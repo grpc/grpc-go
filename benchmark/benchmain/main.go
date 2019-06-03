@@ -320,18 +320,18 @@ func makeClient(bf stats.Features) (testpb.BenchmarkServiceClient, func()) {
 	}
 }
 
-func makeFuncUnary(sf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
-	tc, cleanup := makeClient(sf)
+func makeFuncUnary(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
+	tc, cleanup := makeClient(bf)
 	return func(int) {
-		unaryCaller(tc, sf.ReqSizeBytes, sf.RespSizeBytes)
+		unaryCaller(tc, bf.ReqSizeBytes, bf.RespSizeBytes)
 	}, cleanup
 }
 
-func makeFuncStream(sf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
-	tc, cleanup := makeClient(sf)
+func makeFuncStream(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
+	tc, cleanup := makeClient(bf)
 
-	streams := make([]testpb.BenchmarkService_StreamingCallClient, sf.MaxConcurrentCalls)
-	for i := 0; i < sf.MaxConcurrentCalls; i++ {
+	streams := make([]testpb.BenchmarkService_StreamingCallClient, bf.MaxConcurrentCalls)
+	for i := 0; i < bf.MaxConcurrentCalls; i++ {
 		stream, err := tc.StreamingCall(context.Background())
 		if err != nil {
 			grpclog.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
@@ -340,12 +340,12 @@ func makeFuncStream(sf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 	}
 
 	return func(pos int) {
-		streamCaller(streams[pos], sf.ReqSizeBytes, sf.RespSizeBytes)
+		streamCaller(streams[pos], bf.ReqSizeBytes, bf.RespSizeBytes)
 	}, cleanup
 }
 
-func makeFuncUnconstrainedStreamPreloaded(sf stats.Features) (rpcSendFunc, rpcRecvFunc, rpcCleanupFunc) {
-	streams, req, cleanup := setupUnconstrainedStream(sf)
+func makeFuncUnconstrainedStreamPreloaded(bf stats.Features) (rpcSendFunc, rpcRecvFunc, rpcCleanupFunc) {
+	streams, req, cleanup := setupUnconstrainedStream(bf)
 
 	preparedMsg := make([]*grpc.PreparedMsg, len(streams))
 	for i, stream := range streams {
@@ -363,8 +363,8 @@ func makeFuncUnconstrainedStreamPreloaded(sf stats.Features) (rpcSendFunc, rpcRe
 		}, cleanup
 }
 
-func makeFuncUnconstrainedStream(sf stats.Features) (rpcSendFunc, rpcRecvFunc, rpcCleanupFunc) {
-	streams, req, cleanup := setupUnconstrainedStream(sf)
+func makeFuncUnconstrainedStream(bf stats.Features) (rpcSendFunc, rpcRecvFunc, rpcCleanupFunc) {
+	streams, req, cleanup := setupUnconstrainedStream(bf)
 
 	return func(pos int) {
 			streams[pos].Send(req)
@@ -373,11 +373,11 @@ func makeFuncUnconstrainedStream(sf stats.Features) (rpcSendFunc, rpcRecvFunc, r
 		}, cleanup
 }
 
-func setupUnconstrainedStream(sf stats.Features) ([]testpb.BenchmarkService_StreamingCallClient, *testpb.SimpleRequest, rpcCleanupFunc) {
-	tc, cleanup := makeClient(sf)
+func setupUnconstrainedStream(bf stats.Features) ([]testpb.BenchmarkService_StreamingCallClient, *testpb.SimpleRequest, rpcCleanupFunc) {
+	tc, cleanup := makeClient(bf)
 
-	streams := make([]testpb.BenchmarkService_StreamingCallClient, sf.MaxConcurrentCalls)
-	for i := 0; i < sf.MaxConcurrentCalls; i++ {
+	streams := make([]testpb.BenchmarkService_StreamingCallClient, bf.MaxConcurrentCalls)
+	for i := 0; i < bf.MaxConcurrentCalls; i++ {
 		stream, err := tc.UnconstrainedStreamingCall(context.Background())
 		if err != nil {
 			grpclog.Fatalf("%v.UnconstrainedStreamingCall(_) = _, %v", tc, err)
@@ -385,10 +385,10 @@ func setupUnconstrainedStream(sf stats.Features) ([]testpb.BenchmarkService_Stre
 		streams[i] = stream
 	}
 
-	pl := bm.NewPayload(testpb.PayloadType_COMPRESSABLE, sf.ReqSizeBytes)
+	pl := bm.NewPayload(testpb.PayloadType_COMPRESSABLE, bf.ReqSizeBytes)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
-		ResponseSize: int32(sf.RespSizeBytes),
+		ResponseSize: int32(bf.RespSizeBytes),
 		Payload:      pl,
 	}
 
@@ -667,28 +667,31 @@ func main() {
 	featuresNum := makeFeaturesNum(opts)
 	sf := sharedFeatures(featuresNum)
 	mode := ""
-	for _, bf := range opts.generateFeatures(featuresNum) {
-		var (
-			start  = func() { s.StartRun(mode, bf, sf) }
-			stop   = func(count uint64) { s.EndRun(count) }
-			ucStop = func(req uint64, resp uint64) { s.EndUnconstrainedRun(req, resp) }
-		)
 
+	var (
+		makeStart = func(mode string, bf stats.Features) func() {
+			return func() { s.StartRun(mode, bf, sf) }
+		}
+		stop   = func(count uint64) { s.EndRun(count) }
+		ucStop = func(req uint64, resp uint64) { s.EndUnconstrainedRun(req, resp) }
+	)
+
+	for _, bf := range opts.generateFeatures(featuresNum) {
 		grpc.EnableTracing = bf.EnableTrace
 		if bf.EnableChannelz {
 			channelz.TurnOn()
 		}
 		if opts.rModes.unary {
 			mode = workloadsUnary
-			unaryBenchmark(start, stop, bf, s)
+			unaryBenchmark(makeStart(mode, bf), stop, bf, s)
 		}
 		if opts.rModes.streaming {
 			mode = workloadsStreaming
-			streamBenchmark(start, stop, bf, s)
+			streamBenchmark(makeStart(mode, bf), stop, bf, s)
 		}
 		if opts.rModes.unconstrained {
 			mode = workloadsUnconstrained
-			unconstrainedStreamBenchmark(start, ucStop, bf, s)
+			unconstrainedStreamBenchmark(makeStart(mode, bf), ucStop, bf, s)
 		}
 	}
 	after(opts, s.GetResults())

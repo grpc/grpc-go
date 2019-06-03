@@ -153,11 +153,11 @@ func (f Features) partialString(b *bytes.Buffer, wantFeatures []bool, sep, delim
 			case MaxConcurrentCallsIndex:
 				b.WriteString(fmt.Sprintf("Callers%v%v%v", sep, f.MaxConcurrentCalls, delim))
 			case ReqSizeBytesIndex:
-				b.WriteString(fmt.Sprintf("Request size%v%vB%v", sep, f.ReqSizeBytes, delim))
+				b.WriteString(fmt.Sprintf("ReqSize%v%vB%v", sep, f.ReqSizeBytes, delim))
 			case RespSizeBytesIndex:
-				b.WriteString(fmt.Sprintf("Response size%v%vB%v", sep, f.RespSizeBytes, delim))
+				b.WriteString(fmt.Sprintf("RespSize%v%vB%v", sep, f.RespSizeBytes, delim))
 			case CompModesIndex:
-				b.WriteString(fmt.Sprintf("Compressor %v%v%v", sep, f.ModeCompressor, delim))
+				b.WriteString(fmt.Sprintf("Compressor%v%v%v", sep, f.ModeCompressor, delim))
 			case EnableChannelzIndex:
 				b.WriteString(fmt.Sprintf("Channelz%v%v%v", sep, f.EnableChannelz, delim))
 			case EnablePreloaderIndex:
@@ -266,15 +266,18 @@ func NewStats(numBuckets int) *Stats {
 // StartRun is to be invoked to indicate the start of a new benchmark run.
 func (s *Stats) StartRun(mode string, f Features, sf []bool) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	runtime.ReadMemStats(&s.startMS)
 	s.results = append(s.results, BenchResults{RunMode: mode, Features: f, SharedFeatures: sf})
-	s.mu.Unlock()
 }
 
 // EndRun is to be invoked to indicate the end of the ongoing benchmark run. It
 // computes a bunch of stats and dumps them to stdout.
 func (s *Stats) EndRun(count uint64) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	runtime.ReadMemStats(&s.stopMS)
 	r := &s.results[len(s.results)-1]
 	r.Data = RunData{
@@ -288,13 +291,14 @@ func (s *Stats) EndRun(count uint64) {
 	s.dump(r)
 	s.req = &histWrapper{}
 	s.resp = &histWrapper{}
-	s.mu.Unlock()
 }
 
 // EndUnconstrainedRun is similar to EndRun, but is to be used for
 // unconstrained workloads.
 func (s *Stats) EndUnconstrainedRun(req uint64, resp uint64) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	runtime.ReadMemStats(&s.stopMS)
 	r := &s.results[len(s.results)-1]
 	r.Data = RunData{
@@ -309,30 +313,32 @@ func (s *Stats) EndUnconstrainedRun(req uint64, resp uint64) {
 	s.dump(r)
 	s.req = &histWrapper{}
 	s.resp = &histWrapper{}
-	s.mu.Unlock()
 }
 
 // AddDuration adds an elapsed duration per operation to the stats. This is
 // used by unary and stream modes where request and response stats are equal.
 func (s *Stats) AddDuration(d time.Duration) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.req.durations = append(s.req.durations, d)
-	s.mu.Unlock()
 }
 
 // AddReqDuration adds an elapsed request duration per operation to the stats.
 func (s *Stats) AddReqDuration(d time.Duration) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.req.durations = append(s.req.durations, d)
-	s.mu.Unlock()
 }
 
 // AddRespDuration adds an elapsed response duration per operation to the
 // stats.
 func (s *Stats) AddRespDuration(d time.Duration) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.resp.durations = append(s.resp.durations, d)
-	s.mu.Unlock()
 }
 
 // GetResults returns the results from all benchmark runs.
