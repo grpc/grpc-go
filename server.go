@@ -672,7 +672,7 @@ func (s *Server) handleRawConn(rawConn net.Conn) {
 		return
 	}
 	go func() {
-		s.serveStreams(st)
+		s.serveStreamsWithBlockingHandle(st)
 		s.removeConn(st)
 	}()
 }
@@ -705,6 +705,19 @@ func (s *Server) newHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) tr
 	}
 
 	return st
+}
+
+func (s *Server) serveStreamsWithBlockingHandle(st transport.ServerTransport) {
+	defer st.Close()
+	st.HandleStreams(func(stream *transport.Stream) {
+		s.handleStream(st, stream, s.traceInfo(st, stream))
+	}, func(ctx context.Context, method string) context.Context {
+		if !EnableTracing {
+			return ctx
+		}
+		tr := trace.New("grpc.Recv."+methodFamily(method), method)
+		return trace.NewContext(ctx, tr)
+	})
 }
 
 func (s *Server) serveStreams(st transport.ServerTransport) {

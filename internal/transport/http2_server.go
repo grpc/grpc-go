@@ -31,6 +31,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/grpc/peer"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
@@ -42,7 +44,6 @@ import (
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
@@ -284,11 +285,14 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 }
 
 // operateHeader takes action on the decoded headers.
-func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream), traceCtx func(context.Context, string) context.Context) (fatal bool) {
+func (t *http2Server) operateHeaders(wg *sync.WaitGroup, frame *http2.MetaHeadersFrame, handle func(*Stream), traceCtx func(context.Context, string) context.Context) (fatal bool) {
 	streamID := frame.Header().StreamID
+	length := frame.Header().Length
+
 	state := &decodeState{
 		serverSide: true,
 	}
+
 	if err := state.decodeHeader(frame); err != nil {
 		if se, ok := status.FromError(err); ok {
 			t.controlBuf.put(&cleanupStream{
@@ -301,11 +305,10 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		return false
 	}
 
-	buf := newRecvBuffer()
 	s := &Stream{
 		id:             streamID,
 		st:             t,
-		buf:            buf,
+		buf:            newRecvBuffer(),
 		fc:             &inFlow{limit: uint32(t.initialWindowSize)},
 		recvCompress:   state.data.encoding,
 		method:         state.data.method,
@@ -320,6 +323,43 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	} else {
 		s.ctx, s.cancel = context.WithCancel(t.ctx)
 	}
+
+	t.mu.Lock()
+	if t.state != reachable {
+		t.mu.Unlock()
+		return false
+	}
+	if uint32(len(t.activeStreams)) >= t.maxStreams {
+		t.mu.Unlock()
+		t.controlBuf.put(&cleanupStream{
+			streamID: streamID,
+			rst:      true,
+			rstCode:  http2.ErrCodeRefusedStream,
+			onWrite:  func() {},
+		})
+		return false
+	}
+	if streamID%2 != 1 || streamID <= t.maxStreamID {
+		t.mu.Unlock()
+		// illegal gRPC stream id.
+		errorf("transport: http2Server.HandleStreams received an illegal stream id: %v", streamID)
+		return true
+	}
+	t.maxStreamID = streamID
+	t.activeStreams[streamID] = s
+	if len(t.activeStreams) == 1 {
+		t.idle = time.Time{}
+	}
+	t.mu.Unlock()
+
+	go t.handleStream(wg, s, state, streamID, length, handle, traceCtx)
+	return false
+}
+
+func (t *http2Server) handleStream(wg *sync.WaitGroup, s *Stream, state *decodeState, streamID, length uint32, handle func(*Stream), traceCtx func(context.Context, string) context.Context) {
+	wg.Add(1)
+	defer wg.Done()
+
 	pr := &peer.Peer{
 		Addr: t.remoteAddr,
 	}
@@ -352,36 +392,10 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 				rstCode:  http2.ErrCodeRefusedStream,
 				onWrite:  func() {},
 			})
-			return false
+			t.deleteStreamNoAccounting(s)
+			return
 		}
 	}
-	t.mu.Lock()
-	if t.state != reachable {
-		t.mu.Unlock()
-		return false
-	}
-	if uint32(len(t.activeStreams)) >= t.maxStreams {
-		t.mu.Unlock()
-		t.controlBuf.put(&cleanupStream{
-			streamID: streamID,
-			rst:      true,
-			rstCode:  http2.ErrCodeRefusedStream,
-			onWrite:  func() {},
-		})
-		return false
-	}
-	if streamID%2 != 1 || streamID <= t.maxStreamID {
-		t.mu.Unlock()
-		// illegal gRPC stream id.
-		errorf("transport: http2Server.HandleStreams received an illegal stream id: %v", streamID)
-		return true
-	}
-	t.maxStreamID = streamID
-	t.activeStreams[streamID] = s
-	if len(t.activeStreams) == 1 {
-		t.idle = time.Time{}
-	}
-	t.mu.Unlock()
 	if channelz.IsOn() {
 		atomic.AddInt64(&t.czData.streamsStarted, 1)
 		atomic.StoreInt64(&t.czData.lastStreamCreatedTime, time.Now().UnixNano())
@@ -397,7 +411,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			RemoteAddr:  t.remoteAddr,
 			LocalAddr:   t.localAddr,
 			Compression: s.recvCompress,
-			WireLength:  int(frame.Header().Length),
+			WireLength:  int(length),
 		}
 		t.stats.HandleRPC(s.ctx, inHeader)
 	}
@@ -419,13 +433,14 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		wq:       s.wq,
 	})
 	handle(s)
-	return false
 }
 
 // HandleStreams receives incoming streams using the given handler. This is
 // typically run in a separate goroutine.
 // traceCtx attaches trace to ctx and returns the new context.
 func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.Context, string) context.Context) {
+	var wg sync.WaitGroup
+	defer wg.Wait()
 	defer close(t.readerDone)
 	for {
 		frame, err := t.framer.fr.ReadFrame()
@@ -458,7 +473,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		}
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
-			if t.operateHeaders(frame, handle, traceCtx) {
+			if t.operateHeaders(&wg, frame, handle, traceCtx) {
 				t.Close()
 				break
 			}
@@ -561,6 +576,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 			increment: w,
 		})
 	}
+
 	if sendBDPPing {
 		// Avoid excessive ping detection (e.g. in an L7 proxy)
 		// by sending a window update prior to the BDP ping.
@@ -1018,8 +1034,7 @@ func (t *http2Server) Close() error {
 	return err
 }
 
-// deleteStream deletes the stream s from transport's active streams.
-func (t *http2Server) deleteStream(s *Stream, eosReceived bool) (oldState streamState) {
+func (t *http2Server) deleteStreamNoAccounting(s *Stream) (oldState streamState) {
 	oldState = s.swapState(streamDone)
 	if oldState == streamDone {
 		// If the stream was already done, return.
@@ -1032,14 +1047,20 @@ func (t *http2Server) deleteStream(s *Stream, eosReceived bool) (oldState stream
 	s.cancel()
 
 	t.mu.Lock()
+	defer t.mu.Unlock()
 	if _, ok := t.activeStreams[s.id]; ok {
 		delete(t.activeStreams, s.id)
 		if len(t.activeStreams) == 0 {
 			t.idle = time.Now()
 		}
 	}
-	t.mu.Unlock()
 
+	return oldState
+}
+
+// deleteStream deletes the stream s from transport's active streams.
+func (t *http2Server) deleteStream(s *Stream, eosReceived bool) (oldState streamState) {
+	t.deleteStreamNoAccounting(s)
 	if channelz.IsOn() {
 		if eosReceived {
 			atomic.AddInt64(&t.czData.streamsSucceeded, 1)
