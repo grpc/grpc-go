@@ -33,7 +33,7 @@ func ignore(name string) bool {
 	if !unicode.IsUpper([]rune(name)[0]) {
 		return true
 	}
-	if strings.HasPrefix(f.Name, ignorePrefix) {
+	if strings.HasPrefix(name, ignorePrefix) {
 		return true
 	}
 	return false
