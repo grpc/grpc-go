@@ -20,7 +20,6 @@ package edsbalancer
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net"
 	"reflect"
 	"strconv"
@@ -28,6 +27,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/balancer/xds/internal"
 	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
 	percentpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/type/percent"
 	"google.golang.org/grpc/balancer/xds/lrs"
@@ -54,7 +54,7 @@ type EDSBalancer struct {
 
 	bg                 *balancerGroup
 	subBalancerBuilder balancer.Builder
-	lidToConfig        map[string]*localityConfig
+	lidToConfig        map[internal.Locality]*localityConfig
 	loadStore          lrs.Store
 
 	pickerMu    sync.Mutex
@@ -69,7 +69,7 @@ func NewXDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) *EDSBalancer {
 		ClientConn:         cc,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
 
-		lidToConfig: make(map[string]*localityConfig),
+		lidToConfig: make(map[internal.Locality]*localityConfig),
 		loadStore:   loadStore,
 	}
 	// Don't start balancer group here. Start it when handling the first EDS
@@ -173,7 +173,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 	// Create balancer group if it's never created (this is the first EDS
 	// response).
 	if xdsB.bg == nil {
-		xdsB.bg = newBalancerGroup(xdsB)
+		xdsB.bg = newBalancerGroup(xdsB, xdsB.loadStore)
 	}
 
 	// TODO: Unhandled fields from EDS response:
@@ -189,7 +189,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 
 	// newLocalitiesSet contains all names of localitis in the new EDS response.
 	// It's used to delete localities that are removed in the new EDS response.
-	newLocalitiesSet := make(map[string]struct{})
+	newLocalitiesSet := make(map[internal.Locality]struct{})
 	for _, locality := range edsResp.Endpoints {
 		// One balancer for each locality.
 
@@ -198,7 +198,11 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 			grpclog.Warningf("xds: received LocalityLbEndpoints with <nil> Locality")
 			continue
 		}
-		lid := fmt.Sprintf("%s-%s-%s", l.Region, l.Zone, l.SubZone)
+		lid := internal.Locality{
+			Region:  l.Region,
+			Zone:    l.Zone,
+			SubZone: l.SubZone,
+		}
 		newLocalitiesSet[lid] = struct{}{}
 
 		newWeight := locality.GetLoadBalancingWeight().GetValue()

@@ -35,11 +35,30 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 )
 
+const negativeOneUInt64 = ^uint64(0)
+
 // Store defines the interface for a load store. It keeps loads and can report
 // them to a server when requested.
 type Store interface {
 	CallDropped(category string)
+	CallStarted(l internal.Locality)
+	CallFinished(l internal.Locality, err error)
 	ReportTo(ctx context.Context, cc *grpc.ClientConn)
+}
+
+type rpcCountData struct {
+	// Only atomic accesses are allowed for the fields.
+	succeeded  *uint64
+	errored    *uint64
+	inProgress *uint64
+}
+
+func newRPCCountData() *rpcCountData {
+	return &rpcCountData{
+		succeeded:  new(uint64),
+		errored:    new(uint64),
+		inProgress: new(uint64),
+	}
 }
 
 // lrsStore collects loads from xds balancer, and periodically sends load to the
@@ -50,7 +69,8 @@ type lrsStore struct {
 	backoff      backoff.Strategy
 	lastReported time.Time
 
-	drops sync.Map // map[string]*uint64
+	drops            sync.Map // map[string]*uint64
+	localityRPCCount sync.Map // map[internal.Locality]*rpcCountData
 }
 
 // NewStore creates a store for load reports.
@@ -86,14 +106,35 @@ func (ls *lrsStore) CallDropped(category string) {
 	atomic.AddUint64(p.(*uint64), 1)
 }
 
-// TODO: add query counts
-//  callStarted(l locality)
-//  callFinished(l locality, err error)
+func (ls *lrsStore) CallStarted(l internal.Locality) {
+	p, ok := ls.localityRPCCount.Load(l)
+	if !ok {
+		tp := newRPCCountData()
+		p, _ = ls.localityRPCCount.LoadOrStore(l, tp)
+	}
+	atomic.AddUint64(p.(*rpcCountData).inProgress, 1)
+}
+
+func (ls *lrsStore) CallFinished(l internal.Locality, err error) {
+	p, ok := ls.localityRPCCount.Load(l)
+	if !ok {
+		// The map is never cleared, only values in the map are reset. So the
+		// case where entry for call-finish is not found should never happen.
+		return
+	}
+	atomic.AddUint64(p.(*rpcCountData).inProgress, negativeOneUInt64) // atomic.Add(x, -1)
+	if err == nil {
+		atomic.AddUint64(p.(*rpcCountData).succeeded, 1)
+	} else {
+		atomic.AddUint64(p.(*rpcCountData).errored, 1)
+	}
+}
 
 func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 	var (
-		totalDropped uint64
-		droppedReqs  []*loadreportpb.ClusterStats_DroppedRequests
+		totalDropped  uint64
+		droppedReqs   []*loadreportpb.ClusterStats_DroppedRequests
+		localityStats []*loadreportpb.UpstreamLocalityStats
 	)
 	ls.drops.Range(func(category, countP interface{}) bool {
 		tempCount := atomic.SwapUint64(countP.(*uint64), 0)
@@ -107,6 +148,31 @@ func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 		})
 		return true
 	})
+	ls.localityRPCCount.Range(func(locality, countP interface{}) bool {
+		tempLocality := locality.(internal.Locality)
+		tempCount := countP.(*rpcCountData)
+
+		tempSucceeded := atomic.SwapUint64(tempCount.succeeded, 0)
+		tempInProgress := atomic.LoadUint64(tempCount.inProgress) // InProgress count is not clear when reading.
+		tempErrored := atomic.SwapUint64(tempCount.errored, 0)
+		if tempSucceeded == 0 && tempInProgress == 0 && tempErrored == 0 {
+			return true
+		}
+
+		localityStats = append(localityStats, &loadreportpb.UpstreamLocalityStats{
+			Locality: &basepb.Locality{
+				Region:  tempLocality.Region,
+				Zone:    tempLocality.Zone,
+				SubZone: tempLocality.SubZone,
+			},
+			TotalSuccessfulRequests: tempSucceeded,
+			TotalRequestsInProgress: tempInProgress,
+			TotalErrorRequests:      tempErrored,
+			LoadMetricStats:         nil, // TODO: populate for user loads.
+			UpstreamEndpointStats:   nil, // TODO: populate for per endpoint loads.
+		})
+		return true
+	})
 
 	dur := time.Since(ls.lastReported)
 	ls.lastReported = time.Now()
@@ -114,7 +180,7 @@ func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 	var ret []*loadreportpb.ClusterStats
 	ret = append(ret, &loadreportpb.ClusterStats{
 		ClusterName:           ls.serviceName,
-		UpstreamLocalityStats: nil, // TODO: populate this to support per locality loads.
+		UpstreamLocalityStats: localityStats,
 
 		TotalDroppedRequests: totalDropped,
 		DroppedRequests:      droppedReqs,
