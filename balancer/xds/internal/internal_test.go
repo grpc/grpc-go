@@ -33,10 +33,7 @@ func ignore(name string) bool {
 	if !unicode.IsUpper([]rune(name)[0]) {
 		return true
 	}
-	if strings.HasPrefix(name, ignorePrefix) {
-		return true
-	}
-	return false
+	return strings.HasPrefix(name, ignorePrefix)
 }
 
 // A reflection based test to make sure internal.Locality contains all the
