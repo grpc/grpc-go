@@ -1239,10 +1239,11 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 	currentTr := ac.transport
 	newStream := func(method string) (interface{}, error) {
 		ac.mu.Lock()
-		defer ac.mu.Unlock()
 		if ac.transport != currentTr {
+			ac.mu.Unlock()
 			return nil, status.Error(codes.Canceled, "the provided transport is no longer valid to use")
 		}
+		ac.mu.Unlock()
 		return newNonRetryClientStream(ctx, &StreamDesc{ServerStreams: true}, method, currentTr, ac)
 	}
 	reportHealth := func(s connectivity.State) {
