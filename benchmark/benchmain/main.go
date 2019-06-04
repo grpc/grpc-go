@@ -175,7 +175,7 @@ func runModesFromWorkloads(workload string) runModes {
 	return r
 }
 
-type startFunc func()
+type startFunc func(mode string, bf stats.Features)
 type stopFunc func(count uint64)
 type ucStopFunc func(req uint64, resp uint64)
 type rpcCallFunc func(pos int)
@@ -186,13 +186,13 @@ type rpcCleanupFunc func()
 func unaryBenchmark(start startFunc, stop stopFunc, bf stats.Features, s *stats.Stats) {
 	caller, cleanup := makeFuncUnary(bf)
 	defer cleanup()
-	runBenchmark(caller, start, stop, bf, s)
+	runBenchmark(caller, start, stop, bf, s, workloadsUnary)
 }
 
 func streamBenchmark(start startFunc, stop stopFunc, bf stats.Features, s *stats.Stats) {
 	caller, cleanup := makeFuncStream(bf)
 	defer cleanup()
-	runBenchmark(caller, start, stop, bf, s)
+	runBenchmark(caller, start, stop, bf, s, workloadsStreaming)
 }
 
 func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Features, s *stats.Stats) {
@@ -212,7 +212,7 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 		<-time.NewTimer(warmuptime).C
 		atomic.StoreUint64(&req, 0)
 		atomic.StoreUint64(&resp, 0)
-		start()
+		start(workloadsUnconstrained, bf)
 	}()
 
 	bmEnd := time.Now().Add(bf.BenchTime + warmuptime)
@@ -409,14 +409,14 @@ func streamCaller(stream testpb.BenchmarkService_StreamingCallClient, reqSize, r
 	}
 }
 
-func runBenchmark(caller rpcCallFunc, start startFunc, stop stopFunc, bf stats.Features, s *stats.Stats) {
+func runBenchmark(caller rpcCallFunc, start startFunc, stop stopFunc, bf stats.Features, s *stats.Stats, mode string) {
 	// Warm up connection.
 	for i := 0; i < warmupCallCount; i++ {
 		caller(0)
 	}
 
 	// Run benchmark.
-	start()
+	start(mode, bf)
 	var wg sync.WaitGroup
 	wg.Add(bf.MaxConcurrentCalls)
 	bmEnd := time.Now().Add(bf.BenchTime)
@@ -666,12 +666,9 @@ func main() {
 	s := stats.NewStats(numStatsBuckets)
 	featuresNum := makeFeaturesNum(opts)
 	sf := sharedFeatures(featuresNum)
-	mode := ""
 
 	var (
-		makeStart = func(mode string, bf stats.Features) func() {
-			return func() { s.StartRun(mode, bf, sf) }
-		}
+		start  = func(mode string, bf stats.Features) { s.StartRun(mode, bf, sf) }
 		stop   = func(count uint64) { s.EndRun(count) }
 		ucStop = func(req uint64, resp uint64) { s.EndUnconstrainedRun(req, resp) }
 	)
@@ -682,16 +679,13 @@ func main() {
 			channelz.TurnOn()
 		}
 		if opts.rModes.unary {
-			mode = workloadsUnary
-			unaryBenchmark(makeStart(mode, bf), stop, bf, s)
+			unaryBenchmark(start, stop, bf, s)
 		}
 		if opts.rModes.streaming {
-			mode = workloadsStreaming
-			streamBenchmark(makeStart(mode, bf), stop, bf, s)
+			streamBenchmark(start, stop, bf, s)
 		}
 		if opts.rModes.unconstrained {
-			mode = workloadsUnconstrained
-			unconstrainedStreamBenchmark(makeStart(mode, bf), ucStop, bf, s)
+			unconstrainedStreamBenchmark(start, ucStop, bf, s)
 		}
 	}
 	after(opts, s.GetResults())
