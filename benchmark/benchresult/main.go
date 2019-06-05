@@ -80,23 +80,10 @@ func compareTwoMap(m1, m2 map[string]stats.BenchResults) {
 			changes += intChange("Allocs/op", v1.Data.Allocs, v2.Data.Allocs)
 			changes += floatChange("ReqT/op", v1.Data.ReqT, v2.Data.ReqT)
 			changes += floatChange("RespT/op", v1.Data.RespT, v2.Data.RespT)
-
-			l1 := v1.Data.Latencies
-			l2 := v2.Data.Latencies
-			for i := range l1 {
-				suff := ""
-				if len(l1) > 1 {
-					if i == 0 {
-						suff = "Send"
-					} else {
-						suff = "Recv"
-					}
-				}
-				changes += timeChange(suff+"50th-Lat", l1[i].Fiftieth, l2[i].Fiftieth)
-				changes += timeChange(suff+"90th-Lat", l1[i].Ninetieth, l2[i].Ninetieth)
-				changes += timeChange(suff+"99th-Lat", l1[i].NinetyNinth, l2[i].NinetyNinth)
-				changes += timeChange(suff+"Avg-Lat", l1[i].Average, l2[i].Average)
-			}
+			changes += timeChange("50th-Lat", v1.Data.Fiftieth, v2.Data.Fiftieth)
+			changes += timeChange("90th-Lat", v1.Data.Ninetieth, v2.Data.Ninetieth)
+			changes += timeChange("99th-Lat", v1.Data.NinetyNinth, v2.Data.NinetyNinth)
+			changes += timeChange("Avg-Lat", v1.Data.Average, v2.Data.Average)
 			fmt.Printf("%s\n", changes)
 		}
 	}
@@ -134,23 +121,13 @@ func formatBenchmark(fileName string) {
 	for i := 0; i < len(results[0].SharedFeatures); i++ {
 		wantFeatures[i] = !wantFeatures[i]
 	}
-	printline("Name", "TotalOps", "SendOps", "RecvOps", "Alloc (B)", "Alloc (#)", "RequestT", "ResponseT", "L-50", "L-90", "L-99", "L-Avg")
+
+	printline("Name", "TotalOps", "SendOps", "RecvOps", "Alloc (B)", "Alloc (#)",
+		"RequestT", "ResponseT", "L-50", "L-90", "L-99", "L-Avg")
 	for _, r := range results {
 		d := r.Data
-		for i, rl := range d.Latencies {
-			suff := ""
-			if len(d.Latencies) > 1 {
-				if i == 0 {
-					suff = "Send"
-				} else {
-					suff = "Recv"
-				}
-			}
-			name := r.RunMode + r.Features.PrintableName(wantFeatures) + suff
-
-			printline(name, d.TotalOps, d.SendOps, d.RecvOps, d.AllocedBytes, d.Allocs, d.ReqT, d.RespT,
-				rl.Fiftieth, rl.Ninetieth, rl.NinetyNinth, rl.Average)
-		}
+		printline(r.RunMode+r.Features.PrintableName(wantFeatures), d.TotalOps, d.SendOps, d.RecvOps,
+			d.AllocedBytes, d.Allocs, d.ReqT, d.RespT, d.Fiftieth, d.Ninetieth, d.NinetyNinth, d.Average)
 	}
 }
 

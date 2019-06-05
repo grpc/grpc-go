@@ -226,11 +226,8 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 				if t.After(bmEnd) {
 					return
 				}
-				start := time.Now()
 				sender(pos)
-				elapse := time.Since(start)
 				atomic.AddUint64(&req, 1)
-				s.AddReqDuration(elapse)
 			}
 		}(i)
 		go func(pos int) {
@@ -240,11 +237,8 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 				if t.After(bmEnd) {
 					return
 				}
-				start := time.Now()
 				recver(pos)
-				elapse := time.Since(start)
 				atomic.AddUint64(&resp, 1)
-				s.AddRespDuration(elapse)
 			}
 		}(i)
 	}

@@ -207,16 +207,11 @@ type RunData struct {
 	ReqT float64
 	// RespT is the average response throughput associated with this run.
 	RespT float64
-	// Latencies stores the different latencies associated with this run.  For
-	// unary and streaming workloads, we will have one entry in this slice which
-	// captures latencies for the whole call (sending and receiving), while for
-	// unconstrained workloads, this slice will contain separate send (index 0)
-	// and receive (index 1) latencies.
-	Latencies []Latency
-}
 
-// Latency groups different latencies of interest from a benchmark run.
-type Latency struct {
+	// We store different latencies associated with each run. These latencies are
+	// only computed for unary and stream workloads as they are not very useful
+	// for unconstrained workloads.
+
 	// Fiftieth is the 50th percentile latency.
 	Fiftieth time.Duration
 	// Ninetieth is the 90th percentile latency.
@@ -237,8 +232,7 @@ func (a durationSlice) Less(i, j int) bool { return a[i] < a[j] }
 type Stats struct {
 	mu         sync.Mutex
 	numBuckets int
-	req        *histWrapper
-	resp       *histWrapper
+	hw         *histWrapper
 	results    []BenchResults
 	startMS    runtime.MemStats
 	stopMS     runtime.MemStats
@@ -258,8 +252,7 @@ func NewStats(numBuckets int) *Stats {
 	}
 	// Use one more bucket for the last unbounded bucket.
 	s := &Stats{numBuckets: numBuckets + 1}
-	s.req = &histWrapper{}
-	s.resp = &histWrapper{}
+	s.hw = &histWrapper{}
 	return s
 }
 
@@ -289,8 +282,7 @@ func (s *Stats) EndRun(count uint64) {
 	}
 	s.computeLatencies(r)
 	s.dump(r)
-	s.req = &histWrapper{}
-	s.resp = &histWrapper{}
+	s.hw = &histWrapper{}
 }
 
 // EndUnconstrainedRun is similar to EndRun, but is to be used for
@@ -311,8 +303,7 @@ func (s *Stats) EndUnconstrainedRun(req uint64, resp uint64) {
 	}
 	s.computeLatencies(r)
 	s.dump(r)
-	s.req = &histWrapper{}
-	s.resp = &histWrapper{}
+	s.hw = &histWrapper{}
 }
 
 // AddDuration adds an elapsed duration per operation to the stats. This is
@@ -321,24 +312,7 @@ func (s *Stats) AddDuration(d time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.req.durations = append(s.req.durations, d)
-}
-
-// AddReqDuration adds an elapsed request duration per operation to the stats.
-func (s *Stats) AddReqDuration(d time.Duration) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.req.durations = append(s.req.durations, d)
-}
-
-// AddRespDuration adds an elapsed response duration per operation to the
-// stats.
-func (s *Stats) AddRespDuration(d time.Duration) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.resp.durations = append(s.resp.durations, d)
+	s.hw.durations = append(s.hw.durations, d)
 }
 
 // GetResults returns the results from all benchmark runs.
@@ -352,44 +326,40 @@ func (s *Stats) GetResults() []BenchResults {
 // computeLatencies computes percentile latencies based on durations stored in
 // the stats object and updates the corresponding fields in the result object.
 func (s *Stats) computeLatencies(result *BenchResults) {
-	for _, hw := range []*histWrapper{s.req, s.resp} {
-		if len(hw.durations) == 0 {
-			continue
-		}
-		sort.Sort(hw.durations)
-		minDuration := int64(hw.durations[0])
-		maxDuration := int64(hw.durations[len(hw.durations)-1])
-
-		// Use the largest unit that can represent the minimum time duration.
-		hw.unit = time.Nanosecond
-		for _, u := range []time.Duration{time.Microsecond, time.Millisecond, time.Second} {
-			if minDuration <= int64(u) {
-				break
-			}
-			hw.unit = u
-		}
-
-		numBuckets := s.numBuckets
-		if n := int(maxDuration - minDuration + 1); n < numBuckets {
-			numBuckets = n
-		}
-		hw.histogram = NewHistogram(HistogramOptions{
-			NumBuckets: numBuckets,
-			// max-min(lower bound of last bucket) = (1 + growthFactor)^(numBuckets-2) * baseBucketSize.
-			GrowthFactor:   math.Pow(float64(maxDuration-minDuration), 1/float64(numBuckets-2)) - 1,
-			BaseBucketSize: 1.0,
-			MinValue:       minDuration,
-		})
-		for _, d := range hw.durations {
-			hw.histogram.Add(int64(d))
-		}
-		result.Data.Latencies = append(result.Data.Latencies, Latency{
-			Fiftieth:    hw.durations[max(hw.histogram.Count*int64(50)/100-1, 0)],
-			Ninetieth:   hw.durations[max(hw.histogram.Count*int64(90)/100-1, 0)],
-			NinetyNinth: hw.durations[max(hw.histogram.Count*int64(99)/100-1, 0)],
-			Average:     time.Duration(float64(hw.histogram.Sum) / float64(hw.histogram.Count)),
-		})
+	if len(s.hw.durations) == 0 {
+		return
 	}
+	sort.Sort(s.hw.durations)
+	minDuration := int64(s.hw.durations[0])
+	maxDuration := int64(s.hw.durations[len(s.hw.durations)-1])
+
+	// Use the largest unit that can represent the minimum time duration.
+	s.hw.unit = time.Nanosecond
+	for _, u := range []time.Duration{time.Microsecond, time.Millisecond, time.Second} {
+		if minDuration <= int64(u) {
+			break
+		}
+		s.hw.unit = u
+	}
+
+	numBuckets := s.numBuckets
+	if n := int(maxDuration - minDuration + 1); n < numBuckets {
+		numBuckets = n
+	}
+	s.hw.histogram = NewHistogram(HistogramOptions{
+		NumBuckets: numBuckets,
+		// max-min(lower bound of last bucket) = (1 + growthFactor)^(numBuckets-2) * baseBucketSize.
+		GrowthFactor:   math.Pow(float64(maxDuration-minDuration), 1/float64(numBuckets-2)) - 1,
+		BaseBucketSize: 1.0,
+		MinValue:       minDuration,
+	})
+	for _, d := range s.hw.durations {
+		s.hw.histogram.Add(int64(d))
+	}
+	result.Data.Fiftieth = s.hw.durations[max(s.hw.histogram.Count*int64(50)/100-1, 0)]
+	result.Data.Ninetieth = s.hw.durations[max(s.hw.histogram.Count*int64(90)/100-1, 0)]
+	result.Data.NinetyNinth = s.hw.durations[max(s.hw.histogram.Count*int64(99)/100-1, 0)]
+	result.Data.Average = time.Duration(float64(s.hw.histogram.Sum) / float64(s.hw.histogram.Count))
 }
 
 // dump returns a printable version.
@@ -398,39 +368,30 @@ func (s *Stats) dump(result *BenchResults) {
 	// This prints the run mode and all features of the bench on a line.
 	b.WriteString(fmt.Sprintf("%s-%s:\n", result.RunMode, result.Features.String()))
 
-	for i, l := range result.Data.Latencies {
-		var unit time.Duration
-		var dir, tUnit string
-		var hist *Histogram
-		if i == 0 {
-			if len(result.Data.Latencies) > 1 {
-				dir = "Requests: "
-			}
-			unit = s.req.unit
-			tUnit = fmt.Sprintf("%v", unit)[1:] // stores one of s, ms, μs, ns
-			hist = s.req.histogram
-		} else {
-			dir = "Responses: "
-			unit = s.resp.unit
-			tUnit = fmt.Sprintf("%v", unit)[1:] // stores one of s, ms, μs, ns
-			hist = s.resp.histogram
-		}
-		// This prints the latencies and per-op stats.
-		b.WriteString(dir)
-		b.WriteString(fmt.Sprintf("50_Latency: %s%s\t", strconv.FormatFloat(float64(l.Fiftieth)/float64(unit), 'f', 4, 64), tUnit))
-		b.WriteString(fmt.Sprintf("90_Latency: %s%s\t", strconv.FormatFloat(float64(l.Ninetieth)/float64(unit), 'f', 4, 64), tUnit))
-		b.WriteString(fmt.Sprintf("99_Latency: %s%s\t", strconv.FormatFloat(float64(l.NinetyNinth)/float64(unit), 'f', 4, 64), tUnit))
-		b.WriteString(fmt.Sprintf("Avg_Latency: %s%s\t", strconv.FormatFloat(float64(l.Average)/float64(unit), 'f', 4, 64), tUnit))
-		b.WriteString(fmt.Sprintf("%v Bytes/op\t", result.Data.AllocedBytes))
-		b.WriteString(fmt.Sprintf("%v Allocs/op\t\n", result.Data.Allocs))
+	unit := s.hw.unit
+	tUnit := fmt.Sprintf("%v", unit)[1:] // stores one of s, ms, μs, ns
 
-		// This prints the histogram stats for the latency.
-		if hist == nil {
-			b.WriteString("Histogram (empty)\n")
-		} else {
-			b.WriteString(fmt.Sprintf("Histogram (unit: %s)\n", tUnit))
-			hist.PrintWithUnit(&b, float64(unit))
-		}
+	if l := result.Data.Fiftieth; l != 0 {
+		b.WriteString(fmt.Sprintf("50_Latency: %s%s\t", strconv.FormatFloat(float64(l)/float64(unit), 'f', 4, 64), tUnit))
+	}
+	if l := result.Data.Ninetieth; l != 0 {
+		b.WriteString(fmt.Sprintf("90_Latency: %s%s\t", strconv.FormatFloat(float64(l)/float64(unit), 'f', 4, 64), tUnit))
+	}
+	if l := result.Data.NinetyNinth; l != 0 {
+		b.WriteString(fmt.Sprintf("99_Latency: %s%s\t", strconv.FormatFloat(float64(l)/float64(unit), 'f', 4, 64), tUnit))
+	}
+	if l := result.Data.Average; l != 0 {
+		b.WriteString(fmt.Sprintf("Avg_Latency: %s%s\t", strconv.FormatFloat(float64(l)/float64(unit), 'f', 4, 64), tUnit))
+	}
+	b.WriteString(fmt.Sprintf("Bytes/op: %v\t", result.Data.AllocedBytes))
+	b.WriteString(fmt.Sprintf("Allocs/op: %v\t\n", result.Data.Allocs))
+
+	// This prints the histogram stats for the latency.
+	if s.hw.histogram == nil {
+		b.WriteString("Histogram (empty)\n")
+	} else {
+		b.WriteString(fmt.Sprintf("Histogram (unit: %s)\n", tUnit))
+		s.hw.histogram.PrintWithUnit(&b, float64(unit))
 	}
 
 	// Print throughput data.
