@@ -21,10 +21,20 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/google/go-cmp/cmp"
 	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
 )
+
+const ignorePrefix = "XXX_"
+
+func ignore(name string) bool {
+	if !unicode.IsUpper([]rune(name)[0]) {
+		return true
+	}
+	return strings.HasPrefix(name, ignorePrefix)
+}
 
 // A reflection based test to make sure internal.Locality contains all the
 // fields (expect for XXX_) from the proto message.
@@ -32,14 +42,16 @@ func TestLocalityMatchProtoMessage(t *testing.T) {
 	want1 := make(map[string]string)
 	for ty, i := reflect.TypeOf(Locality{}), 0; i < ty.NumField(); i++ {
 		f := ty.Field(i)
+		if ignore(f.Name) {
+			continue
+		}
 		want1[f.Name] = f.Type.Name()
 	}
 
-	const ignorePrefix = "XXX_"
 	want2 := make(map[string]string)
 	for ty, i := reflect.TypeOf(basepb.Locality{}), 0; i < ty.NumField(); i++ {
 		f := ty.Field(i)
-		if strings.HasPrefix(f.Name, ignorePrefix) {
+		if ignore(f.Name) {
 			continue
 		}
 		want2[f.Name] = f.Type.Name()
