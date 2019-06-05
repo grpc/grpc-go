@@ -149,14 +149,26 @@ func (c *client) newEDSRequest() *discoverypb.DiscoveryRequest {
 		Node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
+					internal.GrpcHostname: {
+						Kind: &structpb.Value_StringValue{StringValue: c.serviceName},
+					},
 					endpointRequired: {
 						Kind: &structpb.Value_BoolValue{BoolValue: c.enableCDS},
 					},
 				},
 			},
 		},
-		ResourceNames: []string{c.serviceName},
-		TypeUrl:       edsType,
+		// TODO: the expected ResourceName could be in a different format from
+		// dial target. (test_service.test_namespace.traffic_director.com vs
+		// test_namespace:test_service).
+		//
+		// The solution today is to always include GrpcHostname in metadata,
+		// with the value set to dial target.
+		//
+		// A future solution could be: always do CDS, get cluster name from CDS
+		// response, and use it here.
+		// `ResourceNames: []string{c.clusterName},`
+		TypeUrl: edsType,
 	}
 	return edsReq
 }

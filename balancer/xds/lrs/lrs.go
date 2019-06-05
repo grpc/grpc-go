@@ -64,7 +64,6 @@ func newRPCCountData() *rpcCountData {
 // lrsStore collects loads from xds balancer, and periodically sends load to the
 // server.
 type lrsStore struct {
-	serviceName  string
 	node         *basepb.Node
 	backoff      backoff.Strategy
 	lastReported time.Time
@@ -76,7 +75,6 @@ type lrsStore struct {
 // NewStore creates a store for load reports.
 func NewStore(serviceName string) Store {
 	return &lrsStore{
-		serviceName: serviceName,
 		node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
@@ -130,7 +128,7 @@ func (ls *lrsStore) CallFinished(l internal.Locality, err error) {
 	}
 }
 
-func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
+func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats {
 	var (
 		totalDropped  uint64
 		droppedReqs   []*loadreportpb.ClusterStats_DroppedRequests
@@ -179,7 +177,7 @@ func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 
 	var ret []*loadreportpb.ClusterStats
 	ret = append(ret, &loadreportpb.ClusterStats{
-		ClusterName:           ls.serviceName,
+		ClusterName:           clusterName,
 		UpstreamLocalityStats: localityStats,
 
 		TotalDroppedRequests: totalDropped,
@@ -239,8 +237,8 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn) {
 			grpclog.Infof("lrs: failed to convert report interval: %v", err)
 			continue
 		}
-		if len(first.Clusters) != 1 || first.Clusters[0] != ls.serviceName {
-			grpclog.Infof("lrs: received clusters %v, expect one cluster %q", first.Clusters, ls.serviceName)
+		if len(first.Clusters) != 1 {
+			grpclog.Infof("lrs: received multiple clusters %v, expect one cluster", first.Clusters)
 			continue
 		}
 		if first.ReportEndpointGranularity {
@@ -267,7 +265,7 @@ func (ls *lrsStore) sendLoads(ctx context.Context, stream lrsgrpc.LoadReportingS
 		}
 		if err := stream.Send(&lrspb.LoadStatsRequest{
 			Node:         ls.node,
-			ClusterStats: ls.buildStats(),
+			ClusterStats: ls.buildStats(clusterName),
 		}); err != nil {
 			grpclog.Infof("lrs: failed to send report: %v", err)
 			return

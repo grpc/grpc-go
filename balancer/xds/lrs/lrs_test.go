@@ -158,7 +158,7 @@ func Test_lrsStore_buildStats_drops(t *testing.T) {
 				}
 				wg.Wait()
 
-				if got := ls.buildStats(); !equalClusterStats(got, want) {
+				if got := ls.buildStats(testService); !equalClusterStats(got, want) {
 					t.Errorf("lrsStore.buildStats() = %v, want %v", got, want)
 					t.Errorf("%s", cmp.Diff(got, want))
 				}
@@ -286,7 +286,7 @@ func Test_lrsStore_buildStats_rpcCounts(t *testing.T) {
 				}
 				wg.Wait()
 
-				if got := ls.buildStats(); !equalClusterStats(got, want) {
+				if got := ls.buildStats(testService); !equalClusterStats(got, want) {
 					t.Errorf("lrsStore.buildStats() = %v, want %v", got, want)
 					t.Errorf("%s", cmp.Diff(got, want))
 				}
