@@ -7165,7 +7165,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 
 	// Do a bunch of RPCs, make sure it stays stable. These should go to connection 2.
 	for i := 0; i < 10; i++ {
-		if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.WaitForReady(true)); err != nil {
 			t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
 		}
 	}
