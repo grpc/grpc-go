@@ -5237,6 +5237,7 @@ type stubServer struct {
 	// A client connected to this service the test may use.  Created in Start().
 	client testpb.TestServiceClient
 	cc     *grpc.ClientConn
+	s      *grpc.Server
 
 	addr string // address of listener
 
@@ -5274,6 +5275,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	testpb.RegisterTestServiceServer(s, ss)
 	go s.Serve(lis)
 	ss.cleanups = append(ss.cleanups, s.Stop)
+	ss.s = s
 
 	target := ss.r.Scheme() + ":///" + ss.addr
 
