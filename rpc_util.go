@@ -254,6 +254,8 @@ func (o PeerCallOption) after(c *callInfo) {
 	}
 }
 
+// Authority returns a CallOption that overrides the :authority pseudoheader
+// for requests sent over an insecure ClientConn.
 func Authority(authority string) AuthorityCallOption {
 	return AuthorityCallOption{
 		Authority: authority,
