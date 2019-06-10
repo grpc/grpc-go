@@ -162,6 +162,7 @@ type callInfo struct {
 	contentSubtype        string
 	codec                 baseCodec
 	maxRetryRPCBufferSize int
+	authority             string
 }
 
 func defaultCallInfo() *callInfo {
@@ -252,6 +253,26 @@ func (o PeerCallOption) after(c *callInfo) {
 		}
 	}
 }
+
+func Authority(authority string) AuthorityCallOption {
+	return AuthorityCallOption{
+		Authority: authority,
+	}
+}
+
+// AuthorityCallOption is a CallOption that allows overriding the http2
+// :authority pseudoheader at call time. This option is ignored unless the
+// connection is insecure (i.e. WithInsecure was provided when dialing).
+type AuthorityCallOption struct {
+	Authority string
+}
+
+func (o AuthorityCallOption) before(c *callInfo) error {
+	c.authority = o.Authority
+	return nil
+}
+
+func (o AuthorityCallOption) after(c *callInfo) {}
 
 // WaitForReady configures the action to take when an RPC is attempted on broken
 // connections or unreachable servers. If waitForReady is false, the RPC will fail

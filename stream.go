@@ -204,8 +204,13 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		return nil, err
 	}
 
+	authority := cc.authority
+	if cc.dopts.insecure && c.authority != "" {
+		authority = c.authority
+	}
+
 	callHdr := &transport.CallHdr{
-		Host:           cc.authority,
+		Host:           authority,
 		Method:         method,
 		ContentSubtype: c.contentSubtype,
 	}
