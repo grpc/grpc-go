@@ -736,6 +736,7 @@ func (ac *addrConn) connect() error {
 		return nil
 	}
 	ac.mu.Unlock()
+	ac.updateConnectivityState(connectivity.Connecting)
 
 	// Start a goroutine connecting to the server asynchronously.
 	go ac.resetTransport()
