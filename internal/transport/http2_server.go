@@ -1024,13 +1024,7 @@ func (t *http2Server) Close() error {
 }
 
 // deleteStream deletes the stream s from transport's active streams.
-func (t *http2Server) deleteStream(s *Stream, eosReceived bool) (oldState streamState) {
-	oldState = s.swapState(streamDone)
-	if oldState == streamDone {
-		// If the stream was already done, return.
-		return oldState
-	}
-
+func (t *http2Server) deleteStream(s *Stream, eosReceived bool) {
 	// In case stream sending and receiving are invoked in separate
 	// goroutines (e.g., bi-directional streaming), cancel needs to be
 	// called to interrupt the potential blocking on other goroutines.
@@ -1052,15 +1046,13 @@ func (t *http2Server) deleteStream(s *Stream, eosReceived bool) (oldState stream
 			atomic.AddInt64(&t.czData.streamsFailed, 1)
 		}
 	}
-
-	return oldState
 }
 
 // finishStream closes the stream and puts the trailing headerFrame into controlbuf.
 func (t *http2Server) finishStream(s *Stream, rst bool, rstCode http2.ErrCode, hdr *headerFrame, eosReceived bool) {
-	oldState := t.deleteStream(s, eosReceived)
-	// If the stream is already closed, then don't put trailing header to controlbuf.
+	oldState := s.swapState(streamDone)
 	if oldState == streamDone {
+		// If the stream was already done, return.
 		return
 	}
 
@@ -1068,14 +1060,18 @@ func (t *http2Server) finishStream(s *Stream, rst bool, rstCode http2.ErrCode, h
 		streamID: s.id,
 		rst:      rst,
 		rstCode:  rstCode,
-		onWrite:  func() {},
+		onWrite: func() {
+			t.deleteStream(s, eosReceived)
+		},
 	}
 	t.controlBuf.put(hdr)
 }
 
 // closeStream clears the footprint of a stream when the stream is not needed any more.
 func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, eosReceived bool) {
+	s.swapState(streamDone)
 	t.deleteStream(s, eosReceived)
+
 	t.controlBuf.put(&cleanupStream{
 		streamID: s.id,
 		rst:      rst,
