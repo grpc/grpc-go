@@ -7434,6 +7434,7 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 }
 
 func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string) {
+	t.Helper()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen. Err: %v", err)
