@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 )
 
 const proxyAuthHeaderKey = "Proxy-Authorization"
@@ -76,6 +77,17 @@ func basicAuth(username, password string) string {
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
+func parseAuthenticationScheme(input string) (string, error) {
+	const ws = " \n\r\t"
+	const qs = `"`
+	s := strings.Trim(input, ws)
+	words := strings.Split(s, " ")
+	if words[0] == "Basic" || words[0] == "Digest" {
+		return words[0], nil
+	}
+	return "", fmt.Errorf("unknown authentication scheme: %q", s)
+}
+
 func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr string, proxyURL *url.URL) (_ net.Conn, err error) {
 	defer func() {
 		if err != nil {
@@ -88,12 +100,6 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr stri
 		URL:    &url.URL{Host: backendAddr},
 		Header: map[string][]string{"User-Agent": {grpcUA}},
 	}
-	if t := proxyURL.User; t != nil {
-		u := t.Username()
-		p, _ := t.Password()
-		req.Header.Add(proxyAuthHeaderKey, "Basic "+basicAuth(u, p))
-	}
-
 	if err := sendHTTPRequest(ctx, req, conn); err != nil {
 		return nil, fmt.Errorf("failed to write the HTTP request: %v", err)
 	}
@@ -103,7 +109,50 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr stri
 	if err != nil {
 		return nil, fmt.Errorf("reading server HTTP response: %v", err)
 	}
+
+	if resp.StatusCode == http.StatusProxyAuthRequired {
+		resp.Body.Close()
+
+		basicSchemeFound := false
+		digestSchemeFound := false
+		challenge := &digestChallenge{}
+		for _, input := range resp.Header["Proxy-Authenticate"] {
+			scheme, _ := parseAuthenticationScheme(input)
+			if scheme == "Basic" {
+				basicSchemeFound = true
+			} else if scheme == "Digest" {
+				digestSchemeFound = true
+				challenge, _ = parseChallenge(input)
+			}
+		}
+		if digestSchemeFound {
+			if t := proxyURL.User; t != nil {
+				u := t.Username()
+				p, _ := t.Password()
+				cr := newDigestCredentials(req, challenge, u, p)
+				auth, err := cr.authorize()
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Add(proxyAuthHeaderKey, auth)
+			}
+		} else if basicSchemeFound {
+			if t := proxyURL.User; t != nil {
+				u := t.Username()
+				p, _ := t.Password()
+				req.Header.Add(proxyAuthHeaderKey, "Basic "+basicAuth(u, p))
+			}
+		}
+		if err := sendHTTPRequest(ctx, req, conn); err != nil {
+			return nil, fmt.Errorf("failed to write the HTTP request: %v", err)
+		}
+		resp, err = http.ReadResponse(r, req)
+		if err != nil {
+			return nil, fmt.Errorf("reading server HTTP response: %v", err)
+		}
+	}
 	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		dump, err := httputil.DumpResponse(resp, true)
 		if err != nil {
