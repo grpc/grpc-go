@@ -110,7 +110,11 @@ func (s) TestStreamCleanupAfterSendStatus(t *testing.T) {
 	// happen because of the pending stream. But if there's a bug in stream
 	// cleanup that causes stream to be removed too aggressively, the connection
 	// will be closd and the stream will be broken.
-	go ss.s.GracefulStop()
+	gracefulStopDone := make(chan struct{})
+	go func() {
+		defer close(gracefulStopDone)
+		ss.s.GracefulStop()
+	}()
 
 	// 4. Make sure the stream is not broken.
 	if _, err := stream.Recv(); err != nil {
@@ -118,5 +122,13 @@ func (s) TestStreamCleanupAfterSendStatus(t *testing.T) {
 	}
 	if _, err := stream.Recv(); err != io.EOF {
 		t.Fatalf("stream.Recv() = _, %v, want _, io.EOF", err)
+	}
+
+	timer := time.NewTimer(time.Second)
+	select {
+	case <-gracefulStopDone:
+		timer.Stop()
+	case <-timer.C:
+		t.Fatalf("s.GracefulStop() didn't finish without 1 second after the last RPC")
 	}
 }
