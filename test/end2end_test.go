@@ -7244,38 +7244,32 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 
 func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
 	// Non-gRPC content-type fallback path.
-	for httpCode, statusCode := range transport.HTTPStatusConvTab {
-		if err := doHTTPHeaderTest(t, statusCode, []string{
+	for httpCode := range transport.HTTPStatusConvTab {
+		doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
 			":status", fmt.Sprintf("%d", httpCode),
 			"content-type", "text/html", // non-gRPC content type to switch to HTTP mode.
 			"grpc-status", "1", // Make up a gRPC status error
 			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
 	}
 
 	// Missing content-type fallback path.
-	for httpCode, statusCode := range transport.HTTPStatusConvTab {
-		if err := doHTTPHeaderTest(t, statusCode, []string{
+	for httpCode := range transport.HTTPStatusConvTab {
+		doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
 			":status", fmt.Sprintf("%d", httpCode),
 			// Omitting content type to switch to HTTP mode.
 			"grpc-status", "1", // Make up a gRPC status error
 			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
 	}
 
 	// Malformed HTTP status when fallback.
-	if err := doHTTPHeaderTest(t, codes.Internal, []string{
+	doHTTPHeaderTest(t, codes.Internal, []string{
 		":status", "abc",
 		// Omitting content type to switch to HTTP mode.
 		"grpc-status", "1", // Make up a gRPC status error
 		"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 }
 
 // Testing erroneous ResponseHeader or Trailers-only (delivered in the first HEADERS frame).
@@ -7321,9 +7315,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 			errCode: codes.InvalidArgument,
 		},
 	} {
-		if err := doHTTPHeaderTest(t, test.errCode, test.header); err != nil {
-			t.Fatal(err)
-		}
+		doHTTPHeaderTest(t, test.errCode, test.header)
 	}
 }
 
@@ -7358,9 +7350,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 			errCode: codes.Internal,
 		},
 	} {
-		if err := doHTTPHeaderTest(t, test.errCode, test.responseHeader, test.trailer); err != nil {
-			t.Fatal(err)
-		}
+		doHTTPHeaderTest(t, test.errCode, test.responseHeader, test.trailer)
 	}
 }
 
@@ -7369,9 +7359,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingMoreThanTwoHeaders(t *testing.T) {
 		":status", "200",
 		"content-type", "application/grpc",
 	}
-	if err := doHTTPHeaderTest(t, codes.Internal, header, header, header); err != nil {
-		t.Fatal(err)
-	}
+	doHTTPHeaderTest(t, codes.Internal, header, header, header)
 }
 
 type httpServer struct {
@@ -7445,30 +7433,29 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 	}()
 }
 
-func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string) error {
+func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		return fmt.Errorf("Failed to listen. Err: %v", err)
+		t.Fatalf("Failed to listen. Err: %v", err)
 	}
 	defer lis.Close()
 	server := &httpServer{
 		headerFields: headerFields,
 	}
 	server.start(t, lis)
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithInsecure())
 	if err != nil {
-		return fmt.Errorf("failed to dial due to err: %v", err)
+		t.Fatalf("failed to dial due to err: %v", err)
 	}
 	defer cc.Close()
 	client := testpb.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	stream, err := client.FullDuplexCall(ctx)
 	if err != nil {
-		return fmt.Errorf("error creating stream due to err: %v", err)
+		t.Fatalf("error creating stream due to err: %v", err)
 	}
 	if _, err := stream.Recv(); err == nil || status.Code(err) != errCode {
-		return fmt.Errorf("stream.Recv() = _, %v, want error code: %v", err, errCode)
+		t.Fatalf("stream.Recv() = _, %v, want error code: %v", err, errCode)
 	}
-	return nil
 }
