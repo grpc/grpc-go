@@ -3535,7 +3535,7 @@ func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
 	}
 }
 
-// TestMalformedHTTP2Metedata verfies the returned error when the client
+// TestMalformedHTTP2Metadata verfies the returned error when the client
 // sends an illegal metadata.
 func (s) TestMalformedHTTP2Metadata(t *testing.T) {
 	for _, e := range listTestEnv() {
