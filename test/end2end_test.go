@@ -7165,6 +7165,11 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 		t.Fatal("expected the stream to die, but got a successful Recv")
 	}
 
+	// Connection was dialed, so ac is either in connecting or ready. Because there's a race
+	// between ac state change and balancer state change, so cc could still be transient
+	// failure. This wait make sure cc is at least in connecting, and RPCs won't fail after
+	// this.
+	cc.WaitForStateChange(ctx, connectivity.TransientFailure)
 	// Do a bunch of RPCs, make sure it stays stable. These should go to connection 2.
 	for i := 0; i < 10; i++ {
 		if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
