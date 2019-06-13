@@ -7436,6 +7436,7 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 }
 
 func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string) {
+	t.Helper()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen. Err: %v", err)
@@ -7445,13 +7446,13 @@ func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string
 		headerFields: headerFields,
 	}
 	server.start(t, lis)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	cc, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithInsecure())
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("failed to dial due to err: %v", err)
 	}
 	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	client := testpb.NewTestServiceClient(cc)
 	stream, err := client.FullDuplexCall(ctx)
 	if err != nil {
