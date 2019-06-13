@@ -21,22 +21,25 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
-	"os"
 	"time"
 
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
 
+var address = flag.String("address", "localhost:50051", "address to connect to")
+
 const (
-	address     = "localhost:50051"
 	defaultName = "world"
 )
 
 func main() {
+	flag.Parse()
+
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.Dial(*address, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -45,8 +48,8 @@ func main() {
 
 	// Contact the server and print out its response.
 	name := defaultName
-	if len(os.Args) > 1 {
-		name = os.Args[1]
+	if len(flag.Args()) > 1 {
+		name = flag.Args()[1]
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

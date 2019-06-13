@@ -23,6 +23,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"net"
 
@@ -30,9 +31,7 @@ import (
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
 
-const (
-	port = ":50051"
-)
+var address = flag.String("address", "localhost:50051", "address to connect to")
 
 // server is used to implement helloworld.GreeterServer.
 type server struct{}
@@ -44,7 +43,9 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 }
 
 func main() {
-	lis, err := net.Listen("tcp", port)
+	flag.Parse()
+
+	lis, err := net.Listen("tcp", *address)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
