@@ -58,6 +58,17 @@ func (se *statusError) GRPCStatus() *Status {
 	return &Status{s: (*spb.Status)(se)}
 }
 
+// Is implements future error.Is functionality.
+// A statusError is equivalent if the code and message are identical.
+func (se *statusError) Is(target error) bool {
+	tse, ok := target.(*statusError)
+	if !ok {
+		return false
+	}
+
+	return proto.Equal((*spb.Status)(se), (*spb.Status)(tse))
+}
+
 // Status represents an RPC status code, message, and details.  It is immutable
 // and should be created with New, Newf, or FromProto.
 type Status struct {
