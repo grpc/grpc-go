@@ -63,51 +63,75 @@ func newRPCCountData() *rpcCountData {
 	}
 }
 
-func (rcd rpcCountData) incrSucceeded() {
+func (rcd *rpcCountData) incrSucceeded() {
 	atomic.AddUint64(rcd.succeeded, 1)
 }
 
-func (rcd rpcCountData) loadAndClearSucceeded() uint64 {
+func (rcd *rpcCountData) loadAndClearSucceeded() uint64 {
 	return atomic.SwapUint64(rcd.succeeded, 0)
 }
 
-func (rcd rpcCountData) incrErrored() {
+func (rcd *rpcCountData) incrErrored() {
 	atomic.AddUint64(rcd.errored, 1)
 }
 
-func (rcd rpcCountData) loadAndClearErrored() uint64 {
+func (rcd *rpcCountData) loadAndClearErrored() uint64 {
 	return atomic.SwapUint64(rcd.errored, 0)
 }
 
-func (rcd rpcCountData) incrInProgress() {
+func (rcd *rpcCountData) incrInProgress() {
 	atomic.AddUint64(rcd.inProgress, 1)
 }
 
-func (rcd rpcCountData) decrInProgress() {
+func (rcd *rpcCountData) decrInProgress() {
 	atomic.AddUint64(rcd.inProgress, negativeOneUInt64) // atomic.Add(x, -1)
 }
 
-func (rcd rpcCountData) loadInProgress() uint64 {
+func (rcd *rpcCountData) loadInProgress() uint64 {
 	return atomic.LoadUint64(rcd.inProgress) // InProgress count is not clear when reading.
 }
 
-// Data for server loads (from trailers or oob)
-type rpcLoadData struct {
-	name  string // FIXME: This is probably unnecessary.
-	sum   uint64
-	count float64
-}
-
-func newRPCLoadDataEmpty(name string) *rpcLoadData {
-	return &rpcLoadData{
-		name: name,
+func (rcd *rpcCountData) addServerLoad(name string, d float64) {
+	loads, ok := rcd.serverLoads.Load(name)
+	if !ok {
+		tl := newRPCLoadData()
+		loads, _ = rcd.serverLoads.LoadOrStore(name, tl)
 	}
+	loads.(*rpcLoadData).add(d)
 }
 
-// Make a copy of old.
-func newRPCLoadDataCopy(old *rpcLoadData) *rpcLoadData {
-	r := *old
-	return &r
+// func (rcd rpcCountData) loadAndClearServerLoads() uint64 {
+// 	// This function doesn't clear the map, but clears the data in map's values.
+// 	return atomic.SwapUint64(rcd.succeeded, 0)
+// }
+
+// Data for server loads (from trailers or oob). Fields in this struct must be
+// updated atomically.
+type rpcLoadData struct {
+	mu    sync.Mutex
+	sum   float64
+	count uint64
+}
+
+func newRPCLoadData() *rpcLoadData {
+	return &rpcLoadData{}
+}
+
+func (rld *rpcLoadData) add(v float64) {
+	rld.mu.Lock()
+	rld.sum += v
+	rld.count += 1
+	rld.mu.Unlock()
+}
+
+func (rld *rpcLoadData) loadAndClear() (s float64, c uint64) {
+	rld.mu.Lock()
+	s = rld.sum
+	rld.sum = 0
+	c = rld.count
+	rld.count = 0
+	rld.mu.Unlock()
+	return
 }
 
 // lrsStore collects loads from xds balancer, and periodically sends load to the
@@ -184,16 +208,7 @@ func (ls *lrsStore) CallServerData(l internal.Locality, name string, d float64) 
 		// case where entry for CallServerData is not found should never happen.
 		return
 	}
-	loadsMap := p.(*rpcCountData).serverLoads
-	loads, ok := loadsMap.Load(name)
-	if !ok {
-		tl := newRPCLoadDataEmpty(name)
-		loads, _ = loadsMap.LoadOrStore(name, tl)
-	}
-	_ = loads
-
-	// Make a copy of loads, update it and try to swap it back.
-	// loads.(*rpcLoadData).blahblah
+	p.(*rpcCountData).addServerLoad(name, d)
 }
 
 func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats {
@@ -225,6 +240,20 @@ func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats 
 			return true
 		}
 
+		var loadMetricStats []*loadreportpb.EndpointLoadMetricStats
+		tempCount.serverLoads.Range(func(name, data interface{}) bool {
+			tempName := name.(string)
+			tempSum, tempCount := data.(*rpcLoadData).loadAndClear()
+			loadMetricStats = append(loadMetricStats,
+				&loadreportpb.EndpointLoadMetricStats{
+					MetricName:                    tempName,
+					NumRequestsFinishedWithMetric: tempCount,
+					TotalMetricValue:              tempSum,
+				},
+			)
+			return true
+		})
+
 		localityStats = append(localityStats, &loadreportpb.UpstreamLocalityStats{
 			Locality: &basepb.Locality{
 				Region:  tempLocality.Region,
@@ -234,7 +263,7 @@ func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats 
 			TotalSuccessfulRequests: tempSucceeded,
 			TotalRequestsInProgress: tempInProgress,
 			TotalErrorRequests:      tempErrored,
-			LoadMetricStats:         nil, // TODO: populate for user loads.
+			LoadMetricStats:         loadMetricStats,
 			UpstreamEndpointStats:   nil, // TODO: populate for per endpoint loads.
 		})
 		return true
