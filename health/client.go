@@ -68,6 +68,7 @@ retryConnection:
 		if ctx.Err() != nil {
 			return nil
 		}
+		reportHealth(connectivity.Connecting)
 		rawS, err := newStream(healthCheckMethod)
 		if err != nil {
 			continue retryConnection
