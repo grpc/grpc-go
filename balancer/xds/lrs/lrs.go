@@ -51,6 +51,8 @@ type rpcCountData struct {
 	succeeded  *uint64
 	errored    *uint64
 	inProgress *uint64
+
+	serverLoads sync.Map // map[string]*rpcLoadData
 }
 
 func newRPCCountData() *rpcCountData {
@@ -59,6 +61,53 @@ func newRPCCountData() *rpcCountData {
 		errored:    new(uint64),
 		inProgress: new(uint64),
 	}
+}
+
+func (rcd rpcCountData) incrSucceeded() {
+	atomic.AddUint64(rcd.succeeded, 1)
+}
+
+func (rcd rpcCountData) loadAndClearSucceeded() uint64 {
+	return atomic.SwapUint64(rcd.succeeded, 0)
+}
+
+func (rcd rpcCountData) incrErrored() {
+	atomic.AddUint64(rcd.errored, 1)
+}
+
+func (rcd rpcCountData) loadAndClearErrored() uint64 {
+	return atomic.SwapUint64(rcd.errored, 0)
+}
+
+func (rcd rpcCountData) incrInProgress() {
+	atomic.AddUint64(rcd.inProgress, 1)
+}
+
+func (rcd rpcCountData) decrInProgress() {
+	atomic.AddUint64(rcd.inProgress, negativeOneUInt64) // atomic.Add(x, -1)
+}
+
+func (rcd rpcCountData) loadInProgress() uint64 {
+	return atomic.LoadUint64(rcd.inProgress) // InProgress count is not clear when reading.
+}
+
+// Data for server loads (from trailers or oob)
+type rpcLoadData struct {
+	name  string // FIXME: This is probably unnecessary.
+	sum   uint64
+	count float64
+}
+
+func newRPCLoadDataEmpty(name string) *rpcLoadData {
+	return &rpcLoadData{
+		name: name,
+	}
+}
+
+// Make a copy of old.
+func newRPCLoadDataCopy(old *rpcLoadData) *rpcLoadData {
+	r := *old
+	return &r
 }
 
 // lrsStore collects loads from xds balancer, and periodically sends load to the
@@ -110,7 +159,7 @@ func (ls *lrsStore) CallStarted(l internal.Locality) {
 		tp := newRPCCountData()
 		p, _ = ls.localityRPCCount.LoadOrStore(l, tp)
 	}
-	atomic.AddUint64(p.(*rpcCountData).inProgress, 1)
+	p.(*rpcCountData).incrInProgress()
 }
 
 func (ls *lrsStore) CallFinished(l internal.Locality, err error) {
@@ -120,12 +169,31 @@ func (ls *lrsStore) CallFinished(l internal.Locality, err error) {
 		// case where entry for call-finish is not found should never happen.
 		return
 	}
-	atomic.AddUint64(p.(*rpcCountData).inProgress, negativeOneUInt64) // atomic.Add(x, -1)
+	p.(*rpcCountData).decrInProgress()
 	if err == nil {
-		atomic.AddUint64(p.(*rpcCountData).succeeded, 1)
+		p.(*rpcCountData).incrSucceeded()
 	} else {
-		atomic.AddUint64(p.(*rpcCountData).errored, 1)
+		p.(*rpcCountData).incrErrored()
 	}
+}
+
+func (ls *lrsStore) CallServerData(l internal.Locality, name string, d float64) {
+	p, ok := ls.localityRPCCount.Load(l)
+	if !ok {
+		// The map is never cleared, only values in the map are reset. So the
+		// case where entry for CallServerData is not found should never happen.
+		return
+	}
+	loadsMap := p.(*rpcCountData).serverLoads
+	loads, ok := loadsMap.Load(name)
+	if !ok {
+		tl := newRPCLoadDataEmpty(name)
+		loads, _ = loadsMap.LoadOrStore(name, tl)
+	}
+	_ = loads
+
+	// Make a copy of loads, update it and try to swap it back.
+	// loads.(*rpcLoadData).blahblah
 }
 
 func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats {
@@ -150,9 +218,9 @@ func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats 
 		tempLocality := locality.(internal.Locality)
 		tempCount := countP.(*rpcCountData)
 
-		tempSucceeded := atomic.SwapUint64(tempCount.succeeded, 0)
-		tempInProgress := atomic.LoadUint64(tempCount.inProgress) // InProgress count is not clear when reading.
-		tempErrored := atomic.SwapUint64(tempCount.errored, 0)
+		tempSucceeded := tempCount.loadAndClearSucceeded()
+		tempInProgress := tempCount.loadInProgress()
+		tempErrored := tempCount.loadAndClearErrored()
 		if tempSucceeded == 0 && tempInProgress == 0 && tempErrored == 0 {
 			return true
 		}
