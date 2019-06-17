@@ -964,7 +964,7 @@ func (a *csAttempt) finish(err error) {
 	a.mu.Unlock()
 }
 
-// newClientStream creates a ClientConn with the specified transport, on the
+// newClientStream creates a ClientStream with the specified transport, on the
 // given addrConn.
 //
 // It's expected that the given transport is either the same one in addrConn, or
