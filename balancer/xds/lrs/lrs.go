@@ -43,6 +43,7 @@ type Store interface {
 	CallDropped(category string)
 	CallStarted(l internal.Locality)
 	CallFinished(l internal.Locality, err error)
+	CallServerLoad(l internal.Locality, name string, d float64)
 	ReportTo(ctx context.Context, cc *grpc.ClientConn)
 }
 
@@ -201,11 +202,11 @@ func (ls *lrsStore) CallFinished(l internal.Locality, err error) {
 	}
 }
 
-func (ls *lrsStore) CallServerData(l internal.Locality, name string, d float64) {
+func (ls *lrsStore) CallServerLoad(l internal.Locality, name string, d float64) {
 	p, ok := ls.localityRPCCount.Load(l)
 	if !ok {
 		// The map is never cleared, only values in the map are reset. So the
-		// case where entry for CallServerData is not found should never happen.
+		// case where entry for CallServerLoad is not found should never happen.
 		return
 	}
 	p.(*rpcCountData).addServerLoad(name, d)
@@ -244,6 +245,9 @@ func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats 
 		tempCount.serverLoads.Range(func(name, data interface{}) bool {
 			tempName := name.(string)
 			tempSum, tempCount := data.(*rpcLoadData).loadAndClear()
+			if tempCount == 0 {
+				return true
+			}
 			loadMetricStats = append(loadMetricStats,
 				&loadreportpb.EndpointLoadMetricStats{
 					MetricName:                    tempName,
