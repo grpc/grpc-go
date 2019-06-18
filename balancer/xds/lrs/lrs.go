@@ -124,7 +124,7 @@ func newRPCLoadData() *rpcLoadData {
 func (rld *rpcLoadData) add(v float64) {
 	rld.mu.Lock()
 	rld.sum += v
-	rld.count += 1
+	rld.count++
 	rld.mu.Unlock()
 }
 
