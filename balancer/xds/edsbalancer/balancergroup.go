@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/balancer/internal/wrr"
 	"google.golang.org/grpc/balancer/xds/internal"
+	orcapb "google.golang.org/grpc/balancer/xds/internal/proto/udpa/data/orca/v1/orca_load_report"
 	"google.golang.org/grpc/balancer/xds/lrs"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
@@ -317,6 +318,11 @@ func (pg *pickerGroup) Pick(ctx context.Context, opts balancer.PickOptions) (con
 	return p.Pick(ctx, opts)
 }
 
+const (
+	serverLoadCPUName    = "cpu_utilization"
+	serverLoadMemoryName = "mem_utilization"
+)
+
 type loadReportPicker struct {
 	balancer.Picker
 
@@ -339,6 +345,13 @@ func (lrp *loadReportPicker) Pick(ctx context.Context, opts balancer.PickOptions
 		td := done
 		done = func(info balancer.DoneInfo) {
 			lrp.loadStore.CallFinished(lrp.id, info.Err)
+			if load, ok := info.ServerLoad.(*orcapb.OrcaLoadReport); ok {
+				lrp.loadStore.CallServerLoad(lrp.id, serverLoadCPUName, load.CpuUtilization)
+				lrp.loadStore.CallServerLoad(lrp.id, serverLoadMemoryName, load.MemUtilization)
+				for n, d := range load.RequestCostOrUtilization {
+					lrp.loadStore.CallServerLoad(lrp.id, n, d)
+				}
+			}
 			if td != nil {
 				td(info)
 			}
