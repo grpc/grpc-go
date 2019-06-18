@@ -53,6 +53,11 @@ type rpcCountData struct {
 	errored    *uint64
 	inProgress *uint64
 
+	// Map from load name to load data (sum+count). Loading data from map is
+	// atomic, but updating data takes a lock, which could cause contention when
+	// multiple RPCs try to report loads for the same name.
+	//
+	// To fix the contention, shard this map.
 	serverLoads sync.Map // map[string]*rpcLoadData
 }
 
@@ -101,13 +106,11 @@ func (rcd *rpcCountData) addServerLoad(name string, d float64) {
 	loads.(*rpcLoadData).add(d)
 }
 
-// func (rcd rpcCountData) loadAndClearServerLoads() uint64 {
-// 	// This function doesn't clear the map, but clears the data in map's values.
-// 	return atomic.SwapUint64(rcd.succeeded, 0)
-// }
-
 // Data for server loads (from trailers or oob). Fields in this struct must be
-// updated atomically.
+// updated consistently.
+//
+// The current solution is to hold a lock, which could cause contention. To fix,
+// shard serverLoads map in rpcCountData.
 type rpcLoadData struct {
 	mu    sync.Mutex
 	sum   float64

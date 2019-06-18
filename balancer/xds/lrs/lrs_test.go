@@ -181,7 +181,7 @@ func Test_lrsStore_buildStats_rpcCounts(t *testing.T) {
 		name string
 		rpcs []map[internal.Locality]struct {
 			start, success, failure uint64
-			serverData              map[string]float64 // Will be sent with successful RPCs.
+			serverData              map[string]float64 // Will be reported with successful RPCs.
 		}
 	}{
 		{
