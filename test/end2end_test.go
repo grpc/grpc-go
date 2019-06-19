@@ -70,12 +70,15 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	_ "google.golang.org/grpc/resolver/passthrough"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
 )
+
+const defaultHealthService = "grpc.health.v1.Health"
 
 func init() {
 	channelz.TurnOn()
@@ -153,6 +156,7 @@ type testServer struct {
 	setAndSendHeader   bool   // whether to call setHeader and sendHeader.
 	setHeaderOnly      bool   // whether to only call setHeader, not sendHeader.
 	multipleSetTrailer bool   // whether to call setTrailer multiple times.
+	enableHealthServer bool   // whether or not to expose the server's health via the default health service implementation.
 	unaryCallSleepTime time.Duration
 }
 
@@ -470,59 +474,70 @@ func listTestEnv() (envs []env) {
 // func, modified as needed, and then started with its startServer method.
 // It should be cleaned up with the tearDown method.
 type test struct {
-	t *testing.T
-	e env
-
+	// The following are setup in newTest().
+	t      *testing.T
+	e      env
 	ctx    context.Context // valid for life of test, before tearDown
 	cancel context.CancelFunc
 
-	// Configurable knobs, after newTest returns:
-	testServer              testpb.TestServiceServer // nil means none
-	healthServer            *health.Server           // nil means disabled
+	// The following knobs are for the server-side, and should be set after
+	// calling newTest() and before calling startServer().
+
+	// In almost all cases, one should set the 'enableHealthServer' flag on the
+	// testServer to expose the server's health using the default health service
+	// implementation.. This should only be used when a non-default health
+	// service implementation is required.
+	healthServer            healthpb.HealthServer
 	maxStream               uint32
 	tapHandle               tap.ServerInHandle
-	maxMsgSize              *int
-	maxClientReceiveMsgSize *int
-	maxClientSendMsgSize    *int
+	maxServerMsgSize        *int
 	maxServerReceiveMsgSize *int
 	maxServerSendMsgSize    *int
-	maxClientHeaderListSize *uint32
 	maxServerHeaderListSize *uint32
+	// Used to test the deprecated API WithCompressor and WithDecompressor.
+	serverCompression           bool
+	unknownHandler              grpc.StreamHandler
+	unaryServerInt              grpc.UnaryServerInterceptor
+	streamServerInt             grpc.StreamServerInterceptor
+	serverInitialWindowSize     int32
+	serverInitialConnWindowSize int32
+	customServerOptions         []grpc.ServerOption
+
+	// The following knobs are for the client-side, and should be set after
+	// calling newTest() and before calling clientConn().
+	maxClientMsgSize        *int
+	maxClientReceiveMsgSize *int
+	maxClientSendMsgSize    *int
+	maxClientHeaderListSize *uint32
 	userAgent               string
-	// clientCompression and serverCompression are set to test the deprecated API
-	// WithCompressor and WithDecompressor.
+	// Used to test the deprecated API WithCompressor and WithDecompressor.
 	clientCompression bool
-	serverCompression bool
-	// clientUseCompression is set to test the new compressor registration API UseCompressor.
+	// Used to test the new compressor registration API UseCompressor.
 	clientUseCompression bool
 	// clientNopCompression is set to create a compressor whose type is not supported.
 	clientNopCompression        bool
 	unaryClientInt              grpc.UnaryClientInterceptor
 	streamClientInt             grpc.StreamClientInterceptor
-	unaryServerInt              grpc.UnaryServerInterceptor
-	streamServerInt             grpc.StreamServerInterceptor
-	unknownHandler              grpc.StreamHandler
 	sc                          <-chan grpc.ServiceConfig
 	customCodec                 encoding.Codec
-	serverInitialWindowSize     int32
-	serverInitialConnWindowSize int32
 	clientInitialWindowSize     int32
 	clientInitialConnWindowSize int32
 	perRPCCreds                 credentials.PerRPCCredentials
 	customDialOptions           []grpc.DialOption
-	customServerOptions         []grpc.ServerOption
 	resolverScheme              string
-
 	// All test dialing is blocking by default. Set this to true if dial
 	// should be non-blocking.
 	nonBlockingDial bool
 
-	// srv and srvAddr are set once startServer is called.
+	// These are are set once startServer is called. The common case is to have
+	// only one testServer.
 	srv     stopper
+	hSrv    healthpb.HealthServer
 	srvAddr string
 
-	// srvs and srvAddrs are set once startServers is called.
-	srvs     []*grpc.Server
+	// These are are set once startServers is called.
+	srvs     []stopper
+	hSrvs    []healthpb.HealthServer
 	srvAddrs []string
 
 	cc          *grpc.ClientConn // nil until requested via clientConn
@@ -553,9 +568,19 @@ func (te *test) tearDown() {
 	if te.srv != nil {
 		te.srv.Stop()
 	}
-	if len(te.srvs) != 0 {
-		for _, s := range te.srvs {
-			s.Stop()
+	if te.hSrv != nil {
+		if hs, ok := te.hSrv.(*health.Server); ok {
+			hs.Shutdown()
+		}
+	}
+	for _, s := range te.srvs {
+		s.Stop()
+	}
+	for _, hSrv := range te.hSrvs {
+		if hSrv != nil {
+			if hs, ok := hSrv.(*health.Server); ok {
+				hs.Shutdown()
+			}
 		}
 	}
 }
@@ -574,11 +599,10 @@ func newTest(t *testing.T, e env) *test {
 }
 
 func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network, address string) (net.Listener, error)) net.Listener {
-	te.testServer = ts
 	te.t.Logf("Running test in %s environment...", te.e.name)
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(te.maxStream)}
-	if te.maxMsgSize != nil {
-		sopts = append(sopts, grpc.MaxMsgSize(*te.maxMsgSize))
+	if te.maxServerMsgSize != nil {
+		sopts = append(sopts, grpc.MaxMsgSize(*te.maxServerMsgSize))
 	}
 	if te.maxServerReceiveMsgSize != nil {
 		sopts = append(sopts, grpc.MaxRecvMsgSize(*te.maxServerReceiveMsgSize))
@@ -635,13 +659,24 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 	}
 	sopts = append(sopts, te.customServerOptions...)
 	s := grpc.NewServer(sopts...)
-	te.srv = s
+
+	// Create a new default health server if enableHealthServer is set, or use
+	// the provided one.
+	var hs healthpb.HealthServer
+	if ts != nil {
+		if tss, ok := ts.(*testServer); ok {
+			if tss.enableHealthServer {
+				hs = health.NewServer()
+				healthgrpc.RegisterHealthServer(s, hs)
+			}
+		}
+		testpb.RegisterTestServiceServer(s, ts)
+	}
 	if te.healthServer != nil {
-		healthgrpc.RegisterHealthServer(s, te.healthServer)
+		hs = te.healthServer
+		healthgrpc.RegisterHealthServer(s, hs)
 	}
-	if te.testServer != nil {
-		testpb.RegisterTestServiceServer(s, te.testServer)
-	}
+
 	addr := la
 	switch te.e.network {
 	case "unix":
@@ -653,6 +688,8 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		addr = "localhost:" + port
 	}
 
+	te.srv = s
+	te.hSrv = hs
 	te.srvAddr = addr
 
 	if te.e.httpHandler {
@@ -661,23 +698,18 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		}
 		cert, err := tls.LoadX509KeyPair(testdata.Path("server1.pem"), testdata.Path("server1.key"))
 		if err != nil {
-			te.t.Fatal("Error creating TLS certificate: ", err)
+			te.t.Fatal("tls.LoadX509KeyPair(server1.pem, server1.key) failed: ", err)
 		}
 		hs := &http.Server{
-			Handler: s,
+			Handler:   s,
+			TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
 		}
-		err = http2.ConfigureServer(hs, &http2.Server{
-			MaxConcurrentStreams: te.maxStream,
-		})
-		if err != nil {
-			te.t.Fatal("error starting http2 server: ", err)
+		if err := http2.ConfigureServer(hs, &http2.Server{MaxConcurrentStreams: te.maxStream}); err != nil {
+			te.t.Fatal("http2.ConfigureServer(_, _) failed: ", err)
 		}
-		hs.TLSConfig.Certificates = []tls.Certificate{cert}
+		te.srv = wrapHS{hs}
 		tlsListener := tls.NewListener(lis, hs.TLSConfig)
-		whs := &wrapHS{Listener: tlsListener, s: hs, conns: make(map[net.Conn]bool)}
-		te.srv = whs
-		go hs.Serve(whs)
-
+		go hs.Serve(tlsListener)
 		return lis
 	}
 
@@ -685,66 +717,16 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 	return lis
 }
 
-// TODO: delete wrapHS and wrapConn when Go1.6 and Go1.7 support are gone and
-// call s.Close and s.Shutdown instead.
 type wrapHS struct {
-	sync.Mutex
-	net.Listener
-	s     *http.Server
-	conns map[net.Conn]bool
+	s *http.Server
 }
 
-func (w *wrapHS) Accept() (net.Conn, error) {
-	c, err := w.Listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-	w.Lock()
-	if w.conns == nil {
-		w.Unlock()
-		c.Close()
-		return nil, errors.New("connection after listener closed")
-	}
-	w.conns[&wrapConn{Conn: c, hs: w}] = true
-	w.Unlock()
-	return c, nil
+func (w wrapHS) GracefulStop() {
+	w.s.Shutdown(context.Background())
 }
 
-func (w *wrapHS) Stop() {
-	w.Listener.Close()
-	w.Lock()
-	conns := w.conns
-	w.conns = nil
-	w.Unlock()
-	for c := range conns {
-		c.Close()
-	}
-}
-
-// Poll for now..
-func (w *wrapHS) GracefulStop() {
-	w.Listener.Close()
-	for {
-		w.Lock()
-		l := len(w.conns)
-		w.Unlock()
-		if l == 0 {
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-}
-
-type wrapConn struct {
-	net.Conn
-	hs *wrapHS
-}
-
-func (w *wrapConn) Close() error {
-	w.hs.Lock()
-	delete(w.hs.conns, w.Conn)
-	w.hs.Unlock()
-	return w.Conn.Close()
+func (w wrapHS) Stop() {
+	w.s.Close()
 }
 
 func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) *listenerWrapper {
@@ -752,10 +734,34 @@ func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) *listene
 	return l.(*listenerWrapper)
 }
 
-// startServer starts a gRPC server listening. Callers should defer a
-// call to te.tearDown to clean up.
-func (te *test) startServer(ts testpb.TestServiceServer) {
-	te.listenAndServe(ts, net.Listen)
+// startServer starts a gRPC server exposing the provided TestService
+// implementation. Callers should defer a call to te.tearDown to clean up.
+func (te *test) startServer(ts ...testpb.TestServiceServer) {
+	for _, t := range ts {
+		te.listenAndServe(t, net.Listen)
+	}
+}
+
+// startServers starts 'num' gRPC servers exposing the provided TestService.
+func (te *test) startServers(ts testpb.TestServiceServer, num int) {
+	for i := 0; i < num; i++ {
+		te.startServer(ts)
+		te.srvs = append(te.srvs, te.srv.(*grpc.Server))
+		te.hSrvs = append(te.hSrvs, te.hSrv)
+		te.srvAddrs = append(te.srvAddrs, te.srvAddr)
+		te.srv = nil
+		te.hSrv = nil
+		te.srvAddr = ""
+	}
+}
+
+// setHealthServingStatus is a helper function to set the health status.
+func (te *test) setHealthServingStatus(service string, status healthpb.HealthCheckResponse_ServingStatus) {
+	if te.hSrv != nil {
+		if hs, ok := te.hSrv.(*health.Server); ok {
+			hs.SetServingStatus(service, status)
+		}
+	}
 }
 
 type nopCompressor struct {
@@ -812,8 +818,8 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	if te.streamClientInt != nil {
 		opts = append(opts, grpc.WithStreamInterceptor(te.streamClientInt))
 	}
-	if te.maxMsgSize != nil {
-		opts = append(opts, grpc.WithMaxMsgSize(*te.maxMsgSize))
+	if te.maxClientMsgSize != nil {
+		opts = append(opts, grpc.WithMaxMsgSize(*te.maxClientMsgSize))
 	}
 	if te.maxClientReceiveMsgSize != nil {
 		opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(*te.maxClientReceiveMsgSize)))
@@ -2446,14 +2452,53 @@ func testTap(t *testing.T, e env) {
 	}
 }
 
-func healthCheck(d time.Duration, cc *grpc.ClientConn, serviceName string) (*healthpb.HealthCheckResponse, error) {
+func healthCheck(d time.Duration, cc *grpc.ClientConn, service string) (*healthpb.HealthCheckResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), d)
 	defer cancel()
+
 	hc := healthgrpc.NewHealthClient(cc)
-	req := &healthpb.HealthCheckRequest{
-		Service: serviceName,
+	return hc.Check(ctx, &healthpb.HealthCheckRequest{Service: service})
+}
+
+func verifyHealthCheckStatus(t *testing.T, d time.Duration, cc *grpc.ClientConn, service string, wantStatus healthpb.HealthCheckResponse_ServingStatus) {
+	t.Helper()
+	resp, err := healthCheck(d, cc, service)
+	if err != nil {
+		t.Fatalf("Health/Check(_, _) = _, %v, want _, <nil>", err)
 	}
-	return hc.Check(ctx, req)
+	if resp.Status != wantStatus {
+		t.Fatalf("Got the serving status %v, want %v", resp.Status, wantStatus)
+	}
+}
+
+func verifyHealthCheckErrCode(t *testing.T, d time.Duration, cc *grpc.ClientConn, service string, wantCode codes.Code) {
+	t.Helper()
+	if _, err := healthCheck(d, cc, service); status.Code(err) != wantCode {
+		t.Fatalf("Health/Check() got errCode %v, want %v", status.Code(err), wantCode)
+	}
+}
+
+func newHealthCheckStream(t *testing.T, cc *grpc.ClientConn, service string) (healthgrpc.Health_WatchClient, context.CancelFunc) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	hc := healthgrpc.NewHealthClient(cc)
+
+	stream, err := hc.Watch(ctx, &healthpb.HealthCheckRequest{Service: service})
+	if err != nil {
+		t.Fatalf("hc.Watch(_, %v) failed: %v", service, err)
+	}
+	return stream, cancel
+}
+
+func healthWatchChecker(t *testing.T, stream healthgrpc.Health_WatchClient, wantStatus healthpb.HealthCheckResponse_ServingStatus) {
+	t.Helper()
+	response, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("stream.Recv() failed: %v", err)
+	}
+	if response.Status != wantStatus {
+		t.Fatalf("got servingStatus %v, want %v", response.Status, wantStatus)
+	}
 }
 
 func (s) TestHealthCheckOnSuccess(t *testing.T) {
@@ -2464,16 +2509,11 @@ func (s) TestHealthCheckOnSuccess(t *testing.T) {
 
 func testHealthCheckOnSuccess(t *testing.T, e env) {
 	te := newTest(t, e)
-	hs := health.NewServer()
-	hs.SetServingStatus("grpc.health.v1.Health", 1)
-	te.healthServer = hs
-	te.startServer(&testServer{security: e.security})
+	te.startServer(&testServer{security: e.security, enableHealthServer: true})
+	te.setHealthServingStatus(defaultHealthService, healthpb.HealthCheckResponse_SERVING)
 	defer te.tearDown()
 
-	cc := te.clientConn()
-	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1.Health"); err != nil {
-		t.Fatalf("Health/Check(_, _) = _, %v, want _, <nil>", err)
-	}
+	verifyHealthCheckErrCode(t, 1*time.Second, te.clientConn(), defaultHealthService, codes.OK)
 }
 
 func (s) TestHealthCheckOnFailure(t *testing.T) {
@@ -2488,17 +2528,11 @@ func testHealthCheckOnFailure(t *testing.T, e env) {
 		"Failed to dial ",
 		"grpc: the client connection is closing; please retry",
 	)
-	hs := health.NewServer()
-	hs.SetServingStatus("grpc.health.v1.HealthCheck", 1)
-	te.healthServer = hs
-	te.startServer(&testServer{security: e.security})
+	te.startServer(&testServer{security: e.security, enableHealthServer: true})
+	te.setHealthServingStatus(defaultHealthService, healthpb.HealthCheckResponse_SERVING)
 	defer te.tearDown()
 
-	cc := te.clientConn()
-	wantErr := status.Error(codes.DeadlineExceeded, "context deadline exceeded")
-	if _, err := healthCheck(0*time.Second, cc, "grpc.health.v1.Health"); !testutils.StatusErrEqual(err, wantErr) {
-		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %s", err, codes.DeadlineExceeded)
-	}
+	verifyHealthCheckErrCode(t, 0*time.Second, te.clientConn(), defaultHealthService, codes.DeadlineExceeded)
 	awaitNewConnLogOutput()
 }
 
@@ -2514,12 +2548,10 @@ func (s) TestHealthCheckOff(t *testing.T) {
 
 func testHealthCheckOff(t *testing.T, e env) {
 	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security})
+	te.startServer(&testServer{security: e.security, enableHealthServer: true})
 	defer te.tearDown()
-	want := status.Error(codes.Unimplemented, "unknown service grpc.health.v1.Health")
-	if _, err := healthCheck(1*time.Second, te.clientConn(), ""); !testutils.StatusErrEqual(err, want) {
-		t.Fatalf("Health/Check(_, _) = _, %v, want _, %v", err, want)
-	}
+
+	verifyHealthCheckErrCode(t, 1*time.Second, te.clientConn(), defaultHealthService, codes.NotFound)
 }
 
 func (s) TestHealthWatchMultipleClients(t *testing.T) {
@@ -2529,41 +2561,20 @@ func (s) TestHealthWatchMultipleClients(t *testing.T) {
 }
 
 func testHealthWatchMultipleClients(t *testing.T, e env) {
-	const service = "grpc.health.v1.Health1"
-
-	hs := health.NewServer()
-
 	te := newTest(t, e)
-	te.healthServer = hs
-	te.startServer(&testServer{security: e.security})
+	te.startServer(&testServer{security: e.security, enableHealthServer: true})
 	defer te.tearDown()
 
 	cc := te.clientConn()
-	hc := healthgrpc.NewHealthClient(cc)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	req := &healthpb.HealthCheckRequest{
-		Service: service,
-	}
-
-	stream1, err := hc.Watch(ctx, req)
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
-
+	stream1, cf1 := newHealthCheckStream(t, cc, defaultHealthService)
+	defer cf1()
 	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
 
-	stream2, err := hc.Watch(ctx, req)
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
-
+	stream2, cf2 := newHealthCheckStream(t, cc, defaultHealthService)
+	defer cf2()
 	healthWatchChecker(t, stream2, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
 
-	hs.SetServingStatus(service, healthpb.HealthCheckResponse_NOT_SERVING)
-
+	te.setHealthServingStatus(defaultHealthService, healthpb.HealthCheckResponse_NOT_SERVING)
 	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_NOT_SERVING)
 	healthWatchChecker(t, stream2, healthpb.HealthCheckResponse_NOT_SERVING)
 }
@@ -2575,40 +2586,19 @@ func (s) TestHealthWatchSameStatus(t *testing.T) {
 }
 
 func testHealthWatchSameStatus(t *testing.T, e env) {
-	const service = "grpc.health.v1.Health1"
-
-	hs := health.NewServer()
-
 	te := newTest(t, e)
-	te.healthServer = hs
-	te.startServer(&testServer{security: e.security})
+	te.startServer(&testServer{security: e.security, enableHealthServer: true})
 	defer te.tearDown()
 
-	cc := te.clientConn()
-	hc := healthgrpc.NewHealthClient(cc)
+	stream, cf := newHealthCheckStream(t, te.clientConn(), defaultHealthService)
+	defer cf()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	req := &healthpb.HealthCheckRequest{
-		Service: service,
-	}
-
-	stream1, err := hc.Watch(ctx, req)
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
-
-	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
-
-	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
-
-	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_SERVING)
-
-	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
-	hs.SetServingStatus(service, healthpb.HealthCheckResponse_NOT_SERVING)
-
-	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_NOT_SERVING)
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
+	te.setHealthServingStatus(defaultHealthService, healthpb.HealthCheckResponse_SERVING)
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVING)
+	te.setHealthServingStatus(defaultHealthService, healthpb.HealthCheckResponse_SERVING)
+	te.setHealthServingStatus(defaultHealthService, healthpb.HealthCheckResponse_NOT_SERVING)
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_NOT_SERVING)
 }
 
 func (s) TestHealthWatchServiceStatusSetBeforeStartingServer(t *testing.T) {
@@ -2618,33 +2608,15 @@ func (s) TestHealthWatchServiceStatusSetBeforeStartingServer(t *testing.T) {
 }
 
 func testHealthWatchSetServiceStatusBeforeStartingServer(t *testing.T, e env) {
-	const service = "grpc.health.v1.Health1"
-
 	hs := health.NewServer()
-
 	te := newTest(t, e)
 	te.healthServer = hs
-
-	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
-
+	hs.SetServingStatus(defaultHealthService, healthpb.HealthCheckResponse_SERVING)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
-	cc := te.clientConn()
-	hc := healthgrpc.NewHealthClient(cc)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	req := &healthpb.HealthCheckRequest{
-		Service: service,
-	}
-
-	stream, err := hc.Watch(ctx, req)
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
-
+	stream, cf := newHealthCheckStream(t, te.clientConn(), defaultHealthService)
+	defer cf()
 	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVING)
 }
 
@@ -2655,34 +2627,14 @@ func (s) TestHealthWatchDefaultStatusChange(t *testing.T) {
 }
 
 func testHealthWatchDefaultStatusChange(t *testing.T, e env) {
-	const service = "grpc.health.v1.Health1"
-
-	hs := health.NewServer()
-
 	te := newTest(t, e)
-	te.healthServer = hs
-	te.startServer(&testServer{security: e.security})
+	te.startServer(&testServer{security: e.security, enableHealthServer: true})
 	defer te.tearDown()
 
-	cc := te.clientConn()
-	hc := healthgrpc.NewHealthClient(cc)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	req := &healthpb.HealthCheckRequest{
-		Service: service,
-	}
-
-	stream, err := hc.Watch(ctx, req)
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
-
+	stream, cf := newHealthCheckStream(t, te.clientConn(), defaultHealthService)
+	defer cf()
 	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
-
-	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
-
+	te.setHealthServingStatus(defaultHealthService, healthpb.HealthCheckResponse_SERVING)
 	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVING)
 }
 
@@ -2693,32 +2645,13 @@ func (s) TestHealthWatchSetServiceStatusBeforeClientCallsWatch(t *testing.T) {
 }
 
 func testHealthWatchSetServiceStatusBeforeClientCallsWatch(t *testing.T, e env) {
-	const service = "grpc.health.v1.Health1"
-
-	hs := health.NewServer()
-
 	te := newTest(t, e)
-	te.healthServer = hs
-	te.startServer(&testServer{security: e.security})
+	te.startServer(&testServer{security: e.security, enableHealthServer: true})
+	te.setHealthServingStatus(defaultHealthService, healthpb.HealthCheckResponse_SERVING)
 	defer te.tearDown()
 
-	cc := te.clientConn()
-	hc := healthgrpc.NewHealthClient(cc)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	req := &healthpb.HealthCheckRequest{
-		Service: service,
-	}
-
-	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
-
-	stream, err := hc.Watch(ctx, req)
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
-
+	stream, cf := newHealthCheckStream(t, te.clientConn(), defaultHealthService)
+	defer cf()
 	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVING)
 }
 
@@ -2729,45 +2662,15 @@ func (s) TestHealthWatchOverallServerHealthChange(t *testing.T) {
 }
 
 func testHealthWatchOverallServerHealthChange(t *testing.T, e env) {
-	const service = ""
-
-	hs := health.NewServer()
-
 	te := newTest(t, e)
-	te.healthServer = hs
-	te.startServer(&testServer{security: e.security})
+	te.startServer(&testServer{security: e.security, enableHealthServer: true})
 	defer te.tearDown()
 
-	cc := te.clientConn()
-	hc := healthgrpc.NewHealthClient(cc)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	req := &healthpb.HealthCheckRequest{
-		Service: service,
-	}
-
-	stream, err := hc.Watch(ctx, req)
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
-
+	stream, cf := newHealthCheckStream(t, te.clientConn(), "")
+	defer cf()
 	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVING)
-
-	hs.SetServingStatus(service, healthpb.HealthCheckResponse_NOT_SERVING)
-
+	te.setHealthServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
 	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_NOT_SERVING)
-}
-
-func healthWatchChecker(t *testing.T, stream healthgrpc.Health_WatchClient, expectedServingStatus healthpb.HealthCheckResponse_ServingStatus) {
-	response, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("error on %v.Recv(): %v", stream, err)
-	}
-	if response.Status != expectedServingStatus {
-		t.Fatalf("response.Status is %v (%v expected)", response.Status, expectedServingStatus)
-	}
 }
 
 func (s) TestUnknownHandler(t *testing.T) {
@@ -2790,10 +2693,8 @@ func testUnknownHandler(t *testing.T, e env, unknownHandler grpc.StreamHandler) 
 	te.unknownHandler = unknownHandler
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
-	want := status.Error(codes.Unauthenticated, "user unauthenticated")
-	if _, err := healthCheck(1*time.Second, te.clientConn(), ""); !testutils.StatusErrEqual(err, want) {
-		t.Fatalf("Health/Check(_, _) = _, %v, want _, %v", err, want)
-	}
+
+	verifyHealthCheckErrCode(t, 1*time.Second, te.clientConn(), "", codes.Unauthenticated)
 }
 
 func (s) TestHealthCheckServingStatus(t *testing.T) {
@@ -2804,40 +2705,16 @@ func (s) TestHealthCheckServingStatus(t *testing.T) {
 
 func testHealthCheckServingStatus(t *testing.T, e env) {
 	te := newTest(t, e)
-	hs := health.NewServer()
-	te.healthServer = hs
-	te.startServer(&testServer{security: e.security})
+	te.startServer(&testServer{security: e.security, enableHealthServer: true})
 	defer te.tearDown()
 
 	cc := te.clientConn()
-	out, err := healthCheck(1*time.Second, cc, "")
-	if err != nil {
-		t.Fatalf("Health/Check(_, _) = _, %v, want _, <nil>", err)
-	}
-	if out.Status != healthpb.HealthCheckResponse_SERVING {
-		t.Fatalf("Got the serving status %v, want SERVING", out.Status)
-	}
-	wantErr := status.Error(codes.NotFound, "unknown service")
-	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1.Health"); !testutils.StatusErrEqual(err, wantErr) {
-		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %s", err, codes.NotFound)
-	}
-	hs.SetServingStatus("grpc.health.v1.Health", healthpb.HealthCheckResponse_SERVING)
-	out, err = healthCheck(1*time.Second, cc, "grpc.health.v1.Health")
-	if err != nil {
-		t.Fatalf("Health/Check(_, _) = _, %v, want _, <nil>", err)
-	}
-	if out.Status != healthpb.HealthCheckResponse_SERVING {
-		t.Fatalf("Got the serving status %v, want SERVING", out.Status)
-	}
-	hs.SetServingStatus("grpc.health.v1.Health", healthpb.HealthCheckResponse_NOT_SERVING)
-	out, err = healthCheck(1*time.Second, cc, "grpc.health.v1.Health")
-	if err != nil {
-		t.Fatalf("Health/Check(_, _) = _, %v, want _, <nil>", err)
-	}
-	if out.Status != healthpb.HealthCheckResponse_NOT_SERVING {
-		t.Fatalf("Got the serving status %v, want NOT_SERVING", out.Status)
-	}
-
+	verifyHealthCheckStatus(t, 1*time.Second, cc, "", healthpb.HealthCheckResponse_SERVING)
+	verifyHealthCheckErrCode(t, 1*time.Second, cc, defaultHealthService, codes.NotFound)
+	te.setHealthServingStatus(defaultHealthService, healthpb.HealthCheckResponse_SERVING)
+	verifyHealthCheckStatus(t, 1*time.Second, cc, defaultHealthService, healthpb.HealthCheckResponse_SERVING)
+	te.setHealthServingStatus(defaultHealthService, healthpb.HealthCheckResponse_NOT_SERVING)
+	verifyHealthCheckStatus(t, 1*time.Second, cc, defaultHealthService, healthpb.HealthCheckResponse_NOT_SERVING)
 }
 
 func (s) TestEmptyUnaryWithUserAgent(t *testing.T) {
@@ -2936,15 +2813,16 @@ func (s) TestExceedMsgLimit(t *testing.T) {
 
 func testExceedMsgLimit(t *testing.T, e env) {
 	te := newTest(t, e)
-	te.maxMsgSize = newInt(1024)
+	maxMsgSize := 1024
+	te.maxServerMsgSize, te.maxClientMsgSize = newInt(maxMsgSize), newInt(maxMsgSize)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
-	argSize := int32(*te.maxMsgSize + 1)
+	largeSize := int32(maxMsgSize + 1)
 	const smallSize = 1
 
-	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
+	largePayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, largeSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2953,23 +2831,23 @@ func testExceedMsgLimit(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 
-	// Test on server side for unary RPC.
+	// Make sure the server cannot receive a unary RPC of largeSize.
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE,
 		ResponseSize: smallSize,
-		Payload:      payload,
+		Payload:      largePayload,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
-	// Test on client side for unary RPC.
-	req.ResponseSize = int32(*te.maxMsgSize) + 1
+	// Make sure the client cannot receive a unary RPC of largeSize.
+	req.ResponseSize = largeSize
 	req.Payload = smallPayload
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
-	// Test on server side for streaming RPC.
+	// Make sure the server cannot receive a streaming RPC of largeSize.
 	stream, err := tc.FullDuplexCall(te.ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -2979,16 +2857,10 @@ func testExceedMsgLimit(t *testing.T, e env) {
 			Size: 1,
 		},
 	}
-
-	spayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(*te.maxMsgSize+1))
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	sreq := &testpb.StreamingOutputCallRequest{
 		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
-		Payload:            spayload,
+		Payload:            largePayload,
 	}
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
@@ -2997,12 +2869,12 @@ func testExceedMsgLimit(t *testing.T, e env) {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
-	// Test on client side for streaming RPC.
+	// Make sure the client cannot receive a streaming RPC of largeSize.
 	stream, err = tc.FullDuplexCall(te.ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	respParam[0].Size = int32(*te.maxMsgSize) + 1
+	respParam[0].Size = largeSize
 	sreq.Payload = smallPayload
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
@@ -3010,7 +2882,6 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	if _, err := stream.Recv(); err == nil || status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
-
 }
 
 func (s) TestPeerClientSide(t *testing.T) {
@@ -7458,4 +7329,12 @@ func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string
 	if _, err := stream.Recv(); err == nil || status.Code(err) != errCode {
 		t.Fatalf("stream.Recv() = _, %v, want error code: %v", err, errCode)
 	}
+}
+
+func parseCfg(s string) serviceconfig.Config {
+	c, err := serviceconfig.Parse(s)
+	if err != nil {
+		panic(fmt.Sprintf("Error parsing config %q: %v", s, err))
+	}
+	return c
 }
