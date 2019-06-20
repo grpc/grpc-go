@@ -19,7 +19,6 @@
 package transport
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -371,9 +370,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 			closeStream: func(err error) {
 				t.CloseStream(s, err)
 			},
-			freeBuffer: func(b *bytes.Buffer) {
-				t.bufferPool.put(b)
-			},
+			freeBuffer: t.bufferPool.put,
 		},
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
