@@ -362,9 +362,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		for buf := make([]byte, readSize); ; {
 			n, err := req.Body.Read(buf)
 			if n > 0 {
-				buffer := new(bytes.Buffer)
-				buffer.Write(buf[:n])
-				s.buf.put(recvMsg{buffer: buffer})
+				s.buf.put(recvMsg{buffer: bytes.NewBuffer(buf[:n:n])})
 				buf = buf[n:]
 			}
 			if err != nil {
