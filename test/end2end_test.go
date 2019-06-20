@@ -692,11 +692,6 @@ func (w wrapHS) Stop() {
 	w.s.Close()
 }
 
-type wrapConn struct {
-	net.Conn
-	hs *wrapHS
-}
-
 func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) *listenerWrapper {
 	l := te.listenAndServe(ts, listenWithConnControl)
 	return l.(*listenerWrapper)
