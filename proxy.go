@@ -122,7 +122,14 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr stri
 				basicSchemeFound = true
 			} else if scheme == "Digest" {
 				digestSchemeFound = true
-				challenge, _ = parseChallenge(input)
+				challenge, err = parseChallenge(input)
+				if err != nil {
+					// ignore bad challenge. Maybe unsupported algorithm?
+					continue
+				}
+				// rfc7616: When the client receives the first challenge, it SHOULD use
+				// the first challenge it supports
+				break
 			}
 		}
 		if digestSchemeFound {

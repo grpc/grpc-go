@@ -29,7 +29,7 @@
 package grpc
 
 import (
-	"crypto/md5"
+	"crypto"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -98,6 +98,9 @@ func parseChallenge(input string) (*digestChallenge, error) {
 			c.Stale = strings.Trim(r[1], qs)
 		case "algorithm":
 			c.Algorithm = strings.Trim(r[1], qs)
+			if _, ok := supportedAlgorithms[c.Algorithm]; !ok {
+				return nil, ErrAlgNotImplemented
+			}
 		case "qop":
 			//TODO(gavaletz) should be an array of strings?
 			c.Qop = strings.Trim(r[1], qs)
@@ -123,22 +126,29 @@ func newDigestCredentials(req *http.Request, c *digestChallenge, username, passw
 	}
 }
 
-func h(data string) string {
-	hf := md5.New()
+var supportedAlgorithms = map[string]crypto.Hash{
+	"MD5":         crypto.MD5,
+	"SHA-512-256": crypto.SHA512_256,
+	"SHA-256":     crypto.SHA256,
+}
+
+func h(data string, algo string) string {
+	hash := supportedAlgorithms[algo]
+	hf := hash.New()
 	io.WriteString(hf, data)
 	return fmt.Sprintf("%x", hf.Sum(nil))
 }
 
-func kd(secret, data string) string {
-	return h(fmt.Sprintf("%s:%s", secret, data))
+func kd(secret, data, algo string) string {
+	return h(fmt.Sprintf("%s:%s", secret, data), algo)
 }
 
 func (c *digestCredentials) ha1() string {
-	return h(fmt.Sprintf("%s:%s:%s", c.Username, c.Realm, c.password))
+	return h(fmt.Sprintf("%s:%s:%s", c.Username, c.Realm, c.password), c.Algorithm)
 }
 
 func (c *digestCredentials) ha2() string {
-	return h(fmt.Sprintf("%s:%s", c.method, c.DigestURI))
+	return h(fmt.Sprintf("%s:%s", c.method, c.DigestURI), c.Algorithm)
 }
 
 func (c *digestCredentials) resp(cnonce string) (string, error) {
@@ -152,17 +162,18 @@ func (c *digestCredentials) resp(cnonce string) (string, error) {
 			c.Cnonce = fmt.Sprintf("%x", b)[:16]
 		}
 		return kd(c.ha1(), fmt.Sprintf("%s:%08x:%s:%s:%s",
-			c.Nonce, c.NonceCount, c.Cnonce, c.MessageQop, c.ha2())), nil
+			c.Nonce, c.NonceCount, c.Cnonce, c.MessageQop, c.ha2()), c.Algorithm), nil
 	} else if c.MessageQop == "" {
-		return kd(c.ha1(), fmt.Sprintf("%s:%s", c.Nonce, c.ha2())), nil
+		return kd(c.ha1(), fmt.Sprintf("%s:%s", c.Nonce, c.ha2()), c.Algorithm), nil
 	}
 	return "", ErrAlgNotImplemented
 }
 
 func (c *digestCredentials) authorize() (string, error) {
-	// Note that this is only implemented for MD5 and NOT MD5-sess.
-	// MD5-sess is rarely supported and those that do are a big mess.
-	if c.Algorithm != "MD5" {
+	// Note that this is only implemented for MD5, SHA-512-256 and SHA-256.
+	// But NOT the *-sess variants.
+	// *-sess variants are rarely supported and those that do are a big mess.
+	if _, ok := supportedAlgorithms[c.Algorithm]; !ok {
 		return "", ErrAlgNotImplemented
 	}
 	// Note that this is NOT implemented for "qop=auth-int".  Similarly the
