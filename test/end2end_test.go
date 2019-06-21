@@ -154,7 +154,6 @@ type testServer struct {
 	setAndSendHeader   bool   // whether to call setHeader and sendHeader.
 	setHeaderOnly      bool   // whether to only call setHeader, not sendHeader.
 	multipleSetTrailer bool   // whether to call setTrailer multiple times.
-	enableHealthServer bool   // whether or not to expose the server's health via the default health service implementation.
 	unaryCallSleepTime time.Duration
 }
 
@@ -481,6 +480,8 @@ type test struct {
 	// The following knobs are for the server-side, and should be set after
 	// calling newTest() and before calling startServer().
 
+	// whether or not to expose the server's health via the default health service implementation.
+	enableHealthServer bool
 	// In almost all cases, one should set the 'enableHealthServer' flag on the
 	// testServer to expose the server's health using the default health service
 	// implementation.. This should only be used when a non-default health
@@ -658,21 +659,17 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 	}
 	sopts = append(sopts, te.customServerOptions...)
 	s := grpc.NewServer(sopts...)
+	if ts != nil {
+		testpb.RegisterTestServiceServer(s, ts)
+	}
 
 	// Create a new default health server if enableHealthServer is set, or use
 	// the provided one.
-	var hs healthpb.HealthServer
-	if ts != nil {
-		if tss, ok := ts.(*testServer); ok {
-			if tss.enableHealthServer {
-				hs = health.NewServer()
-				healthgrpc.RegisterHealthServer(s, hs)
-			}
-		}
-		testpb.RegisterTestServiceServer(s, ts)
+	hs := te.healthServer
+	if te.enableHealthServer {
+		hs = health.NewServer()
 	}
-	if te.healthServer != nil {
-		hs = te.healthServer
+	if hs != nil {
 		healthgrpc.RegisterHealthServer(s, hs)
 	}
 
