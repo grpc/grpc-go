@@ -70,6 +70,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	_ "google.golang.org/grpc/resolver/passthrough"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
@@ -153,6 +154,7 @@ type testServer struct {
 	setAndSendHeader   bool   // whether to call setHeader and sendHeader.
 	setHeaderOnly      bool   // whether to only call setHeader, not sendHeader.
 	multipleSetTrailer bool   // whether to call setTrailer multiple times.
+	enableHealthServer bool   // whether or not to expose the server's health via the default health service implementation.
 	unaryCallSleepTime time.Duration
 }
 
@@ -470,59 +472,71 @@ func listTestEnv() (envs []env) {
 // func, modified as needed, and then started with its startServer method.
 // It should be cleaned up with the tearDown method.
 type test struct {
-	t *testing.T
-	e env
-
+	// The following are setup in newTest().
+	t      *testing.T
+	e      env
 	ctx    context.Context // valid for life of test, before tearDown
 	cancel context.CancelFunc
 
-	// Configurable knobs, after newTest returns:
-	testServer              testpb.TestServiceServer // nil means none
-	healthServer            *health.Server           // nil means disabled
+	// The following knobs are for the server-side, and should be set after
+	// calling newTest() and before calling startServer().
+
+	// In almost all cases, one should set the 'enableHealthServer' flag on the
+	// testServer to expose the server's health using the default health service
+	// implementation.. This should only be used when a non-default health
+	// service implementation is required.
+	healthServer            healthpb.HealthServer
 	maxStream               uint32
 	tapHandle               tap.ServerInHandle
-	maxMsgSize              *int
-	maxClientReceiveMsgSize *int
-	maxClientSendMsgSize    *int
+	maxServerMsgSize        *int
 	maxServerReceiveMsgSize *int
 	maxServerSendMsgSize    *int
-	maxClientHeaderListSize *uint32
 	maxServerHeaderListSize *uint32
+	// Used to test the deprecated API WithCompressor and WithDecompressor.
+	serverCompression           bool
+	unknownHandler              grpc.StreamHandler
+	unaryServerInt              grpc.UnaryServerInterceptor
+	streamServerInt             grpc.StreamServerInterceptor
+	serverInitialWindowSize     int32
+	serverInitialConnWindowSize int32
+	customServerOptions         []grpc.ServerOption
+
+	// The following knobs are for the client-side, and should be set after
+	// calling newTest() and before calling clientConn().
+	maxClientMsgSize        *int
+	maxClientReceiveMsgSize *int
+	maxClientSendMsgSize    *int
+	maxClientHeaderListSize *uint32
 	userAgent               string
-	// clientCompression and serverCompression are set to test the deprecated API
-	// WithCompressor and WithDecompressor.
+	// Used to test the deprecated API WithCompressor and WithDecompressor.
 	clientCompression bool
-	serverCompression bool
-	// clientUseCompression is set to test the new compressor registration API UseCompressor.
+	// Used to test the new compressor registration API UseCompressor.
 	clientUseCompression bool
 	// clientNopCompression is set to create a compressor whose type is not supported.
 	clientNopCompression        bool
 	unaryClientInt              grpc.UnaryClientInterceptor
 	streamClientInt             grpc.StreamClientInterceptor
-	unaryServerInt              grpc.UnaryServerInterceptor
-	streamServerInt             grpc.StreamServerInterceptor
-	unknownHandler              grpc.StreamHandler
 	sc                          <-chan grpc.ServiceConfig
 	customCodec                 encoding.Codec
-	serverInitialWindowSize     int32
-	serverInitialConnWindowSize int32
 	clientInitialWindowSize     int32
 	clientInitialConnWindowSize int32
 	perRPCCreds                 credentials.PerRPCCredentials
 	customDialOptions           []grpc.DialOption
-	customServerOptions         []grpc.ServerOption
 	resolverScheme              string
 
 	// All test dialing is blocking by default. Set this to true if dial
 	// should be non-blocking.
 	nonBlockingDial bool
 
-	// srv and srvAddr are set once startServer is called.
+	// These are are set once startServer is called. The common case is to have
+	// only one testServer.
 	srv     stopper
+	hSrv    healthpb.HealthServer
 	srvAddr string
 
-	// srvs and srvAddrs are set once startServers is called.
-	srvs     []*grpc.Server
+	// These are are set once startServers is called.
+	srvs     []stopper
+	hSrvs    []healthpb.HealthServer
 	srvAddrs []string
 
 	cc          *grpc.ClientConn // nil until requested via clientConn
@@ -553,9 +567,19 @@ func (te *test) tearDown() {
 	if te.srv != nil {
 		te.srv.Stop()
 	}
-	if len(te.srvs) != 0 {
-		for _, s := range te.srvs {
-			s.Stop()
+	if te.hSrv != nil {
+		if hs, ok := te.hSrv.(*health.Server); ok {
+			hs.Shutdown()
+		}
+	}
+	for _, s := range te.srvs {
+		s.Stop()
+	}
+	for _, hSrv := range te.hSrvs {
+		if hSrv != nil {
+			if hs, ok := hSrv.(*health.Server); ok {
+				hs.Shutdown()
+			}
 		}
 	}
 }
@@ -574,11 +598,10 @@ func newTest(t *testing.T, e env) *test {
 }
 
 func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network, address string) (net.Listener, error)) net.Listener {
-	te.testServer = ts
 	te.t.Logf("Running test in %s environment...", te.e.name)
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(te.maxStream)}
-	if te.maxMsgSize != nil {
-		sopts = append(sopts, grpc.MaxMsgSize(*te.maxMsgSize))
+	if te.maxServerMsgSize != nil {
+		sopts = append(sopts, grpc.MaxMsgSize(*te.maxServerMsgSize))
 	}
 	if te.maxServerReceiveMsgSize != nil {
 		sopts = append(sopts, grpc.MaxRecvMsgSize(*te.maxServerReceiveMsgSize))
@@ -635,13 +658,24 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 	}
 	sopts = append(sopts, te.customServerOptions...)
 	s := grpc.NewServer(sopts...)
-	te.srv = s
+
+	// Create a new default health server if enableHealthServer is set, or use
+	// the provided one.
+	var hs healthpb.HealthServer
+	if ts != nil {
+		if tss, ok := ts.(*testServer); ok {
+			if tss.enableHealthServer {
+				hs = health.NewServer()
+				healthgrpc.RegisterHealthServer(s, hs)
+			}
+		}
+		testpb.RegisterTestServiceServer(s, ts)
+	}
 	if te.healthServer != nil {
-		healthgrpc.RegisterHealthServer(s, te.healthServer)
+		hs = te.healthServer
+		healthgrpc.RegisterHealthServer(s, hs)
 	}
-	if te.testServer != nil {
-		testpb.RegisterTestServiceServer(s, te.testServer)
-	}
+
 	addr := la
 	switch te.e.network {
 	case "unix":
@@ -653,6 +687,8 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		addr = "localhost:" + port
 	}
 
+	te.srv = s
+	te.hSrv = hs
 	te.srvAddr = addr
 
 	if te.e.httpHandler {
@@ -697,10 +733,32 @@ func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) *listene
 	return l.(*listenerWrapper)
 }
 
-// startServer starts a gRPC server listening. Callers should defer a
-// call to te.tearDown to clean up.
+// startServer starts a gRPC server exposing the provided TestService
+// implementation. Callers should defer a call to te.tearDown to clean up
 func (te *test) startServer(ts testpb.TestServiceServer) {
 	te.listenAndServe(ts, net.Listen)
+}
+
+// startServers starts 'num' gRPC servers exposing the provided TestService.
+func (te *test) startServers(ts testpb.TestServiceServer, num int) {
+	for i := 0; i < num; i++ {
+		te.startServer(ts)
+		te.srvs = append(te.srvs, te.srv.(*grpc.Server))
+		te.hSrvs = append(te.hSrvs, te.hSrv)
+		te.srvAddrs = append(te.srvAddrs, te.srvAddr)
+		te.srv = nil
+		te.hSrv = nil
+		te.srvAddr = ""
+	}
+}
+
+// setHealthServingStatus is a helper function to set the health status.
+func (te *test) setHealthServingStatus(service string, status healthpb.HealthCheckResponse_ServingStatus) {
+	if te.hSrv != nil {
+		if hs, ok := te.hSrv.(*health.Server); ok {
+			hs.SetServingStatus(service, status)
+		}
+	}
 }
 
 type nopCompressor struct {
@@ -757,8 +815,8 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	if te.streamClientInt != nil {
 		opts = append(opts, grpc.WithStreamInterceptor(te.streamClientInt))
 	}
-	if te.maxMsgSize != nil {
-		opts = append(opts, grpc.WithMaxMsgSize(*te.maxMsgSize))
+	if te.maxClientMsgSize != nil {
+		opts = append(opts, grpc.WithMaxMsgSize(*te.maxClientMsgSize))
 	}
 	if te.maxClientReceiveMsgSize != nil {
 		opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(*te.maxClientReceiveMsgSize)))
@@ -2881,15 +2939,16 @@ func (s) TestExceedMsgLimit(t *testing.T) {
 
 func testExceedMsgLimit(t *testing.T, e env) {
 	te := newTest(t, e)
-	te.maxMsgSize = newInt(1024)
+	maxMsgSize := 1024
+	te.maxServerMsgSize, te.maxClientMsgSize = newInt(maxMsgSize), newInt(maxMsgSize)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
-	argSize := int32(*te.maxMsgSize + 1)
+	largeSize := int32(maxMsgSize + 1)
 	const smallSize = 1
 
-	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
+	largePayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, largeSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2898,23 +2957,23 @@ func testExceedMsgLimit(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 
-	// Test on server side for unary RPC.
+	// Make sure the server cannot receive a unary RPC of largeSize.
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE,
 		ResponseSize: smallSize,
-		Payload:      payload,
+		Payload:      largePayload,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
-	// Test on client side for unary RPC.
-	req.ResponseSize = int32(*te.maxMsgSize) + 1
+	// Make sure the client cannot receive a unary RPC of largeSize.
+	req.ResponseSize = largeSize
 	req.Payload = smallPayload
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
-	// Test on server side for streaming RPC.
+	// Make sure the server cannot receive a streaming RPC of largeSize.
 	stream, err := tc.FullDuplexCall(te.ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -2925,15 +2984,10 @@ func testExceedMsgLimit(t *testing.T, e env) {
 		},
 	}
 
-	spayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(*te.maxMsgSize+1))
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	sreq := &testpb.StreamingOutputCallRequest{
 		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
-		Payload:            spayload,
+		Payload:            largePayload,
 	}
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
@@ -2947,7 +3001,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	respParam[0].Size = int32(*te.maxMsgSize) + 1
+	respParam[0].Size = largeSize
 	sreq.Payload = smallPayload
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
@@ -2955,7 +3009,6 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	if _, err := stream.Recv(); err == nil || status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
-
 }
 
 func (s) TestPeerClientSide(t *testing.T) {
@@ -7411,4 +7464,12 @@ func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string
 	if _, err := stream.Recv(); err == nil || status.Code(err) != errCode {
 		t.Fatalf("stream.Recv() = _, %v, want error code: %v", err, errCode)
 	}
+}
+
+func parseCfg(s string) serviceconfig.Config {
+	c, err := serviceconfig.Parse(s)
+	if err != nil {
+		panic(fmt.Sprintf("Error parsing config %q: %v", s, err))
+	}
+	return c
 }
