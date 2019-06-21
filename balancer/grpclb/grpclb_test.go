@@ -533,42 +533,48 @@ func TestDropRequest(t *testing.T) {
 		i int
 		p peer.Peer
 	)
+	const (
+		// Poll to wait for something to happen. Total timeout 1 second. Sleep 1
+		// ms each loop, and do at most 1000 loops.
+		sleepEachLoop = time.Millisecond
+		loopCount     = int(time.Second / sleepEachLoop)
+	)
 	// Make a non-fail-fast RPC and wait for it to succeed.
-	for i = 0; i < 1000; i++ {
+	for i = 0; i < loopCount; i++ {
 		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err == nil {
 			break
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(sleepEachLoop)
 	}
-	if i >= 1000 {
-		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", testC, err)
+	if i >= loopCount {
+		t.Fatalf("timeout waiting for the first connection to become ready. EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 
 	// Make RPCs until the peer is different. So we know both connections are
 	// READY.
-	for i = 0; i < 1000; i++ {
+	for i = 0; i < loopCount; i++ {
 		var temp peer.Peer
 		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&temp)); err == nil {
 			if temp.Addr.(*net.TCPAddr).Port != p.Addr.(*net.TCPAddr).Port {
 				break
 			}
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(sleepEachLoop)
 	}
-	if i >= 1000 {
-		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", testC, err)
+	if i >= loopCount {
+		t.Fatalf("timeout waiting for the second connection to become ready")
 	}
 
 	// More RPCs until drop happens. So we know the picker index, and the
 	// expected behavior of following RPCs.
-	for i = 0; i < 1000; i++ {
+	for i = 0; i < loopCount; i++ {
 		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); status.Code(err) == codes.Unavailable {
 			break
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(sleepEachLoop)
 	}
-	if i >= 1000 {
-		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", testC, err)
+	if i >= loopCount {
+		t.Fatalf("timeout waiting for drop. EmptyCall(_, _) = _, %v, want _, <Unavailable>", err)
 	}
 
 	select {
