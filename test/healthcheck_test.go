@@ -592,7 +592,7 @@ func (s) TestHealthCheckWithClientConnClose(t *testing.T) {
 // This test is to test the logic in the createTransport after the health check function returns which
 // closes the skipReset channel(since it has not been closed inside health check func) to unblock
 // onGoAway/onClose goroutine.
-func (s) TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
+func (s) TestHealthCheckWithoutSetConnectivityStateCalledAddrConnShutDown(t *testing.T) {
 	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
 
 	_, lis, ts, deferFunc, err := setupServer(&svrConfig{
@@ -602,7 +602,7 @@ func (s) TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) 
 					"this special Watch function only handles request with service name to be \"delay\"")
 			}
 			// Do nothing to mock a delay of health check response from server side.
-			// This case is to help with the test that covers the condition that reportHealth is not
+			// This case is to help with the test that covers the condition that setConnectivityState is not
 			// called inside HealthCheckFunc before the func returns.
 			select {
 			case <-stream.Context().Done():
@@ -654,7 +654,7 @@ func (s) TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) 
 	// trigger teardown of the ac, ac in SHUTDOWN state
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{}, ServiceConfig: sc})
 
-	// The health check func should exit without calling the reportHealth func, as server hasn't sent
+	// The health check func should exit without calling the setConnectivityState func, as server hasn't sent
 	// any response.
 	select {
 	case <-hcExitChan:
@@ -668,7 +668,7 @@ func (s) TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) 
 // This test is to test the logic in the createTransport after the health check function returns which
 // closes the allowedToReset channel(since it has not been closed inside health check func) to unblock
 // onGoAway/onClose goroutine.
-func (s) TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
+func (s) TestHealthCheckWithoutSetConnectivityStateCalled(t *testing.T) {
 	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
 
 	s, lis, ts, deferFunc, err := setupServer(&svrConfig{
@@ -678,7 +678,7 @@ func (s) TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 					"this special Watch function only handles request with service name to be \"delay\"")
 			}
 			// Do nothing to mock a delay of health check response from server side.
-			// This case is to help with the test that covers the condition that reportHealth is not
+			// This case is to help with the test that covers the condition that setConnectivityState is not
 			// called inside HealthCheckFunc before the func returns.
 			select {
 			case <-stream.Context().Done():
@@ -728,7 +728,7 @@ func (s) TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 	// trigger transport being closed
 	s.Stop()
 
-	// The health check func should exit without calling the reportHealth func, as server hasn't sent
+	// The health check func should exit without calling the setConnectivityState func, as server hasn't sent
 	// any response.
 	select {
 	case <-hcExitChan:

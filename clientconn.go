@@ -1246,7 +1246,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 		ac.mu.Unlock()
 		return newNonRetryClientStream(ctx, &StreamDesc{ServerStreams: true}, method, currentTr, ac)
 	}
-	reportHealth := func(s connectivity.State) {
+	setConnectivityState := func(s connectivity.State) {
 		ac.mu.Lock()
 		defer ac.mu.Unlock()
 		if ac.transport != currentTr {
@@ -1256,7 +1256,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 	}
 	// Start the health checking stream.
 	go func() {
-		err := ac.cc.dopts.healthCheckFunc(ctx, newStream, reportHealth, healthCheckConfig.ServiceName)
+		err := ac.cc.dopts.healthCheckFunc(ctx, newStream, setConnectivityState, healthCheckConfig.ServiceName)
 		if err != nil {
 			if status.Code(err) == codes.Unimplemented {
 				if channelz.IsOn() {
