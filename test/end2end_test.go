@@ -749,15 +749,6 @@ func (te *test) startServers(ts testpb.TestServiceServer, num int) {
 	}
 }
 
-// setHealthServingStatus is a helper function to set the health status.
-func (te *test) setHealthServingStatus(service string, status healthpb.HealthCheckResponse_ServingStatus) {
-	if te.hSrv != nil {
-		if hs, ok := te.hSrv.(*health.Server); ok {
-			hs.SetServingStatus(service, status)
-		}
-	}
-}
-
 type nopCompressor struct {
 	grpc.Compressor
 }
