@@ -568,20 +568,8 @@ func (te *test) tearDown() {
 	if te.srv != nil {
 		te.srv.Stop()
 	}
-	if te.hSrv != nil {
-		if hs, ok := te.hSrv.(*health.Server); ok {
-			hs.Shutdown()
-		}
-	}
 	for _, s := range te.srvs {
 		s.Stop()
-	}
-	for _, hSrv := range te.hSrvs {
-		if hSrv != nil {
-			if hs, ok := hSrv.(*health.Server); ok {
-				hs.Shutdown()
-			}
-		}
 	}
 }
 
