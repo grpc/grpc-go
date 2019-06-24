@@ -480,12 +480,13 @@ type test struct {
 	// The following knobs are for the server-side, and should be set after
 	// calling newTest() and before calling startServer().
 
-	// whether or not to expose the server's health via the default health service implementation.
+	// whether or not to expose the server's health via the default health
+	// service implementation.
 	enableHealthServer bool
-	// In almost all cases, one should set the 'enableHealthServer' flag on the
-	// testServer to expose the server's health using the default health service
-	// implementation.. This should only be used when a non-default health
-	// service implementation is required.
+	// In almost all cases, one should set the 'enableHealthServer' flag above to
+	// expose the server's health using the default health service
+	// implementation. This should only be used when a non-default health service
+	// implementation is required.
 	healthServer            healthpb.HealthServer
 	maxStream               uint32
 	tapHandle               tap.ServerInHandle
