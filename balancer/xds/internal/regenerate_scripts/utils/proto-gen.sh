@@ -22,8 +22,7 @@ do
   bazel build "$i"
 done
 
-cwd=$(pwd)
-dest=$cwd/../../proto/
+dest="$PWD/../../proto/"
 rm -rf "$dest"
 srcs=(
     "find -L ./bazel-bin/envoy/ -name *.pb.go -print0"
@@ -36,8 +35,8 @@ do
     eval "$src" |
     while IFS= read -r -d '' origin
     do
-        target=${origin##*proto/}
-        final=$dest$target
+        target="${origin##*proto/}"
+        final="$dest$target"
         mkdir -p "${final%*/*}"
         cp "$origin" "$dest$target"
     done
