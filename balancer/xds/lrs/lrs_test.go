@@ -123,7 +123,7 @@ func Test_lrsStore_buildStats_drops(t *testing.T) {
 				dropCategories[0]: 31,
 				dropCategories[1]: 41,
 			}, {
-				dropCategories[0]: 0, // This is shouldn't cause an empty report for category[0].
+				dropCategories[0]: 0, // This shouldn't cause an empty report for category[0].
 				dropCategories[1]: 26,
 			}},
 		},
@@ -194,7 +194,7 @@ func Test_lrsStore_buildStats_rpcCounts(t *testing.T) {
 			}},
 		},
 		{
-			name: "two localities rpcCount reports",
+			name: "two localities one rpcCount report",
 			rpcs: []map[internal.Locality]struct {
 				start, success, failure uint64
 				serverData              map[string]float64
@@ -204,7 +204,7 @@ func Test_lrsStore_buildStats_rpcCounts(t *testing.T) {
 			}},
 		},
 		{
-			name: "two rpcCount reports",
+			name: "three rpcCount reports",
 			rpcs: []map[internal.Locality]struct {
 				start, success, failure uint64
 				serverData              map[string]float64
@@ -226,18 +226,32 @@ func Test_lrsStore_buildStats_rpcCounts(t *testing.T) {
 				localities[0]: {4, 3, 1, nil},
 				localities[1]: {7, 1, 5, nil},
 			}, {
-				localities[0]: {0, 0, 0, nil}, // This is shouldn't cause an empty report for locality[0].
+				localities[0]: {0, 0, 0, nil}, // This shouldn't cause an empty report for locality[0].
 				localities[1]: {1, 1, 0, nil},
 			}},
 		},
 		{
-			name: "two localities rpcCount reports with server loads",
+			name: "two localities one report with server loads",
 			rpcs: []map[internal.Locality]struct {
 				start, success, failure uint64
 				serverData              map[string]float64
 			}{{
 				localities[0]: {8, 3, 1, map[string]float64{"cpu": 15, "mem": 20}},
 				localities[1]: {15, 4, 5, map[string]float64{"net": 5, "disk": 0.8}},
+			}},
+		},
+		{
+			name: "three reports with server loads",
+			rpcs: []map[internal.Locality]struct {
+				start, success, failure uint64
+				serverData              map[string]float64
+			}{{
+				localities[0]: {8, 3, 1, map[string]float64{"cpu": 15, "mem": 20}},
+				localities[1]: {15, 4, 5, map[string]float64{"net": 5, "disk": 0.8}},
+			}, {
+				localities[0]: {8, 3, 1, map[string]float64{"cpu": 1, "mem": 2}},
+			}, {
+				localities[1]: {15, 4, 5, map[string]float64{"net": 13, "disk": 1.4}},
 			}},
 		},
 	}
