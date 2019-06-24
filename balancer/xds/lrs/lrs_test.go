@@ -297,29 +297,29 @@ func Test_lrsStore_buildStats_rpcCounts(t *testing.T) {
 				for l, count := range counts {
 					for i := 0; i < int(count.success); i++ {
 						wg.Add(1)
-						go func(i int, l internal.Locality, serverData map[string]float64) {
+						go func(l internal.Locality, serverData map[string]float64) {
 							ls.CallStarted(l)
 							ls.CallFinished(l, nil)
 							for n, d := range serverData {
 								ls.CallServerLoad(l, n, d)
 							}
 							wg.Done()
-						}(i, l, count.serverData)
+						}(l, count.serverData)
 					}
 					for i := 0; i < int(count.failure); i++ {
 						wg.Add(1)
-						go func(i int, l internal.Locality) {
+						go func(l internal.Locality) {
 							ls.CallStarted(l)
 							ls.CallFinished(l, errTest)
 							wg.Done()
-						}(i, l)
+						}(l)
 					}
 					for i := 0; i < int(count.start-count.success-count.failure); i++ {
 						wg.Add(1)
-						go func(i int, l internal.Locality) {
+						go func(l internal.Locality) {
 							ls.CallStarted(l)
 							wg.Done()
-						}(i, l)
+						}(l)
 					}
 				}
 				wg.Wait()
