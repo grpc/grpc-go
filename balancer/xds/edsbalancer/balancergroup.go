@@ -81,7 +81,13 @@ func newBalancerGroup(cc balancer.ClientConn, loadStore lrs.Store) *balancerGrou
 }
 
 // add adds a balancer built by builder to the group, with given id and weight.
+//
+// weight should never be zero.
 func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balancer.Builder) {
+	if weight == 0 {
+		grpclog.Errorf("balancerGroup.add called with weight 0, locality: %v. Locality is not added to balancer group", id)
+		return
+	}
 	bg.mu.Lock()
 	if _, ok := bg.idToBalancer[id]; ok {
 		bg.mu.Unlock()
@@ -140,10 +146,16 @@ func (bg *balancerGroup) remove(id internal.Locality) {
 
 // changeWeight changes the weight of the balancer.
 //
+// newWeight should never be zero.
+//
 // NOTE: It always results in a picker update now. This probably isn't
 // necessary. But it seems better to do the update because it's a change in the
 // picker (which is balancer's snapshot).
 func (bg *balancerGroup) changeWeight(id internal.Locality, newWeight uint32) {
+	if newWeight == 0 {
+		grpclog.Errorf("balancerGroup.changeWeight called with newWeight 0. Weight is not changed")
+		return
+	}
 	bg.pickerMu.Lock()
 	defer bg.pickerMu.Unlock()
 	pState, ok := bg.idToPickerState[id]
