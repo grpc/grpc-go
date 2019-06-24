@@ -6,6 +6,7 @@ git clone git@github.com:envoyproxy/data-plane-api.git
 git clone git@github.com:envoyproxy/protoc-gen-validate.git
 
 cd data-plane-api
+git checkout $DATA_PLANE_API_VERSION
 cp ../utils/WORKSPACE .
 bazel clean --expunge
 
@@ -20,7 +21,6 @@ git checkout $PROTOC_GEN_VALIDATE
 git apply ../utils/protoc-gen-validate.patch
 
 cd ../data-plane-api
-git checkout $DATA_PLANE_API_VERSION
 
 # cleanup.sh remove all gogo proto related imports and labels.
 ../utils/cleanup.sh
