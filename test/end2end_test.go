@@ -2587,7 +2587,7 @@ func testHealthWatchMultipleClients(t *testing.T, e env) {
 
 // TestHealthWatchSameStatusmakes a streaming Watch() RPC on the health server
 // and makes sure that the health status of the server is as expected after
-// mutliple calls to SetServingStatus with the same status.
+// multiple calls to SetServingStatus with the same status.
 func (s) TestHealthWatchSameStatus(t *testing.T) {
 	for _, e := range listTestEnv() {
 		testHealthWatchSameStatus(t, e)
