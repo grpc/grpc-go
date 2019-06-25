@@ -3132,7 +3132,8 @@ func testMetadataOrderUnaryRPC(t *testing.T, e env) {
 	ctx = metadata.AppendToOutgoingContext(ctx, "key1", "value2")
 	ctx = metadata.AppendToOutgoingContext(ctx, "key1", "value3")
 
-	newMetadata, _ := metadata.FromOutgoingContext(ctx)
+	// using Join to built expected metadata instead of FromOutgoingContext
+	newMetadata := metadata.Join(testMetadata, metadata.Pairs("key1", "value2", "key1", "value3"))
 
 	var header metadata.MD
 	if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.Header(&header)); err != nil {
