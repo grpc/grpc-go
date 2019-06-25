@@ -3146,6 +3146,43 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 	}
 }
 
+func (s) TestMetadataOrderUnaryRPC(t *testing.T) {
+	for _, e := range listTestEnv() {
+		testMetadataOrderUnaryRPC(t, e)
+	}
+}
+
+func testMetadataOrderUnaryRPC(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	ctx := metadata.NewOutgoingContext(context.Background(), testMetadata)
+	ctx = metadata.AppendToOutgoingContext(ctx, "key1", "value2")
+	ctx = metadata.AppendToOutgoingContext(ctx, "key1", "value3")
+
+	// using Join to built expected metadata instead of FromOutgoingContext
+	newMetadata := metadata.Join(testMetadata, metadata.Pairs("key1", "value2", "key1", "value3"))
+
+	var header metadata.MD
+	if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.Header(&header)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ignore optional response headers that Servers may set:
+	if header != nil {
+		delete(header, "trailer") // RFC 2616 says server SHOULD (but optional) declare trailers
+		delete(header, "date")    // the Date header is also optional
+		delete(header, "user-agent")
+		delete(header, "content-type")
+	}
+
+	if !reflect.DeepEqual(header, newMetadata) {
+		t.Fatalf("Received header metadata %v, want %v", header, newMetadata)
+	}
+}
+
 func (s) TestMultipleSetTrailerUnaryRPC(t *testing.T) {
 	for _, e := range listTestEnv() {
 		testMultipleSetTrailerUnaryRPC(t, e)
