@@ -37,8 +37,11 @@ type parseTestCase struct {
 }
 
 func runParseTests(t *testing.T, testCases []parseTestCase) {
+	t.Helper()
 	for _, c := range testCases {
-		sc, err := parseServiceConfig(c.scjs)
+		sci, err := parseServiceConfig(c.scjs).Get()
+		var sc *ServiceConfig
+		sc, _ = sci.(*ServiceConfig)
 		if !c.wantErr {
 			c.wantSC.rawJSONString = c.scjs
 		}
