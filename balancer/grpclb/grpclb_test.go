@@ -44,7 +44,6 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -853,12 +852,6 @@ func TestFallback(t *testing.T) {
 }
 
 func TestGRPCLBPickFirst(t *testing.T) {
-	const pfc = `{"loadBalancingConfig":[{"grpclb":{"childPolicy":[{"pick_first":{}}]}}]}`
-	svcCfg, err := serviceconfig.Parse(pfc)
-	if err != nil {
-		t.Fatalf("Error parsing config %q: %v", pfc, err)
-	}
-
 	defer leakcheck.Check(t)
 
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
@@ -908,6 +901,11 @@ func TestGRPCLBPickFirst(t *testing.T) {
 	tss.ls.sls <- &lbpb.ServerList{Servers: beServers[0:3]}
 
 	// Start with sub policy pick_first.
+	const pfc = `{"loadBalancingConfig":[{"grpclb":{"childPolicy":[{"pick_first":{}}]}}]}`
+	svcCfg := r.CC.ParseServiceConfig(pfc)
+	if _, err := svcCfg.Get(); err != nil {
+		t.Fatalf("Error parsing config %q: %v", pfc, err)
+	}
 
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{
@@ -915,7 +913,7 @@ func TestGRPCLBPickFirst(t *testing.T) {
 			Type:       resolver.GRPCLB,
 			ServerName: lbServerName,
 		}},
-		ServiceConfig: svcCfg,
+		ServiceConfigGetter: svcCfg,
 	})
 
 	result = ""
@@ -954,9 +952,9 @@ func TestGRPCLBPickFirst(t *testing.T) {
 	}
 
 	// Switch sub policy to roundrobin.
-	grpclbServiceConfigEmpty, err := serviceconfig.Parse(`{}`)
-	if err != nil {
-		t.Fatalf("Error parsing config %q: %v", grpclbServiceConfigEmpty, err)
+	grpclbServiceConfigEmpty := r.CC.ParseServiceConfig(`{}`)
+	if _, err := grpclbServiceConfigEmpty.Get(); err != nil {
+		t.Fatalf("Error parsing config %q: %v", `{}`, err)
 	}
 
 	r.UpdateState(resolver.State{
@@ -965,7 +963,7 @@ func TestGRPCLBPickFirst(t *testing.T) {
 			Type:       resolver.GRPCLB,
 			ServerName: lbServerName,
 		}},
-		ServiceConfig: grpclbServiceConfigEmpty,
+		ServiceConfigGetter: grpclbServiceConfigEmpty,
 	})
 
 	result = ""

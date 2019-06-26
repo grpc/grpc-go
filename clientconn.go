@@ -186,11 +186,11 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	if cc.dopts.defaultServiceConfigRawJSON != nil {
-		sc, err := parseServiceConfig(*cc.dopts.defaultServiceConfigRawJSON)
+		cfg, err := parseServiceConfig(*cc.dopts.defaultServiceConfigRawJSON).Get()
 		if err != nil {
 			return nil, fmt.Errorf("%s: %v", invalidDefaultServiceConfigErrPrefix, err)
 		}
-		cc.dopts.defaultServiceConfig = sc
+		cc.dopts.defaultServiceConfig, _ = cfg.(*ServiceConfig)
 	}
 	cc.mkp = cc.dopts.copts.KeepaliveParams
 
@@ -532,7 +532,29 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 	}
 }
 
-func (cc *ClientConn) updateResolverState(s resolver.State) error {
+var emptyServiceConfig *ServiceConfig
+
+func init() {
+	cfg, err := parseServiceConfig("{}").Get()
+	if err != nil {
+		panic(fmt.Sprintf("impossible error parsing empty service config: %v", err))
+	}
+	emptyServiceConfig = cfg.(*ServiceConfig)
+}
+
+func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
+	if cc.sc != nil {
+		cc.applyServiceConfig(cc.sc, addrs)
+		return
+	}
+	if cc.dopts.defaultServiceConfig != nil {
+		cc.applyServiceConfig(cc.dopts.defaultServiceConfig, addrs)
+	} else {
+		cc.applyServiceConfig(emptyServiceConfig, addrs)
+	}
+}
+
+func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
 	// Check if the ClientConn is already closed. Some fields (e.g.
@@ -542,48 +564,42 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 		return nil
 	}
 
-	if cc.dopts.disableServiceConfig || s.ServiceConfig == nil {
-		if cc.dopts.defaultServiceConfig != nil && cc.sc == nil {
-			cc.applyServiceConfig(cc.dopts.defaultServiceConfig)
+	if err != nil {
+		// May need to apply the initial service config
+		cc.maybeApplyDefaultServiceConfig(nil)
+
+		if cc.balancerWrapper != nil {
+			cc.balancerWrapper.resolverError(err)
 		}
-	} else if sc, ok := s.ServiceConfig.(*ServiceConfig); ok {
-		cc.applyServiceConfig(sc)
+
+		// No addresses are valid with err set; return early.
+		return balancer.ErrBadResolverState
+	}
+
+	var ret error
+	if cc.dopts.disableServiceConfig || s.ServiceConfigGetter == nil {
+		cc.maybeApplyDefaultServiceConfig(s.Addresses)
+		// TODO: do we need to apply a failing LB policy if there is no
+		// default, per the error handling design?
+	} else {
+		scg, err := s.ServiceConfigGetter.Get()
+		if sc, ok := scg.(*ServiceConfig); err == nil && ok {
+			cc.applyServiceConfig(sc, s.Addresses)
+		} else {
+			ret = balancer.ErrBadResolverState
+		}
 	}
 
 	var balCfg serviceconfig.LoadBalancingConfig
-	if cc.dopts.balancerBuilder == nil {
-		// Only look at balancer types and switch balancer if balancer dial
-		// option is not set.
-		var newBalancerName string
-		if cc.sc != nil && cc.sc.lbConfig != nil {
-			newBalancerName = cc.sc.lbConfig.name
-			balCfg = cc.sc.lbConfig.cfg
-		} else {
-			var isGRPCLB bool
-			for _, a := range s.Addresses {
-				if a.Type == resolver.GRPCLB {
-					isGRPCLB = true
-					break
-				}
-			}
-			if isGRPCLB {
-				newBalancerName = grpclbName
-			} else if cc.sc != nil && cc.sc.LB != nil {
-				newBalancerName = *cc.sc.LB
-			} else {
-				newBalancerName = PickFirstBalancerName
-			}
-		}
-		cc.switchBalancer(newBalancerName)
-	} else if cc.balancerWrapper == nil {
-		// Balancer dial option was set, and this is the first time handling
-		// resolved addresses. Build a balancer with dopts.balancerBuilder.
-		cc.curBalancerName = cc.dopts.balancerBuilder.Name()
-		cc.balancerWrapper = newCCBalancerWrapper(cc, cc.dopts.balancerBuilder, cc.balancerBuildOpts)
+	if cc.dopts.balancerBuilder == nil && cc.sc != nil && cc.sc.lbConfig != nil {
+		balCfg = cc.sc.lbConfig.cfg
 	}
-
-	cc.balancerWrapper.updateClientConnState(&balancer.ClientConnState{ResolverState: s, BalancerConfig: balCfg})
-	return nil
+	uccsErr := cc.balancerWrapper.updateClientConnState(&balancer.ClientConnState{ResolverState: s, BalancerConfig: balCfg})
+	if ret == nil {
+		ret = uccsErr // prefer ErrBadResolver state since any other error is
+		// currently meaningless to the caller.
+	}
+	return ret
 }
 
 // switchBalancer starts the switching from current balancer to the balancer
@@ -831,10 +847,10 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method st
 	return t, done, nil
 }
 
-func (cc *ClientConn) applyServiceConfig(sc *ServiceConfig) error {
+func (cc *ClientConn) applyServiceConfig(sc *ServiceConfig, addrs []resolver.Address) {
 	if sc == nil {
 		// should never reach here.
-		return fmt.Errorf("got nil pointer for service config")
+		return
 	}
 	cc.sc = sc
 
@@ -850,7 +866,35 @@ func (cc *ClientConn) applyServiceConfig(sc *ServiceConfig) error {
 		cc.retryThrottler.Store((*retryThrottler)(nil))
 	}
 
-	return nil
+	if cc.dopts.balancerBuilder == nil {
+		// Only look at balancer types and switch balancer if balancer dial
+		// option is not set.
+		var newBalancerName string
+		if cc.sc != nil && cc.sc.lbConfig != nil {
+			newBalancerName = cc.sc.lbConfig.name
+		} else {
+			var isGRPCLB bool
+			for _, a := range addrs {
+				if a.Type == resolver.GRPCLB {
+					isGRPCLB = true
+					break
+				}
+			}
+			if isGRPCLB {
+				newBalancerName = grpclbName
+			} else if cc.sc != nil && cc.sc.LB != nil {
+				newBalancerName = *cc.sc.LB
+			} else {
+				newBalancerName = PickFirstBalancerName
+			}
+		}
+		cc.switchBalancer(newBalancerName)
+	} else if cc.balancerWrapper == nil {
+		// Balancer dial option was set, and this is the first time handling
+		// resolved addresses. Build a balancer with dopts.balancerBuilder.
+		cc.curBalancerName = cc.dopts.balancerBuilder.Name()
+		cc.balancerWrapper = newCCBalancerWrapper(cc, cc.dopts.balancerBuilder, cc.balancerBuildOpts)
+	}
 }
 
 func (cc *ClientConn) resolveNow(o resolver.ResolveNowOption) {
