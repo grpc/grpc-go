@@ -23,26 +23,46 @@
 package serviceconfig
 
 import (
-	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/status"
 )
 
 // Config represents an opaque data structure holding a service config.
 type Config interface {
-	isConfig()
+	isServiceConfig()
 }
 
 // LoadBalancingConfig represents an opaque data structure holding a load
-// balancer config.
+// balancing config.
 type LoadBalancingConfig interface {
 	isLoadBalancingConfig()
 }
 
-// Parse parses the JSON service config provided into an internal form or
-// returns an error if the config is invalid.
-func Parse(ServiceConfigJSON string) (Config, error) {
-	c, err := internal.ParseServiceConfig(ServiceConfigJSON)
-	if err != nil {
-		return nil, err
+// Getter provides a service config or an error.
+type Getter struct {
+	err    error
+	config Config
+}
+
+// Get returns either a service config or an error.
+func (g *Getter) Get() (Config, error) {
+	if g == nil {
+		return nil, nil
 	}
-	return c.(Config), err
+	// Only one field in g may be non-nil.
+	return g.config, g.err
+}
+
+// NewGetter returns a Getter returning the provided parameter as either the
+// serviceconfig.Config or error return value, depending upon the type.
+func NewGetter(configOrError interface{}) *Getter {
+	if e, ok := configOrError.(error); ok {
+		return &Getter{err: e}
+	}
+	if c, ok := configOrError.(Config); ok {
+		return &Getter{config: c}
+	}
+	grpclog.Errorf("Unexpected configOrError type: %T", configOrError)
+	return &Getter{err: status.Errorf(codes.Internal, "unexpected configOrError type: %T", configOrError)}
 }
