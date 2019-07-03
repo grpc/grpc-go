@@ -34,7 +34,7 @@ import (
 	"testing"
 )
 
-var cred = &digestCredentials{
+var credExample = digestCredentials{
 	Username:   "Mufasa",
 	Realm:      "testrealm@host.com",
 	Nonce:      "dcd98b7102dd2f0e8b11d0f600bfb0c093",
@@ -75,6 +75,7 @@ func (s) TestKd(t *testing.T) {
 }
 
 func (s) TestHa1(t *testing.T) {
+	cred := credExample
 	r1 := cred.ha1()
 	if r1 != "939e7578ed9e3c518a452acee763bce9" {
 		t.Fail()
@@ -82,6 +83,7 @@ func (s) TestHa1(t *testing.T) {
 }
 
 func (s) TestHa2(t *testing.T) {
+	cred := credExample
 	r1 := cred.ha2()
 	if r1 != "39aff3a2bab6126f332b942af96d3366" {
 		t.Fail()
@@ -89,6 +91,7 @@ func (s) TestHa2(t *testing.T) {
 }
 
 func (s) TestResp(t *testing.T) {
+	cred := credExample
 	r1, err := cred.resp(cnonce)
 	if err != nil {
 		t.Fail()
