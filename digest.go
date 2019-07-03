@@ -40,10 +40,10 @@ import (
 
 var (
 	// ErrBadChallenge indicates the received challenged is bad.
-	ErrBadChallenge = errors.New("Challenge is bad")
+	ErrBadChallenge = errors.New("challenge is bad")
 
 	// ErrAlgNotImplemented indicates the algorithm requested by the server is not implemented.
-	ErrAlgNotImplemented = errors.New("Alg not implemented")
+	ErrAlgNotImplemented = errors.New("algorithm not implemented")
 )
 
 type digestChallenge struct {
@@ -116,7 +116,7 @@ func newDigestCredentials(req *http.Request, c *digestChallenge, username, passw
 		Username:   username,
 		Realm:      c.Realm,
 		Nonce:      c.Nonce,
-		DigestURI:  fmt.Sprintf("%s", req.URL.Host),
+		DigestURI:  req.URL.Host,
 		Algorithm:  c.Algorithm,
 		Opaque:     c.Opaque,
 		MessageQop: c.Qop, // "auth" must be a single value
