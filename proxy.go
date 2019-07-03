@@ -79,7 +79,6 @@ func basicAuth(username, password string) string {
 
 func parseAuthenticationScheme(input string) (string, error) {
 	const ws = " \n\r\t"
-	const qs = `"`
 	s := strings.Trim(input, ws)
 	words := strings.Split(s, " ")
 	if words[0] == "Basic" || words[0] == "Digest" {
