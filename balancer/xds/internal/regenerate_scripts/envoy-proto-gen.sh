@@ -1,6 +1,6 @@
 #!/bin/bash
 set -ex
-DATA_PLANE_API_VERSION=1935b52f94f7889ad9f538a17250e78cffd0af27
+DATA_PLANE_API_VERSION=965c278c10fa90ff34cb4d4890141863f4437b4a
 
 git clone git@github.com:envoyproxy/data-plane-api.git
 git clone git@github.com:envoyproxy/protoc-gen-validate.git
@@ -14,7 +14,7 @@ bazel clean --expunge
 # for customizing proto generated code import path.
 # And we do a simple grep here to get the release version of the
 # proto-gen-validate that gets used by data-plane-api.
-PROTOC_GEN_VALIDATE=v$(grep "PGV_RELEASE =" ./bazel/repository_locations.bzl  | sed -r 's/.*([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+PROTOC_GEN_VALIDATE=$(grep "PGV_GIT_SHA =" ./bazel/repository_locations.bzl  | sed -r 's/.*"(.*)".*/\1/')
 
 cd ../protoc-gen-validate
 git checkout $PROTOC_GEN_VALIDATE
