@@ -425,16 +425,18 @@ func TestBalancerGroup_LoadReport(t *testing.T) {
 		if done != nil && sc != sc1 {
 			done(balancer.DoneInfo{
 				ServerLoad: &orcapb.OrcaLoadReport{
-					CpuUtilization:           10,
-					MemUtilization:           5,
-					RequestCostOrUtilization: map[string]float64{"pi": 3.14},
+					CpuUtilization: 10,
+					MemUtilization: 5,
+					RequestCost:    map[string]float64{"pic": 3.14},
+					Utilization:    map[string]float64{"piu": 3.14},
 				},
 			})
 			wantEnd = append(wantEnd, locality)
 			wantCost = append(wantCost,
 				testServerLoad{name: serverLoadCPUName, d: 10},
 				testServerLoad{name: serverLoadMemoryName, d: 5},
-				testServerLoad{name: "pi", d: 3.14})
+				testServerLoad{name: "pic", d: 3.14},
+				testServerLoad{name: "piu", d: 3.14})
 		}
 	}
 

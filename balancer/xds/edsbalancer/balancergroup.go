@@ -360,7 +360,10 @@ func (lrp *loadReportPicker) Pick(ctx context.Context, opts balancer.PickOptions
 			if load, ok := info.ServerLoad.(*orcapb.OrcaLoadReport); ok {
 				lrp.loadStore.CallServerLoad(lrp.id, serverLoadCPUName, load.CpuUtilization)
 				lrp.loadStore.CallServerLoad(lrp.id, serverLoadMemoryName, load.MemUtilization)
-				for n, d := range load.RequestCostOrUtilization {
+				for n, d := range load.RequestCost {
+					lrp.loadStore.CallServerLoad(lrp.id, n, d)
+				}
+				for n, d := range load.Utilization {
 					lrp.loadStore.CallServerLoad(lrp.id, n, d)
 				}
 			}
