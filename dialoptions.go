@@ -60,7 +60,6 @@ type dialOptions struct {
 	balancerBuilder balancer.Builder
 	// This is to support grpclb.
 	resolverBuilder             resolver.Builder
-	reqHandshake                envconfig.RequireHandshakeSetting
 	channelzParentID            int64
 	disableServiceConfig        bool
 	disableRetry                bool
@@ -98,17 +97,6 @@ func newFuncDialOption(f func(*dialOptions)) *funcDialOption {
 	return &funcDialOption{
 		f: f,
 	}
-}
-
-// WithWaitForHandshake blocks until the initial settings frame is received from
-// the server before assigning RPCs to the connection.
-//
-// Deprecated: this is the default behavior, and this option will be removed
-// after the 1.18 release.
-func WithWaitForHandshake() DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.reqHandshake = envconfig.RequireHandshakeOn
-	})
 }
 
 // WithWriteBufferSize determines how much data can be batched before doing a
@@ -546,7 +534,6 @@ func withHealthCheckFunc(f internal.HealthChecker) DialOption {
 func defaultDialOptions() dialOptions {
 	return dialOptions{
 		disableRetry:    !envconfig.Retry,
-		reqHandshake:    envconfig.RequireHandshake,
 		healthCheckFunc: internal.HealthCheckFunc,
 		copts: transport.ConnectOptions{
 			WriteBufferSize: defaultWriteBufSize,
