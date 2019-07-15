@@ -21,8 +21,11 @@ package test
 import (
 	"context"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/resolver/manual"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
@@ -258,5 +261,118 @@ func testDoneLoads(t *testing.T, e env) {
 	gotLoad, _ := b.doneInfo[0].ServerLoad.(string)
 	if gotLoad != testLoad {
 		t.Fatalf("b.doneInfo[0].ServerLoad = %v; want = %v", b.doneInfo[0].ServerLoad, testLoad)
+	}
+}
+
+const testBalancerKeepAddressesName = "testbalancer-keepingaddresses"
+
+// testBalancerKeepAddresses keeps the addresses in the builder instead of
+// creating SubConns.
+//
+// It's used to test the addresses balancer gets are correct.
+type testBalancerKeepAddresses struct {
+	mu    sync.Mutex
+	addrs []resolver.Address
+}
+
+func (b *testBalancerKeepAddresses) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
+	return b
+}
+
+func (*testBalancerKeepAddresses) Name() string {
+	return testBalancerKeepAddressesName
+}
+
+func (b *testBalancerKeepAddresses) HandleResolvedAddrs(addrs []resolver.Address, err error) {
+	b.mu.Lock()
+	b.addrs = addrs
+	b.mu.Unlock()
+}
+
+func (testBalancerKeepAddresses) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+	panic("not used")
+}
+
+func (testBalancerKeepAddresses) Close() {
+}
+
+// Make sure that non-grpclb balancers don't get grpclb addresses even if name
+// resolver sends them
+func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+
+	b := &testBalancerKeepAddresses{}
+	balancer.Register(b)
+
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(),
+		grpc.WithBalancerName(b.Name()))
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	if len(b.addrs) != 0 {
+		t.Fatalf("Before name resolving, balancer got addresses %v, want empty", b.addrs)
+	}
+
+	grpclbAddresses := []resolver.Address{{
+		Addr:       "grpc.lb.com",
+		Type:       resolver.GRPCLB,
+		ServerName: "grpc.lb.com",
+	}}
+
+	nonGRPCLBAddresses := []resolver.Address{{
+		Addr: "localhost",
+		Type: resolver.Backend,
+	}}
+
+	r.UpdateState(resolver.State{
+		Addresses: nonGRPCLBAddresses,
+	})
+	var i int
+	for i = 0; i < 1000; i++ {
+		b.mu.Lock()
+		if reflect.DeepEqual(b.addrs, nonGRPCLBAddresses) {
+			b.mu.Unlock()
+			break
+		}
+		b.mu.Unlock()
+		time.Sleep(time.Millisecond)
+	}
+	if i >= 1000 {
+		t.Fatalf("With only backend addresses, balancer got addresses %v, want %v", b.addrs, nonGRPCLBAddresses)
+	}
+
+	r.UpdateState(resolver.State{
+		Addresses: grpclbAddresses,
+	})
+	for i = 0; i < 1000; i++ {
+		b.mu.Lock()
+		if len(b.addrs) == 0 {
+			b.mu.Unlock()
+			break
+		}
+		b.mu.Unlock()
+		time.Sleep(time.Millisecond)
+	}
+	if i >= 1000 {
+		t.Fatalf("With only grpclb addresses, balancer got addresses %v, want empty", b.addrs)
+	}
+
+	r.UpdateState(resolver.State{
+		Addresses: append(grpclbAddresses, nonGRPCLBAddresses...),
+	})
+	for i = 0; i < 1000; i++ {
+		b.mu.Lock()
+		if reflect.DeepEqual(b.addrs, nonGRPCLBAddresses) {
+			b.mu.Unlock()
+			break
+		}
+		b.mu.Unlock()
+		time.Sleep(time.Millisecond)
+	}
+	if i >= 1000 {
+		t.Fatalf("With both backend and grpclb addresses, balancer got addresses %v, want %v", b.addrs, nonGRPCLBAddresses)
 	}
 }
