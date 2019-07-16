@@ -21,7 +21,6 @@ package test
 import (
 	"context"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 
@@ -271,8 +270,13 @@ const testBalancerKeepAddressesName = "testbalancer-keepingaddresses"
 //
 // It's used to test the addresses balancer gets are correct.
 type testBalancerKeepAddresses struct {
-	mu    sync.Mutex
-	addrs []resolver.Address
+	addrs chan []resolver.Address
+}
+
+func newTestBalancerKeepAddresses() *testBalancerKeepAddresses {
+	return &testBalancerKeepAddresses{
+		addrs: make(chan []resolver.Address, 10),
+	}
 }
 
 func (b *testBalancerKeepAddresses) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
@@ -284,9 +288,7 @@ func (*testBalancerKeepAddresses) Name() string {
 }
 
 func (b *testBalancerKeepAddresses) HandleResolvedAddrs(addrs []resolver.Address, err error) {
-	b.mu.Lock()
-	b.addrs = addrs
-	b.mu.Unlock()
+	b.addrs <- addrs
 }
 
 func (testBalancerKeepAddresses) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
@@ -302,7 +304,7 @@ func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
-	b := &testBalancerKeepAddresses{}
+	b := newTestBalancerKeepAddresses()
 	balancer.Register(b)
 
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(),
@@ -311,10 +313,6 @@ func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
 		t.Fatalf("failed to dial: %v", err)
 	}
 	defer cc.Close()
-
-	if len(b.addrs) != 0 {
-		t.Fatalf("Before name resolving, balancer got addresses %v, want empty", b.addrs)
-	}
 
 	grpclbAddresses := []resolver.Address{{
 		Addr:       "grpc.lb.com",
@@ -330,49 +328,21 @@ func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: nonGRPCLBAddresses,
 	})
-	var i int
-	for i = 0; i < 1000; i++ {
-		b.mu.Lock()
-		if reflect.DeepEqual(b.addrs, nonGRPCLBAddresses) {
-			b.mu.Unlock()
-			break
-		}
-		b.mu.Unlock()
-		time.Sleep(time.Millisecond)
-	}
-	if i >= 1000 {
+	if !reflect.DeepEqual(<-b.addrs, nonGRPCLBAddresses) {
 		t.Fatalf("With only backend addresses, balancer got addresses %v, want %v", b.addrs, nonGRPCLBAddresses)
 	}
 
 	r.UpdateState(resolver.State{
 		Addresses: grpclbAddresses,
 	})
-	for i = 0; i < 1000; i++ {
-		b.mu.Lock()
-		if len(b.addrs) == 0 {
-			b.mu.Unlock()
-			break
-		}
-		b.mu.Unlock()
-		time.Sleep(time.Millisecond)
-	}
-	if i >= 1000 {
+	if len(<-b.addrs) != 0 {
 		t.Fatalf("With only grpclb addresses, balancer got addresses %v, want empty", b.addrs)
 	}
 
 	r.UpdateState(resolver.State{
 		Addresses: append(grpclbAddresses, nonGRPCLBAddresses...),
 	})
-	for i = 0; i < 1000; i++ {
-		b.mu.Lock()
-		if reflect.DeepEqual(b.addrs, nonGRPCLBAddresses) {
-			b.mu.Unlock()
-			break
-		}
-		b.mu.Unlock()
-		time.Sleep(time.Millisecond)
-	}
-	if i >= 1000 {
+	if !reflect.DeepEqual(<-b.addrs, nonGRPCLBAddresses) {
 		t.Fatalf("With both backend and grpclb addresses, balancer got addresses %v, want %v", b.addrs, nonGRPCLBAddresses)
 	}
 }
