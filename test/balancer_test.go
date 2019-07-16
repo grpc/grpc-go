@@ -270,12 +270,12 @@ const testBalancerKeepAddressesName = "testbalancer-keepingaddresses"
 //
 // It's used to test the addresses balancer gets are correct.
 type testBalancerKeepAddresses struct {
-	addrs chan []resolver.Address
+	addrsChan chan []resolver.Address
 }
 
 func newTestBalancerKeepAddresses() *testBalancerKeepAddresses {
 	return &testBalancerKeepAddresses{
-		addrs: make(chan []resolver.Address, 10),
+		addrsChan: make(chan []resolver.Address, 10),
 	}
 }
 
@@ -288,7 +288,7 @@ func (*testBalancerKeepAddresses) Name() string {
 }
 
 func (b *testBalancerKeepAddresses) HandleResolvedAddrs(addrs []resolver.Address, err error) {
-	b.addrs <- addrs
+	b.addrsChan <- addrs
 }
 
 func (testBalancerKeepAddresses) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
@@ -328,21 +328,21 @@ func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: nonGRPCLBAddresses,
 	})
-	if !reflect.DeepEqual(<-b.addrs, nonGRPCLBAddresses) {
-		t.Fatalf("With only backend addresses, balancer got addresses %v, want %v", b.addrs, nonGRPCLBAddresses)
+	if got := <-b.addrsChan; !reflect.DeepEqual(got, nonGRPCLBAddresses) {
+		t.Fatalf("With only backend addresses, balancer got addresses %v, want %v", got, nonGRPCLBAddresses)
 	}
 
 	r.UpdateState(resolver.State{
 		Addresses: grpclbAddresses,
 	})
-	if len(<-b.addrs) != 0 {
-		t.Fatalf("With only grpclb addresses, balancer got addresses %v, want empty", b.addrs)
+	if got := <-b.addrsChan; len(got) != 0 {
+		t.Fatalf("With only grpclb addresses, balancer got addresses %v, want empty", got)
 	}
 
 	r.UpdateState(resolver.State{
 		Addresses: append(grpclbAddresses, nonGRPCLBAddresses...),
 	})
-	if !reflect.DeepEqual(<-b.addrs, nonGRPCLBAddresses) {
-		t.Fatalf("With both backend and grpclb addresses, balancer got addresses %v, want %v", b.addrs, nonGRPCLBAddresses)
+	if got := <-b.addrsChan; !reflect.DeepEqual(got, nonGRPCLBAddresses) {
+		t.Fatalf("With both backend and grpclb addresses, balancer got addresses %v, want %v", got, nonGRPCLBAddresses)
 	}
 }
