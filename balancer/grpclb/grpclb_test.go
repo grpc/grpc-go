@@ -1125,9 +1125,9 @@ func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 	})
 
 	if err := checkStats(stats, &rpcStats{
-		numCallsStarted:                        int64(countRPC),
-		numCallsFinished:                       int64(countRPC),
-		numCallsFinishedWithClientFailedToSend: int64(countRPC - 1),
+		numCallsStarted:                        int64(countRPC)*2 - 1,
+		numCallsFinished:                       int64(countRPC)*2 - 1,
+		numCallsFinishedWithClientFailedToSend: int64(countRPC-1) * 2,
 		numCallsFinishedKnownReceived:          1,
 	}); err != nil {
 		t.Fatal(err)
@@ -1227,9 +1227,9 @@ func TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 	})
 
 	if err := checkStats(stats, &rpcStats{
-		numCallsStarted:                        int64(countRPC),
-		numCallsFinished:                       int64(countRPC),
-		numCallsFinishedWithClientFailedToSend: int64(countRPC - 1),
+		numCallsStarted:                        int64(countRPC)*2 - 1,
+		numCallsFinished:                       int64(countRPC)*2 - 1,
+		numCallsFinishedWithClientFailedToSend: int64(countRPC-1) * 2,
 		numCallsFinishedKnownReceived:          1,
 	}); err != nil {
 		t.Fatal(err)
