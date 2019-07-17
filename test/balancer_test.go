@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
 )
@@ -258,5 +259,89 @@ func testDoneLoads(t *testing.T, e env) {
 	gotLoad, _ := b.doneInfo[0].ServerLoad.(string)
 	if gotLoad != testLoad {
 		t.Fatalf("b.doneInfo[0].ServerLoad = %v; want = %v", b.doneInfo[0].ServerLoad, testLoad)
+	}
+}
+
+const testBalancerKeepAddressesName = "testbalancer-keepingaddresses"
+
+// testBalancerKeepAddresses keeps the addresses in the builder instead of
+// creating SubConns.
+//
+// It's used to test the addresses balancer gets are correct.
+type testBalancerKeepAddresses struct {
+	addrsChan chan []resolver.Address
+}
+
+func newTestBalancerKeepAddresses() *testBalancerKeepAddresses {
+	return &testBalancerKeepAddresses{
+		addrsChan: make(chan []resolver.Address, 10),
+	}
+}
+
+func (b *testBalancerKeepAddresses) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
+	return b
+}
+
+func (*testBalancerKeepAddresses) Name() string {
+	return testBalancerKeepAddressesName
+}
+
+func (b *testBalancerKeepAddresses) HandleResolvedAddrs(addrs []resolver.Address, err error) {
+	b.addrsChan <- addrs
+}
+
+func (testBalancerKeepAddresses) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+	panic("not used")
+}
+
+func (testBalancerKeepAddresses) Close() {
+}
+
+// Make sure that non-grpclb balancers don't get grpclb addresses even if name
+// resolver sends them
+func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+
+	b := newTestBalancerKeepAddresses()
+	balancer.Register(b)
+
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(),
+		grpc.WithBalancerName(b.Name()))
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	grpclbAddresses := []resolver.Address{{
+		Addr:       "grpc.lb.com",
+		Type:       resolver.GRPCLB,
+		ServerName: "grpc.lb.com",
+	}}
+
+	nonGRPCLBAddresses := []resolver.Address{{
+		Addr: "localhost",
+		Type: resolver.Backend,
+	}}
+
+	r.UpdateState(resolver.State{
+		Addresses: nonGRPCLBAddresses,
+	})
+	if got := <-b.addrsChan; !reflect.DeepEqual(got, nonGRPCLBAddresses) {
+		t.Fatalf("With only backend addresses, balancer got addresses %v, want %v", got, nonGRPCLBAddresses)
+	}
+
+	r.UpdateState(resolver.State{
+		Addresses: grpclbAddresses,
+	})
+	if got := <-b.addrsChan; len(got) != 0 {
+		t.Fatalf("With only grpclb addresses, balancer got addresses %v, want empty", got)
+	}
+
+	r.UpdateState(resolver.State{
+		Addresses: append(grpclbAddresses, nonGRPCLBAddresses...),
+	})
+	if got := <-b.addrsChan; !reflect.DeepEqual(got, nonGRPCLBAddresses) {
+		t.Fatalf("With both backend and grpclb addresses, balancer got addresses %v, want %v", got, nonGRPCLBAddresses)
 	}
 }
