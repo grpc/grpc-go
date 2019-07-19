@@ -211,6 +211,6 @@ func main() {
 		doSlowFallbackAfterStartup()
 		log.Println("SlowFallbackAfterStartup done!")
 	default:
-		log.Fatalf("Unsupported test case: ", *testCase)
+		log.Fatalf("Unsupported test case: %v", *testCase)
 	}
 }
