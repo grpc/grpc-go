@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 )
@@ -348,6 +349,13 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 	if channelz.IsOn() {
 		dopts = append(dopts, grpc.WithChannelzParentID(lb.opt.ChannelzParentID))
 	}
+
+	// Enable Keepalive for grpclb client.
+	dopts = append(dopts, grpc.WithKeepaliveParams(keepalive.ClientParameters{
+		Time:                20 * time.Second,
+		Timeout:             10 * time.Second,
+		PermitWithoutStream: true,
+	}))
 
 	// DialContext using manualResolver.Scheme, which is a random scheme
 	// generated when init grpclb. The target scheme here is not important.
