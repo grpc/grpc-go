@@ -379,8 +379,8 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	return s
 }
 
-func (t *http2Client) getPeer() *peer.Peer {
-	pr := &peer.Peer{
+func (t *http2Client) getPeer() peer.Peer {
+	pr := peer.Peer{
 		Addr: t.remoteAddr,
 	}
 	// Attach Auth info if there is any.

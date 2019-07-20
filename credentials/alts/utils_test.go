@@ -72,7 +72,7 @@ func setup(testOS string, testReader io.Reader) func() {
 func TestAuthInfoFromContext(t *testing.T) {
 	ctx := context.Background()
 	altsAuthInfo := &fakeALTSAuthInfo{}
-	p := &peer.Peer{
+	p := peer.Peer{
 		AuthInfo: altsAuthInfo,
 	}
 	for _, tc := range []struct {

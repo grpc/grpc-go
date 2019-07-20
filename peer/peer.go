@@ -40,12 +40,12 @@ type Peer struct {
 type peerKey struct{}
 
 // NewContext creates a new context with peer information attached.
-func NewContext(ctx context.Context, p *Peer) context.Context {
+func NewContext(ctx context.Context, p Peer) context.Context {
 	return context.WithValue(ctx, peerKey{}, p)
 }
 
 // FromContext returns the peer information in ctx if it exists.
-func FromContext(ctx context.Context) (p *Peer, ok bool) {
-	p, ok = ctx.Value(peerKey{}).(*Peer)
+func FromContext(ctx context.Context) (p Peer, ok bool) {
+	p, ok = ctx.Value(peerKey{}).(Peer)
 	return
 }

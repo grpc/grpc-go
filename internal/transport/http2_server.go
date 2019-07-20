@@ -327,7 +327,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	} else {
 		s.ctx, s.cancel = context.WithCancel(t.ctx)
 	}
-	pr := &peer.Peer{
+	pr := peer.Peer{
 		Addr: t.remoteAddr,
 	}
 	// Attach Auth info if there is any.

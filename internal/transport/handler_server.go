@@ -330,7 +330,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		recvCompress:   req.Header.Get("grpc-encoding"),
 		contentSubtype: ht.contentSubtype,
 	}
-	pr := &peer.Peer{
+	pr := peer.Peer{
 		Addr: ht.RemoteAddr(),
 	}
 	if req.TLS != nil {

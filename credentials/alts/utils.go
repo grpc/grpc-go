@@ -126,7 +126,7 @@ func AuthInfoFromContext(ctx context.Context) (AuthInfo, error) {
 	if !ok {
 		return nil, errors.New("no Peer found in Context")
 	}
-	return AuthInfoFromPeer(p)
+	return AuthInfoFromPeer(&p)
 }
 
 // AuthInfoFromPeer extracts the alts.AuthInfo object from the given peer, if it

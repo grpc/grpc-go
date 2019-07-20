@@ -248,7 +248,7 @@ func (o PeerCallOption) before(c *callInfo) error { return nil }
 func (o PeerCallOption) after(c *callInfo) {
 	if c.stream != nil {
 		if x, ok := peer.FromContext(c.stream.Context()); ok {
-			*o.PeerAddr = *x
+			o.PeerAddr = &x
 		}
 	}
 }
