@@ -1964,7 +1964,7 @@ func TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	s := &Stream{
 		ctx:         context.Background(),
 		buf:         testRecvBuffer,
-		requestRead: func(int) {},
+		requestRead: func(*Stream, uint32) {},
 	}
 	s.trReader = &transportReader{
 		reader: &recvBufferReader{
@@ -1973,7 +1973,7 @@ func TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 			recv:       s.buf,
 			freeBuffer: func(*bytes.Buffer) {},
 		},
-		windowHandler: func(int) {},
+		windowHandler: func(*Stream, uint32) {},
 	}
 	testData := make([]byte, 1)
 	testData[0] = 5

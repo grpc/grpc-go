@@ -355,9 +355,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		contentSubtype: callHdr.ContentSubtype,
 	}
 	s.wq = newWriteQuota(defaultWriteQuota, s.done)
-	s.requestRead = func(n int) {
-		t.adjustWindow(s, uint32(n))
-	}
+	s.requestRead = t.adjustWindow
 	// The client side stream context should have exactly the same life cycle with the user provided context.
 	// That means, s.ctx should be read-only. And s.ctx is done iff ctx is done.
 	// So we use the original context here instead of creating a copy.
@@ -372,9 +370,8 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 			},
 			freeBuffer: t.bufferPool.put,
 		},
-		windowHandler: func(n int) {
-			t.updateWindow(s, uint32(n))
-		},
+		stream:        s,
+		windowHandler: t.updateWindow,
 	}
 	return s
 }

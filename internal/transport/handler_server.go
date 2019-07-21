@@ -322,7 +322,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 
 	s := &Stream{
 		id:             0, // irrelevant
-		requestRead:    func(int) {},
+		requestRead:    func(*Stream, uint32) {},
 		cancel:         cancel,
 		buf:            newRecvBuffer(),
 		st:             ht,
@@ -349,7 +349,8 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 	}
 	s.trReader = &transportReader{
 		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf, freeBuffer: func(*bytes.Buffer) {}},
-		windowHandler: func(int) {},
+		stream:        s,
+		windowHandler: func(*Stream, uint32) {},
 	}
 
 	// readerDone is closed when the Body.Read-ing goroutine exits.

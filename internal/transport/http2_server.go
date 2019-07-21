@@ -393,9 +393,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		atomic.AddInt64(&t.czData.streamsStarted, 1)
 		atomic.StoreInt64(&t.czData.lastStreamCreatedTime, time.Now().UnixNano())
 	}
-	s.requestRead = func(n int) {
-		t.adjustWindow(s, uint32(n))
-	}
+	s.requestRead = t.adjustWindow
 	s.ctx = traceCtx(s.ctx, s.method)
 	if t.stats != nil {
 		s.ctx = t.stats.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
@@ -417,9 +415,8 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			recv:       s.buf,
 			freeBuffer: t.bufferPool.put,
 		},
-		windowHandler: func(n int) {
-			t.updateWindow(s, uint32(n))
-		},
+		stream:        s,
+		windowHandler: t.updateWindow,
 	}
 	// Register the stream with loopy.
 	t.controlBuf.put(&registerStream{

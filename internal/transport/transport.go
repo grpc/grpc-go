@@ -234,7 +234,7 @@ type Stream struct {
 
 	// Callback to state application's intentions to read data. This
 	// is used to adjust flow control, if needed.
-	requestRead func(int)
+	requestRead func(*Stream, uint32)
 
 	headerChan       chan struct{} // closed to indicate the end of header metadata.
 	headerChanClosed uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
@@ -447,7 +447,7 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 	if er := s.trReader.(*transportReader).er; er != nil {
 		return 0, er
 	}
-	s.requestRead(len(p))
+	s.requestRead(s, uint32(len(p)))
 	return io.ReadFull(s.trReader, p)
 }
 
@@ -457,9 +457,10 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 // the stream broke.
 type transportReader struct {
 	reader io.Reader
+	stream *Stream
 	// The handler to control the window update procedure for both this
 	// particular stream and the associated transport.
-	windowHandler func(int)
+	windowHandler func(*Stream, uint32)
 	er            error
 }
 
@@ -469,7 +470,7 @@ func (t *transportReader) Read(p []byte) (n int, err error) {
 		t.er = err
 		return
 	}
-	t.windowHandler(n)
+	t.windowHandler(t.stream, uint32(n))
 	return
 }
 
