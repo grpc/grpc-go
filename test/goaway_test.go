@@ -30,12 +30,12 @@ import (
 )
 
 // TestGracefulClientOnGoAway attempts to ensure that when the server sends a
-// goaway, a client will never see an error.  This requires that the client is
-// appraised of the GOAWAY and updates its state accordingly before the
-// transport stops accepting new streams.  If a subconn is chosen by a picker
-// and receives the goaway before creating the stream, an error will occur, but
-// upon transparent retry, the clientconn will ensure a ready subconn is
-// chosen.
+// GOAWAY (in this test, by configuring max connection age on the server), a
+// client will never see an error.  This requires that the client is appraised
+// of the GOAWAY and updates its state accordingly before the transport stops
+// accepting new streams.  If a subconn is chosen by a picker and receives the
+// goaway before creating the stream, an error will occur, but upon transparent
+// retry, the clientconn will ensure a ready subconn is chosen.
 func (s) TestGracefulClientOnGoAway(t *testing.T) {
 	const maxConnAge = 100 * time.Millisecond
 	const testTime = maxConnAge * 10
