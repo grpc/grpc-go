@@ -1060,8 +1060,8 @@ func (ac *addrConn) resetTransport() {
 
 		ac.mu.Lock()
 		if ac.state == connectivity.Shutdown {
-			newTr.Close()
 			ac.mu.Unlock()
+			newTr.Close()
 			return
 		}
 		ac.curAddr = addr
@@ -1076,20 +1076,16 @@ func (ac *addrConn) resetTransport() {
 		// we restart from the top of the addr list.
 		<-reconnect.Done()
 		hcancel()
-
-		// Need to reconnect after a READY, the addrConn enters
-		// TRANSIENT_FAILURE.
+		// restart connecting - the top of the loop will set state to
+		// CONNECTING.  This is against the current connectivity semantics doc,
+		// however it allows for graceful behavior for RPCs not yet dispatched
+		// - unfortunate timing would otherwise lead to the RPC failing even
+		// though the TRANSIENT_FAILURE state (called for by the doc) would be
+		// instantaneous.
 		//
-		// This will set addrConn to TRANSIENT_FAILURE for a very short period
-		// of time, and turns CONNECTING. It seems reasonable to skip this, but
-		// READY-CONNECTING is not a valid transition.
-		ac.mu.Lock()
-		if ac.state == connectivity.Shutdown {
-			ac.mu.Unlock()
-			return
-		}
-		ac.updateConnectivityState(connectivity.TransientFailure)
-		ac.mu.Unlock()
+		// Ideally we should transition to Idle here and block until there is
+		// RPC activity that leads to the balancer requesting a reconnect of
+		// the associated SubConn.
 	}
 }
 
@@ -1146,14 +1142,35 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		Authority: ac.cc.authority,
 	}
 
+	once := sync.Once{}
 	onGoAway := func(r transport.GoAwayReason) {
 		ac.mu.Lock()
 		ac.adjustParams(r)
+		once.Do(func() {
+			if ac.state == connectivity.Ready {
+				// Prevent this SubConn from being used for new RPCs by setting its
+				// state to Connecting.
+				//
+				// TODO: this should be Idle when grpc-go properly supports it.
+				ac.updateConnectivityState(connectivity.Connecting)
+			}
+		})
 		ac.mu.Unlock()
 		reconnect.Fire()
 	}
 
 	onClose := func() {
+		ac.mu.Lock()
+		once.Do(func() {
+			if ac.state == connectivity.Ready {
+				// Prevent this SubConn from being used for new RPCs by setting its
+				// state to Connecting.
+				//
+				// TODO: this should be Idle when grpc-go properly supports it.
+				ac.updateConnectivityState(connectivity.Connecting)
+			}
+		})
+		ac.mu.Unlock()
 		close(onCloseCalled)
 		reconnect.Fire()
 	}

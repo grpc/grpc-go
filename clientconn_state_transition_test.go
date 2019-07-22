@@ -193,12 +193,11 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 	}
 }
 
-// When a READY connection is closed, the client enters TRANSIENT FAILURE before CONNECTING.
-func (s) TestStateTransitions_ReadyToTransientFailure(t *testing.T) {
+// When a READY connection is closed, the client enters CONNECTING.
+func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 	want := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,
-		connectivity.TransientFailure,
 		connectivity.Connecting,
 	}
 
@@ -260,8 +259,8 @@ func (s) TestStateTransitions_ReadyToTransientFailure(t *testing.T) {
 	}
 }
 
-// When the first connection is closed, the client enters stays in CONNECTING
-// until it tries the second address (which succeeds, and then it enters READY).
+// When the first connection is closed, the client stays in CONNECTING until it
+// tries the second address (which succeeds, and then it enters READY).
 func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) {
 	want := []connectivity.State{
 		connectivity.Connecting,
@@ -354,13 +353,11 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 }
 
 // When there are multiple addresses, and we enter READY on one of them, a
-// later closure should cause the client to enter TRANSIENT FAILURE before it
-// re-enters CONNECTING.
+// later closure should cause the client to enter CONNECTING
 func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	want := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,
-		connectivity.TransientFailure,
 		connectivity.Connecting,
 	}
 

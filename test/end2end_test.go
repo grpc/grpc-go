@@ -3627,7 +3627,10 @@ func testTransparentRetry(t *testing.T, e env) {
 	}, {
 		successAttempt: 2,
 		failFast:       true,
-		errCode:        codes.Unavailable, // We won't retry on fail fast.
+	}, {
+		successAttempt: 3,
+		failFast:       true,
+		errCode:        codes.Unavailable,
 	}}
 	for _, tc := range testCases {
 		attempts = 0
@@ -7133,9 +7136,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	}
 	s2 := grpc.NewServer()
 	defer s2.Stop()
-	conn2Ready := grpcsync.NewEvent()
 	ts2 := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-		conn2Ready.Fire()
 		return &testpb.SimpleResponse{}, nil
 	}}
 	testpb.RegisterTestServiceServer(s2, ts2)
@@ -7177,11 +7178,6 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 		t.Fatal("expected the stream to die, but got a successful Recv")
 	}
 
-	// Connection was dialed, so ac is either in connecting or ready. Because there's a race
-	// between ac state change and balancer state change, so cc could still be transient
-	// failure. This wait make sure cc is at least in connecting, and RPCs won't fail after
-	// this.
-	cc.WaitForStateChange(ctx, connectivity.TransientFailure)
 	// Do a bunch of RPCs, make sure it stays stable. These should go to connection 2.
 	for i := 0; i < 10; i++ {
 		if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
