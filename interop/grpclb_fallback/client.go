@@ -3,7 +3,7 @@
 
 /*
  *
- * Copyright 2014 gRPC authors.
+ * Copyright 2019 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ package main
 import (
 	"flag"
 	"os/exec"
-
 	"context"
 	"log"
 	"net"
@@ -54,20 +53,12 @@ var (
         slow_fallback_after_startup : LB/backend connections black hole after RPC's have been made;`)
 )
 
-type rpcMode uint8
-
-const (
-	// per-rpc settings
-	failFast     rpcMode = iota
-	waitForReady         = iota
-)
-
-func doRPCAndGetPath(client testpb.TestServiceClient, deadlineSeconds int, mode rpcMode) testpb.GrpclbRouteType {
-	grpclog.Infof("doRPCAndGetPath deadlineSeconds:%v rpcMode:%v", deadlineSeconds, mode)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(deadlineSeconds)*time.Second)
+func doRPCAndGetPath(client testpb.TestServiceClient, deadline time.Duration, waitForReady bool) testpb.GrpclbRouteType {
+	grpclog.Infof("doRPCAndGetPath deadline:%v waitForReady:%v", deadline, waitForReady)
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
 	defer cancel()
 	copts := []grpc.CallOption{}
-	if mode == waitForReady {
+	if waitForReady {
 		copts = append(copts, grpc.WaitForReady(true))
 	}
 	req := &testpb.SimpleRequest{
@@ -110,6 +101,7 @@ func createFallbackTestConn() *grpc.ClientConn {
 	opts := []grpc.DialOption{
 		grpc.WithContextDialer(dialTCPUserTimeout),
 		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second),
 	}
 	switch *customCredentialsType {
 	case "tls":
@@ -125,6 +117,7 @@ func createFallbackTestConn() *grpc.ClientConn {
 	default:
 		grpclog.Fatalf("Invalid --custom_credentials_type:%v", *customCredentialsType)
 	}
+	//conn, err := grpc.DialContext(*serverURI, opts...)
 	conn, err := grpc.Dial(*serverURI, opts...)
 	if err != nil {
 		log.Fatalf("Fail to dial: %v", err)
@@ -140,12 +133,12 @@ func runCmd(command string) {
 }
 
 func runFallbackBeforeStartupTest(breakLBAndBackendConnsCmd string, perRPCDeadlineSeconds int) {
+	runCmd(breakLBAndBackendConnsCmd)
 	conn := createFallbackTestConn()
 	defer conn.Close()
 	client := testpb.NewTestServiceClient(conn)
-	runCmd(breakLBAndBackendConnsCmd)
 	for i := 0; i < 30; i++ {
-		if g := doRPCAndGetPath(client, perRPCDeadlineSeconds, failFast); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
+		if g := doRPCAndGetPath(client, time.Duration(perRPCDeadlineSeconds)*time.Second, false); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
 			grpclog.Fatalf("Expected RPC to take grpclb route type FALLBACK. Got: %v", g)
 		}
 		time.Sleep(time.Second)
@@ -164,12 +157,13 @@ func runFallbackAfterStartupTest(breakLBAndBackendConnsCmd string) {
 	conn := createFallbackTestConn()
 	defer conn.Close()
 	client := testpb.NewTestServiceClient(conn)
-	if g := doRPCAndGetPath(client, 20, failFast); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
+	if g := doRPCAndGetPath(client, 20*time.Second, false); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
 		grpclog.Fatalf("Expected route type BACKEND. Got: %v", g)
 	}
 	runCmd(breakLBAndBackendConnsCmd)
 	for i := 0; i < 40; i++ {
-		g := doRPCAndGetPath(client, 1, waitForReady)
+		// Perform a wait-for-ready RPC
+		g := doRPCAndGetPath(client, 1*time.Second, true)
 		if g == testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
 			grpclog.Infof("Made one successul RPC to a fallback. Now expect the same for the rest.")
 			break
@@ -180,7 +174,7 @@ func runFallbackAfterStartupTest(breakLBAndBackendConnsCmd string) {
 		}
 	}
 	for i := 0; i < 30; i++ {
-		g := doRPCAndGetPath(client, 20, failFast)
+		g := doRPCAndGetPath(client, 20*time.Second, false)
 		if g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
 			grpclog.Fatalf("Expected grpclb route type: FALLBACK. Got: %v", g)
 		}
