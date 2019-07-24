@@ -132,7 +132,7 @@ func FromProto(s *spb.Status) *Status {
 // Status is returned with codes.Unknown and the original error message.
 func FromError(err error) (s *Status, ok bool) {
 	if err == nil {
-		return &Status{s: &spb.Status{Code: int32(codes.OK)}}, true
+		return nil, true
 	}
 	if se, ok := err.(interface {
 		GRPCStatus() *Status
@@ -206,7 +206,7 @@ func Code(err error) codes.Code {
 func FromContextError(err error) *Status {
 	switch err {
 	case nil:
-		return New(codes.OK, "")
+		return nil
 	case context.DeadlineExceeded:
 		return New(codes.DeadlineExceeded, err.Error())
 	case context.Canceled:
