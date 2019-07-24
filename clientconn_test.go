@@ -232,10 +232,10 @@ func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 	if err != context.DeadlineExceeded {
 		t.Fatalf("DialContext(_) = %v; want context.DeadlineExceeded", err)
 	}
+	<-done
 	if numConns < 2 {
 		t.Fatalf("dial attempts: %v; want > 1", numConns)
 	}
-	<-done
 }
 
 // 1. Client connects to a server that doesn't send preface.
