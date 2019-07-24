@@ -978,10 +978,11 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		if sh != nil {
 			sh.HandleRPC(stream.Context(), &stats.InPayload{
-				RecvTime: time.Now(),
-				Payload:  v,
-				Data:     d,
-				Length:   len(d),
+				RecvTime:   time.Now(),
+				Payload:    v,
+				WireLength: payInfo.wireLength,
+				Data:       d,
+				Length:     len(d),
 			})
 		}
 		if binlog != nil {
