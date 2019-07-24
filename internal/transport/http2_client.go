@@ -493,6 +493,9 @@ func (t *http2Client) createAudience(callHdr *CallHdr) string {
 }
 
 func (t *http2Client) getTrAuthData(ctx context.Context, audience string) (map[string]string, error) {
+	if len(t.perRPCCreds) == 0 {
+		return nil, nil
+	}
 	authData := map[string]string{}
 	for _, c := range t.perRPCCreds {
 		data, err := c.GetRequestMetadata(ctx, audience)
@@ -513,7 +516,7 @@ func (t *http2Client) getTrAuthData(ctx context.Context, audience string) (map[s
 }
 
 func (t *http2Client) getCallAuthData(ctx context.Context, audience string, callHdr *CallHdr) (map[string]string, error) {
-	callAuthData := map[string]string{}
+	var callAuthData map[string]string
 	// Check if credentials.PerRPCCredentials were provided via call options.
 	// Note: if these credentials are provided both via dial options and call
 	// options, then both sets of credentials will be applied.
@@ -525,6 +528,7 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "transport: %v", err)
 		}
+		callAuthData = make(map[string]string, len(data))
 		for k, v := range data {
 			// Capital header names are illegal in HTTP/2
 			k = strings.ToLower(k)
