@@ -325,21 +325,21 @@ func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
 	}}
 
 	r.UpdateState(resolver.State{
-		Addresses: nonGRPCLBAddresses,
+		Addresses: resolver.AddressesToWeightedAddresses(nonGRPCLBAddresses),
 	})
 	if got := <-b.addrsChan; !reflect.DeepEqual(got, nonGRPCLBAddresses) {
 		t.Fatalf("With only backend addresses, balancer got addresses %v, want %v", got, nonGRPCLBAddresses)
 	}
 
 	r.UpdateState(resolver.State{
-		Addresses: grpclbAddresses,
+		Addresses: resolver.AddressesToWeightedAddresses(grpclbAddresses),
 	})
 	if got := <-b.addrsChan; len(got) != 0 {
 		t.Fatalf("With only grpclb addresses, balancer got addresses %v, want empty", got)
 	}
 
 	r.UpdateState(resolver.State{
-		Addresses: append(grpclbAddresses, nonGRPCLBAddresses...),
+		Addresses: resolver.AddressesToWeightedAddresses(append(grpclbAddresses, nonGRPCLBAddresses...)),
 	})
 	if got := <-b.addrsChan; !reflect.DeepEqual(got, nonGRPCLBAddresses) {
 		t.Fatalf("With both backend and grpclb addresses, balancer got addresses %v, want %v", got, nonGRPCLBAddresses)

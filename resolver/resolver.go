@@ -95,6 +95,27 @@ type Address struct {
 	Metadata interface{}
 }
 
+type WeightedAddress struct {
+	Address
+	Weight uint32
+}
+
+func AddressesToWeightedAddresses(addrs []Address) []WeightedAddress {
+	waddrs := make ([]WeightedAddress, len(addrs))
+	for i, addr := range addrs {
+		waddrs[i] = WeightedAddress{Address:addr}
+    }
+	return waddrs
+}
+
+func WeightedAddressesToAddresses(waddrs []WeightedAddress) []Address {
+	addrs := make ([]Address, len(waddrs))
+	for i, waddr := range waddrs {
+		addrs[i] = waddr.Address
+	}
+	return addrs
+}
+
 // BuildOption includes additional information for the builder to create
 // the resolver.
 type BuildOption struct {
@@ -104,7 +125,7 @@ type BuildOption struct {
 
 // State contains the current Resolver state relevant to the ClientConn.
 type State struct {
-	Addresses []Address // Resolved addresses for the target
+	Addresses []WeightedAddress // Resolved addresses for the target
 	// ServiceConfig is the parsed service config; obtained from
 	// serviceconfig.Parse.
 	ServiceConfig serviceconfig.Config

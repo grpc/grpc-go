@@ -142,7 +142,7 @@ func (s) TestSwitchBalancer(t *testing.T) {
 		t.Fatalf("failed to dial: %v", err)
 	}
 	defer cc.Close()
-	addrs := []resolver.Address{{Addr: servers[0].addr}, {Addr: servers[1].addr}}
+	addrs := resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: servers[0].addr}, {Addr: servers[1].addr}})
 	r.UpdateState(resolver.State{Addresses: addrs})
 	// The default balancer is pickfirst.
 	if err := checkPickFirst(cc, servers); err != nil {
@@ -174,7 +174,7 @@ func (s) TestBalancerDialOption(t *testing.T) {
 		t.Fatalf("failed to dial: %v", err)
 	}
 	defer cc.Close()
-	addrs := []resolver.Address{{Addr: servers[0].addr}, {Addr: servers[1].addr}}
+	addrs := resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: servers[0].addr}, {Addr: servers[1].addr}})
 	r.UpdateState(resolver.State{Addresses: addrs})
 	// The init balancer is roundrobin.
 	if err := checkRoundRobin(cc, servers); err != nil {
@@ -201,7 +201,7 @@ func (s) TestSwitchBalancerGRPCLBFirst(t *testing.T) {
 
 	// ClientConn will switch balancer to grpclb when receives an address of
 	// type GRPCLB.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "backend"}, {Addr: "grpclb", Type: resolver.GRPCLB}}})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: "backend"}, {Addr: "grpclb", Type: resolver.GRPCLB}})})
 	var isGRPCLB bool
 	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
@@ -218,7 +218,7 @@ func (s) TestSwitchBalancerGRPCLBFirst(t *testing.T) {
 
 	// New update containing new backend and new grpclb. Should not switch
 	// balancer.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "backend2"}, {Addr: "grpclb2", Type: resolver.GRPCLB}}})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: "backend2"}, {Addr: "grpclb2", Type: resolver.GRPCLB}})})
 	for i := 0; i < 200; i++ {
 		cc.mu.Lock()
 		isGRPCLB = cc.curBalancerName == "grpclb"
@@ -234,7 +234,7 @@ func (s) TestSwitchBalancerGRPCLBFirst(t *testing.T) {
 
 	var isPickFirst bool
 	// Switch balancer to pickfirst.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "backend"}}})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: "backend"}})})
 	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
 		isPickFirst = cc.curBalancerName == PickFirstBalancerName
@@ -260,7 +260,7 @@ func (s) TestSwitchBalancerGRPCLBSecond(t *testing.T) {
 	}
 	defer cc.Close()
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "backend"}}})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: "backend"}})})
 	var isPickFirst bool
 	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
@@ -277,7 +277,7 @@ func (s) TestSwitchBalancerGRPCLBSecond(t *testing.T) {
 
 	// ClientConn will switch balancer to grpclb when receives an address of
 	// type GRPCLB.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "backend"}, {Addr: "grpclb", Type: resolver.GRPCLB}}})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: "backend"}, {Addr: "grpclb", Type: resolver.GRPCLB}})})
 	var isGRPCLB bool
 	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
@@ -294,7 +294,7 @@ func (s) TestSwitchBalancerGRPCLBSecond(t *testing.T) {
 
 	// New update containing new backend and new grpclb. Should not switch
 	// balancer.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "backend2"}, {Addr: "grpclb2", Type: resolver.GRPCLB}}})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: "backend2"}, {Addr: "grpclb2", Type: resolver.GRPCLB}})})
 	for i := 0; i < 200; i++ {
 		cc.mu.Lock()
 		isGRPCLB = cc.curBalancerName == "grpclb"
@@ -309,7 +309,7 @@ func (s) TestSwitchBalancerGRPCLBSecond(t *testing.T) {
 	}
 
 	// Switch balancer back.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "backend"}}})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: "backend"}})})
 	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
 		isPickFirst = cc.curBalancerName == PickFirstBalancerName
@@ -339,7 +339,7 @@ func (s) TestSwitchBalancerGRPCLBRoundRobin(t *testing.T) {
 
 	sc := parseCfg(`{"loadBalancingPolicy": "round_robin"}`)
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "backend"}}, ServiceConfig: sc})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: "backend"}}), ServiceConfig: sc})
 	var isRoundRobin bool
 	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
@@ -356,7 +356,7 @@ func (s) TestSwitchBalancerGRPCLBRoundRobin(t *testing.T) {
 
 	// ClientConn will switch balancer to grpclb when receives an address of
 	// type GRPCLB.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "grpclb", Type: resolver.GRPCLB}}, ServiceConfig: sc})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: "grpclb", Type: resolver.GRPCLB}}), ServiceConfig: sc})
 	var isGRPCLB bool
 	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
@@ -372,7 +372,7 @@ func (s) TestSwitchBalancerGRPCLBRoundRobin(t *testing.T) {
 	}
 
 	// Switch balancer back.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "backend"}}, ServiceConfig: sc})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: "backend"}}), ServiceConfig: sc})
 	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
 		isRoundRobin = cc.curBalancerName == "round_robin"
@@ -400,7 +400,7 @@ func (s) TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
 	}
 	defer cc.Close()
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "backend"}}})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: "backend"}})})
 	var isPickFirst bool
 	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
@@ -417,7 +417,7 @@ func (s) TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
 
 	// ClientConn will switch balancer to grpclb when receives an address of
 	// type GRPCLB.
-	addrs := []resolver.Address{{Addr: "grpclb", Type: resolver.GRPCLB}}
+	addrs := resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: "grpclb", Type: resolver.GRPCLB}})
 	r.UpdateState(resolver.State{Addresses: addrs})
 	var isGRPCLB bool
 	for i := 0; i < 5000; i++ {
@@ -452,7 +452,7 @@ func (s) TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
 	}
 
 	// Switch balancer back.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "backend"}}, ServiceConfig: sc})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: "backend"}}), ServiceConfig: sc})
 	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
 		isRoundRobin = cc.curBalancerName == "round_robin"
@@ -490,7 +490,7 @@ func (s) TestSwitchBalancerGRPCLBWithGRPCLBNotRegistered(t *testing.T) {
 		t.Fatalf("failed to dial: %v", err)
 	}
 	defer cc.Close()
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: servers[1].addr}, {Addr: servers[2].addr}}})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: servers[1].addr}, {Addr: servers[2].addr}})})
 	// The default balancer is pickfirst.
 	if err := checkPickFirst(cc, servers[1:]); err != nil {
 		t.Fatalf("check pickfirst returned non-nil error: %v", err)
@@ -501,9 +501,9 @@ func (s) TestSwitchBalancerGRPCLBWithGRPCLBNotRegistered(t *testing.T) {
 	//
 	// If the filtering failed, servers[0] will be used for RPCs and the RPCs
 	// will succeed. The following checks will catch this and fail.
-	addrs := []resolver.Address{
+	addrs := resolver.AddressesToWeightedAddresses([]resolver.Address{
 		{Addr: servers[0].addr, Type: resolver.GRPCLB},
-		{Addr: servers[1].addr}, {Addr: servers[2].addr}}
+		{Addr: servers[1].addr}, {Addr: servers[2].addr}})
 	r.UpdateState(resolver.State{Addresses: addrs})
 	// Still check for pickfirst, but only with server[1] and server[2].
 	if err := checkPickFirst(cc, servers[1:]); err != nil {

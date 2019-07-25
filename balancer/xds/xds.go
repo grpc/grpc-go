@@ -475,7 +475,7 @@ func (x *xdsBalancer) updateFallbackWithResolverState(s *resolver.State) {
 			// we can pass along the config struct.
 		}})
 	} else {
-		x.fallbackLB.HandleResolvedAddrs(s.Addresses, nil)
+		x.fallbackLB.HandleResolvedAddrs(resolver.WeightedAddressesToAddresses(s.Addresses), nil)
 	}
 }
 

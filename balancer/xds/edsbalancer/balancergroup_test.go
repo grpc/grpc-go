@@ -32,7 +32,7 @@ import (
 var (
 	rrBuilder        = balancer.Get(roundrobin.Name)
 	testBalancerIDs  = []internal.Locality{{Region: "b1"}, {Region: "b2"}, {Region: "b3"}}
-	testBackendAddrs = []resolver.Address{{Addr: "1.1.1.1:1"}, {Addr: "2.2.2.2:2"}, {Addr: "3.3.3.3:3"}, {Addr: "4.4.4.4:4"}}
+	testBackendAddrs = resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: "1.1.1.1:1"}, {Addr: "2.2.2.2:2"}, {Addr: "3.3.3.3:3"}, {Addr: "4.4.4.4:4"}})
 )
 
 // 1 balancer, 1 backend -> 2 backends -> 1 backend.

@@ -78,7 +78,7 @@ func (s) TestDialWithTimeout(t *testing.T) {
 
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
-	r.InitialState(resolver.State{Addresses: []resolver.Address{lisAddr}})
+	r.InitialState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{lisAddr})})
 	client, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithTimeout(5*time.Second))
 	close(dialDone)
 	if err != nil {
@@ -131,7 +131,7 @@ func (s) TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
 
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
-	r.InitialState(resolver.State{Addresses: []resolver.Address{lis1Addr, lis2Addr}})
+	r.InitialState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{lis1Addr, lis2Addr})})
 	client, err := Dial(r.Scheme()+":///test.server", WithInsecure())
 	if err != nil {
 		t.Fatalf("Dial failed. Err: %v", err)
@@ -535,10 +535,10 @@ func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
 	}()
 
 	rb := manual.NewBuilderWithScheme("whatever")
-	rb.InitialState(resolver.State{Addresses: []resolver.Address{
+	rb.InitialState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
-	}})
+	})})
 	client, err := DialContext(ctx, "this-gets-overwritten",
 		WithInsecure(),
 		WithBalancerName(stateRecordingBalancerName),
@@ -1055,7 +1055,7 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 		{Addr: lis3.Addr().String()},
 	}
 	rb := manual.NewBuilderWithScheme("whatever")
-	rb.InitialState(resolver.State{Addresses: addrsList})
+	rb.InitialState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses(addrsList)})
 
 	client, err := Dial("this-gets-overwritten",
 		WithInsecure(),
@@ -1160,7 +1160,7 @@ func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r r
 	defer cc.Close()
 	// Resolver service config gets ignored since resolver service config is disabled.
 	r.(*manual.Resolver).UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: addr}},
+		Addresses:     resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: addr}}),
 		ServiceConfig: parseCfg("{}"),
 	})
 	if !verifyWaitForReadyEqualsTrue(cc) {
@@ -1175,7 +1175,7 @@ func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T
 	}
 	defer cc.Close()
 	r.(*manual.Resolver).UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: addr}},
+		Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: addr}}),
 	})
 	if !verifyWaitForReadyEqualsTrue(cc) {
 		t.Fatal("default service config failed to be applied after 1s")
@@ -1189,7 +1189,7 @@ func testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t *testing.T
 	}
 	defer cc.Close()
 	r.(*manual.Resolver).UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: addr}},
+		Addresses:     resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: addr}}),
 		ServiceConfig: nil,
 	})
 	if !verifyWaitForReadyEqualsTrue(cc) {

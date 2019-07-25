@@ -123,7 +123,7 @@ func (r *exampleResolver) start() {
 	for i, s := range addrStrs {
 		addrs[i] = resolver.Address{Addr: s}
 	}
-	r.cc.UpdateState(resolver.State{Addresses: addrs})
+	r.cc.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses(addrs)})
 }
 func (*exampleResolver) ResolveNow(o resolver.ResolveNowOption) {}
 func (*exampleResolver) Close()                                 {}

@@ -402,11 +402,11 @@ func TestGRPCLB(t *testing.T) {
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{
 		Addr:       tss.lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
-	}}})
+	}})})
 
 	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
@@ -453,11 +453,11 @@ func TestGRPCLBWeighted(t *testing.T) {
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{
 		Addr:       tss.lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
-	}}})
+	}})})
 
 	sequences := []string{"00101", "00011"}
 	for _, seq := range sequences {
@@ -523,11 +523,11 @@ func TestDropRequest(t *testing.T) {
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{
 		Addr:       tss.lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
-	}}})
+	}})})
 
 	var (
 		i int
@@ -685,7 +685,7 @@ func TestBalancerDisconnects(t *testing.T) {
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{
 		Addr:       tests[0].lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
@@ -693,7 +693,7 @@ func TestBalancerDisconnects(t *testing.T) {
 		Addr:       tests[1].lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
-	}}})
+	}})})
 
 	var p peer.Peer
 	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
@@ -766,7 +766,7 @@ func TestFallback(t *testing.T) {
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{
 		Addr:       "invalid.address",
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
@@ -774,7 +774,7 @@ func TestFallback(t *testing.T) {
 		Addr:       beLis.Addr().String(),
 		Type:       resolver.Backend,
 		ServerName: beServerName,
-	}}})
+	}})})
 
 	var p peer.Peer
 	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
@@ -784,7 +784,7 @@ func TestFallback(t *testing.T) {
 		t.Fatalf("got peer: %v, want peer: %v", p.Addr, beLis.Addr())
 	}
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{
 		Addr:       tss.lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
@@ -792,7 +792,7 @@ func TestFallback(t *testing.T) {
 		Addr:       beLis.Addr().String(),
 		Type:       resolver.Backend,
 		ServerName: beServerName,
-	}}})
+	}})})
 
 	var backendUsed bool
 	for i := 0; i < 1000; i++ {
@@ -910,11 +910,11 @@ func TestGRPCLBPickFirst(t *testing.T) {
 	// Start with sub policy pick_first.
 
 	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{
+		Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{
 			Addr:       tss.lbAddr,
 			Type:       resolver.GRPCLB,
 			ServerName: lbServerName,
-		}},
+		}}),
 		ServiceConfig: svcCfg,
 	})
 
@@ -960,11 +960,11 @@ func TestGRPCLBPickFirst(t *testing.T) {
 	}
 
 	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{
+		Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{
 			Addr:       tss.lbAddr,
 			Type:       resolver.GRPCLB,
 			ServerName: lbServerName,
-		}},
+		}}),
 		ServiceConfig: grpclbServiceConfigEmpty,
 	})
 
@@ -1049,11 +1049,11 @@ func runAndGetStats(t *testing.T, drop bool, runRPCs func(*grpc.ClientConn)) *rp
 	}
 	defer cc.Close()
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{
 		Addr:       tss.lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
-	}}})
+	}})})
 
 	runRPCs(cc)
 	time.Sleep(1 * time.Second)

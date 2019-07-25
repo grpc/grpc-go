@@ -1458,7 +1458,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
 
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn()
-	addrs := []resolver.Address{{Addr: te.srvAddr}}
+	addrs := resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: te.srvAddr}})
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
 		ServiceConfig: parseCfg(`{
@@ -1545,7 +1545,7 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	// Case1: Client API set failfast to be false, and service config set wait_for_ready to be false, Client API should win, and the rpc will wait until deadline exceeds.
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn()
-	addrs := []resolver.Address{{Addr: te.srvAddr}}
+	addrs := resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: te.srvAddr}})
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
 		ServiceConfig: parseCfg(`{
@@ -1634,7 +1634,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 	// Case1: Client API sets timeout to be 1ns and ServiceConfig sets timeout to be 1hr. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn()
-	addrs := []resolver.Address{{Addr: te.srvAddr}}
+	addrs := resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: te.srvAddr}})
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
 		ServiceConfig: parseCfg(`{
@@ -1775,7 +1775,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	te1.startServer(&testServer{security: e.security})
 	cc1 := te1.clientConn()
 
-	addrs := []resolver.Address{{Addr: te1.srvAddr}}
+	addrs := resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: te1.srvAddr}})
 	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: sc})
 	tc := testpb.NewTestServiceClient(cc1)
 
@@ -1847,7 +1847,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	te2.startServer(&testServer{security: e.security})
 	defer te2.tearDown()
 	cc2 := te2.clientConn()
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: te2.srvAddr}}, ServiceConfig: sc})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: te2.srvAddr}}), ServiceConfig: sc})
 	tc = testpb.NewTestServiceClient(cc2)
 
 	for {
@@ -1908,7 +1908,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	defer te3.tearDown()
 
 	cc3 := te3.clientConn()
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: te3.srvAddr}}, ServiceConfig: sc})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: te3.srvAddr}}), ServiceConfig: sc})
 	tc = testpb.NewTestServiceClient(cc3)
 
 	for {
@@ -1999,7 +1999,7 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 	tc := testpb.NewTestServiceClient(cc)
 
 	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: te.srvAddr}},
+		Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: te.srvAddr}}),
 		ServiceConfig: parseCfg(`{
 	    "methodConfig": [
 	        {
@@ -4948,7 +4948,7 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
 	}
 	defer cc.Close()
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: lis.Addr().String()}})})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -5300,7 +5300,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 		return fmt.Errorf("grpc.Dial(%q) = %v", target, err)
 	}
 	ss.cc = cc
-	ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}})
+	ss.r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: ss.addr}})})
 	if err := ss.waitForReady(cc); err != nil {
 		return err
 	}
@@ -5312,7 +5312,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 }
 
 func (ss *stubServer) newServiceConfig(sc string) {
-	ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}, ServiceConfig: parseCfg(sc)})
+	ss.r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: ss.addr}}), ServiceConfig: parseCfg(sc)})
 }
 
 func (ss *stubServer) waitForReady(cc *grpc.ClientConn) error {
@@ -7144,10 +7144,10 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
-	r.InitialState(resolver.State{Addresses: []resolver.Address{
+	r.InitialState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
-	}})
+	})})
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
@@ -7228,7 +7228,7 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 	go func() {
 		time.Sleep(time.Second)
 		r.UpdateState(resolver.State{
-			Addresses: []resolver.Address{{Addr: te.srvAddr}},
+			Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: te.srvAddr}}),
 			ServiceConfig: parseCfg(`{
 		    "methodConfig": [
 		        {

@@ -136,7 +136,7 @@ func (ccb *ccBalancerWrapper) watcher() {
 			if ub, ok := ccb.balancer.(balancer.V2Balancer); ok {
 				ub.UpdateClientConnState(*s)
 			} else {
-				ccb.balancer.HandleResolvedAddrs(s.ResolverState.Addresses, nil)
+				ccb.balancer.HandleResolvedAddrs(resolver.WeightedAddressesToAddresses(s.ResolverState.Addresses), nil)
 			}
 		case <-ccb.done:
 		}

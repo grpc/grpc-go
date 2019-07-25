@@ -193,7 +193,7 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 	defer deferFunc()
 
 	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
+		Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: lis.Addr().String()}}),
 		ServiceConfig: parseCfg(`{
 	"healthCheckConfig": {
 		"serviceName": "foo"
@@ -261,7 +261,7 @@ func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 	defer deferFunc()
 
 	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
+		Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: lis.Addr().String()}}),
 		ServiceConfig: parseCfg(`{
 	"healthCheckConfig": {
 		"serviceName": "foo"
@@ -305,7 +305,7 @@ func (s) TestHealthCheckWithGoAway(t *testing.T) {
 
 	tc := testpb.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
+		Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: lis.Addr().String()}}),
 		ServiceConfig: parseCfg(`{
 	"healthCheckConfig": {
 		"serviceName": "foo"
@@ -397,7 +397,7 @@ func (s) TestHealthCheckWithConnClose(t *testing.T) {
 	tc := testpb.NewTestServiceClient(cc)
 
 	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
+		Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: lis.Addr().String()}}),
 		ServiceConfig: parseCfg(`{
 	"healthCheckConfig": {
 		"serviceName": "foo"
@@ -463,7 +463,7 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	}
 }`)
 	r.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: lis.Addr().String()}},
+		Addresses:     resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: lis.Addr().String()}}),
 		ServiceConfig: sc,
 	})
 
@@ -506,7 +506,7 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	default:
 	}
 	// trigger teardown of the ac
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{}, ServiceConfig: sc})
+	r.UpdateState(resolver.State{Addresses: []resolver.WeightedAddress{}, ServiceConfig: sc})
 
 	select {
 	case <-hcExitChan:
@@ -551,7 +551,7 @@ func (s) TestHealthCheckWithClientConnClose(t *testing.T) {
 
 	tc := testpb.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
+		Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: lis.Addr().String()}}),
 		ServiceConfig: parseCfg(`{
 	"healthCheckConfig": {
 		"serviceName": "foo"
@@ -636,7 +636,7 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalledAddrConnShutDown(t *tes
 	}
 }`)
 	r.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: lis.Addr().String()}},
+		Addresses:     resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: lis.Addr().String()}}),
 		ServiceConfig: sc,
 	})
 
@@ -652,7 +652,7 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalledAddrConnShutDown(t *tes
 		t.Fatal("Health check function has not been invoked after 5s.")
 	}
 	// trigger teardown of the ac, ac in SHUTDOWN state
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{}, ServiceConfig: sc})
+	r.UpdateState(resolver.State{Addresses: []resolver.WeightedAddress{}, ServiceConfig: sc})
 
 	// The health check func should exit without calling the setConnectivityState func, as server hasn't sent
 	// any response.
@@ -707,7 +707,7 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalled(t *testing.T) {
 	// back to client immediately upon receiving the request (client should receive no response until
 	// test ends).
 	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
+		Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: lis.Addr().String()}}),
 		ServiceConfig: parseCfg(`{
 	"healthCheckConfig": {
 		"serviceName": "delay"
@@ -755,7 +755,7 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 	tc := testpb.NewTestServiceClient(cc)
 
 	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: addr}},
+		Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: addr}}),
 		ServiceConfig: parseCfg(`{
 	"healthCheckConfig": {
 		"serviceName": "foo"
@@ -794,7 +794,7 @@ func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 	tc := testpb.NewTestServiceClient(cc)
 
 	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: addr}},
+		Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: addr}}),
 		ServiceConfig: parseCfg(`{
 	"healthCheckConfig": {
 		"serviceName": "foo"
@@ -832,7 +832,7 @@ func testHealthCheckDisableWithServiceConfig(t *testing.T, addr string) {
 
 	tc := testpb.NewTestServiceClient(cc)
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: addr}}})
+	r.UpdateState(resolver.State{Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: addr}})})
 
 	// send some rpcs to make sure transport has been created and is ready for use.
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -887,7 +887,7 @@ func (s) TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 	defer deferFunc()
 
 	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
+		Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: lis.Addr().String()}}),
 		ServiceConfig: parseCfg(`{
 	"healthCheckConfig": {
 		"serviceName": "channelzSuccess"
@@ -943,7 +943,7 @@ func (s) TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 	defer deferFunc()
 
 	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
+		Addresses: resolver.AddressesToWeightedAddresses([]resolver.Address{{Addr: lis.Addr().String()}}),
 		ServiceConfig: parseCfg(`{
 	"healthCheckConfig": {
 		"serviceName": "channelzFailure"

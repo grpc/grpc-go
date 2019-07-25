@@ -249,7 +249,7 @@ func (s) TestXdsBalanceHandleResolvedAddrs(t *testing.T) {
 	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
 	for i := 0; i < 3; i++ {
 		lb.UpdateClientConnState(balancer.ClientConnState{
-			ResolverState:  resolver.State{Addresses: addrs},
+			ResolverState:  resolver.State{Addresses: resolver.AddressesToWeightedAddresses(addrs)},
 			BalancerConfig: testLBConfigFooBar,
 		})
 		select {
@@ -282,7 +282,7 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 	defer lb.Close()
 	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
 	lb.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  resolver.State{Addresses: addrs},
+		ResolverState:  resolver.State{Addresses: resolver.AddressesToWeightedAddresses(addrs)},
 		BalancerConfig: testLBConfigFooBar,
 	})
 
@@ -313,7 +313,7 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 			FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
 		}
 		lb.UpdateClientConnState(balancer.ClientConnState{
-			ResolverState:  resolver.State{Addresses: addrs},
+			ResolverState:  resolver.State{Addresses: resolver.AddressesToWeightedAddresses(addrs)},
 			BalancerConfig: workingLBConfig,
 		})
 		td.sendResp(&response{resp: testEDSRespWithoutEndpoints})
@@ -459,7 +459,7 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 	cfg2 := cfg
 	cfg2.FallBackPolicy = &loadBalancingConfig{Name: fakeBalancerB}
 	lb.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  resolver.State{Addresses: addrs},
+		ResolverState:  resolver.State{Addresses: resolver.AddressesToWeightedAddresses(addrs)},
 		BalancerConfig: &cfg2,
 	})
 
@@ -491,7 +491,7 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 	cfg3 := cfg
 	cfg3.FallBackPolicy = &loadBalancingConfig{Name: fakeBalancerA}
 	lb.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  resolver.State{Addresses: addrs},
+		ResolverState:  resolver.State{Addresses: resolver.AddressesToWeightedAddresses(addrs)},
 		BalancerConfig: &cfg3,
 	})
 

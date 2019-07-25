@@ -434,7 +434,7 @@ func (lb *lbBalancer) UpdateClientConnState(ccs balancer.ClientConnState) {
 		return
 	}
 
-	var remoteBalancerAddrs, backendAddrs []resolver.Address
+	var remoteBalancerAddrs, backendAddrs []resolver.WeightedAddress
 	for _, a := range addrs {
 		if a.Type == resolver.GRPCLB {
 			a.Type = resolver.Backend
@@ -461,7 +461,7 @@ func (lb *lbBalancer) UpdateClientConnState(ccs balancer.ClientConnState) {
 	lb.manualResolver.UpdateState(resolver.State{Addresses: remoteBalancerAddrs})
 
 	lb.mu.Lock()
-	lb.resolvedBackendAddrs = backendAddrs
+	lb.resolvedBackendAddrs = resolver.WeightedAddressesToAddresses(backendAddrs)
 	if lb.inFallback {
 		// This means we received a new list of resolved backends, and we are
 		// still in fallback mode. Need to update the list of backends we are

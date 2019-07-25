@@ -41,7 +41,7 @@ import (
 
 type localityConfig struct {
 	weight uint32
-	addrs  []resolver.Address
+	addrs  []resolver.WeightedAddress
 }
 
 // EDSBalancer does load balancing based on the EDS responses. Note that it
@@ -224,11 +224,14 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 		newLocalitiesSet[lid] = struct{}{}
 
 		newWeight := locality.GetLoadBalancingWeight().GetValue()
-		var newAddrs []resolver.Address
+		var newAddrs []resolver.WeightedAddress
 		for _, lbEndpoint := range locality.GetLbEndpoints() {
 			socketAddress := lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress()
-			newAddrs = append(newAddrs, resolver.Address{
-				Addr: net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue()))),
+			newAddrs = append(newAddrs, resolver.WeightedAddress{
+				Address : resolver.Address{
+					Addr: net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue()))),
+				},
+				Weight: lbEndpoint.GetLoadBalancingWeight().GetValue(),
 			})
 		}
 		var weightChanged, addrsChanged bool

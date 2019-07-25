@@ -124,10 +124,11 @@ func (ccr *ccResolverWrapper) NewAddress(addrs []resolver.Address) {
 		return
 	}
 	grpclog.Infof("ccResolverWrapper: sending new addresses to cc: %v", addrs)
+	weightedAddresses := resolver.AddressesToWeightedAddresses(addrs)
 	if channelz.IsOn() {
-		ccr.addChannelzTraceEvent(resolver.State{Addresses: addrs, ServiceConfig: ccr.curState.ServiceConfig})
+		ccr.addChannelzTraceEvent(resolver.State{Addresses: weightedAddresses, ServiceConfig: ccr.curState.ServiceConfig})
 	}
-	ccr.curState.Addresses = addrs
+	ccr.curState.Addresses = weightedAddresses
 	ccr.cc.updateResolverState(ccr.curState)
 }
 
