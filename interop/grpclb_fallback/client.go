@@ -22,11 +22,11 @@
 package main
 
 import (
-	"flag"
-	"os/exec"
 	"context"
+	"flag"
 	"log"
 	"net"
+	"os/exec"
 	"syscall"
 	"time"
 
@@ -97,11 +97,9 @@ func dialTCPUserTimeout(ctx context.Context, addr string) (net.Conn, error) {
 	return d.DialContext(ctx, "tcp", addr)
 }
 
-func createFallbackTestConn() *grpc.ClientConn {
+func createTestConn() *grpc.ClientConn {
 	opts := []grpc.DialOption{
 		grpc.WithContextDialer(dialTCPUserTimeout),
-		grpc.WithBlock(),
-		grpc.WithTimeout(5*time.Second),
 	}
 	switch *customCredentialsType {
 	case "tls":
@@ -117,7 +115,6 @@ func createFallbackTestConn() *grpc.ClientConn {
 	default:
 		grpclog.Fatalf("Invalid --custom_credentials_type:%v", *customCredentialsType)
 	}
-	//conn, err := grpc.DialContext(*serverURI, opts...)
 	conn, err := grpc.Dial(*serverURI, opts...)
 	if err != nil {
 		log.Fatalf("Fail to dial: %v", err)
@@ -134,7 +131,7 @@ func runCmd(command string) {
 
 func runFallbackBeforeStartupTest(breakLBAndBackendConnsCmd string, perRPCDeadlineSeconds int) {
 	runCmd(breakLBAndBackendConnsCmd)
-	conn := createFallbackTestConn()
+	conn := createTestConn()
 	defer conn.Close()
 	client := testpb.NewTestServiceClient(conn)
 	for i := 0; i < 30; i++ {
@@ -154,7 +151,7 @@ func doSlowFallbackBeforeStartup() {
 }
 
 func runFallbackAfterStartupTest(breakLBAndBackendConnsCmd string) {
-	conn := createFallbackTestConn()
+	conn := createTestConn()
 	defer conn.Close()
 	client := testpb.NewTestServiceClient(conn)
 	if g := doRPCAndGetPath(client, 20*time.Second, false); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
