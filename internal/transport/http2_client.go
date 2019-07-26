@@ -1332,6 +1332,7 @@ func (t *http2Client) keepalive() {
 					timer.Reset(t.kp.Time)
 					continue
 				}
+				infof("transport: closing client transport due to keepalive.")
 				t.Close()
 				return
 			case <-t.ctx.Done():
