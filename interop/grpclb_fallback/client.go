@@ -43,8 +43,8 @@ import (
 var (
 	customCredentialsType         = flag.String("custom_credentials_type", "", "Client creds to use")
 	serverURI                     = flag.String("server_uri", "dns:///staging-grpc-directpath-fallback-test.googleapis.com:443", "The server host name")
-	unrouteLBAndBackendAddrsCmd   = flag.String("unroute_lb_and_backend_addrs_cmd", "exit 1", "Command to make LB and backend address unroutable")
-	blackholeLBAndBackendAddrsCmd = flag.String("blackhole_lb_and_backend_addrs_cmd", "exit 1", "Command to make LB and backend addresses blackholed")
+	unrouteLBAndBackendAddrsCmd   = flag.String("unroute_lb_and_backend_addrs_cmd", "", "Command to make LB and backend address unroutable")
+	blackholeLBAndBackendAddrsCmd = flag.String("blackhole_lb_and_backend_addrs_cmd", "", "Command to make LB and backend addresses blackholed")
 	testCase                      = flag.String("test_case", "",
 		`Configure different test cases. Valid options are:
         fast_fallback_before_startup : LB/backend connections fail fast before RPC's have been made;
@@ -189,6 +189,12 @@ func doSlowFallbackAfterStartup() {
 
 func main() {
 	flag.Parse()
+	if len(*unrouteLBAndBackendAddrsCmd) == 0 {
+		grpclog.Fatalf("--unroute_lb_and_backend_addrs_cmd unset")
+	}
+	if len(*blackholeLBAndBackendAddrsCmd) == 0 {
+		grpclog.Fatalf("--blackhole_lb_and_backend_addrs_cmd unset")
+	}
 	switch *testCase {
 	case "fast_fallback_before_startup":
 		doFastFallbackBeforeStartup()
