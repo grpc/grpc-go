@@ -66,9 +66,9 @@ func (s) TestSimpleParsing(t *testing.T) {
 	} {
 		buf := fullReader{bytes.NewReader(test.p)}
 		parser := &parser{r: buf}
-		pt, b, err := parser.recvMsg(math.MaxInt32)
-		if err != test.err || !bytes.Equal(b, test.b) || pt != test.pt {
-			t.Fatalf("parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, %v", test.p, pt, b, err, test.pt, test.b, test.err)
+		pt, err := parser.recvMsg(math.MaxInt32)
+		if err != test.err || !bytes.Equal(parser.msg, test.b) || pt != test.pt {
+			t.Fatalf("parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, %v", test.p, pt, parser.msg, err, test.pt, test.b, test.err)
 		}
 	}
 }

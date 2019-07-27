@@ -67,7 +67,7 @@ type testStreamHandler struct {
 func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 	p := &parser{r: s}
 	for {
-		pf, req, err := p.recvMsg(math.MaxInt32)
+		pf, err := p.recvMsg(math.MaxInt32)
 		if err == io.EOF {
 			break
 		}
@@ -80,7 +80,7 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 		}
 		var v string
 		codec := testCodec{}
-		if err := codec.Unmarshal(req, &v); err != nil {
+		if err := codec.Unmarshal(p.msg, &v); err != nil {
 			t.Errorf("Failed to unmarshal the received message: %v", err)
 			return
 		}

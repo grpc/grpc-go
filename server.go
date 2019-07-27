@@ -951,7 +951,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	if sh != nil || binlog != nil {
 		payInfo = &payloadInfo{}
 	}
-	d, err := recvAndDecompress(&parser{r: stream}, stream, dc, s.opts.maxReceiveMessageSize, payInfo, decomp)
+	p := parser{r: stream}
+	err := recvAndDecompress(&p, stream, dc, s.opts.maxReceiveMessageSize, payInfo, decomp)
 	if err != nil {
 		if st, ok := status.FromError(err); ok {
 			if e := t.WriteStatus(stream, st); e != nil {
@@ -964,20 +965,20 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		t.IncrMsgRecv()
 	}
 	df := func(v interface{}) error {
-		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
+		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(p.msg, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
 		if sh != nil {
 			sh.HandleRPC(stream.Context(), &stats.InPayload{
 				RecvTime: time.Now(),
 				Payload:  v,
-				Data:     d,
-				Length:   len(d),
+				Data:     p.msg,
+				Length:   len(p.msg),
 			})
 		}
 		if binlog != nil {
 			binlog.Log(&binarylog.ClientMessage{
-				Message: d,
+				Message: p.msg,
 			})
 		}
 		if trInfo != nil {
