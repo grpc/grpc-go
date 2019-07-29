@@ -965,7 +965,7 @@ func (t *http2Server) keepalive() {
 			select {
 			case <-maxAge.C:
 				// Close the connection after grace period.
-				infof("transport: closing server transport due to maxAge.")
+				infof("transport: closing server transport due to maximum connection age.")
 				t.Close()
 				// Resetting the timer so that the clean-up doesn't deadlock.
 				maxAge.Reset(infinity)
@@ -979,7 +979,7 @@ func (t *http2Server) keepalive() {
 				continue
 			}
 			if pingSent {
-				infof("transport: closing server transport due to keepalive.")
+				infof("transport: closing server transport due to idleness.")
 				t.Close()
 				// Resetting the timer so that the clean-up doesn't deadlock.
 				keepalive.Reset(infinity)
