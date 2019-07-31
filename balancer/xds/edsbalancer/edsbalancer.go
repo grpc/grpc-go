@@ -232,7 +232,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 				Addr: net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue()))),
 			}
 			if lbEndpoint.GetLoadBalancingWeight().GetValue() != 0 {
-				address.Metadata = wrr.Info{Weight:lbEndpoint.GetLoadBalancingWeight().GetValue()}
+				address.Metadata = &wrr.Info{Weight:lbEndpoint.GetLoadBalancingWeight().GetValue()}
 			}
 			newAddrs = append(newAddrs, address)
 		}
