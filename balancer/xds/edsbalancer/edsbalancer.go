@@ -20,6 +20,7 @@ package edsbalancer
 import (
 	"context"
 	"encoding/json"
+	"google.golang.org/grpc/balancer/wrr"
 	"net"
 	"reflect"
 	"strconv"
@@ -227,9 +228,13 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 		var newAddrs []resolver.Address
 		for _, lbEndpoint := range locality.GetLbEndpoints() {
 			socketAddress := lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress()
-			newAddrs = append(newAddrs, resolver.Address{
+			address := resolver.Address{
 				Addr: net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue()))),
-			})
+			}
+			if lbEndpoint.GetLoadBalancingWeight().GetValue() != 0 {
+				address.Metadata = wrr.Info{Weight:lbEndpoint.GetLoadBalancingWeight().GetValue()}
+			}
+			newAddrs = append(newAddrs, address)
 		}
 		var weightChanged, addrsChanged bool
 		config, ok := xdsB.lidToConfig[lid]
