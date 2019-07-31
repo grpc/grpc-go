@@ -7,7 +7,7 @@ index c68ccbd..e6cc8cb 100644
  _GO_PROTO_SUFFIX = "_go_proto"
  _GO_GRPC_SUFFIX = "_go_grpc"
 -_GO_IMPORTPATH_PREFIX = "github.com/envoyproxy/data-plane-api/api/"
-+_GO_IMPORTPATH_PREFIX = "google.golang.org/grpc/balancer/xds/internal/proto/"
++_GO_IMPORTPATH_PREFIX = "google.golang.org/grpc/xds/internal/proto/"
  
  def _Suffix(d, suffix):
      return d + suffix

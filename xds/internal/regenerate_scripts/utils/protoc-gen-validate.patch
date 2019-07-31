@@ -7,7 +7,7 @@ index 8a3d063..939d997 100644
  go_proto_library(
      name = "go_default_library",
 -    importpath = "github.com/envoyproxy/protoc-gen-validate/validate",
-+    importpath = "google.golang.org/grpc/balancer/xds/internal/proto/validate",
++    importpath = "google.golang.org/grpc/xds/internal/proto/validate",
      proto = ":validate_proto",
      visibility = ["//visibility:public"],
  )
@@ -20,7 +20,7 @@ index 864ad86..6165f39 100644
  package validate;
 
 -option go_package = "github.com/envoyproxy/protoc-gen-validate/validate";
-+option go_package = "google.golang.org/grpc/balancer/xds/internal/proto/validate";
++option go_package = "google.golang.org/grpc/xds/internal/proto/validate";
  option java_package = "io.envoyproxy.pgv.validate";
 
  import "google/protobuf/descriptor.proto";

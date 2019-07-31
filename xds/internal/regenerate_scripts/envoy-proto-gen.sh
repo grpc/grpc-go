@@ -27,6 +27,6 @@ cd ../data-plane-api
 
 git apply ../utils/data-plane-api.patch
 # proto-gen.sh build all packages required for grpc xds implementation and move
-# proto generated code to grpc/balancer/xds/internal/proto subdirectory.
+# proto generated code to grpc/xds/internal/proto subdirectory.
 ../utils/proto-gen.sh
 

@@ -1,7 +1,7 @@
 ## Generate new pb.go files
 
  1. Update
-[DATA_PLANE_API_VERSION](https://github.com/grpc/grpc-go/blob/master/balancer/xds/internal/regenerate_scripts/envoy-proto-gen.sh#L3)
+[DATA_PLANE_API_VERSION](https://github.com/grpc/grpc-go/blob/master/xds/internal/regenerate_scripts/envoy-proto-gen.sh#L3)
 to a new commit for
 [envoyproxy/data-plane-api](https://github.com/envoyproxy/data-plane-api/commits/master).
  1. Run `./envoy-proto-gen.sh` in __this__ directory (and fingers crossed).
