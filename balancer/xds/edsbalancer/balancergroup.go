@@ -198,7 +198,7 @@ func (bg *balancerGroup) handleSubConnStateChange(sc balancer.SubConn, state con
 }
 
 // Address change: forward to balancer.
-func (bg *balancerGroup) handleResolvedAddrs(id internal.Locality, addrs []resolver.Address) {
+func (bg *balancerGroup) handleResolvedAddrs(id internal.Locality, addrs []resolver.Address, addrWeights map[resolver.Address]uint32) {
 	bg.mu.Lock()
 	b, ok := bg.idToBalancer[id]
 	bg.mu.Unlock()
@@ -207,7 +207,7 @@ func (bg *balancerGroup) handleResolvedAddrs(id internal.Locality, addrs []resol
 		return
 	}
 	if ub, ok := b.(balancer.V2Balancer); ok {
-		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: addrs}})
+		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: addrs, AddrWeights: addrWeights}})
 	} else {
 		b.HandleResolvedAddrs(addrs, nil)
 	}

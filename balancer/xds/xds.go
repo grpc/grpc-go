@@ -255,6 +255,7 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 				x.config = cfg
 				x.fallbackInitData = &resolver.State{
 					Addresses: u.ResolverState.Addresses,
+					AddrWeights: u.ResolverState.AddrWeights,
 					// TODO(yuxuanli): get the fallback balancer config once the validation change completes, where
 					// we can pass along the config struct.
 				}
@@ -280,15 +281,19 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 			}
 		}
 
-		if x.fallbackLB != nil && (!reflect.DeepEqual(x.fallbackInitData.Addresses, u.ResolverState.Addresses) || fallbackChanged) {
+		if x.fallbackLB != nil && (
+			!reflect.DeepEqual(x.fallbackInitData.Addresses, u.ResolverState.Addresses) ||
+			!reflect.DeepEqual(x.fallbackInitData.AddrWeights, u.ResolverState.AddrWeights) || fallbackChanged) {
 			x.updateFallbackWithResolverState(&resolver.State{
 				Addresses: u.ResolverState.Addresses,
+				AddrWeights: u.ResolverState.AddrWeights,
 			})
 		}
 
 		x.config = cfg
 		x.fallbackInitData = &resolver.State{
 			Addresses: u.ResolverState.Addresses,
+			AddrWeights: u.ResolverState.AddrWeights,
 			// TODO(yuxuanli): get the fallback balancer config once the validation change completes, where
 			// we can pass along the config struct.
 		}

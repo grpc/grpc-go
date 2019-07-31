@@ -38,7 +38,7 @@ func (bb *baseBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) 
 		cc:            cc,
 		pickerBuilder: bb.pickerBuilder,
 
-		subConns: make(map[resolver.Address]balancer.SubConn),
+		subConns: make(map[resolver.Address]AddrInfo),
 		scStates: make(map[balancer.SubConn]connectivity.State),
 		csEvltr:  &balancer.ConnectivityStateEvaluator{},
 		// Initialize picker to a picker that always return
@@ -60,7 +60,7 @@ type baseBalancer struct {
 	csEvltr *balancer.ConnectivityStateEvaluator
 	state   connectivity.State
 
-	subConns map[resolver.Address]balancer.SubConn
+	subConns map[resolver.Address]AddrInfo
 	scStates map[balancer.SubConn]connectivity.State
 	picker   balancer.Picker
 	config   Config
@@ -85,7 +85,11 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) {
 				grpclog.Warningf("base.baseBalancer: failed to create new SubConn: %v", err)
 				continue
 			}
-			b.subConns[a] = sc
+			addrInfo := AddrInfo{SubConn: sc}
+			if s.ResolverState.AddrWeights != nil && s.ResolverState.AddrWeights[a] > 0 {
+				addrInfo.Weight = s.ResolverState.AddrWeights[a]
+			}
+			b.subConns[a] = addrInfo
 			b.scStates[sc] = connectivity.Idle
 			sc.Connect()
 		}
@@ -93,7 +97,7 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) {
 	for a, sc := range b.subConns {
 		// a was removed by resolver.
 		if _, ok := addrsSet[a]; !ok {
-			b.cc.RemoveSubConn(sc)
+			b.cc.RemoveSubConn(sc.SubConn)
 			delete(b.subConns, a)
 			// Keep the state of this sc in b.scStates until sc's state becomes Shutdown.
 			// The entry will be deleted in HandleSubConnStateChange.
@@ -110,15 +114,28 @@ func (b *baseBalancer) regeneratePicker() {
 		b.picker = NewErrPicker(balancer.ErrTransientFailure)
 		return
 	}
-	readySCs := make(map[resolver.Address]balancer.SubConn)
+	pickerBuilderV2, ok := b.pickerBuilder.(PickerBuilderV2)
+	if ok {
+		readySCs := make(map[resolver.Address]AddrInfo)
 
-	// Filter out all ready SCs from full subConn map.
-	for addr, sc := range b.subConns {
-		if st, ok := b.scStates[sc]; ok && st == connectivity.Ready {
-			readySCs[addr] = sc
+		// Filter out all ready SCs from full subConn map.
+		for addr, sc := range b.subConns {
+			if st, ok := b.scStates[sc.SubConn]; ok && st == connectivity.Ready {
+				readySCs[addr] = sc
+			}
 		}
+		b.picker = pickerBuilderV2.BuildV2(readySCs)
+	} else {
+		readySCs := make(map[resolver.Address]balancer.SubConn)
+
+		// Filter out all ready SCs from full subConn map.
+		for addr, sc := range b.subConns {
+			if st, ok := b.scStates[sc.SubConn]; ok && st == connectivity.Ready {
+				readySCs[addr] = sc.SubConn
+			}
+		}
+		b.picker = b.pickerBuilder.Build(readySCs)
 	}
-	b.picker = b.pickerBuilder.Build(readySCs)
 }
 
 func (b *baseBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {

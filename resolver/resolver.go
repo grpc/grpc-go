@@ -109,6 +109,8 @@ type State struct {
 	// serviceconfig.Parse.
 	ServiceConfig serviceconfig.Config
 
+	AddrWeights map[Address]uint32 // Weights of addresses to be use for load balancing
+
 	// TODO: add Err error
 }
 

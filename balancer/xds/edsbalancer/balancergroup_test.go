@@ -43,7 +43,7 @@ func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	// Add one balancer to group.
 	bg.add(testBalancerIDs[0], 1, rrBuilder)
 	// Send one resolved address.
-	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:1])
+	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:1], nil)
 
 	// Send subconn state change.
 	sc1 := <-cc.newSubConnCh
@@ -60,7 +60,7 @@ func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	}
 
 	// Send two addresses.
-	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2], nil)
 	// Expect one new subconn, send state update.
 	sc2 := <-cc.newSubConnCh
 	bg.handleSubConnStateChange(sc2, connectivity.Connecting)
@@ -77,7 +77,7 @@ func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	}
 
 	// Remove the first address.
-	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[1:2])
+	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[1:2], nil)
 	scToRemove := <-cc.removeSubConnCh
 	if !reflect.DeepEqual(scToRemove, sc1) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
@@ -102,11 +102,11 @@ func TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
 	bg.add(testBalancerIDs[0], 1, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:1])
+	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:1], nil)
 	sc1 := <-cc.newSubConnCh
 
 	bg.add(testBalancerIDs[1], 1, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[0:1])
+	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[0:1], nil)
 	sc2 := <-cc.newSubConnCh
 
 	// Send state changes for both subconns.
@@ -134,12 +134,12 @@ func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
 	bg.add(testBalancerIDs[0], 1, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2], nil)
 	sc1 := <-cc.newSubConnCh
 	sc2 := <-cc.newSubConnCh
 
 	bg.add(testBalancerIDs[1], 1, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4], nil)
 	sc3 := <-cc.newSubConnCh
 	sc4 := <-cc.newSubConnCh
 
@@ -177,7 +177,7 @@ func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	}
 
 	// Remove sc3's addresses.
-	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[3:4])
+	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[3:4], nil)
 	scToRemove := <-cc.removeSubConnCh
 	if !reflect.DeepEqual(scToRemove, sc3) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc3, scToRemove)
@@ -230,12 +230,12 @@ func TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
 	bg.add(testBalancerIDs[0], 2, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2], nil)
 	sc1 := <-cc.newSubConnCh
 	sc2 := <-cc.newSubConnCh
 
 	bg.add(testBalancerIDs[1], 1, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4], nil)
 	sc3 := <-cc.newSubConnCh
 	sc4 := <-cc.newSubConnCh
 
@@ -268,15 +268,15 @@ func TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	// Add three balancers to group and send one resolved address to both
 	// balancers.
 	bg.add(testBalancerIDs[0], 1, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:1])
+	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:1], nil)
 	sc1 := <-cc.newSubConnCh
 
 	bg.add(testBalancerIDs[1], 1, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[1:2])
+	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[1:2], nil)
 	sc2 := <-cc.newSubConnCh
 
 	bg.add(testBalancerIDs[2], 1, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[2], testBackendAddrs[1:2])
+	bg.handleResolvedAddrs(testBalancerIDs[2], testBackendAddrs[1:2], nil)
 	sc3 := <-cc.newSubConnCh
 
 	// Send state changes for both subconns.
@@ -335,12 +335,12 @@ func TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
 	bg.add(testBalancerIDs[0], 2, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2], nil)
 	sc1 := <-cc.newSubConnCh
 	sc2 := <-cc.newSubConnCh
 
 	bg.add(testBalancerIDs[1], 1, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4], nil)
 	sc3 := <-cc.newSubConnCh
 	sc4 := <-cc.newSubConnCh
 
@@ -388,14 +388,14 @@ func TestBalancerGroup_LoadReport(t *testing.T) {
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
 	bg.add(testBalancerIDs[0], 2, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2], nil)
 	sc1 := <-cc.newSubConnCh
 	sc2 := <-cc.newSubConnCh
 	backendToBalancerID[sc1] = testBalancerIDs[0]
 	backendToBalancerID[sc2] = testBalancerIDs[0]
 
 	bg.add(testBalancerIDs[1], 1, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4], nil)
 	sc3 := <-cc.newSubConnCh
 	sc4 := <-cc.newSubConnCh
 	backendToBalancerID[sc3] = testBalancerIDs[1]

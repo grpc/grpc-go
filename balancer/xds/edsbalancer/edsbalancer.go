@@ -42,6 +42,7 @@ import (
 type localityConfig struct {
 	weight uint32
 	addrs  []resolver.Address
+	addrWeights map[resolver.Address]uint32
 }
 
 // EDSBalancer does load balancing based on the EDS responses. Note that it
@@ -114,7 +115,7 @@ func (xdsB *EDSBalancer) updateSubBalancerName(subBalancerName string) {
 			//  balancer becomes ready).
 			xdsB.bg.remove(id)
 			xdsB.bg.add(id, config.weight, xdsB.subBalancerBuilder)
-			xdsB.bg.handleResolvedAddrs(id, config.addrs)
+			xdsB.bg.handleResolvedAddrs(id, config.addrs, config.addrWeights)
 		}
 	}
 }
@@ -225,11 +226,16 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 
 		newWeight := locality.GetLoadBalancingWeight().GetValue()
 		var newAddrs []resolver.Address
+		var newAddrWeights = make(map[resolver.Address]uint32)
 		for _, lbEndpoint := range locality.GetLbEndpoints() {
 			socketAddress := lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress()
-			newAddrs = append(newAddrs, resolver.Address{
+			address := resolver.Address{
 				Addr: net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue()))),
-			})
+			}
+			newAddrs = append(newAddrs, address)
+			if lbEndpoint.GetLoadBalancingWeight().GetValue() != 0 {
+				newAddrWeights[address] = lbEndpoint.GetLoadBalancingWeight().GetValue()
+			}
 		}
 		var weightChanged, addrsChanged bool
 		config, ok := xdsB.lidToConfig[lid]
@@ -249,7 +255,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 			if config.weight != newWeight {
 				weightChanged = true
 			}
-			if !reflect.DeepEqual(config.addrs, newAddrs) {
+			if !reflect.DeepEqual(config.addrs, newAddrs) || !reflect.DeepEqual(config.addrWeights, newAddrWeights) {
 				addrsChanged = true
 			}
 		}
@@ -261,7 +267,8 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 
 		if addrsChanged {
 			config.addrs = newAddrs
-			xdsB.bg.handleResolvedAddrs(lid, newAddrs)
+			config.addrWeights = newAddrWeights
+			xdsB.bg.handleResolvedAddrs(lid, newAddrs, newAddrWeights)
 		}
 	}
 
