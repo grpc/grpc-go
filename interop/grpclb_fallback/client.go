@@ -70,7 +70,7 @@ func doRPCAndGetPath(client testpb.TestServiceClient, timeout time.Duration, wai
 	g := reply.GetGrpclbRouteType()
 	infoLog.Printf("doRPCAndGetPath got grpclb route type: %v\n", g)
 	if g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK && g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
-		errorLog.Fatalf("Expected grpclb route type to be either backend or fallback", g)
+		errorLog.Fatalf("Expected grpclb route type to be either backend or fallback; got: %d", g)
 	}
 	return g
 }
