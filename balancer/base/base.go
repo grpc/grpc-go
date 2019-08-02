@@ -42,16 +42,6 @@ type PickerBuilder interface {
 	Build(readySCs map[resolver.Address]balancer.SubConn) balancer.Picker
 }
 
-type AddrInfo struct {
-	SubConn balancer.SubConn
-	Weight uint32
-}
-
-type PickerBuilderV2 interface {
-	PickerBuilder
-	BuildV2(readySCs map[resolver.Address]AddrInfo) balancer.Picker
-}
-
 // NewBalancerBuilder returns a balancer builder. The balancers
 // built by this builder will use the picker builder to build pickers.
 func NewBalancerBuilder(name string, pb PickerBuilder) balancer.Builder {
