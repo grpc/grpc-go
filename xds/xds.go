@@ -24,6 +24,6 @@ package xds
 // packages. Once the code is considered stable enough, we will move it out of
 // experimental to here.
 import (
-	_ "google.golang.org/grpc/xds/experimental"
-	_ "google.golang.org/grpc/xds/internal"
+	_ "google.golang.org/grpc/xds/experimental" // All xds code lives here.
+	_ "google.golang.org/grpc/xds/internal"     // xds internal code lives here.
 )
