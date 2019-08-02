@@ -20,7 +20,6 @@ package edsbalancer
 import (
 	"context"
 	"encoding/json"
-	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"net"
 	"reflect"
 	"strconv"
@@ -28,6 +27,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/balancer/xds/internal"
 	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
 	endpointpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/endpoint/endpoint"
@@ -233,7 +233,9 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 			}
 			if xdsB.subBalancerBuilder.Name() == weightedroundrobin.Name &&
 				lbEndpoint.GetLoadBalancingWeight().GetValue() != 0 {
-				address.Metadata = &weightedroundrobin.AddrInfo{Weight: lbEndpoint.GetLoadBalancingWeight().GetValue()}
+				address.Metadata = &weightedroundrobin.AddrInfo{
+					Weight: lbEndpoint.GetLoadBalancingWeight().GetValue(),
+				}
 			}
 			newAddrs = append(newAddrs, address)
 		}
