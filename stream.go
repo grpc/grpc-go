@@ -689,6 +689,9 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	}
 	msgBytes := data // Store the pointer before setting to nil. For binary logging.
 	op := func(a *csAttempt) error {
+		if a.s == nil {
+			return nil
+		}
 		err := a.sendMsg(m, hdr, payload, data)
 		// nil out the message and uncomp when replaying; they are only needed for
 		// stats which is disabled for subsequent attempts.
