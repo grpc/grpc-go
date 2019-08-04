@@ -559,6 +559,9 @@ func (cs *clientStream) retryLocked(lastErr error) error {
 
 func (cs *clientStream) Context() context.Context {
 	cs.commitAttempt()
+	if cs.attempt.s == nil {
+		return nil
+	}
 	// No need to lock before using attempt, since we know it is committed and
 	// cannot change.
 	return cs.attempt.s.Context()
