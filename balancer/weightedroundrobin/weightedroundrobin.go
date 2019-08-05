@@ -16,7 +16,7 @@
  *
  */
 
-// Package roundrobin defines a weighted roundrobin balancer.
+// Package weightedroundrobin defines a weighted roundrobin balancer.
 package weightedroundrobin
 
 // Name is the name of weighted_round_robin balancer.
