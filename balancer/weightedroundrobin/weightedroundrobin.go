@@ -22,7 +22,7 @@ package weightedroundrobin
 // Name is the name of weighted_round_robin balancer.
 const Name = "weighted_round_robin"
 
-// AddrInfo will stored inside Address metadata in order to use weighted roundrobin
+// AddrInfo will be stored inside Address metadata in order to use weighted roundrobin
 // balancer.
 type AddrInfo struct {
 	Weight uint32
