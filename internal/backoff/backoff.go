@@ -37,6 +37,8 @@ type Strategy interface {
 	Backoff(retries int) time.Duration
 }
 
+// These constants correspond to the ones defined in
+// https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
 const (
 	// baseDelay is the amount of time to wait before retrying after the first
 	// failure.
@@ -45,11 +47,23 @@ const (
 	factor = 1.6
 	// jitter provides a range to randomize backoff delays.
 	jitter = 0.2
+	// maxDelay is the upper bound of backoff delay.
+	maxDelay = 120 * time.Second
 )
+
+var DefaultExponential = Exponential{BaseDelay: baseDelay, Multiplier: factor, Jitter: jitter, MaxDelay: maxDelay}
 
 // Exponential implements exponential backoff algorithm as defined in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
 type Exponential struct {
+	// BaseDelay is the amount of time to backoff after the first connection
+	// failure.
+	BaseDelay time.Duration
+	// Multiplier is the factor with which to multiply backoffs after a failed
+	// retry.
+	Multiplier float64
+	// Jitter is the factor with which backoffs are randomized.
+	Jitter float64
 	// MaxDelay is the upper bound of backoff delay.
 	MaxDelay time.Duration
 }
@@ -58,11 +72,11 @@ type Exponential struct {
 // number of retries.
 func (bc Exponential) Backoff(retries int) time.Duration {
 	if retries == 0 {
-		return baseDelay
+		return bc.BaseDelay
 	}
-	backoff, max := float64(baseDelay), float64(bc.MaxDelay)
+	backoff, max := float64(bc.BaseDelay), float64(bc.MaxDelay)
 	for backoff < max && retries > 0 {
-		backoff *= factor
+		backoff *= bc.Multiplier
 		retries--
 	}
 	if backoff > max {
@@ -70,7 +84,7 @@ func (bc Exponential) Backoff(retries int) time.Duration {
 	}
 	// Randomize backoff delays so that if a cluster of requests start at
 	// the same time, they won't operate in lockstep.
-	backoff *= 1 + jitter*(grpcrand.Float64()*2-1)
+	backoff *= 1 + bc.Jitter*(grpcrand.Float64()*2-1)
 	if backoff < 0 {
 		return 0
 	}

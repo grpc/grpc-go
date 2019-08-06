@@ -33,20 +33,20 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const maxDelay = 120 * time.Second
-
-var backoffStrategy = backoff.Exponential{MaxDelay: maxDelay}
-var backoffFunc = func(ctx context.Context, retries int) bool {
-	d := backoffStrategy.Backoff(retries)
-	timer := time.NewTimer(d)
-	select {
-	case <-timer.C:
-		return true
-	case <-ctx.Done():
-		timer.Stop()
-		return false
+var (
+	backoffStrategy = backoff.DefaultExponential
+	backoffFunc     = func(ctx context.Context, retries int) bool {
+		d := backoffStrategy.Backoff(retries)
+		timer := time.NewTimer(d)
+		select {
+		case <-timer.C:
+			return true
+		case <-ctx.Done():
+			timer.Stop()
+			return false
+		}
 	}
-}
+)
 
 func init() {
 	internal.HealthCheckFunc = clientHealthCheck

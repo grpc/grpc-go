@@ -126,9 +126,11 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 
 	// DNS address (non-IP).
 	ctx, cancel := context.WithCancel(context.Background())
+	bs := backoff.DefaultExponential
+	bs.MaxDelay = b.minFreq
 	d := &dnsResolver{
 		freq:                 b.minFreq,
-		backoff:              backoff.Exponential{MaxDelay: b.minFreq},
+		backoff:              bs,
 		host:                 host,
 		port:                 port,
 		ctx:                  ctx,

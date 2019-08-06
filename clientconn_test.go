@@ -655,22 +655,35 @@ func (s) TestCredentialsMisuse(t *testing.T) {
 }
 
 func (s) TestWithBackoffConfigDefault(t *testing.T) {
-	testBackoffConfigSet(t, &DefaultBackoffConfig)
+	testBackoffConfigSet(t, backoff.DefaultExponential)
 }
 
 func (s) TestWithBackoffConfig(t *testing.T) {
 	b := BackoffConfig{MaxDelay: DefaultBackoffConfig.MaxDelay / 2}
-	expected := b
-	testBackoffConfigSet(t, &expected, WithBackoffConfig(b))
+	wantBackoff := backoff.DefaultExponential
+	wantBackoff.MaxDelay = b.MaxDelay
+	testBackoffConfigSet(t, wantBackoff, WithBackoffConfig(b))
 }
 
 func (s) TestWithBackoffMaxDelay(t *testing.T) {
 	md := DefaultBackoffConfig.MaxDelay / 2
-	expected := BackoffConfig{MaxDelay: md}
-	testBackoffConfigSet(t, &expected, WithBackoffMaxDelay(md))
+	wantBackoff := backoff.DefaultExponential
+	wantBackoff.MaxDelay = md
+	testBackoffConfigSet(t, wantBackoff, WithBackoffMaxDelay(md))
 }
 
-func testBackoffConfigSet(t *testing.T, expected *BackoffConfig, opts ...DialOption) {
+func (s) TestWithConnectParams(t *testing.T) {
+	bd := 2 * time.Second
+	mltpr := 2.0
+	jitter := 0.0
+	crt := ConnectParams{BackoffBaseDelay: bd, BackoffMultiplier: mltpr, BackoffJitter: jitter}
+	// MaxDelay is not set in the ConnectParams. So it should not be set on
+	// backoff.Exponential as well.
+	wantBackoff := backoff.Exponential{BaseDelay: bd, Multiplier: mltpr, Jitter: jitter}
+	testBackoffConfigSet(t, wantBackoff, WithConnectParams(crt))
+}
+
+func testBackoffConfigSet(t *testing.T, wantBackoff backoff.Exponential, opts ...DialOption) {
 	opts = append(opts, WithInsecure())
 	conn, err := Dial("passthrough:///foo:80", opts...)
 	if err != nil {
@@ -682,16 +695,13 @@ func testBackoffConfigSet(t *testing.T, expected *BackoffConfig, opts ...DialOpt
 		t.Fatalf("backoff config not set")
 	}
 
-	actual, ok := conn.dopts.bs.(backoff.Exponential)
+	gotBackoff, ok := conn.dopts.bs.(backoff.Exponential)
 	if !ok {
 		t.Fatalf("unexpected type of backoff config: %#v", conn.dopts.bs)
 	}
 
-	expectedValue := backoff.Exponential{
-		MaxDelay: expected.MaxDelay,
-	}
-	if actual != expectedValue {
-		t.Fatalf("unexpected backoff config on connection: %v, want %v", actual, expected)
+	if gotBackoff != wantBackoff {
+		t.Fatalf("unexpected backoff config on connection: %v, want %v", gotBackoff, wantBackoff)
 	}
 }
 
