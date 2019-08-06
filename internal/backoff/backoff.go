@@ -51,6 +51,9 @@ const (
 	maxDelay = 120 * time.Second
 )
 
+// DefaultExponential is an exponential backoff implementation using the
+// default values for all the configurable knobs defined in
+// https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
 var DefaultExponential = Exponential{BaseDelay: baseDelay, Multiplier: factor, Jitter: jitter, MaxDelay: maxDelay}
 
 // Exponential implements exponential backoff algorithm as defined in
