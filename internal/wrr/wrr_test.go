@@ -99,6 +99,10 @@ func TestRandomWRRNext(t *testing.T) {
 	testWRRNext(t, NewRandom)
 }
 
+func TestEdfWrrNext(t *testing.T) {
+	testWRRNext(t, NewEdfWrr)
+}
+
 func init() {
 	r := rand.New(rand.NewSource(0))
 	grpcrandInt63n = r.Int63n
