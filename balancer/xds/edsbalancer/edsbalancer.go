@@ -27,6 +27,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/balancer/xds/internal"
 	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
 	endpointpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/endpoint/endpoint"
@@ -227,9 +228,16 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 		var newAddrs []resolver.Address
 		for _, lbEndpoint := range locality.GetLbEndpoints() {
 			socketAddress := lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress()
-			newAddrs = append(newAddrs, resolver.Address{
+			address := resolver.Address{
 				Addr: net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue()))),
-			})
+			}
+			if xdsB.subBalancerBuilder.Name() == weightedroundrobin.Name &&
+				lbEndpoint.GetLoadBalancingWeight().GetValue() != 0 {
+				address.Metadata = &weightedroundrobin.AddrInfo{
+					Weight: lbEndpoint.GetLoadBalancingWeight().GetValue(),
+				}
+			}
+			newAddrs = append(newAddrs, address)
 		}
 		var weightChanged, addrsChanged bool
 		config, ok := xdsB.lidToConfig[lid]
