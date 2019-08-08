@@ -17,18 +17,22 @@
 
 package wrr
 
-import "container/heap"
+import (
+	"container/heap"
+	"sync"
+)
 
 // edfWrr is a struct for EDF weighted round robin implementation.
 type edfWrr struct {
+	lock  sync.Mutex
 	items edfPriorityQueue
 }
 
-// NewEdfWrr creates Earliest Deadline First (EDF)
+// NewEDF creates Earliest Deadline First (EDF)
 // (https://en.wikipedia.org/wiki/Earliest_deadline_first_scheduling) implementation for weighted round robin.
 // Each pick from the schedule has the earliest deadline entry selected. Entries have deadlines set
 // at current time + 1 / weight, providing weighted round robin behavior with O(log n) pick time.
-func NewEdfWrr() WRR {
+func NewEDF() WRR {
 	return &edfWrr{}
 }
 
@@ -65,6 +69,8 @@ func (edf edfWrr) currentTime() float64 {
 }
 
 func (edf *edfWrr) Add(item interface{}, weight int64) {
+	edf.lock.Lock()
+	defer edf.lock.Unlock()
 	entry := edfEntry{
 		deadline: edf.currentTime() + 1.0/float64(weight),
 		weight:   weight,
@@ -74,6 +80,8 @@ func (edf *edfWrr) Add(item interface{}, weight int64) {
 }
 
 func (edf *edfWrr) Next() interface{} {
+	edf.lock.Lock()
+	defer edf.lock.Unlock()
 	if len(edf.items) == 0 {
 		return nil
 	}

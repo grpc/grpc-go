@@ -100,7 +100,7 @@ func TestRandomWRRNext(t *testing.T) {
 }
 
 func TestEdfWrrNext(t *testing.T) {
-	testWRRNext(t, NewEdfWrr)
+	testWRRNext(t, NewEDF)
 }
 
 func init() {
