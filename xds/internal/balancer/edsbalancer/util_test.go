@@ -66,7 +66,7 @@ func (twrr *testWRR) Next() interface{} {
 }
 
 func init() {
-	newRandomWRR = newTestWRR
+	newWRR = newTestWRR
 }
 
 func TestDropper(t *testing.T) {

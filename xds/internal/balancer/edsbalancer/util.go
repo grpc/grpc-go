@@ -27,7 +27,7 @@ type dropper struct {
 }
 
 func newDropper(numerator, denominator uint32, category string) *dropper {
-	w := newRandomWRR()
+	w := newWRR()
 	w.Add(true, int64(numerator))
 	w.Add(false, int64(denominator-numerator))
 
