@@ -22,12 +22,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
 	"math"
 	"net"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
