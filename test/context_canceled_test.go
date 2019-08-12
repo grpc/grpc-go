@@ -23,7 +23,9 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
@@ -107,5 +109,51 @@ func (s) TestContextCanceled(t *testing.T) {
 
 	if !canceledOk || !permDeniedOk {
 		t.Fatalf(`couldn't find the delay that causes canceled/perm denied race.`)
+	}
+}
+
+// To make sure that canceling a stream with compression enabled won't result in
+// internal error, compressed flag set with identity or empty encoding.
+//
+// The root cause is a select race on stream headerChan and ctx. Stream gets
+// whether compression is enabled and the compression type from two separate
+// functions, both include select with context. If the `case non-ctx:` wins the
+// first one, but `case ctx.Done()` wins the second one, the compression info
+// will be inconsistent, and it causes internal error.
+func (s) TestCancelWhileRecvingWithCompression(t *testing.T) {
+	ss := &stubServer{
+		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+			for {
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{
+					Payload: nil,
+				}); err != nil {
+					return err
+				}
+			}
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	for i := 0; i < 10; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+		s, err := ss.client.FullDuplexCall(ctx, grpc.UseCompressor(gzip.Name))
+		if err != nil {
+			t.Fatalf("failed to start bidi streaming RPC: %v", err)
+		}
+		// Cancel the stream while receiving to trigger the internal error.
+		time.AfterFunc(time.Millisecond*10, cancel)
+		for {
+			_, err := s.Recv()
+			if err != nil {
+				if status.Code(err) != codes.Canceled {
+					t.Fatalf("recv failed with %v, want Canceled", err)
+				}
+				break
+			}
+		}
 	}
 }
