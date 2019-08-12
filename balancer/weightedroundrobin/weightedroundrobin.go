@@ -55,7 +55,7 @@ func (*wrrBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) bal
 	return &wrrBalancer{
 		cc: cc,
 
-		subConns: make(map[string]*BalancerAddrInfo),
+		subConns: make(map[string]*balancerAddrInfo),
 		scStates: make(map[balancer.SubConn]connectivity.State),
 		csEvltr:  &balancer.ConnectivityStateEvaluator{},
 	}
@@ -65,7 +65,7 @@ func (*wrrBuilder) Name() string {
 	return Name
 }
 
-type BalancerAddrInfo struct {
+type balancerAddrInfo struct {
 	SubConn balancer.SubConn
 	Weight  uint32
 }
@@ -76,7 +76,7 @@ type wrrBalancer struct {
 	csEvltr *balancer.ConnectivityStateEvaluator
 	state   connectivity.State
 
-	subConns map[string]*BalancerAddrInfo
+	subConns map[string]*balancerAddrInfo
 	scStates map[balancer.SubConn]connectivity.State
 	picker   balancer.Picker
 }
@@ -109,7 +109,7 @@ func (b *wrrBalancer) UpdateClientConnState(s balancer.ClientConnState) {
 				grpclog.Warningf("base.baseBalancer: failed to create new SubConn: %v", err)
 				continue
 			}
-			balancerAddrInfo := BalancerAddrInfo{SubConn: sc}
+			balancerAddrInfo := balancerAddrInfo{SubConn: sc}
 			b.subConns[a.Addr] = &balancerAddrInfo
 			b.scStates[sc] = connectivity.Idle
 			sc.Connect()
@@ -171,7 +171,7 @@ func (b *wrrBalancer) regeneratePicker() {
 		b.picker = base.NewErrPicker(balancer.ErrTransientFailure)
 		return
 	}
-	readySCs := make(map[string]*BalancerAddrInfo)
+	readySCs := make(map[string]*balancerAddrInfo)
 
 	// Filter out all ready SCs from full subConn map.
 	for addr, sc := range b.subConns {
@@ -182,7 +182,7 @@ func (b *wrrBalancer) regeneratePicker() {
 	b.picker = buildPicker(readySCs)
 }
 
-func buildPicker(readySCs map[string]*BalancerAddrInfo) balancer.Picker {
+func buildPicker(readySCs map[string]*balancerAddrInfo) balancer.Picker {
 	grpclog.Infof("wrr: buildPicker called with readySCs: %v", readySCs)
 	if len(readySCs) == 0 {
 		return base.NewErrPicker(balancer.ErrNoSubConnAvailable)
