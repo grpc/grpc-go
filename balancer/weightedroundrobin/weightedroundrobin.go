@@ -21,13 +21,14 @@ package weightedroundrobin
 
 import (
 	"context"
+	"sync"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/resolver"
-	"sync"
 )
 
 // Name is the name of weighted_round_robin balancer.
