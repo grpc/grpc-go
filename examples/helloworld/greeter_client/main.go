@@ -39,6 +39,7 @@ func main() {
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
+		os.Exit(-1)
 	}
 	defer conn.Close()
 	c := pb.NewGreeterClient(conn)
@@ -47,12 +48,16 @@ func main() {
 	name := defaultName
 	if len(os.Args) > 1 {
 		name = os.Args[1]
+	} else {
+		log.Fatal("name not provided")
+		os.Exit(-1)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: name})
 	if err != nil {
 		log.Fatalf("could not greet: %v", err)
+		os.Exit(-1)
 	}
 	log.Printf("Greeting: %s", r.Message)
 }
