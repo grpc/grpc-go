@@ -116,8 +116,8 @@ func (b *wrrBalancer) UpdateClientConnState(s balancer.ClientConnState) {
 		}
 	}
 	for a, sc := range b.subConns {
-		// a was removed by resolver.
 		if weight, ok := addrWeights[a]; !ok {
+			// a was removed by resolver.
 			b.cc.RemoveSubConn(sc.SubConn)
 			delete(b.subConns, a)
 			// Keep the state of this sc in b.scStates until sc's state becomes Shutdown.
@@ -179,19 +179,29 @@ func (b *wrrBalancer) regeneratePicker() {
 			readySCs[addr] = sc
 		}
 	}
-	b.picker = buildPicker(readySCs)
+	b.updatePicker(readySCs)
 }
 
-func buildPicker(readySCs map[string]*balancerAddrInfo) balancer.Picker {
-	grpclog.Infof("wrr: buildPicker called with readySCs: %v", readySCs)
+func (b *wrrBalancer) updatePicker(readySCs map[string]*balancerAddrInfo) {
+	grpclog.Infof("wrr: updatePicker called with readySCs: %v", readySCs)
 	if len(readySCs) == 0 {
-		return base.NewErrPicker(balancer.ErrNoSubConnAvailable)
+		b.picker = base.NewErrPicker(balancer.ErrNoSubConnAvailable)
+		return
 	}
-	w := wrr.NewEDF()
+	picker, ok := b.picker.(*wrrPicker)
+	if !ok {
+		picker = &wrrPicker{wrr: wrr.NewEDF()}
+	}
+	b.picker = picker
+	w := picker.wrr
+	oldItems := w.GetItems()
 	for _, sc := range readySCs {
+		delete(oldItems, sc.SubConn)
 		w.Add(sc.SubConn, int64(sc.Weight))
 	}
-	return &wrrPicker{wrr: w}
+	for sc := range oldItems {
+		w.Add(sc, 0)
+	}
 }
 
 type wrrPicker struct {

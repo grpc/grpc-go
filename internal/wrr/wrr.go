@@ -19,10 +19,14 @@ package wrr
 
 // WRR defines an interface that implements weighted round robin.
 type WRR interface {
-	// Add adds an item with weight to the WRR set.
+	// Add adds an item with weight to the WRR set. It is up to implementation how to treat duplicates and not
+	// positive weights.
 	Add(item interface{}, weight int64)
 	// Next returns the next picked item.
 	//
 	// Next needs to be thread safe.
 	Next() interface{}
+
+	// Returns all items in WRR set.
+	GetItems() map[interface{}]struct{}
 }

@@ -32,7 +32,7 @@ func equalApproximate(a, b float64) error {
 	opt := cmp.Comparer(func(x, y float64) bool {
 		delta := math.Abs(x - y)
 		mean := math.Abs(x+y) / 2.0
-		return delta/mean < 0.05
+		return delta < 1e-7 || delta/mean < 0.05
 	})
 	if !cmp.Equal(a, b, opt) {
 		return errors.New(cmp.Diff(a, b))
@@ -95,12 +95,76 @@ func testWRRNext(t *testing.T, newWRR func() WRR) {
 	}
 }
 
+func testWRRModify(t *testing.T, newWRR func() WRR) {
+	tests := []struct {
+		name     string
+		weights1 []int64
+		weights2 []int64
+	}{
+		{
+			name:     "1-1-1 -> 1-0-1",
+			weights1: []int64{1, 1, 1},
+			weights2: []int64{1, 0, 1},
+		},
+		{
+			name:     "1-1-1 -> 1-2-3",
+			weights1: []int64{1, 1, 1},
+			weights2: []int64{1, 2, 3},
+		},
+		{
+			name:     "3-2-5 -> 5-3-5",
+			weights1: []int64{3, 2, 5},
+			weights2: []int64{5, 3, 5},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sumOfWeights int64
+
+			w := newWRR()
+			for i, weight := range tt.weights1 {
+				w.Add(i, weight)
+			}
+			for i, weight := range tt.weights2 {
+				if tt.weights1[i] != tt.weights2[i] {
+					w.Add(i, weight)
+				}
+				sumOfWeights += weight
+			}
+
+			results := make(map[int]int)
+			for i := 0; i < iterCount; i++ {
+				results[w.Next().(int)]++
+			}
+
+			wantRatio := make([]float64, len(tt.weights2))
+			for i, weight := range tt.weights2 {
+				wantRatio[i] = float64(weight) / float64(sumOfWeights)
+			}
+			gotRatio := make([]float64, len(tt.weights2))
+			for i, count := range results {
+				gotRatio[i] = float64(count) / iterCount
+			}
+
+			for i := range wantRatio {
+				if err := equalApproximate(gotRatio[i], wantRatio[i]); err != nil {
+					t.Errorf("%v not equal %v", i, err)
+				}
+			}
+		})
+	}
+}
+
 func TestRandomWRRNext(t *testing.T) {
 	testWRRNext(t, NewRandom)
 }
 
 func TestEdfWrrNext(t *testing.T) {
 	testWRRNext(t, NewEDF)
+}
+
+func TestEdfWrrModify(t *testing.T) {
+	testWRRModify(t, NewEDF)
 }
 
 func init() {

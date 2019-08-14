@@ -59,3 +59,11 @@ func (rw *randomWRR) Add(item interface{}, weight int64) {
 	rw.items = append(rw.items, rItem)
 	rw.sumOfWeights += weight
 }
+
+func (rw *randomWRR) GetItems() map[interface{}]struct{} {
+	res := make(map[interface{}]struct{})
+	for _, item := range rw.items {
+		res[item] = struct{}{}
+	}
+	return res
+}

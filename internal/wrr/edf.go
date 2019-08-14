@@ -24,8 +24,9 @@ import (
 
 // edfWrr is a struct for EDF weighted round robin implementation.
 type edfWrr struct {
-	lock  sync.Mutex
-	items edfPriorityQueue
+	lock    sync.Mutex
+	items   edfPriorityQueue
+	weights map[interface{}]int64
 }
 
 // NewEDF creates Earliest Deadline First (EDF)
@@ -33,13 +34,12 @@ type edfWrr struct {
 // Each pick from the schedule has the earliest deadline entry selected. Entries have deadlines set
 // at current time + 1 / weight, providing weighted round robin behavior with O(log n) pick time.
 func NewEDF() WRR {
-	return &edfWrr{}
+	return &edfWrr{weights: make(map[interface{}]int64)}
 }
 
 // edfEntry is an internal wrapper for item that also stores weight and relative position in the queue.
 type edfEntry struct {
 	deadline float64
-	weight   int64
 	item     interface{}
 }
 
@@ -71,9 +71,20 @@ func (edf edfWrr) currentTime() float64 {
 func (edf *edfWrr) Add(item interface{}, weight int64) {
 	edf.lock.Lock()
 	defer edf.lock.Unlock()
+
+	if weight <= 0 {
+		delete(edf.weights, item)
+		return
+	}
+
+	_, inQueue := edf.weights[item]
+	edf.weights[item] = weight
+	if inQueue {
+		return
+	}
+
 	entry := edfEntry{
 		deadline: edf.currentTime() + 1.0/float64(weight),
-		weight:   weight,
 		item:     item,
 	}
 	heap.Push(&edf.items, &entry)
@@ -82,11 +93,28 @@ func (edf *edfWrr) Add(item interface{}, weight int64) {
 func (edf *edfWrr) Next() interface{} {
 	edf.lock.Lock()
 	defer edf.lock.Unlock()
-	if len(edf.items) == 0 {
-		return nil
+	for {
+		if len(edf.items) == 0 {
+			return nil
+		}
+		entry := edf.items[0]
+		weight, ok := edf.weights[entry.item]
+		if !ok {
+			heap.Pop(&edf.items)
+			continue
+		}
+		entry.deadline = edf.currentTime() + 1.0/float64(weight)
+		heap.Fix(&edf.items, 0)
+		return entry.item
 	}
-	item := edf.items[0]
-	item.deadline = edf.currentTime() + 1.0/float64(item.weight)
-	heap.Fix(&edf.items, 0)
-	return item.item
+}
+
+func (edf *edfWrr) GetItems() map[interface{}]struct{} {
+	res := make(map[interface{}]struct{})
+	for _, item := range edf.items {
+		if _, ok := edf.weights[item.item]; ok {
+			res[item.item] = struct{}{}
+		}
+	}
+	return res
 }
