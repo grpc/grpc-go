@@ -110,6 +110,8 @@ func (edf *edfWrr) Next() interface{} {
 }
 
 func (edf *edfWrr) GetItems() map[interface{}]struct{} {
+	edf.lock.Lock()
+	defer edf.lock.Unlock()
 	res := make(map[interface{}]struct{})
 	for _, item := range edf.items {
 		if _, ok := edf.weights[item.item]; ok {
