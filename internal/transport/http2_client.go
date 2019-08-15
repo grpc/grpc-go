@@ -855,8 +855,8 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 
 func (t *http2Client) getStream(f http2.Frame) (*Stream, bool) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	s, ok := t.activeStreams[f.Header().StreamID]
+	t.mu.Unlock()
 	return s, ok
 }
 
