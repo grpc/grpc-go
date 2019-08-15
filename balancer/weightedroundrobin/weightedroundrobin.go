@@ -193,6 +193,7 @@ func (b *wrrBalancer) updatePicker(readySCs map[string]*balancerAddrInfo) {
 		picker = &wrrPicker{wrr: wrr.NewEDF()}
 	}
 	b.picker = picker
+	picker.mu.Lock()
 	w := picker.wrr
 	oldItems := w.GetItems()
 	for _, sc := range readySCs {
@@ -202,6 +203,7 @@ func (b *wrrBalancer) updatePicker(readySCs map[string]*balancerAddrInfo) {
 	for sc := range oldItems {
 		w.Add(sc, 0)
 	}
+	picker.mu.Unlock()
 }
 
 type wrrPicker struct {
