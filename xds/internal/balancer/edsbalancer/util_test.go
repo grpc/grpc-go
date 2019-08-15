@@ -65,6 +65,14 @@ func (twrr *testWRR) Next() interface{} {
 	return iww.item
 }
 
+func (twrr *testWRR) GetItems() map[interface{}]struct{} {
+	res := make(map[interface{}]struct{})
+	for _, item := range twrr.itemsWithWeight {
+		res[item.item] = struct{}{}
+	}
+	return res
+}
+
 func init() {
 	newRandomWRR = newTestWRR
 }
