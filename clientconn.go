@@ -554,16 +554,18 @@ func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
 
 func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	cc.mu.Lock()
-	defer cc.mu.Unlock()
 	// Check if the ClientConn is already closed. Some fields (e.g.
 	// balancerWrapper) are set to nil when closing the ClientConn, and could
 	// cause nil pointer panic if we don't have this check.
 	if cc.conns == nil {
+		cc.mu.Unlock()
 		return nil
 	}
 
 	if err != nil {
-		// May need to apply the initial service config
+		// May need to apply the initial service config in case the resolver
+		// doesn't support service configs, or doesn't provide a service config
+		// with the new addresses.
 		cc.maybeApplyDefaultServiceConfig(nil)
 
 		if cc.balancerWrapper != nil {
@@ -571,6 +573,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 		}
 
 		// No addresses are valid with err set; return early.
+		cc.mu.Unlock()
 		return balancer.ErrBadResolverState
 	}
 
@@ -592,7 +595,22 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	if cc.dopts.balancerBuilder == nil && cc.sc != nil && cc.sc.lbConfig != nil {
 		balCfg = cc.sc.lbConfig.cfg
 	}
-	uccsErr := cc.balancerWrapper.updateClientConnState(&balancer.ClientConnState{ResolverState: s, BalancerConfig: balCfg})
+
+	cbn := cc.curBalancerName
+	bw := cc.balancerWrapper
+	cc.mu.Unlock()
+	if cbn != grpclbName {
+		// Filter any grpclb addresses since we don't have the grpclb balancer.
+		for i := 0; i < len(s.Addresses); {
+			if s.Addresses[i].Type == resolver.GRPCLB {
+				copy(s.Addresses[i:], s.Addresses[i+1:])
+				s.Addresses = s.Addresses[:len(s.Addresses)-1]
+				continue
+			}
+			i++
+		}
+	}
+	uccsErr := bw.updateClientConnState(&balancer.ClientConnState{ResolverState: s, BalancerConfig: balCfg})
 	if ret == nil {
 		ret = uccsErr // prefer ErrBadResolver state since any other error is
 		// currently meaningless to the caller.
