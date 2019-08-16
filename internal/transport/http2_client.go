@@ -853,11 +853,11 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	return t.controlBuf.put(df)
 }
 
-func (t *http2Client) getStream(f http2.Frame) (*Stream, bool) {
+func (t *http2Client) getStream(f http2.Frame) *Stream {
 	t.mu.Lock()
-	s, ok := t.activeStreams[f.Header().StreamID]
+	s := t.activeStreams[f.Header().StreamID]
 	t.mu.Unlock()
-	return s, ok
+	return s
 }
 
 // adjustWindow sends out extra window update over the initial window size
@@ -937,8 +937,8 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		t.controlBuf.put(bdpPing)
 	}
 	// Select the right stream to dispatch.
-	s, ok := t.getStream(f)
-	if !ok {
+	s := t.getStream(f)
+	if s == nil {
 		return
 	}
 	if size > 0 {
@@ -969,8 +969,8 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 }
 
 func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
-	s, ok := t.getStream(f)
-	if !ok {
+	s := t.getStream(f)
+	if s == nil {
 		return
 	}
 	if f.ErrCode == http2.ErrCodeRefusedStream {
@@ -1147,8 +1147,8 @@ func (t *http2Client) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 
 // operateHeaders takes action on the decoded headers.
 func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
-	s, ok := t.getStream(frame)
-	if !ok {
+	s := t.getStream(frame)
+	if s == nil {
 		return
 	}
 	endStream := frame.StreamEnded()
