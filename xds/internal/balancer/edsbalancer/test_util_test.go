@@ -28,9 +28,17 @@ import (
 	"google.golang.org/grpc/xds/internal"
 )
 
-var (
-	testSubConns = []*testSubConn{{id: "sc1"}, {id: "sc2"}, {id: "sc3"}, {id: "sc4"}}
-)
+const testSubConnsCount = 8
+
+var testSubConns []*testSubConn
+
+func init() {
+	for i := 0; i < testSubConnsCount; i++ {
+		testSubConns = append(testSubConns, &testSubConn{
+			id: fmt.Sprintf("sc%d", i),
+		})
+	}
+}
 
 type testSubConn struct {
 	id string

@@ -176,6 +176,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 	// response).
 	if xdsB.bg == nil {
 		xdsB.bg = newBalancerGroup(xdsB, xdsB.loadStore)
+		xdsB.bg.start()
 	}
 
 	// TODO: Unhandled fields from EDS response:
