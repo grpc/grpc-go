@@ -69,7 +69,7 @@ func newClusterLoadAssignmentBuilder(clusterName string, dropPercents []uint32) 
 	}
 }
 
-func (clab *clusterLoadAssignmentBuilder) addLocality(subzone string, weight uint32, addrsWithPort []string) {
+func (clab *clusterLoadAssignmentBuilder) addLocality(subzone string, weight uint32, priority uint32, addrsWithPort []string) {
 	var lbEndPoints []*endpointpb.LbEndpoint
 	for _, a := range addrsWithPort {
 		host, portStr, err := net.SplitHostPort(a)
@@ -102,6 +102,7 @@ func (clab *clusterLoadAssignmentBuilder) addLocality(subzone string, weight uin
 		},
 		LbEndpoints:         lbEndPoints,
 		LoadBalancingWeight: &typespb.UInt32Value{Value: weight},
+		Priority:            priority,
 	})
 }
 
@@ -120,7 +121,7 @@ func TestEDS_OneLocality(t *testing.T) {
 
 	// One locality with one backend.
 	clab1 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab1.addLocality(testSubZones[0], 1, testEndpointAddrs[:1])
+	clab1.addLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1])
 	edsb.HandleEDSResponse(clab1.build())
 
 	sc1 := <-cc.newSubConnCh
@@ -138,7 +139,7 @@ func TestEDS_OneLocality(t *testing.T) {
 
 	// The same locality, add one more backend.
 	clab2 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab2.addLocality(testSubZones[0], 1, testEndpointAddrs[:2])
+	clab2.addLocality(testSubZones[0], 1, 0, testEndpointAddrs[:2])
 	edsb.HandleEDSResponse(clab2.build())
 
 	sc2 := <-cc.newSubConnCh
@@ -157,7 +158,7 @@ func TestEDS_OneLocality(t *testing.T) {
 
 	// The same locality, delete first backend.
 	clab3 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab3.addLocality(testSubZones[0], 1, testEndpointAddrs[1:2])
+	clab3.addLocality(testSubZones[0], 1, 0, testEndpointAddrs[1:2])
 	edsb.HandleEDSResponse(clab3.build())
 
 	scToRemove := <-cc.removeSubConnCh
@@ -177,7 +178,7 @@ func TestEDS_OneLocality(t *testing.T) {
 
 	// The same locality, replace backend.
 	clab4 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab4.addLocality(testSubZones[0], 1, testEndpointAddrs[2:3])
+	clab4.addLocality(testSubZones[0], 1, 0, testEndpointAddrs[2:3])
 	edsb.HandleEDSResponse(clab4.build())
 
 	sc3 := <-cc.newSubConnCh
@@ -200,7 +201,7 @@ func TestEDS_OneLocality(t *testing.T) {
 
 	// The same locality, different drop rate, dropping 50%.
 	clab5 := newClusterLoadAssignmentBuilder(testClusterNames[0], []uint32{50})
-	clab5.addLocality(testSubZones[0], 1, testEndpointAddrs[2:3])
+	clab5.addLocality(testSubZones[0], 1, 0, testEndpointAddrs[2:3])
 	edsb.HandleEDSResponse(clab5.build())
 
 	// Picks with drops.
@@ -229,13 +230,17 @@ func TestEDS_TwoLocalities(t *testing.T) {
 
 	// Two localities, each with one backend.
 	clab1 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab1.addLocality(testSubZones[0], 1, testEndpointAddrs[:1])
-	clab1.addLocality(testSubZones[1], 1, testEndpointAddrs[1:2])
+	clab1.addLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1])
 	edsb.HandleEDSResponse(clab1.build())
-
 	sc1 := <-cc.newSubConnCh
 	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
 	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
+
+	// Add the second locality later to make sure sc2 belongs to the second
+	// locality. Otherwise the test is flaky because of a map is used in EDS to
+	// keep localities.
+	clab1.addLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2])
+	edsb.HandleEDSResponse(clab1.build())
 	sc2 := <-cc.newSubConnCh
 	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
 	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
@@ -252,9 +257,9 @@ func TestEDS_TwoLocalities(t *testing.T) {
 
 	// Add another locality, with one backend.
 	clab2 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab2.addLocality(testSubZones[0], 1, testEndpointAddrs[:1])
-	clab2.addLocality(testSubZones[1], 1, testEndpointAddrs[1:2])
-	clab2.addLocality(testSubZones[2], 1, testEndpointAddrs[2:3])
+	clab2.addLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1])
+	clab2.addLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2])
+	clab2.addLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:3])
 	edsb.HandleEDSResponse(clab2.build())
 
 	sc3 := <-cc.newSubConnCh
@@ -273,8 +278,8 @@ func TestEDS_TwoLocalities(t *testing.T) {
 
 	// Remove first locality.
 	clab3 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab3.addLocality(testSubZones[1], 1, testEndpointAddrs[1:2])
-	clab3.addLocality(testSubZones[2], 1, testEndpointAddrs[2:3])
+	clab3.addLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2])
+	clab3.addLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:3])
 	edsb.HandleEDSResponse(clab3.build())
 
 	scToRemove := <-cc.removeSubConnCh
@@ -295,8 +300,8 @@ func TestEDS_TwoLocalities(t *testing.T) {
 
 	// Add a backend to the last locality.
 	clab4 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab4.addLocality(testSubZones[1], 1, testEndpointAddrs[1:2])
-	clab4.addLocality(testSubZones[2], 1, testEndpointAddrs[2:4])
+	clab4.addLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2])
+	clab4.addLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:4])
 	edsb.HandleEDSResponse(clab4.build())
 
 	sc4 := <-cc.newSubConnCh
@@ -318,8 +323,8 @@ func TestEDS_TwoLocalities(t *testing.T) {
 
 	// Change weight of the locality[1].
 	clab5 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab5.addLocality(testSubZones[1], 2, testEndpointAddrs[1:2])
-	clab5.addLocality(testSubZones[2], 1, testEndpointAddrs[2:4])
+	clab5.addLocality(testSubZones[1], 2, 0, testEndpointAddrs[1:2])
+	clab5.addLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:4])
 	edsb.HandleEDSResponse(clab5.build())
 
 	// Test pick with two subconns different locality weight.
@@ -337,8 +342,8 @@ func TestEDS_TwoLocalities(t *testing.T) {
 
 	// Change weight of the locality[1] to 0, it should never be picked.
 	clab6 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab6.addLocality(testSubZones[1], 0, testEndpointAddrs[1:2])
-	clab6.addLocality(testSubZones[2], 1, testEndpointAddrs[2:4])
+	clab6.addLocality(testSubZones[1], 0, 0, testEndpointAddrs[1:2])
+	clab6.addLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:4])
 	edsb.HandleEDSResponse(clab6.build())
 
 	// Test pick with two subconns different locality weight.
@@ -350,6 +355,128 @@ func TestEDS_TwoLocalities(t *testing.T) {
 		sc, _, _ := p6.Pick(context.Background(), balancer.PickOptions{})
 		return sc
 	}); err != nil {
+		t.Fatalf("want %v, got %v", want, err)
+	}
+}
+
+// 2 locality
+//  - start with 2 locality with p0 and p1
+//  - add localities with p0 and p1
+// FIXME: p0 changes between ready/non-ready, p1 should be picked.
+func TestEDS_Localities_WithPriorities(t *testing.T) {
+	cc := newTestClientConn(t)
+	edsb := NewXDSBalancer(cc, nil)
+
+	// Two localities, with different priorities, each with one backend.
+	clab1 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.addLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1])
+	clab1.addLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2])
+	edsb.HandleEDSResponse(clab1.build())
+
+	addrs1 := <-cc.newSubConnAddrsCh
+	if got, want := addrs1[0].Addr, testEndpointAddrs[0]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc1 := <-cc.newSubConnCh
+	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
+
+	// Test roundrobin with only p0 subconns.
+	p1 := <-cc.newPickerCh
+	want := []balancer.SubConn{sc1}
+	if err := isRoundRobin(want, func() balancer.SubConn {
+		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
+		return sc
+	}); err != nil {
+		// t.Fatalf("want %v, got %v", want, err)
+		t.Fatalf("want %v, got %v", want, err)
+	}
+
+	// Turn down p0 subconns, p1 subconns will be created.
+	edsb.HandleSubConnStateChange(sc1, connectivity.TransientFailure)
+
+	addrs2 := <-cc.newSubConnAddrsCh
+	if got, want := addrs2[0].Addr, testEndpointAddrs[1]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc2 := <-cc.newSubConnCh
+	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
+	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
+
+	// Test roundrobin with only p1 subconns.
+	p2 := <-cc.newPickerCh
+	want = []balancer.SubConn{sc2}
+	if err := isRoundRobin(want, func() balancer.SubConn {
+		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
+		return sc
+	}); err != nil {
+		// t.Fatalf("want %v, got %v", want, err)
+		t.Fatalf("want %v, got %v", want, err)
+	}
+
+	// Reconnect p0 subconns, p1 subconn will be closed.
+	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
+
+	scToRemove := <-cc.removeSubConnCh
+	if !reflect.DeepEqual(scToRemove, sc2) {
+		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove)
+	}
+
+	// Test roundrobin with only p0 subconns.
+	p3 := <-cc.newPickerCh
+	want = []balancer.SubConn{sc1}
+	if err := isRoundRobin(want, func() balancer.SubConn {
+		sc, _, _ := p3.Pick(context.Background(), balancer.PickOptions{})
+		return sc
+	}); err != nil {
+		t.Fatalf("want %v, got %v", want, err)
+	}
+
+	// Add two localities, with two priorities, with one backend.
+	clab2 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab2.addLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1])
+	clab2.addLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2])
+	clab2.addLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:3])
+	clab2.addLocality(testSubZones[3], 1, 1, testEndpointAddrs[3:4])
+	edsb.HandleEDSResponse(clab2.build())
+
+	addrs3 := <-cc.newSubConnAddrsCh
+	if got, want := addrs3[0].Addr, testEndpointAddrs[2]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc3 := <-cc.newSubConnCh
+	edsb.HandleSubConnStateChange(sc3, connectivity.Connecting)
+	edsb.HandleSubConnStateChange(sc3, connectivity.Ready)
+
+	// Test roundrobin with only two p0 subconns.
+	p4 := <-cc.newPickerCh
+	want = []balancer.SubConn{sc1, sc3}
+	if err := isRoundRobin(want, func() balancer.SubConn {
+		sc, _, _ := p4.Pick(context.Background(), balancer.PickOptions{})
+		return sc
+	}); err != nil {
+		t.Fatalf("want %v, got %v", want, err)
+	}
+
+	// Turn down p0 subconns, p1 subconns will be created.
+	edsb.HandleSubConnStateChange(sc1, connectivity.TransientFailure)
+	edsb.HandleSubConnStateChange(sc3, connectivity.TransientFailure)
+
+	sc4 := <-cc.newSubConnCh
+	edsb.HandleSubConnStateChange(sc4, connectivity.Connecting)
+	edsb.HandleSubConnStateChange(sc4, connectivity.Ready)
+	sc5 := <-cc.newSubConnCh
+	edsb.HandleSubConnStateChange(sc5, connectivity.Connecting)
+	edsb.HandleSubConnStateChange(sc5, connectivity.Ready)
+
+	// Test roundrobin with only p1 subconns.
+	p5 := <-cc.newPickerCh
+	want = []balancer.SubConn{sc4, sc5}
+	if err := isRoundRobin(want, func() balancer.SubConn {
+		sc, _, _ := p5.Pick(context.Background(), balancer.PickOptions{})
+		return sc
+	}); err != nil {
+		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -416,8 +543,8 @@ func TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	// Two localities, each with one backend.
 	clab1 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab1.addLocality(testSubZones[0], 1, testEndpointAddrs[:1])
-	clab1.addLocality(testSubZones[1], 1, testEndpointAddrs[1:2])
+	clab1.addLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1])
+	clab1.addLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2])
 	edsb.HandleEDSResponse(clab1.build())
 
 	p0 := <-cc.newPickerCh
@@ -562,16 +689,20 @@ func TestEDS_LoadReport(t *testing.T) {
 
 	// Two localities, each with one backend.
 	clab1 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab1.addLocality(testSubZones[0], 1, testEndpointAddrs[:1])
-	clab1.addLocality(testSubZones[1], 1, testEndpointAddrs[1:2])
+	clab1.addLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1])
 	edsb.HandleEDSResponse(clab1.build())
-
 	sc1 := <-cc.newSubConnCh
 	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
 	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
 	backendToBalancerID[sc1] = internal.Locality{
 		SubZone: testSubZones[0],
 	}
+
+	// Add the second locality later to make sure sc2 belongs to the second
+	// locality. Otherwise the test is flaky because of a map is used in EDS to
+	// keep localities.
+	clab1.addLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2])
+	edsb.HandleEDSResponse(clab1.build())
 	sc2 := <-cc.newSubConnCh
 	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
 	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
