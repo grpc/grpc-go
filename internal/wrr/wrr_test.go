@@ -127,7 +127,11 @@ func testWRRModify(t *testing.T, newWRR func() WRR) {
 			}
 			for i, weight := range tt.weights2 {
 				if tt.weights1[i] != tt.weights2[i] {
-					w.Add(i, weight)
+					if weight > 0 {
+						w.UpdateOrAdd(i, weight)
+					} else {
+						w.Remove(i)
+					}
 				}
 				sumOfWeights += weight
 			}

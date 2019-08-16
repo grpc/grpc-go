@@ -55,9 +55,10 @@ func (*wrrBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) bal
 	return &wrrBalancer{
 		cc: cc,
 
-		subConns: make(map[string]*balancerAddrInfo),
-		scStates: make(map[balancer.SubConn]connectivity.State),
-		csEvltr:  &balancer.ConnectivityStateEvaluator{},
+		subConns: make(map[string]balancer.SubConn),
+		scInfo:   make(map[balancer.SubConn]*subConnInfo),
+
+		csEvltr: &balancer.ConnectivityStateEvaluator{},
 	}
 }
 
@@ -65,19 +66,21 @@ func (*wrrBuilder) Name() string {
 	return Name
 }
 
-type balancerAddrInfo struct {
-	SubConn balancer.SubConn
-	Weight  uint32
+type subConnInfo struct {
+	address string
+	state   connectivity.State
+	weight  uint32
 }
 
 type wrrBalancer struct {
 	cc balancer.ClientConn
 
-	csEvltr *balancer.ConnectivityStateEvaluator
-	state   connectivity.State
+	csEvltr          *balancer.ConnectivityStateEvaluator
+	state            connectivity.State
+	readyConnections int
 
-	subConns map[string]*balancerAddrInfo
-	scStates map[balancer.SubConn]connectivity.State
+	subConns map[string]balancer.SubConn
+	scInfo   map[balancer.SubConn]*subConnInfo
 	picker   balancer.Picker
 }
 
@@ -109,21 +112,27 @@ func (b *wrrBalancer) UpdateClientConnState(s balancer.ClientConnState) {
 				grpclog.Warningf("base.baseBalancer: failed to create new SubConn: %v", err)
 				continue
 			}
-			balancerAddrInfo := balancerAddrInfo{SubConn: sc}
-			b.subConns[a.Addr] = &balancerAddrInfo
-			b.scStates[sc] = connectivity.Idle
+			b.subConns[a.Addr] = sc
+			b.scInfo[sc] = &subConnInfo{
+				address: a.Addr,
+				weight:  weight,
+				state:   connectivity.Idle,
+			}
 			sc.Connect()
 		}
 	}
 	for a, sc := range b.subConns {
 		if weight, ok := addrWeights[a]; !ok {
 			// a was removed by resolver.
-			b.cc.RemoveSubConn(sc.SubConn)
+			b.cc.RemoveSubConn(sc)
 			delete(b.subConns, a)
-			// Keep the state of this sc in b.scStates until sc's state becomes Shutdown.
+			// Keep the state of this sc in b.scInfo until sc's state becomes Shutdown.
 			// The entry will be deleted in HandleSubConnStateChange.
 		} else {
-			sc.Weight = weight
+			if b.scInfo[sc].weight != weight {
+				b.scInfo[sc].weight = weight
+				b.updatedPicker(sc)
+			}
 		}
 	}
 }
@@ -131,23 +140,31 @@ func (b *wrrBalancer) UpdateClientConnState(s balancer.ClientConnState) {
 func (b *wrrBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	s := state.ConnectivityState
 	grpclog.Infof("wrr: handle SubConn state change: %p, %v", sc, s)
-	oldS, ok := b.scStates[sc]
+	scInfo, ok := b.scInfo[sc]
 	if !ok {
 		grpclog.Infof("wrr: got state changes for an unknown SubConn: %p, %v", sc, s)
 		return
 	}
-	b.scStates[sc] = s
+	oldS := scInfo.state
+	scInfo.state = s
 	switch s {
 	case connectivity.Idle:
 		sc.Connect()
 	case connectivity.Shutdown:
 		// When an address was removed by resolver, b called RemoveSubConn but
-		// kept the sc's state in scStates. Remove state for this sc here.
-		delete(b.scStates, sc)
+		// kept the sc's state in scInfo. Remove state for this sc here.
+		delete(b.scInfo, sc)
 	}
 
 	oldAggrState := b.state
 	b.state = b.csEvltr.RecordTransition(oldS, s)
+
+	if oldS == connectivity.Ready {
+		b.readyConnections--
+	}
+	if s == connectivity.Ready {
+		b.readyConnections++
+	}
 
 	// Regenerate picker when one of the following happens:
 	//  - this sc became ready from not-ready
@@ -156,35 +173,27 @@ func (b *wrrBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 	//  - the aggregated state of balancer became non-TransientFailure from TransientFailure
 	if (s == connectivity.Ready) != (oldS == connectivity.Ready) ||
 		(b.state == connectivity.TransientFailure) != (oldAggrState == connectivity.TransientFailure) {
-		b.regeneratePicker()
+		b.updatedPicker(sc)
 	}
 
 	b.cc.UpdateBalancerState(b.state, b.picker)
+}
+
+type wrrPicker struct {
+	wrr wrr.WRR
+	mu  sync.Mutex
 }
 
 // regeneratePicker takes a snapshot of the balancer, and generates a picker
 // from it. The picker is
 //  - errPicker with ErrTransientFailure if the balancer is in TransientFailure,
 //  - built by the pickerBuilder with all READY SubConns otherwise.
-func (b *wrrBalancer) regeneratePicker() {
+func (b *wrrBalancer) updatedPicker(sc balancer.SubConn) {
 	if b.state == connectivity.TransientFailure {
 		b.picker = base.NewErrPicker(balancer.ErrTransientFailure)
 		return
 	}
-	readySCs := make(map[string]*balancerAddrInfo)
-
-	// Filter out all ready SCs from full subConn map.
-	for addr, sc := range b.subConns {
-		if st, ok := b.scStates[sc.SubConn]; ok && st == connectivity.Ready {
-			readySCs[addr] = sc
-		}
-	}
-	b.updatePicker(readySCs)
-}
-
-func (b *wrrBalancer) updatePicker(readySCs map[string]*balancerAddrInfo) {
-	grpclog.Infof("wrr: updatePicker called with readySCs: %v", readySCs)
-	if len(readySCs) == 0 {
+	if b.readyConnections == 0 {
 		b.picker = base.NewErrPicker(balancer.ErrNoSubConnAvailable)
 		return
 	}
@@ -194,21 +203,12 @@ func (b *wrrBalancer) updatePicker(readySCs map[string]*balancerAddrInfo) {
 	}
 	b.picker = picker
 	picker.mu.Lock()
-	w := picker.wrr
-	oldItems := w.GetItems()
-	for _, sc := range readySCs {
-		delete(oldItems, sc.SubConn)
-		w.Add(sc.SubConn, int64(sc.Weight))
-	}
-	for sc := range oldItems {
-		w.Add(sc, 0)
+	if b.scInfo[sc].state == connectivity.Ready {
+		picker.wrr.UpdateOrAdd(sc, int64(b.scInfo[sc].weight))
+	} else {
+		picker.wrr.Remove(sc)
 	}
 	picker.mu.Unlock()
-}
-
-type wrrPicker struct {
-	wrr wrr.WRR
-	mu  sync.Mutex
 }
 
 func (p *wrrPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {

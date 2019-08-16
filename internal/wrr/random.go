@@ -25,7 +25,7 @@ type weightedItem struct {
 	Weight int64
 }
 
-// randomWRR is a struct that contains weighted items implement weighted random algorithm.
+// randomWRR is a struct that contains weighted queue implement weighted random algorithm.
 type randomWRR struct {
 	items        []*weightedItem
 	sumOfWeights int64
@@ -60,10 +60,10 @@ func (rw *randomWRR) Add(item interface{}, weight int64) {
 	rw.sumOfWeights += weight
 }
 
-func (rw *randomWRR) GetItems() map[interface{}]struct{} {
-	res := make(map[interface{}]struct{})
-	for _, item := range rw.items {
-		res[item] = struct{}{}
-	}
-	return res
+func (*randomWRR) UpdateOrAdd(item interface{}, weight int64) {
+	panic("not supported")
+}
+
+func (*randomWRR) Remove(item interface{}) {
+	panic("not supported")
 }
