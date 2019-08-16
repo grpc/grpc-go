@@ -87,7 +87,7 @@ func (b *scStateUpdateBuffer) get() <-chan *scStateUpdate {
 // It implements balancer.ClientConn interface.
 type ccBalancerWrapper struct {
 	cc               *ClientConn
-	balancerMu       sync.Mutex
+	balancerMu       sync.Mutex // synchronizes calls to the balancer
 	balancer         balancer.Balancer
 	stateChangeQueue *scStateUpdateBuffer
 	done             *grpcsync.Event
@@ -166,22 +166,6 @@ func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s co
 }
 
 func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnState) error {
-	cbn := ccb.cc.curBalancerName
-	ccb.cc.mu.Unlock()
-	defer ccb.cc.mu.Lock()
-	if cbn != grpclbName {
-		// Filter any grpclb addresses since we don't have the grpclb balancer.
-		s := &ccs.ResolverState
-		for i := 0; i < len(s.Addresses); {
-			if s.Addresses[i].Type == resolver.GRPCLB {
-				copy(s.Addresses[i:], s.Addresses[i+1:])
-				s.Addresses = s.Addresses[:len(s.Addresses)-1]
-				continue
-			}
-			i++
-		}
-	}
-
 	ccb.balancerMu.Lock()
 	defer ccb.balancerMu.Unlock()
 	if ub, ok := ccb.balancer.(balancer.V2Balancer); ok {
