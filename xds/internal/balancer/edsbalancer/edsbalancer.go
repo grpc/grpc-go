@@ -45,6 +45,13 @@ type localityConfig struct {
 	addrs  []resolver.Address
 }
 
+// localitiesSamePriority contains the localities with the same priority. It
+// manages all localities using a balancerGroup.
+type localitiesSamePriority struct {
+	bg          *priorityBalancerGroup
+	lidToConfig map[internal.Locality]*localityConfig
+}
+
 // EDSBalancer does load balancing based on the EDS responses. Note that it
 // doesn't implement the balancer interface. It's intended to be used by a high
 // level balancer implementation.
@@ -52,12 +59,24 @@ type localityConfig struct {
 // The localities are picked as weighted round robin. A configurable child
 // policy is used to manage endpoints in each locality.
 type EDSBalancer struct {
-	balancer.ClientConn
+	cc balancer.ClientConn
 
-	bg                 *balancerGroup
 	subBalancerBuilder balancer.Builder
-	lidToConfig        map[internal.Locality]*localityConfig
 	loadStore          lrs.Store
+
+	// maxPriorityPlusOne is The max priority number+1. E.g., with priorities
+	// [0,1,2], this will be set to 3. It starts as 0 at init.
+	//
+	// The purpose of this field is to add/delete new priorityBalancerGroup
+	// to/from the linked list.
+	//
+	// The new priorities can only be those numbers larger than priority max
+	// priority number because according to doc, priorities should range from 0
+	// (highest) to N (lowest) without skipping.
+	maxPriorityPlusOne   uint32
+	priorityToLocalities map[uint32]*localitiesSamePriority
+	subConnMu            sync.Mutex
+	subConnToPriority    map[balancer.SubConn]uint32
 
 	pickerMu    sync.Mutex
 	drops       []*dropper
@@ -68,11 +87,12 @@ type EDSBalancer struct {
 // NewXDSBalancer create a new EDSBalancer.
 func NewXDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) *EDSBalancer {
 	xdsB := &EDSBalancer{
-		ClientConn:         cc,
+		cc:                 cc,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
 
-		lidToConfig: make(map[internal.Locality]*localityConfig),
-		loadStore:   loadStore,
+		priorityToLocalities: make(map[uint32]*localitiesSamePriority),
+		subConnToPriority:    make(map[balancer.SubConn]uint32),
+		loadStore:            loadStore,
 	}
 	// Don't start balancer group here. Start it when handling the first EDS
 	// response. Otherwise the balancer group will be started with round-robin,
@@ -101,16 +121,19 @@ func (xdsB *EDSBalancer) updateSubBalancerName(subBalancerName string) {
 		return
 	}
 	xdsB.subBalancerBuilder = newSubBalancerBuilder
-	if xdsB.bg != nil {
-		// xdsB.bg == nil until the first EDS response is handled. There's no
-		// need to update balancer group before that.
-		for id, config := range xdsB.lidToConfig {
+	for _, lGroup := range xdsB.priorityToLocalities {
+		if lGroup == nil || len(lGroup.lidToConfig) == 0 {
+			// There's no need to update balancer group there's no locality with
+			// this priority.
+			continue
+		}
+		for id, config := range lGroup.lidToConfig {
 			// TODO: (eds) add support to balancer group to support smoothly
 			//  switching sub-balancers (keep old balancer around until new
 			//  balancer becomes ready).
-			xdsB.bg.remove(id)
-			xdsB.bg.add(id, config.weight, xdsB.subBalancerBuilder)
-			xdsB.bg.handleResolvedAddrs(id, config.addrs)
+			lGroup.bg.remove(id)
+			lGroup.bg.add(id, config.weight, xdsB.subBalancerBuilder)
+			lGroup.bg.handleResolvedAddrs(id, config.addrs)
 		}
 	}
 }
@@ -156,7 +179,7 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdspb.ClusterLoadAssignment
 		xdsB.drops = newDrops
 		if xdsB.innerPicker != nil {
 			// Update picker with old inner picker, new drops.
-			xdsB.ClientConn.UpdateBalancerState(xdsB.innerState, newDropPicker(xdsB.innerPicker, newDrops, xdsB.loadStore))
+			xdsB.cc.UpdateBalancerState(xdsB.innerState, newDropPicker(xdsB.innerPicker, newDrops, xdsB.loadStore))
 		}
 		xdsB.pickerMu.Unlock()
 	}
@@ -167,13 +190,6 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdspb.ClusterLoadAssignment
 //
 // HandleChildPolicy and HandleEDSResponse must be called by the same goroutine.
 func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment) {
-	// Create balancer group if it's never created (this is the first EDS
-	// response).
-	if xdsB.bg == nil {
-		xdsB.bg = newBalancerGroup(xdsB, xdsB.loadStore)
-		xdsB.bg.start()
-	}
-
 	// TODO: Unhandled fields from EDS response:
 	//  - edsResp.GetPolicy().GetOverprovisioningFactor()
 	//  - locality.GetPriority()
@@ -194,111 +210,251 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 	//
 	// In the future, we should look at the config in CDS response and decide
 	// whether locality weight matters.
-	newEndpoints := make([]*endpointpb.LocalityLbEndpoints, 0, len(edsResp.Endpoints))
+	newLocalitiesWithPriority := make(map[uint32][]*endpointpb.LocalityLbEndpoints)
 	for _, locality := range edsResp.Endpoints {
 		if locality.GetLoadBalancingWeight().GetValue() == 0 {
 			continue
 		}
-		newEndpoints = append(newEndpoints, locality)
+		priority := locality.GetPriority()
+		newLocalitiesWithPriority[priority] = append(newLocalitiesWithPriority[priority], locality)
 	}
 
-	// newLocalitiesSet contains all names of localitis in the new EDS response.
-	// It's used to delete localities that are removed in the new EDS response.
-	newLocalitiesSet := make(map[internal.Locality]struct{})
-	for _, locality := range newEndpoints {
-		// One balancer for each locality.
+	var maxPriorityPlusOne uint32 // The max priority number.
 
-		l := locality.GetLocality()
-		if l == nil {
-			grpclog.Warningf("xds: received LocalityLbEndpoints with <nil> Locality")
-			continue
+	for priority, newLocalities := range newLocalitiesWithPriority {
+		if maxPriorityPlusOne < priority {
+			maxPriorityPlusOne = priority
 		}
-		lid := internal.Locality{
-			Region:  l.Region,
-			Zone:    l.Zone,
-			SubZone: l.SubZone,
-		}
-		newLocalitiesSet[lid] = struct{}{}
 
-		newWeight := locality.GetLoadBalancingWeight().GetValue()
-		var newAddrs []resolver.Address
-		for _, lbEndpoint := range locality.GetLbEndpoints() {
-			socketAddress := lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress()
-			address := resolver.Address{
-				Addr: net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue()))),
+		lGroup, ok := xdsB.priorityToLocalities[priority]
+		if !ok {
+			// Create balancer group if it's never created (this is the first
+			// time this priority is received). We don't start it here. We will
+			// chain into the linked list. It may be started during that (if
+			// it's a new lowest priority).
+			lGroup = &localitiesSamePriority{
+				bg: newPriorityBalancerGroup(
+					xdsB.ccWrapperWithPriority(priority), xdsB.loadStore,
+				),
+				lidToConfig: make(map[internal.Locality]*localityConfig),
 			}
-			if xdsB.subBalancerBuilder.Name() == weightedroundrobin.Name &&
-				lbEndpoint.GetLoadBalancingWeight().GetValue() != 0 {
-				address.Metadata = &weightedroundrobin.AddrInfo{
-					Weight: lbEndpoint.GetLoadBalancingWeight().GetValue(),
+			xdsB.priorityToLocalities[priority] = lGroup
+		}
+
+		// newLocalitiesSet contains all names of localitis in the new EDS
+		// response for the same priority. It's used to delete localities that
+		// are removed in the new EDS response.
+		newLocalitiesSet := make(map[internal.Locality]struct{})
+		for _, locality := range newLocalities {
+			// One balancer for each locality.
+
+			l := locality.GetLocality()
+			if l == nil {
+				grpclog.Warningf("xds: received LocalityLbEndpoints with <nil> Locality")
+				continue
+			}
+			lid := internal.Locality{
+				Region:  l.Region,
+				Zone:    l.Zone,
+				SubZone: l.SubZone,
+			}
+			newLocalitiesSet[lid] = struct{}{}
+
+			newWeight := locality.GetLoadBalancingWeight().GetValue()
+			var newAddrs []resolver.Address
+			for _, lbEndpoint := range locality.GetLbEndpoints() {
+				socketAddress := lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress()
+				address := resolver.Address{
+					Addr: net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue()))),
+				}
+				if xdsB.subBalancerBuilder.Name() == weightedroundrobin.Name &&
+					lbEndpoint.GetLoadBalancingWeight().GetValue() != 0 {
+					address.Metadata = &weightedroundrobin.AddrInfo{
+						Weight: lbEndpoint.GetLoadBalancingWeight().GetValue(),
+					}
+				}
+				newAddrs = append(newAddrs, address)
+			}
+			var weightChanged, addrsChanged bool
+			config, ok := lGroup.lidToConfig[lid]
+			if !ok {
+				// A new balancer, add it to balancer group and balancer map.
+				lGroup.bg.add(lid, newWeight, xdsB.subBalancerBuilder)
+				config = &localityConfig{
+					weight: newWeight,
+				}
+				lGroup.lidToConfig[lid] = config
+
+				// weightChanged is false for new locality, because there's no need to
+				// update weight in bg.
+				addrsChanged = true
+			} else {
+				// Compare weight and addrs.
+				if config.weight != newWeight {
+					weightChanged = true
+				}
+				if !reflect.DeepEqual(config.addrs, newAddrs) {
+					addrsChanged = true
 				}
 			}
-			newAddrs = append(newAddrs, address)
-		}
-		var weightChanged, addrsChanged bool
-		config, ok := xdsB.lidToConfig[lid]
-		if !ok {
-			// A new balancer, add it to balancer group and balancer map.
-			xdsB.bg.add(lid, newWeight, xdsB.subBalancerBuilder)
-			config = &localityConfig{
-				weight: newWeight,
-			}
-			xdsB.lidToConfig[lid] = config
 
-			// weightChanged is false for new locality, because there's no need to
-			// update weight in bg.
-			addrsChanged = true
-		} else {
-			// Compare weight and addrs.
-			if config.weight != newWeight {
-				weightChanged = true
+			if weightChanged {
+				config.weight = newWeight
+				lGroup.bg.changeWeight(lid, newWeight)
 			}
-			if !reflect.DeepEqual(config.addrs, newAddrs) {
-				addrsChanged = true
+
+			if addrsChanged {
+				config.addrs = newAddrs
+				lGroup.bg.handleResolvedAddrs(lid, newAddrs)
 			}
 		}
 
-		if weightChanged {
-			config.weight = newWeight
-			xdsB.bg.changeWeight(lid, newWeight)
-		}
-
-		if addrsChanged {
-			config.addrs = newAddrs
-			xdsB.bg.handleResolvedAddrs(lid, newAddrs)
+		// Delete localities that are removed in the latest response.
+		for lid := range lGroup.lidToConfig {
+			if _, ok := newLocalitiesSet[lid]; !ok {
+				lGroup.bg.remove(lid)
+				delete(lGroup.lidToConfig, lid)
+			}
 		}
 	}
 
-	// Delete localities that are removed in the latest response.
-	for lid := range xdsB.lidToConfig {
-		if _, ok := newLocalitiesSet[lid]; !ok {
-			xdsB.bg.remove(lid)
-			delete(xdsB.lidToConfig, lid)
+	// Delete priorities that are removed in the latest response. We don't clse
+	// them. They will be closed when they are removed from the chain list.
+	for p := range xdsB.priorityToLocalities {
+		if _, ok := newLocalitiesWithPriority[p]; !ok {
+			delete(xdsB.priorityToLocalities, p)
+		}
+	}
+
+	// We will create balancer groups for 0-max_priority_number, even if some of
+	// them may not be included in the EDS response. The field doc in the proto
+	// file actually says priorities should range from 0 (highest) to N (lowest)
+	// without skipping.
+	//
+	// All priority bgs are chained into a linked list. Adding one in the middle
+	// is tricky because we need to start it if the one in use is a lower
+	// priority, but not if it's a higher priority. Having empty balancer groups
+	// ready makes this easier to handle.
+
+	maxPriorityPlusOne++
+	if xdsB.maxPriorityPlusOne == maxPriorityPlusOne {
+		// If no new priority to add, and no priority to remove.
+		return
+	}
+
+	oldMaxPriorityPlusOne := xdsB.maxPriorityPlusOne
+	xdsB.maxPriorityPlusOne = maxPriorityPlusOne
+	if oldMaxPriorityPlusOne < maxPriorityPlusOne {
+		// New priorities were added. The priorityBalancerGroups are already
+		// created. Chain them into the chain list.
+		var (
+			lower       *priorityBalancerGroup
+			manualStart bool
+		)
+		if lGroup, ok := xdsB.priorityToLocalities[oldMaxPriorityPlusOne-1]; ok {
+			lower = lGroup.bg
+		} else {
+			// lower will be nil if oldMaxPriority is 0 (at init). And we want
+			// to manually start the highest priority.
+			manualStart = true
+		}
+		for i := maxPriorityPlusOne; i > oldMaxPriorityPlusOne; i-- {
+			temp := xdsB.priorityToLocalities[i-1].bg
+			temp.setNext(lower)
+			lower = temp
+		}
+		if manualStart {
+			lower.start()
+		}
+	}
+
+	if oldMaxPriorityPlusOne > maxPriorityPlusOne {
+		// Some priorities were removed. The priorityBalancerGroups are already
+		// deleted from the map. Remove them from the chain list and close them.
+		if lGroup, ok := xdsB.priorityToLocalities[maxPriorityPlusOne-1]; ok {
+			// Remove next from the last valid item.
+			lGroup.bg.setNext(nil)
+		}
+		for i := maxPriorityPlusOne; i < oldMaxPriorityPlusOne; i++ {
+			temp := xdsB.priorityToLocalities[i].bg
+			temp.setNext(nil)
+			temp.close()
 		}
 	}
 }
 
 // HandleSubConnStateChange handles the state change and update pickers accordingly.
 func (xdsB *EDSBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
-	xdsB.bg.handleSubConnStateChange(sc, s)
+	xdsB.subConnMu.Lock()
+	var lGroup *localitiesSamePriority
+	if p, ok := xdsB.subConnToPriority[sc]; ok {
+		if s == connectivity.Shutdown {
+			// Only delete sc from the map when state changed to Shutdown.
+			delete(xdsB.subConnToPriority, sc)
+		}
+		lGroup = xdsB.priorityToLocalities[p]
+	}
+	xdsB.subConnMu.Unlock()
+	if lGroup == nil {
+		grpclog.Infof("EDSBalancer: priority not found for sc state change")
+		return
+	}
+	if bg := lGroup.bg; bg != nil {
+		bg.handleSubConnStateChange(sc, s)
+	}
 }
 
-// UpdateBalancerState overrides balancer.ClientConn to wrap the picker in a
-// dropPicker.
-func (xdsB *EDSBalancer) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
+// Close closes the balancer.
+func (xdsB *EDSBalancer) Close() {
+	for _, lGroup := range xdsB.priorityToLocalities {
+		if bg := lGroup.bg; bg != nil {
+			bg.close()
+		}
+	}
+}
+
+func (xdsB *EDSBalancer) ccWrapperWithPriority(priority uint32) *edsBalancerWrapperCC {
+	return &edsBalancerWrapperCC{
+		ClientConn: xdsB.cc,
+		priority:   priority,
+		parent:     xdsB,
+	}
+}
+
+func (xdsB *EDSBalancer) newSubConn(priority uint32, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	sc, err := xdsB.cc.NewSubConn(addrs, opts)
+	if err != nil {
+		return nil, err
+	}
+	xdsB.subConnMu.Lock()
+	xdsB.subConnToPriority[sc] = priority
+	xdsB.subConnMu.Unlock()
+	return sc, nil
+}
+
+// npdateBalancerState is to wrap the picker in a dropPicker.
+func (xdsB *EDSBalancer) updateBalancerState(s connectivity.State, p balancer.Picker) {
 	xdsB.pickerMu.Lock()
 	defer xdsB.pickerMu.Unlock()
 	xdsB.innerPicker = p
 	xdsB.innerState = s
 	// Don't reset drops when it's a state change.
-	xdsB.ClientConn.UpdateBalancerState(s, newDropPicker(p, xdsB.drops, xdsB.loadStore))
+	xdsB.cc.UpdateBalancerState(s, newDropPicker(p, xdsB.drops, xdsB.loadStore))
 }
 
-// Close closes the balancer.
-func (xdsB *EDSBalancer) Close() {
-	if xdsB.bg != nil {
-		xdsB.bg.close()
-	}
+// edsBalancerWrapperCC implements the balancer.ClientConn API and get passed to
+// each balancer group. It contains the locality priority.
+type edsBalancerWrapperCC struct {
+	balancer.ClientConn
+	priority uint32
+	parent   *EDSBalancer
+}
+
+func (ebwcc *edsBalancerWrapperCC) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	return ebwcc.parent.newSubConn(ebwcc.priority, addrs, opts)
+}
+func (ebwcc *edsBalancerWrapperCC) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
+	ebwcc.parent.updateBalancerState(state, picker)
 }
 
 type dropPicker struct {
