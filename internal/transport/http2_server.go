@@ -359,12 +359,14 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 				rstCode:  http2.ErrCodeRefusedStream,
 				onWrite:  func() {},
 			})
+			s.cancel()
 			return false
 		}
 	}
 	t.mu.Lock()
 	if t.state != reachable {
 		t.mu.Unlock()
+		s.cancel()
 		return false
 	}
 	if uint32(len(t.activeStreams)) >= t.maxStreams {
@@ -375,12 +377,14 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			rstCode:  http2.ErrCodeRefusedStream,
 			onWrite:  func() {},
 		})
+		s.cancel()
 		return false
 	}
 	if streamID%2 != 1 || streamID <= t.maxStreamID {
 		t.mu.Unlock()
 		// illegal gRPC stream id.
 		errorf("transport: http2Server.HandleStreams received an illegal stream id: %v", streamID)
+		s.cancel()
 		return true
 	}
 	t.maxStreamID = streamID
