@@ -184,9 +184,9 @@ func TestXDSRsolverServiceConfig(t *testing.T) {
 	}
 	defer cc.Close()
 
-	timeout := time.After(5 * time.Second)
+	timer := time.NewTimer(5 * time.Second)
 	select {
-	case <-timeout:
+	case <-timer.C:
 		t.Fatal("timed out waiting for service config to reach balancer")
 	case err := <-fbb.errCh:
 		if err != nil {
