@@ -26,11 +26,6 @@ import (
 	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
 )
 
-// ExperimentalName is the name used to register the xDS resolver and balancer.
-// This will also be the scheme part of the URI used by the client application
-// to select the xDS resolver.
-const ExperimentalName = "xds_experimental"
-
 // Locality is xds.Locality without XXX fields, so it can be used as map
 // keys.
 //

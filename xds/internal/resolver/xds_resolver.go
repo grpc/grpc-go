@@ -31,12 +31,12 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	xdsinternal "google.golang.org/grpc/xds/internal"
 )
 
-// The JSON form of the hard-coded service config which picks the
-// xds_experimental balancer with round_robin as the child policy.
-const jsonSC = `{
+const (
+	// The JSON form of the hard-coded service config which picks the
+	// xds_experimental balancer with round_robin as the child policy.
+	jsonSC = `{
     "loadBalancingConfig":[
       {
         "xds_experimental":{
@@ -49,6 +49,10 @@ const jsonSC = `{
       }
     ]
   }`
+	// xDS balancer name is xds_experimental while resolver scheme is
+	// xds-experimental since "_" is not a valid character in the URL.
+	xdsScheme = "xds-experimental"
+)
 
 var (
 	parseOnce sync.Once
@@ -87,7 +91,7 @@ func (b *xdsBuilder) Build(t resolver.Target, cc resolver.ClientConn, o resolver
 
 // Name helps implement the resolver.Builder interface.
 func (*xdsBuilder) Scheme() string {
-	return xdsinternal.ExperimentalName
+	return xdsScheme
 }
 
 type xdsResolver struct{}

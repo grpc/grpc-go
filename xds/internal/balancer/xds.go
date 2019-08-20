@@ -40,7 +40,10 @@ import (
 	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
 )
 
-const defaultTimeout = 10 * time.Second
+const (
+	defaultTimeout = 10 * time.Second
+	xdsName        = "xds-experimental"
+)
 
 var (
 	// This field is for testing purpose.
@@ -83,7 +86,7 @@ func (b *xdsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 }
 
 func (b *xdsBalancerBuilder) Name() string {
-	return xdsinternal.ExperimentalName
+	return xdsName
 }
 
 func (b *xdsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {

@@ -96,7 +96,7 @@ func (s) TestXdsLoadReporting(t *testing.T) {
 		newEDSBalancer = originalNewEDSBalancer
 	}()
 
-	builder := balancer.Get(xdsinternal.ExperimentalName)
+	builder := balancer.Get(xdsName)
 	cc := newTestClientConn()
 	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
 	if !ok {

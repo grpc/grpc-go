@@ -71,11 +71,11 @@ func (*testClientConn) NewAddress(addresses []resolver.Address) { panic("unimple
 func (*testClientConn) NewServiceConfig(serviceConfig string)   { panic("unimplemented") }
 
 // TestXDSRsolverSchemeAndAddresses creates a new xds resolver, verifies that
-// it returns an empty address list and the appropriate xds_experimental
+// it returns an empty address list and the appropriate xds-experimental
 // scheme.
 func TestXDSRsolverSchemeAndAddresses(t *testing.T) {
 	b := NewBuilder()
-	wantScheme := "xds_experimental"
+	wantScheme := "xds-experimental"
 	if b.Scheme() != wantScheme {
 		t.Fatalf("got scheme %s, want %s", b.Scheme(), wantScheme)
 	}
@@ -150,7 +150,9 @@ func (f *fakeBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildO
 	return &fakeBalancer{f.wantLBConfig, f.errCh}
 }
 
-func (f *fakeBalancerBuilder) Name() string { return xdsinternal.ExperimentalName }
+func (f *fakeBalancerBuilder) Name() string {
+	return "xds_experimental"
+}
 
 func (f *fakeBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return &wrappedLBConfig{lbCfg: c}, nil
@@ -169,13 +171,13 @@ type wrappedLBConfig struct {
 // The following sequence of events happen in this test:
 // * The xds_experimental balancer (fake) and resolver builders are initialized
 //   at init time.
-// * We dial a dummy address here with the xds_experimental scheme. This should
+// * We dial a dummy address here with the xds-experimental scheme. This should
 //   pick the xds_resolver, which should return the hard-coded service config,
 //   which should reach the fake balancer that we registered (because the
 //   service config asks for the xds balancer).
 // * In the fake balancer, we verify that we receive the expected LB config.
 func TestXDSRsolverServiceConfig(t *testing.T) {
-	xdsAddr := fmt.Sprintf("%s:///dummy", xdsinternal.ExperimentalName)
+	xdsAddr := fmt.Sprintf("%s:///dummy", xdsScheme)
 	cc, err := grpc.Dial(xdsAddr, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("grpc.Dial(%s) failed with error: %v", xdsAddr, err)
