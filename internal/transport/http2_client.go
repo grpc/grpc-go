@@ -267,7 +267,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		onClose:               onClose,
 		keepaliveEnabled:      keepaliveEnabled,
 		bufferPool:            newBufferPool(),
-		activityCh:            make(chan struct{}, 1),
 		lr:                    lastRead{ch: make(chan struct{}, 1)},
 	}
 	t.controlBuf = newControlBuffer(t.ctxDone)
