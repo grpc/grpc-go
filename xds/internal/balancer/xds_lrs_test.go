@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
+	xdsinternal "google.golang.org/grpc/xds/internal"
 	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
 	lrsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 	lrspb "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
@@ -112,9 +113,9 @@ func (s) TestXdsLoadReporting(t *testing.T) {
 		Nanos:   intervalNano,
 	}
 
-	cfg := &xdsConfig{
+	cfg := &xdsinternal.LBConfig{
 		BalancerName: addr,
-		ChildPolicy:  &loadBalancingConfig{Name: fakeBalancerA}, // Set this to skip cds.
+		ChildPolicy:  &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA}, // Set this to skip cds.
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
 	td.sendResp(&response{resp: testEDSRespWithoutEndpoints})

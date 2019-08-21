@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
+	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	cdspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/cds"
@@ -89,7 +90,7 @@ func (b *xdsBalancerBuilder) Name() string {
 }
 
 func (b *xdsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	var cfg xdsConfig
+	var cfg xdsinternal.LBConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal balancer config %s into xds config", string(c))
 	}
@@ -130,15 +131,15 @@ type xdsBalancer struct {
 	timer           *time.Timer
 	noSubConnAlert  <-chan struct{}
 
-	client           *client    // may change when passed a different service config
-	config           *xdsConfig // may change when passed a different service config
+	client           *client               // may change when passed a different service config
+	config           *xdsinternal.LBConfig // may change when passed a different service config
 	xdsLB            edsBalancerInterface
 	fallbackLB       balancer.Balancer
 	fallbackInitData *resolver.State // may change when HandleResolved address is called
 	loadStore        lrs.Store
 }
 
-func (x *xdsBalancer) startNewXDSClient(u *xdsConfig) {
+func (x *xdsBalancer) startNewXDSClient(u *xdsinternal.LBConfig) {
 	// If the xdsBalancer is in startup stage, then we need to apply the startup timeout for the first
 	// xdsClient to get a response from the traffic director.
 	if x.startup {
@@ -237,7 +238,7 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 			}
 		}
 	case *balancer.ClientConnState:
-		cfg, _ := u.BalancerConfig.(*xdsConfig)
+		cfg, _ := u.BalancerConfig.(*xdsinternal.LBConfig)
 		if cfg == nil {
 			// service config parsing failed. should never happen.
 			return
@@ -497,16 +498,16 @@ func (x *xdsBalancer) cancelFallbackAndSwitchEDSBalancerIfNecessary() {
 	}
 }
 
-func (x *xdsBalancer) buildFallBackBalancer(c *xdsConfig) {
+func (x *xdsBalancer) buildFallBackBalancer(c *xdsinternal.LBConfig) {
 	if c.FallBackPolicy == nil {
-		x.buildFallBackBalancer(&xdsConfig{
-			FallBackPolicy: &loadBalancingConfig{
+		x.buildFallBackBalancer(&xdsinternal.LBConfig{
+			FallBackPolicy: &xdsinternal.LoadBalancingConfig{
 				Name: "round_robin",
 			},
 		})
 		return
 	}
-	// builder will always be non-nil, since when parse JSON into xdsConfig, we check whether the specified
+	// builder will always be non-nil, since when parse JSON into xdsinternal.LBConfig, we check whether the specified
 	// balancer is registered or not.
 	builder := balancer.Get(c.FallBackPolicy.Name)
 
@@ -565,78 +566,4 @@ func createDrainedTimer() *time.Timer {
 		<-timer.C
 	}
 	return timer
-}
-
-type xdsConfig struct {
-	serviceconfig.LoadBalancingConfig
-	BalancerName   string
-	ChildPolicy    *loadBalancingConfig
-	FallBackPolicy *loadBalancingConfig
-}
-
-// When unmarshalling json to xdsConfig, we iterate through the childPolicy/fallbackPolicy lists
-// and select the first LB policy which has been registered to be stored in the returned xdsConfig.
-func (p *xdsConfig) UnmarshalJSON(data []byte) error {
-	var val map[string]json.RawMessage
-	if err := json.Unmarshal(data, &val); err != nil {
-		return err
-	}
-	for k, v := range val {
-		switch k {
-		case "balancerName":
-			if err := json.Unmarshal(v, &p.BalancerName); err != nil {
-				return err
-			}
-		case "childPolicy":
-			var lbcfgs []*loadBalancingConfig
-			if err := json.Unmarshal(v, &lbcfgs); err != nil {
-				return err
-			}
-			for _, lbcfg := range lbcfgs {
-				if balancer.Get(lbcfg.Name) != nil {
-					p.ChildPolicy = lbcfg
-					break
-				}
-			}
-		case "fallbackPolicy":
-			var lbcfgs []*loadBalancingConfig
-			if err := json.Unmarshal(v, &lbcfgs); err != nil {
-				return err
-			}
-			for _, lbcfg := range lbcfgs {
-				if balancer.Get(lbcfg.Name) != nil {
-					p.FallBackPolicy = lbcfg
-					break
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (p *xdsConfig) MarshalJSON() ([]byte, error) {
-	return nil, nil
-}
-
-type loadBalancingConfig struct {
-	Name   string
-	Config json.RawMessage
-}
-
-func (l *loadBalancingConfig) MarshalJSON() ([]byte, error) {
-	m := make(map[string]json.RawMessage)
-	m[l.Name] = l.Config
-	return json.Marshal(m)
-}
-
-func (l *loadBalancingConfig) UnmarshalJSON(data []byte) error {
-	var cfg map[string]json.RawMessage
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return err
-	}
-	for name, config := range cfg {
-		l.Name = name
-		l.Config = config
-	}
-	return nil
 }
