@@ -542,13 +542,13 @@ func init() {
 
 func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
 	if cc.sc != nil {
-		cc.applyServiceConfig(cc.sc, addrs)
+		cc.applyServiceConfigAndBalancer(cc.sc, addrs)
 		return
 	}
 	if cc.dopts.defaultServiceConfig != nil {
-		cc.applyServiceConfig(cc.dopts.defaultServiceConfig, addrs)
+		cc.applyServiceConfigAndBalancer(cc.dopts.defaultServiceConfig, addrs)
 	} else {
-		cc.applyServiceConfig(emptyServiceConfig, addrs)
+		cc.applyServiceConfigAndBalancer(emptyServiceConfig, addrs)
 	}
 }
 
@@ -585,7 +585,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	} else {
 		scg, err := s.ServiceConfigGetter.Get()
 		if sc, ok := scg.(*ServiceConfig); err == nil && ok {
-			cc.applyServiceConfig(sc, s.Addresses)
+			cc.applyServiceConfigAndBalancer(sc, s.Addresses)
 		} else {
 			ret = balancer.ErrBadResolverState
 		}
@@ -863,7 +863,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method st
 	return t, done, nil
 }
 
-func (cc *ClientConn) applyServiceConfig(sc *ServiceConfig, addrs []resolver.Address) {
+func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, addrs []resolver.Address) {
 	if sc == nil {
 		// should never reach here.
 		return
