@@ -94,7 +94,7 @@ func compareBenchmark(file1, file2 string) {
 }
 
 func printline(benchName, total, send, recv, allocB, allocN, reqT, respT, ltc50, ltc90, l99, lAvg interface{}) {
-	fmt.Printf("%-80v%12v%12v%12v%12v%12v%18v%18v%12v%12v%12v%12v\n",
+	fmt.Printf("%-80v%12v%12v%12v%18v%18v%18v%18v%12v%12v%12v%12v\n",
 		benchName, total, send, recv, allocB, allocN, reqT, respT, ltc50, ltc90, l99, lAvg)
 }
 
@@ -122,7 +122,7 @@ func formatBenchmark(fileName string) {
 		wantFeatures[i] = !wantFeatures[i]
 	}
 
-	printline("Name", "TotalOps", "SendOps", "RecvOps", "Alloc (B)", "Alloc (#)",
+	printline("Name", "TotalOps", "SendOps", "RecvOps", "Bytes/op (B)", "Allocs/op (#)",
 		"RequestT", "ResponseT", "L-50", "L-90", "L-99", "L-Avg")
 	for _, r := range results {
 		d := r.Data
