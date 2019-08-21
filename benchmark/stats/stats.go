@@ -200,9 +200,9 @@ type RunData struct {
 	// run. Only makes sense for unconstrained workloads.
 	RecvOps uint64
 	// AllocedBytes is the average memory allocation in bytes per operation.
-	AllocedBytes uint64
+	AllocedBytes float64
 	// Allocs is the average number of memory allocations per operation.
-	Allocs uint64
+	Allocs float64
 	// ReqT is the average request throughput associated with this run.
 	ReqT float64
 	// RespT is the average response throughput associated with this run.
@@ -275,8 +275,8 @@ func (s *Stats) EndRun(count uint64) {
 	r := &s.results[len(s.results)-1]
 	r.Data = RunData{
 		TotalOps:     count,
-		AllocedBytes: s.stopMS.TotalAlloc - s.startMS.TotalAlloc,
-		Allocs:       s.stopMS.Mallocs - s.startMS.Mallocs,
+		AllocedBytes: float64(s.stopMS.TotalAlloc-s.startMS.TotalAlloc) / float64(count),
+		Allocs:       float64(s.stopMS.Mallocs-s.startMS.Mallocs) / float64(count),
 		ReqT:         float64(count) * float64(r.Features.ReqSizeBytes) * 8 / r.Features.BenchTime.Seconds(),
 		RespT:        float64(count) * float64(r.Features.RespSizeBytes) * 8 / r.Features.BenchTime.Seconds(),
 	}
@@ -296,8 +296,8 @@ func (s *Stats) EndUnconstrainedRun(req uint64, resp uint64) {
 	r.Data = RunData{
 		SendOps:      req,
 		RecvOps:      resp,
-		AllocedBytes: (s.stopMS.TotalAlloc - s.startMS.TotalAlloc) / ((req + resp) / 2),
-		Allocs:       (s.stopMS.Mallocs - s.startMS.Mallocs) / ((req + resp) / 2),
+		AllocedBytes: float64(s.stopMS.TotalAlloc-s.startMS.TotalAlloc) / float64((req+resp)/2),
+		Allocs:       float64(s.stopMS.Mallocs-s.startMS.Mallocs) / float64((req+resp)/2),
 		ReqT:         float64(req) * float64(r.Features.ReqSizeBytes) * 8 / r.Features.BenchTime.Seconds(),
 		RespT:        float64(resp) * float64(r.Features.RespSizeBytes) * 8 / r.Features.BenchTime.Seconds(),
 	}
