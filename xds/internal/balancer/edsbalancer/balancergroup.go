@@ -316,6 +316,16 @@ func (bg *balancerGroup) newSubConn(id internal.Locality, addrs []resolver.Addre
 // connectivity state, then forward to ClientConn.
 func (bg *balancerGroup) updateBalancerState(id internal.Locality, state connectivity.State, picker balancer.Picker) {
 	grpclog.Infof("balancer group: update balancer state: %v, %v, %p", id, state, picker)
+
+	// FIXME: this is necessary to stop closed balancers to send updates. But it
+	// causes deadlock when re-starting balancers and sending them addresses,
+	// which may call updateBalancerState to update (an error) picker.
+	bg.mu.Lock()
+	defer bg.mu.Unlock()
+	if !bg.started {
+		return
+	}
+
 	bg.pickerMu.Lock()
 	defer bg.pickerMu.Unlock()
 	pickerSt, ok := bg.idToPickerState[id]

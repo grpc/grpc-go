@@ -544,3 +544,17 @@ func TestBalancerGroup_start_close(t *testing.T) {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
+
+func TestBalancerGroup_start_close_deadlock(t *testing.T) {
+	cc := newTestClientConn(t)
+	bg := newBalancerGroup(cc, nil)
+
+	// Add two balancers to group and send two resolved addresses to both
+	// balancers.
+	bg.add(testBalancerIDs[0], 2, &testConstBalancerBuilder{})
+	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.add(testBalancerIDs[1], 1, &testConstBalancerBuilder{})
+	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+
+	bg.start()
+}
