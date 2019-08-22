@@ -55,14 +55,14 @@ var (
 	errorLog = log.New(os.Stderr, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 )
 
-func doRPCAndGetPath(client testpb.TestServiceClient, timeout time.Duration, waitForReady bool) testpb.GrpclbRouteType {
-	infoLog.Printf("doRPCAndGetPath timeout:%v waitForReady:%v\n", timeout, waitForReady)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+func doRPCAndGetPath(client testpb.TestServiceClient, deadline time.Time) testpb.GrpclbRouteType {
+	infoLog.Printf("doRPCAndGetPath deadline:%v\n", deadline)
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
 	req := &testpb.SimpleRequest{
 		FillGrpclbRouteType: true,
 	}
-	reply, err := client.UnaryCall(ctx, req, grpc.WaitForReady(waitForReady))
+	reply, err := client.UnaryCall(ctx, req)
 	if err != nil {
 		infoLog.Printf("doRPCAndGetPath error:%v\n", err)
 		return testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_UNKNOWN
@@ -98,6 +98,7 @@ func dialTCPUserTimeout(ctx context.Context, addr string) (net.Conn, error) {
 func createTestConn() *grpc.ClientConn {
 	opts := []grpc.DialOption{
 		grpc.WithContextDialer(dialTCPUserTimeout),
+		grpc.WithBlock(),
 	}
 	switch *customCredentialsType {
 	case "tls":
@@ -127,13 +128,27 @@ func runCmd(command string) {
 	}
 }
 
-func runFallbackBeforeStartupTest(breakLBAndBackendConnsCmd string, perRPCDeadlineSeconds int) {
-	runCmd(breakLBAndBackendConnsCmd)
-	conn := createTestConn()
-	defer conn.Close()
-	client := testpb.NewTestServiceClient(conn)
+func waitForFallbackAndDoRPCs(client testpb.TestServiceClient, fallbackDeadline time.Time) {
+	fallbackRetryCount := 0
+	fellBack := false
+	for time.Now().Before(fallbackDeadline) {
+		g := doRPCAndGetPath(client, time.Now().Add(1*time.Second))
+		if g == testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
+			infoLog.Println("Made one successul RPC to a fallback. Now expect the same for the rest.")
+			fellBack = true
+			break
+		} else if g == testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
+			errorLog.Fatalf("Got RPC type backend. This suggests an error in test implementation")
+		} else {
+			infoLog.Println("Retryable RPC failure on iteration:", fallbackRetryCount)
+		}
+		fallbackRetryCount += 1
+	}
+	if !fellBack {
+		infoLog.Fatalf("Didn't fall back before deadline: %v\n", fallbackDeadline)
+	}
 	for i := 0; i < 30; i++ {
-		if g := doRPCAndGetPath(client, time.Duration(perRPCDeadlineSeconds)*time.Second, false); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
+		if g := doRPCAndGetPath(client, time.Now().Add(20*time.Second)); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
 			errorLog.Fatalf("Expected RPC to take grpclb route type FALLBACK. Got: %v", g)
 		}
 		time.Sleep(time.Second)
@@ -141,48 +156,45 @@ func runFallbackBeforeStartupTest(breakLBAndBackendConnsCmd string, perRPCDeadli
 }
 
 func doFastFallbackBeforeStartup() {
-	runFallbackBeforeStartupTest(*unrouteLBAndBackendAddrsCmd, 9)
-}
-
-func doSlowFallbackBeforeStartup() {
-	runFallbackBeforeStartupTest(*blackholeLBAndBackendAddrsCmd, 20)
-}
-
-func runFallbackAfterStartupTest(breakLBAndBackendConnsCmd string) {
+	runCmd(*unrouteLBAndBackendAddrsCmd)
+	fallbackDeadline := time.Now().Add(5*time.Second)
 	conn := createTestConn()
 	defer conn.Close()
 	client := testpb.NewTestServiceClient(conn)
-	if g := doRPCAndGetPath(client, 20*time.Second, false); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
-		errorLog.Fatalf("Expected route type BACKEND. Got: %v", g)
-	}
-	runCmd(breakLBAndBackendConnsCmd)
-	for i := 0; i < 40; i++ {
-		// Perform a wait-for-ready RPC
-		g := doRPCAndGetPath(client, 1*time.Second, true)
-		if g == testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
-			infoLog.Printf("Made one successul RPC to a fallback. Now expect the same for the rest.\n")
-			break
-		} else if g == testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
-			errorLog.Fatalf("Got RPC type backend. This suggests an error in test implementation")
-		} else {
-			infoLog.Printf("Retryable RPC failure on iteration: %v\n", i)
-		}
-	}
-	for i := 0; i < 30; i++ {
-		g := doRPCAndGetPath(client, 20*time.Second, false)
-		if g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
-			errorLog.Fatalf("Expected grpclb route type: FALLBACK. Got: %v", g)
-		}
-		time.Sleep(time.Second)
-	}
+	waitForFallbackAndDoRPCs(client, fallbackDeadline)
+}
+
+func doSlowFallbackBeforeStartup() {
+	runCmd(*blackholeLBAndBackendAddrsCmd)
+	fallbackDeadline := time.Now().Add(20*time.Second)
+	conn := createTestConn()
+	defer conn.Close()
+	client := testpb.NewTestServiceClient(conn)
+	waitForFallbackAndDoRPCs(client, fallbackDeadline)
 }
 
 func doFastFallbackAfterStartup() {
-	runFallbackAfterStartupTest(*unrouteLBAndBackendAddrsCmd)
+	conn := createTestConn()
+	defer conn.Close()
+	client := testpb.NewTestServiceClient(conn)
+	if g := doRPCAndGetPath(client, time.Now().Add(20*time.Second)); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
+		errorLog.Fatalf("Expected RPC to take grpclb route type BACKEND. Got: %v", g)
+	}
+	runCmd(*unrouteLBAndBackendAddrsCmd)
+	fallbackDeadline := time.Now().Add(40*time.Second)
+	waitForFallbackAndDoRPCs(client, fallbackDeadline)
 }
 
 func doSlowFallbackAfterStartup() {
-	runFallbackAfterStartupTest(*blackholeLBAndBackendAddrsCmd)
+	conn := createTestConn()
+	defer conn.Close()
+	client := testpb.NewTestServiceClient(conn)
+	if g := doRPCAndGetPath(client, time.Now().Add(20*time.Second)); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
+		errorLog.Fatalf("Expected RPC to take grpclb route type BACKEND. Got: %v", g)
+	}
+	runCmd(*blackholeLBAndBackendAddrsCmd)
+	fallbackDeadline := time.Now().Add(40*time.Second)
+	waitForFallbackAndDoRPCs(client, fallbackDeadline)
 }
 
 func main() {
