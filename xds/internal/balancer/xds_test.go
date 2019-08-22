@@ -256,23 +256,33 @@ func (s) TestXdsFallbackResolvedAddrs(t *testing.T) {
 	}
 	defer lb.Close()
 
-	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
-	for i := 0; i < 3; i++ {
+	tests := []struct {
+		resolvedAddrs []resolver.Address
+		wantAddrs     []resolver.Address
+	}{
+		{
+			resolvedAddrs: []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}},
+			wantAddrs:     []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, specialAddrForBalancerA},
+		},
+		{
+			resolvedAddrs: []resolver.Address{{Addr: "1.1.1.1:10001"}},
+			wantAddrs:     []resolver.Address{{Addr: "1.1.1.1:10001"}, specialAddrForBalancerA},
+		},
+	}
+	for _, test := range tests {
 		lb.UpdateClientConnState(balancer.ClientConnState{
-			ResolverState:  resolver.State{Addresses: addrs},
+			ResolverState:  resolver.State{Addresses: test.resolvedAddrs},
 			BalancerConfig: testLBConfigFooBar,
 		})
 
-		wantAddrs := append(addrs, specialAddrForBalancerA)
 		select {
 		case gotAddrs := <-cc.newSubConns:
-			if !reflect.DeepEqual(gotAddrs, wantAddrs) {
-				t.Fatalf("got new subconn address %v, want %v", gotAddrs, wantAddrs)
+			if !reflect.DeepEqual(gotAddrs, test.wantAddrs) {
+				t.Fatalf("got new subconn address %v, want %v", gotAddrs, test.wantAddrs)
 			}
 		case <-time.After(2 * time.Second):
 			t.Fatal("timeout when geting new subconn result")
 		}
-		addrs = addrs[:len(addrs)-1]
 	}
 }
 
