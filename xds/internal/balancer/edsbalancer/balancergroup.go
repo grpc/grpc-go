@@ -18,6 +18,7 @@ package edsbalancer
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"google.golang.org/grpc/balancer"
@@ -48,6 +49,19 @@ func (config *balancerConfig) start(bgcc *balancerGroupCC) {
 		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: config.addrs}})
 	} else {
 		b.HandleResolvedAddrs(config.addrs, nil)
+	}
+}
+
+func (config *balancerConfig) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+	b := config.balancer
+	if b == nil {
+		// Either balancer is not found or balancer group is closed.
+		return
+	}
+	if ub, ok := b.(balancer.V2Balancer); ok {
+		ub.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: state})
+	} else {
+		b.HandleSubConnStateChange(sc, state)
 	}
 }
 
@@ -99,14 +113,16 @@ type balancerGroup struct {
 	cc        balancer.ClientConn
 	loadStore lrs.Store
 
-	mu                 sync.Mutex
-	started            bool
+	outgoingMu         sync.Mutex
+	outgoingStarted    bool
 	idToBalancerConfig map[internal.Locality]*balancerConfig
 
-	scMu   sync.Mutex
-	scToID map[balancer.SubConn]internal.Locality
+	incomingMu      sync.Mutex
+	incomingStarted bool // This boolean only guards calls back to ClientConn.
+	scToID          map[balancer.SubConn]internal.Locality
 
-	pickerMu sync.Mutex
+	pickerMu      sync.Mutex
+	pickerStarted bool // This boolean only guards calls back to ClientConn.
 	// All balancer IDs exist as keys in this map, even if balancer group is not
 	// started.
 	//
@@ -126,10 +142,17 @@ func newBalancerGroup(cc balancer.ClientConn, loadStore lrs.Store) *balancerGrou
 }
 
 func (bg *balancerGroup) start() {
-	// FIXME: implement
-	bg.mu.Lock()
-	if bg.started {
-		bg.mu.Unlock()
+	bg.pickerMu.Lock()
+	bg.pickerStarted = true
+	bg.pickerMu.Unlock()
+
+	bg.incomingMu.Lock()
+	bg.incomingStarted = true
+	bg.incomingMu.Unlock()
+
+	bg.outgoingMu.Lock()
+	if bg.outgoingStarted {
+		bg.outgoingMu.Unlock()
 		return
 	}
 
@@ -140,8 +163,8 @@ func (bg *balancerGroup) start() {
 			group:      bg,
 		})
 	}
-	bg.started = true
-	bg.mu.Unlock()
+	bg.outgoingStarted = true
+	bg.outgoingMu.Unlock()
 }
 
 // add adds a balancer built by builder to the group, with given id and weight.
@@ -153,7 +176,8 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 		return
 	}
 
-	// First, add things to the picker map.
+	// First, add things to the picker map. Do this even if pickerStarted is
+	// false, because the data is static.
 	bg.pickerMu.Lock()
 	bg.idToPickerState[id] = &pickerState{
 		weight: weight,
@@ -165,9 +189,9 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 	bg.pickerMu.Unlock()
 
 	// Store data in static map, and then check to see if bg is started.
-	bg.mu.Lock()
+	bg.outgoingMu.Lock()
 	if _, ok := bg.idToBalancerConfig[id]; ok {
-		bg.mu.Unlock()
+		bg.outgoingMu.Unlock()
 		grpclog.Warningf("balancer group: adding a balancer with existing ID: %s", id)
 		return
 	}
@@ -176,7 +200,7 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 	}
 	bg.idToBalancerConfig[id] = config
 
-	if bg.started {
+	if bg.outgoingStarted {
 		// Only start the balancer if bg is started.
 		config.start(&balancerGroupCC{
 			ClientConn: bg.cc,
@@ -184,7 +208,7 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 			group:      bg,
 		})
 	}
-	bg.mu.Unlock()
+	bg.outgoingMu.Unlock()
 }
 
 // remove removes the balancer with id from the group, and closes the balancer.
@@ -192,32 +216,37 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 // It also removes the picker generated from this balancer from the picker
 // group. It always results in a picker update.
 func (bg *balancerGroup) remove(id internal.Locality) {
-	bg.mu.Lock()
+	bg.outgoingMu.Lock()
 	delete(bg.idToBalancerConfig, id)
-	if bg.started {
+	if bg.outgoingStarted {
 		// Close balancer.
 		if config, ok := bg.idToBalancerConfig[id]; ok {
 			config.close()
 		}
 	}
-	bg.mu.Unlock()
+	bg.outgoingMu.Unlock()
 
-	bg.scMu.Lock()
+	bg.incomingMu.Lock()
 	// Remove SubConns.
+	//
+	// FIXME: if NewSubConn is called by this balancer later, the SubConn will
+	//  be leaked. This can be solved by balancer manager.
 	for sc, bid := range bg.scToID {
 		if bid == id {
 			bg.cc.RemoveSubConn(sc)
 			delete(bg.scToID, sc)
 		}
 	}
-	bg.scMu.Unlock()
+	bg.incomingMu.Unlock()
 
 	bg.pickerMu.Lock()
 	// Remove id and picker from picker map. This also results in future updates
 	// for this ID to be ignored.
 	delete(bg.idToPickerState, id)
-	// Update state and picker to reflect the changes.
-	bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
+	if bg.pickerStarted {
+		// Update state and picker to reflect the changes.
+		bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
+	}
 	bg.pickerMu.Unlock()
 }
 
@@ -243,8 +272,10 @@ func (bg *balancerGroup) changeWeight(id internal.Locality, newWeight uint32) {
 		return
 	}
 	pState.weight = newWeight
-	// Update state and picker to reflect the changes.
-	bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
+	if bg.pickerStarted {
+		// Update state and picker to reflect the changes.
+		bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
+	}
 }
 
 // Following are actions from the parent grpc.ClientConn, forward to sub-balancers.
@@ -252,39 +283,30 @@ func (bg *balancerGroup) changeWeight(id internal.Locality, newWeight uint32) {
 // SubConn state change: find the corresponding balancer and then forward.
 func (bg *balancerGroup) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
 	grpclog.Infof("balancer group: handle subconn state change: %p, %v", sc, state)
-	var b balancer.Balancer
-	bg.scMu.Lock()
+	bg.incomingMu.Lock()
 	if id, ok := bg.scToID[sc]; ok {
 		if state == connectivity.Shutdown {
 			// Only delete sc from the map when state changed to Shutdown.
 			delete(bg.scToID, sc)
 		}
-		bg.mu.Lock()
-		b = bg.idToBalancerConfig[id].balancer
-		bg.mu.Unlock()
+		bg.outgoingMu.Lock()
+		config, ok := bg.idToBalancerConfig[id]
+		if ok {
+			config.handleSubConnStateChange(sc, state)
+		}
+		bg.outgoingMu.Unlock()
 	}
-	bg.scMu.Unlock()
-	if b == nil {
-		// Either balancer is not found or balancer group is closed.
-		return
-	}
-	if ub, ok := b.(balancer.V2Balancer); ok {
-		ub.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: state})
-	} else {
-		b.HandleSubConnStateChange(sc, state)
-	}
+	bg.incomingMu.Unlock()
 }
 
 // Address change: forward to balancer.
 func (bg *balancerGroup) handleResolvedAddrs(id internal.Locality, addrs []resolver.Address) {
-	bg.mu.Lock()
+	bg.outgoingMu.Lock()
 	config, ok := bg.idToBalancerConfig[id]
-	bg.mu.Unlock()
-
-	if !ok {
-		grpclog.Infof("balancer group: balancer with id %q not found", id)
+	if ok {
+		config.updateAddrs(addrs)
 	}
-	config.updateAddrs(addrs)
+	bg.outgoingMu.Unlock()
 }
 
 // TODO: handleServiceConfig()
@@ -302,13 +324,17 @@ func (bg *balancerGroup) handleResolvedAddrs(id internal.Locality, addrs []resol
 // it's just forwarding the action, there's no need for a removeSubConn()
 // wrapper function.
 func (bg *balancerGroup) newSubConn(id internal.Locality, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	bg.incomingMu.Lock()
+	defer bg.incomingMu.Unlock()
+	if !bg.incomingStarted {
+		return nil, fmt.Errorf("NewSubConn is called after balancer is closed")
+	}
+	// FIXME: if id is removed, this should also return error.
 	sc, err := bg.cc.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err
 	}
-	bg.scMu.Lock()
 	bg.scToID[sc] = id
-	bg.scMu.Unlock()
 	return sc, nil
 }
 
@@ -320,12 +346,6 @@ func (bg *balancerGroup) updateBalancerState(id internal.Locality, state connect
 	// FIXME: this is necessary to stop closed balancers to send updates. But it
 	// causes deadlock when re-starting balancers and sending them addresses,
 	// which may call updateBalancerState to update (an error) picker.
-	bg.mu.Lock()
-	defer bg.mu.Unlock()
-	if !bg.started {
-		return
-	}
-
 	bg.pickerMu.Lock()
 	defer bg.pickerMu.Unlock()
 	pickerSt, ok := bg.idToPickerState[id]
@@ -337,35 +357,43 @@ func (bg *balancerGroup) updateBalancerState(id internal.Locality, state connect
 	}
 	pickerSt.picker = newLoadReportPicker(picker, id, bg.loadStore)
 	pickerSt.state = state
-	bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
+	if bg.pickerStarted {
+		bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
+	}
 }
 
 func (bg *balancerGroup) close() {
-	bg.mu.Lock()
-	if bg.started {
-		bg.started = false
+	bg.pickerMu.Lock()
+	if bg.pickerStarted {
+		bg.pickerStarted = false
+		for _, pState := range bg.idToPickerState {
+			// Reset everything to IDLE but keep the entry in map (to keep the
+			// weight).
+			pState.picker = nil
+			pState.state = connectivity.Idle
+		}
+	}
+	bg.pickerMu.Unlock()
+
+	bg.incomingMu.Lock()
+	if bg.incomingStarted {
+		bg.incomingStarted = false
+		// Also remove all SubConns.
+		for sc := range bg.scToID {
+			bg.cc.RemoveSubConn(sc)
+			delete(bg.scToID, sc)
+		}
+	}
+	bg.incomingMu.Unlock()
+
+	bg.outgoingMu.Lock()
+	if bg.outgoingStarted {
+		bg.outgoingStarted = false
 		for _, config := range bg.idToBalancerConfig {
 			config.close()
 		}
 	}
-	bg.mu.Unlock()
-
-	bg.scMu.Lock()
-	// Also remove all SubConns.
-	for sc := range bg.scToID {
-		bg.cc.RemoveSubConn(sc)
-		delete(bg.scToID, sc)
-	}
-	bg.scMu.Unlock()
-
-	bg.pickerMu.Lock()
-	for _, pState := range bg.idToPickerState {
-		// Reset everything to IDLE but keep the entry in map (to keep the
-		// weight).
-		pState.picker = nil
-		pState.state = connectivity.Idle
-	}
-	bg.pickerMu.Unlock()
+	bg.outgoingMu.Unlock()
 }
 
 func buildPickerAndState(m map[internal.Locality]*pickerState) (connectivity.State, balancer.Picker) {
