@@ -157,7 +157,7 @@ func waitForFallbackAndDoRPCs(client testpb.TestServiceClient, fallbackDeadline 
 
 func doFastFallbackBeforeStartup() {
 	runCmd(*unrouteLBAndBackendAddrsCmd)
-	fallbackDeadline := time.Now().Add(5*time.Second)
+	fallbackDeadline := time.Now().Add(5 * time.Second)
 	conn := createTestConn()
 	defer conn.Close()
 	client := testpb.NewTestServiceClient(conn)
@@ -166,7 +166,7 @@ func doFastFallbackBeforeStartup() {
 
 func doSlowFallbackBeforeStartup() {
 	runCmd(*blackholeLBAndBackendAddrsCmd)
-	fallbackDeadline := time.Now().Add(20*time.Second)
+	fallbackDeadline := time.Now().Add(20 * time.Second)
 	conn := createTestConn()
 	defer conn.Close()
 	client := testpb.NewTestServiceClient(conn)
@@ -181,7 +181,7 @@ func doFastFallbackAfterStartup() {
 		errorLog.Fatalf("Expected RPC to take grpclb route type BACKEND. Got: %v", g)
 	}
 	runCmd(*unrouteLBAndBackendAddrsCmd)
-	fallbackDeadline := time.Now().Add(40*time.Second)
+	fallbackDeadline := time.Now().Add(40 * time.Second)
 	waitForFallbackAndDoRPCs(client, fallbackDeadline)
 }
 
@@ -193,7 +193,7 @@ func doSlowFallbackAfterStartup() {
 		errorLog.Fatalf("Expected RPC to take grpclb route type BACKEND. Got: %v", g)
 	}
 	runCmd(*blackholeLBAndBackendAddrsCmd)
-	fallbackDeadline := time.Now().Add(40*time.Second)
+	fallbackDeadline := time.Now().Add(40 * time.Second)
 	waitForFallbackAndDoRPCs(client, fallbackDeadline)
 }
 
