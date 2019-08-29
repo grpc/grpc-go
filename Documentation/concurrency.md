@@ -7,8 +7,10 @@ guidelines.
 
 A [ClientConn][client-conn] can safely be accessed concurrently. Using
 [helloworld][helloworld] as an example, one could share the `ClientConn` across
-multiple goroutines to create multiple `GreeterClient` types. In this case, RPCs
-would be sent in parallel.
+multiple goroutines to create multiple `GreeterClient` types. In this case,
+RPCs would be sent in parallel.  `GreeterClient`, generated from the proto
+definitions and wrapping `ClientConn`, is also concurrency safe, and may be
+directly shared in the same way.
 
 ## Streams
 
