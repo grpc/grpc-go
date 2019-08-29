@@ -65,7 +65,6 @@ var (
 // http2Server implements the ServerTransport interface with HTTP2.
 type http2Server struct {
 	ctx         context.Context
-	once        sync.Once // Prevent panic due to closing closed channel
 	done        chan struct{}
 	conn        net.Conn
 	loopy       *loopyWriter
@@ -206,7 +205,6 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	done := make(chan struct{})
 	t := &http2Server{
 		ctx:               context.Background(),
-		once:              sync.Once{},
 		done:              done,
 		conn:              conn,
 		remoteAddr:        conn.RemoteAddr(),
@@ -1011,9 +1009,7 @@ func (t *http2Server) Close() error {
 	t.activeStreams = nil
 	t.mu.Unlock()
 	t.controlBuf.finish()
-	t.once.Do(func() {
-		close(t.done)
-	})
+	close(t.done)
 	err := t.conn.Close()
 	if channelz.IsOn() {
 		channelz.RemoveEntry(t.channelzID)
