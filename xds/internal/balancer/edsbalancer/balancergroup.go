@@ -109,6 +109,11 @@ type pickerState struct {
 //     - sub-pickers are grouped into a group-picker
 //     - aggregated connectivity state is the overall state of all pickers.
 //  - resolveNow
+//
+// Sub-balancers are only built when the balancer group is started. If the
+// balancer group is closed, the sub-balancers are also closed. And it's
+// guaranteed that no updates will be sent to parent ClientConn from a closed
+// balancer group.
 type balancerGroup struct {
 	cc        balancer.ClientConn
 	loadStore lrs.Store
@@ -116,6 +121,13 @@ type balancerGroup struct {
 	outgoingMu         sync.Mutex
 	outgoingStarted    bool
 	idToBalancerConfig map[internal.Locality]*balancerConfig
+
+	// incomingMu and pickerMu are to make sure this balancer group doesn't send
+	// updates to cc after it's closed.
+	//
+	// We don't share the mutex to avoid deadlocks (e.g. a call to sub-balancer
+	// may call back to balancer group inline. It causes deaclock if they
+	// require the same mutex).
 
 	incomingMu      sync.Mutex
 	incomingStarted bool // This boolean only guards calls back to ClientConn.
@@ -229,8 +241,11 @@ func (bg *balancerGroup) remove(id internal.Locality) {
 	bg.incomingMu.Lock()
 	// Remove SubConns.
 	//
-	// FIXME: if NewSubConn is called by this balancer later, the SubConn will
-	//  be leaked. This can be solved by balancer manager.
+	// NOTE: if NewSubConn is called by this (closed) balancer later, the
+	// SubConn will be leaked. This shouldn't happen if the balancer
+	// implementation is correct. To make sure this never happens, we need to
+	// add another layer (balancer manager) between balancer group and the
+	// sub-balancers.
 	for sc, bid := range bg.scToID {
 		if bid == id {
 			bg.cc.RemoveSubConn(sc)
@@ -329,7 +344,9 @@ func (bg *balancerGroup) newSubConn(id internal.Locality, addrs []resolver.Addre
 	if !bg.incomingStarted {
 		return nil, fmt.Errorf("NewSubConn is called after balancer is closed")
 	}
-	// FIXME: if id is removed, this should also return error.
+	// NOTE: if balancer with id was already removed, this should also return
+	// error. But since we call balancer.close when removing the balancer, this
+	// shouldn't happen.
 	sc, err := bg.cc.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err
@@ -343,9 +360,6 @@ func (bg *balancerGroup) newSubConn(id internal.Locality, addrs []resolver.Addre
 func (bg *balancerGroup) updateBalancerState(id internal.Locality, state connectivity.State, picker balancer.Picker) {
 	grpclog.Infof("balancer group: update balancer state: %v, %v, %p", id, state, picker)
 
-	// FIXME: this is necessary to stop closed balancers to send updates. But it
-	// causes deadlock when re-starting balancers and sending them addresses,
-	// which may call updateBalancerState to update (an error) picker.
 	bg.pickerMu.Lock()
 	defer bg.pickerMu.Unlock()
 	pickerSt, ok := bg.idToPickerState[id]
