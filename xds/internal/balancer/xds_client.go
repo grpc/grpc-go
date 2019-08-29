@@ -20,6 +20,7 @@ package balancer
 
 import (
 	"context"
+	"os"
 	"sync"
 	"time"
 
@@ -31,8 +32,8 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
+	xdsclient "google.golang.org/grpc/xds/internal/client"
 	cdspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/cds"
 	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
 	discoverypb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/discovery"
@@ -44,6 +45,8 @@ const (
 	cdsType          = "type.googleapis.com/envoy.api.v2.Cluster"
 	edsType          = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
 	endpointRequired = "endpoints_required"
+	// Environment variable which holds the name of the xDS bootstrap file.
+	bootstrapFileEnv = "GRPC_XDS_BOOTSTRAP"
 )
 
 var (
@@ -70,6 +73,7 @@ type client struct {
 
 	loadStore      lrs.Store
 	loadReportOnce sync.Once
+	cHelper        *xdsclient.ConnectHelper
 
 	mu sync.Mutex
 	cc *grpc.ClientConn
@@ -91,17 +95,7 @@ func (c *client) close() {
 }
 
 func (c *client) dial() {
-	var dopts []grpc.DialOption
-	if creds := c.opts.DialCreds; creds != nil {
-		if err := creds.OverrideServerName(c.balancerName); err == nil {
-			dopts = append(dopts, grpc.WithTransportCredentials(creds))
-		} else {
-			grpclog.Warningf("xds: failed to override the server name in the credentials: %v, using Insecure", err)
-			dopts = append(dopts, grpc.WithInsecure())
-		}
-	} else {
-		dopts = append(dopts, grpc.WithInsecure())
-	}
+	dopts := []grpc.DialOption{c.cHelper.Credentials()}
 	if c.opts.Dialer != nil {
 		dopts = append(dopts, grpc.WithContextDialer(c.opts.Dialer))
 	}
@@ -111,7 +105,7 @@ func (c *client) dial() {
 		dopts = append(dopts, grpc.WithChannelzParentID(c.opts.ChannelzParentID))
 	}
 
-	cc, err := grpc.DialContext(c.ctx, c.balancerName, dopts...)
+	cc, err := grpc.DialContext(c.ctx, c.cHelper.BalancerName(), dopts...)
 	// Since this is a non-blocking dial, so if it fails, it due to some serious error (not network
 	// related) error.
 	if err != nil {
@@ -130,34 +124,20 @@ func (c *client) dial() {
 
 func (c *client) newCDSRequest() *discoverypb.DiscoveryRequest {
 	cdsReq := &discoverypb.DiscoveryRequest{
-		Node: &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: c.serviceName},
-					},
-				},
-			},
-		},
+		Node:    c.cHelper.NodeProto(),
 		TypeUrl: cdsType,
 	}
 	return cdsReq
 }
 
 func (c *client) newEDSRequest() *discoverypb.DiscoveryRequest {
+	nodeProto := proto.Clone(c.cHelper.NodeProto()).(*basepb.Node)
+	nodeProto.Metadata.Fields[endpointRequired] = &structpb.Value{
+		Kind: &structpb.Value_BoolValue{BoolValue: c.enableCDS},
+	}
+
 	edsReq := &discoverypb.DiscoveryRequest{
-		Node: &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: c.serviceName},
-					},
-					endpointRequired: {
-						Kind: &structpb.Value_BoolValue{BoolValue: c.enableCDS},
-					},
-				},
-			},
-		},
+		Node: nodeProto,
 		// TODO: the expected ResourceName could be in a different format from
 		// dial target. (test_service.test_namespace.traffic_director.com vs
 		// test_namespace:test_service).
@@ -292,6 +272,11 @@ func newXDSClient(balancerName string, enableCDS bool, opts balancer.BuildOption
 	}
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
+	c.cHelper = xdsclient.NewConnectHelper(os.Getenv(bootstrapFileEnv), &xdsclient.ConnectHelperDefaults{
+		BalancerName: c.balancerName,
+		ServiceName:  c.serviceName,
+		DialCreds:    c.opts.DialCreds,
+	})
 
 	return c
 }
