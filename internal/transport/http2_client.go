@@ -1392,10 +1392,10 @@ func (t *http2Client) keepalive() {
 			// timeoutLeft. This will ensure that we wait only for kp.Time
 			// before sending out the next ping (for cases where the ping is
 			// acked).
-			sleepDuration = minTime(kp.Time, timeoutLeft)
+			sleepDuration := minTime(t.kp.Time, timeoutLeft)
 			timeoutLeft -= sleepDuration
 			prevNano = time.Now().UTC().UnixNano()
-			timer.Reset(timeoutLeft)
+			timer.Reset(sleepDuration)
 		case <-t.ctx.Done():
 			if !timer.Stop() {
 				<-timer.C
