@@ -131,7 +131,7 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 	bc.MaxDelay = b.minFreq
 	d := &dnsResolver{
 		freq:                 b.minFreq,
-		backoff:              backoff.Exponential{bc},
+		backoff:              backoff.Exponential{Config: bc},
 		host:                 host,
 		port:                 port,
 		ctx:                  ctx,

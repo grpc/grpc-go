@@ -44,7 +44,7 @@ type BackoffConfig struct {
 }
 
 // ConnectParams defines the parameters for connecting and retrying. Users are
-// encouraged to use this instead of BackoffConfig the type defined above. See
+// encouraged to use this instead of the BackoffConfig type defined above. See
 // here for more details:
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
 //
