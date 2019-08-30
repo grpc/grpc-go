@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
+	grpcbackoff "google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/backoff"
@@ -660,15 +661,17 @@ func (s) TestWithBackoffConfigDefault(t *testing.T) {
 
 func (s) TestWithBackoffConfig(t *testing.T) {
 	b := BackoffConfig{MaxDelay: DefaultBackoffConfig.MaxDelay / 2}
-	wantBackoff := backoff.DefaultExponential
-	wantBackoff.MaxDelay = b.MaxDelay
+	bc := grpcbackoff.DefaultConfig
+	bc.MaxDelay = b.MaxDelay
+	wantBackoff := backoff.Exponential{bc}
 	testBackoffConfigSet(t, wantBackoff, WithBackoffConfig(b))
 }
 
 func (s) TestWithBackoffMaxDelay(t *testing.T) {
 	md := DefaultBackoffConfig.MaxDelay / 2
-	wantBackoff := backoff.DefaultExponential
-	wantBackoff.MaxDelay = md
+	bc := grpcbackoff.DefaultConfig
+	bc.MaxDelay = md
+	wantBackoff := backoff.Exponential{bc}
 	testBackoffConfigSet(t, wantBackoff, WithBackoffMaxDelay(md))
 }
 
@@ -676,10 +679,12 @@ func (s) TestWithConnectParams(t *testing.T) {
 	bd := 2 * time.Second
 	mltpr := 2.0
 	jitter := 0.0
-	crt := ConnectParams{BackoffBaseDelay: bd, BackoffMultiplier: mltpr, BackoffJitter: jitter}
+	bc := grpcbackoff.Config{BaseDelay: bd, Multiplier: mltpr, Jitter: jitter}
+
+	crt := ConnectParams{Backoff: bc}
 	// MaxDelay is not set in the ConnectParams. So it should not be set on
 	// backoff.Exponential as well.
-	wantBackoff := backoff.Exponential{BaseDelay: bd, Multiplier: mltpr, Jitter: jitter}
+	wantBackoff := backoff.Exponential{bc}
 	testBackoffConfigSet(t, wantBackoff, WithConnectParams(crt))
 }
 
@@ -702,6 +707,20 @@ func testBackoffConfigSet(t *testing.T, wantBackoff backoff.Exponential, opts ..
 
 	if gotBackoff != wantBackoff {
 		t.Fatalf("unexpected backoff config on connection: %v, want %v", gotBackoff, wantBackoff)
+	}
+}
+
+func (s) TestConnectParamsWithMinConnectTimeout(t *testing.T) {
+	// Default value specified for minConnectTimeout in the spec is 20 seconds.
+	mct := 1 * time.Minute
+	conn, err := Dial("passthrough:///foo:80", WithInsecure(), WithConnectParams(ConnectParams{MinConnectTimeout: mct}))
+	if err != nil {
+		t.Fatalf("unexpected error dialing connection: %v", err)
+	}
+	defer conn.Close()
+
+	if got := conn.dopts.minConnectTimeout(); got != mct {
+		t.Errorf("unexpect minConnectTimeout on the connection: %v, want %v", got, mct)
 	}
 }
 

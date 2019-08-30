@@ -24,6 +24,7 @@ import (
 	"net"
 	"time"
 
+	grpcbackoff "google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
@@ -246,19 +247,15 @@ func WithServiceConfig(c <-chan ServiceConfig) DialOption {
 	})
 }
 
-// WithConnectParams configures the dialer to use the provided backoff
-// parameters for the algorithm defined in
-// https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
-// This will override all the default values with the ones provided here. So,
-// use with caution.
+// WithConnectParams configures the dialer to use the provided ConnectParams.
 //
 // This API is EXPERIMENTAL.
 func WithConnectParams(p ConnectParams) DialOption {
-	return withBackoff(backoff.Exponential{
-		BaseDelay:  p.BackoffBaseDelay,
-		Multiplier: p.BackoffMultiplier,
-		Jitter:     p.BackoffJitter,
-		MaxDelay:   p.BackoffMaxDelay,
+	return newFuncDialOption(func(o *dialOptions) {
+		o.bs = backoff.Exponential{p.Backoff}
+		o.minConnectTimeout = func() time.Duration {
+			return p.MinConnectTimeout
+		}
 	})
 }
 
@@ -275,9 +272,9 @@ func WithBackoffMaxDelay(md time.Duration) DialOption {
 //
 //￼Deprecated: use WithConnectParams instead.
 func WithBackoffConfig(b BackoffConfig) DialOption {
-	bs := backoff.DefaultExponential
-	bs.MaxDelay = b.MaxDelay
-	return withBackoff(bs)
+	bc := grpcbackoff.DefaultConfig
+	bc.MaxDelay = b.MaxDelay
+	return withBackoff(backoff.Exponential{bc})
 }
 
 // withBackoff sets the backoff strategy used for connectRetryNum after a failed

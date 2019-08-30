@@ -32,6 +32,7 @@ import (
 	"sync"
 	"time"
 
+	grpcbackoff "google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpcrand"
@@ -126,11 +127,11 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 
 	// DNS address (non-IP).
 	ctx, cancel := context.WithCancel(context.Background())
-	bs := backoff.DefaultExponential
-	bs.MaxDelay = b.minFreq
+	bc := grpcbackoff.DefaultConfig
+	bc.MaxDelay = b.minFreq
 	d := &dnsResolver{
 		freq:                 b.minFreq,
-		backoff:              bs,
+		backoff:              backoff.Exponential{bc},
 		host:                 host,
 		port:                 port,
 		ctx:                  ctx,
