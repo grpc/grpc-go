@@ -663,7 +663,7 @@ func (s) TestWithBackoffConfig(t *testing.T) {
 	b := BackoffConfig{MaxDelay: DefaultBackoffConfig.MaxDelay / 2}
 	bc := grpcbackoff.DefaultConfig
 	bc.MaxDelay = b.MaxDelay
-	wantBackoff := backoff.Exponential{bc}
+	wantBackoff := backoff.Exponential{Config: bc}
 	testBackoffConfigSet(t, wantBackoff, WithBackoffConfig(b))
 }
 
@@ -671,7 +671,7 @@ func (s) TestWithBackoffMaxDelay(t *testing.T) {
 	md := DefaultBackoffConfig.MaxDelay / 2
 	bc := grpcbackoff.DefaultConfig
 	bc.MaxDelay = md
-	wantBackoff := backoff.Exponential{bc}
+	wantBackoff := backoff.Exponential{Config: bc}
 	testBackoffConfigSet(t, wantBackoff, WithBackoffMaxDelay(md))
 }
 
@@ -684,7 +684,7 @@ func (s) TestWithConnectParams(t *testing.T) {
 	crt := ConnectParams{Backoff: bc}
 	// MaxDelay is not set in the ConnectParams. So it should not be set on
 	// backoff.Exponential as well.
-	wantBackoff := backoff.Exponential{bc}
+	wantBackoff := backoff.Exponential{Config: bc}
 	testBackoffConfigSet(t, wantBackoff, WithConnectParams(crt))
 }
 

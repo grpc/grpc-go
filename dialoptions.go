@@ -252,7 +252,7 @@ func WithServiceConfig(c <-chan ServiceConfig) DialOption {
 // This API is EXPERIMENTAL.
 func WithConnectParams(p ConnectParams) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.bs = backoff.Exponential{p.Backoff}
+		o.bs = backoff.Exponential{Config: p.Backoff}
 		o.minConnectTimeout = func() time.Duration {
 			return p.MinConnectTimeout
 		}
@@ -274,7 +274,7 @@ func WithBackoffMaxDelay(md time.Duration) DialOption {
 func WithBackoffConfig(b BackoffConfig) DialOption {
 	bc := grpcbackoff.DefaultConfig
 	bc.MaxDelay = b.MaxDelay
-	return withBackoff(backoff.Exponential{bc})
+	return withBackoff(backoff.Exponential{Config: bc})
 }
 
 // withBackoff sets the backoff strategy used for connectRetryNum after a failed
