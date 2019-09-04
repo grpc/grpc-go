@@ -58,14 +58,13 @@ func Test(t *testing.T) {
 const (
 	fakeBalancerA = "fake_balancer_A"
 	fakeBalancerB = "fake_balancer_B"
-	fakeBalancerC = "fake_balancer_C"
 )
 
 var (
 	testBalancerNameFooBar = "foo.bar"
 	testLBConfigFooBar     = &xdsinternal.LBConfig{
 		BalancerName:   testBalancerNameFooBar,
-		ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
+		ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerB},
 		FallBackPolicy: &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 	}
 
@@ -115,6 +114,11 @@ func (*balancerBBuilder) Name() string {
 	return string(fakeBalancerB)
 }
 
+// A fake balancer implementation which does two things:
+// * Appends a unique address to the list of resolved addresses received before
+//   attempting to create a SubConn.
+// * Makes the received subConn state changes available through a channel, for
+//   the test to inspect.
 type balancerA struct {
 	cc                 balancer.ClientConn
 	subconnStateChange chan *scStateChange
@@ -130,24 +134,23 @@ func (b *balancerA) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 
 func (b *balancerA) Close() {}
 
+// A fake balancer implementation which appends a unique address to the list of
+// resolved addresses received before attempting to create a SubConn.
 type balancerB struct {
 	cc balancer.ClientConn
-}
-
-func (balancerB) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	panic("implement me")
 }
 
 func (b *balancerB) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 	_, _ = b.cc.NewSubConn(append(addrs, specialAddrForBalancerB), balancer.NewSubConnOptions{})
 }
 
+func (balancerB) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+	panic("implement me")
+}
 func (balancerB) Close() {}
 
 func newTestClientConn() *testClientConn {
-	return &testClientConn{
-		newSubConns: make(chan []resolver.Address, 10),
-	}
+	return &testClientConn{newSubConns: make(chan []resolver.Address, 10)}
 }
 
 type testClientConn struct {
@@ -159,17 +162,10 @@ func (t *testClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewS
 	return nil, nil
 }
 
-func (testClientConn) RemoveSubConn(balancer.SubConn) {
-}
-
-func (testClientConn) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
-}
-
-func (testClientConn) ResolveNow(resolver.ResolveNowOption) {}
-
-func (testClientConn) Target() string {
-	return testServiceName
-}
+func (testClientConn) RemoveSubConn(balancer.SubConn)                              {}
+func (testClientConn) UpdateBalancerState(s connectivity.State, p balancer.Picker) {}
+func (testClientConn) ResolveNow(resolver.ResolveNowOption)                        {}
+func (testClientConn) Target() string                                              { return testServiceName }
 
 type scStateChange struct {
 	sc    balancer.SubConn
@@ -229,40 +225,64 @@ func getLatestEdsBalancer() *fakeEDSBalancer {
 
 type fakeSubConn struct{}
 
-func (*fakeSubConn) UpdateAddresses([]resolver.Address) {
-	panic("implement me")
-}
+func (*fakeSubConn) UpdateAddresses([]resolver.Address) { panic("implement me") }
+func (*fakeSubConn) Connect()                           { panic("implement me") }
 
-func (*fakeSubConn) Connect() {
-	panic("implement me")
-}
-
-func (s) TestXdsBalanceHandleResolvedAddrs(t *testing.T) {
+// TestXdsFallbackResolvedAddrs verifies that the fallback balancer specified
+// in the provided lbconfig is initialized, and that it receives the addresses
+// pushed by the resolver.
+//
+// The test does the following:
+// * Builds a new xds balancer.
+// * Since there is no xDS server to respond to requests from the xds client
+//   (created as part of the xds balancer), we expect the fallback policy to
+//   kick in.
+// * Repeatedly pushes new ClientConnState which specifies the same fallback
+//   policy, but a different set of resolved addresses.
+// * The fallback policy is implemented by a fake balancer, which appends a
+//   unique address to the list of addresses it uses to create the SubConn.
+// * We also have a fake ClientConn which verifies that it receives the
+//   expected address list.
+func (s) TestXdsFallbackResolvedAddrs(t *testing.T) {
 	startupTimeout = 500 * time.Millisecond
 	defer func() { startupTimeout = defaultTimeout }()
 
 	builder := balancer.Get(xdsName)
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
+	b := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
+	lb, ok := b.(*xdsBalancer)
 	if !ok {
-		t.Fatalf("unable to type assert to *xdsBalancer")
+		t.Fatalf("builder.Build() returned a balancer of type %T, want *xdsBalancer", b)
 	}
 	defer lb.Close()
-	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
-	for i := 0; i < 3; i++ {
+
+	tests := []struct {
+		resolvedAddrs []resolver.Address
+		wantAddrs     []resolver.Address
+	}{
+		{
+			resolvedAddrs: []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}},
+			wantAddrs:     []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, specialAddrForBalancerA},
+		},
+		{
+			resolvedAddrs: []resolver.Address{{Addr: "1.1.1.1:10001"}},
+			wantAddrs:     []resolver.Address{{Addr: "1.1.1.1:10001"}, specialAddrForBalancerA},
+		},
+	}
+	for _, test := range tests {
 		lb.UpdateClientConnState(balancer.ClientConnState{
-			ResolverState:  resolver.State{Addresses: addrs},
+			ResolverState:  resolver.State{Addresses: test.resolvedAddrs},
 			BalancerConfig: testLBConfigFooBar,
 		})
+
 		select {
-		case nsc := <-cc.newSubConns:
-			if !reflect.DeepEqual(append(addrs, specialAddrForBalancerA), nsc) {
-				t.Fatalf("got new subconn address %v, want %v", nsc, append(addrs, specialAddrForBalancerA))
+		case gotAddrs := <-cc.newSubConns:
+			if !reflect.DeepEqual(gotAddrs, test.wantAddrs) {
+				t.Fatalf("got new subconn address %v, want %v", gotAddrs, test.wantAddrs)
 			}
 		case <-time.After(2 * time.Second):
 			t.Fatal("timeout when geting new subconn result")
 		}
-		addrs = addrs[:2-i]
 	}
 }
 
