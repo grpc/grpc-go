@@ -1005,7 +1005,7 @@ func TestKeepaliveServerEnforcementWithDormantKeepaliveOnClient(t *testing.T) {
 	}()
 
 	// No active streams on the client. Give keepalive enough time.
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	// Make sure the client transport is healthy.
 	if _, err := client.NewStream(context.Background(), &CallHdr{}); err != nil {
