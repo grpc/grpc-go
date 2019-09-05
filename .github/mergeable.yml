@@ -10,7 +10,7 @@ mergeable:
         status: 'failure'
         payload:
           title: 'Mergeable failed: no "Type:" label'
-          summary: `All PRs must include an appropriate "Type:" label.`
+          summary: 'All PRs must include an appropriate "Type:" label.'
   - when: pull_request.*
     validate:
       - do: label
@@ -24,4 +24,4 @@ mergeable:
         status: 'failure'
         payload:
           title: 'Mergeable failed: no milestone or "no release notes" label'
-          summary: `All PRs must include either a Release milestone or the "no release notes" label.`
+          summary: 'All PRs must include either a Release milestone or the "no release notes" label.'
