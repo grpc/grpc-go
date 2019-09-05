@@ -5,6 +5,6 @@ mergeable:
       - do: label
         must_include:
           regex: '^Type:|no release notes'
-        message: >
-          All PRs must be labeled with an appropriate "Type:" label, or have the
-          "no release notes" label applied before merging.
+          message: >
+            All PRs must be labeled with an appropriate "Type:" label, or have the
+            "no release notes" label applied before merging.
