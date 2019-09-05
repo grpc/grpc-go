@@ -142,7 +142,7 @@ func waitForFallbackAndDoRPCs(client testpb.TestServiceClient, fallbackDeadline 
 		} else {
 			infoLog.Println("Retryable RPC failure on iteration:", fallbackRetryCount)
 		}
-		fallbackRetryCount += 1
+		fallbackRetryCount++
 	}
 	if !fellBack {
 		infoLog.Fatalf("Didn't fall back before deadline: %v\n", fallbackDeadline)
