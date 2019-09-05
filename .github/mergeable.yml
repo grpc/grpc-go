@@ -5,12 +5,12 @@ mergeable:
       - do: label
         must_include:
           regex: '^Type:'
-     fail:
-        - do: checks
-          status: 'failure'
-          payload:
-            title: 'Mergeable failed: no "Type:" label'
-            summary: `All PRs must include an appropriate "Type:" label.`
+    fail:
+       - do: checks
+         status: 'failure'
+         payload:
+           title: 'Mergeable failed: no "Type:" label'
+           summary: `All PRs must include an appropriate "Type:" label.`
   - when: pull_request.*
     validate:
       - do: label
