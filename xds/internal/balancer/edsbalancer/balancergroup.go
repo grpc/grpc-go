@@ -32,6 +32,12 @@ import (
 	orcapb "google.golang.org/grpc/xds/internal/proto/udpa/data/orca/v1/orca_load_report"
 )
 
+// balancerConfig is used to keep the configurations that will be used to start
+// the underlying balancer. It can be called to start/stop the underlying
+// balancer.
+//
+// When the config changes, it will pass the update to the underlying balancer
+// if it exists.
 type balancerConfig struct {
 	// The static part of balancer group. Keeps balancerBuilders and addresses.
 	// To be used when restarting balancer group.
@@ -42,7 +48,7 @@ type balancerConfig struct {
 	balancer balancer.Balancer
 }
 
-func (config *balancerConfig) start(bgcc *balancerGroupCC) {
+func (config *balancerConfig) startBalancer(bgcc *balancerGroupCC) {
 	b := config.builder.Build(bgcc, balancer.BuildOptions{})
 	config.balancer = b
 	if ub, ok := b.(balancer.V2Balancer); ok {
@@ -79,7 +85,7 @@ func (config *balancerConfig) updateAddrs(addrs []resolver.Address) {
 	}
 }
 
-func (config *balancerConfig) close() {
+func (config *balancerConfig) stopBalancer() {
 	config.balancer.Close()
 	config.balancer = nil
 }
@@ -128,6 +134,12 @@ type balancerGroup struct {
 	// We don't share the mutex to avoid deadlocks (e.g. a call to sub-balancer
 	// may call back to balancer group inline. It causes deaclock if they
 	// require the same mutex).
+	//
+	// We should never need to hold multiple locks at the same time in this
+	// struct. The case where two locks are held can only happen when the
+	// underlying balancer calls back into balancer group inline. So there's an
+	// implicit lock acquisition order that outgoingMu is locked before either
+	// incomingMu or pickerMu.
 
 	incomingMu      sync.Mutex
 	incomingStarted bool // This boolean only guards calls back to ClientConn.
@@ -169,7 +181,7 @@ func (bg *balancerGroup) start() {
 	}
 
 	for id, config := range bg.idToBalancerConfig {
-		config.start(&balancerGroupCC{
+		config.startBalancer(&balancerGroupCC{
 			ClientConn: bg.cc,
 			id:         id,
 			group:      bg,
@@ -214,7 +226,7 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 
 	if bg.outgoingStarted {
 		// Only start the balancer if bg is started.
-		config.start(&balancerGroupCC{
+		config.startBalancer(&balancerGroupCC{
 			ClientConn: bg.cc,
 			id:         id,
 			group:      bg,
@@ -229,13 +241,13 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 // group. It always results in a picker update.
 func (bg *balancerGroup) remove(id internal.Locality) {
 	bg.outgoingMu.Lock()
-	delete(bg.idToBalancerConfig, id)
 	if bg.outgoingStarted {
 		// Close balancer.
 		if config, ok := bg.idToBalancerConfig[id]; ok {
-			config.close()
+			config.stopBalancer()
 		}
 	}
+	delete(bg.idToBalancerConfig, id)
 	bg.outgoingMu.Unlock()
 
 	bg.incomingMu.Lock()
@@ -299,26 +311,28 @@ func (bg *balancerGroup) changeWeight(id internal.Locality, newWeight uint32) {
 func (bg *balancerGroup) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
 	grpclog.Infof("balancer group: handle subconn state change: %p, %v", sc, state)
 	bg.incomingMu.Lock()
-	if id, ok := bg.scToID[sc]; ok {
-		if state == connectivity.Shutdown {
-			// Only delete sc from the map when state changed to Shutdown.
-			delete(bg.scToID, sc)
-		}
-		bg.outgoingMu.Lock()
-		config, ok := bg.idToBalancerConfig[id]
-		if ok {
-			config.handleSubConnStateChange(sc, state)
-		}
-		bg.outgoingMu.Unlock()
+	id, ok := bg.scToID[sc]
+	if !ok {
+		bg.incomingMu.Unlock()
+		return
 	}
 	bg.incomingMu.Unlock()
+
+	if state == connectivity.Shutdown {
+		// Only delete sc from the map when state changed to Shutdown.
+		delete(bg.scToID, sc)
+	}
+	bg.outgoingMu.Lock()
+	if config, ok := bg.idToBalancerConfig[id]; ok {
+		config.handleSubConnStateChange(sc, state)
+	}
+	bg.outgoingMu.Unlock()
 }
 
 // Address change: forward to balancer.
 func (bg *balancerGroup) handleResolvedAddrs(id internal.Locality, addrs []resolver.Address) {
 	bg.outgoingMu.Lock()
-	config, ok := bg.idToBalancerConfig[id]
-	if ok {
+	if config, ok := bg.idToBalancerConfig[id]; ok {
 		config.updateAddrs(addrs)
 	}
 	bg.outgoingMu.Unlock()
@@ -345,7 +359,7 @@ func (bg *balancerGroup) newSubConn(id internal.Locality, addrs []resolver.Addre
 		return nil, fmt.Errorf("NewSubConn is called after balancer is closed")
 	}
 	// NOTE: if balancer with id was already removed, this should also return
-	// error. But since we call balancer.close when removing the balancer, this
+	// error. But since we call balancer.stopBalancer when removing the balancer, this
 	// shouldn't happen.
 	sc, err := bg.cc.NewSubConn(addrs, opts)
 	if err != nil {
@@ -404,7 +418,7 @@ func (bg *balancerGroup) close() {
 	if bg.outgoingStarted {
 		bg.outgoingStarted = false
 		for _, config := range bg.idToBalancerConfig {
-			config.close()
+			config.stopBalancer()
 		}
 	}
 	bg.outgoingMu.Unlock()
