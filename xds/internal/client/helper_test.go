@@ -33,7 +33,7 @@ const (
 	serviceName  = "foo-service"
 )
 
-func TestNewConnectHelper(t *testing.T) {
+func TestNewConfig(t *testing.T) {
 	bootstrapFileMap := map[string]string{
 		"empty":   "",
 		"badJSON": `["test": 123]`,
@@ -184,7 +184,7 @@ func TestNewConnectHelper(t *testing.T) {
 			}
 		}`,
 	}
-	insecureDefaults := &ConnectHelperDefaults{
+	insecureDefaults := &ConfigDefaults{
 		BalancerName: balancerName,
 		ServiceName:  serviceName,
 	}
@@ -212,7 +212,7 @@ func TestNewConnectHelper(t *testing.T) {
 	tests := []struct {
 		name             string
 		fName            string
-		defaults         *ConnectHelperDefaults
+		defaults         *ConfigDefaults
 		wantBalancerName string
 		wantNodeProto    *basepb.Node
 		// TODO: It doesn't look like there is an easy way to compare the value
@@ -294,7 +294,7 @@ func TestNewConnectHelper(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		cHelper := NewConnectHelper(test.fName, test.defaults)
+		cHelper := NewConfig(test.fName, test.defaults)
 		if got := cHelper.BalancerName; got != test.wantBalancerName {
 			t.Errorf("%s: cHelper.BalancerName is %s, want %s", test.name, got, test.wantBalancerName)
 		}

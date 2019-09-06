@@ -73,7 +73,7 @@ type client struct {
 
 	loadStore      lrs.Store
 	loadReportOnce sync.Once
-	cHelper        xdsclient.ConnectHelper
+	cHelper        xdsclient.Config
 
 	mu sync.Mutex
 	cc *grpc.ClientConn
@@ -274,7 +274,7 @@ func newXDSClient(balancerName string, enableCDS bool, opts balancer.BuildOption
 	}
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
-	c.cHelper = xdsclient.NewConnectHelper(os.Getenv(bootstrapFileEnv), &xdsclient.ConnectHelperDefaults{
+	c.cHelper = xdsclient.NewConfig(os.Getenv(bootstrapFileEnv), &xdsclient.ConfigDefaults{
 		BalancerName: c.balancerName,
 		ServiceName:  c.serviceName,
 		DialCreds:    c.opts.DialCreds,

@@ -40,10 +40,9 @@ import (
 // For overriding from unit tests.
 var fileReadFunc = ioutil.ReadFile
 
-// ConnectHelperDefaults contains the default values to be used for different
-// configuration options. These values are used by the ConnectHelper when it
-// encounters an error in reading the bootstrap file.
-type ConnectHelperDefaults struct {
+// ConfigDefaults contains the default values to be used when bootstrap file
+// read encounters an error.
+type ConfigDefaults struct {
 	// BalancerName is the name of the xDS server to talk to. This is usually
 	// retrieved from the service config returned by the resolver.
 	BalancerName string
@@ -55,11 +54,11 @@ type ConnectHelperDefaults struct {
 	DialCreds credentials.TransportCredentials
 }
 
-// ConnectHelper provides the xDS client with several key bits of information
-// that it requires in its interaction with an xDS server. The ConnectHelper
-// attempts to get all this information from the bootstrap file. If that
-// process fails for any reason, it uses the defaults passed in.
-type ConnectHelper struct {
+// Config provides the xDS client with several key bits of information that it
+// requires in its interaction with an xDS server. The Config is initialized
+// from the bootstrap file. If that process fails for any reason, it uses the
+// defaults passed in.
+type Config struct {
 	// BalancerName is the name of the xDS server to connect to.
 	BalancerName string
 	// Creds contains the credentials to be used while talking to the xDS
@@ -70,29 +69,29 @@ type ConnectHelper struct {
 	NodeProto *basepb.Node
 }
 
-// NewConnectHelper returns a new instance of ConnectHelper initialized by
-// reading the bootstrap file found at name. If reading the bootstrap file
-// fails for some reason, ConnectHelper is initialized with defaults.
+// NewConfig returns a new instance of Config initialized by reading the
+// bootstrap file found at name. If reading the bootstrap file fails for some
+// reason, Config is initialized with defaults.
 //
 // As of today, the bootstrap file only provides the balancer name and the node
 // proto to be used in calls to the balancer. For transport credentials, the
 // default TLS config with system certs is used. For call credentials, default
 // compute engine credentials are used.
-func NewConnectHelper(name string, defaults *ConnectHelperDefaults) ConnectHelper {
+func NewConfig(name string, defaults *ConfigDefaults) Config {
 	bsd, err := readBootstrapFile(name)
 	if err != nil {
 		grpclog.Error(err)
-		return newConnectHelperFromDefaults(defaults)
+		return newConfigFromDefaults(defaults)
 	}
 
-	return ConnectHelper{
+	return Config{
 		BalancerName: bsd.balancerName(),
 		Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
 		NodeProto:    bsd.node,
 	}
 }
 
-func newConnectHelperFromDefaults(defaults *ConnectHelperDefaults) ConnectHelper {
+func newConfigFromDefaults(defaults *ConfigDefaults) Config {
 	dopts := grpc.WithInsecure()
 	if defaults.DialCreds != nil {
 		if err := defaults.DialCreds.OverrideServerName(defaults.BalancerName); err == nil {
@@ -104,7 +103,7 @@ func newConnectHelperFromDefaults(defaults *ConnectHelperDefaults) ConnectHelper
 		grpclog.Warning("xds: no credentials available, using Insecure")
 	}
 
-	return ConnectHelper{
+	return Config{
 		BalancerName: defaults.BalancerName,
 		Creds:        dopts,
 		NodeProto: &basepb.Node{
