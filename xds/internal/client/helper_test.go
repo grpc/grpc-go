@@ -215,9 +215,9 @@ func TestNewConnectHelper(t *testing.T) {
 		defaults         *ConnectHelperDefaults
 		wantBalancerName string
 		wantNodeProto    *basepb.Node
-		// TODO: It doesn't look like there is an easy way to compare the
-		// return value from Credentials() with an expected value. Figure out a
-		// way to make it testable.
+		// TODO: It doesn't look like there is an easy way to compare the value
+		// stored in Creds with an expected value. Figure out a way to make it
+		// testable.
 	}{
 		{
 			name:             "non-existent-bootstrap-file",
@@ -295,10 +295,10 @@ func TestNewConnectHelper(t *testing.T) {
 
 	for _, test := range tests {
 		cHelper := NewConnectHelper(test.fName, test.defaults)
-		if got := cHelper.BalancerName(); got != test.wantBalancerName {
+		if got := cHelper.BalancerName; got != test.wantBalancerName {
 			t.Errorf("%s: cHelper.BalancerName is %s, want %s", test.name, got, test.wantBalancerName)
 		}
-		if got := cHelper.NodeProto(); !proto.Equal(got, test.wantNodeProto) {
+		if got := cHelper.NodeProto; !proto.Equal(got, test.wantNodeProto) {
 			t.Errorf("%s: cHelper.NodeProto is %#v, want %#v", test.name, got, test.wantNodeProto)
 		}
 	}

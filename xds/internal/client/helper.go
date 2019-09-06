@@ -60,26 +60,14 @@ type ConnectHelperDefaults struct {
 // attempts to get all this information from the bootstrap file. If that
 // process fails for any reason, it uses the defaults passed in.
 type ConnectHelper struct {
-	bName string
-	creds grpc.DialOption
-	node  *basepb.Node
-}
-
-// BalancerName returns the name of the xDS server to connect to.
-func (h *ConnectHelper) BalancerName() string {
-	return h.bName
-}
-
-// NodeProto returns a basepb.Node proto to be used in xDS calls made to the
-// server. The returned proto should not be modified.
-func (h *ConnectHelper) NodeProto() *basepb.Node {
-	return h.node
-}
-
-// Credentials returns the credentials to be used while talking to the xDS
-// server, as a grpc.DialOption.
-func (h *ConnectHelper) Credentials() grpc.DialOption {
-	return h.creds
+	// BalancerName is the name of the xDS server to connect to.
+	BalancerName string
+	// Creds contains the credentials to be used while talking to the xDS
+	// server, as a grpc.DialOption.
+	Creds grpc.DialOption
+	// NodeProto contains the basepb.Node proto to be used in xDS calls made to the
+	// server.
+	NodeProto *basepb.Node
 }
 
 // NewConnectHelper returns a new instance of ConnectHelper initialized by
@@ -90,21 +78,21 @@ func (h *ConnectHelper) Credentials() grpc.DialOption {
 // proto to be used in calls to the balancer. For transport credentials, the
 // default TLS config with system certs is used. For call credentials, default
 // compute engine credentials are used.
-func NewConnectHelper(name string, defaults *ConnectHelperDefaults) *ConnectHelper {
+func NewConnectHelper(name string, defaults *ConnectHelperDefaults) ConnectHelper {
 	bsd, err := readBootstrapFile(name)
 	if err != nil {
 		grpclog.Error(err)
 		return newConnectHelperFromDefaults(defaults)
 	}
 
-	return &ConnectHelper{
-		bName: bsd.balancerName(),
-		creds: grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-		node:  bsd.node,
+	return ConnectHelper{
+		BalancerName: bsd.balancerName(),
+		Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
+		NodeProto:    bsd.node,
 	}
 }
 
-func newConnectHelperFromDefaults(defaults *ConnectHelperDefaults) *ConnectHelper {
+func newConnectHelperFromDefaults(defaults *ConnectHelperDefaults) ConnectHelper {
 	dopts := grpc.WithInsecure()
 	if defaults.DialCreds != nil {
 		if err := defaults.DialCreds.OverrideServerName(defaults.BalancerName); err == nil {
@@ -116,10 +104,10 @@ func newConnectHelperFromDefaults(defaults *ConnectHelperDefaults) *ConnectHelpe
 		grpclog.Warning("xds: no credentials available, using Insecure")
 	}
 
-	return &ConnectHelper{
-		bName: defaults.BalancerName,
-		creds: dopts,
-		node: &basepb.Node{
+	return ConnectHelper{
+		BalancerName: defaults.BalancerName,
+		Creds:        dopts,
+		NodeProto: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
 					internal.GrpcHostname: {

@@ -46,7 +46,7 @@ const (
 	edsType          = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
 	endpointRequired = "endpoints_required"
 	// Environment variable which holds the name of the xDS bootstrap file.
-	bootstrapFileEnv = "GRPC_XDS_BOOTSTRAP"
+	bootstrapFileEnv = "GRPC_GO_XDS_BOOTSTRAP"
 )
 
 var (
@@ -73,7 +73,7 @@ type client struct {
 
 	loadStore      lrs.Store
 	loadReportOnce sync.Once
-	cHelper        *xdsclient.ConnectHelper
+	cHelper        xdsclient.ConnectHelper
 
 	mu sync.Mutex
 	cc *grpc.ClientConn
@@ -95,7 +95,7 @@ func (c *client) close() {
 }
 
 func (c *client) dial() {
-	dopts := []grpc.DialOption{c.cHelper.Credentials()}
+	dopts := []grpc.DialOption{c.cHelper.Creds}
 	if c.opts.Dialer != nil {
 		dopts = append(dopts, grpc.WithContextDialer(c.opts.Dialer))
 	}
@@ -105,7 +105,7 @@ func (c *client) dial() {
 		dopts = append(dopts, grpc.WithChannelzParentID(c.opts.ChannelzParentID))
 	}
 
-	cc, err := grpc.DialContext(c.ctx, c.cHelper.BalancerName(), dopts...)
+	cc, err := grpc.DialContext(c.ctx, c.cHelper.BalancerName, dopts...)
 	// Since this is a non-blocking dial, so if it fails, it due to some serious error (not network
 	// related) error.
 	if err != nil {
@@ -124,20 +124,22 @@ func (c *client) dial() {
 
 func (c *client) newCDSRequest() *discoverypb.DiscoveryRequest {
 	cdsReq := &discoverypb.DiscoveryRequest{
-		Node:    c.cHelper.NodeProto(),
+		Node:    c.cHelper.NodeProto,
 		TypeUrl: cdsType,
 	}
 	return cdsReq
 }
 
 func (c *client) newEDSRequest() *discoverypb.DiscoveryRequest {
-	nodeProto := proto.Clone(c.cHelper.NodeProto()).(*basepb.Node)
-	nodeProto.Metadata.Fields[endpointRequired] = &structpb.Value{
+	// TODO: Once we change the client to always make a CDS call, we can remove
+	// this boolean field from the metadata.
+	np := proto.Clone(c.cHelper.NodeProto).(*basepb.Node)
+	np.Metadata.Fields[endpointRequired] = &structpb.Value{
 		Kind: &structpb.Value_BoolValue{BoolValue: c.enableCDS},
 	}
 
 	edsReq := &discoverypb.DiscoveryRequest{
-		Node: nodeProto,
+		Node: np,
 		// TODO: the expected ResourceName could be in a different format from
 		// dial target. (test_service.test_namespace.traffic_director.com vs
 		// test_namespace:test_service).
