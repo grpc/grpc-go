@@ -545,12 +545,22 @@ func TestBalancerGroup_start_close(t *testing.T) {
 	}
 }
 
+// Test that balancer group start() doesn't deadlock if the balancer calls back
+// into balancer group inline when it gets an update.
+//
+// The potential deadlock can happen if we
+//  - hold a lock and send updates to balancer (e.g. update resolved addresses)
+//  - the balancer calls back (NewSubConn or update picker) in line
+// The callback will try to hold hte same lock again, which will cause a
+// deadlock.
+//
+// This test starts the balancer group with a test balancer, will updates picker
+// whenever it gets an address update. It's expected that start() doesn't block
+// because of deadlock.
 func TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
 
-	// Add two balancers to group and send two resolved addresses to both
-	// balancers.
 	bg.add(testBalancerIDs[0], 2, &testConstBalancerBuilder{})
 	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
 	bg.add(testBalancerIDs[1], 1, &testConstBalancerBuilder{})

@@ -32,13 +32,13 @@ import (
 	orcapb "google.golang.org/grpc/xds/internal/proto/udpa/data/orca/v1/orca_load_report"
 )
 
-// balancerConfig is used to keep the configurations that will be used to start
+// subBalancerConfig is used to keep the configurations that will be used to start
 // the underlying balancer. It can be called to start/stop the underlying
 // balancer.
 //
 // When the config changes, it will pass the update to the underlying balancer
 // if it exists.
-type balancerConfig struct {
+type subBalancerConfig struct {
 	// The static part of balancer group. Keeps balancerBuilders and addresses.
 	// To be used when restarting balancer group.
 	builder balancer.Builder
@@ -48,7 +48,7 @@ type balancerConfig struct {
 	balancer balancer.Balancer
 }
 
-func (config *balancerConfig) startBalancer(bgcc *balancerGroupCC) {
+func (config *subBalancerConfig) startBalancer(bgcc *balancerGroupCC) {
 	b := config.builder.Build(bgcc, balancer.BuildOptions{})
 	config.balancer = b
 	if ub, ok := b.(balancer.V2Balancer); ok {
@@ -58,7 +58,7 @@ func (config *balancerConfig) startBalancer(bgcc *balancerGroupCC) {
 	}
 }
 
-func (config *balancerConfig) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+func (config *subBalancerConfig) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
 	b := config.balancer
 	if b == nil {
 		// Either balancer is not found or balancer group is closed.
@@ -71,7 +71,7 @@ func (config *balancerConfig) handleSubConnStateChange(sc balancer.SubConn, stat
 	}
 }
 
-func (config *balancerConfig) updateAddrs(addrs []resolver.Address) {
+func (config *subBalancerConfig) updateAddrs(addrs []resolver.Address) {
 	config.addrs = addrs
 	b := config.balancer
 	if b == nil {
@@ -85,7 +85,7 @@ func (config *balancerConfig) updateAddrs(addrs []resolver.Address) {
 	}
 }
 
-func (config *balancerConfig) stopBalancer() {
+func (config *subBalancerConfig) stopBalancer() {
 	config.balancer.Close()
 	config.balancer = nil
 }
@@ -126,7 +126,7 @@ type balancerGroup struct {
 
 	outgoingMu         sync.Mutex
 	outgoingStarted    bool
-	idToBalancerConfig map[internal.Locality]*balancerConfig
+	idToBalancerConfig map[internal.Locality]*subBalancerConfig
 
 	// incomingMu and pickerMu are to make sure this balancer group doesn't send
 	// updates to cc after it's closed.
@@ -159,7 +159,7 @@ func newBalancerGroup(cc balancer.ClientConn, loadStore lrs.Store) *balancerGrou
 		cc:        cc,
 		loadStore: loadStore,
 
-		idToBalancerConfig: make(map[internal.Locality]*balancerConfig),
+		idToBalancerConfig: make(map[internal.Locality]*subBalancerConfig),
 		scToID:             make(map[balancer.SubConn]internal.Locality),
 		idToPickerState:    make(map[internal.Locality]*pickerState),
 	}
@@ -219,7 +219,7 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 		grpclog.Warningf("balancer group: adding a balancer with existing ID: %s", id)
 		return
 	}
-	config := &balancerConfig{
+	config := &subBalancerConfig{
 		builder: builder,
 	}
 	bg.idToBalancerConfig[id] = config
