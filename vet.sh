@@ -67,7 +67,9 @@ elif [[ "$#" -ne 0 ]]; then
 fi
 
 # - Ensure all source files contain a copyright message.
+set +o pipefail  # Expect no matches; some versions of grep exit with error in that case
 git ls-files "*.go" | xargs grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" 2>&1 | fail_on_output
+set -o pipefail
 
 # - Make sure all tests in grpc and grpc/test use leakcheck via Teardown.
 (! grep 'func Test[^(]' *_test.go)
