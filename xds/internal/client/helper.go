@@ -50,7 +50,7 @@ var (
 // For overriding from unit tests.
 var (
 	fileReadFunc = ioutil.ReadFile
-	onceDoerFunc = func(f func()) { bsOnce.Do(f) }
+	onceDoerFunc = bsOnce.Do
 )
 
 // Config provides the xDS client with several key bits of information that it
@@ -77,17 +77,18 @@ type Config struct {
 // proto to be used in calls to the balancer. For transport credentials, the
 // default TLS config with system certs is used. For call credentials, default
 // compute engine credentials are used.
-func NewConfig() (Config, error) {
-	fName, ok := os.LookupEnv(bootstrapFileEnv)
-	if !ok {
-		return Config{}, fmt.Errorf("xds: %s environment variable not set", bootstrapFileEnv)
-	}
-
-	onceDoerFunc(func() { bsData, bsErr = readBootstrapFile(fName) })
+func NewConfig() (*Config, error) {
+	onceDoerFunc(func() {
+		fName, ok := os.LookupEnv(bootstrapFileEnv)
+		if !ok {
+			bsData, bsErr = nil, fmt.Errorf("xds: %s environment variable not set", bootstrapFileEnv)
+		}
+		bsData, bsErr = readBootstrapFile(fName)
+	})
 	if bsErr != nil {
-		return Config{}, bsErr
+		return nil, bsErr
 	}
-	return Config{
+	return &Config{
 		BalancerName: bsData.balancerName(),
 		Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
 		NodeProto:    bsData.node,

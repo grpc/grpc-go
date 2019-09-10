@@ -294,15 +294,17 @@ func TestNewConfig(t *testing.T) {
 		if err := os.Setenv(bootstrapFileEnv, test.fName); err != nil {
 			t.Fatalf("%s: os.Setenv(%s, %s) failed with error: %v", test.name, bootstrapFileEnv, test.fName, err)
 		}
-		cHelper, err := NewConfig()
+		config, err := NewConfig()
 		if (err != nil) != test.wantErr {
 			t.Fatalf("%s: NewConfig() returned error: %v, wantErr: %v", test.name, err, test.wantErr)
 		}
-		if got := cHelper.BalancerName; got != test.wantBalancerName {
-			t.Errorf("%s: cHelper.BalancerName is %s, want %s", test.name, got, test.wantBalancerName)
-		}
-		if got := cHelper.NodeProto; !proto.Equal(got, test.wantNodeProto) {
-			t.Errorf("%s: cHelper.NodeProto is %#v, want %#v", test.name, got, test.wantNodeProto)
+		if !test.wantErr {
+			if got := config.BalancerName; got != test.wantBalancerName {
+				t.Errorf("%s: config.BalancerName is %s, want %s", test.name, got, test.wantBalancerName)
+			}
+			if got := config.NodeProto; !proto.Equal(got, test.wantNodeProto) {
+				t.Errorf("%s: config.NodeProto is %#v, want %#v", test.name, got, test.wantNodeProto)
+			}
 		}
 	}
 }
