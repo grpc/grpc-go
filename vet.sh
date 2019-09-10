@@ -67,9 +67,7 @@ elif [[ "$#" -ne 0 ]]; then
 fi
 
 # - Ensure all source files contain a copyright message.
-set +o pipefail  # Expect no matches; some versions of grep exit with error in that case
-git ls-files "*.go" | xargs grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" 2>&1 | fail_on_output
-set -o pipefail
+(! git grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" -- '*.go')
 
 # - Make sure all tests in grpc and grpc/test use leakcheck via Teardown.
 (! grep 'func Test[^(]' *_test.go)
@@ -77,10 +75,10 @@ set -o pipefail
 
 # - Do not import math/rand for real library code.  Use internal/grpcrand for
 #   thread safety.
-git ls-files "*.go" | xargs grep -l '"math/rand"' 2>&1 | (! grep -v '^examples\|^stress\|grpcrand\|wrr_test')
+git grep -l '"math/rand"' -- "*.go" 2>&1 | (! grep -v '^examples\|^stress\|grpcrand\|wrr_test')
 
 # - Ensure all ptypes proto packages are renamed when importing.
-git ls-files "*.go" | (! xargs grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/")
+(! git grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/" -- "*.go")
 
 # - Check imports that are illegal in appengine (until Go 1.11).
 # TODO: Remove when we drop Go 1.10 support
