@@ -20,7 +20,7 @@ package balancer
 
 import (
 	"context"
-	"os"
+	"net"
 	"sync"
 	"time"
 
@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	cdspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/cds"
@@ -45,8 +46,6 @@ const (
 	cdsType          = "type.googleapis.com/envoy.api.v2.Cluster"
 	edsType          = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
 	endpointRequired = "endpoints_required"
-	// Environment variable which holds the name of the xDS bootstrap file.
-	bootstrapFileEnv = "GRPC_GO_XDS_BOOTSTRAP"
 )
 
 var (
@@ -59,17 +58,16 @@ var (
 // ADS response from the traffic director, and sending notification when communication with the
 // traffic director is lost.
 type client struct {
-	ctx          context.Context
-	cancel       context.CancelFunc
-	cli          adsgrpc.AggregatedDiscoveryServiceClient
-	opts         balancer.BuildOptions
-	balancerName string // the traffic director name
-	serviceName  string // the user dial target name
-	enableCDS    bool
-	newADS       func(ctx context.Context, resp proto.Message) error
-	loseContact  func(ctx context.Context)
-	cleanup      func()
-	backoff      backoff.Strategy
+	ctx              context.Context
+	cancel           context.CancelFunc
+	cli              adsgrpc.AggregatedDiscoveryServiceClient
+	dialer           func(context.Context, string) (net.Conn, error)
+	channelzParentID int64
+	enableCDS        bool
+	newADS           func(ctx context.Context, resp proto.Message) error
+	loseContact      func(ctx context.Context)
+	cleanup          func()
+	backoff          backoff.Strategy
 
 	loadStore      lrs.Store
 	loadReportOnce sync.Once
@@ -96,13 +94,13 @@ func (c *client) close() {
 
 func (c *client) dial() {
 	dopts := []grpc.DialOption{c.cHelper.Creds}
-	if c.opts.Dialer != nil {
-		dopts = append(dopts, grpc.WithContextDialer(c.opts.Dialer))
+	if c.dialer != nil {
+		dopts = append(dopts, grpc.WithContextDialer(c.dialer))
 	}
 	// Explicitly set pickfirst as the balancer.
 	dopts = append(dopts, grpc.WithBalancerName(grpc.PickFirstBalancerName))
 	if channelz.IsOn() {
-		dopts = append(dopts, grpc.WithChannelzParentID(c.opts.ChannelzParentID))
+		dopts = append(dopts, grpc.WithChannelzParentID(c.channelzParentID))
 	}
 
 	cc, err := grpc.DialContext(c.ctx, c.cHelper.BalancerName, dopts...)
@@ -262,23 +260,48 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 
 func newXDSClient(balancerName string, enableCDS bool, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
 	c := &client{
-		balancerName: balancerName,
-		serviceName:  opts.Target.Endpoint,
-		enableCDS:    enableCDS,
-		opts:         opts,
-		newADS:       newADS,
-		loseContact:  loseContact,
-		cleanup:      exitCleanup,
-		backoff:      defaultBackoffConfig,
-		loadStore:    loadStore,
+		enableCDS:        enableCDS,
+		dialer:           opts.Dialer,
+		channelzParentID: opts.ChannelzParentID,
+		newADS:           newADS,
+		loseContact:      loseContact,
+		cleanup:          exitCleanup,
+		backoff:          defaultBackoffConfig,
+		loadStore:        loadStore,
 	}
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
-	c.cHelper = xdsclient.NewConfig(os.Getenv(bootstrapFileEnv), &xdsclient.ConfigDefaults{
-		BalancerName: c.balancerName,
-		ServiceName:  c.serviceName,
-		DialCreds:    c.opts.DialCreds,
-	})
 
+	var err error
+	if c.cHelper, err = xdsclient.NewConfig(); err != nil {
+		grpclog.Error(err)
+		c.newConfigFromDefaults(balancerName, &opts)
+	}
 	return c
+}
+
+func (c *client) newConfigFromDefaults(balancerName string, opts *balancer.BuildOptions) {
+	dopts := grpc.WithInsecure()
+	if opts.DialCreds != nil {
+		if err := opts.DialCreds.OverrideServerName(balancerName); err == nil {
+			dopts = grpc.WithTransportCredentials(opts.DialCreds)
+		} else {
+			grpclog.Warningf("xds: failed to override the server name in credentials: %v, using Insecure", err)
+		}
+	} else {
+		grpclog.Warning("xds: no credentials available, using Insecure")
+	}
+	c.cHelper = xdsclient.Config{
+		BalancerName: balancerName,
+		Creds:        dopts,
+		NodeProto: &basepb.Node{
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					internal.GrpcHostname: {
+						Kind: &structpb.Value_StringValue{StringValue: opts.Target.Endpoint},
+					},
+				},
+			},
+		},
+	}
 }

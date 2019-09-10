@@ -21,38 +21,37 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"strings"
+	"os"
+	"sync"
 
 	"github.com/golang/protobuf/jsonpb"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/xds/internal"
 	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
 	cspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/config_source"
 )
 
-// For overriding from unit tests.
-var fileReadFunc = ioutil.ReadFile
+// Environment variable which holds the name of the xDS bootstrap file.
+const bootstrapFileEnv = "GRPC_XDS_BOOTSTRAP"
 
-// ConfigDefaults contains the default values to be used when bootstrap file
-// read encounters an error.
-type ConfigDefaults struct {
-	// BalancerName is the name of the xDS server to talk to. This is usually
-	// retrieved from the service config returned by the resolver.
-	BalancerName string
-	// ServiceName is the address specified in the original Dial call made by
-	// the user.
-	ServiceName string
-	// DialCreds specifies the credentials to be used when connecting to the
-	// xDS server.
-	DialCreds credentials.TransportCredentials
-}
+var (
+	// Bootstrap file is read once (on the first invocation of NewConfig), and
+	// the results are stored in these package level vars.
+	bsOnce sync.Once
+	bsData *bootstrapData
+	bsErr  error
+)
+
+// For overriding from unit tests.
+var (
+	fileReadFunc = ioutil.ReadFile
+	onceDoerFunc = func(f func()) { bsOnce.Do(f) }
+)
 
 // Config provides the xDS client with several key bits of information that it
 // requires in its interaction with an xDS server. The Config is initialized
@@ -70,52 +69,29 @@ type Config struct {
 }
 
 // NewConfig returns a new instance of Config initialized by reading the
-// bootstrap file found at name. If reading the bootstrap file fails for some
-// reason, Config is initialized with defaults.
+// bootstrap file found at ${GRPC_XDS_BOOTSTRAP}. Bootstrap file is read only
+// on the first invocation of this function, and further invocations end up
+// using the results from the former.
 //
 // As of today, the bootstrap file only provides the balancer name and the node
 // proto to be used in calls to the balancer. For transport credentials, the
 // default TLS config with system certs is used. For call credentials, default
 // compute engine credentials are used.
-func NewConfig(name string, defaults *ConfigDefaults) Config {
-	bsd, err := readBootstrapFile(name)
-	if err != nil {
-		grpclog.Error(err)
-		return newConfigFromDefaults(defaults)
+func NewConfig() (Config, error) {
+	fName, ok := os.LookupEnv(bootstrapFileEnv)
+	if !ok {
+		return Config{}, fmt.Errorf("xds: %s environment variable not set", bootstrapFileEnv)
 	}
 
+	onceDoerFunc(func() { bsData, bsErr = readBootstrapFile(fName) })
+	if bsErr != nil {
+		return Config{}, bsErr
+	}
 	return Config{
-		BalancerName: bsd.balancerName(),
+		BalancerName: bsData.balancerName(),
 		Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-		NodeProto:    bsd.node,
-	}
-}
-
-func newConfigFromDefaults(defaults *ConfigDefaults) Config {
-	dopts := grpc.WithInsecure()
-	if defaults.DialCreds != nil {
-		if err := defaults.DialCreds.OverrideServerName(defaults.BalancerName); err == nil {
-			dopts = grpc.WithTransportCredentials(defaults.DialCreds)
-		} else {
-			grpclog.Warningf("xds: failed to override the server name in credentials: %v, using Insecure", err)
-		}
-	} else {
-		grpclog.Warning("xds: no credentials available, using Insecure")
-	}
-
-	return Config{
-		BalancerName: defaults.BalancerName,
-		Creds:        dopts,
-		NodeProto: &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: defaults.ServiceName},
-					},
-				},
-			},
-		},
-	}
+		NodeProto:    bsData.node,
+	}, nil
 }
 
 // bootstrapData wraps the contents of the bootstrap file.
@@ -127,22 +103,22 @@ type bootstrapData struct {
 }
 
 func (bsd *bootstrapData) balancerName() string {
-	if s := bsd.xdsServer.GetGrpcServices(); len(s) != 0 {
-		return s[0].GetGoogleGrpc().GetTargetUri()
-	}
-	return ""
+	// If the bootstrap file was read and parsed successfully, this should be
+	// setup properly. So, we skip checking for the presence of these fields
+	// before accessing and returning it.
+	return bsd.xdsServer.GetGrpcServices()[0].GetGoogleGrpc().GetTargetUri()
 }
 
 func readBootstrapFile(name string) (*bootstrapData, error) {
 	grpclog.Infof("xds: Reading bootstrap file from %s", name)
 	data, err := fileReadFunc(name)
 	if err != nil {
-		return nil, fmt.Errorf("xds: bootstrap file read failed: %v", err)
+		return nil, fmt.Errorf("xds: bootstrap file {%v} read failed: %v", name, err)
 	}
 
 	var jsonData map[string]json.RawMessage
 	if err := json.Unmarshal(data, &jsonData); err != nil {
-		return nil, fmt.Errorf("xds: json.Unmarshal(%v) failed: %v", string(data), err)
+		return nil, fmt.Errorf("xds: json.Unmarshal(%v) failed during bootstrap: %v", string(data), err)
 	}
 
 	bsd := &bootstrapData{}
@@ -151,14 +127,14 @@ func readBootstrapFile(name string) (*bootstrapData, error) {
 		switch k {
 		case "node":
 			n := &basepb.Node{}
-			if err := m.Unmarshal(strings.NewReader(string(v)), n); err != nil {
-				return nil, fmt.Errorf("xds: jsonpb.Unmarshal(%v) failed: %v", string(v), err)
+			if err := m.Unmarshal(bytes.NewReader(v), n); err != nil {
+				return nil, fmt.Errorf("xds: jsonpb.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
 			}
 			bsd.node = n
 		case "xds_server":
 			s := &cspb.ApiConfigSource{}
-			if err := m.Unmarshal(strings.NewReader(string(v)), s); err != nil {
-				return nil, fmt.Errorf("xds: jsonpb.Unmarshal(%v) failed: %v", string(v), err)
+			if err := m.Unmarshal(bytes.NewReader(v), s); err != nil {
+				return nil, fmt.Errorf("xds: jsonpb.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
 			}
 			bsd.xdsServer = s
 		default:

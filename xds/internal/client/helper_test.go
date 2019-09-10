@@ -20,19 +20,20 @@ package client
 
 import (
 	"os"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
 	structpb "github.com/golang/protobuf/ptypes/struct"
-	"google.golang.org/grpc/xds/internal"
 	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
 )
 
-const (
-	balancerName = "foo-balancer"
-	serviceName  = "foo-service"
-)
-
+// TestNewConfig exercises the functionality in NewConfig with different
+// bootstrap file contents. It overrides the fileReadFunc by returning
+// bootstrap file contents defined in this test, instead of reading from a
+// file. It also overrides onceDoerFunc to disable reading the bootstrap file
+// only once.
 func TestNewConfig(t *testing.T) {
 	bootstrapFileMap := map[string]string{
 		"empty":   "",
@@ -184,19 +185,6 @@ func TestNewConfig(t *testing.T) {
 			}
 		}`,
 	}
-	insecureDefaults := &ConfigDefaults{
-		BalancerName: balancerName,
-		ServiceName:  serviceName,
-	}
-	defaultNodeProto := &basepb.Node{
-		Metadata: &structpb.Struct{
-			Fields: map[string]*structpb.Value{
-				internal.GrpcHostname: {
-					Kind: &structpb.Value_StringValue{StringValue: serviceName},
-				},
-			},
-		},
-	}
 
 	oldFileReadFunc := fileReadFunc
 	fileReadFunc = func(name string) ([]byte, error) {
@@ -205,14 +193,23 @@ func TestNewConfig(t *testing.T) {
 		}
 		return nil, os.ErrNotExist
 	}
+	oldOnceDoerFunc := onceDoerFunc
+	onceDoerFunc = func(f func()) {
+		// Disable the synce.Once functionality to read the bootstrap file.
+		// Instead, read it everytime NewConfig() is called so that we can test
+		// with different file contents.
+		f()
+	}
 	defer func() {
 		fileReadFunc = oldFileReadFunc
+		onceDoerFunc = oldOnceDoerFunc
+		os.Unsetenv(bootstrapFileEnv)
 	}()
 
 	tests := []struct {
 		name             string
 		fName            string
-		defaults         *ConfigDefaults
+		wantErr          bool
 		wantBalancerName string
 		wantNodeProto    *basepb.Node
 		// TODO: It doesn't look like there is an easy way to compare the value
@@ -222,63 +219,63 @@ func TestNewConfig(t *testing.T) {
 		{
 			name:             "non-existent-bootstrap-file",
 			fName:            "dummy",
-			defaults:         insecureDefaults,
-			wantBalancerName: balancerName,
-			wantNodeProto:    defaultNodeProto,
+			wantErr:          true,
+			wantBalancerName: "",
+			wantNodeProto:    nil,
 		},
 		{
 			name:             "bad-json-in-file",
 			fName:            "badJSON",
-			defaults:         insecureDefaults,
-			wantBalancerName: balancerName,
-			wantNodeProto:    defaultNodeProto,
+			wantErr:          true,
+			wantBalancerName: "",
+			wantNodeProto:    nil,
 		},
 		{
 			name:             "bad-nodeProto-in-file",
 			fName:            "badNodeProto",
-			defaults:         insecureDefaults,
-			wantBalancerName: balancerName,
-			wantNodeProto:    defaultNodeProto,
+			wantErr:          true,
+			wantBalancerName: "",
+			wantNodeProto:    nil,
 		},
 		{
 			name:             "bad-ApiConfigSourceProto-in-file",
 			fName:            "badApiConfigSourceProto",
-			defaults:         insecureDefaults,
-			wantBalancerName: balancerName,
-			wantNodeProto:    defaultNodeProto,
+			wantErr:          true,
+			wantBalancerName: "",
+			wantNodeProto:    nil,
 		},
 		{
 			name:             "bad-top-level-field-in-file",
 			fName:            "badTopLevelFieldInFile",
-			defaults:         insecureDefaults,
-			wantBalancerName: balancerName,
-			wantNodeProto:    defaultNodeProto,
+			wantErr:          true,
+			wantBalancerName: "",
+			wantNodeProto:    nil,
 		},
 		{
 			name:             "empty-nodeProto-in-file",
 			fName:            "emptyNodeProto",
-			defaults:         insecureDefaults,
-			wantBalancerName: balancerName,
-			wantNodeProto:    defaultNodeProto,
+			wantErr:          true,
+			wantBalancerName: "",
+			wantNodeProto:    nil,
 		},
 		{
 			name:             "empty-apiConfigSourceProto-in-file",
 			fName:            "emptyApiConfigSourceProto",
-			defaults:         insecureDefaults,
-			wantBalancerName: balancerName,
-			wantNodeProto:    defaultNodeProto,
+			wantErr:          true,
+			wantBalancerName: "",
+			wantNodeProto:    nil,
 		},
 		{
 			name:             "bad-api-type-in-file",
 			fName:            "badApiTypeInFile",
-			defaults:         insecureDefaults,
-			wantBalancerName: balancerName,
-			wantNodeProto:    defaultNodeProto,
+			wantErr:          true,
+			wantBalancerName: "",
+			wantNodeProto:    nil,
 		},
 		{
 			name:             "good-bootstrap",
 			fName:            "goodBootstrap",
-			defaults:         insecureDefaults,
+			wantErr:          false,
 			wantBalancerName: "trafficdirector.googleapis.com:443",
 			wantNodeProto: &basepb.Node{
 				Id: "ENVOY_NODE_ID",
@@ -294,12 +291,83 @@ func TestNewConfig(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		cHelper := NewConfig(test.fName, test.defaults)
+		if err := os.Setenv(bootstrapFileEnv, test.fName); err != nil {
+			t.Fatalf("%s: os.Setenv(%s, %s) failed with error: %v", test.name, bootstrapFileEnv, test.fName, err)
+		}
+		cHelper, err := NewConfig()
+		if (err != nil) != test.wantErr {
+			t.Fatalf("%s: NewConfig() returned error: %v, wantErr: %v", test.name, err, test.wantErr)
+		}
 		if got := cHelper.BalancerName; got != test.wantBalancerName {
 			t.Errorf("%s: cHelper.BalancerName is %s, want %s", test.name, got, test.wantBalancerName)
 		}
 		if got := cHelper.NodeProto; !proto.Equal(got, test.wantNodeProto) {
 			t.Errorf("%s: cHelper.NodeProto is %#v, want %#v", test.name, got, test.wantNodeProto)
 		}
+	}
+}
+
+// TestNewConfigOnce does not override onceDoerFunc, which means that the
+// bootstrap file will be read only once. This test first supplies a bad
+// bootstrap file and makes sure that the error from reading the bootstrap file
+// is stored in package level vars and returned on subsequent calls to
+// NewConfig.
+func TestNewConfigOnce(t *testing.T) {
+	// This test could be executed multiple times as part of the same test
+	// binary (especially in cases where we pass in different values for the
+	// -cpu flag). We want each run to start off with a fresh state.
+	bsOnce = sync.Once{}
+
+	bootstrapFileMap := map[string]string{
+		"badJSON": `["test": 123]`,
+		"goodBootstrap": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_server" : {
+			    "api_type": "GRPC",
+			    "grpc_services": [
+					{
+						"google_grpc": {
+							"target_uri": "trafficdirector.googleapis.com:443"
+						}
+					}
+				]
+			}
+		}`,
+	}
+
+	oldFileReadFunc := fileReadFunc
+	fileReadFunc = func(name string) ([]byte, error) {
+		if b, ok := bootstrapFileMap[name]; ok {
+			return []byte(b), nil
+		}
+		return nil, os.ErrNotExist
+	}
+	defer func() {
+		fileReadFunc = oldFileReadFunc
+		os.Unsetenv(bootstrapFileEnv)
+	}()
+
+	// Pass bad JSON in bootstrap file. This should end up being stored in
+	// package level vars and returned in further calls to NewConfig.
+	if err := os.Setenv(bootstrapFileEnv, "badJSON"); err != nil {
+		t.Fatalf("os.Setenv(%s, badJSON) failed with error: %v", bootstrapFileEnv, err)
+	}
+	if _, err := NewConfig(); err == nil || !strings.Contains(err.Error(), "json.Unmarshal") {
+		t.Fatalf("NewConfig() returned error: %v, want json.Unmarshal error", err)
+	}
+
+	// Setting the bootstrap file to valid contents should not succeed, as the
+	// file is read only on the first call to NewConfig.
+	if err := os.Setenv(bootstrapFileEnv, "goodBootstrap"); err != nil {
+		t.Fatalf("os.Setenv(%s, badJSON) failed with error: %v", bootstrapFileEnv, err)
+	}
+	if _, err := NewConfig(); err == nil || !strings.Contains(err.Error(), "json.Unmarshal") {
+		t.Fatalf("NewConfig() returned error: %v, want json.Unmarshal error", err)
 	}
 }
