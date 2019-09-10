@@ -257,7 +257,7 @@ func (c *channel) deleteSelfFromTree() (deleted bool) {
 // channel, and its memory will be garbage collected.
 //
 // The trace reference count of the channel must be 0 in order to be deleted from the map. This is
-// specified in the channel tracing gRFC that as long as some other trace has reference to an entity,
+// specified in the channel tracing gRPC that as long as some other trace has reference to an entity,
 // the trace of the referenced entity must not be deleted. In order to release the resource allocated
 // by grpc, the reference to the grpc object is reset to a dummy object.
 //
@@ -364,7 +364,7 @@ func (sc *subChannel) deleteSelfFromTree() (deleted bool) {
 // the subchannel, and its memory will be garbage collected.
 //
 // The trace reference count of the subchannel must be 0 in order to be deleted from the map. This is
-// specified in the channel tracing gRFC that as long as some other trace has reference to an entity,
+// specified in the channel tracing gRPC that as long as some other trace has reference to an entity,
 // the trace of the referenced entity must not be deleted. In order to release the resource allocated
 // by grpc, the reference to the grpc object is reset to a dummy object.
 //
