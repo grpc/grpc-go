@@ -82,6 +82,7 @@ func NewConfig() (*Config, error) {
 		fName, ok := os.LookupEnv(bootstrapFileEnv)
 		if !ok {
 			bsData, bsErr = nil, fmt.Errorf("xds: %s environment variable not set", bootstrapFileEnv)
+			return
 		}
 		bsData, bsErr = readBootstrapFile(fName)
 	})
