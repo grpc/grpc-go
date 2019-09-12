@@ -39,12 +39,12 @@ import (
 // When the config changes, it will pass the update to the underlying balancer
 // if it exists.
 type subBalancerConfig struct {
-	// The static part of balancer group. Keeps balancerBuilders and addresses.
-	// To be used when restarting balancer group.
+	// The static part of sub-balancer. Keeps balancerBuilders and addresses.
+	// To be used when restarting sub-balancer.
 	builder balancer.Builder
 	addrs   []resolver.Address
-	// The dynamic part of balancer group. Only used when balancer group is
-	// started. Gets cleared when balancer group is closed.
+	// The dynamic part of sub-balancer. Only used when balancer group is
+	// started. Gets cleared when sub-balancer is closed.
 	balancer balancer.Balancer
 }
 
@@ -61,7 +61,10 @@ func (config *subBalancerConfig) startBalancer(bgcc *balancerGroupCC) {
 func (config *subBalancerConfig) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
 	b := config.balancer
 	if b == nil {
-		// Either balancer is not found or balancer group is closed.
+		// This sub-balancer was closed. This can happen when EDS removes a
+		// locality. The balancer for this locality was already closed, and the
+		// SubConns are being deleted. But SubConn state change can still
+		// happen.
 		return
 	}
 	if ub, ok := b.(balancer.V2Balancer); ok {
@@ -75,7 +78,11 @@ func (config *subBalancerConfig) updateAddrs(addrs []resolver.Address) {
 	config.addrs = addrs
 	b := config.balancer
 	if b == nil {
-		// bg is closed.
+		// This sub-balancer was closed. This should never happen because
+		// sub-balancers are closed when the locality is removed from EDS, or
+		// the balancer group is closed. There should be no further address
+		// updates when either of this happened.
+		grpclog.Warningf("subBalancerConfig: updateAddrs is called when balancer is nil. This means this sub-balancer is closed.")
 		return
 	}
 	if ub, ok := b.(balancer.V2Balancer); ok {
@@ -225,7 +232,8 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 	bg.idToBalancerConfig[id] = config
 
 	if bg.outgoingStarted {
-		// Only start the balancer if bg is started.
+		// Only start the balancer if bg is started. Otherwise, we only keep the
+		// static data.
 		config.startBalancer(&balancerGroupCC{
 			ClientConn: bg.cc,
 			id:         id,
@@ -242,7 +250,6 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 func (bg *balancerGroup) remove(id internal.Locality) {
 	bg.outgoingMu.Lock()
 	if bg.outgoingStarted {
-		// Close balancer.
 		if config, ok := bg.idToBalancerConfig[id]; ok {
 			config.stopBalancer()
 		}
@@ -271,7 +278,9 @@ func (bg *balancerGroup) remove(id internal.Locality) {
 	// for this ID to be ignored.
 	delete(bg.idToPickerState, id)
 	if bg.pickerStarted {
-		// Update state and picker to reflect the changes.
+		// Normally picker update is triggered by SubConn state change. But we
+		// want to update state and picker to reflect the changes, too. Because
+		// we don't want `ClientConn` to pick this sub-balancer anymore.
 		bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
 	}
 	bg.pickerMu.Unlock()
@@ -300,7 +309,9 @@ func (bg *balancerGroup) changeWeight(id internal.Locality, newWeight uint32) {
 	}
 	pState.weight = newWeight
 	if bg.pickerStarted {
-		// Update state and picker to reflect the changes.
+		// Normally picker update is triggered by SubConn state change. But we
+		// want to update state and picker to reflect the changes, too. Because
+		// `ClientConn` should do pick with the new weights now.
 		bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
 	}
 }
@@ -316,12 +327,12 @@ func (bg *balancerGroup) handleSubConnStateChange(sc balancer.SubConn, state con
 		bg.incomingMu.Unlock()
 		return
 	}
-	bg.incomingMu.Unlock()
-
 	if state == connectivity.Shutdown {
 		// Only delete sc from the map when state changed to Shutdown.
 		delete(bg.scToID, sc)
 	}
+	bg.incomingMu.Unlock()
+
 	bg.outgoingMu.Lock()
 	if config, ok := bg.idToBalancerConfig[id]; ok {
 		config.handleSubConnStateChange(sc, state)
