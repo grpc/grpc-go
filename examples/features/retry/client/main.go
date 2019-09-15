@@ -22,30 +22,19 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"io"
 	"log"
-	"os"
 	"time"
 
-	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
+	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
+	pb "github.com/grpc-ecosystem/go-grpc-middleware/testing/testproto"
 	"google.golang.org/grpc"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
-	"google.golang.org/grpc/status"
 )
 
 var (
 	addr        = flag.String("addr", "localhost:50052", "the address to connect to")
-	retryPolicy = `{
-		"methodConfig": [
-		  {
-			"name": [
-			  {
-				"service": "",
-				"method": ""
-			  }
-			]
-		  }
-		],
-		"retryPolicy": {
+	retryPolicy = `{"retryPolicy": {
 		  "maxAttempts": 4,
 		  "initialBackoff": "0.1s",
 		  "maxBackoff": "1s",
@@ -59,20 +48,9 @@ var (
 		  "tokenRatio": 0.1
 		}
 	}`
-	hedgingPolicy = `{
-		"methodConfig": [
-		  {
-			"name": [
-			  {
-				"service": "",
-				"method": ""
-			  }
-			]
-		  }
-		],
-		"hedgingPolicy": {
+	hedgingPolicy = `{"hedgingPolicy": {
 		  "maxAttempts": 4,
-		  "hedgingDelay": "0.5s",
+		  "hedgingDelay": "0s",
 		  "nonFatalStatusCodes": [
 			"UNAVAILABLE",
 			"INTERNAL",
@@ -86,11 +64,24 @@ var (
 	  }`
 )
 
+func retryDial() (*grpc.ClientConn, error) {
+	return grpc.Dial(*addr, grpc.WithInsecure(), grpc.WithDefaultServiceConfig(retryPolicy))
+}
+
+func hedgingDial() (*grpc.ClientConn, error) {
+	return grpc.Dial(*addr, grpc.WithInsecure(), grpc.WithDefaultServiceConfig(hedgingPolicy))
+}
+
+func newCtx(timeout time.Duration) context.Context {
+	ctx, _ := context.WithTimeout(context.TODO(), timeout)
+	return ctx
+}
+
 func main() {
 	flag.Parse()
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(*addr, grpc.WithInsecure(), grpc.WithDefaultServiceConfig(retryPolicy))
+	conn, err := retryDial()
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -99,22 +90,17 @@ func main() {
 			log.Printf("failed to close connection: %s", e)
 		}
 	}()
-	c := pb.NewGreeterClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: "world"})
-	if err != nil {
-		s := status.Convert(err)
-		for _, d := range s.Details() {
-			switch info := d.(type) {
-			case *epb.QuotaFailure:
-				log.Printf("Quota failure: %s", info)
-			default:
-				log.Printf("Unexpected type: %s", info)
-			}
+	c := pb.NewTestServiceClient(conn)
+	stream, _ := c.PingList(newCtx(1*time.Second), &pb.PingRequest{}, grpc_retry.WithMax(3))
+
+	for {
+		pong, err := stream.Recv() // retries happen here
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return
 		}
-		os.Exit(1)
+		fmt.Printf("got pong: %v", pong)
 	}
-	log.Printf("Greeting: %s", r.Message)
 }

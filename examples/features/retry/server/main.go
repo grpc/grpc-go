@@ -26,46 +26,79 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 
-	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
+	server "github.com/grpc-ecosystem/go-grpc-middleware/testing"
+	pb "github.com/grpc-ecosystem/go-grpc-middleware/testing/testproto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
-	"google.golang.org/grpc/status"
 )
 
 var port = flag.Int("port", 50052, "port number")
+var (
+	retriableErrors = []codes.Code{codes.Unavailable, codes.DataLoss}
+	goodPing        = &pb.PingRequest{Value: "something"}
+	noSleep         = 0 * time.Second
+	retryTimeout    = 50 * time.Millisecond
+)
 
-// server is used to implement helloworld.GreeterServer.
-type server struct {
-	mu    sync.Mutex
-	count map[string]int
+type failingService struct {
+	pb.TestServiceServer
+	mu sync.Mutex
+
+	reqCounter uint
+	reqModulo  uint
+	reqSleep   time.Duration
+	reqError   codes.Code
 }
 
-// SayHello implements helloworld.GreeterServer
-func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+func (s *failingService) resetFailingConfiguration(modulo uint, errorCode codes.Code, sleepTime time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// Track the number of times the user has been greeted.
-	s.count[in.Name]++
-	if s.count[in.Name] > 1 {
-		st := status.New(codes.ResourceExhausted, "Request limit exceeded.")
-		ds, err := st.WithDetails(
-			&epb.QuotaFailure{
-				Violations: []*epb.QuotaFailure_Violation{{
-					Subject:     fmt.Sprintf("name:%s", in.Name),
-					Description: "Limit one greeting per person",
-				}},
-			},
-		)
-		if err != nil {
-			return nil, st.Err()
-		}
-		return nil, ds.Err()
-	}
-	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
+
+	s.reqCounter = 0
+	s.reqModulo = modulo
+	s.reqError = errorCode
+	s.reqSleep = sleepTime
 }
 
+func (s *failingService) requestCount() uint {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.reqCounter
+}
+
+func (s *failingService) maybeFailRequest() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reqCounter++
+	if (s.reqModulo > 0) && (s.reqCounter%s.reqModulo == 0) {
+		return nil
+	}
+	time.Sleep(s.reqSleep)
+	return grpc.Errorf(s.reqError, "maybeFailRequest: failing it")
+}
+
+func (s *failingService) Ping(ctx context.Context, ping *pb.PingRequest) (*pb.PingResponse, error) {
+	if err := s.maybeFailRequest(); err != nil {
+		return nil, err
+	}
+	return s.TestServiceServer.Ping(ctx, ping)
+}
+
+func (s *failingService) PingList(ping *pb.PingRequest, stream pb.TestService_PingListServer) error {
+	if err := s.maybeFailRequest(); err != nil {
+		return err
+	}
+	return s.TestServiceServer.PingList(ping, stream)
+}
+
+func (s *failingService) PingStream(stream pb.TestService_PingStreamServer) error {
+	if err := s.maybeFailRequest(); err != nil {
+		return err
+	}
+	return s.TestServiceServer.PingStream(stream)
+}
 func main() {
 	flag.Parse()
 
@@ -76,7 +109,7 @@ func main() {
 	}
 
 	s := grpc.NewServer()
-	pb.RegisterGreeterServer(s, &server{count: make(map[string]int)})
+	pb.RegisterTestServiceServer(s, &server.TestPingService{})
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
