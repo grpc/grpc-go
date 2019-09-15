@@ -32,22 +32,65 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var addr = flag.String("addr", "localhost:50052", "the address to connect to")
+var (
+	addr        = flag.String("addr", "localhost:50052", "the address to connect to")
+	retryPolicy = `{
+		"methodConfig": [
+		  {
+			"name": [
+			  {
+				"service": "",
+				"method": ""
+			  }
+			]
+		  }
+		],
+		"retryPolicy": {
+		  "maxAttempts": 4,
+		  "initialBackoff": "0.1s",
+		  "maxBackoff": "1s",
+		  "backoffMultiplier": 2,
+		  "retryableStatusCodes": [
+			"UNAVAILABLE"
+		  ]
+		},
+		"retryThrottling": {
+		  "maxTokens": 10,
+		  "tokenRatio": 0.1
+		}
+	}`
+	hedgingPolicy = `{
+		"methodConfig": [
+		  {
+			"name": [
+			  {
+				"service": "",
+				"method": ""
+			  }
+			]
+		  }
+		],
+		"hedgingPolicy": {
+		  "maxAttempts": 4,
+		  "hedgingDelay": "0.5s",
+		  "nonFatalStatusCodes": [
+			"UNAVAILABLE",
+			"INTERNAL",
+			"ABORTED"
+		  ]
+		},
+		"retryThrottling": {
+		  "maxTokens": 10,
+		  "tokenRatio": 0.1
+		}
+	  }`
+)
 
 func main() {
 	flag.Parse()
-	var config string = `{"retryPolicy": {
-		"maxAttempts": 4,
-		"initialBackoff": "0.1s",
-		"maxBackoff": "1s",
-		"backoffMultiplier": 2,
-		"retryableStatusCodes": [
-		  "UNAVAILABLE"
-		]
-	  }
-	  }`
+
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(*addr, grpc.WithInsecure(), grpc.WithDefaultServiceConfig(config))
+	conn, err := grpc.Dial(*addr, grpc.WithInsecure(), grpc.WithDefaultServiceConfig(retryPolicy))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
