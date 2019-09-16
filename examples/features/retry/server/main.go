@@ -28,22 +28,22 @@ import (
 	"sync"
 	"time"
 
-	server "github.com/grpc-ecosystem/go-grpc-middleware/testing"
-	pb "github.com/grpc-ecosystem/go-grpc-middleware/testing/testproto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	pb "google.golang.org/grpc/examples/features/proto/echo"
+	"google.golang.org/grpc/status"
 )
 
 var port = flag.Int("port", 50052, "port number")
+
 var (
 	retriableErrors = []codes.Code{codes.Unavailable, codes.DataLoss}
-	goodPing        = &pb.PingRequest{Value: "something"}
+	goodPing        = &pb.EchoRequest{Message: "something"}
 	noSleep         = 0 * time.Second
 	retryTimeout    = 50 * time.Millisecond
 )
 
-type failingService struct {
-	pb.TestServiceServer
+type failingServer struct {
 	mu sync.Mutex
 
 	reqCounter uint
@@ -52,7 +52,7 @@ type failingService struct {
 	reqError   codes.Code
 }
 
-func (s *failingService) resetFailingConfiguration(modulo uint, errorCode codes.Code, sleepTime time.Duration) {
+func (s *failingServer) resetFailingConfiguration(modulo uint, errorCode codes.Code, sleepTime time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -62,13 +62,13 @@ func (s *failingService) resetFailingConfiguration(modulo uint, errorCode codes.
 	s.reqSleep = sleepTime
 }
 
-func (s *failingService) requestCount() uint {
+func (s *failingServer) requestCount() uint {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.reqCounter
 }
 
-func (s *failingService) maybeFailRequest() error {
+func (s *failingServer) maybeFailRequest() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.reqCounter++
@@ -79,26 +79,28 @@ func (s *failingService) maybeFailRequest() error {
 	return grpc.Errorf(s.reqError, "maybeFailRequest: failing it")
 }
 
-func (s *failingService) Ping(ctx context.Context, ping *pb.PingRequest) (*pb.PingResponse, error) {
+func (s *failingServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	if err := s.maybeFailRequest(); err != nil {
+		log.Println("request failed count:", s.reqCounter)
 		return nil, err
 	}
-	return s.TestServiceServer.Ping(ctx, ping)
+
+	log.Println("request succeeded count:", s.reqCounter)
+	return &pb.EchoResponse{Message: req.Message}, nil
 }
 
-func (s *failingService) PingList(ping *pb.PingRequest, stream pb.TestService_PingListServer) error {
-	if err := s.maybeFailRequest(); err != nil {
-		return err
-	}
-	return s.TestServiceServer.PingList(ping, stream)
+func (s *failingServer) ServerStreamingEcho(req *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoServer) error {
+	return status.Error(codes.Unimplemented, "RPC unimplemented")
 }
 
-func (s *failingService) PingStream(stream pb.TestService_PingStreamServer) error {
-	if err := s.maybeFailRequest(); err != nil {
-		return err
-	}
-	return s.TestServiceServer.PingStream(stream)
+func (s *failingServer) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
+	return status.Error(codes.Unimplemented, "RPC unimplemented")
 }
+
+func (s *failingServer) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
+	return status.Error(codes.Unimplemented, "RPC unimplemented")
+}
+
 func main() {
 	flag.Parse()
 
@@ -107,9 +109,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
+	fmt.Println("listen on address", address)
 
 	s := grpc.NewServer()
-	pb.RegisterTestServiceServer(s, &server.TestPingService{})
+
+	// a retry configuration
+	failingservice := &failingServer{
+		reqCounter: 0,
+		reqModulo:  4,
+		reqError:   codes.Unavailable, /* uint = 14 */
+		reqSleep:   0,
+	}
+
+	pb.RegisterEchoServer(s, failingservice)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

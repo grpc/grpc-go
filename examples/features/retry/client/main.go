@@ -23,13 +23,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"time"
 
-	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
-	pb "github.com/grpc-ecosystem/go-grpc-middleware/testing/testproto"
 	"google.golang.org/grpc"
+	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 var (
@@ -73,7 +71,8 @@ func hedgingDial() (*grpc.ClientConn, error) {
 }
 
 func newCtx(timeout time.Duration) context.Context {
-	ctx, _ := context.WithTimeout(context.TODO(), timeout)
+	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
+	defer cancel()
 	return ctx
 }
 
@@ -91,16 +90,10 @@ func main() {
 		}
 	}()
 
-	c := pb.NewTestServiceClient(conn)
-	stream, _ := c.PingList(newCtx(1*time.Second), &pb.PingRequest{}, grpc_retry.WithMax(3))
-
-	for {
-		pong, err := stream.Recv() // retries happen here
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return
-		}
-		fmt.Printf("got pong: %v", pong)
+	c := pb.NewEchoClient(conn)
+	reply, err := c.UnaryEcho(newCtx(1*time.Second), &pb.EchoRequest{Message: "Please Success"})
+	if err != nil {
+		fmt.Println(err)
 	}
+	fmt.Println(reply)
 }
