@@ -38,7 +38,7 @@ var (
 		  "maxBackoff": "1s",
 		  "backoffMultiplier": 2,
 		  "retryableStatusCodes": [
-			"UNAVAILABLE"
+			"Unavailable"
 		  ]
 		},
 		"retryThrottling": {
@@ -46,33 +46,15 @@ var (
 		  "tokenRatio": 0.1
 		}
 	}`
-	hedgingPolicy = `{"hedgingPolicy": {
-		  "maxAttempts": 4,
-		  "hedgingDelay": "0s",
-		  "nonFatalStatusCodes": [
-			"UNAVAILABLE",
-			"INTERNAL",
-			"ABORTED"
-		  ]
-		},
-		"retryThrottling": {
-		  "maxTokens": 10,
-		  "tokenRatio": 0.1
-		}
-	  }`
 )
 
 func retryDial() (*grpc.ClientConn, error) {
 	return grpc.Dial(*addr, grpc.WithInsecure(), grpc.WithDefaultServiceConfig(retryPolicy))
 }
 
-func hedgingDial() (*grpc.ClientConn, error) {
-	return grpc.Dial(*addr, grpc.WithInsecure(), grpc.WithDefaultServiceConfig(hedgingPolicy))
-}
-
+// use it for one value return
 func newCtx(timeout time.Duration) context.Context {
-	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
-	defer cancel()
+	ctx, _ := context.WithTimeout(context.TODO(), timeout)
 	return ctx
 }
 
