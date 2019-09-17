@@ -48,7 +48,7 @@ if [[ "$1" = "-install" ]]; then
       github.com/client9/misspell/cmd/misspell \
       github.com/golang/protobuf/protoc-gen-go
   fi
-  if [[ -z "${VET_SKIP_PROTO}" ]]; then
+  if [[ -n "${VET_SKIP_PROTO}" ]]; then
     if [[ "${TRAVIS}" = "true" ]]; then
       PROTOBUF_VERSION=3.3.0
       PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
@@ -86,12 +86,12 @@ go list -f {{.Dir}} ./... | xargs go run test/go_vet/vet.go
 
 # - gofmt, goimports, golint (with exceptions for generated code), go vet.
 gofmt -s -d -l . 2>&1 | fail_on_output
-goimports -l . 2>&1 | (! grep -vE "(_mock|\.pb)\.go:") | fail_on_output
+goimports -l . 2>&1 | (! grep -vE "(_mock|\.pb)\.go") | fail_on_output
 golint ./... 2>&1 | (! grep -vE "(_mock|\.pb)\.go:")
 go vet -all .
 
 # - Check that generated proto files are up to date.
-if [[ -z "${VET_SKIP_PROTO}" ]]; then
+if [[ -n "${VET_SKIP_PROTO}" ]]; then
   PATH="/home/travis/bin:${PATH}" make proto && \
     git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
