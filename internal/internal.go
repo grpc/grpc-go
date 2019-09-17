@@ -47,6 +47,9 @@ var (
 	// NewRequestInfoContext creates a new context based on the argument context attaching
 	// the passed in RequestInfo to the new context.
 	NewRequestInfoContext interface{} // func(context.Context, credentials.RequestInfo) context.Context
+	// ParseServiceConfigForTesting is for creating a fake
+	// ClientConn for resolver testing only
+	ParseServiceConfigForTesting interface{} // func(string) *serviceconfig.Getter
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.
