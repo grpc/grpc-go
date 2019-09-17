@@ -24,6 +24,7 @@ before_install:
   - if [[ -n "${RUN386}" ]]; then export GOARCH=386; fi
   - if [[ "${TRAVIS_EVENT_TYPE}" = "cron" && -z "${RUN386}" ]]; then RACE=1; fi
   - if [[ "${TRAVIS_EVENT_TYPE}" != "cron" ]]; then VET_SKIP_PROTO=1; fi
+  - echo ${TRAVIS_EVENT_TYPE} ${VET_SKIP_PROTO}
 
 install:
   - try3() { eval "$*" || eval "$*" || eval "$*"; }
