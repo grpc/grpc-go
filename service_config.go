@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -259,6 +260,9 @@ type jsonSC struct {
 	HealthCheckConfig   *healthCheckConfig
 }
 
+func init() {
+	internal.ParseServiceConfigForTesting = parseServiceConfig
+}
 func parseServiceConfig(js string) *serviceconfig.Getter {
 	if len(js) == 0 {
 		return serviceconfig.NewGetter(fmt.Errorf("no JSON service config provided"))
