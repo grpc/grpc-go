@@ -44,6 +44,9 @@ var (
 	// call to proto.Clone(). The returned Status proto should not be mutated by
 	// the caller.
 	StatusRawProto interface{} // func (*status.Status) *spb.Status
+	// ParseServiceConfigForTesting is for creating a fake
+	// ClientConn for resolver testing only
+	ParseServiceConfigForTesting interface{} // func(string) *serviceconfig.Getter
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.
