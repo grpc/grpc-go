@@ -380,6 +380,8 @@ func MaxHeaderListSize(s uint32) ServerOption {
 
 // HeaderTableSize returns a ServerOption that sets the size of dynamic
 // header table for stream.
+//
+// This API is EXPERIMENTAL.
 func HeaderTableSize(s uint32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.headerTableSize = &s
