@@ -113,7 +113,7 @@ func (ccr *ccResolverWrapper) close() {
 	ccr.mu.Unlock()
 }
 
-var resolverBackoff = backoff.Exponential{MaxDelay: 2 * time.Minute}
+var resolverBackoff = backoff.Exponential{MaxDelay: 2 * time.Minute}.Backoff
 
 // poll begins or ends asynchronous polling of the resolver based on whether
 // err is ErrBadResolverState.
@@ -137,7 +137,7 @@ func (ccr *ccResolverWrapper) poll(err error) {
 	go func() {
 		for i := 0; ; i++ {
 			ccr.resolveNow(resolver.ResolveNowOption{})
-			t := time.NewTimer(resolverBackoff.Backoff(i))
+			t := time.NewTimer(resolverBackoff(i))
 			select {
 			case <-p:
 				t.Stop()
@@ -147,6 +147,11 @@ func (ccr *ccResolverWrapper) poll(err error) {
 				t.Stop()
 				return
 			case <-t.C:
+				select {
+				case <-p:
+					return
+				default:
+				}
 				// Timer expired; re-resolve.
 			}
 		}
