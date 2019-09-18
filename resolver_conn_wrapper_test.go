@@ -19,12 +19,14 @@
 package grpc
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 )
 
 func (s) TestParseTarget(t *testing.T) {
@@ -112,5 +114,57 @@ func (s) TestDialParseTargetUnknownScheme(t *testing.T) {
 		if got != test.want {
 			t.Errorf("Dial(%q), dialer got %q, want %q", test.targetStr, got, test.want)
 		}
+	}
+}
+
+// TestResolverErrorPolling injects resolver errors and verifies ResolveNow is
+// called with the appropriate backoff strategy being consulted between
+// ResolveNow calls.
+func (s) TestResolverErrorPolling(t *testing.T) {
+	defer func(o func(int) time.Duration) { resolverBackoff = o }(resolverBackoff)
+
+	boTime := time.Duration(0)
+	boIter := make(chan int)
+	resolverBackoff = func(v int) time.Duration {
+		t := boTime
+		boIter <- v
+		return t
+	}
+
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+	rn := make(chan struct{})
+	defer func() { close(rn) }()
+	r.ResolveNowCallback = func(resolver.ResolveNowOption) { rn <- struct{}{} }
+
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure())
+	if err != nil {
+		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
+	}
+	defer cc.Close()
+	r.CC.ReportError(errors.New("res err"))
+	timer := time.AfterFunc(5*time.Second, func() { panic("timed out polling resolver") })
+	// Ensure ResolveNow is called, then Backoff with the right parameter, several times
+	for i := 0; i < 7; i++ {
+		<-rn
+		if v := <-boIter; v != i {
+			t.Errorf("Backoff call %v uses value %v", i, v)
+		}
+	}
+	boTime = 50 * time.Millisecond
+	<-rn
+	<-boIter
+	r.CC.UpdateState(resolver.State{})
+	boTime = 0
+	timer.Stop()
+	// Wait awhile to ensure ResolveNow and Backoff are not called when the
+	// state is OK (i.e. polling was cancelled).
+	timer = time.NewTimer(60 * time.Millisecond)
+	select {
+	case <-boIter:
+		t.Errorf("Received Backoff call after successful resolver state")
+	case <-rn:
+		t.Errorf("Received ResolveNow after successful resolver state")
+	case <-timer.C:
 	}
 }
