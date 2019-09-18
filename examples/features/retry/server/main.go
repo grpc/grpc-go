@@ -36,13 +36,6 @@ import (
 
 var port = flag.Int("port", 50052, "port number")
 
-var (
-	retriableErrors = []codes.Code{codes.Unavailable, codes.DataLoss}
-	goodPing        = &pb.EchoRequest{Message: "something"}
-	noSleep         = 0 * time.Second
-	retryTimeout    = 50 * time.Millisecond
-)
-
 type failingServer struct {
 	mu sync.Mutex
 
@@ -50,22 +43,6 @@ type failingServer struct {
 	reqModulo  uint
 	reqSleep   time.Duration
 	reqError   codes.Code
-}
-
-func (s *failingServer) resetFailingConfiguration(modulo uint, errorCode codes.Code, sleepTime time.Duration) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.reqCounter = 0
-	s.reqModulo = modulo
-	s.reqError = errorCode
-	s.reqSleep = sleepTime
-}
-
-func (s *failingServer) requestCount() uint {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.reqCounter
 }
 
 func (s *failingServer) maybeFailRequest() error {
@@ -76,7 +53,7 @@ func (s *failingServer) maybeFailRequest() error {
 		return nil
 	}
 	time.Sleep(s.reqSleep)
-	return grpc.Errorf(s.reqError, "maybeFailRequest: failing it")
+	return status.Errorf(s.reqError, "maybeFailRequest: failing it")
 }
 
 func (s *failingServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {

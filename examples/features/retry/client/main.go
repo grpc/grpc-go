@@ -22,11 +22,11 @@ package main
 import (
 	"context"
 	"flag"
+	"log"
 	"time"
 
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
-	"google.golang.org/grpc/grpclog"
 )
 
 var (
@@ -62,18 +62,18 @@ func main() {
 	// Set up a connection to the server.
 	conn, err := retryDial()
 	if err != nil {
-		grpclog.Fatalf("did not connect: %v", err)
+		log.Fatalf("did not connect: %v", err)
 	}
 	defer func() {
 		if e := conn.Close(); e != nil {
-			grpclog.Printf("failed to close connection: %s", e)
+			log.Printf("failed to close connection: %s", e)
 		}
 	}()
 
 	c := pb.NewEchoClient(conn)
 	reply, err := c.UnaryEcho(newCtx(1*time.Second), &pb.EchoRequest{Message: "Try and Success"})
 	if err != nil {
-		grpclog.Println(err)
+		log.Println(err)
 	}
-	grpclog.Println(reply)
+	log.Println(reply)
 }
