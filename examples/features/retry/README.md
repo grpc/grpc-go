@@ -17,7 +17,27 @@ go run server/main.go
 go run client/main.go
 ```
 
-# Integration with Service Config
+# Usage
+
+        {
+            "methodConfig": [{
+                // config per method or all methods, this is for all methods under grpc.example.echo.Echo 
+                // service
+                "name": [{"service": "grpc.examples.echo.Echo"}],
+                "waitForReady": true,
+
+                "retryPolicy": {
+                    "MaxAttempts": 4,
+                    "InitialBackoff": ".01s",
+                    "MaxBackoff": ".01s",
+                    "BackoffMultiplier": 1.0,
+                    // this value is grpc code
+                    "RetryableStatusCodes": [ "UNAVAILABLE" ]
+                }
+            }]
+        }
+
+# Know all retry policies Integration with Service Config
 From [grpc/proposal](https://github.com/grpc/proposal/blob/master/A6-client-retries.md#integration-with-service-config)
 
 The retry policy is transmitted to the client through the service config mechanism. The following is what the JSON configuration file would look like:

@@ -22,37 +22,35 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
-	"log"
 	"time"
 
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
+	"google.golang.org/grpc/grpclog"
 )
 
 var (
-	addr        = flag.String("addr", "localhost:50052", "the address to connect to")
-	retryPolicy = `{"retryPolicy": {
-		  "maxAttempts": 4,
-		  "initialBackoff": "0.1s",
-		  "maxBackoff": "1s",
-		  "backoffMultiplier": 2,
-		  "retryableStatusCodes": [
-			"Unavailable"
-		  ]
-		},
-		"retryThrottling": {
-		  "maxTokens": 10,
-		  "tokenRatio": 0.1
-		}
-	}`
+	addr = flag.String("addr", "localhost:50052", "the address to connect to")
+	// see https://github.com/grpc/grpc/blob/master/doc/service_config.md to know more about service config
+	retryPolicy = `{
+		"methodConfig": [{
+		  "name": [{"service": "grpc.examples.echo.Echo"}],
+		  "waitForReady": true,
+		  "retryPolicy": {
+			  "MaxAttempts": 4,
+			  "InitialBackoff": ".01s",
+			  "MaxBackoff": ".01s",
+			  "BackoffMultiplier": 1.0,
+			  "RetryableStatusCodes": [ "UNAVAILABLE" ]
+		  }
+		}]}`
 )
 
+// use grpc.WithDefaultServiceConfig() to set service config
 func retryDial() (*grpc.ClientConn, error) {
 	return grpc.Dial(*addr, grpc.WithInsecure(), grpc.WithDefaultServiceConfig(retryPolicy))
 }
 
-// use it for one value return
 func newCtx(timeout time.Duration) context.Context {
 	ctx, _ := context.WithTimeout(context.TODO(), timeout)
 	return ctx
@@ -64,18 +62,18 @@ func main() {
 	// Set up a connection to the server.
 	conn, err := retryDial()
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		grpclog.Fatalf("did not connect: %v", err)
 	}
 	defer func() {
 		if e := conn.Close(); e != nil {
-			log.Printf("failed to close connection: %s", e)
+			grpclog.Printf("failed to close connection: %s", e)
 		}
 	}()
 
 	c := pb.NewEchoClient(conn)
-	reply, err := c.UnaryEcho(newCtx(1*time.Second), &pb.EchoRequest{Message: "Please Success"})
+	reply, err := c.UnaryEcho(newCtx(1*time.Second), &pb.EchoRequest{Message: "Try and Success"})
 	if err != nil {
-		fmt.Println(err)
+		grpclog.Println(err)
 	}
-	fmt.Println(reply)
+	grpclog.Println(reply)
 }
