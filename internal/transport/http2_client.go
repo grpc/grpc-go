@@ -547,6 +547,10 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 // streams.
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Stream, err error) {
 	ctx = peer.NewContext(ctx, t.getPeer())
+	ri := credentials.RequestInfo{
+		Method: callHdr.Method,
+	}
+	ctx = context.WithValue(ctx, credentials.RequestInfoKey{}, ri)
 	headerFields, err := t.createHeaderFields(ctx, callHdr)
 	if err != nil {
 		return nil, err

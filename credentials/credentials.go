@@ -334,3 +334,12 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 
 	return cfg.Clone()
 }
+
+// RequestInfo contains request data to be attached to the context passed along to GetRequestMetadata calls.
+type RequestInfo struct {
+	// This is assumed to be of the format some.Service/Method
+	Method string
+}
+
+// RequestInfoKey is a struct to be used as the key when attacking a RequestInfo to a context object.
+type RequestInfoKey struct{}
