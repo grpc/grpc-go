@@ -16,8 +16,6 @@ require (
 	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a
 	golang.org/x/tools v0.0.0-20190524140312-2c0ae7006135
 	google.golang.org/appengine v1.1.0 // indirect
-	google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
-	honnef.co/go/tools v0.0.0-20190523083050-ea95bdfd59fc
 )
 
 go 1.13
