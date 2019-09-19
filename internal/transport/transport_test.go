@@ -2384,7 +2384,9 @@ func TestTCPUserTimeout(t *testing.T) {
 // propagated into the context object as a credentials.RequestInfo object.
 func TestRequestInfoFoundInStreamContext(t *testing.T) {
 	serverConfig := &ServerConfig{}
-	_, client, _ := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	defer cancel()
+	defer server.stop()
 	defer client.Close()
 	ch := &CallHdr{
 		Method: "someService/Method",
