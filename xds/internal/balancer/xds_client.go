@@ -20,6 +20,7 @@ package balancer
 
 import (
 	"context"
+	"net"
 	"sync"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
+	xdsclient "google.golang.org/grpc/xds/internal/client"
 	cdspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/cds"
 	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
 	discoverypb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/discovery"
@@ -56,20 +58,20 @@ var (
 // ADS response from the traffic director, and sending notification when communication with the
 // traffic director is lost.
 type client struct {
-	ctx          context.Context
-	cancel       context.CancelFunc
-	cli          adsgrpc.AggregatedDiscoveryServiceClient
-	opts         balancer.BuildOptions
-	balancerName string // the traffic director name
-	serviceName  string // the user dial target name
-	enableCDS    bool
-	newADS       func(ctx context.Context, resp proto.Message) error
-	loseContact  func(ctx context.Context)
-	cleanup      func()
-	backoff      backoff.Strategy
+	ctx              context.Context
+	cancel           context.CancelFunc
+	cli              adsgrpc.AggregatedDiscoveryServiceClient
+	dialer           func(context.Context, string) (net.Conn, error)
+	channelzParentID int64
+	enableCDS        bool
+	newADS           func(ctx context.Context, resp proto.Message) error
+	loseContact      func(ctx context.Context)
+	cleanup          func()
+	backoff          backoff.Strategy
 
 	loadStore      lrs.Store
 	loadReportOnce sync.Once
+	config         *xdsclient.Config
 
 	mu sync.Mutex
 	cc *grpc.ClientConn
@@ -91,27 +93,17 @@ func (c *client) close() {
 }
 
 func (c *client) dial() {
-	var dopts []grpc.DialOption
-	if creds := c.opts.DialCreds; creds != nil {
-		if err := creds.OverrideServerName(c.balancerName); err == nil {
-			dopts = append(dopts, grpc.WithTransportCredentials(creds))
-		} else {
-			grpclog.Warningf("xds: failed to override the server name in the credentials: %v, using Insecure", err)
-			dopts = append(dopts, grpc.WithInsecure())
-		}
-	} else {
-		dopts = append(dopts, grpc.WithInsecure())
-	}
-	if c.opts.Dialer != nil {
-		dopts = append(dopts, grpc.WithContextDialer(c.opts.Dialer))
+	dopts := []grpc.DialOption{c.config.Creds}
+	if c.dialer != nil {
+		dopts = append(dopts, grpc.WithContextDialer(c.dialer))
 	}
 	// Explicitly set pickfirst as the balancer.
 	dopts = append(dopts, grpc.WithBalancerName(grpc.PickFirstBalancerName))
 	if channelz.IsOn() {
-		dopts = append(dopts, grpc.WithChannelzParentID(c.opts.ChannelzParentID))
+		dopts = append(dopts, grpc.WithChannelzParentID(c.channelzParentID))
 	}
 
-	cc, err := grpc.DialContext(c.ctx, c.balancerName, dopts...)
+	cc, err := grpc.DialContext(c.ctx, c.config.BalancerName, dopts...)
 	// Since this is a non-blocking dial, so if it fails, it due to some serious error (not network
 	// related) error.
 	if err != nil {
@@ -130,34 +122,22 @@ func (c *client) dial() {
 
 func (c *client) newCDSRequest() *discoverypb.DiscoveryRequest {
 	cdsReq := &discoverypb.DiscoveryRequest{
-		Node: &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: c.serviceName},
-					},
-				},
-			},
-		},
+		Node:    c.config.NodeProto,
 		TypeUrl: cdsType,
 	}
 	return cdsReq
 }
 
 func (c *client) newEDSRequest() *discoverypb.DiscoveryRequest {
+	// TODO: Once we change the client to always make a CDS call, we can remove
+	// this boolean field from the metadata.
+	np := proto.Clone(c.config.NodeProto).(*basepb.Node)
+	np.Metadata.Fields[endpointRequired] = &structpb.Value{
+		Kind: &structpb.Value_BoolValue{BoolValue: c.enableCDS},
+	}
+
 	edsReq := &discoverypb.DiscoveryRequest{
-		Node: &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: c.serviceName},
-					},
-					endpointRequired: {
-						Kind: &structpb.Value_BoolValue{BoolValue: c.enableCDS},
-					},
-				},
-			},
-		},
+		Node: np,
 		// TODO: the expected ResourceName could be in a different format from
 		// dial target. (test_service.test_namespace.traffic_director.com vs
 		// test_namespace:test_service).
@@ -280,18 +260,48 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 
 func newXDSClient(balancerName string, enableCDS bool, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
 	c := &client{
-		balancerName: balancerName,
-		serviceName:  opts.Target.Endpoint,
-		enableCDS:    enableCDS,
-		opts:         opts,
-		newADS:       newADS,
-		loseContact:  loseContact,
-		cleanup:      exitCleanup,
-		backoff:      defaultBackoffConfig,
-		loadStore:    loadStore,
+		enableCDS:        enableCDS,
+		dialer:           opts.Dialer,
+		channelzParentID: opts.ChannelzParentID,
+		newADS:           newADS,
+		loseContact:      loseContact,
+		cleanup:          exitCleanup,
+		backoff:          defaultBackoffConfig,
+		loadStore:        loadStore,
 	}
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 
+	var err error
+	if c.config, err = xdsclient.NewConfig(); err != nil {
+		grpclog.Error(err)
+		c.config = newConfigFromDefaults(balancerName, &opts)
+	}
 	return c
+}
+
+func newConfigFromDefaults(balancerName string, opts *balancer.BuildOptions) *xdsclient.Config {
+	dopts := grpc.WithInsecure()
+	if opts.DialCreds != nil {
+		if err := opts.DialCreds.OverrideServerName(balancerName); err == nil {
+			dopts = grpc.WithTransportCredentials(opts.DialCreds)
+		} else {
+			grpclog.Warningf("xds: failed to override the server name in credentials: %v, using Insecure", err)
+		}
+	} else {
+		grpclog.Warning("xds: no credentials available, using Insecure")
+	}
+	return &xdsclient.Config{
+		BalancerName: balancerName,
+		Creds:        dopts,
+		NodeProto: &basepb.Node{
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					internal.GrpcHostname: {
+						Kind: &structpb.Value_StringValue{StringValue: opts.Target.Endpoint},
+					},
+				},
+			},
+		},
+	}
 }

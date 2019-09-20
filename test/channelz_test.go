@@ -846,21 +846,6 @@ func doServerSideInitiatedFailedStreamWithGoAway(tc testpb.TestServiceClient, t 
 	}
 }
 
-// this func is to be used to test client side counting of failed streams.
-func doServerSideInitiatedFailedStreamWithClientBreakFlowControl(tc testpb.TestServiceClient, t *testing.T, dw *dialerWrapper) {
-	stream, err := tc.FullDuplexCall(context.Background())
-	if err != nil {
-		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
-	}
-	// sleep here to make sure header frame being sent before the data frame we write directly below.
-	time.Sleep(10 * time.Millisecond)
-	payload := make([]byte, 65537)
-	dw.getRawConnWrapper().writeRawFrame(http2.FrameData, 0, tc.(*testServiceClientWrapper).getCurrentStreamID(), payload)
-	if _, err := stream.Recv(); err == nil || status.Code(err) != codes.ResourceExhausted {
-		t.Fatalf("%v.Recv() = %v, want error code: %v", stream, err, codes.ResourceExhausted)
-	}
-}
-
 func doIdleCallToInvokeKeepAlive(tc testpb.TestServiceClient, t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	_, err := tc.FullDuplexCall(ctx)
@@ -981,12 +966,35 @@ func (s) TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *t
 	// Avoid overflowing connection level flow control window, which will lead to
 	// transport being closed.
 	te.serverInitialConnWindowSize = 65536 * 2
-	te.startServer(&testServer{security: e.security})
+	ts := &funcServer{fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+		stream.Send(&testpb.StreamingOutputCallResponse{})
+		<-stream.Context().Done()
+		return status.Errorf(codes.DeadlineExceeded, "deadline exceeded or cancelled")
+	}}
+	te.startServer(ts)
 	defer te.tearDown()
 	cc, dw := te.clientConnWithConnControl()
 	tc := &testServiceClientWrapper{TestServiceClient: testpb.NewTestServiceClient(cc)}
 
-	doServerSideInitiatedFailedStreamWithClientBreakFlowControl(tc, t, dw)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	stream, err := tc.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("stream.Recv() = %v, want nil", err)
+	}
+	go func() {
+		payload := make([]byte, 16384)
+		for i := 0; i < 6; i++ {
+			dw.getRawConnWrapper().writeRawFrame(http2.FrameData, 0, tc.getCurrentStreamID(), payload)
+		}
+	}()
+	if _, err := stream.Recv(); status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("stream.Recv() = %v, want error code: %v", err, codes.ResourceExhausted)
+	}
+	cancel()
+
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tchan, _ := channelz.GetTopChannels(0, 0)
 		if len(tchan) != 1 {
