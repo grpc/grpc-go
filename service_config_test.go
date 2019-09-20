@@ -93,6 +93,8 @@ func (s) TestParseLBConfig(t *testing.T) {
 }
 
 func (s) TestParseNoLBConfigSupported(t *testing.T) {
+	// We have a loadBalancingConfig field but will not encounter a supported
+	// policy.  The config will be considered invalid in this case.
 	testcases := []parseTestCase{
 		{
 			scjs: `{
