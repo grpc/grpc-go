@@ -101,6 +101,9 @@ func (s) TestParseNoLBConfigSupported(t *testing.T) {
     "loadBalancingConfig": [{"not_a_balancer1": {} }, {"not_a_balancer2": {}}]
 }`,
 			wantErr: true,
+		}, {
+			scjs:    `{"loadBalancingConfig": []}`,
+			wantErr: true,
 		},
 	}
 	runParseTests(t, testcases)
