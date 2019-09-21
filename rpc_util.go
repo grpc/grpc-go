@@ -158,6 +158,7 @@ type callInfo struct {
 	stream                ClientStream
 	maxReceiveMessageSize *int
 	maxSendMessageSize    *int
+	compressionFactor     int
 	creds                 credentials.PerRPCCredentials
 	contentSubtype        string
 	codec                 baseCodec
@@ -322,6 +323,25 @@ func (o MaxSendMsgSizeCallOption) before(c *callInfo) error {
 	return nil
 }
 func (o MaxSendMsgSizeCallOption) after(c *callInfo) {}
+
+// CallCompressionFactor returns a CallOption which sets the predicted compression factor,
+// used in sizing buffers
+func CallCompressionFactor(f int) CallOption {
+	return CompressionFactorCallOption{CompressionFactor: f}
+}
+
+// CompressionFactor is a CallOption which sets the predicted compression factor,
+// used in sizing buffers
+// This is an EXPERIMENTAL API.
+type CompressionFactorCallOption struct {
+	CompressionFactor int
+}
+
+func (o CompressionFactorCallOption) before(c *callInfo) error {
+	c.compressionFactor = o.CompressionFactor
+	return nil
+}
+func (o CompressionFactorCallOption) after(c *callInfo) {}
 
 // PerRPCCredentials returns a CallOption that sets credentials.PerRPCCredentials
 // for a call.
@@ -635,7 +655,7 @@ type payloadInfo struct {
 	uncompressedBytes []byte
 }
 
-func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor) ([]byte, error) {
+func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, compressionFactor int) ([]byte, error) {
 	pf, d, err := p.recvMsg(maxReceiveMessageSize)
 	if err != nil {
 		return nil, err
@@ -661,9 +681,10 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
 			}
+			expectedSize := int64(len(d) * compressionFactor)
 			// Read from LimitReader with limit max+1. So if the underlying
 			// reader is over limit, the result will be bigger than max.
-			d, err = ioutil.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+			d, err = readAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1), expectedSize)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
 			}
@@ -677,11 +698,36 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 	return d, nil
 }
 
+// Copied from go/src/io/ioutil/ioutil.go
+// readAll reads from r until an error or EOF and returns the data it read
+// from the internal buffer allocated with a specified capacity.
+func readAll(r io.Reader, capacity int64) (b []byte, err error) {
+	var buf bytes.Buffer
+	// If the buffer overflows, we will get bytes.ErrTooLarge.
+	// Return that as an error. Any other panic remains.
+	defer func() {
+		e := recover()
+		if e == nil {
+			return
+		}
+		if panicErr, ok := e.(error); ok && panicErr == bytes.ErrTooLarge {
+			err = panicErr
+		} else {
+			panic(e)
+		}
+	}()
+	if int64(int(capacity)) == capacity {
+		buf.Grow(int(capacity))
+	}
+	_, err = buf.ReadFrom(r)
+	return buf.Bytes(), err
+}
+
 // For the two compressor parameters, both should not be set, but if they are,
 // dc takes precedence over compressor.
 // TODO(dfawley): wrap the old compressor/decompressor using the new API?
-func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interface{}, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor) error {
-	d, err := recvAndDecompress(p, s, dc, maxReceiveMessageSize, payInfo, compressor)
+func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interface{}, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, compressionFactor int) error {
+	d, err := recvAndDecompress(p, s, dc, maxReceiveMessageSize, payInfo, compressor, compressionFactor)
 	if err != nil {
 		return err
 	}
