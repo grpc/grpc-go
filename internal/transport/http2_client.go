@@ -550,7 +550,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	ri := credentials.RequestInfo{
 		Method: callHdr.Method,
 	}
-	ctx = context.WithValue(ctx, credentials.RequestInfoKey{}, ri)
+	ctx = credentials.WithRequestInfo(ctx, ri)
 	headerFields, err := t.createHeaderFields(ctx, callHdr)
 	if err != nil {
 		return nil, err

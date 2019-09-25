@@ -2253,17 +2253,18 @@ func TestRequestInfoFoundInStreamContext(t *testing.T) {
 	defer cancel()
 	defer server.stop()
 	defer client.Close()
+
 	ch := &CallHdr{
 		Method: "someService/Method",
 	}
-	s, err := client.NewStream(context.Background(), ch)
+	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer ctxCancel()
+
+	s, err := client.NewStream(ctx, ch)
 	if err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
-	ri, ok := s.ctx.Value(credentials.RequestInfoKey{}).(credentials.RequestInfo)
-	if !ok {
-		t.Fatalf("s.ctx does not have an attached credentials.RequestInfo object: %v", s.ctx)
-	}
+	ri := credentials.RequestInfoFromContext(s.ctx)
 	if ch.Method != ri.Method {
 		t.Fatalf("RequestInfo.Method == %s; want %s", ri.Method, ch.Method)
 	}
