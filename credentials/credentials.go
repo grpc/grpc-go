@@ -336,10 +336,30 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 }
 
 // RequestInfo contains request data to be attached to the context passed along to GetRequestMetadata calls.
+//
+// This API is experimental.
 type RequestInfo struct {
 	// This is assumed to be of the format some.Service/Method
 	Method string
 }
 
-// RequestInfoKey is a struct to be used as the key when attacking a RequestInfo to a context object.
-type RequestInfoKey struct{}
+// requestInfoKey is a struct to be used as the key when attaching a RequestInfo to a context object.
+type requestInfoKey struct{}
+
+// RequestInfoFromContext extracts the RequestInfo object from the context object.
+//
+// This API is experimental.
+func RequestInfoFromContext(ctx context.Context) RequestInfo {
+	ri, ok := ctx.Value(requestInfoKey{}).(RequestInfo)
+	if !ok {
+		return RequestInfo{}
+	}
+	return ri
+}
+
+// WithRequestInfo adds the supplied RequestInfo object to the context object.
+//
+// This API is experimental.
+func WithRequestInfo(ctx context.Context, ri RequestInfo) context.Context {
+	return context.WithValue(ctx, requestInfoKey{}, ri)
+}
