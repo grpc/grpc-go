@@ -339,7 +339,8 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 //
 // This API is experimental.
 type RequestInfo struct {
-	// This is assumed to be of the format some.Service/Method
+	// The method passed to Invoke or NewStream for this RPC.
+	// For proto methods this should have the format "/some.Service/Method"
 	Method string
 }
 
