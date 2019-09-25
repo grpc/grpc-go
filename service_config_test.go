@@ -92,6 +92,23 @@ func (s) TestParseLBConfig(t *testing.T) {
 	runParseTests(t, testcases)
 }
 
+func (s) TestParseNoLBConfigSupported(t *testing.T) {
+	// We have a loadBalancingConfig field but will not encounter a supported
+	// policy.  The config will be considered invalid in this case.
+	testcases := []parseTestCase{
+		{
+			scjs: `{
+    "loadBalancingConfig": [{"not_a_balancer1": {} }, {"not_a_balancer2": {}}]
+}`,
+			wantErr: true,
+		}, {
+			scjs:    `{"loadBalancingConfig": []}`,
+			wantErr: true,
+		},
+	}
+	runParseTests(t, testcases)
+}
+
 func (s) TestParseLoadBalancer(t *testing.T) {
 	testcases := []parseTestCase{
 		{
