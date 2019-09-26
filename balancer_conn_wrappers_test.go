@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -67,12 +68,10 @@ func (b *funcBalancerBuilder) Name() string { return b.name }
 func (s) TestBalancerErrorResolverPolling(t *testing.T) {
 	defer func(o func(int) time.Duration) { resolverBackoff = o }(resolverBackoff)
 
-	boTime := time.Duration(0)
 	boIter := make(chan int)
 	resolverBackoff = func(v int) time.Duration {
-		t := boTime
 		boIter <- v
-		return t
+		return 0
 	}
 
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
@@ -81,25 +80,32 @@ func (s) TestBalancerErrorResolverPolling(t *testing.T) {
 	defer func() { close(rn) }()
 	r.ResolveNowCallback = func(resolver.ResolveNowOption) { rn <- struct{}{} }
 
-	uccsErr := make(chan error)
+	// The test balancer will return ErrBadResolverState iff the
+	// ClientConnState contains no addresses.
 	fb := &funcBalancer{
 		updateClientConnState: func(s balancer.ClientConnState) error {
-			return <-uccsErr
+			if len(s.ResolverState.Addresses) == 0 {
+				return balancer.ErrBadResolverState
+			}
+			return nil
 		},
 	}
-	balancer.Register(&funcBalancerBuilder{name: "BalancerErrorResolverPolling", instance: fb})
+	const balName = "BalancerErrorResolverPolling"
+	balancer.Register(&funcBalancerBuilder{name: balName, instance: fb})
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithDefaultServiceConfig(`
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithDefaultServiceConfig(fmt.Sprintf(`
 {
-  "loadBalancingConfig": [{"BalancerErrorResolverPolling": {}}]
-}`))
+  "loadBalancingConfig": [{"%v": {}}]
+}`, balName)))
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
 	}
 	defer cc.Close()
-	go func() { uccsErr <- balancer.ErrBadResolverState }()
 	r.CC.UpdateState(resolver.State{})
-	timer := time.AfterFunc(5*time.Second, func() { panic("timed out polling resolver") })
+
+	panicAfter := time.AfterFunc(5*time.Second, func() { panic("timed out polling resolver") })
+	defer panicAfter.Stop()
+
 	// Ensure ResolveNow is called, then Backoff with the right parameter, several times
 	for i := 0; i < 7; i++ {
 		<-rn
@@ -107,21 +113,25 @@ func (s) TestBalancerErrorResolverPolling(t *testing.T) {
 			t.Errorf("Backoff call %v uses value %v", i, v)
 		}
 	}
-	boTime = 50 * time.Millisecond
-	<-rn
-	<-boIter
-	go func() { uccsErr <- nil }()
-	r.CC.UpdateState(resolver.State{})
-	boTime = 0
-	timer.Stop()
-	// Wait awhile to ensure ResolveNow and Backoff are not called when the
+
+	// UpdateState will block if ResolveNow is being called (which blocks on
+	// rn), so call it in a goroutine.  Include some address so the balancer
+	// will be happy.
+	go r.CC.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "x"}}})
+
+	// Wait awhile to ensure ResolveNow and Backoff stop being called when the
 	// state is OK (i.e. polling was cancelled).
-	timer = time.NewTimer(60 * time.Millisecond)
-	select {
-	case <-boIter:
-		t.Errorf("Received Backoff call after successful resolver state")
-	case <-rn:
-		t.Errorf("Received ResolveNow after successful resolver state")
-	case <-timer.C:
+	for {
+		t := time.NewTimer(50 * time.Millisecond)
+		select {
+		case <-rn:
+			// ClientConn is still calling ResolveNow
+			<-boIter
+			time.Sleep(5 * time.Millisecond)
+			continue
+		case <-t.C:
+			// ClientConn stopped calling ResolveNow; success
+		}
+		break
 	}
 }

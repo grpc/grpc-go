@@ -123,12 +123,10 @@ func (s) TestDialParseTargetUnknownScheme(t *testing.T) {
 func (s) TestResolverErrorPolling(t *testing.T) {
 	defer func(o func(int) time.Duration) { resolverBackoff = o }(resolverBackoff)
 
-	boTime := time.Duration(0)
 	boIter := make(chan int)
 	resolverBackoff = func(v int) time.Duration {
-		t := boTime
 		boIter <- v
-		return t
+		return 0
 	}
 
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
@@ -143,7 +141,10 @@ func (s) TestResolverErrorPolling(t *testing.T) {
 	}
 	defer cc.Close()
 	r.CC.ReportError(errors.New("res err"))
-	timer := time.AfterFunc(5*time.Second, func() { panic("timed out polling resolver") })
+
+	panicAfter := time.AfterFunc(5*time.Second, func() { panic("timed out polling resolver") })
+	defer panicAfter.Stop()
+
 	// Ensure ResolveNow is called, then Backoff with the right parameter, several times
 	for i := 0; i < 7; i++ {
 		<-rn
@@ -151,20 +152,24 @@ func (s) TestResolverErrorPolling(t *testing.T) {
 			t.Errorf("Backoff call %v uses value %v", i, v)
 		}
 	}
-	boTime = 50 * time.Millisecond
-	<-rn
-	<-boIter
-	r.CC.UpdateState(resolver.State{})
-	boTime = 0
-	timer.Stop()
-	// Wait awhile to ensure ResolveNow and Backoff are not called when the
+
+	// UpdateState will block if ResolveNow is being called (which blocks on
+	// rn), so call it in a goroutine.
+	go r.CC.UpdateState(resolver.State{})
+
+	// Wait awhile to ensure ResolveNow and Backoff stop being called when the
 	// state is OK (i.e. polling was cancelled).
-	timer = time.NewTimer(60 * time.Millisecond)
-	select {
-	case <-boIter:
-		t.Errorf("Received Backoff call after successful resolver state")
-	case <-rn:
-		t.Errorf("Received ResolveNow after successful resolver state")
-	case <-timer.C:
+	for {
+		t := time.NewTimer(50 * time.Millisecond)
+		select {
+		case <-rn:
+			// ClientConn is still calling ResolveNow
+			<-boIter
+			time.Sleep(5 * time.Millisecond)
+			continue
+		case <-t.C:
+			// ClientConn stopped calling ResolveNow; success
+		}
+		break
 	}
 }
