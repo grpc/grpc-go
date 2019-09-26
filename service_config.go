@@ -313,7 +313,7 @@ func parseServiceConfig(js string) *serviceconfig.Getter {
 			// case.
 			err := fmt.Errorf("invalid loadBalancingConfig: no supported policies found")
 			grpclog.Warningf(err.Error())
-			return nil, err
+			return serviceconfig.NewGetter(err)
 		}
 	}
 

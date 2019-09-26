@@ -61,7 +61,7 @@ func (b *funcBalancerBuilder) Build(balancer.ClientConn, balancer.BuildOptions) 
 }
 func (b *funcBalancerBuilder) Name() string { return b.name }
 
-// TestResolverErrorPolling injects balancer errors and verifies ResolveNow is
+// TestBalancerErrorResolverPolling injects balancer errors and verifies ResolveNow is
 // called on the resolver with the appropriate backoff strategy being consulted
 // between ResolveNow calls.
 func (s) TestBalancerErrorResolverPolling(t *testing.T) {
@@ -89,7 +89,10 @@ func (s) TestBalancerErrorResolverPolling(t *testing.T) {
 	}
 	balancer.Register(&funcBalancerBuilder{name: "BalancerErrorResolverPolling", instance: fb})
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithBalancerName("BalancerErrorResolverPolling"))
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithDefaultServiceConfig(`
+{
+  "loadBalancingConfig": [{"BalancerErrorResolverPolling": {}}]
+}`))
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
 	}
