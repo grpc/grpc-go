@@ -7113,7 +7113,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	}
 	s1 := grpc.NewServer()
 	defer s1.Stop()
-	ts1 := &funcServer{
+	ts := &funcServer{
 		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
@@ -7126,7 +7126,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 			return err
 		},
 	}
-	testpb.RegisterTestServiceServer(s1, ts1)
+	testpb.RegisterTestServiceServer(s1, ts)
 	go s1.Serve(lis1)
 
 	conn2Established := grpcsync.NewEvent()
@@ -7136,17 +7136,13 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	}
 	s2 := grpc.NewServer()
 	defer s2.Stop()
-	ts2 := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-		return &testpb.SimpleResponse{}, nil
-	}}
-	testpb.RegisterTestServiceServer(s2, ts2)
+	testpb.RegisterTestServiceServer(s2, ts)
 	go s2.Serve(lis2)
 
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 	r.InitialState(resolver.State{Addresses: []resolver.Address{
 		{Addr: lis1.Addr().String()},
-		{Addr: lis2.Addr().String()},
 	}})
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure())
 	if err != nil {
@@ -7162,6 +7158,11 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FullDuplexCall(_) = _, %v; want _, nil", err)
 	}
+
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{
+		{Addr: lis1.Addr().String()},
+		{Addr: lis2.Addr().String()},
+	}})
 
 	// Send GO_AWAY to connection 1.
 	go s1.GracefulStop()
