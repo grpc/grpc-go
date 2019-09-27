@@ -587,6 +587,9 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 		if sc, ok := scg.(*ServiceConfig); err == nil && ok {
 			cc.applyServiceConfigAndBalancer(sc, s.Addresses)
 		} else {
+			if cc.balancerWrapper == nil {
+				cc.applyServiceConfigAndBalancer(emptyServiceConfig, s.Addresses)
+			}
 			ret = balancer.ErrBadResolverState
 		}
 	}
