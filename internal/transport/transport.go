@@ -327,11 +327,11 @@ func (s *Stream) waitOnHeader() error {
 
 // RecvCompress returns the compression algorithm applied to the inbound
 // message. It is empty string if there is no compression applied.
-func (s *Stream) RecvCompress() string {
+func (s *Stream) RecvCompress() (string, error) {
 	if err := s.waitOnHeader(); err != nil {
-		return ""
+		return "", err
 	}
-	return s.recvCompress
+	return s.recvCompress, nil
 }
 
 // SetSendCompress sets the compression algorithm to the stream.

@@ -867,8 +867,12 @@ func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
 	}
 
 	if !a.decompSet {
+		ct, err := a.s.RecvCompress()
+		if err != nil {
+			return err
+		}
 		// Block until we receive headers containing received message encoding.
-		if ct := a.s.RecvCompress(); ct != "" && ct != encoding.Identity {
+		if ct != "" && ct != encoding.Identity {
 			if a.dc == nil || a.dc.Type() != ct {
 				// No configured decompressor, or it does not match the incoming
 				// message encoding; attempt to find a registered compressor that does.
@@ -1202,7 +1206,11 @@ func (as *addrConnStream) RecvMsg(m interface{}) (err error) {
 
 	if !as.decompSet {
 		// Block until we receive headers containing received message encoding.
-		if ct := as.s.RecvCompress(); ct != "" && ct != encoding.Identity {
+		ct, err := as.s.RecvCompress()
+		if err != nil {
+			return err
+		}
+		if ct != "" && ct != encoding.Identity {
 			if as.dc == nil || as.dc.Type() != ct {
 				// No configured decompressor, or it does not match the incoming
 				// message encoding; attempt to find a registered compressor that does.
