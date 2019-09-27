@@ -32,13 +32,13 @@ import (
 	orcapb "google.golang.org/grpc/xds/internal/proto/udpa/data/orca/v1/orca_load_report"
 )
 
-// subBalancerConfig is used to keep the configurations that will be used to start
+// subBalancerWithConfig is used to keep the configurations that will be used to start
 // the underlying balancer. It can be called to start/stop the underlying
 // balancer.
 //
 // When the config changes, it will pass the update to the underlying balancer
 // if it exists.
-type subBalancerConfig struct {
+type subBalancerWithConfig struct {
 	// The static part of sub-balancer. Keeps balancerBuilders and addresses.
 	// To be used when restarting sub-balancer.
 	builder balancer.Builder
@@ -48,18 +48,18 @@ type subBalancerConfig struct {
 	balancer balancer.Balancer
 }
 
-func (config *subBalancerConfig) startBalancer(bgcc *balancerGroupCC) {
-	b := config.builder.Build(bgcc, balancer.BuildOptions{})
-	config.balancer = b
+func (sbc *subBalancerWithConfig) startBalancer(bgcc *balancerGroupCC) {
+	b := sbc.builder.Build(bgcc, balancer.BuildOptions{})
+	sbc.balancer = b
 	if ub, ok := b.(balancer.V2Balancer); ok {
-		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: config.addrs}})
+		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: sbc.addrs}})
 	} else {
-		b.HandleResolvedAddrs(config.addrs, nil)
+		b.HandleResolvedAddrs(sbc.addrs, nil)
 	}
 }
 
-func (config *subBalancerConfig) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	b := config.balancer
+func (sbc *subBalancerWithConfig) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+	b := sbc.balancer
 	if b == nil {
 		// This sub-balancer was closed. This can happen when EDS removes a
 		// locality. The balancer for this locality was already closed, and the
@@ -74,15 +74,15 @@ func (config *subBalancerConfig) handleSubConnStateChange(sc balancer.SubConn, s
 	}
 }
 
-func (config *subBalancerConfig) updateAddrs(addrs []resolver.Address) {
-	config.addrs = addrs
-	b := config.balancer
+func (sbc *subBalancerWithConfig) updateAddrs(addrs []resolver.Address) {
+	sbc.addrs = addrs
+	b := sbc.balancer
 	if b == nil {
 		// This sub-balancer was closed. This should never happen because
 		// sub-balancers are closed when the locality is removed from EDS, or
 		// the balancer group is closed. There should be no further address
 		// updates when either of this happened.
-		grpclog.Warningf("subBalancerConfig: updateAddrs is called when balancer is nil. This means this sub-balancer is closed.")
+		grpclog.Warningf("subBalancerWithConfig: updateAddrs is called when balancer is nil. This means this sub-balancer is closed.")
 		return
 	}
 	if ub, ok := b.(balancer.V2Balancer); ok {
@@ -92,9 +92,9 @@ func (config *subBalancerConfig) updateAddrs(addrs []resolver.Address) {
 	}
 }
 
-func (config *subBalancerConfig) stopBalancer() {
-	config.balancer.Close()
-	config.balancer = nil
+func (sbc *subBalancerWithConfig) stopBalancer() {
+	sbc.balancer.Close()
+	sbc.balancer = nil
 }
 
 type pickerState struct {
@@ -131,9 +131,15 @@ type balancerGroup struct {
 	cc        balancer.ClientConn
 	loadStore lrs.Store
 
+	// outgoingMu guards all operations in the direction:
+	// ClientConn-->Sub-balancer. Including start, stop, resolver updates and
+	// SubConn state changes.
+	//
+	// The corresponding boolean outgoingStarted is used to stop further updates
+	// to sub-balancers after they are closed.
 	outgoingMu         sync.Mutex
 	outgoingStarted    bool
-	idToBalancerConfig map[internal.Locality]*subBalancerConfig
+	idToBalancerConfig map[internal.Locality]*subBalancerWithConfig
 
 	// incomingMu and pickerMu are to make sure this balancer group doesn't send
 	// updates to cc after it's closed.
@@ -148,10 +154,21 @@ type balancerGroup struct {
 	// implicit lock acquisition order that outgoingMu is locked before either
 	// incomingMu or pickerMu.
 
+	// incomingMu guards all operations in the direction:
+	// Sub-balancer-->ClientConn. Including NewSubConn and RemoveSubConn. It also
+	// guards the map from SubConn to balancer ID, so handleSubConnStateChange
+	// needs to hold it shortly to find the sub-balancer to forward the update.
+	//
+	// The corresponding boolean incomingStarted is used to stop further updates
+	// from sub-balancers after they are closed.
 	incomingMu      sync.Mutex
 	incomingStarted bool // This boolean only guards calls back to ClientConn.
 	scToID          map[balancer.SubConn]internal.Locality
 
+	// pickerMu guards all operations to update pickers.
+	//
+	// The corresponding boolean pickerStarted is used to stop further picker
+	// updates from sub-balancers after they are closed.
 	pickerMu      sync.Mutex
 	pickerStarted bool // This boolean only guards calls back to ClientConn.
 	// All balancer IDs exist as keys in this map, even if balancer group is not
@@ -166,7 +183,7 @@ func newBalancerGroup(cc balancer.ClientConn, loadStore lrs.Store) *balancerGrou
 		cc:        cc,
 		loadStore: loadStore,
 
-		idToBalancerConfig: make(map[internal.Locality]*subBalancerConfig),
+		idToBalancerConfig: make(map[internal.Locality]*subBalancerWithConfig),
 		scToID:             make(map[balancer.SubConn]internal.Locality),
 		idToPickerState:    make(map[internal.Locality]*pickerState),
 	}
@@ -226,15 +243,15 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 		grpclog.Warningf("balancer group: adding a balancer with existing ID: %s", id)
 		return
 	}
-	config := &subBalancerConfig{
+	sbc := &subBalancerWithConfig{
 		builder: builder,
 	}
-	bg.idToBalancerConfig[id] = config
+	bg.idToBalancerConfig[id] = sbc
 
 	if bg.outgoingStarted {
 		// Only start the balancer if bg is started. Otherwise, we only keep the
 		// static data.
-		config.startBalancer(&balancerGroupCC{
+		sbc.startBalancer(&balancerGroupCC{
 			ClientConn: bg.cc,
 			id:         id,
 			group:      bg,
