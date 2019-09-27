@@ -48,6 +48,14 @@ type Compressor interface {
 	Name() string
 }
 
+// CompressorSizer is optional, can be implemented to improve efficiency.
+// This API is EXPERIMENTAL.
+type CompressorSizer interface {
+	// DecompressedSize returns the exact size the message will
+	// uncompress into, if known.
+	DecompressedSize(buf []byte, maxSize int) (int, error)
+}
+
 var registeredCompressor = make(map[string]Compressor)
 
 // RegisterCompressor registers the compressor with gRPC by its name.  It can

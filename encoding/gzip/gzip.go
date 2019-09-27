@@ -23,9 +23,11 @@ package gzip
 
 import (
 	"compress/gzip"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"sync"
 
 	"google.golang.org/grpc/encoding"
@@ -105,6 +107,20 @@ func (z *reader) Read(p []byte) (n int, err error) {
 		z.pool.Put(z)
 	}
 	return n, err
+}
+
+// RFC1952 specifies that the last four bytes "contains the size of
+// the original (uncompressed) input data modulo 2^32."
+func (c *compressor) DecompressedSize(buf []byte, maxSize int) (int, error) {
+	if int64(maxSize) > int64(math.MaxUint32) {
+		return 0, fmt.Errorf("grpc: message size not known when messages can be longer than 4GB")
+	}
+	last := len(buf)
+	if last < 4 {
+		return 0, fmt.Errorf("grpc: invalid gzip buffer")
+	}
+	size := binary.LittleEndian.Uint32(buf[last-4 : last])
+	return int(size), nil
 }
 
 func (c *compressor) Name() string {
