@@ -1,44 +1,42 @@
 # Retry
 
-This example shows how to enable and configure retry on gRPC client.
+This example shows how to enable and configure retry on gRPC clients.
 
-# Document
+## Documentation
 
-[Document about this example](https://github.com/grpc/proposal/blob/master/A6-client-retries.md#retry-policy)
+[gRFC for client-side retry support](https://github.com/grpc/proposal/blob/master/A6-client-retries.md)
 
+## Try it
 
-# Try it
+This example includes a service implementation that fails requests three times with status
+code `Unavailable`, then passes the fourth.  The client is configured to make four retry attempts
+when receiving an `Unavailable` status code.
 
-we had set server service that will always return status code Unavailable until the every fourth Request.To demonstrate retry.
-
-that means client should retry 4 times and 3 times received Unavailable status.
+First start the server:
 
 ```bash
 go run server/main.go
 ```
 
-set environment otherwise retry will not work.
+Then run the client.  Note that when running the client, `GRPC_GO_RETRY=on` must be set in
+your environment:
+
 ```bash
-GRPC_GO_RETRY=on 
+GRPC_GO_RETRY=on go run client/main.go
 ```
 
-we had set retry policy to client to enable per RPC retry at most 4 times when response status is Unavailable.
-```bash
-go run client/main.go
-```
-
-# Usage
+## Usage
 
 ### Define your retry policy
 
-In below, we set retry policy for "grpc.example.echo.Echo" methods.
+Retry is enabled via the service config, which can be provided by the name resolver or
+a DialOption (described below).  In the below config, we set retry policy for the
+"grpc.example.echo.Echo" method.
 
-and retry policy :
-MaxAttempts: how many times to retry until one of them succeeded.
-InitialBackoff and MaxBackoff and BackoffMultiplier: time settings for delaying retries.
-RetryableStatusCodes: Retry when received following response codes.
+MaxAttempts: how many times to attempt the RPC before failing.
+InitialBackoff, MaxBackoff, BackoffMultiplier: configures delay between attempts.
+RetryableStatusCodes: Retry only when receiving these status codes.
 
-set this as a variable:
 ```go
         var retryPolicy = `{
             "methodConfig": [{
@@ -58,26 +56,11 @@ set this as a variable:
         }`
 ```
 
-### Use retry policy as DialOption
+### Providing the retry policy as a DialOption
 
-now you can use `grpc.WithDefaultCallOptions` as `grpc.DialOption` in `grpc.Dial`
-to set all clientConnection retry policy
+To use the above service config, pass it with `grpc.WithDefaultServiceConfig` to
+`grpc.Dial`.
 
 ```go
-conn, err := grpc.Dial(ctx,grpc.WithInsecure(),grpc.WithDefaultCallOptions(retryPolicy))
-```
-
-### Call 
-
-then your gRPC would retry transparent
-```go
-c := pb.NewEchoClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	reply, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: "Try and Success"})
-	if err != nil {
-		log.Println(err)
-    }
+conn, err := grpc.Dial(ctx,grpc.WithInsecure(), grpc.WithDefaultServiceConfig(retryPolicy))
 ```
