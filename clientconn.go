@@ -875,8 +875,9 @@ func (cc *ClientConn) resolveNow(o resolver.ResolveNowOption) {
 // This API is EXPERIMENTAL.
 func (cc *ClientConn) ResetConnectBackoff() {
 	cc.mu.Lock()
-	defer cc.mu.Unlock()
-	for ac := range cc.conns {
+	conns := cc.conns
+	cc.mu.Unlock()
+	for ac := range conns {
 		ac.resetConnectBackoff()
 	}
 }
