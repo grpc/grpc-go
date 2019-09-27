@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2019 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,9 +71,13 @@ func main() {
 	}()
 
 	c := pb.NewEchoClient(conn)
-	reply, err := c.UnaryEcho(newCtx(1*time.Second), &pb.EchoRequest{Message: "Try and Success"})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	reply, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: "Try and Success"})
 	if err != nil {
-		log.Println(err)
+		log.Fatalf("UnaryEcho error: %v", err)
 	}
-	log.Println(reply)
+	log.Printf("UnaryEcho reply: %v", reply)
 }

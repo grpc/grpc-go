@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2019 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import (
 	"log"
 	"net"
 	"sync"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -41,10 +40,10 @@ type failingServer struct {
 
 	reqCounter uint
 	reqModulo  uint
-	reqSleep   time.Duration
-	reqError   codes.Code
 }
 
+// this method will fail reqModulo - 1 times RPCs and return status code Unavailable,
+// and succeeded RPC on reqModulo times.
 func (s *failingServer) maybeFailRequest() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -52,8 +51,8 @@ func (s *failingServer) maybeFailRequest() error {
 	if (s.reqModulo > 0) && (s.reqCounter%s.reqModulo == 0) {
 		return nil
 	}
-	time.Sleep(s.reqSleep)
-	return status.Errorf(s.reqError, "maybeFailRequest: failing it")
+
+	return status.Errorf(codes.Unavailable, "maybeFailRequest: failing it")
 }
 
 func (s *failingServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
@@ -90,12 +89,11 @@ func main() {
 
 	s := grpc.NewServer()
 
-	// a retry configuration
+	// Configure server to pass every fourth RPC;
+	// client is configured to make four attempts.
 	failingservice := &failingServer{
 		reqCounter: 0,
 		reqModulo:  4,
-		reqError:   codes.Unavailable, /* uint = 14 */
-		reqSleep:   0,
 	}
 
 	pb.RegisterEchoServer(s, failingservice)
