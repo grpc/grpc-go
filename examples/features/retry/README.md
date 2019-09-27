@@ -2,7 +2,7 @@
 
 This example shows how to enable and configure retry on gRPC client.
 
-# Read
+# Document
 
 [Document about this example](https://github.com/grpc/proposal/blob/master/A6-client-retries.md#retry-policy)
 
