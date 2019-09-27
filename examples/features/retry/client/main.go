@@ -51,11 +51,6 @@ func retryDial() (*grpc.ClientConn, error) {
 	return grpc.Dial(*addr, grpc.WithInsecure(), grpc.WithDefaultServiceConfig(retryPolicy))
 }
 
-func newCtx(timeout time.Duration) context.Context {
-	ctx, _ := context.WithTimeout(context.TODO(), timeout)
-	return ctx
-}
-
 func main() {
 	flag.Parse()
 
