@@ -33,13 +33,17 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var port = flag.Int("port", 50052, "port number")
+var (
+	port           = flag.Int("port", 50052, "port number")
+	errUnavailable = codes.Unavailable
+)
 
 type failingServer struct {
 	mu sync.Mutex
 
 	reqCounter uint
 	reqModulo  uint
+	reqErr     codes.Code
 }
 
 // this method will fail reqModulo - 1 times RPCs and return status code Unavailable,
@@ -52,7 +56,7 @@ func (s *failingServer) maybeFailRequest() error {
 		return nil
 	}
 
-	return status.Errorf(codes.Unavailable, "maybeFailRequest: failing it")
+	return status.Errorf(s.reqErr, "maybeFailRequest: failing it")
 }
 
 func (s *failingServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
@@ -94,6 +98,7 @@ func main() {
 	failingservice := &failingServer{
 		reqCounter: 0,
 		reqModulo:  4,
+		reqErr:     errUnavailable,
 	}
 
 	pb.RegisterEchoServer(s, failingservice)
