@@ -679,7 +679,9 @@ func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize 
 	if err != nil {
 		return nil, 0, err
 	}
-	if sizer, ok := compressor.(encoding.CompressorSizer); ok {
+	if sizer, ok := compressor.(interface {
+		DecompressedSize(compressedBytes []byte) int
+	}); ok {
 		if size := sizer.DecompressedSize(d); size >= 0 {
 			if size > maxReceiveMessageSize {
 				return nil, size, nil

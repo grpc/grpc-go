@@ -108,8 +108,6 @@ func (z *reader) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-var _ encoding.CompressorSizer = &compressor{} // assert we conform to this optional interface
-
 // RFC1952 specifies that the last four bytes "contains the size of
 // the original (uncompressed) input data modulo 2^32."
 // gRPC has a max message size of 2GB so we don't need to worry about wraparound.

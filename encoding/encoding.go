@@ -46,14 +46,10 @@ type Compressor interface {
 	// coding header.  The result must be static; the result cannot change
 	// between calls.
 	Name() string
-}
-
-// CompressorSizer is optional, can be implemented to improve efficiency.
-// This API is EXPERIMENTAL.
-type CompressorSizer interface {
-	// DecompressedSize returns the exact size the message will
-	// uncompress into, or -1 if unknown.
-	DecompressedSize(buf []byte) int
+	// EXPERIMENTAL: if a Compressor implements
+	// DecompressedSize(compressedBytes []byte) int, gRPC will call it
+	// to determine the size of the buffer allocated for the result of decompression.
+	// Return -1 to indicate unknown size.
 }
 
 var registeredCompressor = make(map[string]Compressor)
