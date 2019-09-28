@@ -52,8 +52,8 @@ type Compressor interface {
 // This API is EXPERIMENTAL.
 type CompressorSizer interface {
 	// DecompressedSize returns the exact size the message will
-	// uncompress into, if known.
-	DecompressedSize(buf []byte, maxSize int) (int, error)
+	// uncompress into, or -1 if unknown.
+	DecompressedSize(buf []byte) int
 }
 
 var registeredCompressor = make(map[string]Compressor)

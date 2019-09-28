@@ -680,13 +680,15 @@ func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize 
 		return nil, 0, err
 	}
 	if sizer, ok := compressor.(encoding.CompressorSizer); ok {
-		if size, err := sizer.DecompressedSize(d, maxReceiveMessageSize); err == nil {
+		if size := sizer.DecompressedSize(d); size >= 0 {
 			if size > maxReceiveMessageSize {
 				return nil, size, nil
 			}
 			var buf bytes.Buffer
 			buf.Grow(size + bytes.MinRead) // extra space guarantees no reallocation
-			bytesRead, err := buf.ReadFrom(dcReader)
+			// Limit to size+1 so we can detect if the compressed data
+			// is actually bigger than the reported size
+			bytesRead, err := buf.ReadFrom(io.LimitReader(dcReader, int64(size)+1))
 			if err != nil {
 				return nil, size, err
 			}
