@@ -260,7 +260,7 @@ func newXDSClient(balancerName string, enableCDS bool, opts balancer.BuildOption
 		newADS:           newADS,
 		loseContact:      loseContact,
 		cleanup:          exitCleanup,
-		backoff:          defaultBackoffConfig,
+		backoff:          backoff.DefaultExponential,
 		loadStore:        loadStore,
 	}
 
