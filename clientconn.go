@@ -1332,7 +1332,7 @@ func (ac *addrConn) tearDown(err error) {
 	curTr := ac.transport
 	ac.transport = nil
 	// We have to set the state to Shutdown before anything else to prevent races
-	// between setting the state and logic that waits on context cancelation / etc.
+	// between setting the state and logic that waits on context cancellation / etc.
 	ac.updateConnectivityState(connectivity.Shutdown)
 	ac.cancel()
 	ac.curAddr = resolver.Address{}
@@ -1356,7 +1356,7 @@ func (ac *addrConn) tearDown(err error) {
 			},
 		})
 		// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to
-		// the entity beng deleted, and thus prevent it from being deleted right away.
+		// the entity being deleted, and thus prevent it from being deleted right away.
 		channelz.RemoveEntry(ac.channelzID)
 	}
 	ac.mu.Unlock()
