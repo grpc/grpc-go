@@ -1835,3 +1835,28 @@ func TestRequestInfoFoundInStreamContext(t *testing.T) {
 		t.Fatalf("RequestInfo.Method == %s; want %s", ri.Method, ch.Method)
 	}
 }
+
+// TestRequestInfoFoundInStreamContext tests whether data passed in as callheader data gets
+// propagated into the context object as a credentials.RequestInfo object.
+func TestRequestInfoFoundInStreamContext(t *testing.T) {
+	serverConfig := &ServerConfig{}
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	defer cancel()
+	defer server.stop()
+	defer client.Close()
+
+	ch := &CallHdr{
+		Method: "someService/Method",
+	}
+	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer ctxCancel()
+
+	s, err := client.NewStream(ctx, ch)
+	if err != nil {
+		t.Fatalf("client.NewStream() failed: %v", err)
+	}
+	ri := credentials.RequestInfoFromContext(s.ctx)
+	if ch.Method != ri.Method {
+		t.Fatalf("RequestInfo.Method == %s; want %s", ri.Method, ch.Method)
+	}
+}
