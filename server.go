@@ -926,7 +926,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 
 	// If dc is set and matches the stream's compression, use it.  Otherwise, try
 	// to find a matching registered compressor for decomp.
-	if rc, _ := stream.RecvCompress(); s.opts.dc != nil && s.opts.dc.Type() == rc {
+	if rc := stream.RecvCompress(); s.opts.dc != nil && s.opts.dc.Type() == rc {
 		dc = s.opts.dc
 	} else if rc != "" && rc != encoding.Identity {
 		decomp = encoding.GetCompressor(rc)
@@ -944,7 +944,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	if s.opts.cp != nil {
 		cp = s.opts.cp
 		stream.SetSendCompress(cp.Type())
-	} else if rc, _ := stream.RecvCompress(); rc != "" && rc != encoding.Identity {
+	} else if rc := stream.RecvCompress(); rc != "" && rc != encoding.Identity {
 		// Legacy compressor not specified; attempt to respond with same encoding.
 		comp = encoding.GetCompressor(rc)
 		if comp != nil {
@@ -1151,7 +1151,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 
 	// If dc is set and matches the stream's compression, use it.  Otherwise, try
 	// to find a matching registered compressor for decomp.
-	if rc, _ := stream.RecvCompress(); s.opts.dc != nil && s.opts.dc.Type() == rc {
+	if rc := stream.RecvCompress(); s.opts.dc != nil && s.opts.dc.Type() == rc {
 		ss.dc = s.opts.dc
 	} else if rc != "" && rc != encoding.Identity {
 		ss.decomp = encoding.GetCompressor(rc)
@@ -1169,7 +1169,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	if s.opts.cp != nil {
 		ss.cp = s.opts.cp
 		stream.SetSendCompress(s.opts.cp.Type())
-	} else if rc, _ := stream.RecvCompress(); rc != "" && rc != encoding.Identity {
+	} else if rc := stream.RecvCompress(); rc != "" && rc != encoding.Identity {
 		// Legacy compressor not specified; attempt to respond with same encoding.
 		ss.comp = encoding.GetCompressor(rc)
 		if ss.comp != nil {

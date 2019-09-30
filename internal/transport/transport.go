@@ -233,6 +233,7 @@ const (
 type Stream struct {
 	id           uint32
 	st           ServerTransport    // nil for client side Stream
+	ct           *http2Client       // nil for server side Stream
 	ctx          context.Context    // the associated context of the stream
 	cancel       context.CancelFunc // always nil for client side Stream
 	done         chan struct{}      // closed at the end of stream to unblock writers. On the client side.
@@ -251,6 +252,10 @@ type Stream struct {
 
 	headerChan       chan struct{} // closed to indicate the end of header metadata.
 	headerChanClosed uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
+	headerValid      bool          // set if headerChan is closed due to valid
+	// headers.  false if headerChan is open or
+	// if the RPC failed before headers (or
+	// trailers-only) were received
 
 	// hdrMu protects header and trailer metadata on the server-side.
 	hdrMu sync.Mutex
@@ -303,35 +308,27 @@ func (s *Stream) getState() streamState {
 	return streamState(atomic.LoadUint32((*uint32)(&s.state)))
 }
 
-func (s *Stream) waitOnHeader() error {
+func (s *Stream) waitOnHeader() {
 	if s.headerChan == nil {
 		// On the server headerChan is always nil since a stream originates
 		// only after having received headers.
-		return nil
+		return
 	}
 	select {
 	case <-s.ctx.Done():
-		// We prefer success over failure when reading messages because we delay
-		// context error in stream.Read(). To keep behavior consistent, we also
-		// prefer success here.
-		select {
-		case <-s.headerChan:
-			return nil
-		default:
-		}
-		return ContextErr(s.ctx.Err())
+		// Close the stream to prevent headers/trailers from changing after
+		// this function returns.
+		err := ContextErr(s.ctx.Err())
+		s.ct.closeStream(s, err, false, 0, status.Convert(err), nil, false)
 	case <-s.headerChan:
-		return nil
 	}
 }
 
 // RecvCompress returns the compression algorithm applied to the inbound
 // message. It is empty string if there is no compression applied.
-func (s *Stream) RecvCompress() (string, error) {
-	if err := s.waitOnHeader(); err != nil {
-		return "", err
-	}
-	return s.recvCompress, nil
+func (s *Stream) RecvCompress() string {
+	s.waitOnHeader()
+	return s.recvCompress
 }
 
 // SetSendCompress sets the compression algorithm to the stream.
@@ -358,17 +355,11 @@ func (s *Stream) Header() (metadata.MD, error) {
 		// header after t.WriteHeader is called.
 		return s.header.Copy(), nil
 	}
-	err := s.waitOnHeader()
-	// Even if the stream is closed, header is returned if available.
-	select {
-	case <-s.headerChan:
-		if s.header == nil {
-			return nil, nil
-		}
-		return s.header.Copy(), nil
-	default:
+	s.waitOnHeader()
+	if !s.headerValid {
+		return nil, s.status.Err()
 	}
-	return nil, err
+	return s.header.Copy(), nil
 }
 
 // TrailersOnly blocks until a header or trailers-only frame is received and
@@ -376,10 +367,7 @@ func (s *Stream) Header() (metadata.MD, error) {
 // before headers are received, returns true, nil.  If a context error happens
 // first, returns it as a status error.  Client-side only.
 func (s *Stream) TrailersOnly() (bool, error) {
-	err := s.waitOnHeader()
-	if err != nil {
-		return false, err
-	}
+	s.waitOnHeader()
 	return s.noHeaders, nil
 }
 
