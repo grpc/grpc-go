@@ -37,6 +37,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/internal/testutils"
@@ -2376,5 +2377,30 @@ func TestTCPUserTimeout(t *testing.T) {
 			t.Fatalf("wrong TCP_USER_TIMEOUT set on conn. expected %d. got %d",
 				timeoutMS, opt)
 		}
+	}
+}
+
+// TestRequestInfoFoundInStreamContext tests whether data passed in as callheader data gets
+// propagated into the context object as a credentials.RequestInfo object.
+func TestRequestInfoFoundInStreamContext(t *testing.T) {
+	serverConfig := &ServerConfig{}
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	defer cancel()
+	defer server.stop()
+	defer client.Close()
+
+	ch := &CallHdr{
+		Method: "someService/Method",
+	}
+	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer ctxCancel()
+
+	s, err := client.NewStream(ctx, ch)
+	if err != nil {
+		t.Fatalf("client.NewStream() failed: %v", err)
+	}
+	ri := credentials.RequestInfoFromContext(s.ctx)
+	if ch.Method != ri.Method {
+		t.Fatalf("RequestInfo.Method == %s; want %s", ri.Method, ch.Method)
 	}
 }

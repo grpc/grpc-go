@@ -46,7 +46,8 @@ var (
 	// pointer to the wrapped Status proto for a given status.Status without a
 	// call to proto.Clone(). The returned Status proto should not be mutated by
 	// the caller.
-	StatusRawProto interface{} // func (*status.Status) *spb.Status
+	StatusRawProto        interface{} // func (*status.Status) *spb.Status
+	NewRequestInfoContext interface{} // (this avoids a circular dependency; we do it for other things like this already)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.
