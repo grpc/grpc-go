@@ -7484,3 +7484,32 @@ func parseCfg(s string) serviceconfig.Config {
 	}
 	return c
 }
+
+type methodTestCreds struct {
+	expectedMethod string
+}
+
+func (m methodTestCreds) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	ri := credentials.RequestInfoFromContext(ctx)
+	return nil, status.Errorf(codes.Unknown, ri.Method)
+}
+
+func (m methodTestCreds) RequireTransportSecurity() bool {
+	return false
+}
+
+func (s) TestGRPCMethodAccessibleToCredsViaContextRequestInfo(t *testing.T) {
+	const wantMethod = "/grpc.testing.TestService/EmptyCall"
+	ss := &stubServer{}
+	if err := ss.Start(nil, grpc.WithPerRPCCredentials(methodTestCreds{"/grpc.testing.TestService/EmptyCall"})); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); status.Convert(err).Message() != wantMethod {
+		t.Fatalf("ss.client.EmptyCall(_, _) = _, %v; want _, _.Message()=%q", err, wantMethod)
+	}
+}

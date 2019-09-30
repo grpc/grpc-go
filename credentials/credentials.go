@@ -34,6 +34,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/credentials/internal"
+	ginternal "google.golang.org/grpc/internal"
 )
 
 // PerRPCCredentials defines the common interface for the credentials which need to
@@ -333,4 +334,33 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 	}
 
 	return cfg.Clone()
+}
+
+// RequestInfo contains request data to be attached to the context passed along to GetRequestMetadata calls. This API is experimental.
+type RequestInfo struct {
+	// The method passed to Invoke or NewStream for this RPC. (For proto methods, this has the format "/some.Service/Method")
+	Method string
+}
+
+// requestInfoKey is a struct to be used as the key when attaching a RequestInfo to a context object.
+type requestInfoKey struct{}
+
+// RequestInfoFromContext extracts the RequestInfo from the context. This API is experimental.
+func RequestInfoFromContext(ctx context.Context) RequestInfo {
+	ri, ok := ctx.Value(requestInfoKey{}).(RequestInfo)
+	if !ok {
+		return RequestInfo{}
+	}
+	return ri
+}
+
+// withRequestInfo adds the supplied RequestInfo to the context. This API is experimental.
+func withRequestInfo(ctx context.Context, ri RequestInfo) context.Context {
+	return context.WithValue(ctx, requestInfoKey{}, ri)
+}
+
+func init() {
+	ginternal.NewRequestInfoContext = func(ctx context.Context, ri RequestInfo) context.Context {
+		return context.WithValue(ctx, requestInfoKey{}, ri)
+	}
 }
