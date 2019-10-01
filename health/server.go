@@ -35,7 +35,7 @@ import (
 
 // Server implements `service Health`.
 type Server struct {
-	mu sync.Mutex
+	mu sync.RWMutex
 	// If shutdown is true, it's expected all serving status is NOT_SERVING, and
 	// will stay in NOT_SERVING.
 	shutdown bool
@@ -54,8 +54,8 @@ func NewServer() *Server {
 
 // Check implements `service Health`.
 func (s *Server) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if servingStatus, ok := s.statusMap[in.Service]; ok {
 		return &healthpb.HealthCheckResponse{
 			Status: servingStatus,
