@@ -144,7 +144,7 @@ func (s) TestCancelWhileRecvingWithCompression(t *testing.T) {
 			t.Fatalf("failed to start bidi streaming RPC: %v", err)
 		}
 		// Cancel the stream while receiving to trigger the internal error.
-		time.AfterFunc(time.Millisecond*1, cancel)
+		time.AfterFunc(time.Millisecond, cancel)
 		for {
 			_, err := s.Recv()
 			if err != nil {

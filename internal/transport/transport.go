@@ -252,10 +252,10 @@ type Stream struct {
 
 	headerChan       chan struct{} // closed to indicate the end of header metadata.
 	headerChanClosed uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
-	headerValid      bool          // set if headerChan is closed due to valid
-	// headers.  false if headerChan is open or
-	// if the RPC failed before headers (or
-	// trailers-only) were received
+	// headerValid indicates whether a valid header was received.  Only
+	// meaningful after headerChan is closed (always call waitOnHeader() before
+	// reading its value).
+	headerValid bool
 
 	// hdrMu protects header and trailer metadata on the server-side.
 	hdrMu sync.Mutex
@@ -364,11 +364,10 @@ func (s *Stream) Header() (metadata.MD, error) {
 
 // TrailersOnly blocks until a header or trailers-only frame is received and
 // then returns true if the stream was trailers-only.  If the stream ends
-// before headers are received, returns true, nil.  If a context error happens
-// first, returns it as a status error.  Client-side only.
-func (s *Stream) TrailersOnly() (bool, error) {
+// before headers are received, returns true, nil.  Client-side only.
+func (s *Stream) TrailersOnly() bool {
 	s.waitOnHeader()
-	return s.noHeaders, nil
+	return s.noHeaders
 }
 
 // Trailer returns the cached trailer metedata. Note that if it is not called
