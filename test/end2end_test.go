@@ -7485,9 +7485,7 @@ func parseCfg(s string) serviceconfig.Config {
 	return c
 }
 
-type methodTestCreds struct {
-	expectedMethod string
-}
+type methodTestCreds struct{}
 
 func (m methodTestCreds) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
 	ri := credentials.RequestInfoFromContext(ctx)
@@ -7501,7 +7499,7 @@ func (m methodTestCreds) RequireTransportSecurity() bool {
 func (s) TestGRPCMethodAccessibleToCredsViaContextRequestInfo(t *testing.T) {
 	const wantMethod = "/grpc.testing.TestService/EmptyCall"
 	ss := &stubServer{}
-	if err := ss.Start(nil, grpc.WithPerRPCCredentials(methodTestCreds{"/grpc.testing.TestService/EmptyCall"})); err != nil {
+	if err := ss.Start(nil, grpc.WithPerRPCCredentials(methodTestCreds{})); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()

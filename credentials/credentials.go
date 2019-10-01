@@ -354,11 +354,6 @@ func RequestInfoFromContext(ctx context.Context) RequestInfo {
 	return ri
 }
 
-// withRequestInfo adds the supplied RequestInfo to the context. This API is experimental.
-func withRequestInfo(ctx context.Context, ri RequestInfo) context.Context {
-	return context.WithValue(ctx, requestInfoKey{}, ri)
-}
-
 func init() {
 	ginternal.NewRequestInfoContext = func(ctx context.Context, ri RequestInfo) context.Context {
 		return context.WithValue(ctx, requestInfoKey{}, ri)
