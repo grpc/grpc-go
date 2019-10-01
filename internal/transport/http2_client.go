@@ -352,6 +352,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	// TODO(zhaoq): Handle uint32 overflow of Stream.id.
 	s := &Stream{
+		ct:             t,
 		done:           make(chan struct{}),
 		method:         callHdr.Method,
 		sendCompress:   callHdr.SendCompress,
@@ -1191,6 +1192,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 
 	// If headerChan hasn't been closed yet
 	if atomic.CompareAndSwapUint32(&s.headerChanClosed, 0, 1) {
+		s.headerValid = true
 		if !endStream {
 			// HEADERS frame block carries a Response-Headers.
 			isHeader = true
