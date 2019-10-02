@@ -75,7 +75,7 @@ func (s) TestBalancerErrorResolverPolling(t *testing.T) {
 			return nil
 		},
 	}
-	const balName = "BalancerErrorResolverPolling2"
+	const balName = "BalancerErrorResolverPolling"
 	balancer.Register(&funcBalancerBuilder{name: balName, instance: fb})
 
 	testResolverErrorPolling(t,
