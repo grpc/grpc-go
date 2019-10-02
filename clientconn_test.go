@@ -30,10 +30,10 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
-	grpcbackoff "google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal/backoff"
+	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/naming"
@@ -656,22 +656,22 @@ func (s) TestCredentialsMisuse(t *testing.T) {
 }
 
 func (s) TestWithBackoffConfigDefault(t *testing.T) {
-	testBackoffConfigSet(t, backoff.DefaultExponential)
+	testBackoffConfigSet(t, internalbackoff.DefaultExponential)
 }
 
 func (s) TestWithBackoffConfig(t *testing.T) {
 	b := BackoffConfig{MaxDelay: DefaultBackoffConfig.MaxDelay / 2}
-	bc := grpcbackoff.DefaultConfig
+	bc := backoff.DefaultConfig
 	bc.MaxDelay = b.MaxDelay
-	wantBackoff := backoff.Exponential{Config: bc}
+	wantBackoff := internalbackoff.Exponential{Config: bc}
 	testBackoffConfigSet(t, wantBackoff, WithBackoffConfig(b))
 }
 
 func (s) TestWithBackoffMaxDelay(t *testing.T) {
 	md := DefaultBackoffConfig.MaxDelay / 2
-	bc := grpcbackoff.DefaultConfig
+	bc := backoff.DefaultConfig
 	bc.MaxDelay = md
-	wantBackoff := backoff.Exponential{Config: bc}
+	wantBackoff := internalbackoff.Exponential{Config: bc}
 	testBackoffConfigSet(t, wantBackoff, WithBackoffMaxDelay(md))
 }
 
@@ -679,16 +679,16 @@ func (s) TestWithConnectParams(t *testing.T) {
 	bd := 2 * time.Second
 	mltpr := 2.0
 	jitter := 0.0
-	bc := grpcbackoff.Config{BaseDelay: bd, Multiplier: mltpr, Jitter: jitter}
+	bc := backoff.Config{BaseDelay: bd, Multiplier: mltpr, Jitter: jitter}
 
 	crt := ConnectParams{Backoff: bc}
 	// MaxDelay is not set in the ConnectParams. So it should not be set on
-	// backoff.Exponential as well.
-	wantBackoff := backoff.Exponential{Config: bc}
+	// internalbackoff.Exponential as well.
+	wantBackoff := internalbackoff.Exponential{Config: bc}
 	testBackoffConfigSet(t, wantBackoff, WithConnectParams(crt))
 }
 
-func testBackoffConfigSet(t *testing.T, wantBackoff backoff.Exponential, opts ...DialOption) {
+func testBackoffConfigSet(t *testing.T, wantBackoff internalbackoff.Exponential, opts ...DialOption) {
 	opts = append(opts, WithInsecure())
 	conn, err := Dial("passthrough:///foo:80", opts...)
 	if err != nil {
@@ -700,7 +700,7 @@ func testBackoffConfigSet(t *testing.T, wantBackoff backoff.Exponential, opts ..
 		t.Fatalf("backoff config not set")
 	}
 
-	gotBackoff, ok := conn.dopts.bs.(backoff.Exponential)
+	gotBackoff, ok := conn.dopts.bs.(internalbackoff.Exponential)
 	if !ok {
 		t.Fatalf("unexpected type of backoff config: %#v", conn.dopts.bs)
 	}

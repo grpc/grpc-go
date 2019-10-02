@@ -16,14 +16,15 @@
  *
  */
 
-// Package backoff provides configuration options for connection backoff.
+// Package backoff provides configuration options for backoff.
+//
+// More details can be found at:
+// https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
 package backoff
 
 import "time"
 
-// Config defines the configuration options for connection backoff. More
-// details can be found at
-// https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
+// Config defines the configuration options for backoff.
 //
 // This API is EXPERIMENTAL.
 type Config struct {

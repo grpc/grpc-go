@@ -24,20 +24,20 @@ package grpc
 import (
 	"time"
 
-	grpcbackoff "google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/backoff"
 )
 
 // DefaultBackoffConfig uses values specified for backoff in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
 //
-// Deprecated: use ConnectParams instead.
+// Deprecated: use ConnectParams instead. Will be supported throughout 1.x.
 var DefaultBackoffConfig = BackoffConfig{
 	MaxDelay: 120 * time.Second,
 }
 
 // BackoffConfig defines the parameters for the default gRPC backoff strategy.
 //
-// Deprecated: use ConnectParams instead.
+// Deprecated: use ConnectParams instead. Will be supported throughout 1.x.
 type BackoffConfig struct {
 	// MaxDelay is the upper bound of backoff delay.
 	MaxDelay time.Duration
@@ -51,7 +51,7 @@ type BackoffConfig struct {
 // This API is EXPERIMENTAL.
 type ConnectParams struct {
 	// Backoff specifies the configuration options for connection backoff.
-	Backoff grpcbackoff.Config
+	Backoff backoff.Config
 	// MinConnectTimeout is the minimum amount of time we are willing to give a
 	// connection to complete.
 	MinConnectTimeout time.Duration
