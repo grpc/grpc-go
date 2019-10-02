@@ -39,6 +39,7 @@ var (
 func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
+	bg.start()
 
 	// Add one balancer to group.
 	bg.add(testBalancerIDs[0], 1, rrBuilder)
@@ -98,6 +99,7 @@ func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 func TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
+	bg.start()
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
@@ -130,6 +132,7 @@ func TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
+	bg.start()
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
@@ -226,6 +229,7 @@ func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 func TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
+	bg.start()
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -264,6 +268,7 @@ func TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 func TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
+	bg.start()
 
 	// Add three balancers to group and send one resolved address to both
 	// balancers.
@@ -331,6 +336,7 @@ func TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 func TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
+	bg.start()
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -382,6 +388,7 @@ func TestBalancerGroup_LoadReport(t *testing.T) {
 
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, testLoadStore)
+	bg.start()
 
 	backendToBalancerID := make(map[balancer.SubConn]internal.Locality)
 
@@ -449,4 +456,115 @@ func TestBalancerGroup_LoadReport(t *testing.T) {
 	if !reflect.DeepEqual(testLoadStore.callsCost, wantCost) {
 		t.Fatalf("want cost: %v, got: %v", testLoadStore.callsCost, wantCost)
 	}
+}
+
+// Create a new balancer group, add balancer and backends, but not start.
+// - b1, weight 2, backends [0,1]
+// - b2, weight 1, backends [2,3]
+// Start the balancer group and check behavior.
+//
+// Close the balancer group, call add/remove/change weight/change address.
+// - b2, weight 3, backends [0,3]
+// - b3, weight 1, backends [1,2]
+// Start the balancer group again and check for behavior.
+func TestBalancerGroup_start_close(t *testing.T) {
+	cc := newTestClientConn(t)
+	bg := newBalancerGroup(cc, nil)
+
+	// Add two balancers to group and send two resolved addresses to both
+	// balancers.
+	bg.add(testBalancerIDs[0], 2, rrBuilder)
+	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.add(testBalancerIDs[1], 1, rrBuilder)
+	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+
+	bg.start()
+
+	m1 := make(map[resolver.Address]balancer.SubConn)
+	for i := 0; i < 4; i++ {
+		addrs := <-cc.newSubConnAddrsCh
+		sc := <-cc.newSubConnCh
+		m1[addrs[0]] = sc
+		bg.handleSubConnStateChange(sc, connectivity.Connecting)
+		bg.handleSubConnStateChange(sc, connectivity.Ready)
+	}
+
+	// Test roundrobin on the last picker.
+	p1 := <-cc.newPickerCh
+	want := []balancer.SubConn{
+		m1[testBackendAddrs[0]], m1[testBackendAddrs[0]],
+		m1[testBackendAddrs[1]], m1[testBackendAddrs[1]],
+		m1[testBackendAddrs[2]], m1[testBackendAddrs[3]],
+	}
+	if err := isRoundRobin(want, func() balancer.SubConn {
+		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
+		return sc
+	}); err != nil {
+		t.Fatalf("want %v, got %v", want, err)
+	}
+
+	bg.close()
+	for i := 0; i < 4; i++ {
+		bg.handleSubConnStateChange(<-cc.removeSubConnCh, connectivity.Shutdown)
+	}
+
+	// Add b3, weight 1, backends [1,2].
+	bg.add(testBalancerIDs[2], 1, rrBuilder)
+	bg.handleResolvedAddrs(testBalancerIDs[2], testBackendAddrs[1:3])
+
+	// Remove b1.
+	bg.remove(testBalancerIDs[0])
+
+	// Update b2 to weight 3, backends [0,3].
+	bg.changeWeight(testBalancerIDs[1], 3)
+	bg.handleResolvedAddrs(testBalancerIDs[1], append([]resolver.Address(nil), testBackendAddrs[0], testBackendAddrs[3]))
+
+	bg.start()
+
+	m2 := make(map[resolver.Address]balancer.SubConn)
+	for i := 0; i < 4; i++ {
+		addrs := <-cc.newSubConnAddrsCh
+		sc := <-cc.newSubConnCh
+		m2[addrs[0]] = sc
+		bg.handleSubConnStateChange(sc, connectivity.Connecting)
+		bg.handleSubConnStateChange(sc, connectivity.Ready)
+	}
+
+	// Test roundrobin on the last picker.
+	p2 := <-cc.newPickerCh
+	want = []balancer.SubConn{
+		m2[testBackendAddrs[0]], m2[testBackendAddrs[0]], m2[testBackendAddrs[0]],
+		m2[testBackendAddrs[3]], m2[testBackendAddrs[3]], m2[testBackendAddrs[3]],
+		m2[testBackendAddrs[1]], m2[testBackendAddrs[2]],
+	}
+	if err := isRoundRobin(want, func() balancer.SubConn {
+		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
+		return sc
+	}); err != nil {
+		t.Fatalf("want %v, got %v", want, err)
+	}
+}
+
+// Test that balancer group start() doesn't deadlock if the balancer calls back
+// into balancer group inline when it gets an update.
+//
+// The potential deadlock can happen if we
+//  - hold a lock and send updates to balancer (e.g. update resolved addresses)
+//  - the balancer calls back (NewSubConn or update picker) in line
+// The callback will try to hold hte same lock again, which will cause a
+// deadlock.
+//
+// This test starts the balancer group with a test balancer, will updates picker
+// whenever it gets an address update. It's expected that start() doesn't block
+// because of deadlock.
+func TestBalancerGroup_start_close_deadlock(t *testing.T) {
+	cc := newTestClientConn(t)
+	bg := newBalancerGroup(cc, nil)
+
+	bg.add(testBalancerIDs[0], 2, &testConstBalancerBuilder{})
+	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.add(testBalancerIDs[1], 1, &testConstBalancerBuilder{})
+	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+
+	bg.start()
 }
