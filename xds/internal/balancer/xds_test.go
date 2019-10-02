@@ -63,8 +63,10 @@ const (
 var (
 	testBalancerNameFooBar = "foo.bar"
 	testLBConfigFooBar     = &xdsinternal.LBConfig{
-		BalancerName:   testBalancerNameFooBar,
-		ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerB},
+		BalancerName: testBalancerNameFooBar,
+		// FIXME: to use fake_balancer_B in tests, CDS response needs to
+		//  specifiy B as child balancing policy.
+		//  ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerB},
 		FallBackPolicy: &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 	}
 
@@ -330,8 +332,9 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 		addr, td, _, cleanup := setupServer(t)
 		cleanups = append(cleanups, cleanup)
 		workingLBConfig := &xdsinternal.LBConfig{
-			BalancerName:   addr,
-			ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
+			BalancerName: addr,
+			// FIXME: CDS need to change child policy to fake balancer A.
+			//  ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 			FallBackPolicy: &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 		}
 		lb.UpdateClientConnState(balancer.ClientConnState{
@@ -390,31 +393,6 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 		expectedChildPolicy *xdsinternal.LoadBalancingConfig
 	}{
 		{
-			cfg: &xdsinternal.LBConfig{
-				ChildPolicy: &xdsinternal.LoadBalancingConfig{
-					Name:   fakeBalancerA,
-					Config: json.RawMessage("{}"),
-				},
-			},
-			responseToSend: testEDSRespWithoutEndpoints,
-			expectedChildPolicy: &xdsinternal.LoadBalancingConfig{
-				Name:   string(fakeBalancerA),
-				Config: json.RawMessage(`{}`),
-			},
-		},
-		{
-			cfg: &xdsinternal.LBConfig{
-				ChildPolicy: &xdsinternal.LoadBalancingConfig{
-					Name:   fakeBalancerB,
-					Config: json.RawMessage("{}"),
-				},
-			},
-			expectedChildPolicy: &xdsinternal.LoadBalancingConfig{
-				Name:   string(fakeBalancerB),
-				Config: json.RawMessage(`{}`),
-			},
-		},
-		{
 			cfg:            &xdsinternal.LBConfig{},
 			responseToSend: testCDSResp,
 			expectedChildPolicy: &xdsinternal.LoadBalancingConfig{
@@ -439,6 +417,8 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 						t.Fatalf("got childPolicy %v, want %v", childPolicy, test.expectedChildPolicy)
 					}
 				case <-time.After(time.Second):
+					// FIXME: this will fail because the xds_client doesn't do
+					//  CDS. Will be OK after fixing that.
 					t.Fatal("haven't got policy update after 1s")
 				}
 				break
@@ -471,8 +451,9 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 	addr, td, _, cleanup := setupServer(t)
 
 	cfg := xdsinternal.LBConfig{
-		BalancerName:   addr,
-		ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
+		BalancerName: addr,
+		// FIXME: child policy
+		//  ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 		FallBackPolicy: &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: &cfg})
@@ -546,8 +527,9 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	addr, td, _, cleanup := setupServer(t)
 	defer cleanup()
 	cfg := &xdsinternal.LBConfig{
-		BalancerName:   addr,
-		ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
+		BalancerName: addr,
+		// FIXME: child policy
+		//  ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 		FallBackPolicy: &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
@@ -624,8 +606,9 @@ func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 	addr, td, _, cleanup := setupServer(t)
 	defer cleanup()
 	cfg := &xdsinternal.LBConfig{
-		BalancerName:   addr,
-		ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
+		BalancerName: addr,
+		// FIXME: child policy
+		//  ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 		FallBackPolicy: &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
@@ -687,7 +670,6 @@ func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 func (s) TestXdsBalancerConfigParsingSelectingLBPolicy(t *testing.T) {
 	js := json.RawMessage(`{
 "balancerName": "fake.foo.bar",
-"childPolicy": [{"fake_balancer_C": {}}, {"fake_balancer_A": {}}, {"fake_balancer_B": {}}],
 "fallbackPolicy": [{"fake_balancer_C": {}}, {"fake_balancer_B": {}}, {"fake_balancer_A": {}}]
 }`)
 	cfg, err := (&xdsBalancerBuilder{}).ParseConfig(js)
@@ -695,10 +677,6 @@ func (s) TestXdsBalancerConfigParsingSelectingLBPolicy(t *testing.T) {
 		t.Fatalf("unable to unmarshal balancer config into xds config: %v", err)
 	}
 	xdsCfg := cfg.(*xdsinternal.LBConfig)
-	wantChildPolicy := &xdsinternal.LoadBalancingConfig{Name: string(fakeBalancerA), Config: json.RawMessage(`{}`)}
-	if !reflect.DeepEqual(xdsCfg.ChildPolicy, wantChildPolicy) {
-		t.Fatalf("got child policy %v, want %v", xdsCfg.ChildPolicy, wantChildPolicy)
-	}
 	wantFallbackPolicy := &xdsinternal.LoadBalancingConfig{Name: string(fakeBalancerB), Config: json.RawMessage(`{}`)}
 	if !reflect.DeepEqual(xdsCfg.FallBackPolicy, wantFallbackPolicy) {
 		t.Fatalf("got fallback policy %v, want %v", xdsCfg.FallBackPolicy, wantFallbackPolicy)
@@ -718,20 +696,10 @@ func (s) TestXdsLoadbalancingConfigParsing(t *testing.T) {
 		},
 		{
 			name: "success1",
-			s:    `{"childPolicy":[{"pick_first":{}}]}`,
+			s:    `{"fallbackPolicy":[{"pick_first":{}}]}`,
 			want: &xdsinternal.LBConfig{
-				ChildPolicy: &xdsinternal.LoadBalancingConfig{
+				FallBackPolicy: &xdsinternal.LoadBalancingConfig{
 					Name:   "pick_first",
-					Config: json.RawMessage(`{}`),
-				},
-			},
-		},
-		{
-			name: "success2",
-			s:    `{"childPolicy":[{"round_robin":{}},{"pick_first":{}}]}`,
-			want: &xdsinternal.LBConfig{
-				ChildPolicy: &xdsinternal.LoadBalancingConfig{
-					Name:   "round_robin",
 					Config: json.RawMessage(`{}`),
 				},
 			},

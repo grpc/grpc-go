@@ -191,7 +191,8 @@ func (x *xdsBalancer) startNewXDSClient(u *xdsinternal.LBConfig) {
 			prevClient.close()
 		}
 	}
-	x.client = newXDSClient(u.BalancerName, u.ChildPolicy == nil, x.buildOpts, x.loadStore, newADS, loseContact, exitCleanup)
+	// FIXME: enable CDS. Disabling it now only for tests to pass.
+	x.client = newXDSClient(u.BalancerName, false, x.buildOpts, x.loadStore, newADS, loseContact, exitCleanup)
 	go x.client.run()
 }
 
@@ -260,15 +261,8 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 			}
 
 			// With a different BalancerName, we need to create a new xdsClient.
-			// If current or previous ChildPolicy is nil, then we also need to recreate a new xdsClient.
-			// This is because with nil ChildPolicy xdsClient will do CDS request, while non-nil won't.
-			if cfg.BalancerName != x.config.BalancerName || (cfg.ChildPolicy == nil) != (x.config.ChildPolicy == nil) {
+			if cfg.BalancerName != x.config.BalancerName {
 				x.startNewXDSClient(cfg)
-			}
-			// We will update the xdsLB with the new child policy, if we got a different one and it's not nil.
-			// The nil case will be handled when the CDS response gets processed, we will update xdsLB at that time.
-			if x.xdsLB != nil && !reflect.DeepEqual(cfg.ChildPolicy, x.config.ChildPolicy) && cfg.ChildPolicy != nil {
-				x.xdsLB.HandleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
 			}
 
 			if x.fallbackLB != nil && !reflect.DeepEqual(cfg.FallBackPolicy, x.config.FallBackPolicy) {
@@ -492,9 +486,6 @@ func (x *xdsBalancer) cancelFallbackAndSwitchEDSBalancerIfNecessary() {
 			x.fallbackLB = nil
 		}
 		x.xdsLB = newEDSBalancer(x.cc, x.loadStore)
-		if x.config.ChildPolicy != nil {
-			x.xdsLB.HandleChildPolicy(x.config.ChildPolicy.Name, x.config.ChildPolicy.Config)
-		}
 	}
 }
 

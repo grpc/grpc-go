@@ -115,7 +115,6 @@ func (s) TestXdsLoadReporting(t *testing.T) {
 
 	cfg := &xdsinternal.LBConfig{
 		BalancerName: addr,
-		ChildPolicy:  &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA}, // Set this to skip cds.
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
 	td.sendResp(&response{resp: testEDSRespWithoutEndpoints})

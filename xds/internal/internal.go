@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/serviceconfig"
 	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
 )
@@ -58,8 +59,6 @@ type LBConfig struct {
 	serviceconfig.LoadBalancingConfig
 	// BalancerName represents the load balancer to use.
 	BalancerName string
-	// ChildPolicy represents the load balancing config for the child policy.
-	ChildPolicy *LoadBalancingConfig
 	// FallBackPolicy represents the load balancing config for the fallback.
 	FallBackPolicy *LoadBalancingConfig
 }
@@ -78,17 +77,6 @@ func (l *LBConfig) UnmarshalJSON(data []byte) error {
 			if err := json.Unmarshal(v, &l.BalancerName); err != nil {
 				return err
 			}
-		case "childPolicy":
-			var lbcfgs []*LoadBalancingConfig
-			if err := json.Unmarshal(v, &lbcfgs); err != nil {
-				return err
-			}
-			for _, lbcfg := range lbcfgs {
-				if balancer.Get(lbcfg.Name) != nil {
-					l.ChildPolicy = lbcfg
-					break
-				}
-			}
 		case "fallbackPolicy":
 			var lbcfgs []*LoadBalancingConfig
 			if err := json.Unmarshal(v, &lbcfgs); err != nil {
@@ -100,6 +88,8 @@ func (l *LBConfig) UnmarshalJSON(data []byte) error {
 					break
 				}
 			}
+		default:
+			grpclog.Warningf("unknown field in xds balancer config: %q", k)
 		}
 	}
 	return nil
