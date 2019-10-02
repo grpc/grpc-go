@@ -107,10 +107,10 @@ type State struct {
 	// Addresses is the latest set of resolved addresses for the target.
 	Addresses []Address
 
-	// ServiceConfigGetter contains the result from parsing the latest service
+	// ServiceConfig contains the result from parsing the latest service
 	// config.  If it is nil, it indicates no service config is present or the
 	// resolver does not provide service configs.
-	ServiceConfigGetter *serviceconfig.Getter
+	ServiceConfig *serviceconfig.ParseResult
 }
 
 // ClientConn contains the callbacks for resolver to notify any updates
@@ -140,7 +140,7 @@ type ClientConn interface {
 	NewServiceConfig(serviceConfig string)
 	// ParseServiceConfig parses the provided service config and returns an
 	// object that provides the parsed config.
-	ParseServiceConfig(serviceConfigJSON string) *serviceconfig.Getter
+	ParseServiceConfig(serviceConfigJSON string) *serviceconfig.ParseResult
 }
 
 // Target represents a target for gRPC, as specified in:

@@ -902,9 +902,9 @@ func TestGRPCLBPickFirst(t *testing.T) {
 
 	// Start with sub policy pick_first.
 	const pfc = `{"loadBalancingConfig":[{"grpclb":{"childPolicy":[{"pick_first":{}}]}}]}`
-	svcCfg := r.CC.ParseServiceConfig(pfc)
-	if _, err := svcCfg.Get(); err != nil {
-		t.Fatalf("Error parsing config %q: %v", pfc, err)
+	scpr := r.CC.ParseServiceConfig(pfc)
+	if scpr.Err != nil {
+		t.Fatalf("Error parsing config %q: %v", pfc, scpr.Err)
 	}
 
 	r.UpdateState(resolver.State{
@@ -913,7 +913,7 @@ func TestGRPCLBPickFirst(t *testing.T) {
 			Type:       resolver.GRPCLB,
 			ServerName: lbServerName,
 		}},
-		ServiceConfigGetter: svcCfg,
+		ServiceConfig: scpr,
 	})
 
 	result = ""
@@ -953,8 +953,8 @@ func TestGRPCLBPickFirst(t *testing.T) {
 
 	// Switch sub policy to roundrobin.
 	grpclbServiceConfigEmpty := r.CC.ParseServiceConfig(`{}`)
-	if _, err := grpclbServiceConfigEmpty.Get(); err != nil {
-		t.Fatalf("Error parsing config %q: %v", `{}`, err)
+	if grpclbServiceConfigEmpty.Err != nil {
+		t.Fatalf("Error parsing config %q: %v", `{}`, grpclbServiceConfigEmpty.Err)
 	}
 
 	r.UpdateState(resolver.State{
@@ -963,7 +963,7 @@ func TestGRPCLBPickFirst(t *testing.T) {
 			Type:       resolver.GRPCLB,
 			ServerName: lbServerName,
 		}},
-		ServiceConfigGetter: grpclbServiceConfigEmpty,
+		ServiceConfig: grpclbServiceConfigEmpty,
 	})
 
 	result = ""

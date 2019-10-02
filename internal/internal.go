@@ -46,7 +46,7 @@ var (
 	StatusRawProto interface{} // func (*status.Status) *spb.Status
 	// ParseServiceConfigForTesting is for creating a fake
 	// ClientConn for resolver testing only
-	ParseServiceConfigForTesting interface{} // func(string) *serviceconfig.Getter
+	ParseServiceConfigForTesting interface{} // func(string) *serviceconfig.ParseResult
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.

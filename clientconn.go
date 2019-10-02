@@ -186,11 +186,11 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	if cc.dopts.defaultServiceConfigRawJSON != nil {
-		cfg, err := parseServiceConfig(*cc.dopts.defaultServiceConfigRawJSON).Get()
-		if err != nil {
-			return nil, fmt.Errorf("%s: %v", invalidDefaultServiceConfigErrPrefix, err)
+		scpr := parseServiceConfig(*cc.dopts.defaultServiceConfigRawJSON)
+		if scpr.Err != nil {
+			return nil, fmt.Errorf("%s: %v", invalidDefaultServiceConfigErrPrefix, scpr.Err)
 		}
-		cc.dopts.defaultServiceConfig, _ = cfg.(*ServiceConfig)
+		cc.dopts.defaultServiceConfig, _ = scpr.Config.(*ServiceConfig)
 	}
 	cc.mkp = cc.dopts.copts.KeepaliveParams
 
@@ -535,11 +535,11 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 var emptyServiceConfig *ServiceConfig
 
 func init() {
-	cfg, err := parseServiceConfig("{}").Get()
-	if err != nil {
-		panic(fmt.Sprintf("impossible error parsing empty service config: %v", err))
+	cfg := parseServiceConfig("{}")
+	if cfg.Err != nil {
+		panic(fmt.Sprintf("impossible error parsing empty service config: %v", cfg.Err))
 	}
-	emptyServiceConfig = cfg.(*ServiceConfig)
+	emptyServiceConfig = cfg.Config.(*ServiceConfig)
 }
 
 func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
@@ -580,13 +580,12 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	}
 
 	var ret error
-	if cc.dopts.disableServiceConfig || s.ServiceConfigGetter == nil {
+	if cc.dopts.disableServiceConfig || s.ServiceConfig == nil {
 		cc.maybeApplyDefaultServiceConfig(s.Addresses)
 		// TODO: do we need to apply a failing LB policy if there is no
 		// default, per the error handling design?
 	} else {
-		scg, err := s.ServiceConfigGetter.Get()
-		if sc, ok := scg.(*ServiceConfig); err == nil && ok {
+		if sc, ok := s.ServiceConfig.Config.(*ServiceConfig); s.ServiceConfig.Err == nil && ok {
 			cc.applyServiceConfigAndBalancer(sc, s.Addresses)
 		} else {
 			if cc.balancerWrapper == nil {
