@@ -277,23 +277,30 @@ func newXDSClient(balancerName string, enableCDS bool, opts balancer.BuildOption
 		grpclog.Error(err)
 		c.config = newConfigFromDefaults(balancerName, &opts)
 	}
+	// If the bootstrap file did not contain a credential of type
+	// "google_default", we should use parent channel credentials here.
+	if c.config.Creds == nil {
+		c.config.Creds = credsFromDefaults(balancerName, &opts)
+	}
 	return c
 }
 
-func newConfigFromDefaults(balancerName string, opts *balancer.BuildOptions) *xdsclient.Config {
-	dopts := grpc.WithInsecure()
-	if opts.DialCreds != nil {
-		if err := opts.DialCreds.OverrideServerName(balancerName); err == nil {
-			dopts = grpc.WithTransportCredentials(opts.DialCreds)
-		} else {
-			grpclog.Warningf("xds: failed to override the server name in credentials: %v, using Insecure", err)
-		}
-	} else {
+func credsFromDefaults(balancerName string, opts *balancer.BuildOptions) grpc.DialOption {
+	if opts.DialCreds == nil {
 		grpclog.Warning("xds: no credentials available, using Insecure")
+		return grpc.WithInsecure()
 	}
+	if err := opts.DialCreds.OverrideServerName(balancerName); err != nil {
+		grpclog.Warningf("xds: failed to override the server name in credentials: %v, using Insecure", err)
+		return grpc.WithInsecure()
+	}
+	return grpc.WithTransportCredentials(opts.DialCreds)
+}
+
+func newConfigFromDefaults(balancerName string, opts *balancer.BuildOptions) *xdsclient.Config {
 	return &xdsclient.Config{
 		BalancerName: balancerName,
-		Creds:        dopts,
+		Creds:        credsFromDefaults(balancerName, opts),
 		NodeProto: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
