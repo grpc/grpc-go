@@ -22,12 +22,6 @@
 // This package is EXPERIMENTAL.
 package serviceconfig
 
-import (
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/status"
-)
-
 // Config represents an opaque data structure holding a service config.
 type Config interface {
 	isServiceConfig()
@@ -39,21 +33,9 @@ type LoadBalancingConfig interface {
 	isLoadBalancingConfig()
 }
 
-// ParseResult contains a service config or an error.
+// ParseResult contains a service config or an error.  Exactly one must be
+// non-nil.
 type ParseResult struct {
 	Config Config
 	Err    error
-}
-
-// NewParseResult returns a ParseResult returning the provided parameter as
-// either the Config or Err field, depending upon its type.
-func NewParseResult(configOrError interface{}) *ParseResult {
-	if e, ok := configOrError.(error); ok {
-		return &ParseResult{Err: e}
-	}
-	if c, ok := configOrError.(Config); ok {
-		return &ParseResult{Config: c}
-	}
-	grpclog.Errorf("Unexpected configOrError type: %T", configOrError)
-	return &ParseResult{Err: status.Errorf(codes.Internal, "unexpected configOrError type: %T", configOrError)}
 }
