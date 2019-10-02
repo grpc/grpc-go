@@ -20,7 +20,6 @@ package client
 
 import (
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -28,6 +27,29 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
 	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
+)
+
+var (
+	nodeProto = &basepb.Node{
+		Id: "ENVOY_NODE_ID",
+		Metadata: &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				"TRAFFICDIRECTOR_GRPC_HOSTNAME": {
+					Kind: &structpb.Value_StringValue{StringValue: "trafficdirector"},
+				},
+			},
+		},
+	}
+	nilCredsConfig = &Config{
+		BalancerName: "trafficdirector.googleapis.com:443",
+		Creds:        nil,
+		NodeProto:    nodeProto,
+	}
+	nonNilCredsConfig = &Config{
+		BalancerName: "trafficdirector.googleapis.com:443",
+		Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
+		NodeProto:    nodeProto,
+	}
 )
 
 // TestNewConfig exercises the functionality in NewConfig with different
@@ -62,22 +84,6 @@ func TestNewConfig(t *testing.T) {
 				"badField": "foobar",
 			}
 		}`,
-		"badTopLevelFieldInFile": `
-		{
-			"node": {
-				"id": "ENVOY_NODE_ID",
-				"metadata": {
-				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
-			    }
-			},
-			"xds_server" : {
-				"server_uri": "trafficdirector.googleapis.com:443",
-				"channel_creds": [
-					{ "type": "not-google-default" }
-				]
-			},
-			"badField": "foobar"
-		}`,
 		"emptyNodeProto": `
 		{
 			"xds_server" : {
@@ -91,6 +97,38 @@ func TestNewConfig(t *testing.T) {
 				"metadata": {
 				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
 			    }
+			}
+		}`,
+		"unknownTopLevelFieldInFile": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_server" : {
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "not-google-default" }
+				]
+			},
+			"unknownField": "foobar"
+		}`,
+		"unknownFieldInXdsServer": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_server" : {
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "not-google-default" }
+				],
+				"unknownField": "foobar"
 			}
 		}`,
 		"emptyChannelCreds": `
@@ -166,138 +204,74 @@ func TestNewConfig(t *testing.T) {
 	}()
 
 	tests := []struct {
-		name  string
-		fName string
-		// Checking the error string is not ideal since we are now testing the
-		// implementation, instead of just testing the behavior. But given that
-		// most of the cases here are negative cases, it makes sense to verify
-		// that we are indeed getting the expected error.
-		// Also an empty error string means, we expect no error.
-		wantErrSubstr string
-		wantConfig    *Config
+		name       string
+		fName      string
+		wantConfig *Config
 	}{
 		{
-			name:          "non-existent-bootstrap-file",
-			fName:         "dummy",
-			wantErrSubstr: "read failed",
-			wantConfig:    nil,
+			name:       "non-existent-bootstrap-file",
+			fName:      "dummy",
+			wantConfig: &Config{},
 		},
 		{
-			name:          "empty-bootstrap-file",
-			fName:         "empty",
-			wantErrSubstr: "json.Unmarshal",
-			wantConfig:    nil,
+			name:       "empty-bootstrap-file",
+			fName:      "empty",
+			wantConfig: &Config{},
 		},
 		{
-			name:          "bad-json-in-file",
-			fName:         "badJSON",
-			wantErrSubstr: "json.Unmarshal",
-			wantConfig:    nil,
+			name:       "bad-json-in-file",
+			fName:      "badJSON",
+			wantConfig: &Config{},
 		},
 		{
-			name:          "bad-nodeProto-in-file",
-			fName:         "badNodeProto",
-			wantErrSubstr: "jsonpb.Unmarshal",
-			wantConfig:    nil,
+			name:       "bad-nodeProto-in-file",
+			fName:      "badNodeProto",
+			wantConfig: &Config{},
 		},
 		{
-			name:          "bad-xds-server-config-in-file",
-			fName:         "badXdsServerConfig",
-			wantErrSubstr: "json.Unmarshal",
-			wantConfig:    nil,
+			name:       "bad-xds-server-config-in-file",
+			fName:      "badXdsServerConfig",
+			wantConfig: &Config{},
 		},
 		{
-			name:          "bad-top-level-field-in-file",
-			fName:         "badTopLevelFieldInFile",
-			wantErrSubstr: "unexpected data in bootstrap file",
-			wantConfig:    nil,
+			name:       "empty-nodeProto-in-file",
+			fName:      "emptyNodeProto",
+			wantConfig: &Config{BalancerName: "trafficdirector.googleapis.com:443"},
 		},
 		{
-			name:          "empty-nodeProto-in-file",
-			fName:         "emptyNodeProto",
-			wantErrSubstr: "incomplete data in bootstrap file",
-			wantConfig:    nil,
+			name:       "empty-xdsServer-in-file",
+			fName:      "emptyXdsServer",
+			wantConfig: &Config{NodeProto: nodeProto},
 		},
 		{
-			name:          "empty-xdsServer-in-file",
-			fName:         "emptyXdsServer",
-			wantErrSubstr: "incomplete data in bootstrap file",
-			wantConfig:    nil,
+			name:       "unknown-top-level-field-in-file",
+			fName:      "unknownTopLevelFieldInFile",
+			wantConfig: nilCredsConfig,
 		},
 		{
-			name:          "empty-channel-creds",
-			fName:         "emptyChannelCreds",
-			wantErrSubstr: "",
-			wantConfig: &Config{
-				BalancerName: "trafficdirector.googleapis.com:443",
-				Creds:        nil,
-				NodeProto: &basepb.Node{
-					Id: "ENVOY_NODE_ID",
-					Metadata: &structpb.Struct{
-						Fields: map[string]*structpb.Value{
-							"TRAFFICDIRECTOR_GRPC_HOSTNAME": {
-								Kind: &structpb.Value_StringValue{StringValue: "trafficdirector"},
-							},
-						},
-					},
-				},
-			},
+			name:       "unknown-field-in-xds-server",
+			fName:      "unknownFieldInXdsServer",
+			wantConfig: nilCredsConfig,
 		},
 		{
-			name:          "non-google-default-creds",
-			fName:         "nonGoogleDefaultCreds",
-			wantErrSubstr: "",
-			wantConfig: &Config{
-				BalancerName: "trafficdirector.googleapis.com:443",
-				Creds:        nil,
-				NodeProto: &basepb.Node{
-					Id: "ENVOY_NODE_ID",
-					Metadata: &structpb.Struct{
-						Fields: map[string]*structpb.Value{
-							"TRAFFICDIRECTOR_GRPC_HOSTNAME": {
-								Kind: &structpb.Value_StringValue{StringValue: "trafficdirector"},
-							},
-						},
-					},
-				},
-			},
+			name:       "empty-channel-creds",
+			fName:      "emptyChannelCreds",
+			wantConfig: nilCredsConfig,
 		},
 		{
-			name:          "multiple-channel-creds",
-			fName:         "multipleChannelCreds",
-			wantErrSubstr: "",
-			wantConfig: &Config{
-				BalancerName: "trafficdirector.googleapis.com:443",
-				Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-				NodeProto: &basepb.Node{
-					Id: "ENVOY_NODE_ID",
-					Metadata: &structpb.Struct{
-						Fields: map[string]*structpb.Value{
-							"TRAFFICDIRECTOR_GRPC_HOSTNAME": {
-								Kind: &structpb.Value_StringValue{StringValue: "trafficdirector"},
-							},
-						},
-					},
-				},
-			},
+			name:       "non-google-default-creds",
+			fName:      "nonGoogleDefaultCreds",
+			wantConfig: nilCredsConfig,
 		},
 		{
-			name:  "good-bootstrap",
-			fName: "goodBootstrap",
-			wantConfig: &Config{
-				BalancerName: "trafficdirector.googleapis.com:443",
-				Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-				NodeProto: &basepb.Node{
-					Id: "ENVOY_NODE_ID",
-					Metadata: &structpb.Struct{
-						Fields: map[string]*structpb.Value{
-							"TRAFFICDIRECTOR_GRPC_HOSTNAME": {
-								Kind: &structpb.Value_StringValue{StringValue: "trafficdirector"},
-							},
-						},
-					},
-				},
-			},
+			name:       "multiple-channel-creds",
+			fName:      "multipleChannelCreds",
+			wantConfig: nonNilCredsConfig,
+		},
+		{
+			name:       "good-bootstrap",
+			fName:      "goodBootstrap",
+			wantConfig: nonNilCredsConfig,
 		},
 	}
 
@@ -305,31 +279,23 @@ func TestNewConfig(t *testing.T) {
 		if err := os.Setenv(bootstrapFileEnv, test.fName); err != nil {
 			t.Fatalf("%s: os.Setenv(%s, %s) failed with error: %v", test.name, bootstrapFileEnv, test.fName, err)
 		}
-		config, err := NewConfig()
-		if (err != nil) != (test.wantErrSubstr != "") {
-			t.Fatalf("%s: NewConfig() returned error: %v, wantErrSubstr: %v", test.name, err, test.wantErrSubstr)
+		config := NewConfig()
+		if config.BalancerName != test.wantConfig.BalancerName {
+			t.Errorf("%s: config.BalancerName is %s, want %s", test.name, config.BalancerName, test.wantConfig.BalancerName)
 		}
-		if test.wantErrSubstr == "" {
-			if config.BalancerName != test.wantConfig.BalancerName {
-				t.Errorf("%s: config.BalancerName is %s, want %s", test.name, config.BalancerName, test.wantConfig.BalancerName)
-			}
-			if !proto.Equal(config.NodeProto, test.wantConfig.NodeProto) {
-				t.Errorf("%s: config.NodeProto is %#v, want %#v", test.name, config.NodeProto, test.wantConfig.NodeProto)
-			}
-			if (config.Creds != nil) != (test.wantConfig.Creds != nil) {
-				t.Errorf("%s: config.Creds is %#v, want %#v", test.name, config.Creds, test.wantConfig.Creds)
-			}
-		} else {
-			if !strings.Contains(err.Error(), test.wantErrSubstr) {
-				t.Errorf("%s: NewConfig() returned error %v, want %s", test.name, err, test.wantErrSubstr)
-			}
+		if !proto.Equal(config.NodeProto, test.wantConfig.NodeProto) {
+			t.Errorf("%s: config.NodeProto is %#v, want %#v", test.name, config.NodeProto, test.wantConfig.NodeProto)
+		}
+		if (config.Creds != nil) != (test.wantConfig.Creds != nil) {
+			t.Errorf("%s: config.Creds is %#v, want %#v", test.name, config.Creds, test.wantConfig.Creds)
 		}
 	}
 }
 
 func TestNewConfigEnvNotSet(t *testing.T) {
 	os.Unsetenv(bootstrapFileEnv)
-	if _, err := NewConfig(); err == nil || !strings.Contains(err.Error(), "environment variable not set") {
-		t.Errorf("NewConfig() returned error: %v, want json.Unmarshal error", err)
+	wantConfig := Config{}
+	if config := NewConfig(); *config != wantConfig {
+		t.Errorf("NewConfig() returned : %#v, wanted an empty Config object", config)
 	}
 }

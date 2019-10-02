@@ -23,7 +23,6 @@ package client
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 
@@ -89,37 +88,48 @@ type xdsServer struct {
 // Currently, we support exactly one type of credential, which is
 // "google_default", where we use the host's default certs for transport
 // credentials and a Google oauth token for call credentials.
-func NewConfig() (*Config, error) {
+//
+// This function tries to process as much of the bootstrap file as possible (in
+// the presence of the errors) and may return a Config object with certain
+// fields left unspecified, in which case the caller should use some sane
+// defaults.
+func NewConfig() *Config {
+	config := &Config{}
+
 	fName, ok := os.LookupEnv(bootstrapFileEnv)
 	if !ok {
-		return nil, fmt.Errorf("xds: %s environment variable not set", bootstrapFileEnv)
+		grpclog.Errorf("xds: %s environment variable not set", bootstrapFileEnv)
+		return config
 	}
 
 	grpclog.Infof("xds: Reading bootstrap file from %s", fName)
 	data, err := fileReadFunc(fName)
 	if err != nil {
-		return nil, fmt.Errorf("xds: bootstrap file {%v} read failed: %v", fName, err)
+		grpclog.Errorf("xds: bootstrap file {%v} read failed: %v", fName, err)
+		return config
 	}
 
 	var jsonData map[string]json.RawMessage
 	if err := json.Unmarshal(data, &jsonData); err != nil {
-		return nil, fmt.Errorf("xds: json.Unmarshal(%v) failed during bootstrap: %v", string(data), err)
+		grpclog.Errorf("xds: json.Unmarshal(%v) failed during bootstrap: %v", string(data), err)
+		return config
 	}
 
-	config := &Config{}
 	m := jsonpb.Unmarshaler{}
 	for k, v := range jsonData {
 		switch k {
 		case "node":
 			n := &basepb.Node{}
 			if err := m.Unmarshal(bytes.NewReader(v), n); err != nil {
-				return nil, fmt.Errorf("xds: jsonpb.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
+				grpclog.Errorf("xds: jsonpb.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
+				break
 			}
 			config.NodeProto = n
 		case "xds_server":
 			xs := &xdsServer{}
 			if err := json.Unmarshal(v, &xs); err != nil {
-				return nil, fmt.Errorf("xds: json.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
+				grpclog.Errorf("xds: json.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
+				break
 			}
 			config.BalancerName = xs.ServerURI
 			for _, cc := range xs.ChannelCreds {
@@ -128,12 +138,10 @@ func NewConfig() (*Config, error) {
 				}
 			}
 		default:
-			return nil, fmt.Errorf("xds: unexpected data in bootstrap file: {%v, %v}", k, string(v))
+			// Do not fail the xDS bootstrap when an unknown field is seen.
+			grpclog.Warningf("xds: unexpected data in bootstrap file: {%v, %v}", k, string(v))
 		}
 	}
 
-	if config.NodeProto == nil || config.BalancerName == "" {
-		return nil, fmt.Errorf("xds: incomplete data in bootstrap file: %v", string(data))
-	}
-	return config, nil
+	return config
 }

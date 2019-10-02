@@ -272,15 +272,25 @@ func newXDSClient(balancerName string, enableCDS bool, opts balancer.BuildOption
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 
-	var err error
-	if c.config, err = xdsclient.NewConfig(); err != nil {
-		grpclog.Error(err)
-		c.config = newConfigFromDefaults(balancerName, &opts)
+	// It is possible that NewConfig returns a Config object with certain
+	// fields left unspecified. If so, we need to use some sane defaults here.
+	c.config = xdsclient.NewConfig()
+	if c.config.BalancerName == "" {
+		c.config.BalancerName = balancerName
 	}
-	// If the bootstrap file did not contain a credential of type
-	// "google_default", we should use parent channel credentials here.
 	if c.config.Creds == nil {
 		c.config.Creds = credsFromDefaults(balancerName, &opts)
+	}
+	if c.config.NodeProto == nil {
+		c.config.NodeProto = &basepb.Node{
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					internal.GrpcHostname: {
+						Kind: &structpb.Value_StringValue{StringValue: opts.Target.Endpoint},
+					},
+				},
+			},
+		}
 	}
 	return c
 }
@@ -295,20 +305,4 @@ func credsFromDefaults(balancerName string, opts *balancer.BuildOptions) grpc.Di
 		return grpc.WithInsecure()
 	}
 	return grpc.WithTransportCredentials(opts.DialCreds)
-}
-
-func newConfigFromDefaults(balancerName string, opts *balancer.BuildOptions) *xdsclient.Config {
-	return &xdsclient.Config{
-		BalancerName: balancerName,
-		Creds:        credsFromDefaults(balancerName, opts),
-		NodeProto: &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: opts.Target.Endpoint},
-					},
-				},
-			},
-		},
-	}
 }
