@@ -62,15 +62,15 @@ type xdsBuilder struct{}
 func (b *xdsBuilder) Build(t resolver.Target, cc resolver.ClientConn, o resolver.BuildOption) (resolver.Resolver, error) {
 	// The xds balancer must have been registered at this point for the service
 	// config to be parsed properly.
-	sc := cc.ParseServiceConfig(jsonSC)
+	scpr := cc.ParseServiceConfig(jsonSC)
 
-	if _, err := sc.Get(); err != nil {
-		panic(fmt.Sprintf("error parsing service config %q: %v", jsonSC, err))
+	if scpr.Err != nil {
+		panic(fmt.Sprintf("error parsing service config %q: %v", jsonSC, scpr.Err))
 	}
 
 	// We return a resolver which bacically does nothing. The hard-coded service
 	// config returned here picks the xds balancer.
-	cc.UpdateState(resolver.State{ServiceConfigGetter: sc})
+	cc.UpdateState(resolver.State{ServiceConfig: scpr})
 	return &xdsResolver{}, nil
 }
 

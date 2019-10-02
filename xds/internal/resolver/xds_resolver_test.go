@@ -68,8 +68,8 @@ func (t *testClientConn) UpdateState(s resolver.State) {
 	close(t.done)
 }
 
-func (*testClientConn) ParseServiceConfig(jsonSC string) *serviceconfig.Getter {
-	return internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.Getter)(jsonSC)
+func (*testClientConn) ParseServiceConfig(jsonSC string) *serviceconfig.ParseResult {
+	return internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(jsonSC)
 }
 
 func (*testClientConn) NewAddress([]resolver.Address) { panic("unimplemented") }

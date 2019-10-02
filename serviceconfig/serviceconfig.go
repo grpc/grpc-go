@@ -39,30 +39,21 @@ type LoadBalancingConfig interface {
 	isLoadBalancingConfig()
 }
 
-// Getter provides a service config or an error.
-type Getter struct {
-	err    error
-	config Config
+// ParseResult contains a service config or an error.
+type ParseResult struct {
+	Config Config
+	Err    error
 }
 
-// Get returns either a service config or an error.
-func (g *Getter) Get() (Config, error) {
-	if g == nil {
-		return nil, nil
-	}
-	// Only one field in g may be non-nil.
-	return g.config, g.err
-}
-
-// NewGetter returns a Getter returning the provided parameter as either the
-// serviceconfig.Config or error return value, depending upon the type.
-func NewGetter(configOrError interface{}) *Getter {
+// NewParseResult returns a ParseResult returning the provided parameter as
+// either the Config or Err field, depending upon its type.
+func NewParseResult(configOrError interface{}) *ParseResult {
 	if e, ok := configOrError.(error); ok {
-		return &Getter{err: e}
+		return &ParseResult{Err: e}
 	}
 	if c, ok := configOrError.(Config); ok {
-		return &Getter{config: c}
+		return &ParseResult{Config: c}
 	}
 	grpclog.Errorf("Unexpected configOrError type: %T", configOrError)
-	return &Getter{err: status.Errorf(codes.Internal, "unexpected configOrError type: %T", configOrError)}
+	return &ParseResult{Err: status.Errorf(codes.Internal, "unexpected configOrError type: %T", configOrError)}
 }

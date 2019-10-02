@@ -90,7 +90,7 @@ func (t *testClientConn) getSc() (string, int) {
 	return t.sc, t.s
 }
 
-func (t *testClientConn) ParseServiceConfig(string) *serviceconfig.Getter {
+func (t *testClientConn) ParseServiceConfig(string) *serviceconfig.ParseResult {
 	panic("not implemented")
 }
 

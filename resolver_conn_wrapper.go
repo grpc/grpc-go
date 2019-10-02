@@ -191,7 +191,7 @@ func (ccr *ccResolverWrapper) NewAddress(addrs []resolver.Address) {
 	}
 	grpclog.Infof("ccResolverWrapper: sending new addresses to cc: %v", addrs)
 	if channelz.IsOn() {
-		ccr.addChannelzTraceEvent(resolver.State{Addresses: addrs, ServiceConfigGetter: ccr.curState.ServiceConfigGetter})
+		ccr.addChannelzTraceEvent(resolver.State{Addresses: addrs, ServiceConfig: ccr.curState.ServiceConfig})
 	}
 	ccr.curState.Addresses = addrs
 	ccr.poll(ccr.cc.updateResolverState(ccr.curState, nil))
@@ -204,12 +204,12 @@ func (ccr *ccResolverWrapper) NewServiceConfig(sc string) {
 		return
 	}
 	grpclog.Infof("ccResolverWrapper: got new service config: %v", sc)
-	scg := parseServiceConfig(sc)
-	if _, err := scg.Get(); err != nil {
-		grpclog.Warningf("ccResolverWrapper: error parsing service config: %v", err)
+	scpr := parseServiceConfig(sc)
+	if scpr.Err != nil {
+		grpclog.Warningf("ccResolverWrapper: error parsing service config: %v", scpr.Err)
 		if channelz.IsOn() {
 			channelz.AddTraceEvent(ccr.cc.channelzID, &channelz.TraceEventDesc{
-				Desc:     fmt.Sprintf("Error parsing service config: %v", err),
+				Desc:     fmt.Sprintf("Error parsing service config: %v", scpr.Err),
 				Severity: channelz.CtWarning,
 			})
 		}
@@ -217,22 +217,26 @@ func (ccr *ccResolverWrapper) NewServiceConfig(sc string) {
 		return
 	}
 	if channelz.IsOn() {
-		ccr.addChannelzTraceEvent(resolver.State{Addresses: ccr.curState.Addresses, ServiceConfigGetter: scg})
+		ccr.addChannelzTraceEvent(resolver.State{Addresses: ccr.curState.Addresses, ServiceConfig: scpr})
 	}
-	ccr.curState.ServiceConfigGetter = scg
+	ccr.curState.ServiceConfig = scpr
 	ccr.poll(ccr.cc.updateResolverState(ccr.curState, nil))
 }
 
-func (ccr *ccResolverWrapper) ParseServiceConfig(scJSON string) *serviceconfig.Getter {
+func (ccr *ccResolverWrapper) ParseServiceConfig(scJSON string) *serviceconfig.ParseResult {
 	return parseServiceConfig(scJSON)
 }
 
 func (ccr *ccResolverWrapper) addChannelzTraceEvent(s resolver.State) {
 	var updates []string
-	oldSCI, _ := ccr.curState.ServiceConfigGetter.Get()
-	oldSC, oldOK := oldSCI.(*ServiceConfig)
-	newSCI, _ := s.ServiceConfigGetter.Get()
-	newSC, newOK := newSCI.(*ServiceConfig)
+	var oldSC, newSC *ServiceConfig
+	var oldOK, newOK bool
+	if ccr.curState.ServiceConfig != nil {
+		oldSC, oldOK = ccr.curState.ServiceConfig.Config.(*ServiceConfig)
+	}
+	if s.ServiceConfig != nil {
+		newSC, newOK = s.ServiceConfig.Config.(*ServiceConfig)
+	}
 	if oldOK != newOK || (oldOK && newOK && oldSC.rawJSONString != newSC.rawJSONString) {
 		updates = append(updates, "service config updated")
 	}

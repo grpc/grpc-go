@@ -194,7 +194,7 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfigGetter: parseCfg(r, `{
+		ServiceConfig: parseCfg(r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	}
@@ -262,7 +262,7 @@ func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfigGetter: parseCfg(r, `{
+		ServiceConfig: parseCfg(r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	}
@@ -306,7 +306,7 @@ func (s) TestHealthCheckWithGoAway(t *testing.T) {
 	tc := testpb.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfigGetter: parseCfg(r, `{
+		ServiceConfig: parseCfg(r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	}
@@ -398,7 +398,7 @@ func (s) TestHealthCheckWithConnClose(t *testing.T) {
 
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfigGetter: parseCfg(r, `{
+		ServiceConfig: parseCfg(r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	}
@@ -463,8 +463,8 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	}
 }`)
 	r.UpdateState(resolver.State{
-		Addresses:           []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfigGetter: sc,
+		Addresses:     []resolver.Address{{Addr: lis.Addr().String()}},
+		ServiceConfig: sc,
 	})
 
 	// make some rpcs to make sure connection is working.
@@ -506,7 +506,7 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	default:
 	}
 	// trigger teardown of the ac
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{}, ServiceConfigGetter: sc})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{}, ServiceConfig: sc})
 
 	select {
 	case <-hcExitChan:
@@ -552,7 +552,7 @@ func (s) TestHealthCheckWithClientConnClose(t *testing.T) {
 	tc := testpb.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfigGetter: parseCfg(r, `{
+		ServiceConfig: parseCfg(r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	}
@@ -636,8 +636,8 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalledAddrConnShutDown(t *tes
 	}
 }`)
 	r.UpdateState(resolver.State{
-		Addresses:           []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfigGetter: sc,
+		Addresses:     []resolver.Address{{Addr: lis.Addr().String()}},
+		ServiceConfig: sc,
 	})
 
 	select {
@@ -652,7 +652,7 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalledAddrConnShutDown(t *tes
 		t.Fatal("Health check function has not been invoked after 5s.")
 	}
 	// trigger teardown of the ac, ac in SHUTDOWN state
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{}, ServiceConfigGetter: sc})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{}, ServiceConfig: sc})
 
 	// The health check func should exit without calling the setConnectivityState func, as server hasn't sent
 	// any response.
@@ -708,7 +708,7 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalled(t *testing.T) {
 	// test ends).
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfigGetter: parseCfg(r, `{
+		ServiceConfig: parseCfg(r, `{
 	"healthCheckConfig": {
 		"serviceName": "delay"
 	}
@@ -756,7 +756,7 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
-		ServiceConfigGetter: parseCfg(r, `{
+		ServiceConfig: parseCfg(r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	}
@@ -795,7 +795,7 @@ func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
-		ServiceConfigGetter: parseCfg(r, `{
+		ServiceConfig: parseCfg(r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	}
@@ -888,7 +888,7 @@ func (s) TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfigGetter: parseCfg(r, `{
+		ServiceConfig: parseCfg(r, `{
 	"healthCheckConfig": {
 		"serviceName": "channelzSuccess"
 	}
@@ -944,7 +944,7 @@ func (s) TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfigGetter: parseCfg(r, `{
+		ServiceConfig: parseCfg(r, `{
 	"healthCheckConfig": {
 		"serviceName": "channelzFailure"
 	}

@@ -190,7 +190,7 @@ func (s) TestResolverErrorPolling(t *testing.T) {
 func (s) TestServiceConfigErrorPolling(t *testing.T) {
 	testResolverErrorPolling(t, func(r *manual.Resolver) {
 		badsc := r.CC.ParseServiceConfig("bad config")
-		r.UpdateState(resolver.State{ServiceConfigGetter: badsc})
+		r.UpdateState(resolver.State{ServiceConfig: badsc})
 	}, func(r *manual.Resolver) {
 		// UpdateState will block if ResolveNow is being called (which blocks on
 		// rn), so call it in a goroutine.
