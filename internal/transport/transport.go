@@ -320,6 +320,9 @@ func (s *Stream) waitOnHeader() {
 		// this function returns.
 		err := ContextErr(s.ctx.Err())
 		s.ct.closeStream(s, err, false, 0, status.Convert(err), nil, false)
+		// headerChan could possibly not be closed yet if closeStream raced
+		// with operateHeaders; wait until it is closed explicitly here.
+		<-s.headerChan
 	case <-s.headerChan:
 	}
 }
