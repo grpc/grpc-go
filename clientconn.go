@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/base"
 	_ "google.golang.org/grpc/balancer/roundrobin" // To register roundrobin.
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -586,10 +587,13 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 		if sc, ok := s.ServiceConfig.Config.(*ServiceConfig); s.ServiceConfig.Err == nil && ok {
 			cc.applyServiceConfigAndBalancer(sc, s.Addresses)
 		} else {
-			if cc.balancerWrapper == nil {
-				cc.applyServiceConfigAndBalancer(emptyServiceConfig, s.Addresses)
-			}
 			ret = balancer.ErrBadResolverState
+			if cc.balancerWrapper == nil {
+				cc.blockingpicker.updatePicker(base.NewErrPicker(status.Errorf(codes.Unavailable, "error parsing service config: %v", s.ServiceConfig.Err)))
+				cc.csMgr.updateState(connectivity.TransientFailure)
+				cc.mu.Unlock()
+				return ret
+			}
 		}
 	}
 
