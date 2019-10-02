@@ -751,7 +751,7 @@ func (t *http2Server) checkForHeaderListSize(it interface{}) bool {
 	return true
 }
 
-// WriteHeader sends the header metedata md back to the client.
+// WriteHeader sends the header metadata md back to the client.
 func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	if s.updateHeaderSent() || s.getState() == streamDone {
 		return ErrIllegalHeaderWrite

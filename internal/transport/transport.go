@@ -254,7 +254,7 @@ type Stream struct {
 	headerChanClosed uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
 	// headerValid indicates whether a valid header was received.  Only
 	// meaningful after headerChan is closed (always call waitOnHeader() before
-	// reading its value).
+	// reading its value).  Not valid on server side.
 	headerValid bool
 
 	// hdrMu protects header and trailer metadata on the server-side.
@@ -320,6 +320,9 @@ func (s *Stream) waitOnHeader() {
 		// this function returns.
 		err := ContextErr(s.ctx.Err())
 		s.ct.closeStream(s, err, false, 0, status.Convert(err), nil, false)
+		// headerChan could possibly not be closed yet if closeStream raced
+		// with operateHeaders; wait until it is closed explicitly here.
+		<-s.headerChan
 	case <-s.headerChan:
 	}
 }
@@ -348,9 +351,10 @@ func (s *Stream) Done() <-chan struct{} {
 // available. It blocks until i) the metadata is ready or ii) there is no header
 // metadata or iii) the stream is canceled/expired.
 //
-// On server side, it returns the out header after t.WriteHeader is called.
+// On server side, it returns the out header after t.WriteHeader is called.  It
+// does not block and must not be called until after WriteHeader.
 func (s *Stream) Header() (metadata.MD, error) {
-	if s.headerChan == nil && s.header != nil {
+	if s.headerChan == nil {
 		// On server side, return the header in stream. It will be the out
 		// header after t.WriteHeader is called.
 		return s.header.Copy(), nil
