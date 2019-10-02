@@ -341,6 +341,17 @@ func TestEDS_TwoLocalities(t *testing.T) {
 	clab6.addLocality(testSubZones[2], 1, testEndpointAddrs[2:4])
 	edsb.HandleEDSResponse(clab6.build())
 
+	// Changing weight of locality[1] to 0 caused it to be removed. It's subconn
+	// should also be removed.
+	//
+	// NOTE: this is because we handle locality with weight 0 same as the
+	// locality doesn't exist. If this changes in the future, this removeSubConn
+	// behavior will also change.
+	scToRemove2 := <-cc.removeSubConnCh
+	if !reflect.DeepEqual(scToRemove2, sc2) {
+		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove2)
+	}
+
 	// Test pick with two subconns different locality weight.
 	p6 := <-cc.newPickerCh
 	// Locality-1 will be not be picked, and locality-2 will be picked.

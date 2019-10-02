@@ -20,17 +20,21 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/cache"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	orcapb "google.golang.org/grpc/xds/internal/proto/udpa/data/orca/v1/orca_load_report"
 )
+
+var defaultSubBalancerCloseTimeout = 15 * time.Minute
 
 // subBalancerWithConfig is used to keep the configurations that will be used to start
 // the underlying balancer. It can be called to start/stop the underlying
@@ -39,6 +43,14 @@ import (
 // When the config changes, it will pass the update to the underlying balancer
 // if it exists.
 type subBalancerWithConfig struct {
+	// subBalancerWithConfig is passed to the sub-balancer as a ClientConn
+	// wrapper, only to keep the state and picker.  When sub-balancer is
+	// restarted while in cache, the picker needs to be resent.
+	balancer.ClientConn
+	mu     sync.Mutex
+	state  connectivity.State
+	picker balancer.Picker
+
 	// The static part of sub-balancer. Keeps balancerBuilders and addresses.
 	// To be used when restarting sub-balancer.
 	builder balancer.Builder
@@ -48,8 +60,24 @@ type subBalancerWithConfig struct {
 	balancer balancer.Balancer
 }
 
-func (sbc *subBalancerWithConfig) startBalancer(bgcc *balancerGroupCC) {
-	b := sbc.builder.Build(bgcc, balancer.BuildOptions{})
+// UpdateBalancerState is overridden to keep state and picker.
+func (sbc *subBalancerWithConfig) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
+	sbc.mu.Lock()
+	sbc.state, sbc.picker = state, picker
+	sbc.ClientConn.UpdateBalancerState(state, picker)
+	sbc.mu.Unlock()
+}
+
+func (sbc *subBalancerWithConfig) updateBalancerStateWithCachedPicker() {
+	sbc.mu.Lock()
+	if sbc.picker != nil {
+		sbc.ClientConn.UpdateBalancerState(sbc.state, sbc.picker)
+	}
+	sbc.mu.Unlock()
+}
+
+func (sbc *subBalancerWithConfig) startBalancer() {
+	b := sbc.builder.Build(sbc, balancer.BuildOptions{})
 	sbc.balancer = b
 	if ub, ok := b.(balancer.V2Balancer); ok {
 		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: sbc.addrs}})
@@ -145,6 +173,8 @@ type balancerGroup struct {
 	outgoingMu         sync.Mutex
 	outgoingStarted    bool
 	idToBalancerConfig map[internal.Locality]*subBalancerWithConfig
+	// Cache for sub-balancers when they are removed.
+	balancerCache *cache.TimeoutCache
 
 	// incomingMu and pickerMu are to make sure this balancer group doesn't send
 	// updates to cc after it's closed.
@@ -183,6 +213,7 @@ func newBalancerGroup(cc balancer.ClientConn, loadStore lrs.Store) *balancerGrou
 		loadStore: loadStore,
 
 		idToBalancerConfig: make(map[internal.Locality]*subBalancerWithConfig),
+		balancerCache:      cache.NewTimeoutCache(defaultSubBalancerCloseTimeout),
 		scToID:             make(map[balancer.SubConn]internal.Locality),
 		idToPickerState:    make(map[internal.Locality]*pickerState),
 	}
@@ -199,12 +230,8 @@ func (bg *balancerGroup) start() {
 		return
 	}
 
-	for id, config := range bg.idToBalancerConfig {
-		config.startBalancer(&balancerGroupCC{
-			ClientConn: bg.cc,
-			id:         id,
-			group:      bg,
-		})
+	for _, config := range bg.idToBalancerConfig {
+		config.startBalancer()
 	}
 	bg.outgoingStarted = true
 	bg.outgoingMu.Unlock()
@@ -233,44 +260,103 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 
 	// Store data in static map, and then check to see if bg is started.
 	bg.outgoingMu.Lock()
-	if _, ok := bg.idToBalancerConfig[id]; ok {
-		bg.outgoingMu.Unlock()
-		grpclog.Warningf("balancer group: adding a balancer with existing ID: %s", id)
-		return
+	var sbc *subBalancerWithConfig
+	// If outgoingStarted is true, search in the cache. Otherwise, cache is
+	// guaranteed to be empty, searching is unnecessary.
+	if bg.outgoingStarted {
+		if temp, ok := bg.balancerCache.Retrive(id); ok {
+			sbc, _ = temp.(*subBalancerWithConfig)
+			if sbc != nil && sbc.builder != builder {
+				// If the sub-balancer in cache was built with a different
+				// balancer builder, don't use it, cleanup this old-balancer,
+				// and behave as sub-balancer is not found in cache.
+				//
+				// NOTE that this will also drop the cached addresses for this
+				// sub-balancer, which seems to be reasonable.
+				delete(bg.idToBalancerConfig, id)
+				sbc.stopBalancer()
+				bg.cleanupSubConns(id)
+				sbc = nil
+			}
+		}
 	}
-	sbc := &subBalancerWithConfig{
-		builder: builder,
+	if sbc == nil {
+		sbc = &subBalancerWithConfig{
+			ClientConn: &balancerGroupCC{
+				ClientConn: bg.cc,
+				id:         id,
+				group:      bg,
+			},
+			builder: builder,
+		}
+		if bg.outgoingStarted {
+			// Only start the balancer if bg is started. Otherwise, we only keep the
+			// static data.
+			sbc.startBalancer()
+		}
+	} else {
+		// When brining back a sub-balancer from cache, re-send the cached
+		// picker and state.
+		sbc.updateBalancerStateWithCachedPicker()
 	}
 	bg.idToBalancerConfig[id] = sbc
-
-	if bg.outgoingStarted {
-		// Only start the balancer if bg is started. Otherwise, we only keep the
-		// static data.
-		sbc.startBalancer(&balancerGroupCC{
-			ClientConn: bg.cc,
-			id:         id,
-			group:      bg,
-		})
-	}
 	bg.outgoingMu.Unlock()
 }
 
-// remove removes the balancer with id from the group, and closes the balancer.
+// remove removes the balancer with id from the group.
+//
+// But doesn't close the balancer. The balancer is kept in a cache, and will be
+// closed after timeout. Cleanup work (closing sub-balancer and removing
+// subconns) will be done after timeout.
 //
 // It also removes the picker generated from this balancer from the picker
 // group. It always results in a picker update.
 func (bg *balancerGroup) remove(id internal.Locality) {
 	bg.outgoingMu.Lock()
 	if bg.outgoingStarted {
-		if config, ok := bg.idToBalancerConfig[id]; ok {
-			config.stopBalancer()
+		if subBalancerToBeRemoved, ok := bg.idToBalancerConfig[id]; ok {
+			// Add sub-balancer to cache only when this id exists.
+			bg.balancerCache.Store(id, subBalancerToBeRemoved, func() {
+				// After timeout, when sub-balancer is removed from cache, need
+				// to also remove it from map, close the underlying
+				// sub-balancer, and remove all its subconns.
+				bg.outgoingMu.Lock()
+				if bg.outgoingStarted {
+					delete(bg.idToBalancerConfig, id)
+					subBalancerToBeRemoved.stopBalancer()
+				}
+				bg.outgoingMu.Unlock()
+				bg.cleanupSubConns(id)
+			})
+			// We keep id in the map, so subconn state change and resolver
+			// change can be forwarded correctly.
 		}
+	} else {
+		// If balancer group is not active, we can delete it here without adding
+		// to the cache.
+		delete(bg.idToBalancerConfig, id)
 	}
-	delete(bg.idToBalancerConfig, id)
 	bg.outgoingMu.Unlock()
 
 	bg.incomingMu.Lock()
-	// Remove SubConns.
+	// Remove id and picker from picker map. This also results in future updates
+	// for this ID to be ignored.
+	delete(bg.idToPickerState, id)
+	if bg.incomingStarted {
+		// Normally picker update is triggered by SubConn state change. But we
+		// want to update state and picker to reflect the changes, too. Because
+		// we don't want `ClientConn` to pick this sub-balancer anymore.
+		bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
+	}
+	bg.incomingMu.Unlock()
+}
+
+// bg.remove(id) doesn't do cleanup for the sub-balancer. This function does
+// cleanup after the timeout.
+func (bg *balancerGroup) cleanupSubConns(id internal.Locality) {
+	bg.incomingMu.Lock()
+	// Remove SubConns. This is only done after the balancer is
+	// actually closed.
 	//
 	// NOTE: if NewSubConn is called by this (closed) balancer later, the
 	// SubConn will be leaked. This shouldn't happen if the balancer
@@ -282,16 +368,6 @@ func (bg *balancerGroup) remove(id internal.Locality) {
 			bg.cc.RemoveSubConn(sc)
 			delete(bg.scToID, sc)
 		}
-	}
-
-	// Remove id and picker from picker map. This also results in future updates
-	// for this ID to be ignored.
-	delete(bg.idToPickerState, id)
-	if bg.incomingStarted {
-		// Normally picker update is triggered by SubConn state change. But we
-		// want to update state and picker to reflect the changes, too. Because
-		// we don't want `ClientConn` to pick this sub-balancer anymore.
-		bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
 	}
 	bg.incomingMu.Unlock()
 }
@@ -401,7 +477,7 @@ func (bg *balancerGroup) updateBalancerState(id internal.Locality, state connect
 	if !ok {
 		// All state starts in IDLE. If ID is not in map, it's either removed,
 		// or never existed.
-		grpclog.Infof("balancer group: pickerState not found when update picker/state")
+		grpclog.Infof("balancer group: pickerState for %v not found when update picker/state", id)
 		return
 	}
 	pickerSt.picker = newLoadReportPicker(picker, id, bg.loadStore)
@@ -438,6 +514,7 @@ func (bg *balancerGroup) close() {
 			config.stopBalancer()
 		}
 	}
+	bg.balancerCache.Clear()
 	bg.outgoingMu.Unlock()
 }
 
