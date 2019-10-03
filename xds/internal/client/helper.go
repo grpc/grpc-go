@@ -65,7 +65,7 @@ type channelCreds struct {
 
 type xdsServer struct {
 	ServerURI    string         `json:"server_uri"`
-	ChannelCreds []channelCreds `json:"channel_creds,omitempty"`
+	ChannelCreds []channelCreds `json:"channel_creds"`
 }
 
 // NewConfig returns a new instance of Config initialized by reading the
@@ -115,7 +115,7 @@ func NewConfig() *Config {
 		return config
 	}
 
-	m := jsonpb.Unmarshaler{}
+	m := jsonpb.Unmarshaler{AllowUnknownFields: true}
 	for k, v := range jsonData {
 		switch k {
 		case "node":
@@ -135,6 +135,8 @@ func NewConfig() *Config {
 			for _, cc := range xs.ChannelCreds {
 				if cc.Type == googleDefaultCreds {
 					config.Creds = grpc.WithCredentialsBundle(google.NewComputeEngineCredentials())
+					// We stop at the first credential type that we support.
+					break
 				}
 			}
 		default:

@@ -60,30 +60,6 @@ func TestNewConfig(t *testing.T) {
 	bootstrapFileMap := map[string]string{
 		"empty":   "",
 		"badJSON": `["test": 123]`,
-		"badNodeProto": `
-		{
-			"node": {
-				"id": "ENVOY_NODE_ID",
-				"badField": "foobar",
-				"metadata": {
-				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
-			    }
-			}
-		}`,
-		"badXdsServerConfig": `
-		{
-			"node": {
-				"id": "ENVOY_NODE_ID",
-				"metadata": {
-				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
-			    }
-			},
-			"xds_server" : {
-				"server_uri": "trafficdirector.googleapis.com:443"
-			    "api_type": "GRPC",
-				"badField": "foobar",
-			}
-		}`,
 		"emptyNodeProto": `
 		{
 			"xds_server" : {
@@ -114,6 +90,16 @@ func TestNewConfig(t *testing.T) {
 				]
 			},
 			"unknownField": "foobar"
+		}`,
+		"unknownFieldInNodeProto": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"unknownField": "foobar",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			}
 		}`,
 		"unknownFieldInXdsServer": `
 		{
@@ -205,79 +191,25 @@ func TestNewConfig(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		fName      string
 		wantConfig *Config
 	}{
-		{
-			name:       "non-existent-bootstrap-file",
-			fName:      "dummy",
-			wantConfig: &Config{},
-		},
-		{
-			name:       "empty-bootstrap-file",
-			fName:      "empty",
-			wantConfig: &Config{},
-		},
-		{
-			name:       "bad-json-in-file",
-			fName:      "badJSON",
-			wantConfig: &Config{},
-		},
-		{
-			name:       "bad-nodeProto-in-file",
-			fName:      "badNodeProto",
-			wantConfig: &Config{},
-		},
-		{
-			name:       "bad-xds-server-config-in-file",
-			fName:      "badXdsServerConfig",
-			wantConfig: &Config{},
-		},
-		{
-			name:       "empty-nodeProto-in-file",
-			fName:      "emptyNodeProto",
-			wantConfig: &Config{BalancerName: "trafficdirector.googleapis.com:443"},
-		},
-		{
-			name:       "empty-xdsServer-in-file",
-			fName:      "emptyXdsServer",
-			wantConfig: &Config{NodeProto: nodeProto},
-		},
-		{
-			name:       "unknown-top-level-field-in-file",
-			fName:      "unknownTopLevelFieldInFile",
-			wantConfig: nilCredsConfig,
-		},
-		{
-			name:       "unknown-field-in-xds-server",
-			fName:      "unknownFieldInXdsServer",
-			wantConfig: nilCredsConfig,
-		},
-		{
-			name:       "empty-channel-creds",
-			fName:      "emptyChannelCreds",
-			wantConfig: nilCredsConfig,
-		},
-		{
-			name:       "non-google-default-creds",
-			fName:      "nonGoogleDefaultCreds",
-			wantConfig: nilCredsConfig,
-		},
-		{
-			name:       "multiple-channel-creds",
-			fName:      "multipleChannelCreds",
-			wantConfig: nonNilCredsConfig,
-		},
-		{
-			name:       "good-bootstrap",
-			fName:      "goodBootstrap",
-			wantConfig: nonNilCredsConfig,
-		},
+		{"nonExistentBootstrapFile", &Config{}},
+		{"empty", &Config{}},
+		{"badJSON", &Config{}},
+		{"emptyNodeProto", &Config{BalancerName: "trafficdirector.googleapis.com:443"}},
+		{"emptyXdsServer", &Config{NodeProto: nodeProto}},
+		{"unknownTopLevelFieldInFile", nilCredsConfig},
+		{"unknownFieldInNodeProto", &Config{NodeProto: nodeProto}},
+		{"unknownFieldInXdsServer", nilCredsConfig},
+		{"emptyChannelCreds", nilCredsConfig},
+		{"nonGoogleDefaultCreds", nilCredsConfig},
+		{"multipleChannelCreds", nonNilCredsConfig},
+		{"goodBootstrap", nonNilCredsConfig},
 	}
 
 	for _, test := range tests {
-		if err := os.Setenv(bootstrapFileEnv, test.fName); err != nil {
-			t.Fatalf("%s: os.Setenv(%s, %s) failed with error: %v", test.name, bootstrapFileEnv, test.fName, err)
+		if err := os.Setenv(bootstrapFileEnv, test.name); err != nil {
+			t.Fatalf("os.Setenv(%s, %s) failed with error: %v", bootstrapFileEnv, test.name, err)
 		}
 		config := NewConfig()
 		if config.BalancerName != test.wantConfig.BalancerName {
