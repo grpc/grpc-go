@@ -276,7 +276,7 @@ func WithBackoffMaxDelay(md time.Duration) DialOption {
 // WithBackoffConfig configures the dialer to use the provided backoff
 // parameters after connection failures.
 //
-//￼Deprecated: use WithConnectParams instead. Will be supported throughout 1.x.
+// Deprecated: use WithConnectParams instead. Will be supported throughout 1.x.
 func WithBackoffConfig(b BackoffConfig) DialOption {
 	bc := backoff.DefaultConfig
 	bc.MaxDelay = b.MaxDelay
