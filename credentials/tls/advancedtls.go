@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2019 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,9 @@
  * limitations under the License.
  *
  */
-
-// Package tls is an utility library containing functions to construct tls
+// Package tls is a utility library containing functions to construct tls
 // config that can perform credential reloading and custom server authorization.
-
+// All APIs in this package are EXPERIMENTAL.
 package tls
 
 import (
@@ -29,9 +28,9 @@ import (
 )
 
 type ClientOptions struct {
-  // Certificates or GetClientCertificate indicates the certificates sent from clients to servers
-  // to prove clients' identities. If requiring mutual authentication on server side, only one of
-  // the two field must be set; otherwise these two fields are ignored.
+	// Certificates or GetClientCertificate indicates the certificates sent from clients to servers
+	// to prove clients' identities. If requiring mutual authentication on server side, only one of
+	// the two field must be set; otherwise these two fields are ignored.
 	Certificates []tls.Certificate
 	// If requiring mutual authentication and Certificates is nil, clients will invoke this
 	// function every time a new connection is established and clients need to present certificates
@@ -60,8 +59,6 @@ type ServerOptions struct {
 	// is established and servers need to present certificates to the clients, This is known as peer
 	// certificate reloading.
 	GetCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
-	// Note on server side we don't usually perform custom client authorization check.
-	VerifyPeerCertificate func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
 	// RootCACerts or GetRootCAs indicates the certificates trusted by the server side. If requiring
 	// mutual authentication on server side, only one of the two field must be set; otherwise these
 	// two fields are ignored.
@@ -74,59 +71,28 @@ type ServerOptions struct {
 	MutualAuth bool
 }
 
-
 func (o *ClientOptions) Config() (*tls.Config, error) {
 	if o.RootCACerts == nil && o.GetRootCAs == nil {
 		return nil, fmt.Errorf("either RootCACerts or GetRootCAs must be specified")
 	}
 	config := &tls.Config{
 		InsecureSkipVerify: true,
-		ServerName: o.ServerNameOverride,
+		ServerName:         o.ServerNameOverride,
 	}
 	if o.Certificates != nil {
 		config.Certificates = o.Certificates
 	} else {
 		config.GetClientCertificate = o.GetClientCertificate
 	}
-
-	// create a function which will reload the root cert and invoke users' VerifyPeerCertificate
-	verifyFunc := func (rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-		// verify peers' certificates against root CAs and get verifiedChains
-		certs := make([]*x509.Certificate, len(rawCerts))
-		for i, asn1Data := range rawCerts {
-			cert, err := x509.ParseCertificate(asn1Data)
-			if err != nil {
-				return err
-			}
-			certs[i] = cert
+	if o.RootCACerts != nil {
+		// Even if we don't need to reload root certs, we still need to build verification function for
+		// possible custom server authorization
+		o.GetRootCAs = func(rawCerts [][]byte) (*x509.CertPool, error) {
+			return o.RootCACerts, nil
 		}
-		rootCAs := o.RootCACerts
-		// reload root CA certs if specified
-		if rootCAs == nil {
-			root, err := o.GetRootCAs(rawCerts)
-			if err != nil {
-				return err
-			}
-			rootCAs = root
-		}
-		opts := x509.VerifyOptions{
-			Roots:         rootCAs,
-			CurrentTime:   time.Now(),
-			Intermediates: x509.NewCertPool(),
-		}
-		for _, cert := range certs[1:] {
-			opts.Intermediates.AddCert(cert)
-		}
-		verifiedChains, err := certs[0].Verify(opts)
-		if err != nil {
-			return err
-		}
-		if o.VerifyPeerCertificate != nil {
-			return o.VerifyPeerCertificate(rawCerts, verifiedChains)
-		}
-		return nil
 	}
-	config.VerifyPeerCertificate = verifyFunc
+	// create a function which will reload the root cert and invoke users' VerifyPeerCertificate
+	config.VerifyPeerCertificate = buildVerifyFunc(o.GetRootCAs, o.VerifyPeerCertificate, false)
 	return config, nil
 }
 
@@ -144,48 +110,60 @@ func (o *ServerOptions) Config() (*tls.Config, error) {
 		config.ClientAuth = tls.NoClientCert
 		return config, nil
 	}
-
-	config.ClientAuth = tls.RequireAnyClientCert
 	if o.RootCACerts == nil && o.GetRootCAs == nil {
 		return nil, fmt.Errorf("server need trust certs if using mutual TLS")
 	}
-	// we don't usually do name checking on server side. Provide this function just in case we need
-	// it.
-	verifyFunc := func (rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	if o.RootCACerts != nil {
+		config.RootCAs = o.RootCACerts
+		config.ClientAuth = tls.RequireAndVerifyClientCert
+		return config, nil
+	}
+	// We have to rewrite verify function if users want root certificate reloading
+	if o.GetRootCAs != nil {
+		config.ClientAuth = tls.RequireAnyClientCert
+		config.VerifyPeerCertificate = buildVerifyFunc(o.GetRootCAs, nil, true)
+	}
+	return config, nil
+}
+
+func buildVerifyFunc(
+	GetRootCAs func(rawCerts [][]byte) (*x509.CertPool, error),
+	VerifyPeerCertificate func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error,
+	isServer bool) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	verifyFunc := func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+		if GetRootCAs == nil {
+			return fmt.Errorf("buildVerifyFunc failed")
+		}
+		// reload root CA certs if specified
+		rootCAs, err := GetRootCAs(rawCerts)
+		if err != nil {
+			return err
+		}
 		// verify peers' certificates against RootCAs and get verifiedChains
 		certs := make([]*x509.Certificate, len(rawCerts))
 		for i, asn1Data := range rawCerts {
 			cert, _ := x509.ParseCertificate(asn1Data)
 			certs[i] = cert
 		}
-		rootCAs := o.RootCACerts
-		// reload root CA certs if specified
-		if rootCAs == nil {
-			root, err := o.GetRootCAs(rawCerts)
-			if err != nil {
-				return err
-			}
-			rootCAs = root
-		}
 		opts := x509.VerifyOptions{
 			Roots:         rootCAs,
 			CurrentTime:   time.Now(),
 			Intermediates: x509.NewCertPool(),
-			KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		}
+		if isServer {
+			opts.KeyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
 		}
 		for _, cert := range certs[1:] {
 			opts.Intermediates.AddCert(cert)
 		}
-		verifiedChains, err := certs[0].Verify(opts)
+		verifiedChains, err = certs[0].Verify(opts)
 		if err != nil {
 			return err
 		}
-		if o.VerifyPeerCertificate != nil {
-			return o.VerifyPeerCertificate(rawCerts, verifiedChains)
+		if !isServer && VerifyPeerCertificate != nil {
+			return VerifyPeerCertificate(rawCerts, verifiedChains)
 		}
 		return nil
 	}
-	config.VerifyPeerCertificate = verifyFunc
-	return config, nil
+	return verifyFunc
 }
-

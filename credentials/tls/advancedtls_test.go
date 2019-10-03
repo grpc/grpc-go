@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2016 gRPC authors.
+ * Copyright 2019 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,15 +36,15 @@ func TestClientConfig(t *testing.T) {
 	}
 
 	for _, test := range []struct {
-		desc string
-		cert   []tls.Certificate
-		getClientCert func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
-		serverNameOverride string
-		root *x509.CertPool
-		getRoot func(rawCerts [][]byte) (*x509.CertPool, error)
-		expectError bool
-		expectCert []tls.Certificate
-		expectGetCert func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
+		desc                     string
+		cert                     []tls.Certificate
+		getClientCert            func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
+		serverNameOverride       string
+		root                     *x509.CertPool
+		getRoot                  func(rawCerts [][]byte) (*x509.CertPool, error)
+		expectError              bool
+		expectCert               []tls.Certificate
+		expectGetCert            func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 		expectServerNameOverride string
 	}{
 		{
@@ -87,11 +87,11 @@ func TestClientConfig(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			options := &ClientOptions{
-				Certificates: test.cert,
+				Certificates:         test.cert,
 				GetClientCertificate: test.getClientCert,
-				RootCACerts: test.root,
-				GetRootCAs: test.getRoot,
-				ServerNameOverride: test.serverNameOverride,
+				RootCACerts:          test.root,
+				GetRootCAs:           test.getRoot,
+				ServerNameOverride:   test.serverNameOverride,
 			}
 			config, err := options.Config()
 			if got, want := err != nil, test.expectError; got != want {
@@ -135,7 +135,7 @@ func TestVerifyFunction(t *testing.T) {
 	}
 	verifyFunc := func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		if rawCerts == nil || len(rawCerts) == 0 {
-			return errors.New("error");
+			return errors.New("error")
 		}
 		certs := make([]*x509.Certificate, len(rawCerts))
 		for i, asn1Data := range rawCerts {
@@ -151,12 +151,11 @@ func TestVerifyFunction(t *testing.T) {
 		return errors.New("error")
 	}
 
-
 	for _, test := range []struct {
-		desc string
-		root *x509.CertPool
-		getRoot func(rawCerts [][]byte) (*x509.CertPool, error)
-		verifyFunc func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
+		desc        string
+		root        *x509.CertPool
+		getRoot     func(rawCerts [][]byte) (*x509.CertPool, error)
+		verifyFunc  func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
 		expectError bool
 	}{
 		{
@@ -198,9 +197,9 @@ func TestVerifyFunction(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			clientOptions := &ClientOptions{
-				Certificates: cert,
-				RootCACerts: test.root,
-				GetRootCAs: test.getRoot,
+				Certificates:          cert,
+				RootCACerts:           test.root,
+				GetRootCAs:            test.getRoot,
 				VerifyPeerCertificate: test.verifyFunc,
 			}
 			clientConfig, err := clientOptions.Config()
@@ -211,21 +210,6 @@ func TestVerifyFunction(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s: clientConfig checkVerifyPeerCertificate failed: %v.", test.desc, err)
 			}
-			serverOptions := &ServerOptions{
-				Certificates: cert,
-				RootCACerts: test.root,
-				GetRootCAs: test.getRoot,
-				VerifyPeerCertificate: test.verifyFunc,
-				MutualAuth: true,
-			}
-			serverConfig, err := serverOptions.Config()
-			if err != nil {
-				t.Fatalf("%s: serverConfig creation error: %v.", test.desc, err)
-			}
-			err = checkVerifyPeerCertificate(serverConfig, test.expectError)
-			if err != nil {
-				t.Fatalf("%s: serverConfig checkVerifyPeerCertificate failed: %v.", test.desc, err)
-			}
 		})
 	}
 }
@@ -235,17 +219,20 @@ func TestServerConfig(t *testing.T) {
 	getCert := func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 		return nil, nil
 	}
+	getRootCert := func(rawCerts [][]byte) (*x509.CertPool, error) {
+		return nil, nil
+	}
 	rootCert := x509.NewCertPool()
 	for _, test := range []struct {
-		desc string
-		cert   []tls.Certificate
-		getCert func(*tls.ClientHelloInfo) (*tls.Certificate, error)
-		mutualAuth bool
-		root *x509.CertPool
-		getRoot func(rawCerts [][]byte) (*x509.CertPool, error)
-		expectError bool
-		expectCert []tls.Certificate
-		expectGetCert func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+		desc             string
+		cert             []tls.Certificate
+		getCert          func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+		mutualAuth       bool
+		root             *x509.CertPool
+		getRoot          func(rawCerts [][]byte) (*x509.CertPool, error)
+		expectError      bool
+		expectCert       []tls.Certificate
+		expectGetCert    func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 		expectClientAuth tls.ClientAuthType
 	}{
 		{
@@ -261,18 +248,6 @@ func TestServerConfig(t *testing.T) {
 			tls.RequireAnyClientCert,
 		},
 		{
-			"nil_cert",
-			nil,
-			getCert,
-			true,
-			rootCert,
-			nil,
-			false,
-			nil,
-			getCert,
-			tls.RequireAnyClientCert,
-		},
-		{
 			"nil_getCert",
 			cert,
 			nil,
@@ -282,7 +257,7 @@ func TestServerConfig(t *testing.T) {
 			false,
 			cert,
 			nil,
-			tls.RequireAnyClientCert,
+			tls.RequireAndVerifyClientCert,
 		},
 		{
 			"nil_cert",
@@ -294,6 +269,18 @@ func TestServerConfig(t *testing.T) {
 			false,
 			nil,
 			getCert,
+			tls.RequireAndVerifyClientCert,
+		},
+		{
+			"nil_root_cert",
+			cert,
+			nil,
+			true,
+			nil,
+			getRootCert,
+			false,
+			cert,
+			nil,
 			tls.RequireAnyClientCert,
 		},
 		{
@@ -320,16 +307,15 @@ func TestServerConfig(t *testing.T) {
 			getCert,
 			tls.NoClientCert,
 		},
-
 	} {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			options := &ServerOptions{
-				Certificates: test.cert,
+				Certificates:   test.cert,
 				GetCertificate: test.getCert,
-				RootCACerts: test.root,
-				GetRootCAs: test.getRoot,
-				MutualAuth: test.mutualAuth,
+				RootCACerts:    test.root,
+				GetRootCAs:     test.getRoot,
+				MutualAuth:     test.mutualAuth,
 			}
 			config, err := options.Config()
 			if got, want := err != nil, test.expectError; got != want {
