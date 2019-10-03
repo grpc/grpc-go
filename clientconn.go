@@ -589,9 +589,16 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 		} else {
 			ret = balancer.ErrBadResolverState
 			if cc.balancerWrapper == nil {
-				cc.blockingpicker.updatePicker(base.NewErrPicker(status.Errorf(codes.Unavailable, "error parsing service config: %v", s.ServiceConfig.Err)))
+				var err error
+				if s.ServiceConfig.Err != nil {
+					err = status.Errorf(codes.Unavailable, "error parsing service config: %v", s.ServiceConfig.Err)
+				} else {
+					err = status.Errorf(codes.Unavailable, "illegal service config type: %T", s.ServiceConfig.Config)
+				}
+				cc.blockingpicker.updatePicker(base.NewErrPicker(err))
 				cc.csMgr.updateState(connectivity.TransientFailure)
 				cc.mu.Unlock()
+				cc.firstResolveEvent.Fire()
 				return ret
 			}
 		}
