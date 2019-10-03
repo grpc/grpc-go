@@ -26,17 +26,14 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	cdspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/cds"
-	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
 	discoverypb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/discovery"
 	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
 	adsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/discovery/v2/ads"
@@ -60,6 +57,7 @@ var (
 type client struct {
 	ctx              context.Context
 	cancel           context.CancelFunc
+	serviceName      string
 	cli              adsgrpc.AggregatedDiscoveryServiceClient
 	dialer           func(context.Context, string) (net.Conn, error)
 	channelzParentID int64
@@ -129,15 +127,9 @@ func (c *client) newCDSRequest() *discoverypb.DiscoveryRequest {
 }
 
 func (c *client) newEDSRequest() *discoverypb.DiscoveryRequest {
-	// TODO: Once we change the client to always make a CDS call, we can remove
-	// this boolean field from the metadata.
-	np := proto.Clone(c.config.NodeProto).(*basepb.Node)
-	np.Metadata.Fields[endpointRequired] = &structpb.Value{
-		Kind: &structpb.Value_BoolValue{BoolValue: c.enableCDS},
-	}
-
 	edsReq := &discoverypb.DiscoveryRequest{
-		Node: np,
+		ResourceNames: []string{c.serviceName},
+		Node:          c.config.NodeProto,
 		// TODO: the expected ResourceName could be in a different format from
 		// dial target. (test_service.test_namespace.traffic_director.com vs
 		// test_namespace:test_service).
@@ -261,6 +253,7 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 func newXDSClient(balancerName string, enableCDS bool, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
 	c := &client{
 		enableCDS:        enableCDS,
+		serviceName:      opts.Target.Endpoint,
 		dialer:           opts.Dialer,
 		channelzParentID: opts.ChannelzParentID,
 		newADS:           newADS,
@@ -280,17 +273,6 @@ func newXDSClient(balancerName string, enableCDS bool, opts balancer.BuildOption
 	}
 	if c.config.Creds == nil {
 		c.config.Creds = credsFromDefaults(balancerName, &opts)
-	}
-	if c.config.NodeProto == nil {
-		c.config.NodeProto = &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: opts.Target.Endpoint},
-					},
-				},
-			},
-		}
 	}
 	return c
 }

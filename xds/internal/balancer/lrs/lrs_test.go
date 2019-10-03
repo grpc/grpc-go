@@ -30,13 +30,11 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	durationpb "github.com/golang/protobuf/ptypes/duration"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
-	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
 	loadreportpb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/endpoint/load_report"
 	lrsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 	lrspb "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
@@ -362,15 +360,9 @@ func (lrss *lrsServer) StreamLoadStats(stream lrsgrpc.LoadReportingService_Strea
 		return err
 	}
 	if !proto.Equal(req, &lrspb.LoadStatsRequest{
-		Node: &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: testService},
-					},
-				},
-			},
-		},
+		ClusterStats: []*loadreportpb.ClusterStats{{
+			ClusterName: testService,
+		}},
 	}) {
 		return status.Errorf(codes.FailedPrecondition, "unexpected req: %+v", req)
 	}

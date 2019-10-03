@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	discoverypb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/discovery"
 	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
 )
 
@@ -364,72 +363,78 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 	}
 }
 
-// switch child policy, lb stays the same
-// cds->eds or eds -> cds, restart xdsClient, lb stays the same
-func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
-	originalNewEDSBalancer := newEDSBalancer
-	newEDSBalancer = newFakeEDSBalancer
-	defer func() {
-		newEDSBalancer = originalNewEDSBalancer
-	}()
-
-	builder := balancer.Get(xdsName)
-	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
-	if !ok {
-		t.Fatalf("unable to type assert to *xdsBalancer")
-	}
-	defer lb.Close()
-
-	var cleanups []func()
-	defer func() {
-		for _, cleanup := range cleanups {
-			cleanup()
-		}
-	}()
-	for _, test := range []struct {
-		cfg                 *xdsinternal.LBConfig
-		responseToSend      *discoverypb.DiscoveryResponse
-		expectedChildPolicy *xdsinternal.LoadBalancingConfig
-	}{
-		{
-			cfg:            &xdsinternal.LBConfig{},
-			responseToSend: testCDSResp,
-			expectedChildPolicy: &xdsinternal.LoadBalancingConfig{
-				Name: "ROUND_ROBIN",
-			},
-		},
-	} {
-		addr, td, _, cleanup := setupServer(t)
-		cleanups = append(cleanups, cleanup)
-		test.cfg.BalancerName = addr
-
-		lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: test.cfg})
-		if test.responseToSend != nil {
-			td.sendResp(&response{resp: test.responseToSend})
-		}
-		var i int
-		for i = 0; i < 10; i++ {
-			if edsLB := getLatestEdsBalancer(); edsLB != nil {
-				select {
-				case childPolicy := <-edsLB.childPolicy:
-					if !reflect.DeepEqual(childPolicy, test.expectedChildPolicy) {
-						t.Fatalf("got childPolicy %v, want %v", childPolicy, test.expectedChildPolicy)
-					}
-				case <-time.After(time.Second):
-					// FIXME: this will fail because the xds_client doesn't do
-					//  CDS. Will be OK after fixing that.
-					t.Fatal("haven't got policy update after 1s")
-				}
-				break
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-		if i == 10 {
-			t.Fatal("edsBalancer instance has not been created or updated after 1s")
-		}
-	}
-}
+// This sub-balancer policy switching test is temporarily disabled because the
+// machinisms to switch policy are disabled:
+//  - service config update with new balancer config (permanently removed)
+//  - CDS response with new policy (temporarily disabled)
+// This test will be re-enabled when CDS is re-enabled.
+//
+// // switch child policy, lb stays the same
+// // cds->eds or eds -> cds, restart xdsClient, lb stays the same
+// func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
+// 	originalNewEDSBalancer := newEDSBalancer
+// 	newEDSBalancer = newFakeEDSBalancer
+// 	defer func() {
+// 		newEDSBalancer = originalNewEDSBalancer
+// 	}()
+//
+// 	builder := balancer.Get(xdsName)
+// 	cc := newTestClientConn()
+// 	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
+// 	if !ok {
+// 		t.Fatalf("unable to type assert to *xdsBalancer")
+// 	}
+// 	defer lb.Close()
+//
+// 	var cleanups []func()
+// 	defer func() {
+// 		for _, cleanup := range cleanups {
+// 			cleanup()
+// 		}
+// 	}()
+// 	for _, test := range []struct {
+// 		cfg                 *xdsinternal.LBConfig
+// 		responseToSend      *discoverypb.DiscoveryResponse
+// 		expectedChildPolicy *xdsinternal.LoadBalancingConfig
+// 	}{
+// 		{
+// 			cfg:            &xdsinternal.LBConfig{},
+// 			responseToSend: testCDSResp,
+// 			expectedChildPolicy: &xdsinternal.LoadBalancingConfig{
+// 				Name: "ROUND_ROBIN",
+// 			},
+// 		},
+// 	} {
+// 		addr, td, _, cleanup := setupServer(t)
+// 		cleanups = append(cleanups, cleanup)
+// 		test.cfg.BalancerName = addr
+//
+// 		lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: test.cfg})
+// 		if test.responseToSend != nil {
+// 			td.sendResp(&response{resp: test.responseToSend})
+// 		}
+// 		var i int
+// 		for i = 0; i < 10; i++ {
+// 			if edsLB := getLatestEdsBalancer(); edsLB != nil {
+// 				select {
+// 				case childPolicy := <-edsLB.childPolicy:
+// 					if !reflect.DeepEqual(childPolicy, test.expectedChildPolicy) {
+// 						t.Fatalf("got childPolicy %v, want %v", childPolicy, test.expectedChildPolicy)
+// 					}
+// 				case <-time.After(time.Second):
+// 					// FIXME: this will fail because the xds_client doesn't do
+// 					//  CDS. Will be OK after fixing that.
+// 					t.Fatal("haven't got policy update after 1s")
+// 				}
+// 				break
+// 			}
+// 			time.Sleep(100 * time.Millisecond)
+// 		}
+// 		if i == 10 {
+// 			t.Fatal("edsBalancer instance has not been created or updated after 1s")
+// 		}
+// 	}
+// }
 
 // not in fallback mode, overwrite fallback info.
 // in fallback mode, update config or switch balancer.
