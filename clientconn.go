@@ -556,6 +556,7 @@ func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
 }
 
 func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
+	defer cc.firstResolveEvent.Fire()
 	cc.mu.Lock()
 	// Check if the ClientConn is already closed. Some fields (e.g.
 	// balancerWrapper) are set to nil when closing the ClientConn, and could
@@ -600,7 +601,6 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 				cc.blockingpicker.updatePicker(base.NewErrPicker(err))
 				cc.csMgr.updateState(connectivity.TransientFailure)
 				cc.mu.Unlock()
-				cc.firstResolveEvent.Fire()
 				return ret
 			}
 		}

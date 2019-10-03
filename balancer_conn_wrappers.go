@@ -140,7 +140,6 @@ func (ccb *ccBalancerWrapper) watcher() {
 			ccb.UpdateBalancerState(connectivity.Connecting, nil)
 			return
 		}
-		ccb.cc.firstResolveEvent.Fire()
 	}
 }
 
