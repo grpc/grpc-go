@@ -191,7 +191,8 @@ func (x *xdsBalancer) startNewXDSClient(u *xdsinternal.LBConfig) {
 			prevClient.close()
 		}
 	}
-	// FIXME: enable CDS. Disabling it now only for tests to pass.
+	// CDS disabled for tests to pass.
+	// FIXME: Re-enable CDS. Also need to fix EDS behavior to use CDS response in the same PR.
 	x.client = newXDSClient(u.BalancerName, false, x.buildOpts, x.loadStore, newADS, loseContact, exitCleanup)
 	go x.client.run()
 }

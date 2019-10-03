@@ -62,10 +62,7 @@ const (
 var (
 	testBalancerNameFooBar = "foo.bar"
 	testLBConfigFooBar     = &xdsinternal.LBConfig{
-		BalancerName: testBalancerNameFooBar,
-		// FIXME: to use fake_balancer_B in tests, CDS response needs to
-		//  specifiy B as child balancing policy.
-		//  ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerB},
+		BalancerName:   testBalancerNameFooBar,
 		FallBackPolicy: &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 	}
 
@@ -331,9 +328,7 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 		addr, td, _, cleanup := setupServer(t)
 		cleanups = append(cleanups, cleanup)
 		workingLBConfig := &xdsinternal.LBConfig{
-			BalancerName: addr,
-			// FIXME: CDS need to change child policy to fake balancer A.
-			//  ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
+			BalancerName:   addr,
 			FallBackPolicy: &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 		}
 		lb.UpdateClientConnState(balancer.ClientConnState{
@@ -456,9 +451,7 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 	addr, td, _, cleanup := setupServer(t)
 
 	cfg := xdsinternal.LBConfig{
-		BalancerName: addr,
-		// FIXME: child policy
-		//  ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
+		BalancerName:   addr,
 		FallBackPolicy: &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: &cfg})
@@ -532,9 +525,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	addr, td, _, cleanup := setupServer(t)
 	defer cleanup()
 	cfg := &xdsinternal.LBConfig{
-		BalancerName: addr,
-		// FIXME: child policy
-		//  ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
+		BalancerName:   addr,
 		FallBackPolicy: &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
@@ -611,9 +602,7 @@ func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 	addr, td, _, cleanup := setupServer(t)
 	defer cleanup()
 	cfg := &xdsinternal.LBConfig{
-		BalancerName: addr,
-		// FIXME: child policy
-		//  ChildPolicy:    &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
+		BalancerName:   addr,
 		FallBackPolicy: &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA},
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
