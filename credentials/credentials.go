@@ -46,7 +46,8 @@ type PerRPCCredentials interface {
 	// context. If a status code is returned, it will be used as the status
 	// for the RPC. uri is the URI of the entry point for the request.
 	// When supported by the underlying implementation, ctx can be used for
-	// timeout and cancellation.
+	// timeout and cancellation. Additionally, RequestInfo data will be
+	// available via ctx to this call.
 	// TODO(zhaoq): Define the set of the qualified keys instead of leaving
 	// it as an arbitrary string.
 	GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error)
@@ -336,7 +337,9 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 	return cfg.Clone()
 }
 
-// RequestInfo contains request data to be attached to the context passed along to GetRequestMetadata calls. This API is experimental.
+// RequestInfo contains request data attached to the context passed to GetRequestMetadata calls.
+//
+// This API is experimental.
 type RequestInfo struct {
 	// The method passed to Invoke or NewStream for this RPC. (For proto methods, this has the format "/some.Service/Method")
 	Method string
@@ -345,7 +348,9 @@ type RequestInfo struct {
 // requestInfoKey is a struct to be used as the key when attaching a RequestInfo to a context object.
 type requestInfoKey struct{}
 
-// RequestInfoFromContext extracts the RequestInfo from the context. This API is experimental.
+// RequestInfoFromContext extracts the RequestInfo from the context.
+//
+// This API is experimental.
 func RequestInfoFromContext(ctx context.Context) RequestInfo {
 	ri, ok := ctx.Value(requestInfoKey{}).(RequestInfo)
 	if !ok {
