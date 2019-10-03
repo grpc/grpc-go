@@ -525,6 +525,7 @@ type ServerConfig struct {
 	ReadBufferSize        int
 	ChannelzParentID      int64
 	MaxHeaderListSize     *uint32
+	HeaderTableSize       *uint32
 }
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error

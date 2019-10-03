@@ -174,6 +174,12 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 			Val: *config.MaxHeaderListSize,
 		})
 	}
+	if config.HeaderTableSize != nil {
+		isettings = append(isettings, http2.Setting{
+			ID:  http2.SettingHeaderTableSize,
+			Val: *config.HeaderTableSize,
+		})
+	}
 	if err := framer.fr.WriteSettings(isettings...); err != nil {
 		return nil, connectionErrorf(false, err, "transport: %v", err)
 	}
