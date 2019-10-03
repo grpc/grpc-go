@@ -23,35 +23,25 @@ package client
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
-	"sync"
 
 	"github.com/golang/protobuf/jsonpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/grpclog"
 	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
-	cspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/config_source"
 )
 
-// Environment variable which holds the name of the xDS bootstrap file.
-const bootstrapFileEnv = "GRPC_XDS_BOOTSTRAP"
-
-var (
-	// Bootstrap file is read once (on the first invocation of NewConfig), and
-	// the results are stored in these package level vars.
-	bsOnce sync.Once
-	bsData *bootstrapData
-	bsErr  error
+const (
+	// Environment variable which holds the name of the xDS bootstrap file.
+	bootstrapFileEnv = "GRPC_XDS_BOOTSTRAP"
+	// Type name for Google default credentials.
+	googleDefaultCreds = "google_default"
 )
 
 // For overriding from unit tests.
-var (
-	fileReadFunc = ioutil.ReadFile
-	onceDoerFunc = bsOnce.Do
-)
+var fileReadFunc = ioutil.ReadFile
 
 // Config provides the xDS client with several key bits of information that it
 // requires in its interaction with an xDS server. The Config is initialized
@@ -68,95 +58,92 @@ type Config struct {
 	NodeProto *basepb.Node
 }
 
+type channelCreds struct {
+	Type   string          `json:"type"`
+	Config json.RawMessage `json:"config"`
+}
+
+type xdsServer struct {
+	ServerURI    string         `json:"server_uri"`
+	ChannelCreds []channelCreds `json:"channel_creds"`
+}
+
 // NewConfig returns a new instance of Config initialized by reading the
-// bootstrap file found at ${GRPC_XDS_BOOTSTRAP}. Bootstrap file is read only
-// on the first invocation of this function, and further invocations end up
-// using the results from the former.
+// bootstrap file found at ${GRPC_XDS_BOOTSTRAP}.
 //
-// As of today, the bootstrap file only provides the balancer name and the node
-// proto to be used in calls to the balancer. For transport credentials, the
-// default TLS config with system certs is used. For call credentials, default
-// compute engine credentials are used.
-func NewConfig() (*Config, error) {
-	onceDoerFunc(func() {
-		fName, ok := os.LookupEnv(bootstrapFileEnv)
-		if !ok {
-			bsData, bsErr = nil, fmt.Errorf("xds: %s environment variable not set", bootstrapFileEnv)
-			return
-		}
-		bsData, bsErr = readBootstrapFile(fName)
-	})
-	if bsErr != nil {
-		return nil, bsErr
+// The format of the bootstrap file will be as follows:
+// {
+//    "xds_server": {
+//      "server_uri": <string containing URI of xds server>,
+//      "channel_creds": [
+//        {
+//          "type": <string containing channel cred type>,
+//          "config": <JSON object containing config for the type>
+//        }
+//      ]
+//    },
+//    "node": <JSON form of basepb.Node proto>
+// }
+//
+// Currently, we support exactly one type of credential, which is
+// "google_default", where we use the host's default certs for transport
+// credentials and a Google oauth token for call credentials.
+//
+// This function tries to process as much of the bootstrap file as possible (in
+// the presence of the errors) and may return a Config object with certain
+// fields left unspecified, in which case the caller should use some sane
+// defaults.
+func NewConfig() *Config {
+	config := &Config{}
+
+	fName, ok := os.LookupEnv(bootstrapFileEnv)
+	if !ok {
+		grpclog.Errorf("xds: %s environment variable not set", bootstrapFileEnv)
+		return config
 	}
-	return &Config{
-		BalancerName: bsData.balancerName(),
-		Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-		NodeProto:    bsData.node,
-	}, nil
-}
 
-// bootstrapData wraps the contents of the bootstrap file.
-// Today the bootstrap file contains a Node proto and an ApiConfigSource proto
-// in JSON format.
-type bootstrapData struct {
-	node      *basepb.Node
-	xdsServer *cspb.ApiConfigSource
-}
-
-func (bsd *bootstrapData) balancerName() string {
-	// If the bootstrap file was read and parsed successfully, this should be
-	// setup properly. So, we skip checking for the presence of these fields
-	// before accessing and returning it.
-	return bsd.xdsServer.GetGrpcServices()[0].GetGoogleGrpc().GetTargetUri()
-}
-
-func readBootstrapFile(name string) (*bootstrapData, error) {
-	grpclog.Infof("xds: Reading bootstrap file from %s", name)
-	data, err := fileReadFunc(name)
+	grpclog.Infof("xds: Reading bootstrap file from %s", fName)
+	data, err := fileReadFunc(fName)
 	if err != nil {
-		return nil, fmt.Errorf("xds: bootstrap file {%v} read failed: %v", name, err)
+		grpclog.Errorf("xds: bootstrap file {%v} read failed: %v", fName, err)
+		return config
 	}
 
 	var jsonData map[string]json.RawMessage
 	if err := json.Unmarshal(data, &jsonData); err != nil {
-		return nil, fmt.Errorf("xds: json.Unmarshal(%v) failed during bootstrap: %v", string(data), err)
+		grpclog.Errorf("xds: json.Unmarshal(%v) failed during bootstrap: %v", string(data), err)
+		return config
 	}
 
-	bsd := &bootstrapData{}
-	m := jsonpb.Unmarshaler{}
+	m := jsonpb.Unmarshaler{AllowUnknownFields: true}
 	for k, v := range jsonData {
 		switch k {
 		case "node":
 			n := &basepb.Node{}
 			if err := m.Unmarshal(bytes.NewReader(v), n); err != nil {
-				return nil, fmt.Errorf("xds: jsonpb.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
+				grpclog.Errorf("xds: jsonpb.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
+				break
 			}
-			bsd.node = n
+			config.NodeProto = n
 		case "xds_server":
-			s := &cspb.ApiConfigSource{}
-			if err := m.Unmarshal(bytes.NewReader(v), s); err != nil {
-				return nil, fmt.Errorf("xds: jsonpb.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
+			xs := &xdsServer{}
+			if err := json.Unmarshal(v, &xs); err != nil {
+				grpclog.Errorf("xds: json.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
+				break
 			}
-			bsd.xdsServer = s
+			config.BalancerName = xs.ServerURI
+			for _, cc := range xs.ChannelCreds {
+				if cc.Type == googleDefaultCreds {
+					config.Creds = grpc.WithCredentialsBundle(google.NewComputeEngineCredentials())
+					// We stop at the first credential type that we support.
+					break
+				}
+			}
 		default:
-			return nil, fmt.Errorf("xds: unexpected data in bootstrap file: {%v, %v}", k, string(v))
+			// Do not fail the xDS bootstrap when an unknown field is seen.
+			grpclog.Warningf("xds: unexpected data in bootstrap file: {%v, %v}", k, string(v))
 		}
 	}
 
-	if bsd.node == nil || bsd.xdsServer == nil {
-		return nil, fmt.Errorf("xds: incomplete data in bootstrap file: %v", string(data))
-	}
-
-	if api := bsd.xdsServer.GetApiType(); api != cspb.ApiConfigSource_GRPC {
-		return nil, fmt.Errorf("xds: apiType in bootstrap file is %v, want GRPC", api)
-	}
-	if n := len(bsd.xdsServer.GetGrpcServices()); n != 1 {
-		return nil, fmt.Errorf("xds: %v grpc services listed in bootstrap file, want 1", n)
-	}
-	if bsd.xdsServer.GetGrpcServices()[0].GetGoogleGrpc().GetTargetUri() == "" {
-		return nil, fmt.Errorf("xds: trafficdirector name missing in bootstrap file")
-	}
-
-	return bsd, nil
+	return config
 }
