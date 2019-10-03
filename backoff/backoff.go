@@ -20,13 +20,13 @@
 //
 // More details can be found at:
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
+//
+// All APIs in this package are experimental.
 package backoff
 
 import "time"
 
 // Config defines the configuration options for backoff.
-//
-// This API is EXPERIMENTAL.
 type Config struct {
 	// BaseDelay is the amount of time to backoff after the first failure.
 	BaseDelay time.Duration
@@ -44,8 +44,6 @@ type Config struct {
 //
 // This should be useful for callers who want to configure backoff with
 // non-default values only for a subset of the options.
-//
-// This API is EXPERIMENTAL.
 var DefaultConfig = Config{
 	BaseDelay:  1.0 * time.Second,
 	Multiplier: 1.6,
