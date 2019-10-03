@@ -235,9 +235,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}
 	if cc.dopts.bs == nil {
-		cc.dopts.bs = backoff.Exponential{
-			MaxDelay: DefaultBackoffConfig.MaxDelay,
-		}
+		cc.dopts.bs = backoff.DefaultExponential
 	}
 	if cc.dopts.resolverBuilder == nil {
 		// Only try to parse target when resolver builder is not already set.

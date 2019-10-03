@@ -48,12 +48,6 @@ const (
 	endpointRequired = "endpoints_required"
 )
 
-var (
-	defaultBackoffConfig = backoff.Exponential{
-		MaxDelay: 120 * time.Second,
-	}
-)
-
 // client is responsible for connecting to the specified traffic director, passing the received
 // ADS response from the traffic director, and sending notification when communication with the
 // traffic director is lost.
@@ -266,7 +260,7 @@ func newXDSClient(balancerName string, enableCDS bool, opts balancer.BuildOption
 		newADS:           newADS,
 		loseContact:      loseContact,
 		cleanup:          exitCleanup,
-		backoff:          defaultBackoffConfig,
+		backoff:          backoff.DefaultExponential,
 		loadStore:        loadStore,
 	}
 

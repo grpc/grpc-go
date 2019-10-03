@@ -24,11 +24,12 @@ import (
 	"net"
 	"time"
 
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/backoff"
+	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
@@ -47,7 +48,7 @@ type dialOptions struct {
 
 	cp          Compressor
 	dc          Decompressor
-	bs          backoff.Strategy
+	bs          internalbackoff.Strategy
 	block       bool
 	insecure    bool
 	timeout     time.Duration
@@ -246,8 +247,28 @@ func WithServiceConfig(c <-chan ServiceConfig) DialOption {
 	})
 }
 
+// WithConnectParams configures the dialer to use the provided ConnectParams.
+//
+// The backoff configuration specified as part of the ConnectParams overrides
+// all defaults specified in
+// https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md. Consider
+// using the backoff.DefaultConfig as a base, in cases where you want to
+// override only a subset of the backoff configuration.
+//
+// This API is EXPERIMENTAL.
+func WithConnectParams(p ConnectParams) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.bs = internalbackoff.Exponential{Config: p.Backoff}
+		o.minConnectTimeout = func() time.Duration {
+			return p.MinConnectTimeout
+		}
+	})
+}
+
 // WithBackoffMaxDelay configures the dialer to use the provided maximum delay
 // when backing off after failed connection attempts.
+//
+// Deprecated: use WithConnectParams instead. Will be supported throughout 1.x.
 func WithBackoffMaxDelay(md time.Duration) DialOption {
 	return WithBackoffConfig(BackoffConfig{MaxDelay: md})
 }
@@ -255,19 +276,18 @@ func WithBackoffMaxDelay(md time.Duration) DialOption {
 // WithBackoffConfig configures the dialer to use the provided backoff
 // parameters after connection failures.
 //
-// Use WithBackoffMaxDelay until more parameters on BackoffConfig are opened up
-// for use.
+// Deprecated: use WithConnectParams instead. Will be supported throughout 1.x.
 func WithBackoffConfig(b BackoffConfig) DialOption {
-	return withBackoff(backoff.Exponential{
-		MaxDelay: b.MaxDelay,
-	})
+	bc := backoff.DefaultConfig
+	bc.MaxDelay = b.MaxDelay
+	return withBackoff(internalbackoff.Exponential{Config: bc})
 }
 
 // withBackoff sets the backoff strategy used for connectRetryNum after a failed
 // connection attempt.
 //
 // This can be exported if arbitrary backoff strategies are allowed by gRPC.
-func withBackoff(bs backoff.Strategy) DialOption {
+func withBackoff(bs internalbackoff.Strategy) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.bs = bs
 	})

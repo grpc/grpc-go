@@ -32,8 +32,9 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/backoff"
+	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/resolver"
 )
@@ -126,9 +127,11 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 
 	// DNS address (non-IP).
 	ctx, cancel := context.WithCancel(context.Background())
+	bc := backoff.DefaultConfig
+	bc.MaxDelay = b.minFreq
 	d := &dnsResolver{
 		freq:                 b.minFreq,
-		backoff:              backoff.Exponential{MaxDelay: b.minFreq},
+		backoff:              internalbackoff.Exponential{Config: bc},
 		host:                 host,
 		port:                 port,
 		ctx:                  ctx,
@@ -200,7 +203,7 @@ func (i *ipResolver) watcher() {
 // dnsResolver watches for the name resolution update for a non-IP target.
 type dnsResolver struct {
 	freq       time.Duration
-	backoff    backoff.Exponential
+	backoff    internalbackoff.Exponential
 	retryCount int
 	host       string
 	port       string
