@@ -28,23 +28,28 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	ecpb "google.golang.org/grpc/examples/features/proto/echo"
-	hwpb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
+
+	ecpb "google.golang.org/grpc/examples/features/proto/echo"
+	hwpb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
 
 var port = flag.Int("port", 50051, "the port to serve on")
 
 // hwServer is used to implement helloworld.GreeterServer.
-type hwServer struct{}
+type hwServer struct {
+	hwpb.UnimplementedGreeterServer
+}
 
 // SayHello implements helloworld.GreeterServer
 func (s *hwServer) SayHello(ctx context.Context, in *hwpb.HelloRequest) (*hwpb.HelloReply, error) {
 	return &hwpb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
-type ecServer struct{}
+type ecServer struct {
+	ecpb.UnimplementedEchoServer
+}
 
 func (s *ecServer) UnaryEcho(ctx context.Context, req *ecpb.EchoRequest) (*ecpb.EchoResponse, error) {
 	return &ecpb.EchoResponse{Message: req.Message}, nil

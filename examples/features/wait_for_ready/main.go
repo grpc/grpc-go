@@ -29,12 +29,15 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/status"
+
+	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 // server is used to implement EchoServer.
-type server struct{}
+type server struct {
+	pb.UnimplementedEchoServer
+}
 
 func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: req.Message}, nil

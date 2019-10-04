@@ -29,13 +29,16 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/status"
+
+	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 var port = flag.Int("port", 50051, "the port to serve on")
 
-type server struct{}
+type server struct {
+	pb.UnimplementedEchoServer
+}
 
 func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "not implemented")

@@ -29,9 +29,10 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
+
+	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 var port = flag.Int("port", 50052, "port number")
@@ -50,7 +51,9 @@ var kasp = keepalive.ServerParameters{
 }
 
 // server implements EchoServer.
-type server struct{}
+type server struct {
+	pb.UnimplementedEchoServer
+}
 
 func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: req.Message}, nil

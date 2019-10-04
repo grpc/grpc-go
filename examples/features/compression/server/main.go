@@ -28,15 +28,17 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	pb "google.golang.org/grpc/examples/features/proto/echo"
+	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
 	"google.golang.org/grpc/status"
 
-	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
+	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 var port = flag.Int("port", 50051, "the port to serve on")
 
-type server struct{}
+type server struct {
+	pb.UnimplementedEchoServer
+}
 
 func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	fmt.Printf("UnaryEcho called with message %q\n", in.GetMessage())
