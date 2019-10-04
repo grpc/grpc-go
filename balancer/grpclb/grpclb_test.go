@@ -249,7 +249,7 @@ func (b *remoteBalancer) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServe
 }
 
 type testServer struct {
-	testpb.TestServiceServer
+	testpb.UnimplementedTestServiceServer
 
 	addr     string
 	fallback bool

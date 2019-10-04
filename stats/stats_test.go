@@ -58,7 +58,9 @@ var (
 	errorID int32 = 32202
 )
 
-type testServer struct{}
+type testServer struct {
+	testpb.UnimplementedTestServiceServer
+}
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
