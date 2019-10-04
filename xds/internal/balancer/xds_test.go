@@ -281,7 +281,7 @@ func (s) TestXdsFallbackResolvedAddrs(t *testing.T) {
 				t.Fatalf("got new subconn address %v, want %v", gotAddrs, test.wantAddrs)
 			}
 		case <-time.After(2 * time.Second):
-			t.Fatal("timeout when geting new subconn result")
+			t.Fatal("timeout when getting new subconn result")
 		}
 	}
 }
@@ -315,7 +315,7 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 			t.Fatalf("got new subconn address %v, want %v", nsc, append(addrs, specialAddrForBalancerA))
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatalf("timeout when geting new subconn result")
+		t.Fatalf("timeout when getting new subconn result")
 	}
 
 	var cleanups []func()
@@ -507,7 +507,7 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 			t.Fatalf("got new subconn address %v, want %v", nsc, append(addrs, specialAddrForBalancerB))
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatalf("timeout when geting new subconn result")
+		t.Fatalf("timeout when getting new subconn result")
 	}
 
 	cfg3 := cfg
@@ -524,7 +524,7 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 			t.Fatalf("got new subconn address %v, want %v", nsc, append(addrs, specialAddrForBalancerA))
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatalf("timeout when geting new subconn result")
+		t.Fatalf("timeout when getting new subconn result")
 	}
 }
 
