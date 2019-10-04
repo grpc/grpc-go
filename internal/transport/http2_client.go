@@ -35,6 +35,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/keepalive"
@@ -398,11 +399,15 @@ func (t *http2Client) getPeer() *peer.Peer {
 
 func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) ([]hpack.HeaderField, error) {
 	aud := t.createAudience(callHdr)
-	authData, err := t.getTrAuthData(ctx, aud)
+	ri := credentials.RequestInfo{
+		Method: callHdr.Method,
+	}
+	ctxWithRequestInfo := internal.NewRequestInfoContext.(func(context.Context, credentials.RequestInfo) context.Context)(ctx, ri)
+	authData, err := t.getTrAuthData(ctxWithRequestInfo, aud)
 	if err != nil {
 		return nil, err
 	}
-	callAuthData, err := t.getCallAuthData(ctx, aud, callHdr)
+	callAuthData, err := t.getCallAuthData(ctxWithRequestInfo, aud, callHdr)
 	if err != nil {
 		return nil, err
 	}
