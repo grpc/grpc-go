@@ -686,18 +686,12 @@ func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize 
 			if size > maxReceiveMessageSize {
 				return nil, size, nil
 			}
+			// size is used as an estimate to size the buffer, but we
+			// will read more data if available.
 			var buf bytes.Buffer
 			buf.Grow(size + bytes.MinRead) // extra space guarantees no reallocation
-			// Limit to size+1 so we can detect if the compressed data
-			// is actually bigger than the reported size
-			bytesRead, err := buf.ReadFrom(io.LimitReader(dcReader, int64(size)+1))
-			if err != nil {
-				return nil, size, err
-			}
-			if bytesRead != int64(size) {
-				return nil, size, fmt.Errorf("read different size than expected (%d vs. %d)", bytesRead, size)
-			}
-			return buf.Bytes(), size, nil
+			bytesRead, err := buf.ReadFrom(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+			return buf.Bytes(), int(bytesRead), err
 		}
 	}
 	// Read from LimitReader with limit max+1. So if the underlying
