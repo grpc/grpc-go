@@ -60,14 +60,6 @@ func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoRes
 	return &pb.EchoResponse{Message: in.Message}, nil
 }
 
-func (s *server) ServerStreamingEcho(in *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "not implemented")
-}
-
-func (s *server) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "not implemented")
-}
-
 func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
 	for {
 		in, err := stream.Recv()

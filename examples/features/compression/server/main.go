@@ -27,9 +27,7 @@ import (
 	"net"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
-	"google.golang.org/grpc/status"
 
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
@@ -43,18 +41,6 @@ type server struct {
 func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	fmt.Printf("UnaryEcho called with message %q\n", in.GetMessage())
 	return &pb.EchoResponse{Message: in.Message}, nil
-}
-
-func (s *server) ServerStreamingEcho(in *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "not implemented")
-}
-
-func (s *server) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "not implemented")
-}
-
-func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "not implemented")
 }
 
 func main() {

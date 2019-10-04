@@ -27,8 +27,6 @@ import (
 	"net"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	ecpb "google.golang.org/grpc/examples/features/proto/echo"
 	hwpb "google.golang.org/grpc/examples/helloworld/helloworld"
@@ -52,18 +50,6 @@ type ecServer struct {
 
 func (s *ecServer) UnaryEcho(ctx context.Context, req *ecpb.EchoRequest) (*ecpb.EchoResponse, error) {
 	return &ecpb.EchoResponse{Message: req.Message}, nil
-}
-
-func (s *ecServer) ServerStreamingEcho(*ecpb.EchoRequest, ecpb.Echo_ServerStreamingEchoServer) error {
-	return status.Errorf(codes.Unimplemented, "not implemented")
-}
-
-func (s *ecServer) ClientStreamingEcho(ecpb.Echo_ClientStreamingEchoServer) error {
-	return status.Errorf(codes.Unimplemented, "not implemented")
-}
-
-func (s *ecServer) BidirectionalStreamingEcho(ecpb.Echo_BidirectionalStreamingEchoServer) error {
-	return status.Errorf(codes.Unimplemented, "not implemented")
 }
 
 func main() {

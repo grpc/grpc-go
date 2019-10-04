@@ -28,9 +28,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/status"
 
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
@@ -57,18 +55,6 @@ type server struct {
 
 func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: req.Message}, nil
-}
-
-func (s *server) ServerStreamingEcho(req *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "RPC unimplemented")
-}
-
-func (s *server) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "RPC unimplemented")
-}
-
-func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "RPC unimplemented")
 }
 
 func main() {

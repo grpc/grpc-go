@@ -80,15 +80,6 @@ type ecServer struct {
 func (s *ecServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: req.Message}, nil
 }
-func (s *ecServer) ServerStreamingEcho(*pb.EchoRequest, pb.Echo_ServerStreamingEchoServer) error {
-	return status.Errorf(codes.Unimplemented, "not implemented")
-}
-func (s *ecServer) ClientStreamingEcho(pb.Echo_ClientStreamingEchoServer) error {
-	return status.Errorf(codes.Unimplemented, "not implemented")
-}
-func (s *ecServer) BidirectionalStreamingEcho(pb.Echo_BidirectionalStreamingEchoServer) error {
-	return status.Errorf(codes.Unimplemented, "not implemented")
-}
 
 // valid validates the authorization.
 func valid(authorization []string) bool {

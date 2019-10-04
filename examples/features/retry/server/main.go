@@ -67,18 +67,6 @@ func (s *failingServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb
 	return &pb.EchoResponse{Message: req.Message}, nil
 }
 
-func (s *failingServer) ServerStreamingEcho(req *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "RPC unimplemented")
-}
-
-func (s *failingServer) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "RPC unimplemented")
-}
-
-func (s *failingServer) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "RPC unimplemented")
-}
-
 func main() {
 	flag.Parse()
 

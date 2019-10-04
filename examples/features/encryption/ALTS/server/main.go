@@ -27,9 +27,7 @@ import (
 	"net"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/alts"
-	"google.golang.org/grpc/status"
 
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
@@ -42,18 +40,6 @@ type ecServer struct {
 
 func (s *ecServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: req.Message}, nil
-}
-
-func (s *ecServer) ServerStreamingEcho(*pb.EchoRequest, pb.Echo_ServerStreamingEchoServer) error {
-	return status.Errorf(codes.Unimplemented, "not implemented")
-}
-
-func (s *ecServer) ClientStreamingEcho(pb.Echo_ClientStreamingEchoServer) error {
-	return status.Errorf(codes.Unimplemented, "not implemented")
-}
-
-func (s *ecServer) BidirectionalStreamingEcho(pb.Echo_BidirectionalStreamingEchoServer) error {
-	return status.Errorf(codes.Unimplemented, "not implemented")
 }
 
 func main() {
