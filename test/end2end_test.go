@@ -4968,6 +4968,49 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 	}
 }
 
+// This test makes sure that the authority client handshake gets is the endpoint
+// of the ServerName of the address when it is set.
+func (s) TestCredsHandshakeServerNameAuthority(t *testing.T) {
+	const testAuthority = "test.auth.ori.ty"
+	const testServerName = "test.server.name"
+
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	cred := &authorityCheckCreds{}
+	s := grpc.NewServer()
+	go s.Serve(lis)
+	defer s.Stop()
+
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+
+	cc, err := grpc.Dial(r.Scheme()+":///"+testAuthority, grpc.WithTransportCredentials(cred))
+	if err != nil {
+		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
+	}
+	defer cc.Close()
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String(), ServerName: testServerName}}})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	for {
+		s := cc.GetState()
+		if s == connectivity.Ready {
+			break
+		}
+		if !cc.WaitForStateChange(ctx, s) {
+			// ctx got timeout or canceled.
+			t.Fatalf("ClientConn is not ready after 100 ms")
+		}
+	}
+
+	if cred.got != testServerName {
+		t.Fatalf("client creds got authority: %q, want: %q", cred.got, testAuthority)
+	}
+}
+
 type clientFailCreds struct{}
 
 func (c *clientFailCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
