@@ -105,7 +105,7 @@ func (l *LBConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalJSON returns a JSON enconding of l.
+// MarshalJSON returns a JSON encoding of l.
 func (l *LBConfig) MarshalJSON() ([]byte, error) {
 	return nil, nil
 }
@@ -117,7 +117,7 @@ type LoadBalancingConfig struct {
 	Config json.RawMessage
 }
 
-// MarshalJSON returns a JSON enconding of l.
+// MarshalJSON returns a JSON encoding of l.
 func (l *LoadBalancingConfig) MarshalJSON() ([]byte, error) {
 	m := make(map[string]json.RawMessage)
 	m[l.Name] = l.Config
