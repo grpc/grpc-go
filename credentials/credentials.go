@@ -348,15 +348,12 @@ type RequestInfo struct {
 // requestInfoKey is a struct to be used as the key when attaching a RequestInfo to a context object.
 type requestInfoKey struct{}
 
-// RequestInfoFromContext extracts the RequestInfo from the context.
+// RequestInfoFromContext extracts the RequestInfo from the context if it exists.
 //
 // This API is experimental.
-func RequestInfoFromContext(ctx context.Context) RequestInfo {
-	ri, ok := ctx.Value(requestInfoKey{}).(RequestInfo)
-	if !ok {
-		return RequestInfo{}
-	}
-	return ri
+func RequestInfoFromContext(ctx context.Context) (ri RequestInfo, ok bool) {
+	ri, ok = ctx.Value(requestInfoKey{}).(RequestInfo)
+	return
 }
 
 func init() {

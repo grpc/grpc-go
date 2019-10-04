@@ -7488,7 +7488,7 @@ func parseCfg(s string) serviceconfig.Config {
 type methodTestCreds struct{}
 
 func (m methodTestCreds) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	ri := credentials.RequestInfoFromContext(ctx)
+	ri, _ := credentials.RequestInfoFromContext(ctx)
 	return nil, status.Errorf(codes.Unknown, ri.Method)
 }
 
