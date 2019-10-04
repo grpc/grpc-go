@@ -149,6 +149,8 @@ var (
 var raceMode bool // set by race.go in race mode
 
 type testServer struct {
+	testpb.UnimplementedTestServiceServer
+
 	security           string // indicate the authentication protocol used by this server.
 	earlyFail          bool   // whether to error out the execution of a service handler prematurely.
 	setAndSendHeader   bool   // whether to call setHeader and sendHeader.
