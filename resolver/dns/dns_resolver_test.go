@@ -31,6 +31,7 @@ import (
 
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/serviceconfig"
 )
 
 func TestMain(m *testing.M) {
@@ -87,6 +88,14 @@ func (t *testClientConn) getSc() (string, int) {
 	t.m2.Lock()
 	defer t.m2.Unlock()
 	return t.sc, t.s
+}
+
+func (t *testClientConn) ParseServiceConfig(string) *serviceconfig.ParseResult {
+	panic("not implemented")
+}
+
+func (t *testClientConn) ReportError(error) {
+	panic("not implemented")
 }
 
 type testResolver struct {

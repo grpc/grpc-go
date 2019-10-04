@@ -25,12 +25,8 @@ package resolver
 
 import (
 	"fmt"
-	"sync"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/serviceconfig"
 )
 
 const (
@@ -54,11 +50,6 @@ const (
 	xdsScheme = "xds-experimental"
 )
 
-var (
-	parseOnce sync.Once
-	parsedSC  serviceconfig.Config
-)
-
 // NewBuilder creates a new implementation of the resolver.Builder interface
 // for the xDS resolver.
 func NewBuilder() resolver.Builder {
@@ -69,23 +60,17 @@ type xdsBuilder struct{}
 
 // Build helps implement the resolver.Builder interface.
 func (b *xdsBuilder) Build(t resolver.Target, cc resolver.ClientConn, o resolver.BuildOption) (resolver.Resolver, error) {
-	parseOnce.Do(func() {
-		// The xds balancer must have been registered at this point for the service
-		// config to be parsed properly.
-		psc, err := internal.ParseServiceConfig(jsonSC)
-		if err != nil {
-			panic(fmt.Sprintf("service config %s parsing failed: %v", jsonSC, err))
-		}
+	// The xds balancer must have been registered at this point for the service
+	// config to be parsed properly.
+	scpr := cc.ParseServiceConfig(jsonSC)
 
-		var ok bool
-		if parsedSC, ok = psc.(*grpc.ServiceConfig); !ok {
-			panic(fmt.Sprintf("service config type is [%T], want [grpc.ServiceConfig]", psc))
-		}
-	})
+	if scpr.Err != nil {
+		panic(fmt.Sprintf("error parsing service config %q: %v", jsonSC, scpr.Err))
+	}
 
 	// We return a resolver which bacically does nothing. The hard-coded service
 	// config returned here picks the xds balancer.
-	cc.UpdateState(resolver.State{ServiceConfig: parsedSC})
+	cc.UpdateState(resolver.State{ServiceConfig: scpr})
 	return &xdsResolver{}, nil
 }
 

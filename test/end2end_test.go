@@ -1461,7 +1461,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(`{
+		ServiceConfig: parseCfg(r, `{
     "methodConfig": [
         {
             "name": [
@@ -1500,7 +1500,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 
-	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: parseCfg(`{
+	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: parseCfg(r, `{
     "methodConfig": [
         {
             "name": [
@@ -1548,7 +1548,7 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(`{
+		ServiceConfig: parseCfg(r, `{
     "methodConfig": [
         {
             "name": [
@@ -1590,7 +1590,7 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	// Case2:Client API set failfast to be false, and service config set wait_for_ready to be true, and the rpc will wait until deadline exceeds.
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(`{
+		ServiceConfig: parseCfg(r, `{
     "methodConfig": [
         {
             "name": [
@@ -1637,7 +1637,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(`{
+		ServiceConfig: parseCfg(r, `{
     "methodConfig": [
         {
             "name": [
@@ -1684,7 +1684,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 	// Case2: Client API sets timeout to be 1hr and ServiceConfig sets timeout to be 1ns. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(`{
+		ServiceConfig: parseCfg(r, `{
     "methodConfig": [
         {
             "name": [
@@ -1747,7 +1747,17 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sc := parseCfg(`{
+	// Case1: sc set maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
+	te1 := testServiceConfigSetup(t, e)
+	defer te1.tearDown()
+
+	te1.resolverScheme = r.Scheme()
+	te1.nonBlockingDial = true
+	te1.startServer(&testServer{security: e.security})
+	cc1 := te1.clientConn()
+
+	addrs := []resolver.Address{{Addr: te1.srvAddr}}
+	sc := parseCfg(r, `{
     "methodConfig": [
         {
             "name": [
@@ -1765,17 +1775,6 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
         }
     ]
 }`)
-
-	// Case1: sc set maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
-	te1 := testServiceConfigSetup(t, e)
-	defer te1.tearDown()
-
-	te1.resolverScheme = r.Scheme()
-	te1.nonBlockingDial = true
-	te1.startServer(&testServer{security: e.security})
-	cc1 := te1.clientConn()
-
-	addrs := []resolver.Address{{Addr: te1.srvAddr}}
 	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: sc})
 	tc := testpb.NewTestServiceClient(cc1)
 
@@ -2000,7 +1999,7 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: te.srvAddr}},
-		ServiceConfig: parseCfg(`{
+		ServiceConfig: parseCfg(r, `{
 	    "methodConfig": [
 	        {
 	            "name": [
@@ -5312,7 +5311,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 }
 
 func (ss *stubServer) newServiceConfig(sc string) {
-	ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}, ServiceConfig: parseCfg(sc)})
+	ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}, ServiceConfig: parseCfg(ss.r, sc)})
 }
 
 func (ss *stubServer) waitForReady(cc *grpc.ClientConn) error {
@@ -7230,7 +7229,7 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 		time.Sleep(time.Second)
 		r.UpdateState(resolver.State{
 			Addresses: []resolver.Address{{Addr: te.srvAddr}},
-			ServiceConfig: parseCfg(`{
+			ServiceConfig: parseCfg(r, `{
 		    "methodConfig": [
 		        {
 		            "name": [
@@ -7477,12 +7476,12 @@ func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string
 	}
 }
 
-func parseCfg(s string) serviceconfig.Config {
-	c, err := serviceconfig.Parse(s)
-	if err != nil {
-		panic(fmt.Sprintf("Error parsing config %q: %v", s, err))
+func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
+	g := r.CC.ParseServiceConfig(s)
+	if g.Err != nil {
+		panic(fmt.Sprintf("Error parsing config %q: %v", s, g.Err))
 	}
-	return c
+	return g
 }
 
 type methodTestCreds struct{}
