@@ -24,13 +24,15 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
+
+	internalbackoff "google.golang.org/grpc/internal/backoff"
 )
 
 // ccResolverWrapper is a wrapper on top of cc for resolvers.
@@ -113,7 +115,7 @@ func (ccr *ccResolverWrapper) close() {
 	ccr.mu.Unlock()
 }
 
-var resolverBackoff = backoff.Exponential{MaxDelay: 2 * time.Minute}.Backoff
+var resolverBackoff = internalbackoff.Exponential{Config: backoff.Config{MaxDelay: 2 * time.Minute}}.Backoff
 
 // poll begins or ends asynchronous polling of the resolver based on whether
 // err is ErrBadResolverState.
