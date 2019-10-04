@@ -29,13 +29,15 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/status"
+
+	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 var port = flag.Int("port", 50052, "port number")
 
 type failingServer struct {
+	pb.UnimplementedEchoServer
 	mu sync.Mutex
 
 	reqCounter uint
@@ -63,18 +65,6 @@ func (s *failingServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb
 
 	log.Println("request succeeded count:", s.reqCounter)
 	return &pb.EchoResponse{Message: req.Message}, nil
-}
-
-func (s *failingServer) ServerStreamingEcho(req *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "RPC unimplemented")
-}
-
-func (s *failingServer) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "RPC unimplemented")
-}
-
-func (s *failingServer) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "RPC unimplemented")
 }
 
 func main() {
