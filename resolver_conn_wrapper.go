@@ -33,8 +33,6 @@ import (
 type ccResolverWrapper struct {
 	cc       *ClientConn
 	resolver resolver.Resolver
-	addrCh   chan []resolver.Address
-	scCh     chan string
 	done     uint32 // accessed atomically; set to 1 when closed.
 	curState resolver.State
 }
@@ -79,11 +77,7 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 		return nil, fmt.Errorf("could not get resolver for scheme: %q", cc.parsedTarget.Scheme)
 	}
 
-	ccr := &ccResolverWrapper{
-		cc:     cc,
-		addrCh: make(chan []resolver.Address, 1),
-		scCh:   make(chan string, 1),
-	}
+	ccr := &ccResolverWrapper{cc: cc}
 
 	var err error
 	ccr.resolver, err = rb.Build(cc.parsedTarget, ccr, resolver.BuildOption{DisableServiceConfig: cc.dopts.disableServiceConfig})
