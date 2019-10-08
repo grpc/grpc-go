@@ -141,6 +141,8 @@ func (rld *rpcLoadData) loadAndClear() (s float64, c uint64) {
 // lrsStore collects loads from xds balancer, and periodically sends load to the
 // server.
 type lrsStore struct {
+	serviceName string
+	// TODO: delete node. We are sending serviceName as ClusterName now.
 	node         *basepb.Node
 	backoff      backoff.Strategy
 	lastReported time.Time
@@ -152,6 +154,7 @@ type lrsStore struct {
 // NewStore creates a store for load reports.
 func NewStore(serviceName string) Store {
 	return &lrsStore{
+		serviceName: serviceName,
 		node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
@@ -324,6 +327,11 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn) {
 			continue
 		}
 		if err := stream.Send(&lrspb.LoadStatsRequest{
+			ClusterStats: []*loadreportpb.ClusterStats{{
+				// TODO: this is user's dial target now, as a temporary
+				//  solution. Eventually this will be from CDS's response.
+				ClusterName: ls.serviceName,
+			}},
 			Node: ls.node,
 		}); err != nil {
 			grpclog.Infof("lrs: failed to send first request: %v", err)

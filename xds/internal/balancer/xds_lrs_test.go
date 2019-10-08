@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/xds/internal"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
+	loadreportpb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/endpoint/load_report"
 	lrsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 	lrspb "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 )
@@ -52,6 +53,9 @@ func (lrss *lrsServer) StreamLoadStats(stream lrsgrpc.LoadReportingService_Strea
 		return err
 	}
 	if !proto.Equal(req, &lrspb.LoadStatsRequest{
+		ClusterStats: []*loadreportpb.ClusterStats{{
+			ClusterName: testServiceName,
+		}},
 		Node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{

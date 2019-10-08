@@ -362,6 +362,9 @@ func (lrss *lrsServer) StreamLoadStats(stream lrsgrpc.LoadReportingService_Strea
 		return err
 	}
 	if !proto.Equal(req, &lrspb.LoadStatsRequest{
+		ClusterStats: []*loadreportpb.ClusterStats{{
+			ClusterName: testService,
+		}},
 		Node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{

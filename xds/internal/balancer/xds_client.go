@@ -54,6 +54,7 @@ const (
 type client struct {
 	ctx              context.Context
 	cancel           context.CancelFunc
+	serviceName      string
 	cli              adsgrpc.AggregatedDiscoveryServiceClient
 	dialer           func(context.Context, string) (net.Conn, error)
 	channelzParentID int64
@@ -116,8 +117,9 @@ func (c *client) dial() {
 
 func (c *client) newCDSRequest() *discoverypb.DiscoveryRequest {
 	cdsReq := &discoverypb.DiscoveryRequest{
-		Node:    c.config.NodeProto,
-		TypeUrl: cdsType,
+		Node:          c.config.NodeProto,
+		TypeUrl:       cdsType,
+		ResourceNames: []string{c.serviceName},
 	}
 	return cdsReq
 }
@@ -142,7 +144,8 @@ func (c *client) newEDSRequest() *discoverypb.DiscoveryRequest {
 		// A future solution could be: always do CDS, get cluster name from CDS
 		// response, and use it here.
 		// `ResourceNames: []string{c.clusterName},`
-		TypeUrl: edsType,
+		TypeUrl:       edsType,
+		ResourceNames: []string{c.serviceName},
 	}
 	return edsReq
 }
@@ -255,6 +258,7 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 func newXDSClient(balancerName string, enableCDS bool, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
 	c := &client{
 		enableCDS:        enableCDS,
+		serviceName:      opts.Target.Endpoint,
 		dialer:           opts.Dialer,
 		channelzParentID: opts.ChannelzParentID,
 		newADS:           newADS,

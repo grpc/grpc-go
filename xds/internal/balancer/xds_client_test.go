@@ -59,7 +59,8 @@ var (
 				},
 			},
 		},
-		TypeUrl: cdsType,
+		TypeUrl:       cdsType,
+		ResourceNames: []string{testServiceName},
 	}
 	testEDSReq = &discoverypb.DiscoveryRequest{
 		Node: &basepb.Node{
@@ -75,6 +76,8 @@ var (
 			},
 		},
 		TypeUrl: edsType,
+		// TODO: this should be cluster name from CDS response, not the service name.
+		ResourceNames: []string{testServiceName},
 	}
 	testEDSReqWithoutEndpoints = &discoverypb.DiscoveryRequest{
 		Node: &basepb.Node{
@@ -89,7 +92,8 @@ var (
 				},
 			},
 		},
-		TypeUrl: edsType,
+		TypeUrl:       edsType,
+		ResourceNames: []string{testServiceName},
 	}
 	testCluster = &cdspb.Cluster{
 		Name:                 testServiceName,
