@@ -86,9 +86,16 @@ type Address struct {
 	// Type is the type of this address.
 	Type AddressType
 	// ServerName is the name of this address.
+	// If non-empty, the ServerName is used as the transport certification authority for
+	// the address, instead of the hostname from the Dial target string. In most cases,
+	// this should not be set.
 	//
-	// e.g. if Type is GRPCLB, ServerName should be the name of the remote load
+	// If Type is GRPCLB, ServerName should be the name of the remote load
 	// balancer, not the name of the backend.
+	//
+	// WARNING: ServerName must only be populated with trusted values. It
+	// is insecure to populate it with data from untrusted inputs since untrusted
+	// values could be used to bypass the authority checks performed by TLS.
 	ServerName string
 	// Metadata is the information associated with Addr, which may be used
 	// to make load balancing decision.

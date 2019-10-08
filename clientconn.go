@@ -1210,10 +1210,16 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 	onCloseCalled := make(chan struct{})
 	reconnect := grpcsync.NewEvent()
 
+	authority := ac.cc.authority
+	// addr.ServerName takes precedent over ClientConn authority, if present.
+	if addr.ServerName != "" {
+		authority = addr.ServerName
+	}
+
 	target := transport.TargetInfo{
 		Addr:      addr.Addr,
 		Metadata:  addr.Metadata,
-		Authority: ac.cc.authority,
+		Authority: authority,
 	}
 
 	once := sync.Once{}
