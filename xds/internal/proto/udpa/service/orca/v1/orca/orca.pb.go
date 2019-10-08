@@ -8,7 +8,7 @@ import fmt "fmt"
 import math "math"
 import duration "github.com/golang/protobuf/ptypes/duration"
 import orca_load_report "google.golang.org/grpc/xds/internal/proto/udpa/data/orca/v1/orca_load_report"
-import _ "google.golang.org/grpc/xds/internal/proto/validate"
+import _ "github.com/envoyproxy/protoc-gen-validate/validate"
 
 import (
 	context "golang.org/x/net/context"
