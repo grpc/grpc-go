@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package cache implements caches to be used in gRPC.
 package cache
 
 import (
@@ -22,9 +23,15 @@ import (
 )
 
 type cacheEntry struct {
-	item          interface{}
-	callback      func()
-	timer         *time.Timer
+	item     interface{}
+	callback func()
+	timer    *time.Timer
+	// abortDeleting is set to true when timer.Stop() fails. This can happen
+	// when stop() races with the timer (timer fires at the same time stop() is
+	// called).
+	//
+	// This variable needs to be checked before deleting the entry and calling
+	// callback, to make sure the deleting is canceled.
 	abortDeleting bool
 }
 
@@ -43,41 +50,43 @@ func NewTimeoutCache(timeout time.Duration) *TimeoutCache {
 	}
 }
 
-// Store an item to the cache, with the callback to be called when item is
-// removed after timeout.
+// Add an item to the cache, with the callback to be called when item is removed
+// after timeout.
 //
 // The return item is the one stored in cache. If the same key is used for a
-// second time to store an item, before the item is removed, the item won't be
-// stored, the return values will be (false, the previous item)..
-func (c *TimeoutCache) Store(key, item interface{}, callback func()) (stored bool, storedItem interface{}) {
+// second time to add, while the old item is still in cache, the new item won't
+// be stored, and the return values will be (false, the old item).
+func (c *TimeoutCache) Add(key, item interface{}, callback func()) (bool, interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	entry, ok := c.cache[key]
-	if !ok {
-		entry = &cacheEntry{
-			item:     item,
-			callback: callback,
-		}
-		entry.timer = time.AfterFunc(c.timeout, func() {
-			c.mu.Lock()
-			defer c.mu.Unlock()
-			if entry.abortDeleting {
-				return
-			}
-			entry.callback()
-			delete(c.cache, key)
-		})
-		c.cache[key] = entry
-		return true, item
+	if e, ok := c.cache[key]; ok {
+		return false, e.item
 	}
-	return false, entry.item
+
+	entry := &cacheEntry{
+		item:     item,
+		callback: callback,
+	}
+	entry.timer = time.AfterFunc(c.timeout, func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if entry.abortDeleting {
+			// Abort deleting even if timer fires. This mean there was a race
+			// between stopping timer and the timer itself.
+			return
+		}
+		entry.callback()
+		delete(c.cache, key)
+	})
+	c.cache[key] = entry
+	return true, item
 }
 
-// Retrive the item with the key from the cache.
+// Remove the item with the key from the cache.
 //
 // The item will be removed from the cache, and the timer for this item will be
 // stopped. The callback to be called after timeout will never be called.
-func (c *TimeoutCache) Retrive(key interface{}) (item interface{}, ok bool) {
+func (c *TimeoutCache) Remove(key interface{}) (item interface{}, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	entry, ok := c.retrieveAndRemoveItemUnlocked(key)
@@ -98,6 +107,13 @@ func (c *TimeoutCache) retrieveAndRemoveItemUnlocked(key interface{}) (*cacheEnt
 	}
 	delete(c.cache, key)
 	if !entry.timer.Stop() {
+		// If stop was not successful, the timer has fired (this can only happen
+		// in a race). But the deleting function is blocked on c.mu because the
+		// mutex was held by the caller of this function.
+		//
+		// Set abortDeleting to true to abort the deleting function. When the
+		// lock is released, the delete function will acquire the lock, check
+		// the value of abortDeleting and return.
 		entry.abortDeleting = true
 	}
 	return entry, true

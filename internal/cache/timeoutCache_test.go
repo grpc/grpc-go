@@ -41,10 +41,10 @@ func TestCacheExpire(t *testing.T) {
 	c := NewTimeoutCache(testCacheTimeout)
 
 	callbackChan := make(chan struct{})
-	c.Store(k, v, func() { close(callbackChan) })
+	c.Add(k, v, func() { close(callbackChan) })
 
 	if gotV, ok := c.getForTesting(k); !ok || gotV.item != v {
-		t.Fatalf("After store(), before timeout, from cache got: %v, %v, want %v, %v", gotV.item, ok, v, true)
+		t.Fatalf("After add(), before timeout, from cache got: %v, %v, want %v, %v", gotV.item, ok, v, true)
 	}
 
 	select {
@@ -54,31 +54,31 @@ func TestCacheExpire(t *testing.T) {
 	}
 
 	if _, ok := c.getForTesting(k); ok {
-		t.Fatalf("After store(), after timeout, from cache got: _, %v, want _, %v", ok, false)
+		t.Fatalf("After add(), after timeout, from cache got: _, %v, want _, %v", ok, false)
 	}
 }
 
-// Test that retrieve returns the cached item, and also cancels the timer.
-func TestCacheRetrieve(t *testing.T) {
+// Test that remove returns the cached item, and also cancels the timer.
+func TestCacheRemove(t *testing.T) {
 	const k, v = 1, "1"
 	c := NewTimeoutCache(testCacheTimeout)
 
 	callbackChan := make(chan struct{})
-	c.Store(k, v, func() { close(callbackChan) })
+	c.Add(k, v, func() { close(callbackChan) })
 
 	if got, ok := c.getForTesting(k); !ok || got.item != v {
-		t.Fatalf("After store(), before timeout, from cache got: %v, %v, want %v, %v", got.item, ok, v, true)
+		t.Fatalf("After add(), before timeout, from cache got: %v, %v, want %v, %v", got.item, ok, v, true)
 	}
 
 	time.Sleep(testCacheTimeout / 2)
 
-	gotV, gotOK := c.Retrive(k)
+	gotV, gotOK := c.Remove(k)
 	if !gotOK || gotV != v {
-		t.Fatalf("After store(), before timeout, Retrieve() got: %v, %v, want %v, %v", gotV, gotOK, v, true)
+		t.Fatalf("After add(), before timeout, remove() got: %v, %v, want %v, %v", gotV, gotOK, v, true)
 	}
 
 	if _, ok := c.getForTesting(k); ok {
-		t.Fatalf("After store(), before timeout, after Retrieve(), from cache got: _, %v, want _, %v", ok, false)
+		t.Fatalf("After add(), before timeout, after remove(), from cache got: _, %v, want _, %v", ok, false)
 	}
 
 	select {
@@ -88,18 +88,65 @@ func TestCacheRetrieve(t *testing.T) {
 	}
 }
 
+// Test that clear cancels all the timers.
+func TestCacheClear(t *testing.T) {
+	var values []string
+	const itemCount = 3
+	for i := 0; i < itemCount; i++ {
+		values = append(values, strconv.Itoa(i))
+	}
+	c := NewTimeoutCache(testCacheTimeout)
+
+	done := make(chan struct{})
+	defer close(done)
+	callbackChan := make(chan struct{}, itemCount)
+
+	for i, v := range values {
+		callbackChanTemp := make(chan struct{})
+		c.Add(i, v, func() { close(callbackChanTemp) })
+		go func() {
+			select {
+			case <-callbackChanTemp:
+				callbackChan <- struct{}{}
+			case <-done:
+			}
+		}()
+	}
+
+	for i, v := range values {
+		if got, ok := c.getForTesting(i); !ok || got.item != v {
+			t.Fatalf("After add(), before timeout, from cache got: %v, %v, want %v, %v", got.item, ok, v, true)
+		}
+	}
+
+	time.Sleep(testCacheTimeout / 2)
+	c.Clear()
+
+	for i := range values {
+		if _, ok := c.getForTesting(i); ok {
+			t.Fatalf("After add(), before timeout, after remove(), from cache got: _, %v, want _, %v", ok, false)
+		}
+	}
+
+	select {
+	case <-callbackChan:
+		t.Fatalf("unexpected callback after Clear")
+	case <-time.After(testCacheTimeout * 2):
+	}
+}
+
 // Test that if the timer to an item from cache fires at the same time that
-// Retrieve() cancels the timer, it doesn't cause deadlock.
-func TestCache_Retrieve_Timeout_New_Race(t *testing.T) {
+// remove() cancels the timer, it doesn't cause deadlock.
+func TestCacheRetrieveTimeoutRace(t *testing.T) {
 	c := NewTimeoutCache(time.Nanosecond)
 
 	done := make(chan struct{})
 	go func() {
 		for i := 0; i < 1000; i++ {
-			// Store starts a timer with 1 ns timeout, then Retrieve will race
+			// Add starts a timer with 1 ns timeout, then remove will race
 			// with the timer.
-			c.Store(i, strconv.Itoa(i), func() {})
-			c.Retrive(i)
+			c.Add(i, strconv.Itoa(i), func() {})
+			c.Remove(i)
 		}
 		close(done)
 	}()

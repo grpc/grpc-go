@@ -264,7 +264,7 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 	// If outgoingStarted is true, search in the cache. Otherwise, cache is
 	// guaranteed to be empty, searching is unnecessary.
 	if bg.outgoingStarted {
-		if temp, ok := bg.balancerCache.Retrive(id); ok {
+		if temp, ok := bg.balancerCache.Remove(id); ok {
 			sbc, _ = temp.(*subBalancerWithConfig)
 			if sbc != nil && sbc.builder != builder {
 				// If the sub-balancer in cache was built with a different
@@ -316,7 +316,7 @@ func (bg *balancerGroup) remove(id internal.Locality) {
 	if bg.outgoingStarted {
 		if subBalancerToBeRemoved, ok := bg.idToBalancerConfig[id]; ok {
 			// Add sub-balancer to cache only when this id exists.
-			bg.balancerCache.Store(id, subBalancerToBeRemoved, func() {
+			bg.balancerCache.Add(id, subBalancerToBeRemoved, func() {
 				// After timeout, when sub-balancer is removed from cache, need
 				// to also remove it from map, close the underlying
 				// sub-balancer, and remove all its subconns.
@@ -330,6 +330,8 @@ func (bg *balancerGroup) remove(id internal.Locality) {
 			})
 			// We keep id in the map, so subconn state change and resolver
 			// change can be forwarded correctly.
+		} else {
+			grpclog.Infof("balancer group: retrying to remove a non-existing locality from balancer group: %v", id)
 		}
 	} else {
 		// If balancer group is not active, we can delete it here without adding
