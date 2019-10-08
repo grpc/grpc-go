@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal"
 	cdspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/cds"
 	addresspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/address"
 	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
@@ -50,48 +49,15 @@ import (
 var (
 	testServiceName = "test/foo"
 	testCDSReq      = &discoverypb.DiscoveryRequest{
-		Node: &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: testServiceName},
-					},
-				},
-			},
-		},
 		TypeUrl:       cdsType,
 		ResourceNames: []string{testServiceName},
 	}
 	testEDSReq = &discoverypb.DiscoveryRequest{
-		Node: &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: testServiceName},
-					},
-					endpointRequired: {
-						Kind: &structpb.Value_BoolValue{BoolValue: true},
-					},
-				},
-			},
-		},
 		TypeUrl: edsType,
 		// TODO: this should be cluster name from CDS response, not the service name.
 		ResourceNames: []string{testServiceName},
 	}
 	testEDSReqWithoutEndpoints = &discoverypb.DiscoveryRequest{
-		Node: &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: testServiceName},
-					},
-					endpointRequired: {
-						Kind: &structpb.Value_BoolValue{BoolValue: false},
-					},
-				},
-			},
-		},
 		TypeUrl:       edsType,
 		ResourceNames: []string{testServiceName},
 	}

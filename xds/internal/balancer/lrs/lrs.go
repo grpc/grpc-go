@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
@@ -141,9 +140,7 @@ func (rld *rpcLoadData) loadAndClear() (s float64, c uint64) {
 // lrsStore collects loads from xds balancer, and periodically sends load to the
 // server.
 type lrsStore struct {
-	serviceName string
-	// TODO: delete node. We are sending serviceName as ClusterName now.
-	node         *basepb.Node
+	serviceName  string
 	backoff      backoff.Strategy
 	lastReported time.Time
 
@@ -154,16 +151,7 @@ type lrsStore struct {
 // NewStore creates a store for load reports.
 func NewStore(serviceName string) Store {
 	return &lrsStore{
-		serviceName: serviceName,
-		node: &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: serviceName},
-					},
-				},
-			},
-		},
+		serviceName:  serviceName,
 		backoff:      backoff.DefaultExponential,
 		lastReported: time.Now(),
 	}
@@ -332,7 +320,6 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn) {
 				//  solution. Eventually this will be from CDS's response.
 				ClusterName: ls.serviceName,
 			}},
-			Node: ls.node,
 		}); err != nil {
 			grpclog.Infof("lrs: failed to send first request: %v", err)
 			continue
@@ -374,7 +361,6 @@ func (ls *lrsStore) sendLoads(ctx context.Context, stream lrsgrpc.LoadReportingS
 			return
 		}
 		if err := stream.Send(&lrspb.LoadStatsRequest{
-			Node:         ls.node,
 			ClusterStats: ls.buildStats(clusterName),
 		}); err != nil {
 			grpclog.Infof("lrs: failed to send report: %v", err)
