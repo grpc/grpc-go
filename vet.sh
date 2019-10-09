@@ -31,12 +31,15 @@ PATH="${GOPATH}/bin:${GOROOT}/bin:${PATH}"
 if [[ "$1" = "-install" ]]; then
   # Check for module support
   if go help mod >& /dev/null; then
+    # Install the pinned versions as defined in module tools.
+    pushd ./test/tools
     go install \
       golang.org/x/lint/golint \
       golang.org/x/tools/cmd/goimports \
       honnef.co/go/tools/cmd/staticcheck \
       github.com/client9/misspell/cmd/misspell \
       github.com/golang/protobuf/protoc-gen-go
+    popd
   else
     # Ye olde `go get` incantation.
     # Note: this gets the latest version of all tools (vs. the pinned versions
