@@ -20,7 +20,6 @@ package balancer
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net"
 	"testing"
@@ -45,82 +44,54 @@ import (
 
 var (
 	testServiceName = "test/foo"
-	testCDSReq      = &xdspb.DiscoveryRequest{
-		TypeUrl:       cdsType,
-		ResourceNames: []string{testServiceName},
-	}
-	testEDSReq = &xdspb.DiscoveryRequest{
-		TypeUrl: edsType,
-		// TODO: this should be cluster name from CDS response, not the service name.
-		ResourceNames: []string{testServiceName},
-	}
-	testEDSReqWithoutEndpoints = &xdspb.DiscoveryRequest{
+	testEDSReq      = &xdspb.DiscoveryRequest{
 		TypeUrl:       edsType,
 		ResourceNames: []string{testServiceName},
 	}
-	testCluster = &xdspb.Cluster{
-		Name:                 testServiceName,
-		ClusterDiscoveryType: &xdspb.Cluster_Type{Type: xdspb.Cluster_EDS},
-		LbPolicy:             xdspb.Cluster_ROUND_ROBIN,
-	}
-	marshaledCluster, _ = proto.Marshal(testCluster)
-	testCDSResp         = &xdspb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: cdsType,
-				Value:   marshaledCluster,
-			},
-		},
-		TypeUrl: cdsType,
-	}
 	testClusterLoadAssignment = &xdspb.ClusterLoadAssignment{
 		ClusterName: testServiceName,
-		Endpoints: []*endpointpb.LocalityLbEndpoints{
-			{
-				Locality: &corepb.Locality{
-					Region:  "asia-east1",
-					Zone:    "1",
-					SubZone: "sa",
-				},
-				LbEndpoints: []*endpointpb.LbEndpoint{
-					{
-						HostIdentifier: &endpointpb.LbEndpoint_Endpoint{
-							Endpoint: &endpointpb.Endpoint{
-								Address: &corepb.Address{
-									Address: &corepb.Address_SocketAddress{
-										SocketAddress: &corepb.SocketAddress{
-											Address: "1.1.1.1",
-											PortSpecifier: &corepb.SocketAddress_PortValue{
-												PortValue: 10001,
-											},
-											ResolverName: "dns",
-										},
+		Endpoints: []*endpointpb.LocalityLbEndpoints{{
+			Locality: &corepb.Locality{
+				Region:  "asia-east1",
+				Zone:    "1",
+				SubZone: "sa",
+			},
+			LbEndpoints: []*endpointpb.LbEndpoint{{
+				HostIdentifier: &endpointpb.LbEndpoint_Endpoint{
+					Endpoint: &endpointpb.Endpoint{
+						Address: &corepb.Address{
+							Address: &corepb.Address_SocketAddress{
+								SocketAddress: &corepb.SocketAddress{
+									Address: "1.1.1.1",
+									PortSpecifier: &corepb.SocketAddress_PortValue{
+										PortValue: 10001,
 									},
+									ResolverName: "dns",
 								},
-								HealthCheckConfig: nil,
 							},
 						},
-						Metadata: &corepb.Metadata{
-							FilterMetadata: map[string]*structpb.Struct{
-								"xx.lb": {
-									Fields: map[string]*structpb.Value{
-										"endpoint_name": {
-											Kind: &structpb.Value_StringValue{
-												StringValue: "some.endpoint.name",
-											},
-										},
+						HealthCheckConfig: nil,
+					},
+				},
+				Metadata: &corepb.Metadata{
+					FilterMetadata: map[string]*structpb.Struct{
+						"xx.lb": {
+							Fields: map[string]*structpb.Value{
+								"endpoint_name": {
+									Kind: &structpb.Value_StringValue{
+										StringValue: "some.endpoint.name",
 									},
 								},
 							},
 						},
 					},
 				},
-				LoadBalancingWeight: &wrpb.UInt32Value{
-					Value: 1,
-				},
-				Priority: 0,
+			}},
+			LoadBalancingWeight: &wrpb.UInt32Value{
+				Value: 1,
 			},
-		},
+			Priority: 0,
+		}},
 	}
 	marshaledClusterLoadAssignment, _ = proto.Marshal(testClusterLoadAssignment)
 	testEDSResp                       = &xdspb.DiscoveryResponse{
@@ -128,31 +99,6 @@ var (
 			{
 				TypeUrl: edsType,
 				Value:   marshaledClusterLoadAssignment,
-			},
-		},
-		TypeUrl: edsType,
-	}
-	testClusterLoadAssignmentWithoutEndpoints = &xdspb.ClusterLoadAssignment{
-		ClusterName: testServiceName,
-		Endpoints: []*endpointpb.LocalityLbEndpoints{
-			{
-				Locality: &corepb.Locality{
-					SubZone: "sa",
-				},
-				LoadBalancingWeight: &wrpb.UInt32Value{
-					Value: 128,
-				},
-				Priority: 0,
-			},
-		},
-		Policy: nil,
-	}
-	marshaledClusterLoadAssignmentWithoutEndpoints, _ = proto.Marshal(testClusterLoadAssignmentWithoutEndpoints)
-	testEDSRespWithoutEndpoints                       = &xdspb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: edsType,
-				Value:   marshaledClusterLoadAssignmentWithoutEndpoints,
 			},
 		},
 		TypeUrl: edsType,
@@ -231,7 +177,6 @@ func newTestTrafficDirector() *testTrafficDirector {
 }
 
 type testConfig struct {
-	doCDS                bool
 	expectedRequests     []*xdspb.DiscoveryRequest
 	responsesToSend      []*xdspb.DiscoveryResponse
 	expectedADSResponses []proto.Message
@@ -263,20 +208,11 @@ func setupServer(t *testing.T) (addr string, td *testTrafficDirector, lrss *lrsS
 }
 
 func (s) TestXdsClientResponseHandling(t *testing.T) {
-	for _, test := range []*testConfig{
-		{
-			doCDS:                true,
-			expectedRequests:     []*xdspb.DiscoveryRequest{testCDSReq, testEDSReq},
-			responsesToSend:      []*xdspb.DiscoveryResponse{testCDSResp, testEDSResp},
-			expectedADSResponses: []proto.Message{testCluster, testClusterLoadAssignment},
-		},
-		{
-			doCDS:                false,
-			expectedRequests:     []*xdspb.DiscoveryRequest{testEDSReqWithoutEndpoints},
-			responsesToSend:      []*xdspb.DiscoveryResponse{testEDSRespWithoutEndpoints},
-			expectedADSResponses: []proto.Message{testClusterLoadAssignmentWithoutEndpoints},
-		},
-	} {
+	for _, test := range []*testConfig{{
+		expectedRequests:     []*xdspb.DiscoveryRequest{testEDSReq},
+		responsesToSend:      []*xdspb.DiscoveryResponse{testEDSResp},
+		expectedADSResponses: []proto.Message{testClusterLoadAssignment},
+	}} {
 		testXdsClientResponseHandling(t, test)
 	}
 }
@@ -289,7 +225,7 @@ func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 		adsChan <- i
 		return nil
 	}
-	client := newXDSClient(addr, test.doCDS, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, func(context.Context) {}, func() {})
+	client := newXDSClient(addr, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, func(context.Context) {}, func() {})
 	defer client.close()
 	go client.run()
 
@@ -313,34 +249,23 @@ func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 }
 
 func (s) TestXdsClientLoseContact(t *testing.T) {
-	for _, test := range []*testConfig{
-		{
-			doCDS:           true,
-			responsesToSend: []*xdspb.DiscoveryResponse{},
-		},
-		{
-			doCDS:           false,
-			responsesToSend: []*xdspb.DiscoveryResponse{testEDSRespWithoutEndpoints},
-		},
-	} {
+	for _, test := range []*testConfig{{
+		responsesToSend: []*xdspb.DiscoveryResponse{testEDSResp},
+	}} {
 		testXdsClientLoseContactRemoteClose(t, test)
 	}
 
-	for _, test := range []*testConfig{
-		{
-			doCDS:           false,
-			responsesToSend: []*xdspb.DiscoveryResponse{testCDSResp}, // CDS response when in custom mode.
-		},
-		{
-			doCDS:           true,
-			responsesToSend: []*xdspb.DiscoveryResponse{{}}, // response with 0 resources is an error case.
-		},
-		{
-			doCDS:           true,
-			responsesToSend: []*xdspb.DiscoveryResponse{testCDSResp},
-			adsErr:          errors.New("some ads parsing error from xdsBalancer"),
-		},
-	} {
+	for _, test := range []*testConfig{{
+		responsesToSend: []*xdspb.DiscoveryResponse{{
+			Resources: []*anypb.Any{
+				{
+					TypeUrl: "not-eds",
+					Value:   marshaledClusterLoadAssignment,
+				},
+			},
+			TypeUrl: "not-eds",
+		}},
+	}} {
 		testXdsClientLoseContactADSRelatedErrorOccur(t, test)
 	}
 }
@@ -357,7 +282,7 @@ func testXdsClientLoseContactRemoteClose(t *testing.T, test *testConfig) {
 	loseContactFunc := func(context.Context) {
 		contactChan <- &loseContact{}
 	}
-	client := newXDSClient(addr, test.doCDS, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
+	client := newXDSClient(addr, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
 	defer client.close()
 	go client.run()
 
@@ -391,7 +316,7 @@ func testXdsClientLoseContactADSRelatedErrorOccur(t *testing.T, test *testConfig
 	loseContactFunc := func(context.Context) {
 		contactChan <- &loseContact{}
 	}
-	client := newXDSClient(addr, test.doCDS, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
+	client := newXDSClient(addr, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
 	defer client.close()
 	go client.run()
 
@@ -425,7 +350,7 @@ func (s) TestXdsClientExponentialRetry(t *testing.T) {
 	loseContactFunc := func(context.Context) {
 		contactChan <- &loseContact{}
 	}
-	client := newXDSClient(addr, cfg.doCDS, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
+	client := newXDSClient(addr, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
 	defer client.close()
 	go client.run()
 

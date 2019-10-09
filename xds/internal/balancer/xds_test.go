@@ -337,15 +337,15 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 			ResolverState:  resolver.State{Addresses: addrs},
 			BalancerConfig: workingLBConfig,
 		})
-		td.sendResp(&response{resp: testEDSRespWithoutEndpoints})
+		td.sendResp(&response{resp: testEDSResp})
 
 		var j int
 		for j = 0; j < 10; j++ {
 			if edsLB := getLatestEdsBalancer(); edsLB != nil { // edsLB won't change between the two iterations
 				select {
 				case gotEDS := <-edsLB.edsChan:
-					if !proto.Equal(gotEDS, testClusterLoadAssignmentWithoutEndpoints) {
-						t.Fatalf("edsBalancer got eds: %v, want %v", gotEDS, testClusterLoadAssignmentWithoutEndpoints)
+					if !proto.Equal(gotEDS, testClusterLoadAssignment) {
+						t.Fatalf("edsBalancer got eds: %v, want %v", gotEDS, testClusterLoadAssignment)
 					}
 				case <-time.After(time.Second):
 					t.Fatal("haven't got EDS update after 1s")
@@ -361,7 +361,6 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 }
 
 // switch child policy, lb stays the same
-// cds->eds or eds -> cds, restart xdsClient, lb stays the same
 func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 	originalNewEDSBalancer := newEDSBalancer
 	newEDSBalancer = newFakeEDSBalancer
@@ -395,7 +394,7 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 					Config: json.RawMessage("{}"),
 				},
 			},
-			responseToSend: testEDSRespWithoutEndpoints,
+			responseToSend: testEDSResp,
 			expectedChildPolicy: &xdsinternal.LoadBalancingConfig{
 				Name:   string(fakeBalancerA),
 				Config: json.RawMessage(`{}`),
@@ -411,13 +410,6 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 			expectedChildPolicy: &xdsinternal.LoadBalancingConfig{
 				Name:   string(fakeBalancerB),
 				Config: json.RawMessage(`{}`),
-			},
-		},
-		{
-			cfg:            &xdsinternal.LBConfig{},
-			responseToSend: testCDSResp,
-			expectedChildPolicy: &xdsinternal.LoadBalancingConfig{
-				Name: "ROUND_ROBIN",
 			},
 		},
 	} {
@@ -484,7 +476,7 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 		BalancerConfig: &cfg2,
 	})
 
-	td.sendResp(&response{resp: testEDSRespWithoutEndpoints})
+	td.sendResp(&response{resp: testEDSResp})
 
 	var i int
 	for i = 0; i < 10; i++ {
@@ -551,7 +543,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
 
-	td.sendResp(&response{resp: testEDSRespWithoutEndpoints})
+	td.sendResp(&response{resp: testEDSResp})
 
 	expectedScStateChange := &scStateChange{
 		sc:    &fakeSubConn{},
@@ -629,7 +621,7 @@ func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
 
-	td.sendResp(&response{resp: testEDSRespWithoutEndpoints})
+	td.sendResp(&response{resp: testEDSResp})
 
 	expectedScStateChange := &scStateChange{
 		sc:    &fakeSubConn{},

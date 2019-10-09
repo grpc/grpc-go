@@ -38,7 +38,6 @@ import (
 )
 
 const (
-	cdsType          = "type.googleapis.com/envoy.api.v2.Cluster"
 	edsType          = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
 	endpointRequired = "endpoints_required"
 )
@@ -53,7 +52,6 @@ type client struct {
 	cli              xdsgrpc.AggregatedDiscoveryServiceClient
 	dialer           func(context.Context, string) (net.Conn, error)
 	channelzParentID int64
-	enableCDS        bool
 	newADS           func(ctx context.Context, resp proto.Message) error
 	loseContact      func(ctx context.Context)
 	cleanup          func()
@@ -94,10 +92,10 @@ func (c *client) dial() {
 	}
 
 	cc, err := grpc.DialContext(c.ctx, c.config.BalancerName, dopts...)
-	// Since this is a non-blocking dial, so if it fails, it due to some serious error (not network
-	// related) error.
 	if err != nil {
-		grpclog.Fatalf("xds: failed to dial: %v", err)
+		// This could fail due to ctx error, which means this client was closed.
+		grpclog.Warningf("xds: failed to dial: %v", err)
+		return
 	}
 	c.mu.Lock()
 	select {
@@ -108,15 +106,6 @@ func (c *client) dial() {
 		c.cc = cc
 	}
 	c.mu.Unlock()
-}
-
-func (c *client) newCDSRequest() *xdspb.DiscoveryRequest {
-	cdsReq := &xdspb.DiscoveryRequest{
-		Node:          c.config.NodeProto,
-		TypeUrl:       cdsType,
-		ResourceNames: []string{c.serviceName},
-	}
-	return cdsReq
 }
 
 func (c *client) newEDSRequest() *xdspb.DiscoveryRequest {
@@ -180,19 +169,11 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 		grpclog.Infof("xds: failed to initial ADS streaming RPC due to %v", err)
 		return
 	}
-	if c.enableCDS {
-		if err := st.Send(c.newCDSRequest()); err != nil {
-			// current stream is broken, start a new one.
-			grpclog.Infof("xds: ads RPC failed due to err: %v, when sending the CDS request ", err)
-			return
-		}
-	}
 	if err := st.Send(c.newEDSRequest()); err != nil {
 		// current stream is broken, start a new one.
 		grpclog.Infof("xds: ads RPC failed due to err: %v, when sending the EDS request", err)
 		return
 	}
-	expectCDS := c.enableCDS
 	for {
 		resp, err := st.Recv()
 		if err != nil {
@@ -207,24 +188,14 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 			// start a new call as server misbehaves by sending a ADS response with 0 resource info.
 			return
 		}
-		if resp.GetTypeUrl() == cdsType && !c.enableCDS {
-			grpclog.Warning("xds: received CDS response in custom plugin mode.")
-			// start a new call as we receive CDS response when in EDS-only mode.
+		if resp.GetTypeUrl() != edsType {
+			grpclog.Warningf("xds: received non-EDS response: %v", resp.GetTypeUrl())
 			return
 		}
 		var adsResp ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(resources[0], &adsResp); err != nil {
 			grpclog.Warningf("xds: failed to unmarshal resources due to %v.", err)
 			return
-		}
-		switch adsResp.Message.(type) {
-		case *xdspb.Cluster:
-			expectCDS = false
-		case *xdspb.ClusterLoadAssignment:
-			if expectCDS {
-				grpclog.Warningf("xds: expecting CDS response, got EDS response instead.")
-				return
-			}
 		}
 		if err := c.newADS(c.ctx, adsResp.Message); err != nil {
 			grpclog.Warningf("xds: processing new ADS message failed due to %v.", err)
@@ -242,9 +213,8 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 	}
 }
 
-func newXDSClient(balancerName string, enableCDS bool, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
+func newXDSClient(balancerName string, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
 	c := &client{
-		enableCDS:        enableCDS,
 		serviceName:      opts.Target.Endpoint,
 		dialer:           opts.Dialer,
 		channelzParentID: opts.ChannelzParentID,
