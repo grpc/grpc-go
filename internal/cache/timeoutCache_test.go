@@ -44,7 +44,7 @@ func TestCacheExpire(t *testing.T) {
 	c.Add(k, v, func() { close(callbackChan) })
 
 	if gotV, ok := c.getForTesting(k); !ok || gotV.item != v {
-		t.Fatalf("After add(), before timeout, from cache got: %v, %v, want %v, %v", gotV.item, ok, v, true)
+		t.Fatalf("After Add(), before timeout, from cache got: %v, %v, want %v, %v", gotV.item, ok, v, true)
 	}
 
 	select {
@@ -54,7 +54,7 @@ func TestCacheExpire(t *testing.T) {
 	}
 
 	if _, ok := c.getForTesting(k); ok {
-		t.Fatalf("After add(), after timeout, from cache got: _, %v, want _, %v", ok, false)
+		t.Fatalf("After Add(), after timeout, from cache got: _, %v, want _, %v", ok, false)
 	}
 }
 
@@ -67,18 +67,18 @@ func TestCacheRemove(t *testing.T) {
 	c.Add(k, v, func() { close(callbackChan) })
 
 	if got, ok := c.getForTesting(k); !ok || got.item != v {
-		t.Fatalf("After add(), before timeout, from cache got: %v, %v, want %v, %v", got.item, ok, v, true)
+		t.Fatalf("After Add(), before timeout, from cache got: %v, %v, want %v, %v", got.item, ok, v, true)
 	}
 
 	time.Sleep(testCacheTimeout / 2)
 
 	gotV, gotOK := c.Remove(k)
 	if !gotOK || gotV != v {
-		t.Fatalf("After add(), before timeout, remove() got: %v, %v, want %v, %v", gotV, gotOK, v, true)
+		t.Fatalf("After Add(), before timeout, Remove() got: %v, %v, want %v, %v", gotV, gotOK, v, true)
 	}
 
 	if _, ok := c.getForTesting(k); ok {
-		t.Fatalf("After add(), before timeout, after remove(), from cache got: _, %v, want _, %v", ok, false)
+		t.Fatalf("After Add(), before timeout, after Remove(), from cache got: _, %v, want _, %v", ok, false)
 	}
 
 	select {
@@ -115,7 +115,7 @@ func TestCacheClear(t *testing.T) {
 
 	for i, v := range values {
 		if got, ok := c.getForTesting(i); !ok || got.item != v {
-			t.Fatalf("After add(), before timeout, from cache got: %v, %v, want %v, %v", got.item, ok, v, true)
+			t.Fatalf("After Add(), before timeout, from cache got: %v, %v, want %v, %v", got.item, ok, v, true)
 		}
 	}
 
@@ -124,7 +124,7 @@ func TestCacheClear(t *testing.T) {
 
 	for i := range values {
 		if _, ok := c.getForTesting(i); ok {
-			t.Fatalf("After add(), before timeout, after remove(), from cache got: _, %v, want _, %v", ok, false)
+			t.Fatalf("After Add(), before timeout, after Remove(), from cache got: _, %v, want _, %v", ok, false)
 		}
 	}
 
@@ -136,7 +136,7 @@ func TestCacheClear(t *testing.T) {
 }
 
 // Test that if the timer to an item from cache fires at the same time that
-// remove() cancels the timer, it doesn't cause deadlock.
+// Remove() cancels the timer, it doesn't cause deadlock.
 func TestCacheRetrieveTimeoutRace(t *testing.T) {
 	c := NewTimeoutCache(time.Nanosecond)
 
