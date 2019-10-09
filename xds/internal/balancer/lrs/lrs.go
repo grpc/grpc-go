@@ -23,15 +23,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
+	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
+	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/xds/internal"
-	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
-	loadreportpb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/endpoint/load_report"
-	lrsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
-	lrspb "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 )
 
 const negativeOneUInt64 = ^uint64(0)
@@ -204,11 +204,11 @@ func (ls *lrsStore) CallServerLoad(l internal.Locality, name string, d float64) 
 	p.(*rpcCountData).addServerLoad(name, d)
 }
 
-func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats {
+func (ls *lrsStore) buildStats(clusterName string) []*endpointpb.ClusterStats {
 	var (
 		totalDropped  uint64
-		droppedReqs   []*loadreportpb.ClusterStats_DroppedRequests
-		localityStats []*loadreportpb.UpstreamLocalityStats
+		droppedReqs   []*endpointpb.ClusterStats_DroppedRequests
+		localityStats []*endpointpb.UpstreamLocalityStats
 	)
 	ls.drops.Range(func(category, countP interface{}) bool {
 		tempCount := atomic.SwapUint64(countP.(*uint64), 0)
@@ -216,7 +216,7 @@ func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats 
 			return true
 		}
 		totalDropped += tempCount
-		droppedReqs = append(droppedReqs, &loadreportpb.ClusterStats_DroppedRequests{
+		droppedReqs = append(droppedReqs, &endpointpb.ClusterStats_DroppedRequests{
 			Category:     category.(string),
 			DroppedCount: tempCount,
 		})
@@ -233,7 +233,7 @@ func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats 
 			return true
 		}
 
-		var loadMetricStats []*loadreportpb.EndpointLoadMetricStats
+		var loadMetricStats []*endpointpb.EndpointLoadMetricStats
 		tempCount.serverLoads.Range(func(name, data interface{}) bool {
 			tempName := name.(string)
 			tempSum, tempCount := data.(*rpcLoadData).loadAndClear()
@@ -241,7 +241,7 @@ func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats 
 				return true
 			}
 			loadMetricStats = append(loadMetricStats,
-				&loadreportpb.EndpointLoadMetricStats{
+				&endpointpb.EndpointLoadMetricStats{
 					MetricName:                    tempName,
 					NumRequestsFinishedWithMetric: tempCount,
 					TotalMetricValue:              tempSum,
@@ -250,8 +250,8 @@ func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats 
 			return true
 		})
 
-		localityStats = append(localityStats, &loadreportpb.UpstreamLocalityStats{
-			Locality: &basepb.Locality{
+		localityStats = append(localityStats, &endpointpb.UpstreamLocalityStats{
+			Locality: &corepb.Locality{
 				Region:  tempLocality.Region,
 				Zone:    tempLocality.Zone,
 				SubZone: tempLocality.SubZone,
@@ -268,8 +268,8 @@ func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats 
 	dur := time.Since(ls.lastReported)
 	ls.lastReported = time.Now()
 
-	var ret []*loadreportpb.ClusterStats
-	ret = append(ret, &loadreportpb.ClusterStats{
+	var ret []*endpointpb.ClusterStats
+	ret = append(ret, &endpointpb.ClusterStats{
 		ClusterName:           clusterName,
 		UpstreamLocalityStats: localityStats,
 
@@ -318,7 +318,7 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn) {
 			// TODO: when moving this to the xds client, the Node
 			// field needs to be set to node from bootstrap file.
 			// Node: c.config.NodeProto,
-			ClusterStats: []*loadreportpb.ClusterStats{{
+			ClusterStats: []*endpointpb.ClusterStats{{
 				// TODO: this is user's dial target now, as a temporary
 				//  solution. Eventually this will be from CDS's response.
 				ClusterName: ls.serviceName,

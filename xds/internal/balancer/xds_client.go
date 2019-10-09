@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	xdsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc"
@@ -33,10 +35,6 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	cdspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/cds"
-	discoverypb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/discovery"
-	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
-	adsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/discovery/v2/ads"
 )
 
 const (
@@ -52,7 +50,7 @@ type client struct {
 	ctx              context.Context
 	cancel           context.CancelFunc
 	serviceName      string
-	cli              adsgrpc.AggregatedDiscoveryServiceClient
+	cli              xdsgrpc.AggregatedDiscoveryServiceClient
 	dialer           func(context.Context, string) (net.Conn, error)
 	channelzParentID int64
 	enableCDS        bool
@@ -112,8 +110,8 @@ func (c *client) dial() {
 	c.mu.Unlock()
 }
 
-func (c *client) newCDSRequest() *discoverypb.DiscoveryRequest {
-	cdsReq := &discoverypb.DiscoveryRequest{
+func (c *client) newCDSRequest() *xdspb.DiscoveryRequest {
+	cdsReq := &xdspb.DiscoveryRequest{
 		Node:          c.config.NodeProto,
 		TypeUrl:       cdsType,
 		ResourceNames: []string{c.serviceName},
@@ -121,8 +119,8 @@ func (c *client) newCDSRequest() *discoverypb.DiscoveryRequest {
 	return cdsReq
 }
 
-func (c *client) newEDSRequest() *discoverypb.DiscoveryRequest {
-	edsReq := &discoverypb.DiscoveryRequest{
+func (c *client) newEDSRequest() *xdspb.DiscoveryRequest {
+	edsReq := &xdspb.DiscoveryRequest{
 		Node: c.config.NodeProto,
 		// TODO: the expected ResourceName could be in a different format from
 		// dial target. (test_service.test_namespace.traffic_director.com vs
@@ -140,7 +138,7 @@ func (c *client) newEDSRequest() *discoverypb.DiscoveryRequest {
 }
 
 func (c *client) makeADSCall() {
-	c.cli = adsgrpc.NewAggregatedDiscoveryServiceClient(c.cc)
+	c.cli = xdsgrpc.NewAggregatedDiscoveryServiceClient(c.cc)
 	retryCount := 0
 	var doRetry bool
 
@@ -220,9 +218,9 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 			return
 		}
 		switch adsResp.Message.(type) {
-		case *cdspb.Cluster:
+		case *xdspb.Cluster:
 			expectCDS = false
-		case *edspb.ClusterLoadAssignment:
+		case *xdspb.ClusterLoadAssignment:
 			if expectCDS {
 				grpclog.Warningf("xds: expecting CDS response, got EDS response instead.")
 				return
