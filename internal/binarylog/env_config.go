@@ -74,7 +74,7 @@ func (l *logger) fillMethodLoggerWithConfigString(config string) error {
 			return fmt.Errorf("invalid config: %q, %v", config, err)
 		}
 		if m == "*" {
-			return fmt.Errorf("invalid config: %q, %v", config, "* not allowd in blacklist config")
+			return fmt.Errorf("invalid config: %q, %v", config, "* not allowed in blacklist config")
 		}
 		if suffix != "" {
 			return fmt.Errorf("invalid config: %q, %v", config, "header/message limit not allowed in blacklist config")
