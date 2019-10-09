@@ -46,7 +46,15 @@ type subBalancerWithConfig struct {
 	// subBalancerWithConfig is passed to the sub-balancer as a ClientConn
 	// wrapper, only to keep the state and picker.  When sub-balancer is
 	// restarted while in cache, the picker needs to be resent.
+	//
+	// It also contains the sub-balancer ID, so the parent balancer group can
+	// keep track of SubConn/pickers and the sub-balancers they belong to. Some
+	// of the actions are forwarded to the parent ClientConn with no change.
+	// Some are forward to balancer group with the sub-balancer ID.
 	balancer.ClientConn
+	id    internal.Locality
+	group *balancerGroup
+
 	mu     sync.Mutex
 	state  connectivity.State
 	picker balancer.Picker
@@ -64,14 +72,18 @@ type subBalancerWithConfig struct {
 func (sbc *subBalancerWithConfig) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
 	sbc.mu.Lock()
 	sbc.state, sbc.picker = state, picker
-	sbc.ClientConn.UpdateBalancerState(state, picker)
+	sbc.group.updateBalancerState(sbc.id, state, picker)
 	sbc.mu.Unlock()
+}
+
+func (sbc *subBalancerWithConfig) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	return sbc.group.newSubConn(sbc.id, addrs, opts)
 }
 
 func (sbc *subBalancerWithConfig) updateBalancerStateWithCachedPicker() {
 	sbc.mu.Lock()
 	if sbc.picker != nil {
-		sbc.ClientConn.UpdateBalancerState(sbc.state, sbc.picker)
+		sbc.group.updateBalancerState(sbc.id, sbc.state, sbc.picker)
 	}
 	sbc.mu.Unlock()
 }
@@ -282,12 +294,10 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 	}
 	if sbc == nil {
 		sbc = &subBalancerWithConfig{
-			ClientConn: &balancerGroupCC{
-				ClientConn: bg.cc,
-				id:         id,
-				group:      bg,
-			},
-			builder: builder,
+			ClientConn: bg.cc,
+			id:         id,
+			group:      bg,
+			builder:    builder,
 		}
 		if bg.outgoingStarted {
 			// Only start the balancer if bg is started. Otherwise, we only keep the
@@ -625,23 +635,4 @@ func (lrp *loadReportPicker) Pick(ctx context.Context, opts balancer.PickOptions
 		}
 	}
 	return
-}
-
-// balancerGroupCC implements the balancer.ClientConn API and get passed to each
-// sub-balancer. It contains the sub-balancer ID, so the parent balancer can
-// keep track of SubConn/pickers and the sub-balancers they belong to.
-//
-// Some of the actions are forwarded to the parent ClientConn with no change.
-// Some are forward to balancer group with the sub-balancer ID.
-type balancerGroupCC struct {
-	balancer.ClientConn
-	id    internal.Locality
-	group *balancerGroup
-}
-
-func (bgcc *balancerGroupCC) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	return bgcc.group.newSubConn(bgcc.id, addrs, opts)
-}
-func (bgcc *balancerGroupCC) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
-	bgcc.group.updateBalancerState(bgcc.id, state, picker)
 }
