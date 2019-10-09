@@ -30,9 +30,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"strings"
 
 	"github.com/golang/protobuf/proto"
+
 	"google.golang.org/grpc/credentials/internal"
 	ginternal "google.golang.org/grpc/internal"
 )
@@ -168,11 +168,12 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 	// use local cfg to avoid clobbering ServerName if using multiple endpoints
 	cfg := cloneTLSConfig(c.config)
 	if cfg.ServerName == "" {
-		colonPos := strings.LastIndex(authority, ":")
-		if colonPos == -1 {
-			colonPos = len(authority)
+		serverName, _, err := net.SplitHostPort(authority)
+		if err != nil {
+			// If the authority had no host port or if the authority cannot be parsed, use it as-is.
+			serverName = authority
 		}
-		cfg.ServerName = authority[:colonPos]
+		cfg.ServerName = serverName
 	}
 	conn := tls.Client(rawConn, cfg)
 	errChannel := make(chan error, 1)
