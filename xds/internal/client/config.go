@@ -16,8 +16,6 @@
  *
  */
 
-// Package client contains the implementation of the xds client used by
-// grpc-lb-v2.
 package client
 
 import (
