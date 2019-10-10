@@ -24,27 +24,25 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-
-	internalbackoff "google.golang.org/grpc/internal/backoff"
 )
 
 // ccResolverWrapper is a wrapper on top of cc for resolvers.
 // It implements resolver.ClientConnection interface.
 type ccResolverWrapper struct {
-	cc       *ClientConn
-	resolver resolver.Resolver
-	done     *grpcsync.Event
-	curState resolver.State
+	cc         *ClientConn
+	resolverMu sync.Mutex
+	resolver   resolver.Resolver
+	done       *grpcsync.Event
+	curState   resolver.State
 
-	mu      sync.Mutex // protects polling
-	polling chan struct{}
+	pollingMu sync.Mutex
+	polling   chan struct{}
 }
 
 // split2 returns the values from strings.SplitN(s, sep, 2).
@@ -93,35 +91,39 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 	}
 
 	var err error
+	// We need to hold the lock here while we assign to the ccr.resolver field
+	// to guard against a data race caused by the following code path,
+	// rb.Build-->ccr.ReportError-->ccr.poll-->ccr.resolveNow, would end up
+	// accessing ccr.resolver which is being assigned here.
+	ccr.resolverMu.Lock()
 	ccr.resolver, err = rb.Build(cc.parsedTarget, ccr, resolver.BuildOption{DisableServiceConfig: cc.dopts.disableServiceConfig})
 	if err != nil {
 		return nil, err
 	}
+	ccr.resolverMu.Unlock()
 	return ccr, nil
 }
 
 func (ccr *ccResolverWrapper) resolveNow(o resolver.ResolveNowOption) {
-	ccr.mu.Lock()
+	ccr.resolverMu.Lock()
 	if !ccr.done.HasFired() {
 		ccr.resolver.ResolveNow(o)
 	}
-	ccr.mu.Unlock()
+	ccr.resolverMu.Unlock()
 }
 
 func (ccr *ccResolverWrapper) close() {
-	ccr.mu.Lock()
+	ccr.resolverMu.Lock()
 	ccr.resolver.Close()
 	ccr.done.Fire()
-	ccr.mu.Unlock()
+	ccr.resolverMu.Unlock()
 }
-
-var resolverBackoff = internalbackoff.Exponential{Config: backoff.Config{MaxDelay: 2 * time.Minute}}.Backoff
 
 // poll begins or ends asynchronous polling of the resolver based on whether
 // err is ErrBadResolverState.
 func (ccr *ccResolverWrapper) poll(err error) {
-	ccr.mu.Lock()
-	defer ccr.mu.Unlock()
+	ccr.pollingMu.Lock()
+	defer ccr.pollingMu.Unlock()
 	if err != balancer.ErrBadResolverState {
 		// stop polling
 		if ccr.polling != nil {
@@ -139,7 +141,7 @@ func (ccr *ccResolverWrapper) poll(err error) {
 	go func() {
 		for i := 0; ; i++ {
 			ccr.resolveNow(resolver.ResolveNowOption{})
-			t := time.NewTimer(resolverBackoff(i))
+			t := time.NewTimer(ccr.cc.dopts.resolveNowBackoff(i))
 			select {
 			case <-p:
 				t.Stop()
