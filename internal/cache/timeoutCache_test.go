@@ -19,6 +19,7 @@ package cache
 
 import (
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
@@ -88,8 +89,8 @@ func TestCacheRemove(t *testing.T) {
 	}
 }
 
-// Test that clear cancels all the timers.
-func TestCacheClear(t *testing.T) {
+// Test that Clear(false) cancels all the timers, and doesn't run callback.
+func TestCacheClearWithoutCallback(t *testing.T) {
 	var values []string
 	const itemCount = 3
 	for i := 0; i < itemCount; i++ {
@@ -120,7 +121,7 @@ func TestCacheClear(t *testing.T) {
 	}
 
 	time.Sleep(testCacheTimeout / 2)
-	c.Clear()
+	c.Clear(false)
 
 	for i := range values {
 		if _, ok := c.getForTesting(i); ok {
@@ -132,6 +133,60 @@ func TestCacheClear(t *testing.T) {
 	case <-callbackChan:
 		t.Fatalf("unexpected callback after Clear")
 	case <-time.After(testCacheTimeout * 2):
+	}
+}
+
+// Test that Clear(true) removes the items, and runs callbacks.
+func TestCacheClearWithCallback(t *testing.T) {
+	var values []string
+	const itemCount = 3
+	for i := 0; i < itemCount; i++ {
+		values = append(values, strconv.Itoa(i))
+	}
+	c := NewTimeoutCache(time.Hour)
+
+	testDone := make(chan struct{})
+	defer close(testDone)
+
+	var wg sync.WaitGroup
+	wg.Add(itemCount)
+	for i, v := range values {
+		callbackChanTemp := make(chan struct{})
+		c.Add(i, v, func() { close(callbackChanTemp) })
+		go func() {
+			defer wg.Done()
+			select {
+			case <-callbackChanTemp:
+			case <-testDone:
+			}
+		}()
+	}
+
+	allGoroutineDone := make(chan struct{}, itemCount)
+	go func() {
+		wg.Wait()
+		close(allGoroutineDone)
+	}()
+
+	for i, v := range values {
+		if got, ok := c.getForTesting(i); !ok || got.item != v {
+			t.Fatalf("After Add(), before timeout, from cache got: %v, %v, want %v, %v", got.item, ok, v, true)
+		}
+	}
+
+	time.Sleep(testCacheTimeout / 2)
+	c.Clear(true)
+
+	for i := range values {
+		if _, ok := c.getForTesting(i); ok {
+			t.Fatalf("After Add(), before timeout, after Remove(), from cache got: _, %v, want _, %v", ok, false)
+		}
+	}
+
+	select {
+	case <-allGoroutineDone:
+	case <-time.After(testCacheTimeout * 2):
+		t.Fatalf("timeout waiting for all callbacks")
 	}
 }
 

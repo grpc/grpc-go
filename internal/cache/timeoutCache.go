@@ -71,14 +71,15 @@ func (c *TimeoutCache) Add(key, item interface{}, callback func()) (interface{},
 	}
 	entry.timer = time.AfterFunc(c.timeout, func() {
 		c.mu.Lock()
-		defer c.mu.Unlock()
 		if entry.deleted {
+			c.mu.Unlock()
 			// Abort deleting even if timer fires. This mean there was a race
 			// between stopping timer and the timer itself.
 			return
 		}
-		entry.callback()
 		delete(c.cache, key)
+		c.mu.Unlock()
+		entry.callback()
 	})
 	c.cache[key] = entry
 	return item, true
@@ -86,12 +87,13 @@ func (c *TimeoutCache) Add(key, item interface{}, callback func()) (interface{},
 
 // Remove the item with the key from the cache.
 //
-// The item will be removed from the cache, and the timer for this item will be
-// stopped. The callback to be called after timeout will never be called.
+// If the item is in cache when Remove(), it returns (item, true), and the timer
+// for this item will be stopped. If returned ok is true, the callback to be
+// called after timeout is guaranteed to be not called.
 func (c *TimeoutCache) Remove(key interface{}) (item interface{}, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	entry, ok := c.retrieveAndRemoveItemUnlocked(key)
+	entry, ok := c.retrieveAndRemoveItemUnlocked(key, false)
 	if !ok {
 		return nil, false
 	}
@@ -102,7 +104,7 @@ func (c *TimeoutCache) Remove(key interface{}) (item interface{}, ok bool) {
 // doesn't call the callback.
 //
 // caller must hold c.mu.
-func (c *TimeoutCache) retrieveAndRemoveItemUnlocked(key interface{}) (*cacheEntry, bool) {
+func (c *TimeoutCache) retrieveAndRemoveItemUnlocked(key interface{}, runCallback bool) (*cacheEntry, bool) {
 	entry, ok := c.cache[key]
 	if !ok {
 		return nil, false
@@ -118,14 +120,17 @@ func (c *TimeoutCache) retrieveAndRemoveItemUnlocked(key interface{}) (*cacheEnt
 		// of deleted and return.
 		entry.deleted = true
 	}
+	if runCallback {
+		entry.callback()
+	}
 	return entry, true
 }
 
-// Clear removes all entries, but doesn't run the callbacks.
-func (c *TimeoutCache) Clear() {
+// Clear removes all entries, and runs the callbacks if runCallback is true.
+func (c *TimeoutCache) Clear(runCallback bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for key := range c.cache {
-		c.retrieveAndRemoveItemUnlocked(key)
+		c.retrieveAndRemoveItemUnlocked(key, runCallback)
 	}
 }

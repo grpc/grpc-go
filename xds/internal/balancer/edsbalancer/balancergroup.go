@@ -530,7 +530,7 @@ func (bg *balancerGroup) close() {
 			config.stopBalancer()
 		}
 	}
-	bg.balancerCache.Clear()
+	bg.balancerCache.Clear(true)
 	bg.outgoingMu.Unlock()
 }
 
