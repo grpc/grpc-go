@@ -27,8 +27,8 @@ type cacheEntry struct {
 	callback func()
 	timer    *time.Timer
 	// deleted is set to true when timer.Stop() fails. This can happen when
-	// stop() races with the timer (timer fires at the same time stop() is
-	// called).
+	// Remove() races with the timer (timer fires at the same time
+	// timer.stop() is called).
 	//
 	// This variable needs to be checked before deleting the entry and calling
 	// callback, to make sure the deleting is canceled.
@@ -72,8 +72,7 @@ func (c *TimeoutCache) Add(key, item interface{}, callback func()) (interface{},
 	entry.timer = time.AfterFunc(c.timeout, func() {
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		if entry != c.cache[key] {
-			// if entry.deleted {
+		if entry.deleted {
 			// Abort deleting even if timer fires. This mean there was a race
 			// between stopping timer and the timer itself.
 			return
