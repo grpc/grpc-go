@@ -315,6 +315,9 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn) {
 			continue
 		}
 		if err := stream.Send(&lrspb.LoadStatsRequest{
+			// TODO: when moving this to the xds client, the Node
+			// field needs to be set to node from bootstrap file.
+			// Node: c.config.NodeProto,
 			ClusterStats: []*loadreportpb.ClusterStats{{
 				// TODO: this is user's dial target now, as a temporary
 				//  solution. Eventually this will be from CDS's response.
