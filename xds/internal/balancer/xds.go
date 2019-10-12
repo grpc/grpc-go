@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 )
@@ -89,7 +88,7 @@ func (b *xdsBalancerBuilder) Name() string {
 }
 
 func (b *xdsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	var cfg xdsinternal.LBConfig
+	var cfg XDSConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal balancer config %s into xds config", string(c))
 	}
@@ -132,15 +131,15 @@ type xdsBalancer struct {
 	timer           *time.Timer
 	noSubConnAlert  <-chan struct{}
 
-	client           *client               // may change when passed a different service config
-	config           *xdsinternal.LBConfig // may change when passed a different service config
+	client           *client    // may change when passed a different service config
+	config           *XDSConfig // may change when passed a different service config
 	xdsLB            edsBalancerInterface
 	fallbackLB       balancer.Balancer
 	fallbackInitData *resolver.State // may change when HandleResolved address is called
 	loadStore        lrs.Store
 }
 
-func (x *xdsBalancer) startNewXDSClient(u *xdsinternal.LBConfig) {
+func (x *xdsBalancer) startNewXDSClient(u *XDSConfig) {
 	// If the xdsBalancer is in startup stage, then we need to apply the startup timeout for the first
 	// xdsClient to get a response from the traffic director.
 	if x.startup {
@@ -192,7 +191,7 @@ func (x *xdsBalancer) startNewXDSClient(u *xdsinternal.LBConfig) {
 			prevClient.close()
 		}
 	}
-	x.client = newXDSClient(u.BalancerName, x.buildOpts, x.loadStore, newADS, loseContact, exitCleanup)
+	x.client = newXDSClient(u.BalancerName, u.ChildPolicy == nil, u.EdsServiceName, x.buildOpts, x.loadStore, newADS, loseContact, exitCleanup)
 	go x.client.run()
 }
 
@@ -239,7 +238,7 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 			}
 		}
 	case *balancer.ClientConnState:
-		cfg, _ := u.BalancerConfig.(*xdsinternal.LBConfig)
+		cfg, _ := u.BalancerConfig.(*XDSConfig)
 		if cfg == nil {
 			// service config parsing failed. should never happen.
 			return
@@ -248,6 +247,11 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 		var fallbackChanged bool
 		// service config has been updated.
 		if !reflect.DeepEqual(cfg, x.config) {
+			// TODO: handle cfg.LrsLoadReportingServerName and remove log.
+			if cfg.LrsLoadReportingServerName != "" {
+				grpclog.Warningf("xds: lrsLoadReportingServerName is not empty, but is not handled")
+			}
+
 			if x.config == nil {
 				// The first time we get config, we just need to start the xdsClient.
 				x.startNewXDSClient(cfg)
@@ -483,16 +487,16 @@ func (x *xdsBalancer) cancelFallbackAndSwitchEDSBalancerIfNecessary() {
 	}
 }
 
-func (x *xdsBalancer) buildFallBackBalancer(c *xdsinternal.LBConfig) {
+func (x *xdsBalancer) buildFallBackBalancer(c *XDSConfig) {
 	if c.FallBackPolicy == nil {
-		x.buildFallBackBalancer(&xdsinternal.LBConfig{
-			FallBackPolicy: &xdsinternal.LoadBalancingConfig{
+		x.buildFallBackBalancer(&XDSConfig{
+			FallBackPolicy: &loadBalancingConfig{
 				Name: "round_robin",
 			},
 		})
 		return
 	}
-	// builder will always be non-nil, since when parse JSON into xdsinternal.LBConfig, we check whether the specified
+	// builder will always be non-nil, since when parse JSON into xdsinternal.XDSConfig, we check whether the specified
 	// balancer is registered or not.
 	builder := balancer.Get(c.FallBackPolicy.Name)
 

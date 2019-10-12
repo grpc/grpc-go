@@ -213,9 +213,10 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 	}
 }
 
-func newXDSClient(balancerName string, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
+func newXDSClient(balancerName string, enableCDS bool, edsServiceName string, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
 	c := &client{
-		serviceName:      opts.Target.Endpoint,
+		enableCDS:        enableCDS,
+		serviceName:      edsServiceName,
 		dialer:           opts.Dialer,
 		channelzParentID: opts.ChannelzParentID,
 		newADS:           newADS,
@@ -223,6 +224,10 @@ func newXDSClient(balancerName string, opts balancer.BuildOptions, loadStore lrs
 		cleanup:          exitCleanup,
 		backoff:          backoff.DefaultExponential,
 		loadStore:        loadStore,
+	}
+
+	if c.serviceName == "" {
+		c.serviceName = opts.Target.Endpoint
 	}
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())

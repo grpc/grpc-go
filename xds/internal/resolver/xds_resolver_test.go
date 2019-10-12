@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	xdsinternal "google.golang.org/grpc/xds/internal"
+	xdsbalancer "google.golang.org/grpc/xds/internal/balancer"
 )
 
 // This is initialized at init time.
@@ -118,7 +118,7 @@ func (*fakeBalancer) ResolverError(error) {
 	panic("unimplemented")
 }
 
-// UpdateClientConnState verifies that the received LBConfig matches the
+// UpdateClientConnState verifies that the received edsConfig matches the
 // provided one, and if not, sends an error on the provided channel.
 func (f *fakeBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	gotLBConfig, ok := ccs.BalancerConfig.(*wrappedLBConfig)
@@ -127,7 +127,7 @@ func (f *fakeBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error
 		return balancer.ErrBadResolverState
 	}
 
-	var gotCfg, wantCfg xdsinternal.LBConfig
+	var gotCfg, wantCfg xdsbalancer.XDSConfig
 	if err := wantCfg.UnmarshalJSON(f.wantLBConfig.lbCfg); err != nil {
 		f.errCh <- fmt.Errorf("unable to unmarshal balancer config %s into xds config", string(f.wantLBConfig.lbCfg))
 		return balancer.ErrBadResolverState
@@ -136,6 +136,7 @@ func (f *fakeBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error
 		f.errCh <- fmt.Errorf("unable to unmarshal balancer config %s into xds config", string(gotLBConfig.lbCfg))
 		return balancer.ErrBadResolverState
 	}
+
 	if !reflect.DeepEqual(gotCfg, wantCfg) {
 		f.errCh <- fmt.Errorf("in fakeBalancer got lbConfig %v, want %v", gotCfg, wantCfg)
 		return balancer.ErrBadResolverState
@@ -171,7 +172,7 @@ func (f *fakeBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.Load
 }
 
 // wrappedLBConfig simply wraps the provided LB config with a
-// serviceconfig.LoadBalancingConfig interface.
+// serviceconfig.loadBalancingConfig interface.
 type wrappedLBConfig struct {
 	serviceconfig.LoadBalancingConfig
 	lbCfg json.RawMessage

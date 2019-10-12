@@ -43,8 +43,18 @@ import (
 )
 
 var (
-	testServiceName = "test/foo"
-	testEDSReq      = &xdspb.DiscoveryRequest{
+	testServiceName    = "test/foo"
+	testEDSServiceName = "test/service/eds"
+	testCDSReq         = &discoverypb.DiscoveryRequest{
+		TypeUrl:       cdsType,
+		ResourceNames: []string{testServiceName},
+	}
+	testEDSReq = &discoverypb.DiscoveryRequest{
+		TypeUrl: edsType,
+		// TODO: this should be cluster name from CDS response, not the service name.
+		ResourceNames: []string{testServiceName},
+	}
+	testEDSReqWithoutEndpoints = &discoverypb.DiscoveryRequest{
 		TypeUrl:       edsType,
 		ResourceNames: []string{testServiceName},
 	}
@@ -177,8 +187,10 @@ func newTestTrafficDirector() *testTrafficDirector {
 }
 
 type testConfig struct {
-	expectedRequests     []*xdspb.DiscoveryRequest
-	responsesToSend      []*xdspb.DiscoveryResponse
+	doCDS                bool
+	edsServiceName       string
+	expectedRequests     []*discoverypb.DiscoveryRequest
+	responsesToSend      []*discoverypb.DiscoveryResponse
 	expectedADSResponses []proto.Message
 	adsErr               error
 	svrErr               error
@@ -208,11 +220,30 @@ func setupServer(t *testing.T) (addr string, td *testTrafficDirector, lrss *lrsS
 }
 
 func (s) TestXdsClientResponseHandling(t *testing.T) {
-	for _, test := range []*testConfig{{
-		expectedRequests:     []*xdspb.DiscoveryRequest{testEDSReq},
-		responsesToSend:      []*xdspb.DiscoveryResponse{testEDSResp},
-		expectedADSResponses: []proto.Message{testClusterLoadAssignment},
-	}} {
+	for _, test := range []*testConfig{
+		{
+			doCDS:                true,
+			expectedRequests:     []*discoverypb.DiscoveryRequest{testCDSReq, testEDSReq},
+			responsesToSend:      []*discoverypb.DiscoveryResponse{testCDSResp, testEDSResp},
+			expectedADSResponses: []proto.Message{testCluster, testClusterLoadAssignment},
+		},
+		{
+			doCDS:                false,
+			expectedRequests:     []*discoverypb.DiscoveryRequest{testEDSReqWithoutEndpoints},
+			responsesToSend:      []*discoverypb.DiscoveryResponse{testEDSRespWithoutEndpoints},
+			expectedADSResponses: []proto.Message{testClusterLoadAssignmentWithoutEndpoints},
+		},
+		{
+			doCDS:          false,
+			edsServiceName: testEDSServiceName,
+			expectedRequests: []*discoverypb.DiscoveryRequest{{
+				TypeUrl:       edsType,
+				ResourceNames: []string{testEDSServiceName},
+			}},
+			responsesToSend:      []*discoverypb.DiscoveryResponse{testEDSRespWithoutEndpoints},
+			expectedADSResponses: []proto.Message{testClusterLoadAssignmentWithoutEndpoints},
+		},
+	} {
 		testXdsClientResponseHandling(t, test)
 	}
 }
@@ -225,7 +256,7 @@ func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 		adsChan <- i
 		return nil
 	}
-	client := newXDSClient(addr, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, func(context.Context) {}, func() {})
+	client := newXDSClient(addr, test.doCDS, test.edsServiceName, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, func(context.Context) {}, func() {})
 	defer client.close()
 	go client.run()
 
@@ -282,7 +313,7 @@ func testXdsClientLoseContactRemoteClose(t *testing.T, test *testConfig) {
 	loseContactFunc := func(context.Context) {
 		contactChan <- &loseContact{}
 	}
-	client := newXDSClient(addr, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
+	client := newXDSClient(addr, test.doCDS, test.edsServiceName, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
 	defer client.close()
 	go client.run()
 
@@ -316,7 +347,7 @@ func testXdsClientLoseContactADSRelatedErrorOccur(t *testing.T, test *testConfig
 	loseContactFunc := func(context.Context) {
 		contactChan <- &loseContact{}
 	}
-	client := newXDSClient(addr, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
+	client := newXDSClient(addr, test.doCDS, test.edsServiceName, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
 	defer client.close()
 	go client.run()
 
@@ -350,7 +381,7 @@ func (s) TestXdsClientExponentialRetry(t *testing.T) {
 	loseContactFunc := func(context.Context) {
 		contactChan <- &loseContact{}
 	}
-	client := newXDSClient(addr, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
+	client := newXDSClient(addr, cfg.doCDS, "", balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
 	defer client.close()
 	go client.run()
 
