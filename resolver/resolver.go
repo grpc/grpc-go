@@ -21,6 +21,10 @@
 package resolver
 
 import (
+	"context"
+	"net"
+
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -105,8 +109,22 @@ type Address struct {
 // BuildOption includes additional information for the builder to create
 // the resolver.
 type BuildOption struct {
-	// DisableServiceConfig indicates whether resolver should fetch service config data.
+	// DisableServiceConfig indicates whether a resolver implementation should
+	// fetch service config data.
 	DisableServiceConfig bool
+	// DialCreds is the transport credentials that a resolver implementation
+	// can use to dial a remote name resolution server. Resolver
+	// implementations which do not need to talk to another party securely can
+	// safely ignore this field.
+	DialCreds credentials.TransportCredentials
+	// CredsBundle is the credentials bundle that a resolver implementation can
+	// use while dialing a remote name resolution server. If both DialCreds and
+	// CredsBundle are set, the former takes precedence.
+	CredsBundle credentials.Bundle
+	// Dialer is the custom dialer that a resolver implementation can use to
+	// dial a remote name resolution server. Resolver implementations which do
+	// not need to talk to another party securely can safely ignore this field.
+	Dialer func(context.Context, string) (net.Conn, error)
 }
 
 // State contains the current Resolver state relevant to the ClientConn.
