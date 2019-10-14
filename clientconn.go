@@ -452,9 +452,8 @@ func (csm *connectivityStateManager) getNotifyChan() <-chan struct{} {
 //
 // A ClientConn encapsulates a range of functionality including name
 // resolution, TCP connection establishment (with retries and backoff) and TLS
-// handshakes. It also handles errors on established connections and
-// reconnects, or in the case of HTTP/2 GO_AWAY, re-resolves the name and
-// reconnects.
+// handshakes. It also handles errors on established connections by
+// re-resolving the name and reconnecting.
 type ClientConn struct {
 	ctx    context.Context
 	cancel context.CancelFunc
