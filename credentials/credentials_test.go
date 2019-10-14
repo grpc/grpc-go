@@ -150,8 +150,9 @@ func launchServer(t *testing.T, hs serverHandshake, done chan AuthInfo) net.List
 func launchServerOnListenAddress(t *testing.T, hs serverHandshake, done chan AuthInfo, address string) net.Listener {
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
-		if strings.Contains(err.Error(), "bind: cannot assign requested address") {
-			t.Skip("missing IPv6 support")
+		if strings.Contains(err.Error(), "bind: cannot assign requested address") ||
+			strings.Contains(err.Error(), "socket: address family not supported by protocol") {
+			t.Skipf("no support for address %v", address)
 		}
 		t.Fatalf("Failed to listen: %v", err)
 	}
