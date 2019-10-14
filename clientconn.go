@@ -442,7 +442,19 @@ func (csm *connectivityStateManager) getNotifyChan() <-chan struct{} {
 	return csm.notifyChan
 }
 
-// ClientConn represents a client connection to an RPC server.
+// ClientConn represents a virtual connection to a conceptual endpoint, to
+// perform RPCs.
+//
+// A ClientConn is free to have zero or more actual connections to the endpoint
+// based on configuration, load, etc. It is also free to determine which actual
+// endpoints to use and may change it every RPC, permitting client-side load
+// balancing.
+//
+// A ClientConn encapsulates a range of functionality including name
+// resolution, TCP connection establishment (with retries and backoff) and TLS
+// handshakes. It also handles errors on established connections and
+// reconnects, or in the case of HTTP/2 GO_AWAY, re-resolves the name and
+// reconnects.
 type ClientConn struct {
 	ctx    context.Context
 	cancel context.CancelFunc
