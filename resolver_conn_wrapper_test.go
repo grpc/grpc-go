@@ -27,9 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/codes"
-	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
@@ -125,6 +123,12 @@ func (s) TestDialParseTargetUnknownScheme(t *testing.T) {
 }
 
 func testResolverErrorPolling(t *testing.T, badUpdate func(*manual.Resolver), goodUpdate func(*manual.Resolver), dopts ...DialOption) {
+	boIter := make(chan int)
+	resolverBackoff := func(v int) time.Duration {
+		boIter <- v
+		return 0
+	}
+
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 	rn := make(chan struct{})
@@ -133,8 +137,7 @@ func testResolverErrorPolling(t *testing.T, badUpdate func(*manual.Resolver), go
 
 	defaultDialOptions := []DialOption{
 		WithInsecure(),
-		// Use an empty backoff config which results in no backoff.
-		withResolveNowBackoff(internalbackoff.Exponential{Config: backoff.Config{}}.Backoff),
+		withResolveNowBackoff(resolverBackoff),
 	}
 	cc, err := Dial(r.Scheme()+":///test.server", append(defaultDialOptions, dopts...)...)
 	if err != nil {
@@ -149,6 +152,9 @@ func testResolverErrorPolling(t *testing.T, badUpdate func(*manual.Resolver), go
 	// Ensure ResolveNow is called, then Backoff with the right parameter, several times
 	for i := 0; i < 7; i++ {
 		<-rn
+		if v := <-boIter; v != i {
+			t.Errorf("Backoff call %v uses value %v", i, v)
+		}
 	}
 
 	// UpdateState will block if ResolveNow is being called (which blocks on
@@ -162,6 +168,8 @@ func testResolverErrorPolling(t *testing.T, badUpdate func(*manual.Resolver), go
 		select {
 		case <-rn:
 			// ClientConn is still calling ResolveNow
+			<-boIter
+			time.Sleep(5 * time.Millisecond)
 			continue
 		case <-t.C:
 			// ClientConn stopped calling ResolveNow; success
