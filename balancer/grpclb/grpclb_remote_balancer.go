@@ -67,7 +67,7 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 			continue
 		}
 
-		md := metadata.Pairs(lbTokeyKey, s.LoadBalanceToken)
+		md := metadata.Pairs(lbTokenKey, s.LoadBalanceToken)
 		ip := net.IP(s.IpAddress)
 		ipStr := ip.String()
 		if ip.To4() == nil {

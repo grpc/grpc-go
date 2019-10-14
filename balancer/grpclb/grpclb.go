@@ -44,7 +44,7 @@ import (
 )
 
 const (
-	lbTokeyKey             = "lb-token"
+	lbTokenKey             = "lb-token"
 	defaultFallbackTimeout = 10 * time.Second
 	grpclbName             = "grpclb"
 )
