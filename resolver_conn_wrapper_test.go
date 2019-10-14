@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 )
 
@@ -122,10 +123,8 @@ func (s) TestDialParseTargetUnknownScheme(t *testing.T) {
 }
 
 func testResolverErrorPolling(t *testing.T, badUpdate func(*manual.Resolver), goodUpdate func(*manual.Resolver), dopts ...DialOption) {
-	defer func(o func(int) time.Duration) { resolverBackoff = o }(resolverBackoff)
-
 	boIter := make(chan int)
-	resolverBackoff = func(v int) time.Duration {
+	resolverBackoff := func(v int) time.Duration {
 		boIter <- v
 		return 0
 	}
@@ -136,7 +135,11 @@ func testResolverErrorPolling(t *testing.T, badUpdate func(*manual.Resolver), go
 	defer func() { close(rn) }()
 	r.ResolveNowCallback = func(resolver.ResolveNowOption) { rn <- struct{}{} }
 
-	cc, err := Dial(r.Scheme()+":///test.server", append([]DialOption{WithInsecure()}, dopts...)...)
+	defaultDialOptions := []DialOption{
+		WithInsecure(),
+		withResolveNowBackoff(resolverBackoff),
+	}
+	cc, err := Dial(r.Scheme()+":///test.server", append(defaultDialOptions, dopts...)...)
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
 	}
@@ -200,6 +203,31 @@ func (s) TestServiceConfigErrorPolling(t *testing.T) {
 		// rn), so call it in a goroutine.
 		go r.CC.UpdateState(resolver.State{})
 	})
+}
+
+// TestResolverErrorInBuild makes the resolver.Builder call into the ClientConn
+// during the Build call. We use two separate mutexes in the code which make
+// sure there is no data race in this code path, and also that there is no
+// deadlock.
+func (s) TestResolverErrorInBuild(t *testing.T) {
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+	r.InitialState(resolver.State{ServiceConfig: &serviceconfig.ParseResult{Err: errors.New("resolver build err")}})
+
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure())
+	if err != nil {
+		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var dummy int
+	const wantMsg = "error parsing service config"
+	const wantCode = codes.Unavailable
+	if err := cc.Invoke(ctx, "/foo/bar", &dummy, &dummy); status.Code(err) != wantCode || !strings.Contains(status.Convert(err).Message(), wantMsg) {
+		t.Fatalf("cc.Invoke(_, _, _, _) = %v; want status.Code()==%v, status.Message() contains %q", err, wantCode, wantMsg)
+	}
 }
 
 func (s) TestServiceConfigErrorRPC(t *testing.T) {
