@@ -34,14 +34,14 @@ import (
 	orcapb "google.golang.org/grpc/xds/internal/proto/udpa/data/orca/v1/orca_load_report"
 )
 
-var defaultSubBalancerCloseTimeout = 15 * time.Minute
-
 // subBalancerWithConfig is used to keep the configurations that will be used to start
 // the underlying balancer. It can be called to start/stop the underlying
 // balancer.
 //
 // When the config changes, it will pass the update to the underlying balancer
 // if it exists.
+//
+// TODO: rename to subBalanceWrapper (and move to a separate file?)
 type subBalancerWithConfig struct {
 	// subBalancerWithConfig is passed to the sub-balancer as a ClientConn
 	// wrapper, only to keep the state and picker.  When sub-balancer is
@@ -221,6 +221,12 @@ type balancerGroup struct {
 	idToPickerState map[internal.Locality]*pickerState
 }
 
+// defaultSubBalancerCloseTimeout is defined as a variable instead of const for
+// testing.
+//
+// TODO: make it a parameter for newBalancerGroup().
+var defaultSubBalancerCloseTimeout = 15 * time.Minute
+
 func newBalancerGroup(cc balancer.ClientConn, loadStore lrs.Store) *balancerGroup {
 	return &balancerGroup{
 		cc:        cc,
@@ -287,7 +293,6 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 				//
 				// NOTE that this will also drop the cached addresses for this
 				// sub-balancer, which seems to be reasonable.
-				delete(bg.idToBalancerConfig, id)
 				sbc.stopBalancer()
 				// cleanupSubConns must be done before the new balancer starts,
 				// otherwise new SubConns created by the new balancer might be
@@ -328,18 +333,18 @@ func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balanc
 // group. It always results in a picker update.
 func (bg *balancerGroup) remove(id internal.Locality) {
 	bg.outgoingMu.Lock()
-	if subBalancerToBeRemoved, ok := bg.idToBalancerConfig[id]; ok {
+	if sbToRemove, ok := bg.idToBalancerConfig[id]; ok {
 		if bg.outgoingStarted {
-			bg.balancerCache.Add(id, subBalancerToBeRemoved, func() {
+			bg.balancerCache.Add(id, sbToRemove, func() {
 				// After timeout, when sub-balancer is removed from cache, need
-				// to also remove it from map, close the underlying
-				// sub-balancer, and remove all its subconns.
+				// to close the underlying sub-balancer, and remove all its
+				// subconns.
 				bg.outgoingMu.Lock()
 				if bg.outgoingStarted {
-					subBalancerToBeRemoved.stopBalancer()
+					sbToRemove.stopBalancer()
 				}
 				bg.outgoingMu.Unlock()
-				bg.cleanupSubConns(subBalancerToBeRemoved)
+				bg.cleanupSubConns(sbToRemove)
 			})
 		}
 		delete(bg.idToBalancerConfig, id)

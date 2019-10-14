@@ -35,8 +35,9 @@ func (c *TimeoutCache) getForTesting(key interface{}) (*cacheEntry, bool) {
 	return r, ok
 }
 
-// Test that items will be kept in cache, and be removed after timeout. Callback
-// will also be called after timeout.
+// TestCacheExpire attempts to add an entry to the cache and verifies that it
+// was added successfully. It then makes sure that on timeout, it's removed and
+// the associated callback is called.
 func TestCacheExpire(t *testing.T) {
 	const k, v = 1, "1"
 	c := NewTimeoutCache(testCacheTimeout)
@@ -59,7 +60,9 @@ func TestCacheExpire(t *testing.T) {
 	}
 }
 
-// Test that remove returns the cached item, and also cancels the timer.
+// TestCacheRemove attempts to remove an existing entry from the cache and
+// verifies that the entry is removed and the associated callback is not
+// invoked.
 func TestCacheRemove(t *testing.T) {
 	const k, v = 1, "1"
 	c := NewTimeoutCache(testCacheTimeout)
@@ -89,7 +92,8 @@ func TestCacheRemove(t *testing.T) {
 	}
 }
 
-// Test that Clear(false) cancels all the timers, and doesn't run callback.
+// TestCacheClearWithoutCallback attempts to clear all entries from the cache
+// and verifies that the associated callbacks are not invoked.
 func TestCacheClearWithoutCallback(t *testing.T) {
 	var values []string
 	const itemCount = 3
@@ -136,7 +140,8 @@ func TestCacheClearWithoutCallback(t *testing.T) {
 	}
 }
 
-// Test that Clear(true) removes the items, and runs callbacks.
+// TestCacheClearWithCallback attempts to clear all entries from the cache and
+// verifies that the associated callbacks are invoked.
 func TestCacheClearWithCallback(t *testing.T) {
 	var values []string
 	const itemCount = 3
@@ -190,8 +195,9 @@ func TestCacheClearWithCallback(t *testing.T) {
 	}
 }
 
-// Test that if the timer to an item from cache fires at the same time that
-// Remove() cancels the timer, it doesn't cause deadlock.
+// TestCacheRetrieveTimeoutRace simulates the case where an entry's timer fires
+// around the same time that Remove() is called for it. It verifies that there
+// is no deadlock.
 func TestCacheRetrieveTimeoutRace(t *testing.T) {
 	c := NewTimeoutCache(time.Nanosecond)
 

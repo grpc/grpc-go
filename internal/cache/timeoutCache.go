@@ -26,12 +26,9 @@ type cacheEntry struct {
 	item     interface{}
 	callback func()
 	timer    *time.Timer
-	// deleted is set to true when timer.Stop() fails. This can happen when
-	// Remove() races with the timer (timer fires at the same time
-	// timer.stop() is called).
-	//
-	// This variable needs to be checked before deleting the entry and calling
-	// callback, to make sure the deleting is canceled.
+	// deleted is set to true in Remove() when the call to timer.Stop() fails.
+	// This can happen when the timer in the cache entry fires around the same
+	// time that timer.stop() is called in Remove().
 	deleted bool
 }
 
@@ -73,8 +70,7 @@ func (c *TimeoutCache) Add(key, item interface{}, callback func()) (interface{},
 		c.mu.Lock()
 		if entry.deleted {
 			c.mu.Unlock()
-			// Abort deleting even if timer fires. This mean there was a race
-			// between stopping timer and the timer itself.
+			// Abort the delete since this has been taken care of in Remove().
 			return
 		}
 		delete(c.cache, key)
@@ -87,24 +83,23 @@ func (c *TimeoutCache) Add(key, item interface{}, callback func()) (interface{},
 
 // Remove the item with the key from the cache.
 //
-// If the item is in cache when Remove(), it returns (item, true), and the timer
-// for this item will be stopped. If returned ok is true, the callback to be
-// called after timeout is guaranteed to be not called.
+// If the specified key exists in the cache, it returns (item associated with
+// key, true) and the callback associated with the item is guaranteed to be not
+// called. If the given key is not found in the cache, it returns (nil, false)
 func (c *TimeoutCache) Remove(key interface{}) (item interface{}, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	entry, ok := c.retrieveAndRemoveItemUnlocked(key, false)
+	entry, ok := c.removeInternal(key, false)
 	if !ok {
 		return nil, false
 	}
 	return entry.item, true
 }
 
-// retrieveAndRemoveItemUnlocked removes and returns the item with key. It
-// doesn't call the callback.
+// removeInternal removes and returns the item with key.
 //
 // caller must hold c.mu.
-func (c *TimeoutCache) retrieveAndRemoveItemUnlocked(key interface{}, runCallback bool) (*cacheEntry, bool) {
+func (c *TimeoutCache) removeInternal(key interface{}, runCallback bool) (*cacheEntry, bool) {
 	entry, ok := c.cache[key]
 	if !ok {
 		return nil, false
@@ -131,6 +126,6 @@ func (c *TimeoutCache) Clear(runCallback bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for key := range c.cache {
-		c.retrieveAndRemoveItemUnlocked(key, runCallback)
+		c.removeInternal(key, runCallback)
 	}
 }
