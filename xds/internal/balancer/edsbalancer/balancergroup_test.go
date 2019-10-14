@@ -589,10 +589,13 @@ func replaceDefaultSubBalancerCloseTimeout(n time.Duration) func() {
 	return func() { defaultSubBalancerCloseTimeout = old }
 }
 
-// Test that if a sub-balancer is removed, and re-added within close timeout,
-// the subConns won't be re-created.
-func TestBalancerGroup_locality_caching(t *testing.T) {
-	defer replaceDefaultSubBalancerCloseTimeout(10 * time.Second)()
+// initBalancerGroupForCachingTest creates a balancer group, and initialize it
+// to be ready for caching tests.
+//
+// Two rr balancers are added to bg, each with 2 ready subConns. A sub-balancer
+// is removed later, so the balancer group returned has one sub-balancer in its
+// own map, and one sub-balancer in cache.
+func initBalancerGroupForCachingTest(t *testing.T) (*balancerGroup, *testClientConn, map[resolver.Address]balancer.SubConn) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
 
@@ -651,9 +654,18 @@ func TestBalancerGroup_locality_caching(t *testing.T) {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
+	return bg, cc, m1
+}
+
+// Test that if a sub-balancer is removed, and re-added within close timeout,
+// the subConns won't be re-created.
+func TestBalancerGroup_locality_caching(t *testing.T) {
+	defer replaceDefaultSubBalancerCloseTimeout(10 * time.Second)()
+	bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
+
 	// Turn down subconn for addr2, shouldn't get picker update because
 	// sub-balancer1 was removed.
-	bg.handleSubConnStateChange(m1[testBackendAddrs[2]], connectivity.TransientFailure)
+	bg.handleSubConnStateChange(addrToSC[testBackendAddrs[2]], connectivity.TransientFailure)
 	for i := 0; i < 10; i++ {
 		select {
 		case <-cc.newPickerCh:
@@ -672,11 +684,11 @@ func TestBalancerGroup_locality_caching(t *testing.T) {
 	bg.add(testBalancerIDs[1], 1, rrBuilder)
 
 	p3 := <-cc.newPickerCh
-	want = []balancer.SubConn{
-		m1[testBackendAddrs[0]], m1[testBackendAddrs[0]],
-		m1[testBackendAddrs[1]], m1[testBackendAddrs[1]],
+	want := []balancer.SubConn{
+		addrToSC[testBackendAddrs[0]], addrToSC[testBackendAddrs[0]],
+		addrToSC[testBackendAddrs[1]], addrToSC[testBackendAddrs[1]],
 		// addr2 is down, b2 only has addr3 in READY state.
-		m1[testBackendAddrs[3]], m1[testBackendAddrs[3]],
+		addrToSC[testBackendAddrs[3]], addrToSC[testBackendAddrs[3]],
 	}
 	if err := isRoundRobin(want, func() balancer.SubConn {
 		sc, _, _ := p3.Pick(context.Background(), balancer.PickOptions{})
@@ -700,72 +712,16 @@ func TestBalancerGroup_locality_caching(t *testing.T) {
 // immediately.
 func TestBalancerGroup_locality_caching_close_group(t *testing.T) {
 	defer replaceDefaultSubBalancerCloseTimeout(10 * time.Second)()
-	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
-
-	// Add two balancers to group and send two resolved addresses to both
-	// balancers.
-	bg.add(testBalancerIDs[0], 2, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
-	bg.add(testBalancerIDs[1], 1, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
-
-	bg.start()
-
-	m1 := make(map[resolver.Address]balancer.SubConn)
-	for i := 0; i < 4; i++ {
-		addrs := <-cc.newSubConnAddrsCh
-		sc := <-cc.newSubConnCh
-		m1[addrs[0]] = sc
-		bg.handleSubConnStateChange(sc, connectivity.Connecting)
-		bg.handleSubConnStateChange(sc, connectivity.Ready)
-	}
-
-	// Test roundrobin on the last picker.
-	p1 := <-cc.newPickerCh
-	want := []balancer.SubConn{
-		m1[testBackendAddrs[0]], m1[testBackendAddrs[0]],
-		m1[testBackendAddrs[1]], m1[testBackendAddrs[1]],
-		m1[testBackendAddrs[2]], m1[testBackendAddrs[3]],
-	}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
-	}
-
-	bg.remove(testBalancerIDs[1])
-	// Don't wait for SubConns to be removed after close, because they are only
-	// removed after close timeout.
-	for i := 0; i < 10; i++ {
-		select {
-		case <-cc.removeSubConnCh:
-			t.Fatalf("Got request to remove subconn, want no remove subconn (because subconns were still in cache)")
-		default:
-		}
-		time.Sleep(time.Millisecond)
-	}
-	// Test roundrobin on the with only sub-balancer0.
-	p2 := <-cc.newPickerCh
-	want = []balancer.SubConn{
-		m1[testBackendAddrs[0]], m1[testBackendAddrs[1]],
-	}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
-	}
+	bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
 
 	bg.close()
 	// The balancer group is closed. The subconns should be removed immediately.
 	removeTimeout := time.After(time.Millisecond * 500)
 	scToRemove := map[balancer.SubConn]int{
-		m1[testBackendAddrs[0]]: 1,
-		m1[testBackendAddrs[1]]: 1,
-		m1[testBackendAddrs[2]]: 1,
-		m1[testBackendAddrs[3]]: 1,
+		addrToSC[testBackendAddrs[0]]: 1,
+		addrToSC[testBackendAddrs[1]]: 1,
+		addrToSC[testBackendAddrs[2]]: 1,
+		addrToSC[testBackendAddrs[3]]: 1,
 	}
 	for i := 0; i < len(scToRemove); i++ {
 		select {
@@ -785,70 +741,14 @@ func TestBalancerGroup_locality_caching_close_group(t *testing.T) {
 // subConns will be removed.
 func TestBalancerGroup_locality_caching_not_readd_within_timeout(t *testing.T) {
 	defer replaceDefaultSubBalancerCloseTimeout(time.Second)()
-	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
-
-	// Add two balancers to group and send two resolved addresses to both
-	// balancers.
-	bg.add(testBalancerIDs[0], 2, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
-	bg.add(testBalancerIDs[1], 1, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
-
-	bg.start()
-
-	m1 := make(map[resolver.Address]balancer.SubConn)
-	for i := 0; i < 4; i++ {
-		addrs := <-cc.newSubConnAddrsCh
-		sc := <-cc.newSubConnCh
-		m1[addrs[0]] = sc
-		bg.handleSubConnStateChange(sc, connectivity.Connecting)
-		bg.handleSubConnStateChange(sc, connectivity.Ready)
-	}
-
-	// Test roundrobin on the last picker.
-	p1 := <-cc.newPickerCh
-	want := []balancer.SubConn{
-		m1[testBackendAddrs[0]], m1[testBackendAddrs[0]],
-		m1[testBackendAddrs[1]], m1[testBackendAddrs[1]],
-		m1[testBackendAddrs[2]], m1[testBackendAddrs[3]],
-	}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
-	}
-
-	bg.remove(testBalancerIDs[1])
-	// Don't wait for SubConns to be removed after close, because they are only
-	// removed after close timeout.
-	for i := 0; i < 10; i++ {
-		select {
-		case <-cc.removeSubConnCh:
-			t.Fatalf("Got request to remove subconn, want no remove subconn (because subconns were still in cache)")
-		default:
-		}
-		time.Sleep(time.Millisecond)
-	}
-	// Test roundrobin on the with only sub-balancer0.
-	p2 := <-cc.newPickerCh
-	want = []balancer.SubConn{
-		m1[testBackendAddrs[0]], m1[testBackendAddrs[1]],
-	}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
-	}
+	_, cc, addrToSC := initBalancerGroupForCachingTest(t)
 
 	// The sub-balancer is not re-added withtin timeout. The subconns should be
 	// removed.
 	removeTimeout := time.After(defaultSubBalancerCloseTimeout)
 	scToRemove := map[balancer.SubConn]int{
-		m1[testBackendAddrs[2]]: 1,
-		m1[testBackendAddrs[3]]: 1,
+		addrToSC[testBackendAddrs[2]]: 1,
+		addrToSC[testBackendAddrs[3]]: 1,
 	}
 	for i := 0; i < len(scToRemove); i++ {
 		select {
@@ -873,63 +773,7 @@ type noopBalancerBuilderWrapper struct {
 // builder. Old subconns should be removed, and new subconns should be created.
 func TestBalancerGroup_locality_caching_readd_with_different_builder(t *testing.T) {
 	defer replaceDefaultSubBalancerCloseTimeout(10 * time.Second)()
-	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
-
-	// Add two balancers to group and send two resolved addresses to both
-	// balancers.
-	bg.add(testBalancerIDs[0], 2, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
-	bg.add(testBalancerIDs[1], 1, rrBuilder)
-	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
-
-	bg.start()
-
-	m1 := make(map[resolver.Address]balancer.SubConn)
-	for i := 0; i < 4; i++ {
-		addrs := <-cc.newSubConnAddrsCh
-		sc := <-cc.newSubConnCh
-		m1[addrs[0]] = sc
-		bg.handleSubConnStateChange(sc, connectivity.Connecting)
-		bg.handleSubConnStateChange(sc, connectivity.Ready)
-	}
-
-	// Test roundrobin on the last picker.
-	p1 := <-cc.newPickerCh
-	want := []balancer.SubConn{
-		m1[testBackendAddrs[0]], m1[testBackendAddrs[0]],
-		m1[testBackendAddrs[1]], m1[testBackendAddrs[1]],
-		m1[testBackendAddrs[2]], m1[testBackendAddrs[3]],
-	}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
-	}
-
-	bg.remove(testBalancerIDs[1])
-	// Don't wait for SubConns to be removed after close, because they are only
-	// removed after close timeout.
-	for i := 0; i < 10; i++ {
-		select {
-		case <-cc.removeSubConnCh:
-			t.Fatalf("Got request to remove subconn, want no remove subconn (because subconns were still in cache)")
-		default:
-		}
-		time.Sleep(time.Millisecond)
-	}
-	// Test roundrobin on the with only sub-balancer0.
-	p2 := <-cc.newPickerCh
-	want = []balancer.SubConn{
-		m1[testBackendAddrs[0]], m1[testBackendAddrs[1]],
-	}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
-	}
+	bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
 
 	// Re-add sub-balancer-1, but with a different balancer builder. The
 	// sub-balancer was still in cache, but cann't be reused. This should cause
@@ -941,8 +785,8 @@ func TestBalancerGroup_locality_caching_readd_with_different_builder(t *testing.
 	// removed immediately.
 	removeTimeout := time.After(time.Millisecond * 500)
 	scToRemove := map[balancer.SubConn]int{
-		m1[testBackendAddrs[2]]: 1,
-		m1[testBackendAddrs[3]]: 1,
+		addrToSC[testBackendAddrs[2]]: 1,
+		addrToSC[testBackendAddrs[3]]: 1,
 	}
 	for i := 0; i < len(scToRemove); i++ {
 		select {
@@ -973,7 +817,7 @@ func TestBalancerGroup_locality_caching_readd_with_different_builder(t *testing.
 			}
 			scToAdd[addr[0]] = c - 1
 			sc := <-cc.newSubConnCh
-			m1[addr[0]] = sc
+			addrToSC[addr[0]] = sc
 			bg.handleSubConnStateChange(sc, connectivity.Connecting)
 			bg.handleSubConnStateChange(sc, connectivity.Ready)
 		case <-newSCTimeout:
@@ -983,10 +827,10 @@ func TestBalancerGroup_locality_caching_readd_with_different_builder(t *testing.
 
 	// Test roundrobin on the new picker.
 	p3 := <-cc.newPickerCh
-	want = []balancer.SubConn{
-		m1[testBackendAddrs[0]], m1[testBackendAddrs[0]],
-		m1[testBackendAddrs[1]], m1[testBackendAddrs[1]],
-		m1[testBackendAddrs[4]], m1[testBackendAddrs[5]],
+	want := []balancer.SubConn{
+		addrToSC[testBackendAddrs[0]], addrToSC[testBackendAddrs[0]],
+		addrToSC[testBackendAddrs[1]], addrToSC[testBackendAddrs[1]],
+		addrToSC[testBackendAddrs[4]], addrToSC[testBackendAddrs[5]],
 	}
 	if err := isRoundRobin(want, func() balancer.SubConn {
 		sc, _, _ := p3.Pick(context.Background(), balancer.PickOptions{})
