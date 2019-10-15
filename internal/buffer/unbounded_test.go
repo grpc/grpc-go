@@ -18,7 +18,6 @@
 package buffer
 
 import (
-	"os"
 	"reflect"
 	"sort"
 	"sync"
@@ -30,9 +29,17 @@ const (
 	numWrites  = 10
 )
 
-// This is setup in TestMain to the set of values expected to be read by the
-// reader goroutine.
+// wantReads contains the set of values expected to be read by the reader
+// goroutine in the tests.
 var wantReads []int
+
+func init() {
+	for i := 0; i < numWriters; i++ {
+		for j := 0; j < numWrites; j++ {
+			wantReads = append(wantReads, i)
+		}
+	}
+}
 
 // TestSingleWriter starts one reader and one writer goroutine and makes sure
 // that the reader gets all the value added to the buffer by the writer.
@@ -101,14 +108,4 @@ func TestMultipleWriters(t *testing.T) {
 	if !reflect.DeepEqual(reads, wantReads) {
 		t.Errorf("reads: %#v, wantReads: %#v", reads, wantReads)
 	}
-}
-
-func TestMain(m *testing.M) {
-	for i := 0; i < numWriters; i++ {
-		for j := 0; j < numWrites; j++ {
-			wantReads = append(wantReads, i)
-		}
-	}
-
-	os.Exit(m.Run())
 }
