@@ -47,6 +47,7 @@ import (
 
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
+	lr         lastRead // keep this field 64-bit aligned
 	ctx        context.Context
 	cancel     context.CancelFunc
 	ctxDone    <-chan struct{} // Cache the ctx.Done() chan.
@@ -78,7 +79,6 @@ type http2Client struct {
 
 	kp               keepalive.ClientParameters
 	keepaliveEnabled bool
-	lr               lastRead
 
 	statsHandler stats.Handler
 
