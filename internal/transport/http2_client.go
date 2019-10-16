@@ -1320,19 +1320,20 @@ func (t *http2Client) keepalive() {
 	// Amount of time remaining before which we should receive an ACK for the
 	// last sent ping.
 	timeoutLeft := time.Duration(0)
-	// UnixNanos recorded before we go block on the timer. This is required to
-	// check for read activity since then.
+	// Records the last value of t.lr.timeNano before we go block on the timer.
+	// This is required to check for read activity since then.
 	prevNano := time.Now().UnixNano()
 	timer := time.NewTimer(t.kp.Time)
 	for {
 		select {
 		case <-timer.C:
-			if lastRead := atomic.LoadInt64(&t.lr.timeNano); lastRead > prevNano {
+			lastRead := atomic.LoadInt64(&t.lr.timeNano)
+			if lastRead > prevNano {
 				// There has been read activity since the last time we were here.
 				outstandingPing = false
-				prevNano = time.Now().UnixNano()
 				// Next timer should fire at kp.Time seconds from lastRead time.
-				timer.Reset(time.Duration(lastRead) + t.kp.Time - time.Duration(prevNano))
+				timer.Reset(time.Duration(lastRead) + t.kp.Time - time.Duration(time.Now().UnixNano()))
+				prevNano = lastRead
 				continue
 			}
 			if outstandingPing && timeoutLeft <= 0 {
@@ -1352,7 +1353,7 @@ func (t *http2Client) keepalive() {
 			}
 			if len(t.activeStreams) < 1 && !t.kp.PermitWithoutStream {
 				// If a ping was sent out previously (because there were active
-				// streams at that point) which wasn't acked and it's timeout
+				// streams at that point) which wasn't acked and its timeout
 				// hadn't fired, but we got here and are about to go dormant,
 				// we should make sure that we unconditionally send a ping once
 				// we awaken.
@@ -1380,7 +1381,7 @@ func (t *http2Client) keepalive() {
 			// acked).
 			sleepDuration := minTime(t.kp.Time, timeoutLeft)
 			timeoutLeft -= sleepDuration
-			prevNano = time.Now().UnixNano()
+			prevNano = lastRead
 			timer.Reset(sleepDuration)
 		case <-t.ctx.Done():
 			if !timer.Stop() {

@@ -360,7 +360,8 @@ func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 func TestKeepaliveClientFrequency(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
-			MinTime: 2100 * time.Millisecond, // 2.1 seconds
+			MinTime:             1200 * time.Millisecond, // 1.2 seconds
+			PermitWithoutStream: true,
 		},
 	}
 	clientOptions := ConnectOptions{
