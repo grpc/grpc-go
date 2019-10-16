@@ -49,8 +49,8 @@ import (
 )
 
 var (
-	lbServerName = "bar.com"
-	beServerName = "foo.com"
+	lbServerName = "lb.server.com"
+	beServerName = "backends.com"
 	lbToken      = "iamatoken"
 
 	// Resolver replaces localhost with fakeName in Next().
@@ -60,9 +60,8 @@ var (
 )
 
 type serverNameCheckCreds struct {
-	mu       sync.Mutex
-	sn       string
-	expected string
+	mu sync.Mutex
+	sn string
 }
 
 func (c *serverNameCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -72,10 +71,10 @@ func (c *serverNameCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, cred
 	}
 	return rawConn, nil, nil
 }
-func (c *serverNameCheckCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (c *serverNameCheckCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	b := make([]byte, len(c.expected))
+	b := make([]byte, len(authority))
 	errCh := make(chan error, 1)
 	go func() {
 		_, err := rawConn.Read(b)
@@ -84,34 +83,25 @@ func (c *serverNameCheckCreds) ClientHandshake(ctx context.Context, addr string,
 	select {
 	case err := <-errCh:
 		if err != nil {
-			fmt.Printf("Failed to read the server name from the server %v", err)
+			fmt.Printf("test-creds: failed to read expected authority name from the server: %v\n", err)
 			return nil, nil, err
 		}
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
-	if c.expected != string(b) {
-		fmt.Printf("Read the server name %s want %s", string(b), c.expected)
-		return nil, nil, errors.New("received unexpected server name")
+	if authority != string(b) {
+		fmt.Printf("test-creds: got authority from ClientConn %q, expected by server %q\n", authority, string(b))
+		return nil, nil, errors.New("received unexpected server nameq")
 	}
 	return rawConn, nil, nil
 }
 func (c *serverNameCheckCreds) Info() credentials.ProtocolInfo {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	return credentials.ProtocolInfo{}
 }
 func (c *serverNameCheckCreds) Clone() credentials.TransportCredentials {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return &serverNameCheckCreds{
-		expected: c.expected,
-	}
+	return &serverNameCheckCreds{}
 }
 func (c *serverNameCheckCreds) OverrideServerName(s string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.expected = s
 	return nil
 }
 
@@ -388,9 +378,7 @@ func TestGRPCLB(t *testing.T) {
 		Servers: bes,
 	}
 	tss.ls.sls <- sl
-	creds := serverNameCheckCreds{
-		expected: beServerName,
-	}
+	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
@@ -439,9 +427,7 @@ func TestGRPCLBWeighted(t *testing.T) {
 		portsToIndex[tss.bePorts[i]] = i
 	}
 
-	creds := serverNameCheckCreds{
-		expected: beServerName,
-	}
+	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
@@ -509,9 +495,7 @@ func TestDropRequest(t *testing.T) {
 			Drop: true,
 		}},
 	}
-	creds := serverNameCheckCreds{
-		expected: beServerName,
-	}
+	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
@@ -671,9 +655,7 @@ func TestBalancerDisconnects(t *testing.T) {
 		lbs = append(lbs, tss.lb)
 	}
 
-	creds := serverNameCheckCreds{
-		expected: beServerName,
-	}
+	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
@@ -752,9 +734,7 @@ func TestFallback(t *testing.T) {
 		Servers: bes,
 	}
 	tss.ls.sls <- sl
-	creds := serverNameCheckCreds{
-		expected: beServerName,
-	}
+	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
@@ -770,9 +750,8 @@ func TestFallback(t *testing.T) {
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
 	}, {
-		Addr:       beLis.Addr().String(),
-		Type:       resolver.Backend,
-		ServerName: beServerName,
+		Addr: beLis.Addr().String(),
+		Type: resolver.Backend,
 	}}})
 
 	var p peer.Peer
@@ -788,9 +767,8 @@ func TestFallback(t *testing.T) {
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
 	}, {
-		Addr:       beLis.Addr().String(),
-		Type:       resolver.Backend,
-		ServerName: beServerName,
+		Addr: beLis.Addr().String(),
+		Type: resolver.Backend,
 	}}})
 
 	var backendUsed bool
@@ -851,6 +829,105 @@ func TestFallback(t *testing.T) {
 	}
 }
 
+func TestFallBackWithNoServerAddress(t *testing.T) {
+	defer leakcheck.Check(t)
+
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+
+	tss, cleanup, err := newLoadBalancer(1)
+	if err != nil {
+		t.Fatalf("failed to create new load balancer: %v", err)
+	}
+	defer cleanup()
+
+	// Start a standalone backend.
+	beLis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen %v", err)
+	}
+	defer beLis.Close()
+	standaloneBEs := startBackends(beServerName, true, beLis)
+	defer stopBackends(standaloneBEs)
+
+	be := &lbpb.Server{
+		IpAddress:        tss.beIPs[0],
+		Port:             int32(tss.bePorts[0]),
+		LoadBalanceToken: lbToken,
+	}
+	var bes []*lbpb.Server
+	bes = append(bes, be)
+	sl := &lbpb.ServerList{
+		Servers: bes,
+	}
+	tss.ls.sls <- sl
+	creds := serverNameCheckCreds{}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
+	if err != nil {
+		t.Fatalf("Failed to dial to the backend %v", err)
+	}
+	defer cc.Close()
+	testC := testpb.NewTestServiceClient(cc)
+
+	// Select grpclb with service config.
+	const pfc = `{"loadBalancingConfig":[{"grpclb":{"childPolicy":[{"round_robin":{}}]}}]}`
+	scpr := r.CC.ParseServiceConfig(pfc)
+	if scpr.Err != nil {
+		t.Fatalf("Error parsing config %q: %v", pfc, scpr.Err)
+	}
+
+	// Send an update with only backend address. grpclb should enter fallback
+	// and use the fallback backend.
+	r.UpdateState(resolver.State{
+		Addresses: []resolver.Address{{
+			Addr: beLis.Addr().String(),
+			Type: resolver.Backend,
+		}},
+		ServiceConfig: scpr,
+	})
+
+	var p peer.Peer
+	rpcCtx, rpcCancel := context.WithTimeout(context.Background(), time.Second)
+	defer rpcCancel()
+	if _, err := testC.EmptyCall(rpcCtx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	if p.Addr.String() != beLis.Addr().String() {
+		t.Fatalf("got peer: %v, want peer: %v", p.Addr, beLis.Addr())
+	}
+
+	// Send an update with balancer address. The backends behind grpclb should
+	// be used.
+	r.UpdateState(resolver.State{
+		Addresses: []resolver.Address{{
+			Addr:       tss.lbAddr,
+			Type:       resolver.GRPCLB,
+			ServerName: lbServerName,
+		}, {
+			Addr: beLis.Addr().String(),
+			Type: resolver.Backend,
+		}},
+	})
+
+	var backendUsed bool
+	for i := 0; i < 1000; i++ {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		}
+		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
+			backendUsed = true
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !backendUsed {
+		t.Fatalf("No RPC sent to backend behind remote balancer after 1 second")
+	}
+}
+
 func TestGRPCLBPickFirst(t *testing.T) {
 	defer leakcheck.Check(t)
 
@@ -881,9 +958,7 @@ func TestGRPCLBPickFirst(t *testing.T) {
 		portsToIndex[tss.bePorts[i]] = i
 	}
 
-	creds := serverNameCheckCreds{
-		expected: beServerName,
-	}
+	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
@@ -1034,7 +1109,7 @@ func runAndGetStats(t *testing.T, drop bool, runRPCs func(*grpc.ClientConn)) *rp
 	}
 	tss.ls.sls <- &lbpb.ServerList{Servers: servers}
 	tss.ls.statsDura = 100 * time.Millisecond
-	creds := serverNameCheckCreds{expected: beServerName}
+	creds := serverNameCheckCreds{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

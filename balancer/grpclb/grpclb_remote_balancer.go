@@ -326,15 +326,10 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 	}
 }
 
-func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
+func (lb *lbBalancer) dialRemoteLB() {
 	var dopts []grpc.DialOption
 	if creds := lb.opt.DialCreds; creds != nil {
-		if err := creds.OverrideServerName(remoteLBName); err == nil {
-			dopts = append(dopts, grpc.WithTransportCredentials(creds))
-		} else {
-			grpclog.Warningf("grpclb: failed to override the server name in the credentials: %v, using Insecure", err)
-			dopts = append(dopts, grpc.WithInsecure())
-		}
+		dopts = append(dopts, grpc.WithTransportCredentials(creds))
 	} else if bundle := lb.grpclbClientConnCreds; bundle != nil {
 		dopts = append(dopts, grpc.WithCredentialsBundle(bundle))
 	} else {
@@ -363,7 +358,7 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 	//
 	// The grpc dial target will be used by the creds (ALTS) as the authority,
 	// so it has to be set to remoteLBName that comes from resolver.
-	cc, err := grpc.DialContext(context.Background(), remoteLBName, dopts...)
+	cc, err := grpc.DialContext(context.Background(), "grpclb.subClientConn", dopts...)
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
 	}
