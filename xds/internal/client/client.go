@@ -33,15 +33,22 @@ type EndpointUpdate struct{}
 // Client is the xds client resolver and balancer use to watch xds updates.
 //
 // All the watch methods don't block.
-type Client interface {
-	// WatchService watches LRS/RDS/VHDS.
-	WatchService(ctx context.Context, name string, callback func(*ServiceUpdate, error))
+type Client struct {
+}
 
-	// WatchCluster watches CDS.
-	WatchCluster(ctx context.Context, name string, callback func(*ClusterUpdate, error))
+// WatchService watches LRS/RDS/VHDS.
+func (*Client) WatchService(ctx context.Context, name string, callback func(*ServiceUpdate, error)) {}
 
-	// WatchEndpoint watches EDS.
-	WatchEndpoint(ctx context.Context, name string, callback func(*EndpointUpdate, error))
+// WatchCluster watches CDS.
+func (*Client) WatchCluster(ctx context.Context, name string, callback func(*ClusterUpdate, error)) {}
 
-	// TODO: add LRS
+// WatchEndpoint watches EDS.
+func (*Client) WatchEndpoint(ctx context.Context, name string, callback func(*EndpointUpdate, error)) {
+}
+
+// TODO: add LRS
+
+// New creates a new XDS client.
+func New() *Client {
+	return &Client{}
 }
