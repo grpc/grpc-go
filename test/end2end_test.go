@@ -7490,8 +7490,12 @@ func (s) TestClientCancellationPropagatesUnary(t *testing.T) {
 		emptyCall: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			close(called)
 			<-ctx.Done()
+			err := ctx.Err()
+			if err != context.Canceled {
+				t.Errorf("ctx.Err() = %v; want context.Canceled", err)
+			}
 			close(done)
-			return nil, ctx.Err()
+			return nil, err
 		},
 	}
 	if err := ss.Start(nil); err != nil {
@@ -7511,13 +7515,13 @@ func (s) TestClientCancellationPropagatesUnary(t *testing.T) {
 
 	select {
 	case <-called:
-	case <-time.After(10 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatalf("failed to perform EmptyCall after 10s")
 	}
 	cancel()
 	select {
 	case <-done:
-	case <-time.After(10 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatalf("server failed to close done chan due to cancellation propagation")
 	}
 	wg.Wait()
