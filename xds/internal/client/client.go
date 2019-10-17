@@ -37,13 +37,15 @@ type Client struct {
 }
 
 // WatchService watches LRS/RDS/VHDS.
-func (*Client) WatchService(ctx context.Context, name string, callback func(*ServiceUpdate, error)) {}
+func (*Client) WatchService(ctx context.Context, target string, callback func(*ServiceUpdate, error)) {
+}
 
-// WatchCluster watches CDS.
-func (*Client) WatchCluster(ctx context.Context, name string, callback func(*ClusterUpdate, error)) {}
+// WatchClusters watches CDS.
+func (*Client) WatchClusters(ctx context.Context, serviceName string, callback func(*ClusterUpdate, error)) {
+}
 
-// WatchEndpoint watches EDS.
-func (*Client) WatchEndpoint(ctx context.Context, name string, callback func(*EndpointUpdate, error)) {
+// WatchEndpoints watches EDS.
+func (*Client) WatchEndpoints(ctx context.Context, clusterName string, callback func(*EndpointUpdate, error)) {
 }
 
 // TODO: add LRS
