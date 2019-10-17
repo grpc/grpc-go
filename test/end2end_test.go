@@ -7482,3 +7482,43 @@ func (s) TestGRPCMethodAccessibleToCredsViaContextRequestInfo(t *testing.T) {
 		t.Fatalf("ss.client.EmptyCall(_, _) = _, %v; want _, _.Message()=%q", err, wantMethod)
 	}
 }
+
+func (s) TestClientCancellationPropagatesUnary(t *testing.T) {
+	wg := &sync.WaitGroup{}
+	called, done := make(chan struct{}), make(chan struct{})
+	ss := &stubServer{
+		emptyCall: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			close(called)
+			<-ctx.Done()
+			close(done)
+			return nil, ctx.Err()
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+
+	wg.Add(1)
+	go func() {
+		if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Canceled {
+			t.Errorf("ss.client.EmptyCall() = _, %v; want _, Code()=codes.Canceled", err)
+		}
+		wg.Done()
+	}()
+
+	select {
+	case <-called:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("failed to perform EmptyCall after 10s")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("server failed to close done chan due to cancellation propagation")
+	}
+	wg.Wait()
+}

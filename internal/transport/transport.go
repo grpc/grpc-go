@@ -318,8 +318,7 @@ func (s *Stream) waitOnHeader() {
 	case <-s.ctx.Done():
 		// Close the stream to prevent headers/trailers from changing after
 		// this function returns.
-		err := ContextErr(s.ctx.Err())
-		s.ct.closeStream(s, err, false, 0, status.Convert(err), nil, false)
+		s.ct.CloseStream(s, ContextErr(s.ctx.Err()))
 		// headerChan could possibly not be closed yet if closeStream raced
 		// with operateHeaders; wait until it is closed explicitly here.
 		<-s.headerChan
