@@ -108,6 +108,7 @@ func (s) Teardown(t *testing.T) {
 }
 
 func Test(t *testing.T) {
+	testlogger.setTestingT(t)
 	grpctest.RunSubTests(t, s{})
 }
 
