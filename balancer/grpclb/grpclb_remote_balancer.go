@@ -23,10 +23,11 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"reflect"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	timestamppb "github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
@@ -53,7 +54,7 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 	lb.serverListReceived = true
 
 	// If the new server list == old server list, do nothing.
-	if reflect.DeepEqual(lb.fullServerList, l.Servers) {
+	if cmp.Equal(lb.fullServerList, l.Servers, cmp.Comparer(proto.Equal)) {
 		if grpclog.V(2) {
 			grpclog.Infof("lbBalancer: new serverlist same as the previous one, ignoring")
 		}
