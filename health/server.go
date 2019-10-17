@@ -139,7 +139,7 @@ func (s *Server) setServingStatusLocked(service string, servingStatus healthpb.H
 // Shutdown sets all serving status to NOT_SERVING, and configures the server to
 // ignore all future status changes.
 //
-// This changes serving status for all services. To set status for a perticular
+// This changes serving status for all services. To set status for a particular
 // services, call SetServingStatus().
 func (s *Server) Shutdown() {
 	s.mu.Lock()
@@ -153,7 +153,7 @@ func (s *Server) Shutdown() {
 // Resume sets all serving status to SERVING, and configures the server to
 // accept all future status changes.
 //
-// This changes serving status for all services. To set status for a perticular
+// This changes serving status for all services. To set status for a particular
 // services, call SetServingStatus().
 func (s *Server) Resume() {
 	s.mu.Lock()

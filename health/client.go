@@ -105,7 +105,7 @@ retryConnection:
 				continue retryConnection
 			}
 
-			// As a message has been received, removes the need for backoff for the next retry by reseting the try count.
+			// As a message has been received, removes the need for backoff for the next retry by resetting the try count.
 			tryCnt = 0
 			if resp.Status == healthpb.HealthCheckResponse_SERVING {
 				setConnectivityState(connectivity.Ready)
