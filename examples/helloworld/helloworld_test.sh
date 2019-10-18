@@ -18,7 +18,7 @@
 set +e
 
 clean () {
-    pkill -s 0
+    jobs -p | xargs -n 1 pkill -P
     wait
 }
 
@@ -90,5 +90,4 @@ else
 fi
 
 clean
-exit 0
 
