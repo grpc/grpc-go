@@ -19,8 +19,6 @@
 // Package client contains the implementation of the xds client used by xds.
 package client
 
-import "context"
-
 // ServiceUpdate contains update about the service.
 type ServiceUpdate struct{}
 
@@ -37,15 +35,18 @@ type Client struct {
 }
 
 // WatchService watches LRS/RDS/VHDS.
-func (*Client) WatchService(ctx context.Context, target string, callback func(*ServiceUpdate, error)) {
+func (*Client) WatchService(target string, callback func(*ServiceUpdate, error)) (cancel func()) {
+	return nil
 }
 
 // WatchClusters watches CDS.
-func (*Client) WatchClusters(ctx context.Context, serviceName string, callback func(*ClusterUpdate, error)) {
+func (*Client) WatchClusters(serviceName string, callback func(*ClusterUpdate, error)) (cancel func()) {
+	return nil
 }
 
 // WatchEndpoints watches EDS.
-func (*Client) WatchEndpoints(ctx context.Context, clusterName string, callback func(*EndpointUpdate, error)) {
+func (*Client) WatchEndpoints(clusterName string, callback func(*EndpointUpdate, error)) (cancel func()) {
+	return nil
 }
 
 // TODO: add LRS
