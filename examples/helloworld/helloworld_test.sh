@@ -18,7 +18,7 @@
 set +e
 
 clean () {
-    fuser -k 50051/tcp
+    pkill -s 0
     wait
 }
 
@@ -37,7 +37,6 @@ if ! go build -o /dev/null ./greeter_server/*.go; then
     fail "failed to build greeter server"
 else
     pass "successfully built greeter server"
-
 fi
 
 # Build greeter client
@@ -47,36 +46,31 @@ else
     pass "successfully built greeter client"
 fi
 
-# Client should throw an error if it cannot connect to a server
-./client &>/dev/null
-if [ $? == 0 ]; then
-    fail "client communicated when there should be no active server"
-else
-    pass "client failed to communicate when there is no active server"
-fi
-
 # Server should be able to start
 SERVER_LOG="$(mktemp)"
 go run greeter_server/*.go &> $SERVER_LOG & 
 
-# Sleep to make sure server starts
-sleep 0.5
-
 # Client should be able to communicate to the active server
 CLIENT_LOG="$(mktemp)"
-go run greeter_client/*.go &> $CLIENT_LOG
-if [ $? -ne 0 ] ; then
-    fail "client failed to communicate with server"
+if ! go run greeter_client/*.go &> $CLIENT_LOG; then
+    fail "client failed to communicate with server
+    Got server log:
+    $(cat $SERVER_LOG)
+    Got client log:
+    $(cat $CLIENT_LOG)
+    "
 else
     pass "client successfully communicated with server"
 fi
 
 # Out log should contain the string 'Received: world'
 # from the server.
-if ! grep "Received: world" $SERVER_LOG; then
+if ! grep -q "Received: world" $SERVER_LOG; then
     fail "Server log missing server output: 'Received: world'
-    Got: 
+    Got server log:
     $(cat $SERVER_LOG)
+    Got client log:
+    $(cat $CLIENT_LOG)
     "
 else
     pass "Server log contains server output: 'Received: world'"
@@ -84,9 +78,11 @@ fi
 
 # Out log should contain the string 'Greeting: Hello world'
 # from the client.
-if ! grep "Greeting: Hello world" $CLIENT_LOG ; then
+if ! grep -q "Greeting: Hello world" $CLIENT_LOG ; then
     fail "Client log missing client output: 'Greeting: Hello world'
-    Got: 
+    Got server log:
+    $(cat $SERVER_LOG)
+    Got client log:
     $(cat $CLIENT_LOG)
     "
 else
@@ -94,3 +90,4 @@ else
 fi
 
 clean
+
