@@ -35,7 +35,8 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// PickerBuilder creates balancer.Picker.
+// PickerBuilder creates a balancer.Picker. It can maintain state which will be
+// scoped to a single balancer.ClientConn.
 type PickerBuilder interface {
 	// Build takes a slice of ready SubConns, and returns a picker that will be
 	// used by gRPC to pick a SubConn.
@@ -48,17 +49,41 @@ func NewBalancerBuilder(name string, pb PickerBuilder) balancer.Builder {
 	return NewBalancerBuilderWithConfig(name, pb, Config{})
 }
 
-// Config contains the config info about the base balancer builder.
 type Config struct {
+	// PickerBuilderFactory will be used to construct a picker builder for each
+	// balancer.ClientConn.
+	PickerBuilderFactory func() PickerBuilder
+
+	// ConnectionManagerFactory will be used to construct a connection manager
+	// for each balancer.ClientConn. If it is not set DefaultConnectionManager
+	// is used.
+	ConnectionManagerFactory func(SubConnManager, Config) ConnectionManager
+
 	// HealthCheck indicates whether health checking should be enabled for this specific balancer.
 	HealthCheck bool
 }
 
 // NewBalancerBuilderWithConfig returns a base balancer builder configured by the provided config.
 func NewBalancerBuilderWithConfig(name string, pb PickerBuilder, config Config) balancer.Builder {
+	config.PickerBuilderFactory = func() PickerBuilder {
+		return pb
+	}
+	return MakeBalancerBuilder(name, config)
+}
+
+// MakeBalancerBuilder returns a new balancer.Builder with the given name and
+// configuration. The configuration must, at a minimum, specify a
+// PickerBuilderFactory. If the configured ConnectionManagerFactory is nil,
+// DefaultConnectionManager is used.
+func MakeBalancerBuilder(name string, config Config) balancer.Builder {
+	if config.PickerBuilderFactory == nil {
+		panic("config is missing a PickerBuilderFactory")
+	}
+	if config.ConnectionManagerFactory == nil {
+		config.ConnectionManagerFactory = DefaultConnectionManager
+	}
 	return &baseBuilder{
-		name:          name,
-		pickerBuilder: pb,
-		config:        config,
+		name:   name,
+		config: config,
 	}
 }
