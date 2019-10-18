@@ -90,4 +90,5 @@ else
 fi
 
 clean
+exit 0
 
