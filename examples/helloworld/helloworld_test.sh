@@ -33,14 +33,14 @@ pass () {
 }
 
 # Build greeter server
-if ! go build -o /dev/null ./greeter_server/*.go; then
+if ! go build -o /dev/null ./examples/helloworld/greeter_server/*.go; then
     fail "failed to build greeter server"
 else
     pass "successfully built greeter server"
 fi
 
 # Build greeter client
-if ! go build -o /dev/null ./greeter_client/*.go; then
+if ! go build -o /dev/null ./examples/helloworld/greeter_client/*.go; then
     fail "failed to build greeter client"
 else
     pass "successfully built greeter client"
@@ -48,11 +48,11 @@ fi
 
 # Server should be able to start
 SERVER_LOG="$(mktemp)"
-go run greeter_server/*.go &> $SERVER_LOG & 
+go run examples/helloworld/greeter_server/*.go &> $SERVER_LOG & 
 
 # Client should be able to communicate to the active server
 CLIENT_LOG="$(mktemp)"
-if ! go run greeter_client/*.go &> $CLIENT_LOG; then
+if ! go run examples/helloworld/greeter_client/*.go &> $CLIENT_LOG; then
     fail "client failed to communicate with server
     Got server log:
     $(cat $SERVER_LOG)
