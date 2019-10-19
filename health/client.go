@@ -38,11 +38,13 @@ var (
 	backoffFunc     = func(ctx context.Context, retries int) bool {
 		d := backoffStrategy.Backoff(retries)
 		timer := time.NewTimer(d)
+		defer func() {
+			timer.Stop()
+		}()
 		select {
 		case <-timer.C:
 			return true
 		case <-ctx.Done():
-			timer.Stop()
 			return false
 		}
 	}

@@ -269,11 +269,16 @@ func (d *dnsResolver) watcher() {
 
 		// Sleep to prevent excessive re-resolutions. Incoming resolution requests
 		// will be queued in d.rn.
-		t := time.NewTimer(minDNSResRate)
+		var t *time.Timer
+		if t == nil {
+			t = time.NewTimer(minDNSResRate)
+			defer t.Stop()
+		} else {
+			t.Reset(minDNSResRate)
+		}
 		select {
 		case <-t.C:
 		case <-d.ctx.Done():
-			t.Stop()
 			return
 		}
 	}
