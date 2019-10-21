@@ -35,17 +35,17 @@ type Client struct {
 }
 
 // WatchService watches LRS/RDS/VHDS.
-func (*Client) WatchService(target string, callback func(*ServiceUpdate, error)) (cancel func()) {
+func (*Client) WatchService(target []string, callback func(*ServiceUpdate, error)) (cancel func()) {
 	return nil
 }
 
 // WatchClusters watches CDS.
-func (*Client) WatchClusters(serviceName string, callback func(*ClusterUpdate, error)) (cancel func()) {
+func (*Client) WatchClusters(serviceName []string, callback func(*ClusterUpdate, error)) (cancel func()) {
 	return nil
 }
 
 // WatchEndpoints watches EDS.
-func (*Client) WatchEndpoints(clusterName string, callback func(*EndpointUpdate, error)) (cancel func()) {
+func (*Client) WatchEndpoints(clusterName []string, callback func(*EndpointUpdate, error)) (cancel func()) {
 	return nil
 }
 
