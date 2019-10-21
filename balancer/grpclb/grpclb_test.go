@@ -829,10 +829,55 @@ func TestFallback(t *testing.T) {
 	}
 }
 
+type pickfirstFailOnEmptyAddrsListBuilder struct {
+	balancer.Builder // pick_first builder.
+}
+
+func (b *pickfirstFailOnEmptyAddrsListBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	pf := b.Builder.Build(cc, opts)
+	return &pickfirstFailOnEmptyAddrsList{pf}
+}
+
+type pickfirstFailOnEmptyAddrsList struct {
+	balancer.Balancer // pick_first balancer.
+}
+
+func (b *pickfirstFailOnEmptyAddrsList) UpdateClientConnState(s balancer.ClientConnState) error {
+	addrs := s.ResolverState.Addresses
+	if len(addrs) == 0 {
+		return balancer.ErrBadResolverState
+	}
+	b.Balancer.HandleResolvedAddrs(addrs, nil)
+	return nil
+}
+
+func (b *pickfirstFailOnEmptyAddrsList) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	b.Balancer.HandleSubConnStateChange(sc, state.ConnectivityState)
+}
+
+func (b *pickfirstFailOnEmptyAddrsList) ResolverError(error) {}
+
 func TestFallBackWithNoServerAddress(t *testing.T) {
 	defer leakcheck.Check(t)
 
+	defer func() func() {
+		// Override pick_first with a balancer that returns error to trigger
+		// re-resolve, to test that when grpclb accepts no server address,
+		// re-resolve is never triggered.
+		pfb := balancer.Get("pick_first")
+		balancer.Register(&pickfirstFailOnEmptyAddrsListBuilder{pfb})
+		return func() { balancer.Register(pfb) }
+	}()()
+
+	resolveNowCh := make(chan struct{}, 1)
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	r.ResolveNowCallback = func(resolver.ResolveNowOption) {
+		select {
+		case <-resolveNowCh:
+		default:
+		}
+		resolveNowCh <- struct{}{}
+	}
 	defer cleanup()
 
 	tss, cleanup, err := newLoadBalancer(1)
@@ -860,7 +905,6 @@ func TestFallBackWithNoServerAddress(t *testing.T) {
 	sl := &lbpb.ServerList{
 		Servers: bes,
 	}
-	tss.ls.sls <- sl
 	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -879,52 +923,62 @@ func TestFallBackWithNoServerAddress(t *testing.T) {
 		t.Fatalf("Error parsing config %q: %v", pfc, scpr.Err)
 	}
 
-	// Send an update with only backend address. grpclb should enter fallback
-	// and use the fallback backend.
-	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{
-			Addr: beLis.Addr().String(),
-			Type: resolver.Backend,
-		}},
-		ServiceConfig: scpr,
-	})
+	for i := 0; i < 2; i++ {
+		// Send an update with only backend address. grpclb should enter fallback
+		// and use the fallback backend.
+		r.UpdateState(resolver.State{
+			Addresses: []resolver.Address{{
+				Addr: beLis.Addr().String(),
+				Type: resolver.Backend,
+			}},
+			ServiceConfig: scpr,
+		})
 
-	var p peer.Peer
-	rpcCtx, rpcCancel := context.WithTimeout(context.Background(), time.Second)
-	defer rpcCancel()
-	if _, err := testC.EmptyCall(rpcCtx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-		t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
-	}
-	if p.Addr.String() != beLis.Addr().String() {
-		t.Fatalf("got peer: %v, want peer: %v", p.Addr, beLis.Addr())
-	}
-
-	// Send an update with balancer address. The backends behind grpclb should
-	// be used.
-	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{
-			Addr:       tss.lbAddr,
-			Type:       resolver.GRPCLB,
-			ServerName: lbServerName,
-		}, {
-			Addr: beLis.Addr().String(),
-			Type: resolver.Backend,
-		}},
-	})
-
-	var backendUsed bool
-	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		select {
+		case <-resolveNowCh:
+			t.Fatalf("unexpected resolveNow when grpclb gets no balancer address")
+		case <-time.After(time.Second):
 		}
-		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
-			backendUsed = true
-			break
+
+		var p peer.Peer
+		rpcCtx, rpcCancel := context.WithTimeout(context.Background(), time.Second)
+		defer rpcCancel()
+		if _, err := testC.EmptyCall(rpcCtx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
-		time.Sleep(time.Millisecond)
-	}
-	if !backendUsed {
-		t.Fatalf("No RPC sent to backend behind remote balancer after 1 second")
+		if p.Addr.String() != beLis.Addr().String() {
+			t.Fatalf("got peer: %v, want peer: %v", p.Addr, beLis.Addr())
+		}
+
+		tss.ls.sls <- sl
+		// Send an update with balancer address. The backends behind grpclb should
+		// be used.
+		r.UpdateState(resolver.State{
+			Addresses: []resolver.Address{{
+				Addr:       tss.lbAddr,
+				Type:       resolver.GRPCLB,
+				ServerName: lbServerName,
+			}, {
+				Addr: beLis.Addr().String(),
+				Type: resolver.Backend,
+			}},
+			ServiceConfig: scpr,
+		})
+
+		var backendUsed bool
+		for i := 0; i < 1000; i++ {
+			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+				t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+			}
+			if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
+				backendUsed = true
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		if !backendUsed {
+			t.Fatalf("No RPC sent to backend behind remote balancer after 1 second")
+		}
 	}
 }
 

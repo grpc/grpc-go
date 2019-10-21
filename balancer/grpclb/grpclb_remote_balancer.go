@@ -107,6 +107,11 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 
 	fallbackModeChanged := lb.inFallback != fallback
 	lb.inFallback = fallback
+	if fallbackModeChanged && lb.inFallback {
+		// Clear previous received list, so if the server is back and sends the
+		// same list again, the new addresses will be used.
+		lb.fullServerList = nil
+	}
 
 	balancingPolicyChanged := lb.usePickFirst != pickFirst
 	oldUsePickFirst := lb.usePickFirst
@@ -339,7 +344,7 @@ func (lb *lbBalancer) dialRemoteLB() {
 		dopts = append(dopts, grpc.WithContextDialer(lb.opt.Dialer))
 	}
 	// Explicitly set pickfirst as the balancer.
-	dopts = append(dopts, grpc.WithBalancerName(grpc.PickFirstBalancerName))
+	dopts = append(dopts, grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"pick_first"}`))
 	wrb := internal.WithResolverBuilder.(func(resolver.Builder) grpc.DialOption)
 	dopts = append(dopts, wrb(lb.manualResolver))
 	if channelz.IsOn() {
