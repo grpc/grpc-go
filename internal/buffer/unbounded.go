@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 gRPC authors.
+ * Copyright 2019 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,29 +23,6 @@ import "sync"
 // Unbounded is an implementation of an unbounded buffer which does not use
 // extra goroutines. This is typically used for passing updates from one entity
 // to another within gRPC.
-//
-// Typical usage pattern is as follows:
-//
-//   ub := buffer.NewUnbounded()
-//
-// func writerEntity() {
-//   for {
-//     // Waits for some event to happen
-//     wb.Put(some_data)
-//   }
-// }
-//
-// func readerEntity() {
-//   for {
-//     select {
-//     case d := <-ub.Get():
-//       // type assert on the received data and process it
-//       ub.Load()
-//     case <-ctx.Done():
-//       // cleanup and exit
-//     }
-//   }
-// }
 //
 // All methods on this type are thread-safe and don't block on anything except
 // the underlying mutex used for synchronization.
