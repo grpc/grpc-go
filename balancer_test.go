@@ -31,11 +31,6 @@ import (
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/naming"
 	"google.golang.org/grpc/status"
-
-	// V1 balancer tests use passthrough resolver instead of dns.
-	// TODO(bar) remove this when removing v1 balaner entirely.
-
-	_ "google.golang.org/grpc/resolver/passthrough"
 )
 
 func pickFirstBalancerV1(r naming.Resolver) Balancer {
