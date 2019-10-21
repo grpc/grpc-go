@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
+	"google.golang.org/grpc/internal/resolver/dns"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -97,6 +98,7 @@ func (x *balanceLoadClientStream) Recv() (*lbpb.LoadBalanceResponse, error) {
 
 func init() {
 	balancer.Register(newLBBuilder())
+	dns.EnableSRVLookups = true
 }
 
 // newLBBuilder creates a builder for grpclb.
