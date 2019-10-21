@@ -37,7 +37,7 @@ var (
 func printMetrics(client metricspb.MetricsServiceClient, totalOnly bool) {
 	stream, err := client.GetAllGauges(context.Background(), &metricspb.EmptyMessage{})
 	if err != nil {
-		grpclog.Fatalf("failed to call GetAllGuages: %v", err)
+		grpclog.Fatalf("failed to call GetAllGauges: %v", err)
 	}
 
 	var (
