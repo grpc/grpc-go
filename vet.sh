@@ -128,7 +128,7 @@ google.golang.org/grpc/examples/features/debugging/client/main.go:SA1019
 google.golang.org/grpc/examples/features/load_balancing/client/main.go:SA1019
 google.golang.org/grpc/internal/transport/handler_server.go:SA1019
 google.golang.org/grpc/internal/transport/handler_server_test.go:SA1019
-google.golang.org/grpc/resolver/dns/dns_resolver.go:SA1019
+google.golang.org/grpc/internal/resolver/dns/dns_resolver.go:SA1019
 google.golang.org/grpc/stats/stats_test.go:SA1019
 google.golang.org/grpc/test/balancer_test.go:SA1019
 google.golang.org/grpc/test/channelz_test.go:SA1019
