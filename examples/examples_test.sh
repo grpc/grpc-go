@@ -23,7 +23,7 @@ EXAMPLES=(
     "features/compression"
     "features/deadline"
     "features/encryption/TLS"
-    )
+)
 
 declare -A EXPECTED_SERVER_OUTPUT=( 
     ["helloworld"]="Received: world"
@@ -32,7 +32,7 @@ declare -A EXPECTED_SERVER_OUTPUT=(
     ["features/compression"]="UnaryEcho called with message \"compress\""
     ["features/deadline"]=""
     ["features/encryption/TLS"]=""
-    )
+)
 
 declare -A EXPECTED_CLIENT_OUTPUT=(
     ["helloworld"]="Greeting: Hello world"
@@ -41,7 +41,7 @@ declare -A EXPECTED_CLIENT_OUTPUT=(
     ["features/compression"]="UnaryEcho call returned \"compress\", <nil>" 
     ["features/deadline"]="wanted = DeadlineExceeded, got = DeadlineExceeded" 
     ["features/encryption/TLS"]="UnaryEcho:  hello world"
-    )
+)
 
 for example in ${EXAMPLES[@]}; do
     echo "$(tput setaf 4) testing: ${example} $(tput sgr 0)"
