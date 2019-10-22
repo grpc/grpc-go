@@ -45,9 +45,9 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 
-	_ "google.golang.org/grpc/balancer/roundrobin"  // To register roundrobin.
-	_ "google.golang.org/grpc/internal/dns"         // To register dns resolver.
-	_ "google.golang.org/grpc/internal/passthrough" // To register passthrough resolver.
+	_ "google.golang.org/grpc/balancer/roundrobin"           // To register roundrobin.
+	_ "google.golang.org/grpc/internal/resolver/dns"         // To register dns resolver.
+	_ "google.golang.org/grpc/internal/resolver/passthrough" // To register passthrough resolver.
 )
 
 const (
