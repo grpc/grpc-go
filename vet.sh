@@ -125,6 +125,7 @@ google.golang.org/grpc/balancer_test.go:SA1019
 google.golang.org/grpc/balancer_v1_wrapper.go:SA1019
 google.golang.org/grpc/benchmark/benchmain/main.go:SA1019
 google.golang.org/grpc/benchmark/worker/benchmark_client.go:SA1019
+google.golang.org/grpc/clientconn.go:SA1019
 google.golang.org/grpc/clientconn.go:S1024
 google.golang.org/grpc/clientconn.go:SA1019
 google.golang.org/grpc/clientconn_state_transition_test.go:SA1019
