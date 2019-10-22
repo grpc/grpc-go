@@ -187,7 +187,7 @@ type lbBalancer struct {
 	// send to remote LB ClientConn through this resolver.
 	manualResolver *lbManualResolver
 	// The ClientConn to talk to the remote balancer.
-	ccRemoteLB *grpc.ClientConn
+	ccRemoteLB *remoteBalancerCCWrapper
 	// backoff for calling remote balancer.
 	backoff backoff.Strategy
 
@@ -441,10 +441,15 @@ func (lb *lbBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		}
 	}
 
+	// if len(remoteBalancerAddrs) == 0 && lb.ccRemoteLB != nil {
+	// 	lb.ccRemoteLB.close()
+	// 	lb.ccRemoteLB = nil
+	// }
+
 	if lb.ccRemoteLB == nil {
 		// First time receiving resolved addresses, create a cc to remote
 		// balancers.
-		lb.dialRemoteLB()
+		lb.newRemoteBalancerCCWrapper()
 		// Start the fallback goroutine.
 		go lb.fallbackToBackendsAfter(lb.fallbackTimeout)
 	}
@@ -478,7 +483,7 @@ func (lb *lbBalancer) Close() {
 	}
 	close(lb.doneCh)
 	if lb.ccRemoteLB != nil {
-		lb.ccRemoteLB.Close()
+		lb.ccRemoteLB.close()
 	}
 	lb.cc.close()
 }

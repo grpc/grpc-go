@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
@@ -201,137 +202,14 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 	lb.updateStateAndPicker(true, true)
 }
 
-func (lb *lbBalancer) readServerList(s *balanceLoadClientStream) error {
-	for {
-		reply, err := s.Recv()
-		if err != nil {
-			if err == io.EOF {
-				return errServerTerminatedConnection
-			}
-			return fmt.Errorf("grpclb: failed to recv server list: %v", err)
-		}
-		if serverList := reply.GetServerList(); serverList != nil {
-			lb.processServerList(serverList)
-		}
-	}
+type remoteBalancerCCWrapper struct {
+	cc      *grpc.ClientConn
+	lb      *lbBalancer
+	backoff backoff.Strategy
+	done    chan struct{}
 }
 
-func (lb *lbBalancer) sendLoadReport(s *balanceLoadClientStream, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-		case <-s.Context().Done():
-			return
-		}
-		stats := lb.clientStats.toClientStats()
-		t := time.Now()
-		stats.Timestamp = &timestamppb.Timestamp{
-			Seconds: t.Unix(),
-			Nanos:   int32(t.Nanosecond()),
-		}
-		if err := s.Send(&lbpb.LoadBalanceRequest{
-			LoadBalanceRequestType: &lbpb.LoadBalanceRequest_ClientStats{
-				ClientStats: stats,
-			},
-		}); err != nil {
-			return
-		}
-	}
-}
-
-func (lb *lbBalancer) callRemoteBalancer() (backoff bool, _ error) {
-	lbClient := &loadBalancerClient{cc: lb.ccRemoteLB}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	stream, err := lbClient.BalanceLoad(ctx, grpc.WaitForReady(true))
-	if err != nil {
-		return true, fmt.Errorf("grpclb: failed to perform RPC to the remote balancer %v", err)
-	}
-	lb.mu.Lock()
-	lb.remoteBalancerConnected = true
-	lb.mu.Unlock()
-
-	// grpclb handshake on the stream.
-	initReq := &lbpb.LoadBalanceRequest{
-		LoadBalanceRequestType: &lbpb.LoadBalanceRequest_InitialRequest{
-			InitialRequest: &lbpb.InitialLoadBalanceRequest{
-				Name: lb.target,
-			},
-		},
-	}
-	if err := stream.Send(initReq); err != nil {
-		return true, fmt.Errorf("grpclb: failed to send init request: %v", err)
-	}
-	reply, err := stream.Recv()
-	if err != nil {
-		return true, fmt.Errorf("grpclb: failed to recv init response: %v", err)
-	}
-	initResp := reply.GetInitialResponse()
-	if initResp == nil {
-		return true, fmt.Errorf("grpclb: reply from remote balancer did not include initial response")
-	}
-	if initResp.LoadBalancerDelegate != "" {
-		return true, fmt.Errorf("grpclb: Delegation is not supported")
-	}
-
-	go func() {
-		if d := convertDuration(initResp.ClientStatsReportInterval); d > 0 {
-			lb.sendLoadReport(stream, d)
-		}
-	}()
-	// No backoff if init req/resp handshake was successful.
-	return false, lb.readServerList(stream)
-}
-
-func (lb *lbBalancer) watchRemoteBalancer() {
-	var retryCount int
-	for {
-		doBackoff, err := lb.callRemoteBalancer()
-		select {
-		case <-lb.doneCh:
-			return
-		default:
-			if err != nil {
-				if err == errServerTerminatedConnection {
-					grpclog.Info(err)
-				} else {
-					grpclog.Warning(err)
-				}
-			}
-		}
-		// Trigger a re-resolve when the stream errors.
-		lb.cc.cc.ResolveNow(resolver.ResolveNowOption{})
-
-		lb.mu.Lock()
-		lb.remoteBalancerConnected = false
-		lb.fullServerList = nil
-		// Enter fallback when connection to remote balancer is lost, and the
-		// aggregated state is not Ready.
-		if !lb.inFallback && lb.state != connectivity.Ready {
-			// Entering fallback.
-			lb.refreshSubConns(lb.resolvedBackendAddrs, true, lb.usePickFirst)
-		}
-		lb.mu.Unlock()
-
-		if !doBackoff {
-			retryCount = 0
-			continue
-		}
-
-		timer := time.NewTimer(lb.backoff.Backoff(retryCount))
-		select {
-		case <-timer.C:
-		case <-lb.doneCh:
-			timer.Stop()
-			return
-		}
-		retryCount++
-	}
-}
-
-func (lb *lbBalancer) dialRemoteLB() {
+func (lb *lbBalancer) newRemoteBalancerCCWrapper() {
 	var dopts []grpc.DialOption
 	if creds := lb.opt.DialCreds; creds != nil {
 		dopts = append(dopts, grpc.WithTransportCredentials(creds))
@@ -367,6 +245,147 @@ func (lb *lbBalancer) dialRemoteLB() {
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
 	}
-	lb.ccRemoteLB = cc
-	go lb.watchRemoteBalancer()
+	ccw := &remoteBalancerCCWrapper{
+		cc:      cc,
+		lb:      lb,
+		backoff: lb.backoff,
+		done:    make(chan struct{}),
+	}
+	lb.ccRemoteLB = ccw
+	go ccw.watchRemoteBalancer()
+}
+
+func (ccw *remoteBalancerCCWrapper) close() {
+	close(ccw.done)
+	ccw.cc.Close()
+}
+
+func (ccw *remoteBalancerCCWrapper) readServerList(s *balanceLoadClientStream) error {
+	for {
+		reply, err := s.Recv()
+		if err != nil {
+			if err == io.EOF {
+				return errServerTerminatedConnection
+			}
+			return fmt.Errorf("grpclb: failed to recv server list: %v", err)
+		}
+		if serverList := reply.GetServerList(); serverList != nil {
+			ccw.lb.processServerList(serverList)
+		}
+	}
+}
+
+func (ccw *remoteBalancerCCWrapper) sendLoadReport(s *balanceLoadClientStream, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+		case <-s.Context().Done():
+			return
+		}
+		stats := ccw.lb.clientStats.toClientStats()
+		t := time.Now()
+		stats.Timestamp = &timestamppb.Timestamp{
+			Seconds: t.Unix(),
+			Nanos:   int32(t.Nanosecond()),
+		}
+		if err := s.Send(&lbpb.LoadBalanceRequest{
+			LoadBalanceRequestType: &lbpb.LoadBalanceRequest_ClientStats{
+				ClientStats: stats,
+			},
+		}); err != nil {
+			return
+		}
+	}
+}
+
+func (ccw *remoteBalancerCCWrapper) callRemoteBalancer() (backoff bool, _ error) {
+	lbClient := &loadBalancerClient{cc: ccw.cc}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stream, err := lbClient.BalanceLoad(ctx, grpc.WaitForReady(true))
+	if err != nil {
+		return true, fmt.Errorf("grpclb: failed to perform RPC to the remote balancer %v", err)
+	}
+	ccw.lb.mu.Lock()
+	ccw.lb.remoteBalancerConnected = true
+	ccw.lb.mu.Unlock()
+
+	// grpclb handshake on the stream.
+	initReq := &lbpb.LoadBalanceRequest{
+		LoadBalanceRequestType: &lbpb.LoadBalanceRequest_InitialRequest{
+			InitialRequest: &lbpb.InitialLoadBalanceRequest{
+				Name: ccw.lb.target,
+			},
+		},
+	}
+	if err := stream.Send(initReq); err != nil {
+		return true, fmt.Errorf("grpclb: failed to send init request: %v", err)
+	}
+	reply, err := stream.Recv()
+	if err != nil {
+		return true, fmt.Errorf("grpclb: failed to recv init response: %v", err)
+	}
+	initResp := reply.GetInitialResponse()
+	if initResp == nil {
+		return true, fmt.Errorf("grpclb: reply from remote balancer did not include initial response")
+	}
+	if initResp.LoadBalancerDelegate != "" {
+		return true, fmt.Errorf("grpclb: Delegation is not supported")
+	}
+
+	go func() {
+		if d := convertDuration(initResp.ClientStatsReportInterval); d > 0 {
+			ccw.sendLoadReport(stream, d)
+		}
+	}()
+	// No backoff if init req/resp handshake was successful.
+	return false, ccw.readServerList(stream)
+}
+
+func (ccw *remoteBalancerCCWrapper) watchRemoteBalancer() {
+	var retryCount int
+	for {
+		doBackoff, err := ccw.callRemoteBalancer()
+		select {
+		case <-ccw.done:
+			return
+		default:
+			if err != nil {
+				if err == errServerTerminatedConnection {
+					grpclog.Info(err)
+				} else {
+					grpclog.Warning(err)
+				}
+			}
+		}
+		// Trigger a re-resolve when the stream errors.
+		ccw.lb.cc.cc.ResolveNow(resolver.ResolveNowOption{})
+
+		ccw.lb.mu.Lock()
+		ccw.lb.remoteBalancerConnected = false
+		ccw.lb.fullServerList = nil
+		// Enter fallback when connection to remote balancer is lost, and the
+		// aggregated state is not Ready.
+		if !ccw.lb.inFallback && ccw.lb.state != connectivity.Ready {
+			// Entering fallback.
+			ccw.lb.refreshSubConns(ccw.lb.resolvedBackendAddrs, true, ccw.lb.usePickFirst)
+		}
+		ccw.lb.mu.Unlock()
+
+		if !doBackoff {
+			retryCount = 0
+			continue
+		}
+
+		timer := time.NewTimer(ccw.backoff.Backoff(retryCount)) // Copy backoff
+		select {
+		case <-timer.C:
+		case <-ccw.done:
+			timer.Stop()
+			return
+		}
+		retryCount++
+	}
 }
