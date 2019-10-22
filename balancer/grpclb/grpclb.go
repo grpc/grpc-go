@@ -441,12 +441,12 @@ func (lb *lbBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		}
 	}
 
-	if len(remoteBalancerAddrs) == 0 && lb.ccRemoteLB != nil {
-		lb.ccRemoteLB.close()
-		lb.ccRemoteLB = nil
-	}
-
-	if lb.ccRemoteLB == nil {
+	if len(remoteBalancerAddrs) == 0 {
+		if lb.ccRemoteLB != nil {
+			lb.ccRemoteLB.close()
+			lb.ccRemoteLB = nil
+		}
+	} else if lb.ccRemoteLB == nil {
 		// First time receiving resolved addresses, create a cc to remote
 		// balancers.
 		lb.newRemoteBalancerCCWrapper()
@@ -454,12 +454,11 @@ func (lb *lbBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		go lb.fallbackToBackendsAfter(lb.fallbackTimeout)
 	}
 
-	// cc to remote balancers uses lb.manualResolver. Send the updated remote
-	// balancer addresses to it through manualResolver.
-	//
-	// If remoteBalancerAddrs is empty, this could trigger resolveNow() in the
-	// sub-ClientConn.
-	lb.manualResolver.UpdateState(resolver.State{Addresses: remoteBalancerAddrs})
+	if lb.ccRemoteLB != nil {
+		// cc to remote balancers uses lb.manualResolver. Send the updated remote
+		// balancer addresses to it through manualResolver.
+		lb.manualResolver.UpdateState(resolver.State{Addresses: remoteBalancerAddrs})
+	}
 
 	lb.mu.Lock()
 	lb.resolvedBackendAddrs = backendAddrs
