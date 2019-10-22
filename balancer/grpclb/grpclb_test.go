@@ -934,11 +934,11 @@ func TestFallBackWithNoServerAddress(t *testing.T) {
 			ServiceConfig: scpr,
 		})
 
-		// select {
-		// case <-resolveNowCh:
-		// 	t.Fatalf("unexpected resolveNow when grpclb gets no balancer address")
-		// case <-time.After(time.Second):
-		// }
+		select {
+		case <-resolveNowCh:
+			t.Errorf("unexpected resolveNow when grpclb gets no balancer address 1111")
+		case <-time.After(time.Second):
+		}
 
 		var p peer.Peer
 		rpcCtx, rpcCancel := context.WithTimeout(context.Background(), time.Second)
@@ -948,6 +948,12 @@ func TestFallBackWithNoServerAddress(t *testing.T) {
 		}
 		if p.Addr.String() != beLis.Addr().String() {
 			t.Fatalf("got peer: %v, want peer: %v", p.Addr, beLis.Addr())
+		}
+
+		select {
+		case <-resolveNowCh:
+			t.Errorf("unexpected resolveNow when grpclb gets no balancer address 2222")
+		case <-time.After(time.Second):
 		}
 
 		tss.ls.sls <- sl
