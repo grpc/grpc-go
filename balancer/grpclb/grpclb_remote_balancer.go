@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -207,6 +208,9 @@ type remoteBalancerCCWrapper struct {
 	lb      *lbBalancer
 	backoff backoff.Strategy
 	done    chan struct{}
+
+	// waitgroup to wait for all goroutines to exit.
+	wg sync.WaitGroup
 }
 
 func (lb *lbBalancer) newRemoteBalancerCCWrapper() {
@@ -255,9 +259,12 @@ func (lb *lbBalancer) newRemoteBalancerCCWrapper() {
 	go ccw.watchRemoteBalancer()
 }
 
+// close closed the ClientConn to remote balancer, and waits until all
+// goroutines to finish.
 func (ccw *remoteBalancerCCWrapper) close() {
 	close(ccw.done)
 	ccw.cc.Close()
+	ccw.wg.Wait()
 }
 
 func (ccw *remoteBalancerCCWrapper) readServerList(s *balanceLoadClientStream) error {
@@ -336,6 +343,8 @@ func (ccw *remoteBalancerCCWrapper) callRemoteBalancer() (backoff bool, _ error)
 	}
 
 	go func() {
+		ccw.wg.Add(1)
+		defer ccw.wg.Done()
 		if d := convertDuration(initResp.ClientStatsReportInterval); d > 0 {
 			ccw.sendLoadReport(stream, d)
 		}
@@ -345,6 +354,8 @@ func (ccw *remoteBalancerCCWrapper) callRemoteBalancer() (backoff bool, _ error)
 }
 
 func (ccw *remoteBalancerCCWrapper) watchRemoteBalancer() {
+	ccw.wg.Add(1)
+	defer ccw.wg.Done()
 	var retryCount int
 	for {
 		doBackoff, err := ccw.callRemoteBalancer()

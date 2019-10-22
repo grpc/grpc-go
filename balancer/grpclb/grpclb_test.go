@@ -936,7 +936,7 @@ func TestFallBackWithNoServerAddress(t *testing.T) {
 
 		select {
 		case <-resolveNowCh:
-			t.Errorf("unexpected resolveNow when grpclb gets no balancer address 1111")
+			t.Errorf("unexpected resolveNow when grpclb gets no balancer address 1111, %d", i)
 		case <-time.After(time.Second):
 		}
 
@@ -952,7 +952,7 @@ func TestFallBackWithNoServerAddress(t *testing.T) {
 
 		select {
 		case <-resolveNowCh:
-			t.Errorf("unexpected resolveNow when grpclb gets no balancer address 2222")
+			t.Errorf("unexpected resolveNow when grpclb gets no balancer address 2222, %d", i)
 		case <-time.After(time.Second):
 		}
 

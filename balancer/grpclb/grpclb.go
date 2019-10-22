@@ -441,10 +441,10 @@ func (lb *lbBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		}
 	}
 
-	// if len(remoteBalancerAddrs) == 0 && lb.ccRemoteLB != nil {
-	// 	lb.ccRemoteLB.close()
-	// 	lb.ccRemoteLB = nil
-	// }
+	if len(remoteBalancerAddrs) == 0 && lb.ccRemoteLB != nil {
+		lb.ccRemoteLB.close()
+		lb.ccRemoteLB = nil
+	}
 
 	if lb.ccRemoteLB == nil {
 		// First time receiving resolved addresses, create a cc to remote
