@@ -350,8 +350,8 @@ func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 	}
 }
 
-// TestKeepaliveClientFrequency creates a server which expects at most 2 client
-// pings for every 2.1 seconds, while the client is configured to send a ping
+// TestKeepaliveClientFrequency creates a server which expects at most 1 client
+// ping for every 1.2 seconds, while the client is configured to send a ping
 // every 1 second. So, this configuration should end up with the client
 // transport being closed. But we had a bug wherein the client was sending one
 // ping every [Time+Timeout] instead of every [Time] period, and this test
