@@ -47,7 +47,7 @@ import (
 
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
-	lr         lastRead // keep this field 64-bit aligned
+	lastRead   int64 // keep this field 64-bit aligned
 	ctx        context.Context
 	cancel     context.CancelFunc
 	ctxDone    <-chan struct{} // Cache the ctx.Done() chan.
@@ -126,14 +126,6 @@ type http2Client struct {
 	onClose  func()
 
 	bufferPool *bufferPool
-}
-
-type lastRead struct {
-	// Stores the Unix time in nanoseconds. This time cannot be directly
-	// embedded in the http2Client struct because this field is accessed using
-	// functions from the atomic package. And on 32-bit machines, it is the
-	// caller's responsibility to arrange for 64-bit alignment of this field.
-	timeNano int64
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -1246,7 +1238,7 @@ func (t *http2Client) reader() {
 	}
 	t.conn.SetReadDeadline(time.Time{}) // reset deadline once we get the settings frame (we didn't time out, yay!)
 	if t.keepaliveEnabled {
-		atomic.StoreInt64(&t.lr.timeNano, time.Now().UnixNano())
+		atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
@@ -1261,7 +1253,7 @@ func (t *http2Client) reader() {
 		t.controlBuf.throttle()
 		frame, err := t.framer.fr.ReadFrame()
 		if t.keepaliveEnabled {
-			atomic.StoreInt64(&t.lr.timeNano, time.Now().UnixNano())
+			atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
 		}
 		if err != nil {
 			// Abort an active stream if the http2.Framer returns a
@@ -1320,14 +1312,14 @@ func (t *http2Client) keepalive() {
 	// Amount of time remaining before which we should receive an ACK for the
 	// last sent ping.
 	timeoutLeft := time.Duration(0)
-	// Records the last value of t.lr.timeNano before we go block on the timer.
+	// Records the last value of t.lastRead before we go block on the timer.
 	// This is required to check for read activity since then.
 	prevNano := time.Now().UnixNano()
 	timer := time.NewTimer(t.kp.Time)
 	for {
 		select {
 		case <-timer.C:
-			lastRead := atomic.LoadInt64(&t.lr.timeNano)
+			lastRead := atomic.LoadInt64(&t.lastRead)
 			if lastRead > prevNano {
 				// There has been read activity since the last time we were here.
 				outstandingPing = false
