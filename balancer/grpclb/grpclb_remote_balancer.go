@@ -110,8 +110,9 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 	fallbackModeChanged := lb.inFallback != fallback
 	lb.inFallback = fallback
 	if fallbackModeChanged && lb.inFallback {
-		// Clear previous received list, so if the server is back and sends the
-		// same list again, the new addresses will be used.
+		// Clear previous received list when entering fallback, so if the server
+		// comes back and sends the same list again, the new addresses will be
+		// used.
 		lb.fullServerList = nil
 	}
 
@@ -256,6 +257,7 @@ func (lb *lbBalancer) newRemoteBalancerCCWrapper() {
 		done:    make(chan struct{}),
 	}
 	lb.ccRemoteLB = ccw
+	ccw.wg.Add(1)
 	go ccw.watchRemoteBalancer()
 }
 
@@ -342,8 +344,8 @@ func (ccw *remoteBalancerCCWrapper) callRemoteBalancer() (backoff bool, _ error)
 		return true, fmt.Errorf("grpclb: Delegation is not supported")
 	}
 
+	ccw.wg.Add(1)
 	go func() {
-		ccw.wg.Add(1)
 		defer ccw.wg.Done()
 		if d := convertDuration(initResp.ClientStatsReportInterval); d > 0 {
 			ccw.sendLoadReport(stream, d)
@@ -354,7 +356,6 @@ func (ccw *remoteBalancerCCWrapper) callRemoteBalancer() (backoff bool, _ error)
 }
 
 func (ccw *remoteBalancerCCWrapper) watchRemoteBalancer() {
-	ccw.wg.Add(1)
 	defer ccw.wg.Done()
 	var retryCount int
 	for {
