@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	xdsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
+	xdspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2"
+	xdsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/discovery/v2"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc"

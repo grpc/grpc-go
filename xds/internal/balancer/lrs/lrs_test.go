@@ -28,9 +28,9 @@ import (
 	"testing"
 	"time"
 
-	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
-	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
+	endpointpb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/endpoint"
+	lrsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2"
+	lrspb "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2"
 	"github.com/golang/protobuf/proto"
 	durationpb "github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"

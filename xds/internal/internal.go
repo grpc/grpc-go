@@ -21,7 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	corepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/serviceconfig"
 )
