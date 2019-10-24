@@ -350,6 +350,53 @@ func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 	}
 }
 
+// TestKeepaliveClientFrequency creates a server which expects at most 1 client
+// ping for every 1.2 seconds, while the client is configured to send a ping
+// every 1 second. So, this configuration should end up with the client
+// transport being closed. But we had a bug wherein the client was sending one
+// ping every [Time+Timeout] instead of every [Time] period, and this test
+// explicitly makes sure the fix works and the client sends a ping every [Time]
+// period.
+func TestKeepaliveClientFrequency(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepalivePolicy: keepalive.EnforcementPolicy{
+			MinTime:             1200 * time.Millisecond, // 1.2 seconds
+			PermitWithoutStream: true,
+		},
+	}
+	clientOptions := ConnectOptions{
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:                1 * time.Second,
+			Timeout:             2 * time.Second,
+			PermitWithoutStream: true,
+		},
+	}
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
+	defer func() {
+		client.Close()
+		server.stop()
+		cancel()
+	}()
+
+	timeout := time.NewTimer(6 * time.Second)
+	select {
+	case <-client.Error():
+		if !timeout.Stop() {
+			<-timeout.C
+		}
+		if reason := client.GetGoAwayReason(); reason != GoAwayTooManyPings {
+			t.Fatalf("GoAwayReason is %v, want %v", reason, GoAwayTooManyPings)
+		}
+	case <-timeout.C:
+		t.Fatalf("client transport still healthy; expected GoAway from the server.")
+	}
+
+	// Make sure the client transport is not healthy.
+	if _, err := client.NewStream(context.Background(), &CallHdr{}); err == nil {
+		t.Fatal("client.NewStream() should have failed, but succeeded")
+	}
+}
+
 // TestKeepaliveServerEnforcementWithAbusiveClientNoRPC verifies that the
 // server closes a client transport when it sends too many keepalive pings
 // (when there are no active streams), based on the configured
