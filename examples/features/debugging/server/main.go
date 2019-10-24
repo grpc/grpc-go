@@ -20,11 +20,11 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/channelz/service"
 	"google.golang.org/grpc/internal/grpcrand"
