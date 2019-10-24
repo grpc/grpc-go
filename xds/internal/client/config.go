@@ -26,7 +26,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	corepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core"
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/jsonpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"

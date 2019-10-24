@@ -23,7 +23,7 @@ import (
 	"testing"
 	"unicode"
 
-	corepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core"
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/google/go-cmp/cmp"
 )
 

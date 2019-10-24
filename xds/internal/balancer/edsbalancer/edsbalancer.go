@@ -25,9 +25,9 @@ import (
 	"strconv"
 	"sync"
 
-	xdspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2"
-	endpointpb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/endpoint"
-	typepb "google.golang.org/grpc/xds/internal/proto/envoy/type"
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
+	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
