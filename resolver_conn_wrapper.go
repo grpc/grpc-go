@@ -73,12 +73,9 @@ func parseTarget(target string) (ret resolver.Target) {
 	return ret
 }
 
-// newCCResolverWrapper parses cc.target for scheme and gets the resolver
-// builder for this scheme and builds the resolver. The monitoring goroutine
-// for it is not started yet and can be created by calling start().
-//
-// If withResolverBuilder dial option is set, the specified resolver will be
-// used instead.
+// newCCResolverWrapper uses the resolver.Builder stored in the ClientConn to
+// build a Resolver and returns a ccResolverWrapper object which wraps the
+// newly built resolver.
 func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 	rb := cc.dopts.resolverBuilder
 	if rb == nil {
