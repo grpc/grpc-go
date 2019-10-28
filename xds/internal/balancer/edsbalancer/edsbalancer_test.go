@@ -39,8 +39,14 @@ import (
 var (
 	testClusterNames  = []string{"test-cluster-1", "test-cluster-2"}
 	testSubZones      = []string{"I", "II", "III", "IV"}
-	testEndpointAddrs = []string{"1.1.1.1:1", "2.2.2.2:2", "3.3.3.3:3", "4.4.4.4:4"}
+	testEndpointAddrs []string
 )
+
+func init() {
+	for i := 0; i < testBackendAddrsCount; i++ {
+		testEndpointAddrs = append(testEndpointAddrs, fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i))
+	}
+}
 
 type clusterLoadAssignmentBuilder struct {
 	v *xdspb.ClusterLoadAssignment
