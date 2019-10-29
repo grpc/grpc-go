@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	orcapb "google.golang.org/grpc/xds/internal/proto/udpa/data/orca/v1/orca_load_report"
+	orcapb "google.golang.org/grpc/xds/internal/proto/udpa/data/orca/v1"
 )
 
 // subBalancerWithConfig is used to keep the configurations that will be used to start

@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
-	orcapb "google.golang.org/grpc/xds/internal/proto/udpa/data/orca/v1/orca_load_report"
+	orcapb "google.golang.org/grpc/xds/internal/proto/udpa/data/orca/v1"
 )
 
 var (
