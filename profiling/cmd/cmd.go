@@ -337,7 +337,13 @@ func streamStatsCatapultJson(snapshotFileName string, streamStatsCatapultJsonFil
 		} else if len(s.StreamStats[i].Timers) == 0 {
 			return false
 		}
-		return s.StreamStats[i].Timers[0].Begin.Before(s.StreamStats[j].Timers[0].Begin)
+		pi := binary.BigEndian.Uint64(s.StreamStats[i].Metadata[0:8])
+		pj := binary.BigEndian.Uint64(s.StreamStats[j].Metadata[0:8])
+		if pi == pj {
+			return s.StreamStats[i].Timers[0].Begin.Before(s.StreamStats[j].Timers[0].Begin)
+		}
+
+		return pi < pj
 	})
 
 	// Clip the last stat as it's from the /Profiling/GetStreamStats call that we
