@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -36,8 +37,6 @@ import (
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	cdspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/cds"
-	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
 )
 
 const (
@@ -103,7 +102,7 @@ func (b *xdsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadB
 // It's implemented by the real eds balancer and a fake testing eds balancer.
 type edsBalancerInterface interface {
 	// HandleEDSResponse passes the received EDS message from traffic director to eds balancer.
-	HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
+	HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 	// HandleChildPolicy updates the eds balancer the intra-cluster load balancing policy to use.
 	HandleChildPolicy(name string, config json.RawMessage)
 	// HandleSubConnStateChange handles state change for SubConn.
@@ -416,25 +415,25 @@ func (x *xdsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 
 type cdsResp struct {
 	ctx  context.Context
-	resp *cdspb.Cluster
+	resp *xdspb.Cluster
 }
 
 type edsResp struct {
 	ctx  context.Context
-	resp *edspb.ClusterLoadAssignment
+	resp *xdspb.ClusterLoadAssignment
 }
 
 func (x *xdsBalancer) newADSResponse(ctx context.Context, resp proto.Message) error {
 	var update interface{}
 	switch u := resp.(type) {
-	case *cdspb.Cluster:
+	case *xdspb.Cluster:
 		// TODO: EDS requests should use CDS response's Name. Store
 		// `u.GetName()` in `x.clusterName` and use it in xds_client.
-		if u.GetType() != cdspb.Cluster_EDS {
-			return fmt.Errorf("unexpected service discovery type, got %v, want %v", u.GetType(), cdspb.Cluster_EDS)
+		if u.GetType() != xdspb.Cluster_EDS {
+			return fmt.Errorf("unexpected service discovery type, got %v, want %v", u.GetType(), xdspb.Cluster_EDS)
 		}
 		update = &cdsResp{ctx: ctx, resp: u}
-	case *edspb.ClusterLoadAssignment:
+	case *xdspb.ClusterLoadAssignment:
 		// nothing to check
 		update = &edsResp{ctx: ctx, resp: u}
 	default:

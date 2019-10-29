@@ -25,6 +25,9 @@ import (
 	"strconv"
 	"sync"
 
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
+	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
@@ -35,9 +38,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
-	endpointpb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/endpoint/endpoint"
-	percentpb "google.golang.org/grpc/xds/internal/proto/envoy/type/percent"
 )
 
 type localityConfig struct {
@@ -122,7 +122,7 @@ func (xdsB *EDSBalancer) updateSubBalancerName(subBalancerName string) {
 
 // updateDrops compares new drop policies with the old. If they are different,
 // it updates the drop policies and send ClientConn an updated picker.
-func (xdsB *EDSBalancer) updateDrops(dropPolicies []*edspb.ClusterLoadAssignment_Policy_DropOverload) {
+func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdspb.ClusterLoadAssignment_Policy_DropOverload) {
 	var (
 		newDrops     []*dropper
 		dropsChanged bool
@@ -134,11 +134,11 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*edspb.ClusterLoadAssignment
 			denominator uint32
 		)
 		switch percentage.GetDenominator() {
-		case percentpb.FractionalPercent_HUNDRED:
+		case typepb.FractionalPercent_HUNDRED:
 			denominator = 100
-		case percentpb.FractionalPercent_TEN_THOUSAND:
+		case typepb.FractionalPercent_TEN_THOUSAND:
 			denominator = 10000
-		case percentpb.FractionalPercent_MILLION:
+		case typepb.FractionalPercent_MILLION:
 			denominator = 1000000
 		}
 		newDrops = append(newDrops, newDropper(numerator, denominator, dropPolicy.GetCategory()))
@@ -171,7 +171,7 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*edspb.ClusterLoadAssignment
 // SubConns. It also handles drops.
 //
 // HandleCDSResponse and HandleEDSResponse must be called by the same goroutine.
-func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment) {
+func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment) {
 	// Create balancer group if it's never created (this is the first EDS
 	// response).
 	if xdsB.bg == nil {

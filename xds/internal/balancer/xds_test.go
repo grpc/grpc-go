@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -33,8 +34,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	discoverypb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/discovery"
-	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
 )
 
 var lbABuilder = &balancerABuilder{}
@@ -174,7 +173,7 @@ type scStateChange struct {
 
 type fakeEDSBalancer struct {
 	cc                 balancer.ClientConn
-	edsChan            chan *edspb.ClusterLoadAssignment
+	edsChan            chan *xdspb.ClusterLoadAssignment
 	childPolicy        chan *xdsinternal.LoadBalancingConfig
 	fallbackPolicy     chan *xdsinternal.LoadBalancingConfig
 	subconnStateChange chan *scStateChange
@@ -191,7 +190,7 @@ func (f *fakeEDSBalancer) Close() {
 	latestFakeEdsBalancer = nil
 }
 
-func (f *fakeEDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment) {
+func (f *fakeEDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment) {
 	f.edsChan <- edsResp
 }
 
@@ -205,7 +204,7 @@ func (f *fakeEDSBalancer) HandleChildPolicy(name string, config json.RawMessage)
 func newFakeEDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerInterface {
 	lb := &fakeEDSBalancer{
 		cc:                 cc,
-		edsChan:            make(chan *edspb.ClusterLoadAssignment, 10),
+		edsChan:            make(chan *xdspb.ClusterLoadAssignment, 10),
 		childPolicy:        make(chan *xdsinternal.LoadBalancingConfig, 10),
 		fallbackPolicy:     make(chan *xdsinternal.LoadBalancingConfig, 10),
 		subconnStateChange: make(chan *scStateChange, 10),
@@ -386,7 +385,7 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 	}()
 	for _, test := range []struct {
 		cfg                 *xdsinternal.LBConfig
-		responseToSend      *discoverypb.DiscoveryResponse
+		responseToSend      *xdspb.DiscoveryResponse
 		expectedChildPolicy *xdsinternal.LoadBalancingConfig
 	}{
 		{

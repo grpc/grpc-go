@@ -28,6 +28,9 @@ import (
 	"testing"
 	"time"
 
+	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
+	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
+	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 	"github.com/golang/protobuf/proto"
 	durationpb "github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"
@@ -35,9 +38,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
-	loadreportpb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/endpoint/load_report"
-	lrsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
-	lrspb "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 )
 
 const testService = "grpc.service.test"
@@ -73,8 +73,8 @@ func (rcd *rpcCountDataForTest) Equal(b *rpcCountDataForTest) bool {
 }
 
 // equalClusterStats sorts requests and clear report internal before comparing.
-func equalClusterStats(a, b []*loadreportpb.ClusterStats) bool {
-	for _, t := range [][]*loadreportpb.ClusterStats{a, b} {
+func equalClusterStats(a, b []*endpointpb.ClusterStats) bool {
+	for _, t := range [][]*endpointpb.ClusterStats{a, b} {
 		for _, s := range t {
 			sort.Slice(s.DroppedRequests, func(i, j int) bool {
 				return s.DroppedRequests[i].Category < s.DroppedRequests[j].Category
@@ -133,19 +133,19 @@ func Test_lrsStore_buildStats_drops(t *testing.T) {
 			for _, ds := range tt.drops {
 				var (
 					totalDropped uint64
-					droppedReqs  []*loadreportpb.ClusterStats_DroppedRequests
+					droppedReqs  []*endpointpb.ClusterStats_DroppedRequests
 				)
 				for cat, count := range ds {
 					if count == 0 {
 						continue
 					}
 					totalDropped += count
-					droppedReqs = append(droppedReqs, &loadreportpb.ClusterStats_DroppedRequests{
+					droppedReqs = append(droppedReqs, &endpointpb.ClusterStats_DroppedRequests{
 						Category:     cat,
 						DroppedCount: count,
 					})
 				}
-				want := []*loadreportpb.ClusterStats{
+				want := []*endpointpb.ClusterStats{
 					{
 						ClusterName:          testService,
 						TotalDroppedRequests: totalDropped,
@@ -262,7 +262,7 @@ func Test_lrsStore_buildStats_rpcCounts(t *testing.T) {
 			inProgressCounts := make(map[internal.Locality]uint64)
 
 			for _, counts := range tt.rpcs {
-				var upstreamLocalityStats []*loadreportpb.UpstreamLocalityStats
+				var upstreamLocalityStats []*endpointpb.UpstreamLocalityStats
 
 				for l, count := range counts {
 					tempInProgress := count.start - count.success - count.failure + inProgressCounts[l]
@@ -270,17 +270,17 @@ func Test_lrsStore_buildStats_rpcCounts(t *testing.T) {
 					if count.success == 0 && tempInProgress == 0 && count.failure == 0 {
 						continue
 					}
-					var loadMetricStats []*loadreportpb.EndpointLoadMetricStats
+					var loadMetricStats []*endpointpb.EndpointLoadMetricStats
 					for n, d := range count.serverData {
 						loadMetricStats = append(loadMetricStats,
-							&loadreportpb.EndpointLoadMetricStats{
+							&endpointpb.EndpointLoadMetricStats{
 								MetricName:                    n,
 								NumRequestsFinishedWithMetric: count.success,
 								TotalMetricValue:              d * float64(count.success),
 							},
 						)
 					}
-					upstreamLocalityStats = append(upstreamLocalityStats, &loadreportpb.UpstreamLocalityStats{
+					upstreamLocalityStats = append(upstreamLocalityStats, &endpointpb.UpstreamLocalityStats{
 						Locality:                l.ToProto(),
 						TotalSuccessfulRequests: count.success,
 						TotalRequestsInProgress: tempInProgress,
@@ -292,13 +292,13 @@ func Test_lrsStore_buildStats_rpcCounts(t *testing.T) {
 				// needs to be carried over to the next result.
 				for l, c := range inProgressCounts {
 					if _, ok := counts[l]; !ok {
-						upstreamLocalityStats = append(upstreamLocalityStats, &loadreportpb.UpstreamLocalityStats{
+						upstreamLocalityStats = append(upstreamLocalityStats, &endpointpb.UpstreamLocalityStats{
 							Locality:                l.ToProto(),
 							TotalRequestsInProgress: c,
 						})
 					}
 				}
-				want := []*loadreportpb.ClusterStats{
+				want := []*endpointpb.ClusterStats{
 					{
 						ClusterName:           testService,
 						UpstreamLocalityStats: upstreamLocalityStats,
@@ -360,7 +360,7 @@ func (lrss *lrsServer) StreamLoadStats(stream lrsgrpc.LoadReportingService_Strea
 		return err
 	}
 	if !proto.Equal(req, &lrspb.LoadStatsRequest{
-		ClusterStats: []*loadreportpb.ClusterStats{{
+		ClusterStats: []*endpointpb.ClusterStats{{
 			ClusterName: testService,
 		}},
 	}) {

@@ -26,11 +26,11 @@ import (
 	"io/ioutil"
 	"os"
 
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/jsonpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/grpclog"
-	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
 )
 
 const (
@@ -53,9 +53,9 @@ type Config struct {
 	// Creds contains the credentials to be used while talking to the xDS
 	// server, as a grpc.DialOption.
 	Creds grpc.DialOption
-	// NodeProto contains the basepb.Node proto to be used in xDS calls made to the
+	// NodeProto contains the corepb.Node proto to be used in xDS calls made to the
 	// server.
-	NodeProto *basepb.Node
+	NodeProto *corepb.Node
 }
 
 type channelCreds struct {
@@ -82,7 +82,7 @@ type xdsServer struct {
 //        }
 //      ]
 //    },
-//    "node": <JSON form of basepb.Node proto>
+//    "node": <JSON form of corepb.Node proto>
 // }
 //
 // Currently, we support exactly one type of credential, which is
@@ -119,7 +119,7 @@ func NewConfig() *Config {
 	for k, v := range jsonData {
 		switch k {
 		case "node":
-			n := &basepb.Node{}
+			n := &corepb.Node{}
 			if err := m.Unmarshal(bytes.NewReader(v), n); err != nil {
 				grpclog.Errorf("xds: jsonpb.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
 				break
