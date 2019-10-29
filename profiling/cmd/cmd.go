@@ -151,6 +151,10 @@ func (c *counter) GetAndInc(s string) int {
 	return res
 }
 
+func catapultNs(n int64) float64 {
+	return float64(n) / 1000.0
+}
+
 func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []jsonNode {
 	if len(stat.Timers) == 0 {
 		return nil
@@ -211,7 +215,7 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 						Id: flowId,
 						Cname: hashCname("flow"),
 						Phase: "s",
-						Timestamp: float64(stat.Timers[i].End.Sub(base).Nanoseconds()),
+						Timestamp: catapultNs(stat.Timers[i].End.Sub(base).Nanoseconds()),
 						Pid: pid,
 						Tid: tid,
 					},
@@ -221,7 +225,7 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 						Id: flowId,
 						Cname: hashCname("flow"),
 						Phase: "f",
-						Timestamp: float64(stat.Timers[flowEndId].Begin.Sub(base).Nanoseconds()),
+						Timestamp: catapultNs(stat.Timers[flowEndId].Begin.Sub(base).Nanoseconds()),
 						Pid: flowEndPid,
 						Tid: flowEndTid,
 					},
@@ -258,7 +262,7 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 						Id: flowId,
 						Cname: hashCname("flow"),
 						Phase: "s",
-						Timestamp: float64(stat.Timers[flowBeginId].End.Sub(base).Nanoseconds()),
+						Timestamp: catapultNs(stat.Timers[flowBeginId].End.Sub(base).Nanoseconds()),
 						Pid: flowBeginPid,
 						Tid: flowBeginTid,
 					},
@@ -268,7 +272,7 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 						Id: flowId,
 						Cname: hashCname("flow"),
 						Phase: "f",
-						Timestamp: float64(stat.Timers[i].Begin.Sub(base).Nanoseconds()),
+						Timestamp: catapultNs(stat.Timers[i].Begin.Sub(base).Nanoseconds()),
 						Pid: pid,
 						Tid: tid,
 					},
@@ -283,7 +287,7 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 				Id: opid,
 				Cname: hashCname(stat.Timers[i].TimerTag),
 				Phase: "B",
-				Timestamp: float64(stat.Timers[i].Begin.Sub(base).Nanoseconds()),
+				Timestamp: catapultNs(stat.Timers[i].Begin.Sub(base).Nanoseconds()),
 				Pid: pid,
 				Tid: tid,
 			},
@@ -293,7 +297,7 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 				Id: opid,
 				Cname: hashCname(stat.Timers[i].TimerTag),
 				Phase: "E",
-				Timestamp: float64(stat.Timers[i].End.Sub(base).Nanoseconds()),
+				Timestamp: catapultNs(stat.Timers[i].End.Sub(base).Nanoseconds()),
 				Pid: pid,
 				Tid: tid,
 			},
