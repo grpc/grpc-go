@@ -26,6 +26,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/internal/profiling"
 )
 
 // Name is the name registered for the proto compressor.
@@ -50,28 +51,31 @@ func capToMaxInt32(val int) uint32 {
 	return uint32(val)
 }
 
-func marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error) {
+func marshal(v interface{}, cb *cachedProtoBuffer, stat *profiling.Stat) ([]byte, error) {
 	protoMsg := v.(proto.Message)
 	newSlice := make([]byte, 0, cb.lastMarshaledSize)
-
 	cb.SetBuf(newSlice)
 	cb.Reset()
+
+	t := stat.NewTimer("/encoding/marshal/protolib")
 	if err := cb.Marshal(protoMsg); err != nil {
 		return nil, err
 	}
+	t.Egress()
+
 	out := cb.Bytes()
 	cb.lastMarshaledSize = capToMaxInt32(len(out))
 	return out, nil
 }
 
-func (codec) Marshal(v interface{}) ([]byte, error) {
+func (codec) Marshal(v interface{}, stat *profiling.Stat) ([]byte, error) {
 	if pm, ok := v.(proto.Marshaler); ok {
 		// object can marshal itself, no need for buffer
 		return pm.Marshal()
 	}
 
 	cb := protoBufferPool.Get().(*cachedProtoBuffer)
-	out, err := marshal(v, cb)
+	out, err := marshal(v, cb, stat)
 
 	// put back buffer and lose the ref to the slice
 	cb.SetBuf(nil)
@@ -79,7 +83,7 @@ func (codec) Marshal(v interface{}) ([]byte, error) {
 	return out, err
 }
 
-func (codec) Unmarshal(data []byte, v interface{}) error {
+func (codec) Unmarshal(data []byte, v interface{}, stat *profiling.Stat) error {
 	protoMsg := v.(proto.Message)
 	protoMsg.Reset()
 
@@ -90,7 +94,11 @@ func (codec) Unmarshal(data []byte, v interface{}) error {
 
 	cb := protoBufferPool.Get().(*cachedProtoBuffer)
 	cb.SetBuf(data)
+
+	unmarshalTimer := stat.NewTimer("/proto/unmarshal/protolib")
 	err := cb.Unmarshal(protoMsg)
+	unmarshalTimer.Egress()
+
 	cb.SetBuf(nil)
 	protoBufferPool.Put(cb)
 	return err

@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/internal/profiling"
 	_ "google.golang.org/grpc/encoding/proto" // to register the Codec for "proto"
 )
 
@@ -27,8 +28,8 @@ import (
 // omits the name/string, which vary between the two and are not needed for
 // anything besides the registry in the encoding package.
 type baseCodec interface {
-	Marshal(v interface{}) ([]byte, error)
-	Unmarshal(data []byte, v interface{}) error
+	Marshal(v interface{}, stat *profiling.Stat) ([]byte, error)
+	Unmarshal(data []byte, v interface{}, stat *profiling.Stat) error
 }
 
 var _ baseCodec = Codec(nil)
@@ -41,9 +42,9 @@ var _ baseCodec = encoding.Codec(nil)
 // Deprecated: use encoding.Codec instead.
 type Codec interface {
 	// Marshal returns the wire format of v.
-	Marshal(v interface{}) ([]byte, error)
+	Marshal(v interface{}, stat *profiling.Stat) ([]byte, error)
 	// Unmarshal parses the wire format into v.
-	Unmarshal(data []byte, v interface{}) error
+	Unmarshal(data []byte, v interface{}, stat *profiling.Stat) error
 	// String returns the name of the Codec implementation.  This is unused by
 	// gRPC.
 	String() string

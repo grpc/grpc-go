@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/profiling"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/keepalive"
@@ -359,6 +360,12 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		headerChan:     make(chan struct{}),
 		contentSubtype: callHdr.ContentSubtype,
 	}
+
+	if profiling.IsEnabled() {
+		s.stat = profiling.NewStat("client")
+		profiling.StreamStats.Push(s.stat)
+	}
+
 	s.wq = newWriteQuota(defaultWriteQuota, s.done)
 	s.requestRead = func(n int) {
 		t.adjustWindow(s, uint32(n))
@@ -556,6 +563,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		return nil, err
 	}
 	s := t.newStream(ctx, callHdr)
+	timer := s.stat.NewTimer("/http2")
+	defer timer.Egress()
 	cleanup := func(err error) {
 		if s.swapState(streamDone) == streamDone {
 			// If it was already done, return.
@@ -826,7 +835,7 @@ func (t *http2Client) GracefulClose() {
 
 // Write formats the data into HTTP2 data frame(s) and sends it out. The caller
 // should proceed only if Write returns nil.
-func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
+func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, stat *profiling.Stat, opts *Options) error {
 	if opts.Last {
 		// If it's the last message, update stream state.
 		if !s.compareAndSwapState(streamActive, streamWriteDone) {
@@ -838,6 +847,7 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	df := &dataFrame{
 		streamID:  s.id,
 		endStream: opts.Last,
+		stat: stat,
 	}
 	if hdr != nil || data != nil { // If it's not an empty data frame.
 		// Add some data to grpc message header so that we can equally
@@ -907,6 +917,10 @@ func (t *http2Client) updateFlowControl(n uint32) {
 }
 
 func (t *http2Client) handleData(f *http2.DataFrame) {
+	timer := profiling.NewTimer("/http2/recv/dataframe/loopyReader")
+	// We don't call timer.Egress here. It's called by (b *recvBuffer).put when
+	// the recvMsg is actually put into the backlog.
+
 	size := f.Header().Length
 	var sendBDPPing bool
 	if t.bdpEst != nil {
@@ -945,6 +959,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	if s == nil {
 		return
 	}
+	s.stat.AppendTimer(timer)
 	if size > 0 {
 		if err := s.fc.onData(size); err != nil {
 			t.closeStream(s, io.EOF, true, http2.ErrCodeFlowControl, status.New(codes.Internal, err.Error()), nil, false)
@@ -962,7 +977,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			buffer := t.bufferPool.get()
 			buffer.Reset()
 			buffer.Write(f.Data())
-			s.write(recvMsg{buffer: buffer})
+			s.write(recvMsg{buffer: buffer, timer: timer})
 		}
 	}
 	// The server has closed the stream without sending trailers.  Record that
@@ -1155,6 +1170,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	if s == nil {
 		return
 	}
+	timer := s.stat.NewTimer("/http2/recv/header/loopyReader")
+	defer timer.Egress()
 	endStream := frame.StreamEnded()
 	atomic.StoreUint32(&s.bytesReceived, 1)
 	initialHeader := atomic.LoadUint32(&s.headerChanClosed) == 0

@@ -30,6 +30,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"encoding/binary"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/http2"
@@ -40,6 +41,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/profiling"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/keepalive"
@@ -124,6 +126,8 @@ type http2Server struct {
 	channelzID int64 // channelz unique identification number
 	czData     *channelzData
 	bufferPool *bufferPool
+
+	profilingId uint64
 }
 
 // newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
@@ -253,6 +257,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	if channelz.IsOn() {
 		t.channelzID = channelz.RegisterNormalSocket(t, config.ChannelzParentID, fmt.Sprintf("%s -> %s", t.remoteAddr, t.localAddr))
 	}
+	t.profilingId = atomic.AddUint64(&profiling.IdCounter, 1)
 	t.framer.writer.Flush()
 
 	defer func() {
@@ -324,6 +329,17 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		recvCompress:   state.data.encoding,
 		method:         state.data.method,
 		contentSubtype: state.data.contentSubtype,
+	}
+	if profiling.IsEnabled() {
+		s.stat = profiling.NewStat("server")
+
+		s.stat.Metadata = make([]byte, 12)
+		binary.BigEndian.PutUint64(s.stat.Metadata[0:8], t.profilingId)
+		binary.BigEndian.PutUint32(s.stat.Metadata[8:12], streamID)
+
+		profiling.StreamStats.Push(s.stat)
+		timer := s.stat.NewTimer("/http2/recv/header")
+		defer timer.Egress()
 	}
 	if frame.StreamEnded() {
 		// s is just created by the caller. No lock needed.
@@ -436,6 +452,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	t.controlBuf.put(&registerStream{
 		streamID: s.id,
 		wq:       s.wq,
+		stat:     s.Stat(),
 	})
 	handle(s)
 	return false
@@ -562,6 +579,10 @@ func (t *http2Server) updateFlowControl(n uint32) {
 }
 
 func (t *http2Server) handleData(f *http2.DataFrame) {
+	timer := profiling.NewTimer("/http2/recv/dataframe/loopyReader")
+	// We don't call timer.Egress here. It's called by (b *recvBuffer).put when
+	// the recvMsg is actually put into the backlog.
+
 	size := f.Header().Length
 	var sendBDPPing bool
 	if t.bdpEst != nil {
@@ -597,6 +618,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	if !ok {
 		return
 	}
+	s.stat.AppendTimer(timer)
 	if size > 0 {
 		if err := s.fc.onData(size); err != nil {
 			t.closeStream(s, true, http2.ErrCodeFlowControl, false)
@@ -614,7 +636,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 			buffer := t.bufferPool.get()
 			buffer.Reset()
 			buffer.Write(f.Data())
-			s.write(recvMsg{buffer: buffer})
+			s.write(recvMsg{buffer: buffer, timer: timer})
 		}
 	}
 	if f.Header().Flags.Has(http2.FlagDataEndStream) {
@@ -878,7 +900,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 
 // Write converts the data into HTTP2 data frame and sends it out. Non-nil error
 // is returns if it fails (e.g., framing error, transport error).
-func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
+func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, stat *profiling.Stat, opts *Options) error {
 	if !s.isHeaderSent() { // Headers haven't been written yet.
 		if err := t.WriteHeader(s, nil); err != nil {
 			if _, ok := err.(ConnectionError); ok {
@@ -912,6 +934,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		h:           hdr,
 		d:           data,
 		onEachWrite: t.setResetPingStrikes,
+		stat:        stat,
 	}
 	if err := s.wq.get(int32(len(hdr) + len(data))); err != nil {
 		select {
@@ -921,6 +944,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		}
 		return ContextErr(s.ctx.Err())
 	}
+
 	return t.controlBuf.put(df)
 }
 

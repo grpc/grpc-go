@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
+	"google.golang.org/grpc/internal/profiling"
 )
 
 type bufferPool struct {
@@ -70,6 +71,7 @@ type recvMsg struct {
 	// io.EOF: stream is completed. data is nil.
 	// other non-nil error: transport failure. data is nil.
 	err error
+	timer *profiling.Timer
 }
 
 // recvBuffer is an unbounded channel of recvMsg structs.
@@ -92,6 +94,7 @@ func newRecvBuffer() *recvBuffer {
 }
 
 func (b *recvBuffer) put(r recvMsg) {
+	defer r.timer.Egress()
 	b.mu.Lock()
 	if b.err != nil {
 		b.mu.Unlock()
@@ -283,6 +286,8 @@ type Stream struct {
 	// contentSubtype is the content-subtype for requests.
 	// this must be lowercase or the behavior is undefined.
 	contentSubtype string
+
+	stat *profiling.Stat
 }
 
 // isHeaderSent is only valid on the server-side.
@@ -450,6 +455,10 @@ func (s *Stream) SetTrailer(md metadata.MD) error {
 
 func (s *Stream) write(m recvMsg) {
 	s.buf.put(m)
+}
+
+func (s *Stream) Stat() *profiling.Stat {
+	return s.stat
 }
 
 // Read reads all p bytes from the wire for this stream.
@@ -631,7 +640,7 @@ type ClientTransport interface {
 
 	// Write sends the data for the given stream. A nil stream indicates
 	// the write is to be performed on the transport as a whole.
-	Write(s *Stream, hdr []byte, data []byte, opts *Options) error
+	Write(s *Stream, hdr []byte, data []byte, stat *profiling.Stat, opts *Options) error
 
 	// NewStream creates a Stream for an RPC.
 	NewStream(ctx context.Context, callHdr *CallHdr) (*Stream, error)
@@ -682,7 +691,7 @@ type ServerTransport interface {
 
 	// Write sends the data for the given stream.
 	// Write may not be called on all streams.
-	Write(s *Stream, hdr []byte, data []byte, opts *Options) error
+	Write(s *Stream, hdr []byte, data []byte, stat *profiling.Stat, opts *Options) error
 
 	// WriteStatus sends the status of a stream to the client.  WriteStatus is
 	// the final call made on a stream and always occurs.

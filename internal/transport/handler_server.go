@@ -43,6 +43,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/internal/profiling"
 )
 
 // NewServerHandlerTransport returns a ServerTransport handling gRPC
@@ -260,7 +261,7 @@ func (ht *serverHandlerTransport) writeCommonHeaders(s *Stream) {
 	}
 }
 
-func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
+func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data []byte, stat *profiling.Stat, opts *Options) error {
 	return ht.do(func() {
 		ht.writeCommonHeaders(s)
 		ht.rw.Write(hdr)
@@ -362,6 +363,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		for buf := make([]byte, readSize); ; {
 			n, err := req.Body.Read(buf)
 			if n > 0 {
+				// TODO(adtac): what should recvMsg.timer be here?
 				s.buf.put(recvMsg{buffer: bytes.NewBuffer(buf[:n:n])})
 				buf = buf[n:]
 			}
