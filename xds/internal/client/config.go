@@ -16,8 +16,6 @@
  *
  */
 
-// Package client contains the implementation of the xds client used by
-// grpc-lb-v2.
 package client
 
 import (
@@ -30,7 +28,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/grpclog"
-	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
+
+	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 const (

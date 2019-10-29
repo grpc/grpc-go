@@ -23,7 +23,8 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/serviceconfig"
-	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
+
+	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 // Locality is xds.Locality without XXX fields, so it can be used as map

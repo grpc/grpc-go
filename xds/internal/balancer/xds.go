@@ -36,8 +36,9 @@ import (
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	cdspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/cds"
-	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
+
+	cdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	edspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 )
 
 const (

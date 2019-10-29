@@ -24,7 +24,7 @@ import (
 	"unicode"
 
 	"github.com/google/go-cmp/cmp"
-	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
+	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core/base"
 )
 
 const ignorePrefix = "XXX_"

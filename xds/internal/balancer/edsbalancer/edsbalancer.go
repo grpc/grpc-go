@@ -35,9 +35,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
-	endpointpb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/endpoint/endpoint"
-	percentpb "google.golang.org/grpc/xds/internal/proto/envoy/type/percent"
+
+	edspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
+	percentpb "github.com/envoyproxy/go-control-plane/envoy/type"
 )
 
 type localityConfig struct {

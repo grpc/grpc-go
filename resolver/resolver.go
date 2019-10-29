@@ -118,6 +118,13 @@ type State struct {
 	// config.  If it is nil, it indicates no service config is present or the
 	// resolver does not provide service configs.
 	ServiceConfig *serviceconfig.ParseResult
+
+	// BalancerInfo is an opaque field used by the resolver to pass on
+	// additional information to the balancer. Ideally, this field should only
+	// contain information that is not easily transferrable through the service
+	// config. The structure and contents of this field are to be agreed upon
+	// by specific resolver-balancer combinations.
+	BalancerInfo interface{}
 }
 
 // ClientConn contains the callbacks for resolver to notify any updates

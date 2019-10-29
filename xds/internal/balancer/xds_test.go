@@ -33,8 +33,8 @@ import (
 	"google.golang.org/grpc/resolver"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	discoverypb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/discovery"
-	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
+	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2/discovery"
+	edspb "github.com/envoyproxy/go-control-plane/envoy/api/v2/eds"
 )
 
 var lbABuilder = &balancerABuilder{}

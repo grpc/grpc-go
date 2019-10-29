@@ -30,11 +30,11 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
-	addresspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/address"
-	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
-	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
-	endpointpb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/endpoint/endpoint"
-	percentpb "google.golang.org/grpc/xds/internal/proto/envoy/type/percent"
+	addresspb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core/address"
+	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core/base"
+	edspb "github.com/envoyproxy/go-control-plane/envoy/api/v2/eds"
+	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint/endpoint"
+	percentpb "github.com/envoyproxy/go-control-plane/envoy/type/percent"
 )
 
 var (

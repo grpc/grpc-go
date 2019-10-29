@@ -23,10 +23,11 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
-	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
+
+	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	structpb "github.com/golang/protobuf/ptypes/struct"
 )
 
 var (

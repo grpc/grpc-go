@@ -36,14 +36,14 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
-	cdspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/cds"
-	addresspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/address"
-	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
-	discoverypb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/discovery"
-	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
-	endpointpb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/endpoint/endpoint"
-	adsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/discovery/v2/ads"
-	lrsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
+	cdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2/cds"
+	addresspb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core/address"
+	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core/base"
+	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2/discovery"
+	edspb "github.com/envoyproxy/go-control-plane/envoy/api/v2/eds"
+	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint/endpoint"
+	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2/ads"
+	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2/lrs"
 )
 
 var (

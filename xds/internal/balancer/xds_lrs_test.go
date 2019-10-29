@@ -32,9 +32,9 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	xdsinternal "google.golang.org/grpc/xds/internal"
-	loadreportpb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/endpoint/load_report"
-	lrsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
-	lrspb "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
+	loadreportpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint/load_report"
+	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2/lrs"
+	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2/lrs"
 )
 
 type lrsServer struct {

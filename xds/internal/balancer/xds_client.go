@@ -33,10 +33,11 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	cdspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/cds"
-	discoverypb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/discovery"
-	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
-	adsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/discovery/v2/ads"
+
+	cdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	edspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 )
 
 const (
