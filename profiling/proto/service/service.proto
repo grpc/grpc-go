@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+option go_package = "google.golang.org/grpc/profiling/proto/service";
+
+message SetEnabledRequest {
+	bool enabled = 1;
+}
+
+message SetEnabledResponse {
+	bool success = 1;
+}
+
+message TimerProto {
+	string timerTag = 1;
+	int64 beginSec = 2;
+	int32 beginNsec = 3;
+	int64 endSec = 4;
+	int32 endNsec = 5;
+	int64 goId = 6;
+}
+
+message GetStreamStatsRequest {
+}
+
+message StatProto {
+	string statTag = 1;
+	repeated TimerProto timerProtos = 2;
+	bytes metadata = 3;
+}
+
+service Profiling {
+	rpc SetEnabled (SetEnabledRequest) returns (SetEnabledResponse);
+	rpc GetStreamStats (GetStreamStatsRequest) returns (stream StatProto);
+}
