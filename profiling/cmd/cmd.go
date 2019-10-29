@@ -111,7 +111,7 @@ func hashCname(tag string) string {
 		return "heap_dump_stack_frame"
 	}
 
-	if strings.Contains(tag, "flow") {
+	if strings.Contains(tag, "flow") || strings.Contains(tag, "tmp") {
 		return "heap_dump_stack_frame"
 	}
 
@@ -176,6 +176,27 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 	lrc, lwc := newCounter(), newCounter()
 
 	result := make([]jsonNode, 0)
+	result = append(result,
+		jsonNode{
+			Name: "loopyReaderTmp",
+			Id: opid,
+			Cname: hashCname("tmp"),
+			Phase: "i",
+			Timestamp: 0,
+			Pid: fmt.Sprintf("/%d/loopyReader", profilingId),
+			Tid: fmt.Sprintf("%d", loopyReaderGoId),
+		},
+		jsonNode{
+			Name: "loopyWriterTmp",
+			Id: opid,
+			Cname: hashCname("tmp"),
+			Phase: "i",
+			Timestamp: 0,
+			Pid: fmt.Sprintf("/%d/loopyWriter", profilingId),
+			Tid: fmt.Sprintf("%d", loopyWriterGoId),
+		},
+	)
+
 	for i := 0; i < len(stat.Timers); i++ {
 		categories := stat.StatTag
 		pid, tid := opid, fmt.Sprintf("%d", stat.Timers[i].GoId)
