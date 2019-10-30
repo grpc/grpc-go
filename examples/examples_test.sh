@@ -1,6 +1,9 @@
 #!/bin/bash
 set +e
 
+export TMPDIR=$(mktemp -d)
+trap "rm -rf ${TMPDIR}" EXIT
+
 clean () {
     jobs -p | xargs pkill -P 
     wait
@@ -23,6 +26,12 @@ EXAMPLES=(
     "features/compression"
     "features/deadline"
     "features/encryption/TLS"
+    "features/errors"
+    "features/interceptor"
+    "features/load_balancing"
+    "features/metadata"
+    "features/multiplex"
+    "features/name_resolving"
 )
 
 declare -A EXPECTED_SERVER_OUTPUT=( 
@@ -32,6 +41,12 @@ declare -A EXPECTED_SERVER_OUTPUT=(
     ["features/compression"]="UnaryEcho called with message \"compress\""
     ["features/deadline"]=""
     ["features/encryption/TLS"]=""
+    ["features/errors"]=""
+    ["features/interceptor"]="unary echoing message \"hello world\""
+    ["features/load_balancing"]="serving on :50051"
+    ["features/metadata"]="message:\"this is examples/metadata\" , sending echo"
+    ["features/multiplex"]=":50051"
+    ["features/name_resolving"]="serving on localhost:50051"
 )
 
 declare -A EXPECTED_CLIENT_OUTPUT=(
@@ -41,6 +56,12 @@ declare -A EXPECTED_CLIENT_OUTPUT=(
     ["features/compression"]="UnaryEcho call returned \"compress\", <nil>" 
     ["features/deadline"]="wanted = DeadlineExceeded, got = DeadlineExceeded" 
     ["features/encryption/TLS"]="UnaryEcho:  hello world"
+    ["features/errors"]="Greeting: Hello world"
+    ["features/interceptor"]="UnaryEcho:  hello world"
+    ["features/load_balancing"]="calling helloworld.Greeter/SayHello with pick_first"
+    ["features/metadata"]="this is examples/metadata"
+    ["features/multiplex"]="Greeting:  Hello multiplex"
+    ["features/name_resolving"]="calling helloworld.Greeter/SayHello to \"example:///resolver.example.grpc.io\""
 )
 
 for example in ${EXAMPLES[@]}; do
@@ -65,7 +86,7 @@ for example in ${EXAMPLES[@]}; do
     go run ./examples/$example/*server/*.go &> $SERVER_LOG  &
 
     CLIENT_LOG="$(mktemp)"
-    if ! go run examples/${example}/*client/*.go &> $CLIENT_LOG; then
+    if ! timeout 20 go run examples/${example}/*client/*.go &> $CLIENT_LOG; then
         fail "client failed to communicate with server
         got server log:
         $(cat $SERVER_LOG)
@@ -78,7 +99,7 @@ for example in ${EXAMPLES[@]}; do
 
     # Check server log for expected output if expecting an
     # output
-    if [ ! -z "${EXPECTED_SERVER_OUTPUT[$example]}" ]; then
+    if [ -n "${EXPECTED_SERVER_OUTPUT[$example]}" ]; then
         if ! grep -q "${EXPECTED_SERVER_OUTPUT[$example]}" $SERVER_LOG; then
             fail "server log missing output: ${EXPECTED_SERVER_OUTPUT[$example]}
             got server log:
@@ -93,7 +114,7 @@ for example in ${EXAMPLES[@]}; do
 
     # Check client log for expected output if expecting an
     # output
-    if [ ! -z "${EXPECTED_CLIENT_OUTPUT[$example]}" ]; then
+    if [ -n "${EXPECTED_CLIENT_OUTPUT[$example]}" ]; then
         if ! grep -q "${EXPECTED_CLIENT_OUTPUT[$example]}" $CLIENT_LOG; then
             fail "client log missing output: ${EXPECTED_CLIENT_OUTPUT[$example]}
             got server log:
