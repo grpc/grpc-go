@@ -91,7 +91,7 @@ func (c *serverNameCheckCreds) ClientHandshake(ctx context.Context, authority st
 	}
 	if authority != string(b) {
 		fmt.Printf("test-creds: got authority from ClientConn %q, expected by server %q\n", authority, string(b))
-		return nil, nil, errors.New("received unexpected server nameq")
+		return nil, nil, errors.New("received unexpected server name")
 	}
 	return rawConn, nil, nil
 }

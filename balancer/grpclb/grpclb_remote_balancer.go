@@ -241,11 +241,10 @@ func (lb *lbBalancer) newRemoteBalancerCCWrapper() {
 		PermitWithoutStream: true,
 	}))
 
-	// DialContext using manualResolver.Scheme, which is a random scheme
-	// generated when init grpclb. The target scheme here is not important.
+	// The dial target is not important.
 	//
-	// The grpc dial target will be used by the creds (ALTS) as the authority,
-	// so it has to be set to remoteLBName that comes from resolver.
+	// The grpclb server addresses will set field ServerName, and creds will
+	// receive ServerName as authority.
 	cc, err := grpc.DialContext(context.Background(), "grpclb.subClientConn", dopts...)
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)

@@ -426,7 +426,7 @@ func (lb *lbBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 
 	addrs := ccs.ResolverState.Addresses
 	if len(addrs) == 0 {
-		// There's should be at least one address, either grpclb server or
+		// There should be at least one address, either grpclb server or
 		// fallback. Empty address is not valid.
 		return balancer.ErrBadResolverState
 	}
