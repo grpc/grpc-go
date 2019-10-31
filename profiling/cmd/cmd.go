@@ -152,7 +152,7 @@ func (c *counter) GetAndInc(s string) int {
 }
 
 func catapultNs(n int64) float64 {
-	return float64(n) / 1000.0
+	return float64(n)
 }
 
 func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []jsonNode {
