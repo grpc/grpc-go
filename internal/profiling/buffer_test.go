@@ -134,7 +134,7 @@ func TestCircularBufferConcurrent(t *testing.T) {
 func BenchmarkCircularBuffer(b *testing.B) {
 	for size := 1 << 16; size <= 1<<20; size <<= 1 {
 		for routines := 1; routines <= 1<<8; routines <<= 1 {
-			b.Run(fmt.Sprintf("routines:%d/size:%d", routines, size), func(b *testing.B) {
+			b.Run(fmt.Sprintf("goroutines:%d/size:%d", routines, size), func(b *testing.B) {
 				cb, err := NewCircularBuffer(uint32(size))
 				if err != nil {
 					b.Errorf("error allocating CircularBuffer: %v", err)
