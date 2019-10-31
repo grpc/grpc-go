@@ -115,6 +115,7 @@ fi
 staticcheck -go 1.9 -checks 'inherit,-ST1015' -ignore '
 google.golang.org/grpc/balancer.go:SA1019
 google.golang.org/grpc/balancer/grpclb/grpclb_remote_balancer.go:SA1019
+google.golang.org/grpc/balancer/grpclb/grpclb_test.go:SA1019
 google.golang.org/grpc/balancer/roundrobin/roundrobin_test.go:SA1019
 google.golang.org/grpc/xds/internal/balancer/edsbalancer/balancergroup.go:SA1019
 google.golang.org/grpc/xds/internal/resolver/xds_resolver.go:SA1019
