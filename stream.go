@@ -1463,7 +1463,8 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 }
 
 func (ss *serverStream) RecvMsg(m interface{}) (err error) {
-	timer := ss.s.Stat().NewTimer("/recv")
+	stat := ss.s.Stat()
+	timer := stat.NewTimer("/recv")
 	defer timer.Egress()
 
 	defer func() {
@@ -1497,7 +1498,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 	if ss.statsHandler != nil || ss.binlog != nil {
 		payInfo = &payloadInfo{}
 	}
-	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxReceiveMessageSize, payInfo, ss.decomp, ss.s.Stat()); err != nil {
+	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxReceiveMessageSize, payInfo, ss.decomp, stat); err != nil {
 		if err == io.EOF {
 			if ss.binlog != nil {
 				ss.binlog.Log(&binarylog.ClientHalfClose{})
