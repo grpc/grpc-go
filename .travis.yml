@@ -37,4 +37,4 @@ script:
   - if [[ "${GAE}" = 1 ]]; then make testappengine; exit 0; fi
   - if [[ "${RACE}" = 1 ]]; then make testrace; exit 0; fi
   - make test
-  - examples/helloworld/helloworld_test.sh
+  - examples/examples_test.sh
