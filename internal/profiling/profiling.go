@@ -1,6 +1,7 @@
 package profiling
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 	"runtime"
@@ -53,6 +54,7 @@ type Stat struct {
 	StatTag string
 	Timers []*Timer
 	Metadata []byte
+	mu sync.Mutex
 }
 
 func NewStat(statTag string) *Stat {
@@ -65,7 +67,11 @@ func (stat *Stat) NewTimer(timerTag string) *Timer {
 	}
 
 	timer := NewTimer(timerTag)
+
+	stat.mu.Lock()
 	stat.Timers = append(stat.Timers, timer)
+	stat.mu.Unlock()
+
 	return timer
 }
 
@@ -74,7 +80,9 @@ func (stat *Stat) AppendTimer(timer *Timer) {
 		return
 	}
 
+	stat.mu.Lock()
 	stat.Timers = append(stat.Timers, timer)
+	stat.mu.Unlock()
 }
 
 var StreamStats *CircularBuffer
