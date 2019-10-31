@@ -87,11 +87,6 @@ func NewXDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) *EDSBalancer {
 //
 // HandleChildPolicy and HandleEDSResponse must be called by the same goroutine.
 func (xdsB *EDSBalancer) HandleChildPolicy(name string, config json.RawMessage) {
-	// name could come from cdsResp.GetLbPolicy().String(). LbPolicy.String()
-	// are all UPPER_CASE with underscore.
-	//
-	// No conversion is needed here because balancer package converts all names
-	// into lower_case before registering/looking up.
 	xdsB.updateSubBalancerName(name)
 	// TODO: (eds) send balancer config to the new child balancers.
 }
@@ -170,7 +165,7 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdspb.ClusterLoadAssignment
 // HandleEDSResponse handles the EDS response and creates/deletes localities and
 // SubConns. It also handles drops.
 //
-// HandleCDSResponse and HandleEDSResponse must be called by the same goroutine.
+// HandleChildPolicy and HandleEDSResponse must be called by the same goroutine.
 func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment) {
 	// Create balancer group if it's never created (this is the first EDS
 	// response).

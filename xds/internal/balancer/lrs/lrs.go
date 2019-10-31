@@ -320,7 +320,7 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn) {
 			// Node: c.config.NodeProto,
 			ClusterStats: []*endpointpb.ClusterStats{{
 				// TODO: this is user's dial target now, as a temporary
-				//  solution. Eventually this will be from CDS's response.
+				//  solution. Eventually this will be cluster name from CDS's response.
 				ClusterName: ls.serviceName,
 			}},
 		}); err != nil {

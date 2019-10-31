@@ -192,7 +192,7 @@ func (x *xdsBalancer) startNewXDSClient(u *xdsinternal.LBConfig) {
 			prevClient.close()
 		}
 	}
-	x.client = newXDSClient(u.BalancerName, u.ChildPolicy == nil, x.buildOpts, x.loadStore, newADS, loseContact, exitCleanup)
+	x.client = newXDSClient(u.BalancerName, x.buildOpts, x.loadStore, newADS, loseContact, exitCleanup)
 	go x.client.run()
 }
 
@@ -261,15 +261,17 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 			}
 
 			// With a different BalancerName, we need to create a new xdsClient.
-			// If current or previous ChildPolicy is nil, then we also need to recreate a new xdsClient.
-			// This is because with nil ChildPolicy xdsClient will do CDS request, while non-nil won't.
-			if cfg.BalancerName != x.config.BalancerName || (cfg.ChildPolicy == nil) != (x.config.ChildPolicy == nil) {
+			if cfg.BalancerName != x.config.BalancerName {
 				x.startNewXDSClient(cfg)
 			}
-			// We will update the xdsLB with the new child policy, if we got a different one and it's not nil.
-			// The nil case will be handled when the CDS response gets processed, we will update xdsLB at that time.
-			if x.xdsLB != nil && !reflect.DeepEqual(cfg.ChildPolicy, x.config.ChildPolicy) && cfg.ChildPolicy != nil {
-				x.xdsLB.HandleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
+			// We will update the xdsLB with the new child policy, if we got a
+			// different one.
+			if x.xdsLB != nil && !reflect.DeepEqual(cfg.ChildPolicy, x.config.ChildPolicy) {
+				if cfg.ChildPolicy != nil {
+					x.xdsLB.HandleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
+				} else {
+					x.xdsLB.HandleChildPolicy("round_robin", cfg.ChildPolicy.Config)
+				}
 			}
 
 			if x.fallbackLB != nil && !reflect.DeepEqual(cfg.FallBackPolicy, x.config.FallBackPolicy) {
@@ -299,17 +301,6 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 
 func (x *xdsBalancer) handleXDSClientUpdate(update interface{}) {
 	switch u := update.(type) {
-	case *cdsResp:
-		select {
-		case <-u.ctx.Done():
-			return
-		default:
-		}
-		x.cancelFallbackAndSwitchEDSBalancerIfNecessary()
-		// TODO: Get the optional xds record stale timeout from OutlierDetection message. If not exist,
-		// reset to 0.
-		// x.xdsStaleTimeout = u.OutlierDetection.TO_BE_DEFINED_AND_ADDED
-		x.xdsLB.HandleChildPolicy(u.resp.LbPolicy.String(), nil)
 	case *edsResp:
 		select {
 		case <-u.ctx.Done():
@@ -413,11 +404,6 @@ func (x *xdsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	return nil
 }
 
-type cdsResp struct {
-	ctx  context.Context
-	resp *xdspb.Cluster
-}
-
 type edsResp struct {
 	ctx  context.Context
 	resp *xdspb.ClusterLoadAssignment
@@ -426,18 +412,11 @@ type edsResp struct {
 func (x *xdsBalancer) newADSResponse(ctx context.Context, resp proto.Message) error {
 	var update interface{}
 	switch u := resp.(type) {
-	case *xdspb.Cluster:
-		// TODO: EDS requests should use CDS response's Name. Store
-		// `u.GetName()` in `x.clusterName` and use it in xds_client.
-		if u.GetType() != xdspb.Cluster_EDS {
-			return fmt.Errorf("unexpected service discovery type, got %v, want %v", u.GetType(), xdspb.Cluster_EDS)
-		}
-		update = &cdsResp{ctx: ctx, resp: u}
 	case *xdspb.ClusterLoadAssignment:
 		// nothing to check
 		update = &edsResp{ctx: ctx, resp: u}
 	default:
-		grpclog.Warningf("xdsBalancer: got a response that's neither CDS nor EDS, type = %T", u)
+		grpclog.Warningf("xdsBalancer: got a response that's not EDS, type = %T", u)
 	}
 
 	select {
@@ -526,8 +505,6 @@ func (x *xdsBalancer) buildFallBackBalancer(c *xdsinternal.LBConfig) {
 //    timeout.
 // 2. After xds client loses contact with the remote, fallback if all connections to the backends are
 //    lost (i.e. not in state READY).
-// 3. After xds client loses contact with the remote, fallback if the stale eds timeout has been
-//    configured through CDS and is timed out.
 func (x *xdsBalancer) startFallbackMonitoring() {
 	if x.startup {
 		x.startup = false
