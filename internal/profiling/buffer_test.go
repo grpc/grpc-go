@@ -132,11 +132,6 @@ func TestCircularBufferConcurrent(t *testing.T) {
 }
 
 func BenchmarkCircularBuffer(b *testing.B) {
-	type item struct {
-		start time.Time
-		duration time.Duration
-	}
-
 	for size := 1 << 16; size <= 1<<20; size <<= 1 {
 		for routines := 1; routines <= 1<<8; routines <<= 1 {
 			b.Run(fmt.Sprintf("routines:%d/size:%d", routines, size), func(b *testing.B) {
@@ -152,10 +147,8 @@ func BenchmarkCircularBuffer(b *testing.B) {
 					wg.Add(1)
 					go func() {
 						for i := 0; i < perRoutine; i++ {
-							x := &item{}
-							x.start = time.Now()
-							x.duration = time.Now().Sub(x.start)
-							cb.Push(x)
+							x := 1
+							cb.Push(&x)
 						}
 						wg.Done()
 					}()
