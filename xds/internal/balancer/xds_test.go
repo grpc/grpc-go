@@ -178,7 +178,7 @@ type scStateChange struct {
 
 type fakeEDSBalancer struct {
 	cc                 balancer.ClientConn
-	edsChan            chan *edspb.ClusterLoadAssignment
+	edsChan            chan *xdspb.ClusterLoadAssignment
 	childPolicy        chan *loadBalancingConfig
 	fallbackPolicy     chan *loadBalancingConfig
 	subconnStateChange chan *scStateChange
@@ -209,7 +209,7 @@ func (f *fakeEDSBalancer) HandleChildPolicy(name string, config json.RawMessage)
 func newFakeEDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerInterface {
 	lb := &fakeEDSBalancer{
 		cc:                 cc,
-		edsChan:            make(chan *edspb.ClusterLoadAssignment, 10),
+		edsChan:            make(chan *xdspb.ClusterLoadAssignment, 10),
 		childPolicy:        make(chan *loadBalancingConfig, 10),
 		fallbackPolicy:     make(chan *loadBalancingConfig, 10),
 		subconnStateChange: make(chan *scStateChange, 10),
@@ -389,7 +389,7 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 	}()
 	for _, test := range []struct {
 		cfg                 *XDSConfig
-		responseToSend      *discoverypb.DiscoveryResponse
+		responseToSend      *xdspb.DiscoveryResponse
 		expectedChildPolicy *loadBalancingConfig
 	}{
 		{
@@ -399,7 +399,7 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 					Config: json.RawMessage("{}"),
 				},
 			},
-			responseToSend: testEDSRespWithoutEndpoints,
+			responseToSend: testEDSResp,
 			expectedChildPolicy: &loadBalancingConfig{
 				Name:   string(fakeBalancerA),
 				Config: json.RawMessage(`{}`),
@@ -415,13 +415,6 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 			expectedChildPolicy: &loadBalancingConfig{
 				Name:   string(fakeBalancerB),
 				Config: json.RawMessage(`{}`),
-			},
-		},
-		{
-			cfg:            &XDSConfig{},
-			responseToSend: testCDSResp,
-			expectedChildPolicy: &loadBalancingConfig{
-				Name: "ROUND_ROBIN",
 			},
 		},
 	} {
