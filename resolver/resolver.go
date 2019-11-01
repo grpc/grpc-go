@@ -112,18 +112,23 @@ type BuildOption struct {
 	// DisableServiceConfig indicates whether a resolver implementation should
 	// fetch service config data.
 	DisableServiceConfig bool
-	// DialCreds is the transport credentials that a resolver implementation
-	// can use to dial a remote name resolution server. Resolver
-	// implementations which do not need to talk to another party securely can
-	// safely ignore this field.
+	// DialCreds is the transport credentials used by the ClientConn for
+	// communicating with the target gRPC service (set via
+	// WithTransportCredentials). In cases where a name resolution service
+	// requires the same credentials, the resolver may use this field. In most
+	// cases though, it is not appropriate, and this field may be ignored.
 	DialCreds credentials.TransportCredentials
-	// CredsBundle is the credentials bundle that a resolver implementation can
-	// use while dialing a remote name resolution server. If both DialCreds and
-	// CredsBundle are set, the former takes precedence.
+	// CredsBundle is the credentials bundle used by the ClientConn for
+	// communicating with the target gRPC service (set via
+	// WithCredentialsBundle). In cases where a name resolution service
+	// requires the same credentials, the resolver may use this field. In most
+	// cases though, it is not appropriate, and this field may be ignored.
 	CredsBundle credentials.Bundle
-	// Dialer is the custom dialer that a resolver implementation can use to
-	// dial a remote name resolution server. Resolver implementations which do
-	// not need to talk to another party securely can safely ignore this field.
+	// Dialer is the custom dialer used by the ClientConn for dialling the
+	// target gRPC service (set via WithDialer). In cases where a name
+	// resolution service requires the same dialer, the resolver may use this
+	// field. In most cases though, it is not appropriate, and this field may
+	// be ignored.
 	Dialer func(context.Context, string) (net.Conn, error)
 }
 
