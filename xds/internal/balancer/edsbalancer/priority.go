@@ -26,57 +26,56 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-// syncPriorityAfterPriorityChange handles priority after EDS adds/removes a
+// handlePriorityChange handles priority after EDS adds/removes a
 // priority.
 //
-// E.g. when priorityInUse was removed, or all priorities were down, and a new
-// lower priority was added.
-func (xdsB *EDSBalancer) syncPriorityAfterPriorityChange() {
+// - If all priorities were deleted, unset priorityInUse, and set parent
+// ClientConn to TransientFailure
+// - If priorityInUse wasn't set, this is either the first EDS resp, or the
+// previous EDS resp deleted everything. Set priorityInUse to 0, and start 0.
+// - If priorityInUse was deleted, send the picker from the new lowest priority
+// to parent ClientConn, and set priorityInUse to the new lowest.
+// - If priorityInUse has a non-Ready state, and also there's a priority lower
+// than priorityInUse (which means a lower priority was added), set the next
+// priority as new priorityInUse, and start the bg.
+func (xdsB *EDSBalancer) handlePriorityChange() {
 	xdsB.priorityMu.Lock()
 	defer xdsB.priorityMu.Unlock()
 
-	// If there's no prioriy at all, everything was removed by EDS, unset priorityInUse.
+	// Everything was removed by EDS.
 	if xdsB.priorityMax == nil {
 		xdsB.priorityInUse = nil
 		xdsB.cc.UpdateBalancerState(connectivity.TransientFailure, base.NewErrPicker(balancer.ErrTransientFailure))
 		return
 	}
 
-	// If priorityInUse wasn't set, this is either the first EDS resp, or the
-	// previous EDS resp deleted everything.
-	//
-	// Set priorityInUse to 0, and start 0.
+	// priorityInUse wasn't set, use 0.
 	if xdsB.priorityInUse == nil {
 		xdsB.priorityInUse = new(uint32)
 		xdsB.startPriority(0)
 		return
 	}
 
-	// If priorityInUse was deleted, send the picker from the new lowest
-	// priority to parent ClientConn, and set priorityInUse to the new lowest.
-	//
-	// There's no need to start the new lowest, because it must have been
-	// started.
+	// priorityInUse was deleted, use the new lowest.
 	if _, ok := xdsB.priorityToLocalities[*xdsB.priorityInUse]; !ok {
 		*xdsB.priorityInUse = *xdsB.priorityMax
 		if s, ok := xdsB.priorityToState[*xdsB.priorityMax]; ok {
 			xdsB.cc.UpdateBalancerState(s.state, s.picker)
 		} else {
-			// If state for pMax is not found, this means pMax was started, but
-			// never sent any update. And old_pInUse was started after timeout.
+			// If state for priorityMax is not found, this means priorityMax was
+			// started, but never sent any update. The init timer fired and
+			// triggered the next priority. The old_priorityInUse (that was just
+			// deleted EDS) was picked later.
+			//
 			// We don't have an old state to send to parent, but we also don't
-			// want parent to keep using picker from old_pInUse. Send an update
-			// to trigger block picks until a new picker is ready.
+			// want parent to keep using picker from old_priorityInUse. Send an
+			// update to trigger block picks until a new picker is ready.
 			xdsB.cc.UpdateBalancerState(connectivity.Connecting, base.NewErrPicker(balancer.ErrNoSubConnAvailable))
 		}
 		return
 	}
 
-	// priorityInUse is in map, and it had got a state that was not ready, and
-	// also there's a priority lower than InUse. This means a lower priority was
-	// added.
-	//
-	// Set next as new priorityInUse, and start it.
+	// priorityInUse is not ready, look for next priority, and use if found.
 	if s, ok := xdsB.priorityToState[*xdsB.priorityInUse]; ok && s.state != connectivity.Ready {
 		pNext := *xdsB.priorityInUse + 1
 		if _, ok := xdsB.priorityToLocalities[pNext]; ok {
@@ -136,12 +135,9 @@ func (xdsB *EDSBalancer) handlePriorityWithNewState(priority uint32, s connectiv
 		return false
 	}
 
-	// Update state if exists, or add a new entry if this is the first update.
-	var bState *balancerStateAndPicker
-	if st, ok := xdsB.priorityToState[priority]; ok {
-		bState = st
-	} else {
-		bState = new(balancerStateAndPicker)
+	bState, ok := xdsB.priorityToState[priority]
+	if !ok {
+		bState = new(balancerState)
 		xdsB.priorityToState[priority] = bState
 	}
 	oldState := bState.state
@@ -150,15 +146,9 @@ func (xdsB *EDSBalancer) handlePriorityWithNewState(priority uint32, s connectiv
 
 	if s == connectivity.Ready {
 		// If one priority higher or equal to priorityInUse goes Ready, stop the
-		// init timer even if update is not from priorityInUse.
-		if timer := xdsB.priorityInitTimer; timer != nil {
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-		}
+		// init timer. If update is from higher than priorityInUse,
+		// priorityInUse will be closed, and the init timer will become useless.
+		stopTimer(xdsB.priorityInitTimer)
 		// An update with state Ready:
 		// - If it's from higher priority:
 		//   - Forward the update
@@ -193,14 +183,7 @@ func (xdsB *EDSBalancer) handlePriorityWithNewState(priority uint32, s connectiv
 		}
 		// else can only be *pInUse == priority. priorityInUse sends a failure.
 		// Stop its init timer.
-		if timer := xdsB.priorityInitTimer; timer != nil {
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-		}
+		stopTimer(xdsB.priorityInitTimer)
 		pNext := priority + 1
 		if _, okNext := xdsB.priorityToLocalities[pNext]; !okNext {
 			return true
@@ -251,4 +234,17 @@ func (xdsB *EDSBalancer) handlePriorityWithNewState(priority uint32, s connectiv
 
 	// New state is Idle, should never happen. Don't forward.
 	return false
+}
+
+// stopTimer stops the timer if it's not nil. It also makes sure timer.C is drained.
+func stopTimer(timer *time.Timer) {
+	if timer == nil {
+		return
+	}
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
 }

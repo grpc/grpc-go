@@ -49,17 +49,17 @@ type localityConfig struct {
 	addrs  []resolver.Address
 }
 
-// localitiesSamePriority contains the localities with the same priority. It
+// balancerGroupWithConfig contains the localities with the same priority. It
 // manages all localities using a balancerGroup.
-type localitiesSamePriority struct {
-	bg          *balancerGroup
-	lidToConfig map[internal.Locality]*localityConfig
+type balancerGroupWithConfig struct {
+	bg      *balancerGroup
+	configs map[internal.Locality]*localityConfig
 }
 
-// balancerStateAndPicker keeps the previous state updated by a priority. It's kept so if
+// balancerState keeps the previous state updated by a priority. It's kept so if
 // a lower priority is removed, the higher priority's state will be sent to
 // parent ClientConn (even if it's not Ready).
-type balancerStateAndPicker struct {
+type balancerState struct {
 	state  connectivity.State
 	picker balancer.Picker
 }
@@ -75,13 +75,13 @@ type EDSBalancer struct {
 
 	subBalancerBuilder   balancer.Builder
 	loadStore            lrs.Store
-	priorityToLocalities map[uint32]*localitiesSamePriority
+	priorityToLocalities map[uint32]*balancerGroupWithConfig
 
 	priorityMu sync.Mutex
 	// priorities are pointers, and will be nil when EDS returns empty result.
 	priorityInUse   *uint32
 	priorityMax     *uint32
-	priorityToState map[uint32]*balancerStateAndPicker
+	priorityToState map[uint32]*balancerState
 	// The timer to give a priority 10 seconds to connect. And if the priority
 	// doesn't go into Ready/Failure, start the next priority.
 	//
@@ -104,8 +104,8 @@ func NewXDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) *EDSBalancer {
 		cc:                 cc,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
 
-		priorityToLocalities: make(map[uint32]*localitiesSamePriority),
-		priorityToState:      make(map[uint32]*balancerStateAndPicker),
+		priorityToLocalities: make(map[uint32]*balancerGroupWithConfig),
+		priorityToState:      make(map[uint32]*balancerState),
 		subConnToPriority:    make(map[balancer.SubConn]uint32),
 		loadStore:            loadStore,
 	}
@@ -122,27 +122,20 @@ func NewXDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) *EDSBalancer {
 //
 // HandleChildPolicy and HandleEDSResponse must be called by the same goroutine.
 func (xdsB *EDSBalancer) HandleChildPolicy(name string, config json.RawMessage) {
-	xdsB.updateSubBalancerName(name)
-	// TODO: (eds) send balancer config to the new child balancers.
-}
-
-func (xdsB *EDSBalancer) updateSubBalancerName(subBalancerName string) {
-	if xdsB.subBalancerBuilder.Name() == subBalancerName {
+	if xdsB.subBalancerBuilder.Name() == name {
 		return
 	}
-	newSubBalancerBuilder := balancer.Get(subBalancerName)
+	newSubBalancerBuilder := balancer.Get(name)
 	if newSubBalancerBuilder == nil {
-		grpclog.Infof("EDSBalancer: failed to find balancer with name %q, keep using %q", subBalancerName, xdsB.subBalancerBuilder.Name())
+		grpclog.Infof("EDSBalancer: failed to find balancer with name %q, keep using %q", name, xdsB.subBalancerBuilder.Name())
 		return
 	}
 	xdsB.subBalancerBuilder = newSubBalancerBuilder
 	for _, lGroup := range xdsB.priorityToLocalities {
-		if lGroup == nil || len(lGroup.lidToConfig) == 0 {
-			// There's no need to update balancer group there's no locality with
-			// this priority.
+		if lGroup == nil {
 			continue
 		}
-		for id, config := range lGroup.lidToConfig {
+		for id, config := range lGroup.configs {
 			// TODO: (eds) add support to balancer group to support smoothly
 			//  switching sub-balancers (keep old balancer around until new
 			//  balancer becomes ready).
@@ -247,14 +240,14 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 		lGroup, ok := xdsB.priorityToLocalities[priority]
 		if !ok {
 			// Create balancer group if it's never created (this is the first
-			// time this priority is received). We don't start it here. We will
-			// chain into the linked list. It may be started during that (if
-			// it's a new lowest priority).
-			lGroup = &localitiesSamePriority{
+			// time this priority is received). We don't start it here. It may
+			// be started when necessary (e.g. when higher is down, or if it's a
+			// new lowest priority).
+			lGroup = &balancerGroupWithConfig{
 				bg: newBalancerGroup(
 					xdsB.ccWrapperWithPriority(priority), xdsB.loadStore,
 				),
-				lidToConfig: make(map[internal.Locality]*localityConfig),
+				configs: make(map[internal.Locality]*localityConfig),
 			}
 			xdsB.priorityToLocalities[priority] = lGroup
 			priorityChanged = true
@@ -295,14 +288,14 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 				newAddrs = append(newAddrs, address)
 			}
 			var weightChanged, addrsChanged bool
-			config, ok := lGroup.lidToConfig[lid]
+			config, ok := lGroup.configs[lid]
 			if !ok {
 				// A new balancer, add it to balancer group and balancer map.
 				lGroup.bg.add(lid, newWeight, xdsB.subBalancerBuilder)
 				config = &localityConfig{
 					weight: newWeight,
 				}
-				lGroup.lidToConfig[lid] = config
+				lGroup.configs[lid] = config
 
 				// weightChanged is false for new locality, because there's no need to
 				// update weight in bg.
@@ -329,10 +322,10 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 		}
 
 		// Delete localities that are removed in the latest response.
-		for lid := range lGroup.lidToConfig {
+		for lid := range lGroup.configs {
 			if _, ok := newLocalitiesSet[lid]; !ok {
 				lGroup.bg.remove(lid)
-				delete(lGroup.lidToConfig, lid)
+				delete(lGroup.configs, lid)
 			}
 		}
 	}
@@ -357,14 +350,14 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 	// E.g. priorityInUse was removed, or all priorities are down, and a new
 	// lower priority was added.
 	if priorityChanged {
-		xdsB.syncPriorityAfterPriorityChange()
+		xdsB.handlePriorityChange()
 	}
 }
 
 // HandleSubConnStateChange handles the state change and update pickers accordingly.
 func (xdsB *EDSBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
 	xdsB.subConnMu.Lock()
-	var lGroup *localitiesSamePriority
+	var lGroup *balancerGroupWithConfig
 	if p, ok := xdsB.subConnToPriority[sc]; ok {
 		if s == connectivity.Shutdown {
 			// Only delete sc from the map when state changed to Shutdown.
