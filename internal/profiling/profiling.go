@@ -62,7 +62,7 @@ func NewStat(statTag string) *Stat {
 }
 
 func (stat *Stat) NewTimer(timerTag string) *Timer {
-	if (stat == nil) {
+	if stat == nil {
 		return nil
 	}
 
@@ -76,7 +76,7 @@ func (stat *Stat) NewTimer(timerTag string) *Timer {
 }
 
 func (stat *Stat) AppendTimer(timer *Timer) {
-	if (stat == nil) {
+	if stat == nil {
 		return
 	}
 
