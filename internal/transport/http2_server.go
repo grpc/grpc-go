@@ -583,7 +583,7 @@ func (t *http2Server) updateFlowControl(n uint32) {
 }
 
 func (t *http2Server) handleData(f *http2.DataFrame) {
-	timer := profiling.NewTimer("/http2/recv/dataframe/loopyReader")
+	timer := profiling.NewTimer("/http2/recv/dataFrame/loopyReader")
 	// We don't call timer.Egress here. It's called by (b *recvBuffer).put when
 	// the recvMsg is actually put into the backlog.
 
