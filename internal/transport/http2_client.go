@@ -385,14 +385,10 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 }
 
 func (t *http2Client) getPeer() *peer.Peer {
-	pr := &peer.Peer{
-		Addr: t.remoteAddr,
+	return &peer.Peer{
+		Addr:     t.remoteAddr,
+		AuthInfo: t.authInfo,
 	}
-	// Attach Auth info if there is any.
-	if t.authInfo != nil {
-		pr.AuthInfo = t.authInfo
-	}
-	return pr
 }
 
 func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) ([]hpack.HeaderField, error) {
