@@ -406,8 +406,11 @@ func (tb *testConstBalancer) HandleSubConnStateChange(sc balancer.SubConn, state
 	tb.cc.UpdateBalancerState(connectivity.Ready, &testConstPicker{err: errTestConstPicker})
 }
 
-func (tb *testConstBalancer) HandleResolvedAddrs([]resolver.Address, error) {
-	tb.cc.UpdateBalancerState(connectivity.Ready, &testConstPicker{err: errTestConstPicker})
+func (tb *testConstBalancer) HandleResolvedAddrs(a []resolver.Address, err error) {
+	if len(a) == 0 {
+		return
+	}
+	tb.cc.NewSubConn(a, balancer.NewSubConnOptions{})
 }
 
 func (*testConstBalancer) Close() {
@@ -441,6 +444,11 @@ func TestEDS_UpdateSubBalancerName(t *testing.T) {
 	clab1.addLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2])
 	edsb.HandleEDSResponse(clab1.build())
 
+	for i := 0; i < 2; i++ {
+		sc := <-cc.newSubConnCh
+		edsb.HandleSubConnStateChange(sc, connectivity.Ready)
+	}
+
 	p0 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		_, _, err := p0.Pick(context.Background(), balancer.PickOptions{})
@@ -451,6 +459,10 @@ func TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	t.Logf("update sub-balancer to round-robin")
 	edsb.HandleChildPolicy(roundrobin.Name, nil)
+
+	for i := 0; i < 2; i++ {
+		<-cc.removeSubConnCh
+	}
 
 	sc1 := <-cc.newSubConnCh
 	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
@@ -480,6 +492,11 @@ func TestEDS_UpdateSubBalancerName(t *testing.T) {
 		edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
 	}
 
+	for i := 0; i < 2; i++ {
+		sc := <-cc.newSubConnCh
+		edsb.HandleSubConnStateChange(sc, connectivity.Ready)
+	}
+
 	p2 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		_, _, err := p2.Pick(context.Background(), balancer.PickOptions{})
@@ -490,6 +507,10 @@ func TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	t.Logf("update sub-balancer to round-robin")
 	edsb.HandleChildPolicy(roundrobin.Name, nil)
+
+	for i := 0; i < 2; i++ {
+		<-cc.removeSubConnCh
+	}
 
 	sc3 := <-cc.newSubConnCh
 	edsb.HandleSubConnStateChange(sc3, connectivity.Connecting)

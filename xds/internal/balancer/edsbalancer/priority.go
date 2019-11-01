@@ -93,6 +93,10 @@ func (xdsB *EDSBalancer) syncPriorityAfterPriorityChange() {
 func (xdsB *EDSBalancer) startPriority(priority uint32) {
 	*xdsB.priorityInUse = priority
 	p := xdsB.priorityToLocalities[priority]
+	// NOTE: this will eventually send addresses to sub-balancers. If the
+	// sub-balancer tries to update picker, it will result in a deadlock on
+	// priorityMu. But it's not an expected behavior for the balancer to
+	// update picker when handling addresses.
 	p.bg.start()
 	// startPriority can be called when
 	// 1. first EDS resp, start p0
@@ -118,8 +122,8 @@ func (xdsB *EDSBalancer) startPriority(priority uint32) {
 // handlePriorityWithNewState start/close priorities based on the connectivity
 // state. It returns whether the state should be forwarded to parent ClientConn.
 func (xdsB *EDSBalancer) handlePriorityWithNewState(priority uint32, s connectivity.State, p balancer.Picker) bool {
-	xdsB.pickerMu.Lock()
-	defer xdsB.pickerMu.Unlock()
+	xdsB.priorityMu.Lock()
+	defer xdsB.priorityMu.Unlock()
 
 	if xdsB.priorityInUse == nil {
 		grpclog.Infof("eds: received picker update when no priority is in use (this means EDS returned an empty list)")

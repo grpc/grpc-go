@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/xds/internal"
 )
 
-const testSubConnsCount = 8
+const testSubConnsCount = 16
 
 var testSubConns []*testSubConn
 
