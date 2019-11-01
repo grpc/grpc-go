@@ -4694,7 +4694,7 @@ func testClientResourceExhaustedCancelFullDuplex(t *testing.T, e env) {
 		resp := &testpb.StreamingOutputCallResponse{
 			Payload: payload,
 		}
-		ce := make(chan error)
+		ce := make(chan error, 1)
 		go func() {
 			var err error
 			for {
