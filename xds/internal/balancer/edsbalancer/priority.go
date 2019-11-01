@@ -43,7 +43,7 @@ func (xdsB *EDSBalancer) handlePriorityChange() {
 	defer xdsB.priorityMu.Unlock()
 
 	// Everything was removed by EDS.
-	if xdsB.priorityMax == nil {
+	if xdsB.prioritylowest == nil {
 		xdsB.priorityInUse = nil
 		xdsB.cc.UpdateBalancerState(connectivity.TransientFailure, base.NewErrPicker(balancer.ErrTransientFailure))
 		return
@@ -58,11 +58,11 @@ func (xdsB *EDSBalancer) handlePriorityChange() {
 
 	// priorityInUse was deleted, use the new lowest.
 	if _, ok := xdsB.priorityToLocalities[*xdsB.priorityInUse]; !ok {
-		*xdsB.priorityInUse = *xdsB.priorityMax
-		if s, ok := xdsB.priorityToState[*xdsB.priorityMax]; ok {
+		*xdsB.priorityInUse = *xdsB.prioritylowest
+		if s, ok := xdsB.priorityToState[*xdsB.prioritylowest]; ok {
 			xdsB.cc.UpdateBalancerState(s.state, s.picker)
 		} else {
-			// If state for priorityMax is not found, this means priorityMax was
+			// If state for prioritylowest is not found, this means prioritylowest was
 			// started, but never sent any update. The init timer fired and
 			// triggered the next priority. The old_priorityInUse (that was just
 			// deleted EDS) was picked later.
@@ -158,7 +158,7 @@ func (xdsB *EDSBalancer) handlePriorityWithNewState(priority uint32, s connectiv
 		//   - Forward and do nothing else
 		if *xdsB.priorityInUse > priority {
 			*xdsB.priorityInUse = priority
-			for i := priority + 1; i <= *xdsB.priorityMax; i++ {
+			for i := priority + 1; i <= *xdsB.prioritylowest; i++ {
 				xdsB.priorityToLocalities[i].bg.close()
 			}
 			return true

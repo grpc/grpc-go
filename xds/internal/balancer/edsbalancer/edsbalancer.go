@@ -80,7 +80,7 @@ type EDSBalancer struct {
 	priorityMu sync.Mutex
 	// priorities are pointers, and will be nil when EDS returns empty result.
 	priorityInUse   *uint32
-	priorityMax     *uint32
+	prioritylowest  *uint32
 	priorityToState map[uint32]*balancerState
 	// The timer to give a priority 10 seconds to connect. And if the priority
 	// doesn't go into Ready/Failure, start the next priority.
@@ -329,10 +329,10 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 			}
 		}
 	}
-	xdsB.priorityMax = nil
+	xdsB.prioritylowest = nil
 	if priorityMax >= 0 {
-		xdsB.priorityMax = new(uint32)
-		*xdsB.priorityMax = uint32(priorityMax)
+		xdsB.prioritylowest = new(uint32)
+		*xdsB.prioritylowest = uint32(priorityMax)
 	}
 
 	// Delete priorities that are removed in the latest response, and also close
