@@ -467,8 +467,13 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 	if er := s.trReader.(*transportReader).er; er != nil {
 		return 0, er
 	}
+	timer := s.stat.NewTimer("/requestRead")
 	s.requestRead(len(p))
-	return io.ReadFull(s.trReader, p)
+	timer.Egress()
+	timer = s.stat.NewTimer("/ReadFull")
+	n, err = io.ReadFull(s.trReader, p)
+	timer.Egress()
+	return
 }
 
 // tranportReader reads all the data available for this Stream from the transport and
@@ -481,15 +486,20 @@ type transportReader struct {
 	// particular stream and the associated transport.
 	windowHandler func(int)
 	er            error
+	stat *profiling.Stat
 }
 
 func (t *transportReader) Read(p []byte) (n int, err error) {
+	timer := t.stat.NewTimer("/read")
 	n, err = t.reader.Read(p)
 	if err != nil {
 		t.er = err
 		return
 	}
+	timer.Egress()
+	timer = t.stat.NewTimer("/windowHandler")
 	t.windowHandler(n)
+	timer.Egress()
 	return
 }
 

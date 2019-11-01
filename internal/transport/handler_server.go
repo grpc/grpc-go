@@ -321,6 +321,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 
 	req := ht.req
 
+	// TODO(adtac): set stat?
 	s := &Stream{
 		id:             0, // irrelevant
 		requestRead:    func(int) {},
@@ -348,6 +349,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		}
 		ht.stats.HandleRPC(s.ctx, inHeader)
 	}
+	// TODO(adtac): set stat?
 	s.trReader = &transportReader{
 		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf, freeBuffer: func(*bytes.Buffer) {}},
 		windowHandler: func(int) {},

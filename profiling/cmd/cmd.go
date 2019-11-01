@@ -208,12 +208,12 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 			var flowEndPid, flowEndTid string
 			switch stat.Timers[i].TimerTag {
 			case "/http2/recv/header":
-				flowEndId = filterCounter(stat, "/stream/recv/grpc/header", lrc.GetAndInc("/http2/recv/header"))
+				flowEndId = filterCounter(stat, "/grpc/stream/recv/header", lrc.GetAndInc("/http2/recv/header"))
 				if flowEndId != -1 {
 					flowEndPid = opid
 					flowEndTid = fmt.Sprintf("%d", stat.Timers[flowEndId].GoId)
 				} else {
-					grpclog.Infof("cannot find %s/stream/recv/grpc/header for %s/http2/recv/header", opid, opid)
+					grpclog.Infof("cannot find %s/grpc/stream/recv/header for %s/http2/recv/header", opid, opid)
 				}
 			case "/http2/recv/dataFrame/loopyReader":
 				flowEndId = filterCounter(stat, "/transport/dequeue", lrc.GetAndInc("/http2/recv/dataFrame/loopyReader"))

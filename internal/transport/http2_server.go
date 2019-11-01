@@ -330,17 +330,20 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		method:         state.data.method,
 		contentSubtype: state.data.contentSubtype,
 	}
-	if profiling.IsEnabled() {
-		s.stat = profiling.NewStat("server")
 
+	if profiling.IsEnabled() {
+		// This is where the concept of a stream is first established within a gRPC
+		// server, so let's create an associated Stat object.
+		s.stat = profiling.NewStat("server")
 		s.stat.Metadata = make([]byte, 12)
 		binary.BigEndian.PutUint64(s.stat.Metadata[0:8], t.profilingId)
 		binary.BigEndian.PutUint32(s.stat.Metadata[8:12], streamID)
-
 		profiling.StreamStats.Push(s.stat)
+
 		timer := s.stat.NewTimer("/http2/recv/header")
 		defer timer.Egress()
 	}
+
 	if frame.StreamEnded() {
 		// s is just created by the caller. No lock needed.
 		s.state = streamReadDone
@@ -447,6 +450,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
 		},
+		stat: s.stat,
 	}
 	// Register the stream with loopy.
 	t.controlBuf.put(&registerStream{

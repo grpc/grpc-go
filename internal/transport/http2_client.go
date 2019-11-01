@@ -387,6 +387,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
 		},
+		stat: s.stat,
 	}
 	return s
 }

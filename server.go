@@ -719,7 +719,9 @@ func (s *Server) serveStreams(st transport.ServerTransport) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			timer := stream.Stat().NewTimer("/grpc/stream")
 			s.handleStream(st, stream, s.traceInfo(st, stream))
+			timer.Egress()
 		}()
 	}, func(ctx context.Context, method string) context.Context {
 		if !EnableTracing {
@@ -1139,7 +1141,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
 	stat := stream.Stat()
 
-	timer := stat.NewTimer("/grpc/streaming")
+	timer := stat.NewTimer("/processStreamingRPC")
 	defer timer.Egress()
 
 	if channelz.IsOn() {
@@ -1315,7 +1317,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	// processing, we cannot stop the timer *after* the completion of the unknown
 	// stream description handler. For these reasons, we cannot defer the
 	// timer.Egress() call.
-	timer := stream.Stat().NewTimer("/stream/recv/grpc/header")
+	timer := stream.Stat().NewTimer("/grpc/stream/recv/header")
 
 	sm := stream.Method()
 	if sm != "" && sm[0] == '/' {
