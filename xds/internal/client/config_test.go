@@ -39,6 +39,7 @@ var (
 				},
 			},
 		},
+		BuildVersion: gRPCVersion,
 	}
 	nilCredsConfig = &Config{
 		BalancerName: "trafficdirector.googleapis.com:443",

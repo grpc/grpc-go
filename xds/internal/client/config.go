@@ -23,6 +23,7 @@ package client
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 
@@ -39,6 +40,8 @@ const (
 	// Type name for Google default credentials.
 	googleDefaultCreds = "google_default"
 )
+
+var gRPCVersion = fmt.Sprintf("gRPC-Go %s", grpc.Version)
 
 // For overriding from unit tests.
 var fileReadFunc = ioutil.ReadFile
@@ -124,6 +127,7 @@ func NewConfig() *Config {
 				grpclog.Errorf("xds: jsonpb.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
 				break
 			}
+			n.BuildVersion = gRPCVersion
 			config.NodeProto = n
 		case "xds_server":
 			xs := &xdsServer{}
