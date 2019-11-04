@@ -409,8 +409,21 @@ func TestEDS_EndpointsHealth(t *testing.T) {
 	})
 	edsb.HandleEDSResponse(clab1.build())
 
-	var readySCs []balancer.SubConn
+	var (
+		readySCs []balancer.SubConn
+
+		wantNewSubConnAddrStrs = []string{
+			testEndpointAddrs[0],
+			testEndpointAddrs[2],
+			testEndpointAddrs[6],
+			testEndpointAddrs[8],
+		}
+	)
 	for i := 0; i < 4; i++ {
+		addr := <-cc.newSubConnAddrsCh
+		if addr[0].Addr != wantNewSubConnAddrStrs[i] {
+			t.Fatalf("want newSubConn with address %q, got %v", wantNewSubConnAddrStrs[i], addr)
+		}
 		sc := <-cc.newSubConnCh
 		edsb.HandleSubConnStateChange(sc, connectivity.Connecting)
 		edsb.HandleSubConnStateChange(sc, connectivity.Ready)
@@ -418,16 +431,13 @@ func TestEDS_EndpointsHealth(t *testing.T) {
 	}
 	// There should be exactly 4 new SubConns. Check to make sure there's no
 	// more subconns being created.
-	//
-	// This is check is very necessary. The pick later won't fail even if eds
-	// doesn't respect health status, because pick only returns Ready subconn.
 	select {
 	case <-cc.newSubConnCh:
 		t.Fatalf("Got unexpected new subconn")
 	case <-time.After(time.Microsecond * 100):
 	}
 
-	// Test roundrobin with two subconns.
+	// Test roundrobin with the subconns.
 	p1 := <-cc.newPickerCh
 	want := readySCs
 	if err := isRoundRobin(want, func() balancer.SubConn {
