@@ -387,18 +387,24 @@ func TestEDS_EndpointsHealth(t *testing.T) {
 
 	// Two localities, each 3 backend, one Healthy, one Unhealthy, one Unknown.
 	clab1 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab1.addLocality(testSubZones[0], 1, testEndpointAddrs[:3], &addLocalityOptions{
+	clab1.addLocality(testSubZones[0], 1, testEndpointAddrs[:6], &addLocalityOptions{
 		health: []corepb.HealthStatus{
 			corepb.HealthStatus_HEALTHY,
 			corepb.HealthStatus_UNHEALTHY,
 			corepb.HealthStatus_UNKNOWN,
+			corepb.HealthStatus_DRAINING,
+			corepb.HealthStatus_TIMEOUT,
+			corepb.HealthStatus_DEGRADED,
 		},
 	})
-	clab1.addLocality(testSubZones[1], 1, testEndpointAddrs[3:6], &addLocalityOptions{
+	clab1.addLocality(testSubZones[1], 1, testEndpointAddrs[6:12], &addLocalityOptions{
 		health: []corepb.HealthStatus{
 			corepb.HealthStatus_HEALTHY,
 			corepb.HealthStatus_UNHEALTHY,
 			corepb.HealthStatus_UNKNOWN,
+			corepb.HealthStatus_DRAINING,
+			corepb.HealthStatus_TIMEOUT,
+			corepb.HealthStatus_DEGRADED,
 		},
 	})
 	edsb.HandleEDSResponse(clab1.build())

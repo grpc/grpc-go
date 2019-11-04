@@ -37,7 +37,7 @@ var (
 	testBackendAddrs []resolver.Address
 )
 
-const testBackendAddrsCount = 8
+const testBackendAddrsCount = 12
 
 func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
