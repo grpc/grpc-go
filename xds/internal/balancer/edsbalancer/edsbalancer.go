@@ -75,13 +75,13 @@ type EDSBalancer struct {
 
 	subBalancerBuilder   balancer.Builder
 	loadStore            lrs.Store
-	priorityToLocalities map[uint32]*balancerGroupWithConfig
+	priorityToLocalities map[priorityType]*balancerGroupWithConfig
 
 	priorityMu sync.Mutex
 	// priorities are pointers, and will be nil when EDS returns empty result.
-	priorityInUse   *uint32
-	priorityLowest  *uint32
-	priorityToState map[uint32]*balancerState
+	priorityInUse   priorityType
+	priorityLowest  priorityType
+	priorityToState map[priorityType]*balancerState
 	// The timer to give a priority 10 seconds to connect. And if the priority
 	// doesn't go into Ready/Failure, start the next priority.
 	//
@@ -90,7 +90,7 @@ type EDSBalancer struct {
 	priorityInitTimer *time.Timer
 
 	subConnMu         sync.Mutex
-	subConnToPriority map[balancer.SubConn]uint32
+	subConnToPriority map[balancer.SubConn]priorityType
 
 	pickerMu    sync.Mutex
 	drops       []*dropper
@@ -104,9 +104,9 @@ func NewXDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) *EDSBalancer {
 		cc:                 cc,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
 
-		priorityToLocalities: make(map[uint32]*balancerGroupWithConfig),
-		priorityToState:      make(map[uint32]*balancerState),
-		subConnToPriority:    make(map[balancer.SubConn]uint32),
+		priorityToLocalities: make(map[priorityType]*balancerGroupWithConfig),
+		priorityToState:      make(map[priorityType]*balancerState),
+		subConnToPriority:    make(map[balancer.SubConn]priorityType),
 		loadStore:            loadStore,
 	}
 	// Don't start balancer group here. Start it when handling the first EDS
@@ -218,23 +218,23 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 	//
 	// In the future, we should look at the config in CDS response and decide
 	// whether locality weight matters.
-	newLocalitiesWithPriority := make(map[uint32][]*endpointpb.LocalityLbEndpoints)
+	newLocalitiesWithPriority := make(map[priorityType][]*endpointpb.LocalityLbEndpoints)
 	for _, locality := range edsResp.Endpoints {
 		if locality.GetLoadBalancingWeight().GetValue() == 0 {
 			continue
 		}
-		priority := locality.GetPriority()
+		priority := newPriorityType(locality.GetPriority())
 		newLocalitiesWithPriority[priority] = append(newLocalitiesWithPriority[priority], locality)
 	}
 
 	var (
-		priorityMax     = -1
+		priorityLowest  priorityType
 		priorityChanged bool
 	)
 
 	for priority, newLocalities := range newLocalitiesWithPriority {
-		if priorityMax < int(priority) {
-			priorityMax = int(priority)
+		if !priorityLowest.isSet() || priorityLowest.higherThan(priority) {
+			priorityLowest = priority
 		}
 
 		lGroup, ok := xdsB.priorityToLocalities[priority]
@@ -329,11 +329,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 			}
 		}
 	}
-	xdsB.priorityLowest = nil
-	if priorityMax >= 0 {
-		xdsB.priorityLowest = new(uint32)
-		*xdsB.priorityLowest = uint32(priorityMax)
-	}
+	xdsB.priorityLowest = priorityLowest
 
 	// Delete priorities that are removed in the latest response, and also close
 	// the balancer group.
@@ -377,7 +373,7 @@ func (xdsB *EDSBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connect
 
 // updateBalancerState first handles priority, and then wraps picker in a drop
 // picker before forwarding the update.
-func (xdsB *EDSBalancer) updateBalancerState(priority uint32, s connectivity.State, p balancer.Picker) {
+func (xdsB *EDSBalancer) updateBalancerState(priority priorityType, s connectivity.State, p balancer.Picker) {
 	_, ok := xdsB.priorityToLocalities[priority]
 	if !ok {
 		grpclog.Infof("eds: received picker update from unknown priority")
@@ -394,7 +390,7 @@ func (xdsB *EDSBalancer) updateBalancerState(priority uint32, s connectivity.Sta
 	}
 }
 
-func (xdsB *EDSBalancer) ccWrapperWithPriority(priority uint32) *edsBalancerWrapperCC {
+func (xdsB *EDSBalancer) ccWrapperWithPriority(priority priorityType) *edsBalancerWrapperCC {
 	return &edsBalancerWrapperCC{
 		ClientConn: xdsB.cc,
 		priority:   priority,
@@ -406,7 +402,7 @@ func (xdsB *EDSBalancer) ccWrapperWithPriority(priority uint32) *edsBalancerWrap
 // each balancer group. It contains the locality priority.
 type edsBalancerWrapperCC struct {
 	balancer.ClientConn
-	priority uint32
+	priority priorityType
 	parent   *EDSBalancer
 }
 
@@ -417,7 +413,7 @@ func (ebwcc *edsBalancerWrapperCC) UpdateBalancerState(state connectivity.State,
 	ebwcc.parent.updateBalancerState(ebwcc.priority, state, picker)
 }
 
-func (xdsB *EDSBalancer) newSubConn(priority uint32, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+func (xdsB *EDSBalancer) newSubConn(priority priorityType, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	sc, err := xdsB.cc.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err

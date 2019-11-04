@@ -655,3 +655,27 @@ func TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	case <-time.After(time.Millisecond * 100):
 	}
 }
+
+func TestPriorityType(t *testing.T) {
+	p0 := newPriorityType(0)
+	p1 := newPriorityType(1)
+	p2 := newPriorityType(2)
+
+	if !p0.higherThan(p1) || !p0.higherThan(p2) {
+		t.Errorf("want p0 to be higher than p1 and p2, got p0>p1: %v, p0>p2: %v", !p0.higherThan(p1), !p0.higherThan(p2))
+	}
+	if !p1.lowerThan(p0) || !p1.higherThan(p2) {
+		t.Errorf("want p1 to be between p0 and p2, got p1<p0: %v, p1>p2: %v", !p1.lowerThan(p0), !p1.higherThan(p2))
+	}
+	if !p2.lowerThan(p0) || !p2.lowerThan(p1) {
+		t.Errorf("want p2 to be lower than p0 and p1, got p2<p0: %v, p2<p1: %v", !p2.lowerThan(p0), !p2.lowerThan(p1))
+	}
+
+	if got := p1.equal(p0.nextLower()); !got {
+		t.Errorf("want p1 to be equal to p0's next lower, got p1==p0.nextLower: %v", got)
+	}
+
+	if got := p1.equal(newPriorityType(1)); !got {
+		t.Errorf("want p1 to be equal to priority with value 1, got p1==1: %v", got)
+	}
+}
