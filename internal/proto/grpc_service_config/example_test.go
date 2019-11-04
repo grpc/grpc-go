@@ -27,7 +27,7 @@ import (
 	scpb "google.golang.org/grpc/internal/proto/grpc_service_config"
 )
 
-// TestExampleMarshalToJSON is an example to print json format of xds_config.
+// TestXdsConfigMarshalToJSON is an example to print json format of xds_config.
 func TestXdsConfigMarshalToJSON(t *testing.T) {
 	c := &scpb.XdsConfig{
 		ChildPolicy: []*scpb.LoadBalancingConfig{

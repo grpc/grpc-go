@@ -19,6 +19,7 @@ package balancer
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/serviceconfig"
@@ -96,7 +97,7 @@ func (l *XDSConfig) UnmarshalJSON(data []byte) error {
 
 // MarshalJSON returns a JSON encoding of l.
 func (l *XDSConfig) MarshalJSON() ([]byte, error) {
-	return nil, nil
+	return nil, fmt.Errorf("XDSConfig.MarshalJSON() is unimplemented")
 }
 
 // loadBalancingConfig represents a single load balancing config,
