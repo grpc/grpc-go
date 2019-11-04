@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -87,13 +88,24 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 		done: grpcsync.NewEvent(),
 	}
 
+	var credsClone credentials.TransportCredentials
+	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
+		credsClone = creds.Clone()
+	}
+	rbo := resolver.BuildOption{
+		DisableServiceConfig: cc.dopts.disableServiceConfig,
+		DialCreds:            credsClone,
+		CredsBundle:          cc.dopts.copts.CredsBundle,
+		Dialer:               cc.dopts.copts.Dialer,
+	}
+
 	var err error
 	// We need to hold the lock here while we assign to the ccr.resolver field
 	// to guard against a data race caused by the following code path,
 	// rb.Build-->ccr.ReportError-->ccr.poll-->ccr.resolveNow, would end up
 	// accessing ccr.resolver which is being assigned here.
 	ccr.resolverMu.Lock()
-	ccr.resolver, err = rb.Build(cc.parsedTarget, ccr, resolver.BuildOption{DisableServiceConfig: cc.dopts.disableServiceConfig})
+	ccr.resolver, err = rb.Build(cc.parsedTarget, ccr, rbo)
 	if err != nil {
 		return nil, err
 	}
