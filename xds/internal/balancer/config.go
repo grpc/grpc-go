@@ -39,57 +39,48 @@ type XDSConfig struct {
 	FallBackPolicy *loadBalancingConfig
 	// Name to use in EDS query.  If not present, defaults to the server
 	// name from the target URI.
-	EdsServiceName string
+	EDSServiceName string
 	// LRS server to send load reports to.  If not present, load reporting
 	// will be disabled.  If set to the empty string, load reporting will
 	// be sent to the same server that we obtained CDS data from.
 	LrsLoadReportingServerName string
 }
 
+// xdsConfigJSON is the intermediate unmarshal result of XDSConfig. ChildPolicy
+// and Fallbackspolicy are post-processed, and for each, the first installed
+// policy is kept.
+type xdsConfigJSON struct {
+	BalancerName               string
+	ChildPolicy                []*loadBalancingConfig
+	FallbackPolicy             []*loadBalancingConfig
+	EDSServiceName             string
+	LRSLoadReportingServerName string
+}
+
 // UnmarshalJSON parses the JSON-encoded byte slice in data and stores it in l.
 // When unmarshalling, we iterate through the childPolicy/fallbackPolicy lists
 // and select the first LB policy which has been registered.
 func (l *XDSConfig) UnmarshalJSON(data []byte) error {
-	var val map[string]json.RawMessage
-	if err := json.Unmarshal(data, &val); err != nil {
+	var configJSON xdsConfigJSON
+	if err := json.Unmarshal(data, &configJSON); err != nil {
 		return err
 	}
-	for k, v := range val {
-		switch k {
-		case "balancerName":
-			if err := json.Unmarshal(v, &l.BalancerName); err != nil {
-				return err
-			}
-		case "childPolicy":
-			var lbcfgs []*loadBalancingConfig
-			if err := json.Unmarshal(v, &lbcfgs); err != nil {
-				return err
-			}
-			for _, lbcfg := range lbcfgs {
-				if balancer.Get(lbcfg.Name) != nil {
-					l.ChildPolicy = lbcfg
-					break
-				}
-			}
-		case "fallbackPolicy":
-			var lbcfgs []*loadBalancingConfig
-			if err := json.Unmarshal(v, &lbcfgs); err != nil {
-				return err
-			}
-			for _, lbcfg := range lbcfgs {
-				if balancer.Get(lbcfg.Name) != nil {
-					l.FallBackPolicy = lbcfg
-					break
-				}
-			}
-		case "edsServiceName":
-			if err := json.Unmarshal(v, &l.EdsServiceName); err != nil {
-				return err
-			}
-		case "lrsLoadReportingServerName":
-			if err := json.Unmarshal(v, &l.LrsLoadReportingServerName); err != nil {
-				return err
-			}
+
+	l.BalancerName = configJSON.BalancerName
+	l.EDSServiceName = configJSON.EDSServiceName
+	l.LrsLoadReportingServerName = configJSON.LRSLoadReportingServerName
+
+	for _, lbcfg := range configJSON.ChildPolicy {
+		if balancer.Get(lbcfg.Name) != nil {
+			l.ChildPolicy = lbcfg
+			break
+		}
+	}
+
+	for _, lbcfg := range configJSON.FallbackPolicy {
+		if balancer.Get(lbcfg.Name) != nil {
+			l.FallBackPolicy = lbcfg
+			break
 		}
 	}
 	return nil
@@ -109,9 +100,7 @@ type loadBalancingConfig struct {
 
 // MarshalJSON returns a JSON encoding of l.
 func (l *loadBalancingConfig) MarshalJSON() ([]byte, error) {
-	m := make(map[string]json.RawMessage)
-	m[l.Name] = l.Config
-	return json.Marshal(m)
+	return nil, fmt.Errorf("loadBalancingConfig.MarshalJSON() is unimplemented")
 }
 
 // UnmarshalJSON parses the JSON-encoded byte slice in data and stores it in l.

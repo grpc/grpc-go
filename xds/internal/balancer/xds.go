@@ -191,7 +191,7 @@ func (x *xdsBalancer) startNewXDSClient(u *XDSConfig) {
 			prevClient.close()
 		}
 	}
-	x.client = newXDSClient(u.BalancerName, u.EdsServiceName, x.buildOpts, x.loadStore, newADS, loseContact, exitCleanup)
+	x.client = newXDSClient(u.BalancerName, u.EDSServiceName, x.buildOpts, x.loadStore, newADS, loseContact, exitCleanup)
 	go x.client.run()
 }
 
