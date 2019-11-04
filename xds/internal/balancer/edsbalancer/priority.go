@@ -125,13 +125,7 @@ func (xdsB *EDSBalancer) handlePriorityWithNewState(priority uint32, s connectiv
 	defer xdsB.priorityMu.Unlock()
 
 	if xdsB.priorityInUse == nil {
-		grpclog.Infof("eds: received picker update when no priority is in use (this means EDS returned an empty list)")
-		return false
-	}
-
-	if *xdsB.priorityInUse < priority {
-		// Lower priorities should all be closed, this is an unexpected update.
-		grpclog.Infof("eds: received picker update from priority lower then priorityInUse")
+		grpclog.Infof("eds: received picker update when no priority is in use (EDS returned an empty list)")
 		return false
 	}
 
@@ -144,95 +138,129 @@ func (xdsB *EDSBalancer) handlePriorityWithNewState(priority uint32, s connectiv
 	bState.state = s
 	bState.picker = p
 
-	if s == connectivity.Ready {
-		// If one priority higher or equal to priorityInUse goes Ready, stop the
-		// init timer. If update is from higher than priorityInUse,
-		// priorityInUse will be closed, and the init timer will become useless.
-		stopTimer(xdsB.priorityInitTimer)
-		// An update with state Ready:
-		// - If it's from higher priority:
-		//   - Forward the update
-		//   - Set the priority as priorityInUse
-		//   - Close all priorities lower than this one
-		// - If it's from priorityInUse:
-		//   - Forward and do nothing else
-		if *xdsB.priorityInUse > priority {
-			*xdsB.priorityInUse = priority
-			for i := priority + 1; i <= *xdsB.prioritylowest; i++ {
-				xdsB.priorityToLocalities[i].bg.close()
-			}
-			return true
-		}
-		// else can only be *pInUse == priority.
-		return true
+	switch s {
+	case connectivity.Ready:
+		return xdsB.handlePriorityWithNewStateReady(priority)
+	case connectivity.TransientFailure:
+		return xdsB.handlePriorityWithNewStateTransientFailure(priority)
+	case connectivity.Connecting:
+		return xdsB.handlePriorityWithNewStateConnecting(priority, oldState)
+	}
+	// New state is Idle, should never happen. Don't forward.
+	return false
+}
+
+// handlePriorityWithNewStateReady handles state Ready and decides whether to
+// forward update or not.
+//
+// An update with state Ready:
+// - If it's from higher priority:
+//   - Forward the update
+//   - Set the priority as priorityInUse
+//   - Close all priorities lower than this one
+// - If it's from priorityInUse:
+//   - Forward and do nothing else
+func (xdsB *EDSBalancer) handlePriorityWithNewStateReady(priority uint32) bool {
+	if *xdsB.priorityInUse < priority {
+		// Lower priorities should all be closed, this is an unexpected update.
+		grpclog.Infof("eds: received picker update from priority lower then priorityInUse")
+		return false
 	}
 
-	if s == connectivity.TransientFailure {
-		// An update with state Failure:
-		// - If it's from a higher priority:
-		//   - Do not forward, and do nothing
-		// - If it's from priorityInUse:
-		//   - If there's no lower:
-		//     - Forward and do nothing else
-		//   - If there's a lower priority:
-		//     - Forward
-		//     - Set lower as priorityInUse
-		//     - Start lower
-		if *xdsB.priorityInUse > priority {
-			return false
+	// If one priority higher or equal to priorityInUse goes Ready, stop the
+	// init timer. If update is from higher than priorityInUse,
+	// priorityInUse will be closed, and the init timer will become useless.
+	stopTimer(xdsB.priorityInitTimer)
+
+	if *xdsB.priorityInUse > priority {
+		*xdsB.priorityInUse = priority
+		for i := priority + 1; i <= *xdsB.prioritylowest; i++ {
+			xdsB.priorityToLocalities[i].bg.close()
 		}
-		// else can only be *pInUse == priority. priorityInUse sends a failure.
-		// Stop its init timer.
-		stopTimer(xdsB.priorityInitTimer)
+		return true
+	}
+	return true
+}
+
+// handlePriorityWithNewStateTransientFailure handles state TransientFailure and
+// decides whether to forward update or not.
+//
+// An update with state Failure:
+// - If it's from a higher priority:
+//   - Do not forward, and do nothing
+// - If it's from priorityInUse:
+//   - If there's no lower:
+//     - Forward and do nothing else
+//   - If there's a lower priority:
+//     - Forward
+//     - Set lower as priorityInUse
+//     - Start lower
+func (xdsB *EDSBalancer) handlePriorityWithNewStateTransientFailure(priority uint32) bool {
+	if *xdsB.priorityInUse < priority {
+		// Lower priorities should all be closed, this is an unexpected update.
+		grpclog.Infof("eds: received picker update from priority lower then priorityInUse")
+		return false
+	}
+
+	if *xdsB.priorityInUse > priority {
+		return false
+	}
+	// priorityInUse sends a failure. Stop its init timer.
+	stopTimer(xdsB.priorityInitTimer)
+	pNext := priority + 1
+	if _, okNext := xdsB.priorityToLocalities[pNext]; !okNext {
+		return true
+	}
+	xdsB.startPriority(pNext)
+	return true
+}
+
+// handlePriorityWithNewStateConnecting handles state Connecting and decides
+// whether to forward update or not.
+//
+// An update with state Connecting:
+// - If it's from a higher priority
+//   - Do nothing
+// - If it's from priorityInUse, the behavior depends on previous state.
+//
+// When new state is Connecting, the behavior depends on previous state. If the
+// previous state was Ready, this is a transition out from Ready to Connecting.
+// Assuming there are multiple backends in the same priority, this mean we are
+// in a bad situation and we should failover to the next priority (Side note:
+// the current connectivity state aggregating algorhtim (e.g. round-robin) is
+// not handling this right, because if many backends all go from Ready to
+// Connecting, the overall situation is more like TransientFailure, not
+// Connecting).
+//
+// If the previous state was Idle, we don't do anything special with failure,
+// and simply forward the update. The init timer should be in process, will
+// handle failover if it timeouts. If the previous state was TransientFailure,
+// we do not forward, because the lower priority is in use.
+func (xdsB *EDSBalancer) handlePriorityWithNewStateConnecting(priority uint32, oldState connectivity.State) bool {
+	if *xdsB.priorityInUse < priority {
+		// Lower priorities should all be closed, this is an unexpected update.
+		grpclog.Infof("eds: received picker update from priority lower then priorityInUse")
+		return false
+	}
+
+	if *xdsB.priorityInUse > priority {
+		return false
+	}
+
+	switch oldState {
+	case connectivity.Ready:
 		pNext := priority + 1
 		if _, okNext := xdsB.priorityToLocalities[pNext]; !okNext {
 			return true
 		}
 		xdsB.startPriority(pNext)
 		return true
+	case connectivity.Idle:
+		return true
+	case connectivity.TransientFailure:
+		return false
 	}
-
-	if s == connectivity.Connecting {
-		// An update with state Connecting:
-		// - If it's from a higher priority
-		//   - Do nothing
-		// - If it's from priorityInUse, the behavior depends on previous state.
-		if *xdsB.priorityInUse > priority {
-			return false
-		}
-		// else can only be *pInUse == priority, check next.
-
-		// When new state is Connecting, the behavior depends on previous state.
-		//
-		// If the previous state was Ready, this is a transition out from Ready
-		// to Connecting. Assuming there are multiple backends in the same
-		// priority, this mean we are in a bad situation and we should failover
-		// to the next priority (Side note: the current connectivity state
-		// aggregating algorhtim (e.g. round-robin) is not handling this right,
-		// because if many backends all go from Ready to Connecting, the overall
-		// situation is more like TransientFailure, not Connecting).
-		//
-		// If the previous state was Idle, we don't do anything special with
-		// failure, and simply forward the update. The init timer should be in
-		// process, will handle failover if it timeouts.
-		// If the previous state was TransientFailure, we do not forward,
-		// because the lower priority is in use.
-		switch oldState {
-		case connectivity.Ready:
-			pNext := priority + 1
-			if _, okNext := xdsB.priorityToLocalities[pNext]; !okNext {
-				return true
-			}
-			xdsB.startPriority(pNext)
-			return true
-		case connectivity.Idle:
-			return true
-		case connectivity.TransientFailure:
-			return false
-		}
-	}
-
-	// New state is Idle, should never happen. Don't forward.
+	// Old state is Ready or Shutdown, should never happen. Don't forward.
 	return false
 }
 
