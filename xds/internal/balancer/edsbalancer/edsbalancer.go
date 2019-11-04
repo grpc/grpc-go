@@ -252,82 +252,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 			xdsB.priorityToLocalities[priority] = lGroup
 			priorityChanged = true
 		}
-
-		// newLocalitiesSet contains all names of localitis in the new EDS
-		// response for the same priority. It's used to delete localities that
-		// are removed in the new EDS response.
-		newLocalitiesSet := make(map[internal.Locality]struct{})
-		for _, locality := range newLocalities {
-			// One balancer for each locality.
-
-			l := locality.GetLocality()
-			if l == nil {
-				grpclog.Warningf("xds: received LocalityLbEndpoints with <nil> Locality")
-				continue
-			}
-			lid := internal.Locality{
-				Region:  l.Region,
-				Zone:    l.Zone,
-				SubZone: l.SubZone,
-			}
-			newLocalitiesSet[lid] = struct{}{}
-
-			newWeight := locality.GetLoadBalancingWeight().GetValue()
-			var newAddrs []resolver.Address
-			for _, lbEndpoint := range locality.GetLbEndpoints() {
-				socketAddress := lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress()
-				address := resolver.Address{
-					Addr: net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue()))),
-				}
-				if xdsB.subBalancerBuilder.Name() == weightedroundrobin.Name &&
-					lbEndpoint.GetLoadBalancingWeight().GetValue() != 0 {
-					address.Metadata = &weightedroundrobin.AddrInfo{
-						Weight: lbEndpoint.GetLoadBalancingWeight().GetValue(),
-					}
-				}
-				newAddrs = append(newAddrs, address)
-			}
-			var weightChanged, addrsChanged bool
-			config, ok := lGroup.configs[lid]
-			if !ok {
-				// A new balancer, add it to balancer group and balancer map.
-				lGroup.bg.add(lid, newWeight, xdsB.subBalancerBuilder)
-				config = &localityConfig{
-					weight: newWeight,
-				}
-				lGroup.configs[lid] = config
-
-				// weightChanged is false for new locality, because there's no need to
-				// update weight in bg.
-				addrsChanged = true
-			} else {
-				// Compare weight and addrs.
-				if config.weight != newWeight {
-					weightChanged = true
-				}
-				if !reflect.DeepEqual(config.addrs, newAddrs) {
-					addrsChanged = true
-				}
-			}
-
-			if weightChanged {
-				config.weight = newWeight
-				lGroup.bg.changeWeight(lid, newWeight)
-			}
-
-			if addrsChanged {
-				config.addrs = newAddrs
-				lGroup.bg.handleResolvedAddrs(lid, newAddrs)
-			}
-		}
-
-		// Delete localities that are removed in the latest response.
-		for lid := range lGroup.configs {
-			if _, ok := newLocalitiesSet[lid]; !ok {
-				lGroup.bg.remove(lid)
-				delete(lGroup.configs, lid)
-			}
-		}
+		xdsB.handleEDSResponsePerPriority(lGroup, newLocalities)
 	}
 	xdsB.priorityLowest = priorityLowest
 
@@ -347,6 +272,85 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 	// lower priority was added.
 	if priorityChanged {
 		xdsB.handlePriorityChange()
+	}
+}
+
+func (xdsB *EDSBalancer) handleEDSResponsePerPriority(lGroup *balancerGroupWithConfig, newLocalities []*endpointpb.LocalityLbEndpoints) {
+
+	// newLocalitiesSet contains all names of localitis in the new EDS
+	// response for the same priority. It's used to delete localities that
+	// are removed in the new EDS response.
+	newLocalitiesSet := make(map[internal.Locality]struct{})
+	for _, locality := range newLocalities {
+		// One balancer for each locality.
+
+		l := locality.GetLocality()
+		if l == nil {
+			grpclog.Warningf("xds: received LocalityLbEndpoints with <nil> Locality")
+			continue
+		}
+		lid := internal.Locality{
+			Region:  l.Region,
+			Zone:    l.Zone,
+			SubZone: l.SubZone,
+		}
+		newLocalitiesSet[lid] = struct{}{}
+
+		newWeight := locality.GetLoadBalancingWeight().GetValue()
+		var newAddrs []resolver.Address
+		for _, lbEndpoint := range locality.GetLbEndpoints() {
+			socketAddress := lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress()
+			address := resolver.Address{
+				Addr: net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue()))),
+			}
+			if xdsB.subBalancerBuilder.Name() == weightedroundrobin.Name &&
+				lbEndpoint.GetLoadBalancingWeight().GetValue() != 0 {
+				address.Metadata = &weightedroundrobin.AddrInfo{
+					Weight: lbEndpoint.GetLoadBalancingWeight().GetValue(),
+				}
+			}
+			newAddrs = append(newAddrs, address)
+		}
+		var weightChanged, addrsChanged bool
+		config, ok := lGroup.configs[lid]
+		if !ok {
+			// A new balancer, add it to balancer group and balancer map.
+			lGroup.bg.add(lid, newWeight, xdsB.subBalancerBuilder)
+			config = &localityConfig{
+				weight: newWeight,
+			}
+			lGroup.configs[lid] = config
+
+			// weightChanged is false for new locality, because there's no need to
+			// update weight in bg.
+			addrsChanged = true
+		} else {
+			// Compare weight and addrs.
+			if config.weight != newWeight {
+				weightChanged = true
+			}
+			if !reflect.DeepEqual(config.addrs, newAddrs) {
+				addrsChanged = true
+			}
+		}
+
+		if weightChanged {
+			config.weight = newWeight
+			lGroup.bg.changeWeight(lid, newWeight)
+		}
+
+		if addrsChanged {
+			config.addrs = newAddrs
+			lGroup.bg.handleResolvedAddrs(lid, newAddrs)
+		}
+	}
+
+	// Delete localities that are removed in the latest response.
+	for lid := range lGroup.configs {
+		if _, ok := newLocalitiesSet[lid]; !ok {
+			lGroup.bg.remove(lid)
+			delete(lGroup.configs, lid)
+		}
 	}
 }
 
