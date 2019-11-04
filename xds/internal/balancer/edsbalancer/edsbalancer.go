@@ -77,6 +77,11 @@ type EDSBalancer struct {
 	loadStore            lrs.Store
 	priorityToLocalities map[priorityType]*balancerGroupWithConfig
 
+	// There's no need to hold any mutexes at the same time. The order to take
+	// mutex should be: priorityMu > subConnMu, but this is implicit via
+	// balancers (starting balancer with next priority while holding priorityMu,
+	// and the balancer may create new SubConn).
+
 	priorityMu sync.Mutex
 	// priorities are pointers, and will be nil when EDS returns empty result.
 	priorityInUse   priorityType
