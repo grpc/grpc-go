@@ -136,7 +136,7 @@ func (xdsB *EDSBalancer) handlePriorityWithNewState(priority priorityType, s con
 
 	bState, ok := xdsB.priorityToState[priority]
 	if !ok {
-		bState = new(balancerState)
+		bState = &balancerState{}
 		xdsB.priorityToState[priority] = bState
 	}
 	oldState := bState.state
@@ -150,9 +150,10 @@ func (xdsB *EDSBalancer) handlePriorityWithNewState(priority priorityType, s con
 		return xdsB.handlePriorityWithNewStateTransientFailure(priority)
 	case connectivity.Connecting:
 		return xdsB.handlePriorityWithNewStateConnecting(priority, oldState)
+	default:
+		// New state is Idle, should never happen. Don't forward.
+		return false
 	}
-	// New state is Idle, should never happen. Don't forward.
-	return false
 }
 
 // handlePriorityWithNewStateReady handles state Ready and decides whether to
@@ -165,13 +166,11 @@ func (xdsB *EDSBalancer) handlePriorityWithNewState(priority priorityType, s con
 //   - Close all priorities lower than this one
 // - If it's from priorityInUse:
 //   - Forward and do nothing else
+//
+// Caller must make sure priorityInUse is not higher than priority.
+//
+// Caller must hold priorityMu.
 func (xdsB *EDSBalancer) handlePriorityWithNewStateReady(priority priorityType) bool {
-	if xdsB.priorityInUse.higherThan(priority) {
-		// Lower priorities should all be closed, this is an unexpected update.
-		grpclog.Infof("eds: received picker update from priority lower then priorityInUse")
-		return false
-	}
-
 	// If one priority higher or equal to priorityInUse goes Ready, stop the
 	// init timer. If update is from higher than priorityInUse,
 	// priorityInUse will be closed, and the init timer will become useless.
@@ -200,13 +199,11 @@ func (xdsB *EDSBalancer) handlePriorityWithNewStateReady(priority priorityType) 
 //     - Forward
 //     - Set lower as priorityInUse
 //     - Start lower
+//
+// Caller must make sure priorityInUse is not higher than priority.
+//
+// Caller must hold priorityMu.
 func (xdsB *EDSBalancer) handlePriorityWithNewStateTransientFailure(priority priorityType) bool {
-	if xdsB.priorityInUse.higherThan(priority) {
-		// Lower priorities should all be closed, this is an unexpected update.
-		grpclog.Infof("eds: received picker update from priority lower then priorityInUse")
-		return false
-	}
-
 	if xdsB.priorityInUse.lowerThan(priority) {
 		return false
 	}
@@ -241,13 +238,11 @@ func (xdsB *EDSBalancer) handlePriorityWithNewStateTransientFailure(priority pri
 // and simply forward the update. The init timer should be in process, will
 // handle failover if it timeouts. If the previous state was TransientFailure,
 // we do not forward, because the lower priority is in use.
+//
+// Caller must make sure priorityInUse is not higher than priority.
+//
+// Caller must hold priorityMu.
 func (xdsB *EDSBalancer) handlePriorityWithNewStateConnecting(priority priorityType, oldState connectivity.State) bool {
-	if xdsB.priorityInUse.higherThan(priority) {
-		// Lower priorities should all be closed, this is an unexpected update.
-		grpclog.Infof("eds: received picker update from priority lower then priorityInUse")
-		return false
-	}
-
 	if xdsB.priorityInUse.lowerThan(priority) {
 		return false
 	}
@@ -264,9 +259,10 @@ func (xdsB *EDSBalancer) handlePriorityWithNewStateConnecting(priority priorityT
 		return true
 	case connectivity.TransientFailure:
 		return false
+	default:
+		// Old state is Connecting or Shutdown. Don't forward.
+		return false
 	}
-	// Old state is Ready or Shutdown, should never happen. Don't forward.
-	return false
 }
 
 // stopTimer stops the timer if it's not nil. It also makes sure timer.C is drained.

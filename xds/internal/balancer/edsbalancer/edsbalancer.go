@@ -263,10 +263,10 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 
 	// Delete priorities that are removed in the latest response, and also close
 	// the balancer group.
-	for p, lGroup := range xdsB.priorityToLocalities {
+	for p, bgwc := range xdsB.priorityToLocalities {
 		if _, ok := newLocalitiesWithPriority[p]; !ok {
 			delete(xdsB.priorityToLocalities, p)
-			lGroup.bg.close()
+			bgwc.bg.close()
 			delete(xdsB.priorityToState, p)
 			priorityChanged = true
 		}
@@ -281,9 +281,9 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 }
 
 func (xdsB *EDSBalancer) handleEDSResponsePerPriority(bgwc *balancerGroupWithConfig, newLocalities []*endpointpb.LocalityLbEndpoints) {
-	// newLocalitiesSet contains all names of localitis in the new EDS
-	// response for the same priority. It's used to delete localities that
-	// are removed in the new EDS response.
+	// newLocalitiesSet contains all names of localities in the new EDS response
+	// for the same priority. It's used to delete localities that are removed in
+	// the new EDS response.
 	newLocalitiesSet := make(map[internal.Locality]struct{})
 	for _, locality := range newLocalities {
 		// One balancer for each locality.
@@ -325,8 +325,8 @@ func (xdsB *EDSBalancer) handleEDSResponsePerPriority(bgwc *balancerGroupWithCon
 			}
 			bgwc.configs[lid] = config
 
-			// weightChanged is false for new locality, because there's no need to
-			// update weight in bg.
+			// weightChanged is false for new locality, because there's no need
+			// to update weight in bg.
 			addrsChanged = true
 		} else {
 			// Compare weight and addrs.
@@ -361,20 +361,20 @@ func (xdsB *EDSBalancer) handleEDSResponsePerPriority(bgwc *balancerGroupWithCon
 // HandleSubConnStateChange handles the state change and update pickers accordingly.
 func (xdsB *EDSBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
 	xdsB.subConnMu.Lock()
-	var lGroup *balancerGroupWithConfig
+	var bgwc *balancerGroupWithConfig
 	if p, ok := xdsB.subConnToPriority[sc]; ok {
 		if s == connectivity.Shutdown {
 			// Only delete sc from the map when state changed to Shutdown.
 			delete(xdsB.subConnToPriority, sc)
 		}
-		lGroup = xdsB.priorityToLocalities[p]
+		bgwc = xdsB.priorityToLocalities[p]
 	}
 	xdsB.subConnMu.Unlock()
-	if lGroup == nil {
+	if bgwc == nil {
 		grpclog.Infof("EDSBalancer: priority not found for sc state change")
 		return
 	}
-	if bg := lGroup.bg; bg != nil {
+	if bg := bgwc.bg; bg != nil {
 		bg.handleSubConnStateChange(sc, s)
 	}
 }
@@ -434,8 +434,8 @@ func (xdsB *EDSBalancer) newSubConn(priority priorityType, addrs []resolver.Addr
 
 // Close closes the balancer.
 func (xdsB *EDSBalancer) Close() {
-	for _, lGroup := range xdsB.priorityToLocalities {
-		if bg := lGroup.bg; bg != nil {
+	for _, bgwc := range xdsB.priorityToLocalities {
+		if bg := bgwc.bg; bg != nil {
 			bg.close()
 		}
 	}
