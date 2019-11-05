@@ -10,6 +10,8 @@ matrix:
     env: RUN386=1
   - go: 1.13.x
     env: GRPC_GO_RETRY=on
+  - go: 1.13.x
+    env: TESTEXAMPLES=on
   - go: 1.12.x
     env: GO111MODULE=on
   - go: 1.11.x
@@ -33,8 +35,8 @@ install:
 
 script:
   - set -e
+  - if [[ "${TESTEXAMPLES}" = 1 ]]; then examples/examples_test.sh; exit 0; fi
   - if [[ "${VET}" = 1 ]]; then ./vet.sh; fi
   - if [[ "${GAE}" = 1 ]]; then make testappengine; exit 0; fi
   - if [[ "${RACE}" = 1 ]]; then make testrace; exit 0; fi
   - make test
-  - examples/examples_test.sh
