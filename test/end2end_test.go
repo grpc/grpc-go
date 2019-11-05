@@ -24,6 +24,7 @@ package test
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -7524,4 +7525,50 @@ func (s) TestClientCancellationPropagatesUnary(t *testing.T) {
 		t.Fatalf("server failed to close done chan due to cancellation propagation")
 	}
 	wg.Wait()
+}
+
+type badGzipCompressor struct{}
+
+func (badGzipCompressor) Do(w io.Writer, p []byte) error {
+	buf := &bytes.Buffer{}
+	gzw := gzip.NewWriter(buf)
+	if _, err := gzw.Write(p); err != nil {
+		return err
+	}
+	err := gzw.Close()
+	bs := buf.Bytes()
+	if len(bs) >= 6 {
+		bs[len(bs)-6] ^= 1 // modify checksum at end by 1 byte
+	}
+	w.Write(bs)
+	return err
+}
+
+func (badGzipCompressor) Type() string {
+	return "gzip"
+}
+
+func (s) TestGzipBadChecksum(t *testing.T) {
+	ss := &stubServer{
+		unaryCall: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+	if err := ss.Start(nil, grpc.WithCompressor(badGzipCompressor{})); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	p, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1024))
+	if err != nil {
+		t.Fatalf("Unexpected error from newPayload: %v", err)
+	}
+	if _, err := ss.client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: p}); err == nil ||
+		status.Code(err) != codes.Internal ||
+		!strings.Contains(status.Convert(err).Message(), gzip.ErrChecksum.Error()) {
+		t.Errorf("ss.client.UnaryCall(_) = _, %v\n\twant: _, status(codes.Internal, contains %q)", err, gzip.ErrChecksum)
+	}
 }
