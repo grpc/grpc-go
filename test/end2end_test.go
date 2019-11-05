@@ -7537,9 +7537,10 @@ func (badGzipCompressor) Do(w io.Writer, p []byte) error {
 	}
 	err := gzw.Close()
 	bs := buf.Bytes()
-	bs[len(bs)-4]-- // modify checksum (big endian) at end by 1 byte
-	buf = bytes.NewBuffer(bs)
-	buf.WriteTo(w)
+	if len(bs) >= 4 {
+		bs[len(bs)-4]-- // modify checksum (big endian) at end by 1 byte
+	}
+	w.Write(bs)
 	return err
 }
 
@@ -7547,7 +7548,7 @@ func (badGzipCompressor) Type() string {
 	return "gzip"
 }
 
-func (s) TestGzipWithoutFooter(t *testing.T) {
+func (s) TestGzipBadChecksum(t *testing.T) {
 	ss := &stubServer{
 		unaryCall: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
@@ -7563,9 +7564,11 @@ func (s) TestGzipWithoutFooter(t *testing.T) {
 
 	p, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1024))
 	if err != nil {
-		panic(err)
+		t.Fatalf("Unexpected error from newPayload: %v", err)
 	}
-	if _, err := ss.client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: p}); err == nil || status.Code(err) != codes.Internal {
-		t.Errorf("ss.client.UnaryCall(_) = _, %v; want _, Code()=codes.Internal", err)
+	if _, err := ss.client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: p}); err == nil ||
+		status.Code(err) != codes.Internal ||
+		!strings.Contains(status.Convert(err).Message(), gzip.ErrChecksum.Error()) {
+		t.Errorf("ss.client.UnaryCall(_) = _, %v\n\twant: _, status(codes.Internal, contains %q)", err, gzip.ErrChecksum)
 	}
 }
