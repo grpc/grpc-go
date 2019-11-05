@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -30,6 +31,7 @@ import (
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
 	typespb "github.com/golang/protobuf/ptypes/wrappers"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
@@ -410,25 +412,32 @@ func TestEDS_EndpointsHealth(t *testing.T) {
 	edsb.HandleEDSResponse(clab1.build())
 
 	var (
-		readySCs []balancer.SubConn
-
-		wantNewSubConnAddrStrs = []string{
-			testEndpointAddrs[0],
-			testEndpointAddrs[2],
-			testEndpointAddrs[6],
-			testEndpointAddrs[8],
-		}
+		readySCs           []balancer.SubConn
+		newSubConnAddrStrs []string
 	)
 	for i := 0; i < 4; i++ {
 		addr := <-cc.newSubConnAddrsCh
-		if addr[0].Addr != wantNewSubConnAddrStrs[i] {
-			t.Fatalf("want newSubConn with address %q, got %v", wantNewSubConnAddrStrs[i], addr)
-		}
+		newSubConnAddrStrs = append(newSubConnAddrStrs, addr[0].Addr)
 		sc := <-cc.newSubConnCh
 		edsb.HandleSubConnStateChange(sc, connectivity.Connecting)
 		edsb.HandleSubConnStateChange(sc, connectivity.Ready)
 		readySCs = append(readySCs, sc)
 	}
+
+	wantNewSubConnAddrStrs := []string{
+		testEndpointAddrs[0],
+		testEndpointAddrs[2],
+		testEndpointAddrs[6],
+		testEndpointAddrs[8],
+	}
+	sortStrTrans := cmp.Transformer("Sort", func(in []string) []string {
+		sort.Strings(in)
+		return in
+	})
+	if !cmp.Equal(newSubConnAddrStrs, wantNewSubConnAddrStrs, sortStrTrans) {
+		t.Fatalf("want newSubConn with address %v, got %v", wantNewSubConnAddrStrs, newSubConnAddrStrs)
+	}
+
 	// There should be exactly 4 new SubConns. Check to make sure there's no
 	// more subconns being created.
 	select {
