@@ -73,7 +73,6 @@ func (v2c *v2Client) handleLDSResponse(resp *discoverypb.DiscoveryResponse) erro
 		switch apiLis.RouteSpecifier.(type) {
 		case *httppb.HttpConnectionManager_Rds:
 			routeName = apiLis.GetRds().GetRouteConfigName()
-			break
 		case *httppb.HttpConnectionManager_RouteConfig:
 			// TODO: Add support for specifying the RouteConfiguration inline
 			// in the LDS response.

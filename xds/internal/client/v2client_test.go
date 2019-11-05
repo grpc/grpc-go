@@ -124,10 +124,9 @@ func setupClientAndServer(t *testing.T) (*fakexds.Server, *grpc.ClientConn, func
 // test the case where server sends response after watcher is cancelled. make sure callback is not invoked.
 
 type testConfig struct {
-	fakeServer  *fakexds.Server
-	v2c         *v2Client
-	backoffFunc func(int) time.Duration
-	ops         chan interface{}
+	fakeServer *fakexds.Server
+	v2c        *v2Client
+	ops        chan interface{}
 }
 
 type ldsTestOp struct {
@@ -136,6 +135,7 @@ type ldsTestOp struct {
 	wantRequest    *fakexds.Request
 	responseToSend *fakexds.Response
 }
+
 type rdsTestOp struct {
 }
 
