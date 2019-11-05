@@ -7537,7 +7537,7 @@ func (badGzipCompressor) Do(w io.Writer, p []byte) error {
 	}
 	err := gzw.Close()
 	bs := buf.Bytes()
-	bs[len(bs)-4] -= 1 // modify checksum (big endian) at end by 1 byte
+	bs[len(bs)-4]-- // modify checksum (big endian) at end by 1 byte
 	buf = bytes.NewBuffer(bs)
 	buf.WriteTo(w)
 	return err
