@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
-	xdsinternal "google.golang.org/grpc/xds/internal"
 )
 
 type lrsServer struct {
@@ -105,7 +104,7 @@ func (s) TestXdsLoadReporting(t *testing.T) {
 		Nanos:   intervalNano,
 	}
 
-	cfg := &xdsinternal.LBConfig{
+	cfg := &XDSConfig{
 		BalancerName: addr,
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
