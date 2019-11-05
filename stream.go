@@ -679,8 +679,8 @@ func (cs *clientStream) bufferForRetryLocked(sz int, op func(a *csAttempt) error
 }
 
 func (cs *clientStream) SendMsg(m interface{}) (err error) {
-	timer := cs.attempt.s.Stat().NewTimer("/send")
-	defer timer.Egress()
+	stat := cs.attempt.s.Stat()
+	defer stat.Egress(stat.NewTimer("/send"))
 
 	defer func() {
 		if err != nil && err != io.EOF {
@@ -728,8 +728,8 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 }
 
 func (cs *clientStream) RecvMsg(m interface{}) error {
-	timer := cs.attempt.s.Stat().NewTimer("/recv")
-	defer timer.Egress()
+	stat := cs.attempt.s.Stat()
+	defer stat.Egress(stat.NewTimer("/recv"))
 
 	if cs.binlog != nil && !cs.serverHeaderBinlogged {
 		// Call Header() to binary log header if it's not already logged.
@@ -849,19 +849,22 @@ func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte) error {
 		}
 		a.mu.Unlock()
 	}
-	timer := a.s.Stat().NewTimer("/transport/enqueue")
+
+	stat := a.s.Stat()
+	timer := stat.NewTimer("/transport/enqueue")
 	if err := a.t.Write(a.s, hdr, payld, a.s.Stat(), &transport.Options{Last: !cs.desc.ClientStreams}); err != nil {
 		if !cs.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
 			// because the generated code requires it.  finish is not called; RecvMsg()
 			// will call it with the stream's status independently.
-			timer.Egress()
+			stat.Egress(timer)
 			return nil
 		}
-		timer.Egress()
+		stat.Egress(timer)
 		return io.EOF
 	}
-	timer.Egress()
+	stat.Egress(timer)
+
 	if a.statsHandler != nil {
 		a.statsHandler.HandleRPC(cs.ctx, outPayload(true, m, data, payld, time.Now()))
 	}
@@ -879,7 +882,8 @@ func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
 
 	if !a.decompSet {
 		// Block until we receive headers containing received message encoding.
-		timer := a.s.Stat().NewTimer("/recv/header")
+		stat := a.s.Stat()
+		timer := stat.NewTimer("/recv/header")
 		if ct := a.s.RecvCompress(); ct != "" && ct != encoding.Identity {
 			if a.dc == nil || a.dc.Type() != ct {
 				// No configured decompressor, or it does not match the incoming
@@ -893,7 +897,7 @@ func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
 		}
 		// Only initialize this state once per stream.
 		a.decompSet = true
-		timer.Egress()
+		stat.Egress(timer)
 	}
 	err = recv(a.p, cs.codec, a.s, a.dc, m, *cs.callInfo.maxReceiveMessageSize, payInfo, a.decomp, a.s.Stat())
 	if err != nil {
@@ -1396,8 +1400,8 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 }
 
 func (ss *serverStream) SendMsg(m interface{}) (err error) {
-	timer := ss.s.Stat().NewTimer("/send")
-	defer timer.Egress()
+	stat := ss.s.Stat()
+	defer stat.Egress(stat.NewTimer("/recv"))
 
 	defer func() {
 		if ss.trInfo != nil {
@@ -1438,11 +1442,12 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), ss.maxSendMessageSize)
 	}
 
-	timer = ss.s.Stat().NewTimer("/transport/enqueue")
+	timer := stat.NewTimer("/transport/enqueue")
 	if err := ss.t.Write(ss.s, hdr, payload, ss.s.Stat(), &transport.Options{Last: false}); err != nil {
+		stat.Egress(timer)
 		return toRPCErr(err)
 	}
-	timer.Egress()
+	stat.Egress(timer)
 
 	if ss.binlog != nil {
 		if !ss.serverHeaderBinlogged {
@@ -1464,8 +1469,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 
 func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 	stat := ss.s.Stat()
-	timer := stat.NewTimer("/recv")
-	defer timer.Egress()
+	defer stat.Egress(stat.NewTimer("/recv"))
 
 	defer func() {
 		if ss.trInfo != nil {
@@ -1541,25 +1545,26 @@ func prepareMsg(m interface{}, codec baseCodec, cp Compressor, comp encoding.Com
 	if preparedMsg, ok := m.(*PreparedMsg); ok {
 		return preparedMsg.hdr, preparedMsg.payload, preparedMsg.encodedData, nil
 	}
+
 	// The input interface is not a prepared msg.
 	// Marshal and Compress the data at this point
-	encodingTimer := stat.NewTimer("/encoding")
+	timer := stat.NewTimer("/encoding")
 	data, err = encode(codec, m, stat)
-	encodingTimer.Egress()
+	stat.Egress(timer)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	compressionTimer := stat.NewTimer("/compression")
+	timer = stat.NewTimer("/compression")
 	compData, err := compress(data, cp, comp, stat)
+	stat.Egress(timer)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	compressionTimer.Egress()
 
-	headerTimer := stat.NewTimer("/header")
+	timer = stat.NewTimer("/header")
 	hdr, payload = msgHeader(data, compData)
-	headerTimer.Egress()
+	stat.Egress(timer)
 
 	return hdr, payload, data, nil
 }

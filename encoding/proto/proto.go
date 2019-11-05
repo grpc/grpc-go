@@ -57,11 +57,11 @@ func marshal(v interface{}, cb *cachedProtoBuffer, stat *profiling.Stat) ([]byte
 	cb.SetBuf(newSlice)
 	cb.Reset()
 
-	t := stat.NewTimer("/encoding/marshal/protolib")
+	timer := stat.NewTimer("/encoding/marshal/protolib")
 	if err := cb.Marshal(protoMsg); err != nil {
 		return nil, err
 	}
-	t.Egress()
+	stat.Egress(timer)
 
 	out := cb.Bytes()
 	cb.lastMarshaledSize = capToMaxInt32(len(out))
@@ -95,9 +95,9 @@ func (codec) Unmarshal(data []byte, v interface{}, stat *profiling.Stat) error {
 	cb := protoBufferPool.Get().(*cachedProtoBuffer)
 	cb.SetBuf(data)
 
-	unmarshalTimer := stat.NewTimer("/proto/unmarshal/protolib")
+	timer := stat.NewTimer("/proto/unmarshal/protolib")
 	err := cb.Unmarshal(protoMsg)
-	unmarshalTimer.Egress()
+	stat.Egress(timer)
 
 	cb.SetBuf(nil)
 	protoBufferPool.Put(cb)

@@ -7,12 +7,21 @@ import (
 	"runtime"
 )
 
+// A power of two that's large enough to hold all timers within an average RPC
+// request (defined to be a unary request) without any reallocation.
+const defaultStatAllocatedTimers int32 = 32
+
+// 0 or 1 representing profiling off and on, respectively. Use IsEnabled and
+// SetEnabled to get and set this in a safe manner.
 var profilingEnabled uint32
 
+// IsEnabled returns whether or not profiling is enabled.
 func IsEnabled() bool {
 	return atomic.LoadUint32(&profilingEnabled) > 0
 }
 
+// SetEnabled turns profiling on and off depending on enabled. This operation
+// is safe for access concurrently from different goroutines.
 func SetEnabled(enabled bool) {
 	if enabled {
 		atomic.StoreUint32(&profilingEnabled, 1)
@@ -21,6 +30,15 @@ func SetEnabled(enabled bool) {
 	}
 }
 
+// This dummy function always returns 0. In some modified dev environments,
+// this may be replaced with a call to a function in a modified Go runtime that
+// retrieves the goroutine ID efficiently.
+func goId() int64 {
+	return runtime.GoId()
+}
+
+// A Timer represents the wall-clock beginning and ending of a logical
+// operation.
 type Timer struct {
 	TimerTag string
 	Begin time.Time
@@ -28,65 +46,110 @@ type Timer struct {
 	GoId int64
 }
 
+// NewTimer creates and returns a new Timer object. This is useful when you
+// don't already have a Stat object to associate this Timer with; for example,
+// before the context of a new RPC query is created, a Timer may be needed to
+// measure transport-related operations.
+//
+// Use AppendTimer to append the returned Timer to a Stat.
 func NewTimer(timerTag string) *Timer {
-	timer := &Timer{TimerTag: timerTag, GoId: runtime.GoId()}
-	timer.Ingress()
-	return timer
-}
-
-func (t *Timer) Ingress() {
-	if t == nil {
-		return
+	return &Timer{
+		TimerTag: timerTag,
+		Begin: time.Now(),
+		GoId: goId(),
 	}
-
-	t.Begin = time.Now()
 }
 
-func (t *Timer) Egress() {
-	if t == nil {
-		return
-	}
-
-	t.End = time.Now()
-}
-
+// A Stat is a collection of Timers that represent timing information for
+// different components within this Stat. For example, a Stat may be used to
+// reference the entire lifetime of an RPC request, with Timers within it
+// representing different components such as encoding, compression, and
+// transport.
+//
+// The user is expected to use the included helper functions to do operations
+// on the Stat such as creating or appending a new timer. Direct operations on
+// the Stat's exported fields (which are exported for encoding reasons) may
+// lead to data races.
 type Stat struct {
 	StatTag string
-	Timers []*Timer
+	Timers []Timer
 	Metadata []byte
 	mu sync.Mutex
 }
 
+// NewStat creates and returns a new Stat object.
 func NewStat(statTag string) *Stat {
-	return &Stat{StatTag: statTag, Timers: make([]*Timer, 0)}
+	return &Stat{
+		StatTag: statTag,
+		Timers: make([]Timer, 0, defaultStatAllocatedTimers),
+	}
 }
 
-func (stat *Stat) NewTimer(timerTag string) *Timer {
-	if stat == nil {
-		return nil
+// NewTimer creates a Timer object within the given stat if stat is non-nil.
+// The value passed in timerTag will be attached to the newly created Timer.
+// NewTimer also automatically sets the Begin value of the Timer to the current
+// time.
+//
+// The user is expected to call stat.Egress with the returned index as argument
+// to mark the end. The return value is not a pointer to a Timer object because
+// the internal slice may be re-allocated freely, which would make the
+// reference to pointers of the past obsolete.
+func (stat *Stat) NewTimer(timerTag string) (index int) {
+	if stat != nil {
+		// TODO(adtac): Make this lock-free? We don't expect much contention on
+		// this, so I don't predict a significant improvement in performance. Using
+		// a lock-free, concurrent queue will require us to write our own
+		// reallocation and copy, which is probably unnecessary code complexity if
+		// the improvement isn't significant.
+		stat.mu.Lock()
+		stat.Timers = append(stat.Timers, Timer{
+			TimerTag: timerTag,
+			Begin: time.Now(),
+			GoId: goId(),
+		})
+		index = len(stat.Timers) - 1
+		stat.mu.Unlock()
 	}
 
-	timer := NewTimer(timerTag)
-
-	stat.mu.Lock()
-	stat.Timers = append(stat.Timers, timer)
-	stat.mu.Unlock()
-
-	return timer
+	return
 }
 
-func (stat *Stat) AppendTimer(timer *Timer) {
-	if stat == nil {
-		return
+// Egress marks the completion of a given timer within a stat.
+func (stat *Stat) Egress(index int) {
+	if stat != nil && index < len(stat.Timers) {
+		stat.Timers[index].End = time.Now()
+	}
+}
+
+// AppendTimer appends a given Timer object to the internal slice of timers. A
+// deep copy of the timer is made (i.e. no reference is retained to this
+// pointer) and the user is expected to lose their reference to the timer to
+// allow the Timer object to be garbage collected.
+func (stat *Stat) AppendTimer(timer *Timer) (index int) {
+	if stat != nil && timer != nil {
+		stat.mu.Lock()
+		stat.Timers = append(stat.Timers, *timer)
+		index = len(stat.Timers) - 1
+		stat.mu.Unlock()
 	}
 
-	stat.mu.Lock()
-	stat.Timers = append(stat.Timers, timer)
-	stat.mu.Unlock()
+	return
 }
 
+// StreamStats is a CircularBuffer containing data from the last N RPC calls
+// served, where N is set by the user.
+//
+// TODO(adtac): this is currently a global across the package. Use
+// server-specific StreamStats?
 var StreamStats *CircularBuffer
 
+// IdCounter counts the number of RPCs connections. This information is
+// included in a StreamStat's Metadata field along with the stream ID within a
+// connection to uniquely identify each stream.
+var IdCounter uint64
+
+// InitStats initialises all the relevant Stat objects. Must be called exactly
+// once per lifetime of a process.
 func InitStats(bufsize uint32) (err error) {
 	StreamStats, err = NewCircularBuffer(bufsize)
 	if err != nil {
@@ -95,5 +158,3 @@ func InitStats(bufsize uint32) (err error) {
 
 	return
 }
-
-var IdCounter uint64

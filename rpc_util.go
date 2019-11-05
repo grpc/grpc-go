@@ -508,10 +508,10 @@ type parser struct {
 func (p *parser) recvMsg(maxReceiveMessageSize int, stat *profiling.Stat) (pf payloadFormat, msg []byte, err error) {
 	timer := stat.NewTimer("/header")
 	if _, err := p.r.Read(p.header[:]); err != nil {
-		timer.Egress()
+		stat.Egress(timer)
 		return 0, nil, err
 	}
-	timer.Egress()
+	stat.Egress(timer)
 
 	pf = payloadFormat(p.header[0])
 	length := binary.BigEndian.Uint32(p.header[1:])
@@ -534,10 +534,10 @@ func (p *parser) recvMsg(maxReceiveMessageSize int, stat *profiling.Stat) (pf pa
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
-		timer.Egress()
+		stat.Egress(timer)
 		return 0, nil, err
 	}
-	timer.Egress()
+	stat.Egress(timer)
 	return pf, msg, nil
 }
 
@@ -574,29 +574,31 @@ func compress(in []byte, cp Compressor, compressor encoding.Compressor, stat *pr
 		timer := stat.NewTimer("/compresslib/init")
 		z, err := compressor.Compress(cbuf)
 		if err != nil {
-			timer.Egress()
+			stat.Egress(timer)
 			return nil, wrapErr(err)
 		}
-		timer.Egress()
+		stat.Egress(timer)
+
 		timer = stat.NewTimer("/compresslib/write")
 		if _, err := z.Write(in); err != nil {
-			timer.Egress()
+			stat.Egress(timer)
 			return nil, wrapErr(err)
 		}
-		timer.Egress()
+		stat.Egress(timer)
+
 		timer = stat.NewTimer("/compresslib/close")
 		if err := z.Close(); err != nil {
-			timer.Egress()
+			stat.Egress(timer)
 			return nil, wrapErr(err)
 		}
-		timer.Egress()
+		stat.Egress(timer)
 	} else {
 		timer := stat.NewTimer("/compressor")
 		if err := cp.Do(cbuf, in); err != nil {
-			timer.Egress()
+			stat.Egress(timer)
 			return nil, wrapErr(err)
 		}
-		timer.Egress()
+		stat.Egress(timer)
 	}
 	return cbuf.Bytes(), nil
 }
@@ -658,11 +660,10 @@ type payloadInfo struct {
 func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, stat *profiling.Stat) ([]byte, error) {
 	timer := stat.NewTimer("/transport/dequeue")
 	pf, d, err := p.recvMsg(maxReceiveMessageSize, stat)
+	stat.Egress(timer)
 	if err != nil {
-		timer.Egress()
 		return nil, err
 	}
-	timer.Egress()
 
 	if payInfo != nil {
 		payInfo.wireLength = len(d)
@@ -670,10 +671,10 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 
 	timer = stat.NewTimer("/checkRecvPayload")
 	if st := checkRecvPayload(pf, s.RecvCompress(), compressor != nil || dc != nil); st != nil {
-		timer.Egress()
+		stat.Egress(timer)
 		return nil, st.Err()
 	}
-	timer.Egress()
+	stat.Egress(timer)
 
 	timer = stat.NewTimer("/compression")
 	var size int
@@ -687,13 +688,14 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 			d, size, err = decompress(compressor, d, maxReceiveMessageSize)
 		}
 		if err != nil {
-			timer.Egress()
+			stat.Egress(timer)
 			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
 		}
 	} else {
 		size = len(d)
 	}
-	timer.Egress()
+	stat.Egress(timer)
+
 	if size > maxReceiveMessageSize {
 		// TODO: Revisit the error code. Currently keep it consistent with java
 		// implementation.
@@ -739,11 +741,11 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 		return err
 	}
 
-	t := stat.NewTimer("/encoding")
+	timer := stat.NewTimer("/encoding")
 	if err := c.Unmarshal(d, m, stat); err != nil {
 		return status.Errorf(codes.Internal, "grpc: failed to unmarshal the received message %v", err)
 	}
-	t.Egress()
+	stat.Egress(timer)
 
 	if payInfo != nil {
 		payInfo.uncompressedBytes = d

@@ -351,6 +351,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 
 func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	// TODO(zhaoq): Handle uint32 overflow of Stream.id.
+	// TODO(adtac): setup stat?
 	s := &Stream{
 		ct:             t,
 		done:           make(chan struct{}),
@@ -383,6 +384,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 				t.CloseStream(s, err)
 			},
 			freeBuffer: t.bufferPool.put,
+			stat: s.stat,
 		},
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
@@ -563,9 +565,11 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	if err != nil {
 		return nil, err
 	}
+
 	s := t.newStream(ctx, callHdr)
-	timer := s.stat.NewTimer("/http2")
-	defer timer.Egress()
+
+	defer s.stat.Egress(s.stat.NewTimer("/http2"))
+
 	cleanup := func(err error) {
 		if s.swapState(streamDone) == streamDone {
 			// If it was already done, return.
@@ -573,6 +577,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 		// The stream was unprocessed by the server.
 		atomic.StoreUint32(&s.unprocessed, 1)
+		// TODO(adtac): set timer?
 		s.write(recvMsg{err: err})
 		close(s.done)
 		// If headerChan isn't closed, then close it.
@@ -726,6 +731,7 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 	}
 	if err != nil {
 		// This will unblock reads eventually.
+		// TODO(adtac): set timer?
 		s.write(recvMsg{err: err})
 	}
 	// If headerChan isn't closed, then close it.
@@ -918,9 +924,16 @@ func (t *http2Client) updateFlowControl(n uint32) {
 }
 
 func (t *http2Client) handleData(f *http2.DataFrame) {
-	timer := profiling.NewTimer("/http2/recv/dataFrame/loopyReader")
-	// We don't call timer.Egress here. It's called by (b *recvBuffer).put when
-	// the recvMsg is actually put into the backlog.
+	var timer *profiling.Timer
+	if profiling.IsEnabled() {
+		// We don't have a reference to the corresponding stream's stat object
+		// right now, so instead we measure time and append to the stat object
+		// later.
+		timer = profiling.NewTimer("/http2/recv/dataFrame/loopyReader")
+		// Do not defer a call to timer egress here because this object is
+		// short-lived; once this is appended to the appropriate stat, all
+		// references to this object must be lost so as to be garbage collected.
+	}
 
 	size := f.Header().Length
 	var sendBDPPing bool
@@ -960,7 +973,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	if s == nil {
 		return
 	}
-	s.stat.AppendTimer(timer)
+	defer s.stat.Egress(s.stat.AppendTimer(timer))
 	if size > 0 {
 		if err := s.fc.onData(size); err != nil {
 			t.closeStream(s, io.EOF, true, http2.ErrCodeFlowControl, status.New(codes.Internal, err.Error()), nil, false)
@@ -978,7 +991,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			buffer := t.bufferPool.get()
 			buffer.Reset()
 			buffer.Write(f.Data())
-			s.write(recvMsg{buffer: buffer, timer: timer})
+			s.write(recvMsg{buffer: buffer})
 		}
 	}
 	// The server has closed the stream without sending trailers.  Record that
@@ -1171,8 +1184,9 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	if s == nil {
 		return
 	}
-	timer := s.stat.NewTimer("/http2/recv/header/loopyReader")
-	defer timer.Egress()
+
+	defer s.stat.Egress(s.stat.NewTimer("/http2/recv/header/loopyReader"))
+
 	endStream := frame.StreamEnded()
 	atomic.StoreUint32(&s.bytesReceived, 1)
 	initialHeader := atomic.LoadUint32(&s.headerChanClosed) == 0

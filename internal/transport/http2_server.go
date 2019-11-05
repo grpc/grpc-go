@@ -340,8 +340,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		binary.BigEndian.PutUint32(s.stat.Metadata[8:12], streamID)
 		profiling.StreamStats.Push(s.stat)
 
-		timer := s.stat.NewTimer("/http2/recv/header")
-		defer timer.Egress()
+		defer s.stat.Egress(s.stat.NewTimer("/http2/recv/header"))
 	}
 
 	if frame.StreamEnded() {
@@ -446,6 +445,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			ctxDone:    s.ctxDone,
 			recv:       s.buf,
 			freeBuffer: t.bufferPool.put,
+			stat: s.stat,
 		},
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
@@ -583,9 +583,14 @@ func (t *http2Server) updateFlowControl(n uint32) {
 }
 
 func (t *http2Server) handleData(f *http2.DataFrame) {
-	timer := profiling.NewTimer("/http2/recv/dataFrame/loopyReader")
-	// We don't call timer.Egress here. It's called by (b *recvBuffer).put when
-	// the recvMsg is actually put into the backlog.
+	var timer *profiling.Timer
+	if profiling.IsEnabled() {
+		timer = profiling.NewTimer("/http2/recv/dataFrame/loopyReader")
+	}
+
+	// We don't defer timer.Egress() here because it should be called by
+	// google.golang.org/grpc/internal/transport.(*recvBuffer).put when the
+	// recvMsg is actually put into the buffer.
 
 	size := f.Header().Length
 	var sendBDPPing bool
@@ -622,7 +627,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	if !ok {
 		return
 	}
-	s.stat.AppendTimer(timer)
+	defer s.stat.Egress(s.stat.AppendTimer(timer))
 	if size > 0 {
 		if err := s.fc.onData(size); err != nil {
 			t.closeStream(s, true, http2.ErrCodeFlowControl, false)
@@ -640,7 +645,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 			buffer := t.bufferPool.get()
 			buffer.Reset()
 			buffer.Write(f.Data())
-			s.write(recvMsg{buffer: buffer, timer: timer})
+			s.write(recvMsg{buffer: buffer})
 		}
 	}
 	if f.Header().Flags.Has(http2.FlagDataEndStream) {

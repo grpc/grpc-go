@@ -349,7 +349,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		}
 		ht.stats.HandleRPC(s.ctx, inHeader)
 	}
-	// TODO(adtac): set stat?
+	// TODO(adtac): set stat in transportReader and recvBufferReader?
 	s.trReader = &transportReader{
 		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf, freeBuffer: func(*bytes.Buffer) {}},
 		windowHandler: func(int) {},

@@ -71,7 +71,6 @@ type recvMsg struct {
 	// io.EOF: stream is completed. data is nil.
 	// other non-nil error: transport failure. data is nil.
 	err error
-	timer *profiling.Timer
 }
 
 // recvBuffer is an unbounded channel of recvMsg structs.
@@ -94,7 +93,6 @@ func newRecvBuffer() *recvBuffer {
 }
 
 func (b *recvBuffer) put(r recvMsg) {
-	defer r.timer.Egress()
 	b.mu.Lock()
 	if b.err != nil {
 		b.mu.Unlock()
@@ -146,12 +144,14 @@ type recvBufferReader struct {
 	last        *bytes.Buffer // Stores the remaining data in the previous calls.
 	err         error
 	freeBuffer  func(*bytes.Buffer)
+	stat *profiling.Stat
 }
 
 // Read reads the next len(p) bytes from last. If last is drained, it tries to
 // read additional data from recv. It blocks if there no additional data available
 // in recv. If Read returns any non-nil error, it will continue to return that error.
 func (r *recvBufferReader) Read(p []byte) (n int, err error) {
+	defer r.stat.Egress(r.stat.NewTimer("/recvBufferReader"))
 	if r.err != nil {
 		return 0, r.err
 	}
@@ -168,16 +168,28 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 		n, r.err = r.readClient(p)
 	} else {
 		n, r.err = r.read(p)
+		/*
+		timer := r.stat.NewTimer("/select")
+		select {
+		case <-r.ctxDone:
+			n, r.err = 0, ContextErr(r.ctx.Err())
+		case m := <-r.recv.get():
+			n, r.err = r.readAdditional(m, p)
+		}
+		timer.Egress()
+		*/
 	}
 	return n, r.err
 }
 
 func (r *recvBufferReader) read(p []byte) (n int, err error) {
+	defer r.stat.Egress(r.stat.NewTimer("/read"))
 	select {
 	case <-r.ctxDone:
 		return 0, ContextErr(r.ctx.Err())
 	case m := <-r.recv.get():
-		return r.readAdditional(m, p)
+		n, err = r.readAdditional(m, p)
+		return
 	}
 }
 
@@ -467,12 +479,15 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 	if er := s.trReader.(*transportReader).er; er != nil {
 		return 0, er
 	}
+
 	timer := s.stat.NewTimer("/requestRead")
 	s.requestRead(len(p))
-	timer.Egress()
-	timer = s.stat.NewTimer("/ReadFull")
+	s.stat.Egress(timer)
+
+	timer = s.stat.NewTimer("/io")
 	n, err = io.ReadFull(s.trReader, p)
-	timer.Egress()
+	s.stat.Egress(timer)
+
 	return
 }
 
@@ -481,7 +496,7 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 // The error is io.EOF when the stream is done or another non-nil error if
 // the stream broke.
 type transportReader struct {
-	reader io.Reader
+	reader *recvBufferReader
 	// The handler to control the window update procedure for both this
 	// particular stream and the associated transport.
 	windowHandler func(int)
@@ -490,16 +505,18 @@ type transportReader struct {
 }
 
 func (t *transportReader) Read(p []byte) (n int, err error) {
-	timer := t.stat.NewTimer("/read")
+	timer := t.stat.NewTimer("/transportReader/reader")
 	n, err = t.reader.Read(p)
+	t.stat.Egress(timer)
 	if err != nil {
 		t.er = err
 		return
 	}
-	timer.Egress()
-	timer = t.stat.NewTimer("/windowHandler")
+
+	timer = t.stat.NewTimer("/transportReader/windowHandler")
 	t.windowHandler(n)
-	timer.Egress()
+	t.stat.Egress(timer)
+
 	return
 }
 
