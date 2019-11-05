@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
 	"google.golang.org/grpc/balancer"
@@ -223,6 +224,14 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 		newWeight := locality.GetLoadBalancingWeight().GetValue()
 		var newAddrs []resolver.Address
 		for _, lbEndpoint := range locality.GetLbEndpoints() {
+			// Filter out all "unhealthy" endpoints (unknown and
+			// healthy are both considered to be healthy:
+			// https://www.envoyproxy.io/docs/envoy/latest/api-v2/api/v2/core/health_check.proto#envoy-api-enum-core-healthstatus).
+			if lbEndpoint.GetHealthStatus() != corepb.HealthStatus_HEALTHY &&
+				lbEndpoint.GetHealthStatus() != corepb.HealthStatus_UNKNOWN {
+				continue
+			}
+
 			socketAddress := lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress()
 			address := resolver.Address{
 				Addr: net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue()))),
