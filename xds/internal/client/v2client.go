@@ -206,7 +206,6 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 			grpclog.Infof("xds: ADS stream recv failed: %v", err)
 			return success
 		}
-		success = true
 		if len(resp.GetResources()) == 0 {
 			// Prefer closing the stream as the server seems to be misbehaving
 			// by sending an ADS response without any resources.
@@ -227,6 +226,7 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 		default:
 			grpclog.Infof("xds: unknown response URL type: %v", resp.GetTypeUrl())
 		}
+		success = true
 	}
 	return success
 }

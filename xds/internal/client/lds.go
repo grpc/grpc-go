@@ -94,7 +94,7 @@ func (v2c *v2Client) handleLDSResponse(resp *discoverypb.DiscoveryResponse) erro
 		v2c.ldsWatch.callback(ldsUpdate{routeName: routeName}, err)
 	}
 	v2c.mu.Unlock()
-	return nil
+	return err
 }
 
 func (v2c *v2Client) isListenerProtoInteresting(lis *ldspb.Listener) bool {

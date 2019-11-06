@@ -21,8 +21,6 @@
 package fakexds
 
 import (
-	"testing"
-
 	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 	"google.golang.org/grpc/codes"
@@ -59,38 +57,34 @@ type Server struct {
 	// onError is a callback which is invoked when the fake server encounters
 	// errors during sending or receiving messages.
 	onError func(error)
-	t       *testing.T
 }
 
 // New returns a fake xDS server which contains a pair of channels. On one
 // channel, it writes the received requests and on the other, it reads
 // responses that it must send out. The provided onError callback is invoked
-// upon encountering errors during sending or receiving messages. The provided
-// testing.T object is used to throw some useful debugging logs.
-func New(t *testing.T, onError func(error)) *Server {
+// upon encountering errors during sending or receiving messages.
+func New(onError func(error)) *Server {
 	return &Server{
 		RequestChan:  make(chan *Request, defaultChannelBufferSize),
 		ResponseChan: make(chan *Response, defaultChannelBufferSize),
 		onError:      onError,
-		t:            t,
 	}
 }
 
 // StreamAggregatedResources is the fake implementation to handle an ADS
 // stream.
 func (fs *Server) StreamAggregatedResources(s adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+	errCh := make(chan error, 2)
 	go func() {
 		for {
 			req, err := s.Recv()
 			if err != nil {
+				errCh <- err
 				return
 			}
-			fs.t.Logf("fakexds.Server received {%+v, %v}", req, err)
 			fs.RequestChan <- &Request{req, err}
 		}
 	}()
-
-	errCh := make(chan error, 1)
 	go func() {
 		var retErr error
 		defer func() {
@@ -105,11 +99,9 @@ func (fs *Server) StreamAggregatedResources(s adsgrpc.AggregatedDiscoveryService
 					return
 				}
 				if err := s.Send(r.Resp); err != nil {
-					fs.t.Logf("fakexds.Server while sending {%+v}, got error %v", r.Resp, err)
 					retErr = err
 					return
 				}
-				fs.t.Logf("fakexds.Server sent %+v", r.Resp)
 			case <-s.Context().Done():
 				retErr = s.Context().Err()
 				return
