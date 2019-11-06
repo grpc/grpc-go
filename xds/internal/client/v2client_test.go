@@ -42,7 +42,7 @@ import (
 )
 
 const (
-	defaultTestTimeout     = 2 * time.Second
+	defaultTestTimeout     = 5 * time.Second
 	goodLDSTarget1         = "GoodListener1"
 	goodLDSTarget2         = "GoodListener2"
 	uninterestingLDSTarget = "UninterestingListener"
@@ -252,7 +252,7 @@ func testLDS(t *testing.T, ldsOps chan ldsTestOp) {
 
 	// Override the v2Client backoff function with this, so that we can verify
 	// that a backoff actually was triggerred.
-	boCh := make(chan int)
+	boCh := make(chan int, 1)
 	clientBackoff := func(v int) time.Duration {
 		boCh <- v
 		return 0
@@ -290,12 +290,14 @@ func testLDS(t *testing.T, ldsOps chan ldsTestOp) {
 					errCh <- fmt.Errorf("got error while processing LDS request: %v, want: %v", got.Err, ldsOp.wantRequest.Err)
 					return
 				}
+				t.Log("FakeServer received expected request...")
 			}
 
 			// if a response is specified in the testOp, push it to the
 			// fakeserver.
 			if ldsOp.responseToSend != nil {
 				fakeServer.ResponseChan <- ldsOp.responseToSend
+				t.Log("Response pushed to fakeServer...")
 			}
 
 			// Make sure the update callback was invoked, if specified in the
@@ -311,13 +313,16 @@ func testLDS(t *testing.T, ldsOps chan ldsTestOp) {
 					errCh <- fmt.Errorf("received error {%v} in lds callback, wantErr: %v", err, ldsOp.wantUpdateErr)
 					return
 				}
+				t.Log("LDS watch callback received expected update...")
 			}
 
 			// Make sure the stream was retried, if specified in the testOp.
 			if ldsOp.wantRetry {
 				<-boCh
+				t.Log("v2Client backed off before retrying...")
 			}
 		}
+		t.Log("Completed all test ops successfully...")
 		errCh <- nil
 	}()
 

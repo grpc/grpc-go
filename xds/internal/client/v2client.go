@@ -27,7 +27,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 
-	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 )
 
@@ -43,7 +43,7 @@ type v2Client struct {
 
 	// ClientConn to the xDS gRPC server. Owned by the parent xdsClient.
 	cc        *grpc.ClientConn
-	nodeProto *basepb.Node
+	nodeProto *corepb.Node
 	backoff   func(int) time.Duration
 
 	// Message specific channels onto which, corresponding watch information is
@@ -64,7 +64,7 @@ type v2Client struct {
 // newV2Client creates a new v2Client object initialized with the passed
 // arguments. It also spawns a long running goroutine to send and receive xDS
 // messages.
-func newV2Client(cc *grpc.ClientConn, nodeProto *basepb.Node, backoff func(int) time.Duration) *v2Client {
+func newV2Client(cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration) *v2Client {
 	v2c := &v2Client{
 		cc:         cc,
 		nodeProto:  nodeProto,

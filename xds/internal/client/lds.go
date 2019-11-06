@@ -24,13 +24,12 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/grpclog"
 
-	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	ldspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
 )
 
-func (v2c *v2Client) newLDSRequest(target string) *discoverypb.DiscoveryRequest {
-	return &discoverypb.DiscoveryRequest{
+func (v2c *v2Client) newLDSRequest(target string) *xdspb.DiscoveryRequest {
+	return &xdspb.DiscoveryRequest{
 		Node:          v2c.nodeProto,
 		TypeUrl:       listenerURL,
 		ResourceNames: []string{target},
@@ -45,18 +44,24 @@ func (v2c *v2Client) sendLDS(stream adsStream, target string) bool {
 	return true
 }
 
-func (v2c *v2Client) handleLDSResponse(resp *discoverypb.DiscoveryResponse) error {
+func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 	routeName := ""
+	v2c.mu.Lock()
+	defer v2c.mu.Unlock()
+
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
 			return fmt.Errorf("xds: failed to unmarshal resource in LDS response: %v", err)
 		}
-		lis, ok := resource.Message.(*ldspb.Listener)
+		lis, ok := resource.Message.(*xdspb.Listener)
 		if !ok {
 			return fmt.Errorf("xds: unexpected resource type: %T in LDS response", resource.Message)
 		}
 		if !v2c.isListenerProtoInteresting(lis) {
+			// TODO: We might have to cache the results even if the listener is
+			// not interesting at the moment. It might become interesting later
+			// on, and at that time, the server might not send an update.
 			continue
 		}
 		if lis.GetApiListener() == nil {
@@ -89,20 +94,13 @@ func (v2c *v2Client) handleLDSResponse(resp *discoverypb.DiscoveryResponse) erro
 		err = fmt.Errorf("xds: LDS response %+v does not contain route config name", resp)
 	}
 
-	v2c.mu.Lock()
 	if v2c.ldsWatch != nil {
 		v2c.ldsWatch.callback(ldsUpdate{routeName: routeName}, err)
 	}
-	v2c.mu.Unlock()
 	return err
 }
 
-func (v2c *v2Client) isListenerProtoInteresting(lis *ldspb.Listener) bool {
-	interesting := false
-	v2c.mu.Lock()
-	if v2c.ldsWatch != nil && v2c.ldsWatch.target == lis.GetName() {
-		interesting = true
-	}
-	v2c.mu.Unlock()
-	return interesting
+// Caller should hold v2c.mu
+func (v2c *v2Client) isListenerProtoInteresting(lis *xdspb.Listener) bool {
+	return v2c.ldsWatch != nil && v2c.ldsWatch.target == lis.GetName()
 }

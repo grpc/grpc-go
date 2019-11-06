@@ -20,16 +20,16 @@ package client
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/grpclog"
 
-	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	rdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 )
 
-func (v2c *v2Client) newRDSRequest(routeName string) *discoverypb.DiscoveryRequest {
-	return &discoverypb.DiscoveryRequest{
+func (v2c *v2Client) newRDSRequest(routeName string) *xdspb.DiscoveryRequest {
+	return &xdspb.DiscoveryRequest{
 		Node:          v2c.nodeProto,
 		TypeUrl:       routeURL,
 		ResourceNames: []string{routeName},
@@ -44,7 +44,7 @@ func (v2c *v2Client) sendRDS(stream adsStream, routeName string) bool {
 	return true
 }
 
-func (v2c *v2Client) handleRDSResponse(resp *discoverypb.DiscoveryResponse) error {
+func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 	cluster := ""
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
@@ -54,14 +54,14 @@ func (v2c *v2Client) handleRDSResponse(resp *discoverypb.DiscoveryResponse) erro
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
 			return fmt.Errorf("xds: failed to unmarshal resource in RDS response: %v", err)
 		}
-		rc, ok := resource.Message.(*rdspb.RouteConfiguration)
+		rc, ok := resource.Message.(*xdspb.RouteConfiguration)
 		if !ok {
 			return fmt.Errorf("xds: unexpected resource type: %T in RDS response", resource.Message)
 		}
 		if !v2c.isRouteConfigurationInteresting(rc) {
 			continue
 		}
-		cluster = v2c.getClusterFromRouteConfiguration(rc, v2c.ldsWatch.target)
+		cluster = getClusterFromRouteConfiguration(rc, v2c.ldsWatch.target)
 		if cluster != "" {
 			break
 		}
@@ -77,22 +77,18 @@ func (v2c *v2Client) handleRDSResponse(resp *discoverypb.DiscoveryResponse) erro
 	return nil
 }
 
-func (v2c *v2Client) isRouteConfigurationInteresting(rc *rdspb.RouteConfiguration) bool {
-	interesting := false
-	v2c.mu.Lock()
-	if v2c.rdsWatch != nil && v2c.rdsWatch.routeName == rc.GetName() {
-		interesting = true
-	}
-	v2c.mu.Unlock()
-	return interesting
+// Caller should hold v2c.mu
+func (v2c *v2Client) isRouteConfigurationInteresting(rc *xdspb.RouteConfiguration) bool {
+	return v2c.rdsWatch != nil && v2c.rdsWatch.routeName == rc.GetName()
 }
 
-func (v2c *v2Client) getClusterFromRouteConfiguration(rc *rdspb.RouteConfiguration, target string) string {
+func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target string) string {
+	host := stripPort(target)
 	for _, vh := range rc.GetVirtualHosts() {
 		for _, domain := range vh.GetDomains() {
-			// TODO: strip port from target before comparison
-			if target == domain {
-				if vh.GetRoutes() != nil {
+			// TODO: Add support for wildcard matching here.
+			if domain == host {
+				if len(vh.GetRoutes()) > 0 {
 					// The last route is the default route.
 					dr := vh.Routes[len(vh.Routes)-1]
 					if dr.GetMatch() == nil && dr.GetRoute() != nil {
@@ -103,4 +99,12 @@ func (v2c *v2Client) getClusterFromRouteConfiguration(rc *rdspb.RouteConfigurati
 		}
 	}
 	return ""
+}
+
+func stripPort(host string) string {
+	colon := strings.LastIndexByte(host, ':')
+	if colon == -1 {
+		return host
+	}
+	return host[:colon]
 }
