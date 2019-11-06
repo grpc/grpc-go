@@ -1285,7 +1285,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 	}
 
 	select {
-	case <-time.After(connectDeadline.Sub(time.Now())):
+	case <-time.After(time.Until(connectDeadline)):
 		// We didn't get the preface in time.
 		newTr.Close()
 		grpclog.Warningf("grpc: addrConn.createTransport failed to connect to %v: didn't receive server preface in time. Reconnecting...", addr)
