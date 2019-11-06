@@ -345,10 +345,10 @@ func testLDS(t *testing.T, ldsOps chan ldsTestOp) {
 //  - RDS config inline
 func TestLDSBadResponses(t *testing.T) {
 	responses := []fakexds.Response{
-		fakexds.Response{Err: errors.New("RPC error")},
-		fakexds.Response{Resp: emptyLDSResponse},
-		fakexds.Response{Resp: badlyMarshaledLDSResponse},
-		fakexds.Response{Resp: badResourceTypeInLDSResponse},
+		Err:  errors.New("RPC error"),
+		Resp: emptyLDSResponse,
+		Resp: badlyMarshaledLDSResponse,
+		Resp: badResourceTypeInLDSResponse,
 	}
 
 	for _, resp := range responses {
