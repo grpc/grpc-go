@@ -49,31 +49,50 @@ type pickfirstBalancer struct {
 	sc balancer.SubConn
 }
 
+var _ balancer.V2Balancer = &pickfirstBalancer{} // Assert we implement v2
+
 func (b *pickfirstBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 	if err != nil {
-		if grpclog.V(2) {
-			grpclog.Infof("pickfirstBalancer: HandleResolvedAddrs called with error %v", err)
-		}
+		b.ResolverError(err)
 		return
 	}
+	b.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: addrs}}) // Ignore error
+}
+
+func (b *pickfirstBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+	b.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: s})
+}
+
+func (b *pickfirstBalancer) ResolverError(err error) {
+	if grpclog.V(2) {
+		grpclog.Infof("pickfirstBalancer: ResolverError called with error %v", err)
+	}
+}
+
+func (b *pickfirstBalancer) UpdateClientConnState(cs balancer.ClientConnState) error {
+	if len(cs.ResolverState.Addresses) == 0 {
+		return balancer.ErrBadResolverState
+	}
+
 	if b.sc == nil {
-		b.sc, err = b.cc.NewSubConn(addrs, balancer.NewSubConnOptions{})
+		var err error
+		b.sc, err = b.cc.NewSubConn(cs.ResolverState.Addresses, balancer.NewSubConnOptions{})
 		if err != nil {
-			//TODO(yuxuanli): why not change the cc state to Idle?
 			if grpclog.V(2) {
 				grpclog.Errorf("pickfirstBalancer: failed to NewSubConn: %v", err)
 			}
-			return
+			return balancer.ErrBadResolverState
 		}
 		b.cc.UpdateBalancerState(connectivity.Idle, &picker{sc: b.sc})
 		b.sc.Connect()
 	} else {
-		b.sc.UpdateAddresses(addrs)
+		b.sc.UpdateAddresses(cs.ResolverState.Addresses)
 		b.sc.Connect()
 	}
+	return nil
 }
 
-func (b *pickfirstBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+func (b *pickfirstBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
 	if grpclog.V(2) {
 		grpclog.Infof("pickfirstBalancer: HandleSubConnStateChange: %p, %v", sc, s)
 	}
@@ -83,18 +102,18 @@ func (b *pickfirstBalancer) HandleSubConnStateChange(sc balancer.SubConn, s conn
 		}
 		return
 	}
-	if s == connectivity.Shutdown {
+	if s.ConnectivityState == connectivity.Shutdown {
 		b.sc = nil
 		return
 	}
 
-	switch s {
+	switch s.ConnectivityState {
 	case connectivity.Ready, connectivity.Idle:
-		b.cc.UpdateBalancerState(s, &picker{sc: sc})
+		b.cc.UpdateBalancerState(s.ConnectivityState, &picker{sc: sc})
 	case connectivity.Connecting:
-		b.cc.UpdateBalancerState(s, &picker{err: balancer.ErrNoSubConnAvailable})
+		b.cc.UpdateBalancerState(s.ConnectivityState, &picker{err: balancer.ErrNoSubConnAvailable})
 	case connectivity.TransientFailure:
-		b.cc.UpdateBalancerState(s, &picker{err: balancer.ErrTransientFailure})
+		b.cc.UpdateBalancerState(s.ConnectivityState, &picker{err: balancer.ErrTransientFailure})
 	}
 }
 
