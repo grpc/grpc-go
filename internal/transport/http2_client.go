@@ -29,6 +29,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"encoding/binary"
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
@@ -127,6 +128,8 @@ type http2Client struct {
 	onClose  func()
 
 	bufferPool *bufferPool
+
+	connectionCounter uint64
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -330,6 +333,8 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		}
 	}
 
+	t.connectionCounter = atomic.AddUint64(&profiling.ClientConnectionCounter, 1)
+
 	if err := t.framer.writer.Flush(); err != nil {
 		return nil, err
 	}
@@ -360,11 +365,6 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		buf:            newRecvBuffer(),
 		headerChan:     make(chan struct{}),
 		contentSubtype: callHdr.ContentSubtype,
-	}
-
-	if profiling.IsEnabled() {
-		s.stat = profiling.NewStat("client")
-		profiling.StreamStats.Push(s.stat)
 	}
 
 	s.wq = newWriteQuota(defaultWriteQuota, s.done)
@@ -560,6 +560,7 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 // NewStream creates a stream and registers it into the transport as "active"
 // streams.
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Stream, err error) {
+	timer := profiling.NewTimer("/http2")
 	ctx = peer.NewContext(ctx, t.getPeer())
 	headerFields, err := t.createHeaderFields(ctx, callHdr)
 	if err != nil {
@@ -568,7 +569,16 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 
 	s := t.newStream(ctx, callHdr)
 
-	defer s.stat.Egress(s.stat.NewTimer("/http2"))
+	if profiling.IsEnabled() {
+		s.stat = profiling.NewStat("client")
+		s.stat.Metadata = make([]byte, 12)
+		binary.BigEndian.PutUint64(s.stat.Metadata[0:8], t.connectionCounter)
+		// Stream ID will be set when loopy writer actually establishes the stream
+		// and obtains a stream ID
+		profiling.StreamStats.Push(s.stat)
+	}
+
+	defer s.stat.Egress(s.stat.AppendTimer(timer))
 
 	cleanup := func(err error) {
 		if s.swapState(streamDone) == streamDone {
@@ -601,6 +611,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 				return err
 			}
 			t.activeStreams[id] = s
+			if profiling.IsEnabled() {
+				binary.BigEndian.PutUint32(s.stat.Metadata[8:12], id)
+			}
 			if channelz.IsOn() {
 				atomic.AddInt64(&t.czData.streamsStarted, 1)
 				atomic.StoreInt64(&t.czData.lastStreamCreatedTime, time.Now().UnixNano())

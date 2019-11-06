@@ -729,7 +729,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 
 func (cs *clientStream) RecvMsg(m interface{}) error {
 	stat := cs.attempt.s.Stat()
-	defer stat.Egress(stat.NewTimer("/recv"))
+	defer stat.Egress(stat.NewTimer("/clientStream/RecvMsg"))
 
 	if cs.binlog != nil && !cs.serverHeaderBinlogged {
 		// Call Header() to binary log header if it's not already logged.
@@ -1401,7 +1401,7 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 
 func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	stat := ss.s.Stat()
-	defer stat.Egress(stat.NewTimer("/recv"))
+	defer stat.Egress(stat.NewTimer("/serverStream/SendMsg"))
 
 	defer func() {
 		if ss.trInfo != nil {
@@ -1469,7 +1469,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 
 func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 	stat := ss.s.Stat()
-	defer stat.Egress(stat.NewTimer("/recv"))
+	defer stat.Egress(stat.NewTimer("/serverStream/RecvMsg"))
 
 	defer func() {
 		if ss.trInfo != nil {

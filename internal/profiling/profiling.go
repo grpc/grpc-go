@@ -7,10 +7,6 @@ import (
 	"runtime"
 )
 
-// A power of two that's large enough to hold all timers within an average RPC
-// request (defined to be a unary request) without any reallocation.
-const defaultStatAllocatedTimers int32 = 32
-
 // 0 or 1 representing profiling off and on, respectively. Use IsEnabled and
 // SetEnabled to get and set this in a safe manner.
 var profilingEnabled uint32
@@ -20,8 +16,16 @@ func IsEnabled() bool {
 	return atomic.LoadUint32(&profilingEnabled) > 0
 }
 
-// SetEnabled turns profiling on and off depending on enabled. This operation
-// is safe for access concurrently from different goroutines.
+// SetEnabled turns profiling on and off.
+//
+// Note that it is impossible to enable profiling for one server and leave it
+// turned off for another. This is intentional and by design -- if the status
+// of profiling was server-specific, clients wouldn't be able to profile
+// themselves. As a result, SetEnabled turns profiling on and off for all
+// servers and clients in the binary. Each stat will be, however, tagged with
+// whether it's a client stat or a server stat; so you should be able to filter
+// for the right type of stats in post-processing.
+// SetEnabled is the internal 
 func SetEnabled(enabled bool) {
 	if enabled {
 		atomic.StoreUint32(&profilingEnabled, 1)
@@ -77,6 +81,10 @@ type Stat struct {
 	mu sync.Mutex
 }
 
+// A power of two that's large enough to hold all timers within an average RPC
+// request (defined to be a unary request) without any reallocation.
+const defaultStatAllocatedTimers int32 = 32
+
 // NewStat creates and returns a new Stat object.
 func NewStat(statTag string) *Stat {
 	return &Stat{
@@ -94,6 +102,11 @@ func NewStat(statTag string) *Stat {
 // to mark the end. The return value is not a pointer to a Timer object because
 // the internal slice may be re-allocated freely, which would make the
 // reference to pointers of the past obsolete.
+//
+// Why a slice of timer? To make NewTimer allocation-free, we don't allocate a
+// new timer every time. Instead a slice of timers large enough to hold most
+// data is created and elements from this slice are used. This should put less
+// pressure on the GC too.
 func (stat *Stat) NewTimer(timerTag string) (index int) {
 	if stat != nil {
 		// TODO(adtac): Make this lock-free? We don't expect much contention on
@@ -136,23 +149,38 @@ func (stat *Stat) AppendTimer(timer *Timer) (index int) {
 	return
 }
 
+// ConnectionCounters count the number of connections. This counter is embedded
+// within a StreamStat's Metadata along with each stream's stream ID to
+// uniquely identify a query.
+var ServerConnectionCounter uint64
+var ClientConnectionCounter uint64
+
+// Stats for the last defaultStreamStatsBufsize RPCs will be stored in memory.
+// This is can be configured by the registering server at profiling service
+// initialisation with google.golang.org/grpc/profiling/service.ProfilingConfig
+const defaultStreamStatsSize uint32 = 16 << 10
+
+var statsInitialised int32
+
 // StreamStats is a CircularBuffer containing data from the last N RPC calls
-// served, where N is set by the user.
-//
-// TODO(adtac): this is currently a global across the package. Use
-// server-specific StreamStats?
+// served, where N is set by the user. This will contain both server stats and
+// client stats (but each stat will be tagged with whether it's a server or a
+// client in its StatTag).
 var StreamStats *CircularBuffer
 
-// IdCounter counts the number of RPCs connections. This information is
-// included in a StreamStat's Metadata field along with the stream ID within a
-// connection to uniquely identify each stream.
-var IdCounter uint64
-
 // InitStats initialises all the relevant Stat objects. Must be called exactly
-// once per lifetime of a process.
-func InitStats(bufsize uint32) (err error) {
-	StreamStats, err = NewCircularBuffer(bufsize)
-	if err != nil {
+// once per lifetime of a process; calls after the first one are ignored.
+func InitStats(streamStatsSize uint32) (err error) {
+	if !atomic.CompareAndSwapInt32(&statsInitialised, 0, 1) {
+		// If initialised, do nothing.
+		return nil
+	}
+
+	if streamStatsSize == 0 {
+		streamStatsSize = defaultStreamStatsSize
+	}
+
+	if StreamStats, err = NewCircularBuffer(streamStatsSize); err != nil {
 		return
 	}
 

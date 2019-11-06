@@ -6,13 +6,14 @@ import (
 	"google.golang.org/grpc/grpclog"
 
 	"google.golang.org/grpc/internal/profiling"
+	publicprofiling "google.golang.org/grpc/profiling"
 	ppb "google.golang.org/grpc/profiling/proto"
 	pspb "google.golang.org/grpc/profiling/proto/service"
 )
 
 type ProfilingConfig struct {
 	Enabled bool
-	SampleCount uint32
+	StreamStatsSize uint32
 	Server *grpc.Server
 }
 
@@ -21,16 +22,16 @@ func registerService(s *grpc.Server) {
 	pspb.RegisterProfilingServer(s, &profilingServer{})
 }
 
+// Init takes a 
 func Init(pc *ProfilingConfig) (err error) {
-	err = profiling.InitStats(pc.SampleCount)
-	if err != nil {
+	if err = profiling.InitStats(pc.StreamStatsSize); err != nil {
 		return
 	}
 
 	registerService(pc.Server)
 
 	// Do this last after everything has been initialised and allocated.
-	profiling.SetEnabled(pc.Enabled)
+	publicprofiling.SetEnabled(pc.Enabled)
 
 	return
 }
@@ -39,7 +40,7 @@ type profilingServer struct {}
 
 func (s *profilingServer) SetEnabled(ctx context.Context, req *pspb.SetEnabledRequest) (ser *pspb.SetEnabledResponse, err error) {
 	grpclog.Infof("processing SetEnabled (%v)", req.Enabled)
-	profiling.SetEnabled(req.Enabled)
+	publicprofiling.SetEnabled(req.Enabled)
 
 	ser = &pspb.SetEnabledResponse{Success: true}
 	err = nil
@@ -53,7 +54,7 @@ func (s *profilingServer) GetStreamStats(req *pspb.GetStreamStatsRequest, stream
 
 	enabled := profiling.IsEnabled()
 	if enabled {
-		profiling.SetEnabled(false)
+		publicprofiling.SetEnabled(false)
 	}
 
 	for i := 0; i < len(results); i++ {
@@ -63,7 +64,7 @@ func (s *profilingServer) GetStreamStats(req *pspb.GetStreamStatsRequest, stream
 	}
 
 	if enabled {
-		profiling.SetEnabled(true)
+		publicprofiling.SetEnabled(true)
 	}
 
 	return

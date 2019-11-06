@@ -844,6 +844,7 @@ func (s *Server) incrCallsFailed() {
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
 	stat := stream.Stat()
+	defer stat.Egress(stat.NewTimer("/Server/sendResponse"))
 
 	timer := stat.NewTimer("/encoding")
 	data, err := encode(s.getCodec(stream.ContentSubtype()), msg, stat)
@@ -880,7 +881,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
 	stat := stream.Stat()
-	defer stat.Egress(stat.NewTimer("/unary"))
+	defer stat.Egress(stat.NewTimer("/processUnaryRPC"))
 
 	if channelz.IsOn() {
 		s.incrCallsStarted()
@@ -1007,7 +1008,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	df := func(v interface{}) error {
 		defer stat.Egress(stat.NewTimer("/encoding"))
 
-		timer = stat.NewTimer("/getCodec")
+		// Do not create a closure on timer.
+		timer := stat.NewTimer("/getCodec")
 		codec := s.getCodec(stream.ContentSubtype())
 		stat.Egress(timer)
 
@@ -1039,8 +1041,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	}
 	ctx := NewContextWithServerTransportStream(stream.Context(), stream)
 
-	// TODO(adtac): measure /application/interceptor separately?
-	timer = stat.NewTimer("/application")
+	// TODO(adtac): measure interceptor code separately?
+	timer = stat.NewTimer("/applicationHandler")
 	reply, appErr := md.Handler(srv.server, ctx, df, s.opts.unaryInt)
 	stat.Egress(timer)
 	if appErr != nil {
@@ -1077,11 +1079,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	}
 	opts := &transport.Options{Last: true}
 
-	timer = stat.NewTimer("/send")
 	if err := s.sendResponse(t, stream, reply, cp, opts, comp); err != nil {
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
-			stat.Egress(timer)
 			return err
 		}
 		if s, ok := status.FromError(err); ok {
@@ -1106,10 +1106,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				Err:     appErr,
 			})
 		}
-		stat.Egress(timer)
 		return err
 	}
-	stat.Egress(timer)
 	if binlog != nil {
 		h, _ := stream.Header()
 		binlog.Log(&binarylog.ServerHeader{
@@ -1140,7 +1138,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
 	stat := stream.Stat()
-	defer stat.Egress(stat.NewTimer("/streaming"))
+	defer stat.Egress(stat.NewTimer("/processStreamingRPC"))
 
 	if channelz.IsOn() {
 		s.incrCallsStarted()
@@ -1256,7 +1254,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		server = srv.server
 	}
 	if s.opts.streamInt == nil {
-		timer = stat.NewTimer("/application")
+		timer = stat.NewTimer("/applicationHandler")
 		appErr = sd.Handler(server, ss)
 		stat.Egress(timer)
 	} else {
@@ -1265,8 +1263,8 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			IsClientStream: sd.ClientStreams,
 			IsServerStream: sd.ServerStreams,
 		}
-		// TODO(adtac): measure /application/interceptor separately?
-		timer = stat.NewTimer("/application")
+		// TODO(adtac): measure intercept code separately?
+		timer = stat.NewTimer("/applicationHandler")
 		appErr = s.opts.streamInt(server, ss, info, sd.Handler)
 		stat.Egress(timer)
 	}
@@ -1305,6 +1303,17 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		})
 	}
 	return err
+}
+
+//go:noinline
+func foo(t transport.ServerTransport) transport.ServerTransport {
+	if t == nil {
+		for i := 0; i < 8; i++ {
+			foo(t)
+		}
+	}
+
+	return t
 }
 
 func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Stream, trInfo *traceInfo) {
@@ -1349,6 +1358,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	if knownService {
 		if md, ok := srv.md[method]; ok {
 			stat.Egress(timer)
+			t = foo(t)
 			s.processUnaryRPC(t, stream, srv, md, trInfo)
 			return
 		}

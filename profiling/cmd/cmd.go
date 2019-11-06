@@ -29,6 +29,7 @@ var flagEnableProfiling = flag.Bool("enable-profiling", false, "enable profiling
 var flagDisableProfiling = flag.Bool("disable-profiling", false, "disable profiling in remote target")
 
 var flagStreamStatsCatapultJson = flag.String("stream-stats-catapult-json", "", "transform a snapshot into catapult JSON")
+var flagStreamStatsFilter = flag.String("stream-stats-filter", "server,client", "comma-separated list of stat tags to filter for")
 
 func exactlyOneOf(opts ...bool) bool {
 	first := true
@@ -155,14 +156,14 @@ func catapultNs(n int64) float64 {
 	return float64(n)
 }
 
-func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []jsonNode {
+func streamStatsCatapultJsonify(stat *profiling.Stat, base time.Time) []jsonNode {
 	if len(stat.Timers) == 0 {
 		return nil
 	}
 
-	profilingId := binary.BigEndian.Uint64(stat.Metadata[0:8])
+	connectionCounter := binary.BigEndian.Uint64(stat.Metadata[0:8])
 	streamId := binary.BigEndian.Uint32(stat.Metadata[8:12])
-	opid := fmt.Sprintf("/%d/%d", profilingId, streamId)
+	opid := fmt.Sprintf("/%s/%d/%d", stat.StatTag, connectionCounter, streamId)
 
 	var loopyReaderGoId, loopyWriterGoId int64
 	for i := 0; i < len(stat.Timers); i++ {
@@ -183,7 +184,7 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 			Cname: hashCname("tmp"),
 			Phase: "i",
 			Timestamp: 0,
-			Pid: fmt.Sprintf("/%d/loopyReader", profilingId),
+			Pid: fmt.Sprintf("/%s/%d/loopyReader", stat.StatTag, connectionCounter),
 			Tid: fmt.Sprintf("%d", loopyReaderGoId),
 		},
 		jsonNode{
@@ -192,7 +193,7 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 			Cname: hashCname("tmp"),
 			Phase: "i",
 			Timestamp: 0,
-			Pid: fmt.Sprintf("/%d/loopyWriter", profilingId),
+			Pid: fmt.Sprintf("/%s/%d/loopyWriter", stat.StatTag, connectionCounter),
 			Tid: fmt.Sprintf("%d", loopyWriterGoId),
 		},
 	)
@@ -202,7 +203,7 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 		pid, tid := opid, fmt.Sprintf("%d", stat.Timers[i].GoId)
 
 		if stat.Timers[i].GoId == loopyReaderGoId {
-			pid, tid = fmt.Sprintf("/%d/loopyReader", profilingId), fmt.Sprintf("%d", stat.Timers[i].GoId)
+			pid, tid = fmt.Sprintf("/%s/%d/loopyReader", stat.StatTag, connectionCounter), fmt.Sprintf("%d", stat.Timers[i].GoId)
 
 			var flowEndId int
 			var flowEndPid, flowEndTid string
@@ -216,19 +217,19 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 					grpclog.Infof("cannot find %s/grpc/stream/recv/header for %s/http2/recv/header", opid, opid)
 				}
 			case "/http2/recv/dataFrame/loopyReader":
-				flowEndId = filterCounter(stat, "/transport/dequeue", lrc.GetAndInc("/http2/recv/dataFrame/loopyReader"))
+				flowEndId = filterCounter(stat, "/recvAndDecompress", lrc.GetAndInc("/http2/recv/dataFrame/loopyReader"))
 				if flowEndId != -1 {
 					flowEndPid = opid
 					flowEndTid = fmt.Sprintf("%d", stat.Timers[flowEndId].GoId)
 				} else {
-					grpclog.Infof("cannot find %s/transport/dequeue for %s/http2/recv/dataFrame/loopyReader", opid, opid)
+					grpclog.Infof("cannot find %s/recvAndDecompress for %s/http2/recv/dataFrame/loopyReader", opid, opid)
 				}
 			default:
 				flowEndId = -1
 			}
 
 			if flowEndId != -1 {
-				flowId := fmt.Sprintf("lrc begin:/%d%s end:/%d%s begin:(%d, %d, %d) end:(%d, %d, %d)", 2 + id, stat.Timers[i].TimerTag, 2 + id, stat.Timers[flowEndId].TimerTag, i, pid, tid, flowEndId, flowEndPid, flowEndTid)
+				flowId := fmt.Sprintf("lrc begin:/%d%s end:/%d%s begin:(%d, %d, %d) end:(%d, %d, %d)", connectionCounter, stat.Timers[i].TimerTag, connectionCounter, stat.Timers[flowEndId].TimerTag, i, pid, tid, flowEndId, flowEndPid, flowEndTid)
 				result = append(result,
 					jsonNode{
 						Name: fmt.Sprintf("%s/flow", opid),
@@ -253,14 +254,14 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 				)
 			}
 		} else if stat.Timers[i].GoId == loopyWriterGoId {
-			pid, tid = fmt.Sprintf("/%d/loopyWriter", profilingId), fmt.Sprintf("%d", stat.Timers[i].GoId)
+			pid, tid = fmt.Sprintf("/%s/%d/loopyWriter", stat.StatTag, connectionCounter), fmt.Sprintf("%d", stat.Timers[i].GoId)
 
 			var flowBeginId int
 			var flowBeginPid, flowBeginTid string
 			switch stat.Timers[i].TimerTag {
 			case "/http2/recv/header/loopyWriter/registerOutStream":
 				flowBeginId = filterCounter(stat, "/http2/recv/header", lwc.GetAndInc("/http2/recv/header/loopyWriter/registerOutStream"))
-				flowBeginPid = fmt.Sprintf("/%d/loopyReader", profilingId)
+				flowBeginPid = fmt.Sprintf("/%s/%d/loopyReader", stat.StatTag, connectionCounter)
 				flowBeginTid = fmt.Sprintf("%d", loopyReaderGoId)
 			case "/http2/send/dataFrame/loopyWriter/preprocess":
 				flowBeginId = filterCounter(stat, "/transport/enqueue", lwc.GetAndInc("/http2/send/dataFrame/loopyWriter/preprocess"))
@@ -268,17 +269,17 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 					flowBeginPid = opid
 					flowBeginTid = fmt.Sprintf("%d", stat.Timers[flowBeginId].GoId)
 				} else {
-					grpclog.Infof("cannot find /%d/transport/enqueue for /%d/http2/send/dataFrame/loopyWriter/preprocess", 2 + id, 2 + id)
+					grpclog.Infof("cannot find /%d/transport/enqueue for /%d/http2/send/dataFrame/loopyWriter/preprocess", connectionCounter, connectionCounter)
 				}
 			default:
 				flowBeginId = -1
 			}
 
 			if flowBeginId != -1 {
-				flowId := fmt.Sprintf("lwc begin:/%d%s end:/%d%s begin:(%d, %d, %d) end:(%d, %d, %d)", 2 + id, stat.Timers[flowBeginId].TimerTag, 2 + id, stat.Timers[i].TimerTag, flowBeginId, flowBeginPid, flowBeginTid, i, pid, tid)
+				flowId := fmt.Sprintf("lwc begin:/%d%s end:/%d%s begin:(%d, %d, %d) end:(%d, %d, %d)", connectionCounter, stat.Timers[flowBeginId].TimerTag, connectionCounter, stat.Timers[i].TimerTag, flowBeginId, flowBeginPid, flowBeginTid, i, pid, tid)
 				result = append(result,
 					jsonNode{
-						Name: fmt.Sprintf("/%d/%d/flow", profilingId, streamId),
+						Name: fmt.Sprintf("/%s/%d/%d/flow", stat.StatTag, connectionCounter, streamId),
 						Cat: categories + ",flow",
 						Id: flowId,
 						Cname: hashCname("flow"),
@@ -288,7 +289,7 @@ func streamStatsCatapultJsonify(id int, stat *profiling.Stat, base time.Time) []
 						Tid: flowBeginTid,
 					},
 					jsonNode{
-						Name: fmt.Sprintf("/%d/%d/flow", profilingId, streamId),
+						Name: fmt.Sprintf("/%s/%d/%d/flow", stat.StatTag, connectionCounter, streamId),
 						Cat: categories + ",flow",
 						Id: flowId,
 						Cname: hashCname("flow"),
@@ -344,24 +345,39 @@ func streamStatsCatapultJson(snapshotFileName string, streamStatsCatapultJsonFil
 		return err
 	}
 
+	grpclog.Infof("calculating stream stats filters")
+	filterArray := strings.Split(*flagStreamStatsFilter, ",")
+	filter := make(map[string]bool)
+	for _, f := range filterArray {
+		filter[f] = true
+	}
+
+	grpclog.Infof("filter stream stats for %s", *flagStreamStatsFilter)
+	streamStats := make([]*profiling.Stat, 0)
+	for _, stat := range s.StreamStats {
+		if _, ok := filter[stat.StatTag]; ok {
+			streamStats = append(streamStats, stat)
+		}
+	}
+
 	grpclog.Infof("sorting timers within all stats")
-	for id, _ := range s.StreamStats {
-		sort.Slice(s.StreamStats[id].Timers, func(i, j int) bool {
-			return s.StreamStats[id].Timers[i].Begin.Before(s.StreamStats[id].Timers[j].Begin)
+	for id, _ := range streamStats {
+		sort.Slice(streamStats[id].Timers, func(i, j int) bool {
+			return streamStats[id].Timers[i].Begin.Before(streamStats[id].Timers[j].Begin)
 		})
 	}
 
 	grpclog.Infof("sorting stream stats")
-	sort.Slice(s.StreamStats, func(i, j int) bool {
-		if len(s.StreamStats[j].Timers) == 0 {
+	sort.Slice(streamStats, func(i, j int) bool {
+		if len(streamStats[j].Timers) == 0 {
 			return true
-		} else if len(s.StreamStats[i].Timers) == 0 {
+		} else if len(streamStats[i].Timers) == 0 {
 			return false
 		}
-		pi := binary.BigEndian.Uint64(s.StreamStats[i].Metadata[0:8])
-		pj := binary.BigEndian.Uint64(s.StreamStats[j].Metadata[0:8])
+		pi := binary.BigEndian.Uint64(streamStats[i].Metadata[0:8])
+		pj := binary.BigEndian.Uint64(streamStats[j].Metadata[0:8])
 		if pi == pj {
-			return s.StreamStats[i].Timers[0].Begin.Before(s.StreamStats[j].Timers[0].Begin)
+			return streamStats[i].Timers[0].Begin.Before(streamStats[j].Timers[0].Begin)
 		}
 
 		return pi < pj
@@ -371,14 +387,14 @@ func streamStatsCatapultJson(snapshotFileName string, streamStatsCatapultJsonFil
 	// made to retrieve the stats themselves. This likely happenned millions of
 	// nanoseconds after the last stream we want to profile, so it'd just make
 	// the catapult graph less readable.
-	if len(s.StreamStats) > 0 {
-		s.StreamStats = s.StreamStats[:len(s.StreamStats)-1]
+	if len(streamStats) > 0 {
+		streamStats = streamStats[:len(streamStats)-1]
 	}
 
 	// All timestamps use the earliest timestamp available as the reference.
 	grpclog.Infof("calculating the earliest timestamp across all timers")
 	var base time.Time
-	for _, stat := range s.StreamStats {
+	for _, stat := range streamStats {
 		for _, timer := range stat.Timers {
 			if base.IsZero() || timer.Begin.Before(base) {
 				base = timer.Begin
@@ -386,10 +402,10 @@ func streamStatsCatapultJson(snapshotFileName string, streamStatsCatapultJsonFil
 		}
 	}
 
-	grpclog.Infof("converting snapshot data to catapult JSON format")
+	grpclog.Infof("converting %d stats to catapult JSON format", len(streamStats))
 	jsonNodes := make([]jsonNode, 0)
-	for id, stat := range s.StreamStats {
-		jsonNodes = append(jsonNodes, streamStatsCatapultJsonify(id, stat, base)...)
+	for _, stat := range streamStats {
+		jsonNodes = append(jsonNodes, streamStatsCatapultJsonify(stat, base)...)
 	}
 
 	grpclog.Infof("marshalling catapult JSON")

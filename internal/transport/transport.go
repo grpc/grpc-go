@@ -326,6 +326,7 @@ func (s *Stream) getState() streamState {
 }
 
 func (s *Stream) waitOnHeader() {
+	defer s.stat.Egress(s.stat.NewTimer("/waitOnHeader"))
 	if s.headerChan == nil {
 		// On the server headerChan is always nil since a stream originates
 		// only after having received headers.

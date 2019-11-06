@@ -658,7 +658,9 @@ type payloadInfo struct {
 }
 
 func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, stat *profiling.Stat) ([]byte, error) {
-	timer := stat.NewTimer("/transport/dequeue")
+	defer stat.Egress(stat.NewTimer("/recvAndDecompress"))
+
+	timer := stat.NewTimer("/recvMsg")
 	pf, d, err := p.recvMsg(maxReceiveMessageSize, stat)
 	stat.Egress(timer)
 	if err != nil {

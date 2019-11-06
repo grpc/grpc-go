@@ -127,7 +127,7 @@ type http2Server struct {
 	czData     *channelzData
 	bufferPool *bufferPool
 
-	profilingId uint64
+	connectionCounter uint64
 }
 
 // newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
@@ -257,7 +257,9 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	if channelz.IsOn() {
 		t.channelzID = channelz.RegisterNormalSocket(t, config.ChannelzParentID, fmt.Sprintf("%s -> %s", t.remoteAddr, t.localAddr))
 	}
-	t.profilingId = atomic.AddUint64(&profiling.IdCounter, 1)
+
+	t.connectionCounter = atomic.AddUint64(&profiling.ServerConnectionCounter, 1)
+
 	t.framer.writer.Flush()
 
 	defer func() {
@@ -336,7 +338,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		// server, so let's create an associated Stat object.
 		s.stat = profiling.NewStat("server")
 		s.stat.Metadata = make([]byte, 12)
-		binary.BigEndian.PutUint64(s.stat.Metadata[0:8], t.profilingId)
+		binary.BigEndian.PutUint64(s.stat.Metadata[0:8], t.connectionCounter)
 		binary.BigEndian.PutUint32(s.stat.Metadata[8:12], streamID)
 		profiling.StreamStats.Push(s.stat)
 
