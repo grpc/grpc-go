@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	lbgrpc "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
+	"google.golang.org/grpc/balancer/grpclb/statedata"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpctest"
@@ -390,6 +391,8 @@ func newLoadBalancer(numberOfBackends int, statsChan chan *lbpb.ClientStats) (ts
 	return
 }
 
+var grpclbConfig = `{"loadBalancingConfig": [{"grpclb": {}}]}`
+
 func (s) TestGRPCLB(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
@@ -422,13 +425,17 @@ func (s) TestGRPCLB(t *testing.T) {
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
-		Addr:       tss.lbAddr,
-		Type:       resolver.GRPCLB,
-		ServerName: lbServerName,
-	}}})
+	rs := statedata.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)},
+		&statedata.StateData{BalancerAddresses: []resolver.Address{{
+			Addr:       tss.lbAddr,
+			Type:       resolver.Backend,
+			ServerName: lbServerName,
+		}}})
+	r.UpdateState(rs)
 
-	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 	}
 }

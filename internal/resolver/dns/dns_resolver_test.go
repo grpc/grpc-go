@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/balancer/grpclb/statedata"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/resolver"
@@ -742,45 +743,52 @@ func testDNSResolverWithSRV(t *testing.T) {
 	}()
 	defer leakcheck.Check(t)
 	tests := []struct {
-		target   string
-		addrWant []resolver.Address
-		scWant   string
+		target      string
+		addrWant    []resolver.Address
+		grpclbAddrs []resolver.Address
+		scWant      string
 	}{
 		{
 			"foo.bar.com",
 			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			nil,
 			generateSC("foo.bar.com"),
 		},
 		{
 			"foo.bar.com:1234",
 			[]resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
+			nil,
 			generateSC("foo.bar.com"),
 		},
 		{
 			"srv.ipv4.single.fake",
-			[]resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}, {Addr: "1.2.3.4:1234", Type: resolver.GRPCLB, ServerName: "ipv4.single.fake"}},
+			[]resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
+			[]resolver.Address{{Addr: "1.2.3.4:1234", Type: resolver.Backend, ServerName: "ipv4.single.fake"}},
 			generateSC("srv.ipv4.single.fake"),
 		},
 		{
 			"srv.ipv4.multi.fake",
+			nil,
 			[]resolver.Address{
-				{Addr: "1.2.3.4:1234", Type: resolver.GRPCLB, ServerName: "ipv4.multi.fake"},
-				{Addr: "5.6.7.8:1234", Type: resolver.GRPCLB, ServerName: "ipv4.multi.fake"},
-				{Addr: "9.10.11.12:1234", Type: resolver.GRPCLB, ServerName: "ipv4.multi.fake"},
+				{Addr: "1.2.3.4:1234", Type: resolver.Backend, ServerName: "ipv4.multi.fake"},
+				{Addr: "5.6.7.8:1234", Type: resolver.Backend, ServerName: "ipv4.multi.fake"},
+				{Addr: "9.10.11.12:1234", Type: resolver.Backend, ServerName: "ipv4.multi.fake"},
 			},
 			generateSC("srv.ipv4.multi.fake"),
 		},
 		{
 			"srv.ipv6.single.fake",
-			[]resolver.Address{{Addr: "[2607:f8b0:400a:801::1001]:1234", Type: resolver.GRPCLB, ServerName: "ipv6.single.fake"}},
+			nil,
+			[]resolver.Address{{Addr: "[2607:f8b0:400a:801::1001]:1234", Type: resolver.Backend, ServerName: "ipv6.single.fake"}},
 			generateSC("srv.ipv6.single.fake"),
 		},
 		{
 			"srv.ipv6.multi.fake",
+			nil,
 			[]resolver.Address{
-				{Addr: "[2607:f8b0:400a:801::1001]:1234", Type: resolver.GRPCLB, ServerName: "ipv6.multi.fake"},
-				{Addr: "[2607:f8b0:400a:801::1002]:1234", Type: resolver.GRPCLB, ServerName: "ipv6.multi.fake"},
-				{Addr: "[2607:f8b0:400a:801::1003]:1234", Type: resolver.GRPCLB, ServerName: "ipv6.multi.fake"},
+				{Addr: "[2607:f8b0:400a:801::1001]:1234", Type: resolver.Backend, ServerName: "ipv6.multi.fake"},
+				{Addr: "[2607:f8b0:400a:801::1002]:1234", Type: resolver.Backend, ServerName: "ipv6.multi.fake"},
+				{Addr: "[2607:f8b0:400a:801::1003]:1234", Type: resolver.Backend, ServerName: "ipv6.multi.fake"},
 			},
 			generateSC("srv.ipv6.multi.fake"),
 		},
@@ -808,6 +816,11 @@ func testDNSResolverWithSRV(t *testing.T) {
 		}
 		if !reflect.DeepEqual(a.addrWant, state.Addresses) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrWant)
+		}
+		sd := statedata.Get(state)
+		if (sd == nil && len(a.grpclbAddrs) > 0) ||
+			(sd != nil && !reflect.DeepEqual(a.grpclbAddrs, sd.BalancerAddresses)) {
+			t.Errorf("Resolved state of target: %q = %+v (StateData=%+v), want state.Attributes.StateData=%+v\n", a.target, state, sd, a.grpclbAddrs)
 		}
 		sc := scFromState(state)
 		if a.scWant != sc {
