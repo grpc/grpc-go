@@ -90,7 +90,7 @@ func equalClusterStats(a, b []*endpointpb.ClusterStats) bool {
 			s.LoadReportInterval = nil
 		}
 	}
-	return reflect.DeepEqual(a, b)
+	return cmp.Equal(a, b, cmp.Comparer(proto.Equal))
 }
 
 func Test_lrsStore_buildStats_drops(t *testing.T) {

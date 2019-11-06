@@ -3919,9 +3919,13 @@ func testFailedServerStreaming(t *testing.T, e env) {
 		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want <nil>", tc, err)
 	}
 	wantErr := status.Error(codes.DataLoss, "error for testing: "+failAppUA)
-	if _, err := stream.Recv(); !reflect.DeepEqual(err, wantErr) {
+	if _, err := stream.Recv(); !equalError(err, wantErr) {
 		t.Fatalf("%v.Recv() = _, %v, want _, %v", stream, err, wantErr)
 	}
+}
+
+func equalError(x, y error) bool {
+	return x == y || (x != nil && y != nil && x.Error() == y.Error())
 }
 
 // concurrentSendServer is a TestServiceServer whose
