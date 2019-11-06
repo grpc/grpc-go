@@ -125,11 +125,9 @@ func (sbc *subBalancerWithConfig) updateAddrs(addrs []resolver.Address) {
 		// the balancer group is closed. There should be no further address
 		// updates when either of this happened.
 		//
-		// TODO: Update comment and delete the warning below.
 		// This will be a common case with priority support, because a
 		// sub-balancer (and the whole balancer group) could be closed because
 		// it's the lower priority, but it can still get address updates.
-		grpclog.Warningf("subBalancerWithConfig: updateAddrs is called when balancer is nil. This means this sub-balancer is closed.")
 		return
 	}
 	if ub, ok := b.(balancer.V2Balancer); ok {
