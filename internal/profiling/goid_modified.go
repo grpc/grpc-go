@@ -56,6 +56,13 @@ import (
 //    runtime to expose the current goroutine's ID. This is the chosen approach
 //    and it takes about ~2 ns/op, which is negligible in the face of the tens
 //    of microseconds that grpc takes to complete a RPC request.
+//
+// A personal note (adtac@): I'm fully aware of the Go team's position on why
+// goroutine ID isn't exposed and I agree with most of it. However, this is
+// used exclusively for profiling data visualisation, which qualifies as
+// debugging; given that runtime.Stack is fine with exposing the goroutine ID
+// (in an inefficient way), I'm sure the Go team would be comfortable with this
+// conditional build tag.
 func goId() int64 {
 	return runtime.GoId()
 }

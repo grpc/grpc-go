@@ -1,3 +1,21 @@
+/*
+ *
+ * Copyright 2019 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package service
 
 import (
@@ -6,7 +24,6 @@ import (
 	"google.golang.org/grpc/grpclog"
 
 	"google.golang.org/grpc/internal/profiling"
-	publicprofiling "google.golang.org/grpc/profiling"
 	ppb "google.golang.org/grpc/profiling/proto"
 	pspb "google.golang.org/grpc/profiling/proto/service"
 )
@@ -22,7 +39,6 @@ func registerService(s *grpc.Server) {
 	pspb.RegisterProfilingServer(s, &profilingServer{})
 }
 
-// Init takes a
 func Init(pc *ProfilingConfig) (err error) {
 	if err = profiling.InitStats(pc.StreamStatsSize); err != nil {
 		return
@@ -31,7 +47,7 @@ func Init(pc *ProfilingConfig) (err error) {
 	registerService(pc.Server)
 
 	// Do this last after everything has been initialised and allocated.
-	publicprofiling.SetEnabled(pc.Enabled)
+	profiling.SetEnabled(pc.Enabled)
 
 	return
 }
@@ -40,7 +56,7 @@ type profilingServer struct{}
 
 func (s *profilingServer) SetEnabled(ctx context.Context, req *pspb.SetEnabledRequest) (ser *pspb.SetEnabledResponse, err error) {
 	grpclog.Infof("processing SetEnabled (%v)", req.Enabled)
-	publicprofiling.SetEnabled(req.Enabled)
+	profiling.SetEnabled(req.Enabled)
 
 	ser = &pspb.SetEnabledResponse{Success: true}
 	err = nil
@@ -54,7 +70,7 @@ func (s *profilingServer) GetStreamStats(req *pspb.GetStreamStatsRequest, stream
 
 	enabled := profiling.IsEnabled()
 	if enabled {
-		publicprofiling.SetEnabled(false)
+		profiling.SetEnabled(false)
 	}
 
 	for i := 0; i < len(results); i++ {
@@ -64,7 +80,7 @@ func (s *profilingServer) GetStreamStats(req *pspb.GetStreamStatsRequest, stream
 	}
 
 	if enabled {
-		publicprofiling.SetEnabled(true)
+		profiling.SetEnabled(true)
 	}
 
 	return
