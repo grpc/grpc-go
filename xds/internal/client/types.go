@@ -55,27 +55,11 @@ type watchInfo struct {
 	callback interface{}
 }
 
-/*
-type ldsWatchInfo struct {
-	callback ldsCallback
-	target   string
-	state    int32
-}
-*/
-
 type ldsUpdate struct {
 	routeName string
 }
 
 type ldsCallback func(ldsUpdate, error)
-
-/*
-type rdsWatchInfo struct {
-	callback  rdsCallback
-	routeName string
-	state     int32 // accessed atmoically
-}
-*/
 
 type rdsUpdate struct {
 	cluster string
