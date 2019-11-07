@@ -161,7 +161,7 @@ var (
 		},
 	}
 	marshaledBadResourceListener, _ = proto.Marshal(badResourceListener)
-	listenerWithEmptyHttpConnMgr    = &ldspb.Listener{
+	listenerWithEmptyHTTPConnMgr    = &ldspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -170,7 +170,7 @@ var (
 			},
 		},
 	}
-	marshaledListenerWithEmptyHttpConnMgr, _ = proto.Marshal(listenerWithEmptyHttpConnMgr)
+	marshaledListenerWithEmptyHTTPConnMgr, _ = proto.Marshal(listenerWithEmptyHTTPConnMgr)
 	listenerWithInlineRouteConfig            = &ldspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
@@ -276,11 +276,11 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
-	ldsResponseWithEmptyHttpConnMgr = &discoverypb.DiscoveryResponse{
+	ldsResponseWithEmptyHTTPConnMgr = &discoverypb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: listenerURL,
-				Value:   marshaledListenerWithEmptyHttpConnMgr,
+				Value:   marshaledListenerWithEmptyHTTPConnMgr,
 			},
 		},
 		TypeUrl: listenerURL,

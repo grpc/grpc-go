@@ -138,7 +138,7 @@ func TestHandleLDSResponse(t *testing.T) {
 		{
 			name:          "no-routeconfig-in-httpConnMrg",
 			ldsTarget:     goodLDSTarget1,
-			ldsResponse:   ldsResponseWithEmptyHttpConnMgr,
+			ldsResponse:   ldsResponseWithEmptyHTTPConnMgr,
 			wantErr:       true,
 			wantUpdate:    nil,
 			wantUpdateErr: false,
