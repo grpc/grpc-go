@@ -21,6 +21,12 @@
 package fakexds
 
 import (
+	"context"
+	"net"
+	"testing"
+	"time"
+
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -54,21 +60,39 @@ type Server struct {
 	// ResponseChan is a buffered channel from which the fake server reads the
 	// responses that it must send out to the client.
 	ResponseChan chan *Response
-
-	// onError is a callback which is invoked when the fake server encounters
-	// errors during sending or receiving messages.
-	onError func(error)
 }
 
-// New returns a fake xDS server which contains a pair of channels. On one
-// channel, it writes the received requests and on the other, it reads
-// responses that it must send out. The provided onError callback is invoked
-// upon encountering errors during sending or receiving messages.
-func New(onError func(error)) *Server {
-	return &Server{
+// StartClientAndServer starts a fakexds.Server and creates a ClientConn
+// talking to it. The returned cleanup function should be invoked by the caller
+// once the test is done.
+func StartClientAndServer(t *testing.T) (*Server, *grpc.ClientConn, func()) {
+	t.Helper()
+
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("net.Listen() failed: %v", err)
+	}
+
+	server := grpc.NewServer()
+	fakeServer := &Server{
 		RequestChan:  make(chan *Request, defaultChannelBufferSize),
 		ResponseChan: make(chan *Response, defaultChannelBufferSize),
-		onError:      onError,
+	}
+	adsgrpc.RegisterAggregatedDiscoveryServiceServer(server, fakeServer)
+	go server.Serve(lis)
+	t.Logf("Starting fake xDS server at %v...", lis.Addr().String())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		t.Fatalf("grpc.DialContext(%s) failed: %v", lis.Addr().String(), err)
+	}
+	t.Log("Started xDS gRPC client...")
+
+	return fakeServer, client, func() {
+		server.Stop()
+		lis.Close()
 	}
 }
 
@@ -111,12 +135,8 @@ func (fs *Server) StreamAggregatedResources(s adsgrpc.AggregatedDiscoveryService
 	}()
 
 	if err := <-errCh; err != nil {
-		if fs.onError != nil {
-			fs.onError(err)
-		}
 		return err
 	}
-
 	return nil
 }
 

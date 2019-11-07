@@ -19,52 +19,16 @@
 package client
 
 import (
-	"context"
-	"net"
 	"reflect"
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/xds/internal/client/fakexds"
-
 	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
+	"google.golang.org/grpc/xds/internal/client/fakexds"
 )
 
-// setupClientAndServer starts a fakexds.Server and creates a ClientConn
-// talking to it. The returned cleanup function should be invoked by the caller
-// once the test is done.
-func setupClientAndServer(t *testing.T) (*fakexds.Server, *grpc.ClientConn, func()) {
-	t.Helper()
-
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("net.Listen() failed: %v", err)
-	}
-
-	server := grpc.NewServer()
-	fakeServer := fakexds.New(nil)
-	adsgrpc.RegisterAggregatedDiscoveryServiceServer(server, fakeServer)
-	go server.Serve(lis)
-	t.Logf("Starting fake xDS server at %v...", lis.Addr().String())
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	client, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithInsecure(), grpc.WithBlock())
-	if err != nil {
-		t.Fatalf("grpc.DialContext(%s) failed: %v", lis.Addr().String(), err)
-	}
-	t.Log("Started xDS gRPC client...")
-
-	return fakeServer, client, func() {
-		server.Stop()
-		lis.Close()
-	}
-}
-
 func TestHandleLDSResponse(t *testing.T) {
-	fakeServer, client, cleanup := setupClientAndServer(t)
+	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
 	defer cleanup()
 
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
@@ -147,7 +111,7 @@ func TestHandleLDSResponse(t *testing.T) {
 		{
 			name:          "no-apiListener-in-response",
 			ldsTarget:     goodLDSTarget1,
-			ldsResponse:   noApiListenerLDSResponse,
+			ldsResponse:   noAPIListenerLDSResponse,
 			wantErr:       true,
 			wantUpdate:    nil,
 			wantUpdateErr: false,
@@ -156,7 +120,7 @@ func TestHandleLDSResponse(t *testing.T) {
 		{
 			name:          "badly-marshaled-apiListener-in-response",
 			ldsTarget:     goodLDSTarget1,
-			ldsResponse:   badlyMarshaledApiListenerInLDSResponse,
+			ldsResponse:   badlyMarshaledAPIListenerInLDSResponse,
 			wantErr:       true,
 			wantUpdate:    nil,
 			wantUpdateErr: false,
@@ -165,7 +129,7 @@ func TestHandleLDSResponse(t *testing.T) {
 		{
 			name:          "no-httpConnMrg-in-apiListener",
 			ldsTarget:     goodLDSTarget1,
-			ldsResponse:   badResourceTypeInApiListenerInLDSResponse,
+			ldsResponse:   badResourceTypeInAPIListenerInLDSResponse,
 			wantErr:       true,
 			wantUpdate:    nil,
 			wantUpdateErr: false,
@@ -188,8 +152,6 @@ func TestHandleLDSResponse(t *testing.T) {
 			wantUpdate:    nil,
 			wantUpdateErr: false,
 		},
-		// Unsupported type in RouteSpecifier.
-
 	}
 
 	for _, test := range tests {

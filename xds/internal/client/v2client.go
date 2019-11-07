@@ -20,6 +20,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -27,9 +28,12 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/buffer"
 
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 )
+
+const defaultWatchTimer = 5 * time.Second
 
 // v2Client performs the actual xDS RPCs using the xDS v2 API. It creates a
 // single ADS stream on which the different types of xDS requests and responses
@@ -47,7 +51,7 @@ type v2Client struct {
 	backoff   func(int) time.Duration
 
 	// watchCh in the channel onto which watchInfo objects are pushed by the
-	// watch API, and read and acted upon by the send() goroutine.
+	// watch API, and it is read and acted upon by the send() goroutine.
 	watchCh *buffer.Unbounded
 
 	// Message specific watch infos, protected by the below mutex. These are
@@ -57,6 +61,11 @@ type v2Client struct {
 	// these are set to nil.
 	mu       sync.Mutex
 	watchMap map[resourceType]*watchInfo
+
+	// TODO: Add a timer to return an error to watcher.
+	// TODO: check the cache first when we get a watch call.
+	// TODO: when lds resource is updated, see if cache entries can be deleted.
+	rdsCache map[string]*xdspb.RouteConfiguration
 }
 
 // newV2Client creates a new v2Client initialized with the passed arguments.
@@ -67,6 +76,7 @@ func newV2Client(cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) 
 		backoff:   backoff,
 		watchCh:   buffer.NewUnbounded(),
 		watchMap:  make(map[resourceType]*watchInfo),
+		rdsCache:  make(map[string]*xdspb.RouteConfiguration),
 	}
 	v2c.ctx, v2c.cancelCtx = context.WithCancel(context.Background())
 
@@ -172,7 +182,8 @@ func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
 			}
 			wi.state = watchStarted
 			target := wi.target
-			v2c.watchMap[wi.wType] = wi
+			v2c.updateWatchMap(wi)
+			// v2c.watchMap[wi.wType] = wi
 			v2c.mu.Unlock()
 
 			switch wi.wType {
@@ -252,5 +263,25 @@ func (v2c *v2Client) watchRDS(routeName string, rdsCb rdsCallback) (cancel func(
 			return
 		}
 		v2c.watchMap[rdsResource] = nil
+	}
+}
+
+// updateWatchMap takes care of updating watchInfo state in the map in a clean
+// way. Mainly it takes care of closing a watch timer if one exists, and sets
+// up the timer for the new watcher.
+//
+// Caller should hold v2c.mu
+func (v2c *v2Client) updateWatchMap(wi *watchInfo) {
+	if existing := v2c.watchMap[wi.wType]; existing != nil {
+		if existing.timer != nil {
+			existing.timer.Stop()
+		}
+	}
+
+	v2c.watchMap[wi.wType] = wi
+	if wi.wType == rdsResource {
+		wi.timer = time.AfterFunc(defaultWatchTimer, func() {
+			wi.callback.(rdsCallback)(rdsUpdate{cluster: ""}, fmt.Errorf("xds: RDS target %s not found", wi.target))
+		})
 	}
 }

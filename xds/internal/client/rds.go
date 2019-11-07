@@ -44,11 +44,22 @@ func (v2c *v2Client) sendRDS(stream adsStream, routeName []string) bool {
 	return true
 }
 
+// handleRDSResponse processes an RDS response received from the xDS server.
 func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
-	cluster := ""
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
+	// We need to get the target from the URI passed to the gRPC channel.
+	target := ""
+	if v2c.watchMap[ldsResource] != nil {
+		target = v2c.watchMap[ldsResource].target[0]
+	}
+	if target == "" {
+		return fmt.Errorf("xds: unexpected RDS response when no LDS watcher is registered: %+v", resp)
+	}
+
+	returnCluster := ""
+	localCache := make(map[string]*xdspb.RouteConfiguration)
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
@@ -58,47 +69,72 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if !ok {
 			return fmt.Errorf("xds: unexpected resource type: %T in RDS response", resource.Message)
 		}
-		if !v2c.isRouteConfigurationInteresting(rc) {
-			continue
+		cluster, ok := validateRouteConfiguration(rc, target)
+		if !ok {
+			return fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v", rc)
 		}
-		cluster = getClusterFromRouteConfiguration(rc, v2c.watchMap[rdsResource].target[0])
-		if cluster != "" {
-			break
+
+		// If we get here, it means that this resource was a good one.
+		localCache[rc.GetName()] = rc
+		if v2c.isRouteConfigurationInteresting(rc) {
+			returnCluster = cluster
 		}
 	}
 
-	var err error
-	if cluster == "" {
-		err = fmt.Errorf("xds: RDS response {%+v} does not contain cluster name", resp)
+	// Update the cache in the v2Client only after we have confirmed that all
+	// resources in the received response were good.
+	for k, v := range localCache {
+		v2c.rdsCache[k] = v
 	}
-	if wi := v2c.watchMap[ldsResource]; wi != nil {
-		wi.callback.(rdsCallback)(rdsUpdate{cluster: cluster}, err)
+
+	if returnCluster != "" {
+		if wi := v2c.watchMap[rdsResource]; wi != nil {
+			wi.timer.Stop()
+			wi.callback.(rdsCallback)(rdsUpdate{cluster: returnCluster}, nil)
+		}
 	}
 	return nil
 }
 
+// isRouteConfigurationInteresting determines is the provided
+// RouteConfiguration matches the routeName that we are watching for.
+//
 // Caller should hold v2c.mu
 func (v2c *v2Client) isRouteConfigurationInteresting(rc *xdspb.RouteConfiguration) bool {
 	return v2c.watchMap[rdsResource] != nil && v2c.watchMap[rdsResource].target[0] == rc.GetName()
 }
 
-func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target string) string {
+// validateRouteConfiguration checks if the provided RouteConfiguration meets
+// the expected criteria. If so, it returns a non-empty clusterName.
+//
+// A RouteConfiguration resource is considered valid when only if it contains a
+// VirtualHost whose domain field matches the server name from the URI passed
+// to the gRPC channel, and it contains a clusterName.
+//
+// The RouteConfiguration includes a list of VirtualHosts, which may have zero
+// or more elements. We are interested in the element whose domains field
+// matches the server name specified in the "xds:" URI (with port, if any,
+// stripped off). The only field in the VirtualHost proto that the we are
+// interested in is the list of routes. We only look at the last route in the
+// list (the default route), whose match field must be empty and whose route
+// field must be set.  Inside that route message, the cluster field will
+// contain the clusterName we are looking for.
+func validateRouteConfiguration(rc *xdspb.RouteConfiguration, target string) (string, bool) {
 	host := stripPort(target)
 	for _, vh := range rc.GetVirtualHosts() {
 		for _, domain := range vh.GetDomains() {
-			// TODO: Add support for wildcard matching here.
+			// TODO: Add support for wildcard matching here?
 			if domain == host {
 				if len(vh.GetRoutes()) > 0 {
-					// The last route is the default route.
 					dr := vh.Routes[len(vh.Routes)-1]
 					if dr.GetMatch() == nil && dr.GetRoute() != nil {
-						return dr.GetRoute().GetCluster()
+						return dr.GetRoute().GetCluster(), true
 					}
 				}
 			}
 		}
 	}
-	return ""
+	return "", false
 }
 
 func stripPort(host string) string {

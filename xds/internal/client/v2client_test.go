@@ -129,9 +129,9 @@ var (
 		},
 	}
 	uninterestingMarshaledListener, _ = proto.Marshal(uninterestingListener)
-	noApiListener                     = &ldspb.Listener{Name: goodLDSTarget1}
-	marshaledNoApiListener, _         = proto.Marshal(noApiListener)
-	badApiListener1                   = &ldspb.Listener{
+	noAPIListener                     = &ldspb.Listener{Name: goodLDSTarget1}
+	marshaledNoAPIListener, _         = proto.Marshal(noAPIListener)
+	badAPIListener1                   = &ldspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -140,8 +140,8 @@ var (
 			},
 		},
 	}
-	badlyMarshaledApiListener1, _ = proto.Marshal(badApiListener1)
-	badApiListener2               = &ldspb.Listener{
+	badlyMarshaledAPIListener1, _ = proto.Marshal(badAPIListener1)
+	badAPIListener2               = &ldspb.Listener{
 		Name: goodLDSTarget2,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -150,7 +150,7 @@ var (
 			},
 		},
 	}
-	badlyMarshaledApiListener2, _ = proto.Marshal(badApiListener2)
+	badlyMarshaledAPIListener2, _ = proto.Marshal(badAPIListener2)
 	badResourceListener           = &ldspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
@@ -227,7 +227,7 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
-	badResourceTypeInApiListenerInLDSResponse = &discoverypb.DiscoveryResponse{
+	badResourceTypeInAPIListenerInLDSResponse = &discoverypb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: listenerURL,
@@ -258,20 +258,20 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
-	noApiListenerLDSResponse = &discoverypb.DiscoveryResponse{
+	noAPIListenerLDSResponse = &discoverypb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: listenerURL,
-				Value:   marshaledNoApiListener,
+				Value:   marshaledNoAPIListener,
 			},
 		},
 		TypeUrl: listenerURL,
 	}
-	badlyMarshaledApiListenerInLDSResponse = &discoverypb.DiscoveryResponse{
+	badlyMarshaledAPIListenerInLDSResponse = &discoverypb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: listenerURL,
-				Value:   badlyMarshaledApiListener1,
+				Value:   badlyMarshaledAPIListener1,
 			},
 		},
 		TypeUrl: listenerURL,
@@ -306,7 +306,7 @@ var (
 			},
 			{
 				TypeUrl: listenerURL,
-				Value:   badlyMarshaledApiListener2,
+				Value:   badlyMarshaledAPIListener2,
 			},
 		},
 		TypeUrl: listenerURL,
@@ -469,8 +469,8 @@ func TestLDSBadResponses(t *testing.T) {
 			{Resp: emptyLDSResponse},
 			{Resp: badlyMarshaledLDSResponse},
 			{Resp: badResourceTypeInLDSResponse},
-			{Resp: noApiListenerLDSResponse},
-		{Resp: badlyMarshaledApiListenerInLDSResponse},
+			{Resp: noAPIListenerLDSResponse},
+		{Resp: badlyMarshaledAPIListenerInLDSResponse},
 	}
 
 	for _, resp := range responses {

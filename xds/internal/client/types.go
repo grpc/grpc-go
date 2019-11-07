@@ -19,6 +19,8 @@
 package client
 
 import (
+	"time"
+
 	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 )
 
@@ -53,6 +55,7 @@ type watchInfo struct {
 	target   []string
 	state    int32
 	callback interface{}
+	timer    *time.Timer
 }
 
 type ldsUpdate struct {
