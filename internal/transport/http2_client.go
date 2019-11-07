@@ -20,6 +20,7 @@ package transport
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math"
@@ -37,6 +38,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/profiling"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
@@ -368,6 +370,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		headerChan:     make(chan struct{}),
 		contentSubtype: callHdr.ContentSubtype,
 	}
+
 	s.wq = newWriteQuota(defaultWriteQuota, s.done)
 	s.requestRead = func(n int) {
 		t.adjustWindow(s, uint32(n))
@@ -385,10 +388,12 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 				t.CloseStream(s, err)
 			},
 			freeBuffer: t.bufferPool.put,
+			stat:       s.stat,
 		},
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
 		},
+		stat: s.stat,
 	}
 	return s
 }
@@ -557,12 +562,29 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 // NewStream creates a stream and registers it into the transport as "active"
 // streams.
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Stream, err error) {
+	timer := profiling.NewTimer("/http2")
 	ctx = peer.NewContext(ctx, t.getPeer())
 	headerFields, err := t.createHeaderFields(ctx, callHdr)
 	if err != nil {
 		return nil, err
 	}
+
 	s := t.newStream(ctx, callHdr)
+
+	if profiling.IsEnabled() {
+		s.stat = profiling.NewStat("client")
+		s.stat.Metadata = make([]byte, 12)
+		binary.BigEndian.PutUint64(s.stat.Metadata[0:8], t.connectionID)
+		// Stream ID will be set when loopy writer actually establishes the stream
+		// and obtains a stream ID
+		profiling.StreamStats.Push(s.stat)
+		// Usually, performance suffers when we used defers to record egress out of
+		// functions when profiling is disabled, but it's fine here because this is
+		// executed only when profliing is enabled.
+		s.stat.AppendTimer(timer)
+		defer timer.Egress()
+	}
+
 	cleanup := func(err error) {
 		if s.swapState(streamDone) == streamDone {
 			// If it was already done, return.
@@ -593,6 +615,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 				return err
 			}
 			t.activeStreams[id] = s
+			if s.stat != nil {
+				binary.BigEndian.PutUint32(s.stat.Metadata[8:12], id)
+			}
 			if channelz.IsOn() {
 				atomic.AddInt64(&t.czData.streamsStarted, 1)
 				atomic.StoreInt64(&t.czData.lastStreamCreatedTime, time.Now().UnixNano())
@@ -840,7 +865,7 @@ func (t *http2Client) GracefulClose() {
 
 // Write formats the data into HTTP2 data frame(s) and sends it out. The caller
 // should proceed only if Write returns nil.
-func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
+func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, stat *profiling.Stat, opts *Options) error {
 	if opts.Last {
 		// If it's the last message, update stream state.
 		if !s.compareAndSwapState(streamActive, streamWriteDone) {
@@ -852,6 +877,7 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	df := &dataFrame{
 		streamID:  s.id,
 		endStream: opts.Last,
+		stat:      stat,
 	}
 	if hdr != nil || data != nil { // If it's not an empty data frame.
 		// Add some data to grpc message header so that we can equally
@@ -921,6 +947,18 @@ func (t *http2Client) updateFlowControl(n uint32) {
 }
 
 func (t *http2Client) handleData(f *http2.DataFrame) {
+	var timer *profiling.Timer
+	if profiling.IsEnabled() {
+		// We don't have a reference to the stream's stat object right now, so
+		// instead we measure time and append to the stat object later.
+		timer = profiling.NewTimer("/http2/recv/dataFrame/loopyReader")
+		// Do not defer a call to timer egress here because this object is
+		// short-lived; once this is appended to the appropriate stat, all
+		// references to this object must be lost so as to be garbage collected.
+		// AppendTimer makes a copy of the timer, so operations on this object will
+		// not be reflected in the stat's copy.
+	}
+
 	size := f.Header().Length
 	var sendBDPPing bool
 	if t.bdpEst != nil {
@@ -959,9 +997,11 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	if s == nil {
 		return
 	}
+	s.stat.AppendTimer(timer)
 	if size > 0 {
 		if err := s.fc.onData(size); err != nil {
 			t.closeStream(s, io.EOF, true, http2.ErrCodeFlowControl, status.New(codes.Internal, err.Error()), nil, false)
+			timer.Egress()
 			return
 		}
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
@@ -984,6 +1024,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	if f.FrameHeader.Flags.Has(http2.FlagDataEndStream) {
 		t.closeStream(s, io.EOF, false, http2.ErrCodeNo, status.New(codes.Internal, "server closed the stream without sending trailers"), nil, true)
 	}
+	timer.Egress()
 }
 
 func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
@@ -1169,6 +1210,11 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	if s == nil {
 		return
 	}
+
+	if s.stat != nil {
+		defer s.stat.NewTimer("/http2/recv/header/loopyReader").Egress()
+	}
+
 	endStream := frame.StreamEnded()
 	atomic.StoreUint32(&s.bytesReceived, 1)
 	initialHeader := atomic.LoadUint32(&s.headerChanClosed) == 0
