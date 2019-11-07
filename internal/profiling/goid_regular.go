@@ -1,3 +1,5 @@
+// +build !grpcgoid
+
 /*
  *
  * Copyright 2019 gRPC authors.
@@ -18,29 +20,10 @@
 
 package profiling
 
-import (
-	"fmt"
-	"sync"
-	"testing"
-)
-
-func BenchmarkTimer(b *testing.B) {
-	for routines := 1; routines <= 1<<8; routines <<= 1 {
-		b.Run(fmt.Sprintf("goroutines:%d", routines), func(b *testing.B) {
-			stat := NewStat("foo")
-			perRoutine := b.N / routines
-			var wg sync.WaitGroup
-			for r := 0; r < routines; r++ {
-				wg.Add(1)
-				go func() {
-					for i := 0; i < perRoutine; i++ {
-						timer := stat.NewTimer("bar")
-						timer.Egress()
-					}
-					wg.Done()
-				}()
-			}
-			wg.Wait()
-		})
-	}
+// This dummy function always returns 0. In some modified dev environments,
+// this may be replaced with a call to a function in a modified Go runtime that
+// retrieves the goroutine ID efficiently. See goid_modified.go for a different
+// version of goId that requires a grpcgoid build tag to compile.
+func goId() int64 {
+	return 0
 }

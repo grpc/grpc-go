@@ -1,7 +1,39 @@
+/*
+ *
+ * Copyright 2019 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// The profiling package contains two logical components: buffer.go and
+// profiling.go. The former implements a circular buffer (a.k.a. ring buffer)
+// in a lock-free manner using atomics. This ring buffer is used by
+// profiling.go to store various statistics. For example, StreamStats is a
+// circular buffer of Stat objects, each of which is comprised of Timers.
+//
+// This abstraction is designed to accomodate more stats in the future; for
+// example, if one wants to profile the load balancing layer, which is
+// independent of RPC queries, a separate CircularBuffer can be used.
+//
+// Note that the circular buffer simply takes any interface{}. In the future,
+// more types of measurements (such as the number of memory allocations) could
+// be measured, which might require a different type of object being pushed
+// into the circular buffer.
+
 package profiling
 
 import (
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,13 +64,6 @@ func SetEnabled(enabled bool) {
 	} else {
 		atomic.StoreUint32(&profilingEnabled, 0)
 	}
-}
-
-// This dummy function always returns 0. In some modified dev environments,
-// this may be replaced with a call to a function in a modified Go runtime that
-// retrieves the goroutine ID efficiently.
-func goId() int64 {
-	return runtime.GoId()
 }
 
 // A Timer represents the wall-clock beginning and ending of a logical
