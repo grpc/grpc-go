@@ -53,6 +53,7 @@ func capToMaxInt32(val int) uint32 {
 func marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error) {
 	protoMsg := v.(proto.Message)
 	newSlice := make([]byte, 0, cb.lastMarshaledSize)
+
 	cb.SetBuf(newSlice)
 	cb.Reset()
 	if err := cb.Marshal(protoMsg); err != nil {
