@@ -436,8 +436,9 @@ func TestEDS_EndpointsHealth(t *testing.T) {
 		testEndpointAddrs[8],
 	}
 	sortStrTrans := cmp.Transformer("Sort", func(in []string) []string {
-		sort.Strings(in)
-		return in
+		out := append([]string(nil), in...) // Copy input to avoid mutating it.
+		sort.Strings(out)
+		return out
 	})
 	if !cmp.Equal(newSubConnAddrStrs, wantNewSubConnAddrStrs, sortStrTrans) {
 		t.Fatalf("want newSubConn with address %v, got %v", wantNewSubConnAddrStrs, newSubConnAddrStrs)
