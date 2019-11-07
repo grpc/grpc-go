@@ -24,6 +24,7 @@ import (
 	"context"
 	"net"
 
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -87,8 +88,7 @@ const (
 type Address struct {
 	// Addr is the server address on which a connection will be established.
 	Addr string
-	// Type is the type of this address.
-	Type AddressType
+
 	// ServerName is the name of this address.
 	// If non-empty, the ServerName is used as the transport certification authority for
 	// the address, instead of the hostname from the Dial target string. In most cases,
@@ -101,8 +101,20 @@ type Address struct {
 	// is insecure to populate it with data from untrusted inputs since untrusted
 	// values could be used to bypass the authority checks performed by TLS.
 	ServerName string
+
+	// Attributes contains arbitrary data about this address intended for
+	// consumption by the load balancing policy.
+	Attributes *attributes.Attributes
+
+	// Type is the type of this address.
+	//
+	// Deprecated: use Attributes instead.
+	Type AddressType
+
 	// Metadata is the information associated with Addr, which may be used
 	// to make load balancing decision.
+	//
+	// Deprecated: use Attributes instead.
 	Metadata interface{}
 }
 
@@ -141,6 +153,10 @@ type State struct {
 	// config.  If it is nil, it indicates no service config is present or the
 	// resolver does not provide service configs.
 	ServiceConfig *serviceconfig.ParseResult
+
+	// Attributes contains arbitrary data about the resolver intended for
+	// consumption by the load balancing policy.
+	Attributes *attributes.Attributes
 }
 
 // ClientConn contains the callbacks for resolver to notify any updates
