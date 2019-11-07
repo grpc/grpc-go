@@ -41,6 +41,11 @@ type jsonNode struct {
 	Tid       string  `json:"tid"`
 }
 
+// Catapult does not allow specifying colours manually; a 20-odd predefined
+// labels are used (that don't make much sense outside the context of
+// Chromium). See this for more details:
+//
+// https://github.com/catapult-project/catapult/blob/bef344f7017fc9e04f7049d0f58af6d9ce9f4ab6/tracing/tracing/base/color_scheme.html#L29
 func hashCname(tag string) string {
 	if strings.Contains(tag, "encoding") {
 		return "rail_response"

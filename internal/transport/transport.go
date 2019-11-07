@@ -168,16 +168,6 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 		n, r.err = r.readClient(p)
 	} else {
 		n, r.err = r.read(p)
-		/*
-			timer := r.stat.NewTimer("/select")
-			select {
-			case <-r.ctxDone:
-				n, r.err = 0, ContextErr(r.ctx.Err())
-			case m := <-r.recv.get():
-				n, r.err = r.readAdditional(m, p)
-			}
-			timer.Egress()
-		*/
 	}
 	return n, r.err
 }
