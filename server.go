@@ -1015,7 +1015,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		stat.Egress(timer)
 
 		timer = stat.NewTimer("/unmarshal")
-		err := codec.Unmarshal(d, v, stat)
+		err := codec.Unmarshal(d, v)
 		stat.Egress(timer)
 		if err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)

@@ -548,7 +548,7 @@ func encode(c baseCodec, msg interface{}, stat *profiling.Stat) ([]byte, error) 
 	if msg == nil { // NOTE: typed nils will not be caught by this check
 		return nil, nil
 	}
-	b, err := c.Marshal(msg, stat)
+	b, err := c.Marshal(msg)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
 	}
@@ -744,7 +744,7 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 	}
 
 	timer := stat.NewTimer("/encoding")
-	if err := c.Unmarshal(d, m, stat); err != nil {
+	if err := c.Unmarshal(d, m); err != nil {
 		return status.Errorf(codes.Internal, "grpc: failed to unmarshal the received message %v", err)
 	}
 	stat.Egress(timer)
