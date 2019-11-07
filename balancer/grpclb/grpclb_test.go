@@ -829,45 +829,8 @@ func TestFallback(t *testing.T) {
 	}
 }
 
-type pickfirstFailOnEmptyAddrsListBuilder struct {
-	balancer.Builder // pick_first builder.
-}
-
-func (b *pickfirstFailOnEmptyAddrsListBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	pf := b.Builder.Build(cc, opts)
-	return &pickfirstFailOnEmptyAddrsList{pf}
-}
-
-type pickfirstFailOnEmptyAddrsList struct {
-	balancer.Balancer // pick_first balancer.
-}
-
-func (b *pickfirstFailOnEmptyAddrsList) UpdateClientConnState(s balancer.ClientConnState) error {
-	addrs := s.ResolverState.Addresses
-	if len(addrs) == 0 {
-		return balancer.ErrBadResolverState
-	}
-	b.Balancer.HandleResolvedAddrs(addrs, nil)
-	return nil
-}
-
-func (b *pickfirstFailOnEmptyAddrsList) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	b.Balancer.HandleSubConnStateChange(sc, state.ConnectivityState)
-}
-
-func (b *pickfirstFailOnEmptyAddrsList) ResolverError(error) {}
-
 func TestFallBackWithNoServerAddress(t *testing.T) {
 	defer leakcheck.Check(t)
-
-	defer func() func() {
-		// Override pick_first with a balancer that returns error to trigger
-		// re-resolve, to test that when grpclb accepts no server address,
-		// re-resolve is never triggered.
-		pfb := balancer.Get("pick_first")
-		balancer.Register(&pickfirstFailOnEmptyAddrsListBuilder{pfb})
-		return func() { balancer.Register(pfb) }
-	}()()
 
 	resolveNowCh := make(chan struct{}, 1)
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
