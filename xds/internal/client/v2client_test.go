@@ -19,24 +19,16 @@
 package client
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"net"
-	"reflect"
-	"testing"
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/xds/internal/client/fakexds"
 
 	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	ldspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	rdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
 	listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v2"
-	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 )
@@ -83,7 +75,21 @@ var (
 		},
 	}
 	marshaledConnMgr2, _ = proto.Marshal(goodHTTPConnManager2)
-	goodListener1        = &ldspb.Listener{
+	emptyHTTPConnManager = &httppb.HttpConnectionManager{
+		RouteSpecifier: &httppb.HttpConnectionManager_Rds{
+			Rds: &httppb.Rds{},
+		},
+	}
+	emptyMarshaledConnMgr, _     = proto.Marshal(emptyHTTPConnManager)
+	connMgrWithInlineRouteConfig = &httppb.HttpConnectionManager{
+		RouteSpecifier: &httppb.HttpConnectionManager_RouteConfig{
+			RouteConfig: &rdspb.RouteConfiguration{
+				Name: goodRouteName1,
+			},
+		},
+	}
+	marshaledConnMgrWithInlineRouteConfig, _ = proto.Marshal(connMgrWithInlineRouteConfig)
+	goodListener1                            = &ldspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -123,7 +129,59 @@ var (
 		},
 	}
 	uninterestingMarshaledListener, _ = proto.Marshal(uninterestingListener)
-	goodLDSResponse1                  = &discoverypb.DiscoveryResponse{
+	noApiListener                     = &ldspb.Listener{Name: goodLDSTarget1}
+	marshaledNoApiListener, _         = proto.Marshal(noApiListener)
+	badApiListener1                   = &ldspb.Listener{
+		Name: goodLDSTarget1,
+		ApiListener: &listenerpb.ApiListener{
+			ApiListener: &anypb.Any{
+				TypeUrl: httpConnManagerURL,
+				Value:   []byte{1, 2, 3, 4},
+			},
+		},
+	}
+	badlyMarshaledApiListener1, _ = proto.Marshal(badApiListener1)
+	badApiListener2               = &ldspb.Listener{
+		Name: goodLDSTarget2,
+		ApiListener: &listenerpb.ApiListener{
+			ApiListener: &anypb.Any{
+				TypeUrl: httpConnManagerURL,
+				Value:   []byte{1, 2, 3, 4},
+			},
+		},
+	}
+	badlyMarshaledApiListener2, _ = proto.Marshal(badApiListener2)
+	badResourceListener           = &ldspb.Listener{
+		Name: goodLDSTarget1,
+		ApiListener: &listenerpb.ApiListener{
+			ApiListener: &anypb.Any{
+				TypeUrl: listenerURL,
+				Value:   marshaledListener1,
+			},
+		},
+	}
+	marshaledBadResourceListener, _ = proto.Marshal(badResourceListener)
+	listenerWithEmptyHttpConnMgr    = &ldspb.Listener{
+		Name: goodLDSTarget1,
+		ApiListener: &listenerpb.ApiListener{
+			ApiListener: &anypb.Any{
+				TypeUrl: httpConnManagerURL,
+				Value:   emptyMarshaledConnMgr,
+			},
+		},
+	}
+	marshaledListenerWithEmptyHttpConnMgr, _ = proto.Marshal(listenerWithEmptyHttpConnMgr)
+	listenerWithInlineRouteConfig            = &ldspb.Listener{
+		Name: goodLDSTarget1,
+		ApiListener: &listenerpb.ApiListener{
+			ApiListener: &anypb.Any{
+				TypeUrl: httpConnManagerURL,
+				Value:   marshaledConnMgrWithInlineRouteConfig,
+			},
+		},
+	}
+	marshaledListenerWithInlineRouteConfig, _ = proto.Marshal(listenerWithInlineRouteConfig)
+	goodLDSResponse1                          = &discoverypb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: listenerURL,
@@ -169,6 +227,15 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
+	badResourceTypeInApiListenerInLDSResponse = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: listenerURL,
+				Value:   marshaledBadResourceListener,
+			},
+		},
+		TypeUrl: listenerURL,
+	}
 	uninterestingLDSResponse = &discoverypb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
@@ -191,8 +258,62 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
+	noApiListenerLDSResponse = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: listenerURL,
+				Value:   marshaledNoApiListener,
+			},
+		},
+		TypeUrl: listenerURL,
+	}
+	badlyMarshaledApiListenerInLDSResponse = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: listenerURL,
+				Value:   badlyMarshaledApiListener1,
+			},
+		},
+		TypeUrl: listenerURL,
+	}
+	ldsResponseWithEmptyHttpConnMgr = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: listenerURL,
+				Value:   marshaledListenerWithEmptyHttpConnMgr,
+			},
+		},
+		TypeUrl: listenerURL,
+	}
+	ldsResponseWithInlineRouteConfig = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: listenerURL,
+				Value:   marshaledListenerWithInlineRouteConfig,
+			},
+		},
+		TypeUrl: listenerURL,
+	}
+	goodBadUglyLDSResponse = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: listenerURL,
+				Value:   marshaledListener2,
+			},
+			{
+				TypeUrl: listenerURL,
+				Value:   marshaledListener1,
+			},
+			{
+				TypeUrl: listenerURL,
+				Value:   badlyMarshaledApiListener2,
+			},
+		},
+		TypeUrl: listenerURL,
+	}
 )
 
+/*
 // ldsTestOp contains all data related to one particular test operation related
 // to LDS watch.
 type ldsTestOp struct {
@@ -338,17 +459,18 @@ func testLDS(t *testing.T, ldsOps chan ldsTestOp) {
 }
 
 // test bad messages. make sure the client backsoff and retries
-//  - no API listener field in response
 //  - api listener unmarshal error
 //  - no http connection manager in response
 //  - no route specifier in response
 //  - RDS config inline
 func TestLDSBadResponses(t *testing.T) {
 	responses := []fakexds.Response{
-		Err:  errors.New("RPC error"),
-		Resp: emptyLDSResponse,
-		Resp: badlyMarshaledLDSResponse,
-		Resp: badResourceTypeInLDSResponse,
+			{Err: errors.New("RPC error")},
+			{Resp: emptyLDSResponse},
+			{Resp: badlyMarshaledLDSResponse},
+			{Resp: badResourceTypeInLDSResponse},
+			{Resp: noApiListenerLDSResponse},
+		{Resp: badlyMarshaledApiListenerInLDSResponse},
 	}
 
 	for _, resp := range responses {
@@ -418,7 +540,7 @@ func TestLDSMultipleGoodResponses(t *testing.T) {
 	close(opCh)
 	testLDS(t, opCh)
 }
-
+*/
 // TODO:
 // test the case when the stream starts off after an error and resends all the watches
 // test the case where server sends response after watcher is cancelled. make sure callback is not invoked.

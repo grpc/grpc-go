@@ -28,15 +28,15 @@ import (
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 )
 
-func (v2c *v2Client) newRDSRequest(routeName string) *xdspb.DiscoveryRequest {
+func (v2c *v2Client) newRDSRequest(routeName []string) *xdspb.DiscoveryRequest {
 	return &xdspb.DiscoveryRequest{
 		Node:          v2c.nodeProto,
 		TypeUrl:       routeURL,
-		ResourceNames: []string{routeName},
+		ResourceNames: routeName,
 	}
 }
 
-func (v2c *v2Client) sendRDS(stream adsStream, routeName string) bool {
+func (v2c *v2Client) sendRDS(stream adsStream, routeName []string) bool {
 	if err := stream.Send(v2c.newRDSRequest(routeName)); err != nil {
 		grpclog.Infof("xds: RDS request for resource %v failed: %v", routeName, err)
 		return false
@@ -61,7 +61,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if !v2c.isRouteConfigurationInteresting(rc) {
 			continue
 		}
-		cluster = getClusterFromRouteConfiguration(rc, v2c.ldsWatch.target)
+		cluster = getClusterFromRouteConfiguration(rc, v2c.watchMap[rdsResource].target[0])
 		if cluster != "" {
 			break
 		}
@@ -71,15 +71,15 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 	if cluster == "" {
 		err = fmt.Errorf("xds: RDS response {%+v} does not contain cluster name", resp)
 	}
-	if v2c.rdsWatch != nil {
-		v2c.rdsWatch.callback(rdsUpdate{cluster: cluster}, err)
+	if wi := v2c.watchMap[ldsResource]; wi != nil {
+		wi.callback.(rdsCallback)(rdsUpdate{cluster: cluster}, err)
 	}
 	return nil
 }
 
 // Caller should hold v2c.mu
 func (v2c *v2Client) isRouteConfigurationInteresting(rc *xdspb.RouteConfiguration) bool {
-	return v2c.rdsWatch != nil && v2c.rdsWatch.routeName == rc.GetName()
+	return v2c.watchMap[rdsResource] != nil && v2c.watchMap[rdsResource].target[0] == rc.GetName()
 }
 
 func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target string) string {

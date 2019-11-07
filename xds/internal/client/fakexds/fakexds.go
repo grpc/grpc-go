@@ -21,15 +21,16 @@
 package fakexds
 
 import (
-	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 )
 
 // TODO: Make this a var or a field in the server if there is a need to use a
 // value other than this default.
-const defaultChannelBufferSize = 10
+const defaultChannelBufferSize = 50
 
 // Request wraps an xDS request and error.
 type Request struct {

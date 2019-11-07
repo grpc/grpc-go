@@ -40,13 +40,6 @@ const (
 	endpointURL = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
 )
 
-var urlMap = map[string]resourceType{
-	listenerURL: ldsResource,
-	routeURL:    rdsResource,
-	clusterURL:  cdsResource,
-	endpointURL: edsResource,
-}
-
 const (
 	// Using raw constants here instead of enums because it seems to hard to
 	// get that to work with atomic operations which expect int* operands.
@@ -55,11 +48,20 @@ const (
 	watchStarted   = 2
 )
 
+type watchInfo struct {
+	wType    resourceType
+	target   []string
+	state    int32
+	callback interface{}
+}
+
+/*
 type ldsWatchInfo struct {
 	callback ldsCallback
 	target   string
-	state    int32 // accessed atmoically
+	state    int32
 }
+*/
 
 type ldsUpdate struct {
 	routeName string
@@ -67,11 +69,13 @@ type ldsUpdate struct {
 
 type ldsCallback func(ldsUpdate, error)
 
+/*
 type rdsWatchInfo struct {
 	callback  rdsCallback
 	routeName string
 	state     int32 // accessed atmoically
 }
+*/
 
 type rdsUpdate struct {
 	cluster string

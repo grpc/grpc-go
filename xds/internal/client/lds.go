@@ -28,27 +28,40 @@ import (
 	httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
 )
 
-func (v2c *v2Client) newLDSRequest(target string) *xdspb.DiscoveryRequest {
+// newLDSRequest generates an LDS request proto for the provided target, to be
+// sent out on the wire.
+func (v2c *v2Client) newLDSRequest(target []string) *xdspb.DiscoveryRequest {
 	return &xdspb.DiscoveryRequest{
 		Node:          v2c.nodeProto,
 		TypeUrl:       listenerURL,
-		ResourceNames: []string{target},
+		ResourceNames: target,
 	}
 }
 
-func (v2c *v2Client) sendLDS(stream adsStream, target string) bool {
+// sendLDS sends an LDS request for provided target on the provided stream.
+func (v2c *v2Client) sendLDS(stream adsStream, target []string) bool {
 	if err := stream.Send(v2c.newLDSRequest(target)); err != nil {
-		grpclog.Infof("xds: LDS request for resource %v failed: %v", target, err)
+		grpclog.Warningf("xds: LDS request for resource %v failed: %v", target, err)
 		return false
 	}
 	return true
 }
 
+// handleLDSResponse processes an LDS response received from the xDS server. It
+// performs the following actions:
+// - sanity checks the received message (only the listener we are watching for)
+// - extracts the RDS related information
+// - invokes the registered watcher callback with the appropriate update or
+//   error if the received message does not contain a listener for the watch
+//   target.
+//
+// Returns error to the caller only on marshaling errors or if the listener
+// that we are interested in has problems in the response.
 func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
-	routeName := ""
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
+	routeName := ""
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
@@ -59,9 +72,11 @@ func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 			return fmt.Errorf("xds: unexpected resource type: %T in LDS response", resource.Message)
 		}
 		if !v2c.isListenerProtoInteresting(lis) {
-			// TODO: We might have to cache the results even if the listener is
-			// not interesting at the moment. It might become interesting later
-			// on, and at that time, the server might not send an update.
+			// We ignore listeners we are not watching for because LDS is
+			// special in the sense that there is only one resource we are
+			// interested in, and this resource does not change over the
+			// lifetime of the v2Client. So, we don't have to cache other
+			// listeners which we are not interested in.
 			continue
 		}
 		if lis.GetApiListener() == nil {
@@ -77,6 +92,9 @@ func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 		}
 		switch apiLis.RouteSpecifier.(type) {
 		case *httppb.HttpConnectionManager_Rds:
+			if apiLis.GetRds().GetRouteConfigName() == "" {
+				return fmt.Errorf("xds: empty route_config_name in LDS response: %+v", lis)
+			}
 			routeName = apiLis.GetRds().GetRouteConfigName()
 		case *httppb.HttpConnectionManager_RouteConfig:
 			// TODO: Add support for specifying the RouteConfiguration inline
@@ -89,18 +107,22 @@ func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 		}
 	}
 
-	var err error
-	if routeName == "" {
-		err = fmt.Errorf("xds: LDS response %+v does not contain route config name", resp)
+	if wi := v2c.watchMap[ldsResource]; wi != nil {
+		var err error
+		if routeName == "" {
+			err = fmt.Errorf("xds: LDS target %s not found in received response %+v", wi.target, resp)
+		}
+		// Type assert the callback field to the appropriate callback type and
+		// invoke it.
+		wi.callback.(ldsCallback)(ldsUpdate{routeName: routeName}, err)
 	}
-
-	if v2c.ldsWatch != nil {
-		v2c.ldsWatch.callback(ldsUpdate{routeName: routeName}, err)
-	}
-	return err
+	return nil
 }
 
+// isListenerProtoInteresting determines if the provided listener matches the
+// target that we are watching for.
+//
 // Caller should hold v2c.mu
 func (v2c *v2Client) isListenerProtoInteresting(lis *xdspb.Listener) bool {
-	return v2c.ldsWatch != nil && v2c.ldsWatch.target == lis.GetName()
+	return v2c.watchMap[ldsResource] != nil && v2c.watchMap[ldsResource].target[0] == lis.GetName()
 }

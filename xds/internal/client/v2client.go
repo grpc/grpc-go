@@ -21,11 +21,11 @@ package client
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/buffer"
 
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
@@ -46,10 +46,9 @@ type v2Client struct {
 	nodeProto *corepb.Node
 	backoff   func(int) time.Duration
 
-	// Message specific channels onto which, corresponding watch information is
-	// pushed.
-	ldsWatchCh chan *ldsWatchInfo
-	rdsWatchCh chan *rdsWatchInfo
+	// watchCh in the channel onto which watchInfo objects are pushed by the
+	// watch API, and read and acted upon by the send() goroutine.
+	watchCh *buffer.Unbounded
 
 	// Message specific watch infos, protected by the below mutex. These are
 	// written to, after successfully reading from the update channel, and are
@@ -57,20 +56,17 @@ type v2Client struct {
 	// messages. When the user of this client object cancels a watch call,
 	// these are set to nil.
 	mu       sync.Mutex
-	ldsWatch *ldsWatchInfo
-	rdsWatch *rdsWatchInfo
+	watchMap map[resourceType]*watchInfo
 }
 
-// newV2Client creates a new v2Client object initialized with the passed
-// arguments. It also spawns a long running goroutine to send and receive xDS
-// messages.
+// newV2Client creates a new v2Client initialized with the passed arguments.
 func newV2Client(cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration) *v2Client {
 	v2c := &v2Client{
-		cc:         cc,
-		nodeProto:  nodeProto,
-		backoff:    backoff,
-		ldsWatchCh: make(chan *ldsWatchInfo),
-		rdsWatchCh: make(chan *rdsWatchInfo),
+		cc:        cc,
+		nodeProto: nodeProto,
+		backoff:   backoff,
+		watchCh:   buffer.NewUnbounded(),
+		watchMap:  make(map[resourceType]*watchInfo),
 	}
 	v2c.ctx, v2c.cancelCtx = context.WithCancel(context.Background())
 
@@ -139,14 +135,16 @@ func (v2c *v2Client) sendExisting(stream adsStream) bool {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
-	if v2c.ldsWatch != nil {
-		if !v2c.sendLDS(stream, v2c.ldsWatch.target) {
-			return false
-		}
-	}
-	if v2c.rdsWatch != nil {
-		if !v2c.sendRDS(stream, v2c.rdsWatch.routeName) {
-			return false
+	for wType, wi := range v2c.watchMap {
+		switch wType {
+		case ldsResource:
+			if !v2c.sendLDS(stream, wi.target) {
+				return false
+			}
+		case rdsResource:
+			if !v2c.sendRDS(stream, wi.target) {
+				return false
+			}
 		}
 	}
 
@@ -164,31 +162,28 @@ func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
 		select {
 		case <-v2c.ctx.Done():
 			return
-		case wi := <-v2c.ldsWatchCh:
+		case u := <-v2c.watchCh.Get():
+			v2c.watchCh.Load()
+			wi := u.(*watchInfo)
 			v2c.mu.Lock()
-			if atomic.LoadInt32(&wi.state) == watchCancelled {
+			if wi.state == watchCancelled {
 				v2c.mu.Unlock()
 				return
 			}
 			wi.state = watchStarted
 			target := wi.target
-			v2c.ldsWatch = wi
+			v2c.watchMap[wi.wType] = wi
 			v2c.mu.Unlock()
-			if !v2c.sendLDS(stream, target) {
-				return
-			}
-		case wi := <-v2c.rdsWatchCh:
-			v2c.mu.Lock()
-			if atomic.LoadInt32(&wi.state) == watchCancelled {
-				v2c.mu.Unlock()
-				return
-			}
-			wi.state = watchStarted
-			rn := wi.routeName
-			v2c.rdsWatch = wi
-			v2c.mu.Unlock()
-			if !v2c.sendRDS(stream, rn) {
-				return
+
+			switch wi.wType {
+			case ldsResource:
+				if !v2c.sendLDS(stream, target) {
+					return
+				}
+			case rdsResource:
+				if !v2c.sendRDS(stream, target) {
+					return
+				}
 			}
 		case <-done:
 			return
@@ -203,32 +198,25 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 	for {
 		resp, err := stream.Recv()
 		if err != nil {
-			grpclog.Infof("xds: ADS stream recv failed: %v", err)
+			grpclog.Warningf("xds: ADS stream recv failed: %v", err)
 			return success
 		}
-		if len(resp.GetResources()) == 0 {
-			// Prefer closing the stream as the server seems to be misbehaving
-			// by sending an ADS response without any resources.
-			grpclog.Info("xds: ADS response did not contain any resources")
-			return success
-		}
-		switch urlMap[resp.GetTypeUrl()] {
-		case ldsResource:
+		switch resp.GetTypeUrl() {
+		case listenerURL:
 			if err := v2c.handleLDSResponse(resp); err != nil {
-				grpclog.Infof("xds: LDS response handler failed: %v", err)
+				grpclog.Warningf("xds: LDS response handler failed: %v", err)
 				return success
 			}
-		case rdsResource:
+		case routeURL:
 			if err := v2c.handleRDSResponse(resp); err != nil {
-				grpclog.Infof("xds: RDS response handler failed: %v", err)
+				grpclog.Warningf("xds: RDS response handler failed: %v", err)
 				return success
 			}
 		default:
-			grpclog.Infof("xds: unknown response URL type: %v", resp.GetTypeUrl())
+			grpclog.Warningf("xds: unknown response URL type: %v", resp.GetTypeUrl())
 		}
 		success = true
 	}
-	return success
 }
 
 // watchLDS registers an LDS watcher for the provided target. Updates
@@ -236,16 +224,16 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 // callback. The caller can cancel the watch by invoking the returned cancel
 // function.
 func (v2c *v2Client) watchLDS(target string, ldsCb ldsCallback) (cancel func()) {
-	wi := &ldsWatchInfo{callback: ldsCb, target: target}
-	v2c.ldsWatchCh <- wi
+	wi := &watchInfo{wType: ldsResource, target: []string{target}, callback: ldsCb}
+	v2c.watchCh.Put(wi)
 	return func() {
 		v2c.mu.Lock()
-		if atomic.CompareAndSwapInt32(&wi.state, watchEnqueued, watchCancelled) {
-			v2c.mu.Unlock()
+		defer v2c.mu.Unlock()
+		if wi.state == watchEnqueued {
+			wi.state = watchCancelled
 			return
 		}
-		v2c.ldsWatch = nil
-		v2c.mu.Unlock()
+		v2c.watchMap[ldsResource] = nil
 	}
 }
 
@@ -254,15 +242,15 @@ func (v2c *v2Client) watchLDS(target string, ldsCb ldsCallback) (cancel func()) 
 // callback. The caller can cancel the watch by invoking the returned cancel
 // function.
 func (v2c *v2Client) watchRDS(routeName string, rdsCb rdsCallback) (cancel func()) {
-	wi := &rdsWatchInfo{callback: rdsCb, routeName: routeName}
-	v2c.rdsWatchCh <- wi
+	wi := &watchInfo{wType: rdsResource, target: []string{routeName}, callback: rdsCb}
+	v2c.watchCh.Put(wi)
 	return func() {
 		v2c.mu.Lock()
-		if atomic.CompareAndSwapInt32(&wi.state, watchEnqueued, watchCancelled) {
-			v2c.mu.Unlock()
+		defer v2c.mu.Unlock()
+		if wi.state == watchEnqueued {
+			wi.state = watchCancelled
 			return
 		}
-		v2c.rdsWatch = nil
-		v2c.mu.Unlock()
+		v2c.watchMap[rdsResource] = nil
 	}
 }
