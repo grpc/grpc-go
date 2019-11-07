@@ -718,9 +718,10 @@ func (s *Server) serveStreams(st transport.ServerTransport) {
 	st.HandleStreams(func(stream *transport.Stream) {
 		wg.Add(1)
 		go func() {
-			defer stream.Stat().Egress(stream.Stat().NewTimer("/grpc"))
-			defer wg.Done()
+			timer := stream.Stat().NewTimer("/grpc")
 			s.handleStream(st, stream, s.traceInfo(st, stream))
+			stream.Stat().Egress(timer)
+			wg.Done()
 		}()
 	}, func(ctx context.Context, method string) context.Context {
 		if !EnableTracing {
@@ -1152,14 +1153,13 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	}
 	sh := s.opts.statsHandler
 	if sh != nil {
-		beginTime := time.Now()
 		begin := &stats.Begin{
-			BeginTime: beginTime,
+			BeginTime: time.Now(),
 		}
 		sh.HandleRPC(stream.Context(), begin)
 		defer func() {
 			end := &stats.End{
-				BeginTime: beginTime,
+				BeginTime: begin.BeginTime,
 				EndTime:   time.Now(),
 			}
 			if err != nil && err != io.EOF {
@@ -1305,17 +1305,6 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	return err
 }
 
-//go:noinline
-func foo(t transport.ServerTransport) transport.ServerTransport {
-	if t == nil {
-		for i := 0; i < 8; i++ {
-			foo(t)
-		}
-	}
-
-	return t
-}
-
 func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Stream, trInfo *traceInfo) {
 	// If the request is well-formed, we must stop the /stream/recv/grpc/header
 	// timer before either of processUnaryRPC or processStreamingRPC is called.
@@ -1358,7 +1347,6 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	if knownService {
 		if md, ok := srv.md[method]; ok {
 			stat.Egress(timer)
-			t = foo(t)
 			s.processUnaryRPC(t, stream, srv, md, trInfo)
 			return
 		}
