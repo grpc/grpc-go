@@ -49,14 +49,10 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
-	// We need to get the target from the URI passed to the gRPC channel.
-	target := ""
-	if v2c.watchMap[ldsResource] != nil {
-		target = v2c.watchMap[ldsResource].target[0]
-	}
-	if target == "" {
+	if v2c.watchMap[ldsResource] == nil {
 		return fmt.Errorf("xds: unexpected RDS response when no LDS watcher is registered: %+v", resp)
 	}
+	target := v2c.watchMap[ldsResource].target[0]
 
 	returnCluster := ""
 	localCache := make(map[string]*xdspb.RouteConfiguration)
@@ -69,8 +65,8 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if !ok {
 			return fmt.Errorf("xds: unexpected resource type: %T in RDS response", resource.Message)
 		}
-		cluster, ok := validateRouteConfiguration(rc, target)
-		if !ok {
+		cluster := v2c.getClusterFromRouteConfiguration(rc, target)
+		if cluster == "" {
 			return fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v", rc)
 		}
 
@@ -104,8 +100,8 @@ func (v2c *v2Client) isRouteConfigurationInteresting(rc *xdspb.RouteConfiguratio
 	return v2c.watchMap[rdsResource] != nil && v2c.watchMap[rdsResource].target[0] == rc.GetName()
 }
 
-// validateRouteConfiguration checks if the provided RouteConfiguration meets
-// the expected criteria. If so, it returns a non-empty clusterName.
+// getClusterFromRouteConfiguration checks if the provided RouteConfiguration
+// meets the expected criteria. If so, it returns a non-empty clusterName.
 //
 // A RouteConfiguration resource is considered valid when only if it contains a
 // VirtualHost whose domain field matches the server name from the URI passed
@@ -119,7 +115,9 @@ func (v2c *v2Client) isRouteConfigurationInteresting(rc *xdspb.RouteConfiguratio
 // list (the default route), whose match field must be empty and whose route
 // field must be set.  Inside that route message, the cluster field will
 // contain the clusterName we are looking for.
-func validateRouteConfiguration(rc *xdspb.RouteConfiguration, target string) (string, bool) {
+//
+// Caller should hold v2c.mu
+func (v2c *v2Client) getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target string) string {
 	host := stripPort(target)
 	for _, vh := range rc.GetVirtualHosts() {
 		for _, domain := range vh.GetDomains() {
@@ -128,13 +126,13 @@ func validateRouteConfiguration(rc *xdspb.RouteConfiguration, target string) (st
 				if len(vh.GetRoutes()) > 0 {
 					dr := vh.Routes[len(vh.Routes)-1]
 					if dr.GetMatch() == nil && dr.GetRoute() != nil {
-						return dr.GetRoute().GetCluster(), true
+						return dr.GetRoute().GetCluster()
 					}
 				}
 			}
 		}
 	}
-	return "", false
+	return ""
 }
 
 func stripPort(host string) string {

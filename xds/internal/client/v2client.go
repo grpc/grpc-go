@@ -62,9 +62,11 @@ type v2Client struct {
 	mu       sync.Mutex
 	watchMap map[resourceType]*watchInfo
 
-	// TODO: Add a timer to return an error to watcher.
-	// TODO: check the cache first when we get a watch call.
-	// TODO: when lds resource is updated, see if cache entries can be deleted.
+	// rdsCache maintains a cache of validated route configurations received
+	// through RDS responses. We cache all valid resources, whether or not we
+	// are interested in them when we received them (because we could become
+	// interested in them in the future and the server wont send us those
+	// resources again).
 	rdsCache map[string]*xdspb.RouteConfiguration
 }
 
@@ -182,8 +184,8 @@ func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
 			}
 			wi.state = watchStarted
 			target := wi.target
+			v2c.checkWatchTargetInCache(wi)
 			v2c.updateWatchMap(wi)
-			// v2c.watchMap[wi.wType] = wi
 			v2c.mu.Unlock()
 
 			switch wi.wType {
@@ -279,9 +281,39 @@ func (v2c *v2Client) updateWatchMap(wi *watchInfo) {
 	}
 
 	v2c.watchMap[wi.wType] = wi
-	if wi.wType == rdsResource {
+	switch wi.wType {
+	case rdsResource:
 		wi.timer = time.AfterFunc(defaultWatchTimer, func() {
 			wi.callback.(rdsCallback)(rdsUpdate{cluster: ""}, fmt.Errorf("xds: RDS target %s not found", wi.target))
 		})
+	}
+}
+
+// checkWatchTargetInCache is called when a new watch call is handled in
+// send(). This method checks if the resource is found in the cache, and if so,
+// returns it to the watcher.
+// This is required only for RDS and EDS.
+//
+// Caller should hold v2c.mu
+func (v2c *v2Client) checkWatchTargetInCache(wi *watchInfo) {
+	switch wi.wType {
+	case rdsResource:
+		routeName := wi.target[0]
+		if rc := v2c.rdsCache[routeName]; rc != nil {
+			if v2c.watchMap[ldsResource] == nil {
+				grpclog.Warningf("xds: no LDS watcher found when handling RDS watch for route {%v} from cache", routeName)
+				return
+			}
+			target := v2c.watchMap[ldsResource].target[0]
+			cluster := v2c.getClusterFromRouteConfiguration(rc, target)
+			if cluster == "" {
+				// This should ideally never happen because we cache only
+				// validated resources.
+				grpclog.Warningf("xds: no cluster found in cached route config: %+v", rc)
+				return
+			}
+			wi.timer.Stop()
+			wi.callback.(rdsCallback)(rdsUpdate{cluster: cluster}, nil)
+		}
 	}
 }
