@@ -20,6 +20,7 @@ package transport
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math"
@@ -29,7 +30,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"encoding/binary"
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
@@ -37,8 +37,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/profiling"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/profiling"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
@@ -384,7 +384,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 				t.CloseStream(s, err)
 			},
 			freeBuffer: t.bufferPool.put,
-			stat: s.stat,
+			stat:       s.stat,
 		},
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
@@ -867,7 +867,7 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, stat *profiling.
 	df := &dataFrame{
 		streamID:  s.id,
 		endStream: opts.Last,
-		stat: stat,
+		stat:      stat,
 	}
 	if hdr != nil || data != nil { // If it's not an empty data frame.
 		// Add some data to grpc message header so that we can equally

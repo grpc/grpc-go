@@ -33,12 +33,12 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal/profiling"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
-	"google.golang.org/grpc/internal/profiling"
 )
 
 type bufferPool struct {
@@ -144,7 +144,7 @@ type recvBufferReader struct {
 	last        *bytes.Buffer // Stores the remaining data in the previous calls.
 	err         error
 	freeBuffer  func(*bytes.Buffer)
-	stat *profiling.Stat
+	stat        *profiling.Stat
 }
 
 // Read reads the next len(p) bytes from last. If last is drained, it tries to
@@ -169,14 +169,14 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 	} else {
 		n, r.err = r.read(p)
 		/*
-		timer := r.stat.NewTimer("/select")
-		select {
-		case <-r.ctxDone:
-			n, r.err = 0, ContextErr(r.ctx.Err())
-		case m := <-r.recv.get():
-			n, r.err = r.readAdditional(m, p)
-		}
-		timer.Egress()
+			timer := r.stat.NewTimer("/select")
+			select {
+			case <-r.ctxDone:
+				n, r.err = 0, ContextErr(r.ctx.Err())
+			case m := <-r.recv.get():
+				n, r.err = r.readAdditional(m, p)
+			}
+			timer.Egress()
 		*/
 	}
 	return n, r.err
@@ -502,7 +502,7 @@ type transportReader struct {
 	// particular stream and the associated transport.
 	windowHandler func(int)
 	er            error
-	stat *profiling.Stat
+	stat          *profiling.Stat
 }
 
 func (t *transportReader) Read(p []byte) (n int, err error) {

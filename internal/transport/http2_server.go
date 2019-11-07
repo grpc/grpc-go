@@ -21,6 +21,7 @@ package transport
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -30,7 +31,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"encoding/binary"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/http2"
@@ -41,9 +41,9 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/profiling"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/internal/profiling"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -447,7 +447,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			ctxDone:    s.ctxDone,
 			recv:       s.buf,
 			freeBuffer: t.bufferPool.put,
-			stat: s.stat,
+			stat:       s.stat,
 		},
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))

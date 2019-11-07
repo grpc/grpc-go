@@ -1,22 +1,22 @@
 package main
 
 import (
-	"sort"
-	"strings"
-	"time"
-	"io"
 	"context"
-	"fmt"
-	"flag"
-	"os"
-	"encoding/gob"
 	"encoding/binary"
+	"encoding/gob"
 	"encoding/json"
+	"flag"
+	"fmt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/profiling"
 	"google.golang.org/grpc/profiling/proto"
 	pspb "google.golang.org/grpc/profiling/proto/service"
+	"io"
+	"os"
+	"sort"
+	"strings"
+	"time"
 )
 
 var flagAddress = flag.String("address", "", "address of your remote target")
@@ -77,14 +77,14 @@ type snapshot struct {
 }
 
 type jsonNode struct {
-	Name string `json:"name"`
-	Cat string `json:"cat"`
-	Id string `json:"id"`
-	Cname string `json:"cname"`
-	Phase string `json:"ph"`
+	Name      string  `json:"name"`
+	Cat       string  `json:"cat"`
+	Id        string  `json:"id"`
+	Cname     string  `json:"cname"`
+	Phase     string  `json:"ph"`
 	Timestamp float64 `json:"ts"`
-	Pid string `json:"pid"`
-	Tid string `json:"tid"`
+	Pid       string  `json:"pid"`
+	Tid       string  `json:"tid"`
 }
 
 func hashCname(tag string) string {
@@ -179,22 +179,22 @@ func streamStatsCatapultJsonify(stat *profiling.Stat, base time.Time) []jsonNode
 	result := make([]jsonNode, 0)
 	result = append(result,
 		jsonNode{
-			Name: "loopyReaderTmp",
-			Id: opid,
-			Cname: hashCname("tmp"),
-			Phase: "i",
+			Name:      "loopyReaderTmp",
+			Id:        opid,
+			Cname:     hashCname("tmp"),
+			Phase:     "i",
 			Timestamp: 0,
-			Pid: fmt.Sprintf("/%s/%d/loopyReader", stat.StatTag, connectionCounter),
-			Tid: fmt.Sprintf("%d", loopyReaderGoId),
+			Pid:       fmt.Sprintf("/%s/%d/loopyReader", stat.StatTag, connectionCounter),
+			Tid:       fmt.Sprintf("%d", loopyReaderGoId),
 		},
 		jsonNode{
-			Name: "loopyWriterTmp",
-			Id: opid,
-			Cname: hashCname("tmp"),
-			Phase: "i",
+			Name:      "loopyWriterTmp",
+			Id:        opid,
+			Cname:     hashCname("tmp"),
+			Phase:     "i",
 			Timestamp: 0,
-			Pid: fmt.Sprintf("/%s/%d/loopyWriter", stat.StatTag, connectionCounter),
-			Tid: fmt.Sprintf("%d", loopyWriterGoId),
+			Pid:       fmt.Sprintf("/%s/%d/loopyWriter", stat.StatTag, connectionCounter),
+			Tid:       fmt.Sprintf("%d", loopyWriterGoId),
 		},
 	)
 
@@ -232,24 +232,24 @@ func streamStatsCatapultJsonify(stat *profiling.Stat, base time.Time) []jsonNode
 				flowId := fmt.Sprintf("lrc begin:/%d%s end:/%d%s begin:(%d, %d, %d) end:(%d, %d, %d)", connectionCounter, stat.Timers[i].TimerTag, connectionCounter, stat.Timers[flowEndId].TimerTag, i, pid, tid, flowEndId, flowEndPid, flowEndTid)
 				result = append(result,
 					jsonNode{
-						Name: fmt.Sprintf("%s/flow", opid),
-						Cat: categories + ",flow",
-						Id: flowId,
-						Cname: hashCname("flow"),
-						Phase: "s",
+						Name:      fmt.Sprintf("%s/flow", opid),
+						Cat:       categories + ",flow",
+						Id:        flowId,
+						Cname:     hashCname("flow"),
+						Phase:     "s",
 						Timestamp: catapultNs(stat.Timers[i].End.Sub(base).Nanoseconds()),
-						Pid: pid,
-						Tid: tid,
+						Pid:       pid,
+						Tid:       tid,
 					},
 					jsonNode{
-						Name: fmt.Sprintf("%s/flow", opid),
-						Cat: categories + ",flow",
-						Id: flowId,
-						Cname: hashCname("flow"),
-						Phase: "f",
+						Name:      fmt.Sprintf("%s/flow", opid),
+						Cat:       categories + ",flow",
+						Id:        flowId,
+						Cname:     hashCname("flow"),
+						Phase:     "f",
 						Timestamp: catapultNs(stat.Timers[flowEndId].Begin.Sub(base).Nanoseconds()),
-						Pid: flowEndPid,
-						Tid: flowEndTid,
+						Pid:       flowEndPid,
+						Tid:       flowEndTid,
 					},
 				)
 			}
@@ -279,24 +279,24 @@ func streamStatsCatapultJsonify(stat *profiling.Stat, base time.Time) []jsonNode
 				flowId := fmt.Sprintf("lwc begin:/%d%s end:/%d%s begin:(%d, %d, %d) end:(%d, %d, %d)", connectionCounter, stat.Timers[flowBeginId].TimerTag, connectionCounter, stat.Timers[i].TimerTag, flowBeginId, flowBeginPid, flowBeginTid, i, pid, tid)
 				result = append(result,
 					jsonNode{
-						Name: fmt.Sprintf("/%s/%d/%d/flow", stat.StatTag, connectionCounter, streamId),
-						Cat: categories + ",flow",
-						Id: flowId,
-						Cname: hashCname("flow"),
-						Phase: "s",
+						Name:      fmt.Sprintf("/%s/%d/%d/flow", stat.StatTag, connectionCounter, streamId),
+						Cat:       categories + ",flow",
+						Id:        flowId,
+						Cname:     hashCname("flow"),
+						Phase:     "s",
 						Timestamp: catapultNs(stat.Timers[flowBeginId].End.Sub(base).Nanoseconds()),
-						Pid: flowBeginPid,
-						Tid: flowBeginTid,
+						Pid:       flowBeginPid,
+						Tid:       flowBeginTid,
 					},
 					jsonNode{
-						Name: fmt.Sprintf("/%s/%d/%d/flow", stat.StatTag, connectionCounter, streamId),
-						Cat: categories + ",flow",
-						Id: flowId,
-						Cname: hashCname("flow"),
-						Phase: "f",
+						Name:      fmt.Sprintf("/%s/%d/%d/flow", stat.StatTag, connectionCounter, streamId),
+						Cat:       categories + ",flow",
+						Id:        flowId,
+						Cname:     hashCname("flow"),
+						Phase:     "f",
 						Timestamp: catapultNs(stat.Timers[i].Begin.Sub(base).Nanoseconds()),
-						Pid: pid,
-						Tid: tid,
+						Pid:       pid,
+						Tid:       tid,
 					},
 				)
 			}
@@ -304,24 +304,24 @@ func streamStatsCatapultJsonify(stat *profiling.Stat, base time.Time) []jsonNode
 
 		result = append(result,
 			jsonNode{
-				Name: fmt.Sprintf("%s%s", opid, stat.Timers[i].TimerTag),
-				Cat: categories,
-				Id: opid,
-				Cname: hashCname(stat.Timers[i].TimerTag),
-				Phase: "B",
+				Name:      fmt.Sprintf("%s%s", opid, stat.Timers[i].TimerTag),
+				Cat:       categories,
+				Id:        opid,
+				Cname:     hashCname(stat.Timers[i].TimerTag),
+				Phase:     "B",
 				Timestamp: catapultNs(stat.Timers[i].Begin.Sub(base).Nanoseconds()),
-				Pid: pid,
-				Tid: tid,
+				Pid:       pid,
+				Tid:       tid,
 			},
 			jsonNode{
-				Name: fmt.Sprintf("%s%s", opid, stat.Timers[i].TimerTag),
-				Cat: categories,
-				Id: opid,
-				Cname: hashCname(stat.Timers[i].TimerTag),
-				Phase: "E",
+				Name:      fmt.Sprintf("%s%s", opid, stat.Timers[i].TimerTag),
+				Cat:       categories,
+				Id:        opid,
+				Cname:     hashCname(stat.Timers[i].TimerTag),
+				Phase:     "E",
 				Timestamp: catapultNs(stat.Timers[i].End.Sub(base).Nanoseconds()),
-				Pid: pid,
-				Tid: tid,
+				Pid:       pid,
+				Tid:       tid,
 			},
 		)
 	}
@@ -500,7 +500,7 @@ func retrieveSnapshot(ctx context.Context, c pspb.ProfilingClient, f string) err
 func remoteCommand() error {
 	ctx := context.Background()
 	if *flagTimeout > 0 {
-		ctx, _ = context.WithTimeout(context.Background(), time.Duration(*flagTimeout) * time.Second)
+		ctx, _ = context.WithTimeout(context.Background(), time.Duration(*flagTimeout)*time.Second)
 	}
 
 	grpclog.Infof("dialing %s", *flagAddress)

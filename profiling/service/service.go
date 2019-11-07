@@ -12,9 +12,9 @@ import (
 )
 
 type ProfilingConfig struct {
-	Enabled bool
+	Enabled         bool
 	StreamStatsSize uint32
-	Server *grpc.Server
+	Server          *grpc.Server
 }
 
 func registerService(s *grpc.Server) {
@@ -22,7 +22,7 @@ func registerService(s *grpc.Server) {
 	pspb.RegisterProfilingServer(s, &profilingServer{})
 }
 
-// Init takes a 
+// Init takes a
 func Init(pc *ProfilingConfig) (err error) {
 	if err = profiling.InitStats(pc.StreamStatsSize); err != nil {
 		return
@@ -36,7 +36,7 @@ func Init(pc *ProfilingConfig) (err error) {
 	return
 }
 
-type profilingServer struct {}
+type profilingServer struct{}
 
 func (s *profilingServer) SetEnabled(ctx context.Context, req *pspb.SetEnabledRequest) (ser *pspb.SetEnabledResponse, err error) {
 	grpclog.Infof("processing SetEnabled (%v)", req.Enabled)

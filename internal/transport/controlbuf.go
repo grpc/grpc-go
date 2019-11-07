@@ -138,7 +138,7 @@ type dataFrame struct {
 	// onEachWrite is called every time
 	// a part of d is written out.
 	onEachWrite func()
-	stat *profiling.Stat
+	stat        *profiling.Stat
 }
 
 func (*dataFrame) isTransportResponseFrame() bool { return false }

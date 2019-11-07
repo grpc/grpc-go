@@ -1,10 +1,10 @@
 package profiling
 
 import (
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
-	"runtime"
 )
 
 // 0 or 1 representing profiling off and on, respectively. Use IsEnabled and
@@ -25,7 +25,7 @@ func IsEnabled() bool {
 // servers and clients in the binary. Each stat will be, however, tagged with
 // whether it's a client stat or a server stat; so you should be able to filter
 // for the right type of stats in post-processing.
-// SetEnabled is the internal 
+// SetEnabled is the internal
 func SetEnabled(enabled bool) {
 	if enabled {
 		atomic.StoreUint32(&profilingEnabled, 1)
@@ -45,9 +45,9 @@ func goId() int64 {
 // operation.
 type Timer struct {
 	TimerTag string
-	Begin time.Time
-	End time.Time
-	GoId int64
+	Begin    time.Time
+	End      time.Time
+	GoId     int64
 }
 
 // NewTimer creates and returns a new Timer object. This is useful when you
@@ -59,8 +59,8 @@ type Timer struct {
 func NewTimer(timerTag string) *Timer {
 	return &Timer{
 		TimerTag: timerTag,
-		Begin: time.Now(),
-		GoId: goId(),
+		Begin:    time.Now(),
+		GoId:     goId(),
 	}
 }
 
@@ -75,10 +75,10 @@ func NewTimer(timerTag string) *Timer {
 // the Stat's exported fields (which are exported for encoding reasons) may
 // lead to data races.
 type Stat struct {
-	StatTag string
-	Timers []Timer
+	StatTag  string
+	Timers   []Timer
 	Metadata []byte
-	mu sync.Mutex
+	mu       sync.Mutex
 }
 
 // A power of two that's large enough to hold all timers within an average RPC
@@ -89,7 +89,7 @@ const defaultStatAllocatedTimers int32 = 32
 func NewStat(statTag string) *Stat {
 	return &Stat{
 		StatTag: statTag,
-		Timers: make([]Timer, 0, defaultStatAllocatedTimers),
+		Timers:  make([]Timer, 0, defaultStatAllocatedTimers),
 	}
 }
 
@@ -117,8 +117,8 @@ func (stat *Stat) NewTimer(timerTag string) (index int) {
 		stat.mu.Lock()
 		stat.Timers = append(stat.Timers, Timer{
 			TimerTag: timerTag,
-			Begin: time.Now(),
-			GoId: goId(),
+			Begin:    time.Now(),
+			GoId:     goId(),
 		})
 		index = len(stat.Timers) - 1
 		stat.mu.Unlock()
