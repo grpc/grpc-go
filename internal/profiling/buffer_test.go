@@ -30,7 +30,7 @@ func TestCircularBufferSerial(t *testing.T) {
 	var result []interface{}
 
 	size = 1 << 15
-	cb, err := NewCircularBuffer(size)
+	cb, err := newCircularBuffer(size)
 	if err != nil {
 		t.Errorf("error allocating CircularBuffer: %v", err)
 		return
@@ -46,6 +46,7 @@ func TestCircularBufferSerial(t *testing.T) {
 		return
 	}
 
+	// The returned result isn't necessarily sorted.
 	seen := make(map[uint32]bool)
 	for _, r := range result {
 		seen[r.(uint32)] = true
@@ -64,7 +65,7 @@ func TestCircularBufferSerial(t *testing.T) {
 
 	result = cb.Drain()
 	if uint32(len(result)) != size {
-		t.Errorf("expected second push set drain size to be %d, got %d", size/2, len(result))
+		t.Errorf("expected second Push result size to be %d, got %d", size/2, len(result))
 		return
 	}
 }
@@ -74,21 +75,28 @@ func TestCircularBufferOverflow(t *testing.T) {
 	var result []interface{}
 
 	size = 1 << 10
-	cb, err := NewCircularBuffer(size)
+	cb, err := newCircularBuffer(size)
 	if err != nil {
-		t.Errorf("error allocating CircularBuffer: %v", err)
+		t.Errorf("error allocating circularBuffer: %v", err)
 		return
 	}
 
-	for i = 0; i < size+size/2; i++ {
+	for i = 0; i < 10*size; i++ {
 		cb.Push(i)
 	}
 
 	result = cb.Drain()
 
 	if uint32(len(result)) != size {
-		t.Errorf("expected drain size to be a full %d, got %d", size, len(result))
+		t.Errorf("expected result size to be a full %d, got %d", size, len(result))
 		return
+	}
+
+	for idx, x := range result {
+		if x.(uint32) < size {
+			t.Errorf("result[%d] = %d < %d", idx, x, size)
+			return
+		}
 	}
 }
 
@@ -98,9 +106,9 @@ func TestCircularBufferConcurrent(t *testing.T) {
 		var result []interface{}
 
 		size = 1 << 6
-		cb, err := NewCircularBuffer(size)
+		cb, err := newCircularBuffer(size)
 		if err != nil {
-			t.Errorf("error allocating CircularBuffer: %v", err)
+			t.Errorf("error allocating circularBuffer: %v", err)
 			return
 		}
 
@@ -122,18 +130,18 @@ func TestCircularBufferConcurrent(t *testing.T) {
 		}
 
 		// Wait for all goroutines to finish only in one test. Draining
-		// concurrently while pushes are still happening will test for races in the
-		// draining lock.
+		// concurrently while Pushes are still happening will test for races in the
+		// Draining lock.
 		if tn == 0 {
 			wg.Wait()
 		}
 
 		result = cb.Drain()
 
-		// Can't expect the buffer to be full if the pushes aren't necessarily done.
+		// Can't expect the buffer to be full if the Pushes aren't necessarily done.
 		if tn == 0 {
 			if uint32(len(result)) != size {
-				t.Errorf("expected drain size to be a full %d, got %d", size, len(result))
+				t.Errorf("expected Drain size to be a full %d, got %d", size, len(result))
 				return
 			}
 		}
@@ -150,10 +158,11 @@ func TestCircularBufferConcurrent(t *testing.T) {
 }
 
 func BenchmarkCircularBuffer(b *testing.B) {
+	x := 1
 	for size := 1 << 16; size <= 1<<20; size <<= 1 {
 		for routines := 1; routines <= 1<<8; routines <<= 1 {
 			b.Run(fmt.Sprintf("goroutines:%d/size:%d", routines, size), func(b *testing.B) {
-				cb, err := NewCircularBuffer(uint32(size))
+				cb, err := newCircularBuffer(uint32(size))
 				if err != nil {
 					b.Errorf("error allocating CircularBuffer: %v", err)
 					return
@@ -165,7 +174,6 @@ func BenchmarkCircularBuffer(b *testing.B) {
 					wg.Add(1)
 					go func() {
 						for i := 0; i < perRoutine; i++ {
-							x := 1
 							cb.Push(&x)
 						}
 						wg.Done()

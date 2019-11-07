@@ -108,7 +108,7 @@ type Stat struct {
 
 // A power of two that's large enough to hold all timers within an average RPC
 // request (defined to be a unary request) without any reallocation.
-const defaultStatAllocatedTimers int32 = 32
+const defaultStatAllocatedTimers int32 = 128
 
 // NewStat creates and returns a new Stat object.
 func NewStat(statTag string) *Stat {
@@ -191,7 +191,7 @@ var statsInitialised int32
 // served, where N is set by the user. This will contain both server stats and
 // client stats (but each stat will be tagged with whether it's a server or a
 // client in its StatTag).
-var StreamStats *CircularBuffer
+var StreamStats *circularBuffer
 
 // InitStats initialises all the relevant Stat objects. Must be called exactly
 // once per lifetime of a process; calls after the first one are ignored.
@@ -205,7 +205,7 @@ func InitStats(streamStatsSize uint32) (err error) {
 		streamStatsSize = defaultStreamStatsSize
 	}
 
-	if StreamStats, err = NewCircularBuffer(streamStatsSize); err != nil {
+	if StreamStats, err = newCircularBuffer(streamStatsSize); err != nil {
 		return
 	}
 

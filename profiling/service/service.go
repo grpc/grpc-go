@@ -68,19 +68,10 @@ func (s *profilingServer) GetStreamStats(req *pspb.GetStreamStatsRequest, stream
 	results := profiling.StreamStats.Drain()
 	grpclog.Infof("stream stats size: %v records", len(results))
 
-	enabled := profiling.IsEnabled()
-	if enabled {
-		profiling.SetEnabled(false)
-	}
-
 	for i := 0; i < len(results); i++ {
 		if err = stream.Send(ppb.StatToStatProto(results[i].(*profiling.Stat))); err != nil {
 			return
 		}
-	}
-
-	if enabled {
-		profiling.SetEnabled(true)
 	}
 
 	return
