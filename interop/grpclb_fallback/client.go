@@ -55,9 +55,9 @@ var (
 	errorLog = log.New(os.Stderr, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 )
 
-func doRPCAndGetPath(client testpb.TestServiceClient, deadline time.Duration) testpb.GrpclbRouteType {
-	infoLog.Printf("doRPCAndGetPath deadline:%v\n", deadline)
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(deadline))
+func doRPCAndGetPath(client testpb.TestServiceClient, timeout time.Duration) testpb.GrpclbRouteType {
+	infoLog.Printf("doRPCAndGetPath timeout:%v\n", timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	req := &testpb.SimpleRequest{
 		FillGrpclbRouteType: true,
