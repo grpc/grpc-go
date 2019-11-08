@@ -586,6 +586,9 @@ type Options struct {
 	// Last indicates whether this write is the last piece for
 	// this stream.
 	Last bool
+	// If non-nil, ReturnBufferWaitGroup.Done() should be called in order to
+	// return some allocated buffer back to a sync pool.
+	ReturnBufferWaitGroup *sync.WaitGroup
 }
 
 // CallHdr carries the information of a particular RPC.

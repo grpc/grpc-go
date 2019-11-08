@@ -136,6 +136,7 @@ type dataFrame struct {
 	// onEachWrite is called every time
 	// a part of d is written out.
 	onEachWrite func()
+	wg          *sync.WaitGroup
 }
 
 func (*dataFrame) isTransportResponseFrame() bool { return false }
@@ -726,6 +727,16 @@ func (l *loopyWriter) outFlowControlSizeRequestHandler(o *outFlowControlSizeRequ
 func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 	c.onWrite()
 	if str, ok := l.estdStreams[c.streamID]; ok {
+		// If the stream is active, allow the return buffer cleanup function to
+		// proceed because processData is not going to execute on this stream to
+		// call wg.Done() anymore.
+		if str.state == active {
+			for !str.itl.isEmpty() {
+				if dataItem, ok := str.itl.dequeue().(*dataFrame); ok && dataItem.wg != nil {
+					dataItem.wg.Done()
+				}
+			}
+		}
 		// On the server side it could be a trailers-only response or
 		// a RST_STREAM before stream initialization thus the stream might
 		// not be established yet.
@@ -842,6 +853,9 @@ func (l *loopyWriter) processData() (bool, error) {
 			return false, err
 		}
 		str.itl.dequeue() // remove the empty data item from stream
+		if dataItem.wg != nil {
+			dataItem.wg.Done()
+		}
 		if str.itl.isEmpty() {
 			str.state = empty
 		} else if trailer, ok := str.itl.peek().(*headerFrame); ok { // the next item is trailers.
@@ -907,6 +921,9 @@ func (l *loopyWriter) processData() (bool, error) {
 
 	if len(dataItem.h) == 0 && len(dataItem.d) == 0 { // All the data from that message was written out.
 		str.itl.dequeue()
+		if dataItem.wg != nil {
+			dataItem.wg.Done()
+		}
 	}
 	if str.itl.isEmpty() {
 		str.state = empty

@@ -20,6 +20,7 @@ package proto
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -126,4 +127,59 @@ func TestStaggeredMarshalAndUnmarshalUsingSamePool(t *testing.T) {
 			t.Errorf("expected %v at index %v but got %v", i, expectedBody2[i], v)
 		}
 	}
+}
+
+func TestBufferReuse(t *testing.T) {
+	c := codec{}
+
+	var bptr string
+	marshal := func(toMarshal []byte) []byte {
+		protoIn := &codec_perf.Buffer{Body: toMarshal}
+		b, err := c.Marshal(protoIn)
+		if err != nil {
+			t.Errorf("codec.Marshal(%v) failed: %v", protoIn, err)
+		}
+		lbptr := fmt.Sprintf("%p", b)
+		if bptr == "" {
+			bptr = lbptr
+		} else if bptr != lbptr {
+			t.Errorf("expected the same buffer to be reused: lptr = %s, ptr = %s", lbptr, bptr)
+		}
+		bc := append([]byte(nil), b...)
+		c.ReturnBuffer(b)
+		return bc
+	}
+
+	unmarshal := func(b []byte) []byte {
+		protoOut := &codec_perf.Buffer{}
+		if err := c.Unmarshal(b, protoOut); err != nil {
+			t.Errorf("codec.Unarshal(%v) failed: %v", protoOut, err)
+		}
+		return protoOut.GetBody()
+	}
+
+	check := func(in []byte, out []byte) {
+		if len(in) != len(out) {
+			t.Errorf("unequal lengths: len(in=%v)=%d, len(out=%v)=%d", in, len(in), out, len(out))
+		}
+
+		for i := 0; i < len(in); i++ {
+			if in[i] != out[i] {
+				t.Errorf("unequal values: in[%d] = %v, out[%d] = %v", i, in[i], i, out[i])
+			}
+		}
+	}
+
+	// To test that the returned buffer does not have unexpected data at the end,
+	// we use a second input data that is smaller than the first.
+	in1 := []byte{1, 2, 3}
+	b1 := marshal(in1)
+	in2 := []byte{4, 5}
+	b2 := marshal(in2)
+
+	out1 := unmarshal(b1)
+	out2 := unmarshal(b2)
+
+	check(in1, out1)
+	check(in2, out2)
 }

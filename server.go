@@ -841,27 +841,39 @@ func (s *Server) incrCallsFailed() {
 	atomic.AddInt64(&s.czData.callsFailed, 1)
 }
 
-func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
-	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
+func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor, attemptBufferReuse bool) (func(), error) {
+	codec := s.getCodec(stream.ContentSubtype())
+	data, err := encode(codec, msg)
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to encode response: ", err)
-		return err
+		return nil, err
 	}
+
+	var f func()
+	if attemptBufferReuse && len(data) >= bufferReuseThreshold {
+		if bcodec, ok := codec.(bufferedBaseCodec); ok {
+			f = func() {
+				bcodec.ReturnBuffer(data)
+			}
+			opts.ReturnBufferWaitGroup = &sync.WaitGroup{}
+		}
+	}
+
 	compData, err := compress(data, cp, comp)
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to compress response: ", err)
-		return err
+		return nil, err
 	}
 	hdr, payload := msgHeader(data, compData)
 	// TODO(dfawley): should we be checking len(data) instead?
 	if len(payload) > s.opts.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(payload), s.opts.maxSendMessageSize)
+		return nil, status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(payload), s.opts.maxSendMessageSize)
 	}
 	err = t.Write(stream, hdr, payload, opts)
 	if err == nil && s.opts.statsHandler != nil {
 		s.opts.statsHandler.HandleRPC(stream.Context(), outPayload(false, msg, data, payload, time.Now()))
 	}
-	return err
+	return f, err
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
@@ -1039,7 +1051,15 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	}
 	opts := &transport.Options{Last: true}
 
-	if err := s.sendResponse(t, stream, reply, cp, opts, comp); err != nil {
+	f, err := s.sendResponse(t, stream, reply, cp, opts, comp, sh == nil && binlog == nil)
+	if f != nil {
+		defer func() {
+			// Do not wait for the unary response to be written to the wire. Spawn a
+			// goroutine to wait on the waitgroup instead to be non-blocking.
+			go waitCallReturnBuffer(f, opts.ReturnBufferWaitGroup)
+		}()
+	}
+	if err != nil {
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
@@ -1159,6 +1179,15 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			logEntry.PeerAddr = peer.Addr
 		}
 		ss.binlog.Log(logEntry)
+	}
+
+	// Stats handlers and binlog handlers are allowed to retain references to
+	// this slice internally. We may not, therefore, return this to the pool.
+	if ss.statsHandler == nil && ss.binlog == nil {
+		ss.attemptBufferReuse = true
+		defer func() {
+			go callReturnBuffers(ss.returnBuffers)
+		}()
 	}
 
 	// If dc is set and matches the stream's compression, use it.  Otherwise, try

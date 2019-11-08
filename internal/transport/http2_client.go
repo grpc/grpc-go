@@ -834,6 +834,7 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	df := &dataFrame{
 		streamID:  s.id,
 		endStream: opts.Last,
+		wg:        opts.ReturnBufferWaitGroup,
 	}
 	if hdr != nil || data != nil { // If it's not an empty data frame.
 		// Add some data to grpc message header so that we can equally
@@ -849,6 +850,9 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		if err := s.wq.get(int32(len(hdr) + len(data))); err != nil {
 			return err
 		}
+	}
+	if df.wg != nil {
+		df.wg.Add(1)
 	}
 	return t.controlBuf.put(df)
 }

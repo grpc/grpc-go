@@ -86,6 +86,24 @@ type Codec interface {
 	Name() string
 }
 
+// A BufferedCodec is exactly like a Codec, but also requires a ReturnBuffer
+// method to be implemented. Once a Marshal caller is done with the returned
+// byte buffer, they can choose to return it back to the encoding library for
+// re-use using this method.
+//
+// This API is EXPERIMENTAL.
+type BufferedCodec interface {
+	Codec
+	// If implemented in a codec, this function may be called with the byte
+	// buffer returned by Marshal after gRPC is done with the buffer.
+	//
+	// gRPC will not call ReturnBuffer after it's done with the buffer if any of
+	// the following is true:
+	//   1. Stats handlers are used.
+	//   2. Binlogs are enabled.
+	ReturnBuffer(buf []byte)
+}
+
 var registeredCodecs = make(map[string]Codec)
 
 // RegisterCodec registers the provided Codec for use with all gRPC clients and
