@@ -44,7 +44,7 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 		{
 			name: "no-domains-in-rc",
 			rc: &xdspb.RouteConfiguration{
-				VirtualHosts: []*routepb.VirtualHost{&routepb.VirtualHost{}},
+				VirtualHosts: []*routepb.VirtualHost{{}},
 			},
 			wantCluster: "",
 		},
@@ -52,7 +52,7 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 			name: "non-matching-domain-in-rc",
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
-					&routepb.VirtualHost{Domains: []string{"foo", "xyz"}},
+					{Domains: []string{"foo", "xyz"}},
 				},
 			},
 			wantCluster: "",
@@ -61,8 +61,8 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 			name: "no-routes-in-rc",
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
-					&routepb.VirtualHost{Domains: []string{"foo", "xyz"}},
-					&routepb.VirtualHost{Domains: []string{matchingDomain}},
+					{Domains: []string{"foo", "xyz"}},
+					{Domains: []string{matchingDomain}},
 				},
 			},
 			wantCluster: "",
@@ -71,11 +71,11 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 			name: "default-route-match-field-is-non-nil",
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
-					&routepb.VirtualHost{Domains: []string{"foo", "xyz"}},
-					&routepb.VirtualHost{
+					{Domains: []string{"foo", "xyz"}},
+					{
 						Domains: []string{matchingDomain},
 						Routes: []*routepb.Route{
-							&routepb.Route{
+							{
 								Match:  &routepb.RouteMatch{},
 								Action: &routepb.Route_Route{},
 							},
@@ -89,10 +89,10 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 			name: "default-route-routeaction-field-is-nil",
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
-					&routepb.VirtualHost{Domains: []string{"foo", "xyz"}},
-					&routepb.VirtualHost{
+					{Domains: []string{"foo", "xyz"}},
+					{
 						Domains: []string{matchingDomain},
-						Routes:  []*routepb.Route{&routepb.Route{}},
+						Routes:  []*routepb.Route{{}},
 					},
 				},
 			},
@@ -102,11 +102,11 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 			name: "default-route-cluster-field-is-empty",
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
-					&routepb.VirtualHost{Domains: []string{"foo", "xyz"}},
-					&routepb.VirtualHost{
+					{Domains: []string{"foo", "xyz"}},
+					{
 						Domains: []string{matchingDomain},
 						Routes: []*routepb.Route{
-							&routepb.Route{
+							{
 								Action: &routepb.Route_Route{
 									Route: &routepb.RouteAction{
 										ClusterSpecifier: &routepb.RouteAction_ClusterHeader{},
@@ -123,11 +123,11 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 			name: "good-rc",
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
-					&routepb.VirtualHost{Domains: []string{"foo", "xyz"}},
-					&routepb.VirtualHost{
+					{Domains: []string{"foo", "xyz"}},
+					{
 						Domains: []string{matchingDomain},
 						Routes: []*routepb.Route{
-							&routepb.Route{
+							{
 								Action: &routepb.Route_Route{
 									Route: &routepb.RouteAction{
 										ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: "cluster"},
