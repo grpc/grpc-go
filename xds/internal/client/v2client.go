@@ -28,12 +28,13 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/buffer"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 )
 
-const defaultWatchTimer = 5 * time.Second
+// The value chosen here is based on the default value of the
+// initial_fetch_timeout field in corepb.ConfigSource proto.
+const defaultWatchTimer = 15 * time.Second
 
 // v2Client performs the actual xDS RPCs using the xDS v2 API. It creates a
 // single ADS stream on which the different types of xDS requests and responses
@@ -54,20 +55,21 @@ type v2Client struct {
 	// watch API, and it is read and acted upon by the send() goroutine.
 	watchCh *buffer.Unbounded
 
-	// Message specific watch infos, protected by the below mutex. These are
+	mu sync.Mutex
+	// Message specific watch infos, protected by the above mutex. These are
 	// written to, after successfully reading from the update channel, and are
 	// read from when recovering from a broken stream to resend the xDS
 	// messages. When the user of this client object cancels a watch call,
-	// these are set to nil.
-	mu       sync.Mutex
+	// these are set to nil. All accesses to the map protected and any value
+	// inside the map should be protected with the above mutex.
 	watchMap map[resourceType]*watchInfo
-
-	// rdsCache maintains a cache of validated route configurations received
-	// through RDS responses. We cache all valid resources, whether or not we
-	// are interested in them when we received them (because we could become
-	// interested in them in the future and the server wont send us those
-	// resources again).
-	rdsCache map[string]*xdspb.RouteConfiguration
+	// rdsCache maintains a mapping of {routeConfigName --> clusterName} from
+	// validated route configurations received in RDS responses. We cache all
+	// valid route configurations, whether or not we are interested in them
+	// when we received them (because we could become interested in them in the
+	// future and the server wont send us those resources again).
+	// Protected by the above mutex.
+	rdsCache map[string]string
 }
 
 // newV2Client creates a new v2Client initialized with the passed arguments.
@@ -78,7 +80,7 @@ func newV2Client(cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) 
 		backoff:   backoff,
 		watchCh:   buffer.NewUnbounded(),
 		watchMap:  make(map[resourceType]*watchInfo),
-		rdsCache:  make(map[string]*xdspb.RouteConfiguration),
+		rdsCache:  make(map[string]string),
 	}
 	v2c.ctx, v2c.cancelCtx = context.WithCancel(context.Background())
 
@@ -180,7 +182,7 @@ func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
 			v2c.mu.Lock()
 			if wi.state == watchCancelled {
 				v2c.mu.Unlock()
-				return
+				continue
 			}
 			wi.state = watchStarted
 			target := wi.target
@@ -236,6 +238,8 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 // corresponding to received LDS responses will be pushed to the provided
 // callback. The caller can cancel the watch by invoking the returned cancel
 // function.
+// The provided callback should not block or perform any expensive operations
+// or call other methods of the v2Client object.
 func (v2c *v2Client) watchLDS(target string, ldsCb ldsCallback) (cancel func()) {
 	wi := &watchInfo{wType: ldsResource, target: []string{target}, callback: ldsCb}
 	v2c.watchCh.Put(wi)
@@ -254,6 +258,8 @@ func (v2c *v2Client) watchLDS(target string, ldsCb ldsCallback) (cancel func()) 
 // corresponding to received RDS responses will be pushed to the provided
 // callback. The caller can cancel the watch by invoking the returned cancel
 // function.
+// The provided callback should not block or perform any expensive operations
+// or call other methods of the v2Client object.
 func (v2c *v2Client) watchRDS(routeName string, rdsCb rdsCallback) (cancel func()) {
 	wi := &watchInfo{wType: rdsResource, target: []string{routeName}, callback: rdsCb}
 	v2c.watchCh.Put(wi)
@@ -264,6 +270,7 @@ func (v2c *v2Client) watchRDS(routeName string, rdsCb rdsCallback) (cancel func(
 			wi.state = watchCancelled
 			return
 		}
+		v2c.watchMap[rdsResource].cancel()
 		v2c.watchMap[rdsResource] = nil
 	}
 }
@@ -275,9 +282,7 @@ func (v2c *v2Client) watchRDS(routeName string, rdsCb rdsCallback) (cancel func(
 // Caller should hold v2c.mu
 func (v2c *v2Client) updateWatchMap(wi *watchInfo) {
 	if existing := v2c.watchMap[wi.wType]; existing != nil {
-		if existing.timer != nil {
-			existing.timer.Stop()
-		}
+		existing.cancel()
 	}
 
 	v2c.watchMap[wi.wType] = wi
@@ -299,17 +304,9 @@ func (v2c *v2Client) checkWatchTargetInCache(wi *watchInfo) {
 	switch wi.wType {
 	case rdsResource:
 		routeName := wi.target[0]
-		if rc := v2c.rdsCache[routeName]; rc != nil {
+		if cluster := v2c.rdsCache[routeName]; cluster != "" {
 			if v2c.watchMap[ldsResource] == nil {
 				grpclog.Warningf("xds: no LDS watcher found when handling RDS watch for route {%v} from cache", routeName)
-				return
-			}
-			target := v2c.watchMap[ldsResource].target[0]
-			cluster := getClusterFromRouteConfiguration(rc, target)
-			if cluster == "" {
-				// This should ideally never happen because we cache only
-				// validated resources.
-				grpclog.Warningf("xds: no cluster found in cached route config: %+v", rc)
 				return
 			}
 			wi.timer.Stop()

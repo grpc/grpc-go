@@ -20,6 +20,7 @@ package client
 
 import (
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/golang/protobuf/ptypes"
@@ -55,7 +56,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 	target := v2c.watchMap[ldsResource].target[0]
 
 	returnCluster := ""
-	localCache := make(map[string]*xdspb.RouteConfiguration)
+	localCache := make(map[string]string)
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
@@ -71,7 +72,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		}
 
 		// If we get here, it means that this resource was a good one.
-		localCache[rc.GetName()] = rc
+		localCache[rc.GetName()] = cluster
 		if v2c.isRouteConfigurationInteresting(rc) {
 			returnCluster = cluster
 		}
@@ -116,16 +117,20 @@ func (v2c *v2Client) isRouteConfigurationInteresting(rc *xdspb.RouteConfiguratio
 // field must be set.  Inside that route message, the cluster field will
 // contain the clusterName we are looking for.
 func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target string) string {
-	host := stripPort(target)
+	host, _, err := net.SplitHostPort(target)
+	if err != nil {
+		return ""
+	}
 	for _, vh := range rc.GetVirtualHosts() {
 		for _, domain := range vh.GetDomains() {
 			// TODO: Add support for wildcard matching here?
-			if domain == host {
-				if len(vh.GetRoutes()) > 0 {
-					dr := vh.Routes[len(vh.Routes)-1]
-					if dr.GetMatch() == nil && dr.GetRoute() != nil {
-						return dr.GetRoute().GetCluster()
-					}
+			if domain != host {
+				continue
+			}
+			if len(vh.GetRoutes()) > 0 {
+				dr := vh.Routes[len(vh.Routes)-1]
+				if dr.GetMatch() == nil && dr.GetRoute() != nil {
+					return dr.GetRoute().GetCluster()
 				}
 			}
 		}

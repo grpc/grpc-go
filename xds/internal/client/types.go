@@ -26,6 +26,13 @@ import (
 
 type adsStream adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient
 
+const (
+	listenerURL = "type.googleapis.com/envoy.api.v2.Listener"
+	routeURL    = "type.googleapis.com/envoy.api.v2.RouteConfiguration"
+	clusterURL  = "type.googleapis.com/envoy.api.v2.Cluster"
+	endpointURL = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
+)
+
 type resourceType int
 
 const (
@@ -35,27 +42,27 @@ const (
 	edsResource
 )
 
-const (
-	listenerURL = "type.googleapis.com/envoy.api.v2.Listener"
-	routeURL    = "type.googleapis.com/envoy.api.v2.RouteConfiguration"
-	clusterURL  = "type.googleapis.com/envoy.api.v2.Cluster"
-	endpointURL = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
-)
+type watchState int
 
 const (
-	// Using raw constants here instead of enums because it seems to hard to
-	// get that to work with atomic operations which expect int* operands.
-	watchEnqueued  = 0
-	watchCancelled = 1
-	watchStarted   = 2
+	watchEnqueued watchState = iota
+	watchCancelled
+	watchStarted
 )
 
 type watchInfo struct {
 	wType    resourceType
 	target   []string
-	state    int32
+	state    watchState
 	callback interface{}
 	timer    *time.Timer
+}
+
+func (wi *watchInfo) cancel() {
+	wi.state = watchCancelled
+	if wi.timer != nil {
+		wi.timer.Stop()
+	}
 }
 
 type ldsUpdate struct {
