@@ -26,7 +26,6 @@ import (
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	xdsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
-	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
@@ -52,7 +51,7 @@ type client struct {
 	cli              xdsgrpc.AggregatedDiscoveryServiceClient
 	dialer           func(context.Context, string) (net.Conn, error)
 	channelzParentID int64
-	newADS           func(ctx context.Context, resp proto.Message) error
+	newADS           func(ctx context.Context, resp *xdsclient.EDSUpdate) error
 	loseContact      func(ctx context.Context)
 	cleanup          func()
 	backoff          backoff.Strategy
@@ -197,7 +196,12 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 			grpclog.Warningf("xds: failed to unmarshal resources due to %v.", err)
 			return
 		}
-		if err := c.newADS(c.ctx, adsResp.Message); err != nil {
+		parsed, err := xdsclient.ParseEDSRespProto(adsResp.Message.(*xdspb.ClusterLoadAssignment))
+		if err != nil {
+			grpclog.Warningf("xds: parsing new EDS message failed due to %v.", err)
+			return
+		}
+		if err := c.newADS(c.ctx, parsed); err != nil {
 			grpclog.Warningf("xds: processing new ADS message failed due to %v.", err)
 			return
 		}
@@ -213,7 +217,7 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 	}
 }
 
-func newXDSClient(balancerName string, edsServiceName string, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
+func newXDSClient(balancerName string, edsServiceName string, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, *xdsclient.EDSUpdate) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
 	c := &client{
 		serviceName:      edsServiceName,
 		dialer:           opts.Dialer,
