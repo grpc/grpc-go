@@ -21,7 +21,6 @@ package client
 import (
 	"fmt"
 	"net"
-	"strings"
 
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/grpclog"
@@ -136,12 +135,4 @@ func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target strin
 		}
 	}
 	return ""
-}
-
-func stripPort(host string) string {
-	colon := strings.LastIndexByte(host, ':')
-	if colon == -1 {
-		return host
-	}
-	return host[:colon]
 }
