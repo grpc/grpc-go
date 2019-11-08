@@ -54,9 +54,9 @@ var (
 	errorLog = log.New(os.Stderr, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 )
 
-func doRPCAndGetPath(client testpb.TestServiceClient, deadline time.Time) testpb.GrpclbRouteType {
+func doRPCAndGetPath(client testpb.TestServiceClient, deadline time.Duration) testpb.GrpclbRouteType {
 	infoLog.Printf("doRPCAndGetPath deadline:%v\n", deadline)
-	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(deadline))
 	defer cancel()
 	req := &testpb.SimpleRequest{
 		FillGrpclbRouteType: true,
@@ -131,7 +131,7 @@ func waitForFallbackAndDoRPCs(client testpb.TestServiceClient, fallbackDeadline 
 	fallbackRetryCount := 0
 	fellBack := false
 	for time.Now().Before(fallbackDeadline) {
-		g := doRPCAndGetPath(client, time.Now().Add(1*time.Second))
+		g := doRPCAndGetPath(client, 1*time.Second)
 		if g == testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
 			infoLog.Println("Made one successul RPC to a fallback. Now expect the same for the rest.")
 			fellBack = true
@@ -147,7 +147,7 @@ func waitForFallbackAndDoRPCs(client testpb.TestServiceClient, fallbackDeadline 
 		infoLog.Fatalf("Didn't fall back before deadline: %v\n", fallbackDeadline)
 	}
 	for i := 0; i < 30; i++ {
-		if g := doRPCAndGetPath(client, time.Now().Add(20*time.Second)); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
+		if g := doRPCAndGetPath(client, 20*time.Second); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
 			errorLog.Fatalf("Expected RPC to take grpclb route type FALLBACK. Got: %v", g)
 		}
 		time.Sleep(time.Second)
@@ -176,7 +176,7 @@ func doFastFallbackAfterStartup() {
 	conn := createTestConn()
 	defer conn.Close()
 	client := testpb.NewTestServiceClient(conn)
-	if g := doRPCAndGetPath(client, time.Now().Add(20*time.Second)); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
+	if g := doRPCAndGetPath(client, 20*time.Second); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
 		errorLog.Fatalf("Expected RPC to take grpclb route type BACKEND. Got: %v", g)
 	}
 	runCmd(*unrouteLBAndBackendAddrsCmd)
@@ -188,7 +188,7 @@ func doSlowFallbackAfterStartup() {
 	conn := createTestConn()
 	defer conn.Close()
 	client := testpb.NewTestServiceClient(conn)
-	if g := doRPCAndGetPath(client, time.Now().Add(20*time.Second)); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
+	if g := doRPCAndGetPath(client, 20*time.Second); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
 		errorLog.Fatalf("Expected RPC to take grpclb route type BACKEND. Got: %v", g)
 	}
 	runCmd(*blackholeLBAndBackendAddrsCmd)
