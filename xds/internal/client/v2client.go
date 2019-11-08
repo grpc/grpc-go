@@ -305,7 +305,7 @@ func (v2c *v2Client) checkWatchTargetInCache(wi *watchInfo) {
 				return
 			}
 			target := v2c.watchMap[ldsResource].target[0]
-			cluster := v2c.getClusterFromRouteConfiguration(rc, target)
+			cluster := getClusterFromRouteConfiguration(rc, target)
 			if cluster == "" {
 				// This should ideally never happen because we cache only
 				// validated resources.

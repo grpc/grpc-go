@@ -17,3 +17,134 @@
  */
 
 package client
+
+import (
+	"testing"
+
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+)
+
+func TestGetClusterFromRouteConfiguration(t *testing.T) {
+	const (
+		target         = "foo.xyz:9999"
+		matchingDomain = "foo.xyz"
+	)
+
+	tests := []struct {
+		name        string
+		rc          *xdspb.RouteConfiguration
+		wantCluster string
+	}{
+		{
+			name:        "no-virtual-hosts-in-rc",
+			rc:          &xdspb.RouteConfiguration{},
+			wantCluster: "",
+		},
+		{
+			name: "no-domains-in-rc",
+			rc: &xdspb.RouteConfiguration{
+				VirtualHosts: []*routepb.VirtualHost{&routepb.VirtualHost{}},
+			},
+			wantCluster: "",
+		},
+		{
+			name: "non-matching-domain-in-rc",
+			rc: &xdspb.RouteConfiguration{
+				VirtualHosts: []*routepb.VirtualHost{
+					&routepb.VirtualHost{Domains: []string{"foo", "xyz"}},
+				},
+			},
+			wantCluster: "",
+		},
+		{
+			name: "no-routes-in-rc",
+			rc: &xdspb.RouteConfiguration{
+				VirtualHosts: []*routepb.VirtualHost{
+					&routepb.VirtualHost{Domains: []string{"foo", "xyz"}},
+					&routepb.VirtualHost{Domains: []string{matchingDomain}},
+				},
+			},
+			wantCluster: "",
+		},
+		{
+			name: "default-route-match-field-is-non-nil",
+			rc: &xdspb.RouteConfiguration{
+				VirtualHosts: []*routepb.VirtualHost{
+					&routepb.VirtualHost{Domains: []string{"foo", "xyz"}},
+					&routepb.VirtualHost{
+						Domains: []string{matchingDomain},
+						Routes: []*routepb.Route{
+							&routepb.Route{
+								Match:  &routepb.RouteMatch{},
+								Action: &routepb.Route_Route{},
+							},
+						},
+					},
+				},
+			},
+			wantCluster: "",
+		},
+		{
+			name: "default-route-routeaction-field-is-nil",
+			rc: &xdspb.RouteConfiguration{
+				VirtualHosts: []*routepb.VirtualHost{
+					&routepb.VirtualHost{Domains: []string{"foo", "xyz"}},
+					&routepb.VirtualHost{
+						Domains: []string{matchingDomain},
+						Routes:  []*routepb.Route{&routepb.Route{}},
+					},
+				},
+			},
+			wantCluster: "",
+		},
+		{
+			name: "default-route-cluster-field-is-empty",
+			rc: &xdspb.RouteConfiguration{
+				VirtualHosts: []*routepb.VirtualHost{
+					&routepb.VirtualHost{Domains: []string{"foo", "xyz"}},
+					&routepb.VirtualHost{
+						Domains: []string{matchingDomain},
+						Routes: []*routepb.Route{
+							&routepb.Route{
+								Action: &routepb.Route_Route{
+									Route: &routepb.RouteAction{
+										ClusterSpecifier: &routepb.RouteAction_ClusterHeader{},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantCluster: "",
+		},
+		{
+			name: "good-rc",
+			rc: &xdspb.RouteConfiguration{
+				VirtualHosts: []*routepb.VirtualHost{
+					&routepb.VirtualHost{Domains: []string{"foo", "xyz"}},
+					&routepb.VirtualHost{
+						Domains: []string{matchingDomain},
+						Routes: []*routepb.Route{
+							&routepb.Route{
+								Action: &routepb.Route_Route{
+									Route: &routepb.RouteAction{
+										ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: "cluster"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantCluster: "cluster",
+		},
+	}
+
+	for _, test := range tests {
+		if gotCluster := getClusterFromRouteConfiguration(test.rc, target); gotCluster != test.wantCluster {
+			t.Errorf("%s: getClusterFromRouteConfiguration(%+v, %v) = %v, want %v", test.name, test.rc, target, gotCluster, test.wantCluster)
+		}
+	}
+}

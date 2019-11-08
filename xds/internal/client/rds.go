@@ -65,7 +65,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if !ok {
 			return fmt.Errorf("xds: unexpected resource type: %T in RDS response", resource.Message)
 		}
-		cluster := v2c.getClusterFromRouteConfiguration(rc, target)
+		cluster := getClusterFromRouteConfiguration(rc, target)
 		if cluster == "" {
 			return fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v", rc)
 		}
@@ -115,9 +115,7 @@ func (v2c *v2Client) isRouteConfigurationInteresting(rc *xdspb.RouteConfiguratio
 // list (the default route), whose match field must be empty and whose route
 // field must be set.  Inside that route message, the cluster field will
 // contain the clusterName we are looking for.
-//
-// Caller should hold v2c.mu
-func (v2c *v2Client) getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target string) string {
+func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target string) string {
 	host := stripPort(target)
 	for _, vh := range rc.GetVirtualHosts() {
 		for _, domain := range vh.GetDomains() {
