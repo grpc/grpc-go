@@ -24,9 +24,8 @@
 package dns
 
 import (
+	"google.golang.org/grpc/internal/resolver/dns"
 	"google.golang.org/grpc/resolver"
-
-	_ "google.golang.org/grpc/internal/resolver/dns" // import for side effects after package was moved
 )
 
 // NewBuilder creates a dnsBuilder which is used to factory DNS resolvers.
