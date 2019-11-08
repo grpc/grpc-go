@@ -74,12 +74,18 @@ func GetDefaultScheme() string {
 }
 
 // AddressType indicates the address type returned by name resolution.
+//
+// Deprecated: use Attributes in Address instead.
 type AddressType uint8
 
 const (
 	// Backend indicates the address is for a backend server.
+	//
+	// Deprecated: use Attributes in Address instead.
 	Backend AddressType = iota
 	// GRPCLB indicates the address is for a grpclb load balancer.
+	//
+	// Deprecated: use Attributes in Address instead.
 	GRPCLB
 )
 
