@@ -20,16 +20,10 @@ package edsbalancer
 import (
 	"context"
 	"encoding/json"
-	"net"
 	"reflect"
-	"strconv"
 	"sync"
 	"time"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
@@ -40,6 +34,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
+	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
 // TODO: make this a environment variable?
@@ -154,26 +149,17 @@ func (xdsB *EDSBalancer) HandleChildPolicy(name string, config json.RawMessage) 
 
 // updateDrops compares new drop policies with the old. If they are different,
 // it updates the drop policies and send ClientConn an updated picker.
-func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdspb.ClusterLoadAssignment_Policy_DropOverload) {
+func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdsclient.OverloadDropConfig) {
 	var (
 		newDrops     []*dropper
 		dropsChanged bool
 	)
 	for i, dropPolicy := range dropPolicies {
-		percentage := dropPolicy.GetDropPercentage()
 		var (
-			numerator   = percentage.GetNumerator()
-			denominator uint32
+			numerator   = dropPolicy.Numerator
+			denominator = dropPolicy.Denominator
 		)
-		switch percentage.GetDenominator() {
-		case typepb.FractionalPercent_HUNDRED:
-			denominator = 100
-		case typepb.FractionalPercent_TEN_THOUSAND:
-			denominator = 10000
-		case typepb.FractionalPercent_MILLION:
-			denominator = 1000000
-		}
-		newDrops = append(newDrops, newDropper(numerator, denominator, dropPolicy.GetCategory()))
+		newDrops = append(newDrops, newDropper(numerator, denominator, dropPolicy.Category))
 
 		// The following reading xdsB.drops doesn't need mutex because it can only
 		// be updated by the code following.
@@ -203,7 +189,7 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdspb.ClusterLoadAssignment
 // SubConns. It also handles drops.
 //
 // HandleChildPolicy and HandleEDSResponse must be called by the same goroutine.
-func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment) {
+func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) {
 	// TODO: Unhandled fields from EDS response:
 	//  - edsResp.GetPolicy().GetOverprovisioningFactor()
 	//  - locality.GetPriority()
@@ -213,7 +199,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 	//     - socketAddress.GetNamedPort(), socketAddress.GetResolverName()
 	//     - resolve endpoint's name with another resolver
 
-	xdsB.updateDrops(edsResp.GetPolicy().GetDropOverloads())
+	xdsB.updateDrops(edsResp.OverloadDrop)
 
 	// Filter out all localities with weight 0.
 	//
@@ -224,12 +210,12 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 	//
 	// In the future, we should look at the config in CDS response and decide
 	// whether locality weight matters.
-	newLocalitiesWithPriority := make(map[priorityType][]*endpointpb.LocalityLbEndpoints)
-	for _, locality := range edsResp.Endpoints {
-		if locality.GetLoadBalancingWeight().GetValue() == 0 {
+	newLocalitiesWithPriority := make(map[priorityType][]*xdsclient.Locality)
+	for _, locality := range edsResp.Localities {
+		if locality.Weight == 0 {
 			continue
 		}
-		priority := newPriorityType(locality.GetPriority())
+		priority := newPriorityType(locality.Priority)
 		newLocalitiesWithPriority[priority] = append(newLocalitiesWithPriority[priority], locality)
 	}
 
@@ -281,7 +267,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 	}
 }
 
-func (xdsB *EDSBalancer) handleEDSResponsePerPriority(bgwc *balancerGroupWithConfig, newLocalities []*endpointpb.LocalityLbEndpoints) {
+func (xdsB *EDSBalancer) handleEDSResponsePerPriority(bgwc *balancerGroupWithConfig, newLocalities []*xdsclient.Locality) {
 	// newLocalitiesSet contains all names of localities in the new EDS response
 	// for the same priority. It's used to delete localities that are removed in
 	// the new EDS response.
@@ -289,37 +275,26 @@ func (xdsB *EDSBalancer) handleEDSResponsePerPriority(bgwc *balancerGroupWithCon
 	for _, locality := range newLocalities {
 		// One balancer for each locality.
 
-		l := locality.GetLocality()
-		if l == nil {
-			grpclog.Warningf("xds: received LocalityLbEndpoints with <nil> Locality")
-			continue
-		}
-		lid := internal.Locality{
-			Region:  l.Region,
-			Zone:    l.Zone,
-			SubZone: l.SubZone,
-		}
+		lid := locality.ID
 		newLocalitiesSet[lid] = struct{}{}
 
-		newWeight := locality.GetLoadBalancingWeight().GetValue()
+		newWeight := locality.Weight
 		var newAddrs []resolver.Address
-		for _, lbEndpoint := range locality.GetLbEndpoints() {
+		for _, lbEndpoint := range locality.Endpoints {
 			// Filter out all "unhealthy" endpoints (unknown and
 			// healthy are both considered to be healthy:
 			// https://www.envoyproxy.io/docs/envoy/latest/api-v2/api/v2/core/health_check.proto#envoy-api-enum-core-healthstatus).
-			if lbEndpoint.GetHealthStatus() != corepb.HealthStatus_HEALTHY &&
-				lbEndpoint.GetHealthStatus() != corepb.HealthStatus_UNKNOWN {
+			if lbEndpoint.HealthStatus != xdsclient.EndpointHealthStatusHEALTHY &&
+				lbEndpoint.HealthStatus != xdsclient.EndpointHealthStatusUNKNOWN {
 				continue
 			}
 
-			socketAddress := lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress()
 			address := resolver.Address{
-				Addr: net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue()))),
+				Addr: lbEndpoint.Address,
 			}
-			if xdsB.subBalancerBuilder.Name() == weightedroundrobin.Name &&
-				lbEndpoint.GetLoadBalancingWeight().GetValue() != 0 {
+			if xdsB.subBalancerBuilder.Name() == weightedroundrobin.Name && lbEndpoint.Weight != 0 {
 				address.Metadata = &weightedroundrobin.AddrInfo{
-					Weight: lbEndpoint.GetLoadBalancingWeight().GetValue(),
+					Weight: lbEndpoint.Weight,
 				}
 			}
 			newAddrs = append(newAddrs, address)
