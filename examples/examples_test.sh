@@ -21,8 +21,18 @@ export TMPDIR=$(mktemp -d)
 trap "rm -rf ${TMPDIR}" EXIT
 
 clean () {
-    jobs -p | xargs pkill -P
-    wait
+  for i in {1..10}; do
+    jobs -p | xargs -n1 pkill -P
+    # A simple "wait" just hangs sometimes.  Running `jobs` seems to help.
+    sleep 1
+    if jobs | read; then
+      return
+    fi
+  done
+  echo "$(tput setaf 1) clean failed to kill tests $(tput sgr 0)"
+  jobs
+  pstree
+  exit 1
 }
 
 fail () {
