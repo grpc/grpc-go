@@ -28,6 +28,8 @@ import (
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 )
 
+// newRDSRequest generates an RDS request proto for the provided routeName, to
+// be sent out on the wire.
 func (v2c *v2Client) newRDSRequest(routeName []string) *xdspb.DiscoveryRequest {
 	return &xdspb.DiscoveryRequest{
 		Node:          v2c.nodeProto,
@@ -36,6 +38,7 @@ func (v2c *v2Client) newRDSRequest(routeName []string) *xdspb.DiscoveryRequest {
 	}
 }
 
+// sendRDS sends an RDS request for provided routeName on the provided stream.
 func (v2c *v2Client) sendRDS(stream adsStream, routeName []string) bool {
 	if err := stream.Send(v2c.newRDSRequest(routeName)); err != nil {
 		grpclog.Infof("xds: RDS request for resource %v failed: %v", routeName, err)
@@ -87,10 +90,18 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 	// Update the cache in the v2Client only after we have confirmed that all
 	// resources in the received response were good.
 	for k, v := range localCache {
+		// TODO: Need to handle deletion of entries from the cache based on LDS
+		// watch calls. Not handling it does not affect correctness, but leads
+		// to unnecessary memory consumption.
 		v2c.rdsCache[k] = v
 	}
 
 	if returnCluster != "" {
+		// We stop the expiry timer and invoke the callback only when we have
+		// received the resource that we are watching for. Since RDS is an
+		// incremental protocol, the fact that we did not receive the resource
+		// that we are watching for in this response does not mean that the
+		// server does not know about it.
 		wi.expiryTimer.Stop()
 		wi.callback.(rdsCallback)(rdsUpdate{clusterName: returnCluster}, nil)
 	}

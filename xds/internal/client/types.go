@@ -33,6 +33,7 @@ const (
 	endpointURL = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
 )
 
+// resourceType is an enum to represent the different xDS resources.
 type resourceType int
 
 const (
@@ -42,6 +43,7 @@ const (
 	edsResource
 )
 
+// watchState is an enum to represent the state of a watch call.
 type watchState int
 
 const (
@@ -50,6 +52,7 @@ const (
 	watchStarted
 )
 
+// watchInfo holds all the information about a watch call.
 type watchInfo struct {
 	wType       resourceType
 	target      []string
@@ -58,6 +61,7 @@ type watchInfo struct {
 	expiryTimer *time.Timer
 }
 
+// cancel marks the state as cancelled, and also stops the expiry timer.
 func (wi *watchInfo) cancel() {
 	wi.state = watchCancelled
 	if wi.expiryTimer != nil {

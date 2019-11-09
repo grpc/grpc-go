@@ -34,7 +34,7 @@ import (
 
 // The value chosen here is based on the default value of the
 // initial_fetch_timeout field in corepb.ConfigSource proto.
-var defaultWatchTimer = 15 * time.Second
+var defaultWatchExpiryTimer = 15 * time.Second
 
 // v2Client performs the actual xDS RPCs using the xDS v2 API. It creates a
 // single ADS stream on which the different types of xDS requests and responses
@@ -165,8 +165,8 @@ func (v2c *v2Client) sendExisting(stream adsStream) bool {
 	return true
 }
 
-// send reads from message specific update channels and sends out actual xDS
-// requests on the provided ADS stream.
+// send reads watch infos from update channel and sends out actual xDS requests
+// on the provided ADS stream.
 func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
 	if !v2c.sendExisting(stream) {
 		return
@@ -292,7 +292,7 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 	v2c.watchMap[wi.wType] = wi
 	switch wi.wType {
 	case ldsResource:
-		wi.expiryTimer = time.AfterFunc(defaultWatchTimer, func() {
+		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimer, func() {
 			// We need to grab the lock here because we are accessing the
 			// watchInfo (which is now stored in the watchMap) from this
 			// method which will be called when the timer fires.
@@ -302,27 +302,26 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 		})
 	case rdsResource:
 		routeName := wi.target[0]
-		cluster := v2c.rdsCache[routeName]
-		if cluster == "" {
-			// Add the watch expiry timer only for new watches we don't find in
-			// the cache, and return from here.
-			wi.expiryTimer = time.AfterFunc(defaultWatchTimer, func() {
-				// We need to grab the lock here because we are accessing the
-				// watchInfo (which is now stored in the watchMap) from this
-				// method which will be called when the timer fires.
-				v2c.mu.Lock()
-				wi.callback.(rdsCallback)(rdsUpdate{clusterName: ""}, fmt.Errorf("xds: RDS target %s not found", wi.target))
-				v2c.mu.Unlock()
-			})
+		if cluster := v2c.rdsCache[routeName]; cluster != "" {
+			// Invoke the callback now, since we found the entry in the cache.
+			var err error
+			if v2c.watchMap[ldsResource] == nil {
+				cluster = ""
+				err = fmt.Errorf("xds: no LDS watcher found when handling RDS watch for route {%v} from cache", routeName)
+			}
+			wi.callback.(rdsCallback)(rdsUpdate{clusterName: cluster}, err)
 			return
 		}
-		// Invoke the callback now, since we found the entry in the cache.
-		var err error
-		if v2c.watchMap[ldsResource] == nil {
-			cluster = ""
-			err = fmt.Errorf("xds: no LDS watcher found when handling RDS watch for route {%v} from cache", routeName)
-		}
-		wi.callback.(rdsCallback)(rdsUpdate{clusterName: cluster}, err)
+		// Add the watch expiry timer only for new watches we don't find in
+		// the cache, and return from here.
+		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimer, func() {
+			// We need to grab the lock here because we are accessing the
+			// watchInfo (which is now stored in the watchMap) from this
+			// method which will be called when the timer fires.
+			v2c.mu.Lock()
+			wi.callback.(rdsCallback)(rdsUpdate{clusterName: ""}, fmt.Errorf("xds: RDS target %s not found", wi.target))
+			v2c.mu.Unlock()
+		})
 	}
 }
 
