@@ -68,29 +68,39 @@ type Server struct {
 func StartClientAndServer(t *testing.T) (*Server, *grpc.ClientConn, func()) {
 	t.Helper()
 
-	lis, err := net.Listen("tcp", "localhost:0")
+	var lis net.Listener
+	var err error
+	lis, err = net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
 
 	server := grpc.NewServer()
-	fakeServer := &Server{
+	fs := &Server{
 		RequestChan:  make(chan *Request, defaultChannelBufferSize),
 		ResponseChan: make(chan *Response, defaultChannelBufferSize),
 	}
-	adsgrpc.RegisterAggregatedDiscoveryServiceServer(server, fakeServer)
+	adsgrpc.RegisterAggregatedDiscoveryServiceServer(server, fs)
 	go server.Serve(lis)
 	t.Logf("Starting fake xDS server at %v...", lis.Addr().String())
+	defer func() {
+		if err != nil {
+			server.Stop()
+			lis.Close()
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	client, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithInsecure(), grpc.WithBlock())
+
+	var cc *grpc.ClientConn
+	cc, err = grpc.DialContext(ctx, lis.Addr().String(), grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		t.Fatalf("grpc.DialContext(%s) failed: %v", lis.Addr().String(), err)
 	}
 	t.Log("Started xDS gRPC client...")
 
-	return fakeServer, client, func() {
+	return fs, cc, func() {
 		server.Stop()
 		lis.Close()
 	}

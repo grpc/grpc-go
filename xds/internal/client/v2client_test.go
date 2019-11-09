@@ -26,7 +26,9 @@ import (
 	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	ldspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	rdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 	httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
 	listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v2"
 	anypb "github.com/golang/protobuf/ptypes/any"
@@ -34,13 +36,19 @@ import (
 )
 
 const (
-	defaultTestTimeout     = 5 * time.Second
-	goodLDSTarget1         = "GoodListener1"
-	goodLDSTarget2         = "GoodListener2"
-	uninterestingLDSTarget = "UninterestingListener"
-	goodRouteName1         = "GoodRouteConfig1"
-	goodRouteName2         = "GoodRouteConfig2"
-	httpConnManagerURL     = "type.googleapis.com/envoy.config.filter.network.http_connection_manager.v2.HttpConnectionManager"
+	defaultTestTimeout       = 2 * time.Second
+	goodLDSTarget1           = "lds.target.good:1111"
+	goodLDSTarget2           = "lds.target.good:2222"
+	uninterestingLDSTarget   = "lds.target.uninteresting"
+	goodRouteName1           = "GoodRouteConfig1"
+	goodRouteName2           = "GoodRouteConfig2"
+	uninterestingRouteName   = "UninterestingRouteName"
+	goodMatchingDomain       = "lds.target.good"
+	uninterestingDomain      = "uninteresting.domain"
+	goodClusterName1         = "GoodClusterName1"
+	goodClusterName2         = "GoodClusterName2"
+	uninterestingClusterName = "UninterestingClusterName"
+	httpConnManagerURL       = "type.googleapis.com/envoy.config.filter.network.http_connection_manager.v2.HttpConnectionManager"
 )
 
 var (
@@ -89,7 +97,11 @@ var (
 		},
 	}
 	marshaledConnMgrWithInlineRouteConfig, _ = proto.Marshal(connMgrWithInlineRouteConfig)
-	goodListener1                            = &ldspb.Listener{
+	connMgrWithScopedRoutes                  = &httppb.HttpConnectionManager{
+		RouteSpecifier: &httppb.HttpConnectionManager_ScopedRoutes{},
+	}
+	marshaledConnMgrWithScopedRoutes, _ = proto.Marshal(connMgrWithScopedRoutes)
+	goodListener1                       = &ldspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -181,7 +193,16 @@ var (
 		},
 	}
 	marshaledListenerWithInlineRouteConfig, _ = proto.Marshal(listenerWithInlineRouteConfig)
-	goodLDSResponse1                          = &discoverypb.DiscoveryResponse{
+	listenerWithScopedRoutesRouteConfig       = &ldspb.Listener{
+		Name: goodLDSTarget1,
+		ApiListener: &listenerpb.ApiListener{
+			ApiListener: &anypb.Any{
+				TypeUrl: httpConnManagerURL,
+				Value:   marshaledConnMgrWithScopedRoutes,
+			},
+		},
+	}
+	goodLDSResponse1 = &discoverypb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: listenerURL,
@@ -311,6 +332,143 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
+	badlyMarshaledRDSResponse = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: routeURL,
+				Value:   []byte{1, 2, 3, 4},
+			},
+		},
+		TypeUrl: routeURL,
+	}
+	badResourceTypeInRDSResponse = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: routeURL,
+				Value:   marshaledConnMgr1,
+			},
+		},
+		TypeUrl: routeURL,
+	}
+	emptyRouteConfig             = &xdspb.RouteConfiguration{}
+	marshaledEmptyRouteConfig, _ = proto.Marshal(emptyRouteConfig)
+	noDomainsInRouteConfig       = &xdspb.RouteConfiguration{
+		VirtualHosts: []*routepb.VirtualHost{{}},
+	}
+	noVirtualHostsInRDSResponse = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: routeURL,
+				Value:   marshaledEmptyRouteConfig,
+			},
+		},
+		TypeUrl: routeURL,
+	}
+	goodRouteConfig1 = &xdspb.RouteConfiguration{
+		Name: goodRouteName1,
+		VirtualHosts: []*routepb.VirtualHost{
+			{
+				Domains: []string{uninterestingDomain},
+				Routes: []*routepb.Route{
+					{
+						Action: &routepb.Route_Route{
+							Route: &routepb.RouteAction{
+								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: uninterestingClusterName},
+							},
+						},
+					},
+				},
+			},
+			{
+				Domains: []string{goodMatchingDomain},
+				Routes: []*routepb.Route{
+					{
+						Action: &routepb.Route_Route{
+							Route: &routepb.RouteAction{
+								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: goodClusterName1},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	marshaledGoodRouteConfig1, _ = proto.Marshal(goodRouteConfig1)
+	goodRouteConfig2             = &xdspb.RouteConfiguration{
+		Name: goodRouteName2,
+		VirtualHosts: []*routepb.VirtualHost{
+			{
+				Domains: []string{uninterestingDomain},
+				Routes: []*routepb.Route{
+					{
+						Action: &routepb.Route_Route{
+							Route: &routepb.RouteAction{
+								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: uninterestingClusterName},
+							},
+						},
+					},
+				},
+			},
+			{
+				Domains: []string{goodMatchingDomain},
+				Routes: []*routepb.Route{
+					{
+						Action: &routepb.Route_Route{
+							Route: &routepb.RouteAction{
+								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: goodClusterName2},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	marshaledGoodRouteConfig2, _ = proto.Marshal(goodRouteConfig2)
+	uninterestingRouteConfig     = &xdspb.RouteConfiguration{
+		Name: uninterestingRouteName,
+		VirtualHosts: []*routepb.VirtualHost{
+			{
+				Domains: []string{uninterestingDomain},
+				Routes: []*routepb.Route{
+					{
+						Action: &routepb.Route_Route{
+							Route: &routepb.RouteAction{
+								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: uninterestingClusterName},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	marshaledUninterestingRouteConfig, _ = proto.Marshal(uninterestingRouteConfig)
+	goodRDSResponse1                     = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: routeURL,
+				Value:   marshaledGoodRouteConfig1,
+			},
+		},
+		TypeUrl: routeURL,
+	}
+	goodRDSResponse2 = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: routeURL,
+				Value:   marshaledGoodRouteConfig2,
+			},
+		},
+		TypeUrl: routeURL,
+	}
+	uninterestingRDSResponse = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: routeURL,
+				Value:   marshaledUninterestingRouteConfig,
+			},
+		},
+		TypeUrl: routeURL,
+	}
 )
 
 /*
@@ -330,37 +488,6 @@ type ldsTestOp struct {
 	wantRequest *fakexds.Request
 	// responseToSend is the LDS response that the fake server will send.
 	responseToSend *fakexds.Response
-}
-
-// setupClientAndServer starts a fakexds.Server and creates a ClientConn
-// talking to it. The returned cleanup function should be invoked by the caller
-// once the test is done.
-func setupClientAndServer(t *testing.T) (*fakexds.Server, *grpc.ClientConn, func()) {
-	t.Helper()
-
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("net.Listen() failed: %v", err)
-	}
-
-	server := grpc.NewServer()
-	fakeServer := fakexds.New(nil)
-	adsgrpc.RegisterAggregatedDiscoveryServiceServer(server, fakeServer)
-	go server.Serve(lis)
-	t.Logf("Starting fake xDS server at %v...", lis.Addr().String())
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	client, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithInsecure(), grpc.WithBlock())
-	if err != nil {
-		t.Fatalf("grpc.DialContext(%s) failed: %v", lis.Addr().String(), err)
-	}
-	t.Log("Started xDS gRPC client...")
-
-	return fakeServer, client, func() {
-		server.Stop()
-		lis.Close()
-	}
 }
 
 // testLDS creates a v2Client object talking to a fakexds.Server and reads the

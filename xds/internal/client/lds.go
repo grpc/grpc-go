@@ -47,19 +47,16 @@ func (v2c *v2Client) sendLDS(stream adsStream, target []string) bool {
 	return true
 }
 
-// handleLDSResponse processes an LDS response received from the xDS server. It
-// performs the following actions:
-// - sanity checks the received message (only the listener we are watching for)
-// - extracts the RDS related information
-// - invokes the registered watcher callback with the appropriate update or
-//   error if the received message does not contain a listener for the watch
-//   target.
-//
-// Returns error to the caller only on marshaling errors or if the listener
-// that we are interested in has problems in the response.
+// handleLDSResponse processes an LDS response received from the xDS server. On
+// receipt of a good response, it also invokes the registered watcher callback.
 func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
+
+	wi := v2c.watchMap[ldsResource]
+	if wi == nil {
+		return fmt.Errorf("xds: no LDS watcher found when handling LDS response: %+v", resp)
+	}
 
 	routeName := ""
 	for _, r := range resp.GetResources() {
@@ -71,7 +68,7 @@ func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if !ok {
 			return fmt.Errorf("xds: unexpected resource type: %T in LDS response", resource.Message)
 		}
-		if !v2c.isListenerProtoInteresting(lis) {
+		if lis.GetName() != wi.target[0] {
 			// We ignore listeners we are not watching for because LDS is
 			// special in the sense that there is only one resource we are
 			// interested in, and this resource does not change over the
@@ -79,50 +76,49 @@ func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 			// listeners which we are not interested in.
 			continue
 		}
-		if lis.GetApiListener() == nil {
-			return fmt.Errorf("xds: no api_listener field in LDS response %+v", lis)
-		}
-		var apiAny ptypes.DynamicAny
-		if err := ptypes.UnmarshalAny(lis.GetApiListener().GetApiListener(), &apiAny); err != nil {
-			return fmt.Errorf("xds: failed to unmarshal api_listner in LDS response: %v", err)
-		}
-		apiLis, ok := apiAny.Message.(*httppb.HttpConnectionManager)
-		if !ok {
-			return fmt.Errorf("xds: unexpected api_listener type: %T in LDS response", apiAny.Message)
-		}
-		switch apiLis.RouteSpecifier.(type) {
-		case *httppb.HttpConnectionManager_Rds:
-			if apiLis.GetRds().GetRouteConfigName() == "" {
-				return fmt.Errorf("xds: empty route_config_name in LDS response: %+v", lis)
-			}
-			routeName = apiLis.GetRds().GetRouteConfigName()
-		case *httppb.HttpConnectionManager_RouteConfig:
-			// TODO: Add support for specifying the RouteConfiguration inline
-			// in the LDS response.
-			return fmt.Errorf("xds: LDS response contains RDS config inline. Not supported for now: %+v", apiLis)
-		case nil:
-			return fmt.Errorf("xds: no RouteSpecifier in received LDS response: %+v", apiLis)
-		default:
-			return fmt.Errorf("xds: unsupported type %T for RouteSpecifier in received LDS response", apiLis.RouteSpecifier)
+		var err error
+		routeName, err = getRouteConfigNameFromListener(lis)
+		if err != nil {
+			return err
 		}
 	}
 
-	if wi := v2c.watchMap[ldsResource]; wi != nil {
-		var err error
-		if routeName == "" {
-			err = fmt.Errorf("xds: LDS target %s not found in received response %+v", wi.target, resp)
-		}
-		// Type assert the callback field to the appropriate callback type and
-		// invoke it.
-		wi.callback.(ldsCallback)(ldsUpdate{routeName: routeName}, err)
+	var err error
+	if routeName == "" {
+		err = fmt.Errorf("xds: LDS target %s not found in received response %+v", wi.target, resp)
 	}
+	wi.expiryTimer.Stop()
+	wi.callback.(ldsCallback)(ldsUpdate{routeName: routeName}, err)
 	return nil
 }
 
-// isListenerProtoInteresting determines if the provided listener matches the
-// target that we are watching for.
-//
-// Caller should hold v2c.mu
-func (v2c *v2Client) isListenerProtoInteresting(lis *xdspb.Listener) bool {
-	return v2c.watchMap[ldsResource] != nil && v2c.watchMap[ldsResource].target[0] == lis.GetName()
+// getRouteConfigNameFromListener checks if the provided Listener proto meets
+// the expected criteria. If so, it returns a non-empty routeConfigName.
+func getRouteConfigNameFromListener(lis *xdspb.Listener) (string, error) {
+	if lis.GetApiListener() == nil {
+		return "", fmt.Errorf("xds: no api_listener field in LDS response %+v", lis)
+	}
+	var apiAny ptypes.DynamicAny
+	if err := ptypes.UnmarshalAny(lis.GetApiListener().GetApiListener(), &apiAny); err != nil {
+		return "", fmt.Errorf("xds: failed to unmarshal api_listner in LDS response: %v", err)
+	}
+	apiLis, ok := apiAny.Message.(*httppb.HttpConnectionManager)
+	if !ok {
+		return "", fmt.Errorf("xds: unexpected api_listener type: %T in LDS response", apiAny.Message)
+	}
+	switch apiLis.RouteSpecifier.(type) {
+	case *httppb.HttpConnectionManager_Rds:
+		if apiLis.GetRds().GetRouteConfigName() == "" {
+			return "", fmt.Errorf("xds: empty route_config_name in LDS response: %+v", lis)
+		}
+		return apiLis.GetRds().GetRouteConfigName(), nil
+	case *httppb.HttpConnectionManager_RouteConfig:
+		// TODO: Add support for specifying the RouteConfiguration inline
+		// in the LDS response.
+		return "", fmt.Errorf("xds: LDS response contains RDS config inline. Not supported for now: %+v", apiLis)
+	case nil:
+		return "", fmt.Errorf("xds: no RouteSpecifier in received LDS response: %+v", apiLis)
+	default:
+		return "", fmt.Errorf("xds: unsupported type %T for RouteSpecifier in received LDS response", apiLis.RouteSpecifier)
+	}
 }

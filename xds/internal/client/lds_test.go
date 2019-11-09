@@ -23,28 +23,111 @@ import (
 	"testing"
 	"time"
 
-	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"google.golang.org/grpc/xds/internal/client/fakexds"
 )
 
+func TestGetRouteConfigNameFromListener(t *testing.T) {
+	const lisName = "listener"
+	tests := []struct {
+		name      string
+		lis       *xdspb.Listener
+		wantRoute string
+		wantErr   bool
+	}{
+		{
+			name:      "no-apiListener-field",
+			lis:       &xdspb.Listener{},
+			wantRoute: "",
+			wantErr:   true,
+		},
+		{
+			name:      "badly-marshaled-apiListener",
+			lis:       badAPIListener1,
+			wantRoute: "",
+			wantErr:   true,
+		},
+		{
+			name:      "wrong-type-in-apiListener",
+			lis:       badResourceListener,
+			wantRoute: "",
+			wantErr:   true,
+		},
+		{
+			name:      "empty-httpConnMgr-in-apiListener",
+			lis:       listenerWithEmptyHTTPConnMgr,
+			wantRoute: "",
+			wantErr:   true,
+		},
+		{
+			name:      "scopedRoutes-routeConfig-in-apiListener",
+			lis:       listenerWithScopedRoutesRouteConfig,
+			wantRoute: "",
+			wantErr:   true,
+		},
+		{
+			name:      "goodListener1",
+			lis:       goodListener1,
+			wantRoute: goodRouteName1,
+			wantErr:   false,
+		},
+	}
+
+	for _, test := range tests {
+		gotRoute, err := getRouteConfigNameFromListener(test.lis)
+		if gotRoute != test.wantRoute {
+			t.Errorf("%s: getRouteConfigNameFromListener(%+v) = %v, want %v", test.name, test.lis, gotRoute, test.wantRoute)
+		}
+		if (err != nil) != test.wantErr {
+			t.Errorf("%s: getRouteConfigNameFromListener(%+v) = %v, want %v", test.name, test.lis, err, test.wantErr)
+		}
+	}
+}
+
+// TestHandleLDSResponse starts a fake xDS server, makes a ClientConn to it,
+// and creates a v2Client using it. Then, it registers a watchLDS and tests
+// different LDS responses.
 func TestHandleLDSResponse(t *testing.T) {
 	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
 	defer cleanup()
-
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 
 	tests := []struct {
 		name          string
-		ldsTarget     string
-		ldsResponse   *discoverypb.DiscoveryResponse
+		ldsResponse   *xdspb.DiscoveryResponse
 		wantErr       bool
 		wantUpdate    *ldsUpdate
 		wantUpdateErr bool
 	}{
+		// Badly marshaled LDS response.
+		{
+			name:          "badly-marshaled-response",
+			ldsResponse:   badlyMarshaledLDSResponse,
+			wantErr:       true,
+			wantUpdate:    nil,
+			wantUpdateErr: false,
+		},
+		// Response does not contain Listener proto.
+		{
+			name:          "no-listener-proto-in-response",
+			ldsResponse:   badResourceTypeInLDSResponse,
+			wantErr:       true,
+			wantUpdate:    nil,
+			wantUpdateErr: false,
+		},
+		// No APIListener in the response. Just one test case here for a bad
+		// ApiListener, since the others are covered in
+		// TestGetRouteConfigNameFromListener.
+		{
+			name:          "no-apiListener-in-response",
+			ldsResponse:   noAPIListenerLDSResponse,
+			wantErr:       true,
+			wantUpdate:    nil,
+			wantUpdateErr: false,
+		},
 		// Response contains one listener and it is good.
 		{
 			name:          "one-good-listener",
-			ldsTarget:     goodLDSTarget1,
 			ldsResponse:   goodLDSResponse1,
 			wantErr:       false,
 			wantUpdate:    &ldsUpdate{routeName: goodRouteName1},
@@ -54,7 +137,6 @@ func TestHandleLDSResponse(t *testing.T) {
 		// interested in.
 		{
 			name:          "multiple-good-listener",
-			ldsTarget:     goodLDSTarget1,
 			ldsResponse:   ldsResponseWithMultipleResources,
 			wantErr:       false,
 			wantUpdate:    &ldsUpdate{routeName: goodRouteName1},
@@ -64,7 +146,6 @@ func TestHandleLDSResponse(t *testing.T) {
 		// uninteresting), and one badly marshaled listener.
 		{
 			name:          "good-bad-ugly-listeners",
-			ldsTarget:     goodLDSTarget1,
 			ldsResponse:   goodBadUglyLDSResponse,
 			wantErr:       false,
 			wantUpdate:    &ldsUpdate{routeName: goodRouteName1},
@@ -73,7 +154,6 @@ func TestHandleLDSResponse(t *testing.T) {
 		// Response contains one listener, but we are not interested in it.
 		{
 			name:          "one-uninteresting-listener",
-			ldsTarget:     goodLDSTarget1,
 			ldsResponse:   goodLDSResponse2,
 			wantErr:       false,
 			wantUpdate:    &ldsUpdate{routeName: ""},
@@ -83,74 +163,10 @@ func TestHandleLDSResponse(t *testing.T) {
 		// does not know about the target we are interested in.
 		{
 			name:          "empty-response",
-			ldsTarget:     goodLDSTarget1,
-			ldsResponse:   &discoverypb.DiscoveryResponse{TypeUrl: listenerURL},
+			ldsResponse:   &xdspb.DiscoveryResponse{TypeUrl: listenerURL},
 			wantErr:       false,
 			wantUpdate:    &ldsUpdate{routeName: ""},
 			wantUpdateErr: true,
-		},
-		// Badly marshaled LDS response.
-		{
-			name:          "badly-marshaled-response",
-			ldsTarget:     goodLDSTarget1,
-			ldsResponse:   badlyMarshaledLDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
-			wantUpdateErr: false,
-		},
-		// Response does not contain Listener proto.
-		{
-			name:          "no-listener-proto-in-response",
-			ldsTarget:     goodLDSTarget1,
-			ldsResponse:   badResourceTypeInLDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
-			wantUpdateErr: false,
-		},
-		// No APIListener in the response.
-		{
-			name:          "no-apiListener-in-response",
-			ldsTarget:     goodLDSTarget1,
-			ldsResponse:   noAPIListenerLDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
-			wantUpdateErr: false,
-		},
-		// Badly marshaled APIListener in the response.
-		{
-			name:          "badly-marshaled-apiListener-in-response",
-			ldsTarget:     goodLDSTarget1,
-			ldsResponse:   badlyMarshaledAPIListenerInLDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
-			wantUpdateErr: false,
-		},
-		// ApiListener does not contain HttpConnectionManager
-		{
-			name:          "no-httpConnMrg-in-apiListener",
-			ldsTarget:     goodLDSTarget1,
-			ldsResponse:   badResourceTypeInAPIListenerInLDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
-			wantUpdateErr: false,
-		},
-		// No route config name in HttpConnectionManager.
-		{
-			name:          "no-routeconfig-in-httpConnMrg",
-			ldsTarget:     goodLDSTarget1,
-			ldsResponse:   ldsResponseWithEmptyHTTPConnMgr,
-			wantErr:       true,
-			wantUpdate:    nil,
-			wantUpdateErr: false,
-		},
-		// RouteConfig inline in HttpConnectionManager.
-		{
-			name:          "routeconfig-inline-in-httpConnMrg",
-			ldsTarget:     goodLDSTarget1,
-			ldsResponse:   ldsResponseWithInlineRouteConfig,
-			wantErr:       true,
-			wantUpdate:    nil,
-			wantUpdateErr: false,
 		},
 	}
 
@@ -159,7 +175,7 @@ func TestHandleLDSResponse(t *testing.T) {
 		gotUpdateErrCh := make(chan error, 1)
 
 		// Register a watcher, to trigger the v2Client to send an LDS request.
-		cancelWatch := v2c.watchLDS(test.ldsTarget, func(u ldsUpdate, err error) {
+		cancelWatch := v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
 			t.Logf("%s: in v2c.watchLDS callback, ldsUpdate: %+v, err: %v", test.name, u, err)
 			gotUpdateCh <- u
 			gotUpdateErrCh <- err
@@ -178,7 +194,7 @@ func TestHandleLDSResponse(t *testing.T) {
 		// If the test needs the callback to be invoked, verify the update and
 		// error pushed to the callback.
 		if test.wantUpdate != nil {
-			timer := time.NewTimer(2 * time.Second)
+			timer := time.NewTimer(defaultTestTimeout)
 			select {
 			case <-timer.C:
 				t.Fatal("time out when expecting LDS update")
@@ -195,5 +211,17 @@ func TestHandleLDSResponse(t *testing.T) {
 			}
 		}
 		cancelWatch()
+	}
+}
+
+// TestHandleLDSResponseWithoutWatch tests the case where the v2Client recieves
+// an LDS response without a registered watcher.
+func TestHandleLDSResponseWithoutWatch(t *testing.T) {
+	_, client, cleanup := fakexds.StartClientAndServer(t)
+	defer cleanup()
+	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+
+	if v2c.handleLDSResponse(goodLDSResponse1) == nil {
+		t.Fatal("v2c.handleLDSResponse() succeeded, should have failed")
 	}
 }

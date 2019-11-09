@@ -51,17 +51,17 @@ const (
 )
 
 type watchInfo struct {
-	wType    resourceType
-	target   []string
-	state    watchState
-	callback interface{}
-	timer    *time.Timer
+	wType       resourceType
+	target      []string
+	state       watchState
+	callback    interface{}
+	expiryTimer *time.Timer
 }
 
 func (wi *watchInfo) cancel() {
 	wi.state = watchCancelled
-	if wi.timer != nil {
-		wi.timer.Stop()
+	if wi.expiryTimer != nil {
+		wi.expiryTimer.Stop()
 	}
 }
 
@@ -72,7 +72,7 @@ type ldsUpdate struct {
 type ldsCallback func(ldsUpdate, error)
 
 type rdsUpdate struct {
-	cluster string
+	clusterName string
 }
 
 type rdsCallback func(rdsUpdate, error)

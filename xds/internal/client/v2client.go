@@ -34,7 +34,7 @@ import (
 
 // The value chosen here is based on the default value of the
 // initial_fetch_timeout field in corepb.ConfigSource proto.
-const defaultWatchTimer = 15 * time.Second
+var defaultWatchTimer = 15 * time.Second
 
 // v2Client performs the actual xDS RPCs using the xDS v2 API. It creates a
 // single ADS stream on which the different types of xDS requests and responses
@@ -186,8 +186,7 @@ func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
 			}
 			wi.state = watchStarted
 			target := wi.target
-			v2c.checkWatchTargetInCache(wi)
-			v2c.updateWatchMap(wi)
+			v2c.checkCacheAndUpdateWatchMap(wi)
 			v2c.mu.Unlock()
 
 			switch wi.wType {
@@ -250,6 +249,7 @@ func (v2c *v2Client) watchLDS(target string, ldsCb ldsCallback) (cancel func()) 
 			wi.state = watchCancelled
 			return
 		}
+		v2c.watchMap[ldsResource].cancel()
 		v2c.watchMap[ldsResource] = nil
 	}
 }
@@ -272,45 +272,67 @@ func (v2c *v2Client) watchRDS(routeName string, rdsCb rdsCallback) (cancel func(
 		}
 		v2c.watchMap[rdsResource].cancel()
 		v2c.watchMap[rdsResource] = nil
+		// TODO: Once a registered RDS watch is cancelled, we should send an
+		// RDS request with no resources. This will let the server know that we
+		// are no longer interested in this resource.
 	}
 }
 
-// updateWatchMap takes care of updating watchInfo state in the map in a clean
-// way. Mainly it takes care of closing a watch timer if one exists, and sets
-// up the timer for the new watcher.
+// checkCacheAndUpdateWatchMap is called when a new watch call is handled in
+// send(). If an existing watcher is found, its expiry timer is stopped. If the
+// watchInfo to be added to the watchMap is found in the cache, the watcher
+// callback is immediately invoked.
 //
 // Caller should hold v2c.mu
-func (v2c *v2Client) updateWatchMap(wi *watchInfo) {
+func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 	if existing := v2c.watchMap[wi.wType]; existing != nil {
 		existing.cancel()
 	}
 
 	v2c.watchMap[wi.wType] = wi
 	switch wi.wType {
-	case rdsResource:
-		wi.timer = time.AfterFunc(defaultWatchTimer, func() {
-			wi.callback.(rdsCallback)(rdsUpdate{cluster: ""}, fmt.Errorf("xds: RDS target %s not found", wi.target))
+	case ldsResource:
+		wi.expiryTimer = time.AfterFunc(defaultWatchTimer, func() {
+			// We need to grab the lock here because we are accessing the
+			// watchInfo (which is now stored in the watchMap) from this
+			// method which will be called when the timer fires.
+			v2c.mu.Lock()
+			wi.callback.(ldsCallback)(ldsUpdate{routeName: ""}, fmt.Errorf("xds: LDS target %s not found", wi.target))
+			v2c.mu.Unlock()
 		})
+	case rdsResource:
+		routeName := wi.target[0]
+		cluster := v2c.rdsCache[routeName]
+		if cluster == "" {
+			// Add the watch expiry timer only for new watches we don't find in
+			// the cache, and return from here.
+			wi.expiryTimer = time.AfterFunc(defaultWatchTimer, func() {
+				// We need to grab the lock here because we are accessing the
+				// watchInfo (which is now stored in the watchMap) from this
+				// method which will be called when the timer fires.
+				v2c.mu.Lock()
+				wi.callback.(rdsCallback)(rdsUpdate{clusterName: ""}, fmt.Errorf("xds: RDS target %s not found", wi.target))
+				v2c.mu.Unlock()
+			})
+			return
+		}
+		// Invoke the callback now, since we found the entry in the cache.
+		var err error
+		if v2c.watchMap[ldsResource] == nil {
+			cluster = ""
+			err = fmt.Errorf("xds: no LDS watcher found when handling RDS watch for route {%v} from cache", routeName)
+		}
+		wi.callback.(rdsCallback)(rdsUpdate{clusterName: cluster}, err)
 	}
 }
 
-// checkWatchTargetInCache is called when a new watch call is handled in
-// send(). This method checks if the resource is found in the cache, and if so,
-// returns it to the watcher.
-// This is required only for RDS and EDS.
-//
-// Caller should hold v2c.mu
-func (v2c *v2Client) checkWatchTargetInCache(wi *watchInfo) {
-	switch wi.wType {
-	case rdsResource:
-		routeName := wi.target[0]
-		if cluster := v2c.rdsCache[routeName]; cluster != "" {
-			if v2c.watchMap[ldsResource] == nil {
-				grpclog.Warningf("xds: no LDS watcher found when handling RDS watch for route {%v} from cache", routeName)
-				return
-			}
-			wi.timer.Stop()
-			wi.callback.(rdsCallback)(rdsUpdate{cluster: cluster}, nil)
-		}
+func (v2c *v2Client) cloneRDSCacheForTesting() map[string]string {
+	v2c.mu.Lock()
+	defer v2c.mu.Unlock()
+
+	cloneCache := make(map[string]string)
+	for k, v := range v2c.rdsCache {
+		cloneCache[k] = v
 	}
+	return cloneCache
 }
