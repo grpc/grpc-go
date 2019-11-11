@@ -133,8 +133,7 @@ var (
 			},
 		},
 	}
-	otherMarshaledListener2, _ = proto.Marshal(otherGoodListener2)
-	uninterestingListener      = &ldspb.Listener{
+	uninterestingListener = &ldspb.Listener{
 		Name: uninterestingLDSTarget,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -143,10 +142,9 @@ var (
 			},
 		},
 	}
-	uninterestingMarshaledListener, _ = proto.Marshal(uninterestingListener)
-	noAPIListener                     = &ldspb.Listener{Name: goodLDSTarget1}
-	marshaledNoAPIListener, _         = proto.Marshal(noAPIListener)
-	badAPIListener1                   = &ldspb.Listener{
+	noAPIListener             = &ldspb.Listener{Name: goodLDSTarget1}
+	marshaledNoAPIListener, _ = proto.Marshal(noAPIListener)
+	badAPIListener1           = &ldspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -155,8 +153,7 @@ var (
 			},
 		},
 	}
-	badlyMarshaledAPIListener1, _ = proto.Marshal(badAPIListener1)
-	badAPIListener2               = &ldspb.Listener{
+	badAPIListener2 = &ldspb.Listener{
 		Name: goodLDSTarget2,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -175,8 +172,7 @@ var (
 			},
 		},
 	}
-	marshaledBadResourceListener, _ = proto.Marshal(badResourceListener)
-	listenerWithEmptyHTTPConnMgr    = &ldspb.Listener{
+	listenerWithEmptyHTTPConnMgr = &ldspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -185,8 +181,7 @@ var (
 			},
 		},
 	}
-	marshaledListenerWithEmptyHTTPConnMgr, _ = proto.Marshal(listenerWithEmptyHTTPConnMgr)
-	listenerWithInlineRouteConfig            = &ldspb.Listener{
+	listenerWithInlineRouteConfig = &ldspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -195,8 +190,7 @@ var (
 			},
 		},
 	}
-	marshaledListenerWithInlineRouteConfig, _ = proto.Marshal(listenerWithInlineRouteConfig)
-	listenerWithScopedRoutesRouteConfig       = &ldspb.Listener{
+	listenerWithScopedRoutesRouteConfig = &ldspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -419,28 +413,6 @@ var (
 		TypeUrl: routeURL,
 	}
 )
-
-// testOp contains all data related to one particular test operation. Not all
-// fields make sense for all tests.
-type testOp struct {
-	// target is the resource name to watch for.
-	target string
-	// responseToSend is the xDS response sent to the client
-	responseToSend *fakexds.Response
-	// wantOpData is the operation specific output that we expect.
-	wantOpData interface{}
-	// wantOpErr specfies whether the main operation should return an error.
-	wantOpErr bool
-	// wantRetry specifies whether or not the client is expected to kill the
-	// stream because of an error, and expected to backoff and retry.
-	wantRetry bool
-	// wantRequest is the LDS request expected to be sent by the client.
-	wantRequest *fakexds.Request
-	// wantRDSCache is the expected rdsCache at the end of an operation.
-	wantRDSCache map[string]string
-	// wantWatchCallback specifies if the watch callback should be invoked.
-	wantWatchCallback bool
-}
 
 // TestV2ClientBackoffAfterRecvError verifies if the v2Client backoffs when it
 // encounters a Recv error while receiving an LDS response.

@@ -279,6 +279,21 @@ func TestHandleRDSResponseWithoutRDSWatch(t *testing.T) {
 	}
 }
 
+// testOp contains all data related to one particular test operation. Not all
+// fields make sense for all tests.
+type testOp struct {
+	// target is the resource name to watch for.
+	target string
+	// responseToSend is the xDS response sent to the client
+	responseToSend *fakexds.Response
+	// wantOpErr specfies whether the main operation should return an error.
+	wantOpErr bool
+	// wantRDSCache is the expected rdsCache at the end of an operation.
+	wantRDSCache map[string]string
+	// wantWatchCallback specifies if the watch callback should be invoked.
+	wantWatchCallback bool
+}
+
 // testRDSCaching is a helper function which starts a fake xDS server, makes a
 // ClientConn to it, creates a v2Client using it, registers an LDS watcher and
 // pushes a good LDS response. It then reads a bunch of test operations to be
