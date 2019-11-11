@@ -19,9 +19,12 @@
 package client
 
 import (
+	"errors"
+	"testing"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/xds/internal/client/fakexds"
 
 	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	ldspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
@@ -471,31 +474,32 @@ var (
 	}
 )
 
-/*
-// ldsTestOp contains all data related to one particular test operation related
-// to LDS watch.
-type ldsTestOp struct {
+// testOp contains all data related to one particular test operation. Not all
+// fields make sense for all tests.
+type testOp struct {
 	// target is the resource name to watch for.
 	target string
-	// wantUpdate is the expected ldsUpdate received in the ldsCallback.
-	wantUpdate *ldsUpdate
-	// wantUpdateErr specfies whether or not the ldsCallback returns an error.
-	wantUpdateErr bool
+	// responseToSend is the xDS response sent to the client
+	responseToSend *fakexds.Response
+	// wantOpData is the operation specific output that we expect.
+	wantOpData interface{}
+	// wantOpErr specfies whether the main operation should return an error.
+	wantOpErr bool
 	// wantRetry specifies whether or not the client is expected to kill the
 	// stream because of an error, and expected to backoff and retry.
 	wantRetry bool
 	// wantRequest is the LDS request expected to be sent by the client.
 	wantRequest *fakexds.Request
-	// responseToSend is the LDS response that the fake server will send.
-	responseToSend *fakexds.Response
+	// wantRDSCache is the expected rdsCache at the end of an operation.
+	wantRDSCache map[string]string
+	// wantWatchCallback specifies if the watch callback should be invoked.
+	wantWatchCallback bool
 }
 
-// testLDS creates a v2Client object talking to a fakexds.Server and reads the
-// ops channel for test operations to be performed.
-func testLDS(t *testing.T, ldsOps chan ldsTestOp) {
-	t.Helper()
-
-	fakeServer, client, cleanup := setupClientAndServer(t)
+// TestV2ClientBackoffAfterRecvError verifies if the v2Client backoffs when it
+// encounters a Recv error while receiving an LDS response.
+func TestV2ClientBackoffAfterRecvError(t *testing.T) {
+	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
 	defer cleanup()
 
 	// Override the v2Client backoff function with this, so that we can verify
@@ -510,164 +514,106 @@ func testLDS(t *testing.T, ldsOps chan ldsTestOp) {
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
-	errCh := make(chan error, 1)
-	go func() {
-		cbUpdate := make(chan ldsUpdate, 1)
-		cbErr := make(chan error, 1)
-		for ldsOp := range ldsOps {
-			// Register a watcher if required, and use a channel to signal the
-			// successful invocation of the callback.
-			if ldsOp.target != "" {
-				v2c.watchLDS(ldsOp.target, func(u ldsUpdate, err error) {
-					t.Logf("Received callback with ldsUpdate {%+v} and error {%v}", u, err)
-					cbUpdate <- u
-					cbErr <- err
-				})
-				t.Logf("Registered a watcher for LDS target: %v...", ldsOp.target)
-			}
+	v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
+		t.Fatalf("Received unexpected LDS callback with ldsUpdate {%+v} and error {%v}", u, err)
+	})
+	<-fakeServer.RequestChan
+	t.Log("FakeServer received request...")
 
-			// Make sure the request received at the fakeserver matches the
-			// expected one.
-			if ldsOp.wantRequest != nil {
-				got := <-fakeServer.RequestChan
-				if !proto.Equal(got.Req, ldsOp.wantRequest.Req) {
-					errCh <- fmt.Errorf("got LDS request: %+v, want: %+v", got.Req, ldsOp.wantRequest.Req)
-					return
-				}
-				if got.Err != ldsOp.wantRequest.Err {
-					errCh <- fmt.Errorf("got error while processing LDS request: %v, want: %v", got.Err, ldsOp.wantRequest.Err)
-					return
-				}
-				t.Log("FakeServer received expected request...")
-			}
-
-			// if a response is specified in the testOp, push it to the
-			// fakeserver.
-			if ldsOp.responseToSend != nil {
-				fakeServer.ResponseChan <- ldsOp.responseToSend
-				t.Log("Response pushed to fakeServer...")
-			}
-
-			// Make sure the update callback was invoked, if specified in the
-			// testOp.
-			if ldsOp.wantUpdate != nil {
-				u := <-cbUpdate
-				if !reflect.DeepEqual(u, *ldsOp.wantUpdate) {
-					errCh <- fmt.Errorf("got LDS update : %+v, want %+v", u, ldsOp.wantUpdate)
-					return
-				}
-				err := <-cbErr
-				if (err != nil) != ldsOp.wantUpdateErr {
-					errCh <- fmt.Errorf("received error {%v} in lds callback, wantErr: %v", err, ldsOp.wantUpdateErr)
-					return
-				}
-				t.Log("LDS watch callback received expected update...")
-			}
-
-			// Make sure the stream was retried, if specified in the testOp.
-			if ldsOp.wantRetry {
-				<-boCh
-				t.Log("v2Client backed off before retrying...")
-			}
-		}
-		t.Log("Completed all test ops successfully...")
-		errCh <- nil
-	}()
+	fakeServer.ResponseChan <- &fakexds.Response{Err: errors.New("RPC error")}
+	t.Log("Bad LDS response pushed to fakeServer...")
 
 	timer := time.NewTimer(defaultTestTimeout)
 	select {
 	case <-timer.C:
 		t.Fatal("time out when expecting LDS update")
-	case err := <-errCh:
-		if err != nil {
-			t.Fatal(err)
+	case <-boCh:
+		t.Log("v2Client backed off before retrying...")
+	}
+}
+
+// TestV2ClientRetriesAfterBrokenStream verifies the case where a stream
+// encountered a Recv() error, and is expected to send out xDS requests for
+// registered watchers once it comes back up again.
+func TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
+	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
+	defer cleanup()
+
+	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	defer v2c.close()
+	t.Log("Started xds v2Client...")
+
+	callbackCh := make(chan struct{}, 1)
+	v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
+		t.Logf("Received LDS callback with ldsUpdate {%+v} and error {%v}", u, err)
+		callbackCh <- struct{}{}
+	})
+	<-fakeServer.RequestChan
+	t.Log("FakeServer received request...")
+
+	fakeServer.ResponseChan <- &fakexds.Response{Resp: goodLDSResponse1}
+	t.Log("Good LDS response pushed to fakeServer...")
+
+	timer := time.NewTimer(defaultTestTimeout)
+	select {
+	case <-timer.C:
+		t.Fatal("time out when expecting LDS update")
+	case <-callbackCh:
+	}
+
+	fakeServer.ResponseChan <- &fakexds.Response{Err: errors.New("RPC error")}
+	t.Log("Bad LDS response pushed to fakeServer...")
+
+	gotRequest := &fakexds.Request{}
+	timer = time.NewTimer(defaultTestTimeout)
+	select {
+	case <-timer.C:
+		t.Fatal("time out when expecting LDS update")
+	case gotRequest = <-fakeServer.RequestChan:
+		t.Log("received LDS request after stream re-creation")
+		if !proto.Equal(gotRequest.Req, goodLDSRequest) {
+			t.Fatalf("gotRequest: %+v, wantRequest: %+v", gotRequest.Req, goodLDSRequest)
 		}
 	}
 }
 
-// test bad messages. make sure the client backsoff and retries
-//  - api listener unmarshal error
-//  - no http connection manager in response
-//  - no route specifier in response
-//  - RDS config inline
-func TestLDSBadResponses(t *testing.T) {
-	responses := []fakexds.Response{
-			{Err: errors.New("RPC error")},
-			{Resp: emptyLDSResponse},
-			{Resp: badlyMarshaledLDSResponse},
-			{Resp: badResourceTypeInLDSResponse},
-			{Resp: noAPIListenerLDSResponse},
-		{Resp: badlyMarshaledAPIListenerInLDSResponse},
+// TestV2ClientCancelWatch verifies that the registered watch callback is not
+// invoked if a response is received after the watcher is cancelled.
+func TestV2ClientCancelWatch(t *testing.T) {
+	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
+	defer cleanup()
+
+	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	defer v2c.close()
+	t.Log("Started xds v2Client...")
+
+	callbackCh := make(chan struct{}, 1)
+	cancelFunc := v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
+		t.Logf("Received LDS callback with ldsUpdate {%+v} and error {%v}", u, err)
+		callbackCh <- struct{}{}
+	})
+	<-fakeServer.RequestChan
+	t.Log("FakeServer received request...")
+
+	fakeServer.ResponseChan <- &fakexds.Response{Resp: goodLDSResponse1}
+	t.Log("Good LDS response pushed to fakeServer...")
+
+	timer := time.NewTimer(defaultTestTimeout)
+	select {
+	case <-timer.C:
+		t.Fatal("time out when expecting LDS update")
+	case <-callbackCh:
 	}
 
-	for _, resp := range responses {
-		opCh := make(chan ldsTestOp, 1)
-		opCh <- ldsTestOp{
-			target:         goodLDSTarget1,
-			wantRetry:      true,
-			wantUpdate:     nil,
-			wantRequest:    &fakexds.Request{Req: goodLDSRequest},
-			responseToSend: &resp,
-		}
-		close(opCh)
-		testLDS(t, opCh)
-	}
-}
+	cancelFunc()
 
-func TestLDSUninterestingListener(t *testing.T) {
-	opCh := make(chan ldsTestOp, 1)
-	opCh <- ldsTestOp{
-		target:         goodLDSTarget1,
-		wantRetry:      true,
-		wantUpdate:     &ldsUpdate{routeName: ""},
-		wantUpdateErr:  true,
-		wantRequest:    &fakexds.Request{Req: goodLDSRequest},
-		responseToSend: &fakexds.Response{Resp: goodLDSResponse2},
-	}
-	close(opCh)
-	testLDS(t, opCh)
-}
+	fakeServer.ResponseChan <- &fakexds.Response{Resp: goodLDSResponse1}
+	t.Log("Another good LDS response pushed to fakeServer...")
 
-func TestLDSOneGoodResponse(t *testing.T) {
-	opCh := make(chan ldsTestOp, 1)
-	opCh <- ldsTestOp{
-		target:         goodLDSTarget1,
-		wantUpdate:     &ldsUpdate{routeName: goodRouteName1},
-		wantRequest:    &fakexds.Request{Req: goodLDSRequest},
-		responseToSend: &fakexds.Response{Resp: goodLDSResponse1},
+	timer = time.NewTimer(defaultTestTimeout)
+	select {
+	case <-timer.C:
+	case <-callbackCh:
+		t.Fatalf("Watch callback invoked after the watcher was cancelled")
 	}
-	close(opCh)
-	testLDS(t, opCh)
 }
-
-func TestLDSResponseWithMultipleResources(t *testing.T) {
-	opCh := make(chan ldsTestOp, 1)
-	opCh <- ldsTestOp{
-		target:         goodLDSTarget1,
-		wantUpdate:     &ldsUpdate{routeName: goodRouteName1},
-		wantRequest:    &fakexds.Request{Req: goodLDSRequest},
-		responseToSend: &fakexds.Response{Resp: ldsResponseWithMultipleResources},
-	}
-	close(opCh)
-	testLDS(t, opCh)
-}
-
-func TestLDSMultipleGoodResponses(t *testing.T) {
-	opCh := make(chan ldsTestOp, 2)
-	opCh <- ldsTestOp{
-		target:         goodLDSTarget1,
-		wantUpdate:     &ldsUpdate{routeName: goodRouteName1},
-		wantRequest:    &fakexds.Request{Req: goodLDSRequest},
-		responseToSend: &fakexds.Response{Resp: goodLDSResponse1},
-	}
-	opCh <- ldsTestOp{
-		wantUpdate:     &ldsUpdate{routeName: goodRouteName2},
-		responseToSend: &fakexds.Response{Resp: otherGoodLDSResponse1},
-	}
-	close(opCh)
-	testLDS(t, opCh)
-}
-*/
-// TODO:
-// test the case when the stream starts off after an error and resends all the watches
-// test the case where server sends response after watcher is cancelled. make sure callback is not invoked.

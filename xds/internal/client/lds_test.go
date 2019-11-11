@@ -28,7 +28,6 @@ import (
 )
 
 func TestGetRouteConfigNameFromListener(t *testing.T) {
-	const lisName = "listener"
 	tests := []struct {
 		name      string
 		lis       *xdspb.Listener
@@ -163,7 +162,7 @@ func TestHandleLDSResponse(t *testing.T) {
 		// does not know about the target we are interested in.
 		{
 			name:          "empty-response",
-			ldsResponse:   &xdspb.DiscoveryResponse{TypeUrl: listenerURL},
+			ldsResponse:   emptyLDSResponse,
 			wantErr:       false,
 			wantUpdate:    &ldsUpdate{routeName: ""},
 			wantUpdateErr: true,

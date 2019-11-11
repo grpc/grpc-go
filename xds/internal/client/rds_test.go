@@ -58,7 +58,6 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 			name: "no-routes-in-rc",
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
-					{Domains: []string{uninterestingDomain}},
 					{Domains: []string{goodMatchingDomain}},
 				},
 			},
@@ -68,7 +67,6 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 			name: "default-route-match-field-is-non-nil",
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
-					{Domains: []string{uninterestingDomain}},
 					{
 						Domains: []string{goodMatchingDomain},
 						Routes: []*routepb.Route{
@@ -86,7 +84,6 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 			name: "default-route-routeaction-field-is-nil",
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
-					{Domains: []string{uninterestingDomain}},
 					{
 						Domains: []string{goodMatchingDomain},
 						Routes:  []*routepb.Route{{}},
@@ -99,7 +96,6 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 			name: "default-route-cluster-field-is-empty",
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
-					{Domains: []string{uninterestingDomain}},
 					{
 						Domains: []string{goodMatchingDomain},
 						Routes: []*routepb.Route{
@@ -117,7 +113,7 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 			wantCluster: "",
 		},
 		{
-			name:        "good-rc",
+			name:        "good-route-config",
 			rc:          goodRouteConfig1,
 			wantCluster: goodClusterName1,
 		},
@@ -130,6 +126,9 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 	}
 }
 
+// TestHandleRDSResponse starts a fake xDS server, makes a ClientConn to it,
+// and creates a v2Client using it. Then, it registers an LDS and RDS watcher
+// and tests different RDS responses.
 func TestHandleRDSResponse(t *testing.T) {
 	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
 	defer cleanup()
@@ -191,7 +190,7 @@ func TestHandleRDSResponse(t *testing.T) {
 		},
 		// Response contains one good interesting RouteConfiguration.
 		{
-			name:          "one-uninteresting-route-config",
+			name:          "one-good-route-config",
 			rdsResponse:   goodRDSResponse1,
 			wantErr:       false,
 			wantUpdate:    &rdsUpdate{clusterName: goodClusterName1},
@@ -243,6 +242,8 @@ func TestHandleRDSResponse(t *testing.T) {
 	}
 }
 
+// TestHandleRDSResponseWithoutLDSWatch tests the case where the v2Client
+// recieves an RDS response without a registered LDS watcher.
 func TestHandleRDSResponseWithoutLDSWatch(t *testing.T) {
 	_, client, cleanup := fakexds.StartClientAndServer(t)
 	defer cleanup()
@@ -253,6 +254,8 @@ func TestHandleRDSResponseWithoutLDSWatch(t *testing.T) {
 	}
 }
 
+// TestHandleRDSResponseWithoutRDSWatch tests the case where the v2Client
+// recieves an RDS response without a registered RDS watcher.
 func TestHandleRDSResponseWithoutRDSWatch(t *testing.T) {
 	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
 	defer cleanup()
@@ -276,28 +279,11 @@ func TestHandleRDSResponseWithoutRDSWatch(t *testing.T) {
 	}
 }
 
-// testOp contains all data related to one particular test operation. Not all
-// fields make sense for all tests.
-type testOp struct {
-	// target is the resource name to watch for.
-	target string
-	// responseToSend is the xDS response sent to the client
-	responseToSend *fakexds.Response
-	// wantOpData is the operation specific output that we expect.
-	wantOpData interface{}
-	// wantOpErr specfies whether the main operation should return an error.
-	wantOpErr bool
-	// wantRetry specifies whether or not the client is expected to kill the
-	// stream because of an error, and expected to backoff and retry.
-	wantRetry bool
-	// wantRequest is the LDS request expected to be sent by the client.
-	wantRequest *fakexds.Request
-	// wantRDSCache is the expected rdsCache at the end of an operation.
-	wantRDSCache map[string]string
-	// wantWatchCallback specifies if the watch callback should be invoked.
-	wantWatchCallback bool
-}
-
+// testRDSCaching is a helper function which starts a fake xDS server, makes a
+// ClientConn to it, creates a v2Client using it, registers an LDS watcher and
+// pushes a good LDS response. It then reads a bunch of test operations to be
+// performed from testOps and returns error, if any, on the provided error
+// channel. This is executed in a separate goroutine.
 func testRDSCaching(t *testing.T, testOps chan testOp, errCh chan error) {
 	t.Helper()
 
@@ -363,20 +349,22 @@ func testRDSCaching(t *testing.T, testOps chan testOp, errCh chan error) {
 	errCh <- nil
 }
 
+// TestRDSCaching tests some end-to-end RDS flows using a fake xDS server, and
+// verifies the RDS data cached at the v2Client.
 func TestRDSCaching(t *testing.T) {
 	errCh := make(chan error, 1)
-	opCh := make(chan testOp, 50)
+	opCh := make(chan testOp, 10)
 	go testRDSCaching(t, opCh, errCh)
 
-	// Add a watch for a name (goodRouteName1), which returns one matching
-	// resource in the response.
+	// Add an RDS watch for a resource name (goodRouteName1), which returns one
+	// matching resource in the response.
 	opCh <- testOp{
 		target:            goodRouteName1,
 		responseToSend:    &fakexds.Response{Resp: goodRDSResponse1},
 		wantRDSCache:      map[string]string{goodRouteName1: goodClusterName1},
 		wantWatchCallback: true,
 	}
-	// We receive a response with a new resource. This resource is considered
+	// Push an RDS response with a new resource. This resource is considered
 	// good because its domain field matches our LDS watch target, but the
 	// routeConfigName does not match our RDS watch (so the watch callback will
 	// not be invoked). But this should still be cached.
@@ -387,9 +375,9 @@ func TestRDSCaching(t *testing.T) {
 			goodRouteName2: goodClusterName2,
 		},
 	}
-	// We receive an uninteresting RDS response. This should make
-	// v2c.handleRDSResponse to return an error. But the callback should not be
-	// invoked, and the cache should not be updated.
+	// Push an uninteresting RDS response. This should cause handleRDSResponse
+	// to return an error. But the watch callback should not be invoked, and
+	// the cache should not be updated.
 	opCh <- testOp{
 		responseToSend: &fakexds.Response{Resp: uninterestingRDSResponse},
 		wantOpErr:      true,
@@ -398,9 +386,9 @@ func TestRDSCaching(t *testing.T) {
 			goodRouteName2: goodClusterName2,
 		},
 	}
-	// We switch the watch target to goodRouteName2, which was already cached.
-	// Now, we don't get a response from the server (as expected), but we want
-	// the callback to be invoked with the new clusterName.
+	// Switch the watch target to goodRouteName2, which was already cached.  No
+	// response is received from the server (as expected), but we want the
+	// callback to be invoked with the new clusterName.
 	opCh <- testOp{
 		target: goodRouteName2,
 		wantRDSCache: map[string]string{

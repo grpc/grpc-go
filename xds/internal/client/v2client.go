@@ -250,7 +250,7 @@ func (v2c *v2Client) watchLDS(target string, ldsCb ldsCallback) (cancel func()) 
 			return
 		}
 		v2c.watchMap[ldsResource].cancel()
-		v2c.watchMap[ldsResource] = nil
+		delete(v2c.watchMap, ldsResource)
 	}
 }
 
@@ -271,7 +271,7 @@ func (v2c *v2Client) watchRDS(routeName string, rdsCb rdsCallback) (cancel func(
 			return
 		}
 		v2c.watchMap[rdsResource].cancel()
-		v2c.watchMap[rdsResource] = nil
+		delete(v2c.watchMap, rdsResource)
 		// TODO: Once a registered RDS watch is cancelled, we should send an
 		// RDS request with no resources. This will let the server know that we
 		// are no longer interested in this resource.
