@@ -26,9 +26,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/xds/internal/client/fakexds"
 
-	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	ldspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	rdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
@@ -65,7 +62,7 @@ var (
 			},
 		},
 	}
-	goodLDSRequest = &discoverypb.DiscoveryRequest{
+	goodLDSRequest = &xdspb.DiscoveryRequest{
 		Node:          goodNodeProto,
 		TypeUrl:       listenerURL,
 		ResourceNames: []string{goodLDSTarget1},
@@ -78,33 +75,17 @@ var (
 		},
 	}
 	marshaledConnMgr1, _ = proto.Marshal(goodHTTPConnManager1)
-	goodHTTPConnManager2 = &httppb.HttpConnectionManager{
-		RouteSpecifier: &httppb.HttpConnectionManager_Rds{
-			Rds: &httppb.Rds{
-				RouteConfigName: goodRouteName2,
-			},
-		},
-	}
-	marshaledConnMgr2, _ = proto.Marshal(goodHTTPConnManager2)
 	emptyHTTPConnManager = &httppb.HttpConnectionManager{
 		RouteSpecifier: &httppb.HttpConnectionManager_Rds{
 			Rds: &httppb.Rds{},
 		},
 	}
-	emptyMarshaledConnMgr, _     = proto.Marshal(emptyHTTPConnManager)
-	connMgrWithInlineRouteConfig = &httppb.HttpConnectionManager{
-		RouteSpecifier: &httppb.HttpConnectionManager_RouteConfig{
-			RouteConfig: &rdspb.RouteConfiguration{
-				Name: goodRouteName1,
-			},
-		},
-	}
-	marshaledConnMgrWithInlineRouteConfig, _ = proto.Marshal(connMgrWithInlineRouteConfig)
-	connMgrWithScopedRoutes                  = &httppb.HttpConnectionManager{
+	emptyMarshaledConnMgr, _ = proto.Marshal(emptyHTTPConnManager)
+	connMgrWithScopedRoutes  = &httppb.HttpConnectionManager{
 		RouteSpecifier: &httppb.HttpConnectionManager_ScopedRoutes{},
 	}
 	marshaledConnMgrWithScopedRoutes, _ = proto.Marshal(connMgrWithScopedRoutes)
-	goodListener1                       = &ldspb.Listener{
+	goodListener1                       = &xdspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -114,7 +95,7 @@ var (
 		},
 	}
 	marshaledListener1, _ = proto.Marshal(goodListener1)
-	goodListener2         = &ldspb.Listener{
+	goodListener2         = &xdspb.Listener{
 		Name: goodLDSTarget2,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -123,28 +104,10 @@ var (
 			},
 		},
 	}
-	marshaledListener2, _ = proto.Marshal(goodListener2)
-	otherGoodListener2    = &ldspb.Listener{
-		Name: goodLDSTarget1,
-		ApiListener: &listenerpb.ApiListener{
-			ApiListener: &anypb.Any{
-				TypeUrl: httpConnManagerURL,
-				Value:   marshaledConnMgr2,
-			},
-		},
-	}
-	uninterestingListener = &ldspb.Listener{
-		Name: uninterestingLDSTarget,
-		ApiListener: &listenerpb.ApiListener{
-			ApiListener: &anypb.Any{
-				TypeUrl: httpConnManagerURL,
-				Value:   marshaledConnMgr1,
-			},
-		},
-	}
-	noAPIListener             = &ldspb.Listener{Name: goodLDSTarget1}
+	marshaledListener2, _     = proto.Marshal(goodListener2)
+	noAPIListener             = &xdspb.Listener{Name: goodLDSTarget1}
 	marshaledNoAPIListener, _ = proto.Marshal(noAPIListener)
-	badAPIListener1           = &ldspb.Listener{
+	badAPIListener1           = &xdspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -153,7 +116,7 @@ var (
 			},
 		},
 	}
-	badAPIListener2 = &ldspb.Listener{
+	badAPIListener2 = &xdspb.Listener{
 		Name: goodLDSTarget2,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -163,7 +126,7 @@ var (
 		},
 	}
 	badlyMarshaledAPIListener2, _ = proto.Marshal(badAPIListener2)
-	badResourceListener           = &ldspb.Listener{
+	badResourceListener           = &xdspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -172,7 +135,7 @@ var (
 			},
 		},
 	}
-	listenerWithEmptyHTTPConnMgr = &ldspb.Listener{
+	listenerWithEmptyHTTPConnMgr = &xdspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -181,16 +144,7 @@ var (
 			},
 		},
 	}
-	listenerWithInlineRouteConfig = &ldspb.Listener{
-		Name: goodLDSTarget1,
-		ApiListener: &listenerpb.ApiListener{
-			ApiListener: &anypb.Any{
-				TypeUrl: httpConnManagerURL,
-				Value:   marshaledConnMgrWithInlineRouteConfig,
-			},
-		},
-	}
-	listenerWithScopedRoutesRouteConfig = &ldspb.Listener{
+	listenerWithScopedRoutesRouteConfig = &xdspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -199,7 +153,7 @@ var (
 			},
 		},
 	}
-	goodLDSResponse1 = &discoverypb.DiscoveryResponse{
+	goodLDSResponse1 = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: listenerURL,
@@ -208,7 +162,7 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
-	goodLDSResponse2 = &discoverypb.DiscoveryResponse{
+	goodLDSResponse2 = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: listenerURL,
@@ -217,8 +171,8 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
-	emptyLDSResponse          = &discoverypb.DiscoveryResponse{TypeUrl: listenerURL}
-	badlyMarshaledLDSResponse = &discoverypb.DiscoveryResponse{
+	emptyLDSResponse          = &xdspb.DiscoveryResponse{TypeUrl: listenerURL}
+	badlyMarshaledLDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: listenerURL,
@@ -227,7 +181,7 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
-	badResourceTypeInLDSResponse = &discoverypb.DiscoveryResponse{
+	badResourceTypeInLDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: listenerURL,
@@ -236,7 +190,7 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
-	ldsResponseWithMultipleResources = &discoverypb.DiscoveryResponse{
+	ldsResponseWithMultipleResources = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: listenerURL,
@@ -249,7 +203,7 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
-	noAPIListenerLDSResponse = &discoverypb.DiscoveryResponse{
+	noAPIListenerLDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: listenerURL,
@@ -258,7 +212,7 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
-	goodBadUglyLDSResponse = &discoverypb.DiscoveryResponse{
+	goodBadUglyLDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: listenerURL,
@@ -275,7 +229,7 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
-	badlyMarshaledRDSResponse = &discoverypb.DiscoveryResponse{
+	badlyMarshaledRDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: routeURL,
@@ -284,7 +238,7 @@ var (
 		},
 		TypeUrl: routeURL,
 	}
-	badResourceTypeInRDSResponse = &discoverypb.DiscoveryResponse{
+	badResourceTypeInRDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: routeURL,
@@ -298,7 +252,7 @@ var (
 	noDomainsInRouteConfig       = &xdspb.RouteConfiguration{
 		VirtualHosts: []*routepb.VirtualHost{{}},
 	}
-	noVirtualHostsInRDSResponse = &discoverypb.DiscoveryResponse{
+	noVirtualHostsInRDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: routeURL,
@@ -385,7 +339,7 @@ var (
 		},
 	}
 	marshaledUninterestingRouteConfig, _ = proto.Marshal(uninterestingRouteConfig)
-	goodRDSResponse1                     = &discoverypb.DiscoveryResponse{
+	goodRDSResponse1                     = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: routeURL,
@@ -394,7 +348,7 @@ var (
 		},
 		TypeUrl: routeURL,
 	}
-	goodRDSResponse2 = &discoverypb.DiscoveryResponse{
+	goodRDSResponse2 = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: routeURL,
@@ -403,7 +357,7 @@ var (
 		},
 		TypeUrl: routeURL,
 	}
-	uninterestingRDSResponse = &discoverypb.DiscoveryResponse{
+	uninterestingRDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: routeURL,
