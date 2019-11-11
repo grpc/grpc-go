@@ -243,7 +243,7 @@ func TestHandleRDSResponse(t *testing.T) {
 }
 
 // TestHandleRDSResponseWithoutLDSWatch tests the case where the v2Client
-// recieves an RDS response without a registered LDS watcher.
+// receives an RDS response without a registered LDS watcher.
 func TestHandleRDSResponseWithoutLDSWatch(t *testing.T) {
 	_, client, cleanup := fakexds.StartClientAndServer(t)
 	defer cleanup()
@@ -255,7 +255,7 @@ func TestHandleRDSResponseWithoutLDSWatch(t *testing.T) {
 }
 
 // TestHandleRDSResponseWithoutRDSWatch tests the case where the v2Client
-// recieves an RDS response without a registered RDS watcher.
+// receives an RDS response without a registered RDS watcher.
 func TestHandleRDSResponseWithoutRDSWatch(t *testing.T) {
 	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
 	defer cleanup()

@@ -41,7 +41,7 @@ var defaultWatchExpiryTimer = 15 * time.Second
 // are multiplexed.
 // The reason for splitting this out from the top level xdsClient object is
 // because there is already an xDS v3Aplha API in development. If and when we
-// want to switch to that, this seperation will ease that process.
+// want to switch to that, this separation will ease that process.
 type v2Client struct {
 	ctx       context.Context
 	cancelCtx context.CancelFunc

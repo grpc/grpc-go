@@ -213,7 +213,7 @@ func TestHandleLDSResponse(t *testing.T) {
 	}
 }
 
-// TestHandleLDSResponseWithoutWatch tests the case where the v2Client recieves
+// TestHandleLDSResponseWithoutWatch tests the case where the v2Client receives
 // an LDS response without a registered watcher.
 func TestHandleLDSResponseWithoutWatch(t *testing.T) {
 	_, client, cleanup := fakexds.StartClientAndServer(t)
