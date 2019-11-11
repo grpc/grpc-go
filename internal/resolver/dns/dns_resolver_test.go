@@ -678,11 +678,94 @@ func txtLookup(host string) ([]string, error) {
 
 func TestResolve(t *testing.T) {
 	testDNSResolver(t)
+	testDNSResolverWithSRV(t)
 	testDNSResolveNow(t)
 	testIPResolver(t)
 }
 
 func testDNSResolver(t *testing.T) {
+	defer leakcheck.Check(t)
+	tests := []struct {
+		target   string
+		addrWant []resolver.Address
+		scWant   string
+	}{
+		{
+			"foo.bar.com",
+			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			generateSC("foo.bar.com"),
+		},
+		{
+			"foo.bar.com:1234",
+			[]resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
+			generateSC("foo.bar.com"),
+		},
+		{
+			"srv.ipv4.single.fake",
+			[]resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
+			generateSC("srv.ipv4.single.fake"),
+		},
+		{
+			"srv.ipv4.multi.fake",
+			nil,
+			generateSC("srv.ipv4.multi.fake"),
+		},
+		{
+			"srv.ipv6.single.fake",
+			nil,
+			generateSC("srv.ipv6.single.fake"),
+		},
+		{
+			"srv.ipv6.multi.fake",
+			nil,
+			generateSC("srv.ipv6.multi.fake"),
+		},
+		{
+			"no.attribute",
+			nil,
+			generateSC("no.attribute"),
+		},
+	}
+
+	for _, a := range tests {
+		b := NewBuilder()
+		cc := &testClientConn{target: a.target}
+		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOption{})
+		if err != nil {
+			t.Fatalf("%v\n", err)
+		}
+		var addrs []resolver.Address
+		var cnt int
+		for {
+			addrs, cnt = cc.getAddress()
+			if cnt > 0 {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		var sc string
+		for {
+			sc, cnt = cc.getSc()
+			if cnt > 0 {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		if !reflect.DeepEqual(a.addrWant, addrs) {
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.addrWant)
+		}
+		if !reflect.DeepEqual(a.scWant, sc) {
+			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
+		}
+		r.Close()
+	}
+}
+
+func testDNSResolverWithSRV(t *testing.T) {
+	EnableSRVLookups = true
+	defer func() {
+		EnableSRVLookups = false
+	}()
 	defer leakcheck.Check(t)
 	tests := []struct {
 		target   string

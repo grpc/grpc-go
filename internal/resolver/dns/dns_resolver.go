@@ -39,6 +39,10 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
+// EnableSRVLookups controls whether the DNS resolver attempts to fetch gRPCLB
+// addresses from SRV records.  Must not be changed after init time.
+var EnableSRVLookups = false
+
 func init() {
 	resolver.Register(NewBuilder())
 }
@@ -280,6 +284,9 @@ func (d *dnsResolver) watcher() {
 }
 
 func (d *dnsResolver) lookupSRV() []resolver.Address {
+	if !EnableSRVLookups {
+		return nil
+	}
 	var newAddrs []resolver.Address
 	_, srvs, err := d.resolver.LookupSRV(d.ctx, "grpclb", "tcp", d.host)
 	if err != nil {
