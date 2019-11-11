@@ -167,7 +167,7 @@ type OutTrailer struct {
 	// WireLength is the wire length of trailer.
 	WireLength int
 	// Trailer contains the trailer metadata sent to the client. This
-	// field is only valid if this InTrailer is from the server side.
+	// field is only valid if this OutTrailer is from the server side.
 	Trailer metadata.MD
 }
 
