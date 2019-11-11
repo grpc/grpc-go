@@ -324,14 +324,3 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 		})
 	}
 }
-
-func (v2c *v2Client) cloneRDSCacheForTesting() map[string]string {
-	v2c.mu.Lock()
-	defer v2c.mu.Unlock()
-
-	cloneCache := make(map[string]string)
-	for k, v := range v2c.rdsCache {
-		cloneCache[k] = v
-	}
-	return cloneCache
-}

@@ -108,10 +108,11 @@ func getRouteConfigNameFromListener(lis *xdspb.Listener) (string, error) {
 	}
 	switch apiLis.RouteSpecifier.(type) {
 	case *httppb.HttpConnectionManager_Rds:
-		if apiLis.GetRds().GetRouteConfigName() == "" {
+		name := apiLis.GetRds().GetRouteConfigName()
+		if name == "" {
 			return "", fmt.Errorf("xds: empty route_config_name in LDS response: %+v", lis)
 		}
-		return apiLis.GetRds().GetRouteConfigName(), nil
+		return name, nil
 	case *httppb.HttpConnectionManager_RouteConfig:
 		// TODO: Add support for specifying the RouteConfiguration inline
 		// in the LDS response.

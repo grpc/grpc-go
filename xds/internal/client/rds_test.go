@@ -29,6 +29,17 @@ import (
 	"google.golang.org/grpc/xds/internal/client/fakexds"
 )
 
+func (v2c *v2Client) cloneRDSCacheForTesting() map[string]string {
+	v2c.mu.Lock()
+	defer v2c.mu.Unlock()
+
+	cloneCache := make(map[string]string)
+	for k, v := range v2c.rdsCache {
+		cloneCache[k] = v
+	}
+	return cloneCache
+}
+
 func TestGetClusterFromRouteConfiguration(t *testing.T) {
 	tests := []struct {
 		name        string
