@@ -20,11 +20,14 @@ package grpc
 
 import (
 	"context"
+	"errors"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/status"
 )
 
 // PickFirstBalancerName is the name of the pick_first balancer.
@@ -45,8 +48,9 @@ func (*pickfirstBuilder) Name() string {
 }
 
 type pickfirstBalancer struct {
-	cc balancer.ClientConn
-	sc balancer.SubConn
+	state connectivity.State
+	cc    balancer.ClientConn
+	sc    balancer.SubConn
 }
 
 var _ balancer.V2Balancer = &pickfirstBalancer{} // Assert we implement v2
@@ -64,6 +68,12 @@ func (b *pickfirstBalancer) HandleSubConnStateChange(sc balancer.SubConn, s conn
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
+	if b.state == connectivity.TransientFailure {
+		// Set a failing picker if we don't have a good picker.
+		b.cc.UpdateBalancerState(connectivity.TransientFailure,
+			&picker{err: status.Errorf(codes.Unavailable, "name resolver error: %v", err)},
+		)
+	}
 	if grpclog.V(2) {
 		grpclog.Infof("pickfirstBalancer: ResolverError called with error %v", err)
 	}
@@ -71,9 +81,9 @@ func (b *pickfirstBalancer) ResolverError(err error) {
 
 func (b *pickfirstBalancer) UpdateClientConnState(cs balancer.ClientConnState) error {
 	if len(cs.ResolverState.Addresses) == 0 {
+		b.ResolverError(errors.New("produced zero addresses"))
 		return balancer.ErrBadResolverState
 	}
-
 	if b.sc == nil {
 		var err error
 		b.sc, err = b.cc.NewSubConn(cs.ResolverState.Addresses, balancer.NewSubConnOptions{})
@@ -81,8 +91,13 @@ func (b *pickfirstBalancer) UpdateClientConnState(cs balancer.ClientConnState) e
 			if grpclog.V(2) {
 				grpclog.Errorf("pickfirstBalancer: failed to NewSubConn: %v", err)
 			}
+			b.state = connectivity.TransientFailure
+			b.cc.UpdateBalancerState(connectivity.TransientFailure,
+				&picker{err: status.Errorf(codes.Unavailable, "error creating connection: %v", err)},
+			)
 			return balancer.ErrBadResolverState
 		}
+		b.state = connectivity.Idle
 		b.cc.UpdateBalancerState(connectivity.Idle, &picker{sc: b.sc})
 		b.sc.Connect()
 	} else {
@@ -102,6 +117,7 @@ func (b *pickfirstBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.S
 		}
 		return
 	}
+	b.state = s.ConnectivityState
 	if s.ConnectivityState == connectivity.Shutdown {
 		b.sc = nil
 		return
