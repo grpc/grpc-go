@@ -50,8 +50,6 @@ const (
 type testClientConn struct {
 	target           string
 	m1               sync.Mutex
-	m2               sync.Mutex
-	sc               string
 	state            resolver.State
 	updateStateCalls int
 }
@@ -1054,6 +1052,7 @@ func TestDisableServiceConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
+		defer r.Close()
 		var cnt int
 		var sc string
 		for i := 0; i < 2000; i++ {
