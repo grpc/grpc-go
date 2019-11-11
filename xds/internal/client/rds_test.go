@@ -304,7 +304,8 @@ func testRDSCaching(t *testing.T, testOps chan testOp, errCh chan error) {
 	<-fakeServer.RequestChan
 	fakeServer.ResponseChan <- &fakexds.Response{Resp: goodLDSResponse1}
 	if err := <-cbCh; err != nil {
-		t.Fatalf("v2c.watchLDS returned error in callback: %v", err)
+		errCh <- fmt.Errorf("v2c.watchLDS returned error in callback: %v", err)
+		return
 	}
 
 	callbackCh := make(chan struct{}, 1)

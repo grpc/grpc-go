@@ -214,15 +214,6 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
-	otherGoodLDSResponse1 = &discoverypb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: listenerURL,
-				Value:   otherMarshaledListener2,
-			},
-		},
-		TypeUrl: listenerURL,
-	}
 	goodLDSResponse2 = &discoverypb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
@@ -251,24 +242,6 @@ var (
 		},
 		TypeUrl: listenerURL,
 	}
-	badResourceTypeInAPIListenerInLDSResponse = &discoverypb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: listenerURL,
-				Value:   marshaledBadResourceListener,
-			},
-		},
-		TypeUrl: listenerURL,
-	}
-	uninterestingLDSResponse = &discoverypb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: listenerURL,
-				Value:   uninterestingMarshaledListener,
-			},
-		},
-		TypeUrl: listenerURL,
-	}
 	ldsResponseWithMultipleResources = &discoverypb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
@@ -287,33 +260,6 @@ var (
 			{
 				TypeUrl: listenerURL,
 				Value:   marshaledNoAPIListener,
-			},
-		},
-		TypeUrl: listenerURL,
-	}
-	badlyMarshaledAPIListenerInLDSResponse = &discoverypb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: listenerURL,
-				Value:   badlyMarshaledAPIListener1,
-			},
-		},
-		TypeUrl: listenerURL,
-	}
-	ldsResponseWithEmptyHTTPConnMgr = &discoverypb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: listenerURL,
-				Value:   marshaledListenerWithEmptyHTTPConnMgr,
-			},
-		},
-		TypeUrl: listenerURL,
-	}
-	ldsResponseWithInlineRouteConfig = &discoverypb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: listenerURL,
-				Value:   marshaledListenerWithInlineRouteConfig,
 			},
 		},
 		TypeUrl: listenerURL,
@@ -564,12 +510,11 @@ func TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	fakeServer.ResponseChan <- &fakexds.Response{Err: errors.New("RPC error")}
 	t.Log("Bad LDS response pushed to fakeServer...")
 
-	gotRequest := &fakexds.Request{}
 	timer = time.NewTimer(defaultTestTimeout)
 	select {
 	case <-timer.C:
 		t.Fatal("time out when expecting LDS update")
-	case gotRequest = <-fakeServer.RequestChan:
+	case gotRequest := <-fakeServer.RequestChan:
 		t.Log("received LDS request after stream re-creation")
 		if !proto.Equal(gotRequest.Req, goodLDSRequest) {
 			t.Fatalf("gotRequest: %+v, wantRequest: %+v", gotRequest.Req, goodLDSRequest)
