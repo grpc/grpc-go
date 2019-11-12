@@ -117,6 +117,14 @@ type NewSubConnOptions struct {
 	HealthCheckEnabled bool
 }
 
+// State contains the balancer's state relevant to the gRPC ClientConn.
+type State struct {
+	// State controls the connectivity state of the ClientConn
+	State connectivity.State
+	// Picker is used to choose connections (SubConns) for RPCs.
+	Picker Picker
+}
+
 // ClientConn represents a gRPC ClientConn.
 //
 // This interface is to be implemented by gRPC. Users should not need a
@@ -137,7 +145,16 @@ type ClientConn interface {
 	//
 	// gRPC will update the connectivity state of the ClientConn, and will call pick
 	// on the new picker to pick new SubConn.
+	//
+	// Deprecated: use UpdateState instead
 	UpdateBalancerState(s connectivity.State, p Picker)
+
+	// UpdateState notifies gRPC that the balancer's internal state has
+	// changed.
+	//
+	// gRPC will update the connectivity state of the ClientConn, and will call pick
+	// on the new picker to pick new SubConns.
+	UpdateState(State)
 
 	// ResolveNow is called by balancer to notify gRPC to do a name resolving.
 	ResolveNow(resolver.ResolveNowOptions)
