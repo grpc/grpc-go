@@ -124,9 +124,14 @@ type Address struct {
 	Metadata interface{}
 }
 
-// BuildOption includes additional information for the builder to create
+// BuildOption is a type alias of BuildOptions for legacy reasons.
+//
+// Deprecated: use BuildOptions instead.
+type BuildOption = BuildOptions
+
+// BuildOptions includes additional information for the builder to create
 // the resolver.
-type BuildOption struct {
+type BuildOptions struct {
 	// DisableServiceConfig indicates whether a resolver implementation should
 	// fetch service config data.
 	DisableServiceConfig bool
@@ -224,14 +229,19 @@ type Builder interface {
 	//
 	// gRPC dial calls Build synchronously, and fails if the returned error is
 	// not nil.
-	Build(target Target, cc ClientConn, opts BuildOption) (Resolver, error)
+	Build(target Target, cc ClientConn, opts BuildOptions) (Resolver, error)
 	// Scheme returns the scheme supported by this resolver.
 	// Scheme is defined at https://github.com/grpc/grpc/blob/master/doc/naming.md.
 	Scheme() string
 }
 
-// ResolveNowOption includes additional information for ResolveNow.
-type ResolveNowOption struct{}
+// ResolveNowOption is a type alias of ResolveNowOptions for legacy reasons.
+//
+// Deprecated: use ResolveNowOptions instead.
+type ResolveNowOption = ResolveNowOptions
+
+// ResolveNowOptions includes additional information for ResolveNow.
+type ResolveNowOptions struct{}
 
 // Resolver watches for the updates on the specified target.
 // Updates include address updates and service config updates.
@@ -240,7 +250,7 @@ type Resolver interface {
 	// again. It's just a hint, resolver can ignore this if it's not necessary.
 	//
 	// It could be called multiple times concurrently.
-	ResolveNow(ResolveNowOption)
+	ResolveNow(ResolveNowOptions)
 	// Close closes the resolver.
 	Close()
 }
