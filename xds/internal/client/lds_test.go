@@ -19,6 +19,8 @@
 package client
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -196,8 +198,9 @@ func TestHandleLDSResponse(t *testing.T) {
 			timer := time.NewTimer(defaultTestTimeout)
 			select {
 			case <-timer.C:
-				t.Fatal("time out when expecting LDS update")
+				t.Fatal("Timeout when expecting LDS update")
 			case gotUpdate := <-gotUpdateCh:
+				timer.Stop()
 				if !reflect.DeepEqual(gotUpdate, *test.wantUpdate) {
 					t.Fatalf("%s: got LDS update : %+v, want %+v", test.name, gotUpdate, *test.wantUpdate)
 				}
@@ -222,5 +225,46 @@ func TestHandleLDSResponseWithoutWatch(t *testing.T) {
 
 	if v2c.handleLDSResponse(goodLDSResponse1) == nil {
 		t.Fatal("v2c.handleLDSResponse() succeeded, should have failed")
+	}
+}
+
+// TestLDSWatchExpiryTimer tests the case where the client does not receive an
+// LDS response for the request that it sends out. We want the watch callback
+// to be invoked with an error once the watchExpiryTimer fires.
+func TestLDSWatchExpiryTimer(t *testing.T) {
+	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
+	defaultWatchExpiryTimeout = 1 * time.Second
+	defer func() {
+		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
+	}()
+
+	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
+	defer cleanup()
+	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+
+	// Wait till the request makes it to the fakeServer. This ensures that
+	// the watch request has been processed by the v2Client.
+	callbackCh := make(chan error, 1)
+	v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
+		t.Logf("in v2c.watchLDS callback, ldsUpdate: %+v, err: %v", u, err)
+		if u.routeName != "" {
+			callbackCh <- fmt.Errorf("received routeName %v in ldsCallback, wanted empty string", u.routeName)
+		}
+		if err == nil {
+			callbackCh <- errors.New("received nil error in ldsCallback")
+		}
+		callbackCh <- nil
+	})
+	<-fakeServer.RequestChan
+
+	timer := time.NewTimer(2 * time.Second)
+	select {
+	case <-timer.C:
+		t.Fatalf("Timeout expired when expecting LDS update")
+	case err := <-callbackCh:
+		timer.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }

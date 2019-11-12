@@ -34,7 +34,7 @@ import (
 
 // The value chosen here is based on the default value of the
 // initial_fetch_timeout field in corepb.ConfigSource proto.
-var defaultWatchExpiryTimer = 15 * time.Second
+var defaultWatchExpiryTimeout = 15 * time.Second
 
 // v2Client performs the actual xDS RPCs using the xDS v2 API. It creates a
 // single ADS stream on which the different types of xDS requests and responses
@@ -292,7 +292,7 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 	v2c.watchMap[wi.wType] = wi
 	switch wi.wType {
 	case ldsResource:
-		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimer, func() {
+		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
 			// We need to grab the lock here because we are accessing the
 			// watchInfo (which is now stored in the watchMap) from this
 			// method which will be called when the timer fires.
@@ -314,7 +314,7 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 		}
 		// Add the watch expiry timer only for new watches we don't find in
 		// the cache, and return from here.
-		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimer, func() {
+		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
 			// We need to grab the lock here because we are accessing the
 			// watchInfo (which is now stored in the watchMap) from this
 			// method which will be called when the timer fires.

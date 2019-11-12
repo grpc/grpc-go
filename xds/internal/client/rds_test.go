@@ -19,6 +19,7 @@
 package client
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -236,8 +237,9 @@ func TestHandleRDSResponse(t *testing.T) {
 			timer := time.NewTimer(defaultTestTimeout)
 			select {
 			case <-timer.C:
-				t.Fatal("time out when expecting RDS update")
+				t.Fatal("Timeout when expecting RDS update")
 			case gotUpdate := <-gotUpdateCh:
+				timer.Stop()
 				if !reflect.DeepEqual(gotUpdate, *test.wantUpdate) {
 					t.Fatalf("%s: got RDS update : %+v, want %+v", test.name, gotUpdate, *test.wantUpdate)
 				}
@@ -310,7 +312,7 @@ type testOp struct {
 // pushes a good LDS response. It then reads a bunch of test operations to be
 // performed from testOps and returns error, if any, on the provided error
 // channel. This is executed in a separate goroutine.
-func testRDSCaching(t *testing.T, testOps chan testOp, errCh chan error) {
+func testRDSCaching(t *testing.T, testOps []testOp, errCh chan error) {
 	t.Helper()
 
 	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
@@ -335,7 +337,7 @@ func testRDSCaching(t *testing.T, testOps chan testOp, errCh chan error) {
 	}
 
 	callbackCh := make(chan struct{}, 1)
-	for testOp := range testOps {
+	for _, testOp := range testOps {
 		// Register a watcher if required, and use a channel to signal the
 		// successful invocation of the callback.
 		if testOp.target != "" {
@@ -380,57 +382,109 @@ func testRDSCaching(t *testing.T, testOps chan testOp, errCh chan error) {
 // verifies the RDS data cached at the v2Client.
 func TestRDSCaching(t *testing.T) {
 	errCh := make(chan error, 1)
-	opCh := make(chan testOp, 10)
-	go testRDSCaching(t, opCh, errCh)
-
-	// Add an RDS watch for a resource name (goodRouteName1), which returns one
-	// matching resource in the response.
-	opCh <- testOp{
-		target:            goodRouteName1,
-		responseToSend:    &fakexds.Response{Resp: goodRDSResponse1},
-		wantRDSCache:      map[string]string{goodRouteName1: goodClusterName1},
-		wantWatchCallback: true,
-	}
-	// Push an RDS response with a new resource. This resource is considered
-	// good because its domain field matches our LDS watch target, but the
-	// routeConfigName does not match our RDS watch (so the watch callback will
-	// not be invoked). But this should still be cached.
-	opCh <- testOp{
-		responseToSend: &fakexds.Response{Resp: goodRDSResponse2},
-		wantRDSCache: map[string]string{
-			goodRouteName1: goodClusterName1,
-			goodRouteName2: goodClusterName2,
+	ops := []testOp{
+		// Add an RDS watch for a resource name (goodRouteName1), which returns one
+		// matching resource in the response.
+		{
+			target:            goodRouteName1,
+			responseToSend:    &fakexds.Response{Resp: goodRDSResponse1},
+			wantRDSCache:      map[string]string{goodRouteName1: goodClusterName1},
+			wantWatchCallback: true,
+		},
+		// Push an RDS response with a new resource. This resource is considered
+		// good because its domain field matches our LDS watch target, but the
+		// routeConfigName does not match our RDS watch (so the watch callback will
+		// not be invoked). But this should still be cached.
+		{
+			responseToSend: &fakexds.Response{Resp: goodRDSResponse2},
+			wantRDSCache: map[string]string{
+				goodRouteName1: goodClusterName1,
+				goodRouteName2: goodClusterName2,
+			},
+		},
+		// Push an uninteresting RDS response. This should cause handleRDSResponse
+		// to return an error. But the watch callback should not be invoked, and
+		// the cache should not be updated.
+		{
+			responseToSend: &fakexds.Response{Resp: uninterestingRDSResponse},
+			wantOpErr:      true,
+			wantRDSCache: map[string]string{
+				goodRouteName1: goodClusterName1,
+				goodRouteName2: goodClusterName2,
+			},
+		},
+		// Switch the watch target to goodRouteName2, which was already cached.  No
+		// response is received from the server (as expected), but we want the
+		// callback to be invoked with the new clusterName.
+		{
+			target: goodRouteName2,
+			wantRDSCache: map[string]string{
+				goodRouteName1: goodClusterName1,
+				goodRouteName2: goodClusterName2,
+			},
+			wantWatchCallback: true,
 		},
 	}
-	// Push an uninteresting RDS response. This should cause handleRDSResponse
-	// to return an error. But the watch callback should not be invoked, and
-	// the cache should not be updated.
-	opCh <- testOp{
-		responseToSend: &fakexds.Response{Resp: uninterestingRDSResponse},
-		wantOpErr:      true,
-		wantRDSCache: map[string]string{
-			goodRouteName1: goodClusterName1,
-			goodRouteName2: goodClusterName2,
-		},
-	}
-	// Switch the watch target to goodRouteName2, which was already cached.  No
-	// response is received from the server (as expected), but we want the
-	// callback to be invoked with the new clusterName.
-	opCh <- testOp{
-		target: goodRouteName2,
-		wantRDSCache: map[string]string{
-			goodRouteName1: goodClusterName1,
-			goodRouteName2: goodClusterName2,
-		},
-		wantWatchCallback: true,
-	}
-	close(opCh)
+	go testRDSCaching(t, ops, errCh)
 
 	timer := time.NewTimer(defaultTestTimeout)
 	select {
 	case <-timer.C:
-		t.Fatal("time out when expecting RDS update")
+		t.Fatal("Timeout when expecting RDS update")
 	case err := <-errCh:
+		timer.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestRDSWatchExpiryTimer(t *testing.T) {
+	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
+	defaultWatchExpiryTimeout = 1 * time.Second
+	defer func() {
+		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
+	}()
+
+	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
+	defer cleanup()
+
+	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	defer v2c.close()
+	t.Log("Started xds v2Client...")
+
+	// Register an LDS watcher, and wait till the request is sent out, the
+	// response is received and the callback is invoked.
+	ldsCallbackCh := make(chan struct{})
+	v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
+		t.Logf("v2c.watchLDS callback, ldsUpdate: %+v, err: %v", u, err)
+		close(ldsCallbackCh)
+	})
+	<-fakeServer.RequestChan
+	fakeServer.ResponseChan <- &fakexds.Response{Resp: goodLDSResponse1}
+	<-ldsCallbackCh
+
+	// Wait till the request makes it to the fakeServer. This ensures that
+	// the watch request has been processed by the v2Client.
+	rdsCallbackCh := make(chan error, 1)
+	v2c.watchRDS(goodRouteName1, func(u rdsUpdate, err error) {
+		t.Logf("Received callback with rdsUpdate {%+v} and error {%v}", u, err)
+		if u.clusterName != "" {
+			rdsCallbackCh <- fmt.Errorf("received clusterName %v in rdsCallback, wanted empty string", u.clusterName)
+		}
+		if err == nil {
+			rdsCallbackCh <- errors.New("received nil error in rdsCallback")
+		}
+		rdsCallbackCh <- nil
+	})
+	<-fakeServer.RequestChan
+
+	timer := time.NewTimer(2 * time.Second)
+	select {
+	case <-timer.C:
+		t.Fatalf("Timeout expired when expecting RDS update")
+	case err := <-rdsCallbackCh:
+		timer.Stop()
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -39,7 +39,6 @@ const (
 	defaultTestTimeout       = 2 * time.Second
 	goodLDSTarget1           = "lds.target.good:1111"
 	goodLDSTarget2           = "lds.target.good:2222"
-	uninterestingLDSTarget   = "lds.target.uninteresting"
 	goodRouteName1           = "GoodRouteConfig1"
 	goodRouteName2           = "GoodRouteConfig2"
 	uninterestingRouteName   = "UninterestingRouteName"
@@ -386,8 +385,9 @@ func TestV2ClientBackoffAfterRecvError(t *testing.T) {
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
+	callbackCh := make(chan struct{})
 	v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
-		t.Fatalf("Received unexpected LDS callback with ldsUpdate {%+v} and error {%v}", u, err)
+		close(callbackCh)
 	})
 	<-fakeServer.RequestChan
 	t.Log("FakeServer received request...")
@@ -398,9 +398,12 @@ func TestV2ClientBackoffAfterRecvError(t *testing.T) {
 	timer := time.NewTimer(defaultTestTimeout)
 	select {
 	case <-timer.C:
-		t.Fatal("time out when expecting LDS update")
+		t.Fatal("Timeout when expecting LDS update")
 	case <-boCh:
+		timer.Stop()
 		t.Log("v2Client backed off before retrying...")
+	case <-callbackCh:
+		t.Fatal("Received unexpected LDS callback")
 	}
 }
 
@@ -429,8 +432,9 @@ func TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	timer := time.NewTimer(defaultTestTimeout)
 	select {
 	case <-timer.C:
-		t.Fatal("time out when expecting LDS update")
+		t.Fatal("Timeout when expecting LDS update")
 	case <-callbackCh:
+		timer.Stop()
 	}
 
 	fakeServer.ResponseChan <- &fakexds.Response{Err: errors.New("RPC error")}
@@ -439,8 +443,9 @@ func TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	timer = time.NewTimer(defaultTestTimeout)
 	select {
 	case <-timer.C:
-		t.Fatal("time out when expecting LDS update")
+		t.Fatal("Timeout when expecting LDS update")
 	case gotRequest := <-fakeServer.RequestChan:
+		timer.Stop()
 		t.Log("received LDS request after stream re-creation")
 		if !proto.Equal(gotRequest.Req, goodLDSRequest) {
 			t.Fatalf("gotRequest: %+v, wantRequest: %+v", gotRequest.Req, goodLDSRequest)
@@ -472,8 +477,9 @@ func TestV2ClientCancelWatch(t *testing.T) {
 	timer := time.NewTimer(defaultTestTimeout)
 	select {
 	case <-timer.C:
-		t.Fatal("time out when expecting LDS update")
+		t.Fatal("Timeout when expecting LDS update")
 	case <-callbackCh:
+		timer.Stop()
 	}
 
 	cancelFunc()
@@ -485,6 +491,7 @@ func TestV2ClientCancelWatch(t *testing.T) {
 	select {
 	case <-timer.C:
 	case <-callbackCh:
+		timer.Stop()
 		t.Fatalf("Watch callback invoked after the watcher was cancelled")
 	}
 }
