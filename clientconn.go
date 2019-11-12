@@ -938,7 +938,7 @@ func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, addrs []r
 	}
 }
 
-func (cc *ClientConn) resolveNow(o resolver.ResolveNowOption) {
+func (cc *ClientConn) resolveNow(o resolver.ResolveNowOptions) {
 	cc.mu.RLock()
 	r := cc.resolverWrapper
 	cc.mu.RUnlock()
@@ -1081,7 +1081,7 @@ func (ac *addrConn) adjustParams(r transport.GoAwayReason) {
 func (ac *addrConn) resetTransport() {
 	for i := 0; ; i++ {
 		if i > 0 {
-			ac.cc.resolveNow(resolver.ResolveNowOption{})
+			ac.cc.resolveNow(resolver.ResolveNowOptions{})
 		}
 
 		ac.mu.Lock()

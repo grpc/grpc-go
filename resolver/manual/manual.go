@@ -30,7 +30,7 @@ import (
 // NewBuilderWithScheme creates a new test resolver builder with the given scheme.
 func NewBuilderWithScheme(scheme string) *Resolver {
 	return &Resolver{
-		ResolveNowCallback: func(resolver.ResolveNowOption) {},
+		ResolveNowCallback: func(resolver.ResolveNowOptions) {},
 		scheme:             scheme,
 	}
 }
@@ -41,7 +41,7 @@ type Resolver struct {
 	// ResolveNowCallback is called when the ResolveNow method is called on the
 	// resolver.  Must not be nil.  Must not be changed after the resolver may
 	// be built.
-	ResolveNowCallback func(resolver.ResolveNowOption)
+	ResolveNowCallback func(resolver.ResolveNowOptions)
 	scheme             string
 
 	// Fields actually belong to the resolver.
@@ -56,7 +56,7 @@ func (r *Resolver) InitialState(s resolver.State) {
 }
 
 // Build returns itself for Resolver, because it's both a builder and a resolver.
-func (r *Resolver) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
+func (r *Resolver) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	r.CC = cc
 	if r.bootstrapState != nil {
 		r.UpdateState(*r.bootstrapState)
@@ -70,7 +70,7 @@ func (r *Resolver) Scheme() string {
 }
 
 // ResolveNow is a noop for Resolver.
-func (r *Resolver) ResolveNow(o resolver.ResolveNowOption) {
+func (r *Resolver) ResolveNow(o resolver.ResolveNowOptions) {
 	r.ResolveNowCallback(o)
 }
 

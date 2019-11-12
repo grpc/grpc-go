@@ -92,7 +92,7 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
 		credsClone = creds.Clone()
 	}
-	rbo := resolver.BuildOption{
+	rbo := resolver.BuildOptions{
 		DisableServiceConfig: cc.dopts.disableServiceConfig,
 		DialCreds:            credsClone,
 		CredsBundle:          cc.dopts.copts.CredsBundle,
@@ -113,7 +113,7 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 	return ccr, nil
 }
 
-func (ccr *ccResolverWrapper) resolveNow(o resolver.ResolveNowOption) {
+func (ccr *ccResolverWrapper) resolveNow(o resolver.ResolveNowOptions) {
 	ccr.resolverMu.Lock()
 	if !ccr.done.HasFired() {
 		ccr.resolver.ResolveNow(o)
@@ -149,7 +149,7 @@ func (ccr *ccResolverWrapper) poll(err error) {
 	ccr.polling = p
 	go func() {
 		for i := 0; ; i++ {
-			ccr.resolveNow(resolver.ResolveNowOption{})
+			ccr.resolveNow(resolver.ResolveNowOptions{})
 			t := time.NewTimer(ccr.cc.dopts.resolveNowBackoff(i))
 			select {
 			case <-p:

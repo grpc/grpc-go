@@ -372,7 +372,7 @@ func (ccw *remoteBalancerCCWrapper) watchRemoteBalancer() {
 			}
 		}
 		// Trigger a re-resolve when the stream errors.
-		ccw.lb.cc.cc.ResolveNow(resolver.ResolveNowOption{})
+		ccw.lb.cc.cc.ResolveNow(resolver.ResolveNowOptions{})
 
 		ccw.lb.mu.Lock()
 		ccw.lb.remoteBalancerConnected = false
