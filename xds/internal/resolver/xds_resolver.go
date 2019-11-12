@@ -59,7 +59,7 @@ func NewBuilder() resolver.Builder {
 type xdsBuilder struct{}
 
 // Build helps implement the resolver.Builder interface.
-func (b *xdsBuilder) Build(t resolver.Target, cc resolver.ClientConn, o resolver.BuildOption) (resolver.Resolver, error) {
+func (b *xdsBuilder) Build(t resolver.Target, cc resolver.ClientConn, o resolver.BuildOptions) (resolver.Resolver, error) {
 	// The xds balancer must have been registered at this point for the service
 	// config to be parsed properly.
 	scpr := cc.ParseServiceConfig(jsonSC)
@@ -82,7 +82,7 @@ func (*xdsBuilder) Scheme() string {
 type xdsResolver struct{}
 
 // ResolveNow is a no-op at this point.
-func (*xdsResolver) ResolveNow(o resolver.ResolveNowOption) {}
+func (*xdsResolver) ResolveNow(o resolver.ResolveNowOptions) {}
 
 // Close is a no-op at this point.
 func (*xdsResolver) Close() {}

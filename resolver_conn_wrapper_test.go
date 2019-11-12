@@ -133,7 +133,7 @@ func testResolverErrorPolling(t *testing.T, badUpdate func(*manual.Resolver), go
 	defer rcleanup()
 	rn := make(chan struct{})
 	defer func() { close(rn) }()
-	r.ResolveNowCallback = func(resolver.ResolveNowOption) { rn <- struct{}{} }
+	r.ResolveNowCallback = func(resolver.ResolveNowOptions) { rn <- struct{}{} }
 
 	defaultDialOptions := []DialOption{
 		WithInsecure(),

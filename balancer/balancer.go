@@ -140,7 +140,7 @@ type ClientConn interface {
 	UpdateBalancerState(s connectivity.State, p Picker)
 
 	// ResolveNow is called by balancer to notify gRPC to do a name resolving.
-	ResolveNow(resolver.ResolveNowOption)
+	ResolveNow(resolver.ResolveNowOptions)
 
 	// Target returns the dial target for this ClientConn.
 	//

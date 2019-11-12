@@ -87,7 +87,7 @@ func TestXDSRsolverSchemeAndAddresses(t *testing.T) {
 	}
 
 	tcc := &testClientConn{done: make(chan struct{})}
-	r, err := b.Build(resolver.Target{}, tcc, resolver.BuildOption{})
+	r, err := b.Build(resolver.Target{}, tcc, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("xdsBuilder.Build() failed with error: %v", err)
 	}

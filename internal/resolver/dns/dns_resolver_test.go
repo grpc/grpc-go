@@ -730,7 +730,7 @@ func testDNSResolver(t *testing.T) {
 	for _, a := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
-		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOption{})
+		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -820,7 +820,7 @@ func testDNSResolverWithSRV(t *testing.T) {
 	for _, a := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
-		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOption{})
+		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -892,7 +892,7 @@ func testDNSResolveNow(t *testing.T) {
 	for _, a := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
-		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOption{})
+		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -920,7 +920,7 @@ func testDNSResolveNow(t *testing.T) {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
 		}
 		revertTbl := mutateTbl(a.target)
-		r.ResolveNow(resolver.ResolveNowOption{})
+		r.ResolveNow(resolver.ResolveNowOptions{})
 		for {
 			addrs, cnt = cc.getAddress()
 			if cnt == 2 {
@@ -969,7 +969,7 @@ func testIPResolver(t *testing.T) {
 	for _, v := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: v.target}
-		r, err := b.Build(resolver.Target{Endpoint: v.target}, cc, resolver.BuildOption{})
+		r, err := b.Build(resolver.Target{Endpoint: v.target}, cc, resolver.BuildOptions{})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -985,7 +985,7 @@ func testIPResolver(t *testing.T) {
 		if !reflect.DeepEqual(v.want, addrs) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", v.target, addrs, v.want)
 		}
-		r.ResolveNow(resolver.ResolveNowOption{})
+		r.ResolveNow(resolver.ResolveNowOptions{})
 		for {
 			addrs, cnt = cc.getAddress()
 			if cnt == 2 {
@@ -1028,12 +1028,12 @@ func TestResolveFunc(t *testing.T) {
 	b := NewBuilder()
 	for _, v := range tests {
 		cc := &testClientConn{target: v.addr}
-		r, err := b.Build(resolver.Target{Endpoint: v.addr}, cc, resolver.BuildOption{})
+		r, err := b.Build(resolver.Target{Endpoint: v.addr}, cc, resolver.BuildOptions{})
 		if err == nil {
 			r.Close()
 		}
 		if !reflect.DeepEqual(err, v.want) {
-			t.Errorf("Build(%q, cc, resolver.BuildOption{}) = %v, want %v", v.addr, err, v.want)
+			t.Errorf("Build(%q, cc, resolver.BuildOptions{}) = %v, want %v", v.addr, err, v.want)
 		}
 	}
 }
@@ -1060,7 +1060,7 @@ func TestDisableServiceConfig(t *testing.T) {
 	for _, a := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
-		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOption{DisableServiceConfig: a.disableServiceConfig})
+		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{DisableServiceConfig: a.disableServiceConfig})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -1084,7 +1084,7 @@ func TestDNSResolverRetry(t *testing.T) {
 	b := NewBuilder()
 	target := "ipv4.single.fake"
 	cc := &testClientConn{target: target}
-	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOption{})
+	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
@@ -1103,7 +1103,7 @@ func TestDNSResolverRetry(t *testing.T) {
 	// mutate the host lookup table so the target has 0 address returned.
 	revertTbl := mutateTbl(target)
 	// trigger a resolve that will get empty address list
-	r.ResolveNow(resolver.ResolveNowOption{})
+	r.ResolveNow(resolver.ResolveNowOptions{})
 	for {
 		addrs, _ = cc.getAddress()
 		if len(addrs) == 0 {
@@ -1221,7 +1221,7 @@ func TestCustomAuthority(t *testing.T) {
 
 		b := NewBuilder()
 		cc := &testClientConn{target: "foo.bar.com"}
-		r, err := b.Build(resolver.Target{Endpoint: "foo.bar.com", Authority: a.authority}, cc, resolver.BuildOption{})
+		r, err := b.Build(resolver.Target{Endpoint: "foo.bar.com", Authority: a.authority}, cc, resolver.BuildOptions{})
 
 		if err == nil {
 			r.Close()
@@ -1259,7 +1259,7 @@ func TestRateLimitedResolve(t *testing.T) {
 	target := "foo.bar.com"
 	b := NewBuilder()
 	cc := &testClientConn{target: target}
-	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOption{})
+	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("resolver.Build() returned error: %v\n", err)
 	}
@@ -1292,7 +1292,7 @@ func TestRateLimitedResolve(t *testing.T) {
 			case <-done:
 				return
 			default:
-				r.ResolveNow(resolver.ResolveNowOption{})
+				r.ResolveNow(resolver.ResolveNowOptions{})
 				time.Sleep(1 * time.Millisecond)
 			}
 		}

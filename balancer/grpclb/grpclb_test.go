@@ -871,7 +871,7 @@ func TestFallBackWithNoServerAddress(t *testing.T) {
 
 	resolveNowCh := make(chan struct{}, 1)
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	r.ResolveNowCallback = func(resolver.ResolveNowOption) {
+	r.ResolveNowCallback = func(resolver.ResolveNowOptions) {
 		select {
 		case <-resolveNowCh:
 		default:

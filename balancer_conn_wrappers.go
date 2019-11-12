@@ -186,7 +186,7 @@ func (ccb *ccBalancerWrapper) UpdateBalancerState(s connectivity.State, p balanc
 	ccb.cc.csMgr.updateState(s)
 }
 
-func (ccb *ccBalancerWrapper) ResolveNow(o resolver.ResolveNowOption) {
+func (ccb *ccBalancerWrapper) ResolveNow(o resolver.ResolveNowOptions) {
 	ccb.cc.resolveNow(o)
 }
 

@@ -123,7 +123,7 @@ func (tcc *testClientConn) UpdateBalancerState(s connectivity.State, p balancer.
 	tcc.newPickerCh <- p
 }
 
-func (tcc *testClientConn) ResolveNow(resolver.ResolveNowOption) {
+func (tcc *testClientConn) ResolveNow(resolver.ResolveNowOptions) {
 	panic("not implemented")
 }
 

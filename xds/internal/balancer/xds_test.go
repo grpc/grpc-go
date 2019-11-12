@@ -168,7 +168,7 @@ func (t *testClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewS
 
 func (testClientConn) RemoveSubConn(balancer.SubConn)                              {}
 func (testClientConn) UpdateBalancerState(s connectivity.State, p balancer.Picker) {}
-func (testClientConn) ResolveNow(resolver.ResolveNowOption)                        {}
+func (testClientConn) ResolveNow(resolver.ResolveNowOptions)                       {}
 func (testClientConn) Target() string                                              { return testServiceName }
 
 type scStateChange struct {
