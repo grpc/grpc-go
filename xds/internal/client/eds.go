@@ -18,6 +18,7 @@
 package client
 
 import (
+	"fmt"
 	"net"
 	"strconv"
 
@@ -102,7 +103,7 @@ func parseDropPolicy(dropPolicy *xdspb.ClusterLoadAssignment_Policy_DropOverload
 }
 
 func parseEndpoints(lbEndpoints []*endpointpb.LbEndpoint) []Endpoint {
-	var endpoints []Endpoint
+	endpoints := make([]Endpoint, 0, len(lbEndpoints))
 	for _, lbEndpoint := range lbEndpoints {
 		endpoints = append(endpoints, Endpoint{
 			HealthStatus: EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
@@ -122,23 +123,30 @@ func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
 	for _, dropPolicy := range m.GetPolicy().GetDropOverloads() {
 		ret.OverloadDrop = append(ret.OverloadDrop, parseDropPolicy(dropPolicy))
 	}
+	priorities := make(map[uint32]struct{})
 	for _, locality := range m.Endpoints {
 		l := locality.GetLocality()
 		if l == nil {
-			// TODO: return an error.
-			continue
+			return nil, fmt.Errorf("EDS response contains a locality without ID")
 		}
 		lid := internal.Locality{
 			Region:  l.Region,
 			Zone:    l.Zone,
 			SubZone: l.SubZone,
 		}
+		priority := locality.GetPriority()
+		priorities[priority] = struct{}{}
 		ret.Localities = append(ret.Localities, &Locality{
 			ID:        lid,
 			Endpoints: parseEndpoints(locality.GetLbEndpoints()),
 			Weight:    locality.GetLoadBalancingWeight().GetValue(),
-			Priority:  locality.GetPriority(),
+			Priority:  priority,
 		})
+	}
+	for i := 0; i < len(priorities); i++ {
+		if _, ok := priorities[uint32(i)]; !ok {
+			return nil, fmt.Errorf("priority %v missing (with %v different priorities received)", i, len(priorities))
+		}
 	}
 	return ret, nil
 }
