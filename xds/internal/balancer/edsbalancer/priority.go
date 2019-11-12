@@ -45,7 +45,7 @@ func (xdsB *EDSBalancer) handlePriorityChange() {
 	// Everything was removed by EDS.
 	if !xdsB.priorityLowest.isSet() {
 		xdsB.priorityInUse = newPriorityTypeUnset()
-		xdsB.cc.UpdateBalancerState(connectivity.TransientFailure, base.NewErrPicker(balancer.ErrTransientFailure))
+		xdsB.cc.UpdateState(balancer.State{State: connectivity.TransientFailure, Picker: base.NewErrPicker(balancer.ErrTransientFailure)})
 		return
 	}
 
@@ -59,7 +59,7 @@ func (xdsB *EDSBalancer) handlePriorityChange() {
 	if _, ok := xdsB.priorityToLocalities[xdsB.priorityInUse]; !ok {
 		xdsB.priorityInUse = xdsB.priorityLowest
 		if s, ok := xdsB.priorityToState[xdsB.priorityLowest]; ok {
-			xdsB.cc.UpdateBalancerState(s.state, s.picker)
+			xdsB.cc.UpdateState(balancer.State{State: s.state, Picker: s.picker})
 		} else {
 			// If state for priorityLowest is not found, this means priorityLowest was
 			// started, but never sent any update. The init timer fired and
@@ -69,7 +69,7 @@ func (xdsB *EDSBalancer) handlePriorityChange() {
 			// We don't have an old state to send to parent, but we also don't
 			// want parent to keep using picker from old_priorityInUse. Send an
 			// update to trigger block picks until a new picker is ready.
-			xdsB.cc.UpdateBalancerState(connectivity.Connecting, base.NewErrPicker(balancer.ErrNoSubConnAvailable))
+			xdsB.cc.UpdateState(balancer.State{State: connectivity.Connecting, Picker: base.NewErrPicker(balancer.ErrNoSubConnAvailable)})
 		}
 		return
 	}

@@ -169,7 +169,7 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 		b.regeneratePicker()
 	}
 
-	b.cc.UpdateBalancerState(b.state, b.picker)
+	b.cc.UpdateState(balancer.State{State: b.state, Picker: b.picker})
 }
 
 // Close is a nop because base balancer doesn't have internal state to clean up,

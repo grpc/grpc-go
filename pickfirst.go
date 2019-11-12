@@ -65,7 +65,7 @@ func (b *pickfirstBalancer) HandleResolvedAddrs(addrs []resolver.Address, err er
 			}
 			return
 		}
-		b.cc.UpdateBalancerState(connectivity.Idle, &picker{sc: b.sc})
+		b.cc.UpdateState(balancer.State{State: connectivity.Idle, Picker: &picker{sc: b.sc}})
 		b.sc.Connect()
 	} else {
 		b.sc.UpdateAddresses(addrs)
@@ -90,11 +90,11 @@ func (b *pickfirstBalancer) HandleSubConnStateChange(sc balancer.SubConn, s conn
 
 	switch s {
 	case connectivity.Ready, connectivity.Idle:
-		b.cc.UpdateBalancerState(s, &picker{sc: sc})
+		b.cc.UpdateState(balancer.State{State: s, Picker: &picker{sc: sc}})
 	case connectivity.Connecting:
-		b.cc.UpdateBalancerState(s, &picker{err: balancer.ErrNoSubConnAvailable})
+		b.cc.UpdateState(balancer.State{State: s, Picker: &picker{err: balancer.ErrNoSubConnAvailable}})
 	case connectivity.TransientFailure:
-		b.cc.UpdateBalancerState(s, &picker{err: balancer.ErrTransientFailure})
+		b.cc.UpdateState(balancer.State{State: s, Picker: &picker{err: balancer.ErrTransientFailure}})
 	}
 }
 

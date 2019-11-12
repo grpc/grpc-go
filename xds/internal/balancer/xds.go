@@ -368,7 +368,7 @@ type xdsClientConn struct {
 
 func (w *xdsClientConn) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
 	w.updateState(s)
-	w.ClientConn.UpdateBalancerState(s, p)
+	w.ClientConn.UpdateState(balancer.State{State: s, Picker: p})
 }
 
 type subConnStateUpdate struct {

@@ -179,7 +179,7 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []xdsclient.OverloadDropConfig
 		xdsB.drops = newDrops
 		if xdsB.innerPicker != nil {
 			// Update picker with old inner picker, new drops.
-			xdsB.cc.UpdateBalancerState(xdsB.innerState, newDropPicker(xdsB.innerPicker, newDrops, xdsB.loadStore))
+			xdsB.cc.UpdateState(balancer.State{State: xdsB.innerState, Picker: newDropPicker(xdsB.innerPicker, newDrops, xdsB.loadStore)})
 		}
 		xdsB.pickerMu.Unlock()
 	}
@@ -378,7 +378,7 @@ func (xdsB *EDSBalancer) updateBalancerState(priority priorityType, s connectivi
 		xdsB.innerPicker = p
 		xdsB.innerState = s
 		// Don't reset drops when it's a state change.
-		xdsB.cc.UpdateBalancerState(s, newDropPicker(p, xdsB.drops, xdsB.loadStore))
+		xdsB.cc.UpdateState(balancer.State{State: s, Picker: newDropPicker(p, xdsB.drops, xdsB.loadStore)})
 	}
 }
 

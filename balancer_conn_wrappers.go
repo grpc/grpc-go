@@ -91,7 +91,7 @@ func (ccb *ccBalancerWrapper) watcher() {
 			for acbw := range scs {
 				ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 			}
-			ccb.UpdateBalancerState(connectivity.Connecting, nil)
+			ccb.UpdateState(balancer.State{State: connectivity.Connecting, Picker: nil})
 			return
 		}
 	}
