@@ -145,7 +145,7 @@ func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
 	}
 	for i := 0; i < len(priorities); i++ {
 		if _, ok := priorities[uint32(i)]; !ok {
-			return nil, fmt.Errorf("priority %v missing (with %v different priorities received)", i, len(priorities))
+			return nil, fmt.Errorf("priority %v missing (with different priorities %v received)", i, priorities)
 		}
 	}
 	return ret, nil
