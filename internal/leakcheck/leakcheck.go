@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -74,11 +75,24 @@ func ignore(g string) bool {
 	return false
 }
 
+var lastStacktraceSize uint32 = 4 << 10
+
 // interestingGoroutines returns all goroutines we care about for the purpose of
 // leak checking. It excludes testing or runtime ones.
 func interestingGoroutines() (gs []string) {
-	buf := make([]byte, 2<<20)
-	buf = buf[:runtime.Stack(buf, true)]
+	n := atomic.LoadUint32(&lastStacktraceSize)
+	buf := make([]byte, n)
+	for {
+		nb := uint32(runtime.Stack(buf, true))
+		if nb < uint32(len(buf)) {
+			buf = buf[:nb]
+			break
+		}
+		n <<= 1
+		buf = make([]byte, n)
+	}
+	atomic.StoreUint32(&lastStacktraceSize, n)
+
 	for _, g := range strings.Split(string(buf), "\n\n") {
 		if !ignore(g) {
 			gs = append(gs, g)
