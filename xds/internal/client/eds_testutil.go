@@ -67,6 +67,7 @@ func NewClusterLoadAssignmentBuilder(clusterName string, dropPercents []uint32) 
 // AddLocalityOptions contains options when adding locality to the builder.
 type AddLocalityOptions struct {
 	Health []corepb.HealthStatus
+	Weight []uint32
 }
 
 // AddLocality adds a locality to the builder.
@@ -93,18 +94,28 @@ func (clab *ClusterLoadAssignmentBuilder) AddLocality(subzone string, weight uin
 								PortSpecifier: &corepb.SocketAddress_PortValue{
 									PortValue: uint32(port)}}}}}},
 		}
-		if opts != nil && i < len(opts.Health) {
-			lbe.HealthStatus = opts.Health[i]
+		if opts != nil {
+			if i < len(opts.Health) {
+				lbe.HealthStatus = opts.Health[i]
+			}
+			if i < len(opts.Weight) {
+				lbe.LoadBalancingWeight = &wrapperspb.UInt32Value{Value: opts.Weight[i]}
+			}
 		}
 		lbEndPoints = append(lbEndPoints, lbe)
 	}
 
-	clab.v.Endpoints = append(clab.v.Endpoints, &endpointpb.LocalityLbEndpoints{
-		Locality: &corepb.Locality{
+	var localityID *corepb.Locality
+	if subzone != "" {
+		localityID = &corepb.Locality{
 			Region:  "",
 			Zone:    "",
 			SubZone: subzone,
-		},
+		}
+	}
+
+	clab.v.Endpoints = append(clab.v.Endpoints, &endpointpb.LocalityLbEndpoints{
+		Locality:            localityID,
 		LbEndpoints:         lbEndPoints,
 		LoadBalancingWeight: &wrapperspb.UInt32Value{Value: weight},
 		Priority:            priority,

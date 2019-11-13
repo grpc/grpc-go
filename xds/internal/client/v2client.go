@@ -198,6 +198,10 @@ func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
 				if !v2c.sendRDS(stream, target) {
 					return
 				}
+			case edsResource:
+				if !v2c.sendEDS(stream, target) {
+					return
+				}
 			}
 		case <-done:
 			return
@@ -278,6 +282,30 @@ func (v2c *v2Client) watchRDS(routeName string, rdsCb rdsCallback) (cancel func(
 	}
 }
 
+// watchEDS registers an EDS watcher for the provided clusterName. Updates
+// corresponding to received EDS responses will be pushed to the provided
+// callback. The caller can cancel the watch by invoking the returned cancel
+// function.
+// The provided callback should not block or perform any expensive operations
+// or call other methods of the v2Client object.
+func (v2c *v2Client) watchEDS(clusterName string, edsCb edsCallback) (cancel func()) {
+	wi := &watchInfo{wType: edsResource, target: []string{clusterName}, callback: edsCb}
+	v2c.watchCh.Put(wi)
+	return func() {
+		v2c.mu.Lock()
+		defer v2c.mu.Unlock()
+		if wi.state == watchEnqueued {
+			wi.state = watchCancelled
+			return
+		}
+		v2c.watchMap[edsResource].cancel()
+		delete(v2c.watchMap, edsResource)
+		// TODO: Once a registered RDS watch is cancelled, we should send an
+		// RDS request with no resources. This will let the server know that we
+		// are no longer interested in this resource.
+	}
+}
+
 // checkCacheAndUpdateWatchMap is called when a new watch call is handled in
 // send(). If an existing watcher is found, its expiry timer is stopped. If the
 // watchInfo to be added to the watchMap is found in the cache, the watcher
@@ -320,6 +348,16 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 			// method which will be called when the timer fires.
 			v2c.mu.Lock()
 			wi.callback.(rdsCallback)(rdsUpdate{clusterName: ""}, fmt.Errorf("xds: RDS target %s not found", wi.target))
+			v2c.mu.Unlock()
+		})
+	case edsResource:
+		// TODO: check cache
+		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
+			// We need to grab the lock here because we are accessing the
+			// watchInfo (which is now stored in the watchMap) from this
+			// method which will be called when the timer fires.
+			v2c.mu.Lock()
+			wi.callback.(edsCallback)(nil, fmt.Errorf("xds: EDS target %s not found", wi.target))
 			v2c.mu.Unlock()
 		})
 	}

@@ -38,8 +38,7 @@ import (
 )
 
 const (
-	edsType          = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
-	endpointRequired = "endpoints_required"
+	edsType = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
 )
 
 // client is responsible for connecting to the specified traffic director, passing the received
