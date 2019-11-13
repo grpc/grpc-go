@@ -27,11 +27,12 @@ import (
 	"io/ioutil"
 	"os"
 
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/jsonpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/grpclog"
+
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 const (

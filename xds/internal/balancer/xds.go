@@ -53,14 +53,13 @@ var (
 	}
 )
 
-type xdsBalancerBuilder struct{}
-
-// NewBalancerBuilder creates a new implementation of the balancer.Builder
-// interface for the xDS balancer.
-func NewBalancerBuilder() balancer.Builder {
-	return &xdsBalancerBuilder{}
+func init() {
+	balancer.Register(&xdsBalancerBuilder{})
 }
 
+type xdsBalancerBuilder struct{}
+
+// Build helps implement the balancer.Builder interface.
 func (b *xdsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	ctx, cancel := context.WithCancel(context.Background())
 	x := &xdsBalancer{

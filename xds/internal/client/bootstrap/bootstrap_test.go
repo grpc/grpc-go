@@ -22,11 +22,12 @@ import (
 	"os"
 	"testing"
 
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/proto"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
+
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	structpb "github.com/golang/protobuf/ptypes/struct"
 )
 
 var (

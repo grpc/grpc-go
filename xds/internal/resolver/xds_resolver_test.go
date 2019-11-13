@@ -19,46 +19,36 @@
 package resolver
 
 import (
-	"encoding/json"
-	"fmt"
 	"reflect"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/serviceconfig"
-	xdsbalancer "google.golang.org/grpc/xds/internal/balancer"
+	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
+
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
-// This is initialized at init time.
-var fbb *fakeBalancerBuilder
+const (
+	targetStr    = "target"
+	balancerName = "dummyBalancer"
+)
 
-// We register a fake balancer builder and the actual xds_resolver here. We use
-// the fake balancer builder to verify the service config pushed by the
-// resolver.
-func init() {
-	resolver.Register(NewBuilder())
-	fbb = &fakeBalancerBuilder{
-		wantLBConfig: &wrappedLBConfig{lbCfg: json.RawMessage(`{
-      "childPolicy":[
-        {
-          "round_robin": {}
-        }
-      ]
-    }`)},
-		errCh: make(chan error, 1),
+var (
+	validConfig = &bootstrap.Config{
+		BalancerName: balancerName,
+		Creds:        grpc.WithInsecure(),
+		NodeProto:    &corepb.Node{},
 	}
-	balancer.Register(fbb)
-}
+	target = resolver.Target{Endpoint: targetStr}
+)
 
 // testClientConn is a fake implemetation of resolver.ClientConn. All is does
 // is to store the state received from the resolver locally and close the
 // provided done channel.
 type testClientConn struct {
+	resolver.ClientConn
 	done     chan struct{}
 	gotState resolver.State
 }
@@ -68,142 +58,154 @@ func (t *testClientConn) UpdateState(s resolver.State) {
 	close(t.done)
 }
 
-func (*testClientConn) ParseServiceConfig(jsonSC string) *serviceconfig.ParseResult {
-	return internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(jsonSC)
+func newTestClientConn() *testClientConn {
+	return &testClientConn{done: make(chan struct{})}
 }
 
-func (*testClientConn) NewAddress([]resolver.Address) { panic("unimplemented") }
-func (*testClientConn) NewServiceConfig(string)       { panic("unimplemented") }
-func (*testClientConn) ReportError(error)             { panic("unimplemented") }
+// fakeXDSClient is a fake implementation of the xdsClientInterface interface.
+// All it does is to store the parameters received in the watch call and
+// signals various events by sending on channels.
+type fakeXDSClient struct {
+	gotTarget   string
+	gotCallback func(xdsclient.ServiceUpdate, error)
+	suCh        chan struct{}
+	cancel      chan struct{}
+	done        chan struct{}
+}
 
-// TestXDSRsolverSchemeAndAddresses creates a new xds resolver, verifies that
-// it returns an empty address list and the appropriate xds-experimental
-// scheme.
-func TestXDSRsolverSchemeAndAddresses(t *testing.T) {
-	b := NewBuilder()
-	wantScheme := "xds-experimental"
-	if b.Scheme() != wantScheme {
-		t.Fatalf("got scheme %s, want %s", b.Scheme(), wantScheme)
-	}
-
-	tcc := &testClientConn{done: make(chan struct{})}
-	r, err := b.Build(resolver.Target{}, tcc, resolver.BuildOptions{})
-	if err != nil {
-		t.Fatalf("xdsBuilder.Build() failed with error: %v", err)
-	}
-	defer r.Close()
-
-	<-tcc.done
-	if len(tcc.gotState.Addresses) != 0 {
-		t.Fatalf("got address list from resolver %v, want empty list", tcc.gotState.Addresses)
+func (f *fakeXDSClient) WatchForServiceUpdate(target string, callback func(xdsclient.ServiceUpdate, error)) func() {
+	f.gotTarget = target
+	f.gotCallback = callback
+	f.suCh <- struct{}{}
+	return func() {
+		f.cancel <- struct{}{}
 	}
 }
 
-var _ balancer.V2Balancer = (*fakeBalancer)(nil)
-
-// fakeBalancer is used to verify that the xds_resolver returns the expected
-// serice config.
-type fakeBalancer struct {
-	wantLBConfig *wrappedLBConfig
-	errCh        chan error
+func (f *fakeXDSClient) Close() {
+	f.done <- struct{}{}
 }
 
-func (*fakeBalancer) HandleSubConnStateChange(_ balancer.SubConn, _ connectivity.State) {
-	panic("unimplemented")
-}
-func (*fakeBalancer) HandleResolvedAddrs(_ []resolver.Address, _ error) {
-	panic("unimplemented")
-}
-func (*fakeBalancer) ResolverError(error) {
-	panic("unimplemented")
-}
-
-// UpdateClientConnState verifies that the received edsConfig matches the
-// provided one, and if not, sends an error on the provided channel.
-func (f *fakeBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
-	gotLBConfig, ok := ccs.BalancerConfig.(*wrappedLBConfig)
-	if !ok {
-		f.errCh <- fmt.Errorf("in fakeBalancer got lbConfig of type %T, want %T", ccs.BalancerConfig, &wrappedLBConfig{})
-		return balancer.ErrBadResolverState
+func newFakeXDSClient() *fakeXDSClient {
+	return &fakeXDSClient{
+		suCh:   make(chan struct{}, 1),
+		cancel: make(chan struct{}, 1),
+		done:   make(chan struct{}, 1),
 	}
+}
 
-	var gotCfg, wantCfg xdsbalancer.XDSConfig
-	if err := wantCfg.UnmarshalJSON(f.wantLBConfig.lbCfg); err != nil {
-		f.errCh <- fmt.Errorf("unable to unmarshal balancer config %s into xds config", string(f.wantLBConfig.lbCfg))
-		return balancer.ErrBadResolverState
+// different configs
+// different rbo
+// mock the newXDSClient ... return good and bad
+func TestResolverBuilder(t *testing.T) {
+	tests := []struct {
+		name string
+
+		// Things to pass to the function under test
+		rbo resolver.BuildOptions
+
+		// Things to pass from mocked out stuff
+		config     *bootstrap.Config
+		fakeClient xdsClientInterface
+		clientErr  error
+
+		// Things to check
+		wantClientOptions *xdsclient.Options
+		wantErr           bool
+	}{
+		{
+			name:    "empty-config",
+			rbo:     resolver.BuildOptions{},
+			config:  &bootstrap.Config{},
+			wantErr: true,
+		},
+		{
+			name: "no-balancer-name-in-config",
+			rbo:  resolver.BuildOptions{},
+			config: &bootstrap.Config{
+				Creds:     grpc.WithInsecure(),
+				NodeProto: &corepb.Node{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "no-node-proto-in-config",
+			rbo:  resolver.BuildOptions{},
+			opts: Options{
+				Config: bootstrap.Config{
+					BalancerName: balancerName,
+					Creds:        grpc.WithInsecure(),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "no-creds-in-config",
+			rbo:  resolver.BuildOptions{},
+			opts: Options{
+				Config: bootstrap.Config{
+					BalancerName: balancerName,
+					NodeProto:    &corepb.Node{},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "dummy-dialer-in-rbo",
+			rbo:  resolver.BuildOptions{
+				Dialer: func(_ context.Context, _ string) (net.Conn, error) {
+					return , nil
+				}
+			},
+			opts: Options{
+				Config: bootstrap.Config{
+					BalancerName: balancerName,
+					NodeProto:    &corepb.Node{},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "simple-good",
+			rbo:     resolver.BuildOptions{},
+			config:  validConfig,
+			wantErr: false,
+		},
 	}
-	if err := gotCfg.UnmarshalJSON(gotLBConfig.lbCfg); err != nil {
-		f.errCh <- fmt.Errorf("unable to unmarshal balancer config %s into xds config", string(gotLBConfig.lbCfg))
-		return balancer.ErrBadResolverState
-	}
+	for _, test := range tests {
+		func() {
+			oldConfigMaker := newXDSConfig
+			newXDSConfig = func() *bootstrap.Config {
+				return test.config
+			}
+			oldClientMaker := newXDSClient
+			newXDSClient = func(o xdsclient.Options) (xdsClientInterface, error) {
+				if test.wantClientOptions != nil {
+					if !reflect.DeepEqual(o, *test.wantClientOptions) {
+						t.Fatalf("%s: got client options: %+v, want: %+v", test.name, o, test.wantClientOptions)
+					}
+				}
+				return newFakeXDSClient(), test.clientErr
+			}
+			defer func() {
+				newXDSConfig = oldConfigMaker
+				newXDSClient = oldClientMaker
+			}()
 
-	if !reflect.DeepEqual(gotCfg, wantCfg) {
-		f.errCh <- fmt.Errorf("in fakeBalancer got lbConfig %v, want %v", gotCfg, wantCfg)
-		return balancer.ErrBadResolverState
-	}
+			builder := resolver.Get(xdsScheme)
+			if builder == nil {
+				t.Fatalf("%s: resolver.Get(%v) returned nil", test.name, xdsScheme)
+			}
 
-	f.errCh <- nil
-	return nil
-}
-
-func (*fakeBalancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConnState) {
-	panic("unimplemented")
-}
-
-func (*fakeBalancer) Close() {}
-
-// fakeBalancerBuilder builds a fake balancer and also provides a ParseConfig
-// method (which doesn't really the parse config, but just stores it as is).
-type fakeBalancerBuilder struct {
-	wantLBConfig *wrappedLBConfig
-	errCh        chan error
-}
-
-func (f *fakeBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &fakeBalancer{f.wantLBConfig, f.errCh}
-}
-
-func (f *fakeBalancerBuilder) Name() string {
-	return "xds_experimental"
-}
-
-func (f *fakeBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	return &wrappedLBConfig{lbCfg: c}, nil
-}
-
-// wrappedLBConfig simply wraps the provided LB config with a
-// serviceconfig.loadBalancingConfig interface.
-type wrappedLBConfig struct {
-	serviceconfig.LoadBalancingConfig
-	lbCfg json.RawMessage
-}
-
-// TestXDSRsolverServiceConfig verifies that the xds_resolver returns the
-// expected service config.
-//
-// The following sequence of events happen in this test:
-// * The xds_experimental balancer (fake) and resolver builders are initialized
-//   at init time.
-// * We dial a dummy address here with the xds-experimental scheme. This should
-//   pick the xds_resolver, which should return the hard-coded service config,
-//   which should reach the fake balancer that we registered (because the
-//   service config asks for the xds balancer).
-// * In the fake balancer, we verify that we receive the expected LB config.
-func TestXDSRsolverServiceConfig(t *testing.T) {
-	xdsAddr := fmt.Sprintf("%s:///dummy", xdsScheme)
-	cc, err := grpc.Dial(xdsAddr, grpc.WithInsecure())
-	if err != nil {
-		t.Fatalf("grpc.Dial(%s) failed with error: %v", xdsAddr, err)
-	}
-	defer cc.Close()
-
-	timer := time.NewTimer(5 * time.Second)
-	select {
-	case <-timer.C:
-		t.Fatal("timed out waiting for service config to reach balancer")
-	case err := <-fbb.errCh:
-		if err != nil {
-			t.Error(err)
-		}
+			r, err := builder.Build(target, newTestClientConn(), test.rbo)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("%s: builder.Build(%v) returned err: %v, wantErr: %v", test.name, target, err, test.wantErr)
+			}
+			if err != nil {
+				// This is the case where we expect an error and got it.
+				return
+			}
+			defer r.Close()
+		}()
 	}
 }

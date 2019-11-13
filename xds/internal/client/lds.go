@@ -40,10 +40,12 @@ func (v2c *v2Client) newLDSRequest(target []string) *xdspb.DiscoveryRequest {
 
 // sendLDS sends an LDS request for provided target on the provided stream.
 func (v2c *v2Client) sendLDS(stream adsStream, target []string) bool {
+	fmt.Println("easwars: v2Client.sendLDS: entering")
 	if err := stream.Send(v2c.newLDSRequest(target)); err != nil {
 		grpclog.Warningf("xds: LDS request for resource %v failed: %v", target, err)
 		return false
 	}
+	fmt.Println("easwars: v2Client.sendLDS: done")
 	return true
 }
 
