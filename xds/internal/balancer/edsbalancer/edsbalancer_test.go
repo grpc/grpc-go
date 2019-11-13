@@ -17,7 +17,6 @@
 package edsbalancer
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"sort"
@@ -67,9 +66,9 @@ func TestEDS_OneLocality(t *testing.T) {
 	// Pick with only the first backend.
 	p1 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		gotSC, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		if !reflect.DeepEqual(gotSC, sc1) {
-			t.Fatalf("picker.Pick, got %v, want %v", gotSC, sc1)
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
+		if !reflect.DeepEqual(gotSCSt.SubConn, sc1) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
 
@@ -85,10 +84,7 @@ func TestEDS_OneLocality(t *testing.T) {
 	// Test roundrobin with two subconns.
 	p2 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1, sc2}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -106,9 +102,9 @@ func TestEDS_OneLocality(t *testing.T) {
 	// Test pick with only the second subconn.
 	p3 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		gotSC, _, _ := p3.Pick(context.Background(), balancer.PickOptions{})
-		if !reflect.DeepEqual(gotSC, sc2) {
-			t.Fatalf("picker.Pick, got %v, want %v", gotSC, sc2)
+		gotSCSt, _ := p3.Pick(balancer.PickInfo{})
+		if !reflect.DeepEqual(gotSCSt.SubConn, sc2) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
 		}
 	}
 
@@ -129,9 +125,9 @@ func TestEDS_OneLocality(t *testing.T) {
 	// Test pick with only the third subconn.
 	p4 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		gotSC, _, _ := p4.Pick(context.Background(), balancer.PickOptions{})
-		if !reflect.DeepEqual(gotSC, sc3) {
-			t.Fatalf("picker.Pick, got %v, want %v", gotSC, sc3)
+		gotSCSt, _ := p4.Pick(balancer.PickInfo{})
+		if !reflect.DeepEqual(gotSCSt.SubConn, sc3) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc3)
 		}
 	}
 
@@ -143,7 +139,7 @@ func TestEDS_OneLocality(t *testing.T) {
 	// Picks with drops.
 	p5 := <-cc.newPickerCh
 	for i := 0; i < 100; i++ {
-		_, _, err := p5.Pick(context.Background(), balancer.PickOptions{})
+		_, err := p5.Pick(balancer.PickInfo{})
 		// TODO: the dropping algorithm needs a design. When the dropping algorithm
 		// is fixed, this test also needs fix.
 		if i < 50 && err == nil {
@@ -184,10 +180,7 @@ func TestEDS_TwoLocalities(t *testing.T) {
 	// Test roundrobin with two subconns.
 	p1 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1, sc2}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -205,10 +198,7 @@ func TestEDS_TwoLocalities(t *testing.T) {
 	// Test roundrobin with three subconns.
 	p2 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc1, sc2, sc3}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -227,10 +217,7 @@ func TestEDS_TwoLocalities(t *testing.T) {
 	// Test pick with two subconns (without the first one).
 	p3 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc2, sc3}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p3.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p3)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -250,10 +237,7 @@ func TestEDS_TwoLocalities(t *testing.T) {
 	// Locality-1 contains only sc2, locality-2 contains sc3 and sc4. So expect
 	// two sc2's and sc3, sc4.
 	want = []balancer.SubConn{sc2, sc2, sc3, sc4}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p4.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p4)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -269,10 +253,7 @@ func TestEDS_TwoLocalities(t *testing.T) {
 	// (weight 2 and 1). Locality-1 contains only sc2, locality-2 contains sc3 and
 	// sc4. So expect four sc2's and sc3, sc4.
 	want = []balancer.SubConn{sc2, sc2, sc2, sc2, sc3, sc4}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p5.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p5)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -298,10 +279,7 @@ func TestEDS_TwoLocalities(t *testing.T) {
 	// Locality-1 will be not be picked, and locality-2 will be picked.
 	// Locality-2 contains sc3 and sc4. So expect sc3, sc4.
 	want = []balancer.SubConn{sc3, sc4}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p6.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p6)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -375,10 +353,7 @@ func TestEDS_EndpointsHealth(t *testing.T) {
 	// Test roundrobin with the subconns.
 	p1 := <-cc.newPickerCh
 	want := readySCs
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -429,11 +404,11 @@ type testConstPicker struct {
 	sc  balancer.SubConn
 }
 
-func (tcp *testConstPicker) Pick(ctx context.Context, opts balancer.PickOptions) (conn balancer.SubConn, done func(balancer.DoneInfo), err error) {
+func (tcp *testConstPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	if tcp.err != nil {
-		return nil, nil, tcp.err
+		return balancer.PickResult{}, tcp.err
 	}
-	return tcp.sc, nil, nil
+	return balancer.PickResult{SubConn: tcp.sc}, nil
 }
 
 // Create XDS balancer, and update sub-balancer before handling eds responses.
@@ -459,7 +434,7 @@ func TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	p0 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		_, _, err := p0.Pick(context.Background(), balancer.PickOptions{})
+		_, err := p0.Pick(balancer.PickInfo{})
 		if !reflect.DeepEqual(err, errTestConstPicker) {
 			t.Fatalf("picker.Pick, got err %q, want err %q", err, errTestConstPicker)
 		}
@@ -482,10 +457,7 @@ func TestEDS_UpdateSubBalancerName(t *testing.T) {
 	// Test roundrobin with two subconns.
 	p1 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1, sc2}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -507,7 +479,7 @@ func TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	p2 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		_, _, err := p2.Pick(context.Background(), balancer.PickOptions{})
+		_, err := p2.Pick(balancer.PickInfo{})
 		if !reflect.DeepEqual(err, errTestConstPicker) {
 			t.Fatalf("picker.Pick, got err %q, want err %q", err, errTestConstPicker)
 		}
@@ -529,10 +501,7 @@ func TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	p3 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc3, sc4}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p3.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p3)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -589,7 +558,7 @@ func TestDropPicker(t *testing.T) {
 			}
 
 			for i := 0; i < pickCount; i++ {
-				_, _, err := p.Pick(context.Background(), balancer.PickOptions{})
+				_, err := p.Pick(balancer.PickInfo{})
 				if err == nil {
 					scCount++
 				}
@@ -641,12 +610,12 @@ func TestEDS_LoadReport(t *testing.T) {
 	)
 
 	for i := 0; i < 10; i++ {
-		sc, done, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		locality := backendToBalancerID[sc]
+		scst, _ := p1.Pick(balancer.PickInfo{})
+		locality := backendToBalancerID[scst.SubConn]
 		wantStart = append(wantStart, locality)
-		if done != nil && sc != sc1 {
-			done(balancer.DoneInfo{})
-			wantEnd = append(wantEnd, backendToBalancerID[sc])
+		if scst.Done != nil && scst.SubConn != sc1 {
+			scst.Done(balancer.DoneInfo{})
+			wantEnd = append(wantEnd, backendToBalancerID[scst.SubConn])
 		}
 	}
 

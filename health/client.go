@@ -20,6 +20,7 @@ package health
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -56,7 +57,7 @@ const healthCheckMethod = "/grpc.health.v1.Health/Watch"
 
 // This function implements the protocol defined at:
 // https://github.com/grpc/grpc/blob/master/doc/health-checking.md
-func clientHealthCheck(ctx context.Context, newStream func(string) (interface{}, error), setConnectivityState func(connectivity.State), service string) error {
+func clientHealthCheck(ctx context.Context, newStream func(string) (interface{}, error), setConnectivityState func(connectivity.State, error), service string) error {
 	tryCnt := 0
 
 retryConnection:
@@ -70,7 +71,7 @@ retryConnection:
 		if ctx.Err() != nil {
 			return nil
 		}
-		setConnectivityState(connectivity.Connecting)
+		setConnectivityState(connectivity.Connecting, nil)
 		rawS, err := newStream(healthCheckMethod)
 		if err != nil {
 			continue retryConnection
@@ -79,7 +80,7 @@ retryConnection:
 		s, ok := rawS.(grpc.ClientStream)
 		// Ideally, this should never happen. But if it happens, the server is marked as healthy for LBing purposes.
 		if !ok {
-			setConnectivityState(connectivity.Ready)
+			setConnectivityState(connectivity.Ready, nil)
 			return fmt.Errorf("newStream returned %v (type %T); want grpc.ClientStream", rawS, rawS)
 		}
 
@@ -95,22 +96,22 @@ retryConnection:
 
 			// Reports healthy for the LBing purposes if health check is not implemented in the server.
 			if status.Code(err) == codes.Unimplemented {
-				setConnectivityState(connectivity.Ready)
+				setConnectivityState(connectivity.Ready, nil)
 				return err
 			}
 
 			// Reports unhealthy if server's Watch method gives an error other than UNIMPLEMENTED.
 			if err != nil {
-				setConnectivityState(connectivity.TransientFailure)
+				setConnectivityState(connectivity.TransientFailure, errors.New("health check RPC error"))
 				continue retryConnection
 			}
 
 			// As a message has been received, removes the need for backoff for the next retry by resetting the try count.
 			tryCnt = 0
 			if resp.Status == healthpb.HealthCheckResponse_SERVING {
-				setConnectivityState(connectivity.Ready)
+				setConnectivityState(connectivity.Ready, nil)
 			} else {
-				setConnectivityState(connectivity.TransientFailure)
+				setConnectivityState(connectivity.TransientFailure, errors.New("health check failed"))
 			}
 		}
 	}

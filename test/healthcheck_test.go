@@ -115,7 +115,7 @@ func (s *testHealthServer) SetServingStatus(service string, status healthpb.Heal
 func setupHealthCheckWrapper() (hcEnterChan chan struct{}, hcExitChan chan struct{}, wrapper internal.HealthChecker) {
 	hcEnterChan = make(chan struct{})
 	hcExitChan = make(chan struct{})
-	wrapper = func(ctx context.Context, newStream func(string) (interface{}, error), update func(state connectivity.State), service string) error {
+	wrapper = func(ctx context.Context, newStream func(string) (interface{}, error), update func(connectivity.State, error), service string) error {
 		close(hcEnterChan)
 		defer close(hcExitChan)
 		return testHealthCheckFunc(ctx, newStream, update, service)

@@ -19,7 +19,6 @@
 package grpclb
 
 import (
-	"context"
 	"sync"
 	"sync/atomic"
 
@@ -96,8 +95,8 @@ type errPicker struct {
 	err error
 }
 
-func (p *errPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
-	return nil, nil, p.err
+func (p *errPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
+	return balancer.PickResult{}, p.err
 }
 
 // rrPicker does roundrobin on subConns. It's typically used when there's no
@@ -118,12 +117,12 @@ func newRRPicker(readySCs []balancer.SubConn) *rrPicker {
 	}
 }
 
-func (p *rrPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
+func (p *rrPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	sc := p.subConns[p.subConnsNext]
 	p.subConnsNext = (p.subConnsNext + 1) % len(p.subConns)
-	return sc, nil, nil
+	return balancer.PickResult{SubConn: sc}, nil
 }
 
 // lbPicker does two layers of picks:
@@ -154,7 +153,7 @@ func newLBPicker(serverList []*lbpb.Server, readySCs []balancer.SubConn, stats *
 	}
 }
 
-func (p *lbPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
+func (p *lbPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -165,12 +164,12 @@ func (p *lbPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balance
 	// If it's a drop, return an error and fail the RPC.
 	if s.Drop {
 		p.stats.drop(s.LoadBalanceToken)
-		return nil, nil, status.Errorf(codes.Unavailable, "request dropped by grpclb")
+		return balancer.PickResult{}, status.Errorf(codes.Unavailable, "request dropped by grpclb")
 	}
 
 	// If not a drop but there's no ready subConns.
 	if len(p.subConns) <= 0 {
-		return nil, nil, balancer.ErrNoSubConnAvailable
+		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
 
 	// Return the next ready subConn in the list, also collect rpc stats.
@@ -183,7 +182,7 @@ func (p *lbPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balance
 			p.stats.knownReceived()
 		}
 	}
-	return sc, done, nil
+	return balancer.PickResult{SubConn: sc, Done: done}, nil
 }
 
 func (p *lbPicker) updateReadySCs(readySCs []balancer.SubConn) {

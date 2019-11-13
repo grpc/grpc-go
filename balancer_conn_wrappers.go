@@ -34,6 +34,7 @@ import (
 type scStateUpdate struct {
 	sc    balancer.SubConn
 	state connectivity.State
+	err   error
 }
 
 // ccBalancerWrapper is a wrapper on top of cc for balancers.
@@ -74,7 +75,7 @@ func (ccb *ccBalancerWrapper) watcher() {
 			ccb.balancerMu.Lock()
 			su := t.(*scStateUpdate)
 			if ub, ok := ccb.balancer.(balancer.V2Balancer); ok {
-				ub.UpdateSubConnState(su.sc, balancer.SubConnState{ConnectivityState: su.state})
+				ub.UpdateSubConnState(su.sc, balancer.SubConnState{ConnectivityState: su.state, ConnectionError: su.err})
 			} else {
 				ccb.balancer.HandleSubConnStateChange(su.sc, su.state)
 			}
@@ -101,7 +102,7 @@ func (ccb *ccBalancerWrapper) close() {
 	ccb.done.Fire()
 }
 
-func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State, err error) {
 	// When updating addresses for a SubConn, if the address in use is not in
 	// the new addresses, the old ac will be tearDown() and a new ac will be
 	// created. tearDown() generates a state change with Shutdown state, we
@@ -115,6 +116,7 @@ func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s co
 	ccb.scBuffer.Put(&scStateUpdate{
 		sc:    sc,
 		state: s,
+		err:   err,
 	})
 }
 
@@ -172,7 +174,18 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 }
 
 func (ccb *ccBalancerWrapper) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
-	ccb.UpdateState(balancer.State{State: s, Picker: p})
+	ccb.mu.Lock()
+	defer ccb.mu.Unlock()
+	if ccb.subConns == nil {
+		return
+	}
+	// Update picker before updating state.  Even though the ordering here does
+	// not matter, it can lead to multiple calls of Pick in the common start-up
+	// case where we wait for ready and then perform an RPC.  If the picker is
+	// updated later, we could call the "connecting" picker when the state is
+	// updated, and then call the "ready" picker after the picker gets updated.
+	ccb.cc.blockingpicker.updatePicker(p)
+	ccb.cc.csMgr.updateState(s)
 }
 
 func (ccb *ccBalancerWrapper) UpdateState(s balancer.State) {
@@ -186,7 +199,7 @@ func (ccb *ccBalancerWrapper) UpdateState(s balancer.State) {
 	// case where we wait for ready and then perform an RPC.  If the picker is
 	// updated later, we could call the "connecting" picker when the state is
 	// updated, and then call the "ready" picker after the picker gets updated.
-	ccb.cc.blockingpicker.updatePicker(s.Picker)
+	ccb.cc.blockingpicker.updatePickerV2(s.Picker)
 	ccb.cc.csMgr.updateState(s.State)
 }
 

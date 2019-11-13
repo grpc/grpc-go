@@ -19,8 +19,6 @@
 package grpc
 
 import (
-	"context"
-
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
@@ -65,7 +63,7 @@ func (b *pickfirstBalancer) HandleResolvedAddrs(addrs []resolver.Address, err er
 			}
 			return
 		}
-		b.cc.UpdateState(balancer.State{State: connectivity.Idle, Picker: &picker{sc: b.sc}})
+		b.cc.UpdateState(balancer.State{State: connectivity.Idle, Picker: &picker{result: balancer.PickResult{SubConn: b.sc}}})
 		b.sc.Connect()
 	} else {
 		b.sc.UpdateAddresses(addrs)
@@ -90,7 +88,7 @@ func (b *pickfirstBalancer) HandleSubConnStateChange(sc balancer.SubConn, s conn
 
 	switch s {
 	case connectivity.Ready, connectivity.Idle:
-		b.cc.UpdateState(balancer.State{State: s, Picker: &picker{sc: sc}})
+		b.cc.UpdateState(balancer.State{State: s, Picker: &picker{result: balancer.PickResult{SubConn: sc}}})
 	case connectivity.Connecting:
 		b.cc.UpdateState(balancer.State{State: s, Picker: &picker{err: balancer.ErrNoSubConnAvailable}})
 	case connectivity.TransientFailure:
@@ -102,15 +100,12 @@ func (b *pickfirstBalancer) Close() {
 }
 
 type picker struct {
-	err error
-	sc  balancer.SubConn
+	result balancer.PickResult
+	err    error
 }
 
-func (p *picker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
-	if p.err != nil {
-		return nil, nil, p.err
-	}
-	return p.sc, nil, nil
+func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	return p.result, p.err
 }
 
 func init() {

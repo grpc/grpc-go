@@ -214,7 +214,7 @@ type lbBalancer struct {
 	state    connectivity.State
 	subConns map[resolver.Address]balancer.SubConn   // Used to new/remove SubConn.
 	scStates map[balancer.SubConn]connectivity.State // Used to filter READY SubConns.
-	picker   balancer.Picker
+	picker   balancer.V2Picker
 	// Support fallback to resolved backend addresses if there's no response
 	// from remote balancer within fallbackTimeout.
 	remoteBalancerConnected bool

@@ -28,25 +28,32 @@ import (
 )
 
 type baseBuilder struct {
-	name          string
-	pickerBuilder PickerBuilder
-	config        Config
+	name            string
+	pickerBuilder   PickerBuilder
+	v2PickerBuilder V2PickerBuilder
+	config          Config
 }
 
 func (bb *baseBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
-	return &baseBalancer{
-		cc:            cc,
-		pickerBuilder: bb.pickerBuilder,
+	bal := &baseBalancer{
+		cc:              cc,
+		pickerBuilder:   bb.pickerBuilder,
+		v2PickerBuilder: bb.v2PickerBuilder,
 
 		subConns: make(map[resolver.Address]balancer.SubConn),
 		scStates: make(map[balancer.SubConn]connectivity.State),
 		csEvltr:  &balancer.ConnectivityStateEvaluator{},
-		// Initialize picker to a picker that always return
-		// ErrNoSubConnAvailable, because when state of a SubConn changes, we
-		// may call UpdateBalancerState with this picker.
-		picker: NewErrPicker(balancer.ErrNoSubConnAvailable),
-		config: bb.config,
+		config:   bb.config,
 	}
+	// Initialize picker to a picker that always returns
+	// ErrNoSubConnAvailable, because when state of a SubConn changes, we
+	// may call UpdateState with this picker.
+	if bb.pickerBuilder != nil {
+		bal.picker = NewErrPicker(balancer.ErrNoSubConnAvailable)
+	} else {
+		bal.v2Picker = NewErrPickerV2(balancer.ErrNoSubConnAvailable)
+	}
+	return bal
 }
 
 func (bb *baseBuilder) Name() string {
@@ -56,8 +63,9 @@ func (bb *baseBuilder) Name() string {
 var _ balancer.V2Balancer = (*baseBalancer)(nil) // Assert that we implement V2Balancer
 
 type baseBalancer struct {
-	cc            balancer.ClientConn
-	pickerBuilder PickerBuilder
+	cc              balancer.ClientConn
+	pickerBuilder   PickerBuilder
+	v2PickerBuilder V2PickerBuilder
 
 	csEvltr *balancer.ConnectivityStateEvaluator
 	state   connectivity.State
@@ -65,6 +73,7 @@ type baseBalancer struct {
 	subConns map[resolver.Address]balancer.SubConn
 	scStates map[balancer.SubConn]connectivity.State
 	picker   balancer.Picker
+	v2Picker balancer.V2Picker
 	config   Config
 }
 
@@ -72,8 +81,14 @@ func (b *baseBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) 
 	panic("not implemented")
 }
 
-func (b *baseBalancer) ResolverError(error) {
-	// Ignore
+func (b *baseBalancer) ResolverError(err error) {
+	if b.state == connectivity.TransientFailure {
+		if b.picker != nil {
+			b.picker = NewErrPicker(err)
+		} else {
+			b.v2Picker = NewErrPickerV2(err)
+		}
+	}
 }
 
 func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
@@ -116,7 +131,11 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 //  - built by the pickerBuilder with all READY SubConns otherwise.
 func (b *baseBalancer) regeneratePicker() {
 	if b.state == connectivity.TransientFailure {
-		b.picker = NewErrPicker(balancer.ErrTransientFailure)
+		if b.pickerBuilder != nil {
+			b.picker = NewErrPicker(balancer.ErrTransientFailure)
+		} else {
+			b.v2Picker = NewErrPickerV2(balancer.ErrTransientFailure)
+		}
 		return
 	}
 	readySCs := make(map[resolver.Address]balancer.SubConn)
@@ -127,7 +146,11 @@ func (b *baseBalancer) regeneratePicker() {
 			readySCs[addr] = sc
 		}
 	}
-	b.picker = b.pickerBuilder.Build(readySCs)
+	if b.pickerBuilder != nil {
+		b.picker = b.pickerBuilder.Build(readySCs)
+	} else {
+		b.v2Picker = b.v2PickerBuilder.Build(readySCs, PickerBuildOptions{})
+	}
 }
 
 func (b *baseBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
@@ -169,7 +192,11 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 		b.regeneratePicker()
 	}
 
-	b.cc.UpdateState(balancer.State{State: b.state, Picker: b.picker})
+	if b.picker != nil {
+		b.cc.UpdateBalancerState(b.state, b.picker)
+	} else {
+		b.cc.UpdateState(balancer.State{State: b.state, Picker: b.v2Picker})
+	}
 }
 
 // Close is a nop because base balancer doesn't have internal state to clean up,
@@ -186,6 +213,19 @@ type errPicker struct {
 	err error // Pick() always returns this err.
 }
 
-func (p *errPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
+func (p *errPicker) Pick(context.Context, balancer.PickInfo) (balancer.SubConn, func(balancer.DoneInfo), error) {
 	return nil, nil, p.err
+}
+
+// NewErrPickerV2 returns a V2Picker that always returns err on Pick().
+func NewErrPickerV2(err error) balancer.V2Picker {
+	return &errPickerV2{err: err}
+}
+
+type errPickerV2 struct {
+	err error // Pick() always returns this err.
+}
+
+func (p *errPickerV2) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	return balancer.PickResult{}, p.err
 }

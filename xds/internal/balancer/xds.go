@@ -366,9 +366,12 @@ type xdsClientConn struct {
 	balancer.ClientConn
 }
 
+func (w *xdsClientConn) UpdateState(s balancer.State) {
+	w.updateState(s.State)
+	w.ClientConn.UpdateState(s)
+}
 func (w *xdsClientConn) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
-	w.updateState(s)
-	w.ClientConn.UpdateState(balancer.State{State: s, Picker: p})
+	grpclog.Fatalln("not implemented")
 }
 
 type subConnStateUpdate struct {
