@@ -29,8 +29,6 @@ import (
 	"google.golang.org/grpc/xds/internal"
 )
 
-// TODO: pointers or not???
-
 // OverloadDropConfig contains the config to drop overloads.
 type OverloadDropConfig struct {
 	Category    string
@@ -42,18 +40,18 @@ type OverloadDropConfig struct {
 type EndpointHealthStatus int32
 
 const (
-	// EndpointHealthStatusUNKNOWN represents HealthStatus UNKNOWN.
-	EndpointHealthStatusUNKNOWN EndpointHealthStatus = iota
-	// EndpointHealthStatusHEALTHY represents HealthStatus HEALTHY.
-	EndpointHealthStatusHEALTHY
-	// EndpointHealthStatusUNHEALTHY represents HealthStatus UNHEALTHY.
-	EndpointHealthStatusUNHEALTHY
-	// EndpointHealthStatusDRAINING represents HealthStatus DRAINING.
-	EndpointHealthStatusDRAINING
-	// EndpointHealthStatusTIMEOUT represents HealthStatus TIMEOUT.
-	EndpointHealthStatusTIMEOUT
-	// EndpointHealthStatusDEGRADED represents HealthStatus DEGRADED.
-	EndpointHealthStatusDEGRADED
+	// EndpointHealthStatusUnknown represents HealthStatus UNKNOWN.
+	EndpointHealthStatusUnknown EndpointHealthStatus = iota
+	// EndpointHealthStatusHealthy represents HealthStatus HEALTHY.
+	EndpointHealthStatusHealthy
+	// EndpointHealthStatusUnhealthy represents HealthStatus UNHEALTHY.
+	EndpointHealthStatusUnhealthy
+	// EndpointHealthStatusDraining represents HealthStatus DRAINING.
+	EndpointHealthStatusDraining
+	// EndpointHealthStatusTimeout represents HealthStatus TIMEOUT.
+	EndpointHealthStatusTimeout
+	// EndpointHealthStatusDegraded represents HealthStatus DEGRADED.
+	EndpointHealthStatusDegraded
 )
 
 // Endpoint contains information of an endpoint.
@@ -73,15 +71,15 @@ type Locality struct {
 
 // EDSUpdate contains an EDS update.
 type EDSUpdate struct {
-	OverloadDrop []*OverloadDropConfig
-	Localities   []*Locality
+	Drops      []OverloadDropConfig
+	Localities []Locality
 }
 
 func parseAddress(socketAddress *corepb.SocketAddress) string {
 	return net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue())))
 }
 
-func parseDropPolicy(dropPolicy *xdspb.ClusterLoadAssignment_Policy_DropOverload) *OverloadDropConfig {
+func parseDropPolicy(dropPolicy *xdspb.ClusterLoadAssignment_Policy_DropOverload) OverloadDropConfig {
 	percentage := dropPolicy.GetDropPercentage()
 	var (
 		numerator   = percentage.GetNumerator()
@@ -95,7 +93,7 @@ func parseDropPolicy(dropPolicy *xdspb.ClusterLoadAssignment_Policy_DropOverload
 	case typepb.FractionalPercent_MILLION:
 		denominator = 1000000
 	}
-	return &OverloadDropConfig{
+	return OverloadDropConfig{
 		Category:    dropPolicy.GetCategory(),
 		Numerator:   numerator,
 		Denominator: denominator,
@@ -121,13 +119,13 @@ func parseEndpoints(lbEndpoints []*endpointpb.LbEndpoint) []Endpoint {
 func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
 	ret := &EDSUpdate{}
 	for _, dropPolicy := range m.GetPolicy().GetDropOverloads() {
-		ret.OverloadDrop = append(ret.OverloadDrop, parseDropPolicy(dropPolicy))
+		ret.Drops = append(ret.Drops, parseDropPolicy(dropPolicy))
 	}
 	priorities := make(map[uint32]struct{})
 	for _, locality := range m.Endpoints {
 		l := locality.GetLocality()
 		if l == nil {
-			return nil, fmt.Errorf("EDS response contains a locality without ID")
+			return nil, fmt.Errorf("EDS response contains a locality without ID, locality: %+v", locality)
 		}
 		lid := internal.Locality{
 			Region:  l.Region,
@@ -136,7 +134,7 @@ func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
 		}
 		priority := locality.GetPriority()
 		priorities[priority] = struct{}{}
-		ret.Localities = append(ret.Localities, &Locality{
+		ret.Localities = append(ret.Localities, Locality{
 			ID:        lid,
 			Endpoints: parseEndpoints(locality.GetLbEndpoints()),
 			Weight:    locality.GetLoadBalancingWeight().GetValue(),
@@ -152,6 +150,10 @@ func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
 }
 
 // ParseEDSRespProtoForTesting parses EDS response, and panic if parsing fails.
+// This is used by EDS balancer tests.
+//
+// TODO: delete this. The EDS balancer should build an EDSUpdate directly,
+//  instead of building and parsing a proto message.
 func ParseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) *EDSUpdate {
 	u, err := ParseEDSRespProto(m)
 	if err != nil {
