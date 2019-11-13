@@ -16,7 +16,7 @@
  *
  */
 
-package client
+package bootstrap
 
 import (
 	"os"
@@ -187,7 +187,7 @@ func TestNewConfig(t *testing.T) {
 	}
 	defer func() {
 		fileReadFunc = oldFileReadFunc
-		os.Unsetenv(bootstrapFileEnv)
+		os.Unsetenv(fileEnv)
 	}()
 
 	tests := []struct {
@@ -209,8 +209,8 @@ func TestNewConfig(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if err := os.Setenv(bootstrapFileEnv, test.name); err != nil {
-			t.Fatalf("os.Setenv(%s, %s) failed with error: %v", bootstrapFileEnv, test.name, err)
+		if err := os.Setenv(fileEnv, test.name); err != nil {
+			t.Fatalf("os.Setenv(%s, %s) failed with error: %v", fileEnv, test.name, err)
 		}
 		config := NewConfig()
 		if config.BalancerName != test.wantConfig.BalancerName {
@@ -226,7 +226,7 @@ func TestNewConfig(t *testing.T) {
 }
 
 func TestNewConfigEnvNotSet(t *testing.T) {
-	os.Unsetenv(bootstrapFileEnv)
+	os.Unsetenv(fileEnv)
 	wantConfig := Config{}
 	if config := NewConfig(); *config != wantConfig {
 		t.Errorf("NewConfig() returned : %#v, wanted an empty Config object", config)

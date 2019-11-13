@@ -34,7 +34,7 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
 const (
@@ -59,7 +59,7 @@ type client struct {
 
 	loadStore      lrs.Store
 	loadReportOnce sync.Once
-	config         *xdsclient.Config
+	config         *bootstrap.Config
 
 	mu sync.Mutex
 	cc *grpc.ClientConn
@@ -233,7 +233,7 @@ func newXDSClient(balancerName string, edsServiceName string, opts balancer.Buil
 
 	// It is possible that NewConfig returns a Config object with certain
 	// fields left unspecified. If so, we need to use some sane defaults here.
-	c.config = xdsclient.NewConfig()
+	c.config = bootstrap.NewConfig()
 	if c.config.BalancerName == "" {
 		c.config.BalancerName = balancerName
 	}
