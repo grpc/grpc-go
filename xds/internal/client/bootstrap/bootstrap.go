@@ -16,9 +16,9 @@
  *
  */
 
-// Package client contains the implementation of the xds client used by
-// grpc-lb-v2.
-package client
+// Package bootstrap provides the functionality to initialize certain aspects
+// of an xDS client by reading a bootstrap file.
+package bootstrap
 
 import (
 	"bytes"
@@ -36,28 +36,26 @@ import (
 
 const (
 	// Environment variable which holds the name of the xDS bootstrap file.
-	bootstrapFileEnv = "GRPC_XDS_BOOTSTRAP"
+	fileEnv = "GRPC_XDS_BOOTSTRAP"
 	// Type name for Google default credentials.
 	googleDefaultCreds = "google_default"
 )
 
 var gRPCVersion = fmt.Sprintf("gRPC-Go %s", grpc.Version)
 
-// For overriding from unit tests.
+// For overriding in unit tests.
 var fileReadFunc = ioutil.ReadFile
 
 // Config provides the xDS client with several key bits of information that it
 // requires in its interaction with an xDS server. The Config is initialized
-// from the bootstrap file. If that process fails for any reason, it uses the
-// defaults passed in.
+// from the bootstrap file.
 type Config struct {
 	// BalancerName is the name of the xDS server to connect to.
 	BalancerName string
 	// Creds contains the credentials to be used while talking to the xDS
 	// server, as a grpc.DialOption.
 	Creds grpc.DialOption
-	// NodeProto contains the corepb.Node proto to be used in xDS calls made to the
-	// server.
+	// NodeProto contains the node proto to be used in xDS requests.
 	NodeProto *corepb.Node
 }
 
@@ -99,9 +97,9 @@ type xdsServer struct {
 func NewConfig() *Config {
 	config := &Config{}
 
-	fName, ok := os.LookupEnv(bootstrapFileEnv)
+	fName, ok := os.LookupEnv(fileEnv)
 	if !ok {
-		grpclog.Errorf("xds: %s environment variable not set", bootstrapFileEnv)
+		grpclog.Errorf("xds: %s environment variable not set", fileEnv)
 		return config
 	}
 
@@ -149,5 +147,6 @@ func NewConfig() *Config {
 		}
 	}
 
+	grpclog.Infof("xds: bootstrap.NewConfig returning: %+v", config)
 	return config
 }
