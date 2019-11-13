@@ -19,8 +19,6 @@ package client
 
 import (
 	"testing"
-
-	"google.golang.org/grpc/xds/internal/proto"
 )
 
 // Only error cases are tested, normal cases are covered because EDS balancer
@@ -30,7 +28,7 @@ import (
 // Test that parsing fails if EDS response doesn't have all priorities.
 // Priorities should range from 0 (highest) to N (lowest) without skipping
 func TestParseEDSRespProtoPriorityError(t *testing.T) {
-	clab0 := proto.NewClusterLoadAssignmentBuilder("test", nil)
+	clab0 := NewClusterLoadAssignmentBuilder("test", nil)
 	clab0.AddLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
 	clab0.AddLocality("locality-2", 1, 2, []string{"addr2:159"}, nil)
 	_, err := ParseEDSRespProto(clab0.Build())

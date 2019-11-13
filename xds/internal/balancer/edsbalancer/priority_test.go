@@ -26,7 +26,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/proto"
 )
 
 // When a high priority is ready, adding/removing lower locality doesn't cause
@@ -38,7 +37,7 @@ func TestEDSPriority_HighPriorityReady(t *testing.T) {
 	edsb := NewXDSBalancer(cc, nil)
 
 	// Two localities, with priorities [0, 1], each with one backend.
-	clab1 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
@@ -65,7 +64,7 @@ func TestEDSPriority_HighPriorityReady(t *testing.T) {
 	}
 
 	// Add p2, it shouldn't cause any udpates.
-	clab2 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab2 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab2.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	clab2.AddLocality(testSubZones[2], 1, 2, testEndpointAddrs[2:3], nil)
@@ -82,7 +81,7 @@ func TestEDSPriority_HighPriorityReady(t *testing.T) {
 	}
 
 	// Remove p2, no updates.
-	clab3 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab3 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab3.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab3.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab3.Build()))
@@ -107,7 +106,7 @@ func TestEDSPriority_SwitchPriority(t *testing.T) {
 	edsb := NewXDSBalancer(cc, nil)
 
 	// Two localities, with priorities [0, 1], each with one backend.
-	clab1 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
@@ -153,7 +152,7 @@ func TestEDSPriority_SwitchPriority(t *testing.T) {
 	}
 
 	// Add p2, it shouldn't cause any udpates.
-	clab2 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab2 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab2.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	clab2.AddLocality(testSubZones[2], 1, 2, testEndpointAddrs[2:3], nil)
@@ -189,7 +188,7 @@ func TestEDSPriority_SwitchPriority(t *testing.T) {
 	}
 
 	// Remove 2, use 1.
-	clab3 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab3 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab3.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab3.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab3.Build()))
@@ -217,7 +216,7 @@ func TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	edsb := NewXDSBalancer(cc, nil)
 
 	// Two localities, with different priorities, each with one backend.
-	clab1 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
@@ -247,7 +246,7 @@ func TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	}
 
 	// Add p2, it should create a new SubConn.
-	clab2 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab2 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab2.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	clab2.AddLocality(testSubZones[2], 1, 2, testEndpointAddrs[2:3], nil)
@@ -281,7 +280,7 @@ func TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	edsb := NewXDSBalancer(cc, nil)
 
 	// Two localities, with priorities [0,1,2], each with one backend.
-	clab1 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	clab1.AddLocality(testSubZones[2], 1, 2, testEndpointAddrs[2:3], nil)
@@ -360,7 +359,7 @@ func TestEDSPriority_InitTimeout(t *testing.T) {
 	edsb := NewXDSBalancer(cc, nil)
 
 	// Two localities, with different priorities, each with one backend.
-	clab1 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
@@ -409,7 +408,7 @@ func TestEDSPriority_MultipleLocalities(t *testing.T) {
 	edsb := NewXDSBalancer(cc, nil)
 
 	// Two localities, with different priorities, each with one backend.
-	clab0 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab0 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab0.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab0.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab0.Build()))
@@ -474,7 +473,7 @@ func TestEDSPriority_MultipleLocalities(t *testing.T) {
 	}
 
 	// Add two localities, with two priorities, with one backend.
-	clab1 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	clab1.AddLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:3], nil)
@@ -536,7 +535,7 @@ func TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	edsb := NewXDSBalancer(cc, nil)
 
 	// Two localities, with different priorities, each with one backend.
-	clab0 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab0 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab0.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab0.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab0.Build()))
@@ -561,7 +560,7 @@ func TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	}
 
 	// Remove all priorities.
-	clab1 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
 
 	// p0 subconn should be removed.
@@ -579,7 +578,7 @@ func TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	}
 
 	// Re-add two localities, with previous priorities, but different backends.
-	clab2 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab2 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[2:3], nil)
 	clab2.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[3:4], nil)
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
@@ -614,7 +613,7 @@ func TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	}
 
 	// Remove p1 from EDS, to fallback to p0.
-	clab3 := proto.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab3 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab3.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[2:3], nil)
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab3.Build()))
 
