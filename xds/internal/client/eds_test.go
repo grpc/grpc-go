@@ -25,6 +25,7 @@ import (
 
 // Only error cases are tested, normal cases are covered because EDS balancer
 // tests build an EDS responses and parses them.
+// TODO: add more tests, including normal cases.
 
 // Test that parsing fails if EDS response doesn't have all priorities.
 // Priorities should range from 0 (highest) to N (lowest) without skipping

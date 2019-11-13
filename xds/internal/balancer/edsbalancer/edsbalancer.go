@@ -149,7 +149,7 @@ func (xdsB *EDSBalancer) HandleChildPolicy(name string, config json.RawMessage) 
 
 // updateDrops compares new drop policies with the old. If they are different,
 // it updates the drop policies and send ClientConn an updated picker.
-func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdsclient.OverloadDropConfig) {
+func (xdsB *EDSBalancer) updateDrops(dropPolicies []xdsclient.OverloadDropConfig) {
 	var (
 		newDrops     []*dropper
 		dropsChanged bool
@@ -199,7 +199,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) {
 	//     - socketAddress.GetNamedPort(), socketAddress.GetResolverName()
 	//     - resolve endpoint's name with another resolver
 
-	xdsB.updateDrops(edsResp.OverloadDrop)
+	xdsB.updateDrops(edsResp.Drops)
 
 	// Filter out all localities with weight 0.
 	//
@@ -210,7 +210,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) {
 	//
 	// In the future, we should look at the config in CDS response and decide
 	// whether locality weight matters.
-	newLocalitiesWithPriority := make(map[priorityType][]*xdsclient.Locality)
+	newLocalitiesWithPriority := make(map[priorityType][]xdsclient.Locality)
 	for _, locality := range edsResp.Localities {
 		if locality.Weight == 0 {
 			continue
@@ -267,7 +267,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) {
 	}
 }
 
-func (xdsB *EDSBalancer) handleEDSResponsePerPriority(bgwc *balancerGroupWithConfig, newLocalities []*xdsclient.Locality) {
+func (xdsB *EDSBalancer) handleEDSResponsePerPriority(bgwc *balancerGroupWithConfig, newLocalities []xdsclient.Locality) {
 	// newLocalitiesSet contains all names of localities in the new EDS response
 	// for the same priority. It's used to delete localities that are removed in
 	// the new EDS response.
@@ -284,8 +284,8 @@ func (xdsB *EDSBalancer) handleEDSResponsePerPriority(bgwc *balancerGroupWithCon
 			// Filter out all "unhealthy" endpoints (unknown and
 			// healthy are both considered to be healthy:
 			// https://www.envoyproxy.io/docs/envoy/latest/api-v2/api/v2/core/health_check.proto#envoy-api-enum-core-healthstatus).
-			if lbEndpoint.HealthStatus != xdsclient.EndpointHealthStatusHEALTHY &&
-				lbEndpoint.HealthStatus != xdsclient.EndpointHealthStatusUNKNOWN {
+			if lbEndpoint.HealthStatus != xdsclient.EndpointHealthStatusHealthy &&
+				lbEndpoint.HealthStatus != xdsclient.EndpointHealthStatusUnknown {
 				continue
 			}
 

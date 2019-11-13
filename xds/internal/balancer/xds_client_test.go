@@ -257,7 +257,11 @@ func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 	for i, resp := range test.responsesToSend {
 		td.sendResp(&response{resp: resp})
 		ads := <-adsChan
-		if !cmp.Equal(ads, xdsclient.ParseEDSRespProtoForTesting(test.expectedADSResponses[i].(*xdspb.ClusterLoadAssignment))) {
+		want, err := xdsclient.ParseEDSRespProto(test.expectedADSResponses[i].(*xdspb.ClusterLoadAssignment))
+		if err != nil {
+			t.Fatalf("parsing wanted EDS response failed: %v", err)
+		}
+		if !cmp.Equal(ads, want) {
 			t.Fatalf("received unexpected ads response, got %v, want %v", ads, test.expectedADSResponses[i])
 		}
 	}

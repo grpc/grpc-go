@@ -349,7 +349,11 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 			if edsLB := getLatestEdsBalancer(); edsLB != nil { // edsLB won't change between the two iterations
 				select {
 				case gotEDS := <-edsLB.edsChan:
-					if !cmp.Equal(gotEDS, xdsclient.ParseEDSRespProtoForTesting(testClusterLoadAssignment)) {
+					want, err := xdsclient.ParseEDSRespProto(testClusterLoadAssignment)
+					if err != nil {
+						t.Fatalf("parsing wanted EDS response failed: %v", err)
+					}
+					if !cmp.Equal(gotEDS, want) {
 						t.Fatalf("edsBalancer got eds: %v, want %v", gotEDS, testClusterLoadAssignment)
 					}
 				case <-time.After(time.Second):
