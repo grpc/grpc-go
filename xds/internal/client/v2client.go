@@ -223,6 +223,7 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 	success := false
 	for {
 		resp, err := stream.Recv()
+		// TODO: call watch callbacks with error when stream is broken.
 		if err != nil {
 			grpclog.Warningf("xds: ADS stream recv failed: %v", err)
 			return success
@@ -236,6 +237,11 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 		case routeURL:
 			if err := v2c.handleRDSResponse(resp); err != nil {
 				grpclog.Warningf("xds: RDS response handler failed: %v", err)
+				return success
+			}
+		case endpointURL:
+			if err := v2c.handleEDSResponse(resp); err != nil {
+				grpclog.Warningf("xds: EDS response handler failed: %v", err)
 				return success
 			}
 		default:
