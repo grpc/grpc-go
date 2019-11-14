@@ -35,11 +35,13 @@ import (
 	durationpb "github.com/golang/protobuf/ptypes/duration"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	wrpb "github.com/golang/protobuf/ptypes/wrappers"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
+	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
 var (
@@ -233,8 +235,8 @@ func (s) TestXdsClientResponseHandling(t *testing.T) {
 func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 	addr, td, _, cleanup := setupServer(t)
 	defer cleanup()
-	adsChan := make(chan proto.Message, 10)
-	newADS := func(ctx context.Context, i proto.Message) error {
+	adsChan := make(chan *xdsclient.EDSUpdate, 10)
+	newADS := func(ctx context.Context, i *xdsclient.EDSUpdate) error {
 		adsChan <- i
 		return nil
 	}
@@ -255,7 +257,11 @@ func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 	for i, resp := range test.responsesToSend {
 		td.sendResp(&response{resp: resp})
 		ads := <-adsChan
-		if !proto.Equal(ads, test.expectedADSResponses[i]) {
+		want, err := xdsclient.ParseEDSRespProto(test.expectedADSResponses[i].(*xdspb.ClusterLoadAssignment))
+		if err != nil {
+			t.Fatalf("parsing wanted EDS response failed: %v", err)
+		}
+		if !cmp.Equal(ads, want) {
 			t.Fatalf("received unexpected ads response, got %v, want %v", ads, test.expectedADSResponses[i])
 		}
 	}
@@ -286,8 +292,8 @@ func (s) TestXdsClientLoseContact(t *testing.T) {
 func testXdsClientLoseContactRemoteClose(t *testing.T, test *testConfig) {
 	addr, td, _, cleanup := setupServer(t)
 	defer cleanup()
-	adsChan := make(chan proto.Message, 10)
-	newADS := func(ctx context.Context, i proto.Message) error {
+	adsChan := make(chan *xdsclient.EDSUpdate, 10)
+	newADS := func(ctx context.Context, i *xdsclient.EDSUpdate) error {
 		adsChan <- i
 		return nil
 	}
@@ -320,8 +326,8 @@ func testXdsClientLoseContactADSRelatedErrorOccur(t *testing.T, test *testConfig
 	addr, td, _, cleanup := setupServer(t)
 	defer cleanup()
 
-	adsChan := make(chan proto.Message, 10)
-	newADS := func(ctx context.Context, i proto.Message) error {
+	adsChan := make(chan *xdsclient.EDSUpdate, 10)
+	newADS := func(ctx context.Context, i *xdsclient.EDSUpdate) error {
 		adsChan <- i
 		return test.adsErr
 	}
@@ -354,8 +360,8 @@ func (s) TestXdsClientExponentialRetry(t *testing.T) {
 	addr, td, _, cleanup := setupServer(t)
 	defer cleanup()
 
-	adsChan := make(chan proto.Message, 10)
-	newADS := func(ctx context.Context, i proto.Message) error {
+	adsChan := make(chan *xdsclient.EDSUpdate, 10)
+	newADS := func(ctx context.Context, i *xdsclient.EDSUpdate) error {
 		adsChan <- i
 		return nil
 	}

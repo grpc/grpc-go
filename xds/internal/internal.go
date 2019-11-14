@@ -30,6 +30,8 @@ import (
 //
 // This struct should only be used as map keys. Use the proto message directly
 // in all other places.
+//
+// TODO: rename to LocalityID.
 type Locality struct {
 	Region  string
 	Zone    string

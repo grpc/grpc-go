@@ -28,7 +28,6 @@ import (
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
@@ -39,6 +38,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
+	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
 var lbABuilder = &balancerABuilder{}
@@ -178,7 +178,7 @@ type scStateChange struct {
 
 type fakeEDSBalancer struct {
 	cc                 balancer.ClientConn
-	edsChan            chan *xdspb.ClusterLoadAssignment
+	edsChan            chan *xdsclient.EDSUpdate
 	childPolicy        chan *loadBalancingConfig
 	fallbackPolicy     chan *loadBalancingConfig
 	subconnStateChange chan *scStateChange
@@ -195,7 +195,7 @@ func (f *fakeEDSBalancer) Close() {
 	latestFakeEdsBalancer = nil
 }
 
-func (f *fakeEDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment) {
+func (f *fakeEDSBalancer) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) {
 	f.edsChan <- edsResp
 }
 
@@ -209,7 +209,7 @@ func (f *fakeEDSBalancer) HandleChildPolicy(name string, config json.RawMessage)
 func newFakeEDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerInterface {
 	lb := &fakeEDSBalancer{
 		cc:                 cc,
-		edsChan:            make(chan *xdspb.ClusterLoadAssignment, 10),
+		edsChan:            make(chan *xdsclient.EDSUpdate, 10),
 		childPolicy:        make(chan *loadBalancingConfig, 10),
 		fallbackPolicy:     make(chan *loadBalancingConfig, 10),
 		subconnStateChange: make(chan *scStateChange, 10),
@@ -349,7 +349,11 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 			if edsLB := getLatestEdsBalancer(); edsLB != nil { // edsLB won't change between the two iterations
 				select {
 				case gotEDS := <-edsLB.edsChan:
-					if !proto.Equal(gotEDS, testClusterLoadAssignment) {
+					want, err := xdsclient.ParseEDSRespProto(testClusterLoadAssignment)
+					if err != nil {
+						t.Fatalf("parsing wanted EDS response failed: %v", err)
+					}
+					if !cmp.Equal(gotEDS, want) {
 						t.Fatalf("edsBalancer got eds: %v, want %v", gotEDS, testClusterLoadAssignment)
 					}
 				case <-time.After(time.Second):

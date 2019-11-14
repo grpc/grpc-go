@@ -27,8 +27,6 @@ import (
 	"sync"
 	"time"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
@@ -36,6 +34,7 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
+	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
 const (
@@ -101,7 +100,7 @@ func (b *xdsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadB
 // It's implemented by the real eds balancer and a fake testing eds balancer.
 type edsBalancerInterface interface {
 	// HandleEDSResponse passes the received EDS message from traffic director to eds balancer.
-	HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
+	HandleEDSResponse(edsResp *xdsclient.EDSUpdate)
 	// HandleChildPolicy updates the eds balancer the intra-cluster load balancing policy to use.
 	HandleChildPolicy(name string, config json.RawMessage)
 	// HandleSubConnStateChange handles state change for SubConn.
@@ -158,7 +157,7 @@ func (x *xdsBalancer) startNewXDSClient(u *XDSConfig) {
 	var haveGotADS bool
 
 	// set up callbacks for the xds client.
-	newADS := func(ctx context.Context, resp proto.Message) error {
+	newADS := func(ctx context.Context, resp *xdsclient.EDSUpdate) error {
 		if !haveGotADS {
 			if prevClient != nil {
 				prevClient.close()
@@ -410,21 +409,12 @@ func (x *xdsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 
 type edsResp struct {
 	ctx  context.Context
-	resp *xdspb.ClusterLoadAssignment
+	resp *xdsclient.EDSUpdate
 }
 
-func (x *xdsBalancer) newADSResponse(ctx context.Context, resp proto.Message) error {
-	var update interface{}
-	switch u := resp.(type) {
-	case *xdspb.ClusterLoadAssignment:
-		// nothing to check
-		update = &edsResp{ctx: ctx, resp: u}
-	default:
-		grpclog.Warningf("xdsBalancer: got a response that's not EDS, type = %T", u)
-	}
-
+func (x *xdsBalancer) newADSResponse(ctx context.Context, resp *xdsclient.EDSUpdate) error {
 	select {
-	case x.xdsClientUpdate <- update:
+	case x.xdsClientUpdate <- &edsResp{ctx: ctx, resp: resp}:
 	case <-x.ctx.Done():
 	case <-ctx.Done():
 	}
