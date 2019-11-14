@@ -71,7 +71,7 @@ func (b *xdsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		grpcUpdate:      make(chan interface{}),
 		xdsClientUpdate: make(chan interface{}),
 		timer:           createDrainedTimer(), // initialized a timer that won't fire without reset
-		loadStore:       lrs.NewStore(opts.Target.Endpoint),
+		loadStore:       lrs.NewStore(),
 	}
 	x.cc = &xdsClientConn{
 		updateState: x.connStateMgr.updateState,
@@ -129,8 +129,8 @@ type xdsBalancer struct {
 	timer           *time.Timer
 	noSubConnAlert  <-chan struct{}
 
-	client           *client    // may change when passed a different service config
-	config           *XDSConfig // may change when passed a different service config
+	client           *xdsclientWrapper // may change when passed a different service config
+	config           *XDSConfig        // may change when passed a different service config
 	xdsLB            edsBalancerInterface
 	fallbackLB       balancer.Balancer
 	fallbackInitData *resolver.State // may change when HandleResolved address is called
@@ -189,8 +189,9 @@ func (x *xdsBalancer) startNewXDSClient(u *XDSConfig) {
 			prevClient.close()
 		}
 	}
-	x.client = newXDSClient(u.BalancerName, u.EDSServiceName, x.buildOpts, x.loadStore, newADS, loseContact, exitCleanup)
-	go x.client.run()
+	// TODO: stop using u.BalancerName. The value should come from bootstrap
+	// file. It's only used in tests now.
+	x.client = newXDSClientWrapper(u.BalancerName, u.EDSServiceName, x.buildOpts, u.LrsLoadReportingServerName, x.loadStore, newADS, loseContact, exitCleanup)
 }
 
 // run gets executed in a goroutine once xdsBalancer is created. It monitors updates from grpc,

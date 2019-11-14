@@ -21,15 +21,18 @@ package balancer
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/jsonpb"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
@@ -39,6 +42,7 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
 var lbABuilder = &balancerABuilder{}
@@ -47,6 +51,14 @@ func init() {
 	balancer.Register(&xdsBalancerBuilder{})
 	balancer.Register(lbABuilder)
 	balancer.Register(&balancerBBuilder{})
+
+	bootstrapConfigNew = func() *bootstrap.Config {
+		return &bootstrap.Config{
+			BalancerName: "",
+			Creds:        grpc.WithInsecure(),
+			NodeProto:    &corepb.Node{},
+		}
+	}
 }
 
 type s struct{}
@@ -70,6 +82,7 @@ var (
 		BalancerName:   testBalancerNameFooBar,
 		ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerB},
 		FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
+		EDSServiceName: testEDSClusterName,
 	}
 
 	specialAddrForBalancerA = resolver.Address{Addr: "this.is.balancer.A"}
@@ -233,6 +246,21 @@ type fakeSubConn struct{}
 func (*fakeSubConn) UpdateAddresses([]resolver.Address) { panic("implement me") }
 func (*fakeSubConn) Connect()                           { panic("implement me") }
 
+type fakeXDSClient struct {
+	edsCb func(*xdsclient.EDSUpdate, error)
+}
+
+func (c *fakeXDSClient) WatchEDS(clusterName string, edsCb func(*xdsclient.EDSUpdate, error)) (cancel func()) {
+	c.edsCb = edsCb
+	return func() {}
+}
+
+func (c *fakeXDSClient) ReportLoad(server string, clusterName string, loadStore lrs.Store) (cancel func()) {
+	return func() {}
+}
+
+func (c *fakeXDSClient) Close() {}
+
 // TestXdsFallbackResolvedAddrs verifies that the fallback balancer specified
 // in the provided lbconfig is initialized, and that it receives the addresses
 // pushed by the resolver.
@@ -338,6 +366,7 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 			BalancerName:   addr,
 			ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
 			FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
+			EDSServiceName: testEDSClusterName,
 		}
 		lb.UpdateClientConnState(balancer.ClientConnState{
 			ResolverState:  resolver.State{Addresses: addrs},
@@ -403,6 +432,7 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 					Name:   fakeBalancerA,
 					Config: json.RawMessage("{}"),
 				},
+				EDSServiceName: testEDSClusterName,
 			},
 			responseToSend: testEDSResp,
 			expectedChildPolicy: &loadBalancingConfig{
@@ -416,6 +446,7 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 					Name:   fakeBalancerB,
 					Config: json.RawMessage("{}"),
 				},
+				EDSServiceName: testEDSClusterName,
 			},
 			expectedChildPolicy: &loadBalancingConfig{
 				Name:   string(fakeBalancerB),
@@ -461,18 +492,25 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 		newEDSBalancer = originalNewEDSBalancer
 	}()
 
+	testXDSClient := &fakeXDSClient{}
+	originalxdsclientNew := xdsclientNew
+	xdsclientNew = func(opts xdsclient.Options) (xdsEDSWatchClient, error) {
+		return testXDSClient, nil
+	}
+	defer func() {
+		xdsclientNew = originalxdsclientNew
+	}()
+
 	builder := balancer.Get(xdsName)
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*xdsBalancer)
 	if !ok {
 		t.Fatalf("unable to type assert to *xdsBalancer")
 	}
 	defer lb.Close()
 
-	addr, td, _, cleanup := setupServer(t)
-
 	cfg := XDSConfig{
-		BalancerName:   addr,
+		BalancerName:   "",
 		ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
 		FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
 	}
@@ -486,7 +524,9 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 		BalancerConfig: &cfg2,
 	})
 
-	td.sendResp(&response{resp: testEDSResp})
+	// Callback with an EDS update, the balancer will build a EDS balancer, not
+	// a fallback.
+	testXDSClient.edsCb(xdsclient.ParseEDSRespProtoForTesting(testClusterLoadAssignment), nil)
 
 	var i int
 	for i = 0; i < 10; i++ {
@@ -499,7 +539,8 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 		t.Fatal("edsBalancer instance has not been created and assigned to lb.xdsLB after 1s")
 	}
 
-	cleanup()
+	// Callback with an error, the balancer should switch to fallback.
+	testXDSClient.edsCb(nil, fmt.Errorf("xds client error"))
 
 	// verify fallback balancer B takes over
 	select {
@@ -536,24 +577,34 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 		newEDSBalancer = originalNewEDSBalancer
 	}()
 
+	testXDSClient := &fakeXDSClient{}
+	originalxdsclientNew := xdsclientNew
+	xdsclientNew = func(opts xdsclient.Options) (xdsEDSWatchClient, error) {
+		return testXDSClient, nil
+	}
+	defer func() {
+		xdsclientNew = originalxdsclientNew
+	}()
+
 	builder := balancer.Get(xdsName)
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*xdsBalancer)
 	if !ok {
 		t.Fatalf("unable to type assert to *xdsBalancer")
 	}
 	defer lb.Close()
 
-	addr, td, _, cleanup := setupServer(t)
-	defer cleanup()
 	cfg := &XDSConfig{
-		BalancerName:   addr,
+		BalancerName:   "",
 		ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
 		FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
+		EDSServiceName: testEDSClusterName,
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
 
-	td.sendResp(&response{resp: testEDSResp})
+	// Callback with an EDS update, the balancer will build a EDS balancer, not
+	// a fallback.
+	testXDSClient.edsCb(xdsclient.ParseEDSRespProtoForTesting(testClusterLoadAssignment), nil)
 
 	expectedScStateChange := &scStateChange{
 		sc:    &fakeSubConn{},
@@ -583,7 +634,8 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	// lbAbuilder has a per binary record what's the last balanceA created. We need to clear the record
 	// to make sure there's a new one created and get the pointer to it.
 	lbABuilder.clearLastBalancer()
-	cleanup()
+	// Callback with an error, the balancer should switch to fallback.
+	testXDSClient.edsCb(nil, fmt.Errorf("xds client error"))
 
 	// switch to fallback
 	// fallback balancer A takes over
@@ -614,24 +666,33 @@ func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 		newEDSBalancer = originalNewEDSBalancer
 	}()
 
+	testXDSClient := &fakeXDSClient{}
+	originalxdsclientNew := xdsclientNew
+	xdsclientNew = func(opts xdsclient.Options) (xdsEDSWatchClient, error) {
+		return testXDSClient, nil
+	}
+	defer func() {
+		xdsclientNew = originalxdsclientNew
+	}()
+
 	builder := balancer.Get(xdsName)
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*xdsBalancer)
 	if !ok {
 		t.Fatalf("unable to type assert to *xdsBalancer")
 	}
 	defer lb.Close()
 
-	addr, td, _, cleanup := setupServer(t)
-	defer cleanup()
 	cfg := &XDSConfig{
-		BalancerName:   addr,
+		BalancerName:   "",
 		ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
 		FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
 
-	td.sendResp(&response{resp: testEDSResp})
+	// Callback with an EDS update, the balancer will build a EDS balancer, not
+	// a fallback.
+	testXDSClient.edsCb(xdsclient.ParseEDSRespProtoForTesting(testClusterLoadAssignment), nil)
 
 	expectedScStateChange := &scStateChange{
 		sc:    &fakeSubConn{},
@@ -661,7 +722,8 @@ func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 	// lbAbuilder has a per binary record what's the last balanceA created. We need to clear the record
 	// to make sure there's a new one created and get the pointer to it.
 	lbABuilder.clearLastBalancer()
-	cleanup()
+	// Callback with an error, the balancer should switch to fallback.
+	testXDSClient.edsCb(nil, fmt.Errorf("xds client error"))
 
 	// switch to fallback
 	// fallback balancer A takes over

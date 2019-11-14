@@ -204,6 +204,7 @@ func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 		}
 
 		if cla.GetClusterName() != wi.target[0] {
+			grpclog.Infof("xds: got uninteresting EDS resource, got %s, want %s", cla.GetClusterName(), wi.target[0])
 			// We won't validate the remaining resources. If one of the
 			// uninteresting ones is invalid, we will still ACK the response.
 			continue
