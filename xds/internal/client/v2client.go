@@ -69,6 +69,10 @@ type v2Client struct {
 	// when we received them (because we could become interested in them in the
 	// future and the server wont send us those resources again).
 	// Protected by the above mutex.
+	//
+	// TODO: remove RDS cache. The updated spec says client can ignore
+	// unrequested resources.
+	// https://github.com/envoyproxy/envoy/blob/master/api/xds_protocol.rst#resource-hints
 	rdsCache map[string]string
 }
 
@@ -355,7 +359,6 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 			v2c.mu.Unlock()
 		})
 	case edsResource:
-		// TODO: check cache
 		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
 			// We need to grab the lock here because we are accessing the
 			// watchInfo (which is now stored in the watchMap) from this

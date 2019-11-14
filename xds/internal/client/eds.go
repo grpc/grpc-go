@@ -211,13 +211,15 @@ func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 			return err
 		}
 
-		// TODO: Cache, localCache[cla.GetClusterName()] = u
 		if cla.GetClusterName() == wi.target[0] {
 			returnUpdate = u
+			// Break from the loop because the request resource is found. But
+			// this also means we won't validate the remaining resources. If one
+			// of the uninteresting ones is invalid, we will still ACK the
+			// response.
+			break
 		}
 	}
-
-	// TODO: Update cache
 
 	if returnUpdate != nil {
 		wi.expiryTimer.Stop()
