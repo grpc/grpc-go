@@ -416,6 +416,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			LocalAddr:   t.localAddr,
 			Compression: s.recvCompress,
 			WireLength:  int(frame.Header().Length),
+			Header:      metadata.MD(state.data.mdata).Copy(),
 		}
 		t.stats.HandleRPC(s.ctx, inHeader)
 	}
@@ -808,7 +809,9 @@ func (t *http2Server) writeHeaderLocked(s *Stream) error {
 	if t.stats != nil {
 		// Note: WireLength is not set in outHeader.
 		// TODO(mmukhi): Revisit this later, if needed.
-		outHeader := &stats.OutHeader{}
+		outHeader := &stats.OutHeader{
+			Header: s.header.Copy(),
+		}
 		t.stats.HandleRPC(s.Context(), outHeader)
 	}
 	return nil
@@ -871,7 +874,9 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 	rst := s.getState() == streamActive
 	t.finishStream(s, rst, http2.ErrCodeNo, trailingHeader, true)
 	if t.stats != nil {
-		t.stats.HandleRPC(s.Context(), &stats.OutTrailer{})
+		t.stats.HandleRPC(s.Context(), &stats.OutTrailer{
+			Trailer: s.trailer.Copy(),
+		})
 	}
 	return nil
 }
