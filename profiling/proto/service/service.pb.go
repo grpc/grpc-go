@@ -24,91 +24,133 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-type SetEnabledRequest struct {
+// EnableRequest defines the fields in a /Profiling/Enable method request to
+// toggle profiling on and off within a gRPC program.
+type EnableRequest struct {
+	// Setting this to true will enable profiling. Setting this to false will
+	// disable profiling.
 	Enabled              bool     `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SetEnabledRequest) Reset()         { *m = SetEnabledRequest{} }
-func (m *SetEnabledRequest) String() string { return proto.CompactTextString(m) }
-func (*SetEnabledRequest) ProtoMessage()    {}
-func (*SetEnabledRequest) Descriptor() ([]byte, []int) {
+func (m *EnableRequest) Reset()         { *m = EnableRequest{} }
+func (m *EnableRequest) String() string { return proto.CompactTextString(m) }
+func (*EnableRequest) ProtoMessage()    {}
+func (*EnableRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_a0b84a42fa06f626, []int{0}
 }
 
-func (m *SetEnabledRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SetEnabledRequest.Unmarshal(m, b)
+func (m *EnableRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_EnableRequest.Unmarshal(m, b)
 }
-func (m *SetEnabledRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SetEnabledRequest.Marshal(b, m, deterministic)
+func (m *EnableRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_EnableRequest.Marshal(b, m, deterministic)
 }
-func (m *SetEnabledRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SetEnabledRequest.Merge(m, src)
+func (m *EnableRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_EnableRequest.Merge(m, src)
 }
-func (m *SetEnabledRequest) XXX_Size() int {
-	return xxx_messageInfo_SetEnabledRequest.Size(m)
+func (m *EnableRequest) XXX_Size() int {
+	return xxx_messageInfo_EnableRequest.Size(m)
 }
-func (m *SetEnabledRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_SetEnabledRequest.DiscardUnknown(m)
+func (m *EnableRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_EnableRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_SetEnabledRequest proto.InternalMessageInfo
+var xxx_messageInfo_EnableRequest proto.InternalMessageInfo
 
-func (m *SetEnabledRequest) GetEnabled() bool {
+func (m *EnableRequest) GetEnabled() bool {
 	if m != nil {
 		return m.Enabled
 	}
 	return false
 }
 
-type SetEnabledResponse struct {
-	Success              bool     `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+// EnableResponse defines the fields in a /Profiling/Enable method response.
+type EnableResponse struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SetEnabledResponse) Reset()         { *m = SetEnabledResponse{} }
-func (m *SetEnabledResponse) String() string { return proto.CompactTextString(m) }
-func (*SetEnabledResponse) ProtoMessage()    {}
-func (*SetEnabledResponse) Descriptor() ([]byte, []int) {
+func (m *EnableResponse) Reset()         { *m = EnableResponse{} }
+func (m *EnableResponse) String() string { return proto.CompactTextString(m) }
+func (*EnableResponse) ProtoMessage()    {}
+func (*EnableResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_a0b84a42fa06f626, []int{1}
 }
 
-func (m *SetEnabledResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SetEnabledResponse.Unmarshal(m, b)
+func (m *EnableResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_EnableResponse.Unmarshal(m, b)
 }
-func (m *SetEnabledResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SetEnabledResponse.Marshal(b, m, deterministic)
+func (m *EnableResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_EnableResponse.Marshal(b, m, deterministic)
 }
-func (m *SetEnabledResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SetEnabledResponse.Merge(m, src)
+func (m *EnableResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_EnableResponse.Merge(m, src)
 }
-func (m *SetEnabledResponse) XXX_Size() int {
-	return xxx_messageInfo_SetEnabledResponse.Size(m)
+func (m *EnableResponse) XXX_Size() int {
+	return xxx_messageInfo_EnableResponse.Size(m)
 }
-func (m *SetEnabledResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_SetEnabledResponse.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_SetEnabledResponse proto.InternalMessageInfo
-
-func (m *SetEnabledResponse) GetSuccess() bool {
-	if m != nil {
-		return m.Success
-	}
-	return false
+func (m *EnableResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_EnableResponse.DiscardUnknown(m)
 }
 
+var xxx_messageInfo_EnableResponse proto.InternalMessageInfo
+
+// GetStreamStats defines the fields in a /Profiling/GetStreamStats method
+// request to retrieve stream-level stats in a gRPC client/server.
+type GetStreamStatsRequest struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetStreamStatsRequest) Reset()         { *m = GetStreamStatsRequest{} }
+func (m *GetStreamStatsRequest) String() string { return proto.CompactTextString(m) }
+func (*GetStreamStatsRequest) ProtoMessage()    {}
+func (*GetStreamStatsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_a0b84a42fa06f626, []int{2}
+}
+
+func (m *GetStreamStatsRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetStreamStatsRequest.Unmarshal(m, b)
+}
+func (m *GetStreamStatsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetStreamStatsRequest.Marshal(b, m, deterministic)
+}
+func (m *GetStreamStatsRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetStreamStatsRequest.Merge(m, src)
+}
+func (m *GetStreamStatsRequest) XXX_Size() int {
+	return xxx_messageInfo_GetStreamStatsRequest.Size(m)
+}
+func (m *GetStreamStatsRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetStreamStatsRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetStreamStatsRequest proto.InternalMessageInfo
+
+// Equivalent to google.golang.org/grpc/internal/profiling.Timer, but defined
+// for proto. Each TimerProto measures the start and end of execution of a
+// component within gRPC that's being profiled.
 type TimerProto struct {
-	TimerTag             string   `protobuf:"bytes,1,opt,name=timerTag,proto3" json:"timerTag,omitempty"`
-	BeginSec             int64    `protobuf:"varint,2,opt,name=beginSec,proto3" json:"beginSec,omitempty"`
-	BeginNsec            int32    `protobuf:"varint,3,opt,name=beginNsec,proto3" json:"beginNsec,omitempty"`
-	EndSec               int64    `protobuf:"varint,4,opt,name=endSec,proto3" json:"endSec,omitempty"`
-	EndNsec              int32    `protobuf:"varint,5,opt,name=endNsec,proto3" json:"endNsec,omitempty"`
-	GoId                 int64    `protobuf:"varint,6,opt,name=goId,proto3" json:"goId,omitempty"`
+	// timer_tag is an arbitrary string that is used to tag a timer for
+	// identification purposes later.
+	TimerTag string `protobuf:"bytes,1,opt,name=timer_tag,json=timerTag,proto3" json:"timer_tag,omitempty"`
+	// begin_sec and begin_nsec are the start epoch second and nanosecond,
+	// respectively, of the component profiled by this timer in UTC. begin_nsec
+	// must be a non-negative integer.
+	BeginSec  int64 `protobuf:"varint,2,opt,name=begin_sec,json=beginSec,proto3" json:"begin_sec,omitempty"`
+	BeginNsec int32 `protobuf:"varint,3,opt,name=begin_nsec,json=beginNsec,proto3" json:"begin_nsec,omitempty"`
+	// end_sec and end_nsec are the end epoch second and nanosecond,
+	// respectively, of the component profiled by this timer in UTC. end_nsec
+	// must be a non-negative integer.
+	EndSec  int64 `protobuf:"varint,4,opt,name=end_sec,json=endSec,proto3" json:"end_sec,omitempty"`
+	EndNsec int32 `protobuf:"varint,5,opt,name=end_nsec,json=endNsec,proto3" json:"end_nsec,omitempty"`
+	// go_id is the goroutine ID of the component being profiled.
+	GoId                 int64    `protobuf:"varint,6,opt,name=go_id,json=goId,proto3" json:"go_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -118,7 +160,7 @@ func (m *TimerProto) Reset()         { *m = TimerProto{} }
 func (m *TimerProto) String() string { return proto.CompactTextString(m) }
 func (*TimerProto) ProtoMessage()    {}
 func (*TimerProto) Descriptor() ([]byte, []int) {
-	return fileDescriptor_a0b84a42fa06f626, []int{2}
+	return fileDescriptor_a0b84a42fa06f626, []int{3}
 }
 
 func (m *TimerProto) XXX_Unmarshal(b []byte) error {
@@ -181,44 +223,23 @@ func (m *TimerProto) GetGoId() int64 {
 	return 0
 }
 
-type GetStreamStatsRequest struct {
+// Equivalent to google.golang.org/grpc/internal/profiling.Stat, but defined
+// for proto. A stat is essentially a collection of timers along with some
+// metadata.
+type StatProto struct {
+	// stat_tag is an arbitrary string that is used to tag a stat.
+	StatTag string `protobuf:"bytes,1,opt,name=stat_tag,json=statTag,proto3" json:"stat_tag,omitempty"`
+	// timer_protos is an array of TimerProtos, each representing a different
+	// (but possibly overlapping) component within this stat.
+	TimerProtos []*TimerProto `protobuf:"bytes,2,rep,name=timer_protos,json=timerProtos,proto3" json:"timer_protos,omitempty"`
+	// metadata is an array of bytes that is used to further tag a stat with an
+	// undefined encoding. For example, the StatProtos returned by the
+	// /Profiling/GetStreamStats service use the metadata field to encode the
+	// connection ID and the stream ID of each query.
+	Metadata             []byte   `protobuf:"bytes,3,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *GetStreamStatsRequest) Reset()         { *m = GetStreamStatsRequest{} }
-func (m *GetStreamStatsRequest) String() string { return proto.CompactTextString(m) }
-func (*GetStreamStatsRequest) ProtoMessage()    {}
-func (*GetStreamStatsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_a0b84a42fa06f626, []int{3}
-}
-
-func (m *GetStreamStatsRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_GetStreamStatsRequest.Unmarshal(m, b)
-}
-func (m *GetStreamStatsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_GetStreamStatsRequest.Marshal(b, m, deterministic)
-}
-func (m *GetStreamStatsRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetStreamStatsRequest.Merge(m, src)
-}
-func (m *GetStreamStatsRequest) XXX_Size() int {
-	return xxx_messageInfo_GetStreamStatsRequest.Size(m)
-}
-func (m *GetStreamStatsRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetStreamStatsRequest.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_GetStreamStatsRequest proto.InternalMessageInfo
-
-type StatProto struct {
-	StatTag              string        `protobuf:"bytes,1,opt,name=statTag,proto3" json:"statTag,omitempty"`
-	TimerProtos          []*TimerProto `protobuf:"bytes,2,rep,name=timerProtos,proto3" json:"timerProtos,omitempty"`
-	Metadata             []byte        `protobuf:"bytes,3,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
-	XXX_unrecognized     []byte        `json:"-"`
-	XXX_sizecache        int32         `json:"-"`
 }
 
 func (m *StatProto) Reset()         { *m = StatProto{} }
@@ -268,39 +289,40 @@ func (m *StatProto) GetMetadata() []byte {
 }
 
 func init() {
-	proto.RegisterType((*SetEnabledRequest)(nil), "SetEnabledRequest")
-	proto.RegisterType((*SetEnabledResponse)(nil), "SetEnabledResponse")
-	proto.RegisterType((*TimerProto)(nil), "TimerProto")
+	proto.RegisterType((*EnableRequest)(nil), "EnableRequest")
+	proto.RegisterType((*EnableResponse)(nil), "EnableResponse")
 	proto.RegisterType((*GetStreamStatsRequest)(nil), "GetStreamStatsRequest")
+	proto.RegisterType((*TimerProto)(nil), "TimerProto")
 	proto.RegisterType((*StatProto)(nil), "StatProto")
 }
 
 func init() { proto.RegisterFile("service.proto", fileDescriptor_a0b84a42fa06f626) }
 
 var fileDescriptor_a0b84a42fa06f626 = []byte{
-	// 342 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x92, 0xcb, 0x4e, 0xe3, 0x30,
-	0x14, 0x86, 0x95, 0xde, 0xa6, 0x39, 0x9d, 0x19, 0x09, 0x23, 0x4a, 0x54, 0xb1, 0x88, 0xb2, 0xca,
-	0xa6, 0x4e, 0x55, 0x04, 0x0f, 0x80, 0x84, 0x10, 0x1b, 0x54, 0x39, 0x5d, 0xb1, 0x73, 0x93, 0x83,
-	0x15, 0x29, 0x8d, 0x83, 0xed, 0xb2, 0xe0, 0x89, 0x78, 0x4c, 0x64, 0x37, 0x97, 0x22, 0xba, 0xf3,
-	0x67, 0xff, 0xbf, 0x92, 0xcf, 0x3e, 0xf0, 0x4f, 0xa3, 0xfa, 0x28, 0x32, 0xa4, 0xb5, 0x92, 0x46,
-	0x46, 0x4b, 0xb8, 0x48, 0xd1, 0x3c, 0x56, 0x7c, 0x57, 0x62, 0xce, 0xf0, 0xfd, 0x80, 0xda, 0x90,
-	0x00, 0xfe, 0xe0, 0x71, 0x27, 0xf0, 0x42, 0x2f, 0x9e, 0xb2, 0x16, 0x23, 0x0a, 0xe4, 0x34, 0xae,
-	0x6b, 0x59, 0x69, 0xb4, 0x79, 0x7d, 0xc8, 0x32, 0xd4, 0xba, 0xcd, 0x37, 0x18, 0x7d, 0x79, 0x00,
-	0xdb, 0x62, 0x8f, 0x6a, 0x63, 0xbf, 0x46, 0x16, 0x30, 0x35, 0x96, 0xb6, 0x5c, 0xb8, 0xa4, 0xcf,
-	0x3a, 0xb6, 0x67, 0x3b, 0x14, 0x45, 0x95, 0x62, 0x16, 0x0c, 0x42, 0x2f, 0x1e, 0xb2, 0x8e, 0xc9,
-	0x0d, 0xf8, 0x6e, 0xfd, 0xa2, 0x31, 0x0b, 0x86, 0xa1, 0x17, 0x8f, 0x59, 0xbf, 0x41, 0xe6, 0x30,
-	0xc1, 0x2a, 0xb7, 0xbd, 0x91, 0xeb, 0x35, 0x74, 0xd4, 0xc8, 0x5d, 0x67, 0xec, 0x3a, 0x2d, 0x12,
-	0x02, 0x23, 0x21, 0x9f, 0xf3, 0x60, 0xe2, 0xf2, 0x6e, 0x1d, 0x5d, 0xc3, 0xd5, 0x13, 0x9a, 0xd4,
-	0x28, 0xe4, 0xfb, 0xd4, 0x70, 0xa3, 0x9b, 0xdb, 0x88, 0x6a, 0xf0, 0x2d, 0x1f, 0x0d, 0xac, 0xaa,
-	0xe1, 0xa6, 0x17, 0x68, 0x91, 0x2c, 0x61, 0x66, 0x3a, 0x53, 0x1d, 0x0c, 0xc2, 0x61, 0x3c, 0x5b,
-	0xcf, 0x68, 0x6f, 0xcf, 0x4e, 0xcf, 0xad, 0xee, 0x1e, 0x0d, 0xcf, 0xb9, 0xe1, 0xce, 0xe8, 0x2f,
-	0xeb, 0x78, 0xfd, 0x09, 0xfe, 0x46, 0xc9, 0xb7, 0xa2, 0x2c, 0x2a, 0x41, 0xee, 0x00, 0xfa, 0x2b,
-	0x27, 0x84, 0xfe, 0x7a, 0xae, 0xc5, 0x25, 0x3d, 0xf3, 0x26, 0xf7, 0xf0, 0xff, 0xa7, 0x0e, 0x99,
-	0xd3, 0xb3, 0x7e, 0x0b, 0xa0, 0x9d, 0xde, 0xca, 0x7b, 0x58, 0xbd, 0x52, 0x21, 0xa5, 0x28, 0x91,
-	0x0a, 0x59, 0xf2, 0x4a, 0x50, 0xa9, 0x44, 0x22, 0x54, 0x9d, 0x25, 0x75, 0xfb, 0x4b, 0x89, 0x1b,
-	0x9d, 0xa4, 0x19, 0xa4, 0xdd, 0xc4, 0xe1, 0xed, 0x77, 0x00, 0x00, 0x00, 0xff, 0xff, 0x5b, 0x23,
-	0xd0, 0xe1, 0x5a, 0x02, 0x00, 0x00,
+	// 356 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x52, 0xcb, 0x6a, 0xeb, 0x30,
+	0x14, 0xc4, 0x79, 0x38, 0xf6, 0xc9, 0xe3, 0x5e, 0x74, 0xb9, 0x8d, 0x93, 0x52, 0x30, 0x5e, 0x39,
+	0x1b, 0x39, 0xa4, 0xd0, 0x0f, 0x28, 0x94, 0xd2, 0x4d, 0x09, 0x4e, 0x56, 0xdd, 0x04, 0xc5, 0x3e,
+	0x15, 0x06, 0x47, 0x72, 0x25, 0xb5, 0x9f, 0xd5, 0x6f, 0x2c, 0x92, 0x93, 0xb4, 0x81, 0xee, 0x3c,
+	0x67, 0xce, 0xc8, 0x33, 0x23, 0xc1, 0x58, 0xa3, 0xfa, 0xa8, 0x0a, 0xa4, 0x8d, 0x92, 0x46, 0x26,
+	0x0b, 0x18, 0x3f, 0x08, 0xb6, 0xaf, 0x31, 0xc7, 0xb7, 0x77, 0xd4, 0x86, 0x44, 0x30, 0x40, 0x37,
+	0x28, 0x23, 0x2f, 0xf6, 0xd2, 0x20, 0x3f, 0xc1, 0xe4, 0x2f, 0x4c, 0x4e, 0xab, 0xba, 0x91, 0x42,
+	0x63, 0x32, 0x85, 0xff, 0x8f, 0x68, 0x36, 0x46, 0x21, 0x3b, 0x6c, 0x0c, 0x33, 0xfa, 0x78, 0x48,
+	0xf2, 0xe9, 0x01, 0x6c, 0xab, 0x03, 0xaa, 0xb5, 0xfd, 0x09, 0xb9, 0x86, 0xd0, 0x58, 0xb4, 0x33,
+	0x8c, 0xbb, 0x53, 0xc3, 0x3c, 0x70, 0x83, 0x2d, 0xe3, 0x96, 0xdc, 0x23, 0xaf, 0xc4, 0x4e, 0x63,
+	0x11, 0x75, 0x62, 0x2f, 0xed, 0xe6, 0x81, 0x1b, 0x6c, 0xb0, 0x20, 0x37, 0x00, 0x2d, 0x29, 0x2c,
+	0xdb, 0x8d, 0xbd, 0xb4, 0x9f, 0xb7, 0xeb, 0xcf, 0x1a, 0x0b, 0x32, 0xb5, 0x66, 0x4b, 0xa7, 0xec,
+	0x39, 0xa5, 0x8f, 0xa2, 0xb4, 0xba, 0x19, 0x04, 0x96, 0x70, 0xaa, 0xbe, 0x53, 0xd9, 0x45, 0xa7,
+	0xf9, 0x07, 0x7d, 0x2e, 0x77, 0x55, 0x19, 0xf9, 0x4e, 0xd1, 0xe3, 0xf2, 0xa9, 0x4c, 0x14, 0x84,
+	0x36, 0x40, 0x6b, 0x77, 0x06, 0x81, 0x36, 0xcc, 0xfc, 0x70, 0x3b, 0xb0, 0xd8, 0x9a, 0xa5, 0x30,
+	0x6a, 0x93, 0xb8, 0xf6, 0x74, 0xd4, 0x89, 0xbb, 0xe9, 0x70, 0x35, 0xa4, 0xdf, 0x61, 0xf3, 0xa1,
+	0x39, 0x7f, 0x6b, 0x32, 0x87, 0xe0, 0x80, 0x86, 0x95, 0xcc, 0x30, 0xe7, 0x7e, 0x94, 0x9f, 0xf1,
+	0x4a, 0x40, 0xb8, 0x56, 0xf2, 0xb5, 0xaa, 0x2b, 0xc1, 0xc9, 0x02, 0xfc, 0xb6, 0x5c, 0x32, 0xa1,
+	0x17, 0x17, 0x32, 0xff, 0x43, 0x2f, 0x5b, 0x27, 0x77, 0x30, 0xb9, 0x6c, 0x9d, 0x5c, 0xd1, 0x5f,
+	0xaf, 0x61, 0x0e, 0xf4, 0x1c, 0x6a, 0xe9, 0xdd, 0x2f, 0x5f, 0x28, 0x97, 0x92, 0xd7, 0x48, 0xb9,
+	0xac, 0x99, 0xe0, 0x54, 0x2a, 0x9e, 0x71, 0xd5, 0x14, 0x59, 0x73, 0xb2, 0x91, 0xb9, 0x58, 0xd9,
+	0xf1, 0x89, 0xec, 0x7d, 0x07, 0x6f, 0xbf, 0x02, 0x00, 0x00, 0xff, 0xff, 0xf1, 0x54, 0xf3, 0xb8,
+	0x34, 0x02, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -315,7 +337,10 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type ProfilingClient interface {
-	SetEnabled(ctx context.Context, in *SetEnabledRequest, opts ...grpc.CallOption) (*SetEnabledResponse, error)
+	// Enable allows users to toggle profiling on and off remotely.
+	Enable(ctx context.Context, in *EnableRequest, opts ...grpc.CallOption) (*EnableResponse, error)
+	// GetStreamStats is used to retrieve an array of stream-level stats from a
+	// gRPC client/server.
 	GetStreamStats(ctx context.Context, in *GetStreamStatsRequest, opts ...grpc.CallOption) (Profiling_GetStreamStatsClient, error)
 }
 
@@ -327,9 +352,9 @@ func NewProfilingClient(cc *grpc.ClientConn) ProfilingClient {
 	return &profilingClient{cc}
 }
 
-func (c *profilingClient) SetEnabled(ctx context.Context, in *SetEnabledRequest, opts ...grpc.CallOption) (*SetEnabledResponse, error) {
-	out := new(SetEnabledResponse)
-	err := c.cc.Invoke(ctx, "/Profiling/SetEnabled", in, out, opts...)
+func (c *profilingClient) Enable(ctx context.Context, in *EnableRequest, opts ...grpc.CallOption) (*EnableResponse, error) {
+	out := new(EnableResponse)
+	err := c.cc.Invoke(ctx, "/Profiling/Enable", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -370,7 +395,10 @@ func (x *profilingGetStreamStatsClient) Recv() (*StatProto, error) {
 
 // ProfilingServer is the server API for Profiling service.
 type ProfilingServer interface {
-	SetEnabled(context.Context, *SetEnabledRequest) (*SetEnabledResponse, error)
+	// Enable allows users to toggle profiling on and off remotely.
+	Enable(context.Context, *EnableRequest) (*EnableResponse, error)
+	// GetStreamStats is used to retrieve an array of stream-level stats from a
+	// gRPC client/server.
 	GetStreamStats(*GetStreamStatsRequest, Profiling_GetStreamStatsServer) error
 }
 
@@ -378,8 +406,8 @@ type ProfilingServer interface {
 type UnimplementedProfilingServer struct {
 }
 
-func (*UnimplementedProfilingServer) SetEnabled(ctx context.Context, req *SetEnabledRequest) (*SetEnabledResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetEnabled not implemented")
+func (*UnimplementedProfilingServer) Enable(ctx context.Context, req *EnableRequest) (*EnableResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Enable not implemented")
 }
 func (*UnimplementedProfilingServer) GetStreamStats(req *GetStreamStatsRequest, srv Profiling_GetStreamStatsServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetStreamStats not implemented")
@@ -389,20 +417,20 @@ func RegisterProfilingServer(s *grpc.Server, srv ProfilingServer) {
 	s.RegisterService(&_Profiling_serviceDesc, srv)
 }
 
-func _Profiling_SetEnabled_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetEnabledRequest)
+func _Profiling_Enable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnableRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProfilingServer).SetEnabled(ctx, in)
+		return srv.(ProfilingServer).Enable(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/Profiling/SetEnabled",
+		FullMethod: "/Profiling/Enable",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProfilingServer).SetEnabled(ctx, req.(*SetEnabledRequest))
+		return srv.(ProfilingServer).Enable(ctx, req.(*EnableRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -433,8 +461,8 @@ var _Profiling_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*ProfilingServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "SetEnabled",
-			Handler:    _Profiling_SetEnabled_Handler,
+			MethodName: "Enable",
+			Handler:    _Profiling_Enable_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
