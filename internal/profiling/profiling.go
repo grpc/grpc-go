@@ -132,24 +132,25 @@ func NewStat(statTag string) *Stat {
 // new timer every time. Instead a slice of timers large enough to hold most
 // data is created and elements from this slice are used. This should put less
 // pressure on the GC too.
-func (stat *Stat) NewTimer(timerTag string) (index int) {
-	if stat != nil {
-		// TODO(adtac): Make this lock-free? We don't expect much contention on
-		// this, so I don't predict a significant improvement in performance. Using
-		// a lock-free, concurrent queue will require us to write our own
-		// reallocation and copy, which is probably unnecessary code complexity if
-		// the improvement isn't significant.
-		stat.mu.Lock()
-		stat.Timers = append(stat.Timers, Timer{
-			TimerTag: timerTag,
-			Begin:    time.Now(),
-			GoId:     goId(),
-		})
-		index = len(stat.Timers) - 1
-		stat.mu.Unlock()
+func (stat *Stat) NewTimer(timerTag string) int {
+	if stat == nil {
+		return 0
 	}
 
-	return
+	// TODO(adtac): Make this lock-free? We don't expect much contention on
+	// this, so I don't predict a significant improvement in performance. Using
+	// a lock-free, concurrent queue will require us to write our own
+	// reallocation and copy, which is probably unnecessary code complexity if
+	// the improvement isn't significant.
+	stat.mu.Lock()
+	stat.Timers = append(stat.Timers, Timer{
+		TimerTag: timerTag,
+		Begin:    time.Now(),
+		GoId:     goId(),
+	})
+	index := len(stat.Timers) - 1
+	stat.mu.Unlock()
+	return index
 }
 
 // Egress marks the completion of a given timer within a stat.
@@ -163,15 +164,16 @@ func (stat *Stat) Egress(index int) {
 // deep copy of the timer is made (i.e. no reference is retained to this
 // pointer) and the user is expected to lose their reference to the timer to
 // allow the Timer object to be garbage collected.
-func (stat *Stat) AppendTimer(timer *Timer) (index int) {
-	if stat != nil && timer != nil {
-		stat.mu.Lock()
-		stat.Timers = append(stat.Timers, *timer)
-		index = len(stat.Timers) - 1
-		stat.mu.Unlock()
+func (stat *Stat) AppendTimer(timer *Timer) int {
+	if stat == nil || timer == nil {
+		return 0
 	}
 
-	return
+	stat.mu.Lock()
+	stat.Timers = append(stat.Timers, *timer)
+	index := len(stat.Timers) - 1
+	stat.mu.Unlock()
+	return index
 }
 
 // ConnectionCounters count the number of connections. This counter is embedded
