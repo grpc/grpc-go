@@ -186,6 +186,7 @@ type End struct {
 	EndTime time.Time
 	// Trailer contains the trailer metadata received from the server. This
 	// field is only valid if this End is from the client side.
+	// Deprecated: use Trailer in InTrailer instead.
 	Trailer metadata.MD
 	// Error is the error the RPC ended with. It is an error generated from
 	// status.Status and can be converted back to status.Status using
