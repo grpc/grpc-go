@@ -23,16 +23,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
+	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
+	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 	"github.com/golang/protobuf/ptypes"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/xds/internal"
-	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
-	loadreportpb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/endpoint/load_report"
-	lrsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
-	lrspb "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 )
 
 const negativeOneUInt64 = ^uint64(0)
@@ -141,7 +140,7 @@ func (rld *rpcLoadData) loadAndClear() (s float64, c uint64) {
 // lrsStore collects loads from xds balancer, and periodically sends load to the
 // server.
 type lrsStore struct {
-	node         *basepb.Node
+	serviceName  string
 	backoff      backoff.Strategy
 	lastReported time.Time
 
@@ -152,18 +151,8 @@ type lrsStore struct {
 // NewStore creates a store for load reports.
 func NewStore(serviceName string) Store {
 	return &lrsStore{
-		node: &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: serviceName},
-					},
-				},
-			},
-		},
-		backoff: backoff.Exponential{
-			MaxDelay: 120 * time.Second,
-		},
+		serviceName:  serviceName,
+		backoff:      backoff.DefaultExponential,
 		lastReported: time.Now(),
 	}
 }
@@ -215,11 +204,11 @@ func (ls *lrsStore) CallServerLoad(l internal.Locality, name string, d float64) 
 	p.(*rpcCountData).addServerLoad(name, d)
 }
 
-func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats {
+func (ls *lrsStore) buildStats(clusterName string) []*endpointpb.ClusterStats {
 	var (
 		totalDropped  uint64
-		droppedReqs   []*loadreportpb.ClusterStats_DroppedRequests
-		localityStats []*loadreportpb.UpstreamLocalityStats
+		droppedReqs   []*endpointpb.ClusterStats_DroppedRequests
+		localityStats []*endpointpb.UpstreamLocalityStats
 	)
 	ls.drops.Range(func(category, countP interface{}) bool {
 		tempCount := atomic.SwapUint64(countP.(*uint64), 0)
@@ -227,7 +216,7 @@ func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats 
 			return true
 		}
 		totalDropped += tempCount
-		droppedReqs = append(droppedReqs, &loadreportpb.ClusterStats_DroppedRequests{
+		droppedReqs = append(droppedReqs, &endpointpb.ClusterStats_DroppedRequests{
 			Category:     category.(string),
 			DroppedCount: tempCount,
 		})
@@ -244,7 +233,7 @@ func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats 
 			return true
 		}
 
-		var loadMetricStats []*loadreportpb.EndpointLoadMetricStats
+		var loadMetricStats []*endpointpb.EndpointLoadMetricStats
 		tempCount.serverLoads.Range(func(name, data interface{}) bool {
 			tempName := name.(string)
 			tempSum, tempCount := data.(*rpcLoadData).loadAndClear()
@@ -252,7 +241,7 @@ func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats 
 				return true
 			}
 			loadMetricStats = append(loadMetricStats,
-				&loadreportpb.EndpointLoadMetricStats{
+				&endpointpb.EndpointLoadMetricStats{
 					MetricName:                    tempName,
 					NumRequestsFinishedWithMetric: tempCount,
 					TotalMetricValue:              tempSum,
@@ -261,8 +250,8 @@ func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats 
 			return true
 		})
 
-		localityStats = append(localityStats, &loadreportpb.UpstreamLocalityStats{
-			Locality: &basepb.Locality{
+		localityStats = append(localityStats, &endpointpb.UpstreamLocalityStats{
+			Locality: &corepb.Locality{
 				Region:  tempLocality.Region,
 				Zone:    tempLocality.Zone,
 				SubZone: tempLocality.SubZone,
@@ -279,8 +268,8 @@ func (ls *lrsStore) buildStats(clusterName string) []*loadreportpb.ClusterStats 
 	dur := time.Since(ls.lastReported)
 	ls.lastReported = time.Now()
 
-	var ret []*loadreportpb.ClusterStats
-	ret = append(ret, &loadreportpb.ClusterStats{
+	var ret []*endpointpb.ClusterStats
+	ret = append(ret, &endpointpb.ClusterStats{
 		ClusterName:           clusterName,
 		UpstreamLocalityStats: localityStats,
 
@@ -326,7 +315,14 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn) {
 			continue
 		}
 		if err := stream.Send(&lrspb.LoadStatsRequest{
-			Node: ls.node,
+			// TODO: when moving this to the xds client, the Node
+			// field needs to be set to node from bootstrap file.
+			// Node: c.config.NodeProto,
+			ClusterStats: []*endpointpb.ClusterStats{{
+				// TODO: this is user's dial target now, as a temporary
+				//  solution. Eventually this will be cluster name from CDS's response.
+				ClusterName: ls.serviceName,
+			}},
 		}); err != nil {
 			grpclog.Infof("lrs: failed to send first request: %v", err)
 			continue
@@ -368,7 +364,6 @@ func (ls *lrsStore) sendLoads(ctx context.Context, stream lrsgrpc.LoadReportingS
 			return
 		}
 		if err := stream.Send(&lrspb.LoadStatsRequest{
-			Node:         ls.node,
 			ClusterStats: ls.buildStats(clusterName),
 		}); err != nil {
 			grpclog.Infof("lrs: failed to send report: %v", err)

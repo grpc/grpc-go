@@ -24,7 +24,12 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
+	"time"
 
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
+	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
@@ -35,14 +40,29 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
-	endpointpb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/endpoint/endpoint"
-	percentpb "google.golang.org/grpc/xds/internal/proto/envoy/type/percent"
 )
+
+// TODO: make this a environment variable?
+var defaultPriorityInitTimeout = 10 * time.Second
 
 type localityConfig struct {
 	weight uint32
 	addrs  []resolver.Address
+}
+
+// balancerGroupWithConfig contains the localities with the same priority. It
+// manages all localities using a balancerGroup.
+type balancerGroupWithConfig struct {
+	bg      *balancerGroup
+	configs map[internal.Locality]*localityConfig
+}
+
+// balancerState keeps the previous state updated by a priority. It's kept so if
+// a lower priority is removed, the higher priority's state will be sent to
+// parent ClientConn (even if it's not Ready).
+type balancerState struct {
+	state  connectivity.State
+	picker balancer.Picker
 }
 
 // EDSBalancer does load balancing based on the EDS responses. Note that it
@@ -52,12 +72,31 @@ type localityConfig struct {
 // The localities are picked as weighted round robin. A configurable child
 // policy is used to manage endpoints in each locality.
 type EDSBalancer struct {
-	balancer.ClientConn
+	cc balancer.ClientConn
 
-	bg                 *balancerGroup
-	subBalancerBuilder balancer.Builder
-	lidToConfig        map[internal.Locality]*localityConfig
-	loadStore          lrs.Store
+	subBalancerBuilder   balancer.Builder
+	loadStore            lrs.Store
+	priorityToLocalities map[priorityType]*balancerGroupWithConfig
+
+	// There's no need to hold any mutexes at the same time. The order to take
+	// mutex should be: priorityMu > subConnMu, but this is implicit via
+	// balancers (starting balancer with next priority while holding priorityMu,
+	// and the balancer may create new SubConn).
+
+	priorityMu sync.Mutex
+	// priorities are pointers, and will be nil when EDS returns empty result.
+	priorityInUse   priorityType
+	priorityLowest  priorityType
+	priorityToState map[priorityType]*balancerState
+	// The timer to give a priority 10 seconds to connect. And if the priority
+	// doesn't go into Ready/Failure, start the next priority.
+	//
+	// One timer is enough because there can be at most one priority in init
+	// state.
+	priorityInitTimer *time.Timer
+
+	subConnMu         sync.Mutex
+	subConnToPriority map[balancer.SubConn]priorityType
 
 	pickerMu    sync.Mutex
 	drops       []*dropper
@@ -68,11 +107,13 @@ type EDSBalancer struct {
 // NewXDSBalancer create a new EDSBalancer.
 func NewXDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) *EDSBalancer {
 	xdsB := &EDSBalancer{
-		ClientConn:         cc,
+		cc:                 cc,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
 
-		lidToConfig: make(map[internal.Locality]*localityConfig),
-		loadStore:   loadStore,
+		priorityToLocalities: make(map[priorityType]*balancerGroupWithConfig),
+		priorityToState:      make(map[priorityType]*balancerState),
+		subConnToPriority:    make(map[balancer.SubConn]priorityType),
+		loadStore:            loadStore,
 	}
 	// Don't start balancer group here. Start it when handling the first EDS
 	// response. Otherwise the balancer group will be started with round-robin,
@@ -87,42 +128,33 @@ func NewXDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) *EDSBalancer {
 //
 // HandleChildPolicy and HandleEDSResponse must be called by the same goroutine.
 func (xdsB *EDSBalancer) HandleChildPolicy(name string, config json.RawMessage) {
-	// name could come from cdsResp.GetLbPolicy().String(). LbPolicy.String()
-	// are all UPPER_CASE with underscore.
-	//
-	// No conversion is needed here because balancer package converts all names
-	// into lower_case before registering/looking up.
-	xdsB.updateSubBalancerName(name)
-	// TODO: (eds) send balancer config to the new child balancers.
-}
-
-func (xdsB *EDSBalancer) updateSubBalancerName(subBalancerName string) {
-	if xdsB.subBalancerBuilder.Name() == subBalancerName {
+	if xdsB.subBalancerBuilder.Name() == name {
 		return
 	}
-	newSubBalancerBuilder := balancer.Get(subBalancerName)
+	newSubBalancerBuilder := balancer.Get(name)
 	if newSubBalancerBuilder == nil {
-		grpclog.Infof("EDSBalancer: failed to find balancer with name %q, keep using %q", subBalancerName, xdsB.subBalancerBuilder.Name())
+		grpclog.Infof("EDSBalancer: failed to find balancer with name %q, keep using %q", name, xdsB.subBalancerBuilder.Name())
 		return
 	}
 	xdsB.subBalancerBuilder = newSubBalancerBuilder
-	if xdsB.bg != nil {
-		// xdsB.bg == nil until the first EDS response is handled. There's no
-		// need to update balancer group before that.
-		for id, config := range xdsB.lidToConfig {
+	for _, bgwc := range xdsB.priorityToLocalities {
+		if bgwc == nil {
+			continue
+		}
+		for id, config := range bgwc.configs {
 			// TODO: (eds) add support to balancer group to support smoothly
 			//  switching sub-balancers (keep old balancer around until new
 			//  balancer becomes ready).
-			xdsB.bg.remove(id)
-			xdsB.bg.add(id, config.weight, xdsB.subBalancerBuilder)
-			xdsB.bg.handleResolvedAddrs(id, config.addrs)
+			bgwc.bg.remove(id)
+			bgwc.bg.add(id, config.weight, xdsB.subBalancerBuilder)
+			bgwc.bg.handleResolvedAddrs(id, config.addrs)
 		}
 	}
 }
 
 // updateDrops compares new drop policies with the old. If they are different,
 // it updates the drop policies and send ClientConn an updated picker.
-func (xdsB *EDSBalancer) updateDrops(dropPolicies []*edspb.ClusterLoadAssignment_Policy_DropOverload) {
+func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdspb.ClusterLoadAssignment_Policy_DropOverload) {
 	var (
 		newDrops     []*dropper
 		dropsChanged bool
@@ -134,11 +166,11 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*edspb.ClusterLoadAssignment
 			denominator uint32
 		)
 		switch percentage.GetDenominator() {
-		case percentpb.FractionalPercent_HUNDRED:
+		case typepb.FractionalPercent_HUNDRED:
 			denominator = 100
-		case percentpb.FractionalPercent_TEN_THOUSAND:
+		case typepb.FractionalPercent_TEN_THOUSAND:
 			denominator = 10000
-		case percentpb.FractionalPercent_MILLION:
+		case typepb.FractionalPercent_MILLION:
 			denominator = 1000000
 		}
 		newDrops = append(newDrops, newDropper(numerator, denominator, dropPolicy.GetCategory()))
@@ -161,7 +193,7 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*edspb.ClusterLoadAssignment
 		xdsB.drops = newDrops
 		if xdsB.innerPicker != nil {
 			// Update picker with old inner picker, new drops.
-			xdsB.ClientConn.UpdateBalancerState(xdsB.innerState, newDropPicker(xdsB.innerPicker, newDrops, xdsB.loadStore))
+			xdsB.cc.UpdateBalancerState(xdsB.innerState, newDropPicker(xdsB.innerPicker, newDrops, xdsB.loadStore))
 		}
 		xdsB.pickerMu.Unlock()
 	}
@@ -170,14 +202,8 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*edspb.ClusterLoadAssignment
 // HandleEDSResponse handles the EDS response and creates/deletes localities and
 // SubConns. It also handles drops.
 //
-// HandleCDSResponse and HandleEDSResponse must be called by the same goroutine.
-func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment) {
-	// Create balancer group if it's never created (this is the first EDS
-	// response).
-	if xdsB.bg == nil {
-		xdsB.bg = newBalancerGroup(xdsB, xdsB.loadStore)
-	}
-
+// HandleChildPolicy and HandleEDSResponse must be called by the same goroutine.
+func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment) {
 	// TODO: Unhandled fields from EDS response:
 	//  - edsResp.GetPolicy().GetOverprovisioningFactor()
 	//  - locality.GetPriority()
@@ -198,18 +224,69 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 	//
 	// In the future, we should look at the config in CDS response and decide
 	// whether locality weight matters.
-	newEndpoints := make([]*endpointpb.LocalityLbEndpoints, 0, len(edsResp.Endpoints))
+	newLocalitiesWithPriority := make(map[priorityType][]*endpointpb.LocalityLbEndpoints)
 	for _, locality := range edsResp.Endpoints {
 		if locality.GetLoadBalancingWeight().GetValue() == 0 {
 			continue
 		}
-		newEndpoints = append(newEndpoints, locality)
+		priority := newPriorityType(locality.GetPriority())
+		newLocalitiesWithPriority[priority] = append(newLocalitiesWithPriority[priority], locality)
 	}
 
-	// newLocalitiesSet contains all names of localitis in the new EDS response.
-	// It's used to delete localities that are removed in the new EDS response.
+	var (
+		priorityLowest  priorityType
+		priorityChanged bool
+	)
+
+	for priority, newLocalities := range newLocalitiesWithPriority {
+		if !priorityLowest.isSet() || priorityLowest.higherThan(priority) {
+			priorityLowest = priority
+		}
+
+		bgwc, ok := xdsB.priorityToLocalities[priority]
+		if !ok {
+			// Create balancer group if it's never created (this is the first
+			// time this priority is received). We don't start it here. It may
+			// be started when necessary (e.g. when higher is down, or if it's a
+			// new lowest priority).
+			bgwc = &balancerGroupWithConfig{
+				bg: newBalancerGroup(
+					xdsB.ccWrapperWithPriority(priority), xdsB.loadStore,
+				),
+				configs: make(map[internal.Locality]*localityConfig),
+			}
+			xdsB.priorityToLocalities[priority] = bgwc
+			priorityChanged = true
+		}
+		xdsB.handleEDSResponsePerPriority(bgwc, newLocalities)
+	}
+	xdsB.priorityLowest = priorityLowest
+
+	// Delete priorities that are removed in the latest response, and also close
+	// the balancer group.
+	for p, bgwc := range xdsB.priorityToLocalities {
+		if _, ok := newLocalitiesWithPriority[p]; !ok {
+			delete(xdsB.priorityToLocalities, p)
+			bgwc.bg.close()
+			delete(xdsB.priorityToState, p)
+			priorityChanged = true
+		}
+	}
+
+	// If priority was added/removed, it may affect the balancer group to use.
+	// E.g. priorityInUse was removed, or all priorities are down, and a new
+	// lower priority was added.
+	if priorityChanged {
+		xdsB.handlePriorityChange()
+	}
+}
+
+func (xdsB *EDSBalancer) handleEDSResponsePerPriority(bgwc *balancerGroupWithConfig, newLocalities []*endpointpb.LocalityLbEndpoints) {
+	// newLocalitiesSet contains all names of localities in the new EDS response
+	// for the same priority. It's used to delete localities that are removed in
+	// the new EDS response.
 	newLocalitiesSet := make(map[internal.Locality]struct{})
-	for _, locality := range newEndpoints {
+	for _, locality := range newLocalities {
 		// One balancer for each locality.
 
 		l := locality.GetLocality()
@@ -227,6 +304,14 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 		newWeight := locality.GetLoadBalancingWeight().GetValue()
 		var newAddrs []resolver.Address
 		for _, lbEndpoint := range locality.GetLbEndpoints() {
+			// Filter out all "unhealthy" endpoints (unknown and
+			// healthy are both considered to be healthy:
+			// https://www.envoyproxy.io/docs/envoy/latest/api-v2/api/v2/core/health_check.proto#envoy-api-enum-core-healthstatus).
+			if lbEndpoint.GetHealthStatus() != corepb.HealthStatus_HEALTHY &&
+				lbEndpoint.GetHealthStatus() != corepb.HealthStatus_UNKNOWN {
+				continue
+			}
+
 			socketAddress := lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress()
 			address := resolver.Address{
 				Addr: net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue()))),
@@ -240,17 +325,17 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 			newAddrs = append(newAddrs, address)
 		}
 		var weightChanged, addrsChanged bool
-		config, ok := xdsB.lidToConfig[lid]
+		config, ok := bgwc.configs[lid]
 		if !ok {
 			// A new balancer, add it to balancer group and balancer map.
-			xdsB.bg.add(lid, newWeight, xdsB.subBalancerBuilder)
+			bgwc.bg.add(lid, newWeight, xdsB.subBalancerBuilder)
 			config = &localityConfig{
 				weight: newWeight,
 			}
-			xdsB.lidToConfig[lid] = config
+			bgwc.configs[lid] = config
 
-			// weightChanged is false for new locality, because there's no need to
-			// update weight in bg.
+			// weightChanged is false for new locality, because there's no need
+			// to update weight in bg.
 			addrsChanged = true
 		} else {
 			// Compare weight and addrs.
@@ -264,44 +349,104 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 
 		if weightChanged {
 			config.weight = newWeight
-			xdsB.bg.changeWeight(lid, newWeight)
+			bgwc.bg.changeWeight(lid, newWeight)
 		}
 
 		if addrsChanged {
 			config.addrs = newAddrs
-			xdsB.bg.handleResolvedAddrs(lid, newAddrs)
+			bgwc.bg.handleResolvedAddrs(lid, newAddrs)
 		}
 	}
 
 	// Delete localities that are removed in the latest response.
-	for lid := range xdsB.lidToConfig {
+	for lid := range bgwc.configs {
 		if _, ok := newLocalitiesSet[lid]; !ok {
-			xdsB.bg.remove(lid)
-			delete(xdsB.lidToConfig, lid)
+			bgwc.bg.remove(lid)
+			delete(bgwc.configs, lid)
 		}
 	}
 }
 
 // HandleSubConnStateChange handles the state change and update pickers accordingly.
 func (xdsB *EDSBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
-	xdsB.bg.handleSubConnStateChange(sc, s)
+	xdsB.subConnMu.Lock()
+	var bgwc *balancerGroupWithConfig
+	if p, ok := xdsB.subConnToPriority[sc]; ok {
+		if s == connectivity.Shutdown {
+			// Only delete sc from the map when state changed to Shutdown.
+			delete(xdsB.subConnToPriority, sc)
+		}
+		bgwc = xdsB.priorityToLocalities[p]
+	}
+	xdsB.subConnMu.Unlock()
+	if bgwc == nil {
+		grpclog.Infof("EDSBalancer: priority not found for sc state change")
+		return
+	}
+	if bg := bgwc.bg; bg != nil {
+		bg.handleSubConnStateChange(sc, s)
+	}
 }
 
-// UpdateBalancerState overrides balancer.ClientConn to wrap the picker in a
-// dropPicker.
-func (xdsB *EDSBalancer) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
-	xdsB.pickerMu.Lock()
-	defer xdsB.pickerMu.Unlock()
-	xdsB.innerPicker = p
-	xdsB.innerState = s
-	// Don't reset drops when it's a state change.
-	xdsB.ClientConn.UpdateBalancerState(s, newDropPicker(p, xdsB.drops, xdsB.loadStore))
+// updateBalancerState first handles priority, and then wraps picker in a drop
+// picker before forwarding the update.
+func (xdsB *EDSBalancer) updateBalancerState(priority priorityType, s connectivity.State, p balancer.Picker) {
+	_, ok := xdsB.priorityToLocalities[priority]
+	if !ok {
+		grpclog.Infof("eds: received picker update from unknown priority")
+		return
+	}
+
+	if xdsB.handlePriorityWithNewState(priority, s, p) {
+		xdsB.pickerMu.Lock()
+		defer xdsB.pickerMu.Unlock()
+		xdsB.innerPicker = p
+		xdsB.innerState = s
+		// Don't reset drops when it's a state change.
+		xdsB.cc.UpdateBalancerState(s, newDropPicker(p, xdsB.drops, xdsB.loadStore))
+	}
+}
+
+func (xdsB *EDSBalancer) ccWrapperWithPriority(priority priorityType) *edsBalancerWrapperCC {
+	return &edsBalancerWrapperCC{
+		ClientConn: xdsB.cc,
+		priority:   priority,
+		parent:     xdsB,
+	}
+}
+
+// edsBalancerWrapperCC implements the balancer.ClientConn API and get passed to
+// each balancer group. It contains the locality priority.
+type edsBalancerWrapperCC struct {
+	balancer.ClientConn
+	priority priorityType
+	parent   *EDSBalancer
+}
+
+func (ebwcc *edsBalancerWrapperCC) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	return ebwcc.parent.newSubConn(ebwcc.priority, addrs, opts)
+}
+func (ebwcc *edsBalancerWrapperCC) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
+	ebwcc.parent.updateBalancerState(ebwcc.priority, state, picker)
+}
+
+func (xdsB *EDSBalancer) newSubConn(priority priorityType, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	sc, err := xdsB.cc.NewSubConn(addrs, opts)
+	if err != nil {
+		return nil, err
+	}
+	xdsB.subConnMu.Lock()
+	xdsB.subConnToPriority[sc] = priority
+	xdsB.subConnMu.Unlock()
+	return sc, nil
 }
 
 // Close closes the balancer.
 func (xdsB *EDSBalancer) Close() {
-	if xdsB.bg != nil {
-		xdsB.bg.close()
+	for _, bgwc := range xdsB.priorityToLocalities {
+		if bg := bgwc.bg; bg != nil {
+			bg.close()
+		}
 	}
 }
 

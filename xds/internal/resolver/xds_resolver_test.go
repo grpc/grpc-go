@@ -28,9 +28,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	xdsinternal "google.golang.org/grpc/xds/internal"
+	xdsbalancer "google.golang.org/grpc/xds/internal/balancer"
 )
 
 // This is initialized at init time.
@@ -49,7 +50,7 @@ func init() {
         }
       ]
     }`)},
-		errCh: make(chan error),
+		errCh: make(chan error, 1),
 	}
 	balancer.Register(fbb)
 }
@@ -67,8 +68,13 @@ func (t *testClientConn) UpdateState(s resolver.State) {
 	close(t.done)
 }
 
-func (*testClientConn) NewAddress(addresses []resolver.Address) { panic("unimplemented") }
-func (*testClientConn) NewServiceConfig(serviceConfig string)   { panic("unimplemented") }
+func (*testClientConn) ParseServiceConfig(jsonSC string) *serviceconfig.ParseResult {
+	return internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(jsonSC)
+}
+
+func (*testClientConn) NewAddress([]resolver.Address) { panic("unimplemented") }
+func (*testClientConn) NewServiceConfig(string)       { panic("unimplemented") }
+func (*testClientConn) ReportError(error)             { panic("unimplemented") }
 
 // TestXDSRsolverSchemeAndAddresses creates a new xds resolver, verifies that
 // it returns an empty address list and the appropriate xds-experimental
@@ -81,7 +87,7 @@ func TestXDSRsolverSchemeAndAddresses(t *testing.T) {
 	}
 
 	tcc := &testClientConn{done: make(chan struct{})}
-	r, err := b.Build(resolver.Target{}, tcc, resolver.BuildOption{})
+	r, err := b.Build(resolver.Target{}, tcc, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("xdsBuilder.Build() failed with error: %v", err)
 	}
@@ -92,6 +98,8 @@ func TestXDSRsolverSchemeAndAddresses(t *testing.T) {
 		t.Fatalf("got address list from resolver %v, want empty list", tcc.gotState.Addresses)
 	}
 }
+
+var _ balancer.V2Balancer = (*fakeBalancer)(nil)
 
 // fakeBalancer is used to verify that the xds_resolver returns the expected
 // serice config.
@@ -106,31 +114,36 @@ func (*fakeBalancer) HandleSubConnStateChange(_ balancer.SubConn, _ connectivity
 func (*fakeBalancer) HandleResolvedAddrs(_ []resolver.Address, _ error) {
 	panic("unimplemented")
 }
+func (*fakeBalancer) ResolverError(error) {
+	panic("unimplemented")
+}
 
-// UpdateClientConnState verifies that the received LBConfig matches the
+// UpdateClientConnState verifies that the received edsConfig matches the
 // provided one, and if not, sends an error on the provided channel.
-func (f *fakeBalancer) UpdateClientConnState(ccs balancer.ClientConnState) {
+func (f *fakeBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	gotLBConfig, ok := ccs.BalancerConfig.(*wrappedLBConfig)
 	if !ok {
 		f.errCh <- fmt.Errorf("in fakeBalancer got lbConfig of type %T, want %T", ccs.BalancerConfig, &wrappedLBConfig{})
-		return
+		return balancer.ErrBadResolverState
 	}
 
-	var gotCfg, wantCfg xdsinternal.LBConfig
+	var gotCfg, wantCfg xdsbalancer.XDSConfig
 	if err := wantCfg.UnmarshalJSON(f.wantLBConfig.lbCfg); err != nil {
 		f.errCh <- fmt.Errorf("unable to unmarshal balancer config %s into xds config", string(f.wantLBConfig.lbCfg))
-		return
+		return balancer.ErrBadResolverState
 	}
 	if err := gotCfg.UnmarshalJSON(gotLBConfig.lbCfg); err != nil {
 		f.errCh <- fmt.Errorf("unable to unmarshal balancer config %s into xds config", string(gotLBConfig.lbCfg))
-		return
+		return balancer.ErrBadResolverState
 	}
+
 	if !reflect.DeepEqual(gotCfg, wantCfg) {
 		f.errCh <- fmt.Errorf("in fakeBalancer got lbConfig %v, want %v", gotCfg, wantCfg)
-		return
+		return balancer.ErrBadResolverState
 	}
 
 	f.errCh <- nil
+	return nil
 }
 
 func (*fakeBalancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConnState) {
@@ -159,7 +172,7 @@ func (f *fakeBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.Load
 }
 
 // wrappedLBConfig simply wraps the provided LB config with a
-// serviceconfig.LoadBalancingConfig interface.
+// serviceconfig.loadBalancingConfig interface.
 type wrappedLBConfig struct {
 	serviceconfig.LoadBalancingConfig
 	lbCfg json.RawMessage

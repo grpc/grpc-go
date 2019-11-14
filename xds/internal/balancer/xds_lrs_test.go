@@ -24,19 +24,16 @@ import (
 	"testing"
 	"time"
 
+	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
+	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
+	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 	"github.com/golang/protobuf/proto"
 	durationpb "github.com/golang/protobuf/ptypes/duration"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal"
-	xdsinternal "google.golang.org/grpc/xds/internal"
-	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
-	lrsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
-	lrspb "google.golang.org/grpc/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 )
 
 type lrsServer struct {
@@ -52,15 +49,9 @@ func (lrss *lrsServer) StreamLoadStats(stream lrsgrpc.LoadReportingService_Strea
 		return err
 	}
 	if !proto.Equal(req, &lrspb.LoadStatsRequest{
-		Node: &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: testServiceName},
-					},
-				},
-			},
-		},
+		ClusterStats: []*endpointpb.ClusterStats{{
+			ClusterName: testServiceName,
+		}},
 	}) {
 		return status.Errorf(codes.FailedPrecondition, "unexpected req: %+v", req)
 	}
@@ -113,12 +104,11 @@ func (s) TestXdsLoadReporting(t *testing.T) {
 		Nanos:   intervalNano,
 	}
 
-	cfg := &xdsinternal.LBConfig{
+	cfg := &XDSConfig{
 		BalancerName: addr,
-		ChildPolicy:  &xdsinternal.LoadBalancingConfig{Name: fakeBalancerA}, // Set this to skip cds.
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
-	td.sendResp(&response{resp: testEDSRespWithoutEndpoints})
+	td.sendResp(&response{resp: testEDSResp})
 	var (
 		i     int
 		edsLB *fakeEDSBalancer

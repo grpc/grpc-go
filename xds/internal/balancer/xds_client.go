@@ -24,34 +24,22 @@ import (
 	"sync"
 	"time"
 
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	xdsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	cdspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/cds"
-	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
-	discoverypb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/discovery"
-	edspb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/eds"
-	adsgrpc "google.golang.org/grpc/xds/internal/proto/envoy/service/discovery/v2/ads"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
 const (
-	cdsType          = "type.googleapis.com/envoy.api.v2.Cluster"
 	edsType          = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
 	endpointRequired = "endpoints_required"
-)
-
-var (
-	defaultBackoffConfig = backoff.Exponential{
-		MaxDelay: 120 * time.Second,
-	}
 )
 
 // client is responsible for connecting to the specified traffic director, passing the received
@@ -60,10 +48,10 @@ var (
 type client struct {
 	ctx              context.Context
 	cancel           context.CancelFunc
-	cli              adsgrpc.AggregatedDiscoveryServiceClient
+	serviceName      string
+	cli              xdsgrpc.AggregatedDiscoveryServiceClient
 	dialer           func(context.Context, string) (net.Conn, error)
 	channelzParentID int64
-	enableCDS        bool
 	newADS           func(ctx context.Context, resp proto.Message) error
 	loseContact      func(ctx context.Context)
 	cleanup          func()
@@ -71,7 +59,7 @@ type client struct {
 
 	loadStore      lrs.Store
 	loadReportOnce sync.Once
-	config         *xdsclient.Config
+	config         *bootstrap.Config
 
 	mu sync.Mutex
 	cc *grpc.ClientConn
@@ -104,10 +92,10 @@ func (c *client) dial() {
 	}
 
 	cc, err := grpc.DialContext(c.ctx, c.config.BalancerName, dopts...)
-	// Since this is a non-blocking dial, so if it fails, it due to some serious error (not network
-	// related) error.
 	if err != nil {
-		grpclog.Fatalf("xds: failed to dial: %v", err)
+		// This could fail due to ctx error, which means this client was closed.
+		grpclog.Warningf("xds: failed to dial: %v", err)
+		return
 	}
 	c.mu.Lock()
 	select {
@@ -120,41 +108,26 @@ func (c *client) dial() {
 	c.mu.Unlock()
 }
 
-func (c *client) newCDSRequest() *discoverypb.DiscoveryRequest {
-	cdsReq := &discoverypb.DiscoveryRequest{
-		Node:    c.config.NodeProto,
-		TypeUrl: cdsType,
-	}
-	return cdsReq
-}
-
-func (c *client) newEDSRequest() *discoverypb.DiscoveryRequest {
-	// TODO: Once we change the client to always make a CDS call, we can remove
-	// this boolean field from the metadata.
-	np := proto.Clone(c.config.NodeProto).(*basepb.Node)
-	np.Metadata.Fields[endpointRequired] = &structpb.Value{
-		Kind: &structpb.Value_BoolValue{BoolValue: c.enableCDS},
-	}
-
-	edsReq := &discoverypb.DiscoveryRequest{
-		Node: np,
+func (c *client) newEDSRequest() *xdspb.DiscoveryRequest {
+	edsReq := &xdspb.DiscoveryRequest{
+		Node: c.config.NodeProto,
 		// TODO: the expected ResourceName could be in a different format from
 		// dial target. (test_service.test_namespace.traffic_director.com vs
 		// test_namespace:test_service).
 		//
-		// The solution today is to always include GrpcHostname in metadata,
-		// with the value set to dial target.
+		// The solution today is to always set dial target in resource_names.
 		//
 		// A future solution could be: always do CDS, get cluster name from CDS
 		// response, and use it here.
 		// `ResourceNames: []string{c.clusterName},`
-		TypeUrl: edsType,
+		TypeUrl:       edsType,
+		ResourceNames: []string{c.serviceName},
 	}
 	return edsReq
 }
 
 func (c *client) makeADSCall() {
-	c.cli = adsgrpc.NewAggregatedDiscoveryServiceClient(c.cc)
+	c.cli = xdsgrpc.NewAggregatedDiscoveryServiceClient(c.cc)
 	retryCount := 0
 	var doRetry bool
 
@@ -196,19 +169,11 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 		grpclog.Infof("xds: failed to initial ADS streaming RPC due to %v", err)
 		return
 	}
-	if c.enableCDS {
-		if err := st.Send(c.newCDSRequest()); err != nil {
-			// current stream is broken, start a new one.
-			grpclog.Infof("xds: ads RPC failed due to err: %v, when sending the CDS request ", err)
-			return
-		}
-	}
 	if err := st.Send(c.newEDSRequest()); err != nil {
 		// current stream is broken, start a new one.
 		grpclog.Infof("xds: ads RPC failed due to err: %v, when sending the EDS request", err)
 		return
 	}
-	expectCDS := c.enableCDS
 	for {
 		resp, err := st.Recv()
 		if err != nil {
@@ -223,24 +188,14 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 			// start a new call as server misbehaves by sending a ADS response with 0 resource info.
 			return
 		}
-		if resp.GetTypeUrl() == cdsType && !c.enableCDS {
-			grpclog.Warning("xds: received CDS response in custom plugin mode.")
-			// start a new call as we receive CDS response when in EDS-only mode.
+		if resp.GetTypeUrl() != edsType {
+			grpclog.Warningf("xds: received non-EDS response: %v", resp.GetTypeUrl())
 			return
 		}
 		var adsResp ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(resources[0], &adsResp); err != nil {
 			grpclog.Warningf("xds: failed to unmarshal resources due to %v.", err)
 			return
-		}
-		switch adsResp.Message.(type) {
-		case *cdspb.Cluster:
-			expectCDS = false
-		case *edspb.ClusterLoadAssignment:
-			if expectCDS {
-				grpclog.Warningf("xds: expecting CDS response, got EDS response instead.")
-				return
-			}
 		}
 		if err := c.newADS(c.ctx, adsResp.Message); err != nil {
 			grpclog.Warningf("xds: processing new ADS message failed due to %v.", err)
@@ -258,50 +213,44 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 	}
 }
 
-func newXDSClient(balancerName string, enableCDS bool, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
+func newXDSClient(balancerName string, edsServiceName string, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
 	c := &client{
-		enableCDS:        enableCDS,
+		serviceName:      edsServiceName,
 		dialer:           opts.Dialer,
 		channelzParentID: opts.ChannelzParentID,
 		newADS:           newADS,
 		loseContact:      loseContact,
 		cleanup:          exitCleanup,
-		backoff:          defaultBackoffConfig,
+		backoff:          backoff.DefaultExponential,
 		loadStore:        loadStore,
+	}
+
+	if c.serviceName == "" {
+		c.serviceName = opts.Target.Endpoint
 	}
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 
-	var err error
-	if c.config, err = xdsclient.NewConfig(); err != nil {
-		grpclog.Error(err)
-		c.config = newConfigFromDefaults(balancerName, &opts)
+	// It is possible that NewConfig returns a Config object with certain
+	// fields left unspecified. If so, we need to use some sane defaults here.
+	c.config = bootstrap.NewConfig()
+	if c.config.BalancerName == "" {
+		c.config.BalancerName = balancerName
+	}
+	if c.config.Creds == nil {
+		c.config.Creds = credsFromDefaults(balancerName, &opts)
 	}
 	return c
 }
 
-func newConfigFromDefaults(balancerName string, opts *balancer.BuildOptions) *xdsclient.Config {
-	dopts := grpc.WithInsecure()
-	if opts.DialCreds != nil {
-		if err := opts.DialCreds.OverrideServerName(balancerName); err == nil {
-			dopts = grpc.WithTransportCredentials(opts.DialCreds)
-		} else {
-			grpclog.Warningf("xds: failed to override the server name in credentials: %v, using Insecure", err)
-		}
-	} else {
+func credsFromDefaults(balancerName string, opts *balancer.BuildOptions) grpc.DialOption {
+	if opts.DialCreds == nil {
 		grpclog.Warning("xds: no credentials available, using Insecure")
+		return grpc.WithInsecure()
 	}
-	return &xdsclient.Config{
-		BalancerName: balancerName,
-		Creds:        dopts,
-		NodeProto: &basepb.Node{
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					internal.GrpcHostname: {
-						Kind: &structpb.Value_StringValue{StringValue: opts.Target.Endpoint},
-					},
-				},
-			},
-		},
+	if err := opts.DialCreds.OverrideServerName(balancerName); err != nil {
+		grpclog.Warningf("xds: failed to override the server name in credentials: %v, using Insecure", err)
+		return grpc.WithInsecure()
 	}
+	return grpc.WithTransportCredentials(opts.DialCreds)
 }

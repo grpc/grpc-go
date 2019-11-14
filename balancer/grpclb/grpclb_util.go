@@ -67,7 +67,7 @@ type lbManualResolver struct {
 	ccb balancer.ClientConn
 }
 
-func (r *lbManualResolver) Build(_ resolver.Target, cc resolver.ClientConn, _ resolver.BuildOption) (resolver.Resolver, error) {
+func (r *lbManualResolver) Build(_ resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
 	r.ccr = cc
 	return r, nil
 }
@@ -77,7 +77,7 @@ func (r *lbManualResolver) Scheme() string {
 }
 
 // ResolveNow calls resolveNow on the parent ClientConn.
-func (r *lbManualResolver) ResolveNow(o resolver.ResolveNowOption) {
+func (r *lbManualResolver) ResolveNow(o resolver.ResolveNowOptions) {
 	r.ccb.ResolveNow(o)
 }
 

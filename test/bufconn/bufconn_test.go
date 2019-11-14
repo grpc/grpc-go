@@ -96,7 +96,7 @@ func TestConn(t *testing.T) {
 
 func TestConnCloseWithData(t *testing.T) {
 	lis := Listen(7)
-	errChan := make(chan error)
+	errChan := make(chan error, 1)
 	var lisConn net.Conn
 	go func() {
 		var err error
@@ -199,7 +199,7 @@ func TestCloseWhileAccepting(t *testing.T) {
 }
 
 func TestDeadline(t *testing.T) {
-	sig := make(chan error)
+	sig := make(chan error, 2)
 	blockingWrite := func(conn net.Conn) {
 		_, err := conn.Write([]byte("0123456789"))
 		sig <- err
