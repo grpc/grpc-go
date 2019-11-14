@@ -128,7 +128,7 @@ func Test_lrsStore_buildStats_drops(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ls := NewStore(testService).(*lrsStore)
+			ls := NewStore().(*lrsStore)
 
 			for _, ds := range tt.drops {
 				var (
@@ -255,7 +255,7 @@ func Test_lrsStore_buildStats_rpcCounts(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ls := NewStore(testService).(*lrsStore)
+			ls := NewStore().(*lrsStore)
 
 			// InProgress count doesn't get cleared at each buildStats, keep
 			// them to carry over.
@@ -439,7 +439,7 @@ func Test_lrsStore_ReportTo(t *testing.T) {
 	})
 	defer cleanup()
 
-	ls := NewStore(testService)
+	ls := NewStore()
 	cc, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
@@ -448,7 +448,7 @@ func Test_lrsStore_ReportTo(t *testing.T) {
 	defer cancel()
 	done := make(chan struct{})
 	go func() {
-		ls.ReportTo(ctx, cc)
+		ls.ReportTo(ctx, cc, testService, nil)
 		close(done)
 	}()
 

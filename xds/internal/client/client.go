@@ -50,8 +50,9 @@ type Options struct {
 // various dynamic resources. A single client object will be shared by the xds
 // resolver and balancer implementations.
 type Client struct {
-	cc  *grpc.ClientConn // Connection to the xDS server
-	v2c *v2Client        // Actual xDS client implementation using the v2 API
+	opts Options
+	cc   *grpc.ClientConn // Connection to the xDS server
+	v2c  *v2Client        // Actual xDS client implementation using the v2 API
 
 	mu              sync.Mutex
 	serviceCallback func(ServiceUpdate, error)
@@ -80,8 +81,9 @@ func New(opts Options) (*Client, error) {
 	}
 
 	c := &Client{
-		cc:  cc,
-		v2c: newV2Client(cc, opts.Config.NodeProto, backoff.DefaultExponential.Backoff),
+		opts: opts,
+		cc:   cc,
+		v2c:  newV2Client(cc, opts.Config.NodeProto, backoff.DefaultExponential.Backoff),
 	}
 	return c, nil
 }
@@ -156,4 +158,9 @@ func (c *Client) WatchService(serviceName string, callback func(ServiceUpdate, e
 		}
 		c.mu.Unlock()
 	}
+}
+
+// WatchEDS watches the ghost.
+func (c *Client) WatchEDS(clusterName string, edsCb func(*EDSUpdate, error)) (cancel func()) {
+	return c.v2c.watchEDS(clusterName, edsCb)
 }
