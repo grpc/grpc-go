@@ -18,6 +18,8 @@
 package client
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -261,5 +263,56 @@ func TestHandleEDSResponse(t *testing.T) {
 			}
 		}
 		cancelWatch()
+	}
+}
+
+// TestHandleEDSResponseWithoutEDSWatch tests the case where the v2Client
+// receives an EDS response without a registered EDS watcher.
+func TestHandleEDSResponseWithoutEDSWatch(t *testing.T) {
+	_, client, cleanup := fakexds.StartClientAndServer(t)
+	defer cleanup()
+	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+
+	if v2c.handleEDSResponse(goodEDSResponse1) == nil {
+		t.Fatal("v2c.handleEDSResponse() succeeded, should have failed")
+	}
+}
+
+func TestEDSWatchExpiryTimer(t *testing.T) {
+	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
+	defaultWatchExpiryTimeout = 1 * time.Second
+	defer func() {
+		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
+	}()
+
+	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
+	defer cleanup()
+
+	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	defer v2c.close()
+	t.Log("Started xds v2Client...")
+
+	edsCallbackCh := make(chan error, 1)
+	v2c.watchEDS(goodRouteName1, func(u *EDSUpdate, err error) {
+		t.Logf("Received callback with edsUpdate {%+v} and error {%v}", u, err)
+		if u != nil {
+			edsCallbackCh <- fmt.Errorf("received EDSUpdate %v in edsCallback, wanted nil", u)
+		}
+		if err == nil {
+			edsCallbackCh <- errors.New("received nil error in edsCallback")
+		}
+		edsCallbackCh <- nil
+	})
+	<-fakeServer.RequestChan
+
+	timer := time.NewTimer(2 * time.Second)
+	select {
+	case <-timer.C:
+		t.Fatalf("Timeout expired when expecting EDS update")
+	case err := <-edsCallbackCh:
+		timer.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
