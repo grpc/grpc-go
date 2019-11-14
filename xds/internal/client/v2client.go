@@ -159,6 +159,10 @@ func (v2c *v2Client) sendExisting(stream adsStream) bool {
 			if !v2c.sendRDS(stream, wi.target) {
 				return false
 			}
+		case edsResource:
+			if !v2c.sendEDS(stream, wi.target) {
+				return false
+			}
 		}
 	}
 
@@ -300,8 +304,8 @@ func (v2c *v2Client) watchEDS(clusterName string, edsCb edsCallback) (cancel fun
 		}
 		v2c.watchMap[edsResource].cancel()
 		delete(v2c.watchMap, edsResource)
-		// TODO: Once a registered RDS watch is cancelled, we should send an
-		// RDS request with no resources. This will let the server know that we
+		// TODO: Once a registered EDS watch is cancelled, we should send an
+		// EDS request with no resources. This will let the server know that we
 		// are no longer interested in this resource.
 	}
 }
