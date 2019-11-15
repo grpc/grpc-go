@@ -96,14 +96,14 @@ func TestNewClient(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		func() {
+		t.Run(test.name, func(t *testing.T) {
 			oldDialFunc := dialFunc
 			dialFunc = func(ctx context.Context, target string, dopts ...grpc.DialOption) (*grpc.ClientConn, error) {
 				if target != balancerName {
-					t.Fatalf("%s: in dialFunc() got target: %v, want %v", test.name, target, balancerName)
+					t.Fatalf("got target: %v, want %v", target, balancerName)
 				}
 				if len(dopts) != test.wantDialOptsLen {
-					t.Fatalf("%s: found %d dialOptions, want %d", test.name, len(dopts), test.wantDialOptsLen)
+					t.Fatalf("got %d dialOptions, want %d", len(dopts), test.wantDialOptsLen)
 				}
 				return grpc.DialContext(ctx, target, dopts...)
 			}
@@ -111,12 +111,14 @@ func TestNewClient(t *testing.T) {
 				dialFunc = oldDialFunc
 			}()
 			if _, err := NewClient(test.opts); (err != nil) != test.wantErr {
-				t.Fatalf("%s: NewClient(%+v) = %v, wantErr: %v", test.name, test.opts, err, test.wantErr)
+				t.Fatalf("NewClient(%+v) = %v, wantErr: %v", test.opts, err, test.wantErr)
 			}
-		}()
+		})
 	}
 }
 
+// TestWatchForServiceUpdate tests the happy case of registering a watcher for
+// service updates and receiving a good update.
 func TestWatchForServiceUpdate(t *testing.T) {
 	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
 	defer cleanup()
@@ -170,6 +172,10 @@ func TestWatchForServiceUpdate(t *testing.T) {
 	}
 }
 
+// TestWatchForServiceUpdateWithNoResponseFromServer tests the case where the
+// xDS server does not respond to the requests being sent out as part of
+// registering a service update watcher. The underlying v2Client will timeout
+// and will send us an error.
 func TestWatchForServiceUpdateWithNoResponseFromServer(t *testing.T) {
 	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
 	defer cleanup()
@@ -226,6 +232,8 @@ func TestWatchForServiceUpdateWithNoResponseFromServer(t *testing.T) {
 	}
 }
 
+// TestWatchForServiceUpdateEmptyRDS tests the case where the underlying
+// v2Client receives an empty RDS response.
 func TestWatchForServiceUpdateEmptyRDS(t *testing.T) {
 	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
 	defer cleanup()

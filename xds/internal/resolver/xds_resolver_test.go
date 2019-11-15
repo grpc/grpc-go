@@ -211,7 +211,7 @@ func TestResolverBuilder(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		func() {
+		t.Run(test.name, func(t *testing.T) {
 			// Fake out the bootstrap process by providing our own config.
 			oldConfigMaker := newXDSConfig
 			newXDSConfig = func() *bootstrap.Config { return &test.config }
@@ -225,12 +225,12 @@ func TestResolverBuilder(t *testing.T) {
 
 			builder := resolver.Get(xdsScheme)
 			if builder == nil {
-				t.Fatalf("%s: resolver.Get(%v) returned nil", test.name, xdsScheme)
+				t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
 			}
 
 			r, err := builder.Build(target, newTestClientConn(), test.rbo)
 			if (err != nil) != test.wantErr {
-				t.Fatalf("%s: builder.Build(%v) returned err: %v, wantErr: %v", test.name, target, err, test.wantErr)
+				t.Fatalf("builder.Build(%v) returned err: %v, wantErr: %v", target, err, test.wantErr)
 			}
 			if err != nil {
 				// This is the case where we expect an error and got it.
@@ -244,7 +244,7 @@ func TestResolverBuilder(t *testing.T) {
 			if _, err := registry.Get(xdsR.clientID); err == nil {
 				t.Fatal("xdsClient created by resolver found in registry after resolver is closed")
 			}
-		}()
+		})
 	}
 }
 
@@ -253,39 +253,38 @@ type setupOpts struct {
 	xdsClientFunc func(xdsclient.Options) (xdsClientInterface, error)
 }
 
-func testSetup(opts setupOpts) (*xdsResolver, *testClientConn, func(), error) {
+func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *testClientConn, func()) {
 	oldConfigMaker := newXDSConfig
 	newXDSConfig = func() *bootstrap.Config { return opts.config }
 	oldClientMaker := newXDSClient
 	newXDSClient = opts.xdsClientFunc
-	retFunc := func() {
+	cancel := func() {
 		newXDSConfig = oldConfigMaker
 		newXDSClient = oldClientMaker
 	}
 
 	builder := resolver.Get(xdsScheme)
 	if builder == nil {
-		return nil, nil, retFunc, fmt.Errorf("resolver.Get(%v) returned nil", xdsScheme)
+		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
 	}
 
 	tcc := newTestClientConn()
 	r, err := builder.Build(target, tcc, resolver.BuildOptions{})
 	if err != nil {
-		return nil, nil, retFunc, fmt.Errorf("builder.Build(%v) returned err: %v", target, err)
+		t.Fatalf("builder.Build(%v) returned err: %v", target, err)
 	}
-	return r.(*xdsResolver), tcc, retFunc, nil
+	return r.(*xdsResolver), tcc, cancel
 }
 
+// TestXDSResolverWatchCallbackAfterClose tests the case where a service update
+// from the underlying xdsClient is received after the resolver is closed.
 func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	fakeXDSClient := newFakeXDSClient()
-	xdsR, tcc, cancel, err := testSetup(setupOpts{
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
 		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return fakeXDSClient, nil },
 	})
 	defer cancel()
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// Wait for the WatchForServiceUpdate method to be called on the xdsClient.
 	<-fakeXDSClient.suCh
@@ -306,16 +305,15 @@ func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	}
 }
 
+// TestXDSResolverBadServiceUpdate tests the case the xdsClient returns a bad
+// service update.
 func TestXDSResolverBadServiceUpdate(t *testing.T) {
 	fakeXDSClient := newFakeXDSClient()
-	xdsR, tcc, cancel, err := testSetup(setupOpts{
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
 		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return fakeXDSClient, nil },
 	})
 	defer cancel()
-	if err != nil {
-		t.Fatal(err)
-	}
 	defer xdsR.Close()
 
 	// Wait for the WatchForServiceUpdate method to be called on the xdsClient.
@@ -345,16 +343,15 @@ func TestXDSResolverBadServiceUpdate(t *testing.T) {
 	}
 }
 
+// TestXDSResolverGoodServiceUpdate tests the happy case where the resolver
+// gets a good service update from the xdsClient.
 func TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	fakeXDSClient := newFakeXDSClient()
-	xdsR, tcc, cancel, err := testSetup(setupOpts{
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
 		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return fakeXDSClient, nil },
 	})
 	defer cancel()
-	if err != nil {
-		t.Fatal(err)
-	}
 	defer xdsR.Close()
 
 	// Wait for the WatchForServiceUpdate method to be called on the xdsClient.

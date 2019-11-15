@@ -74,7 +74,6 @@ type v2Client struct {
 
 // newV2Client creates a new v2Client initialized with the passed arguments.
 func newV2Client(cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration) *v2Client {
-	fmt.Println("easwars: in newV2Client")
 	v2c := &v2Client{
 		cc:        cc,
 		nodeProto: nodeProto,
@@ -100,7 +99,6 @@ func (v2c *v2Client) close() {
 func (v2c *v2Client) run() {
 	retries := 0
 	for {
-		fmt.Println("easwars: in v2client.run")
 		select {
 		case <-v2c.ctx.Done():
 			return
@@ -148,7 +146,6 @@ func (v2c *v2Client) run() {
 // quickly (once it pushes the message onto the transport layer) and is only
 // ever blocked if we don't have enough flow control quota.
 func (v2c *v2Client) sendExisting(stream adsStream) bool {
-	fmt.Println("easwars: in v2client.sendExisting")
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
@@ -171,7 +168,6 @@ func (v2c *v2Client) sendExisting(stream adsStream) bool {
 // send reads watch infos from update channel and sends out actual xDS requests
 // on the provided ADS stream.
 func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
-	fmt.Println("easwars: in v2client.send")
 	if !v2c.sendExisting(stream) {
 		return
 	}
@@ -183,7 +179,6 @@ func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
 		case u := <-v2c.watchCh.Get():
 			v2c.watchCh.Load()
 			wi := u.(*watchInfo)
-			fmt.Println("easwars: ", wi)
 			v2c.mu.Lock()
 			if wi.state == watchCancelled {
 				v2c.mu.Unlock()
@@ -247,7 +242,6 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 func (v2c *v2Client) watchLDS(target string, ldsCb ldsCallback) (cancel func()) {
 	wi := &watchInfo{wType: ldsResource, target: []string{target}, callback: ldsCb}
 	v2c.watchCh.Put(wi)
-	fmt.Println("easwars: 6")
 	return func() {
 		v2c.mu.Lock()
 		defer v2c.mu.Unlock()

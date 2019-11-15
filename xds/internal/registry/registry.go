@@ -17,9 +17,9 @@
  */
 
 // Package registry provides a global registry of xDS client objects to be
-// shared between the xds resolver and balancer implementations. The former
-// creates the client object (during which it is added to the registry) and
-// passes the registry key the latter.
+// shared between the xds resolver and balancer implementations. The resolver
+// creates the client object, adds it to the registry, and passes the registry
+// key to the balancer.
 package registry
 
 import (

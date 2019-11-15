@@ -16,8 +16,8 @@
  *
  */
 
-// Package client contains the implementation of the xds client used by
-// grpc-lb-v2.
+// Package client implementation a full fledged gRPC client for the xDS API
+// used by the xds resolver and balancer implementations.
 package client
 
 import (
@@ -44,6 +44,9 @@ type Options struct {
 	// Backoff is the backoff strategy to be used when reconnecting to the xDS
 	// server. If left unspecified, a default exponential backoff strategy
 	// would be used.
+	// TODO: If we have no reason to use an exponential backoff with
+	// non-default values, remove this field, and directly use the appropriate
+	// one in v2Client.
 	Backoff backoff.Strategy
 	// DialOpts contains dial options to be used when dialing the xDS server.
 	DialOpts []grpc.DialOption
@@ -144,12 +147,10 @@ func (c *Client) handleRDSUpdate(u rdsUpdate, err error) {
 // WatchForServiceUpdate uses LDS and RDS protocols to discover resource
 // information for the provided target.
 func (c *Client) WatchForServiceUpdate(target string, callback func(ServiceUpdate, error)) (cancel func()) {
-	fmt.Println("easwars: 4")
 	c.mu.Lock()
 	c.serviceCallback = callback
 	c.ldsCancel = c.v2c.watchLDS(target, c.handleLDSUpdate)
 	c.mu.Unlock()
-	fmt.Println("easwars: 5")
 
 	return func() {
 		c.mu.Lock()
