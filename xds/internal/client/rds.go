@@ -41,7 +41,7 @@ func (v2c *v2Client) newRDSRequest(routeName []string) *xdspb.DiscoveryRequest {
 // sendRDS sends an RDS request for provided routeName on the provided stream.
 func (v2c *v2Client) sendRDS(stream adsStream, routeName []string) bool {
 	if err := stream.Send(v2c.newRDSRequest(routeName)); err != nil {
-		grpclog.Infof("xds: RDS request for resource %v failed: %v", routeName, err)
+		grpclog.Warningf("xds: RDS request for resource %v failed: %v", routeName, err)
 		return false
 	}
 	return true
@@ -82,6 +82,8 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 
 		// If we get here, it means that this resource was a good one.
 		localCache[rc.GetName()] = cluster
+
+		// TODO: remove cache, and only process resources that are interesting.
 		if rc.GetName() == wi.target[0] {
 			returnCluster = cluster
 		}

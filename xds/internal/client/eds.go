@@ -119,9 +119,6 @@ func parseEndpoints(lbEndpoints []*endpointpb.LbEndpoint) []Endpoint {
 // This is temporarily exported to be used in eds balancer, before it switches
 // to use xds client. TODO: unexport.
 func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
-	if m == nil {
-		return nil, fmt.Errorf("parsing EDS response failed: message is <nil>")
-	}
 	ret := &EDSUpdate{}
 	for _, dropPolicy := range m.GetPolicy().GetDropOverloads() {
 		ret.Drops = append(ret.Drops, parseDropPolicy(dropPolicy))
@@ -180,7 +177,7 @@ func (v2c *v2Client) newEDSRequest(clusterName []string) *xdspb.DiscoveryRequest
 // sendEDS sends an EDS request for provided clusterName on the provided stream.
 func (v2c *v2Client) sendEDS(stream adsStream, clusterName []string) bool {
 	if err := stream.Send(v2c.newEDSRequest(clusterName)); err != nil {
-		grpclog.Infof("xds: EDS request for resource %v failed: %v", clusterName, err)
+		grpclog.Warningf("xds: EDS request for resource %v failed: %v", clusterName, err)
 		return false
 	}
 	return true
@@ -206,19 +203,23 @@ func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 			return fmt.Errorf("xds: unexpected resource type: %T in EDS response", resource.Message)
 		}
 
+		if cla.GetClusterName() != wi.target[0] {
+			// We won't validate the remaining resources. If one of the
+			// uninteresting ones is invalid, we will still ACK the response.
+			continue
+		}
+
 		u, err := ParseEDSRespProto(cla)
 		if err != nil {
 			return err
 		}
 
-		if cla.GetClusterName() == wi.target[0] {
-			returnUpdate = u
-			// Break from the loop because the request resource is found. But
-			// this also means we won't validate the remaining resources. If one
-			// of the uninteresting ones is invalid, we will still ACK the
-			// response.
-			break
-		}
+		returnUpdate = u
+		// Break from the loop because the request resource is found. But
+		// this also means we won't validate the remaining resources. If one
+		// of the uninteresting ones is invalid, we will still ACK the
+		// response.
+		break
 	}
 
 	if returnUpdate != nil {

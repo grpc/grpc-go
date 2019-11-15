@@ -197,7 +197,7 @@ func TestHandleEDSResponse(t *testing.T) {
 			wantUpdate:    nil,
 			wantUpdateErr: false,
 		},
-		// Response contains one good  ClusterLoadAssignment
+		// Response contains one good ClusterLoadAssignment.
 		{
 			name:        "one-good-assignment",
 			edsResponse: goodEDSResponse1,
@@ -222,47 +222,49 @@ func TestHandleEDSResponse(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		gotUpdateCh := make(chan *EDSUpdate, 1)
-		gotUpdateErrCh := make(chan error, 1)
+		t.Run(test.name, func(t *testing.T) {
+			gotUpdateCh := make(chan *EDSUpdate, 1)
+			gotUpdateErrCh := make(chan error, 1)
 
-		// Register a watcher, to trigger the v2Client to send an EDS request.
-		cancelWatch := v2c.watchEDS(goodEDSName, func(u *EDSUpdate, err error) {
-			t.Logf("%s: in v2c.watchEDS callback, edsUpdate: %+v, err: %v", test.name, u, err)
-			gotUpdateCh <- u
-			gotUpdateErrCh <- err
-		})
+			// Register a watcher, to trigger the v2Client to send an EDS request.
+			cancelWatch := v2c.watchEDS(goodEDSName, func(u *EDSUpdate, err error) {
+				t.Logf("%s: in v2c.watchEDS callback, edsUpdate: %+v, err: %v", test.name, u, err)
+				gotUpdateCh <- u
+				gotUpdateErrCh <- err
+			})
 
-		// Wait till the request makes it to the fakeServer. This ensures that
-		// the watch request has been processed by the v2Client.
-		<-fakeServer.RequestChan
+			// Wait till the request makes it to the fakeServer. This ensures that
+			// the watch request has been processed by the v2Client.
+			<-fakeServer.RequestChan
 
-		// Directly push the response through a call to handleEDSResponse,
-		// thereby bypassing the fakeServer.
-		if err := v2c.handleEDSResponse(test.edsResponse); (err != nil) != test.wantErr {
-			t.Fatalf("%s: v2c.handleEDSResponse() returned err: %v, wantErr: %v", test.name, err, test.wantErr)
-		}
+			// Directly push the response through a call to handleEDSResponse,
+			// thereby bypassing the fakeServer.
+			if err := v2c.handleEDSResponse(test.edsResponse); (err != nil) != test.wantErr {
+				t.Fatalf("%s: v2c.handleEDSResponse() returned err: %v, wantErr: %v", test.name, err, test.wantErr)
+			}
 
-		// If the test needs the callback to be invoked, verify the update and
-		// error pushed to the callback.
-		if test.wantUpdate != nil {
-			timer := time.NewTimer(defaultTestTimeout)
-			select {
-			case <-timer.C:
-				t.Fatal("Timeout when expecting EDS update")
-			case gotUpdate := <-gotUpdateCh:
-				timer.Stop()
-				if d := cmp.Diff(gotUpdate, test.wantUpdate); d != "" {
-					t.Fatalf("%s: got EDS update : %+v, want %+v, diff: %v", test.name, gotUpdate, *test.wantUpdate, d)
+			// If the test needs the callback to be invoked, verify the update and
+			// error pushed to the callback.
+			if test.wantUpdate != nil {
+				timer := time.NewTimer(defaultTestTimeout)
+				select {
+				case <-timer.C:
+					t.Fatal("Timeout when expecting EDS update")
+				case gotUpdate := <-gotUpdateCh:
+					timer.Stop()
+					if d := cmp.Diff(gotUpdate, test.wantUpdate); d != "" {
+						t.Fatalf("%s: got EDS update : %+v, want %+v, diff: %v", test.name, gotUpdate, *test.wantUpdate, d)
+					}
+				}
+				// Since the callback that we registered pushes to both channels at
+				// the same time, this channel read should return immediately.
+				gotUpdateErr := <-gotUpdateErrCh
+				if (gotUpdateErr != nil) != test.wantUpdateErr {
+					t.Fatalf("%s: got EDS update error {%v}, wantErr: %v", test.name, gotUpdateErr, test.wantUpdateErr)
 				}
 			}
-			// Since the callback that we registered pushes to both channels at
-			// the same time, this channel read should return immediately.
-			gotUpdateErr := <-gotUpdateErrCh
-			if (gotUpdateErr != nil) != test.wantUpdateErr {
-				t.Fatalf("%s: got EDS update error {%v}, wantErr: %v", test.name, gotUpdateErr, test.wantUpdateErr)
-			}
-		}
-		cancelWatch()
+			cancelWatch()
+		})
 	}
 }
 
