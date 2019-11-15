@@ -33,6 +33,6 @@ func newCircularBuffer(size uint32) (*circularBuffer, error) {
 func (cb *circularBuffer) Push(x interface{}) {
 }
 
-func (cb *circularBuffer) Drain() ([]interface{}) {
+func (cb *circularBuffer) Drain() []interface{} {
 	return make([]interface{}, 0)
 }
