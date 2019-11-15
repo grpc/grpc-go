@@ -107,19 +107,19 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 // just the transport credentials from the bundle. If we don't find any
 // credentials on the parent channel, we resort to using an insecure channel.
 func defaultDialCreds(balancerName string, rbo resolver.BuildOptions) grpc.DialOption {
-	if creds := rbo.DialCreds; creds != nil {
-		if err := creds.OverrideServerName(balancerName); err == nil {
-			return grpc.WithTransportCredentials(creds)
-		} else {
+	switch {
+	case rbo.DialCreds != nil:
+		if err := rbo.DialCreds.OverrideServerName(balancerName); err != nil {
 			grpclog.Warningf("xds: failed to override server name in credentials: %v, using Insecure", err)
 			return grpc.WithInsecure()
 		}
-	} else if bundle := rbo.CredsBundle; bundle != nil {
-		return grpc.WithTransportCredentials(bundle.TransportCredentials())
+		return grpc.WithTransportCredentials(rbo.DialCreds)
+	case rbo.CredsBundle != nil:
+		return grpc.WithTransportCredentials(rbo.CredsBundle.TransportCredentials())
+	default:
+		grpclog.Warning("xds: no credentials available, using Insecure")
+		return grpc.WithInsecure()
 	}
-
-	grpclog.Warning("xds: no credentials available, using Insecure")
-	return grpc.WithInsecure()
 }
 
 // Name helps implement the resolver.Builder interface.

@@ -149,7 +149,6 @@ func TestWatchForServiceUpdate(t *testing.T) {
 			return
 		}
 		callbackCh <- nil
-		return
 	})
 	defer cancelWatch()
 	t.Log("Registered a watcher for service updates...")
@@ -212,7 +211,6 @@ func TestWatchForServiceUpdateWithNoResponseFromServer(t *testing.T) {
 			return
 		}
 		callbackCh <- nil
-		return
 	})
 	defer cancelWatch()
 	t.Log("Registered a watcher for service updates...")
@@ -270,7 +268,6 @@ func TestWatchForServiceUpdateEmptyRDS(t *testing.T) {
 			return
 		}
 		callbackCh <- nil
-		return
 	})
 	defer cancelWatch()
 	t.Log("Registered a watcher for service updates...")
