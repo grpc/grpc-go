@@ -84,22 +84,22 @@ func (qp *queuePair) switchQueues() *queue {
 	// drain), Push operations may access qp.q whilst we're writing to it.
 	if atomic.CompareAndSwapPointer(&qp.q, qp.q0, qp.q1) {
 		return (*queue)(qp.q0)
-	} else {
-		atomic.CompareAndSwapPointer(&qp.q, qp.q1, qp.q0)
-		return (*queue)(qp.q1)
 	}
+
+	atomic.CompareAndSwapPointer(&qp.q, qp.q1, qp.q0)
+	return (*queue)(qp.q1)
 }
 
 // In order to not have expensive modulo operations, we require the maximum
 // number of elements in the circular buffer (N) to be an exponent of two to
 // use a bitwise AND mask. Since a circularBuffer is a collection of queuePairs
 // (see below), we need to divide N; since exponents of two are only divisible
-// by other exponents of two, we use floorCpuCount number of queuePairs within
+// by other exponents of two, we use floorCPUCount number of queuePairs within
 // each circularBuffer.
 //
 // Floor of the number of CPUs (and not the ceiling) was found to the be the
 // optimal number through experiments.
-func floorCpuCount() uint32 {
+func floorCPUCount() uint32 {
 	n := uint32(runtime.NumCPU())
 	for i := uint32(1 << 31); i >= 2; i >>= 1 {
 		if n&i > 0 {
@@ -110,12 +110,12 @@ func floorCpuCount() uint32 {
 	return 1
 }
 
-var numCircularBufferPairs = floorCpuCount()
+var numCircularBufferPairs = floorCPUCount()
 var numCircularBufferPairsMask = numCircularBufferPairs - 1
 
 // circularBuffer stores the Pushed elements in-memory. It uses a collection of
 // queuePairs to reduce contention on the acquired and written counters within
-// each queuePair; that is, at any given time, there may be floorCpuCount()
+// each queuePair; that is, at any given time, there may be floorCPUCount()
 // Pushes happening simultaneously.
 type circularBuffer struct {
 	mu sync.Mutex
@@ -126,7 +126,7 @@ type circularBuffer struct {
 	qpn uint32
 }
 
-var errorInvalidCircularBufferSize = errors.New("Buffer size is not an exponent of two.")
+var errorInvalidCircularBufferSize = errors.New("buffer size is not an exponent of two")
 
 // Allocates a circular buffer of size size and returns a reference to the
 // struct. Only circular buffers of size 2^k are allowed (saves us from having
