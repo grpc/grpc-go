@@ -53,17 +53,17 @@ var (
 )
 
 func init() {
-	resolver.Register(&xdsBuilder{})
+	resolver.Register(&xdsResolverBuilder{})
 }
 
-type xdsBuilder struct{}
+type xdsResolverBuilder struct{}
 
 // Build helps implement the resolver.Builder interface.
 //
 // The xds bootstrap process is performed (and a new xds client is built) every
 // time an xds resolver is built. The newly created xds client is also added
 // into a global registry.
-func (b *xdsBuilder) Build(t resolver.Target, cc resolver.ClientConn, rbo resolver.BuildOptions) (resolver.Resolver, error) {
+func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rbo resolver.BuildOptions) (resolver.Resolver, error) {
 	config := newXDSConfig()
 	switch {
 	case config.BalancerName == "":
@@ -123,7 +123,7 @@ func defaultDialCreds(balancerName string, rbo resolver.BuildOptions) grpc.DialO
 }
 
 // Name helps implement the resolver.Builder interface.
-func (*xdsBuilder) Scheme() string {
+func (*xdsResolverBuilder) Scheme() string {
 	return xdsScheme
 }
 
