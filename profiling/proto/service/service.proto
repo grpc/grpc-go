@@ -19,9 +19,9 @@ option go_package = "google.golang.org/grpc/profiling/proto/service";
 // EnableRequest defines the fields in a /Profiling/Enable method request to
 // toggle profiling on and off within a gRPC program.
 message EnableRequest {
-	// Setting this to true will enable profiling. Setting this to false will
-	// disable profiling.
-	bool enabled = 1;
+  // Setting this to true will enable profiling. Setting this to false will
+  // disable profiling.
+  bool enabled = 1;
 }
 
 // EnableResponse defines the fields in a /Profiling/Enable method response.
@@ -33,55 +33,54 @@ message EnableResponse {
 message GetStreamStatsRequest {
 }
 
-// Equivalent to google.golang.org/grpc/internal/profiling.Timer, but defined
-// for proto. Each TimerProto measures the start and end of execution of a
-// component within gRPC that's being profiled.
+// A TimerProto measures the start and end of execution of a component within
+// gRPC that's being profiled. It includes a tag and some additional metadata
+// to identify itself.
 message TimerProto {
-	// timer_tag is an arbitrary string that is used to tag a timer for
-	// identification purposes later.
-	string timer_tag = 1;
+  // timer_tag is an arbitrary string that is used to tag a timer for
+  // identification purposes later.
+  string timer_tag = 1;
 
-	// begin_sec and begin_nsec are the start epoch second and nanosecond,
-	// respectively, of the component profiled by this timer in UTC. begin_nsec
-	// must be a non-negative integer.
-	int64 begin_sec = 2;
-	int32 begin_nsec = 3;
+  // begin_sec and begin_nsec are the start epoch second and nanosecond,
+  // respectively, of the component profiled by this timer in UTC. begin_nsec
+  // must be a non-negative integer.
+  int64 begin_sec = 2;
+  int32 begin_nsec = 3;
 
-	// end_sec and end_nsec are the end epoch second and nanosecond,
-	// respectively, of the component profiled by this timer in UTC. end_nsec
-	// must be a non-negative integer.
-	int64 end_sec = 4;
-	int32 end_nsec = 5;
+  // end_sec and end_nsec are the end epoch second and nanosecond,
+  // respectively, of the component profiled by this timer in UTC. end_nsec
+  // must be a non-negative integer.
+  int64 end_sec = 4;
+  int32 end_nsec = 5;
 
-	// go_id is the goroutine ID of the component being profiled.
-	int64 go_id = 6;
+  // go_id is the goroutine ID of the component being profiled.
+  int64 go_id = 6;
 }
 
-// Equivalent to google.golang.org/grpc/internal/profiling.Stat, but defined
-// for proto. A stat is essentially a collection of timers along with some
-// metadata.
+// A StatProto is a collection of TimerProtos along with some additional
+// metadata to tag and identify itself.
 message StatProto {
-	// stat_tag is an arbitrary string that is used to tag a stat.
-	string stat_tag = 1;
+  // stat_tag is an arbitrary string that is used to tag a stat.
+  string stat_tag = 1;
 
-	// timer_protos is an array of TimerProtos, each representing a different
-	// (but possibly overlapping) component within this stat.
-	repeated TimerProto timer_protos = 2;
+  // timer_protos is an array of TimerProtos, each representing a different
+  // (but possibly overlapping) component within this stat.
+  repeated TimerProto timer_protos = 2;
 
-	// metadata is an array of bytes that is used to further tag a stat with an
-	// undefined encoding. For example, the StatProtos returned by the
-	// /Profiling/GetStreamStats service use the metadata field to encode the
-	// connection ID and the stream ID of each query.
-	bytes metadata = 3;
+  // metadata is an array of bytes that is used to further tag a stat with an
+  // undefined encoding. For example, the StatProtos returned by the
+  // /Profiling/GetStreamStats service use the metadata field to encode the
+  // connection ID and the stream ID of each query.
+  bytes metadata = 3;
 }
 
 // The Profiling service exposes functions to remotely manage the gRPC
 // profiling behaviour in a program.
 service Profiling {
-	// Enable allows users to toggle profiling on and off remotely.
-	rpc Enable (EnableRequest) returns (EnableResponse);
+  // Enable allows users to toggle profiling on and off remotely.
+  rpc Enable (EnableRequest) returns (EnableResponse);
 
-	// GetStreamStats is used to retrieve an array of stream-level stats from a
-	// gRPC client/server.
-	rpc GetStreamStats (GetStreamStatsRequest) returns (stream StatProto);
+  // GetStreamStats is used to retrieve an array of stream-level stats from a
+  // gRPC client/server.
+  rpc GetStreamStats (GetStreamStatsRequest) returns (stream StatProto);
 }

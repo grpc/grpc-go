@@ -23,8 +23,8 @@
 package service
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 
@@ -68,7 +68,7 @@ func Init(pc *ProfilingConfig) error {
 	pspb.RegisterProfilingServer(pc.Server, &profilingServer{})
 
 	// Do this last after everything has been initialised and allocated.
-	profiling.SetEnabled(pc.Enabled)
+	profiling.Enable(pc.Enabled)
 
 	return nil
 }
@@ -81,9 +81,9 @@ func (s *profilingServer) Enable(ctx context.Context, req *pspb.EnableRequest) (
 	} else {
 		grpclog.Infof("Disabling profiling")
 	}
-	profiling.SetEnabled(req.Enabled)
+	profiling.Enable(req.Enabled)
 
-	return &pspb.SetEnabledResponse{}, nil
+	return &pspb.EnableResponse{}, nil
 }
 
 func (s *profilingServer) GetStreamStats(req *pspb.GetStreamStatsRequest, stream pspb.Profiling_GetStreamStatsServer) error {

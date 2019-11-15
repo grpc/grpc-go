@@ -16,19 +16,20 @@
  *
  */
 
+// The profiling package exposes methods to manage profiling within gRPC.
 package profiling
 
 import (
 	internal "google.golang.org/grpc/internal/profiling"
 )
 
-// SetEnabled turns profiling on and off. This operation is safe for concurrent
+// Enable turns profiling on and off. This operation is safe for concurrent
 // access from different goroutines.
 //
 // Note that this is the only operation that's accessible through the publicly
 // exposed profiling package. Everything else (such as retrieving stats) must
 // be done through the profiling service. This is allowed so that users can use
 // heuristics to turn profiling on and off automatically.
-func SetEnabled(enabled bool) {
-	internal.SetEnabled(enabled)
+func Enable(enabled bool) {
+	internal.Enable(enabled)
 }
