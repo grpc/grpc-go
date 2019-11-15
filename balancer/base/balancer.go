@@ -82,7 +82,8 @@ func (b *baseBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) 
 }
 
 func (b *baseBalancer) ResolverError(err error) {
-	if b.state == connectivity.TransientFailure {
+	switch b.state {
+	case connectivity.TransientFailure, connectivity.Idle, connectivity.Connecting:
 		if b.picker != nil {
 			b.picker = NewErrPicker(err)
 		} else {
@@ -195,7 +196,7 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 	if b.picker != nil {
 		b.cc.UpdateBalancerState(b.state, b.picker)
 	} else {
-		b.cc.UpdateState(balancer.State{State: b.state, Picker: b.v2Picker})
+		b.cc.UpdateState(balancer.State{ConnectivityState: b.state, Picker: b.v2Picker})
 	}
 }
 

@@ -369,7 +369,7 @@ func (lb *lbBalancer) updateStateAndPicker(forceRegeneratePicker bool, resetDrop
 		lb.regeneratePicker(resetDrop)
 	}
 
-	lb.cc.UpdateState(balancer.State{State: lb.state, Picker: lb.picker})
+	lb.cc.UpdateState(balancer.State{ConnectivityState: lb.state, Picker: lb.picker})
 }
 
 // fallbackToBackendsAfter blocks for fallbackTimeout and falls back to use

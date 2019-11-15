@@ -118,7 +118,7 @@ func (tcc *testClientConn) UpdateState(bs balancer.State) {
 	case <-tcc.newStateCh:
 	default:
 	}
-	tcc.newStateCh <- bs.State
+	tcc.newStateCh <- bs.ConnectivityState
 
 	select {
 	case <-tcc.newPickerCh:

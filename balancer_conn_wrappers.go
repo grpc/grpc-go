@@ -92,7 +92,7 @@ func (ccb *ccBalancerWrapper) watcher() {
 			for acbw := range scs {
 				ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 			}
-			ccb.UpdateState(balancer.State{State: connectivity.Connecting, Picker: nil})
+			ccb.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: nil})
 			return
 		}
 	}
@@ -200,7 +200,7 @@ func (ccb *ccBalancerWrapper) UpdateState(s balancer.State) {
 	// updated later, we could call the "connecting" picker when the state is
 	// updated, and then call the "ready" picker after the picker gets updated.
 	ccb.cc.blockingpicker.updatePickerV2(s.Picker)
-	ccb.cc.csMgr.updateState(s.State)
+	ccb.cc.csMgr.updateState(s.ConnectivityState)
 }
 
 func (ccb *ccBalancerWrapper) ResolveNow(o resolver.ResolveNowOptions) {

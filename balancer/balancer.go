@@ -120,7 +120,7 @@ type NewSubConnOptions struct {
 // State contains the balancer's state relevant to the gRPC ClientConn.
 type State struct {
 	// State controls the connectivity state of the ClientConn
-	State connectivity.State
+	ConnectivityState connectivity.State
 	// Picker is used to choose connections (SubConns) for RPCs.
 	Picker V2Picker
 }
@@ -377,8 +377,11 @@ type Balancer interface {
 
 // SubConnState describes the state of a SubConn.
 type SubConnState struct {
+	// ConnectivityState is the connectivity state of the SubConn.
 	ConnectivityState connectivity.State
-	ConnectionError   error
+	// ConnectionError is set if the ConnectivityState is TransientFailure,
+	// describing the reason the SubConn failed.  Otherwise, it is nil.
+	ConnectionError error
 }
 
 // ClientConnState describes the state of a ClientConn relevant to the

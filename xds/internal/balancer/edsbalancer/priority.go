@@ -45,7 +45,7 @@ func (xdsB *EDSBalancer) handlePriorityChange() {
 	// Everything was removed by EDS.
 	if !xdsB.priorityLowest.isSet() {
 		xdsB.priorityInUse = newPriorityTypeUnset()
-		xdsB.cc.UpdateState(balancer.State{State: connectivity.TransientFailure, Picker: base.NewErrPickerV2(balancer.ErrTransientFailure)})
+		xdsB.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPickerV2(balancer.ErrTransientFailure)})
 		return
 	}
 
@@ -69,13 +69,13 @@ func (xdsB *EDSBalancer) handlePriorityChange() {
 			// We don't have an old state to send to parent, but we also don't
 			// want parent to keep using picker from old_priorityInUse. Send an
 			// update to trigger block picks until a new picker is ready.
-			xdsB.cc.UpdateState(balancer.State{State: connectivity.Connecting, Picker: base.NewErrPickerV2(balancer.ErrNoSubConnAvailable)})
+			xdsB.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: base.NewErrPickerV2(balancer.ErrNoSubConnAvailable)})
 		}
 		return
 	}
 
 	// priorityInUse is not ready, look for next priority, and use if found.
-	if s, ok := xdsB.priorityToState[xdsB.priorityInUse]; ok && s.State != connectivity.Ready {
+	if s, ok := xdsB.priorityToState[xdsB.priorityInUse]; ok && s.ConnectivityState != connectivity.Ready {
 		pNext := xdsB.priorityInUse.nextLower()
 		if _, ok := xdsB.priorityToLocalities[pNext]; ok {
 			xdsB.startPriority(pNext)
@@ -139,10 +139,10 @@ func (xdsB *EDSBalancer) handlePriorityWithNewState(priority priorityType, s bal
 		bState = &balancer.State{}
 		xdsB.priorityToState[priority] = bState
 	}
-	oldState := bState.State
+	oldState := bState.ConnectivityState
 	*bState = s
 
-	switch s.State {
+	switch s.ConnectivityState {
 	case connectivity.Ready:
 		return xdsB.handlePriorityWithNewStateReady(priority)
 	case connectivity.TransientFailure:

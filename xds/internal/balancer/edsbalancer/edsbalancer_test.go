@@ -386,7 +386,7 @@ type testConstBalancer struct {
 }
 
 func (tb *testConstBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	tb.cc.UpdateState(balancer.State{State: connectivity.Ready, Picker: &testConstPicker{err: errTestConstPicker}})
+	tb.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &testConstPicker{err: errTestConstPicker}})
 }
 
 func (tb *testConstBalancer) HandleResolvedAddrs(a []resolver.Address, err error) {

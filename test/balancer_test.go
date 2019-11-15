@@ -70,7 +70,7 @@ func (b *testBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) 
 			grpclog.Errorf("testBalancer: failed to NewSubConn: %v", err)
 			return
 		}
-		b.cc.UpdateState(balancer.State{State: connectivity.Connecting, Picker: &picker{sc: b.sc, bal: b}})
+		b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: &picker{sc: b.sc, bal: b}})
 		b.sc.Connect()
 	}
 }
@@ -88,11 +88,11 @@ func (b *testBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectiv
 
 	switch s {
 	case connectivity.Ready, connectivity.Idle:
-		b.cc.UpdateState(balancer.State{State: s, Picker: &picker{sc: sc, bal: b}})
+		b.cc.UpdateState(balancer.State{ConnectivityState: s, Picker: &picker{sc: sc, bal: b}})
 	case connectivity.Connecting:
-		b.cc.UpdateState(balancer.State{State: s, Picker: &picker{err: balancer.ErrNoSubConnAvailable, bal: b}})
+		b.cc.UpdateState(balancer.State{ConnectivityState: s, Picker: &picker{err: balancer.ErrNoSubConnAvailable, bal: b}})
 	case connectivity.TransientFailure:
-		b.cc.UpdateState(balancer.State{State: s, Picker: &picker{err: balancer.ErrTransientFailure, bal: b}})
+		b.cc.UpdateState(balancer.State{ConnectivityState: s, Picker: &picker{err: balancer.ErrTransientFailure, bal: b}})
 	}
 }
 

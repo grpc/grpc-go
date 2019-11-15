@@ -67,9 +67,10 @@ func (b *pickfirstBalancer) HandleSubConnStateChange(sc balancer.SubConn, s conn
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
-	if b.state == connectivity.TransientFailure {
+	switch b.state {
+	case connectivity.TransientFailure, connectivity.Idle, connectivity.Connecting:
 		// Set a failing picker if we don't have a good picker.
-		b.cc.UpdateState(balancer.State{State: connectivity.TransientFailure,
+		b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure,
 			Picker: &picker{err: status.Errorf(codes.Unavailable, "name resolver error: %v", err)}},
 		)
 	}
@@ -91,13 +92,13 @@ func (b *pickfirstBalancer) UpdateClientConnState(cs balancer.ClientConnState) e
 				grpclog.Errorf("pickfirstBalancer: failed to NewSubConn: %v", err)
 			}
 			b.state = connectivity.TransientFailure
-			b.cc.UpdateState(balancer.State{State: connectivity.TransientFailure,
+			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure,
 				Picker: &picker{err: status.Errorf(codes.Unavailable, "error creating connection: %v", err)}},
 			)
 			return balancer.ErrBadResolverState
 		}
 		b.state = connectivity.Idle
-		b.cc.UpdateState(balancer.State{State: connectivity.Idle, Picker: &picker{result: balancer.PickResult{SubConn: b.sc}}})
+		b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: &picker{result: balancer.PickResult{SubConn: b.sc}}})
 		b.sc.Connect()
 	} else {
 		b.sc.UpdateAddresses(cs.ResolverState.Addresses)
@@ -124,11 +125,20 @@ func (b *pickfirstBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.S
 
 	switch s.ConnectivityState {
 	case connectivity.Ready, connectivity.Idle:
-		b.cc.UpdateState(balancer.State{State: s.ConnectivityState, Picker: &picker{result: balancer.PickResult{SubConn: sc}}})
+		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{result: balancer.PickResult{SubConn: sc}}})
 	case connectivity.Connecting:
-		b.cc.UpdateState(balancer.State{State: s.ConnectivityState, Picker: &picker{err: balancer.ErrNoSubConnAvailable}})
+		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{err: balancer.ErrNoSubConnAvailable}})
 	case connectivity.TransientFailure:
-		b.cc.UpdateState(balancer.State{State: s.ConnectivityState, Picker: &picker{err: balancer.ErrTransientFailure}})
+		err := balancer.ErrTransientFailure
+		// TODO: this can be unconditional after the V1 API is removed, as
+		// SubConnState will always contain a connection error.
+		if s.ConnectionError != nil {
+			err = balancer.TransientFailureError(s.ConnectionError)
+		}
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: s.ConnectivityState,
+			Picker:            &picker{err: err},
+		})
 	}
 }
 

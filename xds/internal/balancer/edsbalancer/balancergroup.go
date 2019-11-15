@@ -18,7 +18,6 @@ package edsbalancer
 
 import (
 	"fmt"
-	"runtime/debug"
 	"sync"
 	"time"
 
@@ -68,7 +67,6 @@ type subBalancerWithConfig struct {
 }
 
 func (sbc *subBalancerWithConfig) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
-	debug.PrintStack()
 	grpclog.Fatalln("not implemented")
 }
 
@@ -498,7 +496,7 @@ func (bg *balancerGroup) updateBalancerState(id internal.Locality, state balance
 		return
 	}
 	pickerSt.picker = newLoadReportPicker(state.Picker, id, bg.loadStore)
-	pickerSt.state = state.State
+	pickerSt.state = state.ConnectivityState
 	if bg.incomingStarted {
 		bg.cc.UpdateState(buildPickerAndState(bg.idToPickerState))
 	}
