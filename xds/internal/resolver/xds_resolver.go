@@ -65,18 +65,16 @@ type xdsResolverBuilder struct{}
 // into a global registry.
 func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rbo resolver.BuildOptions) (resolver.Resolver, error) {
 	config := newXDSConfig()
-	switch {
-	case config.BalancerName == "":
+	if config.BalancerName == "" {
 		return nil, errors.New("xds: balancerName not found in bootstrap file")
-	case config.Creds == nil:
+	}
+	if config.Creds == nil {
 		// TODO: Once we start supporting a mechanism to register credential
 		// types, a failure to find the credential type mentioned in the
 		// bootstrap file should result in a failure, and not in using
 		// credentials from the parent channel (passed through the
 		// resolver.BuildOptions).
 		config.Creds = defaultDialCreds(config.BalancerName, rbo)
-	case config.NodeProto == nil:
-		return nil, errors.New("xds: node proto not found in bootstrap file")
 	}
 
 	var dopts []grpc.DialOption

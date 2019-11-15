@@ -165,15 +165,6 @@ func TestResolverBuilder(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "no-node-proto-in-config",
-			rbo:  resolver.BuildOptions{},
-			config: bootstrap.Config{
-				BalancerName: balancerName,
-				Creds:        grpc.WithInsecure(),
-			},
-			wantErr: true,
-		},
-		{
 			name: "no-creds-in-config",
 			rbo:  resolver.BuildOptions{},
 			config: bootstrap.Config{
