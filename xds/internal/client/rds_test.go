@@ -134,7 +134,7 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if gotCluster := getClusterFromRouteConfiguration(test.rc, goodLDSTarget1); gotCluster != test.wantCluster {
-				t.Errorf("%s: getClusterFromRouteConfiguration(%+v, %v) = %v, want %v", test.name, test.rc, goodLDSTarget1, gotCluster, test.wantCluster)
+				t.Errorf("getClusterFromRouteConfiguration(%+v, %v) = %v, want %v", test.rc, goodLDSTarget1, gotCluster, test.wantCluster)
 			}
 		})
 	}
@@ -219,7 +219,7 @@ func TestHandleRDSResponse(t *testing.T) {
 
 			// Register a watcher, to trigger the v2Client to send an RDS request.
 			cancelWatch := v2c.watchRDS(goodRouteName1, func(u rdsUpdate, err error) {
-				t.Logf("%s: in v2c.watchRDS callback, rdsUpdate: %+v, err: %v", test.name, u, err)
+				t.Logf("in v2c.watchRDS callback, rdsUpdate: %+v, err: %v", u, err)
 				gotUpdateCh <- u
 				gotUpdateErrCh <- err
 			})
@@ -231,7 +231,7 @@ func TestHandleRDSResponse(t *testing.T) {
 			// Directly push the response through a call to handleRDSResponse,
 			// thereby bypassing the fakeServer.
 			if err := v2c.handleRDSResponse(test.rdsResponse); (err != nil) != test.wantErr {
-				t.Fatalf("%s: v2c.handleRDSResponse() returned err: %v, wantErr: %v", test.name, err, test.wantErr)
+				t.Fatalf("v2c.handleRDSResponse() returned err: %v, wantErr: %v", err, test.wantErr)
 			}
 
 			// If the test needs the callback to be invoked, verify the update and
@@ -244,14 +244,14 @@ func TestHandleRDSResponse(t *testing.T) {
 				case gotUpdate := <-gotUpdateCh:
 					timer.Stop()
 					if !reflect.DeepEqual(gotUpdate, *test.wantUpdate) {
-						t.Fatalf("%s: got RDS update : %+v, want %+v", test.name, gotUpdate, *test.wantUpdate)
+						t.Fatalf("got RDS update : %+v, want %+v", gotUpdate, *test.wantUpdate)
 					}
 				}
 				// Since the callback that we registered pushes to both channels at
 				// the same time, this channel read should return immediately.
 				gotUpdateErr := <-gotUpdateErrCh
 				if (gotUpdateErr != nil) != test.wantUpdateErr {
-					t.Fatalf("%s: got RDS update error {%v}, wantErr: %v", test.name, gotUpdateErr, test.wantUpdateErr)
+					t.Fatalf("got RDS update error {%v}, wantErr: %v", gotUpdateErr, test.wantUpdateErr)
 				}
 			}
 			cancelWatch()

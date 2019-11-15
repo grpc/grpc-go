@@ -75,13 +75,15 @@ func TestGetRouteConfigNameFromListener(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		gotRoute, err := getRouteConfigNameFromListener(test.lis)
-		if gotRoute != test.wantRoute {
-			t.Errorf("%s: getRouteConfigNameFromListener(%+v) = %v, want %v", test.name, test.lis, gotRoute, test.wantRoute)
-		}
-		if (err != nil) != test.wantErr {
-			t.Errorf("%s: getRouteConfigNameFromListener(%+v) = %v, want %v", test.name, test.lis, err, test.wantErr)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			gotRoute, err := getRouteConfigNameFromListener(test.lis)
+			if gotRoute != test.wantRoute {
+				t.Errorf("getRouteConfigNameFromListener(%+v) = %v, want %v", test.lis, gotRoute, test.wantRoute)
+			}
+			if (err != nil) != test.wantErr {
+				t.Errorf("getRouteConfigNameFromListener(%+v) = %v, want %v", test.lis, err, test.wantErr)
+			}
+		})
 	}
 }
 
@@ -178,7 +180,7 @@ func TestHandleLDSResponse(t *testing.T) {
 
 			// Register a watcher, to trigger the v2Client to send an LDS request.
 			cancelWatch := v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
-				t.Logf("%s: in v2c.watchLDS callback, ldsUpdate: %+v, err: %v", test.name, u, err)
+				t.Logf("in v2c.watchLDS callback, ldsUpdate: %+v, err: %v", u, err)
 				gotUpdateCh <- u
 				gotUpdateErrCh <- err
 			})
@@ -190,7 +192,7 @@ func TestHandleLDSResponse(t *testing.T) {
 			// Directly push the response through a call to handleLDSResponse,
 			// thereby bypassing the fakeServer.
 			if err := v2c.handleLDSResponse(test.ldsResponse); (err != nil) != test.wantErr {
-				t.Fatalf("%s: v2c.handleLDSResponse() returned err: %v, wantErr: %v", test.name, err, test.wantErr)
+				t.Fatalf("v2c.handleLDSResponse() returned err: %v, wantErr: %v", err, test.wantErr)
 			}
 
 			// If the test needs the callback to be invoked, verify the update and
@@ -203,14 +205,14 @@ func TestHandleLDSResponse(t *testing.T) {
 				case gotUpdate := <-gotUpdateCh:
 					timer.Stop()
 					if !reflect.DeepEqual(gotUpdate, *test.wantUpdate) {
-						t.Fatalf("%s: got LDS update : %+v, want %+v", test.name, gotUpdate, *test.wantUpdate)
+						t.Fatalf("got LDS update : %+v, want %+v", gotUpdate, *test.wantUpdate)
 					}
 				}
 				// Since the callback that we registered pushes to both channels at
 				// the same time, this channel read should return immediately.
 				gotUpdateErr := <-gotUpdateErrCh
 				if (gotUpdateErr != nil) != test.wantUpdateErr {
-					t.Fatalf("%s: got LDS update error {%v}, wantErr: %v", test.name, gotUpdateErr, test.wantUpdateErr)
+					t.Fatalf("got LDS update error {%v}, wantErr: %v", gotUpdateErr, test.wantUpdateErr)
 				}
 			}
 			cancelWatch()
