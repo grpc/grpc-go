@@ -25,7 +25,7 @@ import (
 )
 
 // This stubbed function usually returns zero (see goid_regular.go); however,
-// if grpc is built with `-tags 'grpcgoid'`, a runtime.GoId function, which
+// if grpc is built with `-tags 'grpcgoid'`, a runtime.Goid function, which
 // does not exist in the Go standard library, is expected. While not necessary,
 // sometimes, visualising grpc profiling data in trace-viewer is much nicer
 // with goroutines separated from each other.
@@ -63,6 +63,6 @@ import (
 // debugging; given that runtime.Stack is fine with exposing the goroutine ID
 // (in an inefficient way), I'm sure the Go team would be comfortable with this
 // conditional build tag.
-func goId() int64 {
-	return runtime.GoId()
+func goid() int64 {
+	return runtime.Goid()
 }

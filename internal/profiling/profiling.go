@@ -22,7 +22,7 @@
 // profiling.go to store various statistics. For example, StreamStats is a
 // circular buffer of Stat objects, each of which is comprised of Timers.
 //
-// This abstraction is designed to accomodate more stats in the future; for
+// This abstraction is designed to accommodate more stats in the future; for
 // example, if one wants to profile the load balancing layer, which is
 // independent of RPC queries, a separate CircularBuffer can be used.
 //
@@ -72,7 +72,7 @@ type Timer struct {
 	TimerTag string
 	Begin    time.Time
 	End      time.Time
-	GoId     int64
+	GoID     int64
 }
 
 // NewTimer creates and returns a new Timer object. This is useful when you
@@ -85,7 +85,7 @@ func NewTimer(timerTag string) *Timer {
 	return &Timer{
 		TimerTag: timerTag,
 		Begin:    time.Now(),
-		GoId:     goId(),
+		GoID:     goid(),
 	}
 }
 
@@ -176,10 +176,15 @@ func (stat *Stat) AppendTimer(timer *Timer) int {
 	return index
 }
 
-// ConnectionCounters count the number of connections. This counter is embedded
-// within a StreamStat's Metadata along with each stream's stream ID to
-// uniquely identify a query.
+// ServerConnectionCounter counts the number of connections a server has seen.
+// This counter is embedded within a StreamStat's Metadata along with each
+// stream's stream ID to uniquely identify a query. Accessed atomically.
 var ServerConnectionCounter uint64
+
+// ClientConnectionCounter counts the number of connections a client has
+// initiated. This counter is embedded within a StreamStat's Metadata along
+// with each stream's stream ID to uniquely identify a query. Accessed
+// atomically.
 var ClientConnectionCounter uint64
 
 // Stats for the last defaultStreamStatsBufsize RPCs will be stored in memory.
