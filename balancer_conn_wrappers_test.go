@@ -43,9 +43,7 @@ func (*funcBalancer) HandleResolvedAddrs([]resolver.Address, error) {
 func (b *funcBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	return b.updateClientConnState(s)
 }
-func (*funcBalancer) ResolverError(error) {
-	panic("unimplemented") // resolver never reports error
-}
+func (*funcBalancer) ResolverError(error) {}
 func (*funcBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
 	panic("unimplemented") // we never have sub-conns
 }
