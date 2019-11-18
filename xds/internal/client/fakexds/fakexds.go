@@ -65,6 +65,8 @@ type Server struct {
 // StartClientAndServer starts a fakexds.Server and creates a ClientConn
 // talking to it. The returned cleanup function should be invoked by the caller
 // once the test is done.
+// TODO: Split this into two funcs, one to return a server and one to return a
+// ClientConn connected to this server, and change tests accordingly.
 func StartClientAndServer(t *testing.T) (*Server, *grpc.ClientConn, func()) {
 	t.Helper()
 
