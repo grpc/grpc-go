@@ -140,12 +140,12 @@ func TestWatchService(t *testing.T) {
 
 	callbackCh := make(chan error, 1)
 	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
-		if su.Cluster != goodClusterName1 {
-			callbackCh <- fmt.Errorf("got clusterName: %+v, want clusterName: %+v", su.Cluster, goodClusterName1)
-			return
-		}
 		if err != nil {
 			callbackCh <- fmt.Errorf("xdsClient.WatchService returned error: %v", err)
+			return
+		}
+		if su.Cluster != goodClusterName1 {
+			callbackCh <- fmt.Errorf("got clusterName: %+v, want clusterName: %+v", su.Cluster, goodClusterName1)
 			return
 		}
 		callbackCh <- nil

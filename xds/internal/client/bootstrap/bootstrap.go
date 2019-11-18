@@ -151,7 +151,7 @@ func NewConfig() *Config {
 	// empty one here. That way, callers of this function can always expect
 	// that the NodeProto field is non-nil.
 	if config.NodeProto == nil {
-		config.NodeProto = &corepb.Node{BuildVersion: gRPCVersion}
+		config.NodeProto = &corepb.Node{}
 	}
 	config.NodeProto.BuildVersion = gRPCVersion
 
