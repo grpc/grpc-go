@@ -40,7 +40,7 @@ var validConfig = bootstrap.Config{
 	NodeProto:    &corepb.Node{},
 }
 
-func TestNewClient(t *testing.T) {
+func TestNew(t *testing.T) {
 	tests := []struct {
 		name            string
 		opts            Options
@@ -110,16 +110,16 @@ func TestNewClient(t *testing.T) {
 			defer func() {
 				dialFunc = oldDialFunc
 			}()
-			if _, err := NewClient(test.opts); (err != nil) != test.wantErr {
-				t.Fatalf("NewClient(%+v) = %v, wantErr: %v", test.opts, err, test.wantErr)
+			if _, err := New(test.opts); (err != nil) != test.wantErr {
+				t.Fatalf("New(%+v) = %v, wantErr: %v", test.opts, err, test.wantErr)
 			}
 		})
 	}
 }
 
-// TestWatchForServiceUpdate tests the happy case of registering a watcher for
+// TestWatchService tests the happy case of registering a watcher for
 // service updates and receiving a good update.
-func TestWatchForServiceUpdate(t *testing.T) {
+func TestWatchService(t *testing.T) {
 	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
 	defer cleanup()
 
@@ -131,21 +131,21 @@ func TestWatchForServiceUpdate(t *testing.T) {
 		dialFunc = oldDialFunc
 	}()
 
-	xdsClient, err := NewClient(Options{Config: validConfig})
+	xdsClient, err := New(Options{Config: validConfig})
 	if err != nil {
-		t.Fatalf("NewClient returned error: %v", err)
+		t.Fatalf("New returned error: %v", err)
 	}
 	defer xdsClient.Close()
 	t.Log("Created an xdsClient...")
 
 	callbackCh := make(chan error, 1)
-	cancelWatch := xdsClient.WatchForServiceUpdate(goodLDSTarget1, func(su ServiceUpdate, err error) {
+	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
 		if su.Cluster != goodClusterName1 {
 			callbackCh <- fmt.Errorf("got clusterName: %+v, want clusterName: %+v", su.Cluster, goodClusterName1)
 			return
 		}
 		if err != nil {
-			callbackCh <- fmt.Errorf("xdsClient.WatchForServiceUpdate returned error: %v", err)
+			callbackCh <- fmt.Errorf("xdsClient.WatchService returned error: %v", err)
 			return
 		}
 		callbackCh <- nil
@@ -171,11 +171,11 @@ func TestWatchForServiceUpdate(t *testing.T) {
 	}
 }
 
-// TestWatchForServiceUpdateWithNoResponseFromServer tests the case where the
+// TestWatchServiceWithNoResponseFromServer tests the case where the
 // xDS server does not respond to the requests being sent out as part of
 // registering a service update watcher. The underlying v2Client will timeout
 // and will send us an error.
-func TestWatchForServiceUpdateWithNoResponseFromServer(t *testing.T) {
+func TestWatchServiceWithNoResponseFromServer(t *testing.T) {
 	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
 	defer cleanup()
 
@@ -187,9 +187,9 @@ func TestWatchForServiceUpdateWithNoResponseFromServer(t *testing.T) {
 		dialFunc = oldDialFunc
 	}()
 
-	xdsClient, err := NewClient(Options{Config: validConfig})
+	xdsClient, err := New(Options{Config: validConfig})
 	if err != nil {
-		t.Fatalf("NewClient returned error: %v", err)
+		t.Fatalf("New returned error: %v", err)
 	}
 	defer xdsClient.Close()
 	t.Log("Created an xdsClient...")
@@ -201,13 +201,13 @@ func TestWatchForServiceUpdateWithNoResponseFromServer(t *testing.T) {
 	}()
 
 	callbackCh := make(chan error, 1)
-	cancelWatch := xdsClient.WatchForServiceUpdate(goodLDSTarget1, func(su ServiceUpdate, err error) {
+	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
 		if su.Cluster != "" {
 			callbackCh <- fmt.Errorf("got clusterName: %+v, want empty clusterName", su.Cluster)
 			return
 		}
 		if err == nil {
-			callbackCh <- errors.New("xdsClient.WatchForServiceUpdate returned error non-nil error")
+			callbackCh <- errors.New("xdsClient.WatchService returned error non-nil error")
 			return
 		}
 		callbackCh <- nil
@@ -230,9 +230,9 @@ func TestWatchForServiceUpdateWithNoResponseFromServer(t *testing.T) {
 	}
 }
 
-// TestWatchForServiceUpdateEmptyRDS tests the case where the underlying
+// TestWatchServiceEmptyRDS tests the case where the underlying
 // v2Client receives an empty RDS response.
-func TestWatchForServiceUpdateEmptyRDS(t *testing.T) {
+func TestWatchServiceEmptyRDS(t *testing.T) {
 	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
 	defer cleanup()
 
@@ -244,9 +244,9 @@ func TestWatchForServiceUpdateEmptyRDS(t *testing.T) {
 		dialFunc = oldDialFunc
 	}()
 
-	xdsClient, err := NewClient(Options{Config: validConfig})
+	xdsClient, err := New(Options{Config: validConfig})
 	if err != nil {
-		t.Fatalf("NewClient returned error: %v", err)
+		t.Fatalf("New returned error: %v", err)
 	}
 	defer xdsClient.Close()
 	t.Log("Created an xdsClient...")
@@ -258,13 +258,13 @@ func TestWatchForServiceUpdateEmptyRDS(t *testing.T) {
 	}()
 
 	callbackCh := make(chan error, 1)
-	cancelWatch := xdsClient.WatchForServiceUpdate(goodLDSTarget1, func(su ServiceUpdate, err error) {
+	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
 		if su.Cluster != "" {
 			callbackCh <- fmt.Errorf("got clusterName: %+v, want empty clusterName", su.Cluster)
 			return
 		}
 		if err == nil {
-			callbackCh <- errors.New("xdsClient.WatchForServiceUpdate returned error non-nil error")
+			callbackCh <- errors.New("xdsClient.WatchService returned error non-nil error")
 			return
 		}
 		callbackCh <- nil
@@ -287,5 +287,53 @@ func TestWatchForServiceUpdateEmptyRDS(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+// TestWatchServiceWithClientClose tests the case where xDS responses are
+// received after the client is closed, and we make sure that the registered
+// watcher callback is not invoked.
+func TestWatchServiceWithClientClose(t *testing.T) {
+	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
+	defer cleanup()
+
+	oldDialFunc := dialFunc
+	dialFunc = func(_ context.Context, _ string, _ ...grpc.DialOption) (*grpc.ClientConn, error) {
+		return fakeCC, nil
+	}
+	defer func() {
+		dialFunc = oldDialFunc
+	}()
+
+	xdsClient, err := New(Options{Config: validConfig})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+	t.Log("Created an xdsClient...")
+
+	callbackCh := make(chan error, 1)
+	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
+		callbackCh <- errors.New("watcher callback invoked after client close")
+	})
+	defer cancelWatch()
+	t.Log("Registered a watcher for service updates...")
+
+	// Make the fakeServer send LDS response.
+	<-fakeServer.RequestChan
+	fakeServer.ResponseChan <- &fakexds.Response{Resp: goodLDSResponse1}
+
+	xdsClient.Close()
+	t.Log("Closing the xdsClient...")
+
+	// Push an RDS response from the fakeserver
+	fakeServer.ResponseChan <- &fakexds.Response{Resp: goodRDSResponse1}
+
+	timer := time.NewTimer(1 * time.Second)
+	select {
+	case <-timer.C:
+		// Do nothing. Success.
+	case err := <-callbackCh:
+		timer.Stop()
+		t.Fatal(err)
 	}
 }

@@ -41,13 +41,6 @@ type Options struct {
 	// responsibility of the caller to use some sane defaults here if the
 	// bootstrap process returned with certain fields left unspecified.
 	Config bootstrap.Config
-	// Backoff is the backoff strategy to be used when reconnecting to the xDS
-	// server. If left unspecified, a default exponential backoff strategy
-	// would be used.
-	// TODO: If we have no reason to use an exponential backoff with
-	// non-default values, remove this field, and directly use the appropriate
-	// one in v2Client.
-	Backoff backoff.Strategy
 	// DialOpts contains dial options to be used when dialing the xDS server.
 	DialOpts []grpc.DialOption
 }
@@ -66,8 +59,8 @@ type Client struct {
 	rdsCancel       func()
 }
 
-// NewClient returns a new xdsClient configured with opts.
-func NewClient(opts Options) (*Client, error) {
+// New returns a new xdsClient configured with opts.
+func New(opts Options) (*Client, error) {
 	switch {
 	case opts.Config.BalancerName == "":
 		return nil, errors.New("xds: no xds_server name provided in options")
@@ -86,19 +79,17 @@ func NewClient(opts Options) (*Client, error) {
 		return nil, fmt.Errorf("xds: failed to dial balancer {%s}: %v", opts.Config.BalancerName, err)
 	}
 
-	bs := backoff.DefaultExponential.Backoff
-	if opts.Backoff != nil {
-		bs = opts.Backoff.Backoff
-	}
 	c := &Client{
 		cc:  cc,
-		v2c: newV2Client(cc, opts.Config.NodeProto, bs),
+		v2c: newV2Client(cc, opts.Config.NodeProto, backoff.DefaultExponential.Backoff),
 	}
 	return c, nil
 }
 
 // Close closes the gRPC connection to the xDS server.
 func (c *Client) Close() {
+	// TODO: Should we invoke the registered callbacks here with an error that
+	// the client is closed?
 	c.v2c.close()
 	c.cc.Close()
 }
@@ -110,6 +101,7 @@ type ServiceUpdate struct {
 
 // handleLDSUpdate is the LDS watcher callback we registered with the v2Client.
 func (c *Client) handleLDSUpdate(u ldsUpdate, err error) {
+	grpclog.Infof("xds: client received LDS update: %+v, err: %v", u, err)
 	if err != nil {
 		c.mu.Lock()
 		if c.serviceCallback != nil {
@@ -119,7 +111,6 @@ func (c *Client) handleLDSUpdate(u ldsUpdate, err error) {
 		return
 	}
 
-	grpclog.Infof("xds: client received LDS update: %+v, err: %v", u, err)
 	c.mu.Lock()
 	c.rdsCancel = c.v2c.watchRDS(u.routeName, c.handleRDSUpdate)
 	c.mu.Unlock()
@@ -127,6 +118,7 @@ func (c *Client) handleLDSUpdate(u ldsUpdate, err error) {
 
 // handleRDSUpdate is the RDS watcher callback we registered with the v2Client.
 func (c *Client) handleRDSUpdate(u rdsUpdate, err error) {
+	grpclog.Infof("xds: client received RDS update: %+v, err: %v", u, err)
 	if err != nil {
 		c.mu.Lock()
 		if c.serviceCallback != nil {
@@ -136,7 +128,6 @@ func (c *Client) handleRDSUpdate(u rdsUpdate, err error) {
 		return
 	}
 
-	grpclog.Infof("xds: client received RDS update: %+v, err: %v", u, err)
 	c.mu.Lock()
 	if c.serviceCallback != nil {
 		c.serviceCallback(ServiceUpdate{Cluster: u.clusterName}, nil)
@@ -144,12 +135,14 @@ func (c *Client) handleRDSUpdate(u rdsUpdate, err error) {
 	c.mu.Unlock()
 }
 
-// WatchForServiceUpdate uses LDS and RDS protocols to discover resource
-// information for the provided target.
-func (c *Client) WatchForServiceUpdate(target string, callback func(ServiceUpdate, error)) (cancel func()) {
+// WatchService uses LDS and RDS protocols to discover information about the
+// provided serviceName.
+func (c *Client) WatchService(serviceName string, callback func(ServiceUpdate, error)) (cancel func()) {
+	// TODO: Error out early if the client is closed. Ideally, this should
+	// never be called after the client is closed though.
 	c.mu.Lock()
 	c.serviceCallback = callback
-	c.ldsCancel = c.v2c.watchLDS(target, c.handleLDSUpdate)
+	c.ldsCancel = c.v2c.watchLDS(serviceName, c.handleLDSUpdate)
 	c.mu.Unlock()
 
 	return func() {

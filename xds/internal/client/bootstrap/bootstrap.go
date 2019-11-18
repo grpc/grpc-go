@@ -126,7 +126,6 @@ func NewConfig() *Config {
 				grpclog.Errorf("xds: jsonpb.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
 				break
 			}
-			n.BuildVersion = gRPCVersion
 			config.NodeProto = n
 		case "xds_server":
 			xs := &xdsServer{}
@@ -148,12 +147,13 @@ func NewConfig() *Config {
 		}
 	}
 
-	// If we don't find a nodeProto in the bootstrap file, we just create a new
-	// one and set the version number here. That way, callers of this function
-	// can always expect that the NodeProto field is non-nil.
+	// If we don't find a nodeProto in the bootstrap file, we just create an
+	// empty one here. That way, callers of this function can always expect
+	// that the NodeProto field is non-nil.
 	if config.NodeProto == nil {
 		config.NodeProto = &corepb.Node{BuildVersion: gRPCVersion}
 	}
+	config.NodeProto.BuildVersion = gRPCVersion
 
 	grpclog.Infof("xds: bootstrap.NewConfig returning: %+v", config)
 	return config

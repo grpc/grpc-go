@@ -1,5 +1,4 @@
 /*
- *
  * Copyright 2019 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,27 +26,27 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/resolver"
 
+	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
-	"google.golang.org/grpc/xds/internal/registry"
 )
 
 // xDS balancer name is xds_experimental while resolver scheme is
 // xds-experimental since "_" is not a valid character in the URL.
-const xdsScheme = "xds-experimental"
+// TODO: Change this scheme name to "xds-experimental" once we delete the old
+// resolver implementation in xds_resolver_old.go
+const xdsScheme = "xds-experimental-new"
 
 // For overriding in unittests.
 var (
 	newXDSClient = func(opts xdsclient.Options) (xdsClientInterface, error) {
-		return xdsclient.NewClient(opts)
+		return xdsclient.New(opts)
 	}
 	newXDSConfig = bootstrap.NewConfig
 )
@@ -61,8 +60,7 @@ type xdsResolverBuilder struct{}
 // Build helps implement the resolver.Builder interface.
 //
 // The xds bootstrap process is performed (and a new xds client is built) every
-// time an xds resolver is built. The newly created xds client is also added
-// into a global registry.
+// time an xds resolver is built.
 func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rbo resolver.BuildOptions) (resolver.Resolver, error) {
 	config := newXDSConfig()
 	if config.BalancerName == "" {
@@ -90,10 +88,11 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 		target:   t,
 		cc:       cc,
 		client:   client,
-		clientID: registry.AddTo(client),
-		updateCh: buffer.NewUnbounded(),
+		updateCh: make(chan suWithError, 1),
 	}
 	r.ctx, r.cancelCtx = context.WithCancel(context.Background())
+	r.cancelWatch = r.client.WatchService(r.target.Endpoint, r.handleServiceUpdate)
+
 	go r.run()
 	return r, nil
 }
@@ -128,8 +127,15 @@ func (*xdsResolverBuilder) Scheme() string {
 // xdsClientInterface contains methods from xdsClient.Client which are used by
 // the resolver. This will be faked out in unittests.
 type xdsClientInterface interface {
-	WatchForServiceUpdate(string, func(xdsclient.ServiceUpdate, error)) func()
+	WatchService(string, func(xdsclient.ServiceUpdate, error)) func()
 	Close()
+}
+
+// suWithError wraps the ServiceUpdate and error received through a watch API
+// callback, so that it can pushed onto the update channel as a single entity.
+type suWithError struct {
+	su  xdsclient.ServiceUpdate
+	err error
 }
 
 // xdsResolver implements the resolver.Resolver interface.
@@ -143,22 +149,12 @@ type xdsResolver struct {
 	target    resolver.Target
 	cc        resolver.ClientConn
 
-	// The underlying xdsClient (which performs all xDS requests and responses)
-	// and its registry ID (which is sent to the balancer).
-	client   xdsClientInterface
-	clientID string
-
+	// The underlying xdsClient which performs all xDS requests and responses.
+	client xdsClientInterface
 	// A channel for the watch API callback to write service updates on to. The
 	// updates are read by the run goroutine and passed on to the ClientConn.
-	updateCh *buffer.Unbounded
-
-	// cancelWatch is the cancel function returned by the xdsClient watch API
-	// (which is invoked when the resolver is closed). This is set in run(),
-	// which is executed in a separate goroutine invoked from Build(). But
-	// since Build() returns immediately, it is possible for Close() to be
-	// called at anytime, and could race with the write to r.cancelWatch in
-	// run(). Hence, needs to be guarded by a mutex.
-	mu          sync.Mutex
+	updateCh chan suWithError
+	// cancelWatch is the function to cancel the watcher.
 	cancelWatch func()
 }
 
@@ -172,24 +168,21 @@ const jsonFormatSC = `{
     ]
   }`
 
-// run is a long running goroutine which registers a watcher for service
-// updates. It then blocks on receiving service updates and passes it on the
-// ClientConn.
+// run is a long running goroutine which blocks on receiving service updates
+// and passes it on the ClientConn.
 func (r *xdsResolver) run() {
-	r.mu.Lock()
-	r.cancelWatch = r.client.WatchForServiceUpdate(r.target.Endpoint, r.handleServiceUpdate)
-	r.mu.Unlock()
-
 	for {
 		select {
 		case <-r.ctx.Done():
-		case u := <-r.updateCh.Get():
-			r.updateCh.Load()
-			su := u.(*xdsclient.ServiceUpdate)
-			sc := fmt.Sprintf(jsonFormatSC, su.Cluster)
+		case update := <-r.updateCh:
+			if update.err != nil {
+				r.cc.ReportError(update.err)
+				return
+			}
+			sc := fmt.Sprintf(jsonFormatSC, update.su.Cluster)
 			r.cc.UpdateState(resolver.State{
 				ServiceConfig: r.cc.ParseServiceConfig(sc),
-				Attributes:    attributes.New(registry.KeyName, r.clientID),
+				Attributes:    attributes.New(xdsinternal.XDSClientID, r.client),
 			})
 		}
 	}
@@ -203,11 +196,7 @@ func (r *xdsResolver) handleServiceUpdate(su xdsclient.ServiceUpdate, err error)
 		// Do not pass updates to the ClientConn once the resolver is closed.
 		return
 	}
-	if err != nil {
-		r.cc.ReportError(err)
-		return
-	}
-	r.updateCh.Put(&su)
+	r.updateCh <- suWithError{su, err}
 }
 
 // ResolveNow is a no-op at this point.
@@ -215,13 +204,7 @@ func (*xdsResolver) ResolveNow(o resolver.ResolveNowOptions) {}
 
 // Close closes the resolver, and also closes the underlying xdsClient.
 func (r *xdsResolver) Close() {
-	r.mu.Lock()
-	if r.cancelWatch != nil {
-		r.cancelWatch()
-	}
-	r.mu.Unlock()
-
-	r.cancelCtx()
+	r.cancelWatch()
 	r.client.Close()
-	registry.RemoveFrom(r.clientID)
+	r.cancelCtx()
 }
