@@ -16,12 +16,12 @@
  *
  */
 
-// Package oldresolver implements the xds resolver.
+// Package old implements the old xds resolver.
 //
 // At this point, the resolver is named xds-experimental, and doesn't do very
 // much at all, except for returning a hard-coded service config which selects
 // the xds_experimental balancer.
-package oldresolver
+package old
 
 import (
 	"fmt"
