@@ -41,6 +41,7 @@ const (
 	goodLDSTarget2           = "lds.target.good:2222"
 	goodRouteName1           = "GoodRouteConfig1"
 	goodRouteName2           = "GoodRouteConfig2"
+	goodEDSName              = "GoodClusterAssignment1"
 	uninterestingRouteName   = "UninterestingRouteName"
 	goodMatchingDomain       = "lds.target.good"
 	uninterestingDomain      = "uninteresting.domain"
@@ -183,7 +184,7 @@ var (
 	badResourceTypeInLDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: listenerURL,
+				TypeUrl: httpConnManagerURL,
 				Value:   marshaledConnMgr1,
 			},
 		},
@@ -240,7 +241,7 @@ var (
 	badResourceTypeInRDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: routeURL,
+				TypeUrl: httpConnManagerURL,
 				Value:   marshaledConnMgr1,
 			},
 		},
