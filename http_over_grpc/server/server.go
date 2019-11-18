@@ -46,12 +46,12 @@ type TLSConfig struct {
 	InsecureSkipVerify bool
 }
 
-// HTTPOverGRPCServer implements the GkeConnect gRPC service.
+// HTTPOverGRPCServer implements the HTTPOverGRPC service.
 type HTTPOverGRPCServer struct {
 	client *HTTPClient
 }
 
-// NewGKEConnectServer creates a new GKEConnectServer instance.
+// NewHTTPOverGRPCServer creates a new HTTPOverGRPCServer instance.
 func NewHTTPOverGRPCServer(tlsConfig *TLSConfig) (*HTTPOverGRPCServer, error) {
 	client, err := NewHTTPClient(tlsConfig)
 	if err != nil {
