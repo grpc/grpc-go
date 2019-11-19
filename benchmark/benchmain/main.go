@@ -275,6 +275,16 @@ func makeClient(bf stats.Features) (testpb.BenchmarkServiceClient, func()) {
 		)
 	}
 	if bf.EnableKeepalive {
+		sopts = append(sopts,
+			grpc.KeepaliveParams(keepalive.ServerParameters{
+				Time:    keepaliveTime,
+				Timeout: keepaliveTimeout,
+			}),
+			grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+				MinTime:             keepaliveTime,
+				PermitWithoutStream: true,
+			}),
+		)
 		opts = append(opts,
 			grpc.WithKeepaliveParams(keepalive.ClientParameters{
 				Time:                keepaliveTime,
