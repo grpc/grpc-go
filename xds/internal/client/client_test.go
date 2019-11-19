@@ -19,7 +19,6 @@
 package client
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -40,6 +39,7 @@ var validConfig = bootstrap.Config{
 	NodeProto:    &corepb.Node{},
 }
 
+/*
 func TestNew(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -116,22 +116,26 @@ func TestNew(t *testing.T) {
 		})
 	}
 }
+*/
+
+func clientOpts(balancerName string) Options {
+	return Options{
+		Config: bootstrap.Config{
+			BalancerName: balancerName,
+			Creds:        grpc.WithInsecure(),
+			NodeProto:    &corepb.Node{},
+		},
+		DialOpts: []grpc.DialOption{grpc.WithBlock()},
+	}
+}
 
 // TestWatchService tests the happy case of registering a watcher for
 // service updates and receiving a good update.
 func TestWatchService(t *testing.T) {
-	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
+	fakeServer, cleanup := fakexds.StartServer(t)
 	defer cleanup()
 
-	oldDialFunc := dialFunc
-	dialFunc = func(_ context.Context, _ string, _ ...grpc.DialOption) (*grpc.ClientConn, error) {
-		return fakeCC, nil
-	}
-	defer func() {
-		dialFunc = oldDialFunc
-	}()
-
-	xdsClient, err := New(Options{Config: validConfig})
+	xdsClient, err := New(clientOpts(fakeServer.Address))
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
@@ -176,18 +180,10 @@ func TestWatchService(t *testing.T) {
 // registering a service update watcher. The underlying v2Client will timeout
 // and will send us an error.
 func TestWatchServiceWithNoResponseFromServer(t *testing.T) {
-	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
+	fakeServer, cleanup := fakexds.StartServer(t)
 	defer cleanup()
 
-	oldDialFunc := dialFunc
-	dialFunc = func(_ context.Context, _ string, _ ...grpc.DialOption) (*grpc.ClientConn, error) {
-		return fakeCC, nil
-	}
-	defer func() {
-		dialFunc = oldDialFunc
-	}()
-
-	xdsClient, err := New(Options{Config: validConfig})
+	xdsClient, err := New(clientOpts(fakeServer.Address))
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
@@ -233,18 +229,10 @@ func TestWatchServiceWithNoResponseFromServer(t *testing.T) {
 // TestWatchServiceEmptyRDS tests the case where the underlying
 // v2Client receives an empty RDS response.
 func TestWatchServiceEmptyRDS(t *testing.T) {
-	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
+	fakeServer, cleanup := fakexds.StartServer(t)
 	defer cleanup()
 
-	oldDialFunc := dialFunc
-	dialFunc = func(_ context.Context, _ string, _ ...grpc.DialOption) (*grpc.ClientConn, error) {
-		return fakeCC, nil
-	}
-	defer func() {
-		dialFunc = oldDialFunc
-	}()
-
-	xdsClient, err := New(Options{Config: validConfig})
+	xdsClient, err := New(clientOpts(fakeServer.Address))
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
@@ -294,18 +282,10 @@ func TestWatchServiceEmptyRDS(t *testing.T) {
 // received after the client is closed, and we make sure that the registered
 // watcher callback is not invoked.
 func TestWatchServiceWithClientClose(t *testing.T) {
-	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
+	fakeServer, cleanup := fakexds.StartServer(t)
 	defer cleanup()
 
-	oldDialFunc := dialFunc
-	dialFunc = func(_ context.Context, _ string, _ ...grpc.DialOption) (*grpc.ClientConn, error) {
-		return fakeCC, nil
-	}
-	defer func() {
-		dialFunc = oldDialFunc
-	}()
-
-	xdsClient, err := New(Options{Config: validConfig})
+	xdsClient, err := New(clientOpts(fakeServer.Address))
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}

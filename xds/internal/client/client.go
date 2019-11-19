@@ -32,9 +32,6 @@ import (
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
-// For overriding in unittests.
-var dialFunc = grpc.DialContext
-
 // Options provides all parameters required for the creation of an xDS client.
 type Options struct {
 	// Config contains a fully populated bootstrap config. It is the
@@ -73,7 +70,7 @@ func New(opts Options) (*Client, error) {
 	dopts := append([]grpc.DialOption{opts.Config.Creds}, opts.DialOpts...)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cc, err := dialFunc(ctx, opts.Config.BalancerName, dopts...)
+	cc, err := grpc.DialContext(ctx, opts.Config.BalancerName, dopts...)
 	if err != nil {
 		// An error from a non-blocking dial indicates something serious.
 		return nil, fmt.Errorf("xds: failed to dial balancer {%s}: %v", opts.Config.BalancerName, err)

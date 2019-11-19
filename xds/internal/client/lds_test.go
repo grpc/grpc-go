@@ -91,8 +91,12 @@ func TestGetRouteConfigNameFromListener(t *testing.T) {
 // and creates a v2Client using it. Then, it registers a watchLDS and tests
 // different LDS responses.
 func TestHandleLDSResponse(t *testing.T) {
-	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
-	defer cleanup()
+	fakeServer, sCleanup := fakexds.StartServer(t)
+	client, cCleanup := fakeServer.GetClientConn(t)
+	defer func() {
+		cCleanup()
+		sCleanup()
+	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 
 	tests := []struct {
@@ -223,8 +227,12 @@ func TestHandleLDSResponse(t *testing.T) {
 // TestHandleLDSResponseWithoutWatch tests the case where the v2Client receives
 // an LDS response without a registered watcher.
 func TestHandleLDSResponseWithoutWatch(t *testing.T) {
-	_, client, cleanup := fakexds.StartClientAndServer(t)
-	defer cleanup()
+	fakeServer, sCleanup := fakexds.StartServer(t)
+	client, cCleanup := fakeServer.GetClientConn(t)
+	defer func() {
+		cCleanup()
+		sCleanup()
+	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 
 	if v2c.handleLDSResponse(goodLDSResponse1) == nil {
@@ -242,8 +250,12 @@ func TestLDSWatchExpiryTimer(t *testing.T) {
 		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
 	}()
 
-	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
-	defer cleanup()
+	fakeServer, sCleanup := fakexds.StartServer(t)
+	client, cCleanup := fakeServer.GetClientConn(t)
+	defer func() {
+		cCleanup()
+		sCleanup()
+	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 
 	// Wait till the request makes it to the fakeServer. This ensures that

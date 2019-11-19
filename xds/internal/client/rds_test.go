@@ -144,8 +144,12 @@ func TestGetClusterFromRouteConfiguration(t *testing.T) {
 // and creates a v2Client using it. Then, it registers an LDS and RDS watcher
 // and tests different RDS responses.
 func TestHandleRDSResponse(t *testing.T) {
-	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
-	defer cleanup()
+	fakeServer, sCleanup := fakexds.StartServer(t)
+	client, cCleanup := fakeServer.GetClientConn(t)
+	defer func() {
+		cCleanup()
+		sCleanup()
+	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 
 	// Register an LDS watcher, and wait till the request is sent out, the
@@ -262,8 +266,12 @@ func TestHandleRDSResponse(t *testing.T) {
 // TestHandleRDSResponseWithoutLDSWatch tests the case where the v2Client
 // receives an RDS response without a registered LDS watcher.
 func TestHandleRDSResponseWithoutLDSWatch(t *testing.T) {
-	_, client, cleanup := fakexds.StartClientAndServer(t)
-	defer cleanup()
+	fakeServer, sCleanup := fakexds.StartServer(t)
+	client, cCleanup := fakeServer.GetClientConn(t)
+	defer func() {
+		cCleanup()
+		sCleanup()
+	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 
 	if v2c.handleRDSResponse(goodRDSResponse1) == nil {
@@ -274,8 +282,12 @@ func TestHandleRDSResponseWithoutLDSWatch(t *testing.T) {
 // TestHandleRDSResponseWithoutRDSWatch tests the case where the v2Client
 // receives an RDS response without a registered RDS watcher.
 func TestHandleRDSResponseWithoutRDSWatch(t *testing.T) {
-	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
-	defer cleanup()
+	fakeServer, sCleanup := fakexds.StartServer(t)
+	client, cCleanup := fakeServer.GetClientConn(t)
+	defer func() {
+		cCleanup()
+		sCleanup()
+	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 
 	// Register an LDS watcher, and wait till the request is sent out, the
@@ -319,9 +331,12 @@ type testOp struct {
 func testRDSCaching(t *testing.T, testOps []testOp, errCh chan error) {
 	t.Helper()
 
-	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
-	defer cleanup()
-
+	fakeServer, sCleanup := fakexds.StartServer(t)
+	client, cCleanup := fakeServer.GetClientConn(t)
+	defer func() {
+		cCleanup()
+		sCleanup()
+	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
@@ -450,9 +465,12 @@ func TestRDSWatchExpiryTimer(t *testing.T) {
 		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
 	}()
 
-	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
-	defer cleanup()
-
+	fakeServer, sCleanup := fakexds.StartServer(t)
+	client, cCleanup := fakeServer.GetClientConn(t)
+	defer func() {
+		cCleanup()
+		sCleanup()
+	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
