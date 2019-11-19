@@ -75,6 +75,11 @@ func GetCompressor(name string) Compressor {
 // Codec defines the interface gRPC uses to encode and decode messages.  Note
 // that implementations of this interface must be thread safe; a Codec's
 // methods can be called from concurrent goroutines.
+//
+// Optionally, if a ReturnBuffer(buf []byte) is implemented, it may be called
+// to return the byte slice it received from the Marshal function after gRPC is
+// done with it.  The codec may reuse this byte slice in a future Marshal
+// operation to reduce the application's memory footprint.
 type Codec interface {
 	// Marshal returns the wire format of v.
 	Marshal(v interface{}) ([]byte, error)
@@ -84,24 +89,6 @@ type Codec interface {
 	// will be used as part of content type in transmission.  The result must be
 	// static; the result cannot change between calls.
 	Name() string
-}
-
-// A BufferedCodec is exactly like a Codec, but also requires a ReturnBuffer
-// method to be implemented. Once a Marshal caller is done with the returned
-// byte buffer, they can choose to return it back to the encoding library for
-// re-use using this method.
-//
-// This API is EXPERIMENTAL.
-type BufferedCodec interface {
-	Codec
-	// If implemented in a codec, this function may be called with the byte
-	// buffer returned by Marshal after gRPC is done with the buffer.
-	//
-	// gRPC will not call ReturnBuffer after it's done with the buffer if any of
-	// the following is true:
-	//   1. Stats handlers are used.
-	//   2. Binlogs are enabled.
-	ReturnBuffer(buf []byte)
 }
 
 var registeredCodecs = make(map[string]Codec)

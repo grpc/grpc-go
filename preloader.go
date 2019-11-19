@@ -56,8 +56,8 @@ func (p *PreparedMsg) Encode(s Stream, msg interface{}) error {
 		return err
 	}
 	p.encodedData = data
-	if len(data) >= bufferReuseThreshold {
-		if bcodec, ok := rpcInfo.preloaderInfo.codec.(bufferedBaseCodec); ok {
+	if cap(data) >= bufferReuseThreshold {
+		if bcodec, ok := rpcInfo.preloaderInfo.codec.(reusableBaseCodec); ok {
 			p.returnBuffer = func() {
 				bcodec.ReturnBuffer(data)
 			}

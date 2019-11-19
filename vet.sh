@@ -117,9 +117,9 @@ fi
 # TODO(dfawley): don't use deprecated functions in examples or first-party
 # plugins.
 SC_OUT="$(mktemp)"
-staticcheck -go 1.9 -checks 'inherit,-ST1015' ./... > "${SC_OUT}" || true
+staticcheck -go 1.9 -checks 'inherit,-ST1015,-SA6002' ./... > "${SC_OUT}" || true
 # Error if anything other than deprecation warnings are printed.
-(! grep -Pv "\((SA1019)|(SA6002)\)$" "${SC_OUT}")
+(! grep -v "is deprecated:.*SA1019" "${SC_OUT}")
 # Only ignore the following deprecated types/fields/functions.
 (! grep -Fv '.HandleResolvedAddrs
 .HandleSubConnStateChange
@@ -152,6 +152,5 @@ naming.Resolver
 naming.Update
 naming.Watcher
 resolver.Backend
-resolver.GRPCLB
-SA6002' "${SC_OUT}"
+resolver.GRPCLB' "${SC_OUT}"
 )

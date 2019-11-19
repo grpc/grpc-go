@@ -1623,8 +1623,8 @@ func prepareMsg(m interface{}, codec baseCodec, cp Compressor, comp encoding.Com
 		return nil, nil, nil, nil, err
 	}
 
-	if attemptBufferReuse && len(data) >= bufferReuseThreshold {
-		if bcodec, ok := codec.(bufferedBaseCodec); ok {
+	if attemptBufferReuse && cap(data) >= bufferReuseThreshold {
+		if bcodec, ok := codec.(reusableBaseCodec); ok {
 			returnBuffer = func() {
 				bcodec.ReturnBuffer(data)
 			}

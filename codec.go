@@ -31,13 +31,11 @@ type baseCodec interface {
 	Unmarshal(data []byte, v interface{}) error
 }
 
-// A bufferedBaseCodec is exactly like a baseCodec, but also requires a
+// A reusableBaseCodec is exactly like a baseCodec, but also requires a
 // ReturnBuffer method to be implemented. Once a Marshal caller is done with
 // the returned byte buffer, they can choose to return it back to the encoding
 // library for re-use using this method.
-//
-// This API is EXPERIMENTAL.
-type bufferedBaseCodec interface {
+type reusableBaseCodec interface {
 	baseCodec
 	// If implemented in a codec, this function may be called with the byte
 	// buffer returned by Marshal after gRPC is done with the buffer.
