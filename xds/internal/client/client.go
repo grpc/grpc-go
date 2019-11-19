@@ -21,7 +21,6 @@
 package client
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -68,9 +67,7 @@ func New(opts Options) (*Client, error) {
 	}
 
 	dopts := append([]grpc.DialOption{opts.Config.Creds}, opts.DialOpts...)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cc, err := grpc.DialContext(ctx, opts.Config.BalancerName, dopts...)
+	cc, err := grpc.Dial(opts.Config.BalancerName, dopts...)
 	if err != nil {
 		// An error from a non-blocking dial indicates something serious.
 		return nil, fmt.Errorf("xds: failed to dial balancer {%s}: %v", opts.Config.BalancerName, err)

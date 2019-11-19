@@ -40,7 +40,7 @@ func clientOpts(balancerName string) Options {
 		},
 		// WithTimeout is deprecated. But we are OK to call it here from the
 		// test, so we clearly know that the dial failed.
-		DialOpts: []grpc.DialOption{grpc.WithTimeout(5 * time.Second)},
+		DialOpts: []grpc.DialOption{grpc.WithTimeout(5 * time.Second), grpc.WithBlock()},
 	}
 }
 
