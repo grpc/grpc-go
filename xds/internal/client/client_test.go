@@ -31,21 +31,25 @@ import (
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
-const balancerName = "dummyBalancer"
-
-var validConfig = bootstrap.Config{
-	BalancerName: balancerName,
-	Creds:        grpc.WithInsecure(),
-	NodeProto:    &corepb.Node{},
+func clientOpts(balancerName string) Options {
+	return Options{
+		Config: bootstrap.Config{
+			BalancerName: balancerName,
+			Creds:        grpc.WithInsecure(),
+			NodeProto:    &corepb.Node{},
+		},
+		DialOpts: []grpc.DialOption{grpc.WithBlock()},
+	}
 }
 
-/*
 func TestNew(t *testing.T) {
+	fakeServer, cleanup := fakexds.StartServer(t)
+	defer cleanup()
+
 	tests := []struct {
-		name            string
-		opts            Options
-		wantErr         bool
-		wantDialOptsLen int
+		name    string
+		opts    Options
+		wantErr bool
 	}{
 		{name: "empty-opts", opts: Options{}, wantErr: true},
 		{
@@ -79,53 +83,18 @@ func TestNew(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:            "without-extra-dialoptions",
-			opts:            Options{Config: validConfig},
-			wantErr:         false,
-			wantDialOptsLen: 1,
-		},
-		{
-			name: "without-extra-dialoptions",
-			opts: Options{
-				Config:   validConfig,
-				DialOpts: []grpc.DialOption{grpc.WithDisableRetry()},
-			},
-			wantErr:         false,
-			wantDialOptsLen: 2,
+			name:    "happy-case",
+			opts:    clientOpts(fakeServer.Address),
+			wantErr: false,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			oldDialFunc := dialFunc
-			dialFunc = func(ctx context.Context, target string, dopts ...grpc.DialOption) (*grpc.ClientConn, error) {
-				if target != balancerName {
-					t.Fatalf("got target: %v, want %v", target, balancerName)
-				}
-				if len(dopts) != test.wantDialOptsLen {
-					t.Fatalf("got %d dialOptions, want %d", len(dopts), test.wantDialOptsLen)
-				}
-				return grpc.DialContext(ctx, target, dopts...)
-			}
-			defer func() {
-				dialFunc = oldDialFunc
-			}()
 			if _, err := New(test.opts); (err != nil) != test.wantErr {
 				t.Fatalf("New(%+v) = %v, wantErr: %v", test.opts, err, test.wantErr)
 			}
 		})
-	}
-}
-*/
-
-func clientOpts(balancerName string) Options {
-	return Options{
-		Config: bootstrap.Config{
-			BalancerName: balancerName,
-			Creds:        grpc.WithInsecure(),
-			NodeProto:    &corepb.Node{},
-		},
-		DialOpts: []grpc.DialOption{grpc.WithBlock()},
 	}
 }
 

@@ -85,8 +85,8 @@ func StartServer(t *testing.T) (*Server, func()) {
 	t.Logf("Starting fake xDS server at %v...", fs.Address)
 
 	return fs, func() {
-		server.Stop()
 		lis.Close()
+		server.Stop()
 	}
 }
 

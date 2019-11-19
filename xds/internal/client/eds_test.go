@@ -302,6 +302,7 @@ func TestEDSWatchExpiryTimer(t *testing.T) {
 		sCleanup()
 	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
 	edsCallbackCh := make(chan error, 1)
