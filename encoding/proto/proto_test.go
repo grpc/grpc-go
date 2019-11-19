@@ -20,7 +20,6 @@ package proto
 
 import (
 	"bytes"
-	"fmt"
 	"sync"
 	"testing"
 
@@ -132,19 +131,14 @@ func TestStaggeredMarshalAndUnmarshalUsingSamePool(t *testing.T) {
 func TestBufferReuse(t *testing.T) {
 	c := codec{}
 
-	var bptr string
 	marshal := func(toMarshal []byte) []byte {
 		protoIn := &codec_perf.Buffer{Body: toMarshal}
 		b, err := c.Marshal(protoIn)
 		if err != nil {
 			t.Errorf("codec.Marshal(%v) failed: %v", protoIn, err)
 		}
-		lbptr := fmt.Sprintf("%p", b)
-		if bptr == "" {
-			bptr = lbptr
-		} else if bptr != lbptr {
-			t.Errorf("expected the same buffer to be reused: lptr = %s, ptr = %s", lbptr, bptr)
-		}
+		// We cannot expect the actual pointer to be the same because sync.Pool
+		// during GC pauses.
 		bc := append([]byte(nil), b...)
 		c.ReturnBuffer(b)
 		return bc

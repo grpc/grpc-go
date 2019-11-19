@@ -841,39 +841,37 @@ func (s *Server) incrCallsFailed() {
 	atomic.AddInt64(&s.czData.callsFailed, 1)
 }
 
-func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor, attemptBufferReuse bool) (func(), error) {
+func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor, attemptBufferReuse bool) error {
 	codec := s.getCodec(stream.ContentSubtype())
 	data, err := encode(codec, msg)
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to encode response: ", err)
-		return nil, err
+		return err
 	}
 
-	var f func()
 	if attemptBufferReuse && len(data) >= bufferReuseThreshold {
 		if bcodec, ok := codec.(reusableBaseCodec); ok {
-			f = func() {
+			opts.ReturnBuffer = transport.NewReturnBuffer(1, func() {
 				bcodec.ReturnBuffer(data)
-			}
-			opts.ReturnBufferWaitGroup = &sync.WaitGroup{}
+			})
 		}
 	}
 
 	compData, err := compress(data, cp, comp)
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to compress response: ", err)
-		return nil, err
+		return err
 	}
 	hdr, payload := msgHeader(data, compData)
 	// TODO(dfawley): should we be checking len(data) instead?
 	if len(payload) > s.opts.maxSendMessageSize {
-		return nil, status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(payload), s.opts.maxSendMessageSize)
+		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(payload), s.opts.maxSendMessageSize)
 	}
 	err = t.Write(stream, hdr, payload, opts)
 	if err == nil && s.opts.statsHandler != nil {
 		s.opts.statsHandler.HandleRPC(stream.Context(), outPayload(false, msg, data, payload, time.Now()))
 	}
-	return f, err
+	return err
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
@@ -1050,14 +1048,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		trInfo.tr.LazyLog(stringer("OK"), false)
 	}
 	opts := &transport.Options{Last: true}
-
-	f, err := s.sendResponse(t, stream, reply, cp, opts, comp, sh == nil && binlog == nil)
-	if f != nil {
-		defer func() {
-			// Do not wait for the unary response to be written to the wire. Spawn a
-			// goroutine to wait on the waitgroup instead to be non-blocking.
-			go waitCallReturnBuffer(f, opts.ReturnBufferWaitGroup)
-		}()
+	err = s.sendResponse(t, stream, reply, cp, opts, comp, sh == nil && binlog == nil)
+	if opts.ReturnBuffer != nil {
+		defer opts.ReturnBuffer.Done()
 	}
 	if err != nil {
 		if err == io.EOF {
@@ -1186,7 +1179,9 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	if ss.statsHandler == nil && ss.binlog == nil {
 		ss.attemptBufferReuse = true
 		defer func() {
-			go callReturnBuffers(ss.returnBuffers)
+			for _, rb := range ss.returnBuffers {
+				rb.Done()
+			}
 		}()
 	}
 

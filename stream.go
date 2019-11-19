@@ -430,17 +430,8 @@ type clientStream struct {
 	// This is per-stream array instead of a per-attempt one because there may be
 	// multiple attempts working on the same data, but we may not free the same
 	// buffer twice.
-	returnBuffers      []*returnBuffer
+	returnBuffers      []*transport.ReturnBuffer
 	attemptBufferReuse bool
-}
-
-// returnBuffer contains a function holding a closure that can return a byte
-// buffer back to the encoder for reuse. Before this function is called, all
-// data frames referencing the closured data must be written to the wire,
-// including all re-attempts.
-type returnBuffer struct {
-	f  func()
-	wg *sync.WaitGroup
 }
 
 // csAttempt implements a single transport stream attempt within a
@@ -467,8 +458,14 @@ type csAttempt struct {
 }
 
 func (cs *clientStream) commitAttemptLocked() {
-	cs.committed = true
 	cs.buffer = nil
+	if !cs.committed {
+		cs.committed = true
+		for _, rb := range(cs.returnBuffers) {
+			rb.Done()
+		}
+		cs.returnBuffers = nil
+	}
 }
 
 func (cs *clientStream) commitAttempt() {
@@ -720,11 +717,11 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		return err
 	}
 
-	var rb *returnBuffer
+	var rb *transport.ReturnBuffer
 	if f != nil {
+		rb = transport.NewReturnBuffer(1, f)
 		// We can assume mutual exclusion on this slice as only one SendMsg is
 		// supported concurrently.
-		rb = &returnBuffer{f: f, wg: &sync.WaitGroup{}}
 		cs.returnBuffers = append(cs.returnBuffers, rb)
 	}
 
@@ -815,23 +812,6 @@ func (cs *clientStream) CloseSend() error {
 	return nil
 }
 
-func waitCallReturnBuffer(f func(), wg *sync.WaitGroup) {
-	if f == nil || wg == nil {
-		return
-	}
-	wg.Wait()
-	f()
-}
-
-func callReturnBuffers(returnBuffers []*returnBuffer) {
-	if returnBuffers == nil {
-		return
-	}
-	for _, rb := range returnBuffers {
-		waitCallReturnBuffer(rb.f, rb.wg)
-	}
-}
-
 func (cs *clientStream) finish(err error) {
 	if err == io.EOF {
 		// Ending a stream with EOF indicates a success.
@@ -841,15 +821,6 @@ func (cs *clientStream) finish(err error) {
 	if cs.finished {
 		cs.mu.Unlock()
 		return
-	}
-
-	// Regardless of what err is, we must return all byte slices to the codec
-	// layer once each attempt's transport work is done. This may take as long as
-	// the last data frame's write-to-wire, so we spawn a goroutine to wait on
-	// all such buffers without blocking. This must be called exactly once so as
-	// to not free the same buffer twice.
-	if cs.returnBuffers != nil {
-		go callReturnBuffers(cs.returnBuffers)
 	}
 
 	cs.finished = true
@@ -887,7 +858,7 @@ func (cs *clientStream) finish(err error) {
 	cs.cancel()
 }
 
-func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte, rb *returnBuffer) error {
+func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte, rb *transport.ReturnBuffer) error {
 	cs := a.cs
 	if a.trInfo != nil {
 		a.mu.Lock()
@@ -897,12 +868,7 @@ func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte, rb *returnBu
 		a.mu.Unlock()
 	}
 
-	var wg *sync.WaitGroup
-	if rb != nil {
-		wg = rb.wg
-	}
-
-	if err := a.t.Write(a.s, hdr, payld, &transport.Options{Last: !cs.desc.ClientStreams, ReturnBufferWaitGroup: wg}); err != nil {
+	if err := a.t.Write(a.s, hdr, payld, &transport.Options{Last: !cs.desc.ClientStreams, ReturnBuffer: rb}); err != nil {
 		if !cs.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
 			// because the generated code requires it.  finish is not called; RecvMsg()
@@ -1174,7 +1140,7 @@ type addrConnStream struct {
 	p             *parser
 	mu            sync.Mutex
 	finished      bool
-	returnBuffers []*returnBuffer
+	returnBuffers []*transport.ReturnBuffer
 }
 
 func (as *addrConnStream) Header() (metadata.MD, error) {
@@ -1232,13 +1198,14 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 		return err
 	}
 
-	var rb *returnBuffer
-	var wg *sync.WaitGroup
+	var rb *transport.ReturnBuffer
 	if f != nil {
+		// addrConnStream does not have retries, so there's no point waiting for
+		// the query to be committed. As a result, we use a initial counter of 0
+		// instead of 1 like in serverStream and clientStream.
+		rb = transport.NewReturnBuffer(0, f)
 		// We can assume mutual exclusion on this slice as only one SendMsg is
 		// supported concurrently.
-		wg = &sync.WaitGroup{}
-		rb = &returnBuffer{f: f, wg: wg}
 		as.returnBuffers = append(as.returnBuffers, rb)
 	}
 
@@ -1247,7 +1214,7 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payld), *as.callInfo.maxSendMessageSize)
 	}
 
-	if err := as.t.Write(as.s, hdr, payld, &transport.Options{Last: !as.desc.ClientStreams, ReturnBufferWaitGroup: wg}); err != nil {
+	if err := as.t.Write(as.s, hdr, payld, &transport.Options{Last: !as.desc.ClientStreams, ReturnBuffer: rb}); err != nil {
 		if !as.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
 			// because the generated code requires it.  finish is not called; RecvMsg()
@@ -1319,13 +1286,6 @@ func (as *addrConnStream) RecvMsg(m interface{}) (err error) {
 }
 
 func (as *addrConnStream) finish(err error) {
-	// Regardless of what err is, we must return all byte slices to the codec
-	// layer. This may take as long as the last data frame's write-to-wire, so we
-	// spawn a goroutine to wait on all such buffers without blocking.
-	if as.returnBuffers != nil {
-		go callReturnBuffers(as.returnBuffers)
-	}
-
 	as.mu.Lock()
 	if as.finished {
 		as.mu.Unlock()
@@ -1426,7 +1386,7 @@ type serverStream struct {
 
 	mu sync.Mutex // protects trInfo.tr after the service handler runs.
 
-	returnBuffers      []*returnBuffer
+	returnBuffers      []*transport.ReturnBuffer
 	attemptBufferReuse bool
 }
 
@@ -1495,13 +1455,11 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 		return err
 	}
 
-	var rb *returnBuffer
-	var wg *sync.WaitGroup
+	var rb *transport.ReturnBuffer
 	if f != nil {
+		rb = transport.NewReturnBuffer(1, f)
 		// We can assume mutual exclusion on this slice as only one SendMsg is
 		// supported concurrently.
-		wg = &sync.WaitGroup{}
-		rb = &returnBuffer{f: f, wg: wg}
 		ss.returnBuffers = append(ss.returnBuffers, rb)
 	}
 
@@ -1509,7 +1467,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	if len(payload) > ss.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), ss.maxSendMessageSize)
 	}
-	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false, ReturnBufferWaitGroup: wg}); err != nil {
+	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false, ReturnBuffer: rb}); err != nil {
 		return toRPCErr(err)
 	}
 	if ss.binlog != nil {
