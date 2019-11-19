@@ -173,7 +173,7 @@ func (bw *balancerWrapper) lbWatcher() {
 		} else {
 			var (
 				add []resolver.Address // Addresses need to setup connections.
-				del []balancer.SubConn // Connections need to tear down.
+				//del []balancer.SubConn // Connections need to tear down.
 			)
 			resAddrs := make(map[resolver.Address]Address)
 			for _, a := range addrs {
@@ -186,15 +186,15 @@ func (bw *balancerWrapper) lbWatcher() {
 			}
 			bw.mu.Lock()
 			for a := range resAddrs {
-				if _, ok := bw.conns[a]; !ok {
+				if k, ok := bw.conns[a]; !ok {
 					add = append(add, a)
-				}
-			}
-			for a, c := range bw.conns {
-				if _, ok := resAddrs[a]; !ok {
-					del = append(del, c)
-					delete(bw.conns, a)
-					// Keep the state of this sc in bw.connSt until its state becomes Shutdown.
+				} else {
+					if v, ok := bw.connSt[k]; ok {
+						if v.s == connectivity.Shutdown {
+							//add append when v.s == connectivity.Shutdown
+							add = append(add, a)
+						}
+					}
 				}
 			}
 			bw.mu.Unlock()
@@ -213,9 +213,7 @@ func (bw *balancerWrapper) lbWatcher() {
 					sc.Connect()
 				}
 			}
-			for _, c := range del {
-				bw.cc.RemoveSubConn(c)
-			}
+
 		}
 	}
 }
