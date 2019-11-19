@@ -47,7 +47,7 @@ import (
 
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
-	lastRead   int64 // keep this field 64-bit aligned
+	lastRead   int64 // Keep this field 64-bit aligned. Accessed atomically.
 	ctx        context.Context
 	cancel     context.CancelFunc
 	ctxDone    <-chan struct{} // Cache the ctx.Done() chan.
@@ -1374,7 +1374,6 @@ func (t *http2Client) keepalive() {
 			// acked).
 			sleepDuration := minTime(t.kp.Time, timeoutLeft)
 			timeoutLeft -= sleepDuration
-			prevNano = lastRead
 			timer.Reset(sleepDuration)
 		case <-t.ctx.Done():
 			if !timer.Stop() {
