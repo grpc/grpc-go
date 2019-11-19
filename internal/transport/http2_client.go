@@ -1369,7 +1369,6 @@ func (t *http2Client) keepalive() {
 			// acked).
 			sleepDuration := minTime(t.kp.Time, timeoutLeft)
 			timeoutLeft -= sleepDuration
-			prevNano = lastRead
 			timer.Reset(sleepDuration)
 		case <-t.ctx.Done():
 			if !timer.Stop() {

@@ -1010,7 +1010,6 @@ func (t *http2Server) keepalive() {
 			// acked).
 			sleepDuration := minTime(t.kp.Time, kpTimeoutLeft)
 			kpTimeoutLeft -= sleepDuration
-			prevNano = lastRead
 			kpTimer.Reset(sleepDuration)
 		case <-t.done:
 			return
