@@ -38,7 +38,9 @@ func clientOpts(balancerName string) Options {
 			Creds:        grpc.WithInsecure(),
 			NodeProto:    &corepb.Node{},
 		},
-		DialOpts: []grpc.DialOption{grpc.WithBlock()},
+		// WithTimeout is deprecated. But we are OK to call it here from the
+		// test, so we clearly know that the dial failed.
+		DialOpts: []grpc.DialOption{grpc.WithTimeout(5 * time.Second)},
 	}
 }
 

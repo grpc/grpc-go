@@ -84,10 +84,7 @@ func StartServer(t *testing.T) (*Server, func()) {
 	go server.Serve(lis)
 	t.Logf("Starting fake xDS server at %v...", fs.Address)
 
-	return fs, func() {
-		lis.Close()
-		server.Stop()
-	}
+	return fs, func() { server.Stop() }
 }
 
 // GetClientConn returns a grpc.ClientConn talking to the fake server. The
@@ -105,7 +102,6 @@ func (fs *Server) GetClientConn(t *testing.T) (*grpc.ClientConn, func()) {
 	t.Log("Started xDS gRPC client...")
 
 	return cc, func() {
-		cancel()
 		cc.Close()
 	}
 }
