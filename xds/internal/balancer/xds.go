@@ -137,6 +137,10 @@ type xdsBalancer struct {
 	loadStore        lrs.Store
 }
 
+// TODO: cleanup this function, or just remove it. It was here because the xds
+// server name from service config can change, and we need to migrate from the
+// old one to the new one. Now the xds server name is specified by the bootstrap
+// file, and should never change. There's no need for this.
 func (x *xdsBalancer) startNewXDSClient(u *XDSConfig) {
 	// If the xdsBalancer is in startup stage, then we need to apply the startup timeout for the first
 	// xdsClient to get a response from the traffic director.
