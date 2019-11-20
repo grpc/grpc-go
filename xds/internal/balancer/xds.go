@@ -267,8 +267,12 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 				return
 			}
 
-			// With a different BalancerName, we need to create a new xdsClient.
-			if cfg.BalancerName != x.config.BalancerName {
+			// Create a different xds_client if part of the config is different.
+			//
+			// TODO: this and all client related code, including comparing new
+			// config with old, creating new client, should be moved to a
+			// dedicated struct, and handled together.
+			if cfg.BalancerName != x.config.BalancerName || cfg.EDSServiceName != x.config.EDSServiceName || cfg.LrsLoadReportingServerName != x.config.LrsLoadReportingServerName {
 				x.startNewXDSClient(cfg)
 			}
 			// We will update the xdsLB with the new child policy, if we got a
