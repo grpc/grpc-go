@@ -162,8 +162,12 @@ var (
 )
 
 func TestHandleEDSResponse(t *testing.T) {
-	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
-	defer cleanup()
+	fakeServer, sCleanup := fakexds.StartServer(t)
+	client, cCleanup := fakeServer.GetClientConn(t)
+	defer func() {
+		cCleanup()
+		sCleanup()
+	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 
 	tests := []struct {
@@ -271,8 +275,12 @@ func TestHandleEDSResponse(t *testing.T) {
 // TestHandleEDSResponseWithoutEDSWatch tests the case where the v2Client
 // receives an EDS response without a registered EDS watcher.
 func TestHandleEDSResponseWithoutEDSWatch(t *testing.T) {
-	_, client, cleanup := fakexds.StartClientAndServer(t)
-	defer cleanup()
+	fakeServer, sCleanup := fakexds.StartServer(t)
+	client, cCleanup := fakeServer.GetClientConn(t)
+	defer func() {
+		cCleanup()
+		sCleanup()
+	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 
 	if v2c.handleEDSResponse(goodEDSResponse1) == nil {
@@ -287,9 +295,12 @@ func TestEDSWatchExpiryTimer(t *testing.T) {
 		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
 	}()
 
-	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
-	defer cleanup()
-
+	fakeServer, sCleanup := fakexds.StartServer(t)
+	client, cCleanup := fakeServer.GetClientConn(t)
+	defer func() {
+		cCleanup()
+		sCleanup()
+	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	t.Log("Started xds v2Client...")

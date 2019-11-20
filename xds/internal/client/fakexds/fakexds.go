@@ -60,19 +60,16 @@ type Server struct {
 	// ResponseChan is a buffered channel from which the fake server reads the
 	// responses that it must send out to the client.
 	ResponseChan chan *Response
+	// Address is the host:port on which the fake xdsServer is listening on.
+	Address string
 }
 
-// StartClientAndServer starts a fakexds.Server and creates a ClientConn
-// talking to it. The returned cleanup function should be invoked by the caller
-// once the test is done.
-// TODO: Split this into two funcs, one to return a server and one to return a
-// ClientConn connected to this server, and change tests accordingly.
-func StartClientAndServer(t *testing.T) (*Server, *grpc.ClientConn, func()) {
+// StartServer starts a fakexds.Server. The returned function should be invoked
+// by the caller once the test is done.
+func StartServer(t *testing.T) (*Server, func()) {
 	t.Helper()
 
-	var lis net.Listener
-	var err error
-	lis, err = net.Listen("tcp", "localhost:0")
+	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
@@ -81,30 +78,31 @@ func StartClientAndServer(t *testing.T) (*Server, *grpc.ClientConn, func()) {
 	fs := &Server{
 		RequestChan:  make(chan *Request, defaultChannelBufferSize),
 		ResponseChan: make(chan *Response, defaultChannelBufferSize),
+		Address:      lis.Addr().String(),
 	}
 	adsgrpc.RegisterAggregatedDiscoveryServiceServer(server, fs)
 	go server.Serve(lis)
-	t.Logf("Starting fake xDS server at %v...", lis.Addr().String())
-	defer func() {
-		if err != nil {
-			server.Stop()
-			lis.Close()
-		}
-	}()
+	t.Logf("Starting fake xDS server at %v...", fs.Address)
+
+	return fs, func() { server.Stop() }
+}
+
+// GetClientConn returns a grpc.ClientConn talking to the fake server. The
+// returned function should be invoked by the caller once the test is done.
+func (fs *Server) GetClientConn(t *testing.T) (*grpc.ClientConn, func()) {
+	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var cc *grpc.ClientConn
-	cc, err = grpc.DialContext(ctx, lis.Addr().String(), grpc.WithInsecure(), grpc.WithBlock())
+	cc, err := grpc.DialContext(ctx, fs.Address, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
-		t.Fatalf("grpc.DialContext(%s) failed: %v", lis.Addr().String(), err)
+		t.Fatalf("grpc.DialContext(%s) failed: %v", fs.Address, err)
 	}
 	t.Log("Started xDS gRPC client...")
 
-	return fs, cc, func() {
-		server.Stop()
-		lis.Close()
+	return cc, func() {
+		cc.Close()
 	}
 }
 

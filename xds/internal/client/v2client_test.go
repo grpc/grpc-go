@@ -371,8 +371,12 @@ var (
 // TestV2ClientBackoffAfterRecvError verifies if the v2Client backoffs when it
 // encounters a Recv error while receiving an LDS response.
 func TestV2ClientBackoffAfterRecvError(t *testing.T) {
-	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
-	defer cleanup()
+	fakeServer, sCleanup := fakexds.StartServer(t)
+	client, cCleanup := fakeServer.GetClientConn(t)
+	defer func() {
+		cCleanup()
+		sCleanup()
+	}()
 
 	// Override the v2Client backoff function with this, so that we can verify
 	// that a backoff actually was triggerred.
@@ -412,9 +416,12 @@ func TestV2ClientBackoffAfterRecvError(t *testing.T) {
 // encountered a Recv() error, and is expected to send out xDS requests for
 // registered watchers once it comes back up again.
 func TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
-	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
-	defer cleanup()
-
+	fakeServer, sCleanup := fakexds.StartServer(t)
+	client, cCleanup := fakeServer.GetClientConn(t)
+	defer func() {
+		cCleanup()
+		sCleanup()
+	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
@@ -457,9 +464,12 @@ func TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 // TestV2ClientCancelWatch verifies that the registered watch callback is not
 // invoked if a response is received after the watcher is cancelled.
 func TestV2ClientCancelWatch(t *testing.T) {
-	fakeServer, client, cleanup := fakexds.StartClientAndServer(t)
-	defer cleanup()
-
+	fakeServer, sCleanup := fakexds.StartServer(t)
+	client, cCleanup := fakeServer.GetClientConn(t)
+	defer func() {
+		cCleanup()
+		sCleanup()
+	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	t.Log("Started xds v2Client...")

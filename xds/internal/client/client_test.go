@@ -19,7 +19,6 @@
 package client
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -32,20 +31,27 @@ import (
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
-const balancerName = "dummyBalancer"
-
-var validConfig = bootstrap.Config{
-	BalancerName: balancerName,
-	Creds:        grpc.WithInsecure(),
-	NodeProto:    &corepb.Node{},
+func clientOpts(balancerName string) Options {
+	return Options{
+		Config: bootstrap.Config{
+			BalancerName: balancerName,
+			Creds:        grpc.WithInsecure(),
+			NodeProto:    &corepb.Node{},
+		},
+		// WithTimeout is deprecated. But we are OK to call it here from the
+		// test, so we clearly know that the dial failed.
+		DialOpts: []grpc.DialOption{grpc.WithTimeout(5 * time.Second), grpc.WithBlock()},
+	}
 }
 
 func TestNew(t *testing.T) {
+	fakeServer, cleanup := fakexds.StartServer(t)
+	defer cleanup()
+
 	tests := []struct {
-		name            string
-		opts            Options
-		wantErr         bool
-		wantDialOptsLen int
+		name    string
+		opts    Options
+		wantErr bool
 	}{
 		{name: "empty-opts", opts: Options{}, wantErr: true},
 		{
@@ -79,37 +85,14 @@ func TestNew(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:            "without-extra-dialoptions",
-			opts:            Options{Config: validConfig},
-			wantErr:         false,
-			wantDialOptsLen: 1,
-		},
-		{
-			name: "without-extra-dialoptions",
-			opts: Options{
-				Config:   validConfig,
-				DialOpts: []grpc.DialOption{grpc.WithDisableRetry()},
-			},
-			wantErr:         false,
-			wantDialOptsLen: 2,
+			name:    "happy-case",
+			opts:    clientOpts(fakeServer.Address),
+			wantErr: false,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			oldDialFunc := dialFunc
-			dialFunc = func(ctx context.Context, target string, dopts ...grpc.DialOption) (*grpc.ClientConn, error) {
-				if target != balancerName {
-					t.Fatalf("got target: %v, want %v", target, balancerName)
-				}
-				if len(dopts) != test.wantDialOptsLen {
-					t.Fatalf("got %d dialOptions, want %d", len(dopts), test.wantDialOptsLen)
-				}
-				return grpc.DialContext(ctx, target, dopts...)
-			}
-			defer func() {
-				dialFunc = oldDialFunc
-			}()
 			if _, err := New(test.opts); (err != nil) != test.wantErr {
 				t.Fatalf("New(%+v) = %v, wantErr: %v", test.opts, err, test.wantErr)
 			}
@@ -120,18 +103,10 @@ func TestNew(t *testing.T) {
 // TestWatchService tests the happy case of registering a watcher for
 // service updates and receiving a good update.
 func TestWatchService(t *testing.T) {
-	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
+	fakeServer, cleanup := fakexds.StartServer(t)
 	defer cleanup()
 
-	oldDialFunc := dialFunc
-	dialFunc = func(_ context.Context, _ string, _ ...grpc.DialOption) (*grpc.ClientConn, error) {
-		return fakeCC, nil
-	}
-	defer func() {
-		dialFunc = oldDialFunc
-	}()
-
-	xdsClient, err := New(Options{Config: validConfig})
+	xdsClient, err := New(clientOpts(fakeServer.Address))
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
@@ -176,18 +151,10 @@ func TestWatchService(t *testing.T) {
 // registering a service update watcher. The underlying v2Client will timeout
 // and will send us an error.
 func TestWatchServiceWithNoResponseFromServer(t *testing.T) {
-	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
+	fakeServer, cleanup := fakexds.StartServer(t)
 	defer cleanup()
 
-	oldDialFunc := dialFunc
-	dialFunc = func(_ context.Context, _ string, _ ...grpc.DialOption) (*grpc.ClientConn, error) {
-		return fakeCC, nil
-	}
-	defer func() {
-		dialFunc = oldDialFunc
-	}()
-
-	xdsClient, err := New(Options{Config: validConfig})
+	xdsClient, err := New(clientOpts(fakeServer.Address))
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
@@ -233,18 +200,10 @@ func TestWatchServiceWithNoResponseFromServer(t *testing.T) {
 // TestWatchServiceEmptyRDS tests the case where the underlying
 // v2Client receives an empty RDS response.
 func TestWatchServiceEmptyRDS(t *testing.T) {
-	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
+	fakeServer, cleanup := fakexds.StartServer(t)
 	defer cleanup()
 
-	oldDialFunc := dialFunc
-	dialFunc = func(_ context.Context, _ string, _ ...grpc.DialOption) (*grpc.ClientConn, error) {
-		return fakeCC, nil
-	}
-	defer func() {
-		dialFunc = oldDialFunc
-	}()
-
-	xdsClient, err := New(Options{Config: validConfig})
+	xdsClient, err := New(clientOpts(fakeServer.Address))
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
@@ -294,18 +253,10 @@ func TestWatchServiceEmptyRDS(t *testing.T) {
 // received after the client is closed, and we make sure that the registered
 // watcher callback is not invoked.
 func TestWatchServiceWithClientClose(t *testing.T) {
-	fakeServer, fakeCC, cleanup := fakexds.StartClientAndServer(t)
+	fakeServer, cleanup := fakexds.StartServer(t)
 	defer cleanup()
 
-	oldDialFunc := dialFunc
-	dialFunc = func(_ context.Context, _ string, _ ...grpc.DialOption) (*grpc.ClientConn, error) {
-		return fakeCC, nil
-	}
-	defer func() {
-		dialFunc = oldDialFunc
-	}()
-
-	xdsClient, err := New(Options{Config: validConfig})
+	xdsClient, err := New(clientOpts(fakeServer.Address))
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
