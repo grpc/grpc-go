@@ -31,9 +31,9 @@ import (
 )
 
 func setEnabled(ctx context.Context, c pspb.ProfilingClient, enabled bool) error {
-	_, err := c.SetEnabled(ctx, &pspb.SetEnabledRequest{Enabled: enabled})
+	_, err := c.Enable(ctx, &pspb.EnableRequest{Enabled: enabled})
 	if err != nil {
-		grpclog.Printf("error calling SetEnabled: %v\n", err)
+		grpclog.Printf("error calling Enable: %v\n", err)
 		return err
 	}
 
