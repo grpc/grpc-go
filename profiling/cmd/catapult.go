@@ -311,7 +311,7 @@ func streamStatsCatapultJson(s *snapshot, streamStatsCatapultJsonFileName string
 	}
 
 	grpclog.Infof("sorting timers within all stats")
-	for id, _ := range streamStats {
+	for id := range streamStats {
 		sort.Slice(streamStats[id].TimerProtos, func(i, j int) bool {
 			return timerBeginIsBefore(streamStats[id].TimerProtos[i], streamStats[id].TimerProtos[j])
 		})
