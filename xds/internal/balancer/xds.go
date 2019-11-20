@@ -193,6 +193,11 @@ func (x *edsBalancer) startNewXDSClient(u *XDSConfig) {
 			prevClient.close()
 		}
 	}
+	// TODO: handle cfg.LrsLoadReportingServerName and remove log.
+	if u.LrsLoadReportingServerName != "" {
+		grpclog.Warningf("xds: lrsLoadReportingServerName is not empty, but is not handled")
+	}
+
 	// TODO: stop using u.BalancerName. The value should come from bootstrap
 	// file. It's only used in tests now.
 	x.client = newXDSClientWrapper(u.BalancerName, u.EDSServiceName, x.buildOpts, u.LrsLoadReportingServerName, x.loadStore, newADS, loseContact, exitCleanup)
@@ -250,11 +255,6 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 		var fallbackChanged bool
 		// service config has been updated.
 		if !reflect.DeepEqual(cfg, x.config) {
-			// TODO: handle cfg.LrsLoadReportingServerName and remove log.
-			if cfg.LrsLoadReportingServerName != "" {
-				grpclog.Warningf("xds: lrsLoadReportingServerName is not empty, but is not handled")
-			}
-
 			if x.config == nil {
 				// The first time we get config, we just need to start the xdsClient.
 				x.startNewXDSClient(cfg)
