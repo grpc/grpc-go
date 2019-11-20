@@ -48,7 +48,7 @@ func IsEnabled() bool {
 	return atomic.LoadUint32(&profilingEnabled) > 0
 }
 
-// SetEnabled turns profiling on and off.
+// Enable turns profiling on and off.
 //
 // Note that it is impossible to enable profiling for one server and leave it
 // turned off for another. This is intentional and by design -- if the status
@@ -58,7 +58,7 @@ func IsEnabled() bool {
 // whether it's a client stat or a server stat; so you should be able to filter
 // for the right type of stats in post-processing.
 // SetEnabled is the internal
-func SetEnabled(enabled bool) {
+func Enable(enabled bool) {
 	if enabled {
 		atomic.StoreUint32(&profilingEnabled, 1)
 	} else {
