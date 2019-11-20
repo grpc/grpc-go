@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/grpclog"
 
 	"google.golang.org/grpc/internal/profiling"
-	ppb "google.golang.org/grpc/profiling/proto"
 	pspb "google.golang.org/grpc/profiling/proto/service"
 )
 
@@ -86,13 +85,36 @@ func (s *profilingServer) Enable(ctx context.Context, req *pspb.EnableRequest) (
 	return &pspb.EnableResponse{}, nil
 }
 
+func timerToTimerProto(timer profiling.Timer) *pspb.TimerProto {
+	return &pspb.TimerProto{
+		TimerTag:  timer.TimerTag,
+		BeginSec:  timer.Begin.Unix(),
+		BeginNsec: int32(timer.Begin.Nanosecond()),
+		EndSec:    timer.End.Unix(),
+		EndNsec:   int32(timer.End.Nanosecond()),
+		GoId:      timer.GoId,
+	}
+}
+
+func statToStatProto(stat *profiling.Stat) *pspb.StatProto {
+	statProto := &pspb.StatProto{
+		StatTag:     stat.StatTag,
+		TimerProtos: make([]*pspb.TimerProto, 0, len(stat.Timers)),
+		Metadata:    stat.Metadata,
+	}
+	for _, t := range stat.Timers {
+		statProto.TimerProtos = append(statProto.TimerProtos, timerToTimerProto(t))
+	}
+	return statProto
+}
+
 func (s *profilingServer) GetStreamStats(req *pspb.GetStreamStatsRequest, stream pspb.Profiling_GetStreamStatsServer) error {
 	grpclog.Infof("Processing stream request for stream stats")
 	results := profiling.StreamStats.Drain()
 	grpclog.Infof("Stream stats size: %v records", len(results))
 
 	for i := 0; i < len(results); i++ {
-		if err := stream.Send(ppb.StatToStatProto(results[i].(*profiling.Stat))); err != nil {
+		if err := stream.Send(statToStatProto(results[i].(*profiling.Stat))); err != nil {
 			return err
 		}
 	}
