@@ -114,5 +114,5 @@ func check(efer Errorfer, timeout time.Duration) {
 // interesting (created by gRPC) goroutines leaked. It waits up to 10 seconds
 // in the error cases.
 func Check(efer Errorfer) {
-	check(efer, 10*time.Second)
+	check(efer, 1*time.Second)
 }
