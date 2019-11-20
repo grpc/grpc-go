@@ -48,7 +48,7 @@ import (
 var lbABuilder = &balancerABuilder{}
 
 func init() {
-	balancer.Register(&xdsBalancerBuilder{})
+	balancer.Register(&edsBalancerBuilder{})
 	balancer.Register(lbABuilder)
 	balancer.Register(&balancerBBuilder{})
 
@@ -299,12 +299,12 @@ func (s) TestXdsFallbackResolvedAddrs(t *testing.T) {
 	startupTimeout = 500 * time.Millisecond
 	defer func() { startupTimeout = defaultTimeout }()
 
-	builder := balancer.Get(xdsName)
+	builder := balancer.Get(edsName)
 	cc := newTestClientConn()
 	b := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
-	lb, ok := b.(*xdsBalancer)
+	lb, ok := b.(*edsBalancer)
 	if !ok {
-		t.Fatalf("builder.Build() returned a balancer of type %T, want *xdsBalancer", b)
+		t.Fatalf("builder.Build() returned a balancer of type %T, want *edsBalancer", b)
 	}
 	defer lb.Close()
 
@@ -347,11 +347,11 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 		newEDSBalancer = originalNewEDSBalancer
 	}()
 
-	builder := balancer.Get(xdsName)
+	builder := balancer.Get(edsName)
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*edsBalancer)
 	if !ok {
-		t.Fatalf("unable to type assert to *xdsBalancer")
+		t.Fatalf("unable to type assert to *edsBalancer")
 	}
 	defer lb.Close()
 	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
@@ -426,11 +426,11 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 		newEDSBalancer = originalNewEDSBalancer
 	}()
 
-	builder := balancer.Get(xdsName)
+	builder := balancer.Get(edsName)
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*edsBalancer)
 	if !ok {
-		t.Fatalf("unable to type assert to *xdsBalancer")
+		t.Fatalf("unable to type assert to *edsBalancer")
 	}
 	defer lb.Close()
 
@@ -520,11 +520,11 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 		xdsclientNew = originalxdsclientNew
 	}()
 
-	builder := balancer.Get(xdsName)
+	builder := balancer.Get(edsName)
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
 	if !ok {
-		t.Fatalf("unable to type assert to *xdsBalancer")
+		t.Fatalf("unable to type assert to *edsBalancer")
 	}
 	defer lb.Close()
 
@@ -605,11 +605,11 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 		xdsclientNew = originalxdsclientNew
 	}()
 
-	builder := balancer.Get(xdsName)
+	builder := balancer.Get(edsName)
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
 	if !ok {
-		t.Fatalf("unable to type assert to *xdsBalancer")
+		t.Fatalf("unable to type assert to *edsBalancer")
 	}
 	defer lb.Close()
 
@@ -694,11 +694,11 @@ func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 		xdsclientNew = originalxdsclientNew
 	}()
 
-	builder := balancer.Get(xdsName)
+	builder := balancer.Get(edsName)
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
 	if !ok {
-		t.Fatalf("unable to type assert to *xdsBalancer")
+		t.Fatalf("unable to type assert to *edsBalancer")
 	}
 	defer lb.Close()
 
@@ -851,10 +851,10 @@ func TestXdsBalancerConfigParsing(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := &xdsBalancerBuilder{}
+			b := &edsBalancerBuilder{}
 			got, err := b.ParseConfig(tt.js)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("xdsBalancerBuilder.ParseConfig() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("edsBalancerBuilder.ParseConfig() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !cmp.Equal(got, tt.want) {
