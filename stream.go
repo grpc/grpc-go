@@ -461,7 +461,7 @@ func (cs *clientStream) commitAttemptLocked() {
 	cs.buffer = nil
 	if !cs.committed {
 		cs.committed = true
-		for _, rb := range(cs.returnBuffers) {
+		for _, rb := range cs.returnBuffers {
 			rb.Done()
 		}
 		cs.returnBuffers = nil
