@@ -34,11 +34,11 @@ import (
 func setEnabled(ctx context.Context, c pspb.ProfilingClient, enabled bool) error {
 	_, err := c.Enable(ctx, &pspb.EnableRequest{Enabled: enabled})
 	if err != nil {
-		grpclog.Printf("error calling Enable: %v\n", err)
+		grpclog.Infof("error calling Enable: %v\n", err)
 		return err
 	}
 
-	grpclog.Printf("successfully set enabled = %v", enabled)
+	grpclog.Infof("successfully set enabled = %v", enabled)
 	return nil
 }
 
@@ -69,11 +69,11 @@ func retrieveSnapshot(ctx context.Context, c pspb.ProfilingClient, f string) err
 
 	grpclog.Infof("creating snapshot file %s", f)
 	file, err := os.Create(f)
-	defer file.Close()
 	if err != nil {
 		grpclog.Errorf("cannot create %s: %v", f, err)
 		return err
 	}
+	defer file.Close()
 
 	grpclog.Infof("encoding data and writing to snapshot file %s", f)
 	encoder := gob.NewEncoder(file)

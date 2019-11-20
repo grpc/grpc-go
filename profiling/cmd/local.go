@@ -55,12 +55,12 @@ func localCommand() error {
 		return err
 	}
 
-	if *flagStreamStatsCatapultJson == "" {
+	if *flagStreamStatsCatapultJSON == "" {
 		return fmt.Errorf("what should I do with the snapshot file?")
 	}
 
-	if *flagStreamStatsCatapultJson != "" {
-		if err = streamStatsCatapultJson(s, *flagStreamStatsCatapultJson); err != nil {
+	if *flagStreamStatsCatapultJSON != "" {
+		if err = streamStatsCatapultJSON(s, *flagStreamStatsCatapultJSON); err != nil {
 			return err
 		}
 	}

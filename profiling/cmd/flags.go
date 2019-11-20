@@ -32,7 +32,7 @@ var flagSnapshot = flag.String("snapshot", "", "snapshot file path")
 var flagEnableProfiling = flag.Bool("enable-profiling", false, "enable profiling in remote target")
 var flagDisableProfiling = flag.Bool("disable-profiling", false, "disable profiling in remote target")
 
-var flagStreamStatsCatapultJson = flag.String("stream-stats-catapult-json", "", "transform a snapshot into catapult JSON")
+var flagStreamStatsCatapultJSON = flag.String("stream-stats-catapult-json", "", "transform a snapshot into catapult JSON")
 var flagStreamStatsFilter = flag.String("stream-stats-filter", "server,client", "comma-separated list of stat tags to filter for")
 
 func exactlyOneOf(opts ...bool) bool {
@@ -60,7 +60,7 @@ func parseArgs() error {
 			return fmt.Errorf("when -address is specified, you must include exactly only one of -enable-profiling, -disable-profiling, and -retrieve-snapshot")
 		}
 
-		if *flagStreamStatsCatapultJson != "" {
+		if *flagStreamStatsCatapultJSON != "" {
 			return fmt.Errorf("when -address is specified, you must not include -catapult-json")
 		}
 	} else {
@@ -68,7 +68,7 @@ func parseArgs() error {
 			return fmt.Errorf("when -address isn't specified, you must not include any of -enable-profiling, -disable-profiling, and -retrieve-snapshot")
 		}
 
-		if *flagStreamStatsCatapultJson == "" {
+		if *flagStreamStatsCatapultJSON == "" {
 			return fmt.Errorf("when -address isn't specified, you must include -catapult-json")
 		}
 	}
