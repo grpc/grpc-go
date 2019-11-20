@@ -1,8 +1,25 @@
+/*
+ *
+ * Copyright 2019 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package http_over_grpc
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -11,25 +28,16 @@ import (
 	"net/textproto"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 
-        pb "google.golang.org/grpc/http_over_grpc/http_over_grpc_proto"
-)
-
-var (
-	// ErrResponseHeaderTimeout is an error returned when a timeout fires before the
-	// response headers are received. This indicates a connectivity issue with the
-	// Connect agent over the proxy.
-	ErrResponseHeaderTimeout = errors.New("timeout before response headers received")
-)
-
-const (
-	crlf         = "\r\n"
+	pb "google.golang.org/grpc/http_over_grpc/http_over_grpc_proto"
 )
 
 // Transport is an http.Transport that communicates via a HTTPOverGRPC.
 type Transport struct {
-	ctx context.Context
+	ctx  context.Context
+	conn *grpc.ClientConn
 	// HTTPOverGRPC client.
 	client pb.HTTPOverGRPCClient
 }
@@ -47,7 +55,16 @@ func (h *wrappedBody) Read(p []byte) (n int, err error) {
 	return h.reader.Read(p)
 }
 
-// RoundTrip implements the http.RoundTripper interface and is used by http.Client.
+// NewTransport returns a new Transport for making HTTP over gRPC calls.
+func NewBackgroundTransport(ctx context.Context, conn *grpc.ClientConn) *Transport {
+	return &Transport{
+		ctx:    ctx,
+		conn:   conn,
+		client: pb.NewHTTPOverGRPCClient(conn),
+	}
+}
+
+// RoundTrip implements the http.RoundTripper interface.
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx := t.ctx
 	if ctx == context.Background() || ctx == nil {
@@ -89,7 +106,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	timeout := func(usage string) (*http.Response, error) {
 		pr.Close()
 		grpclog.Infof("Response header timeout: %v", usage)
-		return nil, ErrResponseHeaderTimeout
+		return nil, errors.New("timeout before response header received")
 	}
 	select {
 	case re := <-respCh:
@@ -133,14 +150,7 @@ func readResponse(pr *io.PipeReader, req *http.Request) (resp *http.Response, er
 		}
 	}()
 	tp := textproto.NewReader(bufio.NewReader(pr))
-
-	hs, err := getStatusAndHeader(req, tp)
-	if err != nil {
-		return nil, err
-	}
-	body := io.Reader(tp.R)
-
-	res, err := http.ReadResponse(bufio.NewReader(io.MultiReader(hs, body)), req)
+	res, err := http.ReadResponse(bufio.NewReader(tp.R), req)
 	if err != nil {
 		return nil, err
 	}
@@ -159,30 +169,4 @@ func fromHeader(hdrs http.Header) []*pb.Header {
 		result = append(result, &pb.Header{Key: k, Values: vals})
 	}
 	return result
-}
-
-// getStatusAndHeader reads the http status line and response headers
-func getStatusAndHeader(req *http.Request, tp *textproto.Reader) (*bytes.Buffer, error) {
-	// Read the HTTP status line.
-	line, err := tp.ReadLineBytes()
-	if err != nil {
-		grpclog.Infof("Response err on request %s %q, error: %v", req.Method, req.URL.String(), err)
-		return nil, err
-	}
-	grpclog.Infof("Response: %q", line)
-	// Read the HTTP headers.
-	buf := new(bytes.Buffer)
-	buf.Write(line)
-	buf.WriteString(crlf)
-
-	mimeHeader, err := tp.ReadMIMEHeader()
-	if err != nil {
-		return nil, err
-	}
-	headers := http.Header(mimeHeader)
-	if err := headers.Write(buf); err != nil {
-		return nil, err
-	}
-	buf.WriteString(crlf)
-	return buf, nil
 }

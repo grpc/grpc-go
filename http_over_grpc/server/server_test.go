@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/testdata"
 
-        pb "google.golang.org/grpc/http_over_grpc/http_over_grpc_proto"
+	pb "google.golang.org/grpc/http_over_grpc/http_over_grpc_proto"
 	"google.golang.org/grpc/status"
 )
 
@@ -38,7 +38,7 @@ const (
 	keyFile        = "server1.key"
 	caCertFilePath = "ca.pem"
 	eofErrorString = "readerror: EOF"
-	port = 8080
+	port           = 8080
 )
 
 type testServer struct {
@@ -65,7 +65,6 @@ func (s *testServer) start() {
 			if err := conn.Close(); err != nil {
 				grpclog.Fatalf("Couldn't close the connection.")
 			}
-		default:
 			w.WriteHeader(http.StatusOK)
 		}
 	})
@@ -81,8 +80,8 @@ func TestServer(t *testing.T) {
 	baseURL := fmt.Sprintf("https://localhost:%d", s.Port)
 
 	tlsConfig := &TLSConfig{
-		CAFile:      testdata.Path(caCertFilePath),
-		ServerName:  "x.test.youtube.com",
+		CAFile:     testdata.Path(caCertFilePath),
+		ServerName: "x.test.youtube.com",
 	}
 
 	ts, err := NewHTTPOverGRPCServer(tlsConfig)

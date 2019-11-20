@@ -21,6 +21,7 @@ package http_over_grpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -28,13 +29,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
-        pb "google.golang.org/grpc/http_over_grpc/http_over_grpc_proto"
+	pb "google.golang.org/grpc/http_over_grpc/http_over_grpc_proto"
 	"google.golang.org/grpc/status"
 )
 
 const (
-	projectNumber = "my-fav-project"
-	connectionID  = "0deadbeef2"
+	port = 10000
 )
 
 func TestReadResponse(t *testing.T) {
@@ -99,7 +99,7 @@ type respOrStatus struct {
 }
 
 type fakeClient struct {
-	cc *grpc.ClientConn
+	cc             *grpc.ClientConn
 	respOrStatuses []*respOrStatus
 }
 
@@ -116,16 +116,36 @@ type testClient struct {
 	client pb.HTTPOverGRPCClient
 }
 
+func TestTransport(t *testing.T) {
+	host := fmt.Sprintf("localhost:%d", port)
+	conn, err := grpc.Dial(host, grpc.WithInsecure())
+	if err != nil {
+		grpclog.Infof("grpc dial fail with err = %v", err)
+	}
+	tr := NewBackgroundTransport(context.Background(), conn)
+
+	req, err := http.NewRequest("GET", "http://invalid-backend", nil)
+	if err != nil {
+		t.Errorf("failed to create http request: %v", err)
+	}
+	_, err = tr.RoundTrip(req)
+
+	gs, ok := status.FromError(err)
+	if gs.Code() != codes.Unavailable {
+		t.Errorf("Unexpected error: %v , expected error: %v , ok = %v", err, gs.Code(), ok)
+	}
+}
+
 func TestRoundTrip(t *testing.T) {
 	testCases := []struct {
-		name      string
-		client    pb.HTTPOverGRPCClient
-		err       error
+		name   string
+		client pb.HTTPOverGRPCClient
+		err    error
 	}{
 		{
 			"retryable with deadline exceeded",
 			&fakeClient{
-                               respOrStatuses: []*respOrStatus{
+				respOrStatuses: []*respOrStatus{
 					{
 						resp:   nil,
 						status: status.New(codes.DeadlineExceeded, ""),
@@ -172,7 +192,12 @@ func TestRoundTrip(t *testing.T) {
 		},
 	}
 	for _, tt := range testCases {
-		tr := Transport{context.Background(), tt.client}
+		host := fmt.Sprintf("localhost:%d", port)
+		conn, err := grpc.Dial(host, grpc.WithInsecure())
+		if err != nil {
+			grpclog.Infof("grpc dial fail with err = %v", err)
+		}
+		tr := Transport{context.Background(), conn, tt.client}
 		req, err := http.NewRequest("GET", "http://invalid-site", nil)
 		if err != nil {
 			t.Errorf("[%s] failed to create http request: %v", tt.name, err)
@@ -180,11 +205,11 @@ func TestRoundTrip(t *testing.T) {
 		_, err = tr.RoundTrip(req)
 
 		ws, ok := status.FromError(tt.err)
-	        grpclog.Infof("wstatus = %v", ws)
+		grpclog.Infof("wstatus = %v", ws)
 		// Make sure the gRPC statuses match, otherwise compare the errors.
 		if ok {
 			gs, ok := status.FromError(err)
-	                grpclog.Infof("gstatus = %v", gs)
+			grpclog.Infof("gstatus = %v", gs)
 			if !ok {
 				t.Errorf("[%s] unexpected error: want status %v, got non status %v", tt.name, tt.err, err)
 			}

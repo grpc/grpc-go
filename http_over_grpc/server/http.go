@@ -63,7 +63,6 @@ func NewHTTPClient(tlsConfig *TLSConfig) (*HTTPClient, error) {
 		IdleConnTimeout: 15 * time.Minute,
 	}
 	if tlsConfig.InsecureSkipVerify {
-		log.Printf("****WARNING USING INSECURE SKIP VERIFY FOR HTTP CLIENT****")
 		transport.TLSClientConfig = &tls.Config{
 			InsecureSkipVerify: true,
 		}
