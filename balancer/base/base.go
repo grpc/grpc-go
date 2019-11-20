@@ -46,12 +46,12 @@ type PickerBuilder interface {
 type V2PickerBuilder interface {
 	// Build takes a slice of ready SubConns, and returns a picker that will be
 	// used by gRPC to pick a SubConn.
-	Build(readySCs map[resolver.Address]balancer.SubConn, opts PickerBuildOptions) balancer.V2Picker
+	Build(readySCs map[resolver.Address]balancer.SubConn, info PickerBuildInfo) balancer.V2Picker
 }
 
-// PickerBuildOptions contains optional information needed by the picker
-// builder to construct a picker.
-type PickerBuildOptions struct{}
+// PickerBuildInfo contains information needed by the picker builder to
+// construct a picker.
+type PickerBuildInfo struct{}
 
 // NewBalancerBuilder returns a balancer builder. The balancers
 // built by this builder will use the picker builder to build pickers.

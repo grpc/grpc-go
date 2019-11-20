@@ -45,7 +45,7 @@ func init() {
 
 type rrPickerBuilder struct{}
 
-func (*rrPickerBuilder) Build(readySCs map[resolver.Address]balancer.SubConn, _ base.PickerBuildOptions) balancer.V2Picker {
+func (*rrPickerBuilder) Build(readySCs map[resolver.Address]balancer.SubConn, _ base.PickerBuildInfo) balancer.V2Picker {
 	grpclog.Infof("roundrobinPicker: newPicker called with readySCs: %v", readySCs)
 	if len(readySCs) == 0 {
 		return base.NewErrPickerV2(balancer.ErrNoSubConnAvailable)

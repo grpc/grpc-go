@@ -130,12 +130,12 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 // from it. The picker is
 //  - errPicker with ErrTransientFailure if the balancer is in TransientFailure,
 //  - built by the pickerBuilder with all READY SubConns otherwise.
-func (b *baseBalancer) regeneratePicker() {
+func (b *baseBalancer) regeneratePicker(err error) {
 	if b.state == connectivity.TransientFailure {
 		if b.pickerBuilder != nil {
 			b.picker = NewErrPicker(balancer.ErrTransientFailure)
 		} else {
-			b.v2Picker = NewErrPickerV2(balancer.ErrTransientFailure)
+			b.v2Picker = NewErrPickerV2(balancer.TransientFailureError(err))
 		}
 		return
 	}
@@ -150,7 +150,7 @@ func (b *baseBalancer) regeneratePicker() {
 	if b.pickerBuilder != nil {
 		b.picker = b.pickerBuilder.Build(readySCs)
 	} else {
-		b.v2Picker = b.v2PickerBuilder.Build(readySCs, PickerBuildOptions{})
+		b.v2Picker = b.v2PickerBuilder.Build(readySCs, PickerBuildInfo{})
 	}
 }
 
@@ -190,7 +190,7 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 	//  - the aggregated state of balancer became non-TransientFailure from TransientFailure
 	if (s == connectivity.Ready) != (oldS == connectivity.Ready) ||
 		(b.state == connectivity.TransientFailure) != (oldAggrState == connectivity.TransientFailure) {
-		b.regeneratePicker()
+		b.regeneratePicker(state.ConnectionError)
 	}
 
 	if b.picker != nil {
