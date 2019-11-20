@@ -21,7 +21,6 @@ package base
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -149,18 +148,26 @@ func (b *baseBalancer) regeneratePicker(err error) {
 		}
 		return
 	}
-	readySCs := make(map[resolver.Address]balancer.SubConn)
-
-	// Filter out all ready SCs from full subConn map.
-	for addr, sc := range b.subConns {
-		if st, ok := b.scStates[sc]; ok && st == connectivity.Ready {
-			readySCs[addr] = sc
-		}
-	}
 	if b.pickerBuilder != nil {
+		readySCs := make(map[resolver.Address]balancer.SubConn)
+
+		// Filter out all ready SCs from full subConn map.
+		for addr, sc := range b.subConns {
+			if st, ok := b.scStates[sc]; ok && st == connectivity.Ready {
+				readySCs[addr] = sc
+			}
+		}
 		b.picker = b.pickerBuilder.Build(readySCs)
 	} else {
-		b.v2Picker = b.v2PickerBuilder.Build(readySCs, PickerBuildInfo{})
+		readySCs := make(map[balancer.SubConn]SubConnInfo)
+
+		// Filter out all ready SCs from full subConn map.
+		for addr, sc := range b.subConns {
+			if st, ok := b.scStates[sc]; ok && st == connectivity.Ready {
+				readySCs[sc] = SubConnInfo{Address: addr}
+			}
+		}
+		b.v2Picker = b.v2PickerBuilder.Build(PickerBuildInfo{ReadySCs: readySCs})
 	}
 }
 
@@ -200,7 +207,6 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 	//  - the aggregated state of balancer became non-TransientFailure from TransientFailure
 	if (s == connectivity.Ready) != (oldS == connectivity.Ready) ||
 		(b.state == connectivity.TransientFailure) != (oldAggrState == connectivity.TransientFailure) {
-		fmt.Println("state: ", state)
 		b.regeneratePicker(state.ConnectionError)
 	}
 
