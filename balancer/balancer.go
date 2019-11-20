@@ -119,7 +119,8 @@ type NewSubConnOptions struct {
 
 // State contains the balancer's state relevant to the gRPC ClientConn.
 type State struct {
-	// State controls the connectivity state of the ClientConn
+	// State contains the connectivity state of the balancer, which is used to
+	// determine the state of the ClientConn.
 	ConnectivityState connectivity.State
 	// Picker is used to choose connections (SubConns) for RPCs.
 	Picker V2Picker
