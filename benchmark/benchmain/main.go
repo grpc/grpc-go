@@ -143,7 +143,8 @@ var (
 		networkModeWAN:   latency.WAN,
 		networkLongHaul:  latency.Longhaul,
 	}
-	keepaliveTime    = 10 * time.Second // this is the minimum allowed
+	keepaliveTime    = 10 * time.Second       // This is the minimum allowed
+	keepaliveMinTime = 800 * time.Millisecond // This is 0.8*keepaliveTime
 	keepaliveTimeout = 1 * time.Second
 )
 
@@ -281,7 +282,7 @@ func makeClient(bf stats.Features) (testpb.BenchmarkServiceClient, func()) {
 				Timeout: keepaliveTimeout,
 			}),
 			grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
-				MinTime:             keepaliveTime,
+				MinTime:             keepaliveMinTime,
 				PermitWithoutStream: true,
 			}),
 		)
