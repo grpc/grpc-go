@@ -43,8 +43,6 @@ var goroutinesToIgnore = []string{
 	"runtime_mcall",
 	"(*loggingT).flushDaemon",
 	"goroutine in C code",
-	"grpc.callReturnBuffers",
-	"grpc.waitCallReturnBuffer",
 }
 
 // RegisterIgnoreGoroutine appends s into the ignore goroutine list. The
