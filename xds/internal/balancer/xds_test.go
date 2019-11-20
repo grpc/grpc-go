@@ -513,7 +513,7 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 
 	testXDSClient := newFakeXDSClient()
 	originalxdsclientNew := xdsclientNew
-	xdsclientNew = func(opts xdsclient.Options) (xdsEDSWatchClient, error) {
+	xdsclientNew = func(opts xdsclient.Options) (xdsClientInterface, error) {
 		return testXDSClient, nil
 	}
 	defer func() {
@@ -598,7 +598,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 
 	testXDSClient := newFakeXDSClient()
 	originalxdsclientNew := xdsclientNew
-	xdsclientNew = func(opts xdsclient.Options) (xdsEDSWatchClient, error) {
+	xdsclientNew = func(opts xdsclient.Options) (xdsClientInterface, error) {
 		return testXDSClient, nil
 	}
 	defer func() {
@@ -687,7 +687,7 @@ func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 
 	testXDSClient := newFakeXDSClient()
 	originalxdsclientNew := xdsclientNew
-	xdsclientNew = func(opts xdsclient.Options) (xdsEDSWatchClient, error) {
+	xdsclientNew = func(opts xdsclient.Options) (xdsClientInterface, error) {
 		return testXDSClient, nil
 	}
 	defer func() {

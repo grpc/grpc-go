@@ -310,7 +310,7 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterNa
 		doBackoff = true
 		stream, err := c.StreamLoadStats(ctx)
 		if err != nil {
-			grpclog.Infof("lrs: failed to create stream: %v", err)
+			grpclog.Warningf("lrs: failed to create stream: %v", err)
 			continue
 		}
 		if err := stream.Send(&lrspb.LoadStatsRequest{
@@ -319,30 +319,30 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterNa
 			}},
 			Node: node,
 		}); err != nil {
-			grpclog.Infof("lrs: failed to send first request: %v", err)
+			grpclog.Warningf("lrs: failed to send first request: %v", err)
 			continue
 		}
 		first, err := stream.Recv()
 		if err != nil {
-			grpclog.Infof("lrs: failed to receive first response: %v", err)
+			grpclog.Warningf("lrs: failed to receive first response: %v", err)
 			continue
 		}
 		interval, err := ptypes.Duration(first.LoadReportingInterval)
 		if err != nil {
-			grpclog.Infof("lrs: failed to convert report interval: %v", err)
+			grpclog.Warningf("lrs: failed to convert report interval: %v", err)
 			continue
 		}
 		if len(first.Clusters) != 1 {
-			grpclog.Infof("lrs: received multiple clusters %v, expect one cluster", first.Clusters)
+			grpclog.Warningf("lrs: received multiple clusters %v, expect one cluster", first.Clusters)
 			continue
 		}
 		if first.Clusters[0] != clusterName {
-			grpclog.Infof("lrs: received cluster is unexpected. Got %v, want %v", first.Clusters[0], clusterName)
+			grpclog.Warningf("lrs: received cluster is unexpected. Got %v, want %v", first.Clusters[0], clusterName)
 			continue
 		}
 		if first.ReportEndpointGranularity {
 			// TODO: fixme to support per endpoint loads.
-			grpclog.Infof("lrs: endpoint loads requested, but not supported by current implementation")
+			grpclog.Warningf("lrs: endpoint loads requested, but not supported by current implementation")
 			continue
 		}
 
@@ -365,7 +365,7 @@ func (ls *lrsStore) sendLoads(ctx context.Context, stream lrsgrpc.LoadReportingS
 		if err := stream.Send(&lrspb.LoadStatsRequest{
 			ClusterStats: ls.buildStats(clusterName),
 		}); err != nil {
-			grpclog.Infof("lrs: failed to send report: %v", err)
+			grpclog.Warningf("lrs: failed to send report: %v", err)
 			return
 		}
 	}

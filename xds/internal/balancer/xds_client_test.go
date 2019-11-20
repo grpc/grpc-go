@@ -250,8 +250,7 @@ func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 			t.Fatalf("ads RPC failed with err: %v", req.err)
 		}
 		if !proto.Equal(req.req, expectedReq) {
-			t.Errorf("diff: %s", cmp.Diff(req.req, expectedReq))
-			t.Fatalf("got ADS request %T %v, expected: %T %v", req.req, req.req, expectedReq, expectedReq)
+			t.Fatalf("got ADS request %T, expected: %T, diff: %s", req.req, expectedReq, cmp.Diff(req.req, expectedReq, cmp.Comparer(proto.Equal)))
 		}
 	}
 
