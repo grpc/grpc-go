@@ -16,7 +16,7 @@
  *
  */
 
-// The profiling package exposes methods to manage profiling within gRPC.
+// Package profiling exposes methods to manage profiling within gRPC.
 package profiling
 
 import (

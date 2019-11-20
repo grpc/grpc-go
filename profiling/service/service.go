@@ -16,7 +16,7 @@
  *
  */
 
-// The service package defines methods to register a gRPC client/service for a
+// Package service defines methods to register a gRPC client/service for a
 // profiling service that is exposed in the same server. This service can be
 // queried by a client to remotely manage the gRPC profiling behaviour of an
 // application.
@@ -52,7 +52,7 @@ type ProfilingConfig struct {
 
 var errorNilServer = errors.New("No grpc.Server provided.")
 
-// Init takes a *ProfilingConfig to initialise profiling (turned on/off
+// Init takes a *ProfilingConfig to initialize profiling (turned on/off
 // depending on the value set in pc.Enabled) and register the profiling service
 // in the server provided in pc.Server.
 func Init(pc *ProfilingConfig) error {
@@ -66,7 +66,7 @@ func Init(pc *ProfilingConfig) error {
 
 	pspb.RegisterProfilingServer(pc.Server, &profilingServer{})
 
-	// Do this last after everything has been initialised and allocated.
+	// Do this last after everything has been initialized and allocated.
 	profiling.Enable(pc.Enabled)
 
 	return nil

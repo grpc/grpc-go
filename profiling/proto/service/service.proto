@@ -14,6 +14,11 @@
 
 syntax = "proto3";
 
+// This package defines the proto messages and RPC services exposed by gRPC for
+// profiling management. A reference client implementation to interact with
+// this service is provided as a command-line application. This service can be
+// used to toggle profiling on and off and retrieve stats from a gRPC
+// application.
 option go_package = "google.golang.org/grpc/profiling/proto/service";
 
 // EnableRequest defines the fields in a /Profiling/Enable method request to
