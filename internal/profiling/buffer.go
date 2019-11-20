@@ -29,31 +29,44 @@ import (
 )
 
 type queue struct {
+	// An array of pointers as references to the items stored in this queue.
 	arr               []unsafe.Pointer
+	// The maximum number of elements this queue may store before it wraps around
+	// and overwrites older values. Must be an exponent of 2.
 	size              uint32
+	// Always size - 1. A bitwise AND is performed with this mask in place of a
+	// modulo operation by the Push operation.
 	mask              uint32
+	// Each Push operation into this queue increments the acquired counter before
+	// proceeding forwarding with the actual write to arr. This counter is also
+	// used by the Drain operation's drainWait subroutine to wait for all pushes
+	// to complete.
 	acquired          uint32
+	// After the completion of a Push operation, the written counter is
+	// incremented. Also used by drainWait to wait for all pushes to complete.
 	written           uint32
+	// The Drain operation must first choose a queue to push to. Once this is
+	// done, acquired is incremented; however, between these two operations, if a
+	// Drain operation begins, its drainWait subroutine will return even though
+	// there is a pending write to the queue. If this isn't caught, data
+	// corruption might occur. To prevent this, a second check is used by Push
+	// and Drain to act as a critical section barrier (but in a lock-free way!).
+	// See comments within Push for more details.
 	drainingPostCheck uint32
 }
 
 // Allocates and returns a new *queue. size needs to be a exponent of two.
-func newQueue(size uint32) (q *queue) {
-	q = &queue{
+func newQueue(size uint32) *queue {
+	return &queue{
 		arr:      make([]unsafe.Pointer, size),
 		size:     size,
 		mask:     size - 1,
-		acquired: 0,
-		written:  0,
 	}
-
-	return
 }
 
 // drainWait blocks the caller until all Pushes on this queue are complete.
 func (q *queue) drainWait() {
-	acquired := atomic.LoadUint32(&q.acquired)
-	for acquired != atomic.LoadUint32(&q.written) {
+	for atomic.LoadUint32(&q.acquired) != atomic.LoadUint32(&q.written) {
 		runtime.Gosched()
 	}
 }
@@ -68,12 +81,12 @@ type queuePair struct {
 }
 
 // Allocates and returns a new *queuePair with its internal queues allocated.
-func newQueuePair(size uint32) (qp *queuePair) {
-	qp = &queuePair{}
+func newQueuePair(size uint32) *queuePair {
+	qp := &queuePair{}
 	qp.q0 = unsafe.Pointer(newQueue(size))
 	qp.q1 = unsafe.Pointer(newQueue(size))
 	qp.q = qp.q0
-	return
+	return qp
 }
 
 // Switches the current queue for future Pushes to proceed to the other queue
@@ -192,6 +205,7 @@ reloadq:
 	index := acquired & q.mask
 	atomic.StorePointer(&q.arr[index], unsafe.Pointer(&x))
 
+	// Allows any drainWait checks to proceed.
 	atomic.AddUint32(&q.written, 1)
 }
 
