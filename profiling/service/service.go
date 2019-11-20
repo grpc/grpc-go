@@ -32,7 +32,7 @@ import (
 	pspb "google.golang.org/grpc/profiling/proto/service"
 )
 
-// Profiling configuration options.
+// ProfilingConfig defines configuration options for the Init method.
 type ProfilingConfig struct {
 	// Setting this to true will enable profiling.
 	Enabled bool
@@ -50,7 +50,7 @@ type ProfilingConfig struct {
 	Server *grpc.Server
 }
 
-var errorNilServer = errors.New("No grpc.Server provided.")
+var errorNilServer = errors.New("profiling: no grpc.Server provided")
 
 // Init takes a *ProfilingConfig to initialize profiling (turned on/off
 // depending on the value set in pc.Enabled) and register the profiling service

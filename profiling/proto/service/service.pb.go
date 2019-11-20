@@ -132,9 +132,9 @@ func (m *GetStreamStatsRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_GetStreamStatsRequest proto.InternalMessageInfo
 
-// Equivalent to google.golang.org/grpc/internal/profiling.Timer, but defined
-// for proto. Each TimerProto measures the start and end of execution of a
-// component within gRPC that's being profiled.
+// A TimerProto measures the start and end of execution of a component within
+// gRPC that's being profiled. It includes a tag and some additional metadata
+// to identify itself.
 type TimerProto struct {
 	// timer_tag is an arbitrary string that is used to tag a timer for
 	// identification purposes later.
@@ -223,9 +223,8 @@ func (m *TimerProto) GetGoId() int64 {
 	return 0
 }
 
-// Equivalent to google.golang.org/grpc/internal/profiling.Stat, but defined
-// for proto. A stat is essentially a collection of timers along with some
-// metadata.
+// A StatProto is a collection of TimerProtos along with some additional
+// metadata to tag and identify itself.
 type StatProto struct {
 	// stat_tag is an arbitrary string that is used to tag a stat.
 	StatTag string `protobuf:"bytes,1,opt,name=stat_tag,json=statTag,proto3" json:"stat_tag,omitempty"`
