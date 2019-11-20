@@ -89,11 +89,11 @@ func (s) TestXdsLoadReporting(t *testing.T) {
 		newEDSBalancer = originalNewEDSBalancer
 	}()
 
-	builder := balancer.Get(xdsName)
+	builder := balancer.Get(edsName)
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
 	if !ok {
-		t.Fatalf("unable to type assert to *xdsBalancer")
+		t.Fatalf("unable to type assert to *edsBalancer")
 	}
 	defer lb.Close()
 

@@ -39,7 +39,7 @@ import (
 
 const (
 	defaultTimeout = 10 * time.Second
-	xdsName        = "xds_experimental"
+	edsName        = "experimental_eds"
 )
 
 var (
@@ -53,15 +53,15 @@ var (
 )
 
 func init() {
-	balancer.Register(&xdsBalancerBuilder{})
+	balancer.Register(&edsBalancerBuilder{})
 }
 
-type xdsBalancerBuilder struct{}
+type edsBalancerBuilder struct{}
 
 // Build helps implement the balancer.Builder interface.
-func (b *xdsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	ctx, cancel := context.WithCancel(context.Background())
-	x := &xdsBalancer{
+	x := &edsBalancer{
 		ctx:             ctx,
 		cancel:          cancel,
 		buildOpts:       opts,
@@ -81,11 +81,11 @@ func (b *xdsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 	return x
 }
 
-func (b *xdsBalancerBuilder) Name() string {
-	return xdsName
+func (b *edsBalancerBuilder) Name() string {
+	return edsName
 }
 
-func (b *xdsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+func (b *edsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	var cfg XDSConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal balancer config %s into xds config", string(c))
@@ -94,7 +94,7 @@ func (b *xdsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadB
 }
 
 // edsBalancerInterface defines the interface that edsBalancer must implement to
-// communicate with xdsBalancer.
+// communicate with edsBalancer.
 //
 // It's implemented by the real eds balancer and a fake testing eds balancer.
 type edsBalancerInterface interface {
@@ -108,11 +108,11 @@ type edsBalancerInterface interface {
 	Close()
 }
 
-var _ balancer.V2Balancer = (*xdsBalancer)(nil) // Assert that we implement V2Balancer
+var _ balancer.V2Balancer = (*edsBalancer)(nil) // Assert that we implement V2Balancer
 
-// xdsBalancer manages xdsClient and the actual balancer that does load balancing (either edsBalancer,
+// edsBalancer manages xdsClient and the actual balancer that does load balancing (either edsBalancer,
 // or fallback LB).
-type xdsBalancer struct {
+type edsBalancer struct {
 	cc                balancer.ClientConn // *xdsClientConn
 	buildOpts         balancer.BuildOptions
 	startupTimeout    time.Duration
@@ -120,10 +120,10 @@ type xdsBalancer struct {
 	connStateMgr      *connStateMgr
 	ctx               context.Context
 	cancel            context.CancelFunc
-	startup           bool // startup indicates whether this xdsBalancer is in startup stage.
+	startup           bool // startup indicates whether this edsBalancer is in startup stage.
 	inFallbackMonitor bool
 
-	// xdsBalancer continuously monitor the channels below, and will handle events from them in sync.
+	// edsBalancer continuously monitor the channels below, and will handle events from them in sync.
 	grpcUpdate      chan interface{}
 	xdsClientUpdate chan interface{}
 	timer           *time.Timer
@@ -141,8 +141,8 @@ type xdsBalancer struct {
 // server name from service config can change, and we need to migrate from the
 // old one to the new one. Now the xds server name is specified by the bootstrap
 // file, and should never change. There's no need for this.
-func (x *xdsBalancer) startNewXDSClient(u *XDSConfig) {
-	// If the xdsBalancer is in startup stage, then we need to apply the startup timeout for the first
+func (x *edsBalancer) startNewXDSClient(u *XDSConfig) {
+	// If the edsBalancer is in startup stage, then we need to apply the startup timeout for the first
 	// xdsClient to get a response from the traffic director.
 	if x.startup {
 		x.startFallbackMonitoring()
@@ -152,7 +152,7 @@ func (x *xdsBalancer) startNewXDSClient(u *XDSConfig) {
 	// connect to it. However, previous xds client should not be closed until the new one successfully
 	// connects to the traffic director (i.e. get an ADS response from the traffic director). Therefore,
 	// we let each new client to be responsible to close its immediate predecessor. In this way,
-	// xdsBalancer does not to implement complex synchronization to achieve the same purpose.
+	// edsBalancer does not to implement complex synchronization to achieve the same purpose.
 	prevClient := x.client
 	// haveGotADS is true means, this xdsClient has got ADS response from director in the past, which
 	// means it can close previous client if it hasn't and it now can send lose contact signal for
@@ -198,10 +198,10 @@ func (x *xdsBalancer) startNewXDSClient(u *XDSConfig) {
 	x.client = newXDSClientWrapper(u.BalancerName, u.EDSServiceName, x.buildOpts, u.LrsLoadReportingServerName, x.loadStore, newADS, loseContact, exitCleanup)
 }
 
-// run gets executed in a goroutine once xdsBalancer is created. It monitors updates from grpc,
-// xdsClient and load balancer. It synchronizes the operations that happen inside xdsBalancer. It
-// exits when xdsBalancer is closed.
-func (x *xdsBalancer) run() {
+// run gets executed in a goroutine once edsBalancer is created. It monitors updates from grpc,
+// xdsClient and load balancer. It synchronizes the operations that happen inside edsBalancer. It
+// exits when edsBalancer is closed.
+func (x *edsBalancer) run() {
 	for {
 		select {
 		case update := <-x.grpcUpdate:
@@ -227,7 +227,7 @@ func (x *xdsBalancer) run() {
 	}
 }
 
-func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
+func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 	switch u := update.(type) {
 	case *subConnStateUpdate:
 		if x.xdsLB != nil {
@@ -306,7 +306,7 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 	}
 }
 
-func (x *xdsBalancer) handleXDSClientUpdate(update interface{}) {
+func (x *edsBalancer) handleXDSClientUpdate(update interface{}) {
 	switch u := update.(type) {
 	case *edsResp:
 		select {
@@ -380,15 +380,15 @@ type subConnStateUpdate struct {
 	state balancer.SubConnState
 }
 
-func (x *xdsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+func (x *edsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
 	grpclog.Error("UpdateSubConnState should be called instead of HandleSubConnStateChange")
 }
 
-func (x *xdsBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
+func (x *edsBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 	grpclog.Error("UpdateResolverState should be called instead of HandleResolvedAddrs")
 }
 
-func (x *xdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+func (x *edsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	update := &subConnStateUpdate{
 		sc:    sc,
 		state: state,
@@ -399,11 +399,11 @@ func (x *xdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 	}
 }
 
-func (x *xdsBalancer) ResolverError(error) {
+func (x *edsBalancer) ResolverError(error) {
 	// Ignore for now
 }
 
-func (x *xdsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+func (x *edsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	select {
 	case x.grpcUpdate <- &s:
 	case <-x.ctx.Done():
@@ -416,7 +416,7 @@ type edsResp struct {
 	resp *xdsclient.EDSUpdate
 }
 
-func (x *xdsBalancer) newADSResponse(ctx context.Context, resp *xdsclient.EDSUpdate) error {
+func (x *edsBalancer) newADSResponse(ctx context.Context, resp *xdsclient.EDSUpdate) error {
 	select {
 	case x.xdsClientUpdate <- &edsResp{ctx: ctx, resp: resp}:
 	case <-x.ctx.Done():
@@ -430,7 +430,7 @@ type loseContact struct {
 	ctx context.Context
 }
 
-func (x *xdsBalancer) loseContact(ctx context.Context) {
+func (x *edsBalancer) loseContact(ctx context.Context) {
 	select {
 	case x.xdsClientUpdate <- &loseContact{ctx: ctx}:
 	case <-x.ctx.Done():
@@ -438,7 +438,7 @@ func (x *xdsBalancer) loseContact(ctx context.Context) {
 	}
 }
 
-func (x *xdsBalancer) switchFallback() {
+func (x *edsBalancer) switchFallback() {
 	if x.xdsLB != nil {
 		x.xdsLB.Close()
 		x.xdsLB = nil
@@ -448,7 +448,7 @@ func (x *xdsBalancer) switchFallback() {
 	x.cancelFallbackMonitoring()
 }
 
-func (x *xdsBalancer) updateFallbackWithResolverState(s *resolver.State) {
+func (x *edsBalancer) updateFallbackWithResolverState(s *resolver.State) {
 	if lb, ok := x.fallbackLB.(balancer.V2Balancer); ok {
 		lb.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{
 			Addresses: s.Addresses,
@@ -464,7 +464,7 @@ func (x *xdsBalancer) updateFallbackWithResolverState(s *resolver.State) {
 // It will cancel fallback monitoring if we are in fallback monitoring stage.
 // If there's no running edsBalancer currently, it will create one and initialize it. Also, it will
 // shutdown the fallback balancer if there's one running.
-func (x *xdsBalancer) cancelFallbackAndSwitchEDSBalancerIfNecessary() {
+func (x *edsBalancer) cancelFallbackAndSwitchEDSBalancerIfNecessary() {
 	// xDS update will cancel fallback monitoring if we are in fallback monitoring stage.
 	x.cancelFallbackMonitoring()
 
@@ -481,7 +481,7 @@ func (x *xdsBalancer) cancelFallbackAndSwitchEDSBalancerIfNecessary() {
 	}
 }
 
-func (x *xdsBalancer) buildFallBackBalancer(c *XDSConfig) {
+func (x *edsBalancer) buildFallBackBalancer(c *XDSConfig) {
 	if c.FallBackPolicy == nil {
 		x.buildFallBackBalancer(&XDSConfig{
 			FallBackPolicy: &loadBalancingConfig{
@@ -503,7 +503,7 @@ func (x *xdsBalancer) buildFallBackBalancer(c *XDSConfig) {
 //    timeout.
 // 2. After xds client loses contact with the remote, fallback if all connections to the backends are
 //    lost (i.e. not in state READY).
-func (x *xdsBalancer) startFallbackMonitoring() {
+func (x *edsBalancer) startFallbackMonitoring() {
 	if x.startup {
 		x.startup = false
 		x.timer.Reset(x.startupTimeout)
@@ -522,7 +522,7 @@ func (x *xdsBalancer) startFallbackMonitoring() {
 // There are two cases where fallback monitoring should be canceled:
 // 1. xDS client returns a new ADS message.
 // 2. fallback has been triggered.
-func (x *xdsBalancer) cancelFallbackMonitoring() {
+func (x *edsBalancer) cancelFallbackMonitoring() {
 	if !x.timer.Stop() {
 		select {
 		case <-x.timer.C:
@@ -536,7 +536,7 @@ func (x *xdsBalancer) cancelFallbackMonitoring() {
 	x.inFallbackMonitor = false
 }
 
-func (x *xdsBalancer) Close() {
+func (x *edsBalancer) Close() {
 	x.cancel()
 }
 
