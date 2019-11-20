@@ -146,7 +146,7 @@ func (stat *Stat) NewTimer(timerTag string) int {
 	stat.Timers = append(stat.Timers, Timer{
 		TimerTag: timerTag,
 		Begin:    time.Now(),
-		GoId:     goId(),
+		GoID:     goid(),
 	})
 	index := len(stat.Timers) - 1
 	stat.mu.Unlock()
