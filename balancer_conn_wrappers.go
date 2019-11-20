@@ -174,18 +174,7 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 }
 
 func (ccb *ccBalancerWrapper) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
-	ccb.mu.Lock()
-	defer ccb.mu.Unlock()
-	if ccb.subConns == nil {
-		return
-	}
-	// Update picker before updating state.  Even though the ordering here does
-	// not matter, it can lead to multiple calls of Pick in the common start-up
-	// case where we wait for ready and then perform an RPC.  If the picker is
-	// updated later, we could call the "connecting" picker when the state is
-	// updated, and then call the "ready" picker after the picker gets updated.
-	ccb.cc.blockingpicker.updatePicker(p)
-	ccb.cc.csMgr.updateState(s)
+	ccb.UpdateState(balancer.State{ConnectivityState: s, Picker: p})
 }
 
 func (ccb *ccBalancerWrapper) UpdateState(s balancer.State) {
