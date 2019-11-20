@@ -20,7 +20,6 @@ package health
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -102,7 +101,7 @@ retryConnection:
 
 			// Reports unhealthy if server's Watch method gives an error other than UNIMPLEMENTED.
 			if err != nil {
-				setConnectivityState(connectivity.TransientFailure, errors.New("health check RPC error"))
+				setConnectivityState(connectivity.TransientFailure, fmt.Errorf("connection active but received health check RPC error: %v", err))
 				continue retryConnection
 			}
 
@@ -111,7 +110,7 @@ retryConnection:
 			if resp.Status == healthpb.HealthCheckResponse_SERVING {
 				setConnectivityState(connectivity.Ready, nil)
 			} else {
-				setConnectivityState(connectivity.TransientFailure, errors.New("health check failed"))
+				setConnectivityState(connectivity.TransientFailure, fmt.Errorf("connection active but health check failed. status=%s", resp.Status))
 			}
 		}
 	}
