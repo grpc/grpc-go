@@ -92,7 +92,7 @@ func timerToTimerProto(timer profiling.Timer) *pspb.TimerProto {
 		BeginNsec: int32(timer.Begin.Nanosecond()),
 		EndSec:    timer.End.Unix(),
 		EndNsec:   int32(timer.End.Nanosecond()),
-		GoId:      timer.GoId,
+		GoId:      timer.GoID,
 	}
 }
 
