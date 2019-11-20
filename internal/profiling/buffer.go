@@ -30,21 +30,21 @@ import (
 
 type queue struct {
 	// An array of pointers as references to the items stored in this queue.
-	arr               []unsafe.Pointer
+	arr []unsafe.Pointer
 	// The maximum number of elements this queue may store before it wraps around
 	// and overwrites older values. Must be an exponent of 2.
-	size              uint32
+	size uint32
 	// Always size - 1. A bitwise AND is performed with this mask in place of a
 	// modulo operation by the Push operation.
-	mask              uint32
+	mask uint32
 	// Each Push operation into this queue increments the acquired counter before
 	// proceeding forwarding with the actual write to arr. This counter is also
 	// used by the Drain operation's drainWait subroutine to wait for all pushes
 	// to complete.
-	acquired          uint32
+	acquired uint32
 	// After the completion of a Push operation, the written counter is
 	// incremented. Also used by drainWait to wait for all pushes to complete.
-	written           uint32
+	written uint32
 	// The Drain operation must first choose a queue to push to. Once this is
 	// done, acquired is incremented; however, between these two operations, if a
 	// Drain operation begins, its drainWait subroutine will return even though
@@ -58,9 +58,9 @@ type queue struct {
 // Allocates and returns a new *queue. size needs to be a exponent of two.
 func newQueue(size uint32) *queue {
 	return &queue{
-		arr:      make([]unsafe.Pointer, size),
-		size:     size,
-		mask:     size - 1,
+		arr:  make([]unsafe.Pointer, size),
+		size: size,
+		mask: size - 1,
 	}
 }
 
