@@ -19,9 +19,10 @@
 package main
 
 import (
+	"os"
+
 	"google.golang.org/grpc/grpclog"
 	pspb "google.golang.org/grpc/profiling/proto/service"
-	"os"
 )
 
 type snapshot struct {

@@ -21,8 +21,9 @@ package main
 import (
 	"encoding/gob"
 	"fmt"
-	"google.golang.org/grpc/grpclog"
 	"os"
+
+	"google.golang.org/grpc/grpclog"
 )
 
 func loadSnapshot(snapshotFileName string) (*snapshot, error) {

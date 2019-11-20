@@ -22,11 +22,12 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"google.golang.org/grpc/grpclog"
-	pspb "google.golang.org/grpc/profiling/proto/service"
 	"os"
 	"sort"
 	"strings"
+
+	"google.golang.org/grpc/grpclog"
+	pspb "google.golang.org/grpc/profiling/proto/service"
 )
 
 type jsonNode struct {

@@ -22,12 +22,13 @@ import (
 	"context"
 	"encoding/gob"
 	"fmt"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/grpclog"
-	pspb "google.golang.org/grpc/profiling/proto/service"
 	"io"
 	"os"
 	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/grpclog"
+	pspb "google.golang.org/grpc/profiling/proto/service"
 )
 
 func setEnabled(ctx context.Context, c pspb.ProfilingClient, enabled bool) error {
