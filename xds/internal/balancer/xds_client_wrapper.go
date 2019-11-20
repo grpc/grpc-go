@@ -29,14 +29,16 @@ import (
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
-type xdsEDSWatchClient interface {
+// xdsClientInterface contains only the xds_client methods needed by EDS
+// balancer. It's defined so we can override xdsclientNew function in tests.
+type xdsClientInterface interface {
 	WatchEDS(clusterName string, edsCb func(*xdsclient.EDSUpdate, error)) (cancel func())
 	ReportLoad(server string, clusterName string, loadStore lrs.Store) (cancel func())
 	Close()
 }
 
 var (
-	xdsclientNew = func(opts xdsclient.Options) (xdsEDSWatchClient, error) {
+	xdsclientNew = func(opts xdsclient.Options) (xdsClientInterface, error) {
 		return xdsclient.New(opts)
 	}
 	bootstrapConfigNew = bootstrap.NewConfig
@@ -52,7 +54,7 @@ type xdsclientWrapper struct {
 	cancelLoadReport func()
 	cleanup          func()
 
-	xdsclient xdsEDSWatchClient
+	xdsclient xdsClientInterface
 }
 
 func (c *xdsclientWrapper) close() {
@@ -63,6 +65,7 @@ func (c *xdsclientWrapper) close() {
 		c.cancelWatch()
 	}
 	if c.xdsclient != nil {
+		// TODO: this shouldn't close xdsclient if it's from attributes.
 		c.xdsclient.Close()
 	}
 	c.cleanup()
