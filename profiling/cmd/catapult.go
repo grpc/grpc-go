@@ -205,7 +205,7 @@ func streamStatsCatapultJSONSingle(stat *pspb.StatProto, baseSec int64, baseNsec
 						ID:        flowID,
 						Cname:     hashCname("flow"),
 						Phase:     "f",
-						Timestamp: catapultNs(stat.TimerProtos[flowEndID].BeginSec-baseSec, stat.TimerProtos[flowEndID].EndNsec-baseNsec),
+						Timestamp: catapultNs(stat.TimerProtos[flowEndID].BeginSec-baseSec, stat.TimerProtos[flowEndID].BeginNsec-baseNsec),
 						PID:       flowEndPID,
 						TID:       flowEndTID,
 					},
