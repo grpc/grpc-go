@@ -20,6 +20,8 @@ package base
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -135,7 +137,15 @@ func (b *baseBalancer) regeneratePicker(err error) {
 		if b.pickerBuilder != nil {
 			b.picker = NewErrPicker(balancer.ErrTransientFailure)
 		} else {
-			b.v2Picker = NewErrPickerV2(balancer.TransientFailureError(err))
+			if err != nil {
+				b.v2Picker = NewErrPickerV2(balancer.TransientFailureError(err))
+			} else {
+				// This means the last subchannel transition was not to
+				// TransientFailure (otherwise err must be set), but the
+				// aggregate state of the balancer is TransientFailure, meaning
+				// there are no other addresses.
+				b.v2Picker = NewErrPickerV2(balancer.TransientFailureError(errors.New("resolver returned no addresses")))
+			}
 		}
 		return
 	}
@@ -190,6 +200,7 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 	//  - the aggregated state of balancer became non-TransientFailure from TransientFailure
 	if (s == connectivity.Ready) != (oldS == connectivity.Ready) ||
 		(b.state == connectivity.TransientFailure) != (oldAggrState == connectivity.TransientFailure) {
+		fmt.Println("state: ", state)
 		b.regeneratePicker(state.ConnectionError)
 	}
 

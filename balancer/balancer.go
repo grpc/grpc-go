@@ -423,9 +423,8 @@ type V2Balancer interface {
 //
 // It's not thread safe.
 type ConnectivityStateEvaluator struct {
-	numReady            uint64 // Number of addrConns in ready state.
-	numConnecting       uint64 // Number of addrConns in connecting state.
-	numTransientFailure uint64 // Number of addrConns in transientFailure.
+	numReady      uint64 // Number of addrConns in ready state.
+	numConnecting uint64 // Number of addrConns in connecting state.
 }
 
 // RecordTransition records state change happening in subConn and based on that
@@ -445,8 +444,6 @@ func (cse *ConnectivityStateEvaluator) RecordTransition(oldState, newState conne
 			cse.numReady += updateVal
 		case connectivity.Connecting:
 			cse.numConnecting += updateVal
-		case connectivity.TransientFailure:
-			cse.numTransientFailure += updateVal
 		}
 	}
 
