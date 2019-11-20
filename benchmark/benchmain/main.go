@@ -143,9 +143,11 @@ var (
 		networkModeWAN:   latency.WAN,
 		networkLongHaul:  latency.Longhaul,
 	}
-	keepaliveTime    = 10 * time.Second       // This is the minimum allowed
-	keepaliveMinTime = 800 * time.Millisecond // This is 0.8*keepaliveTime
+	keepaliveTime    = 10 * time.Second
 	keepaliveTimeout = 1 * time.Second
+	// This is 0.8*keepaliveTime to prevent connection issues because of server
+	// keepalive enforcement.
+	keepaliveMinTime = 8 * time.Second
 )
 
 // runModes indicates the workloads to run. This is initialized with a call to
