@@ -24,8 +24,6 @@ import (
 	"fmt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/profiling"
-	"google.golang.org/grpc/profiling/proto"
 	pspb "google.golang.org/grpc/profiling/proto/service"
 	"io"
 	"os"
@@ -51,7 +49,7 @@ func retrieveSnapshot(ctx context.Context, c pspb.ProfilingClient, f string) err
 		return err
 	}
 
-	s := &snapshot{StreamStats: make([]*profiling.Stat, 0)}
+	s := &snapshot{StreamStats: make([]*pspb.StatProto, 0)}
 
 	grpclog.Infof("receiving and processing stream stats")
 	for {
@@ -65,8 +63,7 @@ func retrieveSnapshot(ctx context.Context, c pspb.ProfilingClient, f string) err
 			return err
 		}
 
-		stat := proto.StatProtoToStat(resp)
-		s.StreamStats = append(s.StreamStats, stat)
+		s.StreamStats = append(s.StreamStats, resp)
 	}
 
 	grpclog.Infof("creating snapshot file %s", f)

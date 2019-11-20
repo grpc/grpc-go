@@ -20,12 +20,12 @@ package main
 
 import (
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/profiling"
+	pspb "google.golang.org/grpc/profiling/proto/service"
 	"os"
 )
 
 type snapshot struct {
-	StreamStats []*profiling.Stat
+	StreamStats []*pspb.StatProto
 }
 
 func main() {

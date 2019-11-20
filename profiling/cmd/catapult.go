@@ -23,11 +23,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/profiling"
+	pspb "google.golang.org/grpc/profiling/proto/service"
 	"os"
 	"sort"
 	"strings"
-	"time"
 )
 
 type jsonNode struct {
@@ -78,7 +77,7 @@ func hashCname(tag string) string {
 	return ""
 }
 
-func filterCounter(stat *profiling.Stat, filter string, counter int) int {
+func filterCounter(stat *pspb.StatProto, filter string, counter int) int {
 	localCounter := 0
 	for i := 0; i < len(stat.Timers); i++ {
 		if stat.Timers[i].TimerTag == filter {
@@ -115,7 +114,7 @@ func catapultNs(n int64) float64 {
 	return float64(n)
 }
 
-func streamStatsCatapultJsonify(stat *profiling.Stat, base time.Time) []jsonNode {
+func streamStatsCatapultJsonify(stat *pspb.StatProto, baseSec int64, baseNsec int32) []jsonNode {
 	if len(stat.Timers) == 0 {
 		return nil
 	}
@@ -196,7 +195,7 @@ func streamStatsCatapultJsonify(stat *profiling.Stat, base time.Time) []jsonNode
 						Id:        flowId,
 						Cname:     hashCname("flow"),
 						Phase:     "s",
-						Timestamp: catapultNs(stat.Timers[i].End.Sub(base).Nanoseconds()),
+						Timestamp: catapultNs(stat.Timers[i].EndSec - baseSec, stat.Timers[i].EndNsec - baseNsec),
 						Pid:       pid,
 						Tid:       tid,
 					},
@@ -206,7 +205,7 @@ func streamStatsCatapultJsonify(stat *profiling.Stat, base time.Time) []jsonNode
 						Id:        flowId,
 						Cname:     hashCname("flow"),
 						Phase:     "f",
-						Timestamp: catapultNs(stat.Timers[flowEndId].Begin.Sub(base).Nanoseconds()),
+						Timestamp: catapultNs(stat.Timers[flowEndId].BeginSec - baseSec, stat.Timers[flowEndId].EndNsec - baseNsec),
 						Pid:       flowEndPid,
 						Tid:       flowEndTid,
 					},
@@ -243,7 +242,7 @@ func streamStatsCatapultJsonify(stat *profiling.Stat, base time.Time) []jsonNode
 						Id:        flowId,
 						Cname:     hashCname("flow"),
 						Phase:     "s",
-						Timestamp: catapultNs(stat.Timers[flowBeginId].End.Sub(base).Nanoseconds()),
+						Timestamp: catapultNs(stat.Timers[flowBeginId].EndSec - baseSec, stat.Timers[flowBeginId].EndNsec - baseNsec),
 						Pid:       flowBeginPid,
 						Tid:       flowBeginTid,
 					},
@@ -253,7 +252,7 @@ func streamStatsCatapultJsonify(stat *profiling.Stat, base time.Time) []jsonNode
 						Id:        flowId,
 						Cname:     hashCname("flow"),
 						Phase:     "f",
-						Timestamp: catapultNs(stat.Timers[i].Begin.Sub(base).Nanoseconds()),
+						Timestamp: catapultNs(stat.Timers[i].BeginSec - baseSec, stat.Timers[i].BeginNsec - baseNsec),
 						Pid:       pid,
 						Tid:       tid,
 					},
@@ -268,7 +267,7 @@ func streamStatsCatapultJsonify(stat *profiling.Stat, base time.Time) []jsonNode
 				Id:        opid,
 				Cname:     hashCname(stat.Timers[i].TimerTag),
 				Phase:     "B",
-				Timestamp: catapultNs(stat.Timers[i].Begin.Sub(base).Nanoseconds()),
+				Timestamp: catapultNs(stat.Timers[i].BeginSec - baseSec, stat.Timers[i].BeginNsec - baseNsec),
 				Pid:       pid,
 				Tid:       tid,
 			},
@@ -278,7 +277,7 @@ func streamStatsCatapultJsonify(stat *profiling.Stat, base time.Time) []jsonNode
 				Id:        opid,
 				Cname:     hashCname(stat.Timers[i].TimerTag),
 				Phase:     "E",
-				Timestamp: catapultNs(stat.Timers[i].End.Sub(base).Nanoseconds()),
+				Timestamp: catapultNs(stat.Timers[i].EndSec - baseSec, stat.Timers[i].EndNsec - baseNsec),
 				Pid:       pid,
 				Tid:       tid,
 			},
@@ -286,6 +285,13 @@ func streamStatsCatapultJsonify(stat *profiling.Stat, base time.Time) []jsonNode
 	}
 
 	return result
+}
+
+func timerBeginIsBefore(ti pspb.TimerProto, tj pspb.TimerProto) bool {
+	if ti.BeginSec == tj.BeginSec {
+		return ti.BeginNsec < tj.BeginNsec
+	}
+	return ti.BeginSec < tj.BeginSec
 }
 
 func streamStatsCatapultJson(s *snapshot, streamStatsCatapultJsonFileName string) error {
@@ -297,7 +303,7 @@ func streamStatsCatapultJson(s *snapshot, streamStatsCatapultJsonFileName string
 	}
 
 	grpclog.Infof("filter stream stats for %s", *flagStreamStatsFilter)
-	streamStats := make([]*profiling.Stat, 0)
+	streamStats := make([]*pspb.StatProto, 0)
 	for _, stat := range s.StreamStats {
 		if _, ok := filter[stat.StatTag]; ok {
 			streamStats = append(streamStats, stat)
@@ -307,7 +313,7 @@ func streamStatsCatapultJson(s *snapshot, streamStatsCatapultJsonFileName string
 	grpclog.Infof("sorting timers within all stats")
 	for id, _ := range streamStats {
 		sort.Slice(streamStats[id].Timers, func(i, j int) bool {
-			return streamStats[id].Timers[i].Begin.Before(streamStats[id].Timers[j].Begin)
+			return timerBeginIsBefore(streamStats[id].Timers[i], streamStats[id].Timers[j])
 		})
 	}
 
@@ -321,7 +327,7 @@ func streamStatsCatapultJson(s *snapshot, streamStatsCatapultJsonFileName string
 		pi := binary.BigEndian.Uint64(streamStats[i].Metadata[0:8])
 		pj := binary.BigEndian.Uint64(streamStats[j].Metadata[0:8])
 		if pi == pj {
-			return streamStats[i].Timers[0].Begin.Before(streamStats[j].Timers[0].Begin)
+			return timerBeginIsBefore(streamStats[i].Timers[0], streamStats[j].Timers[0])
 		}
 
 		return pi < pj
@@ -337,11 +343,11 @@ func streamStatsCatapultJson(s *snapshot, streamStatsCatapultJsonFileName string
 
 	// All timestamps use the earliest timestamp available as the reference.
 	grpclog.Infof("calculating the earliest timestamp across all timers")
-	var base time.Time
+	var base pspb.TimerProto
 	for _, stat := range streamStats {
 		for _, timer := range stat.Timers {
-			if base.IsZero() || timer.Begin.Before(base) {
-				base = timer.Begin
+			if (pspb.BaseSec == 0 && pspb.BaseNsec == 0) || timerBeginIsBefore(base, timer) {
+				base = timer
 			}
 		}
 	}
@@ -349,7 +355,7 @@ func streamStatsCatapultJson(s *snapshot, streamStatsCatapultJsonFileName string
 	grpclog.Infof("converting %d stats to catapult JSON format", len(streamStats))
 	jsonNodes := make([]jsonNode, 0)
 	for _, stat := range streamStats {
-		jsonNodes = append(jsonNodes, streamStatsCatapultJsonify(stat, base)...)
+		jsonNodes = append(jsonNodes, streamStatsCatapultJsonify(stat, base.BeginSec, base.BaseNsec)...)
 	}
 
 	grpclog.Infof("marshalling catapult JSON")
