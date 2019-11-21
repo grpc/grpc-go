@@ -17,7 +17,6 @@
 package edsbalancer
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"testing"
@@ -49,6 +48,13 @@ func init() {
 	defaultSubBalancerCloseTimeout = time.Millisecond
 }
 
+func subConnFromPicker(p balancer.V2Picker) func() balancer.SubConn {
+	return func() balancer.SubConn {
+		scst, _ := p.Pick(balancer.PickInfo{})
+		return scst.SubConn
+	}
+}
+
 // 1 balancer, 1 backend -> 2 backends -> 1 backend.
 func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	cc := newTestClientConn(t)
@@ -68,9 +74,9 @@ func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	// Test pick with one backend.
 	p1 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		gotSC, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		if !reflect.DeepEqual(gotSC, sc1) {
-			t.Fatalf("picker.Pick, got %v, want %v", gotSC, sc1)
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
+		if !reflect.DeepEqual(gotSCSt.SubConn, sc1) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
 
@@ -84,10 +90,7 @@ func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	// Test roundrobin pick.
 	p2 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1, sc2}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -102,9 +105,9 @@ func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	// Test pick with only the second subconn.
 	p3 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		gotSC, _, _ := p3.Pick(context.Background(), balancer.PickOptions{})
-		if !reflect.DeepEqual(gotSC, sc2) {
-			t.Fatalf("picker.Pick, got %v, want %v", gotSC, sc2)
+		gotSC, _ := p3.Pick(balancer.PickInfo{})
+		if !reflect.DeepEqual(gotSC.SubConn, sc2) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSC, sc2)
 		}
 	}
 }
@@ -134,10 +137,7 @@ func TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 	// Test roundrobin on the last picker.
 	p1 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1, sc2}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -173,10 +173,7 @@ func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	// Test roundrobin on the last picker.
 	p1 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1, sc2, sc3, sc4}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -186,10 +183,7 @@ func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	// Expect two sc1's in the result, because balancer1 will be picked twice,
 	// but there's only one sc in it.
 	want = []balancer.SubConn{sc1, sc1, sc3, sc4}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -202,10 +196,7 @@ func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	bg.handleSubConnStateChange(scToRemove, connectivity.Shutdown)
 	p3 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc1, sc4}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p3.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p3)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -213,10 +204,7 @@ func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	bg.handleSubConnStateChange(sc1, connectivity.TransientFailure)
 	p4 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc4}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p4.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p4)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -224,7 +212,7 @@ func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	bg.handleSubConnStateChange(sc4, connectivity.Connecting)
 	p5 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		if _, _, err := p5.Pick(context.Background(), balancer.PickOptions{}); err != balancer.ErrNoSubConnAvailable {
+		if _, err := p5.Pick(balancer.PickInfo{}); err != balancer.ErrNoSubConnAvailable {
 			t.Fatalf("want pick error %v, got %v", balancer.ErrNoSubConnAvailable, err)
 		}
 	}
@@ -233,7 +221,7 @@ func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	bg.handleSubConnStateChange(sc4, connectivity.TransientFailure)
 	p6 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		if _, _, err := p6.Pick(context.Background(), balancer.PickOptions{}); err != balancer.ErrTransientFailure {
+		if _, err := p6.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
 			t.Fatalf("want pick error %v, got %v", balancer.ErrTransientFailure, err)
 		}
 	}
@@ -270,10 +258,7 @@ func TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 	// Test roundrobin on the last picker.
 	p1 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1, sc1, sc2, sc2, sc3, sc4}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -308,10 +293,7 @@ func TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 
 	p1 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1, sc2, sc3}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -323,10 +305,7 @@ func TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	}
 	p2 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc1, sc3}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -340,7 +319,7 @@ func TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	}
 	p3 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		if _, _, err := p3.Pick(context.Background(), balancer.PickOptions{}); err != balancer.ErrTransientFailure {
+		if _, err := p3.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
 			t.Fatalf("want pick error %v, got %v", balancer.ErrTransientFailure, err)
 		}
 	}
@@ -377,10 +356,7 @@ func TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 	// Test roundrobin on the last picker.
 	p1 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1, sc1, sc2, sc2, sc3, sc4}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -389,10 +365,7 @@ func TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 	// Test roundrobin with new weight.
 	p2 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc1, sc1, sc1, sc2, sc2, sc2, sc3, sc4}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -440,11 +413,11 @@ func TestBalancerGroup_LoadReport(t *testing.T) {
 		wantCost  []testServerLoad
 	)
 	for i := 0; i < 10; i++ {
-		sc, done, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		locality := backendToBalancerID[sc]
+		scst, _ := p1.Pick(balancer.PickInfo{})
+		locality := backendToBalancerID[scst.SubConn]
 		wantStart = append(wantStart, locality)
-		if done != nil && sc != sc1 {
-			done(balancer.DoneInfo{
+		if scst.Done != nil && scst.SubConn != sc1 {
+			scst.Done(balancer.DoneInfo{
 				ServerLoad: &orcapb.OrcaLoadReport{
 					CpuUtilization: 10,
 					MemUtilization: 5,
@@ -510,10 +483,7 @@ func TestBalancerGroup_start_close(t *testing.T) {
 		m1[testBackendAddrs[1]], m1[testBackendAddrs[1]],
 		m1[testBackendAddrs[2]], m1[testBackendAddrs[3]],
 	}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -551,10 +521,7 @@ func TestBalancerGroup_start_close(t *testing.T) {
 		m2[testBackendAddrs[3]], m2[testBackendAddrs[3]], m2[testBackendAddrs[3]],
 		m2[testBackendAddrs[1]], m2[testBackendAddrs[2]],
 	}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -624,10 +591,7 @@ func initBalancerGroupForCachingTest(t *testing.T) (*balancerGroup, *testClientC
 		m1[testBackendAddrs[1]], m1[testBackendAddrs[1]],
 		m1[testBackendAddrs[2]], m1[testBackendAddrs[3]],
 	}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -647,10 +611,7 @@ func initBalancerGroupForCachingTest(t *testing.T) (*balancerGroup, *testClientC
 	want = []balancer.SubConn{
 		m1[testBackendAddrs[0]], m1[testBackendAddrs[1]],
 	}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -690,10 +651,7 @@ func TestBalancerGroup_locality_caching(t *testing.T) {
 		// addr2 is down, b2 only has addr3 in READY state.
 		addrToSC[testBackendAddrs[3]], addrToSC[testBackendAddrs[3]],
 	}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p3.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p3)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -832,10 +790,7 @@ func TestBalancerGroup_locality_caching_readd_with_different_builder(t *testing.
 		addrToSC[testBackendAddrs[1]], addrToSC[testBackendAddrs[1]],
 		addrToSC[testBackendAddrs[4]], addrToSC[testBackendAddrs[5]],
 	}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p3.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p3)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }

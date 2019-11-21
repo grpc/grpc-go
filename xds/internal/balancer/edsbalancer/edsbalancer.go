@@ -18,7 +18,6 @@
 package edsbalancer
 
 import (
-	"context"
 	"encoding/json"
 	"reflect"
 	"sync"
@@ -52,14 +51,6 @@ type balancerGroupWithConfig struct {
 	configs map[internal.Locality]*localityConfig
 }
 
-// balancerState keeps the previous state updated by a priority. It's kept so if
-// a lower priority is removed, the higher priority's state will be sent to
-// parent ClientConn (even if it's not Ready).
-type balancerState struct {
-	state  connectivity.State
-	picker balancer.Picker
-}
-
 // EDSBalancer does load balancing based on the EDS responses. Note that it
 // doesn't implement the balancer interface. It's intended to be used by a high
 // level balancer implementation.
@@ -82,7 +73,7 @@ type EDSBalancer struct {
 	// priorities are pointers, and will be nil when EDS returns empty result.
 	priorityInUse   priorityType
 	priorityLowest  priorityType
-	priorityToState map[priorityType]*balancerState
+	priorityToState map[priorityType]*balancer.State
 	// The timer to give a priority 10 seconds to connect. And if the priority
 	// doesn't go into Ready/Failure, start the next priority.
 	//
@@ -93,10 +84,9 @@ type EDSBalancer struct {
 	subConnMu         sync.Mutex
 	subConnToPriority map[balancer.SubConn]priorityType
 
-	pickerMu    sync.Mutex
-	drops       []*dropper
-	innerPicker balancer.Picker    // The picker without drop support.
-	innerState  connectivity.State // The state of the picker.
+	pickerMu   sync.Mutex
+	drops      []*dropper
+	innerState balancer.State // The state of the picker without drop support.
 }
 
 // NewXDSBalancer create a new EDSBalancer.
@@ -106,7 +96,7 @@ func NewXDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) *EDSBalancer {
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
 
 		priorityToLocalities: make(map[priorityType]*balancerGroupWithConfig),
-		priorityToState:      make(map[priorityType]*balancerState),
+		priorityToState:      make(map[priorityType]*balancer.State),
 		subConnToPriority:    make(map[balancer.SubConn]priorityType),
 		loadStore:            loadStore,
 	}
@@ -177,9 +167,12 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []xdsclient.OverloadDropConfig
 	if dropsChanged {
 		xdsB.pickerMu.Lock()
 		xdsB.drops = newDrops
-		if xdsB.innerPicker != nil {
+		if xdsB.innerState.Picker != nil {
 			// Update picker with old inner picker, new drops.
-			xdsB.cc.UpdateBalancerState(xdsB.innerState, newDropPicker(xdsB.innerPicker, newDrops, xdsB.loadStore))
+			xdsB.cc.UpdateState(balancer.State{
+				ConnectivityState: xdsB.innerState.ConnectivityState,
+				Picker:            newDropPicker(xdsB.innerState.Picker, newDrops, xdsB.loadStore)},
+			)
 		}
 		xdsB.pickerMu.Unlock()
 	}
@@ -363,22 +356,21 @@ func (xdsB *EDSBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connect
 	}
 }
 
-// updateBalancerState first handles priority, and then wraps picker in a drop
-// picker before forwarding the update.
-func (xdsB *EDSBalancer) updateBalancerState(priority priorityType, s connectivity.State, p balancer.Picker) {
+// updateState first handles priority, and then wraps picker in a drop picker
+// before forwarding the update.
+func (xdsB *EDSBalancer) updateState(priority priorityType, s balancer.State) {
 	_, ok := xdsB.priorityToLocalities[priority]
 	if !ok {
 		grpclog.Infof("eds: received picker update from unknown priority")
 		return
 	}
 
-	if xdsB.handlePriorityWithNewState(priority, s, p) {
+	if xdsB.handlePriorityWithNewState(priority, s) {
 		xdsB.pickerMu.Lock()
 		defer xdsB.pickerMu.Unlock()
-		xdsB.innerPicker = p
 		xdsB.innerState = s
 		// Don't reset drops when it's a state change.
-		xdsB.cc.UpdateBalancerState(s, newDropPicker(p, xdsB.drops, xdsB.loadStore))
+		xdsB.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: newDropPicker(s.Picker, xdsB.drops, xdsB.loadStore)})
 	}
 }
 
@@ -402,7 +394,10 @@ func (ebwcc *edsBalancerWrapperCC) NewSubConn(addrs []resolver.Address, opts bal
 	return ebwcc.parent.newSubConn(ebwcc.priority, addrs, opts)
 }
 func (ebwcc *edsBalancerWrapperCC) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
-	ebwcc.parent.updateBalancerState(ebwcc.priority, state, picker)
+	grpclog.Fatalln("not implemented")
+}
+func (ebwcc *edsBalancerWrapperCC) UpdateState(state balancer.State) {
+	ebwcc.parent.updateState(ebwcc.priority, state)
 }
 
 func (xdsB *EDSBalancer) newSubConn(priority priorityType, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
@@ -427,11 +422,11 @@ func (xdsB *EDSBalancer) Close() {
 
 type dropPicker struct {
 	drops     []*dropper
-	p         balancer.Picker
+	p         balancer.V2Picker
 	loadStore lrs.Store
 }
 
-func newDropPicker(p balancer.Picker, drops []*dropper, loadStore lrs.Store) *dropPicker {
+func newDropPicker(p balancer.V2Picker, drops []*dropper, loadStore lrs.Store) *dropPicker {
 	return &dropPicker{
 		drops:     drops,
 		p:         p,
@@ -439,7 +434,7 @@ func newDropPicker(p balancer.Picker, drops []*dropper, loadStore lrs.Store) *dr
 	}
 }
 
-func (d *dropPicker) Pick(ctx context.Context, opts balancer.PickOptions) (conn balancer.SubConn, done func(balancer.DoneInfo), err error) {
+func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	var (
 		drop     bool
 		category string
@@ -455,9 +450,9 @@ func (d *dropPicker) Pick(ctx context.Context, opts balancer.PickOptions) (conn 
 		if d.loadStore != nil {
 			d.loadStore.CallDropped(category)
 		}
-		return nil, nil, status.Errorf(codes.Unavailable, "RPC is dropped")
+		return balancer.PickResult{}, status.Errorf(codes.Unavailable, "RPC is dropped")
 	}
 	// TODO: (eds) don't drop unless the inner picker is READY. Similar to
 	// https://github.com/grpc/grpc-go/issues/2622.
-	return d.p.Pick(ctx, opts)
+	return d.p.Pick(info)
 }

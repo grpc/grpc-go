@@ -166,10 +166,11 @@ func (t *testClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewS
 	return nil, nil
 }
 
-func (testClientConn) RemoveSubConn(balancer.SubConn)                              {}
-func (testClientConn) UpdateBalancerState(s connectivity.State, p balancer.Picker) {}
-func (testClientConn) ResolveNow(resolver.ResolveNowOptions)                       {}
-func (testClientConn) Target() string                                              { return testServiceName }
+func (testClientConn) RemoveSubConn(balancer.SubConn)                          {}
+func (testClientConn) UpdateBalancerState(connectivity.State, balancer.Picker) {}
+func (testClientConn) UpdateState(balancer.State)                              {}
+func (testClientConn) ResolveNow(resolver.ResolveNowOptions)                   {}
+func (testClientConn) Target() string                                          { return testServiceName }
 
 type scStateChange struct {
 	sc    balancer.SubConn

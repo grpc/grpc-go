@@ -45,7 +45,7 @@ func (xdsB *EDSBalancer) handlePriorityChange() {
 	// Everything was removed by EDS.
 	if !xdsB.priorityLowest.isSet() {
 		xdsB.priorityInUse = newPriorityTypeUnset()
-		xdsB.cc.UpdateBalancerState(connectivity.TransientFailure, base.NewErrPicker(balancer.ErrTransientFailure))
+		xdsB.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPickerV2(balancer.ErrTransientFailure)})
 		return
 	}
 
@@ -59,7 +59,7 @@ func (xdsB *EDSBalancer) handlePriorityChange() {
 	if _, ok := xdsB.priorityToLocalities[xdsB.priorityInUse]; !ok {
 		xdsB.priorityInUse = xdsB.priorityLowest
 		if s, ok := xdsB.priorityToState[xdsB.priorityLowest]; ok {
-			xdsB.cc.UpdateBalancerState(s.state, s.picker)
+			xdsB.cc.UpdateState(*s)
 		} else {
 			// If state for priorityLowest is not found, this means priorityLowest was
 			// started, but never sent any update. The init timer fired and
@@ -69,13 +69,13 @@ func (xdsB *EDSBalancer) handlePriorityChange() {
 			// We don't have an old state to send to parent, but we also don't
 			// want parent to keep using picker from old_priorityInUse. Send an
 			// update to trigger block picks until a new picker is ready.
-			xdsB.cc.UpdateBalancerState(connectivity.Connecting, base.NewErrPicker(balancer.ErrNoSubConnAvailable))
+			xdsB.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: base.NewErrPickerV2(balancer.ErrNoSubConnAvailable)})
 		}
 		return
 	}
 
 	// priorityInUse is not ready, look for next priority, and use if found.
-	if s, ok := xdsB.priorityToState[xdsB.priorityInUse]; ok && s.state != connectivity.Ready {
+	if s, ok := xdsB.priorityToState[xdsB.priorityInUse]; ok && s.ConnectivityState != connectivity.Ready {
 		pNext := xdsB.priorityInUse.nextLower()
 		if _, ok := xdsB.priorityToLocalities[pNext]; ok {
 			xdsB.startPriority(pNext)
@@ -119,7 +119,7 @@ func (xdsB *EDSBalancer) startPriority(priority priorityType) {
 
 // handlePriorityWithNewState start/close priorities based on the connectivity
 // state. It returns whether the state should be forwarded to parent ClientConn.
-func (xdsB *EDSBalancer) handlePriorityWithNewState(priority priorityType, s connectivity.State, p balancer.Picker) bool {
+func (xdsB *EDSBalancer) handlePriorityWithNewState(priority priorityType, s balancer.State) bool {
 	xdsB.priorityMu.Lock()
 	defer xdsB.priorityMu.Unlock()
 
@@ -136,14 +136,13 @@ func (xdsB *EDSBalancer) handlePriorityWithNewState(priority priorityType, s con
 
 	bState, ok := xdsB.priorityToState[priority]
 	if !ok {
-		bState = &balancerState{}
+		bState = &balancer.State{}
 		xdsB.priorityToState[priority] = bState
 	}
-	oldState := bState.state
-	bState.state = s
-	bState.picker = p
+	oldState := bState.ConnectivityState
+	*bState = s
 
-	switch s {
+	switch s.ConnectivityState {
 	case connectivity.Ready:
 		return xdsB.handlePriorityWithNewStateReady(priority)
 	case connectivity.TransientFailure:

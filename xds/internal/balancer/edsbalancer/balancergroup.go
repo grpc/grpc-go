@@ -17,7 +17,6 @@
 package edsbalancer
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -55,9 +54,8 @@ type subBalancerWithConfig struct {
 	id    internal.Locality
 	group *balancerGroup
 
-	mu     sync.Mutex
-	state  connectivity.State
-	picker balancer.Picker
+	mu    sync.Mutex
+	state balancer.State
 
 	// The static part of sub-balancer. Keeps balancerBuilders and addresses.
 	// To be used when restarting sub-balancer.
@@ -68,11 +66,15 @@ type subBalancerWithConfig struct {
 	balancer balancer.Balancer
 }
 
-// UpdateBalancerState overrides balancer.ClientConn, to keep state and picker.
 func (sbc *subBalancerWithConfig) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
+	grpclog.Fatalln("not implemented")
+}
+
+// UpdateState overrides balancer.ClientConn, to keep state and picker.
+func (sbc *subBalancerWithConfig) UpdateState(state balancer.State) {
 	sbc.mu.Lock()
-	sbc.state, sbc.picker = state, picker
-	sbc.group.updateBalancerState(sbc.id, state, picker)
+	sbc.state = state
+	sbc.group.updateBalancerState(sbc.id, state)
 	sbc.mu.Unlock()
 }
 
@@ -84,8 +86,8 @@ func (sbc *subBalancerWithConfig) NewSubConn(addrs []resolver.Address, opts bala
 
 func (sbc *subBalancerWithConfig) updateBalancerStateWithCachedPicker() {
 	sbc.mu.Lock()
-	if sbc.picker != nil {
-		sbc.group.updateBalancerState(sbc.id, sbc.state, sbc.picker)
+	if sbc.state.Picker != nil {
+		sbc.group.updateBalancerState(sbc.id, sbc.state)
 	}
 	sbc.mu.Unlock()
 }
@@ -144,7 +146,7 @@ func (sbc *subBalancerWithConfig) stopBalancer() {
 
 type pickerState struct {
 	weight uint32
-	picker balancer.Picker
+	picker balancer.V2Picker
 	state  connectivity.State
 }
 
@@ -359,7 +361,7 @@ func (bg *balancerGroup) remove(id internal.Locality) {
 		// Normally picker update is triggered by SubConn state change. But we
 		// want to update state and picker to reflect the changes, too. Because
 		// we don't want `ClientConn` to pick this sub-balancer anymore.
-		bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
+		bg.cc.UpdateState(buildPickerAndState(bg.idToPickerState))
 	}
 	bg.incomingMu.Unlock()
 }
@@ -411,7 +413,7 @@ func (bg *balancerGroup) changeWeight(id internal.Locality, newWeight uint32) {
 		// Normally picker update is triggered by SubConn state change. But we
 		// want to update state and picker to reflect the changes, too. Because
 		// `ClientConn` should do pick with the new weights now.
-		bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
+		bg.cc.UpdateState(buildPickerAndState(bg.idToPickerState))
 	}
 }
 
@@ -481,8 +483,8 @@ func (bg *balancerGroup) newSubConn(config *subBalancerWithConfig, addrs []resol
 
 // updateBalancerState: create an aggregated picker and an aggregated
 // connectivity state, then forward to ClientConn.
-func (bg *balancerGroup) updateBalancerState(id internal.Locality, state connectivity.State, picker balancer.Picker) {
-	grpclog.Infof("balancer group: update balancer state: %v, %v, %p", id, state, picker)
+func (bg *balancerGroup) updateBalancerState(id internal.Locality, state balancer.State) {
+	grpclog.Infof("balancer group: update balancer state: %v, %v", id, state)
 
 	bg.incomingMu.Lock()
 	defer bg.incomingMu.Unlock()
@@ -493,10 +495,10 @@ func (bg *balancerGroup) updateBalancerState(id internal.Locality, state connect
 		grpclog.Warningf("balancer group: pickerState for %v not found when update picker/state", id)
 		return
 	}
-	pickerSt.picker = newLoadReportPicker(picker, id, bg.loadStore)
-	pickerSt.state = state
+	pickerSt.picker = newLoadReportPicker(state.Picker, id, bg.loadStore)
+	pickerSt.state = state.ConnectivityState
 	if bg.incomingStarted {
-		bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
+		bg.cc.UpdateState(buildPickerAndState(bg.idToPickerState))
 	}
 }
 
@@ -533,7 +535,7 @@ func (bg *balancerGroup) close() {
 	bg.balancerCache.Clear(true)
 }
 
-func buildPickerAndState(m map[internal.Locality]*pickerState) (connectivity.State, balancer.Picker) {
+func buildPickerAndState(m map[internal.Locality]*pickerState) balancer.State {
 	var readyN, connectingN int
 	readyPickerWithWeights := make([]pickerState, 0, len(m))
 	for _, ps := range m {
@@ -555,9 +557,9 @@ func buildPickerAndState(m map[internal.Locality]*pickerState) (connectivity.Sta
 		aggregatedState = connectivity.TransientFailure
 	}
 	if aggregatedState == connectivity.TransientFailure {
-		return aggregatedState, base.NewErrPicker(balancer.ErrTransientFailure)
+		return balancer.State{aggregatedState, base.NewErrPickerV2(balancer.ErrTransientFailure)}
 	}
-	return aggregatedState, newPickerGroup(readyPickerWithWeights)
+	return balancer.State{aggregatedState, newPickerGroup(readyPickerWithWeights)}
 }
 
 // RandomWRR constructor, to be modified in tests.
@@ -587,12 +589,12 @@ func newPickerGroup(readyPickerWithWeights []pickerState) *pickerGroup {
 	}
 }
 
-func (pg *pickerGroup) Pick(ctx context.Context, opts balancer.PickOptions) (conn balancer.SubConn, done func(balancer.DoneInfo), err error) {
+func (pg *pickerGroup) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	if pg.length <= 0 {
-		return nil, nil, balancer.ErrNoSubConnAvailable
+		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
-	p := pg.w.Next().(balancer.Picker)
-	return p.Pick(ctx, opts)
+	p := pg.w.Next().(balancer.V2Picker)
+	return p.Pick(info)
 }
 
 const (
@@ -601,26 +603,26 @@ const (
 )
 
 type loadReportPicker struct {
-	balancer.Picker
+	p balancer.V2Picker
 
 	id        internal.Locality
 	loadStore lrs.Store
 }
 
-func newLoadReportPicker(p balancer.Picker, id internal.Locality, loadStore lrs.Store) *loadReportPicker {
+func newLoadReportPicker(p balancer.V2Picker, id internal.Locality, loadStore lrs.Store) *loadReportPicker {
 	return &loadReportPicker{
-		Picker:    p,
+		p:         p,
 		id:        id,
 		loadStore: loadStore,
 	}
 }
 
-func (lrp *loadReportPicker) Pick(ctx context.Context, opts balancer.PickOptions) (conn balancer.SubConn, done func(balancer.DoneInfo), err error) {
-	conn, done, err = lrp.Picker.Pick(ctx, opts)
+func (lrp *loadReportPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	res, err := lrp.p.Pick(info)
 	if lrp.loadStore != nil && err == nil {
 		lrp.loadStore.CallStarted(lrp.id)
-		td := done
-		done = func(info balancer.DoneInfo) {
+		td := res.Done
+		res.Done = func(info balancer.DoneInfo) {
 			lrp.loadStore.CallFinished(lrp.id, info.Err)
 			if load, ok := info.ServerLoad.(*orcapb.OrcaLoadReport); ok {
 				lrp.loadStore.CallServerLoad(lrp.id, serverLoadCPUName, load.CpuUtilization)
@@ -637,5 +639,5 @@ func (lrp *loadReportPicker) Pick(ctx context.Context, opts balancer.PickOptions
 			}
 		}
 	}
-	return
+	return res, err
 }

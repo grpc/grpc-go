@@ -128,6 +128,8 @@ staticcheck -go 1.9 -checks 'inherit,-ST1015' ./... > "${SC_OUT}" || true
 .NewServiceConfig
 .Metadata is deprecated: use Attributes
 .Type is deprecated: use Attributes
+.UpdateBalancerState
+balancer.Picker
 grpc.CallCustomCodec
 grpc.Code
 grpc.Compressor

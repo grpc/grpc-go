@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -195,8 +194,8 @@ func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
 	}
 }
 
-func (ccc *lbCacheClientConn) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
-	ccc.cc.UpdateBalancerState(s, p)
+func (ccc *lbCacheClientConn) UpdateState(s balancer.State) {
+	ccc.cc.UpdateState(s)
 }
 
 func (ccc *lbCacheClientConn) close() {

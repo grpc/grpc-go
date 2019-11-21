@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -178,6 +179,19 @@ func testResolverErrorPolling(t *testing.T, badUpdate func(*manual.Resolver), go
 	}
 }
 
+const happyBalancerName = "happy balancer"
+
+func init() {
+	// Register a balancer that never returns an error from
+	// UpdateClientConnState, and doesn't do anything else either.
+	fb := &funcBalancer{
+		updateClientConnState: func(s balancer.ClientConnState) error {
+			return nil
+		},
+	}
+	balancer.Register(&funcBalancerBuilder{name: happyBalancerName, instance: fb})
+}
+
 // TestResolverErrorPolling injects resolver errors and verifies ResolveNow is
 // called with the appropriate backoff strategy being consulted between
 // ResolveNow calls.
@@ -188,7 +202,8 @@ func (s) TestResolverErrorPolling(t *testing.T) {
 		// UpdateState will block if ResolveNow is being called (which blocks on
 		// rn), so call it in a goroutine.
 		go r.CC.UpdateState(resolver.State{})
-	})
+	},
+		WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, happyBalancerName)))
 }
 
 // TestServiceConfigErrorPolling injects a service config error and verifies
@@ -202,7 +217,8 @@ func (s) TestServiceConfigErrorPolling(t *testing.T) {
 		// UpdateState will block if ResolveNow is being called (which blocks on
 		// rn), so call it in a goroutine.
 		go r.CC.UpdateState(resolver.State{})
-	})
+	},
+		WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, happyBalancerName)))
 }
 
 // TestResolverErrorInBuild makes the resolver.Builder call into the ClientConn

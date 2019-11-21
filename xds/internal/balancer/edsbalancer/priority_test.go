@@ -18,7 +18,6 @@
 package edsbalancer
 
 import (
-	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -55,10 +54,7 @@ func TestEDSPriority_HighPriorityReady(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p1 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
@@ -124,10 +120,7 @@ func TestEDSPriority_SwitchPriority(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p0 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc0}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p0.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p0)); err != nil {
 		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
@@ -145,9 +138,9 @@ func TestEDSPriority_SwitchPriority(t *testing.T) {
 	// Test pick with 1.
 	p1 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		gotSC, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		if !reflect.DeepEqual(gotSC, sc1) {
-			t.Fatalf("picker.Pick, got %v, want %v", gotSC, sc1)
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
+		if !reflect.DeepEqual(gotSCSt.SubConn, sc1) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
 
@@ -181,9 +174,9 @@ func TestEDSPriority_SwitchPriority(t *testing.T) {
 	// Test pick with 2.
 	p2 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		gotSC, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		if !reflect.DeepEqual(gotSC, sc2) {
-			t.Fatalf("picker.Pick, got %v, want %v", gotSC, sc2)
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{})
+		if !reflect.DeepEqual(gotSCSt.SubConn, sc2) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
 		}
 	}
 
@@ -202,7 +195,7 @@ func TestEDSPriority_SwitchPriority(t *testing.T) {
 	// Should get an update with 1's old picker, to override 2's old picker.
 	p3 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		if _, _, err := p3.Pick(context.Background(), balancer.PickOptions{}); err != balancer.ErrTransientFailure {
+		if _, err := p3.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
 			t.Fatalf("want pick error %v, got %v", balancer.ErrTransientFailure, err)
 		}
 	}
@@ -240,7 +233,7 @@ func TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	// Test pick failure.
 	pFail := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		if _, _, err := pFail.Pick(context.Background(), balancer.PickOptions{}); err != balancer.ErrTransientFailure {
+		if _, err := pFail.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
 			t.Fatalf("want pick error %v, got %v", balancer.ErrTransientFailure, err)
 		}
 	}
@@ -263,9 +256,9 @@ func TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	// Test pick with 2.
 	p2 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		gotSC, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		if !reflect.DeepEqual(gotSC, sc2) {
-			t.Fatalf("picker.Pick, got %v, want %v", gotSC, sc2)
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{})
+		if !reflect.DeepEqual(gotSCSt.SubConn, sc2) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
 		}
 	}
 }
@@ -312,9 +305,9 @@ func TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	// Test pick with 2.
 	p2 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		gotSC, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		if !reflect.DeepEqual(gotSC, sc2) {
-			t.Fatalf("picker.Pick, got %v, want %v", gotSC, sc2)
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{})
+		if !reflect.DeepEqual(gotSCSt.SubConn, sc2) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
 		}
 	}
 
@@ -334,9 +327,9 @@ func TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	// Test pick with 0.
 	p0 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		gotSC, _, _ := p0.Pick(context.Background(), balancer.PickOptions{})
-		if !reflect.DeepEqual(gotSC, sc0) {
-			t.Fatalf("picker.Pick, got %v, want %v", gotSC, sc0)
+		gotSCSt, _ := p0.Pick(balancer.PickInfo{})
+		if !reflect.DeepEqual(gotSCSt.SubConn, sc0) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
 	}
 }
@@ -392,9 +385,9 @@ func TestEDSPriority_InitTimeout(t *testing.T) {
 	// Test pick with 1.
 	p1 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		gotSC, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		if !reflect.DeepEqual(gotSC, sc1) {
-			t.Fatalf("picker.Pick, got %v, want %v", gotSC, sc1)
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
+		if !reflect.DeepEqual(gotSCSt.SubConn, sc1) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
 }
@@ -424,10 +417,7 @@ func TestEDSPriority_MultipleLocalities(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p0 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc0}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p0.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p0)); err != nil {
 		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
@@ -446,10 +436,7 @@ func TestEDSPriority_MultipleLocalities(t *testing.T) {
 	// Test roundrobin with only p1 subconns.
 	p1 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc1}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
@@ -465,10 +452,7 @@ func TestEDSPriority_MultipleLocalities(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p2 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc0}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -491,10 +475,7 @@ func TestEDSPriority_MultipleLocalities(t *testing.T) {
 	// Test roundrobin with only two p0 subconns.
 	p3 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc0, sc2}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p3.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p3)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -512,10 +493,7 @@ func TestEDSPriority_MultipleLocalities(t *testing.T) {
 	// Test roundrobin with only p1 subconns.
 	p4 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc3, sc4}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p4.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p4)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -551,11 +529,7 @@ func TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p0 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc0}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p0.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
-		// t.Fatalf("want %v, got %v", want, err)
+	if err := isRoundRobin(want, subConnFromPicker(p0)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -572,7 +546,7 @@ func TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	// Test pick return TransientFailure.
 	pFail := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		if _, _, err := pFail.Pick(context.Background(), balancer.PickOptions{}); err != balancer.ErrTransientFailure {
+		if _, err := pFail.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
 			t.Fatalf("want pick error %v, got %v", balancer.ErrTransientFailure, err)
 		}
 	}
@@ -605,10 +579,7 @@ func TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	// Test roundrobin with only p1 subconns.
 	p1 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc11}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p1.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -626,8 +597,8 @@ func TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	// Test pick return TransientFailure.
 	pFail1 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
-		if sc, _, err := pFail1.Pick(context.Background(), balancer.PickOptions{}); err != balancer.ErrNoSubConnAvailable {
-			t.Fatalf("want pick error _, _, %v, got %v, _ ,%v", balancer.ErrTransientFailure, sc, err)
+		if scst, err := pFail1.Pick(balancer.PickInfo{}); err != balancer.ErrNoSubConnAvailable {
+			t.Fatalf("want pick error _, %v, got %v, _ ,%v", balancer.ErrTransientFailure, scst, err)
 		}
 	}
 
@@ -639,10 +610,7 @@ func TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p2 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc01}
-	if err := isRoundRobin(want, func() balancer.SubConn {
-		sc, _, _ := p2.Pick(context.Background(), balancer.PickOptions{})
-		return sc
-	}); err != nil {
+	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 

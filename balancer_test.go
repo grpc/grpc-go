@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc/codes"
-	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/naming"
 	"google.golang.org/grpc/status"
 )
