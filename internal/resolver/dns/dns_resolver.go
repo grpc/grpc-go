@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/serviceconfig"
 )
 
 // EnableSRVLookups controls whether the DNS resolver attempts to fetch gRPCLB
@@ -247,11 +248,12 @@ func (d *dnsResolver) lookupSRV() []resolver.Address {
 	return newAddrs
 }
 
-func (d *dnsResolver) lookupTXT() string {
+func (d *dnsResolver) lookupTXT() *serviceconfig.ParseResult {
 	ss, err := d.resolver.LookupTXT(d.ctx, txtPrefix+d.host)
 	if err != nil {
-		grpclog.Infof("grpc: failed dns TXT record lookup due to %v.\n", err)
-		return ""
+		err = fmt.Errorf("error from DNS TXT record lookup: %v", err)
+		grpclog.Infoln("grpc:", err)
+		return &serviceconfig.ParseResult{Err: err}
 	}
 	var res string
 	for _, s := range ss {
@@ -260,10 +262,12 @@ func (d *dnsResolver) lookupTXT() string {
 
 	// TXT record must have "grpc_config=" attribute in order to be used as service config.
 	if !strings.HasPrefix(res, txtAttribute) {
-		grpclog.Warningf("grpc: TXT record %v missing %v attribute", res, txtAttribute)
-		return ""
+		grpclog.Warningf("grpc: DNS TXT record %v missing %v attribute", res, txtAttribute)
+		// This is not an error; it is the equivalent of not having a service config.
+		return nil
 	}
-	return strings.TrimPrefix(res, txtAttribute)
+	sc := canaryingSC(strings.TrimPrefix(res, txtAttribute))
+	return d.cc.ParseServiceConfig(sc)
 }
 
 func (d *dnsResolver) lookupHost() []resolver.Address {
@@ -292,8 +296,7 @@ func (d *dnsResolver) lookup() *resolver.State {
 	}
 	// Support fallback to non-balancer address.
 	if !d.disableServiceConfig {
-		sc := canaryingSC(d.lookupTXT())
-		state.ServiceConfig = d.cc.ParseServiceConfig(sc)
+		state.ServiceConfig = d.lookupTXT()
 	}
 	return state
 }

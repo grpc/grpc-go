@@ -77,6 +77,9 @@ func (t *testClientConn) NewServiceConfig(serviceConfig string) {
 
 func scFromState(s resolver.State) string {
 	if s.ServiceConfig != nil {
+		if s.ServiceConfig.Err != nil {
+			return ""
+		}
 		return s.ServiceConfig.Config.(unparsedServiceConfig).config
 	}
 	return ""
