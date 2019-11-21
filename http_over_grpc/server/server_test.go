@@ -74,6 +74,7 @@ func (s *testServer) start() {
 func TestServer(t *testing.T) {
 	ctx := context.Background()
 
+	http.DefaultServeMux = http.NewServeMux()
 	s := &testServer{}
 	s.start()
 
