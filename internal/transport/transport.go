@@ -286,6 +286,11 @@ type Stream struct {
 	contentSubtype string
 }
 
+// ID returns the stream ID.
+func (s *Stream) ID() uint32 {
+	return s.id
+}
+
 // isHeaderSent is only valid on the server-side.
 func (s *Stream) isHeaderSent() bool {
 	return atomic.LoadUint32(&s.headerSent) == 1
