@@ -138,7 +138,7 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 
 	d.wg.Add(1)
 	go d.watcher()
-	d.ResolveNow(resolver.ResolveNowOption{})
+	d.ResolveNow(resolver.ResolveNowOptions{})
 	return d, nil
 }
 
@@ -156,7 +156,7 @@ type netResolver interface {
 // deadResolver is a resolver that does nothing.
 type deadResolver struct{}
 
-func (deadResolver) ResolveNow(_ resolver.ResolveNowOption) {}
+func (deadResolver) ResolveNow(resolver.ResolveNowOptions) {}
 
 func (deadResolver) Close() {}
 
