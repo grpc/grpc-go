@@ -16,7 +16,7 @@
  *
  */
 
-package http_over_grpc
+package httpovergrpc
 
 import (
 	"bufio"
@@ -33,7 +33,7 @@ import (
 	"net/textproto"
 	"time"
 
-	pb "google.golang.org/grpc/http_over_grpc/http_over_grpc_proto"
+	pb "google.golang.org/grpc/httpovergrpc/http_over_grpc_proto"
 )
 
 var (

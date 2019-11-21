@@ -16,7 +16,7 @@
  *
  */
 
-package http_over_grpc
+package httpovergrpc
 
 import (
 	"bufio"
@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 
-	pb "google.golang.org/grpc/http_over_grpc/http_over_grpc_proto"
+	pb "google.golang.org/grpc/httpovergrpc/http_over_grpc_proto"
 )
 
 // Transport is an http.Transport that communicates via a HTTPOverGRPC.

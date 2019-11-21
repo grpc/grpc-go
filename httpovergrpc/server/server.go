@@ -16,7 +16,7 @@
  *
  */
 
-package http_over_grpc
+package httpovergrpc
 
 import (
 	"context"
@@ -24,7 +24,7 @@ import (
 	"log"
 
 	"google.golang.org/grpc/codes"
-	pb "google.golang.org/grpc/http_over_grpc/http_over_grpc_proto"
+	pb "google.golang.org/grpc/httpovergrpc/http_over_grpc_proto"
 	"google.golang.org/grpc/status"
 )
 
