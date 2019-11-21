@@ -43,7 +43,8 @@ type Store interface {
 	CallStarted(l internal.Locality)
 	CallFinished(l internal.Locality, err error)
 	CallServerLoad(l internal.Locality, name string, d float64)
-	ReportTo(ctx context.Context, cc *grpc.ClientConn)
+	// Report the load of clusterName to cc.
+	ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterName string, node *corepb.Node)
 }
 
 type rpcCountData struct {
@@ -140,7 +141,6 @@ func (rld *rpcLoadData) loadAndClear() (s float64, c uint64) {
 // lrsStore collects loads from xds balancer, and periodically sends load to the
 // server.
 type lrsStore struct {
-	serviceName  string
 	backoff      backoff.Strategy
 	lastReported time.Time
 
@@ -149,9 +149,8 @@ type lrsStore struct {
 }
 
 // NewStore creates a store for load reports.
-func NewStore(serviceName string) Store {
+func NewStore() Store {
 	return &lrsStore{
-		serviceName:  serviceName,
 		backoff:      backoff.DefaultExponential,
 		lastReported: time.Now(),
 	}
@@ -284,7 +283,7 @@ func (ls *lrsStore) buildStats(clusterName string) []*endpointpb.ClusterStats {
 // ReportTo makes a streaming lrs call to cc and blocks.
 //
 // It retries the call (with backoff) until ctx is canceled.
-func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn) {
+func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterName string, node *corepb.Node) {
 	c := lrsgrpc.NewLoadReportingServiceClient(cc)
 	var (
 		retryCount int
@@ -311,46 +310,46 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn) {
 		doBackoff = true
 		stream, err := c.StreamLoadStats(ctx)
 		if err != nil {
-			grpclog.Infof("lrs: failed to create stream: %v", err)
+			grpclog.Warningf("lrs: failed to create stream: %v", err)
 			continue
 		}
 		if err := stream.Send(&lrspb.LoadStatsRequest{
-			// TODO: when moving this to the xds client, the Node
-			// field needs to be set to node from bootstrap file.
-			// Node: c.config.NodeProto,
 			ClusterStats: []*endpointpb.ClusterStats{{
-				// TODO: this is user's dial target now, as a temporary
-				//  solution. Eventually this will be cluster name from CDS's response.
-				ClusterName: ls.serviceName,
+				ClusterName: clusterName,
 			}},
+			Node: node,
 		}); err != nil {
-			grpclog.Infof("lrs: failed to send first request: %v", err)
+			grpclog.Warningf("lrs: failed to send first request: %v", err)
 			continue
 		}
 		first, err := stream.Recv()
 		if err != nil {
-			grpclog.Infof("lrs: failed to receive first response: %v", err)
+			grpclog.Warningf("lrs: failed to receive first response: %v", err)
 			continue
 		}
 		interval, err := ptypes.Duration(first.LoadReportingInterval)
 		if err != nil {
-			grpclog.Infof("lrs: failed to convert report interval: %v", err)
+			grpclog.Warningf("lrs: failed to convert report interval: %v", err)
 			continue
 		}
 		if len(first.Clusters) != 1 {
-			grpclog.Infof("lrs: received multiple clusters %v, expect one cluster", first.Clusters)
+			grpclog.Warningf("lrs: received multiple clusters %v, expect one cluster", first.Clusters)
+			continue
+		}
+		if first.Clusters[0] != clusterName {
+			grpclog.Warningf("lrs: received cluster is unexpected. Got %v, want %v", first.Clusters[0], clusterName)
 			continue
 		}
 		if first.ReportEndpointGranularity {
 			// TODO: fixme to support per endpoint loads.
-			grpclog.Infof("lrs: endpoint loads requested, but not supported by current implementation")
+			grpclog.Warningf("lrs: endpoint loads requested, but not supported by current implementation")
 			continue
 		}
 
 		// No backoff afterwards.
 		doBackoff = false
 		retryCount = 0
-		ls.sendLoads(ctx, stream, first.Clusters[0], interval)
+		ls.sendLoads(ctx, stream, clusterName, interval)
 	}
 }
 
@@ -366,7 +365,7 @@ func (ls *lrsStore) sendLoads(ctx context.Context, stream lrsgrpc.LoadReportingS
 		if err := stream.Send(&lrspb.LoadStatsRequest{
 			ClusterStats: ls.buildStats(clusterName),
 		}); err != nil {
-			grpclog.Infof("lrs: failed to send report: %v", err)
+			grpclog.Warningf("lrs: failed to send report: %v", err)
 			return
 		}
 	}

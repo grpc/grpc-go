@@ -23,7 +23,6 @@ import (
 	"io"
 	"net"
 	"testing"
-	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -44,15 +43,15 @@ import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
+const (
+	edsType = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
+)
+
 var (
-	testServiceName    = "test/foo"
-	testEDSServiceName = "test/service/eds"
-	testEDSReq         = &xdspb.DiscoveryRequest{
-		TypeUrl:       edsType,
-		ResourceNames: []string{testServiceName},
-	}
+	testServiceName           = "test/foo"
+	testEDSClusterName        = "test/service/eds"
 	testClusterLoadAssignment = &xdspb.ClusterLoadAssignment{
-		ClusterName: testServiceName,
+		ClusterName: testEDSClusterName,
 		Endpoints: []*endpointpb.LocalityLbEndpoints{{
 			Locality: &corepb.Locality{
 				Region:  "asia-east1",
@@ -184,8 +183,6 @@ type testConfig struct {
 	expectedRequests     []*xdspb.DiscoveryRequest
 	responsesToSend      []*xdspb.DiscoveryResponse
 	expectedADSResponses []proto.Message
-	adsErr               error
-	svrErr               error
 }
 
 func setupServer(t *testing.T) (addr string, td *testTrafficDirector, lrss *lrsServer, cleanup func()) {
@@ -214,15 +211,19 @@ func setupServer(t *testing.T) (addr string, td *testTrafficDirector, lrss *lrsS
 func (s) TestXdsClientResponseHandling(t *testing.T) {
 	for _, test := range []*testConfig{
 		{
-			expectedRequests:     []*xdspb.DiscoveryRequest{testEDSReq},
-			responsesToSend:      []*xdspb.DiscoveryResponse{testEDSResp},
-			expectedADSResponses: []proto.Message{testClusterLoadAssignment},
-		},
-		{
-			edsServiceName: testEDSServiceName,
+			// Test that if clusterName is not set, dialing target is used.
 			expectedRequests: []*xdspb.DiscoveryRequest{{
 				TypeUrl:       edsType,
-				ResourceNames: []string{testEDSServiceName},
+				ResourceNames: []string{testServiceName}, // ResourceName is dialing target.
+				Node:          &corepb.Node{},
+			}},
+		},
+		{
+			edsServiceName: testEDSClusterName,
+			expectedRequests: []*xdspb.DiscoveryRequest{{
+				TypeUrl:       edsType,
+				ResourceNames: []string{testEDSClusterName},
+				Node:          &corepb.Node{},
 			}},
 			responsesToSend:      []*xdspb.DiscoveryResponse{testEDSResp},
 			expectedADSResponses: []proto.Message{testClusterLoadAssignment},
@@ -240,9 +241,8 @@ func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 		adsChan <- i
 		return nil
 	}
-	client := newXDSClient(addr, test.edsServiceName, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, func(context.Context) {}, func() {})
+	client := newXDSClientWrapper(addr, test.edsServiceName, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, "", nil, newADS, func(context.Context) {}, func() {})
 	defer client.close()
-	go client.run()
 
 	for _, expectedReq := range test.expectedRequests {
 		req := td.getReq()
@@ -250,7 +250,7 @@ func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 			t.Fatalf("ads RPC failed with err: %v", req.err)
 		}
 		if !proto.Equal(req.req, expectedReq) {
-			t.Fatalf("got ADS request %T %v, expected: %T %v", req.req, req.req, expectedReq, expectedReq)
+			t.Fatalf("got ADS request %T, expected: %T, diff: %s", req.req, expectedReq, cmp.Diff(req.req, expectedReq, cmp.Comparer(proto.Equal)))
 		}
 	}
 
@@ -264,134 +264,5 @@ func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 		if !cmp.Equal(ads, want) {
 			t.Fatalf("received unexpected ads response, got %v, want %v", ads, test.expectedADSResponses[i])
 		}
-	}
-}
-
-func (s) TestXdsClientLoseContact(t *testing.T) {
-	for _, test := range []*testConfig{{
-		responsesToSend: []*xdspb.DiscoveryResponse{testEDSResp},
-	}} {
-		testXdsClientLoseContactRemoteClose(t, test)
-	}
-
-	for _, test := range []*testConfig{{
-		responsesToSend: []*xdspb.DiscoveryResponse{{
-			Resources: []*anypb.Any{
-				{
-					TypeUrl: "not-eds",
-					Value:   marshaledClusterLoadAssignment,
-				},
-			},
-			TypeUrl: "not-eds",
-		}},
-	}} {
-		testXdsClientLoseContactADSRelatedErrorOccur(t, test)
-	}
-}
-
-func testXdsClientLoseContactRemoteClose(t *testing.T, test *testConfig) {
-	addr, td, _, cleanup := setupServer(t)
-	defer cleanup()
-	adsChan := make(chan *xdsclient.EDSUpdate, 10)
-	newADS := func(ctx context.Context, i *xdsclient.EDSUpdate) error {
-		adsChan <- i
-		return nil
-	}
-	contactChan := make(chan *loseContact, 10)
-	loseContactFunc := func(context.Context) {
-		contactChan <- &loseContact{}
-	}
-	client := newXDSClient(addr, test.edsServiceName, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
-	defer client.close()
-	go client.run()
-
-	// make sure server side get the request (i.e stream created successfully on client side)
-	td.getReq()
-
-	for _, resp := range test.responsesToSend {
-		td.sendResp(&response{resp: resp})
-		// make sure client side receives it
-		<-adsChan
-	}
-	cleanup()
-
-	select {
-	case <-contactChan:
-	case <-time.After(2 * time.Second):
-		t.Fatal("time out when expecting lost contact signal")
-	}
-}
-
-func testXdsClientLoseContactADSRelatedErrorOccur(t *testing.T, test *testConfig) {
-	addr, td, _, cleanup := setupServer(t)
-	defer cleanup()
-
-	adsChan := make(chan *xdsclient.EDSUpdate, 10)
-	newADS := func(ctx context.Context, i *xdsclient.EDSUpdate) error {
-		adsChan <- i
-		return test.adsErr
-	}
-	contactChan := make(chan *loseContact, 10)
-	loseContactFunc := func(context.Context) {
-		contactChan <- &loseContact{}
-	}
-	client := newXDSClient(addr, test.edsServiceName, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
-	defer client.close()
-	go client.run()
-
-	// make sure server side get the request (i.e stream created successfully on client side)
-	td.getReq()
-
-	for _, resp := range test.responsesToSend {
-		td.sendResp(&response{resp: resp})
-	}
-
-	select {
-	case <-contactChan:
-	case <-time.After(2 * time.Second):
-		t.Fatal("time out when expecting lost contact signal")
-	}
-}
-
-func (s) TestXdsClientExponentialRetry(t *testing.T) {
-	cfg := &testConfig{
-		svrErr: status.Errorf(codes.Aborted, "abort the stream to trigger retry"),
-	}
-	addr, td, _, cleanup := setupServer(t)
-	defer cleanup()
-
-	adsChan := make(chan *xdsclient.EDSUpdate, 10)
-	newADS := func(ctx context.Context, i *xdsclient.EDSUpdate) error {
-		adsChan <- i
-		return nil
-	}
-	contactChan := make(chan *loseContact, 10)
-	loseContactFunc := func(context.Context) {
-		contactChan <- &loseContact{}
-	}
-	client := newXDSClient(addr, "", balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
-	defer client.close()
-	go client.run()
-
-	var secondRetry, thirdRetry time.Time
-	for i := 0; i < 3; i++ {
-		// make sure server side get the request (i.e stream created successfully on client side)
-		td.getReq()
-		td.sendResp(&response{err: cfg.svrErr})
-
-		select {
-		case <-contactChan:
-			if i == 1 {
-				secondRetry = time.Now()
-			}
-			if i == 2 {
-				thirdRetry = time.Now()
-			}
-		case <-time.After(2 * time.Second):
-			t.Fatal("time out when expecting lost contact signal")
-		}
-	}
-	if thirdRetry.Sub(secondRetry) < 1*time.Second {
-		t.Fatalf("interval between second and third retry is %v, expected > 1s", thirdRetry.Sub(secondRetry))
 	}
 }

@@ -26,6 +26,8 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
+
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 const testSubConnsCount = 16
@@ -166,7 +168,7 @@ func (tls *testLoadStore) CallServerLoad(l internal.Locality, name string, d flo
 	tls.callsCost = append(tls.callsCost, testServerLoad{name: name, d: d})
 }
 
-func (*testLoadStore) ReportTo(ctx context.Context, cc *grpc.ClientConn) {
+func (*testLoadStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterName string, node *corepb.Node) {
 	panic("not implemented")
 }
 

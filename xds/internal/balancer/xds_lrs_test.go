@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
@@ -50,13 +51,14 @@ func (lrss *lrsServer) StreamLoadStats(stream lrsgrpc.LoadReportingService_Strea
 	}
 	if !proto.Equal(req, &lrspb.LoadStatsRequest{
 		ClusterStats: []*endpointpb.ClusterStats{{
-			ClusterName: testServiceName,
+			ClusterName: testEDSClusterName,
 		}},
+		Node: &corepb.Node{},
 	}) {
 		return status.Errorf(codes.FailedPrecondition, "unexpected req: %+v", req)
 	}
 	if err := stream.Send(&lrspb.LoadStatsResponse{
-		Clusters:              []string{testServiceName},
+		Clusters:              []string{testEDSClusterName},
 		LoadReportingInterval: lrss.reportingInterval,
 	}); err != nil {
 		return err
@@ -87,11 +89,11 @@ func (s) TestXdsLoadReporting(t *testing.T) {
 		newEDSBalancer = originalNewEDSBalancer
 	}()
 
-	builder := balancer.Get(xdsName)
+	builder := balancer.Get(edsName)
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
 	if !ok {
-		t.Fatalf("unable to type assert to *xdsBalancer")
+		t.Fatalf("unable to type assert to *edsBalancer")
 	}
 	defer lb.Close()
 
