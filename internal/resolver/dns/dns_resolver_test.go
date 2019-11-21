@@ -183,20 +183,6 @@ func srvLookup(service, proto, name string) (string, []*net.SRV, error) {
 	return "", nil, fmt.Errorf("failed to lookup srv record for %s in srvLookupTbl", cname)
 }
 
-// div divides a byte slice into a slice of strings, each of which is of maximum
-// 255 bytes length, which is the length limit per TXT record in DNS.
-func div(b []byte) []string {
-	var r []string
-	for i := 0; i < len(b); i += txtBytesLimit {
-		if i+txtBytesLimit > len(b) {
-			r = append(r, string(b[i:]))
-		} else {
-			r = append(r, string(b[i:i+txtBytesLimit]))
-		}
-	}
-	return r
-}
-
 // scfs contains an array of service config file string in JSON format.
 // Notes about the scfs contents and usage:
 // scfs contains 4 service config file JSON strings for testing. Inside each
@@ -605,52 +591,34 @@ var scs = []string{
 		}`,
 }
 
-// scLookupTbl is a set, which contains targets that have service config. Target
-// not in this set should not have service config.
-var scLookupTbl = map[string]bool{
-	txtPrefix + "foo.bar.com":          true,
-	txtPrefix + "srv.ipv4.single.fake": true,
-	txtPrefix + "srv.ipv4.multi.fake":  true,
-	txtPrefix + "no.attribute":         true,
-}
-
-// generateSCF generates a slice of strings (aggregately representing a single
-// service config file) for the input name, which mocks the result from a real
-// DNS TXT record lookup.
-func generateSCF(name string) []string {
-	var b []byte
-	switch name {
-	case "foo.bar.com":
-		b = []byte(scfs[0])
-	case "srv.ipv4.single.fake":
-		b = []byte(scfs[1])
-	case "srv.ipv4.multi.fake":
-		b = []byte(scfs[2])
-	default:
-		b = []byte(scfs[3])
-	}
-	if name == "no.attribute" {
-		return div(b)
-	}
-	return div(append([]byte(txtAttribute), b...))
+// scLookupTbl is a map, which contains targets that have service config to
+// their configs.  Targets not in this set should not have service config.
+var scLookupTbl = map[string]string{
+	"foo.bar.com":          scs[0],
+	"srv.ipv4.single.fake": scs[1],
+	"srv.ipv4.multi.fake":  scs[2],
 }
 
 // generateSC returns a service config string in JSON format for the input name.
 func generateSC(name string) string {
-	_, cnt := scLookupTbl[name]
-	if !cnt || name == "no.attribute" {
-		return ""
+	return scLookupTbl[name]
+}
+
+// generateSCF generates a slice of strings (aggregately representing a single
+// service config file) for the input config string, which mocks the result
+// from a real DNS TXT record lookup.
+func generateSCF(cfg string) []string {
+	b := append([]byte(txtAttribute), []byte(cfg)...)
+
+	var r []string
+	for i := 0; i < len(b); i += txtBytesLimit {
+		if i+txtBytesLimit > len(b) {
+			r = append(r, string(b[i:]))
+		} else {
+			r = append(r, string(b[i:i+txtBytesLimit]))
+		}
 	}
-	switch name {
-	case "foo.bar.com":
-		return scs[0]
-	case "srv.ipv4.single.fake":
-		return scs[1]
-	case "srv.ipv4.multi.fake":
-		return scs[2]
-	default:
-		return ""
-	}
+	return r
 }
 
 var txtLookupTbl = struct {
@@ -658,12 +626,11 @@ var txtLookupTbl = struct {
 	tbl map[string][]string
 }{
 	tbl: map[string][]string{
-		"foo.bar.com":          generateSCF("foo.bar.com"),
-		"srv.ipv4.single.fake": generateSCF("srv.ipv4.single.fake"),
-		"srv.ipv4.multi.fake":  generateSCF("srv.ipv4.multi.fake"),
-		"srv.ipv6.single.fake": generateSCF("srv.ipv6.single.fake"),
-		"srv.ipv6.multi.fake":  generateSCF("srv.ipv6.multi.fake"),
-		"no.attribute":         generateSCF("no.attribute"),
+		txtPrefix + "foo.bar.com":          generateSCF(scfs[0]),
+		txtPrefix + "srv.ipv4.single.fake": generateSCF(scfs[1]),
+		txtPrefix + "srv.ipv4.multi.fake":  generateSCF(scfs[2]),
+		txtPrefix + "srv.ipv6.single.fake": generateSCF(scfs[3]),
+		txtPrefix + "srv.ipv6.multi.fake":  generateSCF(scfs[3]),
 	},
 }
 
@@ -720,11 +687,6 @@ func testDNSResolver(t *testing.T) {
 			nil,
 			generateSC("srv.ipv6.multi.fake"),
 		},
-		{
-			"no.attribute",
-			nil,
-			generateSC("no.attribute"),
-		},
 	}
 
 	for _, a := range tests {
@@ -744,12 +706,18 @@ func testDNSResolver(t *testing.T) {
 			time.Sleep(time.Millisecond)
 		}
 		var sc string
-		for {
-			sc, cnt = cc.getSc()
-			if cnt > 0 {
-				break
+		if a.scWant != "" {
+			for {
+				sc, cnt = cc.getSc()
+				if cnt > 0 {
+					break
+				}
+				time.Sleep(time.Millisecond)
 			}
-			time.Sleep(time.Millisecond)
+		} else {
+			// A new service config should never be produced; call getSc once
+			// just in case.
+			sc, _ = cc.getSc()
 		}
 		if !reflect.DeepEqual(a.addrWant, addrs) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.addrWant)
@@ -810,11 +778,6 @@ func testDNSResolverWithSRV(t *testing.T) {
 			},
 			generateSC("srv.ipv6.multi.fake"),
 		},
-		{
-			"no.attribute",
-			nil,
-			generateSC("no.attribute"),
-		},
 	}
 
 	for _, a := range tests {
@@ -834,12 +797,18 @@ func testDNSResolverWithSRV(t *testing.T) {
 			time.Sleep(time.Millisecond)
 		}
 		var sc string
-		for {
-			sc, cnt = cc.getSc()
-			if cnt > 0 {
-				break
+		if a.scWant != "" {
+			for {
+				sc, cnt = cc.getSc()
+				if cnt > 0 {
+					break
+				}
+				time.Sleep(time.Millisecond)
 			}
-			time.Sleep(time.Millisecond)
+		} else {
+			// A new service config should never be produced; call getSc once
+			// just in case.
+			sc, _ = cc.getSc()
 		}
 		if !reflect.DeepEqual(a.addrWant, addrs) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.addrWant)
@@ -857,8 +826,8 @@ func mutateTbl(target string) func() {
 	hostLookupTbl.tbl[target] = hostLookupTbl.tbl[target][:len(oldHostTblEntry)-1]
 	hostLookupTbl.Unlock()
 	txtLookupTbl.Lock()
-	oldTxtTblEntry := txtLookupTbl.tbl[target]
-	txtLookupTbl.tbl[target] = []string{""}
+	oldTxtTblEntry := txtLookupTbl.tbl[txtPrefix+target]
+	txtLookupTbl.tbl[txtPrefix+target] = []string{txtAttribute + `[{"serviceConfig":{"loadBalancingPolicy": "grpclb"}}]`}
 	txtLookupTbl.Unlock()
 
 	return func() {
@@ -866,7 +835,7 @@ func mutateTbl(target string) func() {
 		hostLookupTbl.tbl[target] = oldHostTblEntry
 		hostLookupTbl.Unlock()
 		txtLookupTbl.Lock()
-		txtLookupTbl.tbl[target] = oldTxtTblEntry
+		txtLookupTbl.tbl[txtPrefix+target] = oldTxtTblEntry
 		txtLookupTbl.Unlock()
 	}
 }
@@ -885,7 +854,7 @@ func testDNSResolveNow(t *testing.T) {
 			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
 			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}},
 			generateSC("foo.bar.com"),
-			"",
+			`{"loadBalancingPolicy": "grpclb"}`,
 		},
 	}
 
@@ -921,16 +890,18 @@ func testDNSResolveNow(t *testing.T) {
 		}
 		revertTbl := mutateTbl(a.target)
 		r.ResolveNow(resolver.ResolveNowOptions{})
-		for {
+		for i := 0; i < 1000; i++ {
 			addrs, cnt = cc.getAddress()
-			if cnt == 2 {
+			// Break if the address list changes or enough redundant updates happen.
+			if !reflect.DeepEqual(addrs, a.addrWant) || cnt > 10 {
 				break
 			}
 			time.Sleep(time.Millisecond)
 		}
-		for {
+		for i := 0; i < 1000; i++ {
 			sc, cnt = cc.getSc()
-			if cnt == 2 {
+			// Break if the service config changes or enough redundant updates happen.
+			if !reflect.DeepEqual(sc, a.scWant) || cnt > 10 {
 				break
 			}
 			time.Sleep(time.Millisecond)
@@ -1066,12 +1037,19 @@ func TestDisableServiceConfig(t *testing.T) {
 		}
 		var cnt int
 		var sc string
-		for {
-			sc, cnt = cc.getSc()
+		// First wait for addresses.  We know service configs are reported
+		// first, so once addresses have been reported, we can then check to
+		// see whether any configs have been reported..
+		for i := 0; i < 1000; i++ {
+			_, cnt = cc.getAddress()
 			if cnt > 0 {
 				break
 			}
 			time.Sleep(time.Millisecond)
+		}
+		sc, cnt = cc.getSc()
+		if a.disableServiceConfig && cnt > 0 {
+			t.Errorf("Resolver reported a service config even though lookups are disabled: sc=%v, cnt=%v", sc, cnt)
 		}
 		if !reflect.DeepEqual(a.scWant, sc) {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
@@ -1114,21 +1092,17 @@ func TestDNSResolverRetry(t *testing.T) {
 	revertTbl()
 	// wait for the retry to happen in two seconds.
 	timer := time.NewTimer(2 * time.Second)
+loop:
 	for {
-		b := false
 		select {
 		case <-timer.C:
-			b = true
+			break loop
 		default:
 			addrs, _ = cc.getAddress()
-			if len(addrs) == 1 {
-				b = true
-				break
+			if len(addrs) != 0 {
+				break loop
 			}
 			time.Sleep(time.Millisecond)
-		}
-		if b {
-			break
 		}
 	}
 	if !reflect.DeepEqual(want, addrs) {
