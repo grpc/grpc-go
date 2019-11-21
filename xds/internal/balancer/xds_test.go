@@ -263,7 +263,7 @@ func (c *fakeXDSClient) WatchEDS(clusterName string, edsCb func(*xdsclient.EDSUp
 	return func() {}
 }
 
-func (c *fakeXDSClient) CallEDSCallback(u *xdsclient.EDSUpdate, err error) {
+func (c *fakeXDSClient) callEDSCallback(u *xdsclient.EDSUpdate, err error) {
 	t := time.NewTimer(time.Second)
 	select {
 	case <-c.edsCbReceived:
@@ -545,7 +545,7 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 
 	// Callback with an EDS update, the balancer will build a EDS balancer, not
 	// a fallback.
-	testXDSClient.CallEDSCallback(xdsclient.ParseEDSRespProtoForTesting(testClusterLoadAssignment), nil)
+	testXDSClient.callEDSCallback(xdsclient.ParseEDSRespProtoForTesting(testClusterLoadAssignment), nil)
 
 	var i int
 	for i = 0; i < 10; i++ {
@@ -559,7 +559,7 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 	}
 
 	// Callback with an error, the balancer should switch to fallback.
-	testXDSClient.CallEDSCallback(nil, fmt.Errorf("xds client error"))
+	testXDSClient.callEDSCallback(nil, fmt.Errorf("xds client error"))
 
 	// verify fallback balancer B takes over
 	select {
@@ -623,7 +623,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 
 	// Callback with an EDS update, the balancer will build a EDS balancer, not
 	// a fallback.
-	testXDSClient.CallEDSCallback(xdsclient.ParseEDSRespProtoForTesting(testClusterLoadAssignment), nil)
+	testXDSClient.callEDSCallback(xdsclient.ParseEDSRespProtoForTesting(testClusterLoadAssignment), nil)
 
 	expectedScStateChange := &scStateChange{
 		sc:    &fakeSubConn{},
@@ -654,7 +654,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	// to make sure there's a new one created and get the pointer to it.
 	lbABuilder.clearLastBalancer()
 	// Callback with an error, the balancer should switch to fallback.
-	testXDSClient.CallEDSCallback(nil, fmt.Errorf("xds client error"))
+	testXDSClient.callEDSCallback(nil, fmt.Errorf("xds client error"))
 
 	// switch to fallback
 	// fallback balancer A takes over
@@ -711,7 +711,7 @@ func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 
 	// Callback with an EDS update, the balancer will build a EDS balancer, not
 	// a fallback.
-	testXDSClient.CallEDSCallback(xdsclient.ParseEDSRespProtoForTesting(testClusterLoadAssignment), nil)
+	testXDSClient.callEDSCallback(xdsclient.ParseEDSRespProtoForTesting(testClusterLoadAssignment), nil)
 
 	expectedScStateChange := &scStateChange{
 		sc:    &fakeSubConn{},
@@ -742,7 +742,7 @@ func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 	// to make sure there's a new one created and get the pointer to it.
 	lbABuilder.clearLastBalancer()
 	// Callback with an error, the balancer should switch to fallback.
-	testXDSClient.CallEDSCallback(nil, fmt.Errorf("xds client error"))
+	testXDSClient.callEDSCallback(nil, fmt.Errorf("xds client error"))
 
 	// switch to fallback
 	// fallback balancer A takes over
