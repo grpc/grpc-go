@@ -239,12 +239,12 @@ func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 		return nil
 	}
 	client := newXDSClientWrapper(newADS, func() {}, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
+	defer client.close()
 	client.handleUpdate(&XDSConfig{
 		BalancerName:               addr,
 		EDSServiceName:             test.edsServiceName,
 		LrsLoadReportingServerName: "",
 	}, nil)
-	defer client.close()
 
 	for _, expectedReq := range test.expectedRequests {
 		req := td.getReq()

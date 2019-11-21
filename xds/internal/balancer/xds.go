@@ -193,7 +193,9 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 			// If this is the first config, the edsBalancer is in startup stage.
 			// We need to apply the startup timeout for the first xdsClient, in
 			// case it doesn't get a response from the traffic director in time.
-			x.startFallbackMonitoring()
+			if x.startup {
+				x.startFallbackMonitoring()
+			}
 			x.config = cfg
 			x.fallbackInitData = &resolver.State{
 				Addresses: u.ResolverState.Addresses,
