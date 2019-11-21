@@ -1273,11 +1273,23 @@ func (s) TestCZServerSocketMetricsKeepAlive(t *testing.T) {
 	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
-	te.customServerOptions = append(te.customServerOptions, grpc.KeepaliveParams(keepalive.ServerParameters{Time: time.Second, Timeout: 500 * time.Millisecond}))
+	// We setup the server keepalive parameters to send one keepalive every
+	// second, and verify that the actual number of keepalives is very close to
+	// the number of seconds elapsed in the test.  We had a bug wherein the
+	// server was sending one keepalive every [Time+Timeout] instead of every
+	// [Time] period, and since Timeout is configured to a low value here, we
+	// should be able to verify that the fix works with the above mentioned
+	// logic.
+	kpOption := grpc.KeepaliveParams(keepalive.ServerParameters{
+		Time:    time.Second,
+		Timeout: 100 * time.Millisecond,
+	})
+	te.customServerOptions = append(te.customServerOptions, kpOption)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
+	start := time.Now()
 	doIdleCallToInvokeKeepAlive(tc, t)
 
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -1289,8 +1301,9 @@ func (s) TestCZServerSocketMetricsKeepAlive(t *testing.T) {
 		if len(ns) != 1 {
 			return false, fmt.Errorf("there should be one server normal socket, not %d", len(ns))
 		}
-		if ns[0].SocketData.KeepAlivesSent != 2 { // doIdleCallToInvokeKeepAlive func is set up to send 2 KeepAlives.
-			return false, fmt.Errorf("there should be 2 KeepAlives sent, not %d", ns[0].SocketData.KeepAlivesSent)
+		wantKeepalivesCount := int64(time.Since(start).Seconds()) - 1
+		if gotKeepalivesCount := ns[0].SocketData.KeepAlivesSent; gotKeepalivesCount != wantKeepalivesCount {
+			return false, fmt.Errorf("got keepalivesCount: %v, want keepalivesCount: %v", gotKeepalivesCount, wantKeepalivesCount)
 		}
 		return true, nil
 	}); err != nil {

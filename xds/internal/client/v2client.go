@@ -69,6 +69,10 @@ type v2Client struct {
 	// when we received them (because we could become interested in them in the
 	// future and the server wont send us those resources again).
 	// Protected by the above mutex.
+	//
+	// TODO: remove RDS cache. The updated spec says client can ignore
+	// unrequested resources.
+	// https://github.com/envoyproxy/envoy/blob/master/api/xds_protocol.rst#resource-hints
 	rdsCache map[string]string
 }
 
@@ -159,6 +163,10 @@ func (v2c *v2Client) sendExisting(stream adsStream) bool {
 			if !v2c.sendRDS(stream, wi.target) {
 				return false
 			}
+		case edsResource:
+			if !v2c.sendEDS(stream, wi.target) {
+				return false
+			}
 		}
 	}
 
@@ -198,6 +206,10 @@ func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
 				if !v2c.sendRDS(stream, target) {
 					return
 				}
+			case edsResource:
+				if !v2c.sendEDS(stream, target) {
+					return
+				}
 			}
 		case <-done:
 			return
@@ -211,6 +223,7 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 	success := false
 	for {
 		resp, err := stream.Recv()
+		// TODO: call watch callbacks with error when stream is broken.
 		if err != nil {
 			grpclog.Warningf("xds: ADS stream recv failed: %v", err)
 			return success
@@ -224,6 +237,11 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 		case routeURL:
 			if err := v2c.handleRDSResponse(resp); err != nil {
 				grpclog.Warningf("xds: RDS response handler failed: %v", err)
+				return success
+			}
+		case endpointURL:
+			if err := v2c.handleEDSResponse(resp); err != nil {
+				grpclog.Warningf("xds: EDS response handler failed: %v", err)
 				return success
 			}
 		default:
@@ -278,6 +296,30 @@ func (v2c *v2Client) watchRDS(routeName string, rdsCb rdsCallback) (cancel func(
 	}
 }
 
+// watchEDS registers an EDS watcher for the provided clusterName. Updates
+// corresponding to received EDS responses will be pushed to the provided
+// callback. The caller can cancel the watch by invoking the returned cancel
+// function.
+// The provided callback should not block or perform any expensive operations
+// or call other methods of the v2Client object.
+func (v2c *v2Client) watchEDS(clusterName string, edsCb edsCallback) (cancel func()) {
+	wi := &watchInfo{wType: edsResource, target: []string{clusterName}, callback: edsCb}
+	v2c.watchCh.Put(wi)
+	return func() {
+		v2c.mu.Lock()
+		defer v2c.mu.Unlock()
+		if wi.state == watchEnqueued {
+			wi.state = watchCancelled
+			return
+		}
+		v2c.watchMap[edsResource].cancel()
+		delete(v2c.watchMap, edsResource)
+		// TODO: Once a registered EDS watch is cancelled, we should send an
+		// EDS request with no resources. This will let the server know that we
+		// are no longer interested in this resource.
+	}
+}
+
 // checkCacheAndUpdateWatchMap is called when a new watch call is handled in
 // send(). If an existing watcher is found, its expiry timer is stopped. If the
 // watchInfo to be added to the watchMap is found in the cache, the watcher
@@ -320,6 +362,15 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 			// method which will be called when the timer fires.
 			v2c.mu.Lock()
 			wi.callback.(rdsCallback)(rdsUpdate{clusterName: ""}, fmt.Errorf("xds: RDS target %s not found", wi.target))
+			v2c.mu.Unlock()
+		})
+	case edsResource:
+		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
+			// We need to grab the lock here because we are accessing the
+			// watchInfo (which is now stored in the watchMap) from this
+			// method which will be called when the timer fires.
+			v2c.mu.Lock()
+			wi.callback.(edsCallback)(nil, fmt.Errorf("xds: EDS target %s not found", wi.target))
 			v2c.mu.Unlock()
 		})
 	}

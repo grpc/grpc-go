@@ -80,3 +80,5 @@ type rdsUpdate struct {
 }
 
 type rdsCallback func(rdsUpdate, error)
+
+type edsCallback func(*EDSUpdate, error)

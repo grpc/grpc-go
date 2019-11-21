@@ -26,6 +26,8 @@ import (
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
+	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/xds/internal"
 )
 
@@ -160,4 +162,70 @@ func ParseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) *EDSUpdate {
 		panic(err.Error())
 	}
 	return u
+}
+
+// newEDSRequest generates an EDS request proto for the provided clusterName, to
+// be sent out on the wire.
+func (v2c *v2Client) newEDSRequest(clusterName []string) *xdspb.DiscoveryRequest {
+	return &xdspb.DiscoveryRequest{
+		Node:          v2c.nodeProto,
+		TypeUrl:       endpointURL,
+		ResourceNames: clusterName,
+	}
+}
+
+// sendEDS sends an EDS request for provided clusterName on the provided stream.
+func (v2c *v2Client) sendEDS(stream adsStream, clusterName []string) bool {
+	if err := stream.Send(v2c.newEDSRequest(clusterName)); err != nil {
+		grpclog.Warningf("xds: EDS request for resource %v failed: %v", clusterName, err)
+		return false
+	}
+	return true
+}
+
+func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
+	v2c.mu.Lock()
+	defer v2c.mu.Unlock()
+
+	wi := v2c.watchMap[edsResource]
+	if wi == nil {
+		return fmt.Errorf("xds: no EDS watcher found when handling EDS response: %+v", resp)
+	}
+
+	var returnUpdate *EDSUpdate
+	for _, r := range resp.GetResources() {
+		var resource ptypes.DynamicAny
+		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
+			return fmt.Errorf("xds: failed to unmarshal resource in EDS response: %v", err)
+		}
+		cla, ok := resource.Message.(*xdspb.ClusterLoadAssignment)
+		if !ok {
+			return fmt.Errorf("xds: unexpected resource type: %T in EDS response", resource.Message)
+		}
+
+		if cla.GetClusterName() != wi.target[0] {
+			// We won't validate the remaining resources. If one of the
+			// uninteresting ones is invalid, we will still ACK the response.
+			continue
+		}
+
+		u, err := ParseEDSRespProto(cla)
+		if err != nil {
+			return err
+		}
+
+		returnUpdate = u
+		// Break from the loop because the request resource is found. But
+		// this also means we won't validate the remaining resources. If one
+		// of the uninteresting ones is invalid, we will still ACK the
+		// response.
+		break
+	}
+
+	if returnUpdate != nil {
+		wi.expiryTimer.Stop()
+		wi.callback.(edsCallback)(returnUpdate, nil)
+	}
+
+	return nil
 }

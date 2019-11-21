@@ -27,11 +27,12 @@ import (
 	"io/ioutil"
 	"os"
 
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/jsonpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/grpclog"
+
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 const (
@@ -125,7 +126,6 @@ func NewConfig() *Config {
 				grpclog.Errorf("xds: jsonpb.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
 				break
 			}
-			n.BuildVersion = gRPCVersion
 			config.NodeProto = n
 		case "xds_server":
 			xs := &xdsServer{}
@@ -146,6 +146,14 @@ func NewConfig() *Config {
 			grpclog.Warningf("xds: unexpected data in bootstrap file: {%v, %v}", k, string(v))
 		}
 	}
+
+	// If we don't find a nodeProto in the bootstrap file, we just create an
+	// empty one here. That way, callers of this function can always expect
+	// that the NodeProto field is non-nil.
+	if config.NodeProto == nil {
+		config.NodeProto = &corepb.Node{}
+	}
+	config.NodeProto.BuildVersion = gRPCVersion
 
 	grpclog.Infof("xds: bootstrap.NewConfig returning: %+v", config)
 	return config

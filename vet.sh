@@ -147,6 +147,7 @@ grpc.WithDecompressor
 grpc.WithDialer
 grpc.WithMaxMsgSize
 grpc.WithServiceConfig
+grpc.WithTimeout
 http.CloseNotifier
 naming.Resolver
 naming.Update
