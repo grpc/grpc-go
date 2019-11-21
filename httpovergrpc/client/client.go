@@ -42,6 +42,15 @@ type Transport struct {
 	client pb.HTTPOverGRPCClient
 }
 
+// Close closes the HTTPOverGRPC connection.
+func (t *Transport) Close() error {
+	if t.conn != nil {
+		grpclog.Infof("Closing httpovergrpc connection.")
+		return t.conn.Close()
+	}
+	return nil
+}
+
 type wrappedBody struct {
 	reader io.Reader
 	pr     *io.PipeReader
@@ -56,7 +65,7 @@ func (h *wrappedBody) Read(p []byte) (n int, err error) {
 }
 
 // NewTransport returns a new Transport for making HTTP over gRPC calls.
-func NewBackgroundTransport(ctx context.Context, conn *grpc.ClientConn) *Transport {
+func NewTransport(ctx context.Context, conn *grpc.ClientConn) *Transport {
 	return &Transport{
 		ctx:    ctx,
 		conn:   conn,

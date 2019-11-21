@@ -20,7 +20,6 @@ package httpovergrpc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -122,7 +121,7 @@ func TestTransport(t *testing.T) {
 	if err != nil {
 		grpclog.Infof("grpc dial fail with err = %v", err)
 	}
-	tr := NewBackgroundTransport(context.Background(), conn)
+	tr := NewTransport(context.Background(), conn)
 
 	req, err := http.NewRequest("GET", "http://invalid-backend", nil)
 	if err != nil {
@@ -148,11 +147,11 @@ func TestRoundTrip(t *testing.T) {
 				respOrStatuses: []*respOrStatus{
 					{
 						resp:   nil,
-						status: status.New(codes.DeadlineExceeded, ""),
+						status: status.New(codes.DeadlineExceeded, "DeadlineExceeded."),
 					},
 				},
 			},
-			status.Error(codes.DeadlineExceeded, ""),
+			status.Error(codes.DeadlineExceeded, "DeadlineExceeded"),
 		},
 		{
 			"retryable with deadlines and final unreachable",
@@ -160,11 +159,11 @@ func TestRoundTrip(t *testing.T) {
 				respOrStatuses: []*respOrStatus{
 					{
 						resp:   nil,
-						status: status.New(codes.DeadlineExceeded, ""),
+						status: status.New(codes.DeadlineExceeded, "DeadlineExceededUnreachable"),
 					},
 				},
 			},
-			status.Error(codes.DeadlineExceeded, ""),
+			status.Error(codes.DeadlineExceeded, "DeadlindExceededUnreachable."),
 		},
 		{
 			"retryable with unreachable",
@@ -172,11 +171,11 @@ func TestRoundTrip(t *testing.T) {
 				respOrStatuses: []*respOrStatus{
 					{
 						resp:   nil,
-						status: status.New(codes.Unavailable, ""),
+						status: status.New(codes.Unavailable, "Unavailable."),
 					},
 				},
 			},
-			status.Error(codes.Unavailable, ""),
+			status.Error(codes.Unavailable, "Unavailable."),
 		},
 		{
 			"non-retryable with stream broken",
@@ -184,11 +183,11 @@ func TestRoundTrip(t *testing.T) {
 				respOrStatuses: []*respOrStatus{
 					{
 						resp:   nil,
-						status: status.New(codes.Internal, ""),
+						status: status.New(codes.Internal, "InternalStreamBroken."),
 					},
 				},
 			},
-			status.Error(codes.Internal, ""),
+			status.Error(codes.Internal, "InternalStreamBroken."),
 		},
 	}
 	for _, tt := range testCases {
@@ -204,22 +203,9 @@ func TestRoundTrip(t *testing.T) {
 		}
 		_, err = tr.RoundTrip(req)
 
-		ws, ok := status.FromError(tt.err)
-		grpclog.Infof("wstatus = %v", ws)
-		// Make sure the gRPC statuses match, otherwise compare the errors.
-		if ok {
-			gs, ok := status.FromError(err)
-			grpclog.Infof("gstatus = %v", gs)
-			if !ok {
-				t.Errorf("[%s] unexpected error: want status %v, got non status %v", tt.name, tt.err, err)
-			}
-			if !errors.Is(err, ws.Err()) {
-				t.Errorf("[%s] unexpected status code: want %v, got %v", tt.name, ws, gs)
-			}
-		} else {
-			if err != tt.err {
-				t.Errorf("[%s] unexpected error: want %v, got %v", tt.name, tt.err, err)
-			}
+		// Compare the errors if not null.
+		if err != nil && err.Error() != tt.err.Error() && status.Code(err) != status.Code(tt.err) {
+			t.Errorf("[%s] unexpected error: want %v, got %v", tt.name, tt.err, err)
 		}
 		fc, ok := tt.client.(*fakeClient)
 		if !ok {
