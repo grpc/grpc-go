@@ -82,10 +82,14 @@ func newXDSClientWrapper(newEDSUpdate func(*xdsclient.EDSUpdate) error, loseCont
 	}
 }
 
-// Either pick from attributes, or create a new one. It returns false if
-// xdsclient is not changed.
+// updateXDSClient sets xdsclient in wrapper to the correct one based on the
+// attributes and service config.
 //
-// If a new client is created, the old one will be closed.
+// If xds_client is found in attributes, it will be used. Otherwise, a new one
+// will be created using the given service config.
+//
+// If a new client is created, the old one will be closed if it wasn't from
+// attributes.
 func (c *xdsclientWrapper) updateXDSClient(config *XDSConfig, attr *attributes.Attributes) bool {
 	var clientFromAttr xdsClientInterface
 	if attr != nil {
@@ -129,7 +133,7 @@ func (c *xdsclientWrapper) updateXDSClient(config *XDSConfig, attr *attributes.A
 		if c.balancerName != "" || c.xdsclient != nil {
 			return false
 		}
-		grpclog.Warningf("eds: creating an xds_client with empty string as server name, this is very unlikey to work")
+		grpclog.Warningf("eds: creating an xds_client with empty string as server name, this is very unlikely to work")
 		// If balancerName is empty string, and c.xdsclient is nil,
 		// this is the first time. We try to create a new xdsclient
 		// with empty string as server name, even though it's very
@@ -202,14 +206,13 @@ func (c *xdsclientWrapper) startEDSWatch(edsServiceName string, loadReportServer
 		c.loadReportServer = loadReportServer
 		c.cancelLoadReport = c.xdsclient.ReportLoad(c.loadReportServer, nameToWatch, c.loadStore)
 	}
-	return
 }
 
 // startLoadReport starts load reporting. If there's already a load reporting in
 // progress, it cancels that.
 //
 // Caller can cal this when the loadReportServer name changes, but
-// edsServiceName doens't (so we only need to restart load reporting, not EDS
+// edsServiceName doesn't (so we only need to restart load reporting, not EDS
 // watch).
 func (c *xdsclientWrapper) startLoadReport(edsServiceName string, loadReportServer string) {
 	if c.loadStore != nil {
@@ -225,6 +228,8 @@ func (c *xdsclientWrapper) startLoadReport(edsServiceName string, loadReportServ
 	}
 }
 
+// handleUpdate applies the service config and attributes updates to the client,
+// including updating the xds_client to use, and updating the EDS name to watch.
 func (c *xdsclientWrapper) handleUpdate(config *XDSConfig, attr *attributes.Attributes) {
 	clientChanged := c.updateXDSClient(config, attr)
 
