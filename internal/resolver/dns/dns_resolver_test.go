@@ -71,18 +71,15 @@ func (t *testClientConn) getState() (resolver.State, int) {
 	return t.state, t.updateStateCalls
 }
 
-func (t *testClientConn) getSC() (string, int) {
-	t.m1.Lock()
-	defer t.m1.Unlock()
-	sc := ""
-	if t.state.ServiceConfig != nil {
-		sc = t.state.ServiceConfig.Config.(unparsedServiceConfig).config
-	}
-	return sc, t.updateStateCalls
-}
-
 func (t *testClientConn) NewServiceConfig(serviceConfig string) {
 	panic("unused")
+}
+
+func scFromState(s resolver.State) string {
+	if s.ServiceConfig != nil {
+		return s.ServiceConfig.Config.(unparsedServiceConfig).config
+	}
+	return ""
 }
 
 type unparsedServiceConfig struct {
@@ -671,7 +668,7 @@ func testDNSResolver(t *testing.T) {
 		},
 		{
 			"srv.ipv4.single.fake",
-			[]resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}, {Addr: "1.2.3.4:1234", Type: resolver.GRPCLB, ServerName: "ipv4.single.fake"}},
+			[]resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
 			generateSC("srv.ipv4.single.fake"),
 		},
 		{
@@ -698,32 +695,22 @@ func testDNSResolver(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
-		var addrs []resolver.Address
+		var state resolver.State
 		var cnt int
-		for {
-			addrs, cnt = cc.getAddress()
+		for i := 0; i < 2000; i++ {
+			state, cnt = cc.getState()
 			if cnt > 0 {
 				break
 			}
 			time.Sleep(time.Millisecond)
 		}
-		var sc string
-		if a.scWant != "" {
-			for {
-				sc, cnt = cc.getSc()
-				if cnt > 0 {
-					break
-				}
-				time.Sleep(time.Millisecond)
-			}
-		} else {
-			// A new service config should never be produced; call getSc once
-			// just in case.
-			sc, _ = cc.getSc()
+		if cnt == 0 {
+			t.Fatalf("UpdateState not called after 2s; aborting")
 		}
-		if !reflect.DeepEqual(a.addrWant, addrs) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.addrWant)
+		if !reflect.DeepEqual(a.addrWant, state.Addresses) {
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrWant)
 		}
+		sc := scFromState(state)
 		if !reflect.DeepEqual(a.scWant, sc) {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
 		}
@@ -754,7 +741,7 @@ func testDNSResolverWithSRV(t *testing.T) {
 		},
 		{
 			"srv.ipv4.single.fake",
-			[]resolver.Address{{Addr: "1.2.3.4:1234", Type: resolver.GRPCLB, ServerName: "ipv4.single.fake"}, {Addr: "2.4.6.8" + colonDefaultPort}},
+			[]resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}, {Addr: "1.2.3.4:1234", Type: resolver.GRPCLB, ServerName: "ipv4.single.fake"}},
 			generateSC("srv.ipv4.single.fake"),
 		},
 		{
@@ -805,7 +792,7 @@ func testDNSResolverWithSRV(t *testing.T) {
 		if !reflect.DeepEqual(a.addrWant, state.Addresses) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrWant)
 		}
-		sc, _ := cc.getSC()
+		sc := scFromState(state)
 		if !reflect.DeepEqual(a.scWant, sc) {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
 		}
@@ -873,7 +860,7 @@ func testDNSResolveNow(t *testing.T) {
 		if !reflect.DeepEqual(a.addrWant, state.Addresses) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrWant)
 		}
-		sc, _ := cc.getSC()
+		sc := scFromState(state)
 		if !reflect.DeepEqual(a.scWant, sc) {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
 		}
@@ -890,7 +877,7 @@ func testDNSResolveNow(t *testing.T) {
 		if cnt != 2 {
 			t.Fatalf("UpdateState not called after 2s; aborting.  state=%v", state)
 		}
-		sc, _ = cc.getSC()
+		sc = scFromState(state)
 		if !reflect.DeepEqual(a.addrNext, state.Addresses) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrNext)
 		}
@@ -1013,23 +1000,23 @@ func TestDisableServiceConfig(t *testing.T) {
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
 		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{DisableServiceConfig: a.disableServiceConfig})
-		defer r.Close()
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
 		defer r.Close()
 		var cnt int
-		var sc string
-		for i := 0; i < 1000; i++ {
-			sc, cnt = cc.getSC()
+		var state resolver.State
+		for i := 0; i < 2000; i++ {
+			state, cnt = cc.getState()
 			if cnt > 0 {
 				break
 			}
 			time.Sleep(time.Millisecond)
 		}
 		if cnt == 0 {
-			t.Fatalf("UpdateState not called after 2s; aborting.  sc=%v", sc)
+			t.Fatalf("UpdateState not called after 2s; aborting")
 		}
+		sc := scFromState(state)
 		if !reflect.DeepEqual(a.scWant, sc) {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
 		}
@@ -1076,7 +1063,7 @@ func TestDNSResolverRetry(t *testing.T) {
 	}
 	revertTbl()
 	// wait for the retry to happen in two seconds.
-	r.ResolveNow(resolver.ResolveNowOption{})
+	r.ResolveNow(resolver.ResolveNowOptions{})
 	for i := 0; i < 2000; i++ {
 		state, _ = cc.getState()
 		if len(state.Addresses) == 1 {
