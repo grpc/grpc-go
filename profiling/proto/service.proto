@@ -14,6 +14,8 @@
 
 syntax = "proto3";
 
+package grpc.go.profiling.v1alpha;
+
 // This package defines the proto messages and RPC services exposed by gRPC for
 // profiling management. A reference client implementation to interact with
 // this service is provided as a command-line application. This service can be
