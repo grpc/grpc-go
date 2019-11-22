@@ -217,6 +217,10 @@ func (ccr *ccResolverWrapper) NewServiceConfig(sc string) {
 		return
 	}
 	grpclog.Infof("ccResolverWrapper: got new service config: %v", sc)
+	if ccr.cc.dopts.disableServiceConfig {
+		grpclog.Infof("Service config lookups disabled; ignoring config")
+		return
+	}
 	scpr := parseServiceConfig(sc)
 	if scpr.Err != nil {
 		grpclog.Warningf("ccResolverWrapper: error parsing service config: %v", scpr.Err)

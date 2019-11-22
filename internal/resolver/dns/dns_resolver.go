@@ -268,7 +268,9 @@ func (d *dnsResolver) watcher() {
 			d.retryCount = 0
 			d.t.Reset(d.freq)
 		}
-		d.cc.NewServiceConfig(sc)
+		if sc != "" { // We get empty string when disabled or the TXT lookup failed.
+			d.cc.NewServiceConfig(sc)
+		}
 		d.cc.NewAddress(result)
 
 		// Sleep to prevent excessive re-resolutions. Incoming resolution requests
