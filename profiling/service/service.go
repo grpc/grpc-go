@@ -22,6 +22,8 @@
 // application.
 package service
 
+//go:generate protoc --go_out=plugins=grpc,paths=source_relative:../proto -I../proto service.proto
+
 import (
 	"context"
 	"errors"
@@ -29,7 +31,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/profiling"
-	pspb "google.golang.org/grpc/profiling/proto/service"
+	ppb "google.golang.org/grpc/profiling/proto"
 )
 
 // ProfilingConfig defines configuration options for the Init method.
@@ -64,7 +66,7 @@ func Init(pc *ProfilingConfig) error {
 		return err
 	}
 
-	pspb.RegisterProfilingServer(pc.Server, &profilingServer{})
+	ppb.RegisterProfilingServer(pc.Server, &profilingServer{})
 
 	// Do this last after everything has been initialized and allocated.
 	profiling.Enable(pc.Enabled)
@@ -74,7 +76,7 @@ func Init(pc *ProfilingConfig) error {
 
 type profilingServer struct{}
 
-func (s *profilingServer) Enable(ctx context.Context, req *pspb.EnableRequest) (*pspb.EnableResponse, error) {
+func (s *profilingServer) Enable(ctx context.Context, req *ppb.EnableRequest) (*ppb.EnableResponse, error) {
 	if req.Enabled {
 		grpclog.Infof("Enabling profiling")
 	} else {
@@ -82,11 +84,11 @@ func (s *profilingServer) Enable(ctx context.Context, req *pspb.EnableRequest) (
 	}
 	profiling.Enable(req.Enabled)
 
-	return &pspb.EnableResponse{}, nil
+	return &ppb.EnableResponse{}, nil
 }
 
-func timerToTimerProto(timer profiling.Timer) *pspb.TimerProto {
-	return &pspb.TimerProto{
+func timerToTimerProto(timer profiling.Timer) *ppb.TimerProto {
+	return &ppb.TimerProto{
 		TimerTag:  timer.TimerTag,
 		BeginSec:  timer.Begin.Unix(),
 		BeginNsec: int32(timer.Begin.Nanosecond()),
@@ -96,10 +98,10 @@ func timerToTimerProto(timer profiling.Timer) *pspb.TimerProto {
 	}
 }
 
-func statToStatProto(stat *profiling.Stat) *pspb.StatProto {
-	statProto := &pspb.StatProto{
+func statToStatProto(stat *profiling.Stat) *ppb.StatProto {
+	statProto := &ppb.StatProto{
 		StatTag:     stat.StatTag,
-		TimerProtos: make([]*pspb.TimerProto, 0, len(stat.Timers)),
+		TimerProtos: make([]*ppb.TimerProto, 0, len(stat.Timers)),
 		Metadata:    stat.Metadata,
 	}
 	for _, t := range stat.Timers {
@@ -108,7 +110,7 @@ func statToStatProto(stat *profiling.Stat) *pspb.StatProto {
 	return statProto
 }
 
-func (s *profilingServer) GetStreamStats(req *pspb.GetStreamStatsRequest, stream pspb.Profiling_GetStreamStatsServer) error {
+func (s *profilingServer) GetStreamStats(req *ppb.GetStreamStatsRequest, stream ppb.Profiling_GetStreamStatsServer) error {
 	grpclog.Infof("Processing stream request for stream stats")
 	results := profiling.StreamStats.Drain()
 	grpclog.Infof("Stream stats size: %v records", len(results))

@@ -19,7 +19,7 @@ syntax = "proto3";
 // this service is provided as a command-line application. This service can be
 // used to toggle profiling on and off and retrieve stats from a gRPC
 // application.
-option go_package = "google.golang.org/grpc/profiling/proto/service";
+option go_package = "google.golang.org/grpc/profiling/proto";
 
 // EnableRequest defines the fields in a /Profiling/Enable method request to
 // toggle profiling on and off within a gRPC program.
