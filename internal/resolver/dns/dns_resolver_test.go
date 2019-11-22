@@ -48,10 +48,11 @@ const (
 )
 
 type testClientConn struct {
-	target           string
-	m1               sync.Mutex
-	state            resolver.State
-	updateStateCalls int
+	resolver.ClientConn // For unimplemented functions
+	target              string
+	m1                  sync.Mutex
+	state               resolver.State
+	updateStateCalls    int
 }
 
 func (t *testClientConn) UpdateState(s resolver.State) {
@@ -61,18 +62,10 @@ func (t *testClientConn) UpdateState(s resolver.State) {
 	t.updateStateCalls++
 }
 
-func (t *testClientConn) NewAddress(addresses []resolver.Address) {
-	panic("unused")
-}
-
 func (t *testClientConn) getState() (resolver.State, int) {
 	t.m1.Lock()
 	defer t.m1.Unlock()
 	return t.state, t.updateStateCalls
-}
-
-func (t *testClientConn) NewServiceConfig(serviceConfig string) {
-	panic("unused")
 }
 
 func scFromState(s resolver.State) string {
