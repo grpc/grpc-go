@@ -34,8 +34,7 @@ func TestCircularBufferSerial(t *testing.T) {
 	size = 1 << 15
 	cb, err := newCircularBuffer(size)
 	if err != nil {
-		t.Errorf("error allocating CircularBuffer: %v", err)
-		return
+		t.Fatalf("error allocating CircularBuffer: %v", err)
 	}
 
 	for i = 0; i < size/2; i++ {
@@ -44,8 +43,7 @@ func TestCircularBufferSerial(t *testing.T) {
 
 	result = cb.Drain()
 	if uint32(len(result)) != size/2 {
-		t.Errorf("expected result size %d, got %d", size/2, len(result))
-		return
+		t.Fatalf("len(result) = %d; want %d", len(result), size/2)
 	}
 
 	// The returned result isn't necessarily sorted.
@@ -56,8 +54,7 @@ func TestCircularBufferSerial(t *testing.T) {
 
 	for i = 0; i < uint32(len(result)); i++ {
 		if !seen[i] {
-			t.Errorf("expected seen[%d] to be true", i)
-			return
+			t.Fatalf("seen[%d] = false; want true", i)
 		}
 	}
 
@@ -67,8 +64,7 @@ func TestCircularBufferSerial(t *testing.T) {
 
 	result = cb.Drain()
 	if uint32(len(result)) != size {
-		t.Errorf("expected second Push result size to be %d, got %d", size/2, len(result))
-		return
+		t.Fatalf("len(result) = %d; want %d", len(result), size/2)
 	}
 }
 
@@ -79,8 +75,7 @@ func TestCircularBufferOverflow(t *testing.T) {
 	size = 1 << 10
 	cb, err := newCircularBuffer(size)
 	if err != nil {
-		t.Errorf("error allocating circularBuffer: %v", err)
-		return
+		t.Fatalf("error allocating circularBuffer: %v", err)
 	}
 
 	for i = 0; i < 10*size; i++ {
@@ -90,14 +85,12 @@ func TestCircularBufferOverflow(t *testing.T) {
 	result = cb.Drain()
 
 	if uint32(len(result)) != size {
-		t.Errorf("expected result size to be a full %d, got %d", size, len(result))
-		return
+		t.Fatalf("len(result) = %d; want %d", len(result), size)
 	}
 
 	for idx, x := range result {
 		if x.(uint32) < size {
-			t.Errorf("result[%d] = %d < %d", idx, x, size)
-			return
+			t.Fatalf("result[%d] = %d; want it to be >= %d", idx, x, size)
 		}
 	}
 }
@@ -110,8 +103,7 @@ func TestCircularBufferConcurrent(t *testing.T) {
 		size = 1 << 6
 		cb, err := newCircularBuffer(size)
 		if err != nil {
-			t.Errorf("error allocating circularBuffer: %v", err)
-			return
+			t.Fatalf("error allocating circularBuffer: %v", err)
 		}
 
 		type item struct {
@@ -143,8 +135,7 @@ func TestCircularBufferConcurrent(t *testing.T) {
 		// Can't expect the buffer to be full if the Pushes aren't necessarily done.
 		if tn == 0 {
 			if uint32(len(result)) != size {
-				t.Errorf("expected Drain size to be a full %d, got %d", size, len(result))
-				return
+				t.Fatalf("len(result) = %d; want %d", len(result), size)
 			}
 		}
 
@@ -166,8 +157,7 @@ func BenchmarkCircularBuffer(b *testing.B) {
 			b.Run(fmt.Sprintf("goroutines:%d/size:%d", routines, size), func(b *testing.B) {
 				cb, err := newCircularBuffer(uint32(size))
 				if err != nil {
-					b.Errorf("error allocating CircularBuffer: %v", err)
-					return
+					b.Fatalf("error allocating CircularBuffer: %v", err)
 				}
 
 				perRoutine := b.N / routines

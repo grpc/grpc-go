@@ -69,10 +69,21 @@ func Enable(enabled bool) {
 // A Timer represents the wall-clock beginning and ending of a logical
 // operation.
 type Timer struct {
+	// Each Timer has a tag that identifies it uniquely within a Stat. This is
+	// usually a forward-slash-separated hierarchical string.
 	TimerTag string
-	Begin    time.Time
-	End      time.Time
-	GoID     int64
+	// Begin marks the beginning of this timer. The timezone is unspecified, but
+	// must use the same timezone as End; this is so shave off the small, but
+	// non-zero time required to convert to a standard timezone such as UTC.
+	Begin time.Time
+	// End marks the end of a timer.
+	End time.Time
+	// Each Timer must be started and ended within the same goroutine; GoID
+	// captures this goroutine ID. The Go runtime doesn not typically expose this
+	// information, so this is set to zero in the typical case. However, a
+	// trivial patch to the runtime package can make this field useful. See
+	// goid_modified.go in this package for more details.
+	GoID int64
 }
 
 // NewTimer creates and returns a new Timer object. This is useful when you
@@ -100,14 +111,25 @@ func NewTimer(timerTag string) *Timer {
 // the Stat's exported fields (which are exported for encoding reasons) may
 // lead to data races.
 type Stat struct {
-	StatTag  string
-	Timers   []Timer
+	// Each Stat has a tag associated with it to identify it in post-processing.
+	// This is can be any arbitrary string.
+	StatTag string
+	// Stats may also need to store other unstructured information specific to
+	// this stat. For example, a StreamStat will use these bytes to encode the
+	// connection number and the stream ID for each RPC, thereby uniquely
+	// identifying it. The underlying encoding for this is unspecified.
 	Metadata []byte
-	mu       sync.Mutex
+	// A collection of Timers and a mutex for append operations on the slice.
+	mu     sync.Mutex
+	Timers []Timer
 }
 
 // A power of two that's large enough to hold all timers within an average RPC
-// request (defined to be a unary request) without any reallocation.
+// request (defined to be a unary request) without any reallocation. A typical
+// unary RPC creates 80-100 timers for various things. While this number is
+// purely anecdotal and may change in the future as the resolution of profiling
+// increases or decreases, it serves as a good estimate for what the initial
+// allocation size should be.
 const defaultStatAllocatedTimers int32 = 128
 
 // NewStat creates and returns a new Stat object.
@@ -155,9 +177,15 @@ func (stat *Stat) NewTimer(timerTag string) int {
 
 // Egress marks the completion of a given timer within a stat.
 func (stat *Stat) Egress(index int) {
-	if stat != nil && index < len(stat.Timers) {
+	if stat == nil {
+		return
+	}
+
+	stat.mu.Lock()
+	if index < len(stat.Timers) {
 		stat.Timers[index].End = time.Now()
 	}
+	stat.mu.Unlock()
 }
 
 // AppendTimer appends a given Timer object to the internal slice of timers. A
@@ -187,12 +215,14 @@ var ServerConnectionCounter uint64
 // atomically.
 var ClientConnectionCounter uint64
 
+// statsInitialized is 0 before InitStats has been called. Changed to 1 by
+// exactly one call to InitStats.
+var statsInitialized int32
+
 // Stats for the last defaultStreamStatsBufsize RPCs will be stored in memory.
 // This is can be configured by the registering server at profiling service
-// initialisation with google.golang.org/grpc/profiling/service.ProfilingConfig
+// initialization with google.golang.org/grpc/profiling/service.ProfilingConfig
 const defaultStreamStatsSize uint32 = 16 << 10
-
-var statsInitialised int32
 
 // StreamStats is a CircularBuffer containing data from the last N RPC calls
 // served, where N is set by the user. This will contain both server stats and
@@ -200,11 +230,12 @@ var statsInitialised int32
 // client in its StatTag).
 var StreamStats *circularBuffer
 
-// InitStats initialises all the relevant Stat objects. Must be called exactly
+// InitStats initializes all the relevant Stat objects. Must be called exactly
 // once per lifetime of a process; calls after the first one are ignored.
-func InitStats(streamStatsSize uint32) (err error) {
-	if !atomic.CompareAndSwapInt32(&statsInitialised, 0, 1) {
-		// If initialised, do nothing.
+func InitStats(streamStatsSize uint32) error {
+	var err error
+	if !atomic.CompareAndSwapInt32(&statsInitialized, 0, 1) {
+		// If initialized, do nothing.
 		return nil
 	}
 
@@ -212,9 +243,10 @@ func InitStats(streamStatsSize uint32) (err error) {
 		streamStatsSize = defaultStreamStatsSize
 	}
 
-	if StreamStats, err = newCircularBuffer(streamStatsSize); err != nil {
-		return
+	StreamStats, err = newCircularBuffer(streamStatsSize)
+	if err != nil {
+		return err
 	}
 
-	return
+	return nil
 }
