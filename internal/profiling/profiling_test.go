@@ -20,9 +20,107 @@ package profiling
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 	"testing"
+	"time"
 )
+
+func TestProfiling(t *testing.T) {
+	cb, err := newCircularBuffer(128)
+	if err != nil {
+		t.Fatalf("error creating circular buffer: %v", err)
+	}
+
+	stat := NewStat("foo")
+	cb.Push(stat)
+	bar := func(n int) {
+		if n%2 == 0 {
+			defer stat.Egress(stat.NewTimer(strconv.Itoa(n)))
+		} else {
+			timer := NewTimer(strconv.Itoa(n))
+			timerIdx := stat.AppendTimer(timer)
+			defer stat.Egress(timerIdx)
+		}
+		time.Sleep(1 * time.Microsecond)
+	}
+
+	numTimers := int(8 * defaultStatAllocatedTimers)
+	for i := 0; i < numTimers; i++ {
+		bar(i)
+	}
+
+	results := cb.Drain()
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d; want 1", len(results))
+	}
+
+	statReturned := results[0].(*Stat)
+	if stat.StatTag != "foo" {
+		t.Fatalf("stat.StatTag = %s; want foo", stat.StatTag)
+	}
+
+	if len(stat.Timers) != numTimers {
+		t.Fatalf("len(stat.Timers) = %d; want %d", len(stat.Timers), numTimers)
+	}
+
+	lastIdx := 0
+	for i, timer := range statReturned.Timers {
+		// Check that they're in the order of append.
+		if n, err := strconv.Atoi(timer.TimerTag); err != nil && n != lastIdx {
+			t.Fatalf("stat.Timers[%d].TimerTag = %s; wanted %d", i, timer.TimerTag, lastIdx)
+		}
+
+		// Check that the timestamps are consistent.
+		if diff := timer.End.Sub(timer.Begin); diff.Nanoseconds() < 1000 {
+			t.Fatalf("stat.Timers[%d].End - stat.Timers[%d].Begin = %v; want >= 1000ns", i, i, diff)
+		}
+
+		lastIdx++
+	}
+}
+
+func TestProfilingRace(t *testing.T) {
+	stat := NewStat("foo")
+
+	var wg sync.WaitGroup
+	numTimers := int(8 * defaultStatAllocatedTimers) // also tests the slice growth code path
+	wg.Add(numTimers)
+	for i := 0; i < numTimers; i++ {
+		go func(n int) {
+			defer wg.Done()
+			if n%2 == 0 {
+				defer stat.Egress(stat.NewTimer(strconv.Itoa(n)))
+			} else {
+				timer := NewTimer(strconv.Itoa(n))
+				timerIdx := stat.AppendTimer(timer)
+				defer stat.Egress(timerIdx)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	if len(stat.Timers) != numTimers {
+		t.Fatalf("len(stat.Timers) = %d; want %d", len(stat.Timers), numTimers)
+	}
+
+	// The timers need not be ordered, so we can't expect them to be consecutive
+	// like above.
+	seen := make(map[int]bool)
+	for i, timer := range stat.Timers {
+		n, err := strconv.Atoi(timer.TimerTag)
+		if err != nil {
+			t.Fatalf("stat.Timers[%d].TimerTag = %s; wanted integer", i, timer.TimerTag)
+		}
+		seen[n] = true
+	}
+
+	for i := 0; i < numTimers; i++ {
+		if _, ok := seen[i]; !ok {
+			t.Fatalf("seen[%d] = false or does not exist; want it to be true", i)
+		}
+	}
+}
 
 func BenchmarkProfiling(b *testing.B) {
 	for routines := 1; routines <= 1<<8; routines <<= 1 {
