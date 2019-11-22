@@ -108,6 +108,8 @@ var (
 	}
 )
 
+// TODO: remove all usage of testTrafficDirector, and use fakexds server
+// instead.
 type testTrafficDirector struct {
 	reqChan  chan *request
 	respChan chan *response

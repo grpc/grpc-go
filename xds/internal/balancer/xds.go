@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
@@ -77,7 +78,7 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		updateState: x.connStateMgr.updateState,
 		ClientConn:  cc,
 	}
-	x.client = newXDSClientWrapper(x.newADSResponse, x.loseContact, x.buildOpts, x.loadStore)
+	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, x.loadStore)
 	go x.run()
 	return x
 }
@@ -211,7 +212,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 			if cfg.ChildPolicy != nil {
 				x.xdsLB.HandleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
 			} else {
-				x.xdsLB.HandleChildPolicy("round_robin", cfg.ChildPolicy.Config)
+				x.xdsLB.HandleChildPolicy(roundrobin.Name, nil)
 			}
 		}
 
@@ -242,8 +243,8 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 
 func (x *edsBalancer) handleXDSClientUpdate(update interface{}) {
 	switch u := update.(type) {
-	// TODO: this func should accept *xdsclient.EDSUpdate directly, and process
-	// the error field here, instead of having a separate loseContact signal.
+	// TODO: this func should accept (*xdsclient.EDSUpdate, error), and process
+	// the error, instead of having a separate loseContact signal.
 	case *xdsclient.EDSUpdate:
 		x.cancelFallbackAndSwitchEDSBalancerIfNecessary()
 		x.xdsLB.HandleEDSResponse(u)
@@ -340,7 +341,9 @@ func (x *edsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	return nil
 }
 
-func (x *edsBalancer) newADSResponse(resp *xdsclient.EDSUpdate) error {
+func (x *edsBalancer) handleEDSUpdate(resp *xdsclient.EDSUpdate) error {
+	// TODO: this function should take (resp, error), and send them together on
+	// the channel. There doesn't need to be a separate `loseContact` function.
 	select {
 	case x.xdsClientUpdate <- resp:
 	case <-x.ctx.Done():
@@ -352,6 +355,7 @@ func (x *edsBalancer) newADSResponse(resp *xdsclient.EDSUpdate) error {
 type loseContact struct {
 }
 
+// TODO: delete loseContact when handleEDSUpdate takes (resp, error).
 func (x *edsBalancer) loseContact() {
 	select {
 	case x.xdsClientUpdate <- &loseContact{}:

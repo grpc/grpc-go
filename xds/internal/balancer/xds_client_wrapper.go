@@ -176,7 +176,7 @@ func (c *xdsclientWrapper) updateXDSClient(config *XDSConfig, attr *attributes.A
 // NOT do that. Caller needs to call startLoadReport separately.
 func (c *xdsclientWrapper) startEDSWatch(nameToWatch string) {
 	if c.xdsclient == nil {
-		grpclog.Warningf("eds: xdsclient is nil when trying to start an EDS watch. This means xdsclient wasn't passed in from the resolver, and xdsclient.New failed")
+		grpclog.Warningf("xds: xdsclient is nil when trying to start an EDS watch. This means xdsclient wasn't passed in from the resolver, and xdsclient.New failed")
 		return
 	}
 
@@ -198,7 +198,7 @@ func (c *xdsclientWrapper) startEDSWatch(nameToWatch string) {
 // watch).
 func (c *xdsclientWrapper) startLoadReport(edsServiceNameBeingWatched string, loadReportServer string) {
 	if c.xdsclient == nil {
-		grpclog.Warningf("eds: xdsclient is nil when trying to start load reporting. This means xdsclient wasn't passed in from the resolver, and xdsclient.New failed")
+		grpclog.Warningf("xds: xdsclient is nil when trying to start load reporting. This means xdsclient wasn't passed in from the resolver, and xdsclient.New failed")
 		return
 	}
 	if c.loadStore != nil {
@@ -234,10 +234,7 @@ func (c *xdsclientWrapper) handleUpdate(config *XDSConfig, attr *attributes.Attr
 	//
 	// Only need to restart load reporting when:
 	// - no need to restart EDS, but loadReportServer name changed
-	if clientChanged {
-		restartWatchEDS = true
-		restartLoadReport = true
-	} else if c.edsServiceName != nameToWatch {
+	if clientChanged || c.edsServiceName != nameToWatch {
 		restartWatchEDS = true
 		restartLoadReport = true
 	} else if c.loadReportServer != config.LrsLoadReportingServerName {
