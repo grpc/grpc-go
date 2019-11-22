@@ -242,9 +242,11 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 
 func (x *edsBalancer) handleXDSClientUpdate(update interface{}) {
 	switch u := update.(type) {
-	case *edsResp:
+	// TODO: this func should accept *xdsclient.EDSUpdate directly, and process
+	// the error field here, instead of having a separate loseContact signal.
+	case *xdsclient.EDSUpdate:
 		x.cancelFallbackAndSwitchEDSBalancerIfNecessary()
-		x.xdsLB.HandleEDSResponse(u.resp)
+		x.xdsLB.HandleEDSResponse(u)
 	case *loseContact:
 		// if we are already doing fallback monitoring, then we ignore new loseContact signal.
 		if x.inFallbackMonitor {
@@ -338,13 +340,9 @@ func (x *edsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	return nil
 }
 
-type edsResp struct {
-	resp *xdsclient.EDSUpdate
-}
-
 func (x *edsBalancer) newADSResponse(resp *xdsclient.EDSUpdate) error {
 	select {
-	case x.xdsClientUpdate <- &edsResp{resp: resp}:
+	case x.xdsClientUpdate <- resp:
 	case <-x.ctx.Done():
 	}
 

@@ -21,7 +21,6 @@ package balancer
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"sync"
 	"testing"
@@ -264,7 +263,7 @@ func (c *fakeXDSClient) WatchEDS(clusterName string, edsCb func(*xdsclient.EDSUp
 }
 
 func (c *fakeXDSClient) callEDSCallback(u *xdsclient.EDSUpdate, err error) {
-	t := time.NewTimer(time.Second)
+	t := time.NewTimer(1 * time.Second)
 	select {
 	case <-c.edsCbReceived:
 		t.Stop()
@@ -529,7 +528,7 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 	defer lb.Close()
 
 	cfg := XDSConfig{
-		BalancerName:   "",
+		BalancerName:   "wrong-balancer-name",
 		ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
 		FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
 	}
@@ -558,8 +557,10 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 		t.Fatal("edsBalancer instance has not been created and assigned to lb.xdsLB after 1s")
 	}
 
-	// Callback with an error, the balancer should switch to fallback.
-	testXDSClient.callEDSCallback(nil, fmt.Errorf("xds client error"))
+	// Call loseContact explicitly, error in EDS callback is not handled.
+	// Eventually, this should call EDS ballback with an error that indicates
+	// "lost contact".
+	lb.loseContact()
 
 	// verify fallback balancer B takes over
 	select {
@@ -614,7 +615,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	defer lb.Close()
 
 	cfg := &XDSConfig{
-		BalancerName:   "",
+		BalancerName:   "wrong-balancer-name",
 		ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
 		FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
 		EDSServiceName: testEDSClusterName,
@@ -653,8 +654,10 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	// lbAbuilder has a per binary record what's the last balanceA created. We need to clear the record
 	// to make sure there's a new one created and get the pointer to it.
 	lbABuilder.clearLastBalancer()
-	// Callback with an error, the balancer should switch to fallback.
-	testXDSClient.callEDSCallback(nil, fmt.Errorf("xds client error"))
+	// Call loseContact explicitly, error in EDS callback is not handled.
+	// Eventually, this should call EDS ballback with an error that indicates
+	// "lost contact".
+	lb.loseContact()
 
 	// switch to fallback
 	// fallback balancer A takes over
@@ -703,7 +706,7 @@ func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 	defer lb.Close()
 
 	cfg := &XDSConfig{
-		BalancerName:   "",
+		BalancerName:   "wrong-balancer-name",
 		ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
 		FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
 	}
@@ -741,8 +744,10 @@ func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 	// lbAbuilder has a per binary record what's the last balanceA created. We need to clear the record
 	// to make sure there's a new one created and get the pointer to it.
 	lbABuilder.clearLastBalancer()
-	// Callback with an error, the balancer should switch to fallback.
-	testXDSClient.callEDSCallback(nil, fmt.Errorf("xds client error"))
+	// Call loseContact explicitly, error in EDS callback is not handled.
+	// Eventually, this should call EDS ballback with an error that indicates
+	// "lost contact".
+	lb.loseContact()
 
 	// switch to fallback
 	// fallback balancer A takes over

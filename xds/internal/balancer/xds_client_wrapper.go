@@ -82,47 +82,51 @@ func newXDSClientWrapper(newEDSUpdate func(*xdsclient.EDSUpdate) error, loseCont
 	}
 }
 
+// replaceXDSClient replaces xdsclient fiels to the newClient if they are
+// different. If xdsclient is replaced, the balancerName field will also be
+// updated to newBalancerName.
+//
+// If the old xdsclient is replaced, and was created locally (not from
+// attributes), it will be closed.
+//
+// It returns whether xdsclient is replaced.
+func (c *xdsclientWrapper) replaceXDSClient(newClient xdsClientInterface, newBalancerName string) bool {
+	if c.xdsclient == newClient {
+		return false
+	}
+	oldClient := c.xdsclient
+	oldBalancerName := c.balancerName
+	c.xdsclient = newClient
+	c.balancerName = newBalancerName
+	if oldBalancerName != "" {
+		// OldBalancerName!="" means if the old client was not from attributes.
+		oldClient.Close()
+	}
+	return true
+}
+
 // updateXDSClient sets xdsclient in wrapper to the correct one based on the
 // attributes and service config.
 //
-// If xds_client is found in attributes, it will be used. Otherwise, a new one
-// will be created using the given service config.
+// If client is found in attributes, it will be used, but we also need to decide
+// whether to close the old client.
+// - if old client was created locally (balancerName is not ""), close it and
+// replace it
+// - if old client was from previous attributes, only replace it, but don't
+// close it
 //
-// If a new client is created, the old one will be closed if it wasn't from
-// attributes.
+// If client is not found in attributes, will need to create a new one only if
+// the balancerName (from bootstrap file or from service config) changed.
+// - if balancer names are the same, do nothing, and return false
+// - if balancer names are different, create new one, and return true
 func (c *xdsclientWrapper) updateXDSClient(config *XDSConfig, attr *attributes.Attributes) bool {
-	var clientFromAttr xdsClientInterface
 	if attr != nil {
-		clientFromAttr, _ = attr.Value(xdsinternal.XDSClientID).(xdsClientInterface)
-	}
-
-	// Client is found in attributes, it will be used, but we also need to
-	// decide whether to close the old client.
-	// - if old client was created locally (balancerName is not ""), close it
-	// and replace it
-	// - if old client was from previous attributes, only replace it, but don't
-	// close it
-	if clientFromAttr != nil {
-		oldBalancerName := c.balancerName
-		c.balancerName = "" // Clear balancerName, to indicate that client is from attributes.
-		oldClient := c.xdsclient
-		c.xdsclient = clientFromAttr
-		if oldBalancerName != "" {
-			// Only close the old client if it's not from attributes.
-			oldClient.Close()
+		if clientFromAttr, _ := attr.Value(xdsinternal.XDSClientID).(xdsClientInterface); clientFromAttr != nil {
+			// This will also clear balancerName, to indicate that client is
+			// from attributes.
+			return c.replaceXDSClient(clientFromAttr, "")
 		}
-		return c.xdsclient != oldClient
 	}
-
-	// If client is not found in attributes, will need to create a new one only
-	// if the balancerName (from bootstrap file or from service config) changed.
-	// - if balancer names are the same
-	//   - if new balancerName is an empty string, and this is the first
-	//   update, we still create a client for it, even though it's unlikely to
-	//   work
-	//   - else, do nothing, and return clientChanged = false
-	// - if balancer names are different
-	//     - create new one, and return clientChanged = true
 
 	clientConfig := bootstrapConfigNew()
 	if clientConfig.BalancerName == "" {
@@ -130,14 +134,7 @@ func (c *xdsclientWrapper) updateXDSClient(config *XDSConfig, attr *attributes.A
 	}
 
 	if c.balancerName == clientConfig.BalancerName {
-		if c.balancerName != "" || c.xdsclient != nil {
-			return false
-		}
-		grpclog.Warningf("eds: creating an xds_client with empty string as server name, this is very unlikely to work")
-		// If balancerName is empty string, and c.xdsclient is nil,
-		// this is the first time. We try to create a new xdsclient
-		// with empty string as server name, even though it's very
-		// unlikely to work.
+		return false
 	}
 
 	if clientConfig.Creds == nil {
@@ -157,26 +154,27 @@ func (c *xdsclientWrapper) updateXDSClient(config *XDSConfig, attr *attributes.A
 	if err != nil {
 		// This should never fail. xdsclientnew does a non-blocking dial, and
 		// all the config passed in should be validated.
-		grpclog.Fatalf("failed to create xdsclient, error: %v", err)
+		//
+		// This could leave c.xdsclient as nil if this is the first update.
+		grpclog.Warningf("eds: failed to create xdsclient, error: %v", err)
+		return false
 	}
-	oldBalancerName := c.balancerName
-	c.balancerName = clientConfig.BalancerName
-	oldClient := c.xdsclient
-	c.xdsclient = newClient
-	if oldBalancerName != "" {
-		// Only close the old client if it's not from attributes.
-		oldClient.Close()
-	}
-	return true
+	return c.replaceXDSClient(newClient, clientConfig.BalancerName)
 }
 
-// startEDSWatch starts the EDS watch. If there's already a watch in progress, it
-// cancels that.
+// startEDSWatch starts the EDS watch. Caller can call this when the xds_client
+// is updated, or the edsServiceName is updated.
 //
-// Caller can call this when the xds_client is updated, or the edsServiceName is updated.
+// Note that if there's already a watch in progress, it's not explicitly
+// canceled. Because for each xds_client, there should be only one EDS watch in
+// progress. So a new EDS watch implicitly cancels the previous one.
 //
 // It also (re)starts the load report.
 func (c *xdsclientWrapper) startEDSWatch(edsServiceName string, loadReportServer string) {
+	if c.xdsclient == nil {
+		grpclog.Warningf("eds: xdsclient is nil when trying to start an EDS watch. This means xdsclient wasn't passed in from the resolver, and xdsclient.New failed")
+		return
+	}
 	// The clusterName to watch should come from CDS response, via service
 	// config. If it's an empty string, fallback user's dial target.
 	c.edsServiceName = edsServiceName
@@ -185,15 +183,10 @@ func (c *xdsclientWrapper) startEDSWatch(edsServiceName string, loadReportServer
 		grpclog.Warningf("eds: cluster name to watch is an empty string. Fallback to user's dial target")
 		nameToWatch = c.bbo.Target.Endpoint
 	}
-	if c.cancelEDSWatch != nil {
-		c.cancelEDSWatch()
-	}
 
 	c.cancelEDSWatch = c.xdsclient.WatchEDS(nameToWatch, func(update *xdsclient.EDSUpdate, err error) {
-		if err != nil {
-			c.loseContact()
-			return
-		}
+		// TODO: this should trigger a call to `c.loseContact`, when the error
+		// indicates "lose contact".
 		if err := c.newEDSUpdate(update); err != nil {
 			grpclog.Warningf("xds: processing new EDS update failed due to %v.", err)
 		}
@@ -215,6 +208,10 @@ func (c *xdsclientWrapper) startEDSWatch(edsServiceName string, loadReportServer
 // edsServiceName doesn't (so we only need to restart load reporting, not EDS
 // watch).
 func (c *xdsclientWrapper) startLoadReport(edsServiceName string, loadReportServer string) {
+	if c.xdsclient == nil {
+		grpclog.Warningf("eds: xdsclient is nil when trying to start load reporting. This means xdsclient wasn't passed in from the resolver, and xdsclient.New failed")
+		return
+	}
 	if c.loadStore != nil {
 		nameToWatch := edsServiceName
 		if nameToWatch == "" {
