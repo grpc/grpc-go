@@ -57,8 +57,11 @@ type xdsclientWrapper struct {
 	// xdsclient could come from attributes, or created with balancerName.
 	xdsclient xdsClientInterface
 
-	// edsServiceName is the name from service config. It can be "". When it's
-	// "", user's dial target is used to watch EDS.
+	// edsServiceName is the edsServiceName currently being watched, not
+	// necessary the edsServiceName from service config.
+	//
+	// If edsServiceName from service config is an empty, this will be user's
+	// dial target (because that's what we use to watch EDS).
 	//
 	// TODO: remove the empty string related behavior, when we switch to always
 	// do CDS.
@@ -169,36 +172,22 @@ func (c *xdsclientWrapper) updateXDSClient(config *XDSConfig, attr *attributes.A
 // canceled. Because for each xds_client, there should be only one EDS watch in
 // progress. So a new EDS watch implicitly cancels the previous one.
 //
-// It also (re)starts the load report.
-func (c *xdsclientWrapper) startEDSWatch(edsServiceName string, loadReportServer string) {
+// This usually means load report needs to be restarted, but this function does
+// NOT do that. Caller needs to call startLoadReport separately.
+func (c *xdsclientWrapper) startEDSWatch(nameToWatch string) {
 	if c.xdsclient == nil {
 		grpclog.Warningf("eds: xdsclient is nil when trying to start an EDS watch. This means xdsclient wasn't passed in from the resolver, and xdsclient.New failed")
 		return
 	}
-	// The clusterName to watch should come from CDS response, via service
-	// config. If it's an empty string, fallback user's dial target.
-	c.edsServiceName = edsServiceName
-	nameToWatch := edsServiceName
-	if nameToWatch == "" {
-		grpclog.Warningf("eds: cluster name to watch is an empty string. Fallback to user's dial target")
-		nameToWatch = c.bbo.Target.Endpoint
-	}
 
-	c.cancelEDSWatch = c.xdsclient.WatchEDS(nameToWatch, func(update *xdsclient.EDSUpdate, err error) {
+	c.edsServiceName = nameToWatch
+	c.cancelEDSWatch = c.xdsclient.WatchEDS(c.edsServiceName, func(update *xdsclient.EDSUpdate, err error) {
 		// TODO: this should trigger a call to `c.loseContact`, when the error
 		// indicates "lose contact".
 		if err := c.newEDSUpdate(update); err != nil {
 			grpclog.Warningf("xds: processing new EDS update failed due to %v.", err)
 		}
 	})
-
-	if c.loadStore != nil {
-		if c.cancelLoadReport != nil {
-			c.cancelLoadReport()
-		}
-		c.loadReportServer = loadReportServer
-		c.cancelLoadReport = c.xdsclient.ReportLoad(c.loadReportServer, nameToWatch, c.loadStore)
-	}
 }
 
 // startLoadReport starts load reporting. If there's already a load reporting in
@@ -207,21 +196,17 @@ func (c *xdsclientWrapper) startEDSWatch(edsServiceName string, loadReportServer
 // Caller can cal this when the loadReportServer name changes, but
 // edsServiceName doesn't (so we only need to restart load reporting, not EDS
 // watch).
-func (c *xdsclientWrapper) startLoadReport(edsServiceName string, loadReportServer string) {
+func (c *xdsclientWrapper) startLoadReport(edsServiceNameBeingWatched string, loadReportServer string) {
 	if c.xdsclient == nil {
 		grpclog.Warningf("eds: xdsclient is nil when trying to start load reporting. This means xdsclient wasn't passed in from the resolver, and xdsclient.New failed")
 		return
 	}
 	if c.loadStore != nil {
-		nameToWatch := edsServiceName
-		if nameToWatch == "" {
-			nameToWatch = c.bbo.Target.Endpoint
-		}
-		c.loadReportServer = loadReportServer
 		if c.cancelLoadReport != nil {
 			c.cancelLoadReport()
 		}
-		c.cancelLoadReport = c.xdsclient.ReportLoad(c.loadReportServer, nameToWatch, c.loadStore)
+		c.loadReportServer = loadReportServer
+		c.cancelLoadReport = c.xdsclient.ReportLoad(c.loadReportServer, edsServiceNameBeingWatched, c.loadStore)
 	}
 }
 
@@ -234,6 +219,15 @@ func (c *xdsclientWrapper) handleUpdate(config *XDSConfig, attr *attributes.Attr
 		restartWatchEDS   bool
 		restartLoadReport bool
 	)
+
+	// The clusterName to watch should come from CDS response, via service
+	// config. If it's an empty string, fallback user's dial target.
+	nameToWatch := config.EDSServiceName
+	if nameToWatch == "" {
+		grpclog.Warningf("eds: cluster name to watch is an empty string. Fallback to user's dial target")
+		nameToWatch = c.bbo.Target.Endpoint
+	}
+
 	// Need to restart EDS watch when one of the following happens:
 	// - the xds_client is updated
 	// - the xds_client didn't change, but the edsServiceName changed
@@ -242,19 +236,20 @@ func (c *xdsclientWrapper) handleUpdate(config *XDSConfig, attr *attributes.Attr
 	// - no need to restart EDS, but loadReportServer name changed
 	if clientChanged {
 		restartWatchEDS = true
-	} else if c.edsServiceName != config.EDSServiceName {
+		restartLoadReport = true
+	} else if c.edsServiceName != nameToWatch {
 		restartWatchEDS = true
+		restartLoadReport = true
 	} else if c.loadReportServer != config.LrsLoadReportingServerName {
 		restartLoadReport = true
 	}
 
 	if restartWatchEDS {
-		c.startEDSWatch(config.EDSServiceName, config.LrsLoadReportingServerName)
-		return
+		c.startEDSWatch(nameToWatch)
 	}
 
 	if restartLoadReport {
-		c.startLoadReport(config.EDSServiceName, config.LrsLoadReportingServerName)
+		c.startLoadReport(nameToWatch, config.LrsLoadReportingServerName)
 	}
 }
 
