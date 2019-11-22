@@ -294,7 +294,6 @@ func (d *dnsResolver) lookup() *resolver.State {
 	state := &resolver.State{
 		Addresses: append(d.lookupHost(), srv...),
 	}
-	// Support fallback to non-balancer address.
 	if !d.disableServiceConfig {
 		state.ServiceConfig = d.lookupTXT()
 	}
