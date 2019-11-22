@@ -78,8 +78,11 @@ type v2Client struct {
 	// validated cluster configurations received in CDS responses. We cache all
 	// valid cluster configurations, whether or not we are interested in them
 	// when we received them (because we could become interested in them in the
-	// future and the server wont send us those resources again).  Protected by
-	// the above mutex.
+	// future and the server wont send us those resources again). This is only
+	// to support legacy management servers that do not honor the
+	// resource_names field. As per the latest spec, the server should resend
+	// the response when the request changes, even if it had sent the same
+	// resource earlier (when not asked for). Protected by the above mutex.
 	cdsCache map[string]cdsUpdate
 }
 
@@ -171,6 +174,10 @@ func (v2c *v2Client) sendExisting(stream adsStream) bool {
 			if !v2c.sendRDS(stream, wi.target) {
 				return false
 			}
+		case cdsResource:
+			if !v2c.sendCDS(stream, wi.target) {
+				return false
+			}
 		case edsResource:
 			if !v2c.sendEDS(stream, wi.target) {
 				return false
@@ -249,6 +256,11 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 		case routeURL:
 			if err := v2c.handleRDSResponse(resp); err != nil {
 				grpclog.Warningf("xds: RDS response handler failed: %v", err)
+				return success
+			}
+		case clusterURL:
+			if err := v2c.handleCDSResponse(resp); err != nil {
+				grpclog.Warningf("xds: CDS response handler failed: %v", err)
 				return success
 			}
 		case endpointURL:

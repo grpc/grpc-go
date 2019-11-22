@@ -51,12 +51,12 @@ func (v2c *v2Client) cloneCDSCacheForTesting() map[string]cdsUpdate {
 }
 
 func TestValidateCluster(t *testing.T) {
+	emptyUpdate := cdsUpdate{serviceName: "", doLRS: false}
 	tests := []struct {
-		name        string
-		cluster     *xdspb.Cluster
-		wantService string
-		wantDoLRS   bool
-		wantErr     bool
+		name       string
+		cluster    *xdspb.Cluster
+		wantUpdate cdsUpdate
+		wantErr    bool
 	}{
 		{
 			name: "non-eds-cluster-type",
@@ -71,9 +71,8 @@ func TestValidateCluster(t *testing.T) {
 				},
 				LbPolicy: xdspb.Cluster_LEAST_REQUEST,
 			},
-			wantService: "",
-			wantDoLRS:   false,
-			wantErr:     true,
+			wantUpdate: emptyUpdate,
+			wantErr:    true,
 		},
 		{
 			name: "no-eds-config",
@@ -81,9 +80,8 @@ func TestValidateCluster(t *testing.T) {
 				ClusterDiscoveryType: &xdspb.Cluster_Type{Type: xdspb.Cluster_EDS},
 				LbPolicy:             xdspb.Cluster_ROUND_ROBIN,
 			},
-			wantService: "",
-			wantDoLRS:   false,
-			wantErr:     true,
+			wantUpdate: emptyUpdate,
+			wantErr:    true,
 		},
 		{
 			name: "no-ads-config-source",
@@ -92,9 +90,8 @@ func TestValidateCluster(t *testing.T) {
 				EdsClusterConfig:     &xdspb.Cluster_EdsClusterConfig{},
 				LbPolicy:             xdspb.Cluster_ROUND_ROBIN,
 			},
-			wantService: "",
-			wantDoLRS:   false,
-			wantErr:     true,
+			wantUpdate: emptyUpdate,
+			wantErr:    true,
 		},
 		{
 			name: "non-round-robin-lb-policy",
@@ -109,9 +106,8 @@ func TestValidateCluster(t *testing.T) {
 				},
 				LbPolicy: xdspb.Cluster_LEAST_REQUEST,
 			},
-			wantService: "",
-			wantDoLRS:   false,
-			wantErr:     true,
+			wantUpdate: emptyUpdate,
+			wantErr:    true,
 		},
 		{
 			name: "happy-case-no-service-name-no-lrs",
@@ -126,8 +122,7 @@ func TestValidateCluster(t *testing.T) {
 				},
 				LbPolicy: xdspb.Cluster_ROUND_ROBIN,
 			},
-			wantService: "",
-			wantDoLRS:   false,
+			wantUpdate: emptyUpdate,
 		},
 		{
 			name: "happy-case-no-lrs",
@@ -143,28 +138,23 @@ func TestValidateCluster(t *testing.T) {
 				},
 				LbPolicy: xdspb.Cluster_ROUND_ROBIN,
 			},
-			wantService: serviceName1,
-			wantDoLRS:   false,
+			wantUpdate: cdsUpdate{serviceName: serviceName1, doLRS: false},
 		},
 		{
-			name:        "happiest-case",
-			cluster:     goodCluster1,
-			wantService: serviceName1,
-			wantDoLRS:   true,
+			name:       "happiest-case",
+			cluster:    goodCluster1,
+			wantUpdate: cdsUpdate{serviceName: serviceName1, doLRS: true},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotService, gotDoLRS, gotErr := validateCluster(test.cluster)
+			gotUpdate, gotErr := validateCluster(test.cluster)
 			if (gotErr != nil) != test.wantErr {
 				t.Errorf("validateCluster(%+v) returned error: %v, wantErr: %v", test.cluster, gotErr, test.wantErr)
 			}
-			if gotService != test.wantService {
-				t.Errorf("validateCluster(%+v) returned service: %v, want: %v", test.cluster, gotService, test.wantService)
-			}
-			if gotDoLRS != test.wantDoLRS {
-				t.Errorf("validateCluster(%+v) returned doLRS: %v, want: %v", test.cluster, gotDoLRS, test.wantDoLRS)
+			if !reflect.DeepEqual(gotUpdate, test.wantUpdate) {
+				t.Errorf("validateCluster(%+v) = %v, want: %v", test.cluster, gotUpdate, test.wantUpdate)
 			}
 		})
 	}

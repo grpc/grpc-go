@@ -68,17 +68,16 @@ func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if !ok {
 			return fmt.Errorf("xds: unexpected resource type: %T in CDS response", resource.Message)
 		}
-		service, doLRS, err := validateCluster(cluster)
+		update, err := validateCluster(cluster)
 		if err != nil {
 			return err
 		}
 
 		// If the Cluster message in the CDS response did not contain a
 		// serviceName, we will just use the clusterName for EDS.
-		if service == "" {
-			service = cluster.GetName()
+		if update.serviceName == "" {
+			update.serviceName = cluster.GetName()
 		}
-		update := cdsUpdate{service, doLRS}
 		localCache[cluster.GetName()] = update
 		if cluster.GetName() == wi.target[0] {
 			returnUpdate = update
@@ -95,15 +94,19 @@ func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
 	return nil
 }
 
-func validateCluster(cluster *xdspb.Cluster) (string, bool, error) {
+func validateCluster(cluster *xdspb.Cluster) (cdsUpdate, error) {
+	emptyUpdate := cdsUpdate{serviceName: "", doLRS: false}
 	switch {
 	case cluster.GetType() != xdspb.Cluster_EDS:
-		return "", false, fmt.Errorf("xds: unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
+		return emptyUpdate, fmt.Errorf("xds: unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
 	case cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil:
-		return "", false, fmt.Errorf("xds: unexpected edsConfig in response: %+v", cluster)
+		return emptyUpdate, fmt.Errorf("xds: unexpected edsConfig in response: %+v", cluster)
 	case cluster.GetLbPolicy() != xdspb.Cluster_ROUND_ROBIN:
-		return "", false, fmt.Errorf("xds: unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
+		return emptyUpdate, fmt.Errorf("xds: unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
 
-	return cluster.GetEdsClusterConfig().GetServiceName(), cluster.GetLrsServer().GetSelf() != nil, nil
+	return cdsUpdate{
+		serviceName: cluster.GetEdsClusterConfig().GetServiceName(),
+		doLRS:       cluster.GetLrsServer().GetSelf() != nil,
+	}, nil
 }
