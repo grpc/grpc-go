@@ -610,6 +610,7 @@ func generateSC(name string) string {
 func generateSCF(cfg string) []string {
 	b := append([]byte(txtAttribute), []byte(cfg)...)
 
+	// Split b into multiple strings, each with a max of 255 bytes.
 	var r []string
 	for i := 0; i < len(b); i += txtBytesLimit {
 		if i+txtBytesLimit > len(b) {
