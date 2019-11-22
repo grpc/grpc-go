@@ -27,7 +27,7 @@ import (
 	"strings"
 
 	"google.golang.org/grpc/grpclog"
-	pspb "google.golang.org/grpc/profiling/proto/service"
+	ppb "google.golang.org/grpc/profiling/proto"
 )
 
 type jsonNode struct {
@@ -77,7 +77,7 @@ func hashCname(tag string) string {
 	return ""
 }
 
-func filterCounter(stat *pspb.StatProto, filter string, counter int) int {
+func filterCounter(stat *ppb.StatProto, filter string, counter int) int {
 	localCounter := 0
 	for i := 0; i < len(stat.TimerProtos); i++ {
 		if stat.TimerProtos[i].TimerTag == filter {
@@ -114,7 +114,7 @@ func catapultNs(sec int64, nsec int32) float64 {
 	return float64((sec * 1000000000) + int64(nsec))
 }
 
-func streamStatsCatapultJSONSingle(stat *pspb.StatProto, baseSec int64, baseNsec int32) []jsonNode {
+func streamStatsCatapultJSONSingle(stat *ppb.StatProto, baseSec int64, baseNsec int32) []jsonNode {
 	if len(stat.TimerProtos) == 0 {
 		return nil
 	}
@@ -287,7 +287,7 @@ func streamStatsCatapultJSONSingle(stat *pspb.StatProto, baseSec int64, baseNsec
 	return result
 }
 
-func timerBeginIsBefore(ti *pspb.TimerProto, tj *pspb.TimerProto) bool {
+func timerBeginIsBefore(ti *ppb.TimerProto, tj *ppb.TimerProto) bool {
 	if ti.BeginSec == tj.BeginSec {
 		return ti.BeginNsec < tj.BeginNsec
 	}
@@ -303,7 +303,7 @@ func streamStatsCatapultJSON(s *snapshot, streamStatsCatapultJSONFileName string
 	}
 
 	grpclog.Infof("filter stream stats for %s", *flagStreamStatsFilter)
-	streamStats := make([]*pspb.StatProto, 0)
+	streamStats := make([]*ppb.StatProto, 0)
 	for _, stat := range s.StreamStats {
 		if _, ok := filter[stat.StatTag]; ok {
 			streamStats = append(streamStats, stat)
@@ -343,7 +343,7 @@ func streamStatsCatapultJSON(s *snapshot, streamStatsCatapultJSONFileName string
 
 	// All timestamps use the earliest timestamp available as the reference.
 	grpclog.Infof("calculating the earliest timestamp across all timers")
-	var base *pspb.TimerProto
+	var base *ppb.TimerProto
 	for _, stat := range streamStats {
 		for _, timer := range stat.TimerProtos {
 			if base == nil || timerBeginIsBefore(base, timer) {

@@ -28,11 +28,11 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
-	pspb "google.golang.org/grpc/profiling/proto/service"
+	ppb "google.golang.org/grpc/profiling/proto"
 )
 
-func setEnabled(ctx context.Context, c pspb.ProfilingClient, enabled bool) error {
-	_, err := c.Enable(ctx, &pspb.EnableRequest{Enabled: enabled})
+func setEnabled(ctx context.Context, c ppb.ProfilingClient, enabled bool) error {
+	_, err := c.Enable(ctx, &ppb.EnableRequest{Enabled: enabled})
 	if err != nil {
 		grpclog.Infof("error calling Enable: %v\n", err)
 		return err
@@ -42,15 +42,15 @@ func setEnabled(ctx context.Context, c pspb.ProfilingClient, enabled bool) error
 	return nil
 }
 
-func retrieveSnapshot(ctx context.Context, c pspb.ProfilingClient, f string) error {
+func retrieveSnapshot(ctx context.Context, c ppb.ProfilingClient, f string) error {
 	grpclog.Infof("establishing stream stats stream")
-	stream, err := c.GetStreamStats(ctx, &pspb.GetStreamStatsRequest{})
+	stream, err := c.GetStreamStats(ctx, &ppb.GetStreamStatsRequest{})
 	if err != nil {
 		grpclog.Errorf("error calling GetStreamStats: %v\n", err)
 		return err
 	}
 
-	s := &snapshot{StreamStats: make([]*pspb.StatProto, 0)}
+	s := &snapshot{StreamStats: make([]*ppb.StatProto, 0)}
 
 	grpclog.Infof("receiving and processing stream stats")
 	for {
@@ -101,7 +101,7 @@ func remoteCommand() error {
 	}
 	defer cc.Close()
 
-	c := pspb.NewProfilingClient(cc)
+	c := ppb.NewProfilingClient(cc)
 
 	if *flagEnableProfiling || *flagDisableProfiling {
 		return setEnabled(ctx, c, *flagEnableProfiling)

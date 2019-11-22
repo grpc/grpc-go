@@ -22,11 +22,11 @@ import (
 	"os"
 
 	"google.golang.org/grpc/grpclog"
-	pspb "google.golang.org/grpc/profiling/proto/service"
+	ppb "google.golang.org/grpc/profiling/proto"
 )
 
 type snapshot struct {
-	StreamStats []*pspb.StatProto
+	StreamStats []*ppb.StatProto
 }
 
 func main() {
