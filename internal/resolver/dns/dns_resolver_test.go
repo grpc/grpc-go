@@ -743,7 +743,7 @@ func testDNSResolver(t *testing.T) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrWant)
 		}
 		sc := scFromState(state)
-		if !reflect.DeepEqual(a.scWant, sc) {
+		if a.scWant != sc {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
 		}
 		r.Close()
@@ -830,7 +830,7 @@ func testDNSResolverWithSRV(t *testing.T) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrWant)
 		}
 		sc := scFromState(state)
-		if !reflect.DeepEqual(a.scWant, sc) {
+		if a.scWant != sc {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
 		}
 	}
@@ -898,7 +898,7 @@ func testDNSResolveNow(t *testing.T) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrWant)
 		}
 		sc := scFromState(state)
-		if !reflect.DeepEqual(a.scWant, sc) {
+		if a.scWant != sc {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
 		}
 
@@ -918,7 +918,7 @@ func testDNSResolveNow(t *testing.T) {
 		if !reflect.DeepEqual(a.addrNext, state.Addresses) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrNext)
 		}
-		if !reflect.DeepEqual(a.scNext, sc) {
+		if a.scNext != sc {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scNext)
 		}
 		revertTbl()
@@ -1009,7 +1009,7 @@ func TestResolveFunc(t *testing.T) {
 			r.Close()
 		}
 		if !reflect.DeepEqual(err, v.want) {
-			t.Errorf("Build(%q, cc, resolver.BuildOptions{}) = %v, want %v", v.addr, err, v.want)
+			t.Errorf("Build(%q, cc, _) = %v, want %v", v.addr, err, v.want)
 		}
 	}
 }
@@ -1054,7 +1054,7 @@ func TestDisableServiceConfig(t *testing.T) {
 			t.Fatalf("UpdateState not called after 2s; aborting")
 		}
 		sc := scFromState(state)
-		if !reflect.DeepEqual(a.scWant, sc) {
+		if a.scWant != sc {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
 		}
 	}
