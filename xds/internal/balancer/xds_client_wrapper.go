@@ -85,7 +85,7 @@ func newXDSClientWrapper(newEDSUpdate func(*xdsclient.EDSUpdate) error, loseCont
 	}
 }
 
-// replaceXDSClient replaces xdsclient fiels to the newClient if they are
+// replaceXDSClient replaces xdsclient fields to the newClient if they are
 // different. If xdsclient is replaced, the balancerName field will also be
 // updated to newBalancerName.
 //
