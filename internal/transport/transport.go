@@ -33,6 +33,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
@@ -809,42 +810,35 @@ func ContextErr(err error) error {
 	return status.Errorf(codes.Internal, "Unexpected error from context packet: %v", err)
 }
 
-// returnBuffer contains a function holding a closure that can return a byte
+// ReturnBuffer contains a function holding a closure that can return a byte
 // slice back to the encoder for reuse. This function is called when the
 // counter c reaches 0, which happens when all Add calls have called their
-// corresponding Done calls.
+// corresponding Done calls. All operations on ReturnBuffer are
+// concurrency-safe.
 type ReturnBuffer struct {
 	c int32
 	f func()
 }
 
-// Allocates and returns a *ReturnBuffer.
+// NewReturnBuffer allocates and returns a *ReturnBuffer.
 func NewReturnBuffer(c int32, f func()) *ReturnBuffer {
 	return &ReturnBuffer{c: c, f: f}
 }
 
-// Increments an internal counter atomically.
+// Add increments an internal counter atomically.
 func (rb *ReturnBuffer) Add(n int32) {
-	if rb.f == nil {
-		return
-	}
-
 	atomic.AddInt32(&rb.c, n)
 }
 
-// Each Add call must be paired with a corresponding Done call, which executes
-// the closured function (if any).
+// Done decrements the internal counter and executes the closured ReturnBuffer
+// function if the internal counter reaches zero.
 func (rb *ReturnBuffer) Done() {
-	if rb.f == nil {
-		return
-	}
-
 	nc := atomic.AddInt32(&rb.c, -1)
 	if nc < 0 {
 		// Same behaviour as sync.WaitGroup, this should NEVER happen. And if it
 		// does happen, it's better to terminate early than silently continue with
 		// corrupt data.
-		panic("grpc: ReturnBuffer negative counter")
+		grpclog.Fatalln("grpc: ReturnBuffer negative counter")
 	} else if nc == 0 {
 		rb.f()
 	}

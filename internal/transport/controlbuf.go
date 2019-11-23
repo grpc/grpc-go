@@ -737,7 +737,7 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 	if str, ok := l.estdStreams[c.streamID]; ok {
 		// Dequeue all items from the stream's item list. This would call any pending onDequeue functions.
 		if str.state == active {
-			for str.itl.isEmpty() {
+			for !str.itl.isEmpty() {
 				str.itl.dequeue()
 			}
 		}

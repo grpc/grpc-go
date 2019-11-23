@@ -459,13 +459,11 @@ type csAttempt struct {
 
 func (cs *clientStream) commitAttemptLocked() {
 	cs.buffer = nil
-	if !cs.committed {
-		cs.committed = true
-		for _, rb := range cs.returnBuffers {
-			rb.Done()
-		}
-		cs.returnBuffers = nil
+	cs.committed = true
+	for _, rb := range cs.returnBuffers {
+		rb.Done()
 	}
+	cs.returnBuffers = nil
 }
 
 func (cs *clientStream) commitAttempt() {
