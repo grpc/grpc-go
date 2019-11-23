@@ -52,17 +52,30 @@ import (
 //    special Go code that's both architecture-specific and go version-specific
 //    (a quadratic number of variants to maintain).
 //
-// 4. This approach, which requires a simple two-line modification to the Go
+// 4. This approach, which requires a simple two-line modification [1] to the Go
 //    runtime to expose the current goroutine's ID. This is the chosen approach
 //    and it takes about ~2 ns/op, which is negligible in the face of the tens
 //    of microseconds that grpc takes to complete a RPC request.
 //
-// A personal note (adtac@): I'm fully aware of the Go team's position on why
-// goroutine ID isn't exposed and I agree with most of it. However, this is
-// used exclusively for profiling data visualisation, which qualifies as
-// debugging; given that runtime.Stack is fine with exposing the goroutine ID
-// (in an inefficient way), I'm sure the Go team would be comfortable with this
-// conditional build tag.
+// [1] To make the goroutine ID visible to Go programs apply the following
+// change to the runtime2.go file in your Go runtime installation:
+//
+//     diff --git a/src/runtime/runtime2.go b/src/runtime/runtime2.go
+//     --- a/src/runtime/runtime2.go
+//     +++ b/src/runtime/runtime2.go
+//     @@ -392,6 +392,10 @@ type stack struct {
+//      	hi uintptr
+//      }
+//
+//     +func Goid() int64 {
+//     +  return getg().goid
+//     +}
+//     +
+//      type g struct {
+//      	// Stack parameters.
+//      	// stack describes the actual stack memory: [stack.lo, stack.hi).
+//
+// The exposed runtime.Goid() function will return a int64 goroutine ID.
 func goid() int64 {
 	return runtime.Goid()
 }

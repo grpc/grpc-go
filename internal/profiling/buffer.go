@@ -72,7 +72,7 @@ func (q *queue) drainWait() {
 }
 
 // A queuePair has two queues. At any given time, Pushes go into the queue
-// referenced by queuePair.q. The active queue get switched when there's a
+// referenced by queuePair.q. The active queue gets switched when there's a
 // drain operation on the circular buffer.
 type queuePair struct {
 	q0 unsafe.Pointer
@@ -139,18 +139,17 @@ type circularBuffer struct {
 	qpn uint32
 }
 
-var errorInvalidCircularBufferSize = errors.New("buffer size is not an exponent of two")
+var errInvalidCircularBufferSize = errors.New("buffer size is not an exponent of two")
 
 // Allocates a circular buffer of size size and returns a reference to the
 // struct. Only circular buffers of size 2^k are allowed (saves us from having
 // to do expensive modulo operations).
-func newCircularBuffer(size uint32) (cb *circularBuffer, err error) {
+func newCircularBuffer(size uint32) (*circularBuffer, error) {
 	if size&(size-1) != 0 {
-		err = errorInvalidCircularBufferSize
-		return
+		return nil, errInvalidCircularBufferSize
 	}
 
-	cb = &circularBuffer{
+	cb := &circularBuffer{
 		qp: make([]*queuePair, numCircularBufferPairs),
 	}
 
@@ -158,7 +157,7 @@ func newCircularBuffer(size uint32) (cb *circularBuffer, err error) {
 		cb.qp[i] = newQueuePair(size / numCircularBufferPairs)
 	}
 
-	return
+	return cb, nil
 }
 
 // Pushes an element in to the circular buffer.
@@ -227,7 +226,7 @@ func dereferenceAppend(result []interface{}, arr []unsafe.Pointer, from, to uint
 // Allocates and returns an array of things Pushed in to the circular buffer.
 // Push order is not maintained; that is, if B was Pushed after A, drain may
 // return B at a lower index than A in the returned array.
-func (cb *circularBuffer) Drain() (result []interface{}) {
+func (cb *circularBuffer) Drain() []interface{} {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
@@ -252,7 +251,7 @@ func (cb *circularBuffer) Drain() (result []interface{}) {
 	}
 	wg.Wait()
 
-	result = make([]interface{}, 0)
+	result := make([]interface{}, 0)
 	for i := uint32(0); i < numCircularBufferPairs; i++ {
 		if qs[i].acquired < qs[i].size {
 			result = dereferenceAppend(result, qs[i].arr, 0, qs[i].acquired)
@@ -267,5 +266,5 @@ func (cb *circularBuffer) Drain() (result []interface{}) {
 		qs[i].drainingPostCheck = 0
 	}
 
-	return
+	return result
 }

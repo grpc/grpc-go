@@ -165,13 +165,12 @@ func (stat *Stat) NewTimer(timerTag string) int {
 	// reallocation and copy, which is probably unnecessary code complexity if
 	// the improvement isn't significant.
 	stat.mu.Lock()
-	stat.Timers = append(stat.Timers, Timer{
-		TimerTag: timerTag,
-		Begin:    time.Now(),
-		GoID:     goid(),
-	})
+	stat.Timers = append(stat.Timers, Timer{})
 	index := len(stat.Timers) - 1
 	stat.mu.Unlock()
+	stat.Timers[index].TimerTag = timerTag
+	stat.Timers[index].GoID = goid()
+	stat.Timers[index].Begin = time.Now() // do last to capture the actual timer duration more accurately.
 	return index
 }
 
@@ -181,9 +180,14 @@ func (stat *Stat) Egress(index int) {
 		return
 	}
 
+	// Do first to capture the actual timer duration more accurately (but not
+	// before the stat == nil check; we don't want to affect performance when
+	// profiling is disabled).
+	t := time.Now()
+
 	stat.mu.Lock()
 	if index < len(stat.Timers) {
-		stat.Timers[index].End = time.Now()
+		stat.Timers[index].End = t
 	}
 	stat.mu.Unlock()
 }
