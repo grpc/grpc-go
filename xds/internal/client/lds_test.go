@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/xds/internal/client/fakexds"
 )
 
-func TestGetRouteConfigNameFromListener(t *testing.T) {
+func TestLDSGetRouteConfig(t *testing.T) {
 	tests := []struct {
 		name      string
 		lis       *xdspb.Listener
@@ -87,10 +87,10 @@ func TestGetRouteConfigNameFromListener(t *testing.T) {
 	}
 }
 
-// TestHandleLDSResponse starts a fake xDS server, makes a ClientConn to it,
+// TestLDSHandleResponse starts a fake xDS server, makes a ClientConn to it,
 // and creates a v2Client using it. Then, it registers a watchLDS and tests
 // different LDS responses.
-func TestHandleLDSResponse(t *testing.T) {
+func TestLDSHandleResponse(t *testing.T) {
 	fakeServer, sCleanup := fakexds.StartServer(t)
 	client, cCleanup := fakeServer.GetClientConn(t)
 	defer func() {
@@ -98,6 +98,7 @@ func TestHandleLDSResponse(t *testing.T) {
 		sCleanup()
 	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	defer v2c.close()
 
 	tests := []struct {
 		name          string
@@ -224,9 +225,9 @@ func TestHandleLDSResponse(t *testing.T) {
 	}
 }
 
-// TestHandleLDSResponseWithoutWatch tests the case where the v2Client receives
+// TestLDSHandleResponseWithoutWatch tests the case where the v2Client receives
 // an LDS response without a registered watcher.
-func TestHandleLDSResponseWithoutWatch(t *testing.T) {
+func TestLDSHandleResponseWithoutWatch(t *testing.T) {
 	fakeServer, sCleanup := fakexds.StartServer(t)
 	client, cCleanup := fakeServer.GetClientConn(t)
 	defer func() {
@@ -234,6 +235,7 @@ func TestHandleLDSResponseWithoutWatch(t *testing.T) {
 		sCleanup()
 	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	defer v2c.close()
 
 	if v2c.handleLDSResponse(goodLDSResponse1) == nil {
 		t.Fatal("v2c.handleLDSResponse() succeeded, should have failed")
@@ -257,6 +259,7 @@ func TestLDSWatchExpiryTimer(t *testing.T) {
 		sCleanup()
 	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	defer v2c.close()
 
 	// Wait till the request makes it to the fakeServer. This ensures that
 	// the watch request has been processed by the v2Client.

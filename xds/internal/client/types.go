@@ -69,16 +69,27 @@ func (wi *watchInfo) cancel() {
 	}
 }
 
+// stopTimer stops the expiry timer without cancelling the watch.
+func (wi *watchInfo) stopTimer() {
+	if wi.expiryTimer != nil {
+		wi.expiryTimer.Stop()
+	}
+}
+
 type ldsUpdate struct {
 	routeName string
 }
-
 type ldsCallback func(ldsUpdate, error)
 
 type rdsUpdate struct {
 	clusterName string
 }
-
 type rdsCallback func(rdsUpdate, error)
+
+type cdsUpdate struct {
+	serviceName string
+	doLRS       bool
+}
+type cdsCallback func(cdsUpdate, error)
 
 type edsCallback func(*EDSUpdate, error)

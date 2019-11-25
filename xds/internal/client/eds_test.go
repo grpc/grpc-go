@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/xds/internal/client/fakexds"
 )
 
-func TestParseEDSRespProto(t *testing.T) {
+func TestEDSParseRespProto(t *testing.T) {
 	tests := []struct {
 		name    string
 		m       *xdspb.ClusterLoadAssignment
@@ -161,7 +161,7 @@ var (
 	}
 )
 
-func TestHandleEDSResponse(t *testing.T) {
+func TestEDSHandleResponse(t *testing.T) {
 	fakeServer, sCleanup := fakexds.StartServer(t)
 	client, cCleanup := fakeServer.GetClientConn(t)
 	defer func() {
@@ -169,6 +169,7 @@ func TestHandleEDSResponse(t *testing.T) {
 		sCleanup()
 	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	defer v2c.close()
 
 	tests := []struct {
 		name          string
@@ -272,9 +273,9 @@ func TestHandleEDSResponse(t *testing.T) {
 	}
 }
 
-// TestHandleEDSResponseWithoutEDSWatch tests the case where the v2Client
+// TestEDSHandleResponseWithoutWatch tests the case where the v2Client
 // receives an EDS response without a registered EDS watcher.
-func TestHandleEDSResponseWithoutEDSWatch(t *testing.T) {
+func TestEDSHandleResponseWithoutWatch(t *testing.T) {
 	fakeServer, sCleanup := fakexds.StartServer(t)
 	client, cCleanup := fakeServer.GetClientConn(t)
 	defer func() {

@@ -104,7 +104,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		// incremental protocol, the fact that we did not receive the resource
 		// that we are watching for in this response does not mean that the
 		// server does not know about it.
-		wi.expiryTimer.Stop()
+		wi.stopTimer()
 		wi.callback.(rdsCallback)(rdsUpdate{clusterName: returnCluster}, nil)
 	}
 	return nil
