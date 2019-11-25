@@ -67,7 +67,7 @@ type xdsclientWrapper struct {
 	// do CDS.
 	edsServiceName   string
 	cancelEDSWatch   func()
-	loadReportServer string
+	loadReportServer *string // LRS is disabled if loadReporterServer is nil.
 	cancelLoadReport func()
 }
 
@@ -196,7 +196,7 @@ func (c *xdsclientWrapper) startEDSWatch(nameToWatch string) {
 // Caller can cal this when the loadReportServer name changes, but
 // edsServiceName doesn't (so we only need to restart load reporting, not EDS
 // watch).
-func (c *xdsclientWrapper) startLoadReport(edsServiceNameBeingWatched string, loadReportServer string) {
+func (c *xdsclientWrapper) startLoadReport(edsServiceNameBeingWatched string, loadReportServer *string) {
 	if c.xdsclient == nil {
 		grpclog.Warningf("xds: xdsclient is nil when trying to start load reporting. This means xdsclient wasn't passed in from the resolver, and xdsclient.New failed")
 		return
@@ -206,7 +206,9 @@ func (c *xdsclientWrapper) startLoadReport(edsServiceNameBeingWatched string, lo
 			c.cancelLoadReport()
 		}
 		c.loadReportServer = loadReportServer
-		c.cancelLoadReport = c.xdsclient.ReportLoad(c.loadReportServer, edsServiceNameBeingWatched, c.loadStore)
+		if c.loadReportServer != nil {
+			c.cancelLoadReport = c.xdsclient.ReportLoad(*c.loadReportServer, edsServiceNameBeingWatched, c.loadStore)
+		}
 	}
 }
 
@@ -237,7 +239,7 @@ func (c *xdsclientWrapper) handleUpdate(config *XDSConfig, attr *attributes.Attr
 	if clientChanged || c.edsServiceName != nameToWatch {
 		restartWatchEDS = true
 		restartLoadReport = true
-	} else if c.loadReportServer != config.LrsLoadReportingServerName {
+	} else if !equalStringPointers(c.loadReportServer, config.LrsLoadReportingServerName) {
 		restartLoadReport = true
 	}
 
@@ -284,4 +286,17 @@ func defaultDialCreds(balancerName string, rbo balancer.BuildOptions) grpc.DialO
 		grpclog.Warning("xds: no credentials available, using Insecure")
 		return grpc.WithInsecure()
 	}
+}
+
+// equalStringPointers returns true if
+// - a and b are both nil OR
+// - *a == *b (and a and b are both non-nil)
+func equalStringPointers(a, b *string) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
 }
