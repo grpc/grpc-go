@@ -108,6 +108,9 @@ func (s) TestXdsLoadReporting(t *testing.T) {
 
 	cfg := &XDSConfig{
 		BalancerName: addr,
+		// Set lrs server name to an empty string, instead of nil, so the xds
+		// server will be used for LRS.
+		LrsLoadReportingServerName: new(string),
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
 	td.sendResp(&response{resp: testEDSResp})

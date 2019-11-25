@@ -30,22 +30,22 @@ import (
 // TestXdsConfigMarshalToJSON is an example to print json format of xds_config.
 func TestXdsConfigMarshalToJSON(t *testing.T) {
 	c := &scpb.XdsConfig{
-		ChildPolicy: []*scpb.LoadBalancingConfig{
-			{Policy: &scpb.LoadBalancingConfig_Grpclb{
-				Grpclb: &scpb.GrpcLbConfig{},
-			}},
-			{Policy: &scpb.LoadBalancingConfig_RoundRobin{
-				RoundRobin: &scpb.RoundRobinConfig{},
-			}},
-		},
-		FallbackPolicy: []*scpb.LoadBalancingConfig{
-			{Policy: &scpb.LoadBalancingConfig_Grpclb{
-				Grpclb: &scpb.GrpcLbConfig{},
-			}},
-			{Policy: &scpb.LoadBalancingConfig_PickFirst{
-				PickFirst: &scpb.PickFirstConfig{},
-			}},
-		},
+		// ChildPolicy: []*scpb.LoadBalancingConfig{
+		// 	{Policy: &scpb.LoadBalancingConfig_Grpclb{
+		// 		Grpclb: &scpb.GrpcLbConfig{},
+		// 	}},
+		// 	{Policy: &scpb.LoadBalancingConfig_RoundRobin{
+		// 		RoundRobin: &scpb.RoundRobinConfig{},
+		// 	}},
+		// },
+		// FallbackPolicy: []*scpb.LoadBalancingConfig{
+		// 	{Policy: &scpb.LoadBalancingConfig_Grpclb{
+		// 		Grpclb: &scpb.GrpcLbConfig{},
+		// 	}},
+		// 	{Policy: &scpb.LoadBalancingConfig_PickFirst{
+		// 		PickFirst: &scpb.PickFirstConfig{},
+		// 	}},
+		// },
 		EdsServiceName: "eds.service.name",
 		LrsLoadReportingServerName: &wrapperspb.StringValue{
 			Value: "lrs.server.name",

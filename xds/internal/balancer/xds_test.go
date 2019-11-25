@@ -772,10 +772,8 @@ func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 }
 
 func TestXdsBalancerConfigParsing(t *testing.T) {
-	const (
-		testEDSName = "eds.service"
-		testLRSName = "lrs.server"
-	)
+	const testEDSName = "eds.service"
+	var testLRSName = "lrs.server"
 	b := bytes.NewBuffer(nil)
 	if err := (&jsonpb.Marshaler{}).Marshal(b, &scpb.XdsConfig{
 		ChildPolicy: []*scpb.LoadBalancingConfig{
@@ -815,7 +813,7 @@ func TestXdsBalancerConfigParsing(t *testing.T) {
 					Config: json.RawMessage("{}"),
 				},
 				EDSServiceName:             testEDSName,
-				LrsLoadReportingServerName: testLRSName,
+				LrsLoadReportingServerName: &testLRSName,
 			},
 			wantErr: false,
 		},
@@ -849,7 +847,23 @@ func TestXdsBalancerConfigParsing(t *testing.T) {
 					Config: json.RawMessage("{}"),
 				},
 				EDSServiceName:             testEDSName,
-				LrsLoadReportingServerName: testLRSName,
+				LrsLoadReportingServerName: &testLRSName,
+			},
+			wantErr: false,
+		},
+		{
+			// json with no lrs server name, LrsLoadReportingServerName should
+			// be nil (not an empty string).
+			name: "no-lrs-server-name",
+			js: json.RawMessage(`
+{
+  "balancerName": "fake.foo.bar",
+  "edsServiceName": "eds.service"
+}`),
+			want: &XDSConfig{
+				BalancerName:               "fake.foo.bar",
+				EDSServiceName:             testEDSName,
+				LrsLoadReportingServerName: nil,
 			},
 			wantErr: false,
 		},
@@ -905,6 +919,33 @@ func TestLoadbalancingConfigParsing(t *testing.T) {
 			var cfg XDSConfig
 			if err := json.Unmarshal([]byte(tt.s), &cfg); err != nil || !reflect.DeepEqual(&cfg, tt.want) {
 				t.Errorf("test name: %s, parseFullServiceConfig() = %+v, err: %v, want %+v, <nil>", tt.name, cfg, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestEqualStringPointers(t *testing.T) {
+	var (
+		ta1 = "test-a"
+		ta2 = "test-a"
+		tb  = "test-b"
+	)
+	tests := []struct {
+		name string
+		a    *string
+		b    *string
+		want bool
+	}{
+		{"both-nil", nil, nil, true},
+		{"a-non-nil", &ta1, nil, false},
+		{"b-non-nil", nil, &tb, false},
+		{"equal", &ta1, &ta2, true},
+		{"different", &ta1, &tb, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := equalStringPointers(tt.a, tt.b); got != tt.want {
+				t.Errorf("equalStringPointers() = %v, want %v", got, tt.want)
 			}
 		})
 	}

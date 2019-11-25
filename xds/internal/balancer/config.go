@@ -46,7 +46,7 @@ type XDSConfig struct {
 	//
 	// TODO: this should be a pointer to a string, so nil means load reporting
 	// is disabled.
-	LrsLoadReportingServerName string
+	LrsLoadReportingServerName *string
 }
 
 // xdsConfigJSON is the intermediate unmarshal result of XDSConfig. ChildPolicy
@@ -57,7 +57,7 @@ type xdsConfigJSON struct {
 	ChildPolicy                []*loadBalancingConfig
 	FallbackPolicy             []*loadBalancingConfig
 	EDSServiceName             string
-	LRSLoadReportingServerName string
+	LRSLoadReportingServerName *string
 }
 
 // UnmarshalJSON parses the JSON-encoded byte slice in data and stores it in l.
