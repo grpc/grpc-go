@@ -110,11 +110,6 @@ type testConfig struct {
 	expectedADSResponses []proto.Message
 }
 
-// func setupServer(t *testing.T) (addr string, td *fakexds.Server, cleanup func()) {
-// 	fakes, cleanup := fakexds.StartServer(t)
-// 	return fakes.Address, fakes, cleanup
-// }
-
 func (s) TestXdsClientResponseHandling(t *testing.T) {
 	for _, test := range []*testConfig{
 		{
