@@ -95,7 +95,7 @@ func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
 }
 
 func validateCluster(cluster *xdspb.Cluster) (CDSUpdate, error) {
-	emptyUpdate := CDSUpdate{ServiceName: "", DoLRS: false}
+	emptyUpdate := CDSUpdate{ServiceName: "", EnableLRS: false}
 	switch {
 	case cluster.GetType() != xdspb.Cluster_EDS:
 		return emptyUpdate, fmt.Errorf("xds: unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
@@ -107,6 +107,6 @@ func validateCluster(cluster *xdspb.Cluster) (CDSUpdate, error) {
 
 	return CDSUpdate{
 		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
-		DoLRS:       cluster.GetLrsServer().GetSelf() != nil,
+		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
 	}, nil
 }

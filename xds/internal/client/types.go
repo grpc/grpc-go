@@ -92,8 +92,8 @@ type CDSUpdate struct {
 	// ServiceName is the service name corresponding to the clusterName which
 	// is being watched for through CDS.
 	ServiceName string
-	// DoLRS indicates whether or not load should be reported through LRS.
-	DoLRS bool
+	// EnableLRS indicates whether or not load should be reported through LRS.
+	EnableLRS bool
 }
 type cdsCallback func(CDSUpdate, error)
 

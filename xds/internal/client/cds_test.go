@@ -51,7 +51,7 @@ func (v2c *v2Client) cloneCDSCacheForTesting() map[string]CDSUpdate {
 }
 
 func TestValidateCluster(t *testing.T) {
-	emptyUpdate := CDSUpdate{ServiceName: "", DoLRS: false}
+	emptyUpdate := CDSUpdate{ServiceName: "", EnableLRS: false}
 	tests := []struct {
 		name       string
 		cluster    *xdspb.Cluster
@@ -138,12 +138,12 @@ func TestValidateCluster(t *testing.T) {
 				},
 				LbPolicy: xdspb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: CDSUpdate{ServiceName: serviceName1, DoLRS: false},
+			wantUpdate: CDSUpdate{ServiceName: serviceName1, EnableLRS: false},
 		},
 		{
 			name:       "happiest-case",
 			cluster:    goodCluster1,
-			wantUpdate: CDSUpdate{ServiceName: serviceName1, DoLRS: true},
+			wantUpdate: CDSUpdate{ServiceName: serviceName1, EnableLRS: true},
 		},
 	}
 
@@ -217,7 +217,7 @@ func TestCDSHandleResponse(t *testing.T) {
 			name:          "one-good-cluster",
 			cdsResponse:   goodCDSResponse1,
 			wantErr:       false,
-			wantUpdate:    &CDSUpdate{ServiceName: serviceName1, DoLRS: true},
+			wantUpdate:    &CDSUpdate{ServiceName: serviceName1, EnableLRS: true},
 			wantUpdateErr: false,
 		},
 	}
