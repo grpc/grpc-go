@@ -251,9 +251,17 @@ func (d *dnsResolver) lookupSRV() []resolver.Address {
 func (d *dnsResolver) lookupTXT() *serviceconfig.ParseResult {
 	ss, err := d.resolver.LookupTXT(d.ctx, txtPrefix+d.host)
 	if err != nil {
-		err = fmt.Errorf("error from DNS TXT record lookup: %v", err)
-		grpclog.Infoln("grpc:", err)
-		return &serviceconfig.ParseResult{Err: err}
+		grpclog.Infoln("grpc: error from DNS TXT record lookup:", err)
+		// The lookup is only considered a failure if it's not a NotFound. If
+		// the host is NotFound, the lookup is successful, it's just an empty
+		// service config.
+		//
+		// The other error reasons can be timeout, which is considered an
+		// service config error.
+		if dnsErr, ok := err.(*net.DNSError); ok && !dnsErr.IsNotFound {
+			return &serviceconfig.ParseResult{Err: fmt.Errorf("error from DNS TXT record lookup: %v", err)}
+		}
+		return nil
 	}
 	var res string
 	for _, s := range ss {

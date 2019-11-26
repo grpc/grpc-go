@@ -25,10 +25,12 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -68,14 +70,8 @@ func (t *testClientConn) getState() (resolver.State, int) {
 	return t.state, t.updateStateCalls
 }
 
-func scFromState(s resolver.State) string {
-	if s.ServiceConfig != nil {
-		if s.ServiceConfig.Err != nil {
-			return ""
-		}
-		return s.ServiceConfig.Config.(unparsedServiceConfig).config
-	}
-	return ""
+func scFromState(s resolver.State) *serviceconfig.ParseResult {
+	return s.ServiceConfig
 }
 
 type unparsedServiceConfig struct {
@@ -590,11 +586,20 @@ var scLookupTbl = map[string]string{
 	"foo.bar.com":          scs[0],
 	"srv.ipv4.single.fake": scs[1],
 	"srv.ipv4.multi.fake":  scs[2],
+	"srv.ipv6.single.fake": canaryingSC(scfs[3]), // Value is "".
+	"srv.ipv6.multi.fake":  canaryingSC(scfs[3]), // Value is "".
 }
 
 // generateSC returns a service config string in JSON format for the input name.
-func generateSC(name string) string {
-	return scLookupTbl[name]
+//
+// It returns nil if name is not found.
+func generateSC(name string) *serviceconfig.ParseResult {
+	if sc, ok := scLookupTbl[name]; ok {
+		return &serviceconfig.ParseResult{
+			Config: unparsedServiceConfig{config: sc},
+		}
+	}
+	return nil
 }
 
 // generateSCF generates a slice of strings (aggregately representing a single
@@ -629,13 +634,36 @@ var txtLookupTbl = struct {
 	},
 }
 
+// The host that lookupTXT fails with timeout error.
+const (
+	testHostTXTFailure = "test.host.fails.txt"
+	txtTimeoutErrMsg   = "txt lookup timeout-ed"
+)
+
 func txtLookup(host string) ([]string, error) {
 	txtLookupTbl.Lock()
 	defer txtLookupTbl.Unlock()
 	if scs, cnt := txtLookupTbl.tbl[host]; cnt {
 		return scs, nil
 	}
-	return nil, fmt.Errorf("failed to lookup TXT:%s resolution in txtLookupTbl", host)
+	if host == txtPrefix+testHostTXTFailure {
+		return nil, &net.DNSError{
+			Err:         txtTimeoutErrMsg,
+			Name:        host,
+			Server:      "some.dns.server",
+			IsTimeout:   true,
+			IsTemporary: false,
+			IsNotFound:  false,
+		}
+	}
+	return nil, &net.DNSError{
+		Err:         "an error caused by host not found",
+		Name:        host,
+		Server:      "some.dns.server",
+		IsTimeout:   false,
+		IsTemporary: false,
+		IsNotFound:  true,
+	}
 }
 
 func TestResolve(t *testing.T) {
@@ -650,7 +678,7 @@ func testDNSResolver(t *testing.T) {
 	tests := []struct {
 		target   string
 		addrWant []resolver.Address
-		scWant   string
+		scWant   *serviceconfig.ParseResult
 	}{
 		{
 			"foo.bar.com",
@@ -682,35 +710,57 @@ func testDNSResolver(t *testing.T) {
 			nil,
 			generateSC("srv.ipv6.multi.fake"),
 		},
+		{
+			// If host is not found, the service config should be nil, not an
+			// error.
+			"srv.ipv6.multi.notfound",
+			nil,
+			nil,
+		},
+		{
+			// If lookupTXT failed because of timeout, the service config should
+			// be an error.
+			testHostTXTFailure,
+			nil,
+			&serviceconfig.ParseResult{Err: nil},
+		},
 	}
 
 	for _, a := range tests {
-		b := NewBuilder()
-		cc := &testClientConn{target: a.target}
-		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{})
-		if err != nil {
-			t.Fatalf("%v\n", err)
-		}
-		var state resolver.State
-		var cnt int
-		for i := 0; i < 2000; i++ {
-			state, cnt = cc.getState()
-			if cnt > 0 {
-				break
+		t.Run(a.target, func(t *testing.T) {
+			b := NewBuilder()
+			cc := &testClientConn{target: a.target}
+			r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{})
+			if err != nil {
+				t.Fatalf("%v\n", err)
 			}
-			time.Sleep(time.Millisecond)
-		}
-		if cnt == 0 {
-			t.Fatalf("UpdateState not called after 2s; aborting")
-		}
-		if !reflect.DeepEqual(a.addrWant, state.Addresses) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrWant)
-		}
-		sc := scFromState(state)
-		if a.scWant != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
-		}
-		r.Close()
+			defer r.Close()
+			var state resolver.State
+			var cnt int
+			for i := 0; i < 2000; i++ {
+				state, cnt = cc.getState()
+				if cnt > 0 {
+					break
+				}
+				time.Sleep(time.Millisecond)
+			}
+			if cnt == 0 {
+				t.Fatalf("UpdateState not called after 2s; aborting")
+			}
+			if !reflect.DeepEqual(a.addrWant, state.Addresses) {
+				t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrWant)
+			}
+			sc := scFromState(state)
+			if a.target == testHostTXTFailure {
+				if sc == nil || !strings.Contains(sc.Err.Error(), txtTimeoutErrMsg) {
+					t.Errorf("Resolved service config of target: %q = %+v, want error with %q\n", a.target, sc, txtTimeoutErrMsg)
+				}
+				return
+			}
+			if diff := cmp.Diff(a.scWant, sc, cmp.AllowUnexported(unparsedServiceConfig{})); diff != "" {
+				t.Errorf("Resolved service config of target: %q = %+v, want %+v, diff: %s\n", a.target, sc, a.scWant, diff)
+			}
+		})
 	}
 }
 
@@ -723,7 +773,7 @@ func testDNSResolverWithSRV(t *testing.T) {
 	tests := []struct {
 		target   string
 		addrWant []resolver.Address
-		scWant   string
+		scWant   *serviceconfig.ParseResult
 	}{
 		{
 			"foo.bar.com",
@@ -789,8 +839,8 @@ func testDNSResolverWithSRV(t *testing.T) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrWant)
 		}
 		sc := scFromState(state)
-		if a.scWant != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
+		if diff := cmp.Diff(a.scWant, sc, cmp.AllowUnexported(unparsedServiceConfig{})); diff != "" {
+			t.Errorf("Resolved service config of target: %q = %+v, want %+v, diff: %s\n", a.target, sc, a.scWant, diff)
 		}
 	}
 }
@@ -821,15 +871,15 @@ func testDNSResolveNow(t *testing.T) {
 		target   string
 		addrWant []resolver.Address
 		addrNext []resolver.Address
-		scWant   string
-		scNext   string
+		scWant   *serviceconfig.ParseResult
+		scNext   *serviceconfig.ParseResult
 	}{
 		{
 			"foo.bar.com",
 			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
 			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}},
 			generateSC("foo.bar.com"),
-			`{"loadBalancingPolicy": "grpclb"}`,
+			&serviceconfig.ParseResult{Config: unparsedServiceConfig{config: `{"loadBalancingPolicy": "grpclb"}`}},
 		},
 	}
 
@@ -857,8 +907,8 @@ func testDNSResolveNow(t *testing.T) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrWant)
 		}
 		sc := scFromState(state)
-		if a.scWant != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
+		if diff := cmp.Diff(a.scWant, sc, cmp.AllowUnexported(unparsedServiceConfig{})); diff != "" {
+			t.Errorf("Resolved service config of target: %q = %+v, want %+v, diff: %s\n", a.target, sc, a.scWant, diff)
 		}
 
 		revertTbl := mutateTbl(a.target)
@@ -877,8 +927,8 @@ func testDNSResolveNow(t *testing.T) {
 		if !reflect.DeepEqual(a.addrNext, state.Addresses) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrNext)
 		}
-		if a.scNext != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scNext)
+		if diff := cmp.Diff(a.scNext, sc, cmp.AllowUnexported(unparsedServiceConfig{})); diff != "" {
+			t.Errorf("Resolved service config of target: %q = %+v, want %+v, diff: %s\n", a.target, sc, a.scNext, diff)
 		}
 		revertTbl()
 	}
@@ -977,7 +1027,7 @@ func TestDisableServiceConfig(t *testing.T) {
 	defer leakcheck.Check(t)
 	tests := []struct {
 		target               string
-		scWant               string
+		scWant               *serviceconfig.ParseResult
 		disableServiceConfig bool
 	}{
 		{
@@ -987,7 +1037,7 @@ func TestDisableServiceConfig(t *testing.T) {
 		},
 		{
 			"foo.bar.com",
-			"",
+			nil,
 			true,
 		},
 	}
@@ -1013,8 +1063,8 @@ func TestDisableServiceConfig(t *testing.T) {
 			t.Fatalf("UpdateState not called after 2s; aborting")
 		}
 		sc := scFromState(state)
-		if a.scWant != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
+		if diff := cmp.Diff(a.scWant, sc, cmp.AllowUnexported(unparsedServiceConfig{})); diff != "" {
+			t.Errorf("Resolved service config of target: %q = %+v, want %+v, diff: %s\n", a.target, sc, a.scWant, diff)
 		}
 	}
 }
