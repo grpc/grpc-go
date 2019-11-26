@@ -154,6 +154,12 @@ func (c *Client) WatchService(serviceName string, callback func(ServiceUpdate, e
 	}
 }
 
+// WatchCluster uses CDS to discover information about the provided
+// clusterName.
+func (c *Client) WatchCluster(clusterName string, cdsCb func(CDSUpdate, error)) (cancel func()) {
+	return c.v2c.watchCDS(clusterName, cdsCb)
+}
+
 // WatchEDS watches the ghost.
 func (c *Client) WatchEDS(clusterName string, edsCb func(*EDSUpdate, error)) (cancel func()) {
 	return c.v2c.watchEDS(clusterName, edsCb)

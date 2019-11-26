@@ -39,11 +39,11 @@ const (
 	serviceName2 = "bar-service"
 )
 
-func (v2c *v2Client) cloneCDSCacheForTesting() map[string]cdsUpdate {
+func (v2c *v2Client) cloneCDSCacheForTesting() map[string]CDSUpdate {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
-	cloneCache := make(map[string]cdsUpdate)
+	cloneCache := make(map[string]CDSUpdate)
 	for k, v := range v2c.cdsCache {
 		cloneCache[k] = v
 	}
@@ -51,11 +51,11 @@ func (v2c *v2Client) cloneCDSCacheForTesting() map[string]cdsUpdate {
 }
 
 func TestValidateCluster(t *testing.T) {
-	emptyUpdate := cdsUpdate{serviceName: "", doLRS: false}
+	emptyUpdate := CDSUpdate{ServiceName: "", DoLRS: false}
 	tests := []struct {
 		name       string
 		cluster    *xdspb.Cluster
-		wantUpdate cdsUpdate
+		wantUpdate CDSUpdate
 		wantErr    bool
 	}{
 		{
@@ -138,12 +138,12 @@ func TestValidateCluster(t *testing.T) {
 				},
 				LbPolicy: xdspb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: cdsUpdate{serviceName: serviceName1, doLRS: false},
+			wantUpdate: CDSUpdate{ServiceName: serviceName1, DoLRS: false},
 		},
 		{
 			name:       "happiest-case",
 			cluster:    goodCluster1,
-			wantUpdate: cdsUpdate{serviceName: serviceName1, doLRS: true},
+			wantUpdate: CDSUpdate{ServiceName: serviceName1, DoLRS: true},
 		},
 	}
 
@@ -177,7 +177,7 @@ func TestCDSHandleResponse(t *testing.T) {
 		name          string
 		cdsResponse   *xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    *cdsUpdate
+		wantUpdate    *CDSUpdate
 		wantUpdateErr bool
 	}{
 		// Badly marshaled CDS response.
@@ -201,7 +201,7 @@ func TestCDSHandleResponse(t *testing.T) {
 			name:          "no-cluster",
 			cdsResponse:   &xdspb.DiscoveryResponse{},
 			wantErr:       false,
-			wantUpdate:    &cdsUpdate{},
+			wantUpdate:    &CDSUpdate{},
 			wantUpdateErr: true,
 		},
 		// Response contains one good cluster we are not interested in.
@@ -209,7 +209,7 @@ func TestCDSHandleResponse(t *testing.T) {
 			name:          "one-uninteresting-cluster",
 			cdsResponse:   goodCDSResponse2,
 			wantErr:       false,
-			wantUpdate:    &cdsUpdate{},
+			wantUpdate:    &CDSUpdate{},
 			wantUpdateErr: true,
 		},
 		// Response contains one cluster and it is good.
@@ -217,18 +217,18 @@ func TestCDSHandleResponse(t *testing.T) {
 			name:          "one-good-cluster",
 			cdsResponse:   goodCDSResponse1,
 			wantErr:       false,
-			wantUpdate:    &cdsUpdate{serviceName: serviceName1, doLRS: true},
+			wantUpdate:    &CDSUpdate{ServiceName: serviceName1, DoLRS: true},
 			wantUpdateErr: false,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotUpdateCh := make(chan cdsUpdate, 1)
+			gotUpdateCh := make(chan CDSUpdate, 1)
 			gotUpdateErrCh := make(chan error, 1)
 
 			// Register a watcher, to trigger the v2Client to send an CDS request.
-			cancelWatch := v2c.watchCDS(clusterName1, func(u cdsUpdate, err error) {
-				t.Logf("in v2c.watchCDS callback, cdsUpdate: %+v, err: %v", u, err)
+			cancelWatch := v2c.watchCDS(clusterName1, func(u CDSUpdate, err error) {
+				t.Logf("in v2c.watchCDS callback, CDSUpdate: %+v, err: %v", u, err)
 				gotUpdateCh <- u
 				gotUpdateErrCh <- err
 			})
@@ -295,7 +295,7 @@ type cdsTestOp struct {
 	// wantOpErr specfies whether the main operation should return an error.
 	wantOpErr bool
 	// wantCDSCache is the expected rdsCache at the end of an operation.
-	wantCDSCache map[string]cdsUpdate
+	wantCDSCache map[string]CDSUpdate
 	// wantWatchCallback specifies if the watch callback should be invoked.
 	wantWatchCallback bool
 }
@@ -322,8 +322,8 @@ func testCDSCaching(t *testing.T, cdsTestOps []cdsTestOp, errCh chan error) {
 		// Register a watcher if required, and use a channel to signal the
 		// successful invocation of the callback.
 		if cdsTestOp.target != "" {
-			v2c.watchCDS(cdsTestOp.target, func(u cdsUpdate, err error) {
-				t.Logf("Received callback with cdsUpdate {%+v} and error {%v}", u, err)
+			v2c.watchCDS(cdsTestOp.target, func(u CDSUpdate, err error) {
+				t.Logf("Received callback with CDSUpdate {%+v} and error {%v}", u, err)
 				callbackCh <- struct{}{}
 			})
 			t.Logf("Registered a watcher for CDS target: %v...", cdsTestOp.target)
@@ -369,7 +369,7 @@ func TestCDSCaching(t *testing.T) {
 		{
 			target:         clusterName1,
 			responseToSend: &fakexds.Response{Resp: goodCDSResponse1},
-			wantCDSCache: map[string]cdsUpdate{
+			wantCDSCache: map[string]CDSUpdate{
 				clusterName1: {serviceName1, true},
 			},
 			wantWatchCallback: true,
@@ -378,7 +378,7 @@ func TestCDSCaching(t *testing.T) {
 		// one received in the previous response). This should be cached.
 		{
 			responseToSend: &fakexds.Response{Resp: cdsResponseWithMultipleResources},
-			wantCDSCache: map[string]cdsUpdate{
+			wantCDSCache: map[string]CDSUpdate{
 				clusterName1: {serviceName1, true},
 				clusterName2: {serviceName2, false},
 			},
@@ -389,7 +389,7 @@ func TestCDSCaching(t *testing.T) {
 		// callback to be invoked with the new serviceName.
 		{
 			target: clusterName2,
-			wantCDSCache: map[string]cdsUpdate{
+			wantCDSCache: map[string]CDSUpdate{
 				clusterName1: {serviceName1, true},
 				clusterName2: {serviceName2, false},
 			},
@@ -399,7 +399,7 @@ func TestCDSCaching(t *testing.T) {
 		{
 			responseToSend:    &fakexds.Response{Resp: &xdspb.DiscoveryResponse{TypeUrl: clusterURL}},
 			wantOpErr:         false,
-			wantCDSCache:      map[string]cdsUpdate{},
+			wantCDSCache:      map[string]CDSUpdate{},
 			wantWatchCallback: true,
 		},
 	}
@@ -438,10 +438,10 @@ func TestCDSWatchExpiryTimer(t *testing.T) {
 	t.Log("Started xds v2Client...")
 
 	cdsCallbackCh := make(chan error, 1)
-	v2c.watchCDS(clusterName1, func(u cdsUpdate, err error) {
-		t.Logf("Received callback with cdsUpdate {%+v} and error {%v}", u, err)
-		if u.serviceName != "" {
-			cdsCallbackCh <- fmt.Errorf("received serviceName %v in cdsCallback, wanted empty string", u.serviceName)
+	v2c.watchCDS(clusterName1, func(u CDSUpdate, err error) {
+		t.Logf("Received callback with CDSUpdate {%+v} and error {%v}", u, err)
+		if u.ServiceName != "" {
+			cdsCallbackCh <- fmt.Errorf("received serviceName %v in cdsCallback, wanted empty string", u.ServiceName)
 		}
 		if err == nil {
 			cdsCallbackCh <- errors.New("received nil error in cdsCallback")

@@ -74,7 +74,7 @@ type v2Client struct {
 	// unrequested resources.
 	// https://github.com/envoyproxy/envoy/blob/master/api/xds_protocol.rst#resource-hints
 	rdsCache map[string]string
-	// rdsCache maintains a mapping of {clusterName --> cdsUpdate} from
+	// rdsCache maintains a mapping of {clusterName --> CDSUpdate} from
 	// validated cluster configurations received in CDS responses. We cache all
 	// valid cluster configurations, whether or not we are interested in them
 	// when we received them (because we could become interested in them in the
@@ -83,7 +83,7 @@ type v2Client struct {
 	// resource_names field. As per the latest spec, the server should resend
 	// the response when the request changes, even if it had sent the same
 	// resource earlier (when not asked for). Protected by the above mutex.
-	cdsCache map[string]cdsUpdate
+	cdsCache map[string]CDSUpdate
 }
 
 // newV2Client creates a new v2Client initialized with the passed arguments.
@@ -95,7 +95,7 @@ func newV2Client(cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) 
 		watchCh:   buffer.NewUnbounded(),
 		watchMap:  make(map[resourceType]*watchInfo),
 		rdsCache:  make(map[string]string),
-		cdsCache:  make(map[string]cdsUpdate),
+		cdsCache:  make(map[string]CDSUpdate),
 	}
 	v2c.ctx, v2c.cancelCtx = context.WithCancel(context.Background())
 
@@ -416,7 +416,7 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 		}
 		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
 			v2c.mu.Lock()
-			wi.callback.(cdsCallback)(cdsUpdate{}, fmt.Errorf("xds: CDS target %s not found", wi.target))
+			wi.callback.(cdsCallback)(CDSUpdate{}, fmt.Errorf("xds: CDS target %s not found", wi.target))
 			v2c.mu.Unlock()
 		})
 	case edsResource:

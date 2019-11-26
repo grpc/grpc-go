@@ -57,8 +57,8 @@ func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
 		return fmt.Errorf("xds: no CDS watcher found when handling CDS response: %+v", resp)
 	}
 
-	var returnUpdate cdsUpdate
-	localCache := make(map[string]cdsUpdate)
+	var returnUpdate CDSUpdate
+	localCache := make(map[string]CDSUpdate)
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
@@ -75,8 +75,8 @@ func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
 
 		// If the Cluster message in the CDS response did not contain a
 		// serviceName, we will just use the clusterName for EDS.
-		if update.serviceName == "" {
-			update.serviceName = cluster.GetName()
+		if update.ServiceName == "" {
+			update.ServiceName = cluster.GetName()
 		}
 		localCache[cluster.GetName()] = update
 		if cluster.GetName() == wi.target[0] {
@@ -86,7 +86,7 @@ func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
 	v2c.cdsCache = localCache
 
 	var err error
-	if returnUpdate.serviceName == "" {
+	if returnUpdate.ServiceName == "" {
 		err = fmt.Errorf("xds: CDS target %s not found in received response %+v", wi.target, resp)
 	}
 	wi.stopTimer()
@@ -94,8 +94,8 @@ func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
 	return nil
 }
 
-func validateCluster(cluster *xdspb.Cluster) (cdsUpdate, error) {
-	emptyUpdate := cdsUpdate{serviceName: "", doLRS: false}
+func validateCluster(cluster *xdspb.Cluster) (CDSUpdate, error) {
+	emptyUpdate := CDSUpdate{ServiceName: "", DoLRS: false}
 	switch {
 	case cluster.GetType() != xdspb.Cluster_EDS:
 		return emptyUpdate, fmt.Errorf("xds: unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
@@ -105,8 +105,8 @@ func validateCluster(cluster *xdspb.Cluster) (cdsUpdate, error) {
 		return emptyUpdate, fmt.Errorf("xds: unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
 
-	return cdsUpdate{
-		serviceName: cluster.GetEdsClusterConfig().GetServiceName(),
-		doLRS:       cluster.GetLrsServer().GetSelf() != nil,
+	return CDSUpdate{
+		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
+		DoLRS:       cluster.GetLrsServer().GetSelf() != nil,
 	}, nil
 }
