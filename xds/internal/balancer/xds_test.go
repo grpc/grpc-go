@@ -42,6 +42,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/client/fakexds"
 )
 
 var lbABuilder = &balancerABuilder{}
@@ -378,10 +379,10 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 	// In the first iteration, an eds balancer takes over fallback balancer
 	// In the second iteration, a new xds client takes over previous one.
 	for i := 0; i < 2; i++ {
-		addr, td, _, cleanup := setupServer(t)
+		td, cleanup := fakexds.StartServer(t)
 		cleanups = append(cleanups, cleanup)
 		workingLBConfig := &XDSConfig{
-			BalancerName:   addr,
+			BalancerName:   td.Address,
 			ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
 			FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
 			EDSServiceName: testEDSClusterName,
@@ -390,7 +391,7 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 			ResolverState:  resolver.State{Addresses: addrs},
 			BalancerConfig: workingLBConfig,
 		})
-		td.sendResp(&response{resp: testEDSResp})
+		td.ResponseChan <- &fakexds.Response{Resp: testEDSResp}
 
 		var j int
 		for j = 0; j < 10; j++ {
@@ -472,13 +473,13 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 			},
 		},
 	} {
-		addr, td, _, cleanup := setupServer(t)
+		td, cleanup := fakexds.StartServer(t)
 		cleanups = append(cleanups, cleanup)
-		test.cfg.BalancerName = addr
+		test.cfg.BalancerName = td.Address
 
 		lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: test.cfg})
 		if test.responseToSend != nil {
-			td.sendResp(&response{resp: test.responseToSend})
+			td.ResponseChan <- &fakexds.Response{Resp: test.responseToSend}
 		}
 		var i int
 		for i = 0; i < 10; i++ {

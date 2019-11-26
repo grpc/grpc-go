@@ -32,6 +32,7 @@ import (
 
 	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
+	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 )
 
 // TODO: Make this a var or a field in the server if there is a need to use a
@@ -62,6 +63,8 @@ type Server struct {
 	ResponseChan chan *Response
 	// Address is the host:port on which the fake xdsServer is listening on.
 	Address string
+	// LRS is the LRS server installed.
+	LRS *LRSServer
 }
 
 // StartServer starts a fakexds.Server. The returned function should be invoked
@@ -73,14 +76,19 @@ func StartServer(t *testing.T) (*Server, func()) {
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
-
 	server := grpc.NewServer()
+
+	lrss := newLRSServer()
+	lrsgrpc.RegisterLoadReportingServiceServer(server, lrss)
+
 	fs := &Server{
 		RequestChan:  make(chan *Request, defaultChannelBufferSize),
 		ResponseChan: make(chan *Response, defaultChannelBufferSize),
 		Address:      lis.Addr().String(),
+		LRS:          lrss,
 	}
 	adsgrpc.RegisterAggregatedDiscoveryServiceServer(server, fs)
+
 	go server.Serve(lis)
 	t.Logf("Starting fake xDS server at %v...", fs.Address)
 

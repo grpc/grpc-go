@@ -19,29 +19,24 @@
 package balancer
 
 import (
-	"net"
 	"testing"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	xdsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
-	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
-	durationpb "github.com/golang/protobuf/ptypes/duration"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/status"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/client/fakexds"
 )
 
 const (
@@ -108,166 +103,64 @@ var (
 	}
 )
 
-// TODO: remove all usage of testTrafficDirector, and use fakexds server
-// instead.
-type testTrafficDirector struct {
-	reqChan  chan *request
-	respChan chan *response
-}
-
-type request struct {
-	req *xdspb.DiscoveryRequest
-	err error
-}
-
-type response struct {
-	resp *xdspb.DiscoveryResponse
-	err  error
-}
-
-func (ttd *testTrafficDirector) StreamAggregatedResources(s xdsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
-	go func() {
-		for {
-			req, err := s.Recv()
-			if err != nil {
-				ttd.reqChan <- &request{
-					req: nil,
-					err: err,
-				}
-				return
-			}
-			ttd.reqChan <- &request{
-				req: req,
-				err: nil,
-			}
-		}
-	}()
-
-	for {
-		select {
-		case resp := <-ttd.respChan:
-			if resp.err != nil {
-				return resp.err
-			}
-			if err := s.Send(resp.resp); err != nil {
-				return err
-			}
-		case <-s.Context().Done():
-			return s.Context().Err()
-		}
-	}
-}
-
-func (ttd *testTrafficDirector) DeltaAggregatedResources(xdsgrpc.AggregatedDiscoveryService_DeltaAggregatedResourcesServer) error {
-	return status.Error(codes.Unimplemented, "")
-}
-
-func (ttd *testTrafficDirector) sendResp(resp *response) {
-	ttd.respChan <- resp
-}
-
-func (ttd *testTrafficDirector) getReq() *request {
-	return <-ttd.reqChan
-}
-
-func newTestTrafficDirector() *testTrafficDirector {
-	return &testTrafficDirector{
-		reqChan:  make(chan *request, 10),
-		respChan: make(chan *response, 10),
-	}
-}
-
-type testConfig struct {
-	edsServiceName       string
-	expectedRequests     []*xdspb.DiscoveryRequest
-	responsesToSend      []*xdspb.DiscoveryResponse
-	expectedADSResponses []proto.Message
-}
-
-func setupServer(t *testing.T) (addr string, td *testTrafficDirector, lrss *lrsServer, cleanup func()) {
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("listen failed due to: %v", err)
-	}
-	svr := grpc.NewServer()
-	td = newTestTrafficDirector()
-	lrss = &lrsServer{
-		drops: make(map[string]uint64),
-		reportingInterval: &durationpb.Duration{
-			Seconds: 60 * 60, // 1 hour, each test can override this to a shorter duration.
-			Nanos:   0,
-		},
-	}
-	xdsgrpc.RegisterAggregatedDiscoveryServiceServer(svr, td)
-	lrsgrpc.RegisterLoadReportingServiceServer(svr, lrss)
-	go svr.Serve(lis)
-	return lis.Addr().String(), td, lrss, func() {
-		svr.Stop()
-		lis.Close()
-	}
-}
-
-func (s) TestXdsClientResponseHandling(t *testing.T) {
-	for _, test := range []*testConfig{
-		{
-			// Test that if clusterName is not set, dialing target is used.
-			expectedRequests: []*xdspb.DiscoveryRequest{{
-				TypeUrl:       edsType,
-				ResourceNames: []string{testServiceName}, // ResourceName is dialing target.
-				Node:          &corepb.Node{},
-			}},
-		},
-		{
-			edsServiceName: testEDSClusterName,
-			expectedRequests: []*xdspb.DiscoveryRequest{{
-				TypeUrl:       edsType,
-				ResourceNames: []string{testEDSClusterName},
-				Node:          &corepb.Node{},
-			}},
-			responsesToSend:      []*xdspb.DiscoveryResponse{testEDSResp},
-			expectedADSResponses: []proto.Message{testClusterLoadAssignment},
-		},
-	} {
-		testXdsClientResponseHandling(t, test)
-	}
-}
-
-func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
-	addr, td, _, cleanup := setupServer(t)
+func (s) TestEDSClientResponseHandling(t *testing.T) {
+	td, cleanup := fakexds.StartServer(t)
 	defer cleanup()
-	adsChan := make(chan *xdsclient.EDSUpdate, 10)
-	newADS := func(i *xdsclient.EDSUpdate) error {
-		adsChan <- i
+	edsRespChan := make(chan *xdsclient.EDSUpdate, 10)
+	newEDS := func(i *xdsclient.EDSUpdate) error {
+		edsRespChan <- i
 		return nil
 	}
-	client := newXDSClientWrapper(newADS, func() {}, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
+	client := newXDSClientWrapper(newEDS, func() {}, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
 	defer client.close()
-	client.handleUpdate(&XDSConfig{
-		BalancerName:               addr,
-		EDSServiceName:             test.edsServiceName,
-		LrsLoadReportingServerName: "",
-	}, nil)
 
-	for _, expectedReq := range test.expectedRequests {
-		req := td.getReq()
-		if req.err != nil {
-			t.Fatalf("ads RPC failed with err: %v", req.err)
+	// Test that EDS requests sent match XDSConfig.
+	for _, test := range []struct {
+		name             string
+		edsServiceName   string
+		wantResourceName string
+	}{
+		{
+			name:           "empty-edsServiceName",
+			edsServiceName: "",
+			// EDSServiceName is an empty string, user's dialing target will be
+			// set in resource names.
+			wantResourceName: testServiceName,
+		},
+		{
+			name:             "non-empty-edsServiceName",
+			edsServiceName:   testEDSClusterName,
+			wantResourceName: testEDSClusterName,
+		},
+	} {
+		client.handleUpdate(&XDSConfig{
+			BalancerName:               td.Address,
+			EDSServiceName:             test.edsServiceName,
+			LrsLoadReportingServerName: "",
+		}, nil)
+		req := <-td.RequestChan
+		if req.Err != nil {
+			t.Fatalf("EDS RPC failed with err: %v", req.Err)
 		}
-		if !proto.Equal(req.req, expectedReq) {
-			t.Fatalf("got ADS request %T, expected: %T, diff: %s", req.req, expectedReq, cmp.Diff(req.req, expectedReq, cmp.Comparer(proto.Equal)))
+		wantReq1 := &xdspb.DiscoveryRequest{
+			TypeUrl:       edsType,
+			ResourceNames: []string{test.wantResourceName},
+			Node:          &corepb.Node{},
+		}
+		if !proto.Equal(req.Req, wantReq1) {
+			t.Fatalf("%v: got EDS request %v, expected: %v, diff: %s", test.name, req.Req, wantReq1, cmp.Diff(req.Req, wantReq1, cmp.Comparer(proto.Equal)))
 		}
 	}
 
-	for i, resp := range test.responsesToSend {
-		td.sendResp(&response{resp: resp})
-		ads := <-adsChan
-		want, err := xdsclient.ParseEDSRespProto(test.expectedADSResponses[i].(*xdspb.ClusterLoadAssignment))
-		if err != nil {
-			t.Fatalf("parsing wanted EDS response failed: %v", err)
-		}
-		if !cmp.Equal(ads, want) {
-			t.Fatalf("received unexpected ads response, got %v, want %v", ads, test.expectedADSResponses[i])
-		}
+	// Make sure that the responses from the stream are also handled.
+	td.ResponseChan <- &fakexds.Response{Resp: testEDSResp}
+	gotResp := <-edsRespChan
+	want, err := xdsclient.ParseEDSRespProto(testClusterLoadAssignment)
+	if err != nil {
+		t.Fatalf("parsing wanted EDS response failed: %v", err)
+	}
+	if !cmp.Equal(gotResp, want) {
+		t.Fatalf("received unexpected EDS response, got %v, want %v", gotResp, want)
 	}
 }
 
@@ -276,10 +169,10 @@ func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 //
 // And also that when xds_client in attributes is updated, the new one will be
 // used, and watch will be restarted.
-func (s) TestXdsClientInAttributes(t *testing.T) {
-	adsChan := make(chan *xdsclient.EDSUpdate, 10)
-	newADS := func(i *xdsclient.EDSUpdate) error {
-		adsChan <- i
+func (s) TestEDSClientInAttributes(t *testing.T) {
+	edsRespChan := make(chan *xdsclient.EDSUpdate, 10)
+	newEDS := func(i *xdsclient.EDSUpdate) error {
+		edsRespChan <- i
 		return nil
 	}
 
@@ -290,12 +183,12 @@ func (s) TestXdsClientInAttributes(t *testing.T) {
 	}
 	defer func() { xdsclientNew = oldxdsclientNew }()
 
-	addr, td, _, cleanup := setupServer(t)
+	td, cleanup := fakexds.StartServer(t)
 	defer cleanup()
 	// Create a client to be passed in attributes.
 	c, _ := oldxdsclientNew(xdsclient.Options{
 		Config: bootstrap.Config{
-			BalancerName: addr,
+			BalancerName: td.Address,
 			Creds:        grpc.WithInsecure(),
 			NodeProto:    &corepb.Node{},
 		},
@@ -304,7 +197,7 @@ func (s) TestXdsClientInAttributes(t *testing.T) {
 	// from attributes).
 	defer c.Close()
 
-	client := newXDSClientWrapper(newADS, func() {}, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
+	client := newXDSClientWrapper(newEDS, func() {}, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
 	defer client.close()
 
 	client.handleUpdate(
@@ -319,20 +212,20 @@ func (s) TestXdsClientInAttributes(t *testing.T) {
 	}
 
 	// Make sure the requests are sent to the correct td.
-	req := td.getReq()
-	if req.err != nil {
-		t.Fatalf("ads RPC failed with err: %v", req.err)
+	req := <-td.RequestChan
+	if req.Err != nil {
+		t.Fatalf("EDS RPC failed with err: %v", req.Err)
 	}
-	if !proto.Equal(req.req, expectedReq) {
-		t.Fatalf("got ADS request %T, expected: %T, diff: %s", req.req, expectedReq, cmp.Diff(req.req, expectedReq, cmp.Comparer(proto.Equal)))
+	if !proto.Equal(req.Req, expectedReq) {
+		t.Fatalf("got EDS request %T, expected: %T, diff: %s", req.Req, expectedReq, cmp.Diff(req.Req, expectedReq, cmp.Comparer(proto.Equal)))
 	}
 
-	addr2, td2, _, cleanup2 := setupServer(t)
+	td2, cleanup2 := fakexds.StartServer(t)
 	defer cleanup2()
 	// Create a client to be passed in attributes.
 	c2, _ := oldxdsclientNew(xdsclient.Options{
 		Config: bootstrap.Config{
-			BalancerName: addr2,
+			BalancerName: td2.Address,
 			Creds:        grpc.WithInsecure(),
 			NodeProto:    &corepb.Node{},
 		},
@@ -356,21 +249,21 @@ func (s) TestXdsClientInAttributes(t *testing.T) {
 	}
 
 	// Make sure the requests are sent to the correct td.
-	req2 := td2.getReq()
-	if req.err != nil {
-		t.Fatalf("ads RPC failed with err: %v", req.err)
+	req2 := <-td2.RequestChan
+	if req.Err != nil {
+		t.Fatalf("EDS RPC failed with err: %v", req.Err)
 	}
-	if !proto.Equal(req2.req, expectedReq2) {
-		t.Fatalf("got ADS request %T, expected: %T, diff: %s", req2.req, expectedReq, cmp.Diff(req2.req, expectedReq2, cmp.Comparer(proto.Equal)))
+	if !proto.Equal(req2.Req, expectedReq2) {
+		t.Fatalf("got EDS request %T, expected: %T, diff: %s", req2.Req, expectedReq, cmp.Diff(req2.Req, expectedReq2, cmp.Comparer(proto.Equal)))
 	}
 }
 
 // Test that when edsServiceName from service config is updated, the new one
 // will be watched.
 func (s) TestEDSServiceNameUpdate(t *testing.T) {
-	adsChan := make(chan *xdsclient.EDSUpdate, 10)
-	newADS := func(i *xdsclient.EDSUpdate) error {
-		adsChan <- i
+	edsRespChan := make(chan *xdsclient.EDSUpdate, 10)
+	newEDS := func(i *xdsclient.EDSUpdate) error {
+		edsRespChan <- i
 		return nil
 	}
 
@@ -381,12 +274,12 @@ func (s) TestEDSServiceNameUpdate(t *testing.T) {
 	}
 	defer func() { xdsclientNew = oldxdsclientNew }()
 
-	addr, td, _, cleanup := setupServer(t)
+	td, cleanup := fakexds.StartServer(t)
 	defer cleanup()
 	// Create a client to be passed in attributes.
 	c, _ := oldxdsclientNew(xdsclient.Options{
 		Config: bootstrap.Config{
-			BalancerName: addr,
+			BalancerName: td.Address,
 			Creds:        grpc.WithInsecure(),
 			NodeProto:    &corepb.Node{},
 		},
@@ -395,7 +288,7 @@ func (s) TestEDSServiceNameUpdate(t *testing.T) {
 	// from attributes).
 	defer c.Close()
 
-	client := newXDSClientWrapper(newADS, func() {}, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
+	client := newXDSClientWrapper(newEDS, func() {}, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
 	defer client.close()
 
 	client.handleUpdate(
@@ -410,12 +303,12 @@ func (s) TestEDSServiceNameUpdate(t *testing.T) {
 	}
 
 	// Make sure the requests are sent to the correct td.
-	req := td.getReq()
-	if req.err != nil {
-		t.Fatalf("ads RPC failed with err: %v", req.err)
+	req := <-td.RequestChan
+	if req.Err != nil {
+		t.Fatalf("EDS RPC failed with err: %v", req.Err)
 	}
-	if !proto.Equal(req.req, expectedReq) {
-		t.Fatalf("got ADS request %T, expected: %T, diff: %s", req.req, expectedReq, cmp.Diff(req.req, expectedReq, cmp.Comparer(proto.Equal)))
+	if !proto.Equal(req.Req, expectedReq) {
+		t.Fatalf("got EDS request %T, expected: %T, diff: %s", req.Req, expectedReq, cmp.Diff(req.Req, expectedReq, cmp.Comparer(proto.Equal)))
 	}
 
 	// Update with a new edsServiceName.
@@ -433,11 +326,11 @@ func (s) TestEDSServiceNameUpdate(t *testing.T) {
 	}
 
 	// Make sure the requests are sent to the correct td.
-	req2 := td.getReq()
-	if req.err != nil {
-		t.Fatalf("ads RPC failed with err: %v", req.err)
+	req2 := <-td.RequestChan
+	if req.Err != nil {
+		t.Fatalf("EDS RPC failed with err: %v", req.Err)
 	}
-	if !proto.Equal(req2.req, expectedReq2) {
-		t.Fatalf("got ADS request %T, expected: %T, diff: %s", req2.req, expectedReq, cmp.Diff(req2.req, expectedReq2, cmp.Comparer(proto.Equal)))
+	if !proto.Equal(req2.Req, expectedReq2) {
+		t.Fatalf("got EDS request %T, expected: %T, diff: %s", req2.Req, expectedReq, cmp.Diff(req2.Req, expectedReq2, cmp.Comparer(proto.Equal)))
 	}
 }

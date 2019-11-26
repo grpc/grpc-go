@@ -19,68 +19,15 @@
 package balancer
 
 import (
-	"io"
-	"sync"
 	"testing"
 	"time"
 
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
-	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
-	"github.com/golang/protobuf/proto"
 	durationpb "github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds/internal/client/fakexds"
 )
-
-type lrsServer struct {
-	mu                sync.Mutex
-	dropTotal         uint64
-	drops             map[string]uint64
-	reportingInterval *durationpb.Duration
-}
-
-func (lrss *lrsServer) StreamLoadStats(stream lrsgrpc.LoadReportingService_StreamLoadStatsServer) error {
-	req, err := stream.Recv()
-	if err != nil {
-		return err
-	}
-	if !proto.Equal(req, &lrspb.LoadStatsRequest{
-		ClusterStats: []*endpointpb.ClusterStats{{
-			ClusterName: testEDSClusterName,
-		}},
-		Node: &corepb.Node{},
-	}) {
-		return status.Errorf(codes.FailedPrecondition, "unexpected req: %+v", req)
-	}
-	if err := stream.Send(&lrspb.LoadStatsResponse{
-		Clusters:              []string{testEDSClusterName},
-		LoadReportingInterval: lrss.reportingInterval,
-	}); err != nil {
-		return err
-	}
-
-	for {
-		req, err := stream.Recv()
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-		stats := req.ClusterStats[0]
-		lrss.mu.Lock()
-		lrss.dropTotal += stats.TotalDroppedRequests
-		for _, d := range stats.DroppedRequests {
-			lrss.drops[d.Category] += d.DroppedCount
-		}
-		lrss.mu.Unlock()
-	}
-}
 
 func (s) TestXdsLoadReporting(t *testing.T) {
 	originalNewEDSBalancer := newEDSBalancer
@@ -97,20 +44,21 @@ func (s) TestXdsLoadReporting(t *testing.T) {
 	}
 	defer lb.Close()
 
-	addr, td, lrss, cleanup := setupServer(t)
+	td, cleanup := fakexds.StartServer(t)
 	defer cleanup()
 
 	const intervalNano = 1000 * 1000 * 50
-	lrss.reportingInterval = &durationpb.Duration{
+	td.LRS.ReportingInterval = &durationpb.Duration{
 		Seconds: 0,
 		Nanos:   intervalNano,
 	}
+	td.LRS.ExpectedEDSClusterName = testEDSClusterName
 
 	cfg := &XDSConfig{
-		BalancerName: addr,
+		BalancerName: td.Address,
 	}
 	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
-	td.sendResp(&response{resp: testEDSResp})
+	td.ResponseChan <- &fakexds.Response{Resp: testEDSResp}
 	var (
 		i     int
 		edsLB *fakeEDSBalancer
@@ -140,9 +88,7 @@ func (s) TestXdsLoadReporting(t *testing.T) {
 	}
 	time.Sleep(time.Nanosecond * intervalNano * 2)
 
-	lrss.mu.Lock()
-	defer lrss.mu.Unlock()
-	if !cmp.Equal(lrss.drops, drops) {
-		t.Errorf("different: %v %v %v", lrss.drops, drops, cmp.Diff(lrss.drops, drops))
+	if got := td.LRS.GetDrops(); !cmp.Equal(got, drops) {
+		t.Errorf("different: %v %v %v", got, drops, cmp.Diff(got, drops))
 	}
 }
