@@ -27,6 +27,7 @@ import (
 	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 	"github.com/golang/protobuf/proto"
 	durationpb "github.com/golang/protobuf/ptypes/duration"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -61,13 +62,14 @@ func (lrss *LRSServer) StreamLoadStats(stream lrsgrpc.LoadReportingService_Strea
 	if err != nil {
 		return err
 	}
-	if !proto.Equal(req, &lrspb.LoadStatsRequest{
+	wantReq := &lrspb.LoadStatsRequest{
 		ClusterStats: []*endpointpb.ClusterStats{{
 			ClusterName: lrss.ExpectedEDSClusterName,
 		}},
 		Node: &corepb.Node{},
-	}) {
-		return status.Errorf(codes.FailedPrecondition, "unexpected req: %+v", req)
+	}
+	if !proto.Equal(req, wantReq) {
+		return status.Errorf(codes.FailedPrecondition, "unexpected req: %+v, want %+v, diff: %s", req, wantReq, cmp.Diff(req, wantReq, cmp.Comparer(proto.Equal)))
 	}
 	if err := stream.Send(&lrspb.LoadStatsResponse{
 		Clusters:              []string{lrss.ExpectedEDSClusterName},
