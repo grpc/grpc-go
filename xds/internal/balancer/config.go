@@ -43,9 +43,6 @@ type XDSConfig struct {
 	// LRS server to send load reports to.  If not present, load reporting
 	// will be disabled.  If set to the empty string, load reporting will
 	// be sent to the same server that we obtained CDS data from.
-	//
-	// TODO: this should be a pointer to a string, so nil means load reporting
-	// is disabled.
 	LrsLoadReportingServerName *string
 }
 
