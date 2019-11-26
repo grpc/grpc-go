@@ -86,10 +86,15 @@ type rdsUpdate struct {
 }
 type rdsCallback func(rdsUpdate, error)
 
-type cdsUpdate struct {
-	serviceName string
-	doLRS       bool
+// CDSUpdate contains information from a received CDS response, which is of
+// interest to the registered CDS watcher.
+type CDSUpdate struct {
+	// ServiceName is the service name corresponding to the clusterName which
+	// is being watched for through CDS.
+	ServiceName string
+	// EnableLRS indicates whether or not load should be reported through LRS.
+	EnableLRS bool
 }
-type cdsCallback func(cdsUpdate, error)
+type cdsCallback func(CDSUpdate, error)
 
 type edsCallback func(*EDSUpdate, error)
