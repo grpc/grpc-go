@@ -330,7 +330,10 @@ func (x *edsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 }
 
 func (x *edsBalancer) ResolverError(error) {
-	// Ignore for now
+	// TODO: Need to distinguish between connection errors and resource removed
+	// errors. For the former, we will need to handle it later on for fallback.
+	// For the latter, handle it by stopping the watch, closing sub-balancers
+	// and pickers.
 }
 
 func (x *edsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
