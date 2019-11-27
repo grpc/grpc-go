@@ -90,7 +90,7 @@ func (b *edsBalancerBuilder) Name() string {
 func (b *edsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	var cfg XDSConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal balancer config %s into xds config", string(c))
+		return nil, fmt.Errorf("unable to unmarshal balancer config %s into xds config, error: %v", string(c), err)
 	}
 	return &cfg, nil
 }

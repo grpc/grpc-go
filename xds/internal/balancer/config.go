@@ -43,10 +43,7 @@ type XDSConfig struct {
 	// LRS server to send load reports to.  If not present, load reporting
 	// will be disabled.  If set to the empty string, load reporting will
 	// be sent to the same server that we obtained CDS data from.
-	//
-	// TODO: this should be a pointer to a string, so nil means load reporting
-	// is disabled.
-	LrsLoadReportingServerName string
+	LrsLoadReportingServerName *string
 }
 
 // xdsConfigJSON is the intermediate unmarshal result of XDSConfig. ChildPolicy
@@ -57,7 +54,7 @@ type xdsConfigJSON struct {
 	ChildPolicy                []*loadBalancingConfig
 	FallbackPolicy             []*loadBalancingConfig
 	EDSServiceName             string
-	LRSLoadReportingServerName string
+	LRSLoadReportingServerName *string
 }
 
 // UnmarshalJSON parses the JSON-encoded byte slice in data and stores it in l.

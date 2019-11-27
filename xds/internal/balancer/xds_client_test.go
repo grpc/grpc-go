@@ -136,7 +136,7 @@ func (s) TestEDSClientResponseHandling(t *testing.T) {
 		client.handleUpdate(&XDSConfig{
 			BalancerName:               td.Address,
 			EDSServiceName:             test.edsServiceName,
-			LrsLoadReportingServerName: "",
+			LrsLoadReportingServerName: nil,
 		}, nil)
 		req := <-td.RequestChan
 		if req.Err != nil {
@@ -201,7 +201,7 @@ func (s) TestEDSClientInAttributes(t *testing.T) {
 	defer client.close()
 
 	client.handleUpdate(
-		&XDSConfig{EDSServiceName: testEDSClusterName, LrsLoadReportingServerName: ""},
+		&XDSConfig{EDSServiceName: testEDSClusterName, LrsLoadReportingServerName: nil},
 		attributes.New(xdsinternal.XDSClientID, c),
 	)
 
@@ -236,7 +236,7 @@ func (s) TestEDSClientInAttributes(t *testing.T) {
 
 	// Update with a new xds_client in attributes.
 	client.handleUpdate(
-		&XDSConfig{EDSServiceName: "", LrsLoadReportingServerName: ""},
+		&XDSConfig{EDSServiceName: "", LrsLoadReportingServerName: nil},
 		attributes.New(xdsinternal.XDSClientID, c2),
 	)
 
@@ -292,7 +292,7 @@ func (s) TestEDSServiceNameUpdate(t *testing.T) {
 	defer client.close()
 
 	client.handleUpdate(
-		&XDSConfig{EDSServiceName: testEDSClusterName, LrsLoadReportingServerName: ""},
+		&XDSConfig{EDSServiceName: testEDSClusterName, LrsLoadReportingServerName: nil},
 		attributes.New(xdsinternal.XDSClientID, c),
 	)
 
@@ -313,7 +313,7 @@ func (s) TestEDSServiceNameUpdate(t *testing.T) {
 
 	// Update with a new edsServiceName.
 	client.handleUpdate(
-		&XDSConfig{EDSServiceName: "", LrsLoadReportingServerName: ""},
+		&XDSConfig{EDSServiceName: "", LrsLoadReportingServerName: nil},
 		attributes.New(xdsinternal.XDSClientID, c),
 	)
 
