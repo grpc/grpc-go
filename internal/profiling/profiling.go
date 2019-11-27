@@ -34,8 +34,8 @@
 package profiling
 
 import (
-	"sync"
 	"sync/atomic"
+	"runtime"
 	"time"
 )
 
@@ -119,26 +119,59 @@ type Stat struct {
 	// connection number and the stream ID for each RPC, thereby uniquely
 	// identifying it. The underlying encoding for this is unspecified.
 	Metadata []byte
-	// A collection of Timers and a mutex for append operations on the slice.
-	mu     sync.Mutex
-	Timers []Timer
+	// We use cap and len instead of regular appends to allow lock-free and
+	// concurrency-safe access to the slice. Note that len(Timers) = cap(Timers)
+	// = timerCap at the completion of any given operation; however, since we
+	// can't access len(Timers) and cap(Timers) atomically, we need a timerCap to
+	// keep bookkeeping.
+	timerCap uint32
+	TimerLen uint32
+	Timers   []Timer
 }
 
-// A power of two that's large enough to hold all timers within an average RPC
-// request (defined to be a unary request) without any reallocation. A typical
-// unary RPC creates 80-100 timers for various things. While this number is
-// purely anecdotal and may change in the future as the resolution of profiling
-// increases or decreases, it serves as a good estimate for what the initial
-// allocation size should be.
-const defaultStatAllocatedTimers int32 = 128
+// An exponent of two that's large enough to hold all timers within an average
+// RPC request (defined to be a unary request) without any reallocation. A
+// typical unary RPC creates slightly under 60 timers per RPC. While this
+// number is purely anecdotal and may change in the future as the resolution of
+// profiling increases or decreases, it serves as a good estimate for what the
+// initial allocation size should be.
+const defaultStatAllocatedTimers uint32 = 64
 
 // NewStat creates and returns a new Stat object.
 func NewStat(statTag string) *Stat {
 	return &Stat{
-		StatTag: statTag,
-		Timers:  make([]Timer, 0, defaultStatAllocatedTimers),
+		StatTag:  statTag,
+		Timers:   make([]Timer, defaultStatAllocatedTimers),
+		timerCap: defaultStatAllocatedTimers,
 	}
 }
+
+// getIndex reserves an index on Timers to be used by the caller. Each index is
+// reserved exactly once. If there is no space left in the backing array, it is
+// resized in a lock-free manner.
+func (stat *Stat) getIndex() uint32 {
+	index := atomic.AddUint32(&stat.TimerLen, 1) - 1
+	for {
+		capacity := atomic.LoadUint32(&stat.timerCap)
+		if index < capacity {
+			break
+		} else if index == capacity {
+			// Only one call will do this as only one call will see index = capacity.
+			newTimers := make([]Timer, 2*capacity)
+			copy(newTimers[:capacity], stat.Timers[:capacity])
+			stat.Timers = newTimers
+			atomic.StoreUint32(&stat.timerCap, uint32(cap(stat.Timers)))
+			break
+		} else {
+			// Somebody else is resizing this array for us. Yield and retry later.
+			runtime.Gosched()
+			capacity = atomic.LoadUint32(&stat.timerCap)
+			continue
+		}
+	}
+	return index
+}
+
 
 // NewTimer creates a Timer object within the given stat if stat is non-nil.
 // The value passed in timerTag will be attached to the newly created Timer.
@@ -154,20 +187,12 @@ func NewStat(statTag string) *Stat {
 // new timer every time. Instead a slice of timers large enough to hold most
 // data is created and elements from this slice are used. This should put less
 // pressure on the GC too.
-func (stat *Stat) NewTimer(timerTag string) int {
+func (stat *Stat) NewTimer(timerTag string) uint32 {
 	if stat == nil {
 		return 0
 	}
 
-	// TODO(adtac): Make this lock-free? We don't expect much contention on
-	// this, so I don't predict a significant improvement in performance. Using
-	// a lock-free, concurrent queue will require us to write our own
-	// reallocation and copy, which is probably unnecessary code complexity if
-	// the improvement isn't significant.
-	stat.mu.Lock()
-	stat.Timers = append(stat.Timers, Timer{})
-	index := len(stat.Timers) - 1
-	stat.mu.Unlock()
+	index := stat.getIndex()
 	stat.Timers[index].TimerTag = timerTag
 	stat.Timers[index].GoID = goid()
 	stat.Timers[index].Begin = time.Now() // do last to capture the actual timer duration more accurately.
@@ -175,36 +200,31 @@ func (stat *Stat) NewTimer(timerTag string) int {
 }
 
 // Egress marks the completion of a given timer within a stat.
-func (stat *Stat) Egress(index int) {
+func (stat *Stat) Egress(index uint32) {
 	if stat == nil {
 		return
 	}
 
-	// Do first to capture the actual timer duration more accurately (but not
-	// before the stat == nil check; we don't want to affect performance when
-	// profiling is disabled).
+	// Do time.Now() first to capture the actual timer duration more accurately
+	// (but not before the stat == nil check; we don't want to affect performance
+	// when profiling is disabled).
 	t := time.Now()
-
-	stat.mu.Lock()
-	if index < len(stat.Timers) {
+	if index < atomic.LoadUint32(&stat.TimerLen) {
 		stat.Timers[index].End = t
 	}
-	stat.mu.Unlock()
 }
 
 // AppendTimer appends a given Timer object to the internal slice of timers. A
 // deep copy of the timer is made (i.e. no reference is retained to this
 // pointer) and the user is expected to lose their reference to the timer to
 // allow the Timer object to be garbage collected.
-func (stat *Stat) AppendTimer(timer *Timer) int {
+func (stat *Stat) AppendTimer(timer *Timer) uint32 {
 	if stat == nil || timer == nil {
 		return 0
 	}
 
-	stat.mu.Lock()
-	stat.Timers = append(stat.Timers, *timer)
-	index := len(stat.Timers) - 1
-	stat.mu.Unlock()
+	index := stat.getIndex()
+	stat.Timers[index] = *timer
 	return index
 }
 
