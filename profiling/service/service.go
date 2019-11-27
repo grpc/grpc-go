@@ -104,7 +104,7 @@ func statToStatProto(stat *profiling.Stat) *ppb.StatProto {
 		TimerProtos: make([]*ppb.TimerProto, 0, len(stat.Timers)),
 		Metadata:    stat.Metadata,
 	}
-	for _, t := range stat.Timers {
+	for _, t := range stat.Timers[:stat.TimerLen] {
 		statProto.TimerProtos = append(statProto.TimerProtos, timerToTimerProto(t))
 	}
 	return statProto
