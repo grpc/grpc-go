@@ -55,7 +55,13 @@ type testBinLogSink struct {
 
 func (s *testBinLogSink) Write(e *pb.GrpcLogEntry) error {
 	s.mu.Lock()
-	s.buf = append(s.buf, e)
+
+	// Write should serialize entry to newest allocated memory and send somewhere, entry can be reused after Write
+	b, _ := proto.Marshal(e)
+	se := &pb.GrpcLogEntry{}
+	proto.Unmarshal(b, se)
+
+	s.buf = append(s.buf, se)
 	s.mu.Unlock()
 	return nil
 }
