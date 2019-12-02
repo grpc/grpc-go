@@ -907,7 +907,7 @@ func getRecvBuffer() *recvBuffer {
 	return recvBufferPool.Get().(*recvBuffer)
 }
 
-func freeRecvBuffer(b *recvBuffer) () {
+func freeRecvBuffer(b *recvBuffer) {
 	if b != nil && b.cap() < maxPooledRecvBufferSize {
 		recvBufferPool.Put(b)
 	}
