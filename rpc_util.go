@@ -504,7 +504,7 @@ type parser struct {
 // No other error values or types must be returned, which also means
 // that the underlying io.Reader must not return an incompatible
 // error.
-func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byte, err error) {
+func (p *parser) recvMsg(maxReceiveMessageSize int, recvBuffer *recvBuffer) (pf payloadFormat, msg []byte, err error) {
 	if _, err := p.r.Read(p.header[:]); err != nil {
 		return 0, nil, err
 	}
@@ -521,9 +521,12 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 	if int(length) > maxReceiveMessageSize {
 		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
-	// TODO(bradfitz,zhaoq): garbage. reuse buffer after proto decoding instead
-	// of making it for each message:
-	msg = make([]byte, int(length))
+
+	if recvBuffer != nil {
+		msg = recvBuffer.getBytes(int(length))
+	} else {
+		msg = make([]byte, int(length))
+	}
 	if _, err := p.r.Read(msg); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
@@ -635,8 +638,8 @@ type payloadInfo struct {
 	uncompressedBytes []byte
 }
 
-func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor) ([]byte, error) {
-	pf, d, err := p.recvMsg(maxReceiveMessageSize)
+func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, recvBuffer *recvBuffer) ([]byte, error) {
+	pf, d, err := p.recvMsg(maxReceiveMessageSize, recvBuffer)
 	if err != nil {
 		return nil, err
 	}
@@ -703,8 +706,8 @@ func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize 
 // For the two compressor parameters, both should not be set, but if they are,
 // dc takes precedence over compressor.
 // TODO(dfawley): wrap the old compressor/decompressor using the new API?
-func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interface{}, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor) error {
-	d, err := recvAndDecompress(p, s, dc, maxReceiveMessageSize, payInfo, compressor)
+func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interface{}, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, recvBuffer *recvBuffer) error {
+	d, err := recvAndDecompress(p, s, dc, maxReceiveMessageSize, payInfo, compressor, recvBuffer)
 	if err != nil {
 		return err
 	}
@@ -867,6 +870,47 @@ type channelzData struct {
 	// lastCallStartedTime stores the timestamp that last call starts. It is of int64 type instead of
 	// time.Time since it's more costly to atomically update time.Time variable than int64 variable.
 	lastCallStartedTime int64
+}
+
+// reusable buffers for reads a complete gRPC message from the stream
+const (
+	initialRecvBufferSize   = 1024 * 4
+	maxPooledRecvBufferSize = 1024 * 1024
+)
+
+type recvBuffer struct {
+	buf []byte
+}
+
+var recvBufferPool = &sync.Pool{
+	New: func() interface{} {
+		return &recvBuffer{
+			buf: make([]byte, initialRecvBufferSize),
+		}
+	},
+}
+
+func (b *recvBuffer) getBytes(newLen int) []byte {
+	if newLen <= cap(b.buf) {
+		b.buf = b.buf[:newLen]
+	} else {
+		b.buf = make([]byte, newLen)
+	}
+	return b.buf
+}
+
+func (b *recvBuffer) cap() int {
+	return cap(b.buf)
+}
+
+func getRecvBuffer() *recvBuffer {
+	return recvBufferPool.Get().(*recvBuffer)
+}
+
+func freeRecvBuffer(b *recvBuffer) () {
+	if b != nil && b.cap() < maxPooledRecvBufferSize {
+		recvBufferPool.Put(b)
+	}
 }
 
 // The SupportPackageIsVersion variables are referenced from generated protocol

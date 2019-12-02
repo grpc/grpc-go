@@ -732,8 +732,10 @@ func (cs *clientStream) RecvMsg(m interface{}) error {
 	if cs.binlog != nil {
 		recvInfo = &payloadInfo{}
 	}
+	b := getRecvBuffer()
+	defer freeRecvBuffer(b)
 	err := cs.withRetry(func(a *csAttempt) error {
-		return a.recvMsg(m, recvInfo)
+		return a.recvMsg(m, recvInfo, b)
 	}, cs.commitAttemptLocked)
 	if cs.binlog != nil && err == nil {
 		cs.binlog.Log(&binarylog.ServerMessage{
@@ -860,7 +862,7 @@ func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte) error {
 	return nil
 }
 
-func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
+func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo, recvBuffer *recvBuffer) (err error) {
 	cs := a.cs
 	if a.statsHandler != nil && payInfo == nil {
 		payInfo = &payloadInfo{}
@@ -882,7 +884,7 @@ func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
 		// Only initialize this state once per stream.
 		a.decompSet = true
 	}
-	err = recv(a.p, cs.codec, a.s, a.dc, m, *cs.callInfo.maxReceiveMessageSize, payInfo, a.decomp)
+	err = recv(a.p, cs.codec, a.s, a.dc, m, *cs.callInfo.maxReceiveMessageSize, payInfo, a.decomp, recvBuffer)
 	if err != nil {
 		if err == io.EOF {
 			if statusErr := a.s.Status().Err(); statusErr != nil {
@@ -919,7 +921,7 @@ func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
 	}
 	// Special handling for non-server-stream rpcs.
 	// This recv expects EOF or errors, so we don't collect inPayload.
-	err = recv(a.p, cs.codec, a.s, a.dc, m, *cs.callInfo.maxReceiveMessageSize, nil, a.decomp)
+	err = recv(a.p, cs.codec, a.s, a.dc, m, *cs.callInfo.maxReceiveMessageSize, nil, a.decomp, recvBuffer)
 	if err == nil {
 		return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 	}
@@ -1193,11 +1195,13 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 }
 
 func (as *addrConnStream) RecvMsg(m interface{}) (err error) {
+	b := getRecvBuffer()
 	defer func() {
 		if err != nil || !as.desc.ServerStreams {
 			// err != nil or non-server-streaming indicates end of stream.
 			as.finish(err)
 		}
+		freeRecvBuffer(b)
 	}()
 
 	if !as.decompSet {
@@ -1216,7 +1220,7 @@ func (as *addrConnStream) RecvMsg(m interface{}) (err error) {
 		// Only initialize this state once per stream.
 		as.decompSet = true
 	}
-	err = recv(as.p, as.codec, as.s, as.dc, m, *as.callInfo.maxReceiveMessageSize, nil, as.decomp)
+	err = recv(as.p, as.codec, as.s, as.dc, m, *as.callInfo.maxReceiveMessageSize, nil, as.decomp, b)
 	if err != nil {
 		if err == io.EOF {
 			if statusErr := as.s.Status().Err(); statusErr != nil {
@@ -1237,7 +1241,7 @@ func (as *addrConnStream) RecvMsg(m interface{}) (err error) {
 
 	// Special handling for non-server-stream rpcs.
 	// This recv expects EOF or errors, so we don't collect inPayload.
-	err = recv(as.p, as.codec, as.s, as.dc, m, *as.callInfo.maxReceiveMessageSize, nil, as.decomp)
+	err = recv(as.p, as.codec, as.s, as.dc, m, *as.callInfo.maxReceiveMessageSize, nil, as.decomp, b)
 	if err == nil {
 		return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 	}
@@ -1440,6 +1444,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 }
 
 func (ss *serverStream) RecvMsg(m interface{}) (err error) {
+	b := getRecvBuffer()
 	defer func() {
 		if ss.trInfo != nil {
 			ss.mu.Lock()
@@ -1466,12 +1471,13 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 		if channelz.IsOn() && err == nil {
 			ss.t.IncrMsgRecv()
 		}
+		freeRecvBuffer(b)
 	}()
 	var payInfo *payloadInfo
 	if ss.statsHandler != nil || ss.binlog != nil {
 		payInfo = &payloadInfo{}
 	}
-	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxReceiveMessageSize, payInfo, ss.decomp); err != nil {
+	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxReceiveMessageSize, payInfo, ss.decomp, b); err != nil {
 		if err == io.EOF {
 			if ss.binlog != nil {
 				ss.binlog.Log(&binarylog.ClientHalfClose{})

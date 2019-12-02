@@ -968,7 +968,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	if sh != nil || binlog != nil {
 		payInfo = &payloadInfo{}
 	}
-	d, err := recvAndDecompress(&parser{r: stream}, stream, dc, s.opts.maxReceiveMessageSize, payInfo, decomp)
+	b := getRecvBuffer()
+	defer freeRecvBuffer(b)
+	d, err := recvAndDecompress(&parser{r: stream}, stream, dc, s.opts.maxReceiveMessageSize, payInfo, decomp, b)
 	if err != nil {
 		if st, ok := status.FromError(err); ok {
 			if e := t.WriteStatus(stream, st); e != nil {
