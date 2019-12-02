@@ -64,8 +64,23 @@ var (
 	}
 	goodLDSRequest = &xdspb.DiscoveryRequest{
 		Node:          goodNodeProto,
-		TypeUrl:       listenerURL,
+		TypeUrl:       ldsURL,
 		ResourceNames: []string{goodLDSTarget1},
+	}
+	goodRDSRequest = &xdspb.DiscoveryRequest{
+		Node:          goodNodeProto,
+		TypeUrl:       rdsURL,
+		ResourceNames: []string{goodRouteName1},
+	}
+	goodCDSRequest = &xdspb.DiscoveryRequest{
+		Node:          goodNodeProto,
+		TypeUrl:       cdsURL,
+		ResourceNames: []string{goodClusterName1},
+	}
+	goodEDSRequest = &xdspb.DiscoveryRequest{
+		Node:          goodNodeProto,
+		TypeUrl:       edsURL,
+		ResourceNames: []string{goodEDSName},
 	}
 	goodHTTPConnManager1 = &httppb.HttpConnectionManager{
 		RouteSpecifier: &httppb.HttpConnectionManager_Rds{
@@ -130,7 +145,7 @@ var (
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
-				TypeUrl: listenerURL,
+				TypeUrl: ldsURL,
 				Value:   marshaledListener1,
 			},
 		},
@@ -156,30 +171,30 @@ var (
 	goodLDSResponse1 = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: listenerURL,
+				TypeUrl: ldsURL,
 				Value:   marshaledListener1,
 			},
 		},
-		TypeUrl: listenerURL,
+		TypeUrl: ldsURL,
 	}
 	goodLDSResponse2 = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: listenerURL,
+				TypeUrl: ldsURL,
 				Value:   marshaledListener2,
 			},
 		},
-		TypeUrl: listenerURL,
+		TypeUrl: ldsURL,
 	}
-	emptyLDSResponse          = &xdspb.DiscoveryResponse{TypeUrl: listenerURL}
+	emptyLDSResponse          = &xdspb.DiscoveryResponse{TypeUrl: ldsURL}
 	badlyMarshaledLDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: listenerURL,
+				TypeUrl: ldsURL,
 				Value:   []byte{1, 2, 3, 4},
 			},
 		},
-		TypeUrl: listenerURL,
+		TypeUrl: ldsURL,
 	}
 	badResourceTypeInLDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
@@ -188,55 +203,55 @@ var (
 				Value:   marshaledConnMgr1,
 			},
 		},
-		TypeUrl: listenerURL,
+		TypeUrl: ldsURL,
 	}
 	ldsResponseWithMultipleResources = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: listenerURL,
+				TypeUrl: ldsURL,
 				Value:   marshaledListener2,
 			},
 			{
-				TypeUrl: listenerURL,
+				TypeUrl: ldsURL,
 				Value:   marshaledListener1,
 			},
 		},
-		TypeUrl: listenerURL,
+		TypeUrl: ldsURL,
 	}
 	noAPIListenerLDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: listenerURL,
+				TypeUrl: ldsURL,
 				Value:   marshaledNoAPIListener,
 			},
 		},
-		TypeUrl: listenerURL,
+		TypeUrl: ldsURL,
 	}
 	goodBadUglyLDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: listenerURL,
+				TypeUrl: ldsURL,
 				Value:   marshaledListener2,
 			},
 			{
-				TypeUrl: listenerURL,
+				TypeUrl: ldsURL,
 				Value:   marshaledListener1,
 			},
 			{
-				TypeUrl: listenerURL,
+				TypeUrl: ldsURL,
 				Value:   badlyMarshaledAPIListener2,
 			},
 		},
-		TypeUrl: listenerURL,
+		TypeUrl: ldsURL,
 	}
 	badlyMarshaledRDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: routeURL,
+				TypeUrl: rdsURL,
 				Value:   []byte{1, 2, 3, 4},
 			},
 		},
-		TypeUrl: routeURL,
+		TypeUrl: rdsURL,
 	}
 	badResourceTypeInRDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
@@ -245,7 +260,7 @@ var (
 				Value:   marshaledConnMgr1,
 			},
 		},
-		TypeUrl: routeURL,
+		TypeUrl: rdsURL,
 	}
 	emptyRouteConfig             = &xdspb.RouteConfiguration{}
 	marshaledEmptyRouteConfig, _ = proto.Marshal(emptyRouteConfig)
@@ -255,11 +270,11 @@ var (
 	noVirtualHostsInRDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: routeURL,
+				TypeUrl: rdsURL,
 				Value:   marshaledEmptyRouteConfig,
 			},
 		},
-		TypeUrl: routeURL,
+		TypeUrl: rdsURL,
 	}
 	goodRouteConfig1 = &xdspb.RouteConfiguration{
 		Name: goodRouteName1,
@@ -346,29 +361,29 @@ var (
 	goodRDSResponse1                     = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: routeURL,
+				TypeUrl: rdsURL,
 				Value:   marshaledGoodRouteConfig1,
 			},
 		},
-		TypeUrl: routeURL,
+		TypeUrl: rdsURL,
 	}
 	goodRDSResponse2 = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: routeURL,
+				TypeUrl: rdsURL,
 				Value:   marshaledGoodRouteConfig2,
 			},
 		},
-		TypeUrl: routeURL,
+		TypeUrl: rdsURL,
 	}
 	uninterestingRDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: routeURL,
+				TypeUrl: rdsURL,
 				Value:   marshaledUninterestingRouteConfig,
 			},
 		},
-		TypeUrl: routeURL,
+		TypeUrl: rdsURL,
 	}
 )
 
@@ -448,6 +463,8 @@ func TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	case <-callbackCh:
 		timer.Stop()
 	}
+	// Read the ack, so the next request is sent after stream re-creation.
+	<-fakeServer.RequestChan
 
 	fakeServer.ResponseChan <- &fakexds.Response{Err: errors.New("RPC error")}
 	t.Log("Bad LDS response pushed to fakeServer...")

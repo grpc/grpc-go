@@ -93,7 +93,11 @@ func TestNew(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := New(test.opts); (err != nil) != test.wantErr {
+			c, err := New(test.opts)
+			if err == nil {
+				defer c.Close()
+			}
+			if (err != nil) != test.wantErr {
 				t.Fatalf("New(%+v) = %v, wantErr: %v", test.opts, err, test.wantErr)
 			}
 		})
@@ -260,6 +264,7 @@ func TestWatchServiceWithClientClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
+	defer xdsClient.Close()
 	t.Log("Created an xdsClient...")
 
 	callbackCh := make(chan error, 1)

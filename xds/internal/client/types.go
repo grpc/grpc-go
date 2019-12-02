@@ -27,20 +27,10 @@ import (
 type adsStream adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient
 
 const (
-	listenerURL = "type.googleapis.com/envoy.api.v2.Listener"
-	routeURL    = "type.googleapis.com/envoy.api.v2.RouteConfiguration"
-	clusterURL  = "type.googleapis.com/envoy.api.v2.Cluster"
-	endpointURL = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
-)
-
-// resourceType is an enum to represent the different xDS resources.
-type resourceType int
-
-const (
-	ldsResource resourceType = iota
-	rdsResource
-	cdsResource
-	edsResource
+	ldsURL = "type.googleapis.com/envoy.api.v2.Listener"
+	rdsURL = "type.googleapis.com/envoy.api.v2.RouteConfiguration"
+	cdsURL = "type.googleapis.com/envoy.api.v2.Cluster"
+	edsURL = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
 )
 
 // watchState is an enum to represent the state of a watch call.
@@ -54,9 +44,10 @@ const (
 
 // watchInfo holds all the information about a watch call.
 type watchInfo struct {
-	wType       resourceType
-	target      []string
-	state       watchState
+	typeURL string
+	target  []string
+	state   watchState
+
 	callback    interface{}
 	expiryTimer *time.Timer
 }
@@ -74,6 +65,12 @@ func (wi *watchInfo) stopTimer() {
 	if wi.expiryTimer != nil {
 		wi.expiryTimer.Stop()
 	}
+}
+
+type ackInfo struct {
+	typeURL string
+	version string // Nack if version is an empty string.
+	nonce   string
 }
 
 type ldsUpdate struct {
