@@ -22,30 +22,9 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/golang/protobuf/ptypes"
-	"google.golang.org/grpc/grpclog"
-
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	"github.com/golang/protobuf/ptypes"
 )
-
-// newRDSRequest generates an RDS request proto for the provided routeName, to
-// be sent out on the wire.
-func (v2c *v2Client) newRDSRequest(routeName []string) *xdspb.DiscoveryRequest {
-	return &xdspb.DiscoveryRequest{
-		Node:          v2c.nodeProto,
-		TypeUrl:       routeURL,
-		ResourceNames: routeName,
-	}
-}
-
-// sendRDS sends an RDS request for provided routeName on the provided stream.
-func (v2c *v2Client) sendRDS(stream adsStream, routeName []string) bool {
-	if err := stream.Send(v2c.newRDSRequest(routeName)); err != nil {
-		grpclog.Warningf("xds: RDS request for resource %v failed: %v", routeName, err)
-		return false
-	}
-	return true
-}
 
 // handleRDSResponse processes an RDS response received from the xDS server. On
 // receipt of a good response, it caches validated resources and also invokes
@@ -54,12 +33,12 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
-	if v2c.watchMap[ldsResource] == nil {
+	if v2c.watchMap[ldsURL] == nil {
 		return fmt.Errorf("xds: unexpected RDS response when no LDS watcher is registered: %+v", resp)
 	}
-	target := v2c.watchMap[ldsResource].target[0]
+	target := v2c.watchMap[ldsURL].target[0]
 
-	wi := v2c.watchMap[rdsResource]
+	wi := v2c.watchMap[rdsURL]
 	if wi == nil {
 		return fmt.Errorf("xds: no RDS watcher found when handling RDS response: %+v", resp)
 	}
