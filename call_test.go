@@ -65,9 +65,12 @@ type testStreamHandler struct {
 }
 
 func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
+	b := getRecvBuffer()
+	defer freeRecvBuffer(b)
+
 	p := &parser{r: s}
 	for {
-		pf, req, err := p.recvMsg(math.MaxInt32)
+		pf, req, err := p.recvMsg(math.MaxInt32, b)
 		if err == io.EOF {
 			break
 		}

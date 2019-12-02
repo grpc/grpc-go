@@ -47,6 +47,9 @@ func (f fullReader) Read(p []byte) (int, error) {
 var _ CallOption = EmptyCallOption{} // ensure EmptyCallOption implements the interface
 
 func (s) TestSimpleParsing(t *testing.T) {
+	bb := getRecvBuffer()
+	defer freeRecvBuffer(bb)
+
 	bigMsg := bytes.Repeat([]byte{'x'}, 1<<24)
 	for _, test := range []struct {
 		// input
@@ -66,7 +69,7 @@ func (s) TestSimpleParsing(t *testing.T) {
 	} {
 		buf := fullReader{bytes.NewReader(test.p)}
 		parser := &parser{r: buf}
-		pt, b, err := parser.recvMsg(math.MaxInt32)
+		pt, b, err := parser.recvMsg(math.MaxInt32, bb)
 		if err != test.err || !bytes.Equal(b, test.b) || pt != test.pt {
 			t.Fatalf("parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, %v", test.p, pt, b, err, test.pt, test.b, test.err)
 		}
@@ -74,6 +77,9 @@ func (s) TestSimpleParsing(t *testing.T) {
 }
 
 func (s) TestMultipleParsing(t *testing.T) {
+	buf := getRecvBuffer()
+	defer freeRecvBuffer(buf)
+
 	// Set a byte stream consists of 3 messages with their headers.
 	p := []byte{0, 0, 0, 0, 1, 'a', 0, 0, 0, 0, 2, 'b', 'c', 0, 0, 0, 0, 1, 'd'}
 	b := fullReader{bytes.NewReader(p)}
@@ -88,14 +94,14 @@ func (s) TestMultipleParsing(t *testing.T) {
 		{compressionNone, []byte("d")},
 	}
 	for i, want := range wantRecvs {
-		pt, data, err := parser.recvMsg(math.MaxInt32)
+		pt, data, err := parser.recvMsg(math.MaxInt32, buf)
 		if err != nil || pt != want.pt || !reflect.DeepEqual(data, want.data) {
 			t.Fatalf("after %d calls, parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, <nil>",
 				i, p, pt, data, err, want.pt, want.data)
 		}
 	}
 
-	pt, data, err := parser.recvMsg(math.MaxInt32)
+	pt, data, err := parser.recvMsg(math.MaxInt32, buf)
 	if err != io.EOF {
 		t.Fatalf("after %d recvMsgs calls, parser{%v}.recvMsg(_) = %v, %v, %v\nwant _, _, %v",
 			len(wantRecvs), p, pt, data, err, io.EOF)
