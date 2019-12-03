@@ -339,6 +339,7 @@ func (h *altsHandshaker) processUntilDone(resp *altspb.HandshakerResp, extra []b
 		// Append extra bytes from the previous interaction with the
 		// handshaker service with the current buffer read from conn.
 		p := append(extra, buf[:n]...)
+		// From here on, p and extra point to the same slice.
 		resp, err = h.accessHandshakerService(&altspb.HandshakerReq{
 			ReqOneof: &altspb.HandshakerReq_Next{
 				Next: &altspb.NextHandshakeMessageReq{
@@ -350,11 +351,7 @@ func (h *altsHandshaker) processUntilDone(resp *altspb.HandshakerResp, extra []b
 			return nil, nil, err
 		}
 		// Set extra based on handshaker service response.
-		if n == 0 {
-			extra = nil
-		} else {
-			extra = buf[resp.GetBytesConsumed():n]
-		}
+		extra = p[resp.GetBytesConsumed():]
 	}
 }
 
