@@ -865,26 +865,26 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
-	if channelz.IsOn() {
-		s.incrCallsStarted()
-	}
 	sh := s.opts.statsHandler
-	var statsBegin *stats.Begin
-	if sh != nil {
-		beginTime := time.Now()
-		statsBegin = &stats.Begin{
-			BeginTime: beginTime,
-		}
-		sh.HandleRPC(stream.Context(), statsBegin)
-	}
-	if trInfo != nil {
-		trInfo.tr.LazyLog(&trInfo.firstLine, false)
-	}
 	if sh != nil || trInfo != nil || channelz.IsOn() {
+		if channelz.IsOn() {
+			s.incrCallsStarted()
+		}
+		var statsBegin *stats.Begin
+		if sh != nil {
+			beginTime := time.Now()
+			statsBegin = &stats.Begin{
+				BeginTime: beginTime,
+			}
+			sh.HandleRPC(stream.Context(), statsBegin)
+		}
+		if trInfo != nil {
+			trInfo.tr.LazyLog(&trInfo.firstLine, false)
+		}
 		// The deferred error handling for tracing, stats handler and channelz are
 		// combined into one function to reduce stack usage -- a defer takes ~56-64
-		// bytes on the stack, so overflowing the 2 KiB default stack may require a
-		// stack re-allocation, which is expensive.
+		// bytes on the stack, so overflowing the stack will require a stack
+		// re-allocation, which is expensive.
 		//
 		// To maintain behavior similar to separate deferred statements, statements
 		// should be executed in the reverse order. That is, tracing first, stats
