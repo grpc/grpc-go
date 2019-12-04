@@ -289,7 +289,7 @@ func setupWithWatch(t *testing.T) (*testXDSClient, *cdsBalancer, *testEDSBalance
 	xdsC := newTestXDSClient()
 	cdsB, edsB, cancel := setup()
 	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
 	}
 	if err := xdsC.waitForWatch(clusterName); err != nil {
 		t.Fatal(err)
@@ -353,7 +353,7 @@ func TestUpdateClientConnState(t *testing.T) {
 			defer cdsB.Close()
 
 			if err := cdsB.UpdateClientConnState(test.ccs); err != test.wantErr {
-				t.Fatal(err)
+				t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
 			}
 			if test.wantErr != nil {
 				// When we wanted an error and got it, we should return early.

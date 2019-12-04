@@ -18,7 +18,6 @@
 package cdsbalancer
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -72,10 +71,7 @@ type cdsBB struct{}
 
 // Build creates a new CDS balancer with the ClientConn.
 func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	ctx, cancel := context.WithCancel(context.Background())
 	b := &cdsBalancer{
-		ctx:      ctx,
-		cancel:   cancel,
 		cc:       cc,
 		bOpts:    opts,
 		updateCh: buffer.NewUnbounded(),
@@ -118,6 +114,7 @@ type xdsClientInterface interface {
 // watcher with the xdsClient, while a non-nil error causes it to cancel the
 // existing watch and propagate the error to the underlying edsBalancer.
 type ccUpdate struct {
+	client      xdsClientInterface
 	clusterName string
 	err         error
 }
@@ -138,28 +135,32 @@ type watchUpdate struct {
 	err error
 }
 
+// closeUpdate is an empty struct used to notify the run() goroutine that a
+// Close has been called on the balancer.
+type closeUpdate struct{}
+
 // cdsBalancer implements a CDS based LB policy. It instantiates an EDS based
 // LB policy to further resolve the serviceName received from CDS, into
 // localities and endpoints. Implements the balancer.Balancer interface which
 // is exposed to gRPC and implements the balancer.ClientConn interface which is
 // exposed to the edsBalancer.
 type cdsBalancer struct {
-	ctx      context.Context
-	cancel   context.CancelFunc
-	cc       balancer.ClientConn
-	bOpts    balancer.BuildOptions
-	updateCh *buffer.Unbounded
-
-	// This mutex protects fields which are accessed from the run() goroutine,
-	// and from V2Balancer implementation routines which can happen
-	// concurrently.
-	mu          sync.Mutex
+	cc          balancer.ClientConn
+	bOpts       balancer.BuildOptions
+	updateCh    *buffer.Unbounded
 	client      xdsClientInterface
 	cancelWatch func()
 	edsLB       balancer.V2Balancer
+
+	// The only thing protected by this mutex is the closed boolean. This is
+	// checked by all methods before acting on updates.
+	mu     sync.Mutex
+	closed bool
 }
 
-// run is a long-running goroutine which handles updates from gRPC.
+// run is a long-running goroutine which handles all updates from gRPC. All
+// methods which are invoked directly by gRPC or xdsClient simply push an
+// update onto a channel which is read and acted upon right here.
 //
 // 1. Good clientConn updates lead to registration of a CDS watch. Updates with
 //    error lead to cancellation of existing watch and propagation of the same
@@ -168,71 +169,84 @@ type cdsBalancer struct {
 //    underlying edsBalancer.
 // 3. Watch API updates lead to clientConn updates being invoked on the
 //    underlying edsBalancer.
+// 4. Close results in cancellation of the CDS watch and closing of the
+//    underlying edsBalancer and is the only way to exit this goroutine.
 func (b *cdsBalancer) run() {
 	for {
-		select {
-		case u := <-b.updateCh.Get():
-			b.updateCh.Load()
-			func() {
-				b.mu.Lock()
-				defer b.mu.Unlock()
-
-				switch update := u.(type) {
-				case *ccUpdate:
-					if update.clusterName != "" {
-						b.cancelWatch = b.client.WatchCluster(update.clusterName, b.handleClusterUpdate)
-						return
-					}
-					if err := update.err; err != nil {
-						if b.cancelWatch != nil {
-							b.cancelWatch()
-						}
-						if b.edsLB != nil {
-							b.edsLB.ResolverError(err)
-						}
-					}
-				case *scUpdate:
-					if b.edsLB == nil {
-						grpclog.Errorf("xds: received scUpdate {%+v} with no edsBalancer", update)
-						return
-					}
-					b.edsLB.UpdateSubConnState(update.subConn, update.state)
-				case *watchUpdate:
-					if err := update.err; err != nil {
-						if b.edsLB != nil {
-							b.edsLB.ResolverError(err)
-						}
-						return
-					}
-
-					// The first good update from the watch API leads to the
-					// instantiation of an edsBalancer. Further updates/errors are
-					// propagated to the existing edsBalancer.
-					if b.edsLB == nil {
-						b.edsLB = newEDSBalancer(b.cc, b.bOpts)
-						if b.edsLB == nil {
-							grpclog.Error("xds: failed to build edsBalancer")
-							return
-						}
-					}
-					lbCfg := &xdsbalancer.XDSConfig{EDSServiceName: update.cds.ServiceName}
-					if update.cds.EnableLRS {
-						// An empty string here indicates that the edsBalancer
-						// should use the same xDS server for load reporting as
-						// it does for EDS requests/responses.
-						lbCfg.LrsLoadReportingServerName = new(string)
-
-					}
-					ccState := balancer.ClientConnState{
-						ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, b.client)},
-						BalancerConfig: lbCfg,
-					}
-					if err := b.edsLB.UpdateClientConnState(ccState); err != nil {
-						grpclog.Errorf("xds: edsBalancer.UpdateClientConnState(%+v) returned error: %v", ccState, err)
-					}
+		u := <-b.updateCh.Get()
+		b.updateCh.Load()
+		switch update := u.(type) {
+		case *ccUpdate:
+			if update.client != nil {
+				// Since the cdsBalancer doesn't own the xdsClient object, we
+				// don't have to bother about closing the old client here, but
+				// we still need to cancel the watch on the old client.
+				if b.cancelWatch != nil {
+					b.cancelWatch()
 				}
-			}()
-		case <-b.ctx.Done():
+				b.client = update.client
+			}
+			if update.clusterName != "" {
+				b.cancelWatch = b.client.WatchCluster(update.clusterName, b.handleClusterUpdate)
+			}
+			if err := update.err; err != nil {
+				// TODO: Should we cancel the watch only on specific errors?
+				if b.cancelWatch != nil {
+					b.cancelWatch()
+				}
+				if b.edsLB != nil {
+					b.edsLB.ResolverError(err)
+				}
+			}
+		case *scUpdate:
+			if b.edsLB == nil {
+				grpclog.Errorf("xds: received scUpdate {%+v} with no edsBalancer", update)
+				break
+			}
+			b.edsLB.UpdateSubConnState(update.subConn, update.state)
+		case *watchUpdate:
+			if err := update.err; err != nil {
+				if b.edsLB != nil {
+					b.edsLB.ResolverError(err)
+				}
+				break
+			}
+
+			// The first good update from the watch API leads to the
+			// instantiation of an edsBalancer. Further updates/errors are
+			// propagated to the existing edsBalancer.
+			if b.edsLB == nil {
+				b.edsLB = newEDSBalancer(b.cc, b.bOpts)
+				if b.edsLB == nil {
+					grpclog.Error("xds: failed to build edsBalancer")
+					break
+				}
+			}
+			lbCfg := &xdsbalancer.XDSConfig{EDSServiceName: update.cds.ServiceName}
+			if update.cds.EnableLRS {
+				// An empty string here indicates that the edsBalancer
+				// should use the same xDS server for load reporting as
+				// it does for EDS requests/responses.
+				lbCfg.LrsLoadReportingServerName = new(string)
+
+			}
+			ccState := balancer.ClientConnState{
+				ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, b.client)},
+				BalancerConfig: lbCfg,
+			}
+			if err := b.edsLB.UpdateClientConnState(ccState); err != nil {
+				grpclog.Errorf("xds: edsBalancer.UpdateClientConnState(%+v) returned error: %v", ccState, err)
+			}
+		case *closeUpdate:
+			if b.cancelWatch != nil {
+				b.cancelWatch()
+				b.cancelWatch = nil
+			}
+			if b.edsLB != nil {
+				b.edsLB.Close()
+				b.edsLB = nil
+			}
+			// This is the *ONLY* point of return from this function.
 			return
 		}
 	}
@@ -279,14 +293,7 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 		grpclog.Warningf("xds: unexpected xdsClient type: %T", client)
 		return balancer.ErrBadResolverState
 	}
-
-	b.mu.Lock()
-	// Since the cdsBalancer doesn't own the xdsClient object, we don't have to
-	// bother about closing the old client here.
-	b.client = newClient
-	b.mu.Unlock()
-
-	b.updateCh.Put(&ccUpdate{clusterName: lbCfg.ClusterName})
+	b.updateCh.Put(&ccUpdate{client: newClient, clusterName: lbCfg.ClusterName})
 	return nil
 }
 
@@ -315,21 +322,16 @@ func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 // Close closes the cdsBalancer and the underlying edsBalancer.
 func (b *cdsBalancer) Close() {
 	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	b.cancel()
-	if b.cancelWatch != nil {
-		b.cancelWatch()
-		b.cancelWatch = nil
-	}
-	if b.edsLB != nil {
-		b.edsLB.Close()
-		b.edsLB = nil
-	}
+	b.closed = true
+	b.mu.Unlock()
+	b.updateCh.Put(&closeUpdate{})
 }
 
 func (b *cdsBalancer) isClosed() bool {
-	return b.ctx.Err() != nil
+	b.mu.Lock()
+	closed := b.closed
+	b.mu.Unlock()
+	return closed
 }
 
 func (b *cdsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
