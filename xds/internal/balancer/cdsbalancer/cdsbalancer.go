@@ -145,12 +145,13 @@ type closeUpdate struct{}
 // is exposed to gRPC and implements the balancer.ClientConn interface which is
 // exposed to the edsBalancer.
 type cdsBalancer struct {
-	cc          balancer.ClientConn
-	bOpts       balancer.BuildOptions
-	updateCh    *buffer.Unbounded
-	client      xdsClientInterface
-	cancelWatch func()
-	edsLB       balancer.V2Balancer
+	cc             balancer.ClientConn
+	bOpts          balancer.BuildOptions
+	updateCh       *buffer.Unbounded
+	client         xdsClientInterface
+	cancelWatch    func()
+	edsLB          balancer.V2Balancer
+	clusterToWatch string
 
 	// The only thing protected by this mutex is the closed boolean. This is
 	// checked by all methods before acting on updates.
@@ -177,6 +178,20 @@ func (b *cdsBalancer) run() {
 		b.updateCh.Load()
 		switch update := u.(type) {
 		case *ccUpdate:
+			// We first handle errors, if any, and then proceed with handling
+			// the update, only if the status quo has changed.
+			if err := update.err; err != nil {
+				// TODO: Should we cancel the watch only on specific errors?
+				if b.cancelWatch != nil {
+					b.cancelWatch()
+				}
+				if b.edsLB != nil {
+					b.edsLB.ResolverError(err)
+				}
+			}
+			if b.client == update.client && b.clusterToWatch == update.clusterName {
+				break
+			}
 			if update.client != nil {
 				// Since the cdsBalancer doesn't own the xdsClient object, we
 				// don't have to bother about closing the old client here, but
@@ -188,15 +203,7 @@ func (b *cdsBalancer) run() {
 			}
 			if update.clusterName != "" {
 				b.cancelWatch = b.client.WatchCluster(update.clusterName, b.handleClusterUpdate)
-			}
-			if err := update.err; err != nil {
-				// TODO: Should we cancel the watch only on specific errors?
-				if b.cancelWatch != nil {
-					b.cancelWatch()
-				}
-				if b.edsLB != nil {
-					b.edsLB.ResolverError(err)
-				}
+				b.clusterToWatch = update.clusterName
 			}
 		case *scUpdate:
 			if b.edsLB == nil {
