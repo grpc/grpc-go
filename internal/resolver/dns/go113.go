@@ -24,12 +24,9 @@ import "net"
 
 func init() {
 	filterError = func(err error) error {
-		if dnsErr, ok := err.(*net.DNSError); ok {
+		if dnsErr, ok := err.(*net.DNSError); ok && dnsErr.IsNotFound {
 			// The name does not exist; not an error.
-			if dnsErr.IsNotFound {
-				return nil
-			}
-			return err
+			return nil
 		}
 		return err
 	}

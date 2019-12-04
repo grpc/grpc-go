@@ -249,19 +249,16 @@ func (d *dnsResolver) lookupSRV() []resolver.Address {
 }
 
 var filterError = func(err error) error {
-	if dnsErr, ok := err.(*net.DNSError); ok {
+	if dnsErr, ok := err.(*net.DNSError); ok && !dnsErr.IsTimeout && !dnsErr.IsTemporary {
 		// Timeouts and temporary errors should be communicated to gRPC to
-		// attempt another DNS query (with backoff).
-		if dnsErr.IsTimeout || dnsErr.IsTemporary {
-			return err
-		}
+		// attempt another DNS query (with backoff).  Other errors should be
+		// suppressed (they may represent the absence of a TXT record).
 		return nil
 	}
 	return err
 }
 
 func (d *dnsResolver) lookupTXT() *serviceconfig.ParseResult {
-	fmt.Println("HI?")
 	ss, err := d.resolver.LookupTXT(d.ctx, txtPrefix+d.host)
 	if err != nil {
 		err = filterError(err)
