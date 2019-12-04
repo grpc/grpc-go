@@ -253,7 +253,8 @@ func (d *dnsResolver) lookupTXT() *serviceconfig.ParseResult {
 	if err != nil {
 		err = fmt.Errorf("error from DNS TXT record lookup: %v", err)
 		grpclog.Infoln("grpc:", err)
-		return &serviceconfig.ParseResult{Err: err}
+		// TODO: In Go 1.13, inspect err and pass it along when appropriate.
+		return &serviceconfig.ParseResult{}
 	}
 	var res string
 	for _, s := range ss {
