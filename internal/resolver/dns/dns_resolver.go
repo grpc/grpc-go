@@ -248,13 +248,29 @@ func (d *dnsResolver) lookupSRV() []resolver.Address {
 	return newAddrs
 }
 
+var filterError = func(err error) error {
+	if dnsErr, ok := err.(*net.DNSError); ok {
+		// Timeouts and temporary errors should be communicated to gRPC to
+		// attempt another DNS query (with backoff).
+		if dnsErr.IsTimeout || dnsErr.IsTemporary {
+			return err
+		}
+		return nil
+	}
+	return err
+}
+
 func (d *dnsResolver) lookupTXT() *serviceconfig.ParseResult {
+	fmt.Println("HI?")
 	ss, err := d.resolver.LookupTXT(d.ctx, txtPrefix+d.host)
 	if err != nil {
-		err = fmt.Errorf("error from DNS TXT record lookup: %v", err)
-		grpclog.Infoln("grpc:", err)
-		// TODO: In Go 1.13, inspect err and pass it along when appropriate.
-		return &serviceconfig.ParseResult{}
+		err = filterError(err)
+		if err != nil {
+			err = fmt.Errorf("error from DNS TXT record lookup: %v", err)
+			grpclog.Infoln("grpc:", err)
+			return &serviceconfig.ParseResult{Err: err}
+		}
+		return nil
 	}
 	var res string
 	for _, s := range ss {
