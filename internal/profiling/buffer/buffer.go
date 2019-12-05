@@ -22,11 +22,11 @@ package buffer
 
 import (
 	"errors"
+	"math/bits"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"unsafe"
-	"math/bits"
 )
 
 type queue struct {
@@ -144,7 +144,7 @@ func NewCircularBuffer(size uint32) (*CircularBuffer, error) {
 	}
 
 	n := numCircularBufferPairs
-	if size / numCircularBufferPairs < 8 {
+	if size/numCircularBufferPairs < 8 {
 		// If each circular buffer is going to hold less than a very small number
 		// of items (let's say 8), using multiple circular buffers is very likely
 		// wasteful. Instead, fallback to one circular buffer holding everything.
@@ -152,7 +152,7 @@ func NewCircularBuffer(size uint32) (*CircularBuffer, error) {
 	}
 
 	cb := &CircularBuffer{
-		qp: make([]*queuePair, n),
+		qp:     make([]*queuePair, n),
 		qpMask: n - 1,
 	}
 
@@ -163,7 +163,7 @@ func NewCircularBuffer(size uint32) (*CircularBuffer, error) {
 	return cb, nil
 }
 
-// Pushes an element in to the circular buffer.
+// Push pushes an element in to the circular buffer.
 func (cb *CircularBuffer) Push(x interface{}) {
 	n := atomic.AddUint32(&cb.qpn, 1) & cb.qpMask
 	q := (*queue)(atomic.LoadPointer(&cb.qp[n].q))
@@ -226,9 +226,9 @@ func dereferenceAppend(result []interface{}, arr []unsafe.Pointer, from, to uint
 	return result
 }
 
-// Allocates and returns an array of things Pushed in to the circular buffer.
-// Push order is not maintained; that is, if B was Pushed after A, drain may
-// return B at a lower index than A in the returned array.
+// Drain allocates and returns an array of things Pushed in to the circular
+// buffer. Push order is not maintained; that is, if B was Pushed after A,
+// drain may return B at a lower index than A in the returned array.
 func (cb *CircularBuffer) Drain() []interface{} {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
