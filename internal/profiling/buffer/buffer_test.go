@@ -18,7 +18,7 @@
  *
  */
 
-package profiling
+package buffer
 
 import (
 	"fmt"
@@ -75,7 +75,7 @@ func TestCircularBufferOverflow(t *testing.T) {
 	size = 1 << 10
 	cb, err := newCircularBuffer(size)
 	if err != nil {
-		t.Fatalf("error allocating circularBuffer: %v", err)
+		t.Fatalf("error allocating CircularBuffer: %v", err)
 	}
 
 	for i = 0; i < 10*size; i++ {
@@ -101,9 +101,9 @@ func TestCircularBufferConcurrent(t *testing.T) {
 		var result []interface{}
 
 		size = 1 << 6
-		cb, err := newCircularBuffer(size)
+		cb, err := NewCircularBuffer(size)
 		if err != nil {
-			t.Fatalf("error allocating circularBuffer: %v", err)
+			t.Fatalf("error allocating CircularBuffer: %v", err)
 		}
 
 		type item struct {

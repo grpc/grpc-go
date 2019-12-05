@@ -22,17 +22,17 @@
 // pointers, which are necessary to efficiently store and retrieve things into
 // and from a circular buffer. As a result, Push does not do anything and Drain
 // returns an empty slice.
-package profiling
+package buffer
 
-type circularBuffer struct{}
+type CircularBuffer struct{}
 
-func newCircularBuffer(size uint32) (*circularBuffer, error) {
+func NewCircularBuffer(size uint32) (*CircularBuffer, error) {
 	return nil, nil
 }
 
-func (cb *circularBuffer) Push(x interface{}) {
+func (cb *CircularBuffer) Push(x interface{}) {
 }
 
-func (cb *circularBuffer) Drain() []interface{} {
+func (cb *CircularBuffer) Drain() []interface{} {
 	return make([]interface{}, 0)
 }

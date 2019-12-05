@@ -18,7 +18,7 @@
  *
  */
 
-package profiling
+package buffer
 
 import (
 	"errors"
@@ -26,6 +26,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"unsafe"
+	"math/bits"
 )
 
 type queue struct {
@@ -45,14 +46,6 @@ type queue struct {
 	// After the completion of a Push operation, the written counter is
 	// incremented. Also used by drainWait to wait for all pushes to complete.
 	written uint32
-	// The Drain operation must first choose a queue to push to. Once this is
-	// done, acquired is incremented; however, between these two operations, if a
-	// Drain operation begins, its drainWait subroutine will return even though
-	// there is a pending write to the queue. If this isn't caught, data
-	// corruption might occur. To prevent this, a second check is used by Push
-	// and Drain to act as a critical section barrier (but in a lock-free way!).
-	// See comments within Push for more details.
-	drainingPostCheck uint32
 }
 
 // Allocates and returns a new *queue. size needs to be a exponent of two.
@@ -78,6 +71,10 @@ type queuePair struct {
 	q0 unsafe.Pointer
 	q1 unsafe.Pointer
 	q  unsafe.Pointer
+	// Before a queuePair is switched by a Drain operation, this is set to 1 to
+	// signal any still-running Push operations that there is a Drain in
+	// execution. This is done before the queue switch happens.
+	drainExecuting uint32
 }
 
 // Allocates and returns a new *queuePair with its internal queues allocated.
@@ -105,89 +102,95 @@ func (qp *queuePair) switchQueues() *queue {
 
 // In order to not have expensive modulo operations, we require the maximum
 // number of elements in the circular buffer (N) to be an exponent of two to
-// use a bitwise AND mask. Since a circularBuffer is a collection of queuePairs
+// use a bitwise AND mask. Since a CircularBuffer is a collection of queuePairs
 // (see below), we need to divide N; since exponents of two are only divisible
 // by other exponents of two, we use floorCPUCount number of queuePairs within
-// each circularBuffer.
+// each CircularBuffer.
 //
 // Floor of the number of CPUs (and not the ceiling) was found to the be the
 // optimal number through experiments.
 func floorCPUCount() uint32 {
-	n := uint32(runtime.NumCPU())
-	for i := uint32(1 << 31); i >= 2; i >>= 1 {
-		if n&i > 0 {
-			return i
-		}
+	floorExponent := bits.Len32(uint32(runtime.NumCPU())) - 1
+	if floorExponent < 0 {
+		floorExponent = 0
 	}
-
-	return 1
+	return 1 << uint32(floorExponent)
 }
 
 var numCircularBufferPairs = floorCPUCount()
-var numCircularBufferPairsMask = numCircularBufferPairs - 1
 
-// circularBuffer stores the Pushed elements in-memory. It uses a collection of
+// CircularBuffer stores the Pushed elements in-memory. It uses a collection of
 // queuePairs to reduce contention on the acquired and written counters within
 // each queuePair; that is, at any given time, there may be floorCPUCount()
 // Pushes happening simultaneously.
-type circularBuffer struct {
+type CircularBuffer struct {
 	mu sync.Mutex
 	qp []*queuePair
 	// qpn is an monotonically incrementing counter that's used to determine
-	// which queuePair a Push operation should to write to. This approach's
+	// which queuePair a Push operation should write to. This approach's
 	// performance was found to be better than writing to a random queue.
-	qpn uint32
+	qpn    uint32
+	qpMask uint32
 }
 
 var errInvalidCircularBufferSize = errors.New("buffer size is not an exponent of two")
 
-// Allocates a circular buffer of size size and returns a reference to the
-// struct. Only circular buffers of size 2^k are allowed (saves us from having
-// to do expensive modulo operations).
-func newCircularBuffer(size uint32) (*circularBuffer, error) {
+// NewCircularBuffer allocates a circular buffer of size size and returns a
+// reference to the struct. Only circular buffers of size 2^k are allowed
+// (saves us from having to do expensive modulo operations).
+func NewCircularBuffer(size uint32) (*CircularBuffer, error) {
 	if size&(size-1) != 0 {
 		return nil, errInvalidCircularBufferSize
 	}
 
-	cb := &circularBuffer{
-		qp: make([]*queuePair, numCircularBufferPairs),
+	n := numCircularBufferPairs
+	if size / numCircularBufferPairs < 8 {
+		// If each circular buffer is going to hold less than a very small number
+		// of items (let's say 8), using multiple circular buffers is very likely
+		// wasteful. Instead, fallback to one circular buffer holding everything.
+		n = 1
 	}
 
-	for i := uint32(0); i < numCircularBufferPairs; i++ {
-		cb.qp[i] = newQueuePair(size / numCircularBufferPairs)
+	cb := &CircularBuffer{
+		qp: make([]*queuePair, n),
+		qpMask: n - 1,
+	}
+
+	for i := uint32(0); i < n; i++ {
+		cb.qp[i] = newQueuePair(size / n)
 	}
 
 	return cb, nil
 }
 
 // Pushes an element in to the circular buffer.
-func (cb *circularBuffer) Push(x interface{}) {
-	n := atomic.AddUint32(&cb.qpn, 1) & numCircularBufferPairsMask
-reloadq:
+func (cb *CircularBuffer) Push(x interface{}) {
+	n := atomic.AddUint32(&cb.qpn, 1) & cb.qpMask
 	q := (*queue)(atomic.LoadPointer(&cb.qp[n].q))
 
 	acquired := atomic.AddUint32(&q.acquired, 1) - 1
 
-	if atomic.LoadUint32(&q.drainingPostCheck) > 0 {
-		// Between our q load and acquired increment, a drainer began execution
-		// and switched the queues. This is NOT okay because we don't know if
-		// acquired was incremented before or after the drainer's check for
-		// acquired == writer. And we can't find which without expensive
-		// operations, which we'd like to avoid. If the acquired increment was
-		// after, we cannot write to this buffer as the drainer's collection may
-		// have already started; we must write to the other queue.
-		//
-		// Reverse our increment and retry. Since there's no SubUint32 in atomic,
-		// ^uint32(0) is used to denote -1.
-		atomic.AddUint32(&q.acquired, ^uint32(0))
-		goto reloadq
+	// If drainExecuting is zero, it means that we have incremented acquired
+	// (but not written), so we can guarantee that the Drain operation has not
+	// completed its drainWait. Therefore, it is safe to proceed with the Push
+	// operation on this queue. Otherwise, if drainExecuting is non-zero, it
+	// means that a Drain operation has begun execution, but we don't know how
+	// far along the process it is. If it is past the drainWait check, it is not
+	// safe to proceed with the Push operation. We choose to drop this sample
+	// entirely instead of retrying, as retrying may potentially send the Push
+	// operation into a spin loop (we want to guarantee completion of the Push
+	// operation within a finite time). Before exiting, we increment written so
+	// that any existing drainWaits can proceed.
+	if atomic.LoadUint32(&cb.qp[n].drainExecuting) != 0 {
+		atomic.AddUint32(&q.written, 1)
+		return
 	}
 
 	// At this point, we're definitely writing to the right queue. That is, one
 	// of the following is true:
-	//   1. No drainer is in execution.
-	//   2. A drainer is in execution and it is waiting at the acquired ==
-	//      written barrier.
+	//   1. No drainer is in execution on this queue.
+	//   2. A drainer is in execution on this queue and it is waiting at the
+	//      acquired == written barrier.
 	//
 	// Let's say two Pushes A and B happen on the same queue. Say A and B are
 	// q.size apart; i.e. they get the same index. That is,
@@ -226,33 +229,28 @@ func dereferenceAppend(result []interface{}, arr []unsafe.Pointer, from, to uint
 // Allocates and returns an array of things Pushed in to the circular buffer.
 // Push order is not maintained; that is, if B was Pushed after A, drain may
 // return B at a lower index than A in the returned array.
-func (cb *circularBuffer) Drain() []interface{} {
+func (cb *CircularBuffer) Drain() []interface{} {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
-	qs := make([]*queue, 0)
-	for i := uint32(0); i < numCircularBufferPairs; i++ {
-		qs = append(qs, cb.qp[i].switchQueues())
+	qs := make([]*queue, len(cb.qp))
+	for i := 0; i < len(cb.qp); i++ {
+		atomic.StoreUint32(&cb.qp[i].drainExecuting, 1)
+		qs[i] = cb.qp[i].switchQueues()
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(int(numCircularBufferPairs))
-	for i := uint32(0); i < numCircularBufferPairs; i++ {
-		go func(qi uint32) {
+	wg.Add(int(len(cb.qp)))
+	for i := 0; i < len(cb.qp); i++ {
+		go func(qi int) {
 			qs[qi].drainWait()
-
-			// Even though we have mutual exclusion across drainers, this alone
-			// should be done with atomics because this is shared memory that is also
-			// read by Push operations.
-			atomic.StoreUint32(&qs[qi].drainingPostCheck, 1)
-
 			wg.Done()
 		}(i)
 	}
 	wg.Wait()
 
 	result := make([]interface{}, 0)
-	for i := uint32(0); i < numCircularBufferPairs; i++ {
+	for i := 0; i < len(cb.qp); i++ {
 		if qs[i].acquired < qs[i].size {
 			result = dereferenceAppend(result, qs[i].arr, 0, qs[i].acquired)
 		} else {
@@ -260,10 +258,10 @@ func (cb *circularBuffer) Drain() []interface{} {
 		}
 	}
 
-	for i := uint32(0); i < numCircularBufferPairs; i++ {
-		qs[i].acquired = 0
-		qs[i].written = 0
-		qs[i].drainingPostCheck = 0
+	for i := 0; i < len(cb.qp); i++ {
+		atomic.StoreUint32(&qs[i].acquired, 0)
+		atomic.StoreUint32(&qs[i].written, 0)
+		atomic.StoreUint32(&cb.qp[i].drainExecuting, 0)
 	}
 
 	return result

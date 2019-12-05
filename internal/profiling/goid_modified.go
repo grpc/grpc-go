@@ -52,10 +52,10 @@ import (
 //    special Go code that's both architecture-specific and go version-specific
 //    (a quadratic number of variants to maintain).
 //
-// 4. This approach, which requires a simple two-line modification [1] to the Go
-//    runtime to expose the current goroutine's ID. This is the chosen approach
-//    and it takes about ~2 ns/op, which is negligible in the face of the tens
-//    of microseconds that grpc takes to complete a RPC request.
+// 4. This approach, which requires a simple modification [1] to the Go runtime
+//    to expose the current goroutine's ID. This is the chosen approach and it
+//    takes about ~2 ns/op, which is negligible in the face of the tens of
+//    microseconds that grpc takes to complete a RPC request.
 //
 // [1] To make the goroutine ID visible to Go programs apply the following
 // change to the runtime2.go file in your Go runtime installation:
