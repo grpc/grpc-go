@@ -26,10 +26,12 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/internal/profiling/buffer"
 )
 
 func TestProfiling(t *testing.T) {
-	cb, err := newCircularBuffer(128)
+	cb, err := buffer.NewCircularBuffer(128)
 	if err != nil {
 		t.Fatalf("error creating circular buffer: %v", err)
 	}

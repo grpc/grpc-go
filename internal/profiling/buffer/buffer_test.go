@@ -32,7 +32,7 @@ func TestCircularBufferSerial(t *testing.T) {
 	var result []interface{}
 
 	size = 1 << 15
-	cb, err := newCircularBuffer(size)
+	cb, err := NewCircularBuffer(size)
 	if err != nil {
 		t.Fatalf("error allocating CircularBuffer: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestCircularBufferOverflow(t *testing.T) {
 	var result []interface{}
 
 	size = 1 << 10
-	cb, err := newCircularBuffer(size)
+	cb, err := NewCircularBuffer(size)
 	if err != nil {
 		t.Fatalf("error allocating CircularBuffer: %v", err)
 	}
@@ -155,7 +155,7 @@ func BenchmarkCircularBuffer(b *testing.B) {
 	for size := 1 << 16; size <= 1<<20; size <<= 1 {
 		for routines := 1; routines <= 1<<8; routines <<= 1 {
 			b.Run(fmt.Sprintf("goroutines:%d/size:%d", routines, size), func(b *testing.B) {
-				cb, err := newCircularBuffer(uint32(size))
+				cb, err := NewCircularBuffer(uint32(size))
 				if err != nil {
 					b.Fatalf("error allocating CircularBuffer: %v", err)
 				}
