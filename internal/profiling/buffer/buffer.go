@@ -71,10 +71,6 @@ type queuePair struct {
 	q0 unsafe.Pointer
 	q1 unsafe.Pointer
 	q  unsafe.Pointer
-	// Before a queuePair is switched by a Drain operation, this is set to 1 to
-	// signal any still-running Push operations that there is a Drain in
-	// execution. This is done before the queue switch happens.
-	drainExecuting uint32
 }
 
 // Allocates and returns a new *queuePair with its internal queues allocated.
@@ -124,8 +120,8 @@ var numCircularBufferPairs = floorCPUCount()
 // each queuePair; that is, at any given time, there may be floorCPUCount()
 // Pushes happening simultaneously.
 type CircularBuffer struct {
-	mu sync.Mutex
-	qp []*queuePair
+	drainMutex sync.Mutex
+	qp         []*queuePair
 	// qpn is an monotonically incrementing counter that's used to determine
 	// which queuePair a Push operation should write to. This approach's
 	// performance was found to be better than writing to a random queue.
@@ -163,17 +159,20 @@ func NewCircularBuffer(size uint32) (*CircularBuffer, error) {
 	return cb, nil
 }
 
-// Push pushes an element in to the circular buffer.
+// Push pushes an element in to the circular buffer. Guaranteed to complete in
+// a finite number of steps (also lock-free). Does not guarantee that push
+// order will be retained. Does not guarantee that the operation will succeed
+// if a Drain operation concurrently begins execution.
 func (cb *CircularBuffer) Push(x interface{}) {
 	n := atomic.AddUint32(&cb.qpn, 1) & cb.qpMask
-	q := (*queue)(atomic.LoadPointer(&cb.qp[n].q))
+	qptr := atomic.LoadPointer(&cb.qp[n].q)
+	q := (*queue)(qptr)
 
 	acquired := atomic.AddUint32(&q.acquired, 1) - 1
 
-	// If drainExecuting is zero, it means that we have incremented acquired
-	// (but not written), so we can guarantee that the Drain operation has not
-	// completed its drainWait. Therefore, it is safe to proceed with the Push
-	// operation on this queue. Otherwise, if drainExecuting is non-zero, it
+	// If true, it means that we have incremented acquired before any queuePair
+	// was switched, and therefore before any drainWait completion. Therefore, it
+	// is safe to proceed with the Push operation on this queue. Otherwise, it
 	// means that a Drain operation has begun execution, but we don't know how
 	// far along the process it is. If it is past the drainWait check, it is not
 	// safe to proceed with the Push operation. We choose to drop this sample
@@ -181,7 +180,7 @@ func (cb *CircularBuffer) Push(x interface{}) {
 	// operation into a spin loop (we want to guarantee completion of the Push
 	// operation within a finite time). Before exiting, we increment written so
 	// that any existing drainWaits can proceed.
-	if atomic.LoadUint32(&cb.qp[n].drainExecuting) != 0 {
+	if atomic.LoadPointer(&cb.qp[n].q) != qptr {
 		atomic.AddUint32(&q.written, 1)
 		return
 	}
@@ -230,18 +229,16 @@ func dereferenceAppend(result []interface{}, arr []unsafe.Pointer, from, to uint
 // buffer. Push order is not maintained; that is, if B was Pushed after A,
 // drain may return B at a lower index than A in the returned array.
 func (cb *CircularBuffer) Drain() []interface{} {
-	cb.mu.Lock()
-	defer cb.mu.Unlock()
+	cb.drainMutex.Lock()
 
 	qs := make([]*queue, len(cb.qp))
 	for i := 0; i < len(cb.qp); i++ {
-		atomic.StoreUint32(&cb.qp[i].drainExecuting, 1)
 		qs[i] = cb.qp[i].switchQueues()
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(int(len(cb.qp)))
-	for i := 0; i < len(cb.qp); i++ {
+	wg.Add(int(len(qs)))
+	for i := 0; i < len(qs); i++ {
 		go func(qi int) {
 			qs[qi].drainWait()
 			wg.Done()
@@ -250,7 +247,7 @@ func (cb *CircularBuffer) Drain() []interface{} {
 	wg.Wait()
 
 	result := make([]interface{}, 0)
-	for i := 0; i < len(cb.qp); i++ {
+	for i := 0; i < len(qs); i++ {
 		if qs[i].acquired < qs[i].size {
 			result = dereferenceAppend(result, qs[i].arr, 0, qs[i].acquired)
 		} else {
@@ -258,11 +255,11 @@ func (cb *CircularBuffer) Drain() []interface{} {
 		}
 	}
 
-	for i := 0; i < len(cb.qp); i++ {
+	for i := 0; i < len(qs); i++ {
 		atomic.StoreUint32(&qs[i].acquired, 0)
 		atomic.StoreUint32(&qs[i].written, 0)
-		atomic.StoreUint32(&cb.qp[i].drainExecuting, 0)
 	}
 
+	cb.drainMutex.Unlock()
 	return result
 }

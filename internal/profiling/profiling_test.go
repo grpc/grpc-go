@@ -40,11 +40,11 @@ func TestProfiling(t *testing.T) {
 	cb.Push(stat)
 	bar := func(n int) {
 		if n%2 == 0 {
-			defer stat.Egress(stat.NewTimer(strconv.Itoa(n)))
+			defer stat.NewTimer(strconv.Itoa(n)).Egress()
 		} else {
 			timer := NewTimer(strconv.Itoa(n))
-			timerIdx := stat.AppendTimer(timer)
-			defer stat.Egress(timerIdx)
+			stat.AppendTimer(timer)
+			defer timer.Egress()
 		}
 		time.Sleep(1 * time.Microsecond)
 	}
@@ -94,11 +94,11 @@ func TestProfilingRace(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 			if n%2 == 0 {
-				defer stat.Egress(stat.NewTimer(strconv.Itoa(n)))
+				defer stat.NewTimer(strconv.Itoa(n)).Egress()
 			} else {
 				timer := NewTimer(strconv.Itoa(n))
-				timerIdx := stat.AppendTimer(timer)
-				defer stat.Egress(timerIdx)
+				stat.AppendTimer(timer)
+				defer timer.Egress()
 			}
 		}(i)
 	}
@@ -136,7 +136,7 @@ func BenchmarkProfiling(b *testing.B) {
 			for r := 0; r < routines; r++ {
 				go func() {
 					for i := 0; i < perRoutine; i++ {
-						stat.Egress(stat.NewTimer("bar"))
+						stat.NewTimer("bar").Egress()
 					}
 					wg.Done()
 				}()

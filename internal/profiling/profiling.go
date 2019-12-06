@@ -42,7 +42,7 @@ import (
 )
 
 // 0 or 1 representing profiling off and on, respectively. Use IsEnabled and
-// SetEnabled to get and set this in a safe manner.
+// Enable to get and set this in a safe manner.
 var profilingEnabled uint32
 
 // IsEnabled returns whether or not profiling is enabled.
@@ -55,11 +55,10 @@ func IsEnabled() bool {
 // Note that it is impossible to enable profiling for one server and leave it
 // turned off for another. This is intentional and by design -- if the status
 // of profiling was server-specific, clients wouldn't be able to profile
-// themselves. As a result, SetEnabled turns profiling on and off for all
-// servers and clients in the binary. Each stat will be, however, tagged with
-// whether it's a client stat or a server stat; so you should be able to filter
-// for the right type of stats in post-processing.
-// SetEnabled is the internal
+// themselves. As a result, Enable turns profiling on and off for all servers
+// and clients in the binary. Each stat will be, however, tagged with whether
+// it's a client stat or a server stat; so you should be able to filter for the
+// right type of stats in post-processing.
 func Enable(enabled bool) {
 	if enabled {
 		atomic.StoreUint32(&profilingEnabled, 1)
@@ -81,7 +80,7 @@ type Timer struct {
 	// End marks the end of a timer.
 	End time.Time
 	// Each Timer must be started and ended within the same goroutine; GoID
-	// captures this goroutine ID. The Go runtime doesn not typically expose this
+	// captures this goroutine ID. The Go runtime does not typically expose this
 	// information, so this is set to zero in the typical case. However, a
 	// trivial patch to the runtime package can make this field useful. See
 	// goid_modified.go in this package for more details.
@@ -100,6 +99,14 @@ func NewTimer(timerTag string) *Timer {
 		Begin:    time.Now(),
 		GoID:     goid(),
 	}
+}
+
+func (timer *Timer) Egress() {
+	if timer == nil {
+		return
+	}
+
+	timer.End = time.Now()
 }
 
 // A Stat is a collection of Timers that represent timing information for
@@ -121,9 +128,9 @@ type Stat struct {
 	// connection number and the stream ID for each RPC, thereby uniquely
 	// identifying it. The underlying encoding for this is unspecified.
 	Metadata []byte
-	// A collection of Timers and a mutex for append operations on the slice.
+	// A collection of *Timers and a mutex for append operations on the slice.
 	mu     sync.Mutex
-	Timers []Timer
+	Timers []*Timer
 }
 
 // A power of two that's large enough to hold all timers within an average RPC
@@ -138,81 +145,44 @@ const defaultStatAllocatedTimers int32 = 128
 func NewStat(statTag string) *Stat {
 	return &Stat{
 		StatTag: statTag,
-		Timers:  make([]Timer, 0, defaultStatAllocatedTimers),
+		Timers:  make([]*Timer, 0, defaultStatAllocatedTimers),
 	}
 }
 
 // NewTimer creates a Timer object within the given stat if stat is non-nil.
 // The value passed in timerTag will be attached to the newly created Timer.
 // NewTimer also automatically sets the Begin value of the Timer to the current
-// time.
-//
-// The user is expected to call stat.Egress with the returned index as argument
-// to mark the end. The return value is not a pointer to a Timer object because
-// the internal slice may be re-allocated freely, which would make the
-// reference to pointers of the past obsolete.
-//
-// Why a slice of timer? To make NewTimer allocation-free, we don't allocate a
-// new timer every time. Instead a slice of timers large enough to hold most
-// data is created and elements from this slice are used. This should put less
-// pressure on the GC too.
-func (stat *Stat) NewTimer(timerTag string) int {
+// time. The user is expected to call stat.Egress with the returned index as
+// argument to mark the end.
+func (stat *Stat) NewTimer(timerTag string) *Timer {
 	if stat == nil {
-		return 0
+		return nil
 	}
 
-	t := time.Now()
-	stat.mu.Lock()
-	stat.Timers = append(stat.Timers, Timer{
+	timer := &Timer{
 		TimerTag: timerTag,
 		GoID:     goid(),
-		Begin:    t,
-	})
-	index := len(stat.Timers) - 1
-	stat.mu.Unlock()
-	return index
-}
-
-// Egress marks the completion of a given timer within a stat.
-func (stat *Stat) Egress(index int) {
-	if stat == nil {
-		return
+		Begin:    time.Now(),
 	}
-
-	t := time.Now()
 	stat.mu.Lock()
-	if index < len(stat.Timers) {
-		stat.Timers[index].End = t
-	}
+	stat.Timers = append(stat.Timers, timer)
 	stat.mu.Unlock()
+	return timer
 }
 
 // AppendTimer appends a given Timer object to the internal slice of timers. A
 // deep copy of the timer is made (i.e. no reference is retained to this
 // pointer) and the user is expected to lose their reference to the timer to
 // allow the Timer object to be garbage collected.
-func (stat *Stat) AppendTimer(timer *Timer) int {
+func (stat *Stat) AppendTimer(timer *Timer) {
 	if stat == nil || timer == nil {
-		return 0
+		return
 	}
 
 	stat.mu.Lock()
-	stat.Timers = append(stat.Timers, *timer)
-	index := len(stat.Timers) - 1
+	stat.Timers = append(stat.Timers, timer)
 	stat.mu.Unlock()
-	return index
 }
-
-// ServerConnectionCounter counts the number of connections a server has seen.
-// This counter is embedded within a StreamStat's Metadata along with each
-// stream's stream ID to uniquely identify a query. Accessed atomically.
-var ServerConnectionCounter uint64
-
-// ClientConnectionCounter counts the number of connections a client has
-// initiated. This counter is embedded within a StreamStat's Metadata along
-// with each stream's stream ID to uniquely identify a query. Accessed
-// atomically.
-var ClientConnectionCounter uint64
 
 // statsInitialized is 0 before InitStats has been called. Changed to 1 by
 // exactly one call to InitStats.
