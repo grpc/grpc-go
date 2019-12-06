@@ -87,7 +87,7 @@ func (s *profilingServer) Enable(ctx context.Context, req *ppb.EnableRequest) (*
 	return &ppb.EnableResponse{}, nil
 }
 
-func timerToTimerProto(timer profiling.Timer) *ppb.TimerProto {
+func timerToTimerProto(timer *profiling.Timer) *ppb.TimerProto {
 	return &ppb.TimerProto{
 		TimerTag:  timer.TimerTag,
 		BeginSec:  timer.Begin.Unix(),
