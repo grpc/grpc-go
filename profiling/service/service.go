@@ -27,6 +27,7 @@ package service
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
@@ -66,7 +67,7 @@ func Init(pc *ProfilingConfig) error {
 		return err
 	}
 
-	ppb.RegisterProfilingServer(pc.Server, &profilingServer{})
+	ppb.RegisterProfilingServer(pc.Server, getProfilingServerInstance())
 
 	// Do this last after everything has been initialized and allocated.
 	profiling.Enable(pc.Enabled)
@@ -74,7 +75,23 @@ func Init(pc *ProfilingConfig) error {
 	return nil
 }
 
-type profilingServer struct{}
+type profilingServer struct{
+	drainMutex sync.Mutex
+}
+
+var profilingServerInstance *profilingServer
+var profilingServerOnce sync.Once
+
+// getProfilingServerInstance creates and returns a singleton instance of
+// profilingServer. Only one instance of profilingServer is created to use a
+// shared mutex across all profilingServer instances.
+func getProfilingServerInstance() *profilingServer {
+	profilingServerOnce.Do(func() {
+		profilingServerInstance = &profilingServer{}
+	})
+
+	return profilingServerInstance
+}
 
 func (s *profilingServer) Enable(ctx context.Context, req *ppb.EnableRequest) (*ppb.EnableResponse, error) {
 	if req.Enabled {
@@ -112,9 +129,14 @@ func statToStatProto(stat *profiling.Stat) *ppb.StatProto {
 
 func (s *profilingServer) GetStreamStats(req *ppb.GetStreamStatsRequest, stream ppb.Profiling_GetStreamStatsServer) error {
 	grpclog.Infof("Processing stream request for stream stats")
-	results := profiling.StreamStats.Drain()
-	grpclog.Infof("Stream stats size: %v records", len(results))
 
+	// Since the drain operation is destructive, only one client request should
+	// be served at a time.
+	s.drainMutex.Lock()
+	results := profiling.StreamStats.Drain()
+	s.drainMutex.Unlock()
+
+	grpclog.Infof("Stream stats size: %v records", len(results))
 	for i := 0; i < len(results); i++ {
 		if err := stream.Send(statToStatProto(results[i].(*profiling.Stat))); err != nil {
 			return err
