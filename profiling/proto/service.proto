@@ -44,9 +44,8 @@ message GetStreamStatsRequest {
 // gRPC that's being profiled. It includes a tag and some additional metadata
 // to identify itself.
 message TimerProto {
-  // timer_tag is an arbitrary string that is used to tag a timer for
-  // identification purposes later.
-  string timer_tag = 1;
+	// tags is a comma-separated list of string used to tag a timer.
+  string tags = 1;
 
   // begin_sec and begin_nsec are the start epoch second and nanosecond,
   // respectively, of the component profiled by this timer in UTC. begin_nsec
@@ -67,17 +66,17 @@ message TimerProto {
 // A StatProto is a collection of TimerProtos along with some additional
 // metadata to tag and identify itself.
 message StatProto {
-  // stat_tag is an arbitrary string that is used to tag a stat.
-  string stat_tag = 1;
+  // tags is a comma-separated list of string used to categorize a stat.
+  string tags = 1;
 
   // timer_protos is an array of TimerProtos, each representing a different
   // (but possibly overlapping) component within this stat.
   repeated TimerProto timer_protos = 2;
 
-  // metadata is an array of bytes that is used to further tag a stat with an
-  // undefined encoding. For example, the StatProtos returned by the
-  // /Profiling/GetStreamStats service use the metadata field to encode the
-  // connection ID and the stream ID of each query.
+	// metadata is an array of bytes used to uniquely identify a stat with an
+	// undefined encoding format. For example, the StatProtos returned by the
+	// /Profiling/GetStreamStats service use the metadata field to encode the
+	// connection ID and the stream ID of each query.
   bytes metadata = 3;
 }
 

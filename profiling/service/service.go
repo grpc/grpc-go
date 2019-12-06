@@ -89,7 +89,7 @@ func (s *profilingServer) Enable(ctx context.Context, req *ppb.EnableRequest) (*
 
 func timerToTimerProto(timer *profiling.Timer) *ppb.TimerProto {
 	return &ppb.TimerProto{
-		TimerTag:  timer.TimerTag,
+		Tags:      timer.Tags,
 		BeginSec:  timer.Begin.Unix(),
 		BeginNsec: int32(timer.Begin.Nanosecond()),
 		EndSec:    timer.End.Unix(),
@@ -100,7 +100,7 @@ func timerToTimerProto(timer *profiling.Timer) *ppb.TimerProto {
 
 func statToStatProto(stat *profiling.Stat) *ppb.StatProto {
 	statProto := &ppb.StatProto{
-		StatTag:     stat.StatTag,
+		Tags:        stat.Tags,
 		TimerProtos: make([]*ppb.TimerProto, 0, len(stat.Timers)),
 		Metadata:    stat.Metadata,
 	}
