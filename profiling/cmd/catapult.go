@@ -80,7 +80,7 @@ func hashCname(tag string) string {
 func filterCounter(stat *ppb.StatProto, filter string, counter int) int {
 	localCounter := 0
 	for i := 0; i < len(stat.TimerProtos); i++ {
-		if stat.TimerProtos[i].TimerTag == filter {
+		if stat.TimerProtos[i].Tags == filter {
 			if localCounter == counter {
 				return i
 			}
@@ -121,13 +121,13 @@ func streamStatsCatapultJSONSingle(stat *ppb.StatProto, baseSec int64, baseNsec 
 
 	connectionCounter := binary.BigEndian.Uint64(stat.Metadata[0:8])
 	streamID := binary.BigEndian.Uint32(stat.Metadata[8:12])
-	opid := fmt.Sprintf("/%s/%d/%d", stat.StatTag, connectionCounter, streamID)
+	opid := fmt.Sprintf("/%s/%d/%d", stat.Tags, connectionCounter, streamID)
 
 	var loopyReaderGoID, loopyWriterGoID int64
 	for i := 0; i < len(stat.TimerProtos); i++ {
-		if strings.Contains(stat.TimerProtos[i].TimerTag, "/loopyReader") {
+		if strings.Contains(stat.TimerProtos[i].Tags, "/loopyReader") {
 			loopyReaderGoID = stat.TimerProtos[i].GoId
-		} else if strings.Contains(stat.TimerProtos[i].TimerTag, "/loopyWriter") {
+		} else if strings.Contains(stat.TimerProtos[i].Tags, "/loopyWriter") {
 			loopyWriterGoID = stat.TimerProtos[i].GoId
 		}
 	}
@@ -142,7 +142,7 @@ func streamStatsCatapultJSONSingle(stat *ppb.StatProto, baseSec int64, baseNsec 
 			Cname:     hashCname("tmp"),
 			Phase:     "i",
 			Timestamp: 0,
-			PID:       fmt.Sprintf("/%s/%d/loopyReader", stat.StatTag, connectionCounter),
+			PID:       fmt.Sprintf("/%s/%d/loopyReader", stat.Tags, connectionCounter),
 			TID:       fmt.Sprintf("%d", loopyReaderGoID),
 		},
 		jsonNode{
@@ -151,21 +151,21 @@ func streamStatsCatapultJSONSingle(stat *ppb.StatProto, baseSec int64, baseNsec 
 			Cname:     hashCname("tmp"),
 			Phase:     "i",
 			Timestamp: 0,
-			PID:       fmt.Sprintf("/%s/%d/loopyWriter", stat.StatTag, connectionCounter),
+			PID:       fmt.Sprintf("/%s/%d/loopyWriter", stat.Tags, connectionCounter),
 			TID:       fmt.Sprintf("%d", loopyWriterGoID),
 		},
 	)
 
 	for i := 0; i < len(stat.TimerProtos); i++ {
-		categories := stat.StatTag
+		categories := stat.Tags
 		pid, tid := opid, fmt.Sprintf("%d", stat.TimerProtos[i].GoId)
 
 		if stat.TimerProtos[i].GoId == loopyReaderGoID {
-			pid, tid = fmt.Sprintf("/%s/%d/loopyReader", stat.StatTag, connectionCounter), fmt.Sprintf("%d", stat.TimerProtos[i].GoId)
+			pid, tid = fmt.Sprintf("/%s/%d/loopyReader", stat.Tags, connectionCounter), fmt.Sprintf("%d", stat.TimerProtos[i].GoId)
 
 			var flowEndID int
 			var flowEndPID, flowEndTID string
-			switch stat.TimerProtos[i].TimerTag {
+			switch stat.TimerProtos[i].Tags {
 			case "/http2/recv/header":
 				flowEndID = filterCounter(stat, "/grpc/stream/recv/header", lrc.GetAndInc("/http2/recv/header"))
 				if flowEndID != -1 {
@@ -187,7 +187,7 @@ func streamStatsCatapultJSONSingle(stat *ppb.StatProto, baseSec int64, baseNsec 
 			}
 
 			if flowEndID != -1 {
-				flowID := fmt.Sprintf("lrc begin:/%d%s end:/%d%s begin:(%d, %s, %s) end:(%d, %s, %s)", connectionCounter, stat.TimerProtos[i].TimerTag, connectionCounter, stat.TimerProtos[flowEndID].TimerTag, i, pid, tid, flowEndID, flowEndPID, flowEndTID)
+				flowID := fmt.Sprintf("lrc begin:/%d%s end:/%d%s begin:(%d, %s, %s) end:(%d, %s, %s)", connectionCounter, stat.TimerProtos[i].Tags, connectionCounter, stat.TimerProtos[flowEndID].Tags, i, pid, tid, flowEndID, flowEndPID, flowEndTID)
 				result = append(result,
 					jsonNode{
 						Name:      fmt.Sprintf("%s/flow", opid),
@@ -212,14 +212,14 @@ func streamStatsCatapultJSONSingle(stat *ppb.StatProto, baseSec int64, baseNsec 
 				)
 			}
 		} else if stat.TimerProtos[i].GoId == loopyWriterGoID {
-			pid, tid = fmt.Sprintf("/%s/%d/loopyWriter", stat.StatTag, connectionCounter), fmt.Sprintf("%d", stat.TimerProtos[i].GoId)
+			pid, tid = fmt.Sprintf("/%s/%d/loopyWriter", stat.Tags, connectionCounter), fmt.Sprintf("%d", stat.TimerProtos[i].GoId)
 
 			var flowBeginID int
 			var flowBeginPID, flowBeginTID string
-			switch stat.TimerProtos[i].TimerTag {
+			switch stat.TimerProtos[i].Tags {
 			case "/http2/recv/header/loopyWriter/registerOutStream":
 				flowBeginID = filterCounter(stat, "/http2/recv/header", lwc.GetAndInc("/http2/recv/header/loopyWriter/registerOutStream"))
-				flowBeginPID = fmt.Sprintf("/%s/%d/loopyReader", stat.StatTag, connectionCounter)
+				flowBeginPID = fmt.Sprintf("/%s/%d/loopyReader", stat.Tags, connectionCounter)
 				flowBeginTID = fmt.Sprintf("%d", loopyReaderGoID)
 			case "/http2/send/dataFrame/loopyWriter/preprocess":
 				flowBeginID = filterCounter(stat, "/transport/enqueue", lwc.GetAndInc("/http2/send/dataFrame/loopyWriter/preprocess"))
@@ -234,10 +234,10 @@ func streamStatsCatapultJSONSingle(stat *ppb.StatProto, baseSec int64, baseNsec 
 			}
 
 			if flowBeginID != -1 {
-				flowID := fmt.Sprintf("lwc begin:/%d%s end:/%d%s begin:(%d, %s, %s) end:(%d, %s, %s)", connectionCounter, stat.TimerProtos[flowBeginID].TimerTag, connectionCounter, stat.TimerProtos[i].TimerTag, flowBeginID, flowBeginPID, flowBeginTID, i, pid, tid)
+				flowID := fmt.Sprintf("lwc begin:/%d%s end:/%d%s begin:(%d, %s, %s) end:(%d, %s, %s)", connectionCounter, stat.TimerProtos[flowBeginID].Tags, connectionCounter, stat.TimerProtos[i].Tags, flowBeginID, flowBeginPID, flowBeginTID, i, pid, tid)
 				result = append(result,
 					jsonNode{
-						Name:      fmt.Sprintf("/%s/%d/%d/flow", stat.StatTag, connectionCounter, streamID),
+						Name:      fmt.Sprintf("/%s/%d/%d/flow", stat.Tags, connectionCounter, streamID),
 						Cat:       categories + ",flow",
 						ID:        flowID,
 						Cname:     hashCname("flow"),
@@ -247,7 +247,7 @@ func streamStatsCatapultJSONSingle(stat *ppb.StatProto, baseSec int64, baseNsec 
 						TID:       flowBeginTID,
 					},
 					jsonNode{
-						Name:      fmt.Sprintf("/%s/%d/%d/flow", stat.StatTag, connectionCounter, streamID),
+						Name:      fmt.Sprintf("/%s/%d/%d/flow", stat.Tags, connectionCounter, streamID),
 						Cat:       categories + ",flow",
 						ID:        flowID,
 						Cname:     hashCname("flow"),
@@ -262,20 +262,20 @@ func streamStatsCatapultJSONSingle(stat *ppb.StatProto, baseSec int64, baseNsec 
 
 		result = append(result,
 			jsonNode{
-				Name:      fmt.Sprintf("%s%s", opid, stat.TimerProtos[i].TimerTag),
+				Name:      fmt.Sprintf("%s%s", opid, stat.TimerProtos[i].Tags),
 				Cat:       categories,
 				ID:        opid,
-				Cname:     hashCname(stat.TimerProtos[i].TimerTag),
+				Cname:     hashCname(stat.TimerProtos[i].Tags),
 				Phase:     "B",
 				Timestamp: catapultNs(stat.TimerProtos[i].BeginSec-baseSec, stat.TimerProtos[i].BeginNsec-baseNsec),
 				PID:       pid,
 				TID:       tid,
 			},
 			jsonNode{
-				Name:      fmt.Sprintf("%s%s", opid, stat.TimerProtos[i].TimerTag),
+				Name:      fmt.Sprintf("%s%s", opid, stat.TimerProtos[i].Tags),
 				Cat:       categories,
 				ID:        opid,
-				Cname:     hashCname(stat.TimerProtos[i].TimerTag),
+				Cname:     hashCname(stat.TimerProtos[i].Tags),
 				Phase:     "E",
 				Timestamp: catapultNs(stat.TimerProtos[i].EndSec-baseSec, stat.TimerProtos[i].EndNsec-baseNsec),
 				PID:       pid,
@@ -305,7 +305,7 @@ func streamStatsCatapultJSON(s *snapshot, streamStatsCatapultJSONFileName string
 	grpclog.Infof("filter stream stats for %s", *flagStreamStatsFilter)
 	streamStats := make([]*ppb.StatProto, 0)
 	for _, stat := range s.StreamStats {
-		if _, ok := filter[stat.StatTag]; ok {
+		if _, ok := filter[stat.Tags]; ok {
 			streamStats = append(streamStats, stat)
 		}
 	}
