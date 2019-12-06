@@ -60,8 +60,8 @@ func TestProfiling(t *testing.T) {
 	}
 
 	statReturned := results[0].(*Stat)
-	if stat.StatTag != "foo" {
-		t.Fatalf("stat.StatTag = %s; want foo", stat.StatTag)
+	if stat.Tags != "foo" {
+		t.Fatalf("stat.Tags = %s; want foo", stat.Tags)
 	}
 
 	if len(stat.Timers) != numTimers {
@@ -71,8 +71,8 @@ func TestProfiling(t *testing.T) {
 	lastIdx := 0
 	for i, timer := range statReturned.Timers {
 		// Check that they're in the order of append.
-		if n, err := strconv.Atoi(timer.TimerTag); err != nil && n != lastIdx {
-			t.Fatalf("stat.Timers[%d].TimerTag = %s; wanted %d", i, timer.TimerTag, lastIdx)
+		if n, err := strconv.Atoi(timer.Tags); err != nil && n != lastIdx {
+			t.Fatalf("stat.Timers[%d].Tags = %s; wanted %d", i, timer.Tags, lastIdx)
 		}
 
 		// Check that the timestamps are consistent.
@@ -112,9 +112,9 @@ func TestProfilingRace(t *testing.T) {
 	// like above.
 	seen := make(map[int]bool)
 	for i, timer := range stat.Timers {
-		n, err := strconv.Atoi(timer.TimerTag)
+		n, err := strconv.Atoi(timer.Tags)
 		if err != nil {
-			t.Fatalf("stat.Timers[%d].TimerTag = %s; wanted integer", i, timer.TimerTag)
+			t.Fatalf("stat.Timers[%d].Tags = %s; wanted integer", i, timer.Tags)
 		}
 		seen[n] = true
 	}

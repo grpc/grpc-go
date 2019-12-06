@@ -72,7 +72,7 @@ func Enable(enabled bool) {
 type Timer struct {
 	// Each Timer has a tag that identifies it uniquely within a Stat. This is
 	// usually a forward-slash-separated hierarchical string.
-	TimerTag string
+	Tags string
 	// Begin marks the beginning of this timer. The timezone is unspecified, but
 	// must use the same timezone as End; this is so shave off the small, but
 	// non-zero time required to convert to a standard timezone such as UTC.
@@ -93,14 +93,15 @@ type Timer struct {
 // measure transport-related operations.
 //
 // Use AppendTimer to append the returned Timer to a Stat.
-func NewTimer(timerTag string) *Timer {
+func NewTimer(tags string) *Timer {
 	return &Timer{
-		TimerTag: timerTag,
-		Begin:    time.Now(),
-		GoID:     goid(),
+		Tags:  tags,
+		Begin: time.Now(),
+		GoID:  goid(),
 	}
 }
 
+// Egress sets the End field of a timer to the current time.
 func (timer *Timer) Egress() {
 	if timer == nil {
 		return
@@ -122,7 +123,7 @@ func (timer *Timer) Egress() {
 type Stat struct {
 	// Each Stat has a tag associated with it to identify it in post-processing.
 	// This is can be any arbitrary string.
-	StatTag string
+	Tags string
 	// Stats may also need to store other unstructured information specific to
 	// this stat. For example, a StreamStat will use these bytes to encode the
 	// connection number and the stream ID for each RPC, thereby uniquely
@@ -142,27 +143,27 @@ type Stat struct {
 const defaultStatAllocatedTimers int32 = 128
 
 // NewStat creates and returns a new Stat object.
-func NewStat(statTag string) *Stat {
+func NewStat(tags string) *Stat {
 	return &Stat{
-		StatTag: statTag,
-		Timers:  make([]*Timer, 0, defaultStatAllocatedTimers),
+		Tags:   tags,
+		Timers: make([]*Timer, 0, defaultStatAllocatedTimers),
 	}
 }
 
 // NewTimer creates a Timer object within the given stat if stat is non-nil.
-// The value passed in timerTag will be attached to the newly created Timer.
+// The value passed in tags will be attached to the newly created Timer.
 // NewTimer also automatically sets the Begin value of the Timer to the current
 // time. The user is expected to call stat.Egress with the returned index as
 // argument to mark the end.
-func (stat *Stat) NewTimer(timerTag string) *Timer {
+func (stat *Stat) NewTimer(tags string) *Timer {
 	if stat == nil {
 		return nil
 	}
 
 	timer := &Timer{
-		TimerTag: timerTag,
-		GoID:     goid(),
-		Begin:    time.Now(),
+		Tags:  tags,
+		GoID:  goid(),
+		Begin: time.Now(),
 	}
 	stat.mu.Lock()
 	stat.Timers = append(stat.Timers, timer)
@@ -196,7 +197,7 @@ const defaultStreamStatsSize uint32 = 16 << 10
 // StreamStats is a CircularBuffer containing data from the last N RPC calls
 // served, where N is set by the user. This will contain both server stats and
 // client stats (but each stat will be tagged with whether it's a server or a
-// client in its StatTag).
+// client in its Tags).
 var StreamStats *buffer.CircularBuffer
 
 // InitStats initializes all the relevant Stat objects. Must be called exactly
