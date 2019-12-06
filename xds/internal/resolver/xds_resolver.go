@@ -162,7 +162,7 @@ const jsonFormatSC = `{
     "loadBalancingConfig":[
       {
         "experimental_cds":{
-          "Cluster": %s
+          "Cluster": "%s"
         }
       }
     ]
