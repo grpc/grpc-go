@@ -70,8 +70,8 @@ func Enable(enabled bool) {
 // A Timer represents the wall-clock beginning and ending of a logical
 // operation.
 type Timer struct {
-	// Each Timer has a tag that identifies it uniquely within a Stat. This is
-	// usually a forward-slash-separated hierarchical string.
+	// Tags is a comma-separated list of strings (usually forward-slash-separated
+	// hierarchical strings) used to categorize a Timer.
 	Tags string
 	// Begin marks the beginning of this timer. The timezone is unspecified, but
 	// must use the same timezone as End; this is so shave off the small, but
@@ -121,13 +121,12 @@ func (timer *Timer) Egress() {
 // the Stat's exported fields (which are exported for encoding reasons) may
 // lead to data races.
 type Stat struct {
-	// Each Stat has a tag associated with it to identify it in post-processing.
-	// This is can be any arbitrary string.
+	// Tags is a comma-separated list of strings used to categorize a Stat.
 	Tags string
 	// Stats may also need to store other unstructured information specific to
 	// this stat. For example, a StreamStat will use these bytes to encode the
-	// connection number and the stream ID for each RPC, thereby uniquely
-	// identifying it. The underlying encoding for this is unspecified.
+	// connection ID and stream ID for each RPC to uniquely identify it. The
+	// encoding that must be used is unspecified.
 	Metadata []byte
 	// A collection of *Timers and a mutex for append operations on the slice.
 	mu     sync.Mutex

@@ -34,5 +34,5 @@ func (cb *CircularBuffer) Push(x interface{}) {
 }
 
 func (cb *CircularBuffer) Drain() []interface{} {
-	return make([]interface{}, 0)
+	return nil
 }
