@@ -136,7 +136,7 @@ var xxx_messageInfo_GetStreamStatsRequest proto.InternalMessageInfo
 // gRPC that's being profiled. It includes a tag and some additional metadata
 // to identify itself.
 type TimerProto struct {
-	// tags is a comma-separated list of string used to tag a timer.
+	// tags is a comma-separated list of strings used to tag a timer.
 	Tags string `protobuf:"bytes,1,opt,name=tags,proto3" json:"tags,omitempty"`
 	// begin_sec and begin_nsec are the start epoch second and nanosecond,
 	// respectively, of the component profiled by this timer in UTC. begin_nsec
@@ -225,7 +225,7 @@ func (m *TimerProto) GetGoId() int64 {
 // A StatProto is a collection of TimerProtos along with some additional
 // metadata to tag and identify itself.
 type StatProto struct {
-	// tags is a comma-separated list of string used to categorize a stat.
+	// tags is a comma-separated list of strings used to categorize a stat.
 	Tags string `protobuf:"bytes,1,opt,name=tags,proto3" json:"tags,omitempty"`
 	// timer_protos is an array of TimerProtos, each representing a different
 	// (but possibly overlapping) component within this stat.

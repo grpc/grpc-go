@@ -44,7 +44,7 @@ message GetStreamStatsRequest {
 // gRPC that's being profiled. It includes a tag and some additional metadata
 // to identify itself.
 message TimerProto {
-	// tags is a comma-separated list of string used to tag a timer.
+	// tags is a comma-separated list of strings used to tag a timer.
   string tags = 1;
 
   // begin_sec and begin_nsec are the start epoch second and nanosecond,
@@ -66,7 +66,7 @@ message TimerProto {
 // A StatProto is a collection of TimerProtos along with some additional
 // metadata to tag and identify itself.
 message StatProto {
-  // tags is a comma-separated list of string used to categorize a stat.
+  // tags is a comma-separated list of strings used to categorize a stat.
   string tags = 1;
 
   // timer_protos is an array of TimerProtos, each representing a different
