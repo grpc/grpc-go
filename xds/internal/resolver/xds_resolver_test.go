@@ -77,8 +77,8 @@ func (t *testClientConn) ParseServiceConfig(jsonSC string) *serviceconfig.ParseR
 
 func newTestClientConn() *testClientConn {
 	return &testClientConn{
-		stateCh: channel.NewChanWithTimeout(),
-		errorCh: channel.NewChanWithTimeout(),
+		stateCh: channel.NewChan(),
+		errorCh: channel.NewChan(),
 	}
 }
 

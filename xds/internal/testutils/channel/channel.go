@@ -39,9 +39,6 @@ const (
 // WithTimeout wraps a generic channel and provides a timed receive operation.
 type WithTimeout struct {
 	ch chan interface{}
-	// RecvTimeout is the timeout duration for receive operations on the
-	// underlying channel.
-	RecvTimeout time.Duration
 }
 
 // Send sends value on the underlying channel.
@@ -49,10 +46,10 @@ func (cwt *WithTimeout) Send(value interface{}) {
 	cwt.ch <- value
 }
 
-// Receive returns the value received on the underlying channel, or
-// ErrRecvTimeout if the operation times out.
-func (cwt *WithTimeout) Receive() (interface{}, error) {
-	timer := time.NewTimer(cwt.RecvTimeout)
+// TimedReceive returns the value received on the underlying channel, or
+// ErrRecvTimeout if timeout amount of time elapsed.
+func (cwt *WithTimeout) TimedReceive(timeout time.Duration) (interface{}, error) {
+	timer := time.NewTimer(timeout)
 	select {
 	case <-timer.C:
 		return nil, ErrRecvTimeout
@@ -62,15 +59,13 @@ func (cwt *WithTimeout) Receive() (interface{}, error) {
 	}
 }
 
-// NewChanWithTimeout makes a WithTimeout channel using the defaults.
-func NewChanWithTimeout() *WithTimeout {
-	return NewChan(DefaultRecvTimeout, DefaultBufferSize)
+// Receive returns the value received on the underlying channel, or
+// ErrRecvTimeout if DefaultRecvTimeout amount of time elapses.
+func (cwt *WithTimeout) Receive() (interface{}, error) {
+	return cwt.TimedReceive(DefaultRecvTimeout)
 }
 
-// NewChan makes a WithTimeout channel using the provided timeout and bufSize.
-func NewChan(timeout time.Duration, bufSize int) *WithTimeout {
-	return &WithTimeout{
-		ch:          make(chan interface{}, bufSize),
-		RecvTimeout: timeout,
-	}
+// NewChan returns a new WithTimeout channel.
+func NewChan() *WithTimeout {
+	return &WithTimeout{ch: make(chan interface{}, DefaultBufferSize)}
 }

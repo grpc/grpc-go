@@ -63,8 +63,8 @@ func (xdsC *XDS) Close() {
 // NewXDS returns a new fake xds client.
 func NewXDS() *XDS {
 	return &XDS{
-		suWatchCh:  channel.NewChanWithTimeout(),
-		closeCh:    channel.NewChanWithTimeout(),
-		suCancelCh: channel.NewChanWithTimeout(),
+		suWatchCh:  channel.NewChan(),
+		closeCh:    channel.NewChan(),
+		suCancelCh: channel.NewChan(),
 	}
 }
