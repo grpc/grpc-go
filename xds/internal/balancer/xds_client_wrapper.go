@@ -182,8 +182,11 @@ func (c *xdsclientWrapper) startEDSWatch(nameToWatch string) {
 
 	c.edsServiceName = nameToWatch
 	c.cancelEDSWatch = c.xdsclient.WatchEDS(c.edsServiceName, func(update *xdsclient.EDSUpdate, err error) {
-		// TODO: this should trigger a call to `c.loseContact`, when the error
-		// indicates "lose contact".
+		if err != nil {
+			// TODO: this should trigger a call to `c.loseContact`, when the
+			// error indicates "lose contact".
+			return
+		}
 		if err := c.newEDSUpdate(update); err != nil {
 			grpclog.Warningf("xds: processing new EDS update failed due to %v.", err)
 		}
