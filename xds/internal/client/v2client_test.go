@@ -268,6 +268,7 @@ var (
 				Domains: []string{uninterestingDomain},
 				Routes: []*routepb.Route{
 					{
+						Match: &routepb.RouteMatch{PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: ""}},
 						Action: &routepb.Route_Route{
 							Route: &routepb.RouteAction{
 								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: uninterestingClusterName},
@@ -280,6 +281,7 @@ var (
 				Domains: []string{goodMatchingDomain},
 				Routes: []*routepb.Route{
 					{
+						Match: &routepb.RouteMatch{PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: ""}},
 						Action: &routepb.Route_Route{
 							Route: &routepb.RouteAction{
 								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: goodClusterName1},
@@ -298,6 +300,7 @@ var (
 				Domains: []string{uninterestingDomain},
 				Routes: []*routepb.Route{
 					{
+						Match: &routepb.RouteMatch{PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: ""}},
 						Action: &routepb.Route_Route{
 							Route: &routepb.RouteAction{
 								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: uninterestingClusterName},
@@ -310,6 +313,7 @@ var (
 				Domains: []string{goodMatchingDomain},
 				Routes: []*routepb.Route{
 					{
+						Match: &routepb.RouteMatch{PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: ""}},
 						Action: &routepb.Route_Route{
 							Route: &routepb.RouteAction{
 								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: goodClusterName2},
