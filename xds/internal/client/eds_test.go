@@ -282,7 +282,7 @@ func TestEDSHandleResponseWithoutWatch(t *testing.T) {
 		cCleanup()
 		sCleanup()
 	}()
-	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 1 * time.Second })
+	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 
 	if v2c.handleEDSResponse(goodEDSResponse1) == nil {

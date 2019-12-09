@@ -64,8 +64,10 @@ type v2Client struct {
 	// these are set to nil. All accesses to the map protected and any value
 	// inside the map should be protected with the above mutex.
 	watchMap map[string]*watchInfo
-	// ackMap contains the version that was acked (the ack request was sent on
-	// wire).
+	// ackMap contains the version that was acked (the version in the ack
+	// request that was sent on wire). The key is typeURL, the value is the
+	// version string, becaues the versions for different resource types
+	// should be independent.
 	ackMap map[string]string
 	// rdsCache maintains a mapping of {routeConfigName --> clusterName} from
 	// validated route configurations received in RDS responses. We cache all
@@ -160,6 +162,13 @@ func (v2c *v2Client) run() {
 
 // sendRequest sends a request for provided typeURL and resource on the provided
 // stream.
+//
+// version is the ack version to be send with the request
+// - If this is the new request (not an ack/nack), version will be an empty
+// string
+// - If this is an ack, version will be the version from the response
+// - If this is a nack, verison will be the previous acked version (from
+// ackMap). If there was no ack before, it will be an empty string
 func (v2c *v2Client) sendRequest(stream adsStream, resourceNames []string, typeURL, version, nonce string) bool {
 	req := &xdspb.DiscoveryRequest{
 		Node:          v2c.nodeProto,
@@ -167,7 +176,7 @@ func (v2c *v2Client) sendRequest(stream adsStream, resourceNames []string, typeU
 		ResourceNames: resourceNames,
 		VersionInfo:   version,
 		ResponseNonce: nonce,
-		// TODO: ErrorDetails.
+		// TODO: populate ErrorDetails for nack.
 	}
 	if err := stream.Send(req); err != nil {
 		grpclog.Warningf("xds: request (type %s) for resource %v failed: %v", typeURL, resourceNames, err)
@@ -236,10 +245,11 @@ func (v2c *v2Client) processAckInfo(t *ackInfo) (target []string, typeURL, versi
 	defer v2c.mu.Unlock()
 	wi, ok := v2c.watchMap[typeURL]
 	if !ok {
-		// We don't send the request ack if there's no active watch, because
-		// there's no resource name. And if we send a request with empty
-		// resource name list, the server may treat it as a wild card and send
-		// us everything.
+		// We don't send the request ack if there's no active watch (this can be
+		// either the server sends responses before any request, or the watch is
+		// canceled while the ackInfo is in queue), because there's no resource
+		// name. And if we send a request with empty resource name list, the
+		// server may treat it as a wild card and send us everything.
 		grpclog.Warningf("xds: ack (type %s) not sent because there's no active watch for the type", typeURL)
 		return // This returns all zero values, and false for send.
 	}
@@ -320,6 +330,7 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 			respHandleErr = v2c.handleEDSResponse(resp)
 		default:
 			grpclog.Warningf("xds: unknown response URL type: %v", resp.GetTypeUrl())
+			continue
 		}
 
 		typeURL := resp.GetTypeUrl()
