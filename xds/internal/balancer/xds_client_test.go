@@ -19,7 +19,9 @@
 package balancer
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -34,6 +36,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/resolver"
 	xdsinternal "google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/client/fakexds"
@@ -161,6 +164,61 @@ func (s) TestEDSClientResponseHandling(t *testing.T) {
 	}
 	if !cmp.Equal(gotResp, want) {
 		t.Fatalf("received unexpected EDS response, got %v, want %v", gotResp, want)
+	}
+}
+
+type testXDSClient struct {
+	edsCb func(*xdsclient.EDSUpdate, error)
+}
+
+func (c *testXDSClient) WatchEDS(clusterName string, edsCb func(*xdsclient.EDSUpdate, error)) (cancel func()) {
+	c.edsCb = edsCb
+	return func() {}
+}
+
+func (c *testXDSClient) ReportLoad(server string, clusterName string, loadStore lrs.Store) (cancel func()) {
+	panic("implement me 2")
+}
+
+func (c *testXDSClient) Close() {
+	panic("implement me 3")
+}
+
+// Test that error from the xds client is handled correctly.
+func (s) TestEDSClientResponseErrorHandling(t *testing.T) {
+	td, cleanup := fakexds.StartServer(t)
+	defer cleanup()
+	edsRespChan := make(chan *xdsclient.EDSUpdate, 10)
+	newEDS := func(i *xdsclient.EDSUpdate) error {
+		edsRespChan <- i
+		return nil
+	}
+
+	client := newXDSClientWrapper(newEDS, func() {}, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
+	defer client.close()
+
+	// Create a client to be passed in attributes.
+	c := &testXDSClient{}
+	client.handleUpdate(&XDSConfig{
+		BalancerName:               td.Address,
+		EDSServiceName:             testEDSClusterName,
+		LrsLoadReportingServerName: nil,
+	}, attributes.New(xdsinternal.XDSClientID, c),
+	)
+
+	c.edsCb(nil, fmt.Errorf("testing err"))
+
+	// The ballback is called with an error, expect no update from edsRespChan.
+	//
+	// TODO: check for loseContact() when errors indicating "lose contact" are
+	// handled correctly.
+
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case resp := <-edsRespChan:
+		t.Fatalf("unexpected resp: %v", resp)
 	}
 }
 
