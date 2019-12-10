@@ -26,7 +26,7 @@ import (
 )
 
 type snapshot struct {
-	StreamStats []*ppb.StatProto
+	StreamStats []*ppb.Stat
 }
 
 func main() {

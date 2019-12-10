@@ -50,7 +50,7 @@ func retrieveSnapshot(ctx context.Context, c ppb.ProfilingClient, f string) erro
 		return err
 	}
 
-	s := &snapshot{StreamStats: make([]*ppb.StatProto, 0)}
+	s := &snapshot{StreamStats: make([]*ppb.Stat, 0)}
 
 	grpclog.Infof("receiving and processing stream stats")
 	for {
