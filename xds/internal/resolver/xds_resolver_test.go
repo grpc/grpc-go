@@ -24,13 +24,16 @@ import (
 	"fmt"
 	"net"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
+	xdsinternal "google.golang.org/grpc/xds/internal"
+	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/testutils"
 
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
@@ -55,62 +58,26 @@ var (
 // event through a channel.
 type testClientConn struct {
 	resolver.ClientConn
-	stateCh  chan struct{}
-	errorCh  chan struct{}
-	gotState resolver.State
+	stateCh *testutils.Channel
+	errorCh *testutils.Channel
 }
 
 func (t *testClientConn) UpdateState(s resolver.State) {
-	t.gotState = s
-	t.stateCh <- struct{}{}
+	t.stateCh.Send(s)
 }
 
 func (t *testClientConn) ReportError(err error) {
-	t.errorCh <- struct{}{}
+	t.errorCh.Send(err)
 }
 
-func (*testClientConn) ParseServiceConfig(_ string) *serviceconfig.ParseResult {
-	return &serviceconfig.ParseResult{}
-	// TODO: Uncomment this once we have a "experimental_cds" balancer.
-	// return internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(jsonSC)
+func (t *testClientConn) ParseServiceConfig(jsonSC string) *serviceconfig.ParseResult {
+	return internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(jsonSC)
 }
 
 func newTestClientConn() *testClientConn {
 	return &testClientConn{
-		stateCh: make(chan struct{}, 1),
-		errorCh: make(chan struct{}, 1),
-	}
-}
-
-// fakeXDSClient is a fake implementation of the xdsClientInterface interface.
-// All it does is to store the parameters received in the watch call and
-// signals various events by sending on channels.
-type fakeXDSClient struct {
-	gotTarget   string
-	gotCallback func(xdsclient.ServiceUpdate, error)
-	suCh        chan struct{}
-	cancel      chan struct{}
-	done        chan struct{}
-}
-
-func (f *fakeXDSClient) WatchService(target string, callback func(xdsclient.ServiceUpdate, error)) func() {
-	f.gotTarget = target
-	f.gotCallback = callback
-	f.suCh <- struct{}{}
-	return func() {
-		f.cancel <- struct{}{}
-	}
-}
-
-func (f *fakeXDSClient) Close() {
-	f.done <- struct{}{}
-}
-
-func newFakeXDSClient() *fakeXDSClient {
-	return &fakeXDSClient{
-		suCh:   make(chan struct{}, 1),
-		cancel: make(chan struct{}, 1),
-		done:   make(chan struct{}, 1),
+		stateCh: testutils.NewChannel(),
+		errorCh: testutils.NewChannel(),
 	}
 }
 
@@ -130,7 +97,7 @@ func getXDSClientMakerFunc(wantOpts xdsclient.Options) func(xdsclient.Options) (
 		if len(gotOpts.DialOpts) != len(wantOpts.DialOpts) {
 			return nil, fmt.Errorf("got len(DialOpts): %v, want: %v", len(gotOpts.DialOpts), len(wantOpts.DialOpts))
 		}
-		return newFakeXDSClient(), nil
+		return testutils.NewXDSClient(), nil
 	}
 }
 
@@ -237,6 +204,8 @@ type setupOpts struct {
 }
 
 func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *testClientConn, func()) {
+	t.Helper()
+
 	oldConfigMaker := newXDSConfig
 	newXDSConfig = func() *bootstrap.Config { return opts.config }
 	oldClientMaker := newXDSClient
@@ -259,107 +228,93 @@ func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *testClientConn, fun
 	return r.(*xdsResolver), tcc, cancel
 }
 
+// waitForWatchService waits for the WatchService method to be called on the
+// xdsClient within a reasonable amount of time, and also verifies that the
+// watch is called with the expected target.
+func waitForWatchService(t *testing.T, xdsC *testutils.XDSClient, wantTarget string) {
+	t.Helper()
+
+	gotTarget, err := xdsC.WaitForWatchService()
+	if err != nil {
+		t.Fatalf("xdsClient.WatchService failed with error: %v", err)
+	}
+	if gotTarget != wantTarget {
+		t.Fatalf("xdsClient.WatchService() called with target: %v, want %v", gotTarget, wantTarget)
+	}
+}
+
 // TestXDSResolverWatchCallbackAfterClose tests the case where a service update
 // from the underlying xdsClient is received after the resolver is closed.
 func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
-	fakeXDSClient := newFakeXDSClient()
+	xdsC := testutils.NewXDSClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
-		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return fakeXDSClient, nil },
+		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
 	})
 	defer cancel()
 
-	// Wait for the WatchService method to be called on the xdsClient.
-	<-fakeXDSClient.suCh
-	if fakeXDSClient.gotTarget != targetStr {
-		t.Fatalf("xdsClient.WatchService() called with target: %v, want %v", fakeXDSClient.gotTarget, targetStr)
-	}
+	waitForWatchService(t, xdsC, targetStr)
 
-	// Call the watchAPI callback after closing the resolver.
+	// Call the watchAPI callback after closing the resolver, and make sure no
+	// update is triggerred on the ClientConn.
 	xdsR.Close()
-	fakeXDSClient.gotCallback(xdsclient.ServiceUpdate{Cluster: cluster}, nil)
-
-	timer := time.NewTimer(1 * time.Second)
-	select {
-	case <-timer.C:
-	case <-tcc.stateCh:
-		timer.Stop()
-		t.Fatalf("ClientConn.UpdateState called after xdsResolver is closed")
+	xdsC.InvokeWatchServiceCb(cluster, nil)
+	if gotVal, gotErr := tcc.stateCh.Receive(); gotErr != testutils.ErrRecvTimeout {
+		t.Fatalf("ClientConn.UpdateState called after xdsResolver is closed: %v", gotVal)
 	}
 }
 
 // TestXDSResolverBadServiceUpdate tests the case the xdsClient returns a bad
 // service update.
 func TestXDSResolverBadServiceUpdate(t *testing.T) {
-	fakeXDSClient := newFakeXDSClient()
+	xdsC := testutils.NewXDSClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
-		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return fakeXDSClient, nil },
+		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
 	})
-	defer cancel()
-	defer xdsR.Close()
+	defer func() {
+		cancel()
+		xdsR.Close()
+	}()
 
-	// Wait for the WatchService method to be called on the xdsClient.
-	timer := time.NewTimer(1 * time.Second)
-	select {
-	case <-timer.C:
-		t.Fatal("Timeout when waiting for WatchService to be called on xdsClient")
-	case <-fakeXDSClient.suCh:
-		if !timer.Stop() {
-			<-timer.C
-		}
-	}
-	if fakeXDSClient.gotTarget != targetStr {
-		t.Fatalf("xdsClient.WatchService() called with target: %v, want %v", fakeXDSClient.gotTarget, targetStr)
-	}
+	waitForWatchService(t, xdsC, targetStr)
 
-	// Invoke the watchAPI callback with a bad service update.
-	fakeXDSClient.gotCallback(xdsclient.ServiceUpdate{Cluster: ""}, errors.New("bad serviceupdate"))
-
-	// Wait for the ReportError method to be called on the ClientConn.
-	timer = time.NewTimer(1 * time.Second)
-	select {
-	case <-timer.C:
-		t.Fatal("Timeout when waiting for UpdateState to be called on the ClientConn")
-	case <-tcc.errorCh:
-		timer.Stop()
+	// Invoke the watchAPI callback with a bad service update and wait for the
+	// ReportError method to be called on the ClientConn.
+	suErr := errors.New("bad serviceupdate")
+	xdsC.InvokeWatchServiceCb("", suErr)
+	if gotErrVal, gotErr := tcc.errorCh.Receive(); gotErr != nil || gotErrVal != suErr {
+		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr)
 	}
 }
 
 // TestXDSResolverGoodServiceUpdate tests the happy case where the resolver
 // gets a good service update from the xdsClient.
 func TestXDSResolverGoodServiceUpdate(t *testing.T) {
-	fakeXDSClient := newFakeXDSClient()
+	xdsC := testutils.NewXDSClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
-		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return fakeXDSClient, nil },
+		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
 	})
-	defer cancel()
-	defer xdsR.Close()
+	defer func() {
+		cancel()
+		xdsR.Close()
+	}()
 
-	// Wait for the WatchService method to be called on the xdsClient.
-	timer := time.NewTimer(1 * time.Second)
-	select {
-	case <-timer.C:
-		t.Fatal("Timeout when waiting for WatchService to be called on xdsClient")
-	case <-fakeXDSClient.suCh:
-		if !timer.Stop() {
-			<-timer.C
-		}
+	waitForWatchService(t, xdsC, targetStr)
+
+	// Invoke the watchAPI callback with a good service update and wait for the
+	// UpdateState method to be called on the ClientConn.
+	xdsC.InvokeWatchServiceCb(cluster, nil)
+	gotState, err := tcc.stateCh.Receive()
+	if err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
 	}
-	if fakeXDSClient.gotTarget != targetStr {
-		t.Fatalf("xdsClient.WatchService() called with target: %v, want %v", fakeXDSClient.gotTarget, targetStr)
+	rState := gotState.(resolver.State)
+	if gotClient := rState.Attributes.Value(xdsinternal.XDSClientID); gotClient != xdsC {
+		t.Fatalf("ClientConn.UpdateState got xdsClient: %v, want %v", gotClient, xdsC)
 	}
-
-	// Invoke the watchAPI callback with a good service update.
-	fakeXDSClient.gotCallback(xdsclient.ServiceUpdate{Cluster: cluster}, nil)
-
-	// Wait for the UpdateState method to be called on the ClientConn.
-	timer = time.NewTimer(1 * time.Second)
-	select {
-	case <-timer.C:
-		t.Fatal("Timeout when waiting for ReportError to be called on the ClientConn")
-	case <-tcc.stateCh:
-		timer.Stop()
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
 	}
 }
