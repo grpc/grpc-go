@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-// Package channel provides an implementation of a channel with a receive
-// timeout, for use in xds tests.
-package channel
+// Package testutils provides multiple utility types, for use in xds tests.
+package testutils
 
 import (
 	"errors"
@@ -29,26 +28,26 @@ import (
 var ErrRecvTimeout = errors.New("timed out when waiting for value on channel")
 
 const (
-	// DefaultRecvTimeout is the default timeout for receive operations on the
+	// DefaultChanRecvTimeout is the default timeout for receive operations on the
 	// underlying channel.
-	DefaultRecvTimeout = 1 * time.Second
-	// DefaultBufferSize is the default buffer size of the underlying channel.
-	DefaultBufferSize = 1
+	DefaultChanRecvTimeout = 1 * time.Second
+	// DefaultChanBufferSize is the default buffer size of the underlying channel.
+	DefaultChanBufferSize = 1
 )
 
-// WithTimeout wraps a generic channel and provides a timed receive operation.
-type WithTimeout struct {
+// Channel wraps a generic channel and provides a timed receive operation.
+type Channel struct {
 	ch chan interface{}
 }
 
 // Send sends value on the underlying channel.
-func (cwt *WithTimeout) Send(value interface{}) {
+func (cwt *Channel) Send(value interface{}) {
 	cwt.ch <- value
 }
 
 // TimedReceive returns the value received on the underlying channel, or
 // ErrRecvTimeout if timeout amount of time elapsed.
-func (cwt *WithTimeout) TimedReceive(timeout time.Duration) (interface{}, error) {
+func (cwt *Channel) TimedReceive(timeout time.Duration) (interface{}, error) {
 	timer := time.NewTimer(timeout)
 	select {
 	case <-timer.C:
@@ -60,12 +59,12 @@ func (cwt *WithTimeout) TimedReceive(timeout time.Duration) (interface{}, error)
 }
 
 // Receive returns the value received on the underlying channel, or
-// ErrRecvTimeout if DefaultRecvTimeout amount of time elapses.
-func (cwt *WithTimeout) Receive() (interface{}, error) {
-	return cwt.TimedReceive(DefaultRecvTimeout)
+// ErrRecvTimeout if DefaultChanRecvTimeout amount of time elapses.
+func (cwt *Channel) Receive() (interface{}, error) {
+	return cwt.TimedReceive(DefaultChanRecvTimeout)
 }
 
-// NewChan returns a new WithTimeout channel.
-func NewChan() *WithTimeout {
-	return &WithTimeout{ch: make(chan interface{}, DefaultBufferSize)}
+// NewChannel returns a new Channel.
+func NewChannel() *Channel {
+	return &Channel{ch: make(chan interface{}, DefaultChanBufferSize)}
 }

@@ -16,26 +16,23 @@
  *
  */
 
-// Package fakeclient provides a fake implmementation of the xds client, for
-// use in unittests.
-package fakeclient
+package testutils
 
 import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/testutils/channel"
 )
 
-// XDS is a fake implementation of the xds client. It exposes a bunch of
+// XDSClient is a fake implementation of an xds client. It exposes a bunch of
 // channels to signal the occurrence of various events.
-type XDS struct {
+type XDSClient struct {
 	serviceCb  func(xdsclient.ServiceUpdate, error)
-	suWatchCh  *channel.WithTimeout
-	closeCh    *channel.WithTimeout
-	suCancelCh *channel.WithTimeout
+	suWatchCh  *Channel
+	closeCh    *Channel
+	suCancelCh *Channel
 }
 
 // WatchService registers a LDS/RDS watch.
-func (xdsC *XDS) WatchService(target string, callback func(xdsclient.ServiceUpdate, error)) func() {
+func (xdsC *XDSClient) WatchService(target string, callback func(xdsclient.ServiceUpdate, error)) func() {
 	xdsC.serviceCb = callback
 	xdsC.suWatchCh.Send(target)
 	return func() {
@@ -45,26 +42,26 @@ func (xdsC *XDS) WatchService(target string, callback func(xdsclient.ServiceUpda
 
 // WaitForWatchService waits for WatchService to be invoked on this client
 // within a reasonable timeout.
-func (xdsC *XDS) WaitForWatchService() (string, error) {
+func (xdsC *XDSClient) WaitForWatchService() (string, error) {
 	val, err := xdsC.suWatchCh.Receive()
 	return val.(string), err
 }
 
 // InvokeWatchServiceCb invokes the registered service watch callback.
-func (xdsC *XDS) InvokeWatchServiceCb(cluster string, err error) {
+func (xdsC *XDSClient) InvokeWatchServiceCb(cluster string, err error) {
 	xdsC.serviceCb(xdsclient.ServiceUpdate{Cluster: cluster}, err)
 }
 
 // Close closes the xds client.
-func (xdsC *XDS) Close() {
+func (xdsC *XDSClient) Close() {
 	xdsC.closeCh.Send(nil)
 }
 
-// NewXDS returns a new fake xds client.
-func NewXDS() *XDS {
-	return &XDS{
-		suWatchCh:  channel.NewChan(),
-		closeCh:    channel.NewChan(),
-		suCancelCh: channel.NewChan(),
+// NewXDSClient returns a new fake xds client.
+func NewXDSClient() *XDSClient {
+	return &XDSClient{
+		suWatchCh:  NewChannel(),
+		closeCh:    NewChannel(),
+		suCancelCh: NewChannel(),
 	}
 }
