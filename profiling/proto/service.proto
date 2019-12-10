@@ -40,10 +40,10 @@ message EnableResponse {
 message GetStreamStatsRequest {
 }
 
-// A TimerProto measures the start and end of execution of a component within
+// A Timer measures the start and end of execution of a component within
 // gRPC that's being profiled. It includes a tag and some additional metadata
 // to identify itself.
-message TimerProto {
+message Timer {
 	// tags is a comma-separated list of strings used to tag a timer.
   string tags = 1;
 
@@ -63,18 +63,18 @@ message TimerProto {
   int64 go_id = 6;
 }
 
-// A StatProto is a collection of TimerProtos along with some additional
+// A Stat is a collection of Timers along with some additional
 // metadata to tag and identify itself.
-message StatProto {
+message Stat {
   // tags is a comma-separated list of strings used to categorize a stat.
   string tags = 1;
 
-  // timer_protos is an array of TimerProtos, each representing a different
+  // timers is an array of Timers, each representing a different
   // (but possibly overlapping) component within this stat.
-  repeated TimerProto timer_protos = 2;
+  repeated Timer timers = 2;
 
 	// metadata is an array of bytes used to uniquely identify a stat with an
-	// undefined encoding format. For example, the StatProtos returned by the
+	// undefined encoding format. For example, the Stats returned by the
 	// /Profiling/GetStreamStats service use the metadata field to encode the
 	// connection ID and the stream ID of each query.
   bytes metadata = 3;
@@ -88,5 +88,5 @@ service Profiling {
 
   // GetStreamStats is used to retrieve an array of stream-level stats from a
   // gRPC client/server.
-  rpc GetStreamStats (GetStreamStatsRequest) returns (stream StatProto);
+  rpc GetStreamStats (GetStreamStatsRequest) returns (stream Stat);
 }

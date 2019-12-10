@@ -75,7 +75,7 @@ func Init(pc *ProfilingConfig) error {
 	return nil
 }
 
-type profilingServer struct{
+type profilingServer struct {
 	drainMutex sync.Mutex
 }
 
@@ -104,8 +104,8 @@ func (s *profilingServer) Enable(ctx context.Context, req *ppb.EnableRequest) (*
 	return &ppb.EnableResponse{}, nil
 }
 
-func timerToTimerProto(timer *profiling.Timer) *ppb.TimerProto {
-	return &ppb.TimerProto{
+func timerToProtoTimer(timer *profiling.Timer) *ppb.Timer {
+	return &ppb.Timer{
 		Tags:      timer.Tags,
 		BeginSec:  timer.Begin.Unix(),
 		BeginNsec: int32(timer.Begin.Nanosecond()),
@@ -115,16 +115,16 @@ func timerToTimerProto(timer *profiling.Timer) *ppb.TimerProto {
 	}
 }
 
-func statToStatProto(stat *profiling.Stat) *ppb.StatProto {
-	statProto := &ppb.StatProto{
-		Tags:        stat.Tags,
-		TimerProtos: make([]*ppb.TimerProto, 0, len(stat.Timers)),
-		Metadata:    stat.Metadata,
+func statToProtoStat(stat *profiling.Stat) *ppb.Stat {
+	protoStat := &ppb.Stat{
+		Tags:     stat.Tags,
+		Timers:   make([]*ppb.Timer, 0, len(stat.Timers)),
+		Metadata: stat.Metadata,
 	}
 	for _, t := range stat.Timers {
-		statProto.TimerProtos = append(statProto.TimerProtos, timerToTimerProto(t))
+		protoStat.Timers = append(protoStat.Timers, timerToProtoTimer(t))
 	}
-	return statProto
+	return protoStat
 }
 
 func (s *profilingServer) GetStreamStats(req *ppb.GetStreamStatsRequest, stream ppb.Profiling_GetStreamStatsServer) error {
@@ -138,7 +138,7 @@ func (s *profilingServer) GetStreamStats(req *ppb.GetStreamStatsRequest, stream 
 
 	grpclog.Infof("Stream stats size: %v records", len(results))
 	for i := 0; i < len(results); i++ {
-		if err := stream.Send(statToStatProto(results[i].(*profiling.Stat))); err != nil {
+		if err := stream.Send(statToProtoStat(results[i].(*profiling.Stat))); err != nil {
 			return err
 		}
 	}
