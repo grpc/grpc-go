@@ -199,6 +199,67 @@ func (v2c *v2Client) sendExisting(stream adsStream) bool {
 	return true
 }
 
+// processWatchInfo pulls the fields needed by the request from a watchInfo.
+//
+// It also calls callback with cached response, and updates the watch map in
+// v2c.
+//
+// If the watch was already canceled, it returns false for send
+func (v2c *v2Client) processWatchInfo(t *watchInfo) (target []string, typeURL, version, nonce string, send bool) {
+	v2c.mu.Lock()
+	defer v2c.mu.Unlock()
+	if t.state == watchCancelled {
+		return // This returns all zero values, and false for send.
+	}
+	t.state = watchStarted
+	send = true
+
+	typeURL = t.typeURL
+	target = t.target
+	v2c.checkCacheAndUpdateWatchMap(t)
+	// TODO: if watch is called again with the same resource names,
+	// there's no need to send another request.
+	//
+	// TODO: should we reset version (for ack) when a new watch is
+	// started? Or do this only if the resource names are different
+	// (so we send a new request)?
+	return
+}
+
+// processAckInfo pulls the fields needed by the ack request from a ackInfo.
+//
+// If no active watch is found for this ack, it returns false for send.
+func (v2c *v2Client) processAckInfo(t *ackInfo) (target []string, typeURL, version, nonce string, send bool) {
+	typeURL = t.typeURL
+
+	v2c.mu.Lock()
+	defer v2c.mu.Unlock()
+	wi, ok := v2c.watchMap[typeURL]
+	if !ok {
+		// We don't send the request ack if there's no active watch, because
+		// there's no resource name. And if we send a request with empty
+		// resource name list, the server may treat it as a wild card and send
+		// us everything.
+		grpclog.Warningf("xds: ack (type %s) not sent because there's no active watch for the type", typeURL)
+		return // This returns all zero values, and false for send.
+	}
+	send = true
+
+	version = t.version
+	nonce = t.nonce
+	target = wi.target
+	if version == "" {
+		// This is a nack, get the previous acked version.
+		version = v2c.ackMap[typeURL]
+		// version will still be an empty string if typeURL isn't
+		// found in ackMap, this can happen if there wasn't any ack
+		// before.
+	} else {
+		v2c.ackMap[typeURL] = version
+	}
+	return
+}
+
 // send reads watch infos from update channel and sends out actual xDS requests
 // on the provided ADS stream.
 func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
@@ -216,52 +277,16 @@ func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
 			var (
 				target                  []string
 				typeURL, version, nonce string
+				send                    bool
 			)
 			switch t := u.(type) {
 			case *watchInfo:
-				v2c.mu.Lock()
-				if t.state == watchCancelled {
-					v2c.mu.Unlock()
-					continue
-				}
-				t.state = watchStarted
-
-				typeURL = t.typeURL
-				target = t.target
-				v2c.checkCacheAndUpdateWatchMap(t)
-				// TODO: if watch is called again with the same resource names,
-				// there's no need to send another request.
-				//
-				// TODO: should we reset version (for ack) when a new watch is
-				// started? Or do this only if the resource names are different
-				// (so we send a new request)?
-				v2c.mu.Unlock()
+				target, typeURL, version, nonce, send = v2c.processWatchInfo(t)
 			case *ackInfo:
-				typeURL = t.typeURL
-				version = t.version
-				nonce = t.nonce
-				v2c.mu.Lock()
-				wi, ok := v2c.watchMap[typeURL]
-				if !ok {
-					// We don't send the request ack if there's no active watch, because
-					// there's no resource name. And if we send a request with empty
-					// resource name list, the server may treat it as a wild card and send
-					// us everything.
-					grpclog.Warningf("xds: ack (type %s) not sent because there's no active watch for the type", typeURL)
-					v2c.mu.Unlock()
-					continue
-				}
-				target = wi.target
-				if version == "" {
-					// This is a nack, get the previous acked version.
-					version = v2c.ackMap[typeURL]
-					// version will still be an empty string if typeURL isn't
-					// found in ackMap, this can happen if there wasn't any ack
-					// before.
-				} else {
-					v2c.ackMap[typeURL] = version
-				}
-				v2c.mu.Unlock()
+				target, typeURL, version, nonce, send = v2c.processAckInfo(t)
+			}
+			if !send {
+				continue
 			}
 			if !v2c.sendRequest(stream, target, typeURL, version, nonce) {
 				return
