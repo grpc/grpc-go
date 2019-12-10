@@ -128,6 +128,14 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 // contain the clusterName we are looking for.
 func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target string) string {
 	// TODO: return error for better error logging and nack.
+	//
+	// Currently this returns "" on error, and the caller will return an error.
+	// But the error doesn't contain details of why the response is invalid
+	// (mismatch domain or empty route).
+	//
+	// For logging purposes, we can log in line. But if we want to populate
+	// error details for nack, a detailed error needs to be returned.
+
 	host, err := hostFromTarget(target)
 	if err != nil {
 		return ""
@@ -154,7 +162,7 @@ func hostFromTarget(target string) (string, error) {
 	const portMissingErrDesc = "missing port in address"
 	h, _, err := net.SplitHostPort(target)
 	if err != nil {
-		if strings.Contains(err.Error(), portMissingErrDesc) {
+		if addrErr, ok := err.(*net.AddrError); ok && strings.Contains(addrErr.Err, portMissingErrDesc) {
 			return target, nil
 		}
 		return "", err

@@ -519,7 +519,7 @@ func TestRDSWatchExpiryTimer(t *testing.T) {
 	}
 }
 
-func TestHost(t *testing.T) {
+func TestHostFromTarget(t *testing.T) {
 	tests := []struct {
 		name    string
 		target  string
