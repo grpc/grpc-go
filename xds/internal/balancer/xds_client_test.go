@@ -40,6 +40,7 @@ import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/client/fakexds"
+	"google.golang.org/grpc/xds/internal/testutils"
 )
 
 const (
@@ -168,10 +169,18 @@ func (s) TestEDSClientResponseHandling(t *testing.T) {
 }
 
 type testXDSClient struct {
-	edsCb func(*xdsclient.EDSUpdate, error)
+	clusterNameChan *testutils.Channel
+	edsCb           func(*xdsclient.EDSUpdate, error)
+}
+
+func newTestXDSClient() *testXDSClient {
+	return &testXDSClient{
+		clusterNameChan: testutils.NewChannel(),
+	}
 }
 
 func (c *testXDSClient) WatchEDS(clusterName string, edsCb func(*xdsclient.EDSUpdate, error)) (cancel func()) {
+	c.clusterNameChan.Send(clusterName)
 	c.edsCb = edsCb
 	return func() {}
 }
@@ -198,7 +207,7 @@ func (s) TestEDSClientResponseErrorHandling(t *testing.T) {
 	defer client.close()
 
 	// Create a client to be passed in attributes.
-	c := &testXDSClient{}
+	c := newTestXDSClient()
 	client.handleUpdate(&XDSConfig{
 		BalancerName:               td.Address,
 		EDSServiceName:             testEDSClusterName,
@@ -206,6 +215,9 @@ func (s) TestEDSClientResponseErrorHandling(t *testing.T) {
 	}, attributes.New(xdsinternal.XDSClientID, c),
 	)
 
+	if gotClusterName, err := c.clusterNameChan.Receive(); err != nil || gotClusterName != testEDSClusterName {
+		t.Fatalf("got EDS watch clusterName %v, expected: %v", gotClusterName, testEDSClusterName)
+	}
 	c.edsCb(nil, fmt.Errorf("testing err"))
 
 	// The ballback is called with an error, expect no update from edsRespChan.
