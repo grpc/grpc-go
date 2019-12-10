@@ -115,10 +115,17 @@ func floorCPUCount() uint32 {
 
 var numCircularBufferPairs = floorCPUCount()
 
-// CircularBuffer stores the Pushed elements in-memory. It uses a collection of
-// queuePairs to reduce contention on the acquired and written counters within
-// each queuePair; that is, at any given time, there may be floorCPUCount()
-// Pushes happening simultaneously.
+// CircularBuffer is a lock-free data structure that supports Push and Drain
+// operations.
+//
+// Note that CircularBuffer is built for performance more than reliability.
+// That is, some Push operations may fail without retries in some situations
+// (such as during a Drain operation). Order of pushes is not maintained
+// either; that is, if A was pushed before B, the Drain operation may return an
+// array with B before A. These restrictions are acceptable within gRPC's
+// profiling, but if your use-case does not permit these relaxed constraints
+// or if performance is not a primary concern, you should probably use a
+// lock-based data structure such as internal/buffer.UnboundedBuffer.
 type CircularBuffer struct {
 	drainMutex sync.Mutex
 	qp         []*queuePair
