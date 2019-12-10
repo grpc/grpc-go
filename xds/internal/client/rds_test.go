@@ -76,6 +76,26 @@ func TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 			wantCluster: "",
 		},
 		{
+			name: "default-route-match-field-is-nil",
+			rc: &xdspb.RouteConfiguration{
+				VirtualHosts: []*routepb.VirtualHost{
+					{
+						Domains: []string{goodMatchingDomain},
+						Routes: []*routepb.Route{
+							{
+								Action: &routepb.Route_Route{
+									Route: &routepb.RouteAction{
+										ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: goodClusterName1},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantCluster: "",
+		},
+		{
 			name: "default-route-match-field-is-non-nil",
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{

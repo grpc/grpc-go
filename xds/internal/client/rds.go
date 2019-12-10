@@ -137,9 +137,14 @@ func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target strin
 				continue
 			}
 			dr := vh.Routes[len(vh.Routes)-1]
-			if dr.GetMatch() == nil && dr.GetRoute() != nil {
-				return dr.GetRoute().GetCluster()
+			if match := dr.GetMatch(); match == nil || match.GetPrefix() != "" {
+				continue
 			}
+			route := dr.GetRoute()
+			if route == nil {
+				continue
+			}
+			return route.GetCluster()
 		}
 	}
 	return ""
