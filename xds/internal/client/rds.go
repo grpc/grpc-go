@@ -21,6 +21,7 @@ package client
 import (
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/grpclog"
@@ -126,7 +127,16 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 // field must be set.  Inside that route message, the cluster field will
 // contain the clusterName we are looking for.
 func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target string) string {
-	host, _, err := net.SplitHostPort(target)
+	// TODO: return error for better error logging and nack.
+	//
+	// Currently this returns "" on error, and the caller will return an error.
+	// But the error doesn't contain details of why the response is invalid
+	// (mismatch domain or empty route).
+	//
+	// For logging purposes, we can log in line. But if we want to populate
+	// error details for nack, a detailed error needs to be returned.
+
+	host, err := hostFromTarget(target)
 	if err != nil {
 		return ""
 	}
@@ -148,4 +158,19 @@ func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target strin
 		}
 	}
 	return ""
+}
+
+// hostFromTarget calls net.SplitHostPort and returns the host.
+//
+// It returns the original string instead of error if port is missing.
+func hostFromTarget(target string) (string, error) {
+	const portMissingErrDesc = "missing port in address"
+	h, _, err := net.SplitHostPort(target)
+	if err != nil {
+		if addrErr, ok := err.(*net.AddrError); ok && strings.Contains(addrErr.Err, portMissingErrDesc) {
+			return target, nil
+		}
+		return "", err
+	}
+	return h, nil
 }
