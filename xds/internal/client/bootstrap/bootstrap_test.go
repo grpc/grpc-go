@@ -177,6 +177,25 @@ func TestNewConfig(t *testing.T) {
 				]
 			}]
 		}`,
+		"multipleXDSServers": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [
+				{
+					"server_uri": "trafficdirector.googleapis.com:443",
+					"channel_creds": [{ "type": "google_default" }]
+				},
+				{
+					"server_uri": "backup.never.use.com:1234",
+					"channel_creds": [{ "type": "not-google-default" }]
+				}
+			]
+		}`,
 	}
 
 	oldFileReadFunc := fileReadFunc
@@ -198,13 +217,10 @@ func TestNewConfig(t *testing.T) {
 		{"nonExistentBootstrapFile", &Config{}},
 		{"empty", &Config{}},
 		{"badJSON", &Config{}},
-		{
-			"emptyNodeProto",
-			&Config{
-				BalancerName: "trafficdirector.googleapis.com:443",
-				NodeProto:    &corepb.Node{BuildVersion: gRPCVersion},
-			},
-		},
+		{"emptyNodeProto", &Config{
+			BalancerName: "trafficdirector.googleapis.com:443",
+			NodeProto:    &corepb.Node{BuildVersion: gRPCVersion},
+		}},
 		{"emptyXdsServer", &Config{NodeProto: nodeProto}},
 		{"unknownTopLevelFieldInFile", nilCredsConfig},
 		{"unknownFieldInNodeProto", &Config{NodeProto: nodeProto}},
@@ -213,6 +229,7 @@ func TestNewConfig(t *testing.T) {
 		{"nonGoogleDefaultCreds", nilCredsConfig},
 		{"multipleChannelCreds", nonNilCredsConfig},
 		{"goodBootstrap", nonNilCredsConfig},
+		{"multipleXDSServers", nonNilCredsConfig},
 	}
 
 	for _, test := range tests {
