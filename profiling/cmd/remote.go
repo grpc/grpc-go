@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/gob"
 	"fmt"
-	"io"
 	"os"
 	"time"
 
@@ -43,29 +42,13 @@ func setEnabled(ctx context.Context, c ppb.ProfilingClient, enabled bool) error 
 }
 
 func retrieveSnapshot(ctx context.Context, c ppb.ProfilingClient, f string) error {
-	grpclog.Infof("establishing stream stats stream")
-	stream, err := c.GetStreamStats(ctx, &ppb.GetStreamStatsRequest{})
+	grpclog.Infof("getting stream stats")
+	resp, err := c.GetStreamStats(ctx, &ppb.GetStreamStatsRequest{})
 	if err != nil {
 		grpclog.Errorf("error calling GetStreamStats: %v\n", err)
 		return err
 	}
-
-	s := &snapshot{StreamStats: make([]*ppb.Stat, 0)}
-
-	grpclog.Infof("receiving and processing stream stats")
-	for {
-		resp, err := stream.Recv()
-		if err != nil {
-			if err == io.EOF {
-				grpclog.Infof("received EOF, last message")
-				break
-			}
-			grpclog.Errorf("error recv: %v", err)
-			return err
-		}
-
-		s.StreamStats = append(s.StreamStats, resp)
-	}
+	s := &snapshot{StreamStats: resp.StreamStats}
 
 	grpclog.Infof("creating snapshot file %s", f)
 	file, err := os.Create(f)

@@ -77,6 +77,12 @@ func hashCname(tag string) string {
 	return ""
 }
 
+// filterCounter identifies the counter-th instance of a timer of the type
+// `filter` within a Stat. This, in conjunction with the counter data structure
+// defined below, is used to draw flows between linked loopy writer/reader
+// events with application goroutine events in trace-viewer. This is possible
+// because enqueues and dequeues are ordered -- that is, the first dequeue must
+// be dequeueing the first enqueue operation.
 func filterCounter(stat *ppb.Stat, filter string, counter int) int {
 	localCounter := 0
 	for i := 0; i < len(stat.Timers); i++ {
@@ -91,6 +97,8 @@ func filterCounter(stat *ppb.Stat, filter string, counter int) int {
 	return -1
 }
 
+// counter is state object used to store and retrieve the number of timers of a
+// particular type that have been seen.
 type counter struct {
 	c map[string]int
 }
@@ -100,20 +108,17 @@ func newCounter() *counter {
 }
 
 func (c *counter) GetAndInc(s string) int {
-	res, ok := c.c[s]
-	if !ok {
-		c.c[s] = 1
-		return 0
-	}
-
+	ret := c.c[s]
 	c.c[s]++
-	return res
+	return ret
 }
 
 func catapultNs(sec int64, nsec int32) float64 {
 	return float64((sec * 1000000000) + int64(nsec))
 }
 
+// streamStatsCatapultJSONSingle processes a single proto Stat object to return
+// an array of jsonNodes in trace-viewer's format.
 func streamStatsCatapultJSONSingle(stat *ppb.Stat, baseSec int64, baseNsec int32) []jsonNode {
 	if len(stat.Timers) == 0 {
 		return nil
@@ -124,7 +129,7 @@ func streamStatsCatapultJSONSingle(stat *ppb.Stat, baseSec int64, baseNsec int32
 	opid := fmt.Sprintf("/%s/%d/%d", stat.Tags, connectionCounter, streamID)
 
 	var loopyReaderGoID, loopyWriterGoID int64
-	for i := 0; i < len(stat.Timers); i++ {
+	for i := 0; i < len(stat.Timers) && (loopyReaderGoID == 0 || loopyWriterGoID == 0); i++ {
 		if strings.Contains(stat.Timers[i].Tags, "/loopyReader") {
 			loopyReaderGoID = stat.Timers[i].GoId
 		} else if strings.Contains(stat.Timers[i].Tags, "/loopyWriter") {
@@ -287,6 +292,8 @@ func streamStatsCatapultJSONSingle(stat *ppb.Stat, baseSec int64, baseNsec int32
 	return result
 }
 
+// timerBeginIsBefore compares two proto Timer objects to determine if the
+// first comes before the second chronologically.
 func timerBeginIsBefore(ti *ppb.Timer, tj *ppb.Timer) bool {
 	if ti.BeginSec == tj.BeginSec {
 		return ti.BeginNsec < tj.BeginNsec
@@ -294,7 +301,10 @@ func timerBeginIsBefore(ti *ppb.Timer, tj *ppb.Timer) bool {
 	return ti.BeginSec < tj.BeginSec
 }
 
-func streamStatsCatapultJSON(s *snapshot, streamStatsCatapultJSONFileName string) error {
+// streamStatsCatapulJSON receives a *snapshot and the name of a JSON file to
+// write to. The grpc-go profiling snapshot is processed and converted to a
+// JSON format that can be understood by trace-viewer.
+func streamStatsCatapultJSON(s *snapshot, streamStatsCatapultJSONFileName string) (err error) {
 	grpclog.Infof("calculating stream stats filters")
 	filterArray := strings.Split(*flagStreamStatsFilter, ",")
 	filter := make(map[string]bool)
@@ -371,18 +381,12 @@ func streamStatsCatapultJSON(s *snapshot, streamStatsCatapultJSONFileName string
 		grpclog.Errorf("cannot create file %s: %v", streamStatsCatapultJSONFileName, err)
 		return err
 	}
+	defer streamStatsCatapultJSONFile.Close()
 
 	grpclog.Infof("writing catapult JSON to disk")
 	_, err = streamStatsCatapultJSONFile.Write(b)
 	if err != nil {
 		grpclog.Errorf("cannot write marshalled JSON: %v", err)
-		return err
-	}
-
-	grpclog.Infof("closing catapult JSON file")
-	streamStatsCatapultJSONFile.Close()
-	if err != nil {
-		grpclog.Errorf("cannot close catapult JSON file %s: %v", streamStatsCatapultJSONFileName, err)
 		return err
 	}
 

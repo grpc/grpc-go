@@ -33,6 +33,7 @@ func loadSnapshot(snapshotFileName string) (*snapshot, error) {
 		grpclog.Errorf("cannot open %s: %v", snapshotFileName, err)
 		return nil, err
 	}
+	defer snapshotFile.Close()
 
 	grpclog.Infof("decoding snapshot file %s", snapshotFileName)
 	s := &snapshot{}
@@ -56,7 +57,7 @@ func localCommand() error {
 	}
 
 	if *flagStreamStatsCatapultJSON == "" {
-		return fmt.Errorf("what should I do with the snapshot file?")
+		return fmt.Errorf("snapshot file specified without an action to perform")
 	}
 
 	if *flagStreamStatsCatapultJSON != "" {
