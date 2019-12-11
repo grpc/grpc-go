@@ -88,9 +88,14 @@ type Features struct {
 	// benchmark run.
 	MaxConcurrentCalls int
 	// ReqSizeBytes is the request size in bytes used in this benchmark run.
+	// Unused if PayloadCurve is non-nil.
 	ReqSizeBytes int
 	// RespSizeBytes is the response size in bytes used in this benchmark run.
+	// Unused if PayloadCurve is non-nil.
 	RespSizeBytes int
+	// PayloadCurve is a histogram representing the shape a random distribution
+	// of payload sizes should take.
+	PayloadCurve *PayloadCurve
 	// ModeCompressor represents the compressor mode used.
 	ModeCompressor string
 	// EnableChannelz indicates if channelz was turned on.
@@ -101,12 +106,18 @@ type Features struct {
 
 // String returns all the feature values as a string.
 func (f Features) String() string {
+	var payloadString string
+	if f.PayloadCurve != nil {
+		payloadString = fmt.Sprintf("payloadCurveFile_%s", f.PayloadCurve.Hash())
+	} else {
+		payloadString = fmt.Sprintf("reqSize_%vB-respSize_%vB", f.ReqSizeBytes, f.RespSizeBytes)
+	}
 	return fmt.Sprintf("networkMode_%v-bufConn_%v-keepalive_%v-benchTime_%v-"+
-		"trace_%v-latency_%v-kbps_%v-MTU_%v-maxConcurrentCalls_%v-"+
-		"reqSize_%vB-respSize_%vB-compressor_%v-channelz_%v-preloader_%v",
-		f.NetworkMode, f.UseBufConn, f.EnableKeepalive, f.BenchTime,
-		f.EnableTrace, f.Latency, f.Kbps, f.MTU, f.MaxConcurrentCalls,
-		f.ReqSizeBytes, f.RespSizeBytes, f.ModeCompressor, f.EnableChannelz, f.EnablePreloader)
+		"trace_%v-latency_%v-kbps_%v-MTU_%v-maxConcurrentCalls_%v-%s-"+
+		"compressor_%v-channelz_%v-preloader_%v",
+		f.NetworkMode, f.UseBufConn, f.EnableKeepalive, f.BenchTime, f.EnableTrace,
+		f.Latency, f.Kbps, f.MTU, f.MaxConcurrentCalls, payloadString,
+		f.ModeCompressor, f.EnableChannelz, f.EnablePreloader)
 }
 
 // SharedFeatures returns the shared features as a pretty printable string.

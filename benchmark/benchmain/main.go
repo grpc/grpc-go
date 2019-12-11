@@ -86,8 +86,9 @@ var (
 	readKbps           = flags.IntSlice("kbps", defaultReadKbps, "Simulated network throughput (in kbps) - may be a comma-separated list")
 	readMTU            = flags.IntSlice("mtu", defaultReadMTU, "Simulated network MTU (Maximum Transmission Unit) - may be a comma-separated list")
 	maxConcurrentCalls = flags.IntSlice("maxConcurrentCalls", defaultMaxConcurrentCalls, "Number of concurrent RPCs during benchmarks")
-	readReqSizeBytes   = flags.IntSlice("reqSizeBytes", defaultReqSizeBytes, "Request size in bytes - may be a comma-separated list")
-	readRespSizeBytes  = flags.IntSlice("respSizeBytes", defaultRespSizeBytes, "Response size in bytes - may be a comma-separated list")
+	readReqSizeBytes   = flags.IntSlice("reqSizeBytes", nil, "Request size in bytes - may be a comma-separated list")
+	readRespSizeBytes  = flags.IntSlice("respSizeBytes", nil, "Response size in bytes - may be a comma-separated list")
+	payloadCurveFile   = flag.String("payloadCurveFile", "", "CSV file describing the shape a random distribution of payload sizes must take")
 	benchTime          = flag.Duration("benchtime", time.Second, "Configures the amount of time to run each benchmark")
 	memProfile         = flag.String("memProfile", "", "Enables memory profiling output to the filename provided.")
 	memProfileRate     = flag.Int("memProfileRate", 512*1024, "Configures the memory profiling rate. \n"+
@@ -330,7 +331,13 @@ func makeClient(bf stats.Features) (testpb.BenchmarkServiceClient, func()) {
 func makeFuncUnary(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 	tc, cleanup := makeClient(bf)
 	return func(int) {
-		unaryCaller(tc, bf.ReqSizeBytes, bf.RespSizeBytes)
+		reqSizeBytes := bf.ReqSizeBytes
+		respSizeBytes := bf.RespSizeBytes
+		if bf.PayloadCurve != nil {
+			reqSizeBytes = bf.PayloadCurve.ChooseRandom()
+			respSizeBytes = reqSizeBytes
+		}
+		unaryCaller(tc, reqSizeBytes, respSizeBytes)
 	}, cleanup
 }
 
@@ -347,7 +354,13 @@ func makeFuncStream(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 	}
 
 	return func(pos int) {
-		streamCaller(streams[pos], bf.ReqSizeBytes, bf.RespSizeBytes)
+		reqSizeBytes := bf.ReqSizeBytes
+		respSizeBytes := bf.RespSizeBytes
+		if bf.PayloadCurve != nil {
+			reqSizeBytes = bf.PayloadCurve.ChooseRandom()
+			respSizeBytes = reqSizeBytes
+		}
+		streamCaller(streams[pos], reqSizeBytes, respSizeBytes)
 	}, cleanup
 }
 
@@ -475,6 +488,7 @@ type featureOpts struct {
 	maxConcurrentCalls []int
 	reqSizeBytes       []int
 	respSizeBytes      []int
+	payloadCurve       *stats.PayloadCurve
 	compModes          []string
 	enableChannelz     []bool
 	enablePreloader    []bool
@@ -557,7 +571,7 @@ func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 		if curPos == nil {
 			curPos = make([]int, stats.MaxFeatureIndex)
 		}
-		result = append(result, stats.Features{
+		f := stats.Features{
 			// These features stay the same for each iteration.
 			NetworkMode:     b.networkMode,
 			UseBufConn:      b.useBufconn,
@@ -569,12 +583,17 @@ func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 			Kbps:               b.features.readKbps[curPos[stats.ReadKbpsIndex]],
 			MTU:                b.features.readMTU[curPos[stats.ReadMTUIndex]],
 			MaxConcurrentCalls: b.features.maxConcurrentCalls[curPos[stats.MaxConcurrentCallsIndex]],
-			ReqSizeBytes:       b.features.reqSizeBytes[curPos[stats.ReqSizeBytesIndex]],
-			RespSizeBytes:      b.features.respSizeBytes[curPos[stats.RespSizeBytesIndex]],
 			ModeCompressor:     b.features.compModes[curPos[stats.CompModesIndex]],
 			EnableChannelz:     b.features.enableChannelz[curPos[stats.EnableChannelzIndex]],
 			EnablePreloader:    b.features.enablePreloader[curPos[stats.EnablePreloaderIndex]],
-		})
+		}
+		if b.features.payloadCurve == nil {
+			f.ReqSizeBytes = b.features.reqSizeBytes[curPos[stats.ReqSizeBytesIndex]]
+			f.RespSizeBytes = b.features.respSizeBytes[curPos[stats.RespSizeBytesIndex]]
+		} else {
+			f.PayloadCurve = b.features.payloadCurve
+		}
+		result = append(result, f)
 		addOne(curPos, featuresNum)
 	}
 	return result
@@ -586,6 +605,9 @@ func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 // 'featureIndex' enum.
 func addOne(features []int, featuresMaxPosition []int) {
 	for i := len(features) - 1; i >= 0; i-- {
+		if featuresMaxPosition[i] == 0 {
+			continue
+		}
 		features[i] = (features[i] + 1)
 		if features[i]/featuresMaxPosition[i] == 0 {
 			break
@@ -627,6 +649,23 @@ func processFlags() *benchOpts {
 			enableChannelz:     setToggleMode(*channelzOn),
 			enablePreloader:    setToggleMode(*preloaderMode),
 		},
+	}
+
+	if *payloadCurveFile == "" {
+		if len(opts.features.reqSizeBytes) == 0 {
+			opts.features.reqSizeBytes = defaultReqSizeBytes
+		}
+		if len(opts.features.respSizeBytes) == 0 {
+			opts.features.respSizeBytes = defaultRespSizeBytes
+		}
+	} else {
+		var err error
+		opts.features.payloadCurve, err = stats.NewPayloadCurve(*payloadCurveFile)
+		if err != nil {
+			log.Fatalf("cannot load payload curve file %s: %v", *payloadCurveFile, err)
+		}
+		opts.features.reqSizeBytes = nil
+		opts.features.reqSizeBytes = nil
 	}
 
 	// Re-write latency, kpbs and mtu if network mode is set.
