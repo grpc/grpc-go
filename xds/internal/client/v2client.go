@@ -163,7 +163,7 @@ func (v2c *v2Client) run() {
 // sendRequest sends a request for provided typeURL and resource on the provided
 // stream.
 //
-// version is the ack version to be send with the request
+// version is the ack version to be sent with the request
 // - If this is the new request (not an ack/nack), version will be an empty
 // string
 // - If this is an ack, version will be the version from the response
