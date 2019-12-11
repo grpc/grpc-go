@@ -127,7 +127,7 @@ func statToProtoStat(stat *profiling.Stat) *ppb.Stat {
 	return protoStat
 }
 
-func (s *profilingServer) GetStreamStats(req *ppb.GetStreamStatsRequest, stream ppb.Profiling_GetStreamStatsServer) error {
+func (s *profilingServer) GetStreamStats(ctx context.Context, req *ppb.GetStreamStatsRequest) (*ppb.GetStreamStatsResponse, error) {
 	grpclog.Infof("Processing stream request for stream stats")
 
 	// Since the drain operation is destructive, only one client request should
@@ -135,13 +135,11 @@ func (s *profilingServer) GetStreamStats(req *ppb.GetStreamStatsRequest, stream 
 	s.drainMutex.Lock()
 	results := profiling.StreamStats.Drain()
 	s.drainMutex.Unlock()
-
 	grpclog.Infof("Stream stats size: %v records", len(results))
-	for i := 0; i < len(results); i++ {
-		if err := stream.Send(statToProtoStat(results[i].(*profiling.Stat))); err != nil {
-			return err
-		}
-	}
 
-	return nil
+	streamStats := make([]*ppb.Stat, 0)
+	for _, stat := range results {
+		streamStats = append(streamStats, statToProtoStat(stat.(*profiling.Stat)))
+	}
+	return &ppb.GetStreamStatsResponse{StreamStats: streamStats}, nil
 }

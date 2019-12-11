@@ -35,9 +35,15 @@ message EnableRequest {
 message EnableResponse {
 }
 
-// GetStreamStats defines the fields in a /Profiling/GetStreamStats method
-// request to retrieve stream-level stats in a gRPC client/server.
+// GetStreamStatsRequest defines the fields in a /Profiling/GetStreamStats
+// method request to retrieve stream-level stats in a gRPC client/server.
 message GetStreamStatsRequest {
+}
+
+// GetStreamStatsResponse defines the fields in a /Profiling/GetStreamStats
+// method response.
+message GetStreamStatsResponse {
+	repeated Stat stream_stats = 1;
 }
 
 // A Timer measures the start and end of execution of a component within
@@ -88,5 +94,5 @@ service Profiling {
 
   // GetStreamStats is used to retrieve an array of stream-level stats from a
   // gRPC client/server.
-  rpc GetStreamStats (GetStreamStatsRequest) returns (stream Stat);
+  rpc GetStreamStats (GetStreamStatsRequest) returns (GetStreamStatsResponse);
 }
