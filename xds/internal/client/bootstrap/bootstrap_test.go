@@ -64,9 +64,9 @@ func TestNewConfig(t *testing.T) {
 		"badJSON": `["test": 123]`,
 		"emptyNodeProto": `
 		{
-			"xds_server" : {
+			"xds_servers" : [{
 				"server_uri": "trafficdirector.googleapis.com:443"
-			}
+			}]
 		}`,
 		"emptyXdsServer": `
 		{
@@ -85,12 +85,12 @@ func TestNewConfig(t *testing.T) {
 				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
 			    }
 			},
-			"xds_server" : {
+			"xds_servers" : [{
 				"server_uri": "trafficdirector.googleapis.com:443",
 				"channel_creds": [
 					{ "type": "not-google-default" }
 				]
-			},
+			}],
 			"unknownField": "foobar"
 		}`,
 		"unknownFieldInNodeProto": `
@@ -111,13 +111,13 @@ func TestNewConfig(t *testing.T) {
 				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
 			    }
 			},
-			"xds_server" : {
+			"xds_servers" : [{
 				"server_uri": "trafficdirector.googleapis.com:443",
 				"channel_creds": [
 					{ "type": "not-google-default" }
 				],
 				"unknownField": "foobar"
-			}
+			}]
 		}`,
 		"emptyChannelCreds": `
 		{
@@ -127,9 +127,9 @@ func TestNewConfig(t *testing.T) {
 				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
 			    }
 			},
-			"xds_server" : {
+			"xds_servers" : [{
 				"server_uri": "trafficdirector.googleapis.com:443"
-			}
+			}]
 		}`,
 		"nonGoogleDefaultCreds": `
 		{
@@ -139,12 +139,12 @@ func TestNewConfig(t *testing.T) {
 				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
 			    }
 			},
-			"xds_server" : {
+			"xds_servers" : [{
 				"server_uri": "trafficdirector.googleapis.com:443",
 				"channel_creds": [
 					{ "type": "not-google-default" }
 				]
-			}
+			}]
 		}`,
 		"multipleChannelCreds": `
 		{
@@ -154,13 +154,13 @@ func TestNewConfig(t *testing.T) {
 				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
 			    }
 			},
-			"xds_server" : {
+			"xds_servers" : [{
 				"server_uri": "trafficdirector.googleapis.com:443",
 				"channel_creds": [
 					{ "type": "not-google-default" },
 					{ "type": "google_default" }
 				]
-			}
+			}]
 		}`,
 		"goodBootstrap": `
 		{
@@ -170,12 +170,12 @@ func TestNewConfig(t *testing.T) {
 				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
 			    }
 			},
-			"xds_server" : {
+			"xds_servers" : [{
 				"server_uri": "trafficdirector.googleapis.com:443",
 				"channel_creds": [
 					{ "type": "google_default" }
 				]
-			}
+			}]
 		}`,
 	}
 
