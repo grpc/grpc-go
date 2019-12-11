@@ -49,6 +49,14 @@ func newRPCStats() *rpcStats {
 	}
 }
 
+func isZeroStats(stats *lbpb.ClientStats) bool {
+	return len(stats.CallsFinishedWithDrop) == 0 &&
+		stats.NumCallsStarted == 0 &&
+		stats.NumCallsFinished == 0 &&
+		stats.NumCallsFinishedWithClientFailedToSend == 0 &&
+		stats.NumCallsFinishedKnownReceived == 0
+}
+
 // toClientStats converts rpcStats to lbpb.ClientStats, and clears rpcStats.
 func (s *rpcStats) toClientStats() *lbpb.ClientStats {
 	stats := &lbpb.ClientStats{

@@ -171,13 +171,15 @@ type remoteBalancer struct {
 	statsDura time.Duration
 	done      chan struct{}
 	stats     *rpcStats
+	statsChan chan *lbpb.ClientStats
 }
 
-func newRemoteBalancer(intervals []time.Duration) *remoteBalancer {
+func newRemoteBalancer(intervals []time.Duration, statsChan chan *lbpb.ClientStats) *remoteBalancer {
 	return &remoteBalancer{
-		sls:   make(chan *lbpb.ServerList, 1),
-		done:  make(chan struct{}),
-		stats: newRPCStats(),
+		sls:       make(chan *lbpb.ServerList, 1),
+		done:      make(chan struct{}),
+		stats:     newRPCStats(),
+		statsChan: statsChan,
 	}
 }
 
@@ -218,6 +220,9 @@ func (b *remoteBalancer) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServe
 				return
 			}
 			b.stats.merge(req.GetClientStats())
+			if b.statsChan != nil && req.GetClientStats() != nil {
+				b.statsChan <- req.GetClientStats()
+			}
 		}
 	}()
 	for {
@@ -295,7 +300,7 @@ type testServers struct {
 	beListeners []net.Listener
 }
 
-func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), err error) {
+func newLoadBalancer(numberOfBackends int, statsChan chan *lbpb.ClientStats) (tss *testServers, cleanup func(), err error) {
 	var (
 		beListeners []net.Listener
 		ls          *remoteBalancer
@@ -328,7 +333,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 		sn: lbServerName,
 	}
 	lb = grpc.NewServer(grpc.Creds(lbCreds))
-	ls = newRemoteBalancer(nil)
+	ls = newRemoteBalancer(nil, statsChan)
 	lbgrpc.RegisterLoadBalancerServer(lb, ls)
 	go func() {
 		lb.Serve(lbLis)
@@ -361,7 +366,7 @@ func TestGRPCLB(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
-	tss, cleanup, err := newLoadBalancer(1)
+	tss, cleanup, err := newLoadBalancer(1, nil)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
@@ -407,7 +412,7 @@ func TestGRPCLBWeighted(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
-	tss, cleanup, err := newLoadBalancer(2)
+	tss, cleanup, err := newLoadBalancer(2, nil)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
@@ -475,7 +480,7 @@ func TestDropRequest(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
-	tss, cleanup, err := newLoadBalancer(2)
+	tss, cleanup, err := newLoadBalancer(2, nil)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
@@ -633,7 +638,7 @@ func TestBalancerDisconnects(t *testing.T) {
 		lbs   []*grpc.Server
 	)
 	for i := 0; i < 2; i++ {
-		tss, cleanup, err := newLoadBalancer(1)
+		tss, cleanup, err := newLoadBalancer(1, nil)
 		if err != nil {
 			t.Fatalf("failed to create new load balancer: %v", err)
 		}
@@ -708,7 +713,7 @@ func TestFallback(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
-	tss, cleanup, err := newLoadBalancer(1)
+	tss, cleanup, err := newLoadBalancer(1, nil)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
@@ -843,7 +848,7 @@ func TestFallBackWithNoServerAddress(t *testing.T) {
 	}
 	defer cleanup()
 
-	tss, cleanup, err := newLoadBalancer(1)
+	tss, cleanup, err := newLoadBalancer(1, nil)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
@@ -957,7 +962,7 @@ func TestGRPCLBPickFirst(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
-	tss, cleanup, err := newLoadBalancer(3)
+	tss, cleanup, err := newLoadBalancer(3, nil)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
@@ -1108,13 +1113,11 @@ func checkStats(stats, expected *rpcStats) error {
 	return nil
 }
 
-func runAndGetStats(t *testing.T, drop bool, runRPCs func(*grpc.ClientConn)) *rpcStats {
-	defer leakcheck.Check(t)
-
+func runAndCheckStats(t *testing.T, drop bool, statsChan chan *lbpb.ClientStats, runRPCs func(*grpc.ClientConn), statsWant *rpcStats) error {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
-	tss, cleanup, err := newLoadBalancer(1)
+	tss, cleanup, err := newLoadBalancer(1, statsChan)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
@@ -1152,9 +1155,14 @@ func runAndGetStats(t *testing.T, drop bool, runRPCs func(*grpc.ClientConn)) *rp
 	}}})
 
 	runRPCs(cc)
-	time.Sleep(1 * time.Second)
-	stats := tss.ls.stats
-	return stats
+	end := time.Now().Add(time.Second)
+	for time.Now().Before(end) {
+		if err := checkStats(tss.ls.stats, statsWant); err == nil {
+			time.Sleep(200 * time.Millisecond) // sleep for two intervals to make sure no new stats are reported.
+			break
+		}
+	}
+	return checkStats(tss.ls.stats, statsWant)
 }
 
 const (
@@ -1164,7 +1172,7 @@ const (
 
 func TestGRPCLBStatsUnarySuccess(t *testing.T) {
 	defer leakcheck.Check(t)
-	stats := runAndGetStats(t, false, func(cc *grpc.ClientConn) {
+	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
 		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
@@ -1173,9 +1181,7 @@ func TestGRPCLBStatsUnarySuccess(t *testing.T) {
 		for i := 0; i < countRPC-1; i++ {
 			testC.EmptyCall(context.Background(), &testpb.Empty{})
 		}
-	})
-
-	if err := checkStats(stats, &rpcStats{
+	}, &rpcStats{
 		numCallsStarted:               int64(countRPC),
 		numCallsFinished:              int64(countRPC),
 		numCallsFinishedKnownReceived: int64(countRPC),
@@ -1186,7 +1192,7 @@ func TestGRPCLBStatsUnarySuccess(t *testing.T) {
 
 func TestGRPCLBStatsUnaryDrop(t *testing.T) {
 	defer leakcheck.Check(t)
-	stats := runAndGetStats(t, true, func(cc *grpc.ClientConn) {
+	if err := runAndCheckStats(t, true, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
 		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
@@ -1195,9 +1201,7 @@ func TestGRPCLBStatsUnaryDrop(t *testing.T) {
 		for i := 0; i < countRPC-1; i++ {
 			testC.EmptyCall(context.Background(), &testpb.Empty{})
 		}
-	})
-
-	if err := checkStats(stats, &rpcStats{
+	}, &rpcStats{
 		numCallsStarted:               int64(countRPC),
 		numCallsFinished:              int64(countRPC),
 		numCallsFinishedKnownReceived: int64(countRPC) / 2,
@@ -1209,7 +1213,7 @@ func TestGRPCLBStatsUnaryDrop(t *testing.T) {
 
 func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 	defer leakcheck.Check(t)
-	stats := runAndGetStats(t, false, func(cc *grpc.ClientConn) {
+	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
 		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
@@ -1218,9 +1222,7 @@ func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 		for i := 0; i < countRPC-1; i++ {
 			cc.Invoke(context.Background(), failtosendURI, &testpb.Empty{}, nil)
 		}
-	})
-
-	if err := checkStats(stats, &rpcStats{
+	}, &rpcStats{
 		numCallsStarted:                        int64(countRPC)*2 - 1,
 		numCallsFinished:                       int64(countRPC)*2 - 1,
 		numCallsFinishedWithClientFailedToSend: int64(countRPC-1) * 2,
@@ -1232,7 +1234,7 @@ func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 
 func TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 	defer leakcheck.Check(t)
-	stats := runAndGetStats(t, false, func(cc *grpc.ClientConn) {
+	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
 		stream, err := testC.FullDuplexCall(context.Background(), grpc.WaitForReady(true))
@@ -1255,9 +1257,7 @@ func TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 				}
 			}
 		}
-	})
-
-	if err := checkStats(stats, &rpcStats{
+	}, &rpcStats{
 		numCallsStarted:               int64(countRPC),
 		numCallsFinished:              int64(countRPC),
 		numCallsFinishedKnownReceived: int64(countRPC),
@@ -1268,7 +1268,7 @@ func TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 
 func TestGRPCLBStatsStreamingDrop(t *testing.T) {
 	defer leakcheck.Check(t)
-	stats := runAndGetStats(t, true, func(cc *grpc.ClientConn) {
+	if err := runAndCheckStats(t, true, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
 		stream, err := testC.FullDuplexCall(context.Background(), grpc.WaitForReady(true))
@@ -1291,9 +1291,7 @@ func TestGRPCLBStatsStreamingDrop(t *testing.T) {
 				}
 			}
 		}
-	})
-
-	if err := checkStats(stats, &rpcStats{
+	}, &rpcStats{
 		numCallsStarted:               int64(countRPC),
 		numCallsFinished:              int64(countRPC),
 		numCallsFinishedKnownReceived: int64(countRPC) / 2,
@@ -1305,7 +1303,7 @@ func TestGRPCLBStatsStreamingDrop(t *testing.T) {
 
 func TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 	defer leakcheck.Check(t)
-	stats := runAndGetStats(t, false, func(cc *grpc.ClientConn) {
+	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
 		stream, err := testC.FullDuplexCall(context.Background(), grpc.WaitForReady(true))
@@ -1320,13 +1318,48 @@ func TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 		for i := 0; i < countRPC-1; i++ {
 			cc.NewStream(context.Background(), &grpc.StreamDesc{}, failtosendURI)
 		}
-	})
-
-	if err := checkStats(stats, &rpcStats{
+	}, &rpcStats{
 		numCallsStarted:                        int64(countRPC)*2 - 1,
 		numCallsFinished:                       int64(countRPC)*2 - 1,
 		numCallsFinishedWithClientFailedToSend: int64(countRPC-1) * 2,
 		numCallsFinishedKnownReceived:          1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGRPCLBStatsQuashEmpty(t *testing.T) {
+	defer leakcheck.Check(t)
+	ch := make(chan *lbpb.ClientStats)
+	defer close(ch)
+	if err := runAndCheckStats(t, false, ch, func(cc *grpc.ClientConn) {
+		// Perform no RPCs; wait for load reports to start, which should be
+		// zero, then expect no other load report within 5x the update
+		// interval.
+		select {
+		case st := <-ch:
+			if !isZeroStats(st) {
+				t.Errorf("got stats %v; want all zero", st)
+			}
+		case <-time.After(5 * time.Second):
+			t.Errorf("did not get initial stats report after 5 seconds")
+			return
+		}
+
+		select {
+		case st := <-ch:
+			t.Errorf("got unexpected stats report: %v", st)
+		case <-time.After(500 * time.Millisecond):
+			// Success.
+		}
+		go func() {
+			for range ch { // Drain statsChan until it is closed.
+			}
+		}()
+	}, &rpcStats{
+		numCallsStarted:               0,
+		numCallsFinished:              0,
+		numCallsFinishedKnownReceived: 0,
 	}); err != nil {
 		t.Fatal(err)
 	}
