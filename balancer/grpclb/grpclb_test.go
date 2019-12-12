@@ -116,11 +116,11 @@ func fakeNameDialer(ctx context.Context, addr string) (net.Conn, error) {
 //
 // It's a test-only method. rpcStats is defined in grpclb_picker.
 func (s *rpcStats) merge(cs *lbpb.ClientStats) {
-	s.mu.Lock()
 	atomic.AddInt64(&s.numCallsStarted, cs.NumCallsStarted)
 	atomic.AddInt64(&s.numCallsFinished, cs.NumCallsFinished)
 	atomic.AddInt64(&s.numCallsFinishedWithClientFailedToSend, cs.NumCallsFinishedWithClientFailedToSend)
 	atomic.AddInt64(&s.numCallsFinishedKnownReceived, cs.NumCallsFinishedKnownReceived)
+	s.mu.Lock()
 	for _, perToken := range cs.CallsFinishedWithDrop {
 		s.numCallsDropped[perToken.LoadBalanceToken] += perToken.NumCalls
 	}
