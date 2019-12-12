@@ -21,31 +21,10 @@ package client
 import (
 	"fmt"
 
-	"github.com/golang/protobuf/ptypes"
-	"google.golang.org/grpc/grpclog"
-
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
+	"github.com/golang/protobuf/ptypes"
 )
-
-// newLDSRequest generates an LDS request proto for the provided target, to be
-// sent out on the wire.
-func (v2c *v2Client) newLDSRequest(target []string) *xdspb.DiscoveryRequest {
-	return &xdspb.DiscoveryRequest{
-		Node:          v2c.nodeProto,
-		TypeUrl:       listenerURL,
-		ResourceNames: target,
-	}
-}
-
-// sendLDS sends an LDS request for provided target on the provided stream.
-func (v2c *v2Client) sendLDS(stream adsStream, target []string) bool {
-	if err := stream.Send(v2c.newLDSRequest(target)); err != nil {
-		grpclog.Warningf("xds: LDS request for resource %v failed: %v", target, err)
-		return false
-	}
-	return true
-}
 
 // handleLDSResponse processes an LDS response received from the xDS server. On
 // receipt of a good response, it also invokes the registered watcher callback.
@@ -53,7 +32,7 @@ func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
-	wi := v2c.watchMap[ldsResource]
+	wi := v2c.watchMap[ldsURL]
 	if wi == nil {
 		return fmt.Errorf("xds: no LDS watcher found when handling LDS response: %+v", resp)
 	}

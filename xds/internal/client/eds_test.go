@@ -120,11 +120,11 @@ var (
 	badlyMarshaledEDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: endpointURL,
+				TypeUrl: edsURL,
 				Value:   []byte{1, 2, 3, 4},
 			},
 		},
-		TypeUrl: endpointURL,
+		TypeUrl: edsURL,
 	}
 	badResourceTypeInEDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
@@ -133,7 +133,7 @@ var (
 				Value:   marshaledConnMgr1,
 			},
 		},
-		TypeUrl: endpointURL,
+		TypeUrl: edsURL,
 	}
 	goodEDSResponse1 = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
@@ -145,7 +145,7 @@ var (
 				return a
 			}(),
 		},
-		TypeUrl: endpointURL,
+		TypeUrl: edsURL,
 	}
 	goodEDSResponse2 = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
@@ -157,7 +157,7 @@ var (
 				return a
 			}(),
 		},
-		TypeUrl: endpointURL,
+		TypeUrl: edsURL,
 	}
 )
 
@@ -283,6 +283,7 @@ func TestEDSHandleResponseWithoutWatch(t *testing.T) {
 		sCleanup()
 	}()
 	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	defer v2c.close()
 
 	if v2c.handleEDSResponse(goodEDSResponse1) == nil {
 		t.Fatal("v2c.handleEDSResponse() succeeded, should have failed")

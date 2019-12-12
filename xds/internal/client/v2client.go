@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/buffer"
 
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 )
@@ -51,9 +52,9 @@ type v2Client struct {
 	nodeProto *corepb.Node
 	backoff   func(int) time.Duration
 
-	// watchCh in the channel onto which watchInfo objects are pushed by the
+	// sendCh in the channel onto which watchInfo objects are pushed by the
 	// watch API, and it is read and acted upon by the send() goroutine.
-	watchCh *buffer.Unbounded
+	sendCh *buffer.Unbounded
 
 	mu sync.Mutex
 	// Message specific watch infos, protected by the above mutex. These are
@@ -62,7 +63,12 @@ type v2Client struct {
 	// messages. When the user of this client object cancels a watch call,
 	// these are set to nil. All accesses to the map protected and any value
 	// inside the map should be protected with the above mutex.
-	watchMap map[resourceType]*watchInfo
+	watchMap map[string]*watchInfo
+	// ackMap contains the version that was acked (the version in the ack
+	// request that was sent on wire). The key is typeURL, the value is the
+	// version string, becaues the versions for different resource types
+	// should be independent.
+	ackMap map[string]string
 	// rdsCache maintains a mapping of {routeConfigName --> clusterName} from
 	// validated route configurations received in RDS responses. We cache all
 	// valid route configurations, whether or not we are interested in them
@@ -92,8 +98,9 @@ func newV2Client(cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) 
 		cc:        cc,
 		nodeProto: nodeProto,
 		backoff:   backoff,
-		watchCh:   buffer.NewUnbounded(),
-		watchMap:  make(map[resourceType]*watchInfo),
+		sendCh:    buffer.NewUnbounded(),
+		watchMap:  make(map[string]*watchInfo),
+		ackMap:    make(map[string]string),
 		rdsCache:  make(map[string]string),
 		cdsCache:  make(map[string]CDSUpdate),
 	}
@@ -153,6 +160,31 @@ func (v2c *v2Client) run() {
 	}
 }
 
+// sendRequest sends a request for provided typeURL and resource on the provided
+// stream.
+//
+// version is the ack version to be sent with the request
+// - If this is the new request (not an ack/nack), version will be an empty
+// string
+// - If this is an ack, version will be the version from the response
+// - If this is a nack, version will be the previous acked version (from
+// ackMap). If there was no ack before, it will be an empty string
+func (v2c *v2Client) sendRequest(stream adsStream, resourceNames []string, typeURL, version, nonce string) bool {
+	req := &xdspb.DiscoveryRequest{
+		Node:          v2c.nodeProto,
+		TypeUrl:       typeURL,
+		ResourceNames: resourceNames,
+		VersionInfo:   version,
+		ResponseNonce: nonce,
+		// TODO: populate ErrorDetails for nack.
+	}
+	if err := stream.Send(req); err != nil {
+		grpclog.Warningf("xds: request (type %s) for resource %v failed: %v", typeURL, resourceNames, err)
+		return false
+	}
+	return true
+}
+
 // sendExisting sends out xDS requests for registered watchers when recovering
 // from a broken stream.
 //
@@ -164,28 +196,78 @@ func (v2c *v2Client) sendExisting(stream adsStream) bool {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
-	for wType, wi := range v2c.watchMap {
-		switch wType {
-		case ldsResource:
-			if !v2c.sendLDS(stream, wi.target) {
-				return false
-			}
-		case rdsResource:
-			if !v2c.sendRDS(stream, wi.target) {
-				return false
-			}
-		case cdsResource:
-			if !v2c.sendCDS(stream, wi.target) {
-				return false
-			}
-		case edsResource:
-			if !v2c.sendEDS(stream, wi.target) {
-				return false
-			}
+	// Reset the ack versions when the stream restarts.
+	v2c.ackMap = make(map[string]string)
+
+	for typeURL, wi := range v2c.watchMap {
+		if !v2c.sendRequest(stream, wi.target, typeURL, "", "") {
+			return false
 		}
 	}
 
 	return true
+}
+
+// processWatchInfo pulls the fields needed by the request from a watchInfo.
+//
+// It also calls callback with cached response, and updates the watch map in
+// v2c.
+//
+// If the watch was already canceled, it returns false for send
+func (v2c *v2Client) processWatchInfo(t *watchInfo) (target []string, typeURL, version, nonce string, send bool) {
+	v2c.mu.Lock()
+	defer v2c.mu.Unlock()
+	if t.state == watchCancelled {
+		return // This returns all zero values, and false for send.
+	}
+	t.state = watchStarted
+	send = true
+
+	typeURL = t.typeURL
+	target = t.target
+	v2c.checkCacheAndUpdateWatchMap(t)
+	// TODO: if watch is called again with the same resource names,
+	// there's no need to send another request.
+	//
+	// TODO: should we reset version (for ack) when a new watch is
+	// started? Or do this only if the resource names are different
+	// (so we send a new request)?
+	return
+}
+
+// processAckInfo pulls the fields needed by the ack request from a ackInfo.
+//
+// If no active watch is found for this ack, it returns false for send.
+func (v2c *v2Client) processAckInfo(t *ackInfo) (target []string, typeURL, version, nonce string, send bool) {
+	typeURL = t.typeURL
+
+	v2c.mu.Lock()
+	defer v2c.mu.Unlock()
+	wi, ok := v2c.watchMap[typeURL]
+	if !ok {
+		// We don't send the request ack if there's no active watch (this can be
+		// either the server sends responses before any request, or the watch is
+		// canceled while the ackInfo is in queue), because there's no resource
+		// name. And if we send a request with empty resource name list, the
+		// server may treat it as a wild card and send us everything.
+		grpclog.Warningf("xds: ack (type %s) not sent because there's no active watch for the type", typeURL)
+		return // This returns all zero values, and false for send.
+	}
+	send = true
+
+	version = t.version
+	nonce = t.nonce
+	target = wi.target
+	if version == "" {
+		// This is a nack, get the previous acked version.
+		version = v2c.ackMap[typeURL]
+		// version will still be an empty string if typeURL isn't
+		// found in ackMap, this can happen if there wasn't any ack
+		// before.
+	} else {
+		v2c.ackMap[typeURL] = version
+	}
+	return
 }
 
 // send reads watch infos from update channel and sends out actual xDS requests
@@ -199,36 +281,25 @@ func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
 		select {
 		case <-v2c.ctx.Done():
 			return
-		case u := <-v2c.watchCh.Get():
-			v2c.watchCh.Load()
-			wi := u.(*watchInfo)
-			v2c.mu.Lock()
-			if wi.state == watchCancelled {
-				v2c.mu.Unlock()
+		case u := <-v2c.sendCh.Get():
+			v2c.sendCh.Load()
+
+			var (
+				target                  []string
+				typeURL, version, nonce string
+				send                    bool
+			)
+			switch t := u.(type) {
+			case *watchInfo:
+				target, typeURL, version, nonce, send = v2c.processWatchInfo(t)
+			case *ackInfo:
+				target, typeURL, version, nonce, send = v2c.processAckInfo(t)
+			}
+			if !send {
 				continue
 			}
-			wi.state = watchStarted
-			target := wi.target
-			v2c.checkCacheAndUpdateWatchMap(wi)
-			v2c.mu.Unlock()
-
-			switch wi.wType {
-			case ldsResource:
-				if !v2c.sendLDS(stream, target) {
-					return
-				}
-			case rdsResource:
-				if !v2c.sendRDS(stream, target) {
-					return
-				}
-			case cdsResource:
-				if !v2c.sendCDS(stream, target) {
-					return
-				}
-			case edsResource:
-				if !v2c.sendEDS(stream, target) {
-					return
-				}
+			if !v2c.sendRequest(stream, target, typeURL, version, nonce) {
+				return
 			}
 		case <-done:
 			return
@@ -247,30 +318,36 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 			grpclog.Warningf("xds: ADS stream recv failed: %v", err)
 			return success
 		}
+		var respHandleErr error
 		switch resp.GetTypeUrl() {
-		case listenerURL:
-			if err := v2c.handleLDSResponse(resp); err != nil {
-				grpclog.Warningf("xds: LDS response handler failed: %v", err)
-				return success
-			}
-		case routeURL:
-			if err := v2c.handleRDSResponse(resp); err != nil {
-				grpclog.Warningf("xds: RDS response handler failed: %v", err)
-				return success
-			}
-		case clusterURL:
-			if err := v2c.handleCDSResponse(resp); err != nil {
-				grpclog.Warningf("xds: CDS response handler failed: %v", err)
-				return success
-			}
-		case endpointURL:
-			if err := v2c.handleEDSResponse(resp); err != nil {
-				grpclog.Warningf("xds: EDS response handler failed: %v", err)
-				return success
-			}
+		case ldsURL:
+			respHandleErr = v2c.handleLDSResponse(resp)
+		case rdsURL:
+			respHandleErr = v2c.handleRDSResponse(resp)
+		case cdsURL:
+			respHandleErr = v2c.handleCDSResponse(resp)
+		case edsURL:
+			respHandleErr = v2c.handleEDSResponse(resp)
 		default:
 			grpclog.Warningf("xds: unknown response URL type: %v", resp.GetTypeUrl())
+			continue
 		}
+
+		typeURL := resp.GetTypeUrl()
+		if respHandleErr != nil {
+			grpclog.Warningf("xds: response (type %s) handler failed: %v", typeURL, respHandleErr)
+			v2c.sendCh.Put(&ackInfo{
+				typeURL: typeURL,
+				version: "",
+				nonce:   resp.GetNonce(),
+			})
+			continue
+		}
+		v2c.sendCh.Put(&ackInfo{
+			typeURL: typeURL,
+			version: resp.GetVersionInfo(),
+			nonce:   resp.GetNonce(),
+		})
 		success = true
 	}
 }
@@ -282,18 +359,11 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 // The provided callback should not block or perform any expensive operations
 // or call other methods of the v2Client object.
 func (v2c *v2Client) watchLDS(target string, ldsCb ldsCallback) (cancel func()) {
-	wi := &watchInfo{wType: ldsResource, target: []string{target}, callback: ldsCb}
-	v2c.watchCh.Put(wi)
-	return func() {
-		v2c.mu.Lock()
-		defer v2c.mu.Unlock()
-		if wi.state == watchEnqueued {
-			wi.state = watchCancelled
-			return
-		}
-		v2c.watchMap[ldsResource].cancel()
-		delete(v2c.watchMap, ldsResource)
-	}
+	return v2c.watch(&watchInfo{
+		typeURL:  ldsURL,
+		target:   []string{target},
+		callback: ldsCb,
+	})
 }
 
 // watchRDS registers an RDS watcher for the provided routeName. Updates
@@ -303,21 +373,14 @@ func (v2c *v2Client) watchLDS(target string, ldsCb ldsCallback) (cancel func()) 
 // The provided callback should not block or perform any expensive operations
 // or call other methods of the v2Client object.
 func (v2c *v2Client) watchRDS(routeName string, rdsCb rdsCallback) (cancel func()) {
-	wi := &watchInfo{wType: rdsResource, target: []string{routeName}, callback: rdsCb}
-	v2c.watchCh.Put(wi)
-	return func() {
-		v2c.mu.Lock()
-		defer v2c.mu.Unlock()
-		if wi.state == watchEnqueued {
-			wi.state = watchCancelled
-			return
-		}
-		v2c.watchMap[rdsResource].cancel()
-		delete(v2c.watchMap, rdsResource)
-		// TODO: Once a registered RDS watch is cancelled, we should send an
-		// RDS request with no resources. This will let the server know that we
-		// are no longer interested in this resource.
-	}
+	return v2c.watch(&watchInfo{
+		typeURL:  rdsURL,
+		target:   []string{routeName},
+		callback: rdsCb,
+	})
+	// TODO: Once a registered RDS watch is cancelled, we should send an RDS
+	// request with no resources. This will let the server know that we are no
+	// longer interested in this resource.
 }
 
 // watchCDS registers an CDS watcher for the provided clusterName. Updates
@@ -327,18 +390,11 @@ func (v2c *v2Client) watchRDS(routeName string, rdsCb rdsCallback) (cancel func(
 // The provided callback should not block or perform any expensive operations
 // or call other methods of the v2Client object.
 func (v2c *v2Client) watchCDS(clusterName string, cdsCb cdsCallback) (cancel func()) {
-	wi := &watchInfo{wType: cdsResource, target: []string{clusterName}, callback: cdsCb}
-	v2c.watchCh.Put(wi)
-	return func() {
-		v2c.mu.Lock()
-		defer v2c.mu.Unlock()
-		if wi.state == watchEnqueued {
-			wi.state = watchCancelled
-			return
-		}
-		v2c.watchMap[cdsResource].cancel()
-		delete(v2c.watchMap, cdsResource)
-	}
+	return v2c.watch(&watchInfo{
+		typeURL:  cdsURL,
+		target:   []string{clusterName},
+		callback: cdsCb,
+	})
 }
 
 // watchEDS registers an EDS watcher for the provided clusterName. Updates
@@ -348,8 +404,18 @@ func (v2c *v2Client) watchCDS(clusterName string, cdsCb cdsCallback) (cancel fun
 // The provided callback should not block or perform any expensive operations
 // or call other methods of the v2Client object.
 func (v2c *v2Client) watchEDS(clusterName string, edsCb edsCallback) (cancel func()) {
-	wi := &watchInfo{wType: edsResource, target: []string{clusterName}, callback: edsCb}
-	v2c.watchCh.Put(wi)
+	return v2c.watch(&watchInfo{
+		typeURL:  edsURL,
+		target:   []string{clusterName},
+		callback: edsCb,
+	})
+	// TODO: Once a registered EDS watch is cancelled, we should send an EDS
+	// request with no resources. This will let the server know that we are no
+	// longer interested in this resource.
+}
+
+func (v2c *v2Client) watch(wi *watchInfo) (cancel func()) {
+	v2c.sendCh.Put(wi)
 	return func() {
 		v2c.mu.Lock()
 		defer v2c.mu.Unlock()
@@ -357,11 +423,9 @@ func (v2c *v2Client) watchEDS(clusterName string, edsCb edsCallback) (cancel fun
 			wi.state = watchCancelled
 			return
 		}
-		v2c.watchMap[edsResource].cancel()
-		delete(v2c.watchMap, edsResource)
-		// TODO: Once a registered EDS watch is cancelled, we should send an
-		// EDS request with no resources. This will let the server know that we
-		// are no longer interested in this resource.
+		v2c.watchMap[wi.typeURL].cancel()
+		delete(v2c.watchMap, wi.typeURL)
+		// TODO: should we reset ack version string when cancelling the watch?
 	}
 }
 
@@ -372,25 +436,25 @@ func (v2c *v2Client) watchEDS(clusterName string, edsCb edsCallback) (cancel fun
 //
 // Caller should hold v2c.mu
 func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
-	if existing := v2c.watchMap[wi.wType]; existing != nil {
+	if existing := v2c.watchMap[wi.typeURL]; existing != nil {
 		existing.cancel()
 	}
 
-	v2c.watchMap[wi.wType] = wi
-	switch wi.wType {
+	v2c.watchMap[wi.typeURL] = wi
+	switch wi.typeURL {
 	// We need to grab the lock inside of the expiryTimer's afterFunc because
 	// we need to access the watchInfo, which is stored in the watchMap.
-	case ldsResource:
+	case ldsURL:
 		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
 			v2c.mu.Lock()
 			wi.callback.(ldsCallback)(ldsUpdate{}, fmt.Errorf("xds: LDS target %s not found", wi.target))
 			v2c.mu.Unlock()
 		})
-	case rdsResource:
+	case rdsURL:
 		routeName := wi.target[0]
 		if cluster := v2c.rdsCache[routeName]; cluster != "" {
 			var err error
-			if v2c.watchMap[ldsResource] == nil {
+			if v2c.watchMap[ldsURL] == nil {
 				cluster = ""
 				err = fmt.Errorf("xds: no LDS watcher found when handling RDS watch for route {%v} from cache", routeName)
 			}
@@ -404,11 +468,11 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 			wi.callback.(rdsCallback)(rdsUpdate{}, fmt.Errorf("xds: RDS target %s not found", wi.target))
 			v2c.mu.Unlock()
 		})
-	case cdsResource:
+	case cdsURL:
 		clusterName := wi.target[0]
 		if update, ok := v2c.cdsCache[clusterName]; ok {
 			var err error
-			if v2c.watchMap[cdsResource] == nil {
+			if v2c.watchMap[cdsURL] == nil {
 				err = fmt.Errorf("xds: no CDS watcher found when handling CDS watch for cluster {%v} from cache", clusterName)
 			}
 			wi.callback.(cdsCallback)(update, err)
@@ -419,7 +483,7 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 			wi.callback.(cdsCallback)(CDSUpdate{}, fmt.Errorf("xds: CDS target %s not found", wi.target))
 			v2c.mu.Unlock()
 		})
-	case edsResource:
+	case edsURL:
 		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
 			v2c.mu.Lock()
 			wi.callback.(edsCallback)(nil, fmt.Errorf("xds: EDS target %s not found", wi.target))

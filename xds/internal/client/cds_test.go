@@ -397,7 +397,7 @@ func TestCDSCaching(t *testing.T) {
 		},
 		// Push an empty CDS response. This should clear the cache.
 		{
-			responseToSend:    &fakexds.Response{Resp: &xdspb.DiscoveryResponse{TypeUrl: clusterURL}},
+			responseToSend:    &fakexds.Response{Resp: &xdspb.DiscoveryResponse{TypeUrl: cdsURL}},
 			wantOpErr:         false,
 			wantCDSCache:      map[string]CDSUpdate{},
 			wantWatchCallback: true,
@@ -466,11 +466,11 @@ var (
 	badlyMarshaledCDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: clusterURL,
+				TypeUrl: cdsURL,
 				Value:   []byte{1, 2, 3, 4},
 			},
 		},
-		TypeUrl: clusterURL,
+		TypeUrl: cdsURL,
 	}
 	goodCluster1 = &xdspb.Cluster{
 		Name:                 clusterName1,
@@ -508,32 +508,32 @@ var (
 	goodCDSResponse1     = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: clusterURL,
+				TypeUrl: cdsURL,
 				Value:   marshaledCluster1,
 			},
 		},
-		TypeUrl: clusterURL,
+		TypeUrl: cdsURL,
 	}
 	goodCDSResponse2 = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: clusterURL,
+				TypeUrl: cdsURL,
 				Value:   marshaledCluster2,
 			},
 		},
-		TypeUrl: clusterURL,
+		TypeUrl: cdsURL,
 	}
 	cdsResponseWithMultipleResources = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: clusterURL,
+				TypeUrl: cdsURL,
 				Value:   marshaledCluster1,
 			},
 			{
-				TypeUrl: clusterURL,
+				TypeUrl: cdsURL,
 				Value:   marshaledCluster2,
 			},
 		},
-		TypeUrl: clusterURL,
+		TypeUrl: cdsURL,
 	}
 )

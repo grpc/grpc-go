@@ -164,30 +164,11 @@ func ParseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) *EDSUpdate {
 	return u
 }
 
-// newEDSRequest generates an EDS request proto for the provided clusterName, to
-// be sent out on the wire.
-func (v2c *v2Client) newEDSRequest(clusterName []string) *xdspb.DiscoveryRequest {
-	return &xdspb.DiscoveryRequest{
-		Node:          v2c.nodeProto,
-		TypeUrl:       endpointURL,
-		ResourceNames: clusterName,
-	}
-}
-
-// sendEDS sends an EDS request for provided clusterName on the provided stream.
-func (v2c *v2Client) sendEDS(stream adsStream, clusterName []string) bool {
-	if err := stream.Send(v2c.newEDSRequest(clusterName)); err != nil {
-		grpclog.Warningf("xds: EDS request for resource %v failed: %v", clusterName, err)
-		return false
-	}
-	return true
-}
-
 func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
-	wi := v2c.watchMap[edsResource]
+	wi := v2c.watchMap[edsURL]
 	if wi == nil {
 		return fmt.Errorf("xds: no EDS watcher found when handling EDS response: %+v", resp)
 	}
