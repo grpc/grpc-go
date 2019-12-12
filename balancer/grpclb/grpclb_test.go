@@ -1108,6 +1108,10 @@ func (failPreRPCCred) RequireTransportSecurity() bool {
 
 func checkStats(stats, expected *rpcStats) error {
 	if !stats.equal(expected) {
+		stats.mu.Lock()
+		defer stats.mu.Unlock()
+		expected.mu.Lock()
+		defer expected.mu.Unlock()
 		return fmt.Errorf("stats not equal: got %+v, want %+v", stats, expected)
 	}
 	return nil
