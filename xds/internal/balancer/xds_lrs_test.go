@@ -20,78 +20,45 @@ package balancer
 
 import (
 	"testing"
-	"time"
 
-	durationpb "github.com/golang/protobuf/ptypes/duration"
-	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal/client/fakexds"
+	xdsinternal "google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/testutils/fakexds"
 )
 
-func (s) TestXdsLoadReporting(t *testing.T) {
-	originalNewEDSBalancer := newEDSBalancer
-	newEDSBalancer = newFakeEDSBalancer
-	defer func() {
-		newEDSBalancer = originalNewEDSBalancer
-	}()
-
+// TestXDSLoadReporting verifies that the edsBalancer starts the loadReport
+// stream when the lbConfig passed to it contains a valid value for the LRS
+// server (empty string).
+func (s) TestXDSLoadReporting(t *testing.T) {
 	builder := balancer.Get(edsName)
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
+	edsB, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
 	if !ok {
-		t.Fatalf("unable to type assert to *edsBalancer")
+		t.Fatalf("builder.Build(%s) returned type {%T}, want {*edsBalancer}", edsName, edsB)
 	}
-	defer lb.Close()
+	defer edsB.Close()
 
-	td, cleanup := fakexds.StartServer(t)
-	defer cleanup()
+	xdsC := fakexds.NewClient()
+	edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, xdsC)},
+		BalancerConfig: &XDSConfig{LrsLoadReportingServerName: new(string)},
+	})
 
-	const intervalNano = 1000 * 1000 * 50
-	td.LRS.ReportingInterval = &durationpb.Duration{
-		Seconds: 0,
-		Nanos:   intervalNano,
+	gotCluster, err := xdsC.WaitForWatchEDS()
+	if err != nil {
+		t.Fatalf("xdsClient.WatchEDS failed with error: %v", err)
 	}
-	td.LRS.ExpectedEDSClusterName = testEDSClusterName
-
-	cfg := &XDSConfig{
-		BalancerName: td.Address,
-		// Set lrs server name to an empty string, instead of nil, so the xds
-		// server will be used for LRS.
-		LrsLoadReportingServerName: new(string),
-	}
-	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
-	td.ResponseChan <- &fakexds.Response{Resp: testEDSResp}
-	var (
-		i     int
-		edsLB *fakeEDSBalancer
-	)
-	for i = 0; i < 10; i++ {
-		edsLB = getLatestEdsBalancer()
-		if edsLB != nil {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	if i == 10 {
-		t.Fatal("edsBalancer instance has not been created and assigned to lb.xdsLB after 1s")
+	if gotCluster != testEDSClusterName {
+		t.Fatalf("xdsClient.WatchEDS() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
 	}
 
-	var dropCategories = []string{"drop_for_real", "drop_for_fun"}
-	drops := map[string]uint64{
-		dropCategories[0]: 31,
-		dropCategories[1]: 41,
+	got, err := xdsC.WaitForReportLoad()
+	if err != nil {
+		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err)
 	}
-
-	for c, d := range drops {
-		for i := 0; i < int(d); i++ {
-			edsLB.loadStore.CallDropped(c)
-			time.Sleep(time.Nanosecond * intervalNano / 10)
-		}
-	}
-	time.Sleep(time.Nanosecond * intervalNano * 2)
-
-	if got := td.LRS.GetDrops(); !cmp.Equal(got, drops) {
-		t.Errorf("different: %v %v %v", got, drops, cmp.Diff(got, drops))
+	if got.Server != "" || got.Cluster != testEDSClusterName {
+		t.Fatalf("xdsClient.ReportLoad called with {%v, %v}: want {\"\", %v}", got.Server, got.Cluster, testEDSClusterName)
 	}
 }

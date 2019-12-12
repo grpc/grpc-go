@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-// Package testutils provides multiple utility types, for use in xds tests.
+// Package testutils provides utility types, for use in xds tests.
 package testutils
 
 import (
