@@ -68,6 +68,10 @@ func timeChange(title string, val1, val2 time.Duration) string {
 		val2.String(), float64(val2-val1)*100/float64(val1))
 }
 
+func strDiff(title, val1, val2 string) string {
+	return fmt.Sprintf("%20s %12s %12s\n", title, val1, val2)
+}
+
 func compareTwoMap(m1, m2 map[string]stats.BenchResults) {
 	for k2, v2 := range m2 {
 		if v1, ok := m1[k2]; ok {
@@ -84,6 +88,8 @@ func compareTwoMap(m1, m2 map[string]stats.BenchResults) {
 			changes += timeChange("90th-Lat", v1.Data.Ninetieth, v2.Data.Ninetieth)
 			changes += timeChange("99th-Lat", v1.Data.NinetyNinth, v2.Data.NinetyNinth)
 			changes += timeChange("Avg-Lat", v1.Data.Average, v2.Data.Average)
+			changes += strDiff("GoVersion", v1.GoVersion, v2.GoVersion)
+			changes += strDiff("GrpcVersion", v1.GrpcVersion, v2.GrpcVersion)
 			fmt.Printf("%s\n", changes)
 		}
 	}
