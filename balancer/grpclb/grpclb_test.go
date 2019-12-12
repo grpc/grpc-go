@@ -116,11 +116,11 @@ func fakeNameDialer(ctx context.Context, addr string) (net.Conn, error) {
 //
 // It's a test-only method. rpcStats is defined in grpclb_picker.
 func (s *rpcStats) merge(cs *lbpb.ClientStats) {
+	s.mu.Lock()
 	atomic.AddInt64(&s.numCallsStarted, cs.NumCallsStarted)
 	atomic.AddInt64(&s.numCallsFinished, cs.NumCallsFinished)
 	atomic.AddInt64(&s.numCallsFinishedWithClientFailedToSend, cs.NumCallsFinishedWithClientFailedToSend)
 	atomic.AddInt64(&s.numCallsFinishedKnownReceived, cs.NumCallsFinishedKnownReceived)
-	s.mu.Lock()
 	for _, perToken := range cs.CallsFinishedWithDrop {
 		s.numCallsDropped[perToken.LoadBalanceToken] += perToken.NumCalls
 	}
@@ -164,6 +164,17 @@ func (s *rpcStats) equal(o *rpcStats) bool {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	return mapsEqual(s.numCallsDropped, o.numCallsDropped)
+}
+
+func (s *rpcStats) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return fmt.Sprintf("Started: %v, Finished: %v, FinishedWithClientFailedToSend: %v, FinishedKnownReceived: %v, Dropped: %v",
+		atomic.LoadInt64(&s.numCallsStarted),
+		atomic.LoadInt64(&s.numCallsFinished),
+		atomic.LoadInt64(&s.numCallsFinishedWithClientFailedToSend),
+		atomic.LoadInt64(&s.numCallsFinishedKnownReceived),
+		s.numCallsDropped)
 }
 
 type remoteBalancer struct {
@@ -1108,10 +1119,6 @@ func (failPreRPCCred) RequireTransportSecurity() bool {
 
 func checkStats(stats, expected *rpcStats) error {
 	if !stats.equal(expected) {
-		stats.mu.Lock()
-		defer stats.mu.Unlock()
-		expected.mu.Lock()
-		defer expected.mu.Unlock()
 		return fmt.Errorf("stats not equal: got %+v, want %+v", stats, expected)
 	}
 	return nil
