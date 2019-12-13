@@ -16,7 +16,7 @@
  *
  */
 
-// The profiling package contains two logical components: buffer.go and
+// Package profiling contains two logical components: buffer.go and
 // profiling.go. The former implements a circular buffer (a.k.a. ring buffer)
 // in a lock-free manner using atomics. This ring buffer is used by
 // profiling.go to store various statistics. For example, StreamStats is a
@@ -30,7 +30,6 @@
 // more types of measurements (such as the number of memory allocations) could
 // be measured, which might require a different type of object being pushed
 // into the circular buffer.
-
 package profiling
 
 import (

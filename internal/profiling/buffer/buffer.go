@@ -18,6 +18,8 @@
  *
  */
 
+// Package buffer provides a high-performant lock free implementation of a
+// circular buffer used by the profiling code.
 package buffer
 
 import (
@@ -42,7 +44,7 @@ type queue struct {
 	// proceeding forwarding with the actual write to arr. This counter is also
 	// used by the Drain operation's drainWait subroutine to wait for all pushes
 	// to complete.
-	acquired uint32
+	acquired uint32 // Accessed atomically.
 	// After the completion of a Push operation, the written counter is
 	// incremented. Also used by drainWait to wait for all pushes to complete.
 	written uint32
@@ -255,8 +257,8 @@ func (cb *CircularBuffer) Drain() []interface{} {
 
 	result := make([]interface{}, 0)
 	for i := 0; i < len(qs); i++ {
-		if qs[i].acquired < qs[i].size {
-			result = dereferenceAppend(result, qs[i].arr, 0, qs[i].acquired)
+		if acquired := atomic.LoadUint32(&qs[i].acquired); acquired < qs[i].size {
+			result = dereferenceAppend(result, qs[i].arr, 0, acquired)
 		} else {
 			result = dereferenceAppend(result, qs[i].arr, 0, qs[i].size)
 		}
