@@ -105,11 +105,11 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 	// rb.Build-->ccr.ReportError-->ccr.poll-->ccr.resolveNow, would end up
 	// accessing ccr.resolver which is being assigned here.
 	ccr.resolverMu.Lock()
+	defer ccr.resolverMu.Unlock()
 	ccr.resolver, err = rb.Build(cc.parsedTarget, ccr, rbo)
 	if err != nil {
 		return nil, err
 	}
-	ccr.resolverMu.Unlock()
 	return ccr, nil
 }
 
