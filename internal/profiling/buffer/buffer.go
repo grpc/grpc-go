@@ -257,8 +257,7 @@ func (cb *CircularBuffer) Drain() []interface{} {
 
 	result := make([]interface{}, 0)
 	for i := 0; i < len(qs); i++ {
-		acquired := atomic.LoadUint32(&qs[i].acquired)
-		if acquired < qs[i].size {
+		if acquired := atomic.LoadUint32(&qs[i].acquired); acquired < qs[i].size {
 			result = dereferenceAppend(result, qs[i].arr, 0, acquired)
 		} else {
 			result = dereferenceAppend(result, qs[i].arr, 0, qs[i].size)
