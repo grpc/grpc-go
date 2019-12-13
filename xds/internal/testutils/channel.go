@@ -66,5 +66,10 @@ func (cwt *Channel) Receive() (interface{}, error) {
 
 // NewChannel returns a new Channel.
 func NewChannel() *Channel {
-	return &Channel{ch: make(chan interface{}, DefaultChanBufferSize)}
+	return NewChannelWithSize(DefaultChanBufferSize)
+}
+
+// NewChannelWithSize returns a new Channel with a buffer of bufSize.
+func NewChannelWithSize(bufSize int) *Channel {
+	return &Channel{ch: make(chan interface{}, bufSize)}
 }
