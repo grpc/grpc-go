@@ -88,7 +88,7 @@ var (
 	maxConcurrentCalls = flags.IntSlice("maxConcurrentCalls", defaultMaxConcurrentCalls, "Number of concurrent RPCs during benchmarks")
 	readReqSizeBytes   = flags.IntSlice("reqSizeBytes", nil, "Request size in bytes - may be a comma-separated list")
 	readRespSizeBytes  = flags.IntSlice("respSizeBytes", nil, "Response size in bytes - may be a comma-separated list")
-	payloadCurveFile   = flag.String("payloadCurveFile", "", "CSV file describing the shape a random distribution of payload sizes must take")
+	payloadCurveFiles  = flags.StringSlice("payloadCurveFiles", nil, "comma-separated list of CSV files describing the shape a random distribution of payload sizes")
 	benchTime          = flag.Duration("benchtime", time.Second, "Configures the amount of time to run each benchmark")
 	memProfile         = flag.String("memProfile", "", "Enables memory profiling output to the filename provided.")
 	memProfileRate     = flag.Int("memProfileRate", 512*1024, "Configures the memory profiling rate. \n"+
@@ -488,7 +488,7 @@ type featureOpts struct {
 	maxConcurrentCalls []int
 	reqSizeBytes       []int
 	respSizeBytes      []int
-	payloadCurve       *stats.PayloadCurve
+	payloadCurve       []*stats.PayloadCurve
 	compModes          []string
 	enableChannelz     []bool
 	enablePreloader    []bool
@@ -518,6 +518,8 @@ func makeFeaturesNum(b *benchOpts) []int {
 			featuresNum[i] = len(b.features.reqSizeBytes)
 		case stats.RespSizeBytesIndex:
 			featuresNum[i] = len(b.features.respSizeBytes)
+		case stats.PayloadCurveIndex:
+			featuresNum[i] = len(b.features.payloadCurve)
 		case stats.CompModesIndex:
 			featuresNum[i] = len(b.features.compModes)
 		case stats.EnableChannelzIndex:
@@ -587,11 +589,11 @@ func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 			EnableChannelz:     b.features.enableChannelz[curPos[stats.EnableChannelzIndex]],
 			EnablePreloader:    b.features.enablePreloader[curPos[stats.EnablePreloaderIndex]],
 		}
-		if b.features.payloadCurve == nil {
+		if len(b.features.payloadCurve) == 0 {
 			f.ReqSizeBytes = b.features.reqSizeBytes[curPos[stats.ReqSizeBytesIndex]]
 			f.RespSizeBytes = b.features.respSizeBytes[curPos[stats.RespSizeBytesIndex]]
 		} else {
-			f.PayloadCurve = b.features.payloadCurve
+			f.PayloadCurve = b.features.payloadCurve[curPos[stats.PayloadCurveIndex]]
 		}
 		result = append(result, f)
 		addOne(curPos, featuresNum)
@@ -651,7 +653,7 @@ func processFlags() *benchOpts {
 		},
 	}
 
-	if *payloadCurveFile == "" {
+	if len(*payloadCurveFiles) == 0 {
 		if len(opts.features.reqSizeBytes) == 0 {
 			opts.features.reqSizeBytes = defaultReqSizeBytes
 		}
@@ -659,10 +661,12 @@ func processFlags() *benchOpts {
 			opts.features.respSizeBytes = defaultRespSizeBytes
 		}
 	} else {
-		var err error
-		opts.features.payloadCurve, err = stats.NewPayloadCurve(*payloadCurveFile)
-		if err != nil {
-			log.Fatalf("cannot load payload curve file %s: %v", *payloadCurveFile, err)
+		for _, file := range *payloadCurveFiles {
+			pc, err := stats.NewPayloadCurve(file)
+			if err != nil {
+				log.Fatalf("cannot load payload curve file %s: %v", file, err)
+			}
+			opts.features.payloadCurve = append(opts.features.payloadCurve, pc)
 		}
 		opts.features.reqSizeBytes = nil
 		opts.features.reqSizeBytes = nil

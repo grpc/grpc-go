@@ -41,35 +41,31 @@ type payloadCurveRange struct {
 // returns a *payloadCurveRange if the values are acceptable.
 func newPayloadCurveRange(line []string) (*payloadCurveRange, error) {
 	if len(line) != 3 {
-		return nil, fmt.Errorf("Invalid number of entries in line %v (expected 3)", line)
+		return nil, fmt.Errorf("invalid number of entries in line %v (expected 3)", line)
 	}
 
-	r := &payloadCurveRange{}
-	if from, err := strconv.ParseInt(line[0], 10, 32); err != nil {
+	var from, to int64
+	var weight float64
+	var err error
+	if from, err = strconv.ParseInt(line[0], 10, 32); err != nil {
 		return nil, err
-	} else {
-		r.from = int32(from)
 	}
-	if to, err := strconv.ParseInt(line[1], 10, 32); err != nil {
+	if from <= 0 {
+		return nil, fmt.Errorf("line %v: field (%d) must be in (0, %d]", line, from, math.MaxInt32)
+	}
+	if to, err = strconv.ParseInt(line[1], 10, 32); err != nil {
 		return nil, err
-	} else {
-		r.to = int32(to)
 	}
-	if weight, err := strconv.ParseFloat(line[2], 64); err != nil {
+	if to <= 0 {
+		return nil, fmt.Errorf("line %v: field %d must be in (0, %d]", line, to, math.MaxInt32)
+	}
+	if from > to {
+		return nil, fmt.Errorf("line %v: from (%d) > to (%d)", line, from, to)
+	}
+	if weight, err = strconv.ParseFloat(line[2], 64); err != nil {
 		return nil, err
-	} else {
-		r.weight = weight
 	}
-	if r.from <= 0 {
-		return nil, fmt.Errorf("line %v: field (%d) must be in (0, %d]", line, r.from, math.MaxInt32)
-	}
-	if r.to <= 0 {
-		return nil, fmt.Errorf("line %v: field %d must be in (0, %d]", line, r.to, math.MaxInt32)
-	}
-	if r.from > r.to {
-		return nil, fmt.Errorf("line %v: from (%d) > to (%d)", line, r.from, r.to)
-	}
-	return r, nil
+	return &payloadCurveRange{from: int32(from), to: int32(to), weight: weight}, nil
 }
 
 // bytes returns a byte slice with a binary representation of the
@@ -85,7 +81,7 @@ func (pcr *payloadCurveRange) bytes() []byte {
 // chooseRandom picks a payload size (in bytes) for a particular range. This is
 // done with a uniform distribution.
 func (pcr *payloadCurveRange) chooseRandom() int {
-	if pcr.from == pcr.to {
+	if pcr.from == pcr.to { // fast path
 		return int(pcr.from)
 	}
 
@@ -138,10 +134,10 @@ func NewPayloadCurve(file string) (*PayloadCurve, error) {
 	}
 
 	sort.Slice(ret.pcrs, func(i, j int) bool {
-		if ret.pcrs[i].from == ret.pcrs[i].from {
-			return ret.pcrs[i].to < ret.pcrs[i].to
+		if ret.pcrs[i].from == ret.pcrs[j].from {
+			return ret.pcrs[i].to < ret.pcrs[j].to
 		}
-		return ret.pcrs[i].from < ret.pcrs[i].from
+		return ret.pcrs[i].from < ret.pcrs[j].from
 	})
 
 	var lastTo int32

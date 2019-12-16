@@ -45,6 +45,7 @@ const (
 	MaxConcurrentCallsIndex
 	ReqSizeBytesIndex
 	RespSizeBytesIndex
+	PayloadCurveIndex
 	CompModesIndex
 	EnableChannelzIndex
 	EnablePreloaderIndex
