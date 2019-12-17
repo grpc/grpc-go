@@ -25,6 +25,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -53,6 +54,7 @@ type testClientConn struct {
 	m1                  sync.Mutex
 	state               resolver.State
 	updateStateCalls    int
+	errChan             chan error
 }
 
 func (t *testClientConn) UpdateState(s resolver.State) {
@@ -87,8 +89,8 @@ func (t *testClientConn) ParseServiceConfig(s string) *serviceconfig.ParseResult
 	return &serviceconfig.ParseResult{Config: unparsedServiceConfig{config: s}}
 }
 
-func (t *testClientConn) ReportError(error) {
-	panic("not implemented")
+func (t *testClientConn) ReportError(err error) {
+	t.errChan <- err
 }
 
 type testResolver struct {
@@ -139,6 +141,9 @@ var hostLookupTbl = struct {
 		"foo.bar.com":          {"1.2.3.4", "5.6.7.8"},
 		"ipv4.single.fake":     {"1.2.3.4"},
 		"srv.ipv4.single.fake": {"2.4.6.8"},
+		"srv.ipv4.multi.fake":  {},
+		"srv.ipv6.single.fake": {},
+		"srv.ipv6.multi.fake":  {},
 		"ipv4.multi.fake":      {"1.2.3.4", "5.6.7.8", "9.10.11.12"},
 		"ipv6.single.fake":     {"2607:f8b0:400a:801::1001"},
 		"ipv6.multi.fake":      {"2607:f8b0:400a:801::1001", "2607:f8b0:400a:801::1002", "2607:f8b0:400a:801::1003"},
@@ -148,10 +153,14 @@ var hostLookupTbl = struct {
 func hostLookup(host string) ([]string, error) {
 	hostLookupTbl.Lock()
 	defer hostLookupTbl.Unlock()
-	if addrs, cnt := hostLookupTbl.tbl[host]; cnt {
+	if addrs, ok := hostLookupTbl.tbl[host]; ok {
 		return addrs, nil
 	}
-	return nil, fmt.Errorf("failed to lookup host:%s resolution in hostLookupTbl", host)
+	return nil, &net.DNSError{
+		Err:    "hostLookup error",
+		Name:   host,
+		Server: "fake",
+	}
 }
 
 var srvLookupTbl = struct {
@@ -173,7 +182,11 @@ func srvLookup(service, proto, name string) (string, []*net.SRV, error) {
 	if srvs, cnt := srvLookupTbl.tbl[cname]; cnt {
 		return cname, srvs, nil
 	}
-	return "", nil, fmt.Errorf("failed to lookup srv record for %s in srvLookupTbl", cname)
+	return "", nil, &net.DNSError{
+		Err:    "srvLookup error",
+		Name:   cname,
+		Server: "fake",
+	}
 }
 
 // scfs contains an array of service config file string in JSON format.
@@ -635,7 +648,11 @@ func txtLookup(host string) ([]string, error) {
 	if scs, cnt := txtLookupTbl.tbl[host]; cnt {
 		return scs, nil
 	}
-	return nil, fmt.Errorf("failed to lookup TXT:%s resolution in txtLookupTbl", host)
+	return nil, &net.DNSError{
+		Err:    "txtLookup error",
+		Name:   host,
+		Server: "fake",
+	}
 }
 
 func TestResolve(t *testing.T) {
@@ -962,7 +979,7 @@ func TestResolveFunc(t *testing.T) {
 
 	b := NewBuilder()
 	for _, v := range tests {
-		cc := &testClientConn{target: v.addr}
+		cc := &testClientConn{target: v.addr, errChan: make(chan error, 1)}
 		r, err := b.Build(resolver.Target{Endpoint: v.addr}, cc, resolver.BuildOptions{})
 		if err == nil {
 			r.Close()
@@ -1155,7 +1172,7 @@ func TestCustomAuthority(t *testing.T) {
 		}
 
 		b := NewBuilder()
-		cc := &testClientConn{target: "foo.bar.com"}
+		cc := &testClientConn{target: "foo.bar.com", errChan: make(chan error, 1)}
 		r, err := b.Build(resolver.Target{Endpoint: "foo.bar.com", Authority: a.authority}, cc, resolver.BuildOptions{})
 
 		if err == nil {
@@ -1267,5 +1284,24 @@ func TestRateLimitedResolve(t *testing.T) {
 	}
 	if !reflect.DeepEqual(state.Addresses, wantAddrs) {
 		t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", target, state.Addresses, wantAddrs)
+	}
+}
+
+func TestReportError(t *testing.T) {
+	const target = "notfoundaddress"
+	cc := &testClientConn{target: target, errChan: make(chan error)}
+	b := NewBuilder()
+	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOptions{})
+	if err != nil {
+		t.Fatalf("%v\n", err)
+	}
+	defer r.Close()
+	select {
+	case err := <-cc.errChan:
+		if !strings.Contains(err.Error(), "hostLookup error") {
+			t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("did not receive error after 1s")
 	}
 }
