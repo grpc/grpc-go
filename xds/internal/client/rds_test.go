@@ -241,47 +241,16 @@ func TestRDSHandleResponse(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotUpdateCh := make(chan rdsUpdate, 1)
-			gotUpdateErrCh := make(chan error, 1)
-
-			// Register a watcher, to trigger the v2Client to send an RDS request.
-			cancelWatch := v2c.watchRDS(goodRouteName1, func(u rdsUpdate, err error) {
-				t.Logf("in v2c.watchRDS callback, rdsUpdate: %+v, err: %v", u, err)
-				gotUpdateCh <- u
-				gotUpdateErrCh <- err
-			})
-
-			// Wait till the request makes it to the fakeServer. This ensures that
-			// the watch request has been processed by the v2Client.
-			<-fakeServer.RequestChan
-
-			// Directly push the response through a call to handleRDSResponse,
-			// thereby bypassing the fakeServer.
-			if err := v2c.handleRDSResponse(test.rdsResponse); (err != nil) != test.wantErr {
-				t.Fatalf("v2c.handleRDSResponse() returned err: %v, wantErr: %v", err, test.wantErr)
-			}
-
-			// If the test needs the callback to be invoked, verify the update and
-			// error pushed to the callback.
-			if test.wantUpdate != nil {
-				timer := time.NewTimer(defaultTestTimeout)
-				select {
-				case <-timer.C:
-					t.Fatal("Timeout when expecting RDS update")
-				case gotUpdate := <-gotUpdateCh:
-					timer.Stop()
-					if !reflect.DeepEqual(gotUpdate, *test.wantUpdate) {
-						t.Fatalf("got RDS update : %+v, want %+v", gotUpdate, *test.wantUpdate)
-					}
-				}
-				// Since the callback that we registered pushes to both channels at
-				// the same time, this channel read should return immediately.
-				gotUpdateErr := <-gotUpdateErrCh
-				if (gotUpdateErr != nil) != test.wantUpdateErr {
-					t.Fatalf("got RDS update error {%v}, wantErr: %v", gotUpdateErr, test.wantUpdateErr)
-				}
-			}
-			cancelWatch()
+			testWatchHandle(t, &watchHandleTestcase{
+				responseToHandle: test.rdsResponse,
+				wantErr:          test.wantErr,
+				wantUpdate:       test.wantUpdate,
+				wantUpdateErr:    test.wantUpdateErr,
+			}, &watchHandleConfig{
+				typeURL:  routeURL,
+				rdsWatch: v2c.watchRDS,
+				handle:   v2c.handleRDSResponse,
+			}, fakeServer)
 		})
 	}
 }
