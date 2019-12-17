@@ -55,6 +55,12 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase, testConfig *watchH
 	var cancelWatch func()
 	switch testConfig.typeURL {
 	case listenerURL:
+		// Register a watcher, to trigger the v2Client to send an LDS request.
+		cancelWatch = testConfig.ldsWatch(goodLDSTarget1, func(u ldsUpdate, err error) {
+			t.Logf("in v2c.watchLDS callback, ldsUpdate: %+v, err: %v", u, err)
+			gotUpdateCh <- u
+			gotUpdateErrCh <- err
+		})
 	case routeURL:
 		// Register a watcher, to trigger the v2Client to send an RDS request.
 		cancelWatch = testConfig.rdsWatch(goodRouteName1, func(u rdsUpdate, err error) {
@@ -106,7 +112,7 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase, testConfig *watchH
 		t.Fatal("Timeout expecting RDS update")
 	case gotUpdate := <-gotUpdateCh:
 		timer.Stop()
-		if diff := cmp.Diff(gotUpdate, wantUpdate, cmp.AllowUnexported(rdsUpdate{})); diff != "" {
+		if diff := cmp.Diff(gotUpdate, wantUpdate, cmp.AllowUnexported(rdsUpdate{}, ldsUpdate{}, CDSUpdate{}, EDSUpdate{})); diff != "" {
 			t.Fatalf("got update : %+v, want %+v, diff: %s", gotUpdate, wantUpdate, diff)
 		}
 	}
