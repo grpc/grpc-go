@@ -237,6 +237,11 @@ func (d *dnsResolver) lookupSRV() ([]resolver.Address, error) {
 		lbAddrs, err := d.resolver.LookupHost(d.ctx, s.Target)
 		if err != nil {
 			err = handleDNSError(err, "A") // may become nil
+			if err == nil {
+				// If there are other SRV records, look them up and ignore this
+				// one that does not exist.
+				continue
+			}
 			return nil, err
 		}
 		for _, a := range lbAddrs {
