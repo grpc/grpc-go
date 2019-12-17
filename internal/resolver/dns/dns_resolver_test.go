@@ -157,9 +157,10 @@ func hostLookup(host string) ([]string, error) {
 		return addrs, nil
 	}
 	return nil, &net.DNSError{
-		Err:    "hostLookup error",
-		Name:   host,
-		Server: "fake",
+		Err:         "hostLookup error",
+		Name:        host,
+		Server:      "fake",
+		IsTemporary: true,
 	}
 }
 
@@ -183,9 +184,10 @@ func srvLookup(service, proto, name string) (string, []*net.SRV, error) {
 		return cname, srvs, nil
 	}
 	return "", nil, &net.DNSError{
-		Err:    "srvLookup error",
-		Name:   cname,
-		Server: "fake",
+		Err:         "srvLookup error",
+		Name:        cname,
+		Server:      "fake",
+		IsTemporary: true,
 	}
 }
 
@@ -649,9 +651,10 @@ func txtLookup(host string) ([]string, error) {
 		return scs, nil
 	}
 	return nil, &net.DNSError{
-		Err:    "txtLookup error",
-		Name:   host,
-		Server: "fake",
+		Err:         "txtLookup error",
+		Name:        host,
+		Server:      "fake",
+		IsTemporary: true,
 	}
 }
 
