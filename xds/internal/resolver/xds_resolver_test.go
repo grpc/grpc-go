@@ -34,6 +34,7 @@ import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/testutils/fakexds"
 
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
@@ -97,7 +98,7 @@ func getXDSClientMakerFunc(wantOpts xdsclient.Options) func(xdsclient.Options) (
 		if len(gotOpts.DialOpts) != len(wantOpts.DialOpts) {
 			return nil, fmt.Errorf("got len(DialOpts): %v, want: %v", len(gotOpts.DialOpts), len(wantOpts.DialOpts))
 		}
-		return testutils.NewXDSClient(), nil
+		return fakexds.NewClient(), nil
 	}
 }
 
@@ -231,7 +232,7 @@ func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *testClientConn, fun
 // waitForWatchService waits for the WatchService method to be called on the
 // xdsClient within a reasonable amount of time, and also verifies that the
 // watch is called with the expected target.
-func waitForWatchService(t *testing.T, xdsC *testutils.XDSClient, wantTarget string) {
+func waitForWatchService(t *testing.T, xdsC *fakexds.Client, wantTarget string) {
 	t.Helper()
 
 	gotTarget, err := xdsC.WaitForWatchService()
@@ -246,7 +247,7 @@ func waitForWatchService(t *testing.T, xdsC *testutils.XDSClient, wantTarget str
 // TestXDSResolverWatchCallbackAfterClose tests the case where a service update
 // from the underlying xdsClient is received after the resolver is closed.
 func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
-	xdsC := testutils.NewXDSClient()
+	xdsC := fakexds.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
 		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
@@ -258,7 +259,7 @@ func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	// Call the watchAPI callback after closing the resolver, and make sure no
 	// update is triggerred on the ClientConn.
 	xdsR.Close()
-	xdsC.InvokeWatchServiceCb(cluster, nil)
+	xdsC.InvokeWatchServiceCallback(cluster, nil)
 	if gotVal, gotErr := tcc.stateCh.Receive(); gotErr != testutils.ErrRecvTimeout {
 		t.Fatalf("ClientConn.UpdateState called after xdsResolver is closed: %v", gotVal)
 	}
@@ -267,7 +268,7 @@ func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 // TestXDSResolverBadServiceUpdate tests the case the xdsClient returns a bad
 // service update.
 func TestXDSResolverBadServiceUpdate(t *testing.T) {
-	xdsC := testutils.NewXDSClient()
+	xdsC := fakexds.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
 		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
@@ -282,7 +283,7 @@ func TestXDSResolverBadServiceUpdate(t *testing.T) {
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr := errors.New("bad serviceupdate")
-	xdsC.InvokeWatchServiceCb("", suErr)
+	xdsC.InvokeWatchServiceCallback("", suErr)
 	if gotErrVal, gotErr := tcc.errorCh.Receive(); gotErr != nil || gotErrVal != suErr {
 		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr)
 	}
@@ -291,7 +292,7 @@ func TestXDSResolverBadServiceUpdate(t *testing.T) {
 // TestXDSResolverGoodServiceUpdate tests the happy case where the resolver
 // gets a good service update from the xdsClient.
 func TestXDSResolverGoodServiceUpdate(t *testing.T) {
-	xdsC := testutils.NewXDSClient()
+	xdsC := fakexds.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
 		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
@@ -305,7 +306,7 @@ func TestXDSResolverGoodServiceUpdate(t *testing.T) {
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
-	xdsC.InvokeWatchServiceCb(cluster, nil)
+	xdsC.InvokeWatchServiceCallback(cluster, nil)
 	gotState, err := tcc.stateCh.Receive()
 	if err != nil {
 		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
