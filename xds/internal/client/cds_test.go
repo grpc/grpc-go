@@ -223,47 +223,16 @@ func TestCDSHandleResponse(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotUpdateCh := make(chan CDSUpdate, 1)
-			gotUpdateErrCh := make(chan error, 1)
-
-			// Register a watcher, to trigger the v2Client to send an CDS request.
-			cancelWatch := v2c.watchCDS(clusterName1, func(u CDSUpdate, err error) {
-				t.Logf("in v2c.watchCDS callback, CDSUpdate: %+v, err: %v", u, err)
-				gotUpdateCh <- u
-				gotUpdateErrCh <- err
-			})
-
-			// Wait till the request makes it to the fakeServer. This ensures that
-			// the watch request has been processed by the v2Client.
-			<-fakeServer.RequestChan
-
-			// Directly push the response through a call to handleLDSResponse,
-			// thereby bypassing the fakeServer.
-			if err := v2c.handleCDSResponse(test.cdsResponse); (err != nil) != test.wantErr {
-				t.Fatalf("v2c.handleCDSResponse() returned err: %v, wantErr: %v", err, test.wantErr)
-			}
-
-			// If the test needs the callback to be invoked, verify the update and
-			// error pushed to the callback.
-			if test.wantUpdate != nil {
-				timer := time.NewTimer(defaultTestTimeout)
-				select {
-				case <-timer.C:
-					t.Fatal("Timeout when expecting CDS update")
-				case gotUpdate := <-gotUpdateCh:
-					timer.Stop()
-					if !reflect.DeepEqual(gotUpdate, *test.wantUpdate) {
-						t.Fatalf("got CDS update : %+v, want %+v", gotUpdate, test.wantUpdate)
-					}
-				}
-				// Since the callback that we registered pushes to both channels at
-				// the same time, this channel read should return immediately.
-				gotUpdateErr := <-gotUpdateErrCh
-				if (gotUpdateErr != nil) != test.wantUpdateErr {
-					t.Fatalf("got CDS update error {%v}, wantErr: %v", gotUpdateErr, test.wantUpdateErr)
-				}
-			}
-			cancelWatch()
+			testWatchHandle(t, &watchHandleTestcase{
+				responseToHandle: test.cdsResponse,
+				wantErr:          test.wantErr,
+				wantUpdate:       test.wantUpdate,
+				wantUpdateErr:    test.wantUpdateErr,
+			}, &watchHandleConfig{
+				typeURL:  clusterURL,
+				cdsWatch: v2c.watchCDS,
+				handle:   v2c.handleCDSResponse,
+			}, fakeServer)
 		})
 	}
 }
