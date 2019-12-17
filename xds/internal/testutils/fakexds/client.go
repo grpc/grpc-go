@@ -21,6 +21,8 @@
 package fakexds
 
 import (
+	"sync"
+
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils"
@@ -29,18 +31,24 @@ import (
 // Client is a fake implementation of an xds client. It exposes a bunch of
 // channels to signal the occurrence of various events.
 type Client struct {
-	serviceCb    func(xdsclient.ServiceUpdate, error)
-	edsCb        func(*xdsclient.EDSUpdate, error)
+	name         string
 	suWatchCh    *testutils.Channel
 	edsWatchCh   *testutils.Channel
 	suCancelCh   *testutils.Channel
 	edsCancelCh  *testutils.Channel
 	loadReportCh *testutils.Channel
 	closeCh      *testutils.Channel
+
+	mu        sync.Mutex
+	serviceCb func(xdsclient.ServiceUpdate, error)
+	edsCb     func(*xdsclient.EDSUpdate, error)
 }
 
 // WatchService registers a LDS/RDS watch.
 func (xdsC *Client) WatchService(target string, callback func(xdsclient.ServiceUpdate, error)) func() {
+	xdsC.mu.Lock()
+	defer xdsC.mu.Unlock()
+
 	xdsC.serviceCb = callback
 	xdsC.suWatchCh.Send(target)
 	return func() {
@@ -57,11 +65,17 @@ func (xdsC *Client) WaitForWatchService() (string, error) {
 
 // InvokeWatchServiceCallback invokes the registered service watch callback.
 func (xdsC *Client) InvokeWatchServiceCallback(cluster string, err error) {
+	xdsC.mu.Lock()
+	defer xdsC.mu.Unlock()
+
 	xdsC.serviceCb(xdsclient.ServiceUpdate{Cluster: cluster}, err)
 }
 
 // WatchEDS registers an EDS watch for provided clusterName.
 func (xdsC *Client) WatchEDS(clusterName string, callback func(*xdsclient.EDSUpdate, error)) (cancel func()) {
+	xdsC.mu.Lock()
+	defer xdsC.mu.Unlock()
+
 	xdsC.edsCb = callback
 	xdsC.edsWatchCh.Send(clusterName)
 	return func() {
@@ -78,6 +92,9 @@ func (xdsC *Client) WaitForWatchEDS() (string, error) {
 
 // InvokeWatchEDSCallback invokes the registered edsWatch callback.
 func (xdsC *Client) InvokeWatchEDSCallback(update *xdsclient.EDSUpdate, err error) {
+	xdsC.mu.Lock()
+	defer xdsC.mu.Unlock()
+
 	xdsC.edsCb(update, err)
 }
 
@@ -107,9 +124,22 @@ func (xdsC *Client) Close() {
 	xdsC.closeCh.Send(nil)
 }
 
+// Name returns the name of the xds client.
+func (xdsC *Client) Name() string {
+	return xdsC.name
+}
+
 // NewClient returns a new fake xds client.
 func NewClient() *Client {
+	return NewClientWithName("")
+}
+
+// NewClientWithName returns a new fake xds client with the provided name. This
+// is used in cases where multiple clients are created in the tests and we need
+// to make sure the client is created for the expected balancer name.
+func NewClientWithName(name string) *Client {
 	return &Client{
+		name:         name,
 		suWatchCh:    testutils.NewChannel(),
 		edsWatchCh:   testutils.NewChannel(),
 		suCancelCh:   testutils.NewChannel(),
