@@ -69,6 +69,12 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase, testConfig *watchH
 			gotUpdateErrCh <- err
 		})
 	case clusterURL:
+		// Register a watcher, to trigger the v2Client to send an CDS request.
+		cancelWatch = testConfig.cdsWatch(clusterName1, func(u CDSUpdate, err error) {
+			t.Logf("in v2c.watchCDS callback, cdsUpdate: %+v, err: %v", u, err)
+			gotUpdateCh <- u
+			gotUpdateErrCh <- err
+		})
 	case endpointURL:
 		// Register a watcher, to trigger the v2Client to send an EDS request.
 		cancelWatch = testConfig.edsWatch(goodEDSName, func(u *EDSUpdate, err error) {
