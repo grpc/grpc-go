@@ -18,7 +18,7 @@
 package client
 
 import (
-	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -49,7 +49,7 @@ type watchHandleTestcase struct {
 
 func testWatchHandle(t *testing.T, test *watchHandleTestcase, testConfig *watchHandleConfig, fakeServer *fakexds.Server) {
 	// t.Helper()
-	gotUpdateCh := make(chan rdsUpdate, 1)
+	gotUpdateCh := make(chan interface{}, 1)
 	gotUpdateErrCh := make(chan error, 1)
 
 	var cancelWatch func()
@@ -64,6 +64,12 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase, testConfig *watchH
 		})
 	case clusterURL:
 	case endpointURL:
+		// Register a watcher, to trigger the v2Client to send an EDS request.
+		cancelWatch = testConfig.edsWatch(goodEDSName, func(u *EDSUpdate, err error) {
+			t.Logf("in v2c.watchEDS callback, edsUpdate: %+v, err: %v", u, err)
+			gotUpdateCh <- *u
+			gotUpdateErrCh <- err
+		})
 	default:
 		t.Fatalf("unknown typeURL: %s", testConfig.typeURL)
 	}
@@ -82,30 +88,32 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase, testConfig *watchH
 	// If the test needs the callback to be invoked, verify the update and
 	// error pushed to the callback.
 	//
-	// if test.wantUpdate != nil {
-	// Cannot directly compare wantUpdate with nil (typed vs non-types nil).
-	// if c := test.wantUpdate; !(c == nil || (reflect.ValueOf(c).Kind() == reflect.Ptr && reflect.ValueOf(c).IsNil())) {
-	switch wantUpdate := test.wantUpdate.(type) {
-	case *rdsUpdate:
-		if wantUpdate == nil {
-			break
-		}
-		fmt.Printf("wantUpdate is not nil: %v\n", wantUpdate)
-		timer := time.NewTimer(defaultTestTimeout)
+	// Cannot directly compare test.wantUpdate with nil (typed vs non-types nil).
+	if c := test.wantUpdate; c == nil || (reflect.ValueOf(c).Kind() == reflect.Ptr && reflect.ValueOf(c).IsNil()) {
+		timer := time.NewTimer(time.Millisecond * 500)
 		select {
 		case <-timer.C:
-			t.Fatal("Timeout expecting RDS update")
-		case gotUpdate := <-gotUpdateCh:
-			timer.Stop()
-			if !cmp.Equal(gotUpdate, *wantUpdate, cmp.AllowUnexported(rdsUpdate{})) {
-				t.Fatalf("got RDS update : %+v, want %+v", gotUpdate, wantUpdate)
-			}
+			return
+		case <-gotUpdateCh:
+			t.Fatal("Unexpected update")
 		}
-		// Since the callback that we registered pushes to both channels at
-		// the same time, this channel read should return immediately.
-		gotUpdateErr := <-gotUpdateErrCh
-		if (gotUpdateErr != nil) != test.wantUpdateErr {
-			t.Fatalf("got RDS update error {%v}, wantErr: %v", gotUpdateErr, test.wantUpdateErr)
+	}
+
+	wantUpdate := reflect.ValueOf(test.wantUpdate).Elem().Interface()
+	timer := time.NewTimer(defaultTestTimeout)
+	select {
+	case <-timer.C:
+		t.Fatal("Timeout expecting RDS update")
+	case gotUpdate := <-gotUpdateCh:
+		timer.Stop()
+		if diff := cmp.Diff(gotUpdate, wantUpdate, cmp.AllowUnexported(rdsUpdate{})); diff != "" {
+			t.Fatalf("got update : %+v, want %+v, diff: %s", gotUpdate, wantUpdate, diff)
 		}
+	}
+	// Since the callback that we registered pushes to both channels at
+	// the same time, this channel read should return immediately.
+	gotUpdateErr := <-gotUpdateErrCh
+	if (gotUpdateErr != nil) != test.wantUpdateErr {
+		t.Fatalf("got RDS update error {%v}, wantErr: %v", gotUpdateErr, test.wantUpdateErr)
 	}
 }
