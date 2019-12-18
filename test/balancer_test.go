@@ -76,7 +76,7 @@ func (b *testBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) 
 }
 
 func (b *testBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
-	grpclog.Infof("testBalancer: HandleSubConnStateChange: %p, %v", sc, s)
+	grpclog.Infof("testBalancer: HandleSubConnStateChange: %+v, %v", sc, s)
 	if b.sc != sc {
 		grpclog.Infof("testBalancer: ignored state change because sc is not recognized")
 		return

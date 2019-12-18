@@ -75,7 +75,7 @@ func (b *pickfirstBalancer) HandleResolvedAddrs(addrs []resolver.Address, err er
 
 func (b *pickfirstBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
 	if grpclog.V(2) {
-		grpclog.Infof("pickfirstBalancer: HandleSubConnStateChange: %p, %v", sc, s)
+		grpclog.Infof("pickfirstBalancer: HandleSubConnStateChange: %+v, %v", sc, s)
 	}
 	if b.sc != sc {
 		if grpclog.V(2) {
