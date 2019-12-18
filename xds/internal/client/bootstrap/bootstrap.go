@@ -52,6 +52,9 @@ var fileReadFunc = ioutil.ReadFile
 // from the bootstrap file.
 type Config struct {
 	// BalancerName is the name of the xDS server to connect to.
+	//
+	// The bootstrap file contains a list of servers (with name+creds), but we
+	// pick the first one.
 	BalancerName string
 	// Creds contains the credentials to be used while talking to the xDS
 	// server, as a grpc.DialOption.
@@ -123,16 +126,21 @@ func NewConfig() *Config {
 		case "node":
 			n := &corepb.Node{}
 			if err := m.Unmarshal(bytes.NewReader(v), n); err != nil {
-				grpclog.Errorf("xds: jsonpb.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
+				grpclog.Errorf("xds: jsonpb.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 				break
 			}
 			config.NodeProto = n
-		case "xds_server":
-			xs := &xdsServer{}
-			if err := json.Unmarshal(v, &xs); err != nil {
-				grpclog.Errorf("xds: json.Unmarshal(%v) failed during bootstrap: %v", string(v), err)
+		case "xds_servers":
+			var servers []*xdsServer
+			if err := json.Unmarshal(v, &servers); err != nil {
+				grpclog.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 				break
 			}
+			if len(servers) < 1 {
+				grpclog.Errorf("xds: bootstrap file parsing failed during bootstrap: file doesn't contain any xds server to connect to")
+				break
+			}
+			xs := servers[0]
 			config.BalancerName = xs.ServerURI
 			for _, cc := range xs.ChannelCreds {
 				if cc.Type == googleDefaultCreds {
