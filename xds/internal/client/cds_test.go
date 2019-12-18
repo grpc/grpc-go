@@ -229,7 +229,7 @@ func TestCDSHandleResponse(t *testing.T) {
 				wantUpdate:       test.wantUpdate,
 				wantUpdateErr:    test.wantUpdateErr,
 			}, &watchHandleConfig{
-				typeURL:  clusterURL,
+				typeURL:  cdsURL,
 				cdsWatch: v2c.watchCDS,
 				handle:   v2c.handleCDSResponse,
 			}, fakeServer)

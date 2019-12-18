@@ -245,7 +245,7 @@ func TestRDSHandleResponse(t *testing.T) {
 				wantUpdate:       test.wantUpdate,
 				wantUpdateErr:    test.wantUpdateErr,
 			}, &watchHandleConfig{
-				typeURL:  routeURL,
+				typeURL:  rdsURL,
 				rdsWatch: v2c.watchRDS,
 				handle:   v2c.handleRDSResponse,
 			}, fakeServer)

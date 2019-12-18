@@ -234,7 +234,7 @@ func TestEDSHandleResponse(t *testing.T) {
 				wantUpdate:       test.wantUpdate,
 				wantUpdateErr:    test.wantUpdateErr,
 			}, &watchHandleConfig{
-				typeURL:  endpointURL,
+				typeURL:  edsURL,
 				edsWatch: v2c.watchEDS,
 				handle:   v2c.handleEDSResponse,
 			}, fakeServer)
