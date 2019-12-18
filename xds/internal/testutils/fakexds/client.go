@@ -124,6 +124,13 @@ func (xdsC *Client) Close() {
 	xdsC.closeCh.Send(nil)
 }
 
+// WaitForClose waits for Close to be invoked on this client within a
+// reasonable timeout, and returns testutils.ErrRecvTimeout otherwise.
+func (xdsC *Client) WaitForClose() error {
+	_, err := xdsC.closeCh.Receive()
+	return err
+}
+
 // Name returns the name of the xds client.
 func (xdsC *Client) Name() string {
 	return xdsC.name
