@@ -185,6 +185,8 @@ func TestRDSHandleResponse(t *testing.T) {
 	if err := <-cbCh; err != nil {
 		t.Fatalf("v2c.watchLDS returned error in callback: %v", err)
 	}
+	// Read the LDS ack, to clear RequestChan for following tests.
+	<-fakeServer.RequestChan
 
 	tests := []struct {
 		name          string
