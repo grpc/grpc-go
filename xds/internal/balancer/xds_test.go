@@ -652,7 +652,7 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	fblb.waitForSubConnStateChange(&scStateChange{sc: fsc, state: state})
 }
 
-func TestXdsBalancerConfigParsing(t *testing.T) {
+func TestXDSBalancerConfigParsing(t *testing.T) {
 	const testEDSName = "eds.service"
 	var testLRSName = "lrs.server"
 	b := bytes.NewBuffer(nil)
