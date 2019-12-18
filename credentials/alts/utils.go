@@ -31,7 +31,9 @@ import (
 	"runtime"
 	"strings"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -141,4 +143,17 @@ func AuthInfoFromPeer(p *peer.Peer) (AuthInfo, error) {
 		return nil, errors.New("no alts.AuthInfo found in Peer")
 	}
 	return altsAuthInfo, nil
+}
+
+func ClientAuthorizationCheck(ctx context.Context, expectedServiceAccounts []string) error {
+	authInfo, err := AuthInfoFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	for _, sa := range expectedServiceAccounts {
+		if authInfo.PeerServiceAccount() == sa {
+			return nil
+		}
+	}
+	return status.Newf(codes.PermissionDenied, "Client %v is not authorized", authInfo.PeerServiceAccount()).Err()
 }
