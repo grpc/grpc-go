@@ -1182,18 +1182,19 @@ func TestCustomAuthority(t *testing.T) {
 func TestRateLimitedResolve(t *testing.T) {
 	defer leakcheck.Check(t)
 
-	const dnsResRate = 100 * time.Millisecond
+	const dnsResRate = 10 * time.Millisecond
 	dc := replaceDNSResRate(dnsResRate)
 	defer dc()
 
 	// Create a new testResolver{} for this test because we want the exact count
 	// of the number of times the resolver was invoked.
-	nc := replaceNetFunc(make(chan struct{}, 1))
+	nc := replaceNetFunc(make(chan struct{}))
 	defer nc()
 
 	target := "foo.bar.com"
 	b := NewBuilder()
 	cc := &testClientConn{target: target}
+
 	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("resolver.Build() returned error: %v\n", err)
@@ -1204,22 +1205,28 @@ func TestRateLimitedResolve(t *testing.T) {
 	if !ok {
 		t.Fatalf("resolver.Build() returned unexpected type: %T\n", dnsR)
 	}
+
 	tr, ok := dnsR.resolver.(*testResolver)
 	if !ok {
 		t.Fatalf("delegate resolver returned unexpected type: %T\n", tr)
 	}
 
-	// Wait for the first resolution request to be done. This happens as part of
-	// the first iteration of the for loop in watcher() because we start with a
-	// timer of zero duration.
+	// Observe the time before unblocking the lookupHost call.  The 100ms rate
+	// limiting timer will begin immediately after that.  This means the next
+	// resolution could happen less than 100ms if we read the time *after*
+	// receiving from tr.ch
+	start := time.Now()
+
+	// Wait for the first resolution request to be done. This happens as part
+	// of the first iteration of the for loop in watcher() because we call
+	// ResolveNow in Build.
 	<-tr.ch
 
 	// Here we start a couple of goroutines. One repeatedly calls ResolveNow()
 	// until asked to stop, and the other waits for two resolution requests to be
 	// made to our testResolver and stops the former. We measure the start and
 	// end times, and expect the duration elapsed to be in the interval
-	// {2*dnsResRate, 3*dnsResRate}
-	start := time.Now()
+	// {wantCalls*dnsResRate, wantCalls*dnsResRate}
 	done := make(chan struct{})
 	go func() {
 		for {
@@ -1234,7 +1241,7 @@ func TestRateLimitedResolve(t *testing.T) {
 	}()
 
 	gotCalls := 0
-	const wantCalls = 2
+	const wantCalls = 3
 	min, max := wantCalls*dnsResRate, (wantCalls+1)*dnsResRate
 	tMax := time.NewTimer(max)
 	for gotCalls != wantCalls {
