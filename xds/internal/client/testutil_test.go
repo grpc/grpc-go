@@ -54,28 +54,28 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase, testConfig *watchH
 
 	var cancelWatch func()
 	switch testConfig.typeURL {
-	case listenerURL:
+	case ldsURL:
 		// Register a watcher, to trigger the v2Client to send an LDS request.
 		cancelWatch = testConfig.ldsWatch(goodLDSTarget1, func(u ldsUpdate, err error) {
 			t.Logf("in v2c.watchLDS callback, ldsUpdate: %+v, err: %v", u, err)
 			gotUpdateCh <- u
 			gotUpdateErrCh <- err
 		})
-	case routeURL:
+	case rdsURL:
 		// Register a watcher, to trigger the v2Client to send an RDS request.
 		cancelWatch = testConfig.rdsWatch(goodRouteName1, func(u rdsUpdate, err error) {
 			t.Logf("in v2c.watchRDS callback, rdsUpdate: %+v, err: %v", u, err)
 			gotUpdateCh <- u
 			gotUpdateErrCh <- err
 		})
-	case clusterURL:
+	case cdsURL:
 		// Register a watcher, to trigger the v2Client to send an CDS request.
 		cancelWatch = testConfig.cdsWatch(clusterName1, func(u CDSUpdate, err error) {
 			t.Logf("in v2c.watchCDS callback, cdsUpdate: %+v, err: %v", u, err)
 			gotUpdateCh <- u
 			gotUpdateErrCh <- err
 		})
-	case endpointURL:
+	case edsURL:
 		// Register a watcher, to trigger the v2Client to send an EDS request.
 		cancelWatch = testConfig.edsWatch(goodEDSName, func(u *EDSUpdate, err error) {
 			t.Logf("in v2c.watchEDS callback, edsUpdate: %+v, err: %v", u, err)

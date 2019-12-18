@@ -185,7 +185,7 @@ func TestLDSHandleResponse(t *testing.T) {
 				wantUpdate:       test.wantUpdate,
 				wantUpdateErr:    test.wantUpdateErr,
 			}, &watchHandleConfig{
-				typeURL:  listenerURL,
+				typeURL:  ldsURL,
 				ldsWatch: v2c.watchLDS,
 				handle:   v2c.handleLDSResponse,
 			}, fakeServer)
