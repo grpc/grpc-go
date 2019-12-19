@@ -119,10 +119,10 @@ func TestStringSlice(t *testing.T) {
 		wantVal []string
 		wantErr bool
 	}{
-		{"foobar", []string{"foobar"}, false},
-		{"foo,bar", []string{"foo", "bar"}, false},
-		{`"foo,bar",baz`, []string{"foo,bar", "baz"}, false},
-		{`"foo,bar""",baz`, []string{`foo,bar"`, "baz"}, false},
+		{"-name=foobar", []string{"foobar"}, false},
+		{"-name=foo,bar", []string{"foo", "bar"}, false},
+		{`-name="foo,bar",baz`, []string{"foo,bar", "baz"}, false},
+		{`-name="foo,bar""",baz`, []string{`foo,bar"`, "baz"}, false},
 	}
 
 	for _, test := range tests {

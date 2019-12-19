@@ -20,13 +20,13 @@ package stats
 
 import (
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
 	"math"
 	"math/rand"
 	"os"
+	"io/ioutil"
 	"sort"
 	"strconv"
 )
@@ -68,16 +68,6 @@ func newPayloadCurveRange(line []string) (*payloadCurveRange, error) {
 	return &payloadCurveRange{from: int32(from), to: int32(to), weight: weight}, nil
 }
 
-// bytes returns a byte slice with a binary representation of the
-// payloadCurveRange for hashing purposes.
-func (pcr *payloadCurveRange) bytes() []byte {
-	b := make([]byte, 16)
-	binary.LittleEndian.PutUint32(b[0:], uint32(pcr.from))
-	binary.LittleEndian.PutUint32(b[4:], uint32(pcr.from))
-	binary.LittleEndian.PutUint64(b[8:], math.Float64bits(pcr.weight))
-	return b
-}
-
 // chooseRandom picks a payload size (in bytes) for a particular range. This is
 // done with a uniform distribution.
 func (pcr *payloadCurveRange) chooseRandom() int {
@@ -86,6 +76,17 @@ func (pcr *payloadCurveRange) chooseRandom() int {
 	}
 
 	return int(rand.Int31n(pcr.to-pcr.from+1) + pcr.from)
+}
+
+// sha256file is a helper function that returns a hex string matching the
+// SHA-256 sum of the input file.
+func sha256file(file string) (string, error) {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // PayloadCurve is an internal representation of a weighted random distribution
@@ -114,7 +115,6 @@ func NewPayloadCurve(file string) (*PayloadCurve, error) {
 	}
 
 	ret := &PayloadCurve{}
-	hash := sha256.New()
 	var total float64
 	for _, line := range lines {
 		pcr, err := newPayloadCurveRange(line)
@@ -122,13 +122,14 @@ func NewPayloadCurve(file string) (*PayloadCurve, error) {
 			return nil, err
 		}
 
-		hash.Write(pcr.bytes())
 		ret.pcrs = append(ret.pcrs, pcr)
 		total += pcr.weight
 	}
 
-	ret.Sha256 = hex.EncodeToString(hash.Sum(nil))
-
+	ret.Sha256, err = sha256file(file)
+	if err != nil {
+		return nil, err
+	}
 	for _, pcr := range ret.pcrs {
 		pcr.weight /= total
 	}
@@ -171,4 +172,9 @@ func (pc *PayloadCurve) ChooseRandom() int {
 // matching purposes.
 func (pc *PayloadCurve) Hash() string {
 	return pc.Sha256
+}
+
+// ShortHash returns a shortened version of Hash for display purposes.
+func (pc *PayloadCurve) ShortHash() string {
+	return pc.Sha256[:8]
 }
