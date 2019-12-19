@@ -95,10 +95,10 @@ var (
 	memProfileRate        = flag.Int("memProfileRate", 512*1024, "Configures the memory profiling rate. \n"+
 		"memProfile should be set before setting profile rate. To include every allocated block in the profile, "+
 		"set MemProfileRate to 1. To turn off profiling entirely, set MemProfileRate to 0. 512 * 1024 by default.")
-	cpuProfile            = flag.String("cpuProfile", "", "Enables CPU profiling output to the filename provided")
-	benchmarkResultFile   = flag.String("resultFile", "", "Save the benchmark result into a binary file")
-	useBufconn            = flag.Bool("bufconn", false, "Use in-memory connection instead of system network I/O")
-	enableKeepalive       = flag.Bool("enable_keepalive", false, "Enable client keepalive. \n"+
+	cpuProfile          = flag.String("cpuProfile", "", "Enables CPU profiling output to the filename provided")
+	benchmarkResultFile = flag.String("resultFile", "", "Save the benchmark result into a binary file")
+	useBufconn          = flag.Bool("bufconn", false, "Use in-memory connection instead of system network I/O")
+	enableKeepalive     = flag.Bool("enable_keepalive", false, "Enable client keepalive. \n"+
 		"Keepalive.Time is set to 10s, Keepalive.Timeout is set to 1s, Keepalive.PermitWithoutStream is set to true.")
 )
 

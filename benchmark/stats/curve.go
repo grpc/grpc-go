@@ -23,10 +23,10 @@ import (
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
-	"io/ioutil"
 	"sort"
 	"strconv"
 )
