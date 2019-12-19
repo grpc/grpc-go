@@ -33,14 +33,17 @@ import (
 type Client struct {
 	name         string
 	suWatchCh    *testutils.Channel
+	cdsWatchCh   *testutils.Channel
 	edsWatchCh   *testutils.Channel
 	suCancelCh   *testutils.Channel
+	cdsCancelCh  *testutils.Channel
 	edsCancelCh  *testutils.Channel
 	loadReportCh *testutils.Channel
 	closeCh      *testutils.Channel
 
 	mu        sync.Mutex
 	serviceCb func(xdsclient.ServiceUpdate, error)
+	cdsCb     func(xdsclient.CDSUpdate, error)
 	edsCb     func(*xdsclient.EDSUpdate, error)
 }
 
@@ -60,6 +63,9 @@ func (xdsC *Client) WatchService(target string, callback func(xdsclient.ServiceU
 // within a reasonable timeout, and returns the serviceName being watched.
 func (xdsC *Client) WaitForWatchService() (string, error) {
 	val, err := xdsC.suWatchCh.Receive()
+	if err != nil {
+		return "", err
+	}
 	return val.(string), err
 }
 
@@ -69,6 +75,43 @@ func (xdsC *Client) InvokeWatchServiceCallback(cluster string, err error) {
 	defer xdsC.mu.Unlock()
 
 	xdsC.serviceCb(xdsclient.ServiceUpdate{Cluster: cluster}, err)
+}
+
+// WatchCluster registers a CDS watch.
+func (xdsC *Client) WatchCluster(clusterName string, callback func(xdsclient.CDSUpdate, error)) func() {
+	xdsC.mu.Lock()
+	defer xdsC.mu.Unlock()
+
+	xdsC.cdsCb = callback
+	xdsC.cdsWatchCh.Send(clusterName)
+	return func() {
+		xdsC.cdsCancelCh.Send(nil)
+	}
+}
+
+// WaitForWatchCluster waits for WatchCluster to be invoked on this client
+// within a reasonable timeout, and returns the clusterName being watched.
+func (xdsC *Client) WaitForWatchCluster() (string, error) {
+	val, err := xdsC.cdsWatchCh.Receive()
+	if err != nil {
+		return "", err
+	}
+	return val.(string), err
+}
+
+// InvokeWatchClusterCallback invokes the registered cdsWatch callback.
+func (xdsC *Client) InvokeWatchClusterCallback(update xdsclient.CDSUpdate, err error) {
+	xdsC.mu.Lock()
+	defer xdsC.mu.Unlock()
+
+	xdsC.cdsCb(update, err)
+}
+
+// WaitForCancelClusterWatch waits for a CDS watch to be cancelled within a
+// reasonable timeout, and returns testutils.ErrRecvTimeout otherwise.
+func (xdsC *Client) WaitForCancelClusterWatch() error {
+	_, err := xdsC.cdsCancelCh.Receive()
+	return err
 }
 
 // WatchEDS registers an EDS watch for provided clusterName.
@@ -87,6 +130,9 @@ func (xdsC *Client) WatchEDS(clusterName string, callback func(*xdsclient.EDSUpd
 // reasonable timeout, and returns the clusterName being watched.
 func (xdsC *Client) WaitForWatchEDS() (string, error) {
 	val, err := xdsC.edsWatchCh.Receive()
+	if err != nil {
+		return "", err
+	}
 	return val.(string), err
 }
 
@@ -148,8 +194,10 @@ func NewClientWithName(name string) *Client {
 	return &Client{
 		name:         name,
 		suWatchCh:    testutils.NewChannel(),
+		cdsWatchCh:   testutils.NewChannel(),
 		edsWatchCh:   testutils.NewChannel(),
 		suCancelCh:   testutils.NewChannel(),
+		cdsCancelCh:  testutils.NewChannel(),
 		edsCancelCh:  testutils.NewChannel(),
 		loadReportCh: testutils.NewChannel(),
 		closeCh:      testutils.NewChannel(),
