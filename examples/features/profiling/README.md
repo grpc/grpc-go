@@ -168,17 +168,19 @@ To learn more about trace-viewer and how to navigate the generated HTML, see
 
 ## Frequently Asked Questions
 
-##### I have multiple `grpc.Server`s in my binary. Can I register profiling with just one of them?
+##### I have multiple `grpc.Server`s in my application. Can I register profiling with just one of them?
 
 You may not call `profsvc.Init` more than once -- all calls except for the
 first one will return an error. As a corollary, it is also not possible to
 register or enable/disable profiling for just one `grpc.Server` or operation.
+That is, you can enable/disable profiling globally for all gRPC operations or
+none at all.
 
 ##### Is `google.golang.org/grpc/profiling/cmd` the canonical implementation of a client that can talk to the profiling service?
 
 No, the command-line tool is simply provided as a reference implementation and
-a convenience. You are free to write your own tool as long as it can
-communicate with the underlying protocol buffers.
+as a convenience. You are free to write your own tool as long as it can
+communicate using the underlying protocol buffers.
 
 ##### Is Catapult's `trace-viewer` the only option that is supported?
 
@@ -197,15 +199,16 @@ it turned off). This will be useful in the off-chance you want to debug an
 application later -- in such an event, you can simply remotely toggle profiling
 using the `go run` command previously described to enable profiling data
 collection. Once you're confident that enough profiling data has been measured,
-you can turn it off again and retrieve the data for post-processing (see next
-section).
+you can turn it off again and retrieve the data for post-processing (see
+previous section).
 
 ##### How many RPCs worth of data is stored by profiling? I'd like to restrict the memory footprint of gRPC's profiling framework to a fixed amount.
 
 By default, at any given time, the last 2<sup>14</sup> RPCs worth of data is
 stored by profiling. Newly generated profiling data overwrites older data. Note
-that the internal data structure is not strictly LIFO in order to performant
-(but is approximately so).
+that the internal data structure is not strictly LIFO in order to be performant
+(but is approximately LIFO). All profiling data is timestamped anyway, so
+a LIFO property is unnecessary.
 
 This number is configurable. When registering your server with profiling, you
 may specify the number of samples that should be stored, like so:
@@ -219,18 +222,18 @@ may specify the number of samples that should be stored, like so:
 	})
 ```
 
-As an estimate, a typical unary RPC is expected consume ~2-3 KiB of data in
-memory. This may be useful in estimating how many RPCs worth of data you can
-afford depending on your memory capacity. For more complex RPCs such as
+As an estimate, a typical unary RPC is expected produce ~2-3 KiB of profiling
+data in memory. This may be useful in estimating how many RPCs worth of data
+you can afford depending on your memory capacity. For more complex RPCs such as
 streaming RPCs, each RPC will consume more data. The amount of memory consumed
 by profiling is mostly independent of the size of messages your application
 handles.
 
-##### The generated data is flat and has no flows/arrows. How do I distinguish between different RPCs?
+##### The generated visualization is flat and has no flows/arrows. How do I distinguish between different RPCs?
 
-Unfortunately, there isn't any way to enable this without some changes to the
-way your application is compiled. This is because gRPC's profiling relies on
-the Goroutine ID to uniquely identify different components.
+Unfortunately, there isn't any way to do this without some changes to the way
+your application is compiled. This is because gRPC's profiling relies on the
+Goroutine ID to uniquely identify different components.
 
 To enable this, first apply the following patch to your Go runtime installation
 directory:
@@ -253,4 +256,5 @@ diff --git a/src/runtime/runtime2.go b/src/runtime/runtime2.go
 ```
 
 Then, recompile your application with `-tags grpcgoid` to generate a new
-binary. This binary should generate data that is much cleaner when visualized.
+binary. This binary should produce profiling data that is much nicer when
+visualized.
