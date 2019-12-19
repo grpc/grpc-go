@@ -180,7 +180,7 @@ func TestClientAuthorizationCheck(t *testing.T) {
 			ctx,
 			[]string{testServiceAccount1, testServiceAccount2},
 			false,
-			codes.Unknown, // err doesn't have code, code is Unknown.
+			codes.NotFound,
 		},
 		{
 			"unauthorized client",

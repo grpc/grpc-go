@@ -145,10 +145,14 @@ func AuthInfoFromPeer(p *peer.Peer) (AuthInfo, error) {
 	return altsAuthInfo, nil
 }
 
+// ClientAuthorizationCheck checks whether the client is authorized to access
+// the requested resources based on the given expected client service accounts.
+// This API should be used by gRPC server RPC handlers. This API should not be
+// used by clients.
 func ClientAuthorizationCheck(ctx context.Context, expectedServiceAccounts []string) error {
 	authInfo, err := AuthInfoFromContext(ctx)
 	if err != nil {
-		return err
+		return status.Newf(codes.NotFound, "The context is not an ALTS-compatible context: %v", err).Err()
 	}
 	for _, sa := range expectedServiceAccounts {
 		if authInfo.PeerServiceAccount() == sa {
