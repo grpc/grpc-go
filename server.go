@@ -850,7 +850,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	}
 
 	if attemptBufferReuse && len(data) >= bufferReuseThreshold {
-		if bcodec, ok := codec.(reusableBaseCodec); ok {
+		if bcodec, ok := codec.(bufferReturner); ok {
 			opts.ReturnBuffer = transport.NewReturnBuffer(1, func() {
 				bcodec.ReturnBuffer(data)
 			})

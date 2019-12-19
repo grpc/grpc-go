@@ -1580,7 +1580,7 @@ func prepareMsg(m interface{}, codec baseCodec, cp Compressor, comp encoding.Com
 	}
 
 	if attemptBufferReuse && cap(data) >= bufferReuseThreshold {
-		if bcodec, ok := codec.(reusableBaseCodec); ok {
+		if bcodec, ok := codec.(bufferReturner); ok {
 			returnBuffer = func() {
 				bcodec.ReturnBuffer(data)
 			}
