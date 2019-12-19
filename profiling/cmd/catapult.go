@@ -139,7 +139,7 @@ func streamStatsCatapultJSONSingle(stat *ppb.Stat, baseSec int64, baseNsec int32
 
 	lrc, lwc := newCounter(), newCounter()
 
-	result := make([]jsonNode, 0)
+	var result []jsonNode
 	result = append(result,
 		jsonNode{
 			Name:      "loopyReaderTmp",
@@ -313,7 +313,7 @@ func streamStatsCatapultJSON(s *snapshot, streamStatsCatapultJSONFileName string
 	}
 
 	grpclog.Infof("filter stream stats for %s", *flagStreamStatsFilter)
-	streamStats := make([]*ppb.Stat, 0)
+	var streamStats []*ppb.Stat
 	for _, stat := range s.StreamStats {
 		if _, ok := filter[stat.Tags]; ok {
 			streamStats = append(streamStats, stat)
@@ -363,7 +363,7 @@ func streamStatsCatapultJSON(s *snapshot, streamStatsCatapultJSONFileName string
 	}
 
 	grpclog.Infof("converting %d stats to catapult JSON format", len(streamStats))
-	jsonNodes := make([]jsonNode, 0)
+	var jsonNodes []jsonNode
 	for _, stat := range streamStats {
 		jsonNodes = append(jsonNodes, streamStatsCatapultJSONSingle(stat, base.BeginSec, base.BeginNsec)...)
 	}

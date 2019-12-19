@@ -23,11 +23,11 @@ import (
 	"fmt"
 )
 
-var flagAddress = flag.String("address", "", "address of your remote target")
+var flagAddress = flag.String("address", "", "address of a remote gRPC server with profiling turned on to retrieve stats from")
 var flagTimeout = flag.Int("timeout", 0, "network operations timeout in seconds to remote target (0 indicates unlimited)")
 
 var flagRetrieveSnapshot = flag.Bool("retrieve-snapshot", false, "connect to remote target and retrieve a profiling snapshot locally for processing")
-var flagSnapshot = flag.String("snapshot", "", "snapshot file path")
+var flagSnapshot = flag.String("snapshot", "", "snapshot file to write to when retrieving profiling data or snapshot file to read from when processing profiling data")
 
 var flagEnableProfiling = flag.Bool("enable-profiling", false, "enable profiling in remote target")
 var flagDisableProfiling = flag.Bool("disable-profiling", false, "disable profiling in remote target")
