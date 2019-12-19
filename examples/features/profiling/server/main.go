@@ -27,8 +27,8 @@ import (
 	"net"
 
 	"google.golang.org/grpc"
-	profsvc "google.golang.org/grpc/profiling/service"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
+	profsvc "google.golang.org/grpc/profiling/service"
 )
 
 var port = flag.Int("port", 50051, "the port to serve on")
@@ -56,8 +56,8 @@ func main() {
 
 	// Register your grpc.Server with profiling.
 	pc := &profsvc.ProfilingConfig{
-		Server: s,
-		Enabled: true,
+		Server:          s,
+		Enabled:         true,
 		StreamStatsSize: 1024,
 	}
 	if err = profsvc.Init(pc); err != nil {

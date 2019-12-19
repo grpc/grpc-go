@@ -24,12 +24,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"time"
 	"net"
+	"time"
 
 	"google.golang.org/grpc"
-	profsvc "google.golang.org/grpc/profiling/service"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
+	profsvc "google.golang.org/grpc/profiling/service"
 )
 
 var addr = flag.String("addr", "localhost:50051", "the address to connect to")
@@ -47,8 +47,8 @@ func setupClientProfiling() error {
 
 	// Register this grpc.Server with profiling.
 	pc := &profsvc.ProfilingConfig{
-		Server: s,
-		Enabled: true,
+		Server:          s,
+		Enabled:         true,
 		StreamStatsSize: 1024,
 	}
 	if err = profsvc.Init(pc); err != nil {
@@ -85,5 +85,5 @@ func main() {
 	}
 
 	log.Printf("sleeping for 30 seconds with exposed profiling service on :%d\n", *profilingPort)
-	time.Sleep(30*time.Second)
+	time.Sleep(30 * time.Second)
 }
