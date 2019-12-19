@@ -15,12 +15,12 @@ Typically, there are three logically separate parts involved in integrating
 profiling into your application:
 
 1. Register the `Profiling` service: this requires a simple code change in your
-	 application.
+   application.
 1. Enable profiling when required: profiling is disabled by default and must be
-	 enabled remotely or at server initialization.
+   enabled remotely or at server initialization.
 1. Download and process profiling data: once your application has collected
-	 enough profiling data, you must use a bundled command-line application to
-	 download your data and process it to generate human-friendly visualization.
+   enough profiling data, you must use a bundled command-line application to
+   download your data and process it to generate human-friendly visualization.
 
 ## Registering the `Profiling` Service
 
@@ -97,7 +97,7 @@ that you would like to enable profiling in, do the following:
 ```bash
 $ go run google.golang.org/grpc/profiling/cmd \
     -address example.com:50051                \
-		-enable-profiling
+    -enable-profiling
 ```
 
 Similarly, running the command with `-disable-profiling` can be used to disable
@@ -133,8 +133,8 @@ To retrieve profiling data from a remote server, run the following command:
 ```bash
 $ go run google.golang.org/grpc/profiling/cmd \
     -address example.com:50051                \
-		-retrieve-snapshot                        \
-		-snapshot /path/to/snapshot
+    -retrieve-snapshot                        \
+    -snapshot /path/to/snapshot
 ```
 
 You must provide a path to `-snapshot` that can be written to. This file will
@@ -146,8 +146,8 @@ To process this data into a human-consumable such as
 ```bash
 $ go run google.golang.org/grpc/profiling/cmd \
     -address example.com:50051                \
-		-snapshot /path/to/snapshot               \
-		-stream-stats-catapult-json /path/to/json
+    -snapshot /path/to/snapshot               \
+    -stream-stats-catapult-json /path/to/json
 ```
 
 This would read the data stored in `/path/to/snapshot` and process it to
