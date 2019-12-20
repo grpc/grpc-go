@@ -923,6 +923,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		h:           hdr,
 		d:           data,
 		onEachWrite: t.setResetPingStrikes,
+		rb:          opts.ReturnBuffer,
 	}
 	if err := s.wq.get(int32(len(hdr) + len(data))); err != nil {
 		select {
@@ -931,6 +932,9 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		default:
 		}
 		return ContextErr(s.ctx.Err())
+	}
+	if df.rb != nil {
+		df.rb.Add(1)
 	}
 	return t.controlBuf.put(df)
 }

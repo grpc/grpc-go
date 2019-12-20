@@ -21,7 +21,6 @@
 package proto
 
 import (
-	"math"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -38,29 +37,16 @@ func init() {
 // codec is a Codec implementation with protobuf. It is the default codec for gRPC.
 type codec struct{}
 
-type cachedProtoBuffer struct {
-	lastMarshaledSize uint32
-	proto.Buffer
-}
-
-func capToMaxInt32(val int) uint32 {
-	if val > math.MaxInt32 {
-		return uint32(math.MaxInt32)
-	}
-	return uint32(val)
-}
-
-func marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error) {
+func marshal(v interface{}, pb *proto.Buffer) ([]byte, error) {
 	protoMsg := v.(proto.Message)
-	newSlice := make([]byte, 0, cb.lastMarshaledSize)
+	newSlice := returnBufferPool.Get().([]byte)
 
-	cb.SetBuf(newSlice)
-	cb.Reset()
-	if err := cb.Marshal(protoMsg); err != nil {
+	pb.SetBuf(newSlice)
+	pb.Reset()
+	if err := pb.Marshal(protoMsg); err != nil {
 		return nil, err
 	}
-	out := cb.Bytes()
-	cb.lastMarshaledSize = capToMaxInt32(len(out))
+	out := pb.Bytes()
 	return out, nil
 }
 
@@ -70,12 +56,12 @@ func (codec) Marshal(v interface{}) ([]byte, error) {
 		return pm.Marshal()
 	}
 
-	cb := protoBufferPool.Get().(*cachedProtoBuffer)
-	out, err := marshal(v, cb)
+	pb := protoBufferPool.Get().(*proto.Buffer)
+	out, err := marshal(v, pb)
 
 	// put back buffer and lose the ref to the slice
-	cb.SetBuf(nil)
-	protoBufferPool.Put(cb)
+	pb.SetBuf(nil)
+	protoBufferPool.Put(pb)
 	return out, err
 }
 
@@ -88,12 +74,25 @@ func (codec) Unmarshal(data []byte, v interface{}) error {
 		return pu.Unmarshal(data)
 	}
 
-	cb := protoBufferPool.Get().(*cachedProtoBuffer)
-	cb.SetBuf(data)
-	err := cb.Unmarshal(protoMsg)
-	cb.SetBuf(nil)
-	protoBufferPool.Put(cb)
+	pb := protoBufferPool.Get().(*proto.Buffer)
+	pb.SetBuf(data)
+	err := pb.Unmarshal(protoMsg)
+	pb.SetBuf(nil)
+	protoBufferPool.Put(pb)
 	return err
+}
+
+func (codec) ReturnBuffer(data []byte) {
+	// Make sure we set the length of the buffer to zero so that future appends
+	// will start from the zeroeth byte, not append to the previous, stale data.
+	//
+	// Apparently, sync.Pool with non-pointer objects (slices, in this case)
+	// causes small allocations because of how interface{} works under the hood.
+	// This isn't a problem for us, however, because we're more concerned with
+	// _how_ much that allocation is. Ideally, we'd be using bytes.Buffer as the
+	// Marshal return value to remove even that allocation, but we can't change
+	// the Marshal interface at this point.
+	returnBufferPool.Put(data[:0])
 }
 
 func (codec) Name() string {
@@ -102,9 +101,12 @@ func (codec) Name() string {
 
 var protoBufferPool = &sync.Pool{
 	New: func() interface{} {
-		return &cachedProtoBuffer{
-			Buffer:            proto.Buffer{},
-			lastMarshaledSize: 16,
-		}
+		return &proto.Buffer{}
+	},
+}
+
+var returnBufferPool = &sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 0, 16)
 	},
 }

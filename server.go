@@ -841,12 +841,22 @@ func (s *Server) incrCallsFailed() {
 	atomic.AddInt64(&s.czData.callsFailed, 1)
 }
 
-func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
-	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
+func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor, attemptBufferReuse bool) error {
+	codec := s.getCodec(stream.ContentSubtype())
+	data, err := encode(codec, msg)
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to encode response: ", err)
 		return err
 	}
+
+	if attemptBufferReuse && len(data) >= bufferReuseThreshold {
+		if bcodec, ok := codec.(bufferReturner); ok {
+			opts.ReturnBuffer = transport.NewReturnBuffer(1, func() {
+				bcodec.ReturnBuffer(data)
+			})
+		}
+	}
+
 	compData, err := compress(data, cp, comp)
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to compress response: ", err)
@@ -1055,8 +1065,11 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		trInfo.tr.LazyLog(stringer("OK"), false)
 	}
 	opts := &transport.Options{Last: true}
-
-	if err := s.sendResponse(t, stream, reply, cp, opts, comp); err != nil {
+	err = s.sendResponse(t, stream, reply, cp, opts, comp, sh == nil && binlog == nil)
+	if opts.ReturnBuffer != nil {
+		defer opts.ReturnBuffer.Done()
+	}
+	if err != nil {
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
@@ -1195,6 +1208,17 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			logEntry.PeerAddr = peer.Addr
 		}
 		ss.binlog.Log(logEntry)
+	}
+
+	// Stats handlers and binlog handlers are allowed to retain references to
+	// this slice internally. We may not, therefore, return this to the pool.
+	if ss.statsHandler == nil && ss.binlog == nil {
+		ss.attemptBufferReuse = true
+		defer func() {
+			for _, rb := range ss.returnBuffers {
+				rb.Done()
+			}
+		}()
 	}
 
 	// If dc is set and matches the stream's compression, use it.  Otherwise, try

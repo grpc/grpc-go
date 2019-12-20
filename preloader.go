@@ -28,9 +28,10 @@ import (
 // This API is EXPERIMENTAL.
 type PreparedMsg struct {
 	// Struct for preparing msg before sending them
-	encodedData []byte
-	hdr         []byte
-	payload     []byte
+	encodedData  []byte
+	hdr          []byte
+	payload      []byte
+	returnBuffer func()
 }
 
 // Encode marshalls and compresses the message using the codec and compressor for the stream.
@@ -55,6 +56,14 @@ func (p *PreparedMsg) Encode(s Stream, msg interface{}) error {
 		return err
 	}
 	p.encodedData = data
+	if cap(data) >= bufferReuseThreshold {
+		if bcodec, ok := rpcInfo.preloaderInfo.codec.(bufferReturner); ok {
+			p.returnBuffer = func() {
+				bcodec.ReturnBuffer(data)
+			}
+		}
+	}
+
 	compData, err := compress(data, rpcInfo.preloaderInfo.cp, rpcInfo.preloaderInfo.comp)
 	if err != nil {
 		return err
