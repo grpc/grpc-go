@@ -471,7 +471,7 @@ func TestRDSCaching(t *testing.T) {
 // to be invoked with an error once the watchExpiryTimer fires.
 func TestRDSWatchExpiryTimer(t *testing.T) {
 	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 10 * time.Millisecond
+	defaultWatchExpiryTimeout = 1 * time.Second
 	defer func() {
 		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
 	}()
