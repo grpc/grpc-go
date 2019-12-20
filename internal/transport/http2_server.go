@@ -335,10 +335,10 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 
 	if profiling.IsEnabled() {
-		// This is where the concept of a stream is first established within a gRPC
-		// server, so let's create an associated Stat object.
 		s.stat = profiling.NewStat("server")
-		s.stat.Metadata = make([]byte, 12)
+		// See comment above StreamStatMetadataSize definition for more information
+		// on this encoding.
+		s.stat.Metadata = make([]byte, profiling.StreamStatMetadataSize)
 		binary.BigEndian.PutUint64(s.stat.Metadata[0:8], t.connectionID)
 		binary.BigEndian.PutUint32(s.stat.Metadata[8:12], streamID)
 		profiling.StreamStats.Push(s.stat)

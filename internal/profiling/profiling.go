@@ -221,3 +221,10 @@ func InitStats(streamStatsSize uint32) error {
 
 	return nil
 }
+
+const (
+	// StreamStatMetadataSize is the size of the metadata field StreamStats have
+	// in bytes. A 12-byte slice that is a big-endian concatenation of a stream's
+	// connection ID (first eight bytes) and stream ID (next four bytes) is used.
+	StreamStatMetadataSize = 12
+)
