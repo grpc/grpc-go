@@ -42,6 +42,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
@@ -427,7 +428,10 @@ const serverWorkerResetThreshold = 1 << 16
 //
 // [1] https://github.com/golang/go/issues/18138
 func (s *Server) serverWorker() {
-	for completed := 0; completed < serverWorkerResetThreshold; completed++ {
+	// To make sure all server workers don't reset at the same time, choose a
+	// random number of iterations before resetting.
+	threshold := serverWorkerResetThreshold + grpcrand.Intn(serverWorkerResetThreshold)
+	for completed := 0; completed < threshold; completed++ {
 		data, ok := <-s.serverWorkerChannel
 		if !ok {
 			return
