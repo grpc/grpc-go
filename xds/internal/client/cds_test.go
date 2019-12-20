@@ -225,14 +225,14 @@ func TestCDSHandleResponse(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
 				responseToHandle: test.cdsResponse,
-				wantErr:          test.wantErr,
+				wantHandleErr:    test.wantErr,
 				wantUpdate:       test.wantUpdate,
 				wantUpdateErr:    test.wantUpdateErr,
-			}, &watchHandleConfig{
-				typeURL:  cdsURL,
-				cdsWatch: v2c.watchCDS,
-				handle:   v2c.handleCDSResponse,
-			}, fakeServer)
+
+				cdsWatch:      v2c.watchCDS,
+				watchReqChan:  fakeServer.RequestChan,
+				handleXDSResp: v2c.handleCDSResponse,
+			})
 		})
 	}
 }

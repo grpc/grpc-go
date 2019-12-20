@@ -230,14 +230,14 @@ func TestEDSHandleResponse(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
 				responseToHandle: test.edsResponse,
-				wantErr:          test.wantErr,
+				wantHandleErr:    test.wantErr,
 				wantUpdate:       test.wantUpdate,
 				wantUpdateErr:    test.wantUpdateErr,
-			}, &watchHandleConfig{
-				typeURL:  edsURL,
-				edsWatch: v2c.watchEDS,
-				handle:   v2c.handleEDSResponse,
-			}, fakeServer)
+
+				edsWatch:      v2c.watchEDS,
+				watchReqChan:  fakeServer.RequestChan,
+				handleXDSResp: v2c.handleEDSResponse,
+			})
 		})
 	}
 }

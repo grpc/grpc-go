@@ -243,14 +243,14 @@ func TestRDSHandleResponse(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
 				responseToHandle: test.rdsResponse,
-				wantErr:          test.wantErr,
+				wantHandleErr:    test.wantErr,
 				wantUpdate:       test.wantUpdate,
 				wantUpdateErr:    test.wantUpdateErr,
-			}, &watchHandleConfig{
-				typeURL:  rdsURL,
-				rdsWatch: v2c.watchRDS,
-				handle:   v2c.handleRDSResponse,
-			}, fakeServer)
+
+				rdsWatch:      v2c.watchRDS,
+				watchReqChan:  fakeServer.RequestChan,
+				handleXDSResp: v2c.handleRDSResponse,
+			})
 		})
 	}
 }

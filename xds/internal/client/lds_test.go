@@ -181,14 +181,14 @@ func TestLDSHandleResponse(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
 				responseToHandle: test.ldsResponse,
-				wantErr:          test.wantErr,
+				wantHandleErr:    test.wantErr,
 				wantUpdate:       test.wantUpdate,
 				wantUpdateErr:    test.wantUpdateErr,
-			}, &watchHandleConfig{
-				typeURL:  ldsURL,
-				ldsWatch: v2c.watchLDS,
-				handle:   v2c.handleLDSResponse,
-			}, fakeServer)
+
+				ldsWatch:      v2c.watchLDS,
+				watchReqChan:  fakeServer.RequestChan,
+				handleXDSResp: v2c.handleLDSResponse,
+			})
 		})
 	}
 }

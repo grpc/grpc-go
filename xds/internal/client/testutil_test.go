@@ -27,82 +27,88 @@ import (
 	"google.golang.org/grpc/xds/internal/client/fakexds"
 )
 
-type watchHandleConfig struct {
-	typeURL string
+type watchHandleTestcase struct {
+	responseToHandle *xdspb.DiscoveryResponse
+	wantHandleErr    bool
+	wantUpdate       interface{}
+	wantUpdateErr    bool
 
 	// Only one of the following should be non-nil. The one corresponding with
 	// typeURL will be called.
-	ldsWatch func(target string, ldsCb ldsCallback) (cancel func())
-	rdsWatch func(routeName string, rdsCb rdsCallback) (cancel func())
-	cdsWatch func(clusterName string, cdsCb cdsCallback) (cancel func())
-	edsWatch func(clusterName string, edsCb edsCallback) (cancel func())
-
-	handle func(response *xdspb.DiscoveryResponse) error
+	ldsWatch      func(target string, ldsCb ldsCallback) (cancel func())
+	rdsWatch      func(routeName string, rdsCb rdsCallback) (cancel func())
+	cdsWatch      func(clusterName string, cdsCb cdsCallback) (cancel func())
+	edsWatch      func(clusterName string, edsCb edsCallback) (cancel func())
+	watchReqChan  chan *fakexds.Request // The request sent for watch will be sent to this channel.
+	handleXDSResp func(response *xdspb.DiscoveryResponse) error
 }
 
-type watchHandleTestcase struct {
-	responseToHandle *xdspb.DiscoveryResponse
-	wantErr          bool
-	wantUpdate       interface{}
-	wantUpdateErr    bool
-}
-
-func testWatchHandle(t *testing.T, test *watchHandleTestcase, testConfig *watchHandleConfig, fakeServer *fakexds.Server) {
-	// t.Helper()
+// testWatchHandle is called to test response handling for each xDS.
+//
+// It starts the xDS watch as configured in test, waits for the fake xds server
+// to receive the request (so watch callback is installed), and calls
+// handleXDSResp with responseToHandle (if it's set). It then compares the
+// update received by watch callback with the expected results.
+func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	gotUpdateCh := make(chan interface{}, 1)
 	gotUpdateErrCh := make(chan error, 1)
 
 	var cancelWatch func()
-	switch testConfig.typeURL {
-	case ldsURL:
-		// Register a watcher, to trigger the v2Client to send an LDS request.
-		cancelWatch = testConfig.ldsWatch(goodLDSTarget1, func(u ldsUpdate, err error) {
+	// Register the watcher, this will also trigger the v2Client to send the xDS
+	// request.
+	switch {
+	case test.ldsWatch != nil:
+		cancelWatch = test.ldsWatch(goodLDSTarget1, func(u ldsUpdate, err error) {
 			t.Logf("in v2c.watchLDS callback, ldsUpdate: %+v, err: %v", u, err)
 			gotUpdateCh <- u
 			gotUpdateErrCh <- err
 		})
-	case rdsURL:
-		// Register a watcher, to trigger the v2Client to send an RDS request.
-		cancelWatch = testConfig.rdsWatch(goodRouteName1, func(u rdsUpdate, err error) {
+	case test.rdsWatch != nil:
+		cancelWatch = test.rdsWatch(goodRouteName1, func(u rdsUpdate, err error) {
 			t.Logf("in v2c.watchRDS callback, rdsUpdate: %+v, err: %v", u, err)
 			gotUpdateCh <- u
 			gotUpdateErrCh <- err
 		})
-	case cdsURL:
-		// Register a watcher, to trigger the v2Client to send an CDS request.
-		cancelWatch = testConfig.cdsWatch(clusterName1, func(u CDSUpdate, err error) {
+	case test.cdsWatch != nil:
+		cancelWatch = test.cdsWatch(clusterName1, func(u CDSUpdate, err error) {
 			t.Logf("in v2c.watchCDS callback, cdsUpdate: %+v, err: %v", u, err)
 			gotUpdateCh <- u
 			gotUpdateErrCh <- err
 		})
-	case edsURL:
-		// Register a watcher, to trigger the v2Client to send an EDS request.
-		cancelWatch = testConfig.edsWatch(goodEDSName, func(u *EDSUpdate, err error) {
+	case test.edsWatch != nil:
+		cancelWatch = test.edsWatch(goodEDSName, func(u *EDSUpdate, err error) {
 			t.Logf("in v2c.watchEDS callback, edsUpdate: %+v, err: %v", u, err)
 			gotUpdateCh <- *u
 			gotUpdateErrCh <- err
 		})
 	default:
-		t.Fatalf("unknown typeURL: %s", testConfig.typeURL)
+		t.Fatalf("no watch() is set")
 	}
 	defer cancelWatch()
 
 	// Wait till the request makes it to the fakeServer. This ensures that
 	// the watch request has been processed by the v2Client.
-	<-fakeServer.RequestChan
+	//
+	// TODO: switch to new fakexds server request channel with timed receive.
+	<-test.watchReqChan
 
-	// Directly push the response through a call to handleRDSResponse,
-	// thereby bypassing the fakeServer.
-	if err := testConfig.handle(test.responseToHandle); (err != nil) != test.wantErr {
-		t.Fatalf("v2c.handleRDSResponse() returned err: %v, wantErr: %v", err, test.wantErr)
+	// Directly push the response through a call to handleXDSResp. This bypasses
+	// the fakeServer, so it's only testing the handle logic. Client response
+	// processing is covered elsewhere.
+	//
+	// Also note that this won't trigger ACK, so there's no need to clear the
+	// request channel afterwards.
+	if err := test.handleXDSResp(test.responseToHandle); (err != nil) != test.wantHandleErr {
+		t.Fatalf("v2c.handleRDSResponse() returned err: %v, wantErr: %v", err, test.wantHandleErr)
 	}
 
-	// If the test needs the callback to be invoked, verify the update and
-	// error pushed to the callback.
+	// If the test doesn't expect the callback to be invoked, verify that no
+	// update or error is pushed to the callback.
 	//
-	// Cannot directly compare test.wantUpdate with nil (typed vs non-types nil).
+	// Cannot directly compare test.wantUpdate with nil (typed vs non-typed nil:
+	// https://golang.org/doc/faq#nil_error).
 	if c := test.wantUpdate; c == nil || (reflect.ValueOf(c).Kind() == reflect.Ptr && reflect.ValueOf(c).IsNil()) {
-		timer := time.NewTimer(time.Millisecond * 500)
+		timer := time.NewTimer(defaultTestTimeout)
 		select {
 		case <-timer.C:
 			return
