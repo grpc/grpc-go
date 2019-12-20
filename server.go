@@ -88,8 +88,8 @@ type service struct {
 }
 
 type serverWorkerData struct {
-	st transport.ServerTransport
-	wg *sync.WaitGroup
+	st     transport.ServerTransport
+	wg     *sync.WaitGroup
 	stream *transport.Stream
 }
 
@@ -469,7 +469,6 @@ func NewServer(opt ...ServerOption) *Server {
 		s.events = trace.NewEventLog("grpc.Server", fmt.Sprintf("%s:%d", file, line))
 	}
 
-	s.opts.numServerWorkers = 1
 	if s.opts.numServerWorkers > 0 {
 		s.initServerWorkers()
 	}
