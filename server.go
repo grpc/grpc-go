@@ -115,7 +115,7 @@ type Server struct {
 	channelzID int64 // channelz unique identification number
 	czData     *channelzData
 
-	serverWorkerChannel chan *serverWorkerData
+	serverWorkerChannels []chan *serverWorkerData
 }
 
 type serverOptions struct {
@@ -427,27 +427,34 @@ const serverWorkerResetThreshold = 1 << 16
 // re-allocations (see the runtime.morestack problem [1]).
 //
 // [1] https://github.com/golang/go/issues/18138
-func (s *Server) serverWorker() {
+func (s *Server) serverWorker(ch chan *serverWorkerData) {
 	// To make sure all server workers don't reset at the same time, choose a
 	// random number of iterations before resetting.
 	threshold := serverWorkerResetThreshold + grpcrand.Intn(serverWorkerResetThreshold)
 	for completed := 0; completed < threshold; completed++ {
-		data, ok := <-s.serverWorkerChannel
+		data, ok := <-ch
 		if !ok {
 			return
 		}
 		s.handleStream(data.st, data.stream, s.traceInfo(data.st, data.stream))
 		data.wg.Done()
 	}
-	go s.serverWorker()
+	go s.serverWorker(ch)
 }
 
 // initServerWorkers creates worker goroutines and channels to process incoming
 // connections to reduce the time spent overall on runtime.morestack.
 func (s *Server) initServerWorkers() {
-	s.serverWorkerChannel = make(chan *serverWorkerData)
+	s.serverWorkerChannels = make([]chan *serverWorkerData, s.opts.numServerWorkers)
 	for i := uint32(0); i < s.opts.numServerWorkers; i++ {
-		go s.serverWorker()
+		s.serverWorkerChannels[i] = make(chan *serverWorkerData)
+		go s.serverWorker(s.serverWorkerChannels[i])
+	}
+}
+
+func (s *Server) stopServerWorkers() {
+	for i := uint32(0); i < s.opts.numServerWorkers; i++ {
+		close(s.serverWorkerChannels[i])
 	}
 }
 
@@ -783,12 +790,13 @@ func (s *Server) serveStreams(st transport.ServerTransport) {
 	defer st.Close()
 	var wg sync.WaitGroup
 
+	var roundRobinCounter uint32
 	st.HandleStreams(func(stream *transport.Stream) {
 		wg.Add(1)
 		if s.opts.numServerWorkers > 0 {
 			data := &serverWorkerData{st: st, wg: &wg, stream: stream}
 			select {
-			case s.serverWorkerChannel <- data:
+			case s.serverWorkerChannels[atomic.AddUint32(&roundRobinCounter, 1)%s.opts.numServerWorkers] <- data:
 			default:
 				// If all stream workers are busy, fallback to the default code path.
 				go func() {
@@ -1497,7 +1505,7 @@ func (s *Server) Stop() {
 		c.Close()
 	}
 	if s.opts.numServerWorkers > 0 {
-		close(s.serverWorkerChannel)
+		s.stopServerWorkers()
 	}
 
 	s.mu.Lock()
