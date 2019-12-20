@@ -152,7 +152,7 @@ func AuthInfoFromPeer(p *peer.Peer) (AuthInfo, error) {
 func ClientAuthorizationCheck(ctx context.Context, expectedServiceAccounts []string) error {
 	authInfo, err := AuthInfoFromContext(ctx)
 	if err != nil {
-		return status.Newf(codes.NotFound, "The context is not an ALTS-compatible context: %v", err).Err()
+		return status.Newf(codes.PermissionDenied, "The context is not an ALTS-compatible context: %v", err).Err()
 	}
 	for _, sa := range expectedServiceAccounts {
 		if authInfo.PeerServiceAccount() == sa {
