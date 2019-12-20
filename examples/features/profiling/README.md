@@ -145,7 +145,6 @@ To process this data into a human-consumable such as
 
 ```bash
 $ go run google.golang.org/grpc/profiling/cmd \
-    -address example.com:50051                \
     -snapshot /path/to/snapshot               \
     -stream-stats-catapult-json /path/to/json
 ```
@@ -158,6 +157,7 @@ The Catapult project comes with a utility called
 which can be used to generate human-readable visualizations:
 
 ```bash
+$ git clone https://chromium.googlesource.com/catapult /path/to/catapult
 $ /path/to/catapult/tracing/bin/trace2html /path/to/json --output=/path/to/html
 ```
 
@@ -193,14 +193,15 @@ When turned on, profiling has virtually no impact on the performance (QPS,
 latency, memory footprint) of your application. However, when turned on, expect
 a 5-10% throughput/latency penalty and double the memory footprint.
 
-Because of the negligible impact of profiling when turned off, it is
-recommended to register/initialize all applications with profiling (but leave
-it turned off). This will be useful in the off-chance you want to debug an
-application later -- in such an event, you can simply remotely toggle profiling
-using the `go run` command previously described to enable profiling data
-collection. Once you're confident that enough profiling data has been measured,
-you can turn it off again and retrieve the data for post-processing (see
-previous section).
+Profiling is mostly used by gRPC-Go devs. However, if you foresee using
+profiling in production machines, because of the negligible impact of profiling
+when turned off, you may want to register/initialize your applications with
+profiling (but leave it turned off). This will be useful in the off-chance you
+want to debug an application later -- in such an event, you can simply remotely
+toggle profiling using the `go run` command previously described to enable
+profiling data collection. Once you're confident that enough profiling data has
+been measured, you can turn it off again and retrieve the data for
+post-processing (see previous section).
 
 ##### How many RPCs worth of data is stored by profiling? I'd like to restrict the memory footprint of gRPC's profiling framework to a fixed amount.
 
