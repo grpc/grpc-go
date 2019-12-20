@@ -189,7 +189,7 @@ welcome.
 
 ##### What is the impact of profiling on application performance?
 
-When turned on, profiling has virtually no impact on the performance (QPS,
+When turned off, profiling has virtually no impact on the performance (QPS,
 latency, memory footprint) of your application. However, when turned on, expect
 a 5-10% throughput/latency penalty and double the memory footprint.
 
