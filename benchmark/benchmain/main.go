@@ -670,6 +670,9 @@ func processFlags() *benchOpts {
 			opts.features.reqSizeBytes = defaultReqSizeBytes
 		}
 	} else {
+		if len(opts.features.reqSizeBytes) != 0 {
+			log.Fatalf("you may not specify -reqPayloadCurveFiles and -reqSizeBytes at the same time")
+		}
 		for _, file := range *reqPayloadCurveFiles {
 			pc, err := stats.NewPayloadCurve(file)
 			if err != nil {
@@ -684,6 +687,9 @@ func processFlags() *benchOpts {
 			opts.features.respSizeBytes = defaultRespSizeBytes
 		}
 	} else {
+		if len(opts.features.respSizeBytes) != 0 {
+			log.Fatalf("you may not specify -respPayloadCurveFiles and -respSizeBytes at the same time")
+		}
 		for _, file := range *respPayloadCurveFiles {
 			pc, err := stats.NewPayloadCurve(file)
 			if err != nil {

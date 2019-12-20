@@ -142,8 +142,7 @@ func (isv *intSliceValue) String() string {
 
 type stringSliceValue []string
 
-// StringSlice returns a flag representing a slice of strings. Commas will be
-// interpreted as separators unless they are escaped by a backslash.
+// StringSlice returns a flag representing a slice of strings.
 func StringSlice(name string, defaultVal []string, usage string) *[]string {
 	ss := make([]string, len(defaultVal))
 	copy(ss, defaultVal)
@@ -153,7 +152,7 @@ func StringSlice(name string, defaultVal []string, usage string) *[]string {
 }
 
 // escapedCommaSplit splits a comma-separated list of strings in the same way
-// CSV works. Escaping a comma requires double-quotes.
+// CSV files work (escaping a comma requires double-quotes).
 func escapedCommaSplit(str string) ([]string, error) {
 	r := csv.NewReader(strings.NewReader(str))
 	ret, err := r.Read()

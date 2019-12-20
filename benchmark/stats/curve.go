@@ -50,13 +50,13 @@ func newPayloadCurveRange(line []string) (*payloadCurveRange, error) {
 	if from, err = strconv.ParseInt(line[0], 10, 32); err != nil {
 		return nil, err
 	}
-	if from <= 0 {
+	if from <= 0 || from > math.MaxInt32 {
 		return nil, fmt.Errorf("line %v: field (%d) must be in (0, %d]", line, from, math.MaxInt32)
 	}
 	if to, err = strconv.ParseInt(line[1], 10, 32); err != nil {
 		return nil, err
 	}
-	if to <= 0 {
+	if to <= 0 || to > math.MaxInt32 {
 		return nil, fmt.Errorf("line %v: field %d must be in (0, %d]", line, to, math.MaxInt32)
 	}
 	if from > to {
