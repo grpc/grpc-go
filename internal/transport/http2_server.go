@@ -338,9 +338,11 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		s.stat = profiling.NewStat("server")
 		// See comment above StreamStatMetadataSize definition for more information
 		// on this encoding.
-		s.stat.Metadata = make([]byte, profiling.StreamStatMetadataSize)
-		binary.BigEndian.PutUint64(s.stat.Metadata[0:8], t.connectionID)
-		binary.BigEndian.PutUint32(s.stat.Metadata[8:12], streamID)
+		s.stat.Metadata = make([]byte, profiling.StreamStatMetadataConnectionIDSize+profiling.StreamStatMetadataStreamIDSize)
+		written := 0
+		binary.BigEndian.PutUint64(s.stat.Metadata[written:written+profiling.StreamStatMetadataConnectionIDSize], t.connectionID)
+		written += profiling.StreamStatMetadataConnectionIDSize
+		binary.BigEndian.PutUint32(s.stat.Metadata[written:written+profiling.StreamStatMetadataStreamIDSize], streamID)
 		profiling.StreamStats.Push(s.stat)
 		defer s.stat.NewTimer("/http2/recv/header").Egress()
 	}

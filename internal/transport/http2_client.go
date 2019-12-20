@@ -573,10 +573,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 
 	if profiling.IsEnabled() {
 		s.stat = profiling.NewStat("client")
-		s.stat.Metadata = make([]byte, profiling.StreamStatMetadataSize)
-		// See comment above StreamStatMetadataSize definition for more information
-		// on this encoding.
-		binary.BigEndian.PutUint64(s.stat.Metadata[0:8], t.connectionID)
+		s.stat.Metadata = make([]byte, profiling.StreamStatMetadataConnectionIDSize+profiling.StreamStatMetadataStreamIDSize)
+		binary.BigEndian.PutUint64(s.stat.Metadata[0:profiling.StreamStatMetadataConnectionIDSize], t.connectionID)
 		// Stream ID will be set when loopy writer actually establishes the stream
 		// and obtains a stream ID
 		profiling.StreamStats.Push(s.stat)
@@ -618,7 +616,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			}
 			t.activeStreams[id] = s
 			if s.stat != nil {
-				binary.BigEndian.PutUint32(s.stat.Metadata[8:12], id)
+				from := profiling.StreamStatMetadataConnectionIDSize
+				to := from + profiling.StreamStatMetadataStreamIDSize
+				binary.BigEndian.PutUint32(s.stat.Metadata[from:to], id)
 			}
 			if channelz.IsOn() {
 				atomic.AddInt64(&t.czData.streamsStarted, 1)
