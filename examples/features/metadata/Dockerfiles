@@ -1,0 +1,6 @@
+from busybox
+
+copy ./grpc-client  /
+copy ./grpc-server  /
+
+

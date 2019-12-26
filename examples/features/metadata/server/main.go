@@ -67,6 +67,12 @@ func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoRes
 			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
+	if t, ok := md["metadatatest"]; ok {
+		fmt.Printf("metadataTest from metadata:\n")
+		for i, e := range t {
+			fmt.Printf(" %d. %s\n", i, e)
+		}
+	}
 
 	// Create and send header.
 	header := metadata.New(map[string]string{"location": "MTV", "timestamp": time.Now().Format(timestampFormat)})

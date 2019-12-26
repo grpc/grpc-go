@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
+	"os"
 	"time"
 
 	"google.golang.org/grpc"
@@ -32,17 +34,17 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-var addr = flag.String("addr", "localhost:50051", "the address to connect to")
+
 
 const (
 	timestampFormat = time.StampNano // "Jan _2 15:04:05.000"
 	streamingCount  = 10
 )
 
-func unaryCallWithMetadata(c pb.EchoClient, message string) {
+func unaryCallWithMetadata(c pb.EchoClient, message string, value string) {
 	fmt.Printf("--- unary ---\n")
 	// Create metadata and context.
-	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
+	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat), "metadatatest", value)
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Make RPC using the context with the metadata.
@@ -284,6 +286,18 @@ func bidirectionalWithMetadata(c pb.EchoClient, message string) {
 const message = "this is examples/metadata"
 
 func main() {
+	var ad string
+	var mdValues []string
+	if len(os.Args) > 0 {
+		ad = os.Args[1]
+	}
+	if len(os.Args) > 1 {
+		mdValues = os.Args[2:]
+	}
+	fmt.Println(ad)
+	var addr = flag.String("addr", ad, "the address to connect to")
+
+
 	flag.Parse()
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(*addr, grpc.WithInsecure(), grpc.WithBlock())
@@ -292,16 +306,22 @@ func main() {
 	}
 	defer conn.Close()
 
+	fmt.Println(ad, *addr, mdValues)
 	c := pb.NewEchoClient(conn)
+	l := len(mdValues)
+	for {
+		randData := rand.Int()
+		index := randData % l
+		fmt.Println(index)
+		unaryCallWithMetadata(c, message, mdValues[index])
+		time.Sleep(1 * time.Second)
+	}
 
-	unaryCallWithMetadata(c, message)
-	time.Sleep(1 * time.Second)
-
-	serverStreamingWithMetadata(c, message)
-	time.Sleep(1 * time.Second)
-
-	clientStreamWithMetadata(c, message)
-	time.Sleep(1 * time.Second)
-
-	bidirectionalWithMetadata(c, message)
+	//serverStreamingWithMetadata(c, message)
+	//time.Sleep(1 * time.Second)
+	//
+	//clientStreamWithMetadata(c, message)
+	//time.Sleep(1 * time.Second)
+	//
+	//bidirectionalWithMetadata(c, message)
 }

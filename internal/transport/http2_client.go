@@ -489,6 +489,7 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 			}
 		}
 	}
+	fmt.Println("***************\n", headerFields, "\n**********************")
 	return headerFields, nil
 }
 
