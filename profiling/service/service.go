@@ -24,7 +24,7 @@
 // This package and all its methods are EXPERIMENTAL.
 package service
 
-//go:generate protoc --go_out=plugins=grpc,paths=source_relative:../proto -I../proto service.proto
+//go:generate protoc --go_out=plugins=grpc,paths=source_relative:../proto -I../proto ../proto/service.proto
 
 import (
 	"context"
