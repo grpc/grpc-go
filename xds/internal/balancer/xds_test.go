@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 
@@ -46,12 +45,8 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils/fakexds"
 )
 
-var lbABuilder = &balancerABuilder{}
-
 func init() {
 	balancer.Register(&edsBalancerBuilder{})
-	balancer.Register(lbABuilder)
-	balancer.Register(&balancerBBuilder{})
 
 	bootstrapConfigNew = func() *bootstrap.Config {
 		return &bootstrap.Config{
@@ -72,77 +67,9 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-const (
-	fakeBalancerA = "fake_balancer_A"
-	fakeBalancerB = "fake_balancer_B"
-)
-
 var (
-	testBalancerNameFooBar  = "foo.bar"
-	specialAddrForBalancerA = resolver.Address{Addr: "this.is.balancer.A"}
-	specialAddrForBalancerB = resolver.Address{Addr: "this.is.balancer.B"}
+	testBalancerNameFooBar = "foo.bar"
 )
-
-type balancerABuilder struct {
-	mu           sync.Mutex
-	lastBalancer *balancerA
-}
-
-func (b *balancerABuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	b.mu.Lock()
-	b.lastBalancer = &balancerA{cc: cc, subconnStateChange: testutils.NewChannelWithSize(10)}
-	b.mu.Unlock()
-	return b.lastBalancer
-}
-
-func (b *balancerABuilder) Name() string {
-	return string(fakeBalancerA)
-}
-
-type balancerBBuilder struct{}
-
-func (b *balancerBBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &balancerB{cc: cc}
-}
-
-func (*balancerBBuilder) Name() string {
-	return string(fakeBalancerB)
-}
-
-// A fake balancer implementation which does two things:
-// * Appends a unique address to the list of resolved addresses received before
-//   attempting to create a SubConn.
-// * Makes the received subConn state changes available through a channel, for
-//   the test to inspect.
-type balancerA struct {
-	cc                 balancer.ClientConn
-	subconnStateChange *testutils.Channel
-}
-
-func (b *balancerA) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	b.subconnStateChange.Send(&scStateChange{sc: sc, state: state})
-}
-
-func (b *balancerA) HandleResolvedAddrs(addrs []resolver.Address, err error) {
-	_, _ = b.cc.NewSubConn(append(addrs, specialAddrForBalancerA), balancer.NewSubConnOptions{})
-}
-
-func (b *balancerA) Close() {}
-
-// A fake balancer implementation which appends a unique address to the list of
-// resolved addresses received before attempting to create a SubConn.
-type balancerB struct {
-	cc balancer.ClientConn
-}
-
-func (b *balancerB) HandleResolvedAddrs(addrs []resolver.Address, err error) {
-	_, _ = b.cc.NewSubConn(append(addrs, specialAddrForBalancerB), balancer.NewSubConnOptions{})
-}
-
-func (balancerB) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	panic("implement me")
-}
-func (balancerB) Close() {}
 
 func newTestClientConn() *testClientConn {
 	return &testClientConn{newSubConns: testutils.NewChannelWithSize(10)}
@@ -331,8 +258,6 @@ func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
 			ResolverState: resolver.State{Addresses: addrs},
 			BalancerConfig: &XDSConfig{
 				BalancerName:   balancerName,
-				ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
-				FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
 				EDSServiceName: testEDSClusterName,
 			},
 		})
@@ -341,6 +266,46 @@ func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
 		xdsC.InvokeWatchEDSCallback(&xdsclient.EDSUpdate{}, nil)
 	}
 }
+
+const (
+	fakeBalancerA = "fake_balancer_A"
+	fakeBalancerB = "fake_balancer_B"
+)
+
+// Install two fake balancers for service config update tests.
+//
+// ParseConfig only accepts the json if the balancer specified is registered.
+
+func init() {
+	balancer.Register(&fakeBalancerBuilder{name: fakeBalancerA})
+	balancer.Register(&fakeBalancerBuilder{name: fakeBalancerB})
+}
+
+type fakeBalancerBuilder struct {
+	name string
+}
+
+func (b *fakeBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return &fakeBalancer{cc: cc}
+}
+
+func (b *fakeBalancerBuilder) Name() string {
+	return b.name
+}
+
+type fakeBalancer struct {
+	cc balancer.ClientConn
+}
+
+func (b *fakeBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
+	panic("implement me")
+}
+
+func (b *fakeBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+	panic("implement me")
+}
+
+func (b *fakeBalancer) Close() {}
 
 // TestXDSConnfigChildPolicyUpdate verifies scenarios where the childPolicy
 // section of the lbConfig is updated.
@@ -424,8 +389,6 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 		ResolverState: resolver.State{Addresses: addrs},
 		BalancerConfig: &XDSConfig{
 			BalancerName:   testBalancerNameFooBar,
-			ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
-			FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
 			EDSServiceName: testEDSClusterName,
 		},
 	})
