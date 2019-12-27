@@ -64,15 +64,13 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 	x := &edsBalancer{
 		ctx:             ctx,
 		cancel:          cancel,
+		cc:              cc,
 		buildOpts:       opts,
 		startupTimeout:  startupTimeout,
 		startup:         true,
 		grpcUpdate:      make(chan interface{}),
 		xdsClientUpdate: make(chan interface{}),
 		loadStore:       lrs.NewStore(),
-	}
-	x.cc = &xdsClientConn{
-		ClientConn: cc,
 	}
 	x.xdsLB = newEDSBalancer(x.cc, x.loadStore)
 	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, x.loadStore)
@@ -199,23 +197,6 @@ func (x *edsBalancer) handleXDSClientUpdate(update interface{}) {
 	default:
 		panic("unexpected xds client update type")
 	}
-}
-
-// xdsClientConn wraps around the balancer.ClientConn passed in from grpc. The wrapping is to add
-// functionality to get notification when no subconn is in READY state.
-// TODO: once we have the change that keeps both edsbalancer and fallback balancer alive at the same
-// time, we need to make sure to synchronize updates from both entities on the ClientConn.
-type xdsClientConn struct {
-	updateState func(s connectivity.State)
-	balancer.ClientConn
-}
-
-func (w *xdsClientConn) UpdateState(s balancer.State) {
-	w.updateState(s.ConnectivityState)
-	w.ClientConn.UpdateState(s)
-}
-func (w *xdsClientConn) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
-	grpclog.Fatalln("not implemented")
 }
 
 type subConnStateUpdate struct {
