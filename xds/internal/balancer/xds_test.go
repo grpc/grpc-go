@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-	"time"
 
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/jsonpb"
@@ -221,10 +220,8 @@ func setup(edsLBCh *testutils.Channel, xdsClientCh *testutils.Channel) func() {
 // in tests.
 func setupForFallback(edsLBCh *testutils.Channel, xdsClientCh *testutils.Channel) func() {
 	cancel := setup(edsLBCh, xdsClientCh)
-	startupTimeout = 500 * time.Millisecond
 	return func() {
 		cancel()
-		startupTimeout = defaultTimeout
 	}
 }
 
