@@ -112,19 +112,16 @@ var _ balancer.V2Balancer = (*edsBalancer)(nil) // Assert that we implement V2Ba
 // edsBalancer manages xdsClient and the actual balancer that does load balancing (either edsBalancer,
 // or fallback LB).
 type edsBalancer struct {
-	cc              balancer.ClientConn // *xdsClientConn
-	buildOpts       balancer.BuildOptions
-	startupTimeout  time.Duration
-	xdsStaleTimeout *time.Duration
-	ctx             context.Context
-	cancel          context.CancelFunc
-	startup         bool // startup indicates whether this edsBalancer is in startup stage.
+	cc             balancer.ClientConn // *xdsClientConn
+	buildOpts      balancer.BuildOptions
+	startupTimeout time.Duration
+	ctx            context.Context
+	cancel         context.CancelFunc
+	startup        bool // startup indicates whether this edsBalancer is in startup stage.
 
 	// edsBalancer continuously monitor the channels below, and will handle events from them in sync.
 	grpcUpdate      chan interface{}
 	xdsClientUpdate chan interface{}
-	timer           *time.Timer
-	noSubConnAlert  <-chan struct{}
 
 	client    *xdsclientWrapper // may change when passed a different service config
 	config    *XDSConfig        // may change when passed a different service config
