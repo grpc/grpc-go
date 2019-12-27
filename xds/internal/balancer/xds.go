@@ -43,10 +43,6 @@ const (
 )
 
 var (
-	// This field is for testing purpose.
-	// TODO: if later we make startupTimeout configurable through BuildOptions(maybe?), then we can remove
-	// this field and configure through BuildOptions instead.
-	startupTimeout = defaultTimeout
 	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerInterface {
 		return edsbalancer.NewXDSBalancer(cc, loadStore)
 	}
@@ -66,8 +62,6 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		cancel:          cancel,
 		cc:              cc,
 		buildOpts:       opts,
-		startupTimeout:  startupTimeout,
-		startup:         true,
 		grpcUpdate:      make(chan interface{}),
 		xdsClientUpdate: make(chan interface{}),
 		loadStore:       lrs.NewStore(),
@@ -112,10 +106,8 @@ var _ balancer.V2Balancer = (*edsBalancer)(nil) // Assert that we implement V2Ba
 type edsBalancer struct {
 	cc             balancer.ClientConn // *xdsClientConn
 	buildOpts      balancer.BuildOptions
-	startupTimeout time.Duration
 	ctx            context.Context
 	cancel         context.CancelFunc
-	startup        bool // startup indicates whether this edsBalancer is in startup stage.
 
 	// edsBalancer continuously monitor the channels below, and will handle events from them in sync.
 	grpcUpdate      chan interface{}
