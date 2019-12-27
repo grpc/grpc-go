@@ -72,7 +72,7 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		loadStore:       lrs.NewStore(),
 	}
 	x.cc = &xdsClientConn{
-		ClientConn:  cc,
+		ClientConn: cc,
 	}
 	x.xdsLB = newEDSBalancer(x.cc, x.loadStore)
 	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, x.loadStore)
@@ -112,13 +112,13 @@ var _ balancer.V2Balancer = (*edsBalancer)(nil) // Assert that we implement V2Ba
 // edsBalancer manages xdsClient and the actual balancer that does load balancing (either edsBalancer,
 // or fallback LB).
 type edsBalancer struct {
-	cc                balancer.ClientConn // *xdsClientConn
-	buildOpts         balancer.BuildOptions
-	startupTimeout    time.Duration
-	xdsStaleTimeout   *time.Duration
-	ctx               context.Context
-	cancel            context.CancelFunc
-	startup           bool // startup indicates whether this edsBalancer is in startup stage.
+	cc              balancer.ClientConn // *xdsClientConn
+	buildOpts       balancer.BuildOptions
+	startupTimeout  time.Duration
+	xdsStaleTimeout *time.Duration
+	ctx             context.Context
+	cancel          context.CancelFunc
+	startup         bool // startup indicates whether this edsBalancer is in startup stage.
 
 	// edsBalancer continuously monitor the channels below, and will handle events from them in sync.
 	grpcUpdate      chan interface{}
@@ -126,10 +126,10 @@ type edsBalancer struct {
 	timer           *time.Timer
 	noSubConnAlert  <-chan struct{}
 
-	client           *xdsclientWrapper // may change when passed a different service config
-	config           *XDSConfig        // may change when passed a different service config
-	xdsLB            edsBalancerInterface
-	loadStore        lrs.Store
+	client    *xdsclientWrapper // may change when passed a different service config
+	config    *XDSConfig        // may change when passed a different service config
+	xdsLB     edsBalancerInterface
+	loadStore lrs.Store
 }
 
 // run gets executed in a goroutine once edsBalancer is created. It monitors updates from grpc,
@@ -183,7 +183,6 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 				x.xdsLB.HandleChildPolicy(roundrobin.Name, nil)
 			}
 		}
-
 
 		x.config = cfg
 	default:
@@ -282,7 +281,6 @@ func (x *edsBalancer) loseContact() {
 	case <-x.ctx.Done():
 	}
 }
-
 
 func (x *edsBalancer) Close() {
 	x.cancel()
