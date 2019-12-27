@@ -263,57 +263,6 @@ type fakeSubConn struct{}
 func (*fakeSubConn) UpdateAddresses([]resolver.Address) { panic("implement me") }
 func (*fakeSubConn) Connect()                           { panic("implement me") }
 
-// TestXDSFallbackResolvedAddrs verifies that the fallback balancer specified
-// in the provided lbconfig is initialized, and that it receives the addresses
-// pushed by the resolver.
-//
-// The test does the following:
-// * Builds a new xds balancer.
-// * Since there is no xDS server to respond to requests from the xds client
-//   (created as part of the xds balancer), we expect the fallback policy to
-//   kick in.
-// * Repeatedly pushes new ClientConnState which specifies the same fallback
-//   policy, but a different set of resolved addresses.
-// * The fallback policy is implemented by a fake balancer, which appends a
-//   unique address to the list of addresses it uses to create the SubConn.
-// * We also have a fake ClientConn which verifies that it receives the
-//   expected address list.
-func (s) TestXDSFallbackResolvedAddrs(t *testing.T) {
-	startupTimeout = 500 * time.Millisecond
-	defer func() { startupTimeout = defaultTimeout }()
-
-	builder := balancer.Get(edsName)
-	cc := newTestClientConn()
-	edsB, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*edsBalancer)
-	if !ok {
-		t.Fatalf("builder.Build(%s) returned type {%T}, want {*edsBalancer}", edsName, edsB)
-	}
-	defer edsB.Close()
-
-	tests := []struct {
-		resolvedAddrs []resolver.Address
-		wantAddrs     []resolver.Address
-	}{
-		{
-			resolvedAddrs: []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}},
-			wantAddrs:     []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, specialAddrForBalancerA},
-		},
-		{
-			resolvedAddrs: []resolver.Address{{Addr: "1.1.1.1:10001"}},
-			wantAddrs:     []resolver.Address{{Addr: "1.1.1.1:10001"}, specialAddrForBalancerA},
-		},
-	}
-	for _, test := range tests {
-		edsB.UpdateClientConnState(balancer.ClientConnState{
-			ResolverState:  resolver.State{Addresses: test.resolvedAddrs},
-			BalancerConfig: testLBConfigFooBar,
-		})
-		if err := cc.waitForNewSubConns(test.wantAddrs); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
 // waitForNewXDSClientWithEDSWatch makes sure that a new xdsClient is created
 // with the provided name. It also make sure that the newly created client
 // registers an eds watcher.
@@ -488,85 +437,6 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 	})
 }
 
-// TestXDSConfigFallBackUpdate verifies different scenarios where the fallback
-// config part of the lbConfig is updated.
-//
-// The test does the following:
-// * Builds a top-level edsBalancer
-// * Fakes the xdsClient and the underlying edsLB implementations.
-// * Sends a ClientConn update to the edsBalancer with a bogus balancerName.
-//   This will get the balancer into fallback monitoring, but since the
-//   startupTimeout package variable is not overridden to a small value, fallback
-//   will not kick-in as yet.
-// * Sends another ClientConn update with fallback addresses. Still fallback
-//   would not have kicked in because the startupTimeout hasn't expired.
-// * Sends an EDSUpdate through the fakexds.Client object. This will trigger
-//   the creation of an edsLB object. This is verified.
-// * Trigger fallback by directly calling the loseContact method on the
-//   top-level edsBalancer. This should instantiate the fallbackLB and should
-//   send the appropriate subConns.
-// * Update the fallback policy to specify and different fallback LB and make
-//   sure the new LB receives appropriate subConns.
-func (s) TestXDSConfigFallBackUpdate(t *testing.T) {
-	edsLBCh := testutils.NewChannel()
-	xdsClientCh := testutils.NewChannel()
-	cancel := setup(edsLBCh, xdsClientCh)
-	defer cancel()
-
-	builder := balancer.Get(edsName)
-	cc := newTestClientConn()
-	edsB, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
-	if !ok {
-		t.Fatalf("builder.Build(%s) returned type {%T}, want {*edsBalancer}", edsName, edsB)
-	}
-	defer edsB.Close()
-
-	bogusBalancerName := "wrong-balancer-name"
-	edsB.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &XDSConfig{
-			BalancerName:   bogusBalancerName,
-			FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
-		},
-	})
-	xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, bogusBalancerName)
-
-	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
-	edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: addrs},
-		BalancerConfig: &XDSConfig{
-			BalancerName:   bogusBalancerName,
-			FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerB},
-		},
-	})
-
-	xdsC.InvokeWatchEDSCallback(&xdsclient.EDSUpdate{}, nil)
-	if _, err := edsLBCh.Receive(); err != nil {
-		t.Fatalf("edsBalancer did not create edsLB after receiveing EDS update: %v", err)
-	}
-
-	// Call loseContact explicitly, error in EDS callback is not handled.
-	// Eventually, this should call EDS ballback with an error that indicates
-	// "lost contact".
-	edsB.loseContact()
-
-	// Verify that fallback (fakeBalancerB) takes over.
-	if err := cc.waitForNewSubConns(append(addrs, specialAddrForBalancerB)); err != nil {
-		t.Fatal(err)
-	}
-
-	edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: addrs},
-		BalancerConfig: &XDSConfig{
-			BalancerName:   bogusBalancerName,
-			FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
-		},
-	})
-
-	// Verify that fallbackLB (fakeBalancerA) takes over.
-	if err := cc.waitForNewSubConns(append(addrs, specialAddrForBalancerA)); err != nil {
-		t.Fatal(err)
-	}
-}
 
 // TestXDSSubConnStateChange verifies if the top-level edsBalancer passes on
 // the subConnStateChange to appropriate child balancers (it tests for edsLB
@@ -604,25 +474,6 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	state := connectivity.Ready
 	edsB.UpdateSubConnState(fsc, balancer.SubConnState{ConnectivityState: state})
 	edsLB.waitForSubConnStateChange(&scStateChange{sc: fsc, state: state})
-
-	// lbABuilder maintains a pointer to the last balancerA that it created. We
-	// need to clear that to make sure a new one is created when we attempt to
-	// fallback in the next line.
-	lbABuilder.clearLastBalancer()
-	// Call loseContact explicitly, error in EDS callback is not handled.
-	// Eventually, this should call EDS ballback with an error that indicates
-	// "lost contact".
-	edsB.loseContact()
-	// Verify that fallback (fakeBalancerA) takes over.
-	if err := cc.waitForNewSubConns(append(addrs, specialAddrForBalancerA)); err != nil {
-		t.Fatal(err)
-	}
-	fblb := lbABuilder.getLastBalancer()
-	if fblb == nil {
-		t.Fatal("expected fallback balancerA to be built on fallback")
-	}
-	edsB.UpdateSubConnState(fsc, balancer.SubConnState{ConnectivityState: state})
-	fblb.waitForSubConnStateChange(&scStateChange{sc: fsc, state: state})
 }
 
 func TestXDSBalancerConfigParsing(t *testing.T) {
