@@ -25,11 +25,13 @@ import (
 	"testing"
 	"time"
 
+	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
-	"google.golang.org/grpc/xds/internal/client/fakexds"
+	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 )
 
 const (
@@ -164,13 +166,10 @@ func TestValidateCluster(t *testing.T) {
 // and creates a v2Client using it. Then, it registers a CDS watcher and tests
 // different CDS responses.
 func TestCDSHandleResponse(t *testing.T) {
-	fakeServer, sCleanup := fakexds.StartServer(t)
-	client, cCleanup := fakeServer.GetClientConn(t)
-	defer func() {
-		cCleanup()
-		sCleanup()
-	}()
-	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	defer cleanup()
+
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 
 	tests := []struct {
@@ -230,7 +229,7 @@ func TestCDSHandleResponse(t *testing.T) {
 				wantUpdateErr:    test.wantUpdateErr,
 
 				cdsWatch:      v2c.watchCDS,
-				watchReqChan:  fakeServer.RequestChan,
+				watchReqChan:  fakeServer.XDSRequestChan,
 				handleXDSResp: v2c.handleCDSResponse,
 			})
 		})
@@ -240,13 +239,10 @@ func TestCDSHandleResponse(t *testing.T) {
 // TestCDSHandleResponseWithoutWatch tests the case where the v2Client receives
 // a CDS response without a registered watcher.
 func TestCDSHandleResponseWithoutWatch(t *testing.T) {
-	fakeServer, sCleanup := fakexds.StartServer(t)
-	client, cCleanup := fakeServer.GetClientConn(t)
-	defer func() {
-		cCleanup()
-		sCleanup()
-	}()
-	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	_, cc, cleanup := startServerAndGetCC(t)
+	defer cleanup()
+
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 
 	if v2c.handleCDSResponse(goodCDSResponse1) == nil {
@@ -260,7 +256,7 @@ type cdsTestOp struct {
 	// target is the resource name to watch for.
 	target string
 	// responseToSend is the xDS response sent to the client
-	responseToSend *fakexds.Response
+	responseToSend *fakeserver.Response
 	// wantOpErr specfies whether the main operation should return an error.
 	wantOpErr bool
 	// wantCDSCache is the expected rdsCache at the end of an operation.
@@ -273,16 +269,13 @@ type cdsTestOp struct {
 // ClientConn to it, creates a v2Client using it.  It then reads a bunch of
 // test operations to be performed from cdsTestOps and returns error, if any,
 // on the provided error channel. This is executed in a separate goroutine.
-func testCDSCaching(t *testing.T, cdsTestOps []cdsTestOp, errCh chan error) {
+func testCDSCaching(t *testing.T, cdsTestOps []cdsTestOp, errCh *testutils.Channel) {
 	t.Helper()
 
-	fakeServer, sCleanup := fakexds.StartServer(t)
-	client, cCleanup := fakeServer.GetClientConn(t)
-	defer func() {
-		cCleanup()
-		sCleanup()
-	}()
-	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	defer cleanup()
+
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
@@ -299,15 +292,19 @@ func testCDSCaching(t *testing.T, cdsTestOps []cdsTestOp, errCh chan error) {
 
 			// Wait till the request makes it to the fakeServer. This ensures that
 			// the watch request has been processed by the v2Client.
-			<-fakeServer.RequestChan
+			if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+				errCh.Send(fmt.Errorf("Timeout waiting for CDS request: %v", err))
+				return
+			}
 			t.Log("FakeServer received request...")
 		}
 
 		// Directly push the response through a call to handleCDSResponse,
 		// thereby bypassing the fakeServer.
 		if cdsTestOp.responseToSend != nil {
-			if err := v2c.handleCDSResponse(cdsTestOp.responseToSend.Resp); (err != nil) != cdsTestOp.wantOpErr {
-				errCh <- fmt.Errorf("v2c.handleCDSResponse() returned err: %v", err)
+			resp := cdsTestOp.responseToSend.Resp.(*discoverypb.DiscoveryResponse)
+			if err := v2c.handleCDSResponse(resp); (err != nil) != cdsTestOp.wantOpErr {
+				errCh.Send(fmt.Errorf("v2c.handleRDSResponse(%+v) returned err: %v", resp, err))
 				return
 			}
 		}
@@ -320,24 +317,23 @@ func testCDSCaching(t *testing.T, cdsTestOps []cdsTestOp, errCh chan error) {
 		}
 
 		if !reflect.DeepEqual(v2c.cloneCDSCacheForTesting(), cdsTestOp.wantCDSCache) {
-			errCh <- fmt.Errorf("gotCDSCache: %v, wantCDSCache: %v", v2c.rdsCache, cdsTestOp.wantCDSCache)
+			errCh.Send(fmt.Errorf("gotCDSCache: %v, wantCDSCache: %v", v2c.rdsCache, cdsTestOp.wantCDSCache))
 			return
 		}
 	}
 	t.Log("Completed all test ops successfully...")
-	errCh <- nil
+	errCh.Send(nil)
 }
 
 // TestCDSCaching tests some end-to-end CDS flows using a fake xDS server, and
 // verifies the CDS data cached at the v2Client.
 func TestCDSCaching(t *testing.T) {
-	errCh := make(chan error, 1)
 	ops := []cdsTestOp{
 		// Add an CDS watch for a cluster name (clusterName1), which returns one
 		// matching resource in the response.
 		{
 			target:         clusterName1,
-			responseToSend: &fakexds.Response{Resp: goodCDSResponse1},
+			responseToSend: &fakeserver.Response{Resp: goodCDSResponse1},
 			wantCDSCache: map[string]CDSUpdate{
 				clusterName1: {serviceName1, true},
 			},
@@ -346,7 +342,7 @@ func TestCDSCaching(t *testing.T) {
 		// Push an CDS response which contains a new resource (apart from the
 		// one received in the previous response). This should be cached.
 		{
-			responseToSend: &fakexds.Response{Resp: cdsResponseWithMultipleResources},
+			responseToSend: &fakeserver.Response{Resp: cdsResponseWithMultipleResources},
 			wantCDSCache: map[string]CDSUpdate{
 				clusterName1: {serviceName1, true},
 				clusterName2: {serviceName2, false},
@@ -366,24 +362,15 @@ func TestCDSCaching(t *testing.T) {
 		},
 		// Push an empty CDS response. This should clear the cache.
 		{
-			responseToSend:    &fakexds.Response{Resp: &xdspb.DiscoveryResponse{TypeUrl: cdsURL}},
+			responseToSend:    &fakeserver.Response{Resp: &xdspb.DiscoveryResponse{TypeUrl: cdsURL}},
 			wantOpErr:         false,
 			wantCDSCache:      map[string]CDSUpdate{},
 			wantWatchCallback: true,
 		},
 	}
+	errCh := testutils.NewChannel()
 	go testCDSCaching(t, ops, errCh)
-
-	timer := time.NewTimer(defaultTestTimeout)
-	select {
-	case <-timer.C:
-		t.Fatal("Timeout when expecting CDS update")
-	case err := <-errCh:
-		timer.Stop()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
+	waitForNilErr(t, errCh)
 }
 
 // TestCDSWatchExpiryTimer tests the case where the client does not receive an
@@ -391,44 +378,36 @@ func TestCDSCaching(t *testing.T) {
 // to be invoked with an error once the watchExpiryTimer fires.
 func TestCDSWatchExpiryTimer(t *testing.T) {
 	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 1 * time.Second
+	defaultWatchExpiryTimeout = 500 * time.Millisecond
 	defer func() {
 		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
 	}()
 
-	fakeServer, sCleanup := fakexds.StartServer(t)
-	client, cCleanup := fakeServer.GetClientConn(t)
-	defer func() {
-		cCleanup()
-		sCleanup()
-	}()
-	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	defer cleanup()
+
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
-	cdsCallbackCh := make(chan error, 1)
+	callbackCh := testutils.NewChannel()
 	v2c.watchCDS(clusterName1, func(u CDSUpdate, err error) {
 		t.Logf("Received callback with CDSUpdate {%+v} and error {%v}", u, err)
 		if u.ServiceName != "" {
-			cdsCallbackCh <- fmt.Errorf("received serviceName %v in cdsCallback, wanted empty string", u.ServiceName)
+			callbackCh.Send(fmt.Errorf("received serviceName %v in cdsCallback, wanted empty string", u.ServiceName))
 		}
 		if err == nil {
-			cdsCallbackCh <- errors.New("received nil error in cdsCallback")
+			callbackCh.Send(errors.New("received nil error in cdsCallback"))
 		}
-		cdsCallbackCh <- nil
+		callbackCh.Send(nil)
 	})
-	<-fakeServer.RequestChan
 
-	timer := time.NewTimer(2 * time.Second)
-	select {
-	case <-timer.C:
-		t.Fatalf("Timeout expired when expecting CDS update")
-	case err := <-cdsCallbackCh:
-		timer.Stop()
-		if err != nil {
-			t.Fatal(err)
-		}
+	// Wait till the request makes it to the fakeServer. This ensures that
+	// the watch request has been processed by the v2Client.
+	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+		t.Fatalf("Timeout expired when expecting an CDS request")
 	}
+	waitForNilErr(t, callbackCh)
 }
 
 var (

@@ -32,7 +32,8 @@ import (
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/fakexds"
+	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 )
 
 const (
@@ -54,7 +55,7 @@ var (
 // * Sends updates with different edsServiceNames and expects new watches to be
 //   registered.
 func (s) TestClientWrapperWatchEDS(t *testing.T) {
-	fakeServer, cleanup, err := fakexds.StartServer()
+	fakeServer, cleanup, err := fakeserver.StartServer()
 	if err != nil {
 		t.Fatalf("Failed to start fake xDS server: %v", err)
 	}
@@ -101,7 +102,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 			if err != nil {
 				t.Fatalf("EDS RPC failed with err: %v", err)
 			}
-			edsReq := req.(*fakexds.Request)
+			edsReq := req.(*fakeserver.Request)
 			if edsReq.Err != nil {
 				t.Fatalf("EDS RPC failed with err: %v", edsReq.Err)
 			}
@@ -123,9 +124,9 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 //
 // The test does the following:
 // * Creates a clientWrapper.
-// * Creates a fakexds.Client and passes it to the clientWrapper in attributes.
+// * Creates a fakeclient.Client and passes it to the clientWrapper in attributes.
 // * Verifies the clientWrapper registers an EDS watch.
-// * Forces the fakexds.Client to invoke the registered EDS watch callback with
+// * Forces the fakeclient.Client to invoke the registered EDS watch callback with
 //   an error. Verifies that the wrapper does not invoke the top-level
 //   edsBalancer with the received error.
 func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
@@ -138,7 +139,7 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	cw := newXDSClientWrapper(newEDS, nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
 	defer cw.close()
 
-	xdsC := fakexds.NewClient()
+	xdsC := fakeclient.NewClient()
 	cw.handleUpdate(&XDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC))
 	gotCluster, err := xdsC.WaitForWatchEDS()
 	if err != nil {
@@ -173,7 +174,7 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 	defer cw.close()
 
 	// Verify that the eds watch is registered for the expected resource name.
-	xdsC1 := fakexds.NewClient()
+	xdsC1 := fakeclient.NewClient()
 	cw.handleUpdate(&XDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC1))
 	gotCluster, err := xdsC1.WaitForWatchEDS()
 	if err != nil {
@@ -187,7 +188,7 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 	// re-registered on the new client, and that the old client is not closed
 	// (because clientWrapper only closes clients that it creates, it does not
 	// close client that are passed through attributes).
-	xdsC2 := fakexds.NewClient()
+	xdsC2 := fakeclient.NewClient()
 	cw.handleUpdate(&XDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC2))
 	gotCluster, err = xdsC2.WaitForWatchEDS()
 	if err != nil {

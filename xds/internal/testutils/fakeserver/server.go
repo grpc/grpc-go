@@ -16,12 +16,15 @@
  *
  */
 
-package fakexds
+// Package fakeserver provides a fake implementation of an xDS server.
+package fakeserver
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
@@ -35,9 +38,12 @@ import (
 	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 )
 
-// TODO: Make this a var or a field in the server if there is a need to use a
-// value other than this default.
-const defaultChannelBufferSize = 50
+const (
+	// TODO: Make this a var or a field in the server if there is a need to use a
+	// value other than this default.
+	defaultChannelBufferSize = 50
+	defaultDialTimeout       = 5 * time.Second
+)
 
 // Request wraps the request protobuf (xds/LRS) and error received by the
 // Server in a call to stream.Recv().
@@ -102,6 +108,18 @@ func StartServer() (*Server, func(), error) {
 	go server.Serve(lis)
 
 	return s, func() { server.Stop() }, nil
+}
+
+// XDSClientConn returns a grpc.ClientConn connected to the fakeServer.
+func (xdsS *Server) XDSClientConn() (*grpc.ClientConn, func(), error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultDialTimeout)
+	defer cancel()
+
+	cc, err := grpc.DialContext(ctx, xdsS.Address, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		return nil, nil, fmt.Errorf("grpc.DialContext(%s) failed: %v", xdsS.Address, err)
+	}
+	return cc, func() { cc.Close() }, nil
 }
 
 type xdsServer struct {
