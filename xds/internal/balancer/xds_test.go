@@ -392,16 +392,13 @@ func setupForFallback(edsLBCh *testutils.Channel, xdsClientCh *testutils.Channel
 //
 // The test does the following:
 // * Builds a new xds balancer.
-// * Since there is no xDS server to respond to requests from the xds client
-//   (created as part of the xds balancer), we expect the fallback policy to
-//   kick in.
 // * Repeatedly pushes new ClientConnState which specifies different
 //   balancerName in the lbConfig. We expect xdsClient objects to created
-//   whenever the balancerName changes. We also expect a new edsLB to created
-//   the first time the client receives an edsUpdate.
+//   whenever the balancerName changes.
 func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
 	edsLBCh := testutils.NewChannel()
 	xdsClientCh := testutils.NewChannel()
+	// TODO: setup doesn't need to take edsLBCh.
 	cancel := setupForFallback(edsLBCh, xdsClientCh)
 	defer cancel()
 
@@ -414,18 +411,6 @@ func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
 	defer edsB.Close()
 
 	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
-	edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  resolver.State{Addresses: addrs},
-		BalancerConfig: testLBConfigFooBar,
-	})
-
-	waitForNewXDSClientWithEDSWatch(t, xdsClientCh, testBalancerNameFooBar)
-	// Verify that fallbackLB (fakeBalancerA) takes over, since the xdsClient
-	// receives no edsUpdate.
-	if err := cc.waitForNewSubConns(append(addrs, specialAddrForBalancerA)); err != nil {
-		t.Fatal(err)
-	}
-
 	for i := 0; i < 2; i++ {
 		balancerName := fmt.Sprintf("balancer-%d", i)
 		edsB.UpdateClientConnState(balancer.ClientConnState{
@@ -440,18 +425,6 @@ func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
 
 		xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, balancerName)
 		xdsC.InvokeWatchEDSCallback(&xdsclient.EDSUpdate{}, nil)
-
-		// In the first iteration, an edsLB takes over from the fallbackLB. In the
-		// second iteration, a new xds client is created, but the same edsLB is used.
-		if i == 0 {
-			if _, err := edsLBCh.Receive(); err != nil {
-				t.Fatalf("edsBalancer did not create edsLB after receiveing EDS update: %v, %d", err, i)
-			}
-		} else {
-			if _, err := edsLBCh.Receive(); err == nil {
-				t.Fatal("edsBalancer created new edsLB when it was not expected to")
-			}
-		}
 	}
 }
 
