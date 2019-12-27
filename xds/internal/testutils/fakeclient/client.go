@@ -16,9 +16,8 @@
  *
  */
 
-// Package fakexds provides fake implementation of multiple types, for use in
-// xds tests.
-package fakexds
+// Package fakeclient provides a fake implementation of an xDS client.
+package fakeclient
 
 import (
 	"sync"

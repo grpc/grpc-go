@@ -20,11 +20,12 @@ package client
 import (
 	"reflect"
 	"testing"
-	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/xds/internal/client/fakexds"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 )
 
 type watchHandleTestcase struct {
@@ -39,7 +40,7 @@ type watchHandleTestcase struct {
 	rdsWatch      func(routeName string, rdsCb rdsCallback) (cancel func())
 	cdsWatch      func(clusterName string, cdsCb cdsCallback) (cancel func())
 	edsWatch      func(clusterName string, edsCb edsCallback) (cancel func())
-	watchReqChan  chan *fakexds.Request // The request sent for watch will be sent to this channel.
+	watchReqChan  *testutils.Channel // The request sent for watch will be sent to this channel.
 	handleXDSResp func(response *xdspb.DiscoveryResponse) error
 }
 
@@ -50,8 +51,11 @@ type watchHandleTestcase struct {
 // handleXDSResp with responseToHandle (if it's set). It then compares the
 // update received by watch callback with the expected results.
 func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
-	gotUpdateCh := make(chan interface{}, 1)
-	gotUpdateErrCh := make(chan error, 1)
+	type updateErr struct {
+		u   interface{}
+		err error
+	}
+	gotUpdateCh := testutils.NewChannel()
 
 	var cancelWatch func()
 	// Register the watcher, this will also trigger the v2Client to send the xDS
@@ -60,26 +64,22 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	case test.ldsWatch != nil:
 		cancelWatch = test.ldsWatch(goodLDSTarget1, func(u ldsUpdate, err error) {
 			t.Logf("in v2c.watchLDS callback, ldsUpdate: %+v, err: %v", u, err)
-			gotUpdateCh <- u
-			gotUpdateErrCh <- err
+			gotUpdateCh.Send(updateErr{u, err})
 		})
 	case test.rdsWatch != nil:
 		cancelWatch = test.rdsWatch(goodRouteName1, func(u rdsUpdate, err error) {
 			t.Logf("in v2c.watchRDS callback, rdsUpdate: %+v, err: %v", u, err)
-			gotUpdateCh <- u
-			gotUpdateErrCh <- err
+			gotUpdateCh.Send(updateErr{u, err})
 		})
 	case test.cdsWatch != nil:
 		cancelWatch = test.cdsWatch(clusterName1, func(u CDSUpdate, err error) {
 			t.Logf("in v2c.watchCDS callback, cdsUpdate: %+v, err: %v", u, err)
-			gotUpdateCh <- u
-			gotUpdateErrCh <- err
+			gotUpdateCh.Send(updateErr{u, err})
 		})
 	case test.edsWatch != nil:
 		cancelWatch = test.edsWatch(goodEDSName, func(u *EDSUpdate, err error) {
 			t.Logf("in v2c.watchEDS callback, edsUpdate: %+v, err: %v", u, err)
-			gotUpdateCh <- *u
-			gotUpdateErrCh <- err
+			gotUpdateCh.Send(updateErr{*u, err})
 		})
 	default:
 		t.Fatalf("no watch() is set")
@@ -88,9 +88,9 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 
 	// Wait till the request makes it to the fakeServer. This ensures that
 	// the watch request has been processed by the v2Client.
-	//
-	// TODO: switch to new fakexds server request channel with timed receive.
-	<-test.watchReqChan
+	if _, err := test.watchReqChan.Receive(); err != nil {
+		t.Fatalf("Timeout waiting for an xDS request: %v", err)
+	}
 
 	// Directly push the response through a call to handleXDSResp. This bypasses
 	// the fakeServer, so it's only testing the handle logic. Client response
@@ -108,30 +108,62 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	// Cannot directly compare test.wantUpdate with nil (typed vs non-typed nil:
 	// https://golang.org/doc/faq#nil_error).
 	if c := test.wantUpdate; c == nil || (reflect.ValueOf(c).Kind() == reflect.Ptr && reflect.ValueOf(c).IsNil()) {
-		timer := time.NewTimer(defaultTestTimeout)
-		select {
-		case <-timer.C:
+		update, err := gotUpdateCh.Receive()
+		if err == testutils.ErrRecvTimeout {
 			return
-		case <-gotUpdateCh:
-			t.Fatal("Unexpected update")
 		}
+		t.Fatalf("Unexpected update: +%v", update)
 	}
 
 	wantUpdate := reflect.ValueOf(test.wantUpdate).Elem().Interface()
-	timer := time.NewTimer(defaultTestTimeout)
-	select {
-	case <-timer.C:
-		t.Fatal("Timeout expecting RDS update")
-	case gotUpdate := <-gotUpdateCh:
-		timer.Stop()
-		if diff := cmp.Diff(gotUpdate, wantUpdate, cmp.AllowUnexported(rdsUpdate{}, ldsUpdate{}, CDSUpdate{}, EDSUpdate{})); diff != "" {
-			t.Fatalf("got update : %+v, want %+v, diff: %s", gotUpdate, wantUpdate, diff)
-		}
+	uErr, err := gotUpdateCh.Receive()
+	if err == testutils.ErrRecvTimeout {
+		t.Fatal("Timeout expecting xDS update")
 	}
-	// Since the callback that we registered pushes to both channels at
-	// the same time, this channel read should return immediately.
-	gotUpdateErr := <-gotUpdateErrCh
+	gotUpdate := uErr.(updateErr).u
+	opt := cmp.AllowUnexported(rdsUpdate{}, ldsUpdate{}, CDSUpdate{}, EDSUpdate{})
+	if diff := cmp.Diff(gotUpdate, wantUpdate, opt); diff != "" {
+		t.Fatalf("got update : %+v, want %+v, diff: %s", gotUpdate, wantUpdate, diff)
+	}
+	gotUpdateErr := uErr.(updateErr).err
 	if (gotUpdateErr != nil) != test.wantUpdateErr {
-		t.Fatalf("got RDS update error {%v}, wantErr: %v", gotUpdateErr, test.wantUpdateErr)
+		t.Fatalf("got xDS update error {%v}, wantErr: %v", gotUpdateErr, test.wantUpdateErr)
+	}
+}
+
+// startServerAndGetCC starts a fake XDS server and also returns a ClientConn
+// connected to it.
+func startServerAndGetCC(t *testing.T) (*fakeserver.Server, *grpc.ClientConn, func()) {
+	t.Helper()
+
+	fs, sCleanup, err := fakeserver.StartServer()
+	if err != nil {
+		t.Fatalf("Failed to start fake xDS server: %v", err)
+	}
+
+	cc, ccCleanup, err := fs.XDSClientConn()
+	if err != nil {
+		sCleanup()
+		t.Fatalf("Failed to get a clientConn to the fake xDS server: %v", err)
+	}
+	return fs, cc, func() {
+		sCleanup()
+		ccCleanup()
+	}
+}
+
+// waitForNonNilErr waits for a non-nil error value to be received on the
+// provided channel.
+func waitForNonNilErr(t *testing.T, ch *testutils.Channel) {
+	t.Helper()
+
+	val, err := ch.Receive()
+	if err == testutils.ErrRecvTimeout {
+		t.Fatalf("Timeout expired when expecting update")
+	}
+	if val != nil {
+		if cbErr := val.(error); cbErr != nil {
+			t.Fatal(cbErr)
+		}
 	}
 }

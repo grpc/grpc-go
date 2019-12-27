@@ -25,7 +25,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/resolver"
 	xdsinternal "google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/testutils/fakexds"
+	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
 
 // TestXDSLoadReporting verifies that the edsBalancer starts the loadReport
@@ -40,7 +40,7 @@ func (s) TestXDSLoadReporting(t *testing.T) {
 	}
 	defer edsB.Close()
 
-	xdsC := fakexds.NewClient()
+	xdsC := fakeclient.NewClient()
 	edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, xdsC)},
 		BalancerConfig: &XDSConfig{LrsLoadReportingServerName: new(string)},

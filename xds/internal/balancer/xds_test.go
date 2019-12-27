@@ -43,7 +43,7 @@ import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/fakexds"
+	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
 
 var lbABuilder = &balancerABuilder{}
@@ -317,7 +317,7 @@ func (s) TestXDSFallbackResolvedAddrs(t *testing.T) {
 // waitForNewXDSClientWithEDSWatch makes sure that a new xdsClient is created
 // with the provided name. It also make sure that the newly created client
 // registers an eds watcher.
-func waitForNewXDSClientWithEDSWatch(t *testing.T, ch *testutils.Channel, wantName string) *fakexds.Client {
+func waitForNewXDSClientWithEDSWatch(t *testing.T, ch *testutils.Channel, wantName string) *fakeclient.Client {
 	t.Helper()
 
 	val, err := ch.Receive()
@@ -325,7 +325,7 @@ func waitForNewXDSClientWithEDSWatch(t *testing.T, ch *testutils.Channel, wantNa
 		t.Fatalf("error when waiting for a new xds client: %v", err)
 		return nil
 	}
-	xdsC := val.(*fakexds.Client)
+	xdsC := val.(*fakeclient.Client)
 	if xdsC.Name() != wantName {
 		t.Fatalf("xdsClient created to balancer: %v, want %v", xdsC.Name(), wantName)
 		return nil
@@ -365,7 +365,7 @@ func setup(edsLBCh *testutils.Channel, xdsClientCh *testutils.Channel) func() {
 
 	origXdsClientNew := xdsclientNew
 	xdsclientNew = func(opts xdsclient.Options) (xdsClientInterface, error) {
-		xdsC := fakexds.NewClientWithName(opts.Config.BalancerName)
+		xdsC := fakeclient.NewClientWithName(opts.Config.BalancerName)
 		defer func() { xdsClientCh.Send(xdsC) }()
 		return xdsC, nil
 	}
@@ -527,7 +527,7 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 //   will not kick-in as yet.
 // * Sends another ClientConn update with fallback addresses. Still fallback
 //   would not have kicked in because the startupTimeout hasn't expired.
-// * Sends an EDSUpdate through the fakexds.Client object. This will trigger
+// * Sends an EDSUpdate through the fakeclient.Client object. This will trigger
 //   the creation of an edsLB object. This is verified.
 // * Trigger fallback by directly calling the loseContact method on the
 //   top-level edsBalancer. This should instantiate the fallbackLB and should

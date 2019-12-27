@@ -25,7 +25,7 @@ import (
 	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	"google.golang.org/grpc/xds/internal/client/fakexds"
+	"google.golang.org/grpc/xds/internal/testutils"
 )
 
 func TestLDSGetRouteConfig(t *testing.T) {
@@ -90,13 +90,10 @@ func TestLDSGetRouteConfig(t *testing.T) {
 // and creates a v2Client using it. Then, it registers a watchLDS and tests
 // different LDS responses.
 func TestLDSHandleResponse(t *testing.T) {
-	fakeServer, sCleanup := fakexds.StartServer(t)
-	client, cCleanup := fakeServer.GetClientConn(t)
-	defer func() {
-		cCleanup()
-		sCleanup()
-	}()
-	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	defer cleanup()
+
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 
 	tests := []struct {
@@ -186,7 +183,7 @@ func TestLDSHandleResponse(t *testing.T) {
 				wantUpdateErr:    test.wantUpdateErr,
 
 				ldsWatch:      v2c.watchLDS,
-				watchReqChan:  fakeServer.RequestChan,
+				watchReqChan:  fakeServer.XDSRequestChan,
 				handleXDSResp: v2c.handleLDSResponse,
 			})
 		})
@@ -196,13 +193,10 @@ func TestLDSHandleResponse(t *testing.T) {
 // TestLDSHandleResponseWithoutWatch tests the case where the v2Client receives
 // an LDS response without a registered watcher.
 func TestLDSHandleResponseWithoutWatch(t *testing.T) {
-	fakeServer, sCleanup := fakexds.StartServer(t)
-	client, cCleanup := fakeServer.GetClientConn(t)
-	defer func() {
-		cCleanup()
-		sCleanup()
-	}()
-	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	_, cc, cleanup := startServerAndGetCC(t)
+	defer cleanup()
+
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 
 	if v2c.handleLDSResponse(goodLDSResponse1) == nil {
@@ -215,43 +209,33 @@ func TestLDSHandleResponseWithoutWatch(t *testing.T) {
 // to be invoked with an error once the watchExpiryTimer fires.
 func TestLDSWatchExpiryTimer(t *testing.T) {
 	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 1 * time.Second
+	defaultWatchExpiryTimeout = 500 * time.Millisecond
 	defer func() {
 		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
 	}()
 
-	fakeServer, sCleanup := fakexds.StartServer(t)
-	client, cCleanup := fakeServer.GetClientConn(t)
-	defer func() {
-		cCleanup()
-		sCleanup()
-	}()
-	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	defer cleanup()
+
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 
-	// Wait till the request makes it to the fakeServer. This ensures that
-	// the watch request has been processed by the v2Client.
-	callbackCh := make(chan error, 1)
+	callbackCh := testutils.NewChannel()
 	v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
 		t.Logf("in v2c.watchLDS callback, ldsUpdate: %+v, err: %v", u, err)
 		if u.routeName != "" {
-			callbackCh <- fmt.Errorf("received routeName %v in ldsCallback, wanted empty string", u.routeName)
+			callbackCh.Send(fmt.Errorf("received routeName %v in ldsCallback, wanted empty string", u.routeName))
 		}
 		if err == nil {
-			callbackCh <- errors.New("received nil error in ldsCallback")
+			callbackCh.Send(errors.New("received nil error in ldsCallback"))
 		}
-		callbackCh <- nil
+		callbackCh.Send(nil)
 	})
-	<-fakeServer.RequestChan
 
-	timer := time.NewTimer(2 * time.Second)
-	select {
-	case <-timer.C:
-		t.Fatalf("Timeout expired when expecting LDS update")
-	case err := <-callbackCh:
-		timer.Stop()
-		if err != nil {
-			t.Fatal(err)
-		}
+	// Wait till the request makes it to the fakeServer. This ensures that
+	// the watch request has been processed by the v2Client.
+	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+		t.Fatalf("Timeout expired when expecting an LDS request")
 	}
+	waitForNonNilErr(t, callbackCh)
 }

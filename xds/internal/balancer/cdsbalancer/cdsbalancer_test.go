@@ -34,7 +34,7 @@ import (
 	xdsbalancer "google.golang.org/grpc/xds/internal/balancer"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/fakexds"
+	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
 
 const (
@@ -55,7 +55,7 @@ type cdsWatchInfo struct {
 
 // invokeWatchCb invokes the CDS watch callback registered by the cdsBalancer
 // and waits for appropriate state to be pushed to the provided edsBalancer.
-func invokeWatchCbAndWait(xdsC *fakexds.Client, cdsW cdsWatchInfo, wantCCS balancer.ClientConnState, edsB *testEDSBalancer) error {
+func invokeWatchCbAndWait(xdsC *fakeclient.Client, cdsW cdsWatchInfo, wantCCS balancer.ClientConnState, edsB *testEDSBalancer) error {
 	xdsC.InvokeWatchClusterCallback(cdsW.update, cdsW.err)
 	if cdsW.err != nil {
 		return edsB.waitForResolverError(cdsW.err)
@@ -224,10 +224,10 @@ func setup() (*cdsBalancer, *testEDSBalancer, func()) {
 
 // setupWithWatch does everything that setup does, and also pushes a ClientConn
 // update to the cdsBalancer and waits for a CDS watch call to be registered.
-func setupWithWatch(t *testing.T) (*fakexds.Client, *cdsBalancer, *testEDSBalancer, func()) {
+func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, func()) {
 	t.Helper()
 
-	xdsC := fakexds.NewClient()
+	xdsC := fakeclient.NewClient()
 	cdsB, edsB, cancel := setup()
 	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != nil {
 		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
@@ -246,7 +246,7 @@ func setupWithWatch(t *testing.T) (*fakexds.Client, *cdsBalancer, *testEDSBalanc
 // cdsBalancer with different inputs and verifies that the CDS watch API on the
 // provided xdsClient is invoked appropriately.
 func TestUpdateClientConnState(t *testing.T) {
-	xdsC := fakexds.NewClient()
+	xdsC := fakeclient.NewClient()
 
 	tests := []struct {
 		name        string
@@ -324,7 +324,7 @@ func TestUpdateClientConnStateAfterClose(t *testing.T) {
 	defer cancel()
 	cdsB.Close()
 
-	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, fakexds.NewClient())); err != errBalancerClosed {
+	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, fakeclient.NewClient())); err != errBalancerClosed {
 		t.Fatalf("UpdateClientConnState() after close returned %v, want %v", err, errBalancerClosed)
 	}
 }

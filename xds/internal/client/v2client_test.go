@@ -24,7 +24,8 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"google.golang.org/grpc/xds/internal/client/fakexds"
+	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -36,7 +37,7 @@ import (
 )
 
 const (
-	defaultTestTimeout       = 2 * time.Second
+	defaultTestTimeout       = 1 * time.Second
 	goodLDSTarget1           = "lds.target.good:1111"
 	goodLDSTarget2           = "lds.target.good:2222"
 	goodRouteName1           = "GoodRouteConfig1"
@@ -390,12 +391,8 @@ var (
 // TestV2ClientBackoffAfterRecvError verifies if the v2Client backoffs when it
 // encounters a Recv error while receiving an LDS response.
 func TestV2ClientBackoffAfterRecvError(t *testing.T) {
-	fakeServer, sCleanup := fakexds.StartServer(t)
-	client, cCleanup := fakeServer.GetClientConn(t)
-	defer func() {
-		cCleanup()
-		sCleanup()
-	}()
+	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	defer cleanup()
 
 	// Override the v2Client backoff function with this, so that we can verify
 	// that a backoff actually was triggerred.
@@ -405,7 +402,7 @@ func TestV2ClientBackoffAfterRecvError(t *testing.T) {
 		return 0
 	}
 
-	v2c := newV2Client(client, goodNodeProto, clientBackoff)
+	v2c := newV2Client(cc, goodNodeProto, clientBackoff)
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
@@ -413,10 +410,12 @@ func TestV2ClientBackoffAfterRecvError(t *testing.T) {
 	v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
 		close(callbackCh)
 	})
-	<-fakeServer.RequestChan
+	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+		t.Fatalf("Timeout expired when expecting an LDS request")
+	}
 	t.Log("FakeServer received request...")
 
-	fakeServer.ResponseChan <- &fakexds.Response{Err: errors.New("RPC error")}
+	fakeServer.XDSResponseChan <- &fakeserver.Response{Err: errors.New("RPC error")}
 	t.Log("Bad LDS response pushed to fakeServer...")
 
 	timer := time.NewTimer(defaultTestTimeout)
@@ -435,95 +434,81 @@ func TestV2ClientBackoffAfterRecvError(t *testing.T) {
 // encountered a Recv() error, and is expected to send out xDS requests for
 // registered watchers once it comes back up again.
 func TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
-	fakeServer, sCleanup := fakexds.StartServer(t)
-	client, cCleanup := fakeServer.GetClientConn(t)
-	defer func() {
-		cCleanup()
-		sCleanup()
-	}()
-	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	defer cleanup()
+
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
-	callbackCh := make(chan struct{}, 1)
+	callbackCh := testutils.NewChannel()
 	v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
 		t.Logf("Received LDS callback with ldsUpdate {%+v} and error {%v}", u, err)
-		callbackCh <- struct{}{}
+		callbackCh.Send(struct{}{})
 	})
-	<-fakeServer.RequestChan
+	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+		t.Fatalf("Timeout expired when expecting an LDS request")
+	}
 	t.Log("FakeServer received request...")
 
-	fakeServer.ResponseChan <- &fakexds.Response{Resp: goodLDSResponse1}
+	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
 	t.Log("Good LDS response pushed to fakeServer...")
 
-	timer := time.NewTimer(defaultTestTimeout)
-	select {
-	case <-timer.C:
+	if _, err := callbackCh.Receive(); err != nil {
 		t.Fatal("Timeout when expecting LDS update")
-	case <-callbackCh:
-		timer.Stop()
 	}
-	// Read the ack, so the next request is sent after stream re-creation.
-	<-fakeServer.RequestChan
 
-	fakeServer.ResponseChan <- &fakexds.Response{Err: errors.New("RPC error")}
+	// Read the ack, so the next request is sent after stream re-creation.
+	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+		t.Fatalf("Timeout expired when expecting an LDS ACK")
+	}
+
+	fakeServer.XDSResponseChan <- &fakeserver.Response{Err: errors.New("RPC error")}
 	t.Log("Bad LDS response pushed to fakeServer...")
 
-	timer = time.NewTimer(defaultTestTimeout)
-	select {
-	case <-timer.C:
-		t.Fatal("Timeout when expecting LDS update")
-	case gotRequest := <-fakeServer.RequestChan:
-		timer.Stop()
-		t.Log("received LDS request after stream re-creation")
-		if !proto.Equal(gotRequest.Req, goodLDSRequest) {
-			t.Fatalf("gotRequest: %+v, wantRequest: %+v", gotRequest.Req, goodLDSRequest)
-		}
+	val, err := fakeServer.XDSRequestChan.Receive()
+	if err == testutils.ErrRecvTimeout {
+		t.Fatalf("Timeout expired when expecting LDS update")
+	}
+	gotRequest := val.(*fakeserver.Request)
+	if !proto.Equal(gotRequest.Req, goodLDSRequest) {
+		t.Fatalf("gotRequest: %+v, wantRequest: %+v", gotRequest.Req, goodLDSRequest)
 	}
 }
 
 // TestV2ClientCancelWatch verifies that the registered watch callback is not
 // invoked if a response is received after the watcher is cancelled.
 func TestV2ClientCancelWatch(t *testing.T) {
-	fakeServer, sCleanup := fakexds.StartServer(t)
-	client, cCleanup := fakeServer.GetClientConn(t)
-	defer func() {
-		cCleanup()
-		sCleanup()
-	}()
-	v2c := newV2Client(client, goodNodeProto, func(int) time.Duration { return 0 })
+	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	defer cleanup()
+
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
-	callbackCh := make(chan struct{}, 1)
+	callbackCh := testutils.NewChannel()
 	cancelFunc := v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
 		t.Logf("Received LDS callback with ldsUpdate {%+v} and error {%v}", u, err)
-		callbackCh <- struct{}{}
+		callbackCh.Send(struct{}{})
 	})
-	<-fakeServer.RequestChan
+	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+		t.Fatalf("Timeout expired when expecting an LDS request")
+	}
 	t.Log("FakeServer received request...")
 
-	fakeServer.ResponseChan <- &fakexds.Response{Resp: goodLDSResponse1}
+	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
 	t.Log("Good LDS response pushed to fakeServer...")
 
-	timer := time.NewTimer(defaultTestTimeout)
-	select {
-	case <-timer.C:
+	if _, err := callbackCh.Receive(); err != nil {
 		t.Fatal("Timeout when expecting LDS update")
-	case <-callbackCh:
-		timer.Stop()
 	}
 
 	cancelFunc()
 
-	fakeServer.ResponseChan <- &fakexds.Response{Resp: goodLDSResponse1}
+	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
 	t.Log("Another good LDS response pushed to fakeServer...")
 
-	timer = time.NewTimer(defaultTestTimeout)
-	select {
-	case <-timer.C:
-	case <-callbackCh:
-		timer.Stop()
+	if _, err := callbackCh.Receive(); err != testutils.ErrRecvTimeout {
 		t.Fatalf("Watch callback invoked after the watcher was cancelled")
 	}
 }

@@ -34,7 +34,7 @@ import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/fakexds"
+	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
@@ -98,7 +98,7 @@ func getXDSClientMakerFunc(wantOpts xdsclient.Options) func(xdsclient.Options) (
 		if len(gotOpts.DialOpts) != len(wantOpts.DialOpts) {
 			return nil, fmt.Errorf("got len(DialOpts): %v, want: %v", len(gotOpts.DialOpts), len(wantOpts.DialOpts))
 		}
-		return fakexds.NewClient(), nil
+		return fakeclient.NewClient(), nil
 	}
 }
 
@@ -232,7 +232,7 @@ func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *testClientConn, fun
 // waitForWatchService waits for the WatchService method to be called on the
 // xdsClient within a reasonable amount of time, and also verifies that the
 // watch is called with the expected target.
-func waitForWatchService(t *testing.T, xdsC *fakexds.Client, wantTarget string) {
+func waitForWatchService(t *testing.T, xdsC *fakeclient.Client, wantTarget string) {
 	t.Helper()
 
 	gotTarget, err := xdsC.WaitForWatchService()
@@ -247,7 +247,7 @@ func waitForWatchService(t *testing.T, xdsC *fakexds.Client, wantTarget string) 
 // TestXDSResolverWatchCallbackAfterClose tests the case where a service update
 // from the underlying xdsClient is received after the resolver is closed.
 func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
-	xdsC := fakexds.NewClient()
+	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
 		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
@@ -268,7 +268,7 @@ func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 // TestXDSResolverBadServiceUpdate tests the case the xdsClient returns a bad
 // service update.
 func TestXDSResolverBadServiceUpdate(t *testing.T) {
-	xdsC := fakexds.NewClient()
+	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
 		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
@@ -292,7 +292,7 @@ func TestXDSResolverBadServiceUpdate(t *testing.T) {
 // TestXDSResolverGoodServiceUpdate tests the happy case where the resolver
 // gets a good service update from the xdsClient.
 func TestXDSResolverGoodServiceUpdate(t *testing.T) {
-	xdsC := fakexds.NewClient()
+	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
 		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
