@@ -195,7 +195,7 @@ func (x *edsBalancer) handleXDSClientUpdate(update interface{}) {
 	case *xdsclient.EDSUpdate:
 		x.xdsLB.HandleEDSResponse(u)
 	case *loseContact:
-		// TODO: start a monitor goroutine to switch to fallback
+		// loseContact can be useful for going into fallback.
 	default:
 		panic("unexpected xds client update type")
 	}
