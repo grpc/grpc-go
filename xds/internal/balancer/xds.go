@@ -106,10 +106,10 @@ var _ balancer.V2Balancer = (*edsBalancer)(nil) // Assert that we implement V2Ba
 //
 // It currently has only an edsBalancer. Later, we may add fallback.
 type edsBalancer struct {
-	cc             balancer.ClientConn // *xdsClientConn
-	buildOpts      balancer.BuildOptions
-	ctx            context.Context
-	cancel         context.CancelFunc
+	cc        balancer.ClientConn // *xdsClientConn
+	buildOpts balancer.BuildOptions
+	ctx       context.Context
+	cancel    context.CancelFunc
 
 	// edsBalancer continuously monitor the channels below, and will handle events from them in sync.
 	grpcUpdate      chan interface{}
