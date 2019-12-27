@@ -370,7 +370,7 @@ func TestCDSCaching(t *testing.T) {
 	}
 	errCh := testutils.NewChannel()
 	go testCDSCaching(t, ops, errCh)
-	waitForNonNilErr(t, errCh)
+	waitForNilErr(t, errCh)
 }
 
 // TestCDSWatchExpiryTimer tests the case where the client does not receive an
@@ -407,7 +407,7 @@ func TestCDSWatchExpiryTimer(t *testing.T) {
 	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
 		t.Fatalf("Timeout expired when expecting an CDS request")
 	}
-	waitForNonNilErr(t, callbackCh)
+	waitForNilErr(t, callbackCh)
 }
 
 var (

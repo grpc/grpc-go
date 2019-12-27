@@ -150,7 +150,7 @@ func TestWatchService(t *testing.T) {
 		t.Fatalf("Timeout expired when expecting an RDS request")
 	}
 	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodRDSResponse1}
-	waitForNonNilErr(t, callbackCh)
+	waitForNilErr(t, callbackCh)
 }
 
 // TestWatchServiceWithNoResponseFromServer tests the case where the
@@ -196,7 +196,7 @@ func TestWatchServiceWithNoResponseFromServer(t *testing.T) {
 	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
 		t.Fatalf("Timeout expired when expecting an LDS request")
 	}
-	waitForNonNilErr(t, callbackCh)
+	waitForNilErr(t, callbackCh)
 }
 
 // TestWatchServiceEmptyRDS tests the case where the underlying
@@ -247,7 +247,7 @@ func TestWatchServiceEmptyRDS(t *testing.T) {
 		t.Fatalf("Timeout expired when expecting an RDS request")
 	}
 	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: noVirtualHostsInRDSResponse}
-	waitForNonNilErr(t, callbackCh)
+	waitForNilErr(t, callbackCh)
 }
 
 // TestWatchServiceWithClientClose tests the case where xDS responses are

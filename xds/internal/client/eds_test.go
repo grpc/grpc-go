@@ -284,5 +284,5 @@ func TestEDSWatchExpiryTimer(t *testing.T) {
 	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
 		t.Fatalf("Timeout expired when expecting an CDS request")
 	}
-	waitForNonNilErr(t, callbackCh)
+	waitForNilErr(t, callbackCh)
 }

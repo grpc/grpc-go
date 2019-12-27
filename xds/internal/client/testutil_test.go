@@ -152,9 +152,9 @@ func startServerAndGetCC(t *testing.T) (*fakeserver.Server, *grpc.ClientConn, fu
 	}
 }
 
-// waitForNonNilErr waits for a non-nil error value to be received on the
+// waitForNilErr waits for a nil error value to be received on the
 // provided channel.
-func waitForNonNilErr(t *testing.T, ch *testutils.Channel) {
+func waitForNilErr(t *testing.T, ch *testutils.Channel) {
 	t.Helper()
 
 	val, err := ch.Receive()

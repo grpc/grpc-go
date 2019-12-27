@@ -237,5 +237,5 @@ func TestLDSWatchExpiryTimer(t *testing.T) {
 	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
 		t.Fatalf("Timeout expired when expecting an LDS request")
 	}
-	waitForNonNilErr(t, callbackCh)
+	waitForNilErr(t, callbackCh)
 }

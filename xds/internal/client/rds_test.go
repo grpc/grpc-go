@@ -181,7 +181,7 @@ func doLDS(t *testing.T, v2c *v2Client, fakeServer *fakeserver.Server) {
 	}
 
 	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
-	waitForNonNilErr(t, cbCh)
+	waitForNilErr(t, cbCh)
 
 	// Read the LDS ack, to clear RequestChan for following tests.
 	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
@@ -420,7 +420,7 @@ func TestRDSCaching(t *testing.T) {
 	}
 	errCh := testutils.NewChannel()
 	go testRDSCaching(t, ops, errCh)
-	waitForNonNilErr(t, errCh)
+	waitForNilErr(t, errCh)
 }
 
 // TestRDSWatchExpiryTimer tests the case where the client does not receive an
@@ -458,7 +458,7 @@ func TestRDSWatchExpiryTimer(t *testing.T) {
 	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
 		t.Fatalf("Timeout expired when expecting an RDS request")
 	}
-	waitForNonNilErr(t, callbackCh)
+	waitForNilErr(t, callbackCh)
 }
 
 func TestHostFromTarget(t *testing.T) {
