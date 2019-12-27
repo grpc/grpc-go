@@ -437,7 +437,6 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 	})
 }
 
-
 // TestXDSSubConnStateChange verifies if the top-level edsBalancer passes on
 // the subConnStateChange to appropriate child balancers (it tests for edsLB
 // and a fallbackLB).
