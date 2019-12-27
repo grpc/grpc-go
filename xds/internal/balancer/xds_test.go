@@ -215,16 +215,6 @@ func setup(edsLBCh *testutils.Channel, xdsClientCh *testutils.Channel) func() {
 	}
 }
 
-// setupForFallback performs everything that setup does and in addition
-// overrides the fallback startupTimeout to a small value to trigger fallback
-// in tests.
-func setupForFallback(edsLBCh *testutils.Channel, xdsClientCh *testutils.Channel) func() {
-	cancel := setup(edsLBCh, xdsClientCh)
-	return func() {
-		cancel()
-	}
-}
-
 // TestXDSConfigBalancerNameUpdate verifies different scenarios where the
 // balancer name in the lbConfig is updated.
 //
@@ -236,8 +226,7 @@ func setupForFallback(edsLBCh *testutils.Channel, xdsClientCh *testutils.Channel
 func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
 	edsLBCh := testutils.NewChannel()
 	xdsClientCh := testutils.NewChannel()
-	// TODO: setup doesn't need to take edsLBCh.
-	cancel := setupForFallback(edsLBCh, xdsClientCh)
+	cancel := setup(edsLBCh, xdsClientCh)
 	defer cancel()
 
 	builder := balancer.Get(edsName)
@@ -365,8 +354,7 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 }
 
 // TestXDSSubConnStateChange verifies if the top-level edsBalancer passes on
-// the subConnStateChange to appropriate child balancers (it tests for edsLB
-// and a fallbackLB).
+// the subConnStateChange to appropriate child balancers.
 func (s) TestXDSSubConnStateChange(t *testing.T) {
 	edsLBCh := testutils.NewChannel()
 	xdsClientCh := testutils.NewChannel()
