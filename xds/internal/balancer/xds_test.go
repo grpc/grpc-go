@@ -78,14 +78,7 @@ const (
 )
 
 var (
-	testBalancerNameFooBar = "foo.bar"
-	testLBConfigFooBar     = &XDSConfig{
-		BalancerName:   testBalancerNameFooBar,
-		ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerB},
-		FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
-		EDSServiceName: testEDSClusterName,
-	}
-
+	testBalancerNameFooBar  = "foo.bar"
 	specialAddrForBalancerA = resolver.Address{Addr: "this.is.balancer.A"}
 	specialAddrForBalancerB = resolver.Address{Addr: "this.is.balancer.B"}
 )
@@ -104,18 +97,6 @@ func (b *balancerABuilder) Build(cc balancer.ClientConn, opts balancer.BuildOpti
 
 func (b *balancerABuilder) Name() string {
 	return string(fakeBalancerA)
-}
-
-func (b *balancerABuilder) getLastBalancer() *balancerA {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.lastBalancer
-}
-
-func (b *balancerABuilder) clearLastBalancer() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.lastBalancer = nil
 }
 
 type balancerBBuilder struct{}
@@ -148,10 +129,6 @@ func (b *balancerA) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 
 func (b *balancerA) Close() {}
 
-func (b *balancerA) waitForSubConnStateChange(wantState *scStateChange) error {
-	return waitForSubConnStateChange(b.subconnStateChange, wantState)
-}
-
 // A fake balancer implementation which appends a unique address to the list of
 // resolved addresses received before attempting to create a SubConn.
 type balancerB struct {
@@ -178,18 +155,6 @@ type testClientConn struct {
 func (t *testClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	t.newSubConns.Send(addrs)
 	return nil, nil
-}
-
-func (t *testClientConn) waitForNewSubConns(wantAddrs []resolver.Address) error {
-	val, err := t.newSubConns.Receive()
-	if err != nil {
-		return fmt.Errorf("error waiting for subconns: %v", err)
-	}
-	gotAddrs := val.([]resolver.Address)
-	if !reflect.DeepEqual(gotAddrs, wantAddrs) {
-		return fmt.Errorf("got subconn address %v, want %v", gotAddrs, wantAddrs)
-	}
-	return nil
 }
 
 func (testClientConn) RemoveSubConn(balancer.SubConn)                          {}
