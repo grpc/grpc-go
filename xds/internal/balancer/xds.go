@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc/balancer"
@@ -67,17 +66,15 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		cancel:          cancel,
 		buildOpts:       opts,
 		startupTimeout:  startupTimeout,
-		connStateMgr:    &connStateMgr{},
 		startup:         true,
 		grpcUpdate:      make(chan interface{}),
 		xdsClientUpdate: make(chan interface{}),
-		timer:           createDrainedTimer(), // initialized a timer that won't fire without reset
 		loadStore:       lrs.NewStore(),
 	}
 	x.cc = &xdsClientConn{
-		updateState: x.connStateMgr.updateState,
 		ClientConn:  cc,
 	}
+	x.xdsLB = newEDSBalancer(x.cc, x.loadStore)
 	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, x.loadStore)
 	go x.run()
 	return x
@@ -119,11 +116,9 @@ type edsBalancer struct {
 	buildOpts         balancer.BuildOptions
 	startupTimeout    time.Duration
 	xdsStaleTimeout   *time.Duration
-	connStateMgr      *connStateMgr
 	ctx               context.Context
 	cancel            context.CancelFunc
 	startup           bool // startup indicates whether this edsBalancer is in startup stage.
-	inFallbackMonitor bool
 
 	// edsBalancer continuously monitor the channels below, and will handle events from them in sync.
 	grpcUpdate      chan interface{}
@@ -134,8 +129,6 @@ type edsBalancer struct {
 	client           *xdsclientWrapper // may change when passed a different service config
 	config           *XDSConfig        // may change when passed a different service config
 	xdsLB            edsBalancerInterface
-	fallbackLB       balancer.Balancer
-	fallbackInitData *resolver.State // may change when HandleResolved address is called
 	loadStore        lrs.Store
 }
 
@@ -149,19 +142,12 @@ func (x *edsBalancer) run() {
 			x.handleGRPCUpdate(update)
 		case update := <-x.xdsClientUpdate:
 			x.handleXDSClientUpdate(update)
-		case <-x.timer.C: // x.timer.C will block if we are not in fallback monitoring stage.
-			x.switchFallback()
-		case <-x.noSubConnAlert: // x.noSubConnAlert will block if we are not in fallback monitoring stage.
-			x.switchFallback()
 		case <-x.ctx.Done():
 			if x.client != nil {
 				x.client.close()
 			}
 			if x.xdsLB != nil {
 				x.xdsLB.Close()
-			}
-			if x.fallbackLB != nil {
-				x.fallbackLB.Close()
 			}
 			return
 		}
@@ -174,13 +160,6 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 		if x.xdsLB != nil {
 			x.xdsLB.HandleSubConnStateChange(u.sc, u.state.ConnectivityState)
 		}
-		if x.fallbackLB != nil {
-			if lb, ok := x.fallbackLB.(balancer.V2Balancer); ok {
-				lb.UpdateSubConnState(u.sc, u.state)
-			} else {
-				x.fallbackLB.HandleSubConnStateChange(u.sc, u.state.ConnectivityState)
-			}
-		}
 	case *balancer.ClientConnState:
 		cfg, _ := u.BalancerConfig.(*XDSConfig)
 		if cfg == nil {
@@ -191,18 +170,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 		x.client.handleUpdate(cfg, u.ResolverState.Attributes)
 
 		if x.config == nil {
-			// If this is the first config, the edsBalancer is in startup stage.
-			// We need to apply the startup timeout for the first xdsClient, in
-			// case it doesn't get a response from the traffic director in time.
-			if x.startup {
-				x.startFallbackMonitoring()
-			}
 			x.config = cfg
-			x.fallbackInitData = &resolver.State{
-				Addresses: u.ResolverState.Addresses,
-				// TODO(yuxuanli): get the fallback balancer config once the validation change completes, where
-				// we can pass along the config struct.
-			}
 			return
 		}
 
@@ -216,25 +184,8 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 			}
 		}
 
-		var fallbackChanged bool
-		if x.fallbackLB != nil && !reflect.DeepEqual(cfg.FallBackPolicy, x.config.FallBackPolicy) {
-			x.fallbackLB.Close()
-			x.buildFallBackBalancer(cfg)
-			fallbackChanged = true
-		}
-
-		if x.fallbackLB != nil && (!reflect.DeepEqual(x.fallbackInitData.Addresses, u.ResolverState.Addresses) || fallbackChanged) {
-			x.updateFallbackWithResolverState(&resolver.State{
-				Addresses: u.ResolverState.Addresses,
-			})
-		}
 
 		x.config = cfg
-		x.fallbackInitData = &resolver.State{
-			Addresses: u.ResolverState.Addresses,
-			// TODO(yuxuanli): get the fallback balancer config once the validation change completes, where
-			// we can pass along the config struct.
-		}
 	default:
 		// unreachable path
 		panic("wrong update type")
@@ -246,46 +197,12 @@ func (x *edsBalancer) handleXDSClientUpdate(update interface{}) {
 	// TODO: this func should accept (*xdsclient.EDSUpdate, error), and process
 	// the error, instead of having a separate loseContact signal.
 	case *xdsclient.EDSUpdate:
-		x.cancelFallbackAndSwitchEDSBalancerIfNecessary()
 		x.xdsLB.HandleEDSResponse(u)
 	case *loseContact:
-		// if we are already doing fallback monitoring, then we ignore new loseContact signal.
-		if x.inFallbackMonitor {
-			return
-		}
-		x.inFallbackMonitor = true
-		x.startFallbackMonitoring()
+		// TODO: start a monitor goroutine to switch to fallback
 	default:
 		panic("unexpected xds client update type")
 	}
-}
-
-type connStateMgr struct {
-	mu       sync.Mutex
-	curState connectivity.State
-	notify   chan struct{}
-}
-
-func (c *connStateMgr) updateState(s connectivity.State) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.curState = s
-	if s != connectivity.Ready && c.notify != nil {
-		close(c.notify)
-		c.notify = nil
-	}
-}
-
-func (c *connStateMgr) notifyWhenNotReady() <-chan struct{} {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.curState != connectivity.Ready {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	}
-	c.notify = make(chan struct{})
-	return c.notify
 }
 
 // xdsClientConn wraps around the balancer.ClientConn passed in from grpc. The wrapping is to add
@@ -366,113 +283,7 @@ func (x *edsBalancer) loseContact() {
 	}
 }
 
-func (x *edsBalancer) switchFallback() {
-	if x.xdsLB != nil {
-		x.xdsLB.Close()
-		x.xdsLB = nil
-	}
-	x.buildFallBackBalancer(x.config)
-	x.updateFallbackWithResolverState(x.fallbackInitData)
-	x.cancelFallbackMonitoring()
-}
-
-func (x *edsBalancer) updateFallbackWithResolverState(s *resolver.State) {
-	if lb, ok := x.fallbackLB.(balancer.V2Balancer); ok {
-		lb.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{
-			Addresses: s.Addresses,
-			// TODO(yuxuanli): get the fallback balancer config once the validation change completes, where
-			// we can pass along the config struct.
-		}})
-	} else {
-		x.fallbackLB.HandleResolvedAddrs(s.Addresses, nil)
-	}
-}
-
-// x.cancelFallbackAndSwitchEDSBalancerIfNecessary() will be no-op if we have a working xds client.
-// It will cancel fallback monitoring if we are in fallback monitoring stage.
-// If there's no running edsBalancer currently, it will create one and initialize it. Also, it will
-// shutdown the fallback balancer if there's one running.
-func (x *edsBalancer) cancelFallbackAndSwitchEDSBalancerIfNecessary() {
-	// xDS update will cancel fallback monitoring if we are in fallback monitoring stage.
-	x.cancelFallbackMonitoring()
-
-	// xDS update will switch balancer back to edsBalancer if we are in fallback.
-	if x.xdsLB == nil {
-		if x.fallbackLB != nil {
-			x.fallbackLB.Close()
-			x.fallbackLB = nil
-		}
-		x.xdsLB = newEDSBalancer(x.cc, x.loadStore)
-		if x.config.ChildPolicy != nil {
-			x.xdsLB.HandleChildPolicy(x.config.ChildPolicy.Name, x.config.ChildPolicy.Config)
-		}
-	}
-}
-
-func (x *edsBalancer) buildFallBackBalancer(c *XDSConfig) {
-	if c.FallBackPolicy == nil {
-		x.buildFallBackBalancer(&XDSConfig{
-			FallBackPolicy: &loadBalancingConfig{
-				Name: "round_robin",
-			},
-		})
-		return
-	}
-	// builder will always be non-nil, since when parse JSON into xdsinternal.XDSConfig, we check whether the specified
-	// balancer is registered or not.
-	builder := balancer.Get(c.FallBackPolicy.Name)
-
-	x.fallbackLB = builder.Build(x.cc, x.buildOpts)
-}
-
-// There are three ways that could lead to fallback:
-// 1. During startup (i.e. the first xds client is just created and attempts to contact the traffic
-//    director), fallback if it has not received any response from the director within the configured
-//    timeout.
-// 2. After xds client loses contact with the remote, fallback if all connections to the backends are
-//    lost (i.e. not in state READY).
-func (x *edsBalancer) startFallbackMonitoring() {
-	if x.startup {
-		x.startup = false
-		x.timer.Reset(x.startupTimeout)
-		return
-	}
-
-	x.noSubConnAlert = x.connStateMgr.notifyWhenNotReady()
-	if x.xdsStaleTimeout != nil {
-		if !x.timer.Stop() {
-			<-x.timer.C
-		}
-		x.timer.Reset(*x.xdsStaleTimeout)
-	}
-}
-
-// There are two cases where fallback monitoring should be canceled:
-// 1. xDS client returns a new ADS message.
-// 2. fallback has been triggered.
-func (x *edsBalancer) cancelFallbackMonitoring() {
-	if !x.timer.Stop() {
-		select {
-		case <-x.timer.C:
-			// For cases where some fallback condition happens along with the timeout, but timeout loses
-			// the race, so we need to drain the x.timer.C. thus we don't trigger fallback again.
-		default:
-			// if the timer timeout leads us here, then there's no thing to drain from x.timer.C.
-		}
-	}
-	x.noSubConnAlert = nil
-	x.inFallbackMonitor = false
-}
 
 func (x *edsBalancer) Close() {
 	x.cancel()
-}
-
-func createDrainedTimer() *time.Timer {
-	timer := time.NewTimer(0 * time.Millisecond)
-	// make sure initially the timer channel is blocking until reset.
-	if !timer.Stop() {
-		<-timer.C
-	}
-	return timer
 }
