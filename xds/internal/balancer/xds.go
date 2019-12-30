@@ -64,10 +64,10 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		buildOpts:       opts,
 		grpcUpdate:      make(chan interface{}),
 		xdsClientUpdate: make(chan interface{}),
-		loadStore:       lrs.NewStore(),
 	}
-	x.xdsLB = newEDSBalancer(x.cc, x.loadStore)
-	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, x.loadStore)
+	loadStore := lrs.NewStore()
+	x.xdsLB = newEDSBalancer(x.cc, loadStore)
+	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, loadStore)
 	go x.run()
 	return x
 }
@@ -118,7 +118,6 @@ type edsBalancer struct {
 	client    *xdsclientWrapper // may change when passed a different service config
 	config    *XDSConfig        // may change when passed a different service config
 	xdsLB     edsBalancerInterface
-	loadStore lrs.Store
 }
 
 // run gets executed in a goroutine once edsBalancer is created. It monitors updates from grpc,
