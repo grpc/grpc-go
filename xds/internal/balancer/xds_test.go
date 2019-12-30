@@ -82,7 +82,7 @@ func (t *testClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewS
 	return nil, nil
 }
 
-func (testClientConn) Target() string                                          { return testServiceName }
+func (testClientConn) Target() string { return testServiceName }
 
 type scStateChange struct {
 	sc    balancer.SubConn
