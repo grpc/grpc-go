@@ -66,15 +66,14 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-var (
-	testBalancerNameFooBar = "foo.bar"
-)
+const testBalancerNameFooBar = "foo.bar"
 
 func newTestClientConn() *testClientConn {
 	return &testClientConn{newSubConns: testutils.NewChannelWithSize(10)}
 }
 
 type testClientConn struct {
+	balancer.ClientConn
 	newSubConns *testutils.Channel
 }
 
@@ -83,10 +82,6 @@ func (t *testClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewS
 	return nil, nil
 }
 
-func (testClientConn) RemoveSubConn(balancer.SubConn)                          {}
-func (testClientConn) UpdateBalancerState(connectivity.State, balancer.Picker) {}
-func (testClientConn) UpdateState(balancer.State)                              {}
-func (testClientConn) ResolveNow(resolver.ResolveNowOptions)                   {}
 func (testClientConn) Target() string                                          { return testServiceName }
 
 type scStateChange struct {
@@ -125,11 +120,7 @@ func (f *fakeEDSBalancer) waitForChildPolicy(wantPolicy *loadBalancingConfig) er
 }
 
 func (f *fakeEDSBalancer) waitForSubConnStateChange(wantState *scStateChange) error {
-	return waitForSubConnStateChange(f.subconnStateChange, wantState)
-}
-
-func waitForSubConnStateChange(ch *testutils.Channel, wantState *scStateChange) error {
-	val, err := ch.Receive()
+	val, err := f.subconnStateChange.Receive()
 	if err != nil {
 		return fmt.Errorf("error waiting for subconnStateChange: %v", err)
 	}
