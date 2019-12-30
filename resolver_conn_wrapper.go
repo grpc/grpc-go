@@ -34,7 +34,7 @@ import (
 )
 
 // ccResolverWrapper is a wrapper on top of cc for resolvers.
-// It implements resolver.ClientConnection interface.
+// It implements resolver.ClientConn interface.
 type ccResolverWrapper struct {
 	cc         *ClientConn
 	resolverMu sync.Mutex
