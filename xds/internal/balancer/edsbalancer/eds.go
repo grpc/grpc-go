@@ -100,8 +100,8 @@ type edsBalancerImplInterface interface {
 
 var _ balancer.V2Balancer = (*edsBalancer)(nil) // Assert that we implement V2Balancer
 
-// edsBalancer manages xdsClient and the actual balancer that does load
-// balancing.
+// edsBalancer manages xdsClient and the actual EDS balancer implementation that
+// does load balancing.
 //
 // It currently has only an edsBalancer. Later, we may add fallback.
 type edsBalancer struct {
