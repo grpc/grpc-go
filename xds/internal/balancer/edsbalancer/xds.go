@@ -17,7 +17,7 @@
  */
 
 // Package balancer contains xds balancer implementation.
-package balancer
+package edsbalancer
 
 import (
 	"context"
@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
@@ -44,7 +43,7 @@ const (
 
 var (
 	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerInterface {
-		return edsbalancer.NewXDSBalancer(cc, loadStore)
+		return NewXDSBalancer(cc, loadStore)
 	}
 )
 

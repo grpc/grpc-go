@@ -16,7 +16,7 @@
  *
  */
 
-package balancer
+package edsbalancer
 
 import (
 	"bytes"
@@ -68,21 +68,21 @@ func Test(t *testing.T) {
 
 const testBalancerNameFooBar = "foo.bar"
 
-func newTestClientConn() *testClientConn {
-	return &testClientConn{newSubConns: testutils.NewChannelWithSize(10)}
+func newNoopTestClientConn() *noopTestClientConn {
+	return &noopTestClientConn{newSubConns: testutils.NewChannelWithSize(10)}
 }
 
-type testClientConn struct {
+type noopTestClientConn struct {
 	balancer.ClientConn
 	newSubConns *testutils.Channel
 }
 
-func (t *testClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+func (t *noopTestClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	t.newSubConns.Send(addrs)
 	return nil, nil
 }
 
-func (testClientConn) Target() string { return testServiceName }
+func (noopTestClientConn) Target() string { return testServiceName }
 
 type scStateChange struct {
 	sc    balancer.SubConn
@@ -221,7 +221,7 @@ func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
 	defer cancel()
 
 	builder := balancer.Get(edsName)
-	cc := newTestClientConn()
+	cc := newNoopTestClientConn()
 	edsB, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
 	if !ok {
 		t.Fatalf("builder.Build(%s) returned type {%T}, want {*edsBalancer}", edsName, edsB)
@@ -303,7 +303,7 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 	defer cancel()
 
 	builder := balancer.Get(edsName)
-	cc := newTestClientConn()
+	cc := newNoopTestClientConn()
 	edsB, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*edsBalancer)
 	if !ok {
 		t.Fatalf("builder.Build(%s) returned type {%T}, want {*edsBalancer}", edsName, edsB)
@@ -353,7 +353,7 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	defer cancel()
 
 	builder := balancer.Get(edsName)
-	cc := newTestClientConn()
+	cc := newNoopTestClientConn()
 	edsB, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
 	if !ok {
 		t.Fatalf("builder.Build(%s) returned type {%T}, want {*edsBalancer}", edsName, edsB)
