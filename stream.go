@@ -426,11 +426,11 @@ type clientStream struct {
 	committed  bool                       // active attempt committed for retry?
 	buffer     []func(a *csAttempt) error // operations to replay on retry
 	bufferSize int                        // current size of buffer
-
 	// This is per-stream array instead of a per-attempt one because there may be
 	// multiple attempts working on the same data, but we may not free the same
 	// buffer twice.
-	returnBuffers      []*transport.ReturnBuffer
+	returnBuffers []*transport.ReturnBuffer
+
 	attemptBufferReuse bool
 }
 
@@ -718,9 +718,15 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	var rb *transport.ReturnBuffer
 	if f != nil {
 		rb = transport.NewReturnBuffer(1, f)
-		// We can assume mutual exclusion on this slice as only one SendMsg is
-		// supported concurrently.
-		cs.returnBuffers = append(cs.returnBuffers, rb)
+		// commitAttempt() may happen in a recv goroutine during retry, so we
+		// cannot assume mutual exclusion.
+		cs.mu.Lock()
+		if !cs.committed {
+			cs.returnBuffers = append(cs.returnBuffers, rb)
+		} else {
+			rb.Done()
+		}
+		cs.mu.Unlock()
 	}
 
 	// TODO(dfawley): should we be checking len(data) instead?
