@@ -69,16 +69,16 @@ func Test(t *testing.T) {
 const testBalancerNameFooBar = "foo.bar"
 
 func newNoopTestClientConn() *noopTestClientConn {
-	return &noopTestClientConn{newSubConns: testutils.NewChannelWithSize(10)}
+	return &noopTestClientConn{}
 }
 
+// noopTestClientConn is used in EDS balancer config update tests that only
+// cover the config update handling, but not SubConn/load-balancing.
 type noopTestClientConn struct {
 	balancer.ClientConn
-	newSubConns *testutils.Channel
 }
 
 func (t *noopTestClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	t.newSubConns.Send(addrs)
 	return nil, nil
 }
 
