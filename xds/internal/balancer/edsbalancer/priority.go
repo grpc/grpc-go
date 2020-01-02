@@ -38,7 +38,7 @@ import (
 // - If priorityInUse has a non-Ready state, and also there's a priority lower
 // than priorityInUse (which means a lower priority was added), set the next
 // priority as new priorityInUse, and start the bg.
-func (xdsB *EDSBalancer) handlePriorityChange() {
+func (xdsB *edsBalancerImpl) handlePriorityChange() {
 	xdsB.priorityMu.Lock()
 	defer xdsB.priorityMu.Unlock()
 
@@ -88,7 +88,7 @@ func (xdsB *EDSBalancer) handlePriorityChange() {
 //
 // Caller must hold priorityMu, priority must exist, and xdsB.priorityInUse must
 // be non-nil.
-func (xdsB *EDSBalancer) startPriority(priority priorityType) {
+func (xdsB *edsBalancerImpl) startPriority(priority priorityType) {
 	xdsB.priorityInUse = priority
 	p := xdsB.priorityToLocalities[priority]
 	// NOTE: this will eventually send addresses to sub-balancers. If the
@@ -119,7 +119,7 @@ func (xdsB *EDSBalancer) startPriority(priority priorityType) {
 
 // handlePriorityWithNewState start/close priorities based on the connectivity
 // state. It returns whether the state should be forwarded to parent ClientConn.
-func (xdsB *EDSBalancer) handlePriorityWithNewState(priority priorityType, s balancer.State) bool {
+func (xdsB *edsBalancerImpl) handlePriorityWithNewState(priority priorityType, s balancer.State) bool {
 	xdsB.priorityMu.Lock()
 	defer xdsB.priorityMu.Unlock()
 
@@ -169,7 +169,7 @@ func (xdsB *EDSBalancer) handlePriorityWithNewState(priority priorityType, s bal
 // Caller must make sure priorityInUse is not higher than priority.
 //
 // Caller must hold priorityMu.
-func (xdsB *EDSBalancer) handlePriorityWithNewStateReady(priority priorityType) bool {
+func (xdsB *edsBalancerImpl) handlePriorityWithNewStateReady(priority priorityType) bool {
 	// If one priority higher or equal to priorityInUse goes Ready, stop the
 	// init timer. If update is from higher than priorityInUse,
 	// priorityInUse will be closed, and the init timer will become useless.
@@ -205,7 +205,7 @@ func (xdsB *EDSBalancer) handlePriorityWithNewStateReady(priority priorityType) 
 // Caller must make sure priorityInUse is not higher than priority.
 //
 // Caller must hold priorityMu.
-func (xdsB *EDSBalancer) handlePriorityWithNewStateTransientFailure(priority priorityType) bool {
+func (xdsB *edsBalancerImpl) handlePriorityWithNewStateTransientFailure(priority priorityType) bool {
 	if xdsB.priorityInUse.lowerThan(priority) {
 		return false
 	}
@@ -247,7 +247,7 @@ func (xdsB *EDSBalancer) handlePriorityWithNewStateTransientFailure(priority pri
 // Caller must make sure priorityInUse is not higher than priority.
 //
 // Caller must hold priorityMu.
-func (xdsB *EDSBalancer) handlePriorityWithNewStateConnecting(priority priorityType, oldState connectivity.State) bool {
+func (xdsB *edsBalancerImpl) handlePriorityWithNewStateConnecting(priority priorityType, oldState connectivity.State) bool {
 	if xdsB.priorityInUse.lowerThan(priority) {
 		return false
 	}

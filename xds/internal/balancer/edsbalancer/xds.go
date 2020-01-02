@@ -43,7 +43,7 @@ const (
 
 var (
 	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerInterface {
-		return NewXDSBalancer(cc, loadStore)
+		return newEDSBalancerImpl(cc, loadStore)
 	}
 )
 
