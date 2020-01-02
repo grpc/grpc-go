@@ -42,7 +42,7 @@ const (
 )
 
 var (
-	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerInterface {
+	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerImplInterface {
 		return newEDSBalancerImpl(cc, loadStore)
 	}
 )
@@ -83,11 +83,11 @@ func (b *edsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadB
 	return &cfg, nil
 }
 
-// edsBalancerInterface defines the interface that edsBalancer must implement to
-// communicate with edsBalancer.
+// edsBalancerImplInterface defines the interface that edsBalancerImpl must
+// implement to communicate with edsBalancer.
 //
 // It's implemented by the real eds balancer and a fake testing eds balancer.
-type edsBalancerInterface interface {
+type edsBalancerImplInterface interface {
 	// HandleEDSResponse passes the received EDS message from traffic director to eds balancer.
 	HandleEDSResponse(edsResp *xdsclient.EDSUpdate)
 	// HandleChildPolicy updates the eds balancer the intra-cluster load balancing policy to use.
@@ -116,7 +116,7 @@ type edsBalancer struct {
 
 	client  *xdsclientWrapper // may change when passed a different service config
 	config  *EDSConfig        // may change when passed a different service config
-	edsImpl edsBalancerInterface
+	edsImpl edsBalancerImplInterface
 }
 
 // run gets executed in a goroutine once edsBalancer is created. It monitors updates from grpc,
