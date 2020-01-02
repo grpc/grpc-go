@@ -194,7 +194,7 @@ func cdsCCS(cluster string, xdsClient interface{}) balancer.ClientConnState {
 // edsCCS is a helper function to construct a good update passed from the
 // cdsBalancer to the edsBalancer.
 func edsCCS(service string, enableLRS bool, xdsClient interface{}) balancer.ClientConnState {
-	lbCfg := &edsbalancer.XDSConfig{EDSServiceName: service}
+	lbCfg := &edsbalancer.EDSConfig{EDSServiceName: service}
 	if enableLRS {
 		lbCfg.LrsLoadReportingServerName = new(string)
 	}

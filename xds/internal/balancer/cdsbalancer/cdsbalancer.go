@@ -229,7 +229,7 @@ func (b *cdsBalancer) run() {
 					break
 				}
 			}
-			lbCfg := &edsbalancer.XDSConfig{EDSServiceName: update.cds.ServiceName}
+			lbCfg := &edsbalancer.EDSConfig{EDSServiceName: update.cds.ServiceName}
 			if update.cds.EnableLRS {
 				// An empty string here indicates that the edsBalancer
 				// should use the same xDS server for load reporting as

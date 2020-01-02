@@ -233,7 +233,7 @@ func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
 		balancerName := fmt.Sprintf("balancer-%d", i)
 		edsB.UpdateClientConnState(balancer.ClientConnState{
 			ResolverState: resolver.State{Addresses: addrs},
-			BalancerConfig: &XDSConfig{
+			BalancerConfig: &EDSConfig{
 				BalancerName:   balancerName,
 				EDSServiceName: testEDSClusterName,
 			},
@@ -311,7 +311,7 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 	defer edsB.Close()
 
 	edsB.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &XDSConfig{
+		BalancerConfig: &EDSConfig{
 			BalancerName: testBalancerNameFooBar,
 			ChildPolicy: &loadBalancingConfig{
 				Name:   fakeBalancerA,
@@ -329,7 +329,7 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 	})
 
 	edsB.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &XDSConfig{
+		BalancerConfig: &EDSConfig{
 			BalancerName: testBalancerNameFooBar,
 			ChildPolicy: &loadBalancingConfig{
 				Name:   fakeBalancerB,
@@ -363,7 +363,7 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
 	edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: addrs},
-		BalancerConfig: &XDSConfig{
+		BalancerConfig: &EDSConfig{
 			BalancerName:   testBalancerNameFooBar,
 			EDSServiceName: testEDSClusterName,
 		},
@@ -411,7 +411,7 @@ func TestXDSBalancerConfigParsing(t *testing.T) {
 		{
 			name: "jsonpb-generated",
 			js:   b.Bytes(),
-			want: &XDSConfig{
+			want: &EDSConfig{
 				ChildPolicy: &loadBalancingConfig{
 					Name:   "round_robin",
 					Config: json.RawMessage("{}"),
@@ -444,7 +444,7 @@ func TestXDSBalancerConfigParsing(t *testing.T) {
   "edsServiceName": "eds.service",
   "lrsLoadReportingServerName": "lrs.server"
 }`),
-			want: &XDSConfig{
+			want: &EDSConfig{
 				BalancerName: "fake.foo.bar",
 				ChildPolicy: &loadBalancingConfig{
 					Name:   "fake_balancer_A",
@@ -468,7 +468,7 @@ func TestXDSBalancerConfigParsing(t *testing.T) {
   "balancerName": "fake.foo.bar",
   "edsServiceName": "eds.service"
 }`),
-			want: &XDSConfig{
+			want: &EDSConfig{
 				BalancerName:               "fake.foo.bar",
 				EDSServiceName:             testEDSName,
 				LrsLoadReportingServerName: nil,
@@ -494,17 +494,17 @@ func TestLoadbalancingConfigParsing(t *testing.T) {
 	tests := []struct {
 		name string
 		s    string
-		want *XDSConfig
+		want *EDSConfig
 	}{
 		{
 			name: "empty",
 			s:    "{}",
-			want: &XDSConfig{},
+			want: &EDSConfig{},
 		},
 		{
 			name: "success1",
 			s:    `{"childPolicy":[{"pick_first":{}}]}`,
-			want: &XDSConfig{
+			want: &EDSConfig{
 				ChildPolicy: &loadBalancingConfig{
 					Name:   "pick_first",
 					Config: json.RawMessage(`{}`),
@@ -514,7 +514,7 @@ func TestLoadbalancingConfigParsing(t *testing.T) {
 		{
 			name: "success2",
 			s:    `{"childPolicy":[{"round_robin":{}},{"pick_first":{}}]}`,
-			want: &XDSConfig{
+			want: &EDSConfig{
 				ChildPolicy: &loadBalancingConfig{
 					Name:   "round_robin",
 					Config: json.RawMessage(`{}`),
@@ -524,7 +524,7 @@ func TestLoadbalancingConfigParsing(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var cfg XDSConfig
+			var cfg EDSConfig
 			if err := json.Unmarshal([]byte(tt.s), &cfg); err != nil || !reflect.DeepEqual(&cfg, tt.want) {
 				t.Errorf("test name: %s, parseFullServiceConfig() = %+v, err: %v, want %+v, <nil>", tt.name, cfg, err, tt.want)
 			}

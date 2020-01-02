@@ -43,7 +43,7 @@ func (s) TestXDSLoadReporting(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, xdsC)},
-		BalancerConfig: &XDSConfig{LrsLoadReportingServerName: new(string)},
+		BalancerConfig: &EDSConfig{LrsLoadReportingServerName: new(string)},
 	})
 
 	gotCluster, err := xdsC.WaitForWatchEDS()

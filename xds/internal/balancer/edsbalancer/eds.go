@@ -16,7 +16,7 @@
  *
  */
 
-// Package balancer contains xds balancer implementation.
+// Package edsbalancer contains EDS balancer implementation.
 package edsbalancer
 
 import (
@@ -65,7 +65,7 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		xdsClientUpdate: make(chan interface{}),
 	}
 	loadStore := lrs.NewStore()
-	x.xdsLB = newEDSBalancer(x.cc, loadStore)
+	x.edsImpl = newEDSBalancer(x.cc, loadStore)
 	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, loadStore)
 	go x.run()
 	return x
@@ -76,9 +76,9 @@ func (b *edsBalancerBuilder) Name() string {
 }
 
 func (b *edsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	var cfg XDSConfig
+	var cfg EDSConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal balancer config %s into xds config, error: %v", string(c), err)
+		return nil, fmt.Errorf("unable to unmarshal balancer config %s into EDSConfig, error: %v", string(c), err)
 	}
 	return &cfg, nil
 }
@@ -114,9 +114,9 @@ type edsBalancer struct {
 	grpcUpdate      chan interface{}
 	xdsClientUpdate chan interface{}
 
-	client *xdsclientWrapper // may change when passed a different service config
-	config *XDSConfig        // may change when passed a different service config
-	xdsLB  edsBalancerInterface
+	client  *xdsclientWrapper // may change when passed a different service config
+	config  *EDSConfig        // may change when passed a different service config
+	edsImpl edsBalancerInterface
 }
 
 // run gets executed in a goroutine once edsBalancer is created. It monitors updates from grpc,
@@ -133,8 +133,8 @@ func (x *edsBalancer) run() {
 			if x.client != nil {
 				x.client.close()
 			}
-			if x.xdsLB != nil {
-				x.xdsLB.Close()
+			if x.edsImpl != nil {
+				x.edsImpl.Close()
 			}
 			return
 		}
@@ -144,11 +144,11 @@ func (x *edsBalancer) run() {
 func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 	switch u := update.(type) {
 	case *subConnStateUpdate:
-		if x.xdsLB != nil {
-			x.xdsLB.HandleSubConnStateChange(u.sc, u.state.ConnectivityState)
+		if x.edsImpl != nil {
+			x.edsImpl.HandleSubConnStateChange(u.sc, u.state.ConnectivityState)
 		}
 	case *balancer.ClientConnState:
-		cfg, _ := u.BalancerConfig.(*XDSConfig)
+		cfg, _ := u.BalancerConfig.(*EDSConfig)
 		if cfg == nil {
 			// service config parsing failed. should never happen.
 			return
@@ -161,13 +161,13 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 			return
 		}
 
-		// We will update the xdsLB with the new child policy, if we got a
+		// We will update the edsImpl with the new child policy, if we got a
 		// different one.
-		if x.xdsLB != nil && !reflect.DeepEqual(cfg.ChildPolicy, x.config.ChildPolicy) {
+		if x.edsImpl != nil && !reflect.DeepEqual(cfg.ChildPolicy, x.config.ChildPolicy) {
 			if cfg.ChildPolicy != nil {
-				x.xdsLB.HandleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
+				x.edsImpl.HandleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
 			} else {
-				x.xdsLB.HandleChildPolicy(roundrobin.Name, nil)
+				x.edsImpl.HandleChildPolicy(roundrobin.Name, nil)
 			}
 		}
 
@@ -183,7 +183,7 @@ func (x *edsBalancer) handleXDSClientUpdate(update interface{}) {
 	// TODO: this func should accept (*xdsclient.EDSUpdate, error), and process
 	// the error, instead of having a separate loseContact signal.
 	case *xdsclient.EDSUpdate:
-		x.xdsLB.HandleEDSResponse(u)
+		x.edsImpl.HandleEDSResponse(u)
 	case *loseContact:
 		// loseContact can be useful for going into fallback.
 	default:
