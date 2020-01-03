@@ -16,7 +16,7 @@
  *
  */
 
-package balancer
+package edsbalancer
 
 import (
 	"google.golang.org/grpc"
@@ -122,7 +122,7 @@ func (c *xdsclientWrapper) replaceXDSClient(newClient xdsClientInterface, newBal
 // the balancerName (from bootstrap file or from service config) changed.
 // - if balancer names are the same, do nothing, and return false
 // - if balancer names are different, create new one, and return true
-func (c *xdsclientWrapper) updateXDSClient(config *XDSConfig, attr *attributes.Attributes) bool {
+func (c *xdsclientWrapper) updateXDSClient(config *EDSConfig, attr *attributes.Attributes) bool {
 	if attr != nil {
 		if clientFromAttr, _ := attr.Value(xdsinternal.XDSClientID).(xdsClientInterface); clientFromAttr != nil {
 			// This will also clear balancerName, to indicate that client is
@@ -217,7 +217,7 @@ func (c *xdsclientWrapper) startLoadReport(edsServiceNameBeingWatched string, lo
 
 // handleUpdate applies the service config and attributes updates to the client,
 // including updating the xds_client to use, and updating the EDS name to watch.
-func (c *xdsclientWrapper) handleUpdate(config *XDSConfig, attr *attributes.Attributes) {
+func (c *xdsclientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attributes) {
 	clientChanged := c.updateXDSClient(config, attr)
 
 	var (

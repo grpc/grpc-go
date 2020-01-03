@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package balancer
+package edsbalancer
 
 import "google.golang.org/grpc/balancer"
 

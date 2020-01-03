@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package balancer
+package edsbalancer
 
 import (
 	"encoding/json"
@@ -25,9 +25,9 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-// XDSConfig represents the loadBalancingConfig section of the service config
-// for xDS balancers.
-type XDSConfig struct {
+// EDSConfig represents the loadBalancingConfig section of the service config
+// for EDS balancers.
+type EDSConfig struct {
 	serviceconfig.LoadBalancingConfig
 	// BalancerName represents the load balancer to use.
 	BalancerName string
@@ -46,10 +46,10 @@ type XDSConfig struct {
 	LrsLoadReportingServerName *string
 }
 
-// xdsConfigJSON is the intermediate unmarshal result of XDSConfig. ChildPolicy
+// edsConfigJSON is the intermediate unmarshal result of EDSConfig. ChildPolicy
 // and Fallbackspolicy are post-processed, and for each, the first installed
 // policy is kept.
-type xdsConfigJSON struct {
+type edsConfigJSON struct {
 	BalancerName               string
 	ChildPolicy                []*loadBalancingConfig
 	FallbackPolicy             []*loadBalancingConfig
@@ -60,8 +60,8 @@ type xdsConfigJSON struct {
 // UnmarshalJSON parses the JSON-encoded byte slice in data and stores it in l.
 // When unmarshalling, we iterate through the childPolicy/fallbackPolicy lists
 // and select the first LB policy which has been registered.
-func (l *XDSConfig) UnmarshalJSON(data []byte) error {
-	var configJSON xdsConfigJSON
+func (l *EDSConfig) UnmarshalJSON(data []byte) error {
+	var configJSON edsConfigJSON
 	if err := json.Unmarshal(data, &configJSON); err != nil {
 		return err
 	}
@@ -87,8 +87,8 @@ func (l *XDSConfig) UnmarshalJSON(data []byte) error {
 }
 
 // MarshalJSON returns a JSON encoding of l.
-func (l *XDSConfig) MarshalJSON() ([]byte, error) {
-	return nil, fmt.Errorf("XDSConfig.MarshalJSON() is unimplemented")
+func (l *EDSConfig) MarshalJSON() ([]byte, error) {
+	return nil, fmt.Errorf("EDSConfig.MarshalJSON() is unimplemented")
 }
 
 // loadBalancingConfig represents a single load balancing config,

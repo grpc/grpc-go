@@ -30,9 +30,9 @@ import (
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
 
 	xdsinternal "google.golang.org/grpc/xds/internal"
-	xdsbalancer "google.golang.org/grpc/xds/internal/balancer"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
@@ -229,7 +229,7 @@ func (b *cdsBalancer) run() {
 					break
 				}
 			}
-			lbCfg := &xdsbalancer.XDSConfig{EDSServiceName: update.cds.ServiceName}
+			lbCfg := &edsbalancer.EDSConfig{EDSServiceName: update.cds.ServiceName}
 			if update.cds.EnableLRS {
 				// An empty string here indicates that the edsBalancer
 				// should use the same xDS server for load reporting as

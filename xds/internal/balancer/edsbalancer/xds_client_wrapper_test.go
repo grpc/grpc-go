@@ -16,7 +16,7 @@
  *
  */
 
-package balancer
+package edsbalancer
 
 import (
 	"errors"
@@ -93,7 +93,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			cw.handleUpdate(&XDSConfig{
+			cw.handleUpdate(&EDSConfig{
 				BalancerName:   fakeServer.Address,
 				EDSServiceName: test.edsServiceName,
 			}, nil)
@@ -140,7 +140,7 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	defer cw.close()
 
 	xdsC := fakeclient.NewClient()
-	cw.handleUpdate(&XDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC))
+	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC))
 	gotCluster, err := xdsC.WaitForWatchEDS()
 	if err != nil {
 		t.Fatalf("xdsClient.WatchEDS failed with error: %v", err)
@@ -175,7 +175,7 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 
 	// Verify that the eds watch is registered for the expected resource name.
 	xdsC1 := fakeclient.NewClient()
-	cw.handleUpdate(&XDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC1))
+	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC1))
 	gotCluster, err := xdsC1.WaitForWatchEDS()
 	if err != nil {
 		t.Fatalf("xdsClient.WatchEDS failed with error: %v", err)
@@ -189,7 +189,7 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 	// (because clientWrapper only closes clients that it creates, it does not
 	// close client that are passed through attributes).
 	xdsC2 := fakeclient.NewClient()
-	cw.handleUpdate(&XDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC2))
+	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC2))
 	gotCluster, err = xdsC2.WaitForWatchEDS()
 	if err != nil {
 		t.Fatalf("xdsClient.WatchEDS failed with error: %v", err)

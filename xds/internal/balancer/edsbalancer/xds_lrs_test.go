@@ -16,7 +16,7 @@
  *
  */
 
-package balancer
+package edsbalancer
 
 import (
 	"testing"
@@ -33,7 +33,7 @@ import (
 // server (empty string).
 func (s) TestXDSLoadReporting(t *testing.T) {
 	builder := balancer.Get(edsName)
-	cc := newTestClientConn()
+	cc := newNoopTestClientConn()
 	edsB, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
 	if !ok {
 		t.Fatalf("builder.Build(%s) returned type {%T}, want {*edsBalancer}", edsName, edsB)
@@ -43,7 +43,7 @@ func (s) TestXDSLoadReporting(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, xdsC)},
-		BalancerConfig: &XDSConfig{LrsLoadReportingServerName: new(string)},
+		BalancerConfig: &EDSConfig{LrsLoadReportingServerName: new(string)},
 	})
 
 	gotCluster, err := xdsC.WaitForWatchEDS()

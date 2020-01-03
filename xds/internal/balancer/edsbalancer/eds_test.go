@@ -16,7 +16,7 @@
  *
  */
 
-package balancer
+package edsbalancer
 
 import (
 	"bytes"
@@ -68,21 +68,21 @@ func Test(t *testing.T) {
 
 const testBalancerNameFooBar = "foo.bar"
 
-func newTestClientConn() *testClientConn {
-	return &testClientConn{newSubConns: testutils.NewChannelWithSize(10)}
+func newNoopTestClientConn() *noopTestClientConn {
+	return &noopTestClientConn{}
 }
 
-type testClientConn struct {
+// noopTestClientConn is used in EDS balancer config update tests that only
+// cover the config update handling, but not SubConn/load-balancing.
+type noopTestClientConn struct {
 	balancer.ClientConn
-	newSubConns *testutils.Channel
 }
 
-func (t *testClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	t.newSubConns.Send(addrs)
+func (t *noopTestClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	return nil, nil
 }
 
-func (testClientConn) Target() string { return testServiceName }
+func (noopTestClientConn) Target() string { return testServiceName }
 
 type scStateChange struct {
 	sc    balancer.SubConn
@@ -131,7 +131,7 @@ func (f *fakeEDSBalancer) waitForSubConnStateChange(wantState *scStateChange) er
 	return nil
 }
 
-func newFakeEDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerInterface {
+func newFakeEDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerImplInterface {
 	return &fakeEDSBalancer{
 		cc:                 cc,
 		childPolicy:        testutils.NewChannelWithSize(10),
@@ -188,7 +188,7 @@ func waitForNewEDSLB(t *testing.T, ch *testutils.Channel) *fakeEDSBalancer {
 // cleanup.
 func setup(edsLBCh *testutils.Channel, xdsClientCh *testutils.Channel) func() {
 	origNewEDSBalancer := newEDSBalancer
-	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerInterface {
+	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerImplInterface {
 		edsLB := newFakeEDSBalancer(cc, loadStore)
 		defer func() { edsLBCh.Send(edsLB) }()
 		return edsLB
@@ -221,7 +221,7 @@ func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
 	defer cancel()
 
 	builder := balancer.Get(edsName)
-	cc := newTestClientConn()
+	cc := newNoopTestClientConn()
 	edsB, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
 	if !ok {
 		t.Fatalf("builder.Build(%s) returned type {%T}, want {*edsBalancer}", edsName, edsB)
@@ -233,7 +233,7 @@ func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
 		balancerName := fmt.Sprintf("balancer-%d", i)
 		edsB.UpdateClientConnState(balancer.ClientConnState{
 			ResolverState: resolver.State{Addresses: addrs},
-			BalancerConfig: &XDSConfig{
+			BalancerConfig: &EDSConfig{
 				BalancerName:   balancerName,
 				EDSServiceName: testEDSClusterName,
 			},
@@ -303,7 +303,7 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 	defer cancel()
 
 	builder := balancer.Get(edsName)
-	cc := newTestClientConn()
+	cc := newNoopTestClientConn()
 	edsB, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*edsBalancer)
 	if !ok {
 		t.Fatalf("builder.Build(%s) returned type {%T}, want {*edsBalancer}", edsName, edsB)
@@ -311,7 +311,7 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 	defer edsB.Close()
 
 	edsB.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &XDSConfig{
+		BalancerConfig: &EDSConfig{
 			BalancerName: testBalancerNameFooBar,
 			ChildPolicy: &loadBalancingConfig{
 				Name:   fakeBalancerA,
@@ -329,7 +329,7 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 	})
 
 	edsB.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &XDSConfig{
+		BalancerConfig: &EDSConfig{
 			BalancerName: testBalancerNameFooBar,
 			ChildPolicy: &loadBalancingConfig{
 				Name:   fakeBalancerB,
@@ -353,7 +353,7 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	defer cancel()
 
 	builder := balancer.Get(edsName)
-	cc := newTestClientConn()
+	cc := newNoopTestClientConn()
 	edsB, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
 	if !ok {
 		t.Fatalf("builder.Build(%s) returned type {%T}, want {*edsBalancer}", edsName, edsB)
@@ -363,7 +363,7 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
 	edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: addrs},
-		BalancerConfig: &XDSConfig{
+		BalancerConfig: &EDSConfig{
 			BalancerName:   testBalancerNameFooBar,
 			EDSServiceName: testEDSClusterName,
 		},
@@ -411,7 +411,7 @@ func TestXDSBalancerConfigParsing(t *testing.T) {
 		{
 			name: "jsonpb-generated",
 			js:   b.Bytes(),
-			want: &XDSConfig{
+			want: &EDSConfig{
 				ChildPolicy: &loadBalancingConfig{
 					Name:   "round_robin",
 					Config: json.RawMessage("{}"),
@@ -444,7 +444,7 @@ func TestXDSBalancerConfigParsing(t *testing.T) {
   "edsServiceName": "eds.service",
   "lrsLoadReportingServerName": "lrs.server"
 }`),
-			want: &XDSConfig{
+			want: &EDSConfig{
 				BalancerName: "fake.foo.bar",
 				ChildPolicy: &loadBalancingConfig{
 					Name:   "fake_balancer_A",
@@ -468,7 +468,7 @@ func TestXDSBalancerConfigParsing(t *testing.T) {
   "balancerName": "fake.foo.bar",
   "edsServiceName": "eds.service"
 }`),
-			want: &XDSConfig{
+			want: &EDSConfig{
 				BalancerName:               "fake.foo.bar",
 				EDSServiceName:             testEDSName,
 				LrsLoadReportingServerName: nil,
@@ -494,17 +494,17 @@ func TestLoadbalancingConfigParsing(t *testing.T) {
 	tests := []struct {
 		name string
 		s    string
-		want *XDSConfig
+		want *EDSConfig
 	}{
 		{
 			name: "empty",
 			s:    "{}",
-			want: &XDSConfig{},
+			want: &EDSConfig{},
 		},
 		{
 			name: "success1",
 			s:    `{"childPolicy":[{"pick_first":{}}]}`,
-			want: &XDSConfig{
+			want: &EDSConfig{
 				ChildPolicy: &loadBalancingConfig{
 					Name:   "pick_first",
 					Config: json.RawMessage(`{}`),
@@ -514,7 +514,7 @@ func TestLoadbalancingConfigParsing(t *testing.T) {
 		{
 			name: "success2",
 			s:    `{"childPolicy":[{"round_robin":{}},{"pick_first":{}}]}`,
-			want: &XDSConfig{
+			want: &EDSConfig{
 				ChildPolicy: &loadBalancingConfig{
 					Name:   "round_robin",
 					Config: json.RawMessage(`{}`),
@@ -524,7 +524,7 @@ func TestLoadbalancingConfigParsing(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var cfg XDSConfig
+			var cfg EDSConfig
 			if err := json.Unmarshal([]byte(tt.s), &cfg); err != nil || !reflect.DeepEqual(&cfg, tt.want) {
 				t.Errorf("test name: %s, parseFullServiceConfig() = %+v, err: %v, want %+v, <nil>", tt.name, cfg, err, tt.want)
 			}
