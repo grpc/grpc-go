@@ -718,15 +718,6 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	var rb *transport.ReturnBuffer
 	if f != nil {
 		rb = transport.NewReturnBuffer(1, f)
-		// commitAttempt() may happen in a recv goroutine during retry, so we
-		// cannot assume mutual exclusion.
-		cs.mu.Lock()
-		if !cs.committed {
-			cs.returnBuffers = append(cs.returnBuffers, rb)
-		} else {
-			rb.Done()
-		}
-		cs.mu.Unlock()
 	}
 
 	// TODO(dfawley): should we be checking len(data) instead?
@@ -742,6 +733,22 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		return err
 	}
 	err = cs.withRetry(op, func() { cs.bufferForRetryLocked(len(hdr)+len(payload), op) })
+
+	if rb != nil {
+		// If this stream is not committed, the buffer needs to be kept for future
+		// attempts. It's ref-count will be subtracted when committing.
+		//
+		// If this stream is already committed, the ref-count can be subtracted
+		// here.
+		cs.mu.Lock()
+		if !cs.committed {
+			cs.returnBuffers = append(cs.returnBuffers, rb)
+		} else {
+			rb.Done()
+		}
+		cs.mu.Unlock()
+	}
+
 	if cs.binlog != nil && err == nil {
 		cs.binlog.Log(&binarylog.ClientMessage{
 			OnClientSide: true,
