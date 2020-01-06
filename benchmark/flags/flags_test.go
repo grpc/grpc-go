@@ -111,3 +111,33 @@ func TestIntSlice(t *testing.T) {
 		}
 	}
 }
+
+func TestStringSlice(t *testing.T) {
+	defaultVal := []string{"bar", "baz"}
+	tests := []struct {
+		args    string
+		wantVal []string
+		wantErr bool
+	}{
+		{"-name=foobar", []string{"foobar"}, false},
+		{"-name=foo,bar", []string{"foo", "bar"}, false},
+		{`-name="foo,bar",baz`, []string{"foo,bar", "baz"}, false},
+		{`-name="foo,bar""",baz`, []string{`foo,bar"`, "baz"}, false},
+	}
+
+	for _, test := range tests {
+		flag.CommandLine = flag.NewFlagSet("test", flag.ContinueOnError)
+		var w = StringSlice("name", defaultVal, "usage")
+		err := flag.CommandLine.Parse([]string{test.args})
+		switch {
+		case !test.wantErr && err != nil:
+			t.Errorf("failed to parse command line args {%v}: %v", test.args, err)
+		case test.wantErr && err == nil:
+			t.Errorf("flag.Parse(%v) = nil, want non-nil error", test.args)
+		default:
+			if !reflect.DeepEqual(*w, test.wantVal) {
+				t.Errorf("flag value is %v, want %v", *w, test.wantVal)
+			}
+		}
+	}
+}

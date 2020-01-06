@@ -24,6 +24,7 @@ package flags
 
 import (
 	"bytes"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"strconv"
@@ -137,4 +138,41 @@ func (isv *intSliceValue) String() string {
 		b.WriteString(strconv.Itoa(n))
 	}
 	return b.String()
+}
+
+type stringSliceValue []string
+
+// StringSlice returns a flag representing a slice of strings.
+func StringSlice(name string, defaultVal []string, usage string) *[]string {
+	ss := make([]string, len(defaultVal))
+	copy(ss, defaultVal)
+	ssv := (*stringSliceValue)(&ss)
+	flag.CommandLine.Var(ssv, name, usage)
+	return &ss
+}
+
+// escapedCommaSplit splits a comma-separated list of strings in the same way
+// CSV files work (escaping a comma requires double-quotes).
+func escapedCommaSplit(str string) ([]string, error) {
+	r := csv.NewReader(strings.NewReader(str))
+	ret, err := r.Read()
+	if err != nil {
+		return nil, err
+	}
+	return ret, nil
+}
+
+// Set implements the flag.Value interface.
+func (ss *stringSliceValue) Set(str string) error {
+	var err error
+	*ss, err = escapedCommaSplit(str)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// String implements the flag.Value interface.
+func (ss *stringSliceValue) String() string {
+	return strings.Join(*ss, ",")
 }
