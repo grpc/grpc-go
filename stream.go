@@ -717,7 +717,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 
 	var rb *transport.ReturnBuffer
 	if f != nil {
-		rb = transport.NewReturnBuffer(2, f)
+		rb = transport.NewReturnBuffer(1, f)
 	}
 
 	// TODO(dfawley): should we be checking len(data) instead?
@@ -1212,9 +1212,9 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 	var rb *transport.ReturnBuffer
 	if f != nil {
 		// addrConnStream does not have retries, so there's no point waiting for
-		// the query to be committed. As a result, we use a initial counter of 1
-		// instead of 2 like in serverStream and clientStream.
-		rb = transport.NewReturnBuffer(1, f)
+		// the query to be committed. As a result, we use a initial counter of 0
+		// instead of 1 like in serverStream and clientStream.
+		rb = transport.NewReturnBuffer(0, f)
 		// We can assume mutual exclusion on this slice as only one SendMsg is
 		// supported concurrently.
 		as.returnBuffers = append(as.returnBuffers, rb)
@@ -1468,7 +1468,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 
 	var rb *transport.ReturnBuffer
 	if f != nil {
-		rb = transport.NewReturnBuffer(2, f)
+		rb = transport.NewReturnBuffer(1, f)
 		// We can assume mutual exclusion on this slice as only one SendMsg is
 		// supported concurrently.
 		ss.returnBuffers = append(ss.returnBuffers, rb)
