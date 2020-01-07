@@ -851,9 +851,11 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 
 	if attemptBufferReuse && len(data) >= bufferReuseThreshold {
 		if bcodec, ok := codec.(bufferReturner); ok {
-			opts.ReturnBuffer = transport.NewReturnBuffer(1, func() {
+			rb := transport.NewReturnBuffer(1, func() {
 				bcodec.ReturnBuffer(data)
 			})
+			opts.ReturnBuffer = rb
+			defer rb.Done()
 		}
 	}
 
@@ -1066,9 +1068,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	}
 	opts := &transport.Options{Last: true}
 	err = s.sendResponse(t, stream, reply, cp, opts, comp, sh == nil && binlog == nil)
-	if opts.ReturnBuffer != nil {
-		defer opts.ReturnBuffer.Done()
-	}
 	if err != nil {
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
@@ -1214,11 +1213,6 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	// this slice internally. We may not, therefore, return this to the pool.
 	if ss.statsHandler == nil && ss.binlog == nil {
 		ss.attemptBufferReuse = true
-		defer func() {
-			for _, rb := range ss.returnBuffers {
-				rb.Done()
-			}
-		}()
 	}
 
 	// If dc is set and matches the stream's compression, use it.  Otherwise, try

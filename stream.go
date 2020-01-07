@@ -1132,26 +1132,25 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 }
 
 type addrConnStream struct {
-	s             *transport.Stream
-	ac            *addrConn
-	callHdr       *transport.CallHdr
-	cancel        context.CancelFunc
-	opts          []CallOption
-	callInfo      *callInfo
-	t             transport.ClientTransport
-	ctx           context.Context
-	sentLast      bool
-	desc          *StreamDesc
-	codec         baseCodec
-	cp            Compressor
-	comp          encoding.Compressor
-	decompSet     bool
-	dc            Decompressor
-	decomp        encoding.Compressor
-	p             *parser
-	mu            sync.Mutex
-	finished      bool
-	returnBuffers []*transport.ReturnBuffer
+	s         *transport.Stream
+	ac        *addrConn
+	callHdr   *transport.CallHdr
+	cancel    context.CancelFunc
+	opts      []CallOption
+	callInfo  *callInfo
+	t         transport.ClientTransport
+	ctx       context.Context
+	sentLast  bool
+	desc      *StreamDesc
+	codec     baseCodec
+	cp        Compressor
+	comp      encoding.Compressor
+	decompSet bool
+	dc        Decompressor
+	decomp    encoding.Compressor
+	p         *parser
+	mu        sync.Mutex
+	finished  bool
 }
 
 func (as *addrConnStream) Header() (metadata.MD, error) {
@@ -1211,13 +1210,8 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 
 	var rb *transport.ReturnBuffer
 	if f != nil {
-		// addrConnStream does not have retries, so there's no point waiting for
-		// the query to be committed. As a result, we use a initial counter of 0
-		// instead of 1 like in serverStream and clientStream.
-		rb = transport.NewReturnBuffer(0, f)
-		// We can assume mutual exclusion on this slice as only one SendMsg is
-		// supported concurrently.
-		as.returnBuffers = append(as.returnBuffers, rb)
+		rb = transport.NewReturnBuffer(1, f)
+		defer rb.Done()
 	}
 
 	// TODO(dfawley): should we be checking len(data) instead?
@@ -1397,7 +1391,6 @@ type serverStream struct {
 
 	mu sync.Mutex // protects trInfo.tr after the service handler runs.
 
-	returnBuffers      []*transport.ReturnBuffer
 	attemptBufferReuse bool
 }
 
@@ -1469,9 +1462,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	var rb *transport.ReturnBuffer
 	if f != nil {
 		rb = transport.NewReturnBuffer(1, f)
-		// We can assume mutual exclusion on this slice as only one SendMsg is
-		// supported concurrently.
-		ss.returnBuffers = append(ss.returnBuffers, rb)
+		defer rb.Done()
 	}
 
 	// TODO(dfawley): should we be checking len(data) instead?
