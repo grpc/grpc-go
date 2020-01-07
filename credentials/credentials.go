@@ -52,6 +52,8 @@ type PerRPCCredentials interface {
 }
 
 // SecurityLevel defines the protection level on an established connection.
+//
+// This API is experimental.
 type SecurityLevel int
 
 const (
@@ -80,6 +82,8 @@ func (s SecurityLevel) String() string {
 // CommonAuthInfo contains authenticated information common to AuthInfo implementations.
 // It should be embedded in a struct implementing AuthInfo to provide additional information
 // about the credentials.
+//
+// This API is experimental.
 type CommonAuthInfo struct {
 	SecurityLevel SecurityLevel
 }
