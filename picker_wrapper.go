@@ -66,7 +66,7 @@ func newPickerWrapper() *pickerWrapper {
 	return &pickerWrapper{blockingCh: make(chan struct{}), connErr: &connErr{}}
 }
 
-// updatePicker is called by UpdateBalancerState. It unblocks all blocked pick.
+// updatePicker updates the picker and unblocks all blocked picks.
 func (pw *pickerWrapper) updatePicker(p balancer.Picker) {
 	pw.mu.Lock()
 	if pw.done {

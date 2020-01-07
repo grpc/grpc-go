@@ -41,15 +41,6 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
-func assertState(wantState connectivity.State, cc *ClientConn) (connectivity.State, bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	var state connectivity.State
-	for state = cc.GetState(); state != wantState && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
-	}
-	return state, state == wantState
-}
-
 func (s) TestDialWithTimeout(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {

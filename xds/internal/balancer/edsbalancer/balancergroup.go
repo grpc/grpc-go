@@ -66,10 +66,6 @@ type subBalancerWithConfig struct {
 	balancer balancer.Balancer
 }
 
-func (sbc *subBalancerWithConfig) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
-	grpclog.Fatalln("not implemented")
-}
-
 // UpdateState overrides balancer.ClientConn, to keep state and picker.
 func (sbc *subBalancerWithConfig) UpdateState(state balancer.State) {
 	sbc.mu.Lock()

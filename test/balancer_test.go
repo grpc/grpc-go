@@ -82,7 +82,7 @@ func (b *testBalancer) UpdateClientConnState(state balancer.ClientConnState) err
 }
 
 func (b *testBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
-	grpclog.Infof("testBalancer: HandleSubConnStateChange: %p, %v", sc, s)
+	grpclog.Infof("testBalancer: UpdateSubConnState: %p, %v", sc, s)
 	if b.sc != sc {
 		grpclog.Infof("testBalancer: ignored state change because sc is not recognized")
 		return

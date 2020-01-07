@@ -25,7 +25,6 @@ import (
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/resolver"
@@ -46,7 +45,7 @@ var (
 
 	// newEDSBalancer is a helper function to build a new edsBalancer and will be
 	// overridden in unittests.
-	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.V2Balancer {
+	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 		builder := balancer.Get(edsName)
 		if builder == nil {
 			grpclog.Errorf("xds: no balancer builder with name %v", edsName)
@@ -55,7 +54,7 @@ var (
 		// We directly pass the parent clientConn to the
 		// underlying edsBalancer because the cdsBalancer does
 		// not deal with subConns.
-		return builder.Build(cc, opts).(balancer.V2Balancer)
+		return builder.Build(cc, opts)
 	}
 )
 
@@ -150,7 +149,7 @@ type cdsBalancer struct {
 	updateCh       *buffer.Unbounded
 	client         xdsClientInterface
 	cancelWatch    func()
-	edsLB          balancer.V2Balancer
+	edsLB          balancer.Balancer
 	clusterToWatch string
 
 	// The only thing protected by this mutex is the closed boolean. This is
@@ -339,12 +338,4 @@ func (b *cdsBalancer) isClosed() bool {
 	closed := b.closed
 	b.mu.Unlock()
 	return closed
-}
-
-func (b *cdsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	grpclog.Error("UpdateSubConnState should be called instead of HandleSubConnStateChange")
-}
-
-func (b *cdsBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
-	grpclog.Error("UpdateClientConnState should be called instead of HandleResolvedAddrs")
 }

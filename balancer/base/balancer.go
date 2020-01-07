@@ -106,7 +106,7 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 			b.cc.RemoveSubConn(sc)
 			delete(b.subConns, a)
 			// Keep the state of this sc in b.scStates until sc's state becomes Shutdown.
-			// The entry will be deleted in HandleSubConnStateChange.
+			// The entry will be deleted in UpdateSubConnState.
 		}
 	}
 	return nil
@@ -138,10 +138,6 @@ func (b *baseBalancer) regeneratePicker(err error) {
 		}
 	}
 	b.picker = b.pickerBuilder.Build(PickerBuildInfo{ReadySCs: readySCs})
-}
-
-func (b *baseBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
-	panic("not implemented")
 }
 
 func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
