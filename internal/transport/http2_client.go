@@ -834,7 +834,17 @@ func (t *http2Client) GracefulClose() {
 
 // Write formats the data into HTTP2 data frame(s) and sends it out. The caller
 // should proceed only if Write returns nil.
-func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
+//
+// If opts.ReturnBuffer is not nil, Write makes sure opts.ReturnBuffer.Done() is
+// called exactly once:
+// - in loopy writer, when the bytes are sent out
+// - at the end of this function, when error happens before loopy writer
+func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) (err error) {
+	defer func() {
+		if rb := opts.ReturnBuffer; rb != nil && err != nil {
+			rb.Done()
+		}
+	}()
 	if opts.Last {
 		// If it's the last message, update stream state.
 		if !s.compareAndSwapState(streamActive, streamWriteDone) {
@@ -862,9 +872,6 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		if err := s.wq.get(int32(len(hdr) + len(data))); err != nil {
 			return err
 		}
-	}
-	if df.rb != nil {
-		df.rb.Add(1)
 	}
 	return t.controlBuf.put(df)
 }
