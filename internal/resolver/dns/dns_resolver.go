@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -278,6 +279,9 @@ func handleDNSError(err error, lookupType string) error {
 func (d *dnsResolver) lookupTXT() *serviceconfig.ParseResult {
 	ss, err := d.resolver.LookupTXT(d.ctx, txtPrefix+d.host)
 	if err != nil {
+		if envconfig.TXTErrIgnore {
+			return nil
+		}
 		if err = handleDNSError(err, "TXT"); err != nil {
 			return &serviceconfig.ParseResult{Err: err}
 		}
