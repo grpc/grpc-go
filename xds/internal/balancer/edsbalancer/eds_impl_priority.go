@@ -45,7 +45,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityChange() {
 	// Everything was removed by EDS.
 	if !edsImpl.priorityLowest.isSet() {
 		edsImpl.priorityInUse = newPriorityTypeUnset()
-		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPickerV2(balancer.ErrTransientFailure)})
+		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(balancer.ErrTransientFailure)})
 		return
 	}
 
@@ -69,7 +69,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityChange() {
 			// We don't have an old state to send to parent, but we also don't
 			// want parent to keep using picker from old_priorityInUse. Send an
 			// update to trigger block picks until a new picker is ready.
-			edsImpl.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: base.NewErrPickerV2(balancer.ErrNoSubConnAvailable)})
+			edsImpl.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: base.NewErrPicker(balancer.ErrNoSubConnAvailable)})
 		}
 		return
 	}

@@ -74,11 +74,7 @@ func (ccb *ccBalancerWrapper) watcher() {
 			}
 			ccb.balancerMu.Lock()
 			su := t.(*scStateUpdate)
-			if ub, ok := ccb.balancer.(balancer.V2Balancer); ok {
-				ub.UpdateSubConnState(su.sc, balancer.SubConnState{ConnectivityState: su.state, ConnectionError: su.err})
-			} else {
-				ccb.balancer.HandleSubConnStateChange(su.sc, su.state)
-			}
+			ccb.balancer.UpdateSubConnState(su.sc, balancer.SubConnState{ConnectivityState: su.state, ConnectionError: su.err})
 			ccb.balancerMu.Unlock()
 		case <-ccb.done.Done():
 		}
@@ -123,19 +119,14 @@ func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s co
 func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnState) error {
 	ccb.balancerMu.Lock()
 	defer ccb.balancerMu.Unlock()
-	if ub, ok := ccb.balancer.(balancer.V2Balancer); ok {
-		return ub.UpdateClientConnState(*ccs)
-	}
-	ccb.balancer.HandleResolvedAddrs(ccs.ResolverState.Addresses, nil)
+	return ccb.balancer.UpdateClientConnState(*ccs)
 	return nil
 }
 
 func (ccb *ccBalancerWrapper) resolverError(err error) {
-	if ub, ok := ccb.balancer.(balancer.V2Balancer); ok {
-		ccb.balancerMu.Lock()
-		ub.ResolverError(err)
-		ccb.balancerMu.Unlock()
-	}
+	ccb.balancerMu.Lock()
+	ccb.balancer.ResolverError(err)
+	ccb.balancerMu.Unlock()
 }
 
 func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
@@ -199,7 +190,7 @@ func (ccb *ccBalancerWrapper) UpdateState(s balancer.State) {
 	// case where we wait for ready and then perform an RPC.  If the picker is
 	// updated later, we could call the "connecting" picker when the state is
 	// updated, and then call the "ready" picker after the picker gets updated.
-	ccb.cc.blockingpicker.updatePickerV2(s.Picker)
+	ccb.cc.blockingpicker.updatePicker(s.Picker)
 	ccb.cc.csMgr.updateState(s.ConnectivityState)
 }
 

@@ -62,37 +62,43 @@ func (*testBalancer) Name() string {
 	return testBalancerName
 }
 
-func (b *testBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
+func (*testBalancer) ResolverError(err error) {
+	panic("not implemented")
+}
+
+func (b *testBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	// Only create a subconn at the first time.
-	if err == nil && b.sc == nil {
-		b.sc, err = b.cc.NewSubConn(addrs, b.newSubConnOptions)
+	if b.sc == nil {
+		var err error
+		b.sc, err = b.cc.NewSubConn(state.ResolverState.Addresses, b.newSubConnOptions)
 		if err != nil {
 			grpclog.Errorf("testBalancer: failed to NewSubConn: %v", err)
-			return
+			return nil
 		}
 		b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: &picker{sc: b.sc, bal: b}})
 		b.sc.Connect()
 	}
+	return nil
 }
 
-func (b *testBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+func (b *testBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
 	grpclog.Infof("testBalancer: HandleSubConnStateChange: %p, %v", sc, s)
 	if b.sc != sc {
 		grpclog.Infof("testBalancer: ignored state change because sc is not recognized")
 		return
 	}
-	if s == connectivity.Shutdown {
+	if s.ConnectivityState == connectivity.Shutdown {
 		b.sc = nil
 		return
 	}
 
-	switch s {
+	switch s.ConnectivityState {
 	case connectivity.Ready, connectivity.Idle:
-		b.cc.UpdateState(balancer.State{ConnectivityState: s, Picker: &picker{sc: sc, bal: b}})
+		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{sc: sc, bal: b}})
 	case connectivity.Connecting:
-		b.cc.UpdateState(balancer.State{ConnectivityState: s, Picker: &picker{err: balancer.ErrNoSubConnAvailable, bal: b}})
+		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{err: balancer.ErrNoSubConnAvailable, bal: b}})
 	case connectivity.TransientFailure:
-		b.cc.UpdateState(balancer.State{ConnectivityState: s, Picker: &picker{err: balancer.ErrTransientFailure, bal: b}})
+		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{err: balancer.ErrTransientFailure, bal: b}})
 	}
 }
 
@@ -279,6 +285,10 @@ func newTestBalancerKeepAddresses() *testBalancerKeepAddresses {
 	}
 }
 
+func (testBalancerKeepAddresses) ResolverError(err error) {
+	panic("not implemented")
+}
+
 func (b *testBalancerKeepAddresses) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
 	return b
 }
@@ -287,11 +297,12 @@ func (*testBalancerKeepAddresses) Name() string {
 	return testBalancerKeepAddressesName
 }
 
-func (b *testBalancerKeepAddresses) HandleResolvedAddrs(addrs []resolver.Address, err error) {
-	b.addrsChan <- addrs
+func (b *testBalancerKeepAddresses) UpdateClientConnState(state balancer.ClientConnState) error {
+	b.addrsChan <- state.ResolverState.Addresses
+	return nil
 }
 
-func (testBalancerKeepAddresses) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+func (testBalancerKeepAddresses) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
 	panic("not used")
 }
 

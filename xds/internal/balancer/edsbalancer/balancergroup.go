@@ -95,11 +95,7 @@ func (sbc *subBalancerWithConfig) updateBalancerStateWithCachedPicker() {
 func (sbc *subBalancerWithConfig) startBalancer() {
 	b := sbc.builder.Build(sbc, balancer.BuildOptions{})
 	sbc.balancer = b
-	if ub, ok := b.(balancer.V2Balancer); ok {
-		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: sbc.addrs}})
-	} else {
-		b.HandleResolvedAddrs(sbc.addrs, nil)
-	}
+	b.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: sbc.addrs}})
 }
 
 func (sbc *subBalancerWithConfig) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
@@ -111,11 +107,7 @@ func (sbc *subBalancerWithConfig) handleSubConnStateChange(sc balancer.SubConn, 
 		// happen.
 		return
 	}
-	if ub, ok := b.(balancer.V2Balancer); ok {
-		ub.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: state})
-	} else {
-		b.HandleSubConnStateChange(sc, state)
-	}
+	b.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: state})
 }
 
 func (sbc *subBalancerWithConfig) updateAddrs(addrs []resolver.Address) {
@@ -132,11 +124,7 @@ func (sbc *subBalancerWithConfig) updateAddrs(addrs []resolver.Address) {
 		// it's the lower priority, but it can still get address updates.
 		return
 	}
-	if ub, ok := b.(balancer.V2Balancer); ok {
-		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: addrs}})
-	} else {
-		b.HandleResolvedAddrs(addrs, nil)
-	}
+	b.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: addrs}})
 }
 
 func (sbc *subBalancerWithConfig) stopBalancer() {
@@ -146,7 +134,7 @@ func (sbc *subBalancerWithConfig) stopBalancer() {
 
 type pickerState struct {
 	weight uint32
-	picker balancer.V2Picker
+	picker balancer.Picker
 	state  connectivity.State
 }
 
@@ -557,7 +545,7 @@ func buildPickerAndState(m map[internal.Locality]*pickerState) balancer.State {
 		aggregatedState = connectivity.TransientFailure
 	}
 	if aggregatedState == connectivity.TransientFailure {
-		return balancer.State{aggregatedState, base.NewErrPickerV2(balancer.ErrTransientFailure)}
+		return balancer.State{aggregatedState, base.NewErrPicker(balancer.ErrTransientFailure)}
 	}
 	return balancer.State{aggregatedState, newPickerGroup(readyPickerWithWeights)}
 }
@@ -593,7 +581,7 @@ func (pg *pickerGroup) Pick(info balancer.PickInfo) (balancer.PickResult, error)
 	if pg.length <= 0 {
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
-	p := pg.w.Next().(balancer.V2Picker)
+	p := pg.w.Next().(balancer.Picker)
 	return p.Pick(info)
 }
 
@@ -603,13 +591,13 @@ const (
 )
 
 type loadReportPicker struct {
-	p balancer.V2Picker
+	p balancer.Picker
 
 	id        internal.Locality
 	loadStore lrs.Store
 }
 
-func newLoadReportPicker(p balancer.V2Picker, id internal.Locality, loadStore lrs.Store) *loadReportPicker {
+func newLoadReportPicker(p balancer.Picker, id internal.Locality, loadStore lrs.Store) *loadReportPicker {
 	return &loadReportPicker{
 		p:         p,
 		id:        id,

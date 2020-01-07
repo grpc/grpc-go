@@ -20,7 +20,6 @@ package grpc
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"sync"
 
@@ -32,33 +31,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// v2PickerWrapper wraps a balancer.Picker while providing the
-// balancer.V2Picker API.  It requires a pickerWrapper to generate errors
-// including the latest connectionError.  To be deleted when balancer.Picker is
-// updated to the balancer.V2Picker API.
-type v2PickerWrapper struct {
-	picker  balancer.Picker
-	connErr *connErr
-}
-
-func (v *v2PickerWrapper) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	sc, done, err := v.picker.Pick(info.Ctx, info)
-	if err != nil {
-		if err == balancer.ErrTransientFailure {
-			return balancer.PickResult{}, balancer.TransientFailureError(fmt.Errorf("%v, latest connection error: %v", err, v.connErr.connectionError()))
-		}
-		return balancer.PickResult{}, err
-	}
-	return balancer.PickResult{SubConn: sc, Done: done}, nil
-}
-
 // pickerWrapper is a wrapper of balancer.Picker. It blocks on certain pick
 // actions and unblock when there's a picker update.
 type pickerWrapper struct {
 	mu         sync.Mutex
 	done       bool
 	blockingCh chan struct{}
-	picker     balancer.V2Picker
+	picker     balancer.Picker
 
 	// The latest connection error.  TODO: remove when V1 picker is deprecated;
 	// balancer should be responsible for providing the error.
@@ -89,11 +68,6 @@ func newPickerWrapper() *pickerWrapper {
 
 // updatePicker is called by UpdateBalancerState. It unblocks all blocked pick.
 func (pw *pickerWrapper) updatePicker(p balancer.Picker) {
-	pw.updatePickerV2(&v2PickerWrapper{picker: p, connErr: pw.connErr})
-}
-
-// updatePicker is called by UpdateBalancerState. It unblocks all blocked pick.
-func (pw *pickerWrapper) updatePickerV2(p balancer.V2Picker) {
 	pw.mu.Lock()
 	if pw.done {
 		pw.mu.Unlock()

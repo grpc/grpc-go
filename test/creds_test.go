@@ -66,7 +66,7 @@ func (c *testCredsBundle) NewWithMode(mode string) (credentials.Bundle, error) {
 }
 
 func (s) TestCredsBundleBoth(t *testing.T) {
-	te := newTest(t, env{name: "creds-bundle", network: "tcp", balancer: "v1", security: "empty"})
+	te := newTest(t, env{name: "creds-bundle", network: "tcp", security: "empty"})
 	te.tapHandle = authHandle
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithCredentialsBundle(&testCredsBundle{t: t}),
@@ -89,7 +89,7 @@ func (s) TestCredsBundleBoth(t *testing.T) {
 }
 
 func (s) TestCredsBundleTransportCredentials(t *testing.T) {
-	te := newTest(t, env{name: "creds-bundle", network: "tcp", balancer: "v1", security: "empty"})
+	te := newTest(t, env{name: "creds-bundle", network: "tcp", security: "empty"})
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithCredentialsBundle(&testCredsBundle{t: t, mode: bundleTLSOnly}),
 	}
@@ -111,7 +111,7 @@ func (s) TestCredsBundleTransportCredentials(t *testing.T) {
 }
 
 func (s) TestCredsBundlePerRPCCredentials(t *testing.T) {
-	te := newTest(t, env{name: "creds-bundle", network: "tcp", balancer: "v1", security: "empty"})
+	te := newTest(t, env{name: "creds-bundle", network: "tcp", security: "empty"})
 	te.tapHandle = authHandle
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithCredentialsBundle(&testCredsBundle{t: t, mode: bundlePerRPCOnly}),
