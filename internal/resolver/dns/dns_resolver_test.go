@@ -831,7 +831,11 @@ func mutateTbl(target string) func() {
 		hostLookupTbl.tbl[target] = oldHostTblEntry
 		hostLookupTbl.Unlock()
 		txtLookupTbl.Lock()
-		txtLookupTbl.tbl[txtPrefix+target] = oldTxtTblEntry
+		if len(oldTxtTblEntry) == 0 {
+			delete(txtLookupTbl.tbl, txtPrefix+target)
+		} else {
+			txtLookupTbl.tbl[txtPrefix+target] = oldTxtTblEntry
+		}
 		txtLookupTbl.Unlock()
 	}
 }
