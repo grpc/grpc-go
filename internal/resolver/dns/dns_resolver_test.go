@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -1035,6 +1036,38 @@ func TestDisableServiceConfig(t *testing.T) {
 		sc := scFromState(state)
 		if a.scWant != sc {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
+		}
+	}
+}
+
+func TestTXTError(t *testing.T) {
+	defer leakcheck.Check(t)
+	defer func(v bool) { envconfig.TXTErrIgnore = v }(envconfig.TXTErrIgnore)
+	for _, ignore := range []bool{false, true} {
+		envconfig.TXTErrIgnore = ignore
+		b := NewBuilder()
+		cc := &testClientConn{target: "ipv4.single.fake"} // has A records but not TXT records.
+		r, err := b.Build(resolver.Target{Endpoint: "ipv4.single.fake"}, cc, resolver.BuildOptions{})
+		if err != nil {
+			t.Fatalf("%v\n", err)
+		}
+		defer r.Close()
+		var cnt int
+		var state resolver.State
+		for i := 0; i < 2000; i++ {
+			state, cnt = cc.getState()
+			if cnt > 0 {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		if cnt == 0 {
+			t.Fatalf("UpdateState not called after 2s; aborting")
+		}
+		if !ignore && (state.ServiceConfig == nil || state.ServiceConfig.Err == nil) {
+			t.Errorf("state.ServiceConfig = %v; want non-nil error", state.ServiceConfig)
+		} else if ignore && state.ServiceConfig != nil {
+			t.Errorf("state.ServiceConfig = %v; want nil", state.ServiceConfig)
 		}
 	}
 }
