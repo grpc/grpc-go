@@ -43,7 +43,7 @@ const testBalancerName = "testbalancer"
 // testBalancer creates one subconn with the first address from resolved
 // addresses.
 //
-// It's used to test options for NewSubConn are applies correctly.
+// It's used to test options for NewSubConn are applied correctly.
 type testBalancer struct {
 	cc balancer.ClientConn
 	sc balancer.SubConn
