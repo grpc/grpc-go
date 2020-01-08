@@ -79,7 +79,6 @@ func (b *baseBalancer) ResolverError(err error) {
 }
 
 func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	// TODO: handle s.ResolverState.Err (log if not nil) once implemented.
 	// TODO: handle s.ResolverState.ServiceConfig?
 	if grpclog.V(2) {
 		grpclog.Infoln("base.baseBalancer: got new ClientConn state: ", s)
