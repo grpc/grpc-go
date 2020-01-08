@@ -426,11 +426,11 @@ type clientStream struct {
 	committed  bool                       // active attempt committed for retry?
 	buffer     []func(a *csAttempt) error // operations to replay on retry
 	bufferSize int                        // current size of buffer
-
 	// This is per-stream array instead of a per-attempt one because there may be
 	// multiple attempts working on the same data, but we may not free the same
 	// buffer twice.
-	returnBuffers      []*transport.ReturnBuffer
+	returnBuffers []*transport.ReturnBuffer
+
 	attemptBufferReuse bool
 }
 
@@ -718,9 +718,6 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	var rb *transport.ReturnBuffer
 	if f != nil {
 		rb = transport.NewReturnBuffer(1, f)
-		// We can assume mutual exclusion on this slice as only one SendMsg is
-		// supported concurrently.
-		cs.returnBuffers = append(cs.returnBuffers, rb)
 	}
 
 	// TODO(dfawley): should we be checking len(data) instead?
@@ -736,6 +733,22 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		return err
 	}
 	err = cs.withRetry(op, func() { cs.bufferForRetryLocked(len(hdr)+len(payload), op) })
+
+	if rb != nil {
+		// If this stream is not committed, the buffer needs to be kept for future
+		// attempts. It's ref-count will be subtracted when committing.
+		//
+		// If this stream is already committed, the ref-count can be subtracted
+		// here.
+		cs.mu.Lock()
+		if !cs.committed {
+			cs.returnBuffers = append(cs.returnBuffers, rb)
+		} else {
+			rb.Done()
+		}
+		cs.mu.Unlock()
+	}
+
 	if cs.binlog != nil && err == nil {
 		cs.binlog.Log(&binarylog.ClientMessage{
 			OnClientSide: true,
@@ -1119,26 +1132,25 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 }
 
 type addrConnStream struct {
-	s             *transport.Stream
-	ac            *addrConn
-	callHdr       *transport.CallHdr
-	cancel        context.CancelFunc
-	opts          []CallOption
-	callInfo      *callInfo
-	t             transport.ClientTransport
-	ctx           context.Context
-	sentLast      bool
-	desc          *StreamDesc
-	codec         baseCodec
-	cp            Compressor
-	comp          encoding.Compressor
-	decompSet     bool
-	dc            Decompressor
-	decomp        encoding.Compressor
-	p             *parser
-	mu            sync.Mutex
-	finished      bool
-	returnBuffers []*transport.ReturnBuffer
+	s         *transport.Stream
+	ac        *addrConn
+	callHdr   *transport.CallHdr
+	cancel    context.CancelFunc
+	opts      []CallOption
+	callInfo  *callInfo
+	t         transport.ClientTransport
+	ctx       context.Context
+	sentLast  bool
+	desc      *StreamDesc
+	codec     baseCodec
+	cp        Compressor
+	comp      encoding.Compressor
+	decompSet bool
+	dc        Decompressor
+	decomp    encoding.Compressor
+	p         *parser
+	mu        sync.Mutex
+	finished  bool
 }
 
 func (as *addrConnStream) Header() (metadata.MD, error) {
@@ -1198,13 +1210,8 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 
 	var rb *transport.ReturnBuffer
 	if f != nil {
-		// addrConnStream does not have retries, so there's no point waiting for
-		// the query to be committed. As a result, we use a initial counter of 0
-		// instead of 1 like in serverStream and clientStream.
-		rb = transport.NewReturnBuffer(0, f)
-		// We can assume mutual exclusion on this slice as only one SendMsg is
-		// supported concurrently.
-		as.returnBuffers = append(as.returnBuffers, rb)
+		rb = transport.NewReturnBuffer(1, f)
+		defer rb.Done()
 	}
 
 	// TODO(dfawley): should we be checking len(data) instead?
@@ -1384,7 +1391,6 @@ type serverStream struct {
 
 	mu sync.Mutex // protects trInfo.tr after the service handler runs.
 
-	returnBuffers      []*transport.ReturnBuffer
 	attemptBufferReuse bool
 }
 
@@ -1456,9 +1462,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	var rb *transport.ReturnBuffer
 	if f != nil {
 		rb = transport.NewReturnBuffer(1, f)
-		// We can assume mutual exclusion on this slice as only one SendMsg is
-		// supported concurrently.
-		ss.returnBuffers = append(ss.returnBuffers, rb)
+		defer rb.Done()
 	}
 
 	// TODO(dfawley): should we be checking len(data) instead?

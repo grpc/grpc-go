@@ -263,12 +263,23 @@ func (ht *serverHandlerTransport) writeCommonHeaders(s *Stream) {
 }
 
 func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
-	return ht.do(func() {
+	rb := opts.ReturnBuffer
+	if rb != nil {
+		rb.Add(1)
+	}
+	err := ht.do(func() {
 		ht.writeCommonHeaders(s)
 		ht.rw.Write(hdr)
 		ht.rw.Write(data)
 		ht.rw.(http.Flusher).Flush()
+		if rb != nil {
+			rb.Done()
+		}
 	})
+	if rb != nil && err != nil {
+		rb.Done()
+	}
+	return err
 }
 
 func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
