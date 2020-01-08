@@ -16,6 +16,7 @@
  *
  */
 
+// Package balancer installs all the xds balancers.
 package balancer
 
 import (
