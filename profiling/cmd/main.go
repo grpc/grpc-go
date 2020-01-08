@@ -16,6 +16,8 @@
  *
  */
 
+// Binary cmd is a command-line tool for profiling management. It retrieves and
+// processes data from the profiling service.
 package main
 
 import (
