@@ -188,6 +188,11 @@ func NewErrPicker(err error) balancer.Picker {
 	return &errPicker{err: err}
 }
 
+// NewErrPickerV2 is temporarily defined for backward compatibility reasons.
+//
+// Deprecated: use NewErrPicker instead.
+var NewErrPickerV2 = NewErrPicker
+
 type errPicker struct {
 	err error // Pick() always returns this err.
 }
