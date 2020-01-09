@@ -90,5 +90,5 @@ func (bb bb) Name() string { return bb.name }
 // Register registers a stub balancer builder which will call the provided
 // functions.  The name used should be unique.
 func Register(name string, bf BalancerFuncs) {
-	balancer.Register(bb{name, bf})
+	balancer.Register(bb{name: name, bf: bf})
 }

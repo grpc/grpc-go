@@ -76,7 +76,7 @@ func NewBalancerBuilder(name string, pb PickerBuilder, config Config) balancer.B
 // Deprecated: use NewBalancerBuilder instead.
 var NewBalancerBuilderV2 = NewBalancerBuilder
 
-// PickerBuilderV2 is temporarily defined for backward compatibility reasons.
+// V2PickerBuilder is temporarily defined for backward compatibility reasons.
 //
 // Deprecated: use PickerBuilder instead.
-type PickerBuilderV2 = PickerBuilder
+type V2PickerBuilder = PickerBuilder
