@@ -27,7 +27,7 @@ import "google.golang.org/grpc/balancer"
 type BalancerFuncs struct {
 	// Build is called after ClientConn and BuildOptions are set in
 	// BalancerData.  It may be used to initialize BalancerData.Data.
-	Build func(*BalancerData)
+	Init func(*BalancerData)
 
 	UpdateClientConnState func(*BalancerData, balancer.ClientConnState) error
 	ResolverError         func(*BalancerData, error)
@@ -79,8 +79,8 @@ type bb struct {
 
 func (bb bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b := &bal{bf: bb.bf, bd: &BalancerData{ClientConn: cc, BuildOptions: opts}}
-	if b.bf.Build != nil {
-		b.bf.Build(b.bd)
+	if b.bf.Init != nil {
+		b.bf.Init(b.bd)
 	}
 	return b
 }
