@@ -304,8 +304,6 @@ type Picker interface {
 	// - For all other errors, wait for ready RPCs will wait, but non-wait for
 	//   ready RPCs will be terminated with this error's Error() string and
 	//   status code Unavailable.
-	//
-	// - Any other errors terminate
 	Pick(info PickInfo) (PickResult, error)
 }
 
