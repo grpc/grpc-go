@@ -571,6 +571,9 @@ func TestTLSClone(t *testing.T) {
 		ServerNameOverride: expectedServerName,
 	}
 	c, err := NewClient(clientOptions)
+	if err != nil {
+		t.Fatalf("Failed to create new client: %v", err)
+	}
 	cc := c.Clone()
 	if cc.Info().ServerName != expectedServerName {
 		t.Fatalf("cc.Info().ServerName = %v, want %v", cc.Info().ServerName, expectedServerName)
