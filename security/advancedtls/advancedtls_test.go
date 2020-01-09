@@ -32,11 +32,12 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
 func TestClientServerHandshake(t *testing.T) {
 	// ------------------Load Client Trust Cert and Peer Cert-------------------
-	clientTrustPool, err := readTrustCert("testdata/client_trust_cert_1.pem")
+	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
 	if err != nil {
 		t.Fatalf("Client is unable to load trust certs. Error: %v", err)
 	}
@@ -50,21 +51,21 @@ func TestClientServerHandshake(t *testing.T) {
 		}
 		return results, fmt.Errorf("custom verification function failed")
 	}
-	clientPeerCert, err := tls.LoadX509KeyPair("testdata/client_cert_1.pem",
-		"testdata/client_key_1.pem")
+	clientPeerCert, err := tls.LoadX509KeyPair(testdata.Path("client_cert_1.pem"),
+		testdata.Path("client_key_1.pem"))
 	if err != nil {
 		t.Fatalf("Client is unable to parse peer certificates. Error: %v", err)
 	}
 	// ------------------Load Server Trust Cert and Peer Cert-------------------
-	serverTrustPool, err := readTrustCert("testdata/server_trust_cert_1.pem")
+	serverTrustPool, err := readTrustCert(testdata.Path("server_trust_cert_1.pem"))
 	if err != nil {
 		t.Fatalf("Server is unable to load trust certs. Error: %v", err)
 	}
 	getRootCAsForServer := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return &GetRootCAsResults{TrustCerts: serverTrustPool}, nil
 	}
-	serverPeerCert, err := tls.LoadX509KeyPair("testdata/server_cert_1.pem",
-		"testdata/server_key_1.pem")
+	serverPeerCert, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
+		testdata.Path("server_key_1.pem"))
 	if err != nil {
 		t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
 	}
@@ -538,7 +539,7 @@ func compare(a1, a2 credentials.AuthInfo) bool {
 
 func TestAdvancedTLSOverrideServerName(t *testing.T) {
 	expectedServerName := "server.name"
-	clientTrustPool, err := readTrustCert("testdata/client_trust_cert_1.pem")
+	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
 	if err != nil {
 		t.Fatalf("Client is unable to load trust certs. Error: %v", err)
 	}
@@ -560,7 +561,7 @@ func TestAdvancedTLSOverrideServerName(t *testing.T) {
 
 func TestTLSClone(t *testing.T) {
 	expectedServerName := "server.name"
-	clientTrustPool, err := readTrustCert("testdata/client_trust_cert_1.pem")
+	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
 	if err != nil {
 		t.Fatalf("Client is unable to load trust certs. Error: %v", err)
 	}
