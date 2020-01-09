@@ -566,6 +566,7 @@ func (s) TestWaitForReady(t *testing.T) {
 	case <-time.After(5 * time.Millisecond):
 	}
 
+	// Resolve the server.  The WFR RPC should unblock and use it.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
 	if err := <-errChan; err != nil {
