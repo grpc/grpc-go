@@ -25,7 +25,7 @@ import "google.golang.org/grpc/balancer"
 // *BalancerData parameter for passing additional instance information.  Any
 // nil functions will never be called.
 type BalancerFuncs struct {
-	// Build is called after ClientConn and BuildOptions are set in
+	// Init is called after ClientConn and BuildOptions are set in
 	// BalancerData.  It may be used to initialize BalancerData.Data.
 	Init func(*BalancerData)
 
