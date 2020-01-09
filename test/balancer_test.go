@@ -20,12 +20,17 @@ package test
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net"
 	"reflect"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
@@ -34,6 +39,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
 )
@@ -355,5 +361,214 @@ func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
 	})
 	if got := <-b.addrsChan; !reflect.DeepEqual(got, nonGRPCLBAddresses) {
 		t.Fatalf("With both backend and grpclb addresses, balancer got addresses %v, want %v", got, nonGRPCLBAddresses)
+	}
+}
+
+// TestServersSwap creates two servers and verifies the client switches between
+// them when the name resolver reports the first and then the second.
+func (s) TestServersSwap(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Initialize servers
+	reg := func(username string) (addr string, cleanup func()) {
+		lis, err := net.Listen("tcp", "localhost:0")
+		if err != nil {
+			t.Fatalf("Error while listening. Err: %v", err)
+		}
+		s := grpc.NewServer()
+		ts := &funcServer{
+			unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				return &testpb.SimpleResponse{Username: username}, nil
+			},
+		}
+		testpb.RegisterTestServiceServer(s, ts)
+		go s.Serve(lis)
+		return lis.Addr().String(), s.Stop
+	}
+	const one = "1"
+	addr1, cleanup := reg(one)
+	defer cleanup()
+	const two = "2"
+	addr2, cleanup := reg(two)
+	defer cleanup()
+
+	// Initialize client
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: addr1}}})
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("Error creating client: %v", err)
+	}
+	defer cc.Close()
+	client := testpb.NewTestServiceClient(cc)
+
+	// Confirm we are connected to the first server
+	if res, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil || res.Username != one {
+		t.Fatalf("UnaryCall(_) = %v, %v; want {Username: %q}, nil", res, err, one)
+	}
+
+	// Update resolver to report only the second server
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: addr2}}})
+
+	// Loop until new RPCs talk to server two.
+	for i := 0; i < 2000; i++ {
+		if res, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+			t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
+		} else if res.Username == two {
+			break // pass
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// TestEmptyAddrs verifies client behavior when a working connection is
+// removed.  In pick first, it will continue using the old connection but in
+// round robin it will not.
+func (s) TestEmptyAddrs(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Initialize server
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	s := grpc.NewServer()
+	defer s.Stop()
+	const one = "1"
+	ts := &funcServer{
+		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Username: one}, nil
+		},
+	}
+	testpb.RegisterTestServiceServer(s, ts)
+	go s.Serve(lis)
+
+	// Initialize client
+	pfr, cleanup := manual.GenerateAndRegisterManualResolver()
+	rn := make(chan struct{})
+	pfr.ResolveNowCallback = func(resolver.ResolveNowOptions) {
+		rn <- struct{}{}
+	}
+	defer cleanup()
+	pfr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
+
+	rrr, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	rrr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
+
+	pfcc, err := grpc.DialContext(ctx, pfr.Scheme()+":///", grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("Error creating client: %v", err)
+	}
+	defer pfcc.Close()
+	pfclient := testpb.NewTestServiceClient(pfcc)
+
+	rrcc, err := grpc.DialContext(ctx, rrr.Scheme()+":///", grpc.WithInsecure(),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, roundrobin.Name)))
+	if err != nil {
+		t.Fatalf("Error creating client: %v", err)
+	}
+	defer rrcc.Close()
+	rrclient := testpb.NewTestServiceClient(rrcc)
+
+	// Confirm we are connected to the server
+	if res, err := pfclient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil || res.Username != one {
+		t.Fatalf("UnaryCall(_) = %v, %v; want {Username: %q}, nil", res, err, one)
+	}
+	if res, err := rrclient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil || res.Username != one {
+		t.Fatalf("UnaryCall(_) = %v, %v; want {Username: %q}, nil", res, err, one)
+	}
+
+	// Remove all addresses.
+	rrr.UpdateState(resolver.State{})
+	pfr.UpdateState(resolver.State{})
+
+	// Wait for a ResolveNow call on the pick first client's resolver.
+	select {
+	case <-rn:
+	case <-ctx.Done():
+		t.Fatalf("ResolveNow() never invoked after providing empty addresses")
+	}
+
+	// Confirm several new RPCs succeed on pick first but eventually fail on round robin.
+	for {
+		if _, err := rrclient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("round robin client did not fail after 5 seconds")
+	}
+
+	for i := 0; i < 10; i++ {
+		if _, err := pfclient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+			t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func (s) TestWaitForReady(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Initialize server
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	s := grpc.NewServer()
+	defer s.Stop()
+	const one = "1"
+	ts := &funcServer{
+		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Username: one}, nil
+		},
+	}
+	testpb.RegisterTestServiceServer(s, ts)
+	go s.Serve(lis)
+
+	// Initialize client
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("Error creating client: %v", err)
+	}
+	defer cc.Close()
+	client := testpb.NewTestServiceClient(cc)
+
+	// Report an error so non-WFR RPCs will give up early.
+	r.CC.ReportError(errors.New("fake resolver error"))
+
+	// Ensure the client is not connected to anything and fails non-WFR RPCs.
+	if res, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("UnaryCall(_) = %v, %v; want _, Code()=%v", res, err, codes.Unavailable)
+	}
+
+	errChan := make(chan error, 1)
+	go func() {
+		if res, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.WaitForReady(true)); err != nil || res.Username != one {
+			errChan <- fmt.Errorf("UnaryCall(_) = %v, %v; want {Username: %q}, nil", res, err, one)
+		}
+		close(errChan)
+	}()
+
+	select {
+	case err := <-errChan:
+		t.Errorf("unexpected receive from errChan before addresses provided")
+		t.Fatal(err.Error())
+	case <-time.After(5 * time.Millisecond):
+	}
+
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
+
+	if err := <-errChan; err != nil {
+		t.Fatal(err.Error())
 	}
 }
