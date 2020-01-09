@@ -15,11 +15,8 @@
  *
  */
 
-// Package resolver implements the xds resolver.
-//
-// At this point, the resolver is named xds-experimental, and doesn't do very
-// much at all, except for returning a hard-coded service config which selects
-// the xds_experimental balancer.
+// Package resolver implements the xds resolver, that does LDS and RDS to find
+// the cluster to use.
 package resolver
 
 import (
@@ -39,9 +36,7 @@ import (
 
 // xDS balancer name is xds_experimental while resolver scheme is
 // xds-experimental since "_" is not a valid character in the URL.
-// TODO: Change this scheme name to "xds-experimental" once we delete the old
-// resolver implementation in xds_resolver_old.go
-const xdsScheme = "xds-experimental-new"
+const xdsScheme = "xds-experimental"
 
 // For overriding in unittests.
 var (
