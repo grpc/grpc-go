@@ -446,7 +446,7 @@ func (s) TestEmptyAddrs(t *testing.T) {
 	testpb.RegisterTestServiceServer(s, ts)
 	go s.Serve(lis)
 
-	// Initialize client
+	// Initialize pickfirst client
 	pfr, cleanup := manual.GenerateAndRegisterManualResolver()
 	rn := make(chan struct{})
 	pfr.ResolveNowCallback = func(resolver.ResolveNowOptions) {
@@ -455,6 +455,21 @@ func (s) TestEmptyAddrs(t *testing.T) {
 	defer cleanup()
 	pfr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
+	// Confirm we are connected to the server
+	if res, err := pfclient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil || res.Username != one {
+		t.Fatalf("UnaryCall(_) = %v, %v; want {Username: %q}, nil", res, err, one)
+	}
+
+	// Remove all addresses.
+	pfr.UpdateState(resolver.State{})
+	// Wait for a ResolveNow call on the pick first client's resolver.
+	select {
+	case <-rn:
+	case <-ctx.Done():
+		t.Fatalf("ResolveNow() never invoked after providing empty addresses")
+	}
+
+	// Initialize roundrobin client
 	rrr, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 	rrr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
@@ -475,25 +490,14 @@ func (s) TestEmptyAddrs(t *testing.T) {
 	rrclient := testpb.NewTestServiceClient(rrcc)
 
 	// Confirm we are connected to the server
-	if res, err := pfclient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil || res.Username != one {
-		t.Fatalf("UnaryCall(_) = %v, %v; want {Username: %q}, nil", res, err, one)
-	}
 	if res, err := rrclient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil || res.Username != one {
 		t.Fatalf("UnaryCall(_) = %v, %v; want {Username: %q}, nil", res, err, one)
 	}
 
 	// Remove all addresses.
 	rrr.UpdateState(resolver.State{})
-	pfr.UpdateState(resolver.State{})
 
-	// Wait for a ResolveNow call on the pick first client's resolver.
-	select {
-	case <-rn:
-	case <-ctx.Done():
-		t.Fatalf("ResolveNow() never invoked after providing empty addresses")
-	}
-
-	// Confirm several new RPCs succeed on pick first but eventually fail on round robin.
+	// Confirm RPCs eventually fail on round robin.
 	for {
 		if _, err := rrclient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 			break
@@ -504,6 +508,9 @@ func (s) TestEmptyAddrs(t *testing.T) {
 		t.Fatalf("round robin client did not fail after 5 seconds")
 	}
 
+	// Confirm several new RPCs succeed on pick first.  Because rr failed
+	// before this, but we initialized and updated pf first, we should not need
+	// to check this success case for as long.
 	for i := 0; i < 10; i++ {
 		if _, err := pfclient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 			t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)

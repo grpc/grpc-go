@@ -27,7 +27,6 @@ import (
 	"net"
 	"strings"
 
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
@@ -262,12 +261,10 @@ func (e *dropRPCError) DropRPC() bool { return true }
 func (e *dropRPCError) GRPCStatus() *status.Status { return e.status }
 
 // DropRPCError wraps err in an error implementing DropRPC() bool, returning
-// true.
+// true.  If err is not a status error, it will be converted to one with code
+// Unknown and the message containing the err.Error() result.
 func DropRPCError(err error) error {
-	st, ok := status.FromError(err)
-	if !ok {
-		st = status.New(codes.Unknown, err.Error())
-	}
+	st := status.Convert(err)
 	return &dropRPCError{error: st.Err(), status: st}
 }
 

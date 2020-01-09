@@ -155,12 +155,9 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 				continue
 			}
 			if drop, ok := err.(interface{ DropRPC() bool }); ok && drop.DropRPC() {
-				// End the RPC unconditionally.
-				if _, ok := status.FromError(err); ok {
-					return nil, nil, err
-				}
-				// err is some other error.
-				return nil, nil, status.Error(codes.Unknown, err.Error())
+				// End the RPC unconditionally.  If not a status error, Convert
+				// will transform it into one with code Unknown.
+				return nil, nil, status.Convert(err).Err()
 			}
 			// For all other errors, wait for ready RPCs should block and other
 			// RPCs should fail.
