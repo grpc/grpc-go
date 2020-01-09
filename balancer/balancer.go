@@ -271,6 +271,13 @@ func DropRPCError(err error) error {
 	return &dropRPCError{error: st.Err(), status: st}
 }
 
+// TransientFailureError returns e.  It exists for backward compatibility and
+// will be deleted soon.
+//
+// Deprecated: no longer necessary, picker errors are treated this way by
+// default.
+func TransientFailureError(e error) error { return e }
+
 // Picker is used by gRPC to pick a SubConn to send an RPC.
 // Balancer is expected to generate a new picker from its snapshot every time its
 // internal state has changed.
