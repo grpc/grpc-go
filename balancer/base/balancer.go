@@ -73,7 +73,7 @@ func (b *baseBalancer) ResolverError(err error) {
 	switch b.state {
 	case connectivity.TransientFailure, connectivity.Idle, connectivity.Connecting:
 		if b.picker != nil {
-			b.picker = NewErrPicker(err)
+			b.picker = NewErrPicker(balancer.TransientFailureError(err))
 		}
 	}
 }
