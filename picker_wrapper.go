@@ -154,18 +154,21 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 			if err == balancer.ErrNoSubConnAvailable {
 				continue
 			}
-			if tfe, ok := err.(interface{ IsTransientFailure() bool }); ok && tfe.IsTransientFailure() {
-				if !failfast {
-					lastPickErr = err
-					continue
+			if drop, ok := err.(interface{ DropRPC() bool }); ok && drop.DropRPC() {
+				// End the RPC unconditionally.
+				if _, ok := status.FromError(err); ok {
+					return nil, nil, err
 				}
-				return nil, nil, status.Error(codes.Unavailable, err.Error())
+				// err is some other error.
+				return nil, nil, status.Error(codes.Unknown, err.Error())
 			}
-			if _, ok := status.FromError(err); ok {
-				return nil, nil, err
+			// For all other errors, wait for ready RPCs should block and other
+			// RPCs should fail.
+			if !failfast {
+				lastPickErr = err
+				continue
 			}
-			// err is some other error.
-			return nil, nil, status.Error(codes.Unknown, err.Error())
+			return nil, nil, status.Error(codes.Unavailable, err.Error())
 		}
 
 		acw, ok := pickResult.SubConn.(*acBalancerWrapper)

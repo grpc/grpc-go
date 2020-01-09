@@ -73,7 +73,7 @@ func (b *baseBalancer) ResolverError(err error) {
 	switch b.state {
 	case connectivity.TransientFailure, connectivity.Idle, connectivity.Connecting:
 		if b.picker != nil {
-			b.picker = NewErrPicker(balancer.TransientFailureError(err))
+			b.picker = NewErrPicker(err)
 		}
 	}
 }
@@ -118,13 +118,13 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 func (b *baseBalancer) regeneratePicker(err error) {
 	if b.state == connectivity.TransientFailure {
 		if err != nil {
-			b.picker = NewErrPicker(balancer.TransientFailureError(err))
+			b.picker = NewErrPicker(err)
 		} else {
 			// This means the last subchannel transition was not to
 			// TransientFailure (otherwise err must be set), but the
 			// aggregate state of the balancer is TransientFailure, meaning
 			// there are no other addresses.
-			b.picker = NewErrPicker(balancer.TransientFailureError(errors.New("resolver returned no addresses")))
+			b.picker = NewErrPicker(errors.New("resolver returned no addresses"))
 		}
 		return
 	}

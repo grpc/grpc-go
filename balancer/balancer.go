@@ -27,12 +27,14 @@ import (
 	"net"
 	"strings"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -232,7 +234,7 @@ var (
 	ErrNoSubConnAvailable = errors.New("no SubConn is available")
 	// ErrTransientFailure indicates all SubConns are in TransientFailure.
 	// WaitForReady RPCs will block, non-WaitForReady RPCs will fail.
-	ErrTransientFailure = TransientFailureError(errors.New("all SubConns are in TransientFailure"))
+	ErrTransientFailure = errors.New("all SubConns are in TransientFailure")
 )
 
 // PickResult contains information related to a connection chosen for an RPC.
@@ -250,16 +252,23 @@ type PickResult struct {
 	Done func(DoneInfo)
 }
 
-type transientFailureError struct {
+type dropRPCError struct {
 	error
+	status *status.Status
 }
 
-func (e *transientFailureError) IsTransientFailure() bool { return true }
+func (e *dropRPCError) DropRPC() bool { return true }
 
-// TransientFailureError wraps err in an error implementing
-// IsTransientFailure() bool, returning true.
-func TransientFailureError(err error) error {
-	return &transientFailureError{error: err}
+func (e *dropRPCError) GRPCStatus() *status.Status { return e.status }
+
+// DropRPCError wraps err in an error implementing DropRPC() bool, returning
+// true.
+func DropRPCError(err error) error {
+	st, ok := status.FromError(err)
+	if !ok {
+		st = status.New(codes.Unknown, err.Error())
+	}
+	return &dropRPCError{error: st.Err(), status: st}
 }
 
 // Picker is used by gRPC to pick a SubConn to send an RPC.
@@ -280,14 +289,16 @@ type Picker interface {
 	// - If the error is ErrNoSubConnAvailable, gRPC will block until a new
 	//   Picker is provided by the balancer (using ClientConn.UpdateState).
 	//
-	// - If the error implements IsTransientFailure() bool, returning true,
-	//   wait for ready RPCs will wait, but non-wait for ready RPCs will be
-	//   terminated with this error's Error() string and status code
-	//   Unavailable.
+	// - If the error implements DropRPC() bool, returning true, gRPC will
+	//   terminate all RPCs with the code and message provided.  If the error
+	//   is not a status error, it will be converted by gRPC to a status error
+	//   with code Unknown.
 	//
-	// - Any other errors terminate all RPCs with the code and message
-	//   provided.  If the error is not a status error, it will be converted by
-	//   gRPC to a status error with code Unknown.
+	// - For all other errors, wait for ready RPCs will wait, but non-wait for
+	//   ready RPCs will be terminated with this error's Error() string and
+	//   status code Unavailable.
+	//
+	// - Any other errors terminate
 	Pick(info PickInfo) (PickResult, error)
 }
 

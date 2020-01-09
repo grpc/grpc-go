@@ -446,7 +446,7 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		if d.loadStore != nil {
 			d.loadStore.CallDropped(category)
 		}
-		return balancer.PickResult{}, status.Errorf(codes.Unavailable, "RPC is dropped")
+		return balancer.PickResult{}, balancer.DropRPCError(status.Errorf(codes.Unavailable, "RPC is dropped"))
 	}
 	// TODO: (eds) don't drop unless the inner picker is READY. Similar to
 	// https://github.com/grpc/grpc-go/issues/2622.
