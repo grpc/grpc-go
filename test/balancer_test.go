@@ -455,6 +455,13 @@ func (s) TestEmptyAddrs(t *testing.T) {
 	defer cleanup()
 	pfr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
+	pfcc, err := grpc.DialContext(ctx, pfr.Scheme()+":///", grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("Error creating client: %v", err)
+	}
+	defer pfcc.Close()
+	pfclient := testpb.NewTestServiceClient(pfcc)
+
 	// Confirm we are connected to the server
 	if res, err := pfclient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil || res.Username != one {
 		t.Fatalf("UnaryCall(_) = %v, %v; want {Username: %q}, nil", res, err, one)
@@ -473,13 +480,6 @@ func (s) TestEmptyAddrs(t *testing.T) {
 	rrr, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 	rrr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
-
-	pfcc, err := grpc.DialContext(ctx, pfr.Scheme()+":///", grpc.WithInsecure())
-	if err != nil {
-		t.Fatalf("Error creating client: %v", err)
-	}
-	defer pfcc.Close()
-	pfclient := testpb.NewTestServiceClient(pfcc)
 
 	rrcc, err := grpc.DialContext(ctx, rrr.Scheme()+":///", grpc.WithInsecure(),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, roundrobin.Name)))
