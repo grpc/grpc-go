@@ -274,11 +274,15 @@ type fakeBalancer struct {
 	cc balancer.ClientConn
 }
 
-func (b *fakeBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
+func (b *fakeBalancer) ResolverError(error) {
 	panic("implement me")
 }
 
-func (b *fakeBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+func (b *fakeBalancer) UpdateClientConnState(balancer.ClientConnState) error {
+	panic("implement me")
+}
+
+func (b *fakeBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
 	panic("implement me")
 }
 

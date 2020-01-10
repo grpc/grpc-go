@@ -199,19 +199,6 @@ func WithDecompressor(dc Decompressor) DialOption {
 	})
 }
 
-// WithBalancer returns a DialOption which sets a load balancer with the v1 API.
-// Name resolver will be ignored if this DialOption is specified.
-//
-// Deprecated: use the new balancer APIs in balancer package and
-// WithBalancerName.  Will be removed in a future 1.x release.
-func WithBalancer(b Balancer) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.balancerBuilder = &balancerWrapperBuilder{
-			b: b,
-		}
-	})
-}
-
 // WithBalancerName sets the balancer that the ClientConn will be initialized
 // with. Balancer registered with balancerName will be used. This function
 // panics if no balancer was registered by balancerName.
