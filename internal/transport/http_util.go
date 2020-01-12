@@ -222,14 +222,6 @@ func contentType(contentSubtype string) string {
 	return baseContentType + "+" + contentSubtype
 }
 
-func (d *decodeState) status() *status.Status {
-	if d.data.statusGen == nil {
-		// No status-details were provided; generate status using code/msg.
-		d.data.statusGen = status.New(codes.Code(int32(*(d.data.rawStatusCode))), d.data.rawStatusMsg)
-	}
-	return d.data.statusGen
-}
-
 const binHdrSuffix = "-bin"
 
 func encodeBinHeader(v []byte) string {
@@ -325,6 +317,26 @@ func (d *decodeState) constructHTTPErrMsg() string {
 		errMsgs = append(errMsgs, "transport: missing content-type field")
 	} else {
 		errMsgs = append(errMsgs, d.data.contentTypeErr)
+	}
+
+	return strings.Join(errMsgs, "; ")
+}
+
+// constructErrMsg constructs error message to be returned in HTTP fallback mode.
+// Format: HTTP status code and its corresponding message + content-type error message.
+func constructHTTPErrMsg(httpStatus *int, contentTypeErr string) string {
+	var errMsgs []string
+
+	if httpStatus == nil {
+		errMsgs = append(errMsgs, "malformed header: missing HTTP status")
+	} else {
+		errMsgs = append(errMsgs, fmt.Sprintf("%s: HTTP status code %d", http.StatusText(*(httpStatus)), *httpStatus))
+	}
+
+	if contentTypeErr == "" {
+		errMsgs = append(errMsgs, "transport: missing content-type field")
+	} else {
+		errMsgs = append(errMsgs, contentTypeErr)
 	}
 
 	return strings.Join(errMsgs, "; ")
