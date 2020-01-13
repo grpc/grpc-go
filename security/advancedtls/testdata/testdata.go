@@ -15,6 +15,7 @@
  *
  */
 
+// Package testdata contains functionality to find data files in tests.
 package testdata
 
 import (
