@@ -172,7 +172,7 @@ func (p *lbPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	// If it's a drop, return an error and fail the RPC.
 	if s.Drop {
 		p.stats.drop(s.LoadBalanceToken)
-		return balancer.PickResult{}, balancer.DropRPCError(status.Errorf(codes.Unavailable, "request dropped by grpclb"))
+		return balancer.PickResult{}, status.Errorf(codes.Unavailable, "request dropped by grpclb")
 	}
 
 	// If not a drop but there's no ready subConns.

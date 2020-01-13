@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 )
 
@@ -49,6 +50,20 @@ type pickfirstBalancer struct {
 	state connectivity.State
 	cc    balancer.ClientConn
 	sc    balancer.SubConn
+}
+
+var _ balancer.V2Balancer = &pickfirstBalancer{} // Assert we implement v2
+
+func (b *pickfirstBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
+	if err != nil {
+		b.ResolverError(err)
+		return
+	}
+	b.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: addrs}}) // Ignore error
+}
+
+func (b *pickfirstBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+	b.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: s})
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
@@ -114,9 +129,15 @@ func (b *pickfirstBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.S
 	case connectivity.Connecting:
 		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{err: balancer.ErrNoSubConnAvailable}})
 	case connectivity.TransientFailure:
+		err := balancer.ErrTransientFailure
+		// TODO: this can be unconditional after the V1 API is removed, as
+		// SubConnState will always contain a connection error.
+		if s.ConnectionError != nil {
+			err = balancer.TransientFailureError(s.ConnectionError)
+		}
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: s.ConnectivityState,
-			Picker:            &picker{err: s.ConnectionError},
+			Picker:            &picker{err: err},
 		})
 	}
 }

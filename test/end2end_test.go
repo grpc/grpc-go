@@ -50,6 +50,7 @@ import (
 	"golang.org/x/net/http2/hpack"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
@@ -420,7 +421,7 @@ type env struct {
 	network      string // The type of network such as tcp, unix, etc.
 	security     string // The security protocol such as TLS, SSH, etc.
 	httpHandler  bool   // whether to use the http.Handler ServerTransport; requires TLS
-	balancer     string // One of "round_robin", "pick_first", or "".
+	balancer     string // One of "round_robin", "pick_first", "v1", or "".
 	customDialer func(string, string, time.Duration) (net.Conn, error)
 }
 
@@ -439,8 +440,8 @@ func (e env) dialer(addr string, timeout time.Duration) (net.Conn, error) {
 }
 
 var (
-	tcpClearEnv   = env{name: "tcp-clear-v1-balancer", network: "tcp"}
-	tcpTLSEnv     = env{name: "tcp-tls-v1-balancer", network: "tcp", security: "tls"}
+	tcpClearEnv   = env{name: "tcp-clear-v1-balancer", network: "tcp", balancer: "v1"}
+	tcpTLSEnv     = env{name: "tcp-tls-v1-balancer", network: "tcp", security: "tls", balancer: "v1"}
 	tcpClearRREnv = env{name: "tcp-clear", network: "tcp", balancer: "round_robin"}
 	tcpTLSRREnv   = env{name: "tcp-tls", network: "tcp", security: "tls", balancer: "round_robin"}
 	handlerEnv    = env{name: "handler-tls", network: "tcp", security: "tls", httpHandler: true, balancer: "round_robin"}
@@ -837,8 +838,11 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	} else {
 		scheme = te.resolverScheme + ":///"
 	}
-	if te.e.balancer != "" {
-		opts = append(opts, grpc.WithBalancerName(te.e.balancer))
+	switch te.e.balancer {
+	case "v1":
+		opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(nil)))
+	case "round_robin":
+		opts = append(opts, grpc.WithBalancerName(roundrobin.Name))
 	}
 	if te.clientInitialWindowSize > 0 {
 		opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
@@ -4762,7 +4766,7 @@ func (c *clientTimeoutCreds) OverrideServerName(s string) error {
 }
 
 func (s) TestNonFailFastRPCSucceedOnTimeoutCreds(t *testing.T) {
-	te := newTest(t, env{name: "timeout-cred", network: "tcp", security: "clientTimeoutCreds"})
+	te := newTest(t, env{name: "timeout-cred", network: "tcp", security: "clientTimeoutCreds", balancer: "v1"})
 	te.userAgent = testAppUA
 	te.startServer(&testServer{security: te.e.security})
 	defer te.tearDown()

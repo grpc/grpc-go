@@ -121,11 +121,14 @@ staticcheck -go 1.9 -checks 'inherit,-ST1015,-SA6002' ./... > "${SC_OUT}" || tru
 # Error if anything other than deprecation warnings are printed.
 (! grep -v "is deprecated:.*SA1019" "${SC_OUT}")
 # Only ignore the following deprecated types/fields/functions.
-(! grep -Fv '.HeaderMap
+(! grep -Fv '.HandleResolvedAddrs
+.HandleSubConnStateChange
+.HeaderMap
 .NewAddress
 .NewServiceConfig
 .Metadata is deprecated: use Attributes
 .Type is deprecated: use Attributes
+.UpdateBalancerState
 balancer.Picker
 grpc.CallCustomCodec
 grpc.Code

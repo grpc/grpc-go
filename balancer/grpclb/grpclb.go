@@ -163,6 +163,8 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 	return lb
 }
 
+var _ balancer.V2Balancer = (*lbBalancer)(nil) // Assert that we implement V2Balancer
+
 type lbBalancer struct {
 	cc     *lbCacheClientConn
 	target string
@@ -212,7 +214,7 @@ type lbBalancer struct {
 	state    connectivity.State
 	subConns map[resolver.Address]balancer.SubConn   // Used to new/remove SubConn.
 	scStates map[balancer.SubConn]connectivity.State // Used to filter READY SubConns.
-	picker   balancer.Picker
+	picker   balancer.V2Picker
 	// Support fallback to resolved backend addresses if there's no response
 	// from remote balancer within fallbackTimeout.
 	remoteBalancerConnected bool
@@ -310,6 +312,10 @@ func (lb *lbBalancer) aggregateSubConnStates() connectivity.State {
 	return connectivity.TransientFailure
 }
 
+func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+	panic("not used")
+}
+
 func (lb *lbBalancer) UpdateSubConnState(sc balancer.SubConn, scs balancer.SubConnState) {
 	s := scs.ConnectivityState
 	if grpclog.V(2) {
@@ -385,6 +391,13 @@ func (lb *lbBalancer) fallbackToBackendsAfter(fallbackTimeout time.Duration) {
 	// Enter fallback.
 	lb.refreshSubConns(lb.resolvedBackendAddrs, true, lb.usePickFirst)
 	lb.mu.Unlock()
+}
+
+// HandleResolvedAddrs sends the updated remoteLB addresses to remoteLB
+// clientConn. The remoteLB clientConn will handle creating/removing remoteLB
+// connections.
+func (lb *lbBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
+	panic("not used")
 }
 
 func (lb *lbBalancer) handleServiceConfig(gc *grpclbServiceConfig) {
