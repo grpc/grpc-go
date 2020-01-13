@@ -137,7 +137,6 @@ grpc.NewGZIPCompressor
 grpc.NewGZIPDecompressor
 grpc.RPCCompressor
 grpc.RPCDecompressor
-grpc.RoundRobin
 grpc.ServiceConfig
 grpc.WithBalancer
 grpc.WithBalancerName
@@ -148,9 +147,5 @@ grpc.WithMaxMsgSize
 grpc.WithServiceConfig
 grpc.WithTimeout
 http.CloseNotifier
-naming.Resolver
-naming.Update
-naming.Watcher
 resolver.Backend
-resolver.GRPCLB' "${SC_OUT}"
-)
+resolver.GRPCLB' "${SC_OUT}")
