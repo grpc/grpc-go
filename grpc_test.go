@@ -23,9 +23,8 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 	"google.golang.org/grpc/internal/leakcheck"
-
-	_ "google.golang.org/grpc/grpclog/glogger"
 )
 
 type s struct{}
@@ -39,6 +38,10 @@ type errorer struct {
 func (e errorer) Errorf(format string, args ...interface{}) {
 	atomic.StoreUint32(&lcFailed, 1)
 	e.t.Errorf(format, args...)
+}
+
+func (s) Setup(t *testing.T) {
+	tlogger.Update(t)
 }
 
 func (s) Teardown(t *testing.T) {
