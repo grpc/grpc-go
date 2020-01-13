@@ -26,11 +26,13 @@ import (
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/resolver"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
@@ -93,8 +95,16 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			oldBootstrapConfigNew := bootstrapConfigNew
+			bootstrapConfigNew = func() *bootstrap.Config {
+				return &bootstrap.Config{
+					BalancerName: fakeServer.Address,
+					Creds:        grpc.WithInsecure(),
+					NodeProto:    &corepb.Node{},
+				}
+			}
+			defer func() { bootstrapConfigNew = oldBootstrapConfigNew }()
 			cw.handleUpdate(&EDSConfig{
-				BalancerName:   fakeServer.Address,
 				EDSServiceName: test.edsServiceName,
 			}, nil)
 

@@ -132,10 +132,6 @@ func (c *xdsclientWrapper) updateXDSClient(config *EDSConfig, attr *attributes.A
 	}
 
 	clientConfig := bootstrapConfigNew()
-	if clientConfig.BalancerName == "" {
-		clientConfig.BalancerName = config.BalancerName
-	}
-
 	if c.balancerName == clientConfig.BalancerName {
 		return false
 	}

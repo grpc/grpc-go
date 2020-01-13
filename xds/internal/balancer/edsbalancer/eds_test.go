@@ -206,44 +206,6 @@ func setup(edsLBCh *testutils.Channel, xdsClientCh *testutils.Channel) func() {
 	}
 }
 
-// TestXDSConfigBalancerNameUpdate verifies different scenarios where the
-// balancer name in the lbConfig is updated.
-//
-// The test does the following:
-// * Builds a new xds balancer.
-// * Repeatedly pushes new ClientConnState which specifies different
-//   balancerName in the lbConfig. We expect xdsClient objects to created
-//   whenever the balancerName changes.
-func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
-	edsLBCh := testutils.NewChannel()
-	xdsClientCh := testutils.NewChannel()
-	cancel := setup(edsLBCh, xdsClientCh)
-	defer cancel()
-
-	builder := balancer.Get(edsName)
-	cc := newNoopTestClientConn()
-	edsB, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
-	if !ok {
-		t.Fatalf("builder.Build(%s) returned type {%T}, want {*edsBalancer}", edsName, edsB)
-	}
-	defer edsB.Close()
-
-	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
-	for i := 0; i < 2; i++ {
-		balancerName := fmt.Sprintf("balancer-%d", i)
-		edsB.UpdateClientConnState(balancer.ClientConnState{
-			ResolverState: resolver.State{Addresses: addrs},
-			BalancerConfig: &EDSConfig{
-				BalancerName:   balancerName,
-				EDSServiceName: testEDSClusterName,
-			},
-		})
-
-		xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, balancerName)
-		xdsC.InvokeWatchEDSCallback(&xdsclient.EDSUpdate{}, nil)
-	}
-}
-
 const (
 	fakeBalancerA = "fake_balancer_A"
 	fakeBalancerB = "fake_balancer_B"
@@ -302,6 +264,16 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 	cancel := setup(edsLBCh, xdsClientCh)
 	defer cancel()
 
+	oldBootstrapConfigNew := bootstrapConfigNew
+	bootstrapConfigNew = func() *bootstrap.Config {
+		return &bootstrap.Config{
+			BalancerName: testBalancerNameFooBar,
+			Creds:        grpc.WithInsecure(),
+			NodeProto:    &corepb.Node{},
+		}
+	}
+	defer func() { bootstrapConfigNew = oldBootstrapConfigNew }()
+
 	builder := balancer.Get(edsName)
 	cc := newNoopTestClientConn()
 	edsB, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*edsBalancer)
@@ -312,7 +284,6 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 
 	edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
-			BalancerName: testBalancerNameFooBar,
 			ChildPolicy: &loadBalancingConfig{
 				Name:   fakeBalancerA,
 				Config: json.RawMessage("{}"),
@@ -330,7 +301,6 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 
 	edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
-			BalancerName: testBalancerNameFooBar,
 			ChildPolicy: &loadBalancingConfig{
 				Name:   fakeBalancerB,
 				Config: json.RawMessage("{}"),
@@ -352,6 +322,16 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	cancel := setup(edsLBCh, xdsClientCh)
 	defer cancel()
 
+	oldBootstrapConfigNew := bootstrapConfigNew
+	bootstrapConfigNew = func() *bootstrap.Config {
+		return &bootstrap.Config{
+			BalancerName: testBalancerNameFooBar,
+			Creds:        grpc.WithInsecure(),
+			NodeProto:    &corepb.Node{},
+		}
+	}
+	defer func() { bootstrapConfigNew = oldBootstrapConfigNew }()
+
 	builder := balancer.Get(edsName)
 	cc := newNoopTestClientConn()
 	edsB, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
@@ -364,7 +344,6 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: addrs},
 		BalancerConfig: &EDSConfig{
-			BalancerName:   testBalancerNameFooBar,
 			EDSServiceName: testEDSClusterName,
 		},
 	})
@@ -430,7 +409,6 @@ func TestXDSBalancerConfigParsing(t *testing.T) {
 			name: "manually-generated",
 			js: json.RawMessage(`
 {
-  "balancerName": "fake.foo.bar",
   "childPolicy": [
     {"fake_balancer_C": {}},
     {"fake_balancer_A": {}},
@@ -445,7 +423,6 @@ func TestXDSBalancerConfigParsing(t *testing.T) {
   "lrsLoadReportingServerName": "lrs.server"
 }`),
 			want: &EDSConfig{
-				BalancerName: "fake.foo.bar",
 				ChildPolicy: &loadBalancingConfig{
 					Name:   "fake_balancer_A",
 					Config: json.RawMessage("{}"),
@@ -465,11 +442,9 @@ func TestXDSBalancerConfigParsing(t *testing.T) {
 			name: "no-lrs-server-name",
 			js: json.RawMessage(`
 {
-  "balancerName": "fake.foo.bar",
   "edsServiceName": "eds.service"
 }`),
 			want: &EDSConfig{
-				BalancerName:               "fake.foo.bar",
 				EDSServiceName:             testEDSName,
 				LrsLoadReportingServerName: nil,
 			},
