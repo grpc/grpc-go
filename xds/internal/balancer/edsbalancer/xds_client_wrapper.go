@@ -134,11 +134,7 @@ func (c *xdsclientWrapper) updateXDSClient(config *EDSConfig, attr *attributes.A
 	clientConfig, err := bootstrapConfigNew()
 	if err != nil {
 		// TODO: propogate this error to ClientConn, and fail RPCs if necessary.
-		clientConfig = &bootstrap.Config{
-			BalancerName: config.BalancerName,
-		}
-	} else if clientConfig.BalancerName == "" {
-		clientConfig.BalancerName = config.BalancerName
+		return false
 	}
 
 	if c.balancerName == clientConfig.BalancerName {
