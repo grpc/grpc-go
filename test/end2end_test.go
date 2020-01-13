@@ -56,13 +56,13 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/encoding/gzip"
-	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport"
@@ -95,6 +95,10 @@ type errorer struct {
 func (e errorer) Errorf(format string, args ...interface{}) {
 	atomic.StoreUint32(&lcFailed, 1)
 	e.t.Errorf(format, args...)
+}
+
+func (s) Setup(t *testing.T) {
+	tlogger.Update(t)
 }
 
 func (s) Teardown(t *testing.T) {
