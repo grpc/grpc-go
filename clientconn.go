@@ -68,6 +68,8 @@ var (
 	errConnDrain = errors.New("grpc: the connection is drained")
 	// errConnClosing indicates that the connection is closing.
 	errConnClosing = errors.New("grpc: the connection is closing")
+	// errBalancerClosed indicates that the balancer is closed.
+	errBalancerClosed = errors.New("grpc: balancer is closed")
 	// invalidDefaultServiceConfigErrPrefix is used to prefix the json parsing error for the default
 	// service config.
 	invalidDefaultServiceConfigErrPrefix = "grpc: the provided default service config is invalid"

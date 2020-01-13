@@ -66,6 +66,10 @@ type subBalancerWithConfig struct {
 	balancer balancer.Balancer
 }
 
+func (sbc *subBalancerWithConfig) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
+	grpclog.Fatalln("not implemented")
+}
+
 // UpdateState overrides balancer.ClientConn, to keep state and picker.
 func (sbc *subBalancerWithConfig) UpdateState(state balancer.State) {
 	sbc.mu.Lock()
@@ -91,7 +95,11 @@ func (sbc *subBalancerWithConfig) updateBalancerStateWithCachedPicker() {
 func (sbc *subBalancerWithConfig) startBalancer() {
 	b := sbc.builder.Build(sbc, balancer.BuildOptions{})
 	sbc.balancer = b
-	b.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: sbc.addrs}})
+	if ub, ok := b.(balancer.V2Balancer); ok {
+		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: sbc.addrs}})
+	} else {
+		b.HandleResolvedAddrs(sbc.addrs, nil)
+	}
 }
 
 func (sbc *subBalancerWithConfig) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
@@ -103,7 +111,11 @@ func (sbc *subBalancerWithConfig) handleSubConnStateChange(sc balancer.SubConn, 
 		// happen.
 		return
 	}
-	b.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: state})
+	if ub, ok := b.(balancer.V2Balancer); ok {
+		ub.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: state})
+	} else {
+		b.HandleSubConnStateChange(sc, state)
+	}
 }
 
 func (sbc *subBalancerWithConfig) updateAddrs(addrs []resolver.Address) {
@@ -120,7 +132,11 @@ func (sbc *subBalancerWithConfig) updateAddrs(addrs []resolver.Address) {
 		// it's the lower priority, but it can still get address updates.
 		return
 	}
-	b.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: addrs}})
+	if ub, ok := b.(balancer.V2Balancer); ok {
+		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: addrs}})
+	} else {
+		b.HandleResolvedAddrs(addrs, nil)
+	}
 }
 
 func (sbc *subBalancerWithConfig) stopBalancer() {
@@ -130,7 +146,7 @@ func (sbc *subBalancerWithConfig) stopBalancer() {
 
 type pickerState struct {
 	weight uint32
-	picker balancer.Picker
+	picker balancer.V2Picker
 	state  connectivity.State
 }
 
@@ -541,7 +557,7 @@ func buildPickerAndState(m map[internal.Locality]*pickerState) balancer.State {
 		aggregatedState = connectivity.TransientFailure
 	}
 	if aggregatedState == connectivity.TransientFailure {
-		return balancer.State{aggregatedState, base.NewErrPicker(balancer.ErrTransientFailure)}
+		return balancer.State{aggregatedState, base.NewErrPickerV2(balancer.ErrTransientFailure)}
 	}
 	return balancer.State{aggregatedState, newPickerGroup(readyPickerWithWeights)}
 }
@@ -577,7 +593,7 @@ func (pg *pickerGroup) Pick(info balancer.PickInfo) (balancer.PickResult, error)
 	if pg.length <= 0 {
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
-	p := pg.w.Next().(balancer.Picker)
+	p := pg.w.Next().(balancer.V2Picker)
 	return p.Pick(info)
 }
 
@@ -587,13 +603,13 @@ const (
 )
 
 type loadReportPicker struct {
-	p balancer.Picker
+	p balancer.V2Picker
 
 	id        internal.Locality
 	loadStore lrs.Store
 }
 
-func newLoadReportPicker(p balancer.Picker, id internal.Locality, loadStore lrs.Store) *loadReportPicker {
+func newLoadReportPicker(p balancer.V2Picker, id internal.Locality, loadStore lrs.Store) *loadReportPicker {
 	return &loadReportPicker{
 		p:         p,
 		id:        id,

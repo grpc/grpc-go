@@ -55,14 +55,14 @@ type testingPicker struct {
 	maxCalled int64
 }
 
-func (p *testingPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (p *testingPicker) Pick(ctx context.Context, info balancer.PickInfo) (balancer.SubConn, func(balancer.DoneInfo), error) {
 	if atomic.AddInt64(&p.maxCalled, -1) < 0 {
-		return balancer.PickResult{}, fmt.Errorf("pick called to many times (> goroutineCount)")
+		return nil, nil, fmt.Errorf("pick called to many times (> goroutineCount)")
 	}
 	if p.err != nil {
-		return balancer.PickResult{}, p.err
+		return nil, nil, p.err
 	}
-	return balancer.PickResult{SubConn: p.sc}, nil
+	return p.sc, nil, nil
 }
 
 func (s) TestBlockingPickTimeout(t *testing.T) {
