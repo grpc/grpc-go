@@ -539,10 +539,10 @@ func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	}})
-	client, err := DialContext(ctx, "this-gets-overwritten",
+	client, err := DialContext(ctx, "whatever:///this-gets-overwritten",
 		WithInsecure(),
 		WithBalancerName(stateRecordingBalancerName),
-		withResolverBuilder(rb),
+		WithResolvers(rb),
 		withMinConnectDeadline(getMinConnectTimeout))
 	if err != nil {
 		t.Fatal(err)
@@ -1085,9 +1085,9 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 	rb := manual.NewBuilderWithScheme("whatever")
 	rb.InitialState(resolver.State{Addresses: addrsList})
 
-	client, err := Dial("this-gets-overwritten",
+	client, err := Dial("whatever:///this-gets-overwritten",
 		WithInsecure(),
-		withResolverBuilder(rb),
+		WithResolvers(rb),
 		withBackoff(noBackoff{}),
 		WithBalancerName(stateRecordingBalancerName),
 		withMinConnectDeadline(func() time.Duration { return time.Hour }))

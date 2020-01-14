@@ -243,7 +243,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		// Only try to parse target when resolver builder is not already set.
 		cc.parsedTarget = parseTarget(cc.target)
 		grpclog.Infof("parsed scheme: %q", cc.parsedTarget.Scheme)
-		cc.dopts.resolverBuilder = resolver.Get(cc.parsedTarget.Scheme)
+		cc.dopts.resolverBuilder = cc.getResolver(cc.parsedTarget.Scheme)
 		if cc.dopts.resolverBuilder == nil {
 			// If resolver builder is still nil, the parsed target's scheme is
 			// not registered. Fallback to default resolver and set Endpoint to
@@ -1542,3 +1542,12 @@ func (c *channelzChannel) ChannelzMetric() *channelz.ChannelInternalMetric {
 // Deprecated: This error is never returned by grpc and should not be
 // referenced by users.
 var ErrClientConnTimeout = errors.New("grpc: timed out when dialing")
+
+func (cc *ClientConn) getResolver(scheme string) resolver.Builder {
+	for _, rb := range cc.dopts.resolvers {
+		if cc.parsedTarget.Scheme == rb.Scheme() {
+			return rb
+		}
+	}
+	return resolver.Get(cc.parsedTarget.Scheme)
+}
