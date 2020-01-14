@@ -259,12 +259,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}
 
-	// Build the resolver.
-	rWrapper, err := newCCResolverWrapper(cc, resolverBuilder)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build resolver: %v", err)
-	}
-
 	creds := cc.dopts.copts.TransportCredentials
 	if creds != nil && creds.Info().ServerName != "" {
 		cc.authority = creds.Info().ServerName
@@ -303,6 +297,11 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		Target:           cc.parsedTarget,
 	}
 
+	// Build the resolver.
+	rWrapper, err := newCCResolverWrapper(cc, resolverBuilder)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build resolver: %v", err)
+	}
 	cc.mu.Lock()
 	cc.resolverWrapper = rWrapper
 	cc.mu.Unlock()
