@@ -74,15 +74,9 @@ func parseTarget(target string) (ret resolver.Target) {
 	return ret
 }
 
-// newCCResolverWrapper uses the resolver.Builder stored in the ClientConn to
-// build a Resolver and returns a ccResolverWrapper object which wraps the
-// newly built resolver.
-func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
-	rb := cc.dopts.resolverBuilder
-	if rb == nil {
-		return nil, fmt.Errorf("could not get resolver for scheme: %q", cc.parsedTarget.Scheme)
-	}
-
+// newCCResolverWrapper uses the resolver.Builder to build a Resolver and
+// returns a ccResolverWrapper object which wraps the newly built resolver.
+func newCCResolverWrapper(cc *ClientConn, rb resolver.Builder) (*ccResolverWrapper, error) {
 	ccr := &ccResolverWrapper{
 		cc:   cc,
 		done: grpcsync.NewEvent(),

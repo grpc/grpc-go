@@ -239,25 +239,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if cc.dopts.bs == nil {
 		cc.dopts.bs = backoff.DefaultExponential
 	}
-	if cc.dopts.resolverBuilder == nil {
-		// Only try to parse target when resolver builder is not already set.
-		cc.parsedTarget = parseTarget(cc.target)
-		grpclog.Infof("parsed scheme: %q", cc.parsedTarget.Scheme)
-		cc.dopts.resolverBuilder = cc.getResolver(cc.parsedTarget.Scheme)
-		if cc.dopts.resolverBuilder == nil {
-			// If resolver builder is still nil, the parsed target's scheme is
-			// not registered. Fallback to default resolver and set Endpoint to
-			// the original target.
-			grpclog.Infof("scheme %q not registered, fallback to default scheme", cc.parsedTarget.Scheme)
-			cc.parsedTarget = resolver.Target{
-				Scheme:   resolver.GetDefaultScheme(),
-				Endpoint: target,
-			}
-			cc.dopts.resolverBuilder = cc.getResolver(cc.parsedTarget.Scheme)
-		}
-	} else {
-		cc.parsedTarget = resolver.Target{Endpoint: target}
-	}
+
 	creds := cc.dopts.copts.TransportCredentials
 	if creds != nil && creds.Info().ServerName != "" {
 		cc.authority = creds.Info().ServerName
@@ -296,8 +278,27 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		Target:           cc.parsedTarget,
 	}
 
+	// Determine the resolver to use.
+	cc.parsedTarget = parseTarget(cc.target)
+	grpclog.Infof("parsed scheme: %q", cc.parsedTarget.Scheme)
+	resolverBuilder := cc.getResolver(cc.parsedTarget.Scheme)
+	if resolverBuilder == nil {
+		// If resolver builder is still nil, the parsed target's scheme is
+		// not registered. Fallback to default resolver and set Endpoint to
+		// the original target.
+		grpclog.Infof("scheme %q not registered, fallback to default scheme", cc.parsedTarget.Scheme)
+		cc.parsedTarget = resolver.Target{
+			Scheme:   resolver.GetDefaultScheme(),
+			Endpoint: target,
+		}
+		resolverBuilder = cc.getResolver(cc.parsedTarget.Scheme)
+		if resolverBuilder == nil {
+			return nil, fmt.Errorf("could not get resolver for default scheme: %q", cc.parsedTarget.Scheme)
+		}
+	}
+
 	// Build the resolver.
-	rWrapper, err := newCCResolverWrapper(cc)
+	rWrapper, err := newCCResolverWrapper(cc, resolverBuilder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build resolver: %v", err)
 	}
@@ -305,6 +306,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	cc.mu.Lock()
 	cc.resolverWrapper = rWrapper
 	cc.mu.Unlock()
+
 	// A blocking dial blocks until the clientConn is ready.
 	if cc.dopts.block {
 		for {
