@@ -253,7 +253,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 				Scheme:   resolver.GetDefaultScheme(),
 				Endpoint: target,
 			}
-			cc.dopts.resolverBuilder = resolver.Get(cc.parsedTarget.Scheme)
+			cc.dopts.resolverBuilder = cc.getResolver(cc.parsedTarget.Scheme)
 		}
 	} else {
 		cc.parsedTarget = resolver.Target{Endpoint: target}
