@@ -589,6 +589,6 @@ func withResolveNowBackoff(f func(int) time.Duration) DialOption {
 // This API is EXPERIMENTAL.
 func WithResolvers(rs ...resolver.Builder) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.resolvers = rs
+		o.resolvers = append(o.resolvers, rs...)
 	})
 }
