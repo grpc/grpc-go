@@ -232,13 +232,6 @@ func WithBalancerName(balancerName string) DialOption {
 	})
 }
 
-// withResolverBuilder is only for grpclb.
-func withResolverBuilder(b resolver.Builder) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.resolverBuilder = b
-	})
-}
-
 // WithServiceConfig returns a DialOption which has a channel to read the
 // service configuration.
 //
@@ -366,7 +359,6 @@ func WithContextDialer(f func(context.Context, string) (net.Conn, error)) DialOp
 }
 
 func init() {
-	internal.WithResolverBuilder = withResolverBuilder
 	internal.WithHealthCheckFunc = withHealthCheckFunc
 }
 
