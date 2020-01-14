@@ -266,18 +266,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		go cc.scWatcher()
 	}
 
-	var credsClone credentials.TransportCredentials
-	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
-		credsClone = creds.Clone()
-	}
-	cc.balancerBuildOpts = balancer.BuildOptions{
-		DialCreds:        credsClone,
-		CredsBundle:      cc.dopts.copts.CredsBundle,
-		Dialer:           cc.dopts.copts.Dialer,
-		ChannelzParentID: cc.channelzID,
-		Target:           cc.parsedTarget,
-	}
-
 	// Determine the resolver to use.
 	cc.parsedTarget = parseTarget(cc.target)
 	grpclog.Infof("parsed scheme: %q", cc.parsedTarget.Scheme)
@@ -301,6 +289,18 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	rWrapper, err := newCCResolverWrapper(cc, resolverBuilder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build resolver: %v", err)
+	}
+
+	var credsClone credentials.TransportCredentials
+	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
+		credsClone = creds.Clone()
+	}
+	cc.balancerBuildOpts = balancer.BuildOptions{
+		DialCreds:        credsClone,
+		CredsBundle:      cc.dopts.copts.CredsBundle,
+		Dialer:           cc.dopts.copts.Dialer,
+		ChannelzParentID: cc.channelzID,
+		Target:           cc.parsedTarget,
 	}
 
 	cc.mu.Lock()
