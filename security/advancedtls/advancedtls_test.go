@@ -189,7 +189,7 @@ func TestClientServerHandshake(t *testing.T) {
 			nil,
 			false,
 		},
-		// Client: set clientGetRoot and clientVerifyFunc, and bad custom verification function
+		// Client: set clientGetRoot and bad clientVerifyFunc function
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: server side failure and client handshake failure
 		// Reason: custom verification function is bad
