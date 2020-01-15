@@ -58,9 +58,7 @@ type dialOptions struct {
 	callOptions []CallOption
 	// This is used by v1 balancer dial option WithBalancer to support v1
 	// balancer, and also by WithBalancerName dial option.
-	balancerBuilder balancer.Builder
-	// This is to support grpclb.
-	resolverBuilder             resolver.Builder
+	balancerBuilder             balancer.Builder
 	channelzParentID            int64
 	disableServiceConfig        bool
 	disableRetry                bool
@@ -232,13 +230,6 @@ func WithBalancerName(balancerName string) DialOption {
 	})
 }
 
-// withResolverBuilder is only for grpclb.
-func withResolverBuilder(b resolver.Builder) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.resolverBuilder = b
-	})
-}
-
 // WithServiceConfig returns a DialOption which has a channel to read the
 // service configuration.
 //
@@ -366,7 +357,6 @@ func WithContextDialer(f func(context.Context, string) (net.Conn, error)) DialOp
 }
 
 func init() {
-	internal.WithResolverBuilder = withResolverBuilder
 	internal.WithHealthCheckFunc = withHealthCheckFunc
 }
 
@@ -599,6 +589,6 @@ func withResolveNowBackoff(f func(int) time.Duration) DialOption {
 // This API is EXPERIMENTAL.
 func WithResolvers(rs ...resolver.Builder) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.resolvers = rs
+		o.resolvers = append(o.resolvers, rs...)
 	})
 }

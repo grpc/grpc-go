@@ -34,7 +34,6 @@ import (
 	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/keepalive"
@@ -228,8 +227,7 @@ func (lb *lbBalancer) newRemoteBalancerCCWrapper() {
 	}
 	// Explicitly set pickfirst as the balancer.
 	dopts = append(dopts, grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"pick_first"}`))
-	wrb := internal.WithResolverBuilder.(func(resolver.Builder) grpc.DialOption)
-	dopts = append(dopts, wrb(lb.manualResolver))
+	dopts = append(dopts, grpc.WithResolvers(lb.manualResolver))
 	if channelz.IsOn() {
 		dopts = append(dopts, grpc.WithChannelzParentID(lb.opt.ChannelzParentID))
 	}
@@ -245,7 +243,7 @@ func (lb *lbBalancer) newRemoteBalancerCCWrapper() {
 	//
 	// The grpclb server addresses will set field ServerName, and creds will
 	// receive ServerName as authority.
-	cc, err := grpc.DialContext(context.Background(), "grpclb.subClientConn", dopts...)
+	cc, err := grpc.DialContext(context.Background(), lb.manualResolver.Scheme()+":///grpclb.subClientConn", dopts...)
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
 	}
