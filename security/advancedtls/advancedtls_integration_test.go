@@ -136,16 +136,17 @@ func callAndVerifyInSameRPC(msg string, client pb.GreeterClient, shouldFail bool
 	return nil
 }
 
-func callAndVerifyWithNewRPC(msg string, creds credentials.TransportCredentials, shouldFail bool) (*grpc.ClientConn, pb.GreeterClient, error) {
+func callAndVerifyWithNewRPC(connCtx context.Context, msg string, creds credentials.TransportCredentials, shouldFail bool) (*grpc.ClientConn, pb.GreeterClient, error) {
 	var conn *grpc.ClientConn
 	var err error
+	// If we want the test to fail, we establish a non-blocking connection to avoid it hangs and killed by the context.
 	if shouldFail {
-		conn, err = grpc.Dial(address, grpc.WithTransportCredentials(creds))
+		conn, err = grpc.DialContext(connCtx, address, grpc.WithTransportCredentials(creds))
 		if err != nil {
 			return nil, nil, fmt.Errorf("client failed to connect to %s. Error: %v", address, err)
 		}
 	} else {
-		conn, err = grpc.Dial(address, grpc.WithTransportCredentials(creds), grpc.WithBlock())
+		conn, err = grpc.DialContext(connCtx, address, grpc.WithTransportCredentials(creds), grpc.WithBlock())
 		if err != nil {
 			return nil, nil, fmt.Errorf("client failed to connect to %s. Error: %v", address, err)
 		}
@@ -233,7 +234,9 @@ func TestClientPeerCertReloadServerTrustCertReload(t *testing.T) {
 	}
 	// ------------------------Scenario 1-----------------------------------------
 	// stage = 0, clientPeer1 and serverTrust1, initial connection should succeed
-	conn, greetClient, err := callAndVerifyWithNewRPC("rpc call 1", clientTLSCreds, false)
+	ctx1, cancel1 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel1()
+	conn, greetClient, err := callAndVerifyWithNewRPC(ctx1, "rpc call 1", clientTLSCreds, false)
 	defer conn.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -248,7 +251,9 @@ func TestClientPeerCertReloadServerTrustCertReload(t *testing.T) {
 	}
 	// ------------------------Scenario 3-----------------------------------------
 	// stage = 1, clientPeer2 and serverTrust1, new connection should fail
-	conn2, greetClient, err := callAndVerifyWithNewRPC("rpc call 3", clientTLSCreds, true)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel2()
+	conn2, greetClient, err := callAndVerifyWithNewRPC(ctx2, "rpc call 3", clientTLSCreds, true)
 	defer conn2.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -257,7 +262,9 @@ func TestClientPeerCertReloadServerTrustCertReload(t *testing.T) {
 	stage.increase()
 	// ------------------------Scenario 4-----------------------------------------
 	// stage = 2, clientPeer2 and serverTrust2, new connection should succeed
-	conn3, greetClient, err := callAndVerifyWithNewRPC("rpc call 4", clientTLSCreds, false)
+	ctx3, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel3()
+	conn3, greetClient, err := callAndVerifyWithNewRPC(ctx3, "rpc call 4", clientTLSCreds, false)
 	defer conn3.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -333,7 +340,9 @@ func TestServerPeerCertReloadClientTrustCertReload(t *testing.T) {
 	}
 	// ------------------------Scenario 1-----------------------------------------
 	// stage = 0, serverPeer1 and clientTrust1, initial connection should succeed
-	conn, greetClient, err := callAndVerifyWithNewRPC("rpc call 1", clientTLSCreds, false)
+	ctx1, cancel1 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel1()
+	conn, greetClient, err := callAndVerifyWithNewRPC(ctx1, "rpc call 1", clientTLSCreds, false)
 	defer conn.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -348,7 +357,9 @@ func TestServerPeerCertReloadClientTrustCertReload(t *testing.T) {
 	}
 	// ------------------------Scenario 3-----------------------------------------
 	// stage = 1, serverPeer2 and clientTrust1, new connection should fail
-	conn2, greetClient, err := callAndVerifyWithNewRPC("rpc call 3", clientTLSCreds, true)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel2()
+	conn2, greetClient, err := callAndVerifyWithNewRPC(ctx2, "rpc call 3", clientTLSCreds, true)
 	defer conn2.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -357,7 +368,9 @@ func TestServerPeerCertReloadClientTrustCertReload(t *testing.T) {
 	stage.increase()
 	// ------------------------Scenario 4-----------------------------------------
 	// stage = 2, serverPeer2 and clientTrust2, new connection should succeed
-	conn3, greetClient, err := callAndVerifyWithNewRPC("rpc call 4", clientTLSCreds, false)
+	ctx3, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel3()
+	conn3, greetClient, err := callAndVerifyWithNewRPC(ctx3, "rpc call 4", clientTLSCreds, false)
 	defer conn3.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -457,7 +470,9 @@ func TestClientCustomServerAuthz(t *testing.T) {
 	}
 	// ------------------------Scenario 1-----------------------------------------
 	// stage = 0, serverPeer1 and clientTrust1, initial connection should succeed
-	conn, greetClient, err := callAndVerifyWithNewRPC("rpc call 1", clientTLSCreds, false)
+	ctx1, cancel1 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel1()
+	conn, greetClient, err := callAndVerifyWithNewRPC(ctx1, "rpc call 1", clientTLSCreds, false)
 	defer conn.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -472,7 +487,9 @@ func TestClientCustomServerAuthz(t *testing.T) {
 	}
 	// ------------------------Scenario 3-----------------------------------------
 	// stage = 1, serverPeer2 and clientTrust2, new connection should fail due to the custom server authz checks against serverPeer1
-	conn2, greetClient, err := callAndVerifyWithNewRPC("rpc call 3", clientTLSCreds, true)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel2()
+	conn2, greetClient, err := callAndVerifyWithNewRPC(ctx2, "rpc call 3", clientTLSCreds, true)
 	defer conn2.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -481,7 +498,9 @@ func TestClientCustomServerAuthz(t *testing.T) {
 	stage.increase()
 	// ------------------------Scenario 4-----------------------------------------
 	// stage = 2, serverPeer2 and clientTrust2, new connection should succeed
-	conn3, greetClient, err := callAndVerifyWithNewRPC("rpc call 4", clientTLSCreds, false)
+	ctx3, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel3()
+	conn3, greetClient, err := callAndVerifyWithNewRPC(ctx3, "rpc call 4", clientTLSCreds, false)
 	defer conn3.Close()
 	if err != nil {
 		t.Fatal(err)
