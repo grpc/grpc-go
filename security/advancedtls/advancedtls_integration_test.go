@@ -25,9 +25,13 @@ import (
 	"os"
 	"testing"
 	"time"
+	"fmt"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	ecpb "google.golang.org/grpc/examples/features/proto/echo"
+	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
 // serverImpl is used to implement pb.GreeterServer.
@@ -38,14 +42,15 @@ func (s *serverImpl) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.Hel
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
-// Test Scenarios:
-// At initialization(stage = 0), client will be initialized with cert clientPeer1 and clientTrust1, server with serverPeer1 and serverTrust1.
-// The mutual authentication works at the beginning, since clientPeer1 is trusted by serverTrust1, and serverPeer1 by clientTrust1.
-// At stage 1, client changes clientPeer1 to clientPeer2. Since clientPeer2 is not trusted by serverTrust1, following rpc calls are expected
-// to fail, while the previous rpc calls are still good because those are already authenticated.
-// At stage 2, the server changes serverTrust1 to serverTrust2, and we should see it again accepts the connection, since clientPeer2 is trusted
-// by serverTrust2.
-func TestClientPeerCertReloadServerTrustCertReload(t *testing.T) {
+type ecServerImpl struct {
+	ecpb.UnimplementedEchoServer
+}
+
+func (s *ecServerImpl) UnaryEcho(ctx context.Context, req *ecpb.EchoRequest) (*ecpb.EchoResponse, error) {
+	return &ecpb.EchoResponse{Message: req.Message}, nil
+}
+
+func TestHelloWorld(t *testing.T) {
 	address     := "localhost:50051"
 	defaultName := "world"
 	port := ":50051"
@@ -83,4 +88,54 @@ func TestClientPeerCertReloadServerTrustCertReload(t *testing.T) {
 		log.Fatalf("could not greet: %v", err)
 	}
 	log.Printf("Greeting: %s", r.GetMessage())
+}
+
+func TestTls(t *testing.T) {
+	address     := "localhost:50051"
+	port := ":50051"
+	// Create tls based credential.
+	creds, err := credentials.NewServerTLSFromFile(testdata.Path("server_cert_1.pem"), testdata.Path("server_key_1.pem"))
+	if err != nil {
+		log.Fatalf("failed to create credentials: %v", err)
+	}
+	s := grpc.NewServer(grpc.Creds(creds))
+	defer s.Stop()
+	go func(s *grpc.Server) {
+		lis, err := net.Listen("tcp", port)
+		if err != nil {
+			log.Fatalf("failed to listen: %v", err)
+		}
+		// Register EchoServer on the server.
+		ecpb.RegisterEchoServer(s, &ecServerImpl{})
+		if err := s.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}(s)
+	log.Println("zhen: server created")
+	clientcreds, err := credentials.NewClientTLSFromFile(testdata.Path("client_trust_cert_1.pem"), "foo.bar.com")
+	if err != nil {
+		log.Fatalf("failed to load credentials: %v", err)
+	}
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(clientcreds))
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+	log.Println("zhen: connection established")
+	// Make a echo client and send an RPC.
+	rgc := ecpb.NewEchoClient(conn)
+	log.Println("zhen: client created")
+	callUnaryEcho(rgc, "hello world")
+	log.Println("zhen: call finished")
+}
+
+func callUnaryEcho(client ecpb.EchoClient, message string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	resp, err := client.UnaryEcho(ctx, &ecpb.EchoRequest{Message: message})
+	if err != nil {
+		log.Fatalf("client.UnaryEcho(_) = _, %v: ", err)
+	}
+	fmt.Println("UnaryEcho: ", resp.Message)
 }
