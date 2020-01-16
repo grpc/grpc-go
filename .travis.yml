@@ -35,7 +35,7 @@ install:
 
 script:
   - set -e
-  - if [[ -n "${TESTEXTRAS}" ]]; then examples/examples_test.sh; interop/interop_test.sh; make testsubmodule; exit 0; fi
+  - if [[ -n "${TESTEXTRAS}" ]]; then examples/examples_test.sh; interop/interop_test.sh; export GRPC_GO_LOG_VERBOSITY_LEVEL=99; export GRPC_GO_LOG_SEVERITY_LEVEL=info; make testsubmodule; exit 0; fi
   - if [[ -n "${VET}" ]]; then ./vet.sh; fi
   - if [[ -n "${GAE}" ]]; then make testappengine; exit 0; fi
   - if [[ -n "${RACE}" ]]; then make testrace; exit 0; fi

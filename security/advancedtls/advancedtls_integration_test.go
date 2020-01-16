@@ -20,17 +20,18 @@ package advancedtls
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"testing"
 	"time"
-	"fmt"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+
 	ecpb "google.golang.org/grpc/examples/features/proto/echo"
+	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
@@ -51,7 +52,7 @@ func (s *ecServerImpl) UnaryEcho(ctx context.Context, req *ecpb.EchoRequest) (*e
 }
 
 func TestHelloWorld(t *testing.T) {
-	address     := "localhost:50051"
+	address := "localhost:50051"
 	defaultName := "world"
 	port := ":50051"
 
@@ -68,8 +69,9 @@ func TestHelloWorld(t *testing.T) {
 			log.Fatalf("failed to serve: %v", err)
 		}
 	}(s)
-
-	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -81,9 +83,9 @@ func TestHelloWorld(t *testing.T) {
 	if len(os.Args) > 1 {
 		name = os.Args[1]
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: name})
+	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel2()
+	r, err := c.SayHello(ctx2, &pb.HelloRequest{Name: name})
 	if err != nil {
 		log.Fatalf("could not greet: %v", err)
 	}
@@ -91,8 +93,8 @@ func TestHelloWorld(t *testing.T) {
 }
 
 func TestTls(t *testing.T) {
-	address     := "localhost:50051"
-	port := ":50051"
+	address := "localhost:50053"
+	port := ":50053"
 	// Create tls based credential.
 	creds, err := credentials.NewServerTLSFromFile(testdata.Path("server_cert_1.pem"), testdata.Path("server_key_1.pem"))
 	if err != nil {
@@ -116,8 +118,10 @@ func TestTls(t *testing.T) {
 	if err != nil {
 		log.Fatalf("failed to load credentials: %v", err)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(clientcreds))
+	conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientcreds), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
