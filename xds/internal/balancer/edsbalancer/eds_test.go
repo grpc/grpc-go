@@ -47,12 +47,12 @@ import (
 func init() {
 	balancer.Register(&edsBalancerBuilder{})
 
-	bootstrapConfigNew = func() *bootstrap.Config {
+	bootstrapConfigNew = func() (*bootstrap.Config, error) {
 		return &bootstrap.Config{
 			BalancerName: "",
 			Creds:        grpc.WithInsecure(),
 			NodeProto:    &corepb.Node{},
-		}
+		}, nil
 	}
 }
 

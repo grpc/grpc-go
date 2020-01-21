@@ -98,26 +98,23 @@ type xdsServer struct {
 // the presence of the errors) and may return a Config object with certain
 // fields left unspecified, in which case the caller should use some sane
 // defaults.
-func NewConfig() *Config {
+func NewConfig() (*Config, error) {
 	config := &Config{}
 
 	fName, ok := os.LookupEnv(fileEnv)
 	if !ok {
-		grpclog.Errorf("xds: %s environment variable not set", fileEnv)
-		return config
+		return nil, fmt.Errorf("xds: %s environment variable not set", fileEnv)
 	}
 
 	grpclog.Infof("xds: Reading bootstrap file from %s", fName)
 	data, err := fileReadFunc(fName)
 	if err != nil {
-		grpclog.Errorf("xds: bootstrap file {%v} read failed: %v", fName, err)
-		return config
+		return nil, fmt.Errorf("xds: bootstrap file {%v} read failed: %v", fName, err)
 	}
 
 	var jsonData map[string]json.RawMessage
 	if err := json.Unmarshal(data, &jsonData); err != nil {
-		grpclog.Errorf("xds: json.Unmarshal(%v) failed during bootstrap: %v", string(data), err)
-		return config
+		return nil, fmt.Errorf("xds: json.Unmarshal(%v) failed during bootstrap: %v", string(data), err)
 	}
 
 	m := jsonpb.Unmarshaler{AllowUnknownFields: true}
@@ -126,19 +123,16 @@ func NewConfig() *Config {
 		case "node":
 			n := &corepb.Node{}
 			if err := m.Unmarshal(bytes.NewReader(v), n); err != nil {
-				grpclog.Errorf("xds: jsonpb.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
-				break
+				return nil, fmt.Errorf("xds: jsonpb.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 			config.NodeProto = n
 		case "xds_servers":
 			var servers []*xdsServer
 			if err := json.Unmarshal(v, &servers); err != nil {
-				grpclog.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
-				break
+				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 			if len(servers) < 1 {
-				grpclog.Errorf("xds: bootstrap file parsing failed during bootstrap: file doesn't contain any xds server to connect to")
-				break
+				return nil, fmt.Errorf("xds: bootstrap file parsing failed during bootstrap: file doesn't contain any xds server to connect to")
 			}
 			xs := servers[0]
 			config.BalancerName = xs.ServerURI
@@ -155,6 +149,10 @@ func NewConfig() *Config {
 		}
 	}
 
+	if config.BalancerName == "" {
+		return nil, fmt.Errorf("xds: xds_server name is expected, but not found in bootstrap file")
+	}
+
 	// If we don't find a nodeProto in the bootstrap file, we just create an
 	// empty one here. That way, callers of this function can always expect
 	// that the NodeProto field is non-nil.
@@ -164,5 +162,5 @@ func NewConfig() *Config {
 	config.NodeProto.BuildVersion = gRPCVersion
 
 	grpclog.Infof("xds: bootstrap.NewConfig returning: %+v", config)
-	return config
+	return config, nil
 }
