@@ -172,7 +172,12 @@ func TestResolverBuilder(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Fake out the bootstrap process by providing our own config.
 			oldConfigMaker := newXDSConfig
-			newXDSConfig = func() *bootstrap.Config { return &test.config }
+			newXDSConfig = func() (*bootstrap.Config, error) {
+				if test.config.BalancerName == "" {
+					return nil, fmt.Errorf("no balancer name found in config")
+				}
+				return &test.config, nil
+			}
 			// Fake out the xdsClient creation process by providing a fake.
 			oldClientMaker := newXDSClient
 			newXDSClient = test.xdsClientFunc
@@ -208,7 +213,7 @@ func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *testClientConn, fun
 	t.Helper()
 
 	oldConfigMaker := newXDSConfig
-	newXDSConfig = func() *bootstrap.Config { return opts.config }
+	newXDSConfig = func() (*bootstrap.Config, error) { return opts.config, nil }
 	oldClientMaker := newXDSClient
 	newXDSClient = opts.xdsClientFunc
 	cancel := func() {
