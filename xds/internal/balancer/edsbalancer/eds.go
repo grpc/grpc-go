@@ -154,7 +154,10 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 			return
 		}
 
-		x.client.handleUpdate(cfg, u.ResolverState.Attributes)
+		if err := x.client.handleUpdate(cfg, u.ResolverState.Attributes); err != nil {
+			// TODO: propagate this error back to ClientConn, and fail the RPCs.
+			grpclog.Errorf("xds: eds failed to handle resolver update: %v", err)
+		}
 
 		if x.config == nil {
 			x.config = cfg

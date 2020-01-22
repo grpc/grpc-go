@@ -122,23 +122,22 @@ func (c *xdsclientWrapper) replaceXDSClient(newClient xdsClientInterface, newBal
 // the balancerName (from bootstrap file or from service config) changed.
 // - if balancer names are the same, do nothing, and return false
 // - if balancer names are different, create new one, and return true
-func (c *xdsclientWrapper) updateXDSClient(config *EDSConfig, attr *attributes.Attributes) bool {
+func (c *xdsclientWrapper) updateXDSClient(config *EDSConfig, attr *attributes.Attributes) (bool, error) {
 	if attr != nil {
 		if clientFromAttr, _ := attr.Value(xdsinternal.XDSClientID).(xdsClientInterface); clientFromAttr != nil {
 			// This will also clear balancerName, to indicate that client is
 			// from attributes.
-			return c.replaceXDSClient(clientFromAttr, "")
+			return c.replaceXDSClient(clientFromAttr, ""), nil
 		}
 	}
 
 	clientConfig, err := bootstrapConfigNew()
 	if err != nil {
-		// TODO: propogate this error to ClientConn, and fail RPCs if necessary.
-		return false
+		return false, err
 	}
 
 	if c.balancerName == clientConfig.BalancerName {
-		return false
+		return false, nil
 	}
 
 	if clientConfig.Creds == nil {
@@ -161,9 +160,9 @@ func (c *xdsclientWrapper) updateXDSClient(config *EDSConfig, attr *attributes.A
 		//
 		// This could leave c.xdsclient as nil if this is the first update.
 		grpclog.Warningf("eds: failed to create xdsclient, error: %v", err)
-		return false
+		return false, err
 	}
-	return c.replaceXDSClient(newClient, clientConfig.BalancerName)
+	return c.replaceXDSClient(newClient, clientConfig.BalancerName), nil
 }
 
 // startEDSWatch starts the EDS watch. Caller can call this when the xds_client
@@ -218,8 +217,11 @@ func (c *xdsclientWrapper) startLoadReport(edsServiceNameBeingWatched string, lo
 
 // handleUpdate applies the service config and attributes updates to the client,
 // including updating the xds_client to use, and updating the EDS name to watch.
-func (c *xdsclientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attributes) {
-	clientChanged := c.updateXDSClient(config, attr)
+func (c *xdsclientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attributes) error {
+	clientChanged, err := c.updateXDSClient(config, attr)
+	if err != nil {
+		return err
+	}
 
 	var (
 		restartWatchEDS   bool
@@ -254,6 +256,7 @@ func (c *xdsclientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attr
 	if restartLoadReport {
 		c.startLoadReport(nameToWatch, config.LrsLoadReportingServerName)
 	}
+	return nil
 }
 
 func (c *xdsclientWrapper) close() {

@@ -49,7 +49,7 @@ func init() {
 
 	bootstrapConfigNew = func() (*bootstrap.Config, error) {
 		return &bootstrap.Config{
-			BalancerName: "",
+			BalancerName: "no.balancer.name",
 			Creds:        grpc.WithInsecure(),
 			NodeProto:    &corepb.Node{},
 		}, nil
