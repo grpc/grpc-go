@@ -49,7 +49,7 @@ func init() {
 
 	bootstrapConfigNew = func() (*bootstrap.Config, error) {
 		return &bootstrap.Config{
-			BalancerName: "",
+			BalancerName: testBalancerNameFooBar,
 			Creds:        grpc.WithInsecure(),
 			NodeProto:    &corepb.Node{},
 		}, nil
@@ -215,6 +215,15 @@ func setup(edsLBCh *testutils.Channel, xdsClientCh *testutils.Channel) func() {
 //   balancerName in the lbConfig. We expect xdsClient objects to created
 //   whenever the balancerName changes.
 func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
+	oldBootstrapConfigNew := bootstrapConfigNew
+	bootstrapConfigNew = func() (*bootstrap.Config, error) {
+		// Return an error from bootstrap, so the eds balancer will use
+		// BalancerName from the config.
+		//
+		// TODO: remove this when deleting BalancerName from config.
+		return nil, fmt.Errorf("no bootstrap available")
+	}
+	defer func() { bootstrapConfigNew = oldBootstrapConfigNew }()
 	edsLBCh := testutils.NewChannel()
 	xdsClientCh := testutils.NewChannel()
 	cancel := setup(edsLBCh, xdsClientCh)
