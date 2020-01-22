@@ -244,14 +244,14 @@ func TestNewConfig(t *testing.T) {
 				t.Fatalf("os.Setenv(%s, %s) failed with error: %v", fileEnv, test.name, err)
 			}
 			config, err := NewConfig()
-			if test.wantError {
-				if err == nil {
-					t.Fatalf("wantError: %v, got error %v", test.wantError, err)
+			if err != nil {
+				if !test.wantError {
+					t.Fatalf("unexpected error %v", err)
 				}
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error %v", err)
+			if test.wantError {
+				t.Fatalf("wantError: %v, got error %v", test.wantError, err)
 			}
 			if config.BalancerName != test.wantConfig.BalancerName {
 				t.Errorf("config.BalancerName is %s, want %s", config.BalancerName, test.wantConfig.BalancerName)
