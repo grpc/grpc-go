@@ -220,7 +220,11 @@ func (te *test) clientConn() *grpc.ClientConn {
 	if te.cc != nil {
 		return te.cc
 	}
-	opts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
+	opts := []grpc.DialOption{
+		grpc.WithInsecure(),
+		grpc.WithBlock(),
+		grpc.WithUserAgent("test/0.0.1"),
+	}
 	if te.compress == "gzip" {
 		opts = append(opts,
 			grpc.WithCompressor(grpc.NewGZIPCompressor()),

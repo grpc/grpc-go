@@ -245,6 +245,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 			updateFlowControl: t.updateFlowControl,
 		}
 	}
+
 	if t.stats != nil {
 		t.ctx = t.stats.TagConn(t.ctx, &stats.ConnTagInfo{
 			RemoteAddr: t.remoteAddr,
@@ -413,9 +414,13 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	s.requestRead = func(n int) {
 		t.adjustWindow(s, uint32(n))
 	}
+
 	s.ctx = traceCtx(s.ctx, s.method)
 	if t.stats != nil {
-		s.ctx = t.stats.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
+		s.ctx = t.stats.TagRPC(s.ctx, &stats.RPCTagInfo{
+			FullMethodName: s.method,
+			UserAgent:      state.data.mdata["user-agent"][0],
+		})
 		inHeader := &stats.InHeader{
 			FullMethod:  s.method,
 			RemoteAddr:  t.remoteAddr,
