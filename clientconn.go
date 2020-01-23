@@ -454,8 +454,8 @@ type ClientConnInterface interface {
 	NewStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (ClientStream, error)
 }
 
-// Assert ClientConn implements InvokerStreamer.
-var _ InvokerStreamer = (*ClientConn)(nil)
+// Assert ClientConn implements ClientConnInterface.
+var _ ClientConnInterface = (*ClientConn)(nil)
 
 // ClientConn represents a virtual connection to a conceptual endpoint, to
 // perform RPCs.
