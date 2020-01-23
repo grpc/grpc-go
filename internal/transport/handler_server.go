@@ -354,9 +354,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 	ctx = metadata.NewIncomingContext(ctx, ht.headerMD)
 	s.ctx = peer.NewContext(ctx, pr)
 	if ht.stats != nil {
-		s.ctx = ht.stats.TagRPC(s.ctx, &stats.RPCTagInfo{
-			FullMethodName: s.method,
-		})
+		s.ctx = ht.stats.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
 		inHeader := &stats.InHeader{
 			FullMethod:  s.method,
 			RemoteAddr:  ht.RemoteAddr(),

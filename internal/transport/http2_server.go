@@ -413,7 +413,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	s.requestRead = func(n int) {
 		t.adjustWindow(s, uint32(n))
 	}
-
 	s.ctx = traceCtx(s.ctx, s.method)
 	if t.stats != nil {
 		s.ctx = t.stats.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
