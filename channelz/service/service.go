@@ -24,6 +24,7 @@ package service
 import (
 	"context"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
@@ -39,16 +40,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func init() {
-	channelz.TurnOn()
-}
-
 func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
 	return ptypes.DurationProto(time.Duration(sec*1e9 + usec*1e3))
 }
 
+var channelzTurnOnOnce sync.Once
+
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
 func RegisterChannelzServiceToServer(s *grpc.Server) {
+	channelzTurnOnOnce.Do(channelz.TurnOn)
 	channelzgrpc.RegisterChannelzServer(s, newCZServer())
 }
 
