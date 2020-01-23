@@ -191,6 +191,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			cancel()
 		}
 	}()
+	ctx = metadata.NewOutgoingContext(ctx, metadata.MD{"user-agent": []string{cc.dopts.copts.UserAgent}})
 
 	for _, o := range opts {
 		if err := o.before(c); err != nil {
@@ -245,7 +246,6 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		ctx = trace.NewContext(ctx, trInfo.tr)
 	}
 	ctx = newContextWithRPCInfo(ctx, c.failFast, c.codec, cp, comp)
-	ctx = metadata.NewOutgoingContext(ctx, metadata.MD{"user-agent": []string{cc.dopts.copts.UserAgent}})
 	sh := cc.dopts.copts.StatsHandler
 	var beginTime time.Time
 	if sh != nil {
