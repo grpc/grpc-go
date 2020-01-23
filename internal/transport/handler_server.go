@@ -356,6 +356,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 	if ht.stats != nil {
 		s.ctx = ht.stats.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
 		inHeader := &stats.InHeader{
+			
 			FullMethod:  s.method,
 			RemoteAddr:  ht.RemoteAddr(),
 			Compression: s.recvCompress,
