@@ -193,7 +193,6 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}()
 	ctx = metadata.AppendToOutgoingContext(ctx, "user-agent", cc.dopts.copts.UserAgent)
 
-
 	for _, o := range opts {
 		if err := o.before(c); err != nil {
 			return nil, toRPCErr(err)
