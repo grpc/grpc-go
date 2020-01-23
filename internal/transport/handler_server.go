@@ -356,7 +356,6 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 	if ht.stats != nil {
 		s.ctx = ht.stats.TagRPC(s.ctx, &stats.RPCTagInfo{
 			FullMethodName: s.method,
-			UserAgent:      ht.headerMD.Get("user-agent")[0],
 		})
 		inHeader := &stats.InHeader{
 			FullMethod:  s.method,

@@ -245,13 +245,13 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		ctx = trace.NewContext(ctx, trInfo.tr)
 	}
 	ctx = newContextWithRPCInfo(ctx, c.failFast, c.codec, cp, comp)
+	ctx = metadata.NewOutgoingContext(ctx, metadata.MD{"user-agent": []string{cc.dopts.copts.UserAgent}})
 	sh := cc.dopts.copts.StatsHandler
 	var beginTime time.Time
 	if sh != nil {
 		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{
 			FullMethodName: method,
 			FailFast:       c.failFast,
-			UserAgent:      cc.dopts.copts.UserAgent,
 		})
 		beginTime = time.Now()
 		begin := &stats.Begin{

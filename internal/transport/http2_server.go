@@ -419,7 +419,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	if t.stats != nil {
 		s.ctx = t.stats.TagRPC(s.ctx, &stats.RPCTagInfo{
 			FullMethodName: s.method,
-			UserAgent:      state.data.mdata["user-agent"][0],
 		})
 		inHeader := &stats.InHeader{
 			FullMethod:  s.method,

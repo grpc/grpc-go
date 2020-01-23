@@ -38,8 +38,6 @@ type RPCTagInfo struct {
 	// FailFast indicates if this RPC is failfast.
 	// This field is only valid on client side, it's always false on server side.
 	FailFast bool
-	// UserAgent stores client user agent.
-	UserAgent string
 }
 
 // Handler defines the interface for the related stats handling (e.g., RPCs, connections).
