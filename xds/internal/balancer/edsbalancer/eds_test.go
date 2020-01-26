@@ -47,12 +47,12 @@ import (
 func init() {
 	balancer.Register(&edsBalancerBuilder{})
 
-	bootstrapConfigNew = func() *bootstrap.Config {
+	bootstrapConfigNew = func() (*bootstrap.Config, error) {
 		return &bootstrap.Config{
-			BalancerName: "",
+			BalancerName: testBalancerNameFooBar,
 			Creds:        grpc.WithInsecure(),
 			NodeProto:    &corepb.Node{},
-		}
+		}, nil
 	}
 }
 
@@ -215,6 +215,15 @@ func setup(edsLBCh *testutils.Channel, xdsClientCh *testutils.Channel) func() {
 //   balancerName in the lbConfig. We expect xdsClient objects to created
 //   whenever the balancerName changes.
 func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
+	oldBootstrapConfigNew := bootstrapConfigNew
+	bootstrapConfigNew = func() (*bootstrap.Config, error) {
+		// Return an error from bootstrap, so the eds balancer will use
+		// BalancerName from the config.
+		//
+		// TODO: remove this when deleting BalancerName from config.
+		return nil, fmt.Errorf("no bootstrap available")
+	}
+	defer func() { bootstrapConfigNew = oldBootstrapConfigNew }()
 	edsLBCh := testutils.NewChannel()
 	xdsClientCh := testutils.NewChannel()
 	cancel := setup(edsLBCh, xdsClientCh)
@@ -274,15 +283,11 @@ type fakeBalancer struct {
 	cc balancer.ClientConn
 }
 
-func (b *fakeBalancer) ResolverError(error) {
+func (b *fakeBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 	panic("implement me")
 }
 
-func (b *fakeBalancer) UpdateClientConnState(balancer.ClientConnState) error {
-	panic("implement me")
-}
-
-func (b *fakeBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
+func (b *fakeBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
 	panic("implement me")
 }
 

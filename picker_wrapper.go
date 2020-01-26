@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 
@@ -31,13 +32,33 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// v2PickerWrapper wraps a balancer.Picker while providing the
+// balancer.V2Picker API.  It requires a pickerWrapper to generate errors
+// including the latest connectionError.  To be deleted when balancer.Picker is
+// updated to the balancer.V2Picker API.
+type v2PickerWrapper struct {
+	picker  balancer.Picker
+	connErr *connErr
+}
+
+func (v *v2PickerWrapper) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	sc, done, err := v.picker.Pick(info.Ctx, info)
+	if err != nil {
+		if err == balancer.ErrTransientFailure {
+			return balancer.PickResult{}, balancer.TransientFailureError(fmt.Errorf("%v, latest connection error: %v", err, v.connErr.connectionError()))
+		}
+		return balancer.PickResult{}, err
+	}
+	return balancer.PickResult{SubConn: sc, Done: done}, nil
+}
+
 // pickerWrapper is a wrapper of balancer.Picker. It blocks on certain pick
 // actions and unblock when there's a picker update.
 type pickerWrapper struct {
 	mu         sync.Mutex
 	done       bool
 	blockingCh chan struct{}
-	picker     balancer.Picker
+	picker     balancer.V2Picker
 
 	// The latest connection error.  TODO: remove when V1 picker is deprecated;
 	// balancer should be responsible for providing the error.
@@ -68,6 +89,11 @@ func newPickerWrapper() *pickerWrapper {
 
 // updatePicker is called by UpdateBalancerState. It unblocks all blocked pick.
 func (pw *pickerWrapper) updatePicker(p balancer.Picker) {
+	pw.updatePickerV2(&v2PickerWrapper{picker: p, connErr: pw.connErr})
+}
+
+// updatePicker is called by UpdateBalancerState. It unblocks all blocked pick.
+func (pw *pickerWrapper) updatePickerV2(p balancer.V2Picker) {
 	pw.mu.Lock()
 	if pw.done {
 		pw.mu.Unlock()
@@ -154,18 +180,18 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 			if err == balancer.ErrNoSubConnAvailable {
 				continue
 			}
-			if drop, ok := err.(interface{ DropRPC() bool }); ok && drop.DropRPC() {
-				// End the RPC unconditionally.  If not a status error, Convert
-				// will transform it into one with code Unknown.
-				return nil, nil, status.Convert(err).Err()
+			if tfe, ok := err.(interface{ IsTransientFailure() bool }); ok && tfe.IsTransientFailure() {
+				if !failfast {
+					lastPickErr = err
+					continue
+				}
+				return nil, nil, status.Error(codes.Unavailable, err.Error())
 			}
-			// For all other errors, wait for ready RPCs should block and other
-			// RPCs should fail.
-			if !failfast {
-				lastPickErr = err
-				continue
+			if _, ok := status.FromError(err); ok {
+				return nil, nil, err
 			}
-			return nil, nil, status.Error(codes.Unavailable, err.Error())
+			// err is some other error.
+			return nil, nil, status.Error(codes.Unknown, err.Error())
 		}
 
 		acw, ok := pickResult.SubConn.(*acBalancerWrapper)

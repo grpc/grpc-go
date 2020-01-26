@@ -58,9 +58,7 @@ type dialOptions struct {
 	callOptions []CallOption
 	// This is used by v1 balancer dial option WithBalancer to support v1
 	// balancer, and also by WithBalancerName dial option.
-	balancerBuilder balancer.Builder
-	// This is to support grpclb.
-	resolverBuilder             resolver.Builder
+	balancerBuilder             balancer.Builder
 	channelzParentID            int64
 	disableServiceConfig        bool
 	disableRetry                bool
@@ -73,6 +71,7 @@ type dialOptions struct {
 	// resolver.ResolveNow(). The user will have no need to configure this, but
 	// we need to be able to configure this in tests.
 	resolveNowBackoff func(int) time.Duration
+	resolvers         []resolver.Builder
 }
 
 // DialOption configures how we set up the connection.
@@ -199,6 +198,19 @@ func WithDecompressor(dc Decompressor) DialOption {
 	})
 }
 
+// WithBalancer returns a DialOption which sets a load balancer with the v1 API.
+// Name resolver will be ignored if this DialOption is specified.
+//
+// Deprecated: use the new balancer APIs in balancer package and
+// WithBalancerName.  Will be removed in a future 1.x release.
+func WithBalancer(b Balancer) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.balancerBuilder = &balancerWrapperBuilder{
+			b: b,
+		}
+	})
+}
+
 // WithBalancerName sets the balancer that the ClientConn will be initialized
 // with. Balancer registered with balancerName will be used. This function
 // panics if no balancer was registered by balancerName.
@@ -215,13 +227,6 @@ func WithBalancerName(balancerName string) DialOption {
 	}
 	return newFuncDialOption(func(o *dialOptions) {
 		o.balancerBuilder = builder
-	})
-}
-
-// withResolverBuilder is only for grpclb.
-func withResolverBuilder(b resolver.Builder) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.resolverBuilder = b
 	})
 }
 
@@ -352,7 +357,6 @@ func WithContextDialer(f func(context.Context, string) (net.Conn, error)) DialOp
 }
 
 func init() {
-	internal.WithResolverBuilder = withResolverBuilder
 	internal.WithHealthCheckFunc = withHealthCheckFunc
 }
 
@@ -574,5 +578,17 @@ func withMinConnectDeadline(f func() time.Duration) DialOption {
 func withResolveNowBackoff(f func(int) time.Duration) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.resolveNowBackoff = f
+	})
+}
+
+// WithResolvers allows a list of resolver implementations to be registered
+// locally with the ClientConn without needing to be globally registered via
+// resolver.Register.  They will be matched against the scheme used for the
+// current Dial only, and will take precedence over the global registry.
+//
+// This API is EXPERIMENTAL.
+func WithResolvers(rs ...resolver.Builder) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.resolvers = append(o.resolvers, rs...)
 	})
 }

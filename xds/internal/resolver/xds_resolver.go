@@ -21,7 +21,6 @@ package resolver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"google.golang.org/grpc"
@@ -57,9 +56,9 @@ type xdsResolverBuilder struct{}
 // The xds bootstrap process is performed (and a new xds client is built) every
 // time an xds resolver is built.
 func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rbo resolver.BuildOptions) (resolver.Resolver, error) {
-	config := newXDSConfig()
-	if config.BalancerName == "" {
-		return nil, errors.New("xds: balancerName not found in bootstrap file")
+	config, err := newXDSConfig()
+	if err != nil {
+		return nil, fmt.Errorf("xds: failed to read bootstrap file: %v", err)
 	}
 	if config.Creds == nil {
 		// TODO: Once we start supporting a mechanism to register credential
