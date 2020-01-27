@@ -8,10 +8,10 @@ How to Generate Test Certificates Using OpenSSL
 Supposing we are going to create a `subject_cert.pem` that is trusted by `ca_cert.pem`, here are the
 commands we run: 
 
-1. Generate a private key `subject_key.pem` for the subject: 
-   
+1. Generate the private key, `ca_key.pem`, and the cert `ca_cert.pem`, for the CA:
+
    ```
-   $ openssl genrsa -out subject_key.pem 4096
+   $ openssl req -x509 -newkey rsa:4096 -keyout ca_key.pem -out ca_cert.pem -nodes -days $DURATION_DAYS
    ```
 
 2. Generate a CSR `csr.pem` using `subject_key.pem`:
@@ -20,10 +20,10 @@ commands we run:
    $ openssl req -new -key subject_key.pem -out csr.pem
    ```
 
-3. Generate the private key, `ca_key.pem`, and the cert `ca_cert.pem`, for the CA:
-
+3. Generate a private key `subject_key.pem` for the subject: 
+   
    ```
-   $ openssl req -x509 -newkey rsa:4096 -keyout ca_key.pem -out ca_cert.pem -nodes -days $DURATION_DAYS
+   $ openssl genrsa -out subject_key.pem 4096
    ```
 
 4. Use `ca_key.pem` and `ca_cert.pem` to sign `csr.pem`, and get a certificate, `subject_cert.pem`, for the subject:
