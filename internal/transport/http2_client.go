@@ -1194,11 +1194,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		isGRPC         = !initialHeader
 		mdata          = make(map[string][]string)
 		statusGen      *status.Status
-		grpcErr        error
-		httpErr        error
 		rawStatusCode  *int
 		httpStatus     *int
-		encoding       string
 		contentTypeErr string
 		rawStatusMsg   string
 	)
@@ -1218,11 +1215,17 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
 			isGRPC = true
 		case "grpc-encoding":
-			encoding = hf.Value
+			if !endStream {
+				s.recvCompress = hf.Value
+			}
 		case "grpc-status":
 			code, err := strconv.Atoi(hf.Value)
 			if err != nil {
-				grpcErr = status.Errorf(codes.Internal, "transport: malformed grpc-status: %v", err)
+				if isGRPC {
+					err = status.Errorf(codes.Internal, "transport: malformed grpc-status: %v", err)
+					t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+					return
+				}
 				break
 			}
 			rawStatusCode = &code
@@ -1231,33 +1234,53 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		case "grpc-status-details-bin":
 			v, err := decodeBinHeader(hf.Value)
 			if err != nil {
-				grpcErr = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
+				if isGRPC {
+					err = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
+					t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+					return
+				}
 				break
 			}
-			s := &spb.Status{}
-			if err := proto.Unmarshal(v, s); err != nil {
-				grpcErr = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
+			pbStatus := &spb.Status{}
+			if err := proto.Unmarshal(v, pbStatus); err != nil {
+				if isGRPC {
+					err = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
+					t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+					return
+				}
 				break
 			}
-			statusGen = status.FromProto(s)
+			statusGen = status.FromProto(pbStatus)
 		case ":status":
 			code, err := strconv.Atoi(hf.Value)
 			if err != nil {
-				httpErr = status.Errorf(codes.Internal, "transport: malformed http-status: %v", err)
+				if !isGRPC {
+					err = status.Errorf(codes.Internal, "transport: malformed http-status: %v", err)
+					t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+					return
+				}
 				break
 			}
 			httpStatus = &code
 		case "grpc-tags-bin":
 			v, err := decodeBinHeader(hf.Value)
 			if err != nil {
-				grpcErr = status.Errorf(codes.Internal, "transport: malformed grpc-tags-bin: %v", err)
+				if isGRPC {
+					err = status.Errorf(codes.Internal, "transport: malformed grpc-tags-bin: %v", err)
+					t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+					return
+				}
 				break
 			}
 			mdata[hf.Name] = append(mdata[hf.Name], string(v))
 		case "grpc-trace-bin":
 			v, err := decodeBinHeader(hf.Value)
 			if err != nil {
-				grpcErr = status.Errorf(codes.Internal, "transport: malformed grpc-trace-bin: %v", err)
+				if isGRPC {
+					err = status.Errorf(codes.Internal, "transport: malformed grpc-trace-bin: %v", err)
+					t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+					return
+				}
 				break
 			}
 			mdata[hf.Name] = append(mdata[hf.Name], string(v))
@@ -1275,10 +1298,6 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 
 	if isGRPC {
-		if grpcErr != nil {
-			t.closeStream(s, grpcErr, true, http2.ErrCodeProtocol, status.Convert(grpcErr), nil, endStream)
-			return
-		}
 		if rawStatusCode == nil && statusGen == nil {
 			// gRPC status doesn't exist.
 			// Set rawStatusCode to be unknown and return nil error.
@@ -1290,11 +1309,6 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			rawStatusCode = &code
 		}
 	} else {
-		if httpErr != nil {
-			t.closeStream(s, httpErr, true, http2.ErrCodeProtocol, status.Convert(httpErr), nil, endStream)
-			return
-		}
-
 		var (
 			code = codes.Internal // when header does not include HTTP status, return INTERNAL
 			ok   bool
@@ -1344,7 +1358,6 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			// These values can be set without any synchronization because
 			// stream goroutine will read it only after seeing a closed
 			// headerChan which we'll close after setting this.
-			s.recvCompress = encoding
 			if len(mdata) > 0 {
 				s.header = mdata
 			}
@@ -1363,7 +1376,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	rst := s.getState() == streamActive
 
 	if statusGen == nil {
-		statusGen = status.New(codes.Code(int32(*(rawStatusCode))), rawStatusMsg)
+		statusGen = status.New(codes.Code(int32(*rawStatusCode)), rawStatusMsg)
 	}
 	t.closeStream(s, io.EOF, rst, http2.ErrCodeNo, statusGen, mdata, true)
 }
