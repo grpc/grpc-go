@@ -34,9 +34,8 @@ var updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {
 }
 
 type itemNode struct {
-	it        interface{}
-	onDequeue func()
-	next      *itemNode
+	it   interface{}
+	next *itemNode
 }
 
 type itemList struct {
@@ -44,8 +43,8 @@ type itemList struct {
 	tail *itemNode
 }
 
-func (il *itemList) enqueue(i interface{}, onDequeue func()) {
-	n := &itemNode{it: i, onDequeue: onDequeue}
+func (il *itemList) enqueue(i interface{}) {
+	n := &itemNode{it: i}
 	if il.tail == nil {
 		il.head, il.tail = n, n
 		return
@@ -64,13 +63,10 @@ func (il *itemList) dequeue() interface{} {
 	if il.head == nil {
 		return nil
 	}
-	i, onDequeue := il.head.it, il.head.onDequeue
+	i := il.head.it
 	il.head = il.head.next
 	if il.head == nil {
 		il.tail = nil
-	}
-	if onDequeue != nil {
-		onDequeue()
 	}
 	return i
 }
@@ -140,7 +136,6 @@ type dataFrame struct {
 	// onEachWrite is called every time
 	// a part of d is written out.
 	onEachWrite func()
-	rb          *ReturnBuffer
 }
 
 func (*dataFrame) isTransportResponseFrame() bool { return false }
@@ -334,7 +329,7 @@ func (c *controlBuffer) executeAndPut(f func(it interface{}) bool, it cbItem) (b
 		wakeUp = true
 		c.consumerWaiting = false
 	}
-	c.list.enqueue(it, nil)
+	c.list.enqueue(it)
 	if it.isTransportResponseFrame() {
 		c.transportResponseFrames++
 		if c.transportResponseFrames == maxQueuedTransportResponseFrames {
@@ -621,7 +616,7 @@ func (l *loopyWriter) headerHandler(h *headerFrame) error {
 
 		if str.state != empty { // either active or waiting on stream quota.
 			// add it str's list of items.
-			str.itl.enqueue(h, nil)
+			str.itl.enqueue(h)
 			return nil
 		}
 		if err := l.writeHeader(h.streamID, h.endStream, h.hf, h.onWrite); err != nil {
@@ -636,7 +631,7 @@ func (l *loopyWriter) headerHandler(h *headerFrame) error {
 		itl:   &itemList{},
 		wq:    h.wq,
 	}
-	str.itl.enqueue(h, nil)
+	str.itl.enqueue(h)
 	return l.originateStream(str)
 }
 
@@ -707,11 +702,7 @@ func (l *loopyWriter) preprocessData(df *dataFrame) error {
 	}
 	// If we got data for a stream it means that
 	// stream was originated and the headers were sent out.
-	var onDequeue func()
-	if df.rb != nil {
-		onDequeue = df.rb.Done
-	}
-	str.itl.enqueue(df, onDequeue)
+	str.itl.enqueue(df)
 	if str.state == empty {
 		str.state = active
 		l.activeStreams.enqueue(str)
@@ -735,12 +726,6 @@ func (l *loopyWriter) outFlowControlSizeRequestHandler(o *outFlowControlSizeRequ
 func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 	c.onWrite()
 	if str, ok := l.estdStreams[c.streamID]; ok {
-		// Dequeue all items from the stream's item list. This would call any pending onDequeue functions.
-		if str.state == active {
-			for !str.itl.isEmpty() {
-				str.itl.dequeue()
-			}
-		}
 		// On the server side it could be a trailers-only response or
 		// a RST_STREAM before stream initialization thus the stream might
 		// not be established yet.
