@@ -681,6 +681,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	}
 	if t.statsHandler != nil {
 		header, _, _ := metadata.FromOutgoingContextRaw(ctx)
+		header = header.Copy()
+		header.Set("user-agent", t.userAgent)
 		outHeader := &stats.OutHeader{
 			Client:      true,
 			FullMethod:  callHdr.Method,
