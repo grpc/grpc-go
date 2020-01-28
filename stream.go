@@ -278,10 +278,6 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	cs.binlog = binarylog.GetMethodLogger(method)
 
-	// Stats handlers and binlog handlers are allowed to retain references to
-	// this slice internally. We may not, therefore, return this to the pool.
-	cs.attemptBufferReuse = sh == nil && cs.binlog == nil
-
 	cs.callInfo.stream = cs
 	// Only this initial attempt has stats/tracing.
 	// TODO(dfawley): move to newAttempt when per-attempt stats are implemented.
@@ -426,12 +422,6 @@ type clientStream struct {
 	committed  bool                       // active attempt committed for retry?
 	buffer     []func(a *csAttempt) error // operations to replay on retry
 	bufferSize int                        // current size of buffer
-	// This is per-stream array instead of a per-attempt one because there may be
-	// multiple attempts working on the same data, but we may not free the same
-	// buffer twice.
-	returnBuffers []*transport.ReturnBuffer
-
-	attemptBufferReuse bool
 }
 
 // csAttempt implements a single transport stream attempt within a
@@ -458,12 +448,8 @@ type csAttempt struct {
 }
 
 func (cs *clientStream) commitAttemptLocked() {
-	cs.buffer = nil
 	cs.committed = true
-	for _, rb := range cs.returnBuffers {
-		rb.Done()
-	}
-	cs.returnBuffers = nil
+	cs.buffer = nil
 }
 
 func (cs *clientStream) commitAttempt() {
@@ -710,14 +696,9 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, payload, data, f, err := prepareMsg(m, cs.codec, cs.cp, cs.comp, cs.attemptBufferReuse)
+	hdr, payload, data, err := prepareMsg(m, cs.codec, cs.cp, cs.comp)
 	if err != nil {
 		return err
-	}
-
-	var rb *transport.ReturnBuffer
-	if f != nil {
-		rb = transport.NewReturnBuffer(1, f)
 	}
 
 	// TODO(dfawley): should we be checking len(data) instead?
@@ -726,29 +707,13 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	}
 	msgBytes := data // Store the pointer before setting to nil. For binary logging.
 	op := func(a *csAttempt) error {
-		err := a.sendMsg(m, hdr, payload, data, rb)
+		err := a.sendMsg(m, hdr, payload, data)
 		// nil out the message and uncomp when replaying; they are only needed for
 		// stats which is disabled for subsequent attempts.
 		m, data = nil, nil
 		return err
 	}
 	err = cs.withRetry(op, func() { cs.bufferForRetryLocked(len(hdr)+len(payload), op) })
-
-	if rb != nil {
-		// If this stream is not committed, the buffer needs to be kept for future
-		// attempts. It's ref-count will be subtracted when committing.
-		//
-		// If this stream is already committed, the ref-count can be subtracted
-		// here.
-		cs.mu.Lock()
-		if !cs.committed {
-			cs.returnBuffers = append(cs.returnBuffers, rb)
-		} else {
-			rb.Done()
-		}
-		cs.mu.Unlock()
-	}
-
 	if cs.binlog != nil && err == nil {
 		cs.binlog.Log(&binarylog.ClientMessage{
 			OnClientSide: true,
@@ -833,7 +798,6 @@ func (cs *clientStream) finish(err error) {
 		cs.mu.Unlock()
 		return
 	}
-
 	cs.finished = true
 	cs.commitAttemptLocked()
 	cs.mu.Unlock()
@@ -869,7 +833,7 @@ func (cs *clientStream) finish(err error) {
 	cs.cancel()
 }
 
-func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte, rb *transport.ReturnBuffer) error {
+func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte) error {
 	cs := a.cs
 	if a.trInfo != nil {
 		a.mu.Lock()
@@ -878,8 +842,7 @@ func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte, rb *transpor
 		}
 		a.mu.Unlock()
 	}
-
-	if err := a.t.Write(a.s, hdr, payld, &transport.Options{Last: !cs.desc.ClientStreams, ReturnBuffer: rb}); err != nil {
+	if err := a.t.Write(a.s, hdr, payld, &transport.Options{Last: !cs.desc.ClientStreams}); err != nil {
 		if !cs.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
 			// because the generated code requires it.  finish is not called; RecvMsg()
@@ -1202,16 +1165,10 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 		as.sentLast = true
 	}
 
-	// load hdr, payload, data, returnBuffer
-	hdr, payld, _, f, err := prepareMsg(m, as.codec, as.cp, as.comp, true)
+	// load hdr, payload, data
+	hdr, payld, _, err := prepareMsg(m, as.codec, as.cp, as.comp)
 	if err != nil {
 		return err
-	}
-
-	var rb *transport.ReturnBuffer
-	if f != nil {
-		rb = transport.NewReturnBuffer(1, f)
-		defer rb.Done()
 	}
 
 	// TODO(dfawley): should we be checking len(data) instead?
@@ -1219,7 +1176,7 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payld), *as.callInfo.maxSendMessageSize)
 	}
 
-	if err := as.t.Write(as.s, hdr, payld, &transport.Options{Last: !as.desc.ClientStreams, ReturnBuffer: rb}); err != nil {
+	if err := as.t.Write(as.s, hdr, payld, &transport.Options{Last: !as.desc.ClientStreams}); err != nil {
 		if !as.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
 			// because the generated code requires it.  finish is not called; RecvMsg()
@@ -1390,8 +1347,6 @@ type serverStream struct {
 	serverHeaderBinlogged bool
 
 	mu sync.Mutex // protects trInfo.tr after the service handler runs.
-
-	attemptBufferReuse bool
 }
 
 func (ss *serverStream) Context() context.Context {
@@ -1453,23 +1408,17 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 		}
 	}()
 
-	// load hdr, payload, returnBuffer, data
-	hdr, payload, data, f, err := prepareMsg(m, ss.codec, ss.cp, ss.comp, ss.attemptBufferReuse)
+	// load hdr, payload, data
+	hdr, payload, data, err := prepareMsg(m, ss.codec, ss.cp, ss.comp)
 	if err != nil {
 		return err
-	}
-
-	var rb *transport.ReturnBuffer
-	if f != nil {
-		rb = transport.NewReturnBuffer(1, f)
-		defer rb.Done()
 	}
 
 	// TODO(dfawley): should we be checking len(data) instead?
 	if len(payload) > ss.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), ss.maxSendMessageSize)
 	}
-	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false, ReturnBuffer: rb}); err != nil {
+	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
 	}
 	if ss.binlog != nil {
@@ -1558,44 +1507,23 @@ func MethodFromServerStream(stream ServerStream) (string, bool) {
 	return Method(stream.Context())
 }
 
-// Threshold beyond which buffer reuse should apply.
-//
-// TODO(adtac): make this an option in the future so that the user can
-// configure it per-RPC or even per-message?
-const bufferReuseThreshold = 1024
-
 // prepareMsg returns the hdr, payload and data
 // using the compressors passed or using the
 // passed preparedmsg
-func prepareMsg(m interface{}, codec baseCodec, cp Compressor, comp encoding.Compressor, attemptBufferReuse bool) (hdr, payload, data []byte, returnBuffer func(), err error) {
+func prepareMsg(m interface{}, codec baseCodec, cp Compressor, comp encoding.Compressor) (hdr, payload, data []byte, err error) {
 	if preparedMsg, ok := m.(*PreparedMsg); ok {
-		f := preparedMsg.returnBuffer
-		if !attemptBufferReuse {
-			f = nil
-		}
-		return preparedMsg.hdr, preparedMsg.payload, preparedMsg.encodedData, f, nil
+		return preparedMsg.hdr, preparedMsg.payload, preparedMsg.encodedData, nil
 	}
-
 	// The input interface is not a prepared msg.
 	// Marshal and Compress the data at this point
 	data, err = encode(codec, m)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
-
-	if attemptBufferReuse && cap(data) >= bufferReuseThreshold {
-		if bcodec, ok := codec.(bufferReturner); ok {
-			returnBuffer = func() {
-				bcodec.ReturnBuffer(data)
-			}
-		}
-	}
-
 	compData, err := compress(data, cp, comp)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
-
 	hdr, payload = msgHeader(data, compData)
-	return hdr, payload, data, returnBuffer, nil
+	return hdr, payload, data, nil
 }
