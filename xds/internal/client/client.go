@@ -24,10 +24,12 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
@@ -67,7 +69,15 @@ func New(opts Options) (*Client, error) {
 		return nil, errors.New("xds: no node_proto provided in options")
 	}
 
-	dopts := append([]grpc.DialOption{opts.Config.Creds}, opts.DialOpts...)
+	dopts := []grpc.DialOption{
+		opts.Config.Creds,
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:    5 * time.Minute,
+			Timeout: 20 * time.Second,
+		}),
+	}
+	dopts = append(dopts, opts.DialOpts...)
+
 	cc, err := grpc.Dial(opts.Config.BalancerName, dopts...)
 	if err != nil {
 		// An error from a non-blocking dial indicates something serious.
