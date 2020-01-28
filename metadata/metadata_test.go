@@ -23,9 +23,20 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
+
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 )
 
-func TestPairsMD(t *testing.T) {
+type s struct {
+	tlogger.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestPairsMD(t *testing.T) {
 	for _, test := range []struct {
 		// input
 		kv []string
@@ -42,7 +53,7 @@ func TestPairsMD(t *testing.T) {
 	}
 }
 
-func TestCopy(t *testing.T) {
+func (s) TestCopy(t *testing.T) {
 	const key, val = "key", "val"
 	orig := Pairs(key, val)
 	cpy := orig.Copy()
@@ -55,7 +66,7 @@ func TestCopy(t *testing.T) {
 	}
 }
 
-func TestJoin(t *testing.T) {
+func (s) TestJoin(t *testing.T) {
 	for _, test := range []struct {
 		mds  []MD
 		want MD
@@ -72,7 +83,7 @@ func TestJoin(t *testing.T) {
 	}
 }
 
-func TestGet(t *testing.T) {
+func (s) TestGet(t *testing.T) {
 	for _, test := range []struct {
 		md       MD
 		key      string
@@ -89,7 +100,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-func TestSet(t *testing.T) {
+func (s) TestSet(t *testing.T) {
 	for _, test := range []struct {
 		md      MD
 		setKey  string
@@ -122,7 +133,7 @@ func TestSet(t *testing.T) {
 	}
 }
 
-func TestAppend(t *testing.T) {
+func (s) TestAppend(t *testing.T) {
 	for _, test := range []struct {
 		md         MD
 		appendKey  string
@@ -156,7 +167,7 @@ func TestAppend(t *testing.T) {
 	}
 }
 
-func TestAppendToOutgoingContext(t *testing.T) {
+func (s) TestAppendToOutgoingContext(t *testing.T) {
 	// Pre-existing metadata
 	ctx := NewOutgoingContext(context.Background(), Pairs("k1", "v1", "k2", "v2"))
 	ctx = AppendToOutgoingContext(ctx, "k1", "v3")
@@ -182,7 +193,7 @@ func TestAppendToOutgoingContext(t *testing.T) {
 	}
 }
 
-func TestAppendToOutgoingContext_Repeated(t *testing.T) {
+func (s) TestAppendToOutgoingContext_Repeated(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 100; i = i + 2 {
@@ -200,7 +211,7 @@ func TestAppendToOutgoingContext_Repeated(t *testing.T) {
 	}
 }
 
-func TestAppendToOutgoingContext_FromKVSlice(t *testing.T) {
+func (s) TestAppendToOutgoingContext_FromKVSlice(t *testing.T) {
 	const k, v = "a", "b"
 	kv := []string{k, v}
 	ctx := AppendToOutgoingContext(context.Background(), kv...)

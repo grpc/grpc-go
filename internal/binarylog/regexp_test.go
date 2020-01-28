@@ -23,7 +23,7 @@ import (
 	"testing"
 )
 
-func TestLongMethodConfigRegexp(t *testing.T) {
+func (s) TestLongMethodConfigRegexp(t *testing.T) {
 	testCases := []struct {
 		in  string
 		out []string
@@ -87,7 +87,7 @@ func TestLongMethodConfigRegexp(t *testing.T) {
 	}
 }
 
-func TestHeaderConfigRegexp(t *testing.T) {
+func (s) TestHeaderConfigRegexp(t *testing.T) {
 	testCases := []struct {
 		in  string
 		out []string
@@ -114,7 +114,7 @@ func TestHeaderConfigRegexp(t *testing.T) {
 	}
 }
 
-func TestMessageConfigRegexp(t *testing.T) {
+func (s) TestMessageConfigRegexp(t *testing.T) {
 	testCases := []struct {
 		in  string
 		out []string
@@ -141,7 +141,7 @@ func TestMessageConfigRegexp(t *testing.T) {
 	}
 }
 
-func TestHeaderMessageConfigRegexp(t *testing.T) {
+func (s) TestHeaderMessageConfigRegexp(t *testing.T) {
 	testCases := []struct {
 		in  string
 		out []string

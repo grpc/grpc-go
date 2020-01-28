@@ -23,9 +23,20 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 )
 
-func TestStringWithAllowedValues(t *testing.T) {
+type s struct {
+	tlogger.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestStringWithAllowedValues(t *testing.T) {
 	const defaultVal = "default"
 	tests := []struct {
 		args    string
@@ -54,7 +65,7 @@ func TestStringWithAllowedValues(t *testing.T) {
 	}
 }
 
-func TestDurationSlice(t *testing.T) {
+func (s) TestDurationSlice(t *testing.T) {
 	defaultVal := []time.Duration{time.Second, time.Nanosecond}
 	tests := []struct {
 		args    string
@@ -83,7 +94,7 @@ func TestDurationSlice(t *testing.T) {
 	}
 }
 
-func TestIntSlice(t *testing.T) {
+func (s) TestIntSlice(t *testing.T) {
 	defaultVal := []int{1, 1024}
 	tests := []struct {
 		args    string
@@ -112,7 +123,7 @@ func TestIntSlice(t *testing.T) {
 	}
 }
 
-func TestStringSlice(t *testing.T) {
+func (s) TestStringSlice(t *testing.T) {
 	defaultVal := []string{"bar", "baz"}
 	tests := []struct {
 		args    string

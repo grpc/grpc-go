@@ -25,9 +25,20 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 )
 
-func TestCircularBufferSerial(t *testing.T) {
+type s struct {
+	tlogger.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestCircularBufferSerial(t *testing.T) {
 	var size, i uint32
 	var result []interface{}
 
@@ -68,7 +79,7 @@ func TestCircularBufferSerial(t *testing.T) {
 	}
 }
 
-func TestCircularBufferOverflow(t *testing.T) {
+func (s) TestCircularBufferOverflow(t *testing.T) {
 	var size, i uint32
 	var result []interface{}
 
@@ -95,7 +106,7 @@ func TestCircularBufferOverflow(t *testing.T) {
 	}
 }
 
-func TestCircularBufferConcurrent(t *testing.T) {
+func (s) TestCircularBufferConcurrent(t *testing.T) {
 	for tn := 0; tn < 2; tn++ {
 		var size uint32
 		var result []interface{}

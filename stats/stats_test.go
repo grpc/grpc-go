@@ -30,11 +30,21 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	testpb "google.golang.org/grpc/stats/grpc_testing"
 	"google.golang.org/grpc/status"
 )
+
+type s struct {
+	tlogger.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 func init() {
 	grpc.EnableTracing = false
@@ -877,7 +887,7 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 	checkServerStats(t, h.gotRPC, expect, checkFuncs)
 }
 
-func TestServerStatsUnaryRPC(t *testing.T) {
+func (s) TestServerStatsUnaryRPC(t *testing.T) {
 	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
@@ -889,7 +899,7 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 	})
 }
 
-func TestServerStatsUnaryRPCError(t *testing.T) {
+func (s) TestServerStatsUnaryRPCError(t *testing.T) {
 	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
@@ -900,7 +910,7 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 	})
 }
 
-func TestServerStatsClientStreamRPC(t *testing.T) {
+func (s) TestServerStatsClientStreamRPC(t *testing.T) {
 	count := 5
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
@@ -921,7 +931,7 @@ func TestServerStatsClientStreamRPC(t *testing.T) {
 	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, callType: clientStreamRPC}, checkFuncs)
 }
 
-func TestServerStatsClientStreamRPCError(t *testing.T) {
+func (s) TestServerStatsClientStreamRPCError(t *testing.T) {
 	count := 1
 	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: clientStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
@@ -933,7 +943,7 @@ func TestServerStatsClientStreamRPCError(t *testing.T) {
 	})
 }
 
-func TestServerStatsServerStreamRPC(t *testing.T) {
+func (s) TestServerStatsServerStreamRPC(t *testing.T) {
 	count := 5
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
@@ -954,7 +964,7 @@ func TestServerStatsServerStreamRPC(t *testing.T) {
 	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, callType: serverStreamRPC}, checkFuncs)
 }
 
-func TestServerStatsServerStreamRPCError(t *testing.T) {
+func (s) TestServerStatsServerStreamRPCError(t *testing.T) {
 	count := 5
 	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: serverStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
@@ -966,7 +976,7 @@ func TestServerStatsServerStreamRPCError(t *testing.T) {
 	})
 }
 
-func TestServerStatsFullDuplexRPC(t *testing.T) {
+func (s) TestServerStatsFullDuplexRPC(t *testing.T) {
 	count := 5
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
@@ -987,7 +997,7 @@ func TestServerStatsFullDuplexRPC(t *testing.T) {
 	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, callType: fullDuplexStreamRPC}, checkFuncs)
 }
 
-func TestServerStatsFullDuplexRPCError(t *testing.T) {
+func (s) TestServerStatsFullDuplexRPCError(t *testing.T) {
 	count := 5
 	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: fullDuplexStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
@@ -1172,7 +1182,7 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 	checkClientStats(t, h.gotRPC, expect, checkFuncs)
 }
 
-func TestClientStatsUnaryRPC(t *testing.T) {
+func (s) TestClientStatsUnaryRPC(t *testing.T) {
 	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, failfast: false, callType: unaryRPC}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
@@ -1184,7 +1194,7 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 	})
 }
 
-func TestClientStatsUnaryRPCError(t *testing.T) {
+func (s) TestClientStatsUnaryRPCError(t *testing.T) {
 	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, failfast: false, callType: unaryRPC}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
@@ -1195,7 +1205,7 @@ func TestClientStatsUnaryRPCError(t *testing.T) {
 	})
 }
 
-func TestClientStatsClientStreamRPC(t *testing.T) {
+func (s) TestClientStatsClientStreamRPC(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: clientStreamRPC}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
@@ -1208,7 +1218,7 @@ func TestClientStatsClientStreamRPC(t *testing.T) {
 	})
 }
 
-func TestClientStatsClientStreamRPCError(t *testing.T) {
+func (s) TestClientStatsClientStreamRPCError(t *testing.T) {
 	count := 1
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: clientStreamRPC}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
@@ -1220,7 +1230,7 @@ func TestClientStatsClientStreamRPCError(t *testing.T) {
 	})
 }
 
-func TestClientStatsServerStreamRPC(t *testing.T) {
+func (s) TestClientStatsServerStreamRPC(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: serverStreamRPC}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
@@ -1233,7 +1243,7 @@ func TestClientStatsServerStreamRPC(t *testing.T) {
 	})
 }
 
-func TestClientStatsServerStreamRPCError(t *testing.T) {
+func (s) TestClientStatsServerStreamRPCError(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: serverStreamRPC}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
@@ -1245,7 +1255,7 @@ func TestClientStatsServerStreamRPCError(t *testing.T) {
 	})
 }
 
-func TestClientStatsFullDuplexRPC(t *testing.T) {
+func (s) TestClientStatsFullDuplexRPC(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: fullDuplexStreamRPC}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
@@ -1258,7 +1268,7 @@ func TestClientStatsFullDuplexRPC(t *testing.T) {
 	})
 }
 
-func TestClientStatsFullDuplexRPCError(t *testing.T) {
+func (s) TestClientStatsFullDuplexRPCError(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: fullDuplexStreamRPC}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
@@ -1270,7 +1280,7 @@ func TestClientStatsFullDuplexRPCError(t *testing.T) {
 	})
 }
 
-func TestTags(t *testing.T) {
+func (s) TestTags(t *testing.T) {
 	b := []byte{5, 2, 4, 3, 1}
 	ctx := stats.SetTags(context.Background(), b)
 	if tg := stats.OutgoingTags(ctx); !reflect.DeepEqual(tg, b) {
@@ -1289,7 +1299,7 @@ func TestTags(t *testing.T) {
 	}
 }
 
-func TestTrace(t *testing.T) {
+func (s) TestTrace(t *testing.T) {
 	b := []byte{5, 2, 4, 3, 1}
 	ctx := stats.SetTrace(context.Background(), b)
 	if tr := stats.OutgoingTrace(ctx); !reflect.DeepEqual(tr, b) {

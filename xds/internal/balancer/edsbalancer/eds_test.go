@@ -388,7 +388,7 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	edsLB.waitForSubConnStateChange(&scStateChange{sc: fsc, state: state})
 }
 
-func TestXDSBalancerConfigParsing(t *testing.T) {
+func (s) TestXDSBalancerConfigParsing(t *testing.T) {
 	const testEDSName = "eds.service"
 	var testLRSName = "lrs.server"
 	b := bytes.NewBuffer(nil)
@@ -499,7 +499,7 @@ func TestXDSBalancerConfigParsing(t *testing.T) {
 		})
 	}
 }
-func TestLoadbalancingConfigParsing(t *testing.T) {
+func (s) TestLoadbalancingConfigParsing(t *testing.T) {
 	tests := []struct {
 		name string
 		s    string
@@ -541,7 +541,7 @@ func TestLoadbalancingConfigParsing(t *testing.T) {
 	}
 }
 
-func TestEqualStringPointers(t *testing.T) {
+func (s) TestEqualStringPointers(t *testing.T) {
 	var (
 		ta1 = "test-a"
 		ta2 = "test-a"

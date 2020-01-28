@@ -27,8 +27,18 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 	"google.golang.org/grpc/testdata"
 )
+
+type s struct {
+	tlogger.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 // A struct that implements AuthInfo interface but does not implement GetCommonAuthInfo() method.
 type testAuthInfoNoGetCommonAuthInfoMethod struct{}
@@ -55,7 +65,7 @@ func createTestContext(s SecurityLevel) context.Context {
 	return internal.NewRequestInfoContext.(func(context.Context, RequestInfo) context.Context)(context.Background(), ri)
 }
 
-func TestCheckSecurityLevel(t *testing.T) {
+func (s) TestCheckSecurityLevel(t *testing.T) {
 	testCases := []struct {
 		authLevel SecurityLevel
 		testLevel SecurityLevel
@@ -98,7 +108,7 @@ func TestCheckSecurityLevel(t *testing.T) {
 	}
 }
 
-func TestCheckSecurityLevelNoGetCommonAuthInfoMethod(t *testing.T) {
+func (s) TestCheckSecurityLevelNoGetCommonAuthInfoMethod(t *testing.T) {
 	auth := &testAuthInfoNoGetCommonAuthInfoMethod{}
 	ri := RequestInfo{
 		Method:   "testInfo",
@@ -110,7 +120,7 @@ func TestCheckSecurityLevelNoGetCommonAuthInfoMethod(t *testing.T) {
 	}
 }
 
-func TestTLSOverrideServerName(t *testing.T) {
+func (s) TestTLSOverrideServerName(t *testing.T) {
 	expectedServerName := "server.name"
 	c := NewTLS(nil)
 	c.OverrideServerName(expectedServerName)
@@ -119,7 +129,7 @@ func TestTLSOverrideServerName(t *testing.T) {
 	}
 }
 
-func TestTLSClone(t *testing.T) {
+func (s) TestTLSClone(t *testing.T) {
 	expectedServerName := "server.name"
 	c := NewTLS(nil)
 	c.OverrideServerName(expectedServerName)
@@ -136,7 +146,7 @@ func TestTLSClone(t *testing.T) {
 
 type serverHandshake func(net.Conn) (AuthInfo, error)
 
-func TestClientHandshakeReturnsAuthInfo(t *testing.T) {
+func (s) TestClientHandshakeReturnsAuthInfo(t *testing.T) {
 	tcs := []struct {
 		name    string
 		address string
@@ -174,7 +184,7 @@ func TestClientHandshakeReturnsAuthInfo(t *testing.T) {
 	}
 }
 
-func TestServerHandshakeReturnsAuthInfo(t *testing.T) {
+func (s) TestServerHandshakeReturnsAuthInfo(t *testing.T) {
 	done := make(chan AuthInfo, 1)
 	lis := launchServer(t, gRPCServerHandshake, done)
 	defer lis.Close()
@@ -189,7 +199,7 @@ func TestServerHandshakeReturnsAuthInfo(t *testing.T) {
 	}
 }
 
-func TestServerAndClientHandshake(t *testing.T) {
+func (s) TestServerAndClientHandshake(t *testing.T) {
 	done := make(chan AuthInfo, 1)
 	lis := launchServer(t, gRPCServerHandshake, done)
 	defer lis.Close()
@@ -318,7 +328,7 @@ func tlsClientHandshake(conn net.Conn, _ string) (AuthInfo, error) {
 	return TLSInfo{State: clientConn.ConnectionState(), CommonAuthInfo: CommonAuthInfo{SecurityLevel: PrivacyAndIntegrity}}, nil
 }
 
-func TestAppendH2ToNextProtos(t *testing.T) {
+func (s) TestAppendH2ToNextProtos(t *testing.T) {
 	tests := []struct {
 		name string
 		ps   []string

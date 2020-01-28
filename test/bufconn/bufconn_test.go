@@ -25,7 +25,18 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 )
+
+type s struct {
+	tlogger.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 func testRW(r io.Reader, w io.Writer) error {
 	for i := 0; i < 20; i++ {
@@ -64,14 +75,14 @@ func testRW(r io.Reader, w io.Writer) error {
 	return nil
 }
 
-func TestPipe(t *testing.T) {
+func (s) TestPipe(t *testing.T) {
 	p := newPipe(10)
 	if err := testRW(p, p); err != nil {
 		t.Fatalf(err.Error())
 	}
 }
 
-func TestPipeClose(t *testing.T) {
+func (s) TestPipeClose(t *testing.T) {
 	p := newPipe(10)
 	p.Close()
 	if _, err := p.Write(nil); err != io.ErrClosedPipe {
@@ -82,7 +93,7 @@ func TestPipeClose(t *testing.T) {
 	}
 }
 
-func TestConn(t *testing.T) {
+func (s) TestConn(t *testing.T) {
 	p1, p2 := newPipe(10), newPipe(10)
 	c1, c2 := &conn{p1, p2}, &conn{p2, p1}
 
@@ -94,7 +105,7 @@ func TestConn(t *testing.T) {
 	}
 }
 
-func TestConnCloseWithData(t *testing.T) {
+func (s) TestConnCloseWithData(t *testing.T) {
 	lis := Listen(7)
 	errChan := make(chan error, 1)
 	var lisConn net.Conn
@@ -144,7 +155,7 @@ func TestConnCloseWithData(t *testing.T) {
 	}
 }
 
-func TestListener(t *testing.T) {
+func (s) TestListener(t *testing.T) {
 	l := Listen(7)
 	var s net.Conn
 	var serr error
@@ -166,7 +177,7 @@ func TestListener(t *testing.T) {
 	}
 }
 
-func TestCloseWhileDialing(t *testing.T) {
+func (s) TestCloseWhileDialing(t *testing.T) {
 	l := Listen(7)
 	var c net.Conn
 	var err error
@@ -182,7 +193,7 @@ func TestCloseWhileDialing(t *testing.T) {
 	}
 }
 
-func TestCloseWhileAccepting(t *testing.T) {
+func (s) TestCloseWhileAccepting(t *testing.T) {
 	l := Listen(7)
 	var c net.Conn
 	var err error
@@ -198,7 +209,7 @@ func TestCloseWhileAccepting(t *testing.T) {
 	}
 }
 
-func TestDeadline(t *testing.T) {
+func (s) TestDeadline(t *testing.T) {
 	sig := make(chan error, 2)
 	blockingWrite := func(conn net.Conn) {
 		_, err := conn.Write([]byte("0123456789"))

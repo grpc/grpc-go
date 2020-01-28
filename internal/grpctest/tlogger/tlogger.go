@@ -27,9 +27,11 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/leakcheck"
 )
 
 var logger = tLogger{v: 0}
@@ -137,4 +139,37 @@ func (g *tLogger) Fatalf(format string, args ...interface{}) {
 
 func (g *tLogger) V(l int) bool {
 	return l <= g.v
+}
+
+var lcFailed uint32
+
+type errorer struct {
+	t *testing.T
+}
+
+func (e errorer) Errorf(format string, args ...interface{}) {
+	atomic.StoreUint32(&lcFailed, 1)
+	e.t.Errorf(format, args...)
+}
+
+// Tester is an implementation of the x interface parameter to
+// grpctest.RunSubTests with default Setup and Teardown behavior. Setup updates
+// the tlogger and Teardown performs a leak check. Embed in a struct with tests
+// defined to use.
+type Tester struct{}
+
+// Setup updates the tlogger.
+func (Tester) Setup(t *testing.T) {
+	Update(t)
+}
+
+// Teardown performs a leak check.
+func (Tester) Teardown(t *testing.T) {
+	if atomic.LoadUint32(&lcFailed) == 1 {
+		return
+	}
+	leakcheck.Check(errorer{t: t})
+	if atomic.LoadUint32(&lcFailed) == 1 {
+		t.Log("Leak check disabled for future tests")
+	}
 }

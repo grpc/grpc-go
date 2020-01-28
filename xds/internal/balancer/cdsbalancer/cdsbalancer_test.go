@@ -28,6 +28,8 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	xdsinternal "google.golang.org/grpc/xds/internal"
@@ -42,6 +44,14 @@ const (
 	serviceName        = "service1"
 	defaultTestTimeout = 2 * time.Second
 )
+
+type s struct {
+	tlogger.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 type testClientConn struct {
 	balancer.ClientConn
@@ -245,7 +255,7 @@ func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBal
 // TestUpdateClientConnState invokes the UpdateClientConnState method on the
 // cdsBalancer with different inputs and verifies that the CDS watch API on the
 // provided xdsClient is invoked appropriately.
-func TestUpdateClientConnState(t *testing.T) {
+func (s) TestUpdateClientConnState(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	tests := []struct {
@@ -319,7 +329,7 @@ func TestUpdateClientConnState(t *testing.T) {
 
 // TestUpdateClientConnStateAfterClose invokes the UpdateClientConnState method
 // on the cdsBalancer after close and verifies that it returns an error.
-func TestUpdateClientConnStateAfterClose(t *testing.T) {
+func (s) TestUpdateClientConnStateAfterClose(t *testing.T) {
 	cdsB, _, cancel := setup()
 	defer cancel()
 	cdsB.Close()
@@ -332,7 +342,7 @@ func TestUpdateClientConnStateAfterClose(t *testing.T) {
 // TestUpdateClientConnStateWithSameState verifies that a ClientConnState
 // update with the same cluster and xdsClient does not cause the cdsBalancer to
 // create a new watch.
-func TestUpdateClientConnStateWithSameState(t *testing.T) {
+func (s) TestUpdateClientConnStateWithSameState(t *testing.T) {
 	xdsC, cdsB, _, cancel := setupWithWatch(t)
 	defer func() {
 		cancel()
@@ -350,7 +360,7 @@ func TestUpdateClientConnStateWithSameState(t *testing.T) {
 // TestHandleClusterUpdate invokes the registered CDS watch callback with
 // different updates and verifies that the expect ClientConnState is propagated
 // to the edsBalancer.
-func TestHandleClusterUpdate(t *testing.T) {
+func (s) TestHandleClusterUpdate(t *testing.T) {
 	xdsC, cdsB, edsB, cancel := setupWithWatch(t)
 	defer func() {
 		cancel()
@@ -391,7 +401,7 @@ func TestHandleClusterUpdate(t *testing.T) {
 // TestResolverError verifies that an existing watch is cancelled when a
 // resolver error is received by the cdsBalancer, and also that the same error
 // is propagated to the edsBalancer.
-func TestResolverError(t *testing.T) {
+func (s) TestResolverError(t *testing.T) {
 	xdsC, cdsB, edsB, cancel := setupWithWatch(t)
 	defer func() {
 		cancel()
@@ -416,7 +426,7 @@ func TestResolverError(t *testing.T) {
 
 // TestUpdateSubConnState pushes a SubConn update to the cdsBalancer and
 // verifies that the update is propagated to the edsBalancer.
-func TestUpdateSubConnState(t *testing.T) {
+func (s) TestUpdateSubConnState(t *testing.T) {
 	xdsC, cdsB, edsB, cancel := setupWithWatch(t)
 	defer func() {
 		cancel()
@@ -439,7 +449,7 @@ func TestUpdateSubConnState(t *testing.T) {
 
 // TestClose calls Close() on the cdsBalancer, and verifies that the underlying
 // edsBalancer is also closed.
-func TestClose(t *testing.T) {
+func (s) TestClose(t *testing.T) {
 	xdsC, cdsB, edsB, cancel := setupWithWatch(t)
 	defer cancel()
 
@@ -460,7 +470,7 @@ func TestClose(t *testing.T) {
 
 // TestParseConfig exercises the config parsing functionality in the cds
 // balancer builder.
-func TestParseConfig(t *testing.T) {
+func (s) TestParseConfig(t *testing.T) {
 	bb := cdsBB{}
 	if gotName := bb.Name(); gotName != cdsName {
 		t.Fatalf("cdsBB.Name() = %v, want %v", gotName, cdsName)

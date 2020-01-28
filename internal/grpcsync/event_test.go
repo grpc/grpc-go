@@ -18,9 +18,22 @@
 
 package grpcsync
 
-import "testing"
+import (
+	"testing"
 
-func TestEventHasFired(t *testing.T) {
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
+)
+
+type s struct {
+	tlogger.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestEventHasFired(t *testing.T) {
 	e := NewEvent()
 	if e.HasFired() {
 		t.Fatal("e.HasFired() = true; want false")
@@ -33,7 +46,7 @@ func TestEventHasFired(t *testing.T) {
 	}
 }
 
-func TestEventDoneChannel(t *testing.T) {
+func (s) TestEventDoneChannel(t *testing.T) {
 	e := NewEvent()
 	select {
 	case <-e.Done():
@@ -50,7 +63,7 @@ func TestEventDoneChannel(t *testing.T) {
 	}
 }
 
-func TestEventMultipleFires(t *testing.T) {
+func (s) TestEventMultipleFires(t *testing.T) {
 	e := NewEvent()
 	if e.HasFired() {
 		t.Fatal("e.HasFired() = true; want false")

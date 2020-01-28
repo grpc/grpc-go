@@ -26,7 +26,18 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 )
+
+type s struct {
+	tlogger.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 // bufConn is a net.Conn implemented by a bytes.Buffer (which is a ReadWriter).
 type bufConn struct {
@@ -49,7 +60,7 @@ func restoreHooks() func() {
 	}
 }
 
-func TestConn(t *testing.T) {
+func (s) TestConn(t *testing.T) {
 	defer restoreHooks()()
 
 	// Constant time.
@@ -122,7 +133,7 @@ func TestConn(t *testing.T) {
 	wantSleeps(pkt4Time)
 }
 
-func TestSync(t *testing.T) {
+func (s) TestSync(t *testing.T) {
 	defer restoreHooks()()
 
 	// Infinitely fast CPU: time doesn't pass unless sleep is called.
@@ -145,7 +156,7 @@ func TestSync(t *testing.T) {
 	}
 }
 
-func TestSyncTooSlow(t *testing.T) {
+func (s) TestSyncTooSlow(t *testing.T) {
 	defer restoreHooks()()
 
 	// Infinitely fast CPU: time doesn't pass unless sleep is called.
@@ -166,7 +177,7 @@ func TestSyncTooSlow(t *testing.T) {
 	}
 }
 
-func TestListenerAndDialer(t *testing.T) {
+func (s) TestListenerAndDialer(t *testing.T) {
 	defer restoreHooks()()
 
 	tn := time.Unix(123, 0)
@@ -292,7 +303,7 @@ func TestListenerAndDialer(t *testing.T) {
 	read(clientConn, len(pkt1), pkt1, tn)
 }
 
-func TestBufferBloat(t *testing.T) {
+func (s) TestBufferBloat(t *testing.T) {
 	defer restoreHooks()()
 
 	// Infinitely fast CPU: time doesn't pass unless sleep is called.

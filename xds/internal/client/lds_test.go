@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils"
 )
 
-func TestLDSGetRouteConfig(t *testing.T) {
+func (s) TestLDSGetRouteConfig(t *testing.T) {
 	tests := []struct {
 		name      string
 		lis       *xdspb.Listener
@@ -89,7 +89,7 @@ func TestLDSGetRouteConfig(t *testing.T) {
 // TestLDSHandleResponse starts a fake xDS server, makes a ClientConn to it,
 // and creates a v2Client using it. Then, it registers a watchLDS and tests
 // different LDS responses.
-func TestLDSHandleResponse(t *testing.T) {
+func (s) TestLDSHandleResponse(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
@@ -192,7 +192,7 @@ func TestLDSHandleResponse(t *testing.T) {
 
 // TestLDSHandleResponseWithoutWatch tests the case where the v2Client receives
 // an LDS response without a registered watcher.
-func TestLDSHandleResponseWithoutWatch(t *testing.T) {
+func (s) TestLDSHandleResponseWithoutWatch(t *testing.T) {
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
@@ -207,7 +207,7 @@ func TestLDSHandleResponseWithoutWatch(t *testing.T) {
 // TestLDSWatchExpiryTimer tests the case where the client does not receive an
 // LDS response for the request that it sends out. We want the watch callback
 // to be invoked with an error once the watchExpiryTimer fires.
-func TestLDSWatchExpiryTimer(t *testing.T) {
+func (s) TestLDSWatchExpiryTimer(t *testing.T) {
 	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
 	defaultWatchExpiryTimeout = 500 * time.Millisecond
 	defer func() {

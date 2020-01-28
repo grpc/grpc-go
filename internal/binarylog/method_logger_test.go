@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func TestLog(t *testing.T) {
+func (s) TestLog(t *testing.T) {
 	idGen.reset()
 	ml := newMethodLogger(10, 10)
 	// Set sink to testing buffer.
@@ -348,7 +348,7 @@ func TestLog(t *testing.T) {
 	}
 }
 
-func TestTruncateMetadataNotTruncated(t *testing.T) {
+func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 	testCases := []struct {
 		ml   *MethodLogger
 		mpPb *pb.Metadata
@@ -415,7 +415,7 @@ func TestTruncateMetadataNotTruncated(t *testing.T) {
 	}
 }
 
-func TestTruncateMetadataTruncated(t *testing.T) {
+func (s) TestTruncateMetadataTruncated(t *testing.T) {
 	testCases := []struct {
 		ml   *MethodLogger
 		mpPb *pb.Metadata
@@ -476,7 +476,7 @@ func TestTruncateMetadataTruncated(t *testing.T) {
 	}
 }
 
-func TestTruncateMessageNotTruncated(t *testing.T) {
+func (s) TestTruncateMessageNotTruncated(t *testing.T) {
 	testCases := []struct {
 		ml    *MethodLogger
 		msgPb *pb.Message
@@ -509,7 +509,7 @@ func TestTruncateMessageNotTruncated(t *testing.T) {
 	}
 }
 
-func TestTruncateMessageTruncated(t *testing.T) {
+func (s) TestTruncateMessageTruncated(t *testing.T) {
 	testCases := []struct {
 		ml    *MethodLogger
 		msgPb *pb.Message

@@ -24,6 +24,8 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 	"google.golang.org/grpc/test/codec_perf"
 )
 
@@ -45,12 +47,20 @@ func marshalAndUnmarshal(t *testing.T, codec encoding.Codec, expectedBody []byte
 	}
 }
 
-func TestBasicProtoCodecMarshalAndUnmarshal(t *testing.T) {
+type s struct {
+	tlogger.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestBasicProtoCodecMarshalAndUnmarshal(t *testing.T) {
 	marshalAndUnmarshal(t, codec{}, []byte{1, 2, 3})
 }
 
 // Try to catch possible race conditions around use of pools
-func TestConcurrentUsage(t *testing.T) {
+func (s) TestConcurrentUsage(t *testing.T) {
 	const (
 		numGoRoutines   = 100
 		numMarshUnmarsh = 1000
@@ -83,7 +93,7 @@ func TestConcurrentUsage(t *testing.T) {
 
 // TestStaggeredMarshalAndUnmarshalUsingSamePool tries to catch potential errors in which slices get
 // stomped on during reuse of a proto.Buffer.
-func TestStaggeredMarshalAndUnmarshalUsingSamePool(t *testing.T) {
+func (s) TestStaggeredMarshalAndUnmarshalUsingSamePool(t *testing.T) {
 	codec1 := codec{}
 	codec2 := codec{}
 

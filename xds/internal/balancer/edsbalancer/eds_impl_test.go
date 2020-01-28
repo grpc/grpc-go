@@ -50,7 +50,7 @@ func init() {
 //  - remove backend
 //  - replace backend
 //  - change drop rate
-func TestEDS_OneLocality(t *testing.T) {
+func (s) TestEDS_OneLocality(t *testing.T) {
 	cc := newTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil)
 
@@ -156,7 +156,7 @@ func TestEDS_OneLocality(t *testing.T) {
 //  - remove locality
 //  - address change for the <not-the-first> locality
 //  - update locality weight
-func TestEDS_TwoLocalities(t *testing.T) {
+func (s) TestEDS_TwoLocalities(t *testing.T) {
 	cc := newTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil)
 
@@ -286,7 +286,7 @@ func TestEDS_TwoLocalities(t *testing.T) {
 
 // The EDS balancer gets EDS resp with unhealthy endpoints. Test that only
 // healthy ones are used.
-func TestEDS_EndpointsHealth(t *testing.T) {
+func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	cc := newTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil)
 
@@ -358,7 +358,7 @@ func TestEDS_EndpointsHealth(t *testing.T) {
 	}
 }
 
-func TestClose(t *testing.T) {
+func (s) TestClose(t *testing.T) {
 	edsb := newEDSBalancerImpl(nil, nil)
 	// This is what could happen when switching between fallback and eds. This
 	// make sure it doesn't panic.
@@ -414,7 +414,7 @@ func (tcp *testConstPicker) Pick(info balancer.PickInfo) (balancer.PickResult, e
 // Create XDS balancer, and update sub-balancer before handling eds responses.
 // Then switch between round-robin and test-const-balancer after handling first
 // eds response.
-func TestEDS_UpdateSubBalancerName(t *testing.T) {
+func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	cc := newTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil)
 
@@ -506,7 +506,7 @@ func TestEDS_UpdateSubBalancerName(t *testing.T) {
 	}
 }
 
-func TestDropPicker(t *testing.T) {
+func (s) TestDropPicker(t *testing.T) {
 	const pickCount = 12
 	var constPicker = &testConstPicker{
 		sc: testSubConns[0],
@@ -571,7 +571,7 @@ func TestDropPicker(t *testing.T) {
 	}
 }
 
-func TestEDS_LoadReport(t *testing.T) {
+func (s) TestEDS_LoadReport(t *testing.T) {
 	testLoadStore := newTestLoadStore()
 
 	cc := newTestClientConn(t)

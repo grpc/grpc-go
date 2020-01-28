@@ -27,10 +27,20 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 	"google.golang.org/grpc/internal/profiling/buffer"
 )
 
-func TestProfiling(t *testing.T) {
+type s struct {
+	tlogger.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestProfiling(t *testing.T) {
 	cb, err := buffer.NewCircularBuffer(128)
 	if err != nil {
 		t.Fatalf("error creating circular buffer: %v", err)
@@ -84,7 +94,7 @@ func TestProfiling(t *testing.T) {
 	}
 }
 
-func TestProfilingRace(t *testing.T) {
+func (s) TestProfilingRace(t *testing.T) {
 	stat := NewStat("foo")
 
 	var wg sync.WaitGroup

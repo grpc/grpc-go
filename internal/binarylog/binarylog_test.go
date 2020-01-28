@@ -20,10 +20,21 @@ package binarylog
 
 import (
 	"testing"
+
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 )
 
+type s struct {
+	tlogger.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
 // Test that get method logger returns the one with the most exact match.
-func TestGetMethodLogger(t *testing.T) {
+func (s) TestGetMethodLogger(t *testing.T) {
 	testCases := []struct {
 		in       string
 		method   string
@@ -96,7 +107,7 @@ func TestGetMethodLogger(t *testing.T) {
 }
 
 // expect method logger to be nil
-func TestGetMethodLoggerOff(t *testing.T) {
+func (s) TestGetMethodLoggerOff(t *testing.T) {
 	testCases := []struct {
 		in     string
 		method string

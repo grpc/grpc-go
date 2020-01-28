@@ -34,6 +34,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 	rpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	pb "google.golang.org/grpc/reflection/grpc_testing"
 	pbv3 "google.golang.org/grpc/reflection/grpc_testingv3"
@@ -54,6 +56,14 @@ var (
 	fdProto2ExtByte  []byte
 	fdProto2Ext2Byte []byte
 )
+
+type x struct {
+	tlogger.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, x{})
+}
 
 func loadFileDesc(filename string) (*dpb.FileDescriptorProto, []byte) {
 	enc := proto.FileDescriptor(filename)
@@ -79,7 +89,7 @@ func init() {
 	fdProto2Ext2, fdProto2Ext2Byte = loadFileDesc("proto2_ext2.proto")
 }
 
-func TestFileDescForType(t *testing.T) {
+func (x) TestFileDescForType(t *testing.T) {
 	for _, test := range []struct {
 		st     reflect.Type
 		wantFd *dpb.FileDescriptorProto
@@ -94,7 +104,7 @@ func TestFileDescForType(t *testing.T) {
 	}
 }
 
-func TestTypeForName(t *testing.T) {
+func (x) TestTypeForName(t *testing.T) {
 	for _, test := range []struct {
 		name string
 		want reflect.Type
@@ -108,7 +118,7 @@ func TestTypeForName(t *testing.T) {
 	}
 }
 
-func TestTypeForNameNotFound(t *testing.T) {
+func (x) TestTypeForNameNotFound(t *testing.T) {
 	for _, test := range []string{
 		"grpc.testing.not_exiting",
 	} {
@@ -119,7 +129,7 @@ func TestTypeForNameNotFound(t *testing.T) {
 	}
 }
 
-func TestFileDescContainingExtension(t *testing.T) {
+func (x) TestFileDescContainingExtension(t *testing.T) {
 	for _, test := range []struct {
 		st     reflect.Type
 		extNum int32
@@ -145,7 +155,7 @@ func (s intArray) Len() int           { return len(s) }
 func (s intArray) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s intArray) Less(i, j int) bool { return s[i] < s[j] }
 
-func TestAllExtensionNumbersForType(t *testing.T) {
+func (x) TestAllExtensionNumbersForType(t *testing.T) {
 	for _, test := range []struct {
 		st   reflect.Type
 		want []int32
@@ -184,7 +194,7 @@ func (s *serverV3) StreamingSearch(stream pbv3.SearchServiceV3_StreamingSearchSe
 	return nil
 }
 
-func TestReflectionEnd2end(t *testing.T) {
+func (x) TestReflectionEnd2end(t *testing.T) {
 	// Start server.
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {

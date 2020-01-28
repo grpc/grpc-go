@@ -26,7 +26,17 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/credentials/internal"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 )
+
+type s struct {
+	tlogger.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 type syscallConn struct {
 	net.Conn
@@ -40,7 +50,7 @@ type nonSyscallConn struct {
 	net.Conn
 }
 
-func TestWrapSyscallConn(t *testing.T) {
+func (s) TestWrapSyscallConn(t *testing.T) {
 	sc := &syscallConn{}
 	nsc := &nonSyscallConn{}
 
@@ -50,7 +60,7 @@ func TestWrapSyscallConn(t *testing.T) {
 	}
 }
 
-func TestWrapSyscallConnNoWrap(t *testing.T) {
+func (s) TestWrapSyscallConnNoWrap(t *testing.T) {
 	nscRaw := &nonSyscallConn{}
 	nsc := &nonSyscallConn{}
 

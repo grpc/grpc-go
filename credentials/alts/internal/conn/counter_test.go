@@ -29,7 +29,7 @@ const (
 	testOverflowLen = 5
 )
 
-func TestCounterSides(t *testing.T) {
+func (s) TestCounterSides(t *testing.T) {
 	for _, side := range []core.Side{core.ClientSide, core.ServerSide} {
 		outCounter := NewOutCounter(side, testOverflowLen)
 		inCounter := NewInCounter(side, testOverflowLen)
@@ -50,7 +50,7 @@ func TestCounterSides(t *testing.T) {
 	}
 }
 
-func TestCounterInc(t *testing.T) {
+func (s) TestCounterInc(t *testing.T) {
 	for _, test := range []struct {
 		counter []byte
 		want    []byte
@@ -89,7 +89,7 @@ func TestCounterInc(t *testing.T) {
 	}
 }
 
-func TestRolloverCounter(t *testing.T) {
+func (s) TestRolloverCounter(t *testing.T) {
 	for _, test := range []struct {
 		desc        string
 		value       []byte

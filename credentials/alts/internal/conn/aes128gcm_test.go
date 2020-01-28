@@ -81,7 +81,7 @@ func testGCMEncryptionDecryption(sender ALTSRecordCrypto, receiver ALTSRecordCry
 }
 
 // Test encrypt and decrypt using test vectors for aes128gcm.
-func TestAES128GCMEncrypt(t *testing.T) {
+func (s) TestAES128GCMEncrypt(t *testing.T) {
 	for _, test := range []cryptoTestVector{
 		{
 			key:         dehex("11754cd72aec309bf52f7687212e8957"),
@@ -215,7 +215,7 @@ func testGCMEncryptRoundtrip(client ALTSRecordCrypto, server ALTSRecordCrypto, t
 }
 
 // Test encrypt and decrypt on roundtrip messages for aes128gcm.
-func TestAES128GCMEncryptRoundtrip(t *testing.T) {
+func (s) TestAES128GCMEncryptRoundtrip(t *testing.T) {
 	// Test for aes128gcm.
 	key := make([]byte, 16)
 	client, server := getGCMCryptoPair(key, nil, t)
