@@ -450,7 +450,7 @@ func TestClientServerHandshake(t *testing.T) {
 					close(done)
 					return
 				}
-				serverTLS, err := NewServer(serverOptions)
+				serverTLS, err := NewServerCreds(serverOptions)
 				if err != nil {
 					serverRawConn.Close()
 					close(done)
@@ -481,7 +481,7 @@ func TestClientServerHandshake(t *testing.T) {
 					GetRootCAs:  test.clientGetRoot,
 				},
 			}
-			clientTLS, newClientErr := NewClient(clientOptions)
+			clientTLS, newClientErr := NewClientCreds(clientOptions)
 			if newClientErr != nil && test.clientExpectCreateError {
 				return
 			}
@@ -566,7 +566,7 @@ func TestAdvancedTLSOverrideServerName(t *testing.T) {
 		},
 		ServerNameOverride: expectedServerName,
 	}
-	c, err := NewClient(clientOptions)
+	c, err := NewClientCreds(clientOptions)
 	if err != nil {
 		t.Fatalf("Client is unable to create credentials. Error: %v", err)
 	}
@@ -588,7 +588,7 @@ func TestTLSClone(t *testing.T) {
 		},
 		ServerNameOverride: expectedServerName,
 	}
-	c, err := NewClient(clientOptions)
+	c, err := NewClientCreds(clientOptions)
 	if err != nil {
 		t.Fatalf("Failed to create new client: %v", err)
 	}
