@@ -48,7 +48,7 @@ var (
 	testMetadata = metadata.MD{
 		"key1": []string{"value1"},
 		"key2": []string{"value2"},
-		"user-agent": []string{"test/0.0.1 grpc-go/1.27.0-dev"},
+		"user-agent": []string{fmt.Sprintf("test/0.0.1 grpc-go/%s", grpc.Version)},
 	}
 	// For headers sent from server:
 	testHeaderMetadata = metadata.MD{

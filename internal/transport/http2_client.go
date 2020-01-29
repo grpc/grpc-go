@@ -689,7 +689,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			RemoteAddr:  t.remoteAddr,
 			LocalAddr:   t.localAddr,
 			Compression: callHdr.SendCompress,
-			Header:      header.Copy(),
+			Header:      header,
 		}
 		t.statsHandler.HandleRPC(s.ctx, outHeader)
 	}
