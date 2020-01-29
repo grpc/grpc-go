@@ -295,10 +295,7 @@ type TraceEventDesc struct {
 
 // AddTraceEvent adds trace related to the entity with specified id, using the provided TraceEventDesc.
 func AddTraceEvent(id int64, desc *TraceEventDesc) {
-	for _, d := range [2]*TraceEventDesc{desc, desc.Parent} {
-		if d == nil {
-			continue
-		}
+	for d := desc; d != nil; d = d.Parent {
 		switch d.Severity {
 		case CtUNKNOWN:
 			grpclog.Infoln(d.Desc)

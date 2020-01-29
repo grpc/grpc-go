@@ -667,7 +667,7 @@ func (cc *ClientConn) switchBalancer(name string) {
 
 	channelz.Infof(cc.channelzID, "ClientConn switching balancer to %q", name)
 	if cc.dopts.balancerBuilder != nil {
-		channelz.Infoln(cc.channelzID, "ignoring balancer switching: Balancer DialOption used instead")
+		channelz.Info(cc.channelzID, "ignoring balancer switching: Balancer DialOption used instead")
 		return
 	}
 	if cc.balancerWrapper != nil {
@@ -1272,7 +1272,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, onPrefaceReceipt, onGoAway, onClose)
 	if err != nil {
 		// newTr is either nil, or closed.
-		channelz.Warningf(ac.channelzID, "grpc: addrConn.createTransport failed to connect to %v. Err :%v. Reconnecting...", addr, err)
+		channelz.Warningf(ac.channelzID, "grpc: addrConn.createTransport failed to connect to %v. Err: %v. Reconnecting...", addr, err)
 		return nil, nil, err
 	}
 

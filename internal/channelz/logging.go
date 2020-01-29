@@ -24,7 +24,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-// Info logs through grpclog.Info and adds a trace event is channelz is on.
+// Info logs through grpclog.Info and adds a trace event if channelz is on.
 func Info(id int64, args ...interface{}) {
 	if IsOn() {
 		AddTraceEvent(id, &TraceEventDesc{
@@ -36,19 +36,7 @@ func Info(id int64, args ...interface{}) {
 	}
 }
 
-// Infoln logs through grpclog.Infoln and adds a trace event is channelz is on.
-func Infoln(id int64, args ...interface{}) {
-	if IsOn() {
-		AddTraceEvent(id, &TraceEventDesc{
-			Desc:     fmt.Sprintln(args...),
-			Severity: CtINFO,
-		})
-	} else {
-		grpclog.Infoln(args...)
-	}
-}
-
-// Infof logs through grpclog.Infof and adds a trace event is channelz is on.
+// Infof logs through grpclog.Infof and adds a trace event if channelz is on.
 func Infof(id int64, format string, args ...interface{}) {
 	if IsOn() {
 		AddTraceEvent(id, &TraceEventDesc{
@@ -60,7 +48,7 @@ func Infof(id int64, format string, args ...interface{}) {
 	}
 }
 
-// Warning logs through grpclog.Warning and adds a trace event is channelz is on.
+// Warning logs through grpclog.Warning and adds a trace event if channelz is on.
 func Warning(id int64, args ...interface{}) {
 	if IsOn() {
 		AddTraceEvent(id, &TraceEventDesc{
@@ -72,19 +60,7 @@ func Warning(id int64, args ...interface{}) {
 	}
 }
 
-// Warningln logs through grpclog.Warningln and adds a trace event is channelz is on.
-func Warningln(id int64, args ...interface{}) {
-	if IsOn() {
-		AddTraceEvent(id, &TraceEventDesc{
-			Desc:     fmt.Sprintln(args...),
-			Severity: CtWarning,
-		})
-	} else {
-		grpclog.Warningln(args...)
-	}
-}
-
-// Warningf logs through grpclog.Warningf and adds a trace event is channelz is on.
+// Warningf logs through grpclog.Warningf and adds a trace event if channelz is on.
 func Warningf(id int64, format string, args ...interface{}) {
 	if IsOn() {
 		AddTraceEvent(id, &TraceEventDesc{
@@ -96,7 +72,7 @@ func Warningf(id int64, format string, args ...interface{}) {
 	}
 }
 
-// Error logs through grpclog.Error and adds a trace event is channelz is on.
+// Error logs through grpclog.Error and adds a trace event if channelz is on.
 func Error(id int64, args ...interface{}) {
 	if IsOn() {
 		AddTraceEvent(id, &TraceEventDesc{
@@ -108,19 +84,7 @@ func Error(id int64, args ...interface{}) {
 	}
 }
 
-// Errorln logs through grpclog.Errorln and adds a trace event is channelz is on.
-func Errorln(id int64, args ...interface{}) {
-	if IsOn() {
-		AddTraceEvent(id, &TraceEventDesc{
-			Desc:     fmt.Sprintln(args...),
-			Severity: CtError,
-		})
-	} else {
-		grpclog.Errorln(args...)
-	}
-}
-
-// Errorf logs through grpclog.Errorf and adds a trace event is channelz is on.
+// Errorf logs through grpclog.Errorf and adds a trace event if channelz is on.
 func Errorf(id int64, format string, args ...interface{}) {
 	if IsOn() {
 		AddTraceEvent(id, &TraceEventDesc{
