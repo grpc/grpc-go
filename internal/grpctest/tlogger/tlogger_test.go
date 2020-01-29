@@ -57,8 +57,18 @@ func TestWarningf(t *testing.T) {
 	grpclog.Warningf("%v %v.", "Warning", "message")
 }
 
+func TestError(t *testing.T) {
+	Update(t)
+	Expect("Expected error")
+	grpclog.Error("Expected", "error")
+	Expect("Expected ln error")
+	grpclog.Errorln("Expected", "ln", "error")
+	Expect("Expected formatted error")
+	grpclog.Errorf("%v %v %v", "Expected", "formatted", "error")
+}
+
 func TestSubTests(t *testing.T) {
-	testFuncs := [6]func(*testing.T){TestInfo, TestInfoln, TestInfof, TestWarning, TestWarningln, TestWarningf}
+	testFuncs := [7]func(*testing.T){TestInfo, TestInfoln, TestInfof, TestWarning, TestWarningln, TestWarningf, TestError}
 	for _, testFunc := range testFuncs {
 		splitFuncName := strings.Split(runtime.FuncForPC(reflect.ValueOf(testFunc).Pointer()).Name(), ".")
 		t.Run(splitFuncName[len(splitFuncName)-1], testFunc)

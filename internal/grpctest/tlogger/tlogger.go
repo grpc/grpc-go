@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -38,9 +39,18 @@ var logger = tLogger{v: 0}
 
 const callingFrame = 4
 
+type logType int
+
+const (
+	logLog logType = iota
+	errorLog
+	fatalLog
+)
+
 type tLogger struct {
-	v int
-	t *testing.T
+	v      int
+	t      *testing.T
+	errors []*regexp.Regexp
 }
 
 func init() {
@@ -60,7 +70,7 @@ func getStackFrame(stack []byte, frame int) (string, error) {
 	return fmt.Sprintf("%v:", split[len(split)-1]), nil
 }
 
-func log(t *testing.T, format string, fatal bool, args ...interface{}) {
+func log(t *testing.T, ltype logType, format string, args ...interface{}) {
 	s := debug.Stack()
 	prefix, err := getStackFrame(s, callingFrame)
 	args = append([]interface{}{prefix}, args...)
@@ -69,16 +79,32 @@ func log(t *testing.T, format string, fatal bool, args ...interface{}) {
 		return
 	}
 	if format == "" {
-		if fatal {
+		switch ltype {
+		case errorLog:
+			// fmt.Sprintln is used rather than fmt.Sprint because t.Log uses fmt.Sprintln behavior.
+			if logger.expected(fmt.Sprintln(args...)) {
+				t.Log(args...)
+			} else {
+				t.Error(args...)
+			}
+		case fatalLog:
 			panic(fmt.Sprint(args...))
-		} else {
+		default:
 			t.Log(args...)
 		}
 	} else {
-		if fatal {
-			panic(fmt.Sprintf("%v "+format, args...))
-		} else {
-			t.Logf("%v "+format, args...)
+		format = "%v " + format
+		switch ltype {
+		case errorLog:
+			if logger.expected(fmt.Sprintf(format, args...)) {
+				t.Logf(format, args...)
+			} else {
+				t.Errorf(format, args...)
+			}
+		case fatalLog:
+			panic(fmt.Sprintf(format, args...))
+		default:
+			t.Logf(format, args...)
 		}
 	}
 }
@@ -87,54 +113,76 @@ func log(t *testing.T, format string, fatal bool, args ...interface{}) {
 // before every test.
 func Update(t *testing.T) {
 	logger.t = t
+	logger.errors = nil
+}
+
+// Expect declares an error to be expected. For the next test, all error logs
+// matching the expression (using FindString) will not cause the test to fail.
+// "For the next test" is includes all the time until the next call to Update().
+func Expect(expr string) {
+	re, err := regexp.Compile(expr)
+	if err != nil {
+		logger.t.Error(err)
+		return
+	}
+	logger.errors = append(logger.errors, re)
+}
+
+func (g *tLogger) expected(s string) bool {
+	for _, re := range g.errors {
+		if re.FindStringIndex(s) != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *tLogger) Info(args ...interface{}) {
-	log(g.t, "", false, args...)
+	log(g.t, logLog, "", args...)
 }
 
 func (g *tLogger) Infoln(args ...interface{}) {
-	log(g.t, "", false, args...)
+	log(g.t, logLog, "", args...)
 }
 
 func (g *tLogger) Infof(format string, args ...interface{}) {
-	log(g.t, format, false, args...)
+	log(g.t, logLog, format, args...)
 }
 
 func (g *tLogger) Warning(args ...interface{}) {
-	log(g.t, "", false, args...)
+	log(g.t, logLog, "", args...)
 }
 
 func (g *tLogger) Warningln(args ...interface{}) {
-	log(g.t, "", false, args...)
+	log(g.t, logLog, "", args...)
 }
 
 func (g *tLogger) Warningf(format string, args ...interface{}) {
-	log(g.t, format, false, args...)
+	log(g.t, logLog, format, args...)
 }
 
 func (g *tLogger) Error(args ...interface{}) {
-	log(g.t, "", false, args...)
+	log(g.t, errorLog, "", args...)
 }
 
 func (g *tLogger) Errorln(args ...interface{}) {
-	log(g.t, "", false, args...)
+	log(g.t, errorLog, "", args...)
 }
 
 func (g *tLogger) Errorf(format string, args ...interface{}) {
-	log(g.t, format, false, args...)
+	log(g.t, errorLog, format, args...)
 }
 
 func (g *tLogger) Fatal(args ...interface{}) {
-	log(g.t, "", true, args...)
+	log(g.t, fatalLog, "", args...)
 }
 
 func (g *tLogger) Fatalln(args ...interface{}) {
-	log(g.t, "", true, args...)
+	log(g.t, fatalLog, "", args...)
 }
 
 func (g *tLogger) Fatalf(format string, args ...interface{}) {
-	log(g.t, format, true, args...)
+	log(g.t, fatalLog, format, args...)
 }
 
 func (g *tLogger) V(l int) bool {
