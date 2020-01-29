@@ -46,8 +46,8 @@ type rpcCtxKey struct{}
 var (
 	// For headers sent to server:
 	testMetadata = metadata.MD{
-		"key1": []string{"value1"},
-		"key2": []string{"value2"},
+		"key1":       []string{"value1"},
+		"key2":       []string{"value2"},
 		"user-agent": []string{fmt.Sprintf("test/0.0.1 grpc-go/%s", grpc.Version)},
 	}
 	// For headers sent from server:
