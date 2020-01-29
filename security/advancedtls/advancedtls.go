@@ -322,8 +322,8 @@ func buildVerifyFunc(c *advancedTLSCreds,
 	}
 }
 
-// NewClient uses ClientOptions to construct a TransportCredentials based on TLS.
-func NewClient(o *ClientOptions) (credentials.TransportCredentials, error) {
+// NewClientCreds uses ClientOptions to construct a TransportCredentials based on TLS.
+func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) {
 	conf, err := o.config()
 	if err != nil {
 		return nil, err
@@ -338,8 +338,8 @@ func NewClient(o *ClientOptions) (credentials.TransportCredentials, error) {
 	return tc, nil
 }
 
-// NewServer uses ServerOptions to construct a TransportCredentials based on TLS.
-func NewServer(o *ServerOptions) (credentials.TransportCredentials, error) {
+// NewServerCreds uses ServerOptions to construct a TransportCredentials based on TLS.
+func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) {
 	conf, err := o.config()
 	if err != nil {
 		return nil, err

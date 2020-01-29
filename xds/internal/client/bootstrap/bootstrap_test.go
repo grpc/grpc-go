@@ -60,8 +60,9 @@ var (
 // file.
 func TestNewConfig(t *testing.T) {
 	bootstrapFileMap := map[string]string{
-		"empty":   "",
-		"badJSON": `["test": 123]`,
+		"empty":          "",
+		"badJSON":        `["test": 123]`,
+		"noBalancerName": `{"node": {"id": "ENVOY_NODE_ID"}}`,
 		"emptyNodeProto": `
 		{
 			"xds_servers" : [{
@@ -101,7 +102,10 @@ func TestNewConfig(t *testing.T) {
 				"metadata": {
 				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
 			    }
-			}
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443"
+			}]
 		}`,
 		"unknownFieldInXdsServer": `
 		{
@@ -213,23 +217,25 @@ func TestNewConfig(t *testing.T) {
 	tests := []struct {
 		name       string
 		wantConfig *Config
+		wantError  bool
 	}{
-		{"nonExistentBootstrapFile", &Config{}},
-		{"empty", &Config{}},
-		{"badJSON", &Config{}},
+		{"nonExistentBootstrapFile", nil, true},
+		{"empty", nil, true},
+		{"badJSON", nil, true},
 		{"emptyNodeProto", &Config{
 			BalancerName: "trafficdirector.googleapis.com:443",
 			NodeProto:    &corepb.Node{BuildVersion: gRPCVersion},
-		}},
-		{"emptyXdsServer", &Config{NodeProto: nodeProto}},
-		{"unknownTopLevelFieldInFile", nilCredsConfig},
-		{"unknownFieldInNodeProto", &Config{NodeProto: nodeProto}},
-		{"unknownFieldInXdsServer", nilCredsConfig},
-		{"emptyChannelCreds", nilCredsConfig},
-		{"nonGoogleDefaultCreds", nilCredsConfig},
-		{"multipleChannelCreds", nonNilCredsConfig},
-		{"goodBootstrap", nonNilCredsConfig},
-		{"multipleXDSServers", nonNilCredsConfig},
+		}, false},
+		{"noBalancerName", nil, true},
+		{"emptyXdsServer", nil, true},
+		{"unknownTopLevelFieldInFile", nilCredsConfig, false},
+		{"unknownFieldInNodeProto", nilCredsConfig, false},
+		{"unknownFieldInXdsServer", nilCredsConfig, false},
+		{"emptyChannelCreds", nilCredsConfig, false},
+		{"nonGoogleDefaultCreds", nilCredsConfig, false},
+		{"multipleChannelCreds", nonNilCredsConfig, false},
+		{"goodBootstrap", nonNilCredsConfig, false},
+		{"multipleXDSServers", nonNilCredsConfig, false},
 	}
 
 	for _, test := range tests {
@@ -237,7 +243,16 @@ func TestNewConfig(t *testing.T) {
 			if err := os.Setenv(fileEnv, test.name); err != nil {
 				t.Fatalf("os.Setenv(%s, %s) failed with error: %v", fileEnv, test.name, err)
 			}
-			config := NewConfig()
+			config, err := NewConfig()
+			if err != nil {
+				if !test.wantError {
+					t.Fatalf("unexpected error %v", err)
+				}
+				return
+			}
+			if test.wantError {
+				t.Fatalf("wantError: %v, got error %v", test.wantError, err)
+			}
 			if config.BalancerName != test.wantConfig.BalancerName {
 				t.Errorf("config.BalancerName is %s, want %s", config.BalancerName, test.wantConfig.BalancerName)
 			}
@@ -253,8 +268,8 @@ func TestNewConfig(t *testing.T) {
 
 func TestNewConfigEnvNotSet(t *testing.T) {
 	os.Unsetenv(fileEnv)
-	wantConfig := Config{}
-	if config := NewConfig(); *config != wantConfig {
-		t.Errorf("NewConfig() returned : %#v, wanted an empty Config object", config)
+	config, err := NewConfig()
+	if err == nil {
+		t.Errorf("NewConfig() returned: %#v, <nil>, wanted non-nil error", config)
 	}
 }
