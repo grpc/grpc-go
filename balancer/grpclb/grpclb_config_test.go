@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-func (s) Test_Parse(t *testing.T) {
+func (s) TestParse(t *testing.T) {
 	tests := []struct {
 		name    string
 		s       string
@@ -71,7 +71,7 @@ func (s) Test_Parse(t *testing.T) {
 	}
 }
 
-func (s) Test_childIsPickFirst(t *testing.T) {
+func (s) TestChildIsPickFirst(t *testing.T) {
 	tests := []struct {
 		name string
 		s    string

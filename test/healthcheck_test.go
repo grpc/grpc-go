@@ -35,6 +35,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/grpctest/tlogger"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
@@ -247,6 +248,7 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 
 // If Watch returns Unimplemented, then the ClientConn should go into READY state.
 func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
+	tlogger.Expect("Subchannel health check is unimplemented at server side, thus health check is disabled")
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {

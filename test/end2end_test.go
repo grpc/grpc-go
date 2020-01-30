@@ -6532,7 +6532,6 @@ func (s) TestServeExitsWhenListenerClosed(t *testing.T) {
 
 // Service handler returns status with invalid utf8 message.
 func (s) TestStatusInvalidUTF8Message(t *testing.T) {
-
 	var (
 		origMsg = string([]byte{0xff, 0xfe, 0xfd})
 		wantMsg = "���"
@@ -6560,6 +6559,7 @@ func (s) TestStatusInvalidUTF8Message(t *testing.T) {
 // will fail to marshal the status because of the invalid utf8 message. Details
 // will be dropped when sending.
 func (s) TestStatusInvalidUTF8Details(t *testing.T) {
+	tlogger.Expect("transport: failed to marshal rpc status")
 
 	var (
 		origMsg = string([]byte{0xff, 0xfe, 0xfd})
