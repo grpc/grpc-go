@@ -96,14 +96,14 @@ To build Go code, there are several options:
 ##### If you are using Go modules:
 
 Please ensure your gRPC-Go version is `require`d at the appropriate version in
-the same module containing the generated `.pb.go` files.  For example, in your
-`go.mod` file:
+the same module containing the generated `.pb.go` files.  For example,
+`SupportPackageIsVersion6` needs `v1.27.0`, so in your `go.mod` file:
 
 ```
 module <your module name>
 
 require (
-    google.golang.org/grpc v1.27.0  // for SupportPackageIsVersion6
+    google.golang.org/grpc v1.27.0
 )
 ```
 
