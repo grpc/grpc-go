@@ -680,14 +680,15 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 	}
 	if t.statsHandler != nil {
-		header, _, _ := metadata.FromOutgoingContextRaw(ctx)
+		header, _ := metadata.FromOutgoingContext(ctx)
+		header.Set("user-agent", t.userAgent)
 		outHeader := &stats.OutHeader{
 			Client:      true,
 			FullMethod:  callHdr.Method,
 			RemoteAddr:  t.remoteAddr,
 			LocalAddr:   t.localAddr,
 			Compression: callHdr.SendCompress,
-			Header:      header.Copy(),
+			Header:      header,
 		}
 		t.statsHandler.HandleRPC(s.ctx, outHeader)
 	}
