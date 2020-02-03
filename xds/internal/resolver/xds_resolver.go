@@ -155,7 +155,7 @@ type xdsResolver struct {
 const jsonFormatSC = `{
     "loadBalancingConfig":[
       {
-        "experimental_cds":{
+        "cds_experimental":{
           "Cluster": "%s"
         }
       }

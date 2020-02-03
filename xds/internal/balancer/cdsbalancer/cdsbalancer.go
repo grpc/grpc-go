@@ -37,8 +37,8 @@ import (
 )
 
 const (
-	cdsName = "experimental_cds"
-	edsName = "experimental_eds"
+	cdsName = "cds_experimental"
+	edsName = "eds_experimental"
 )
 
 var (
