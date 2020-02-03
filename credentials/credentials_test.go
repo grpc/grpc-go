@@ -28,12 +28,11 @@ import (
 
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/grpctest/tlogger"
 	"google.golang.org/grpc/testdata"
 )
 
 type s struct {
-	tlogger.Tester
+	grpctest.Tester
 }
 
 func Test(t *testing.T) {

@@ -16,7 +16,7 @@
  *
  */
 
-package tlogger
+package grpctest
 
 import (
 	"reflect"

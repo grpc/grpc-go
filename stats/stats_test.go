@@ -31,7 +31,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/grpctest/tlogger"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	testpb "google.golang.org/grpc/stats/grpc_testing"
@@ -39,7 +38,7 @@ import (
 )
 
 type s struct {
-	tlogger.Tester
+	grpctest.Tester
 }
 
 func Test(t *testing.T) {

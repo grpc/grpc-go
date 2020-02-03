@@ -40,7 +40,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/grpctest/tlogger"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -62,7 +61,7 @@ var (
 )
 
 type s struct {
-	tlogger.Tester
+	grpctest.Tester
 }
 
 func Test(t *testing.T) {

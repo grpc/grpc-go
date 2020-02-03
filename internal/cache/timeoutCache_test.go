@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/grpctest/tlogger"
 )
 
 const (
@@ -32,7 +31,7 @@ const (
 )
 
 type s struct {
-	tlogger.Tester
+	grpctest.Tester
 }
 
 func Test(t *testing.T) {

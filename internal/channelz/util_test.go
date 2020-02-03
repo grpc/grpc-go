@@ -33,11 +33,10 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/grpctest/tlogger"
 )
 
 type s struct {
-	tlogger.Tester
+	grpctest.Tester
 }
 
 func Test(t *testing.T) {

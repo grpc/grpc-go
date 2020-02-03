@@ -25,7 +25,6 @@ import (
 
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/grpctest/tlogger"
 	"google.golang.org/grpc/test/codec_perf"
 )
 
@@ -48,7 +47,7 @@ func marshalAndUnmarshal(t *testing.T, codec encoding.Codec, expectedBody []byte
 }
 
 type s struct {
-	tlogger.Tester
+	grpctest.Tester
 }
 
 func Test(t *testing.T) {

@@ -16,9 +16,7 @@
  *
  */
 
-// Package tlogger initializes the testing logger on import which logs to the
-// testing package's T struct.
-package tlogger
+package grpctest
 
 import (
 	"errors"
@@ -28,14 +26,12 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"testing"
 
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/leakcheck"
 )
 
-var logger = tLogger{v: 0}
+var logger *tLogger
 
 const callingFrame = 4
 
@@ -51,14 +47,6 @@ type tLogger struct {
 	v      int
 	t      *testing.T
 	errors []*regexp.Regexp
-}
-
-func init() {
-	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
-	if vl, err := strconv.Atoi(vLevel); err == nil {
-		logger.v = vl
-	}
-	grpclog.SetLoggerV2(&logger)
 }
 
 func getStackFrame(stack []byte, frame int) (string, error) {
@@ -110,8 +98,16 @@ func log(t *testing.T, ltype logType, format string, args ...interface{}) {
 }
 
 // Update updates the testing.T that the testing logger logs to. Should be done
-// before every test.
+// before every test. It also initializes the tLogger if it has not already.
 func Update(t *testing.T) {
+	if logger == nil {
+		logger = &tLogger{v: 0}
+		vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
+		if vl, err := strconv.Atoi(vLevel); err == nil {
+			logger.v = vl
+		}
+		grpclog.SetLoggerV2(logger)
+	}
 	logger.t = t
 	logger.errors = nil
 }
@@ -187,37 +183,4 @@ func (g *tLogger) Fatalf(format string, args ...interface{}) {
 
 func (g *tLogger) V(l int) bool {
 	return l <= g.v
-}
-
-var lcFailed uint32
-
-type errorer struct {
-	t *testing.T
-}
-
-func (e errorer) Errorf(format string, args ...interface{}) {
-	atomic.StoreUint32(&lcFailed, 1)
-	e.t.Errorf(format, args...)
-}
-
-// Tester is an implementation of the x interface parameter to
-// grpctest.RunSubTests with default Setup and Teardown behavior. Setup updates
-// the tlogger and Teardown performs a leak check. Embed in a struct with tests
-// defined to use.
-type Tester struct{}
-
-// Setup updates the tlogger.
-func (Tester) Setup(t *testing.T) {
-	Update(t)
-}
-
-// Teardown performs a leak check.
-func (Tester) Teardown(t *testing.T) {
-	if atomic.LoadUint32(&lcFailed) == 1 {
-		return
-	}
-	leakcheck.Check(errorer{t: t})
-	if atomic.LoadUint32(&lcFailed) == 1 {
-		t.Log("Leak check disabled for future tests")
-	}
 }

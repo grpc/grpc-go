@@ -29,11 +29,10 @@ import (
 	helloworld "google.golang.org/grpc/examples/helloworld/helloworld"
 	hwmock "google.golang.org/grpc/examples/helloworld/mock_helloworld"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/grpctest/tlogger"
 )
 
 type s struct {
-	tlogger.Tester
+	grpctest.Tester
 }
 
 func Test(t *testing.T) {

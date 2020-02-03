@@ -29,11 +29,10 @@ import (
 	rgmock "google.golang.org/grpc/examples/route_guide/mock_routeguide"
 	rgpb "google.golang.org/grpc/examples/route_guide/routeguide"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/grpctest/tlogger"
 )
 
 type s struct {
-	tlogger.Tester
+	grpctest.Tester
 }
 
 func Test(t *testing.T) {

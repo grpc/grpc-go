@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/leakcheck"
 	scpb "google.golang.org/grpc/internal/proto/grpc_service_config"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -56,10 +55,8 @@ func init() {
 	}
 }
 
-type s struct{}
-
-func (s) Teardown(t *testing.T) {
-	leakcheck.Check(t)
+type s struct {
+	grpctest.Tester
 }
 
 func Test(t *testing.T) {

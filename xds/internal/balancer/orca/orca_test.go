@@ -23,7 +23,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/grpctest/tlogger"
 	"google.golang.org/grpc/metadata"
 	orcapb "google.golang.org/grpc/xds/internal/proto/udpa/data/orca/v1"
 )
@@ -39,7 +38,7 @@ var (
 )
 
 type s struct {
-	tlogger.Tester
+	grpctest.Tester
 }
 
 func Test(t *testing.T) {
