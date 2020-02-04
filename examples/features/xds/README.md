@@ -4,7 +4,7 @@ The xDS example is a Hello World client/server capable of being configured with
 the XDS management protocol. Out-of-the-box it behaves the same as hello world.
 The server replies with responses including its hostname.
 
-Note that xDS support is incomplete and experimental, with limited
+**Note** that xDS support is incomplete and experimental, with limited
 compatibility.
 
 ## xDS environment setup
