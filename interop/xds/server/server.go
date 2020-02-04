@@ -16,6 +16,7 @@
  *
  */
 
+// Binary server for xDS interop tests.
 package main
 
 import (

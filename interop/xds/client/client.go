@@ -16,6 +16,7 @@
  *
  */
 
+// Binary client for xDS interop tests.
 package main
 
 import (
@@ -23,7 +24,6 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
@@ -35,57 +35,62 @@ import (
 )
 
 type statsWatcherKey struct {
-	startId int32
-	endId   int32
+	startID int32
+	endID   int32
 }
 
 type statsWatcher struct {
+	mu            sync.Mutex
 	rpcsByPeer    map[string]int32
 	numFailures   int32
 	remainingRpcs int32
-	lock          sync.Mutex
 }
 
 var (
-	dialTimeout   = flag.Duration("dialTimeout", 10*time.Second, "timeout for creating grpc.ClientConn")
 	numChannels   = flag.Int("num_channels", 1, "Num of channels")
 	printResponse = flag.Bool("print_response", false, "Write RPC response to stdout")
-	qps           = flag.Int("qps", 1, "QPS (across all channels)")
-	rpcTimeout    = flag.Duration("rpc_timeout", 2*time.Second, "Per RPC timeout")
+	qps           = flag.Int("qps", 1, "QPS per channel")
+	rpcTimeout    = flag.Duration("rpc_timeout", 10*time.Second, "Per RPC timeout")
 	server        = flag.String("server", "localhost:8080", "Address of server to connect to")
 	statsPort     = flag.Int("stats_port", 8081, "Port to expose peer distribution stats service")
 
+	mu               sync.Mutex
 	currentRequestId int32 = 0
-	lock             sync.Mutex
-	watchers         = make(map[statsWatcherKey]*statsWatcher)
+	watchers               = make(map[statsWatcherKey]*statsWatcher)
 )
 
 type statsService struct{}
 
+// Wait for the next LoadBalancerStatsRequest.GetNumRpcs to start and complete,
+// and return the distribution of remote peers. This is essentially a clientside
+// LB reporting mechanism that is designed to be queried by an external test
+// driver when verifying that the client is distributing RPCs as expected.
 func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalancerStatsRequest) (*testpb.LoadBalancerStatsResponse, error) {
-	lock.Lock()
+	mu.Lock()
 	watcherKey := statsWatcherKey{currentRequestId, currentRequestId + in.GetNumRpcs()}
-	var watcher *statsWatcher
-	_, exists := watchers[watcherKey]
-	if exists {
-		watcher = watchers[watcherKey]
-	} else {
-		watcher = &statsWatcher{make(map[string]int32), 0, in.GetNumRpcs(), sync.Mutex{}}
+	watcher, ok := watchers[watcherKey]
+	if !ok {
+		watcher = &statsWatcher{
+			rpcsByPeer:    make(map[string]int32),
+			numFailures:   0,
+			remainingRpcs: in.GetNumRpcs(),
+		}
 		watchers[watcherKey] = watcher
 	}
-	lock.Unlock()
+	mu.Unlock()
 
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(in.GetTimeoutSec())*time.Second)
 	defer cancel()
 
 	done := make(chan bool)
+	// Wait until the requested RPCs have all been recorded or timeout occurs.
 	go func() {
 		for {
 			select {
 			default:
-				watcher.lock.Lock()
+				watcher.mu.Lock()
 				remainingRpcs := watcher.remainingRpcs
-				watcher.lock.Unlock()
+				watcher.mu.Unlock()
 				if remainingRpcs == 0 {
 					done <- true
 					close(done)
@@ -103,38 +108,36 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 	if !success {
 		grpclog.Info("Timed out, returning partial stats")
 	}
-	lock.Lock()
+	mu.Lock()
 	delete(watchers, watcherKey)
-	lock.Unlock()
-	watcher.lock.Lock()
-	defer watcher.lock.Unlock()
+	mu.Unlock()
+	watcher.mu.Lock()
+	defer watcher.mu.Unlock()
 	return &testpb.LoadBalancerStatsResponse{NumFailures: watcher.numFailures + watcher.remainingRpcs, RpcsByPeer: watcher.rpcsByPeer}, nil
 }
 
 func main() {
 	flag.Parse()
 
-	p := strconv.Itoa(*statsPort)
-	lis, err := net.Listen("tcp", ":"+p)
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *statsPort))
 	if err != nil {
 		grpclog.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
+	defer s.Stop()
 	testpb.RegisterLoadBalancerStatsServiceServer(s, &statsService{})
 	go s.Serve(lis)
 
-	ctx, cancel := context.WithTimeout(context.Background(), *dialTimeout)
-	defer cancel()
 	clients := make([]testpb.TestServiceClient, *numChannels)
 	for i := 0; i < *numChannels; i++ {
-		conn, err := grpc.DialContext(ctx, *server, grpc.WithInsecure(), grpc.WithBlock())
+		conn, err := grpc.DialContext(context.Background(), *server, grpc.WithInsecure(), grpc.WithBlock())
 		if err != nil {
 			grpclog.Fatalf("Fail to dial: %v", err)
 		}
 		defer conn.Close()
 		clients[i] = testpb.NewTestServiceClient(conn)
 	}
-	ticker := time.NewTicker(time.Second / time.Duration(*qps))
+	ticker := time.NewTicker(time.Second / time.Duration(*qps**numChannels))
 	defer ticker.Stop()
 	sendRpcs(clients, ticker)
 }
@@ -143,25 +146,25 @@ func sendRpcs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 	var i int
 	for range ticker.C {
 		go func(i int) {
-			c := clients[i%len(clients)]
+			c := clients[i]
 			ctx, cancel := context.WithTimeout(context.Background(), *rpcTimeout)
 			p := new(peer.Peer)
-			lock.Lock()
+			mu.Lock()
 			savedRequestId := currentRequestId
 			currentRequestId += 1
 			savedWatchers := make(map[statsWatcherKey]*statsWatcher)
 			for key, value := range watchers {
 				savedWatchers[key] = value
 			}
-			lock.Unlock()
+			mu.Unlock()
 			r, err := c.UnaryCall(ctx, &testpb.SimpleRequest{FillServerId: true}, grpc.Peer(p))
 
 			success := err == nil
 			cancel()
 
 			for key, value := range savedWatchers {
-				value.lock.Lock()
-				if key.startId <= savedRequestId && savedRequestId < key.endId {
+				value.mu.Lock()
+				if key.startID <= savedRequestId && savedRequestId < key.endID {
 					if success {
 						value.rpcsByPeer[r.GetServerId()] += 1
 					} else {
@@ -169,13 +172,13 @@ func sendRpcs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 					}
 					value.remainingRpcs -= 1
 				}
-				value.lock.Unlock()
+				value.mu.Unlock()
 			}
 
 			if success && *printResponse {
 				fmt.Printf("Greeting: Hello world, this is %s, from %v\n", r.GetHostname(), p.Addr)
 			}
 		}(i)
-		i++
+		i = (i + 1) % len(clients)
 	}
 }
