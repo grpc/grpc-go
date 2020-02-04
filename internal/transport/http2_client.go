@@ -680,8 +680,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 	}
 	if t.statsHandler != nil {
-		header, _ := metadata.FromOutgoingContext(ctx)
-		header.Set("user-agent", t.userAgent)
+		header, ok := metadata.FromOutgoingContext(ctx)
+		if ok {
+			header.Set("user-agent", t.userAgent)
+		} else {
+			header = metadata.Pairs("user-agent", t.userAgent)
+		}
 		outHeader := &stats.OutHeader{
 			Client:      true,
 			FullMethod:  callHdr.Method,
