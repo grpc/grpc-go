@@ -21,13 +21,12 @@ package base
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/status"
 )
 
 type baseBuilder struct {
@@ -78,6 +77,9 @@ type baseBalancer struct {
 	picker   balancer.Picker
 	v2Picker balancer.V2Picker
 	config   Config
+
+	resolverErr error // the last error reported by the resolver; cleared on successful resolution
+	connErr     error // the last connection error; cleared upon leaving TransientFailure
 }
 
 func (b *baseBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
@@ -85,19 +87,23 @@ func (b *baseBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) 
 }
 
 func (b *baseBalancer) ResolverError(err error) {
-	switch b.state {
-	case connectivity.TransientFailure, connectivity.Idle, connectivity.Connecting:
-		// Set a failing picker if we don't have a good picker.
-		if b.picker != nil {
-			b.picker = NewErrPicker(status.Errorf(codes.Unavailable, "name resolver error: %v", err))
-			b.cc.UpdateBalancerState(connectivity.TransientFailure, b.picker)
-		} else {
-			b.v2Picker = NewErrPickerV2(status.Errorf(codes.Unavailable, "name resolver error: %v", err))
-			b.cc.UpdateState(balancer.State{
-				ConnectivityState: connectivity.TransientFailure,
-				Picker:            b.v2Picker,
-			})
-		}
+	b.resolverErr = fmt.Errorf("last resolver error: %v", err)
+	if len(b.subConns) == 0 {
+		b.state = connectivity.TransientFailure
+	}
+	if b.state != connectivity.TransientFailure {
+		// The picker will not change since the balancer does not currently
+		// report an error.
+		return
+	}
+	b.regeneratePicker()
+	if b.picker != nil {
+		b.cc.UpdateBalancerState(b.state, b.picker)
+	} else {
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: b.state,
+			Picker:            b.v2Picker,
+		})
 	}
 }
 
@@ -111,6 +117,8 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		b.ResolverError(errors.New("produced zero addresses"))
 		return balancer.ErrBadResolverState
 	}
+	// Successful resolution; clear resolver error and ensure we return nil.
+	b.resolverErr = nil
 	// addrsSet is the set converted from addrs, it's used for quick lookup of an address.
 	addrsSet := make(map[resolver.Address]struct{})
 	for _, a := range s.ResolverState.Addresses {
@@ -141,22 +149,26 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 
 // regeneratePicker takes a snapshot of the balancer, and generates a picker
 // from it. The picker is
-//  - errPicker with ErrTransientFailure if the balancer is in TransientFailure,
+//  - errPicker if the balancer is in TransientFailure,
 //  - built by the pickerBuilder with all READY SubConns otherwise.
-func (b *baseBalancer) regeneratePicker(err error) {
+func (b *baseBalancer) regeneratePicker() {
 	if b.state == connectivity.TransientFailure {
 		if b.pickerBuilder != nil {
 			b.picker = NewErrPicker(balancer.ErrTransientFailure)
 		} else {
-			if err != nil {
-				b.v2Picker = NewErrPickerV2(balancer.TransientFailureError(err))
-			} else {
-				// This means the last subchannel transition was not to
-				// TransientFailure (otherwise err must be set), but the
-				// aggregate state of the balancer is TransientFailure, meaning
-				// there are no other addresses.
-				b.v2Picker = NewErrPickerV2(balancer.TransientFailureError(errors.New("resolver returned no addresses")))
+			// Build the error from the last connection error and the last
+			// resolver error.  connErr must always be non-nil unless there are
+			// no SubConns, in which case resolverErr must be non-nil.
+			err := b.connErr
+			if b.resolverErr != nil {
+				if err == nil {
+					err = b.resolverErr
+				}
+				if err != nil {
+					err = fmt.Errorf("%v; %v", err, b.resolverErr)
+				}
 			}
+			b.v2Picker = NewErrPickerV2(balancer.TransientFailureError(err))
 		}
 		return
 	}
@@ -212,6 +224,13 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 	oldAggrState := b.state
 	b.state = b.csEvltr.RecordTransition(oldS, s)
 
+	// Set or clear the last connection error accordingly.
+	if b.state == connectivity.TransientFailure {
+		b.connErr = fmt.Errorf("last connection error %v", state.ConnectionError)
+	} else {
+		b.connErr = nil
+	}
+
 	// Regenerate picker when one of the following happens:
 	//  - this sc became ready from not-ready
 	//  - this sc became not-ready from ready
@@ -219,7 +238,7 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 	//  - the aggregated state of balancer became non-TransientFailure from TransientFailure
 	if (s == connectivity.Ready) != (oldS == connectivity.Ready) ||
 		(b.state == connectivity.TransientFailure) != (oldAggrState == connectivity.TransientFailure) {
-		b.regeneratePicker(state.ConnectionError)
+		b.regeneratePicker()
 	}
 
 	if b.picker != nil {
