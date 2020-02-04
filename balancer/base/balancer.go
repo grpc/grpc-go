@@ -23,9 +23,11 @@ import (
 	"errors"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/status"
 )
 
 type baseBuilder struct {
@@ -85,10 +87,16 @@ func (b *baseBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) 
 func (b *baseBalancer) ResolverError(err error) {
 	switch b.state {
 	case connectivity.TransientFailure, connectivity.Idle, connectivity.Connecting:
+		// Set a failing picker if we don't have a good picker.
 		if b.picker != nil {
-			b.picker = NewErrPicker(err)
+			b.picker = NewErrPicker(status.Errorf(codes.Unavailable, "name resolver error: %v", err))
+			b.cc.UpdateBalancerState(connectivity.TransientFailure, b.picker)
 		} else {
-			b.v2Picker = NewErrPickerV2(err)
+			b.v2Picker = NewErrPickerV2(status.Errorf(codes.Unavailable, "name resolver error: %v", err))
+			b.cc.UpdateState(balancer.State{
+				ConnectivityState: connectivity.TransientFailure,
+				Picker:            b.v2Picker,
+			})
 		}
 	}
 }
@@ -98,6 +106,10 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	// TODO: handle s.ResolverState.ServiceConfig?
 	if grpclog.V(2) {
 		grpclog.Infoln("base.baseBalancer: got new ClientConn state: ", s)
+	}
+	if len(s.ResolverState.Addresses) == 0 {
+		b.ResolverError(errors.New("produced zero addresses"))
+		return balancer.ErrBadResolverState
 	}
 	// addrsSet is the set converted from addrs, it's used for quick lookup of an address.
 	addrsSet := make(map[resolver.Address]struct{})
