@@ -33,7 +33,7 @@ import (
 
 var (
 	port        = flag.Int("port", 8080, "The server port")
-	serverId    = flag.String("server_id", "go_server", "Server ID included in response")
+	serverID    = flag.String("server_id", "go_server", "Server ID included in response")
 	hostname, _ = os.Hostname()
 )
 
@@ -42,7 +42,7 @@ type server struct {
 }
 
 func (s *server) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	return &testpb.SimpleResponse{ServerId: *serverId, Hostname: hostname}, nil
+	return &testpb.SimpleResponse{ServerId: *serverID, Hostname: hostname}, nil
 }
 
 func main() {
