@@ -38,55 +38,8 @@ import (
 // the data path to build the RLS keys to be used for a given request.
 type BuilderMap map[string]builder
 
-func validateKeyBuilderProto(kbs []*rlspb.GrpcKeyBuilder) error {
-	if len(kbs) == 0 {
-		return errors.New("rls: RouteLookupConfig does not contain any GrpcKeyBuilder")
-	}
-
-	// nameProto is a struct which contains only the fields of interest from
-	// the GrpcKeyBuilder_Name proto. This is to make sure that we don't use
-	// the XXX_* fields (which are part of the struct corresponding to
-	// GrpcKeyBuilder_Name proto in the generated pb.go files) as keys in the
-	// map to determine whether or not we have this Name.
-	type nameProto struct {
-		service string
-		method  string
-	}
-	seenNames := make(map[nameProto]bool)
-	for _, kb := range kbs {
-		names := kb.GetNames()
-		if len(names) == 0 {
-			return fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig does not contain any Name {%+v}", kbs)
-		}
-
-		for _, name := range names {
-			if name.GetService() == "" {
-				return fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains a Name field with no Service {%+v}", kbs)
-			}
-			n := nameProto{service: name.GetService(), method: name.GetMethod()}
-			if seenNames[n] {
-				return fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated Name field {%+v}", kbs)
-			}
-			seenNames[n] = true
-		}
-
-		seenKeys := make(map[string]bool)
-		for _, matcher := range kb.GetHeaders() {
-			if matcher.GetRequiredMatch() {
-				return fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig has required_match field set {%+v}", kbs)
-			}
-			key := matcher.GetKey()
-			if seenKeys[key] {
-				return fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated Key field in headers {%+v}", kbs)
-			}
-			seenKeys[key] = true
-		}
-	}
-	return nil
-}
-
-// MakeBuilderMap parses the provided RouteLookupConfig proto and builds a map
-// of key builders.
+// MakeBuilderMap parses the provided RouteLookupConfig proto and returns a map
+// from paths to key builders.
 //
 // The following conditions are validated, and an error is returned if any of
 // them is not met:
@@ -99,19 +52,39 @@ func validateKeyBuilderProto(kbs []*rlspb.GrpcKeyBuilder) error {
 // * must not have two headers entries with the same key within one entry
 func MakeBuilderMap(cfg *rlspb.RouteLookupConfig) (BuilderMap, error) {
 	kbs := cfg.GetGrpcKeybuilders()
-	if err := validateKeyBuilderProto(kbs); err != nil {
-		return nil, err
+	if len(kbs) == 0 {
+		return nil, errors.New("rls: RouteLookupConfig does not contain any GrpcKeyBuilder")
 	}
 
 	bm := make(map[string]builder)
 	for _, kb := range kbs {
 		var matchers []matcher
+		seenKeys := make(map[string]bool)
 		for _, h := range kb.GetHeaders() {
+			if h.GetRequiredMatch() {
+				return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig has required_match field set {%+v}", kbs)
+			}
+			key := h.GetKey()
+			if seenKeys[key] {
+				return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated Key field in headers {%+v}", kbs)
+			}
+			seenKeys[key] = true
 			matchers = append(matchers, matcher{key: h.GetKey(), names: h.GetNames()})
 		}
 		b := builder{matchers: matchers}
-		for _, name := range kb.GetNames() {
+
+		names := kb.GetNames()
+		if len(names) == 0 {
+			return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig does not contain any Name {%+v}", kbs)
+		}
+		for _, name := range names {
+			if name.GetService() == "" {
+				return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains a Name field with no Service {%+v}", kbs)
+			}
 			path := "/" + name.GetService() + "/" + name.GetMethod()
+			if _, ok := bm[path]; ok {
+				return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated Name field {%+v}", kbs)
+			}
 			bm[path] = b
 		}
 	}
