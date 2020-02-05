@@ -87,7 +87,7 @@ func (b *baseBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) 
 }
 
 func (b *baseBalancer) ResolverError(err error) {
-	b.resolverErr = fmt.Errorf("last resolver error: %v", err)
+	b.resolverErr = err
 	if len(b.subConns) == 0 {
 		b.state = connectivity.TransientFailure
 	}
@@ -147,6 +147,20 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	return nil
 }
 
+// mergeErrors builds an error from the last connection error and the last
+// resolver error.  Must only be called if b.state is TransientFailure.
+func (b *baseBalancer) mergeErrors() error {
+	// connErr must always be non-nil unless there are no SubConns, in which
+	// case resolverErr must be non-nil.
+	if b.connErr == nil {
+		return fmt.Errorf("last resolver error: %v", b.resolverErr)
+	}
+	if b.resolverErr == nil {
+		return fmt.Errorf("last connection error: %v", b.connErr)
+	}
+	return fmt.Errorf("last connection error: %v; last resolver error: %v", b.connErr, b.resolverErr)
+}
+
 // regeneratePicker takes a snapshot of the balancer, and generates a picker
 // from it. The picker is
 //  - errPicker if the balancer is in TransientFailure,
@@ -156,17 +170,7 @@ func (b *baseBalancer) regeneratePicker() {
 		if b.pickerBuilder != nil {
 			b.picker = NewErrPicker(balancer.ErrTransientFailure)
 		} else {
-			// Build the error from the last connection error and the last
-			// resolver error.  connErr must always be non-nil unless there are
-			// no SubConns, in which case resolverErr must be non-nil.
-			err := b.resolverErr
-			switch {
-			case err == nil:
-				err = fmt.Errorf("last connection error: %v", b.connErr)
-			case b.connErr != nil:
-				err = fmt.Errorf("last connection error: %v; %v", b.connErr, err)
-			}
-			b.v2Picker = NewErrPickerV2(balancer.TransientFailureError(err))
+			b.v2Picker = NewErrPickerV2(balancer.TransientFailureError(b.mergeErrors()))
 		}
 		return
 	}
