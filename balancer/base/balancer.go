@@ -159,14 +159,12 @@ func (b *baseBalancer) regeneratePicker() {
 			// Build the error from the last connection error and the last
 			// resolver error.  connErr must always be non-nil unless there are
 			// no SubConns, in which case resolverErr must be non-nil.
-			err := b.connErr
-			if b.resolverErr != nil {
-				if err == nil {
-					err = b.resolverErr
-				}
-				if err != nil {
-					err = fmt.Errorf("%v; %v", err, b.resolverErr)
-				}
+			err := b.resolverErr
+			switch {
+			case err == nil:
+				err = fmt.Errorf("last connection error: %v", b.connectionErr)
+			case b.connectionErr != nil:
+				err = fmt.Errorf("last connection error: %v; %v", b.connectionErr, err)
 			}
 			b.v2Picker = NewErrPickerV2(balancer.TransientFailureError(err))
 		}
@@ -225,11 +223,7 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 	b.state = b.csEvltr.RecordTransition(oldS, s)
 
 	// Set or clear the last connection error accordingly.
-	if b.state == connectivity.TransientFailure {
-		b.connErr = fmt.Errorf("last connection error %v", state.ConnectionError)
-	} else {
-		b.connErr = nil
-	}
+	b.connErr = state.ConnectionError
 
 	// Regenerate picker when one of the following happens:
 	//  - this sc became ready from not-ready
