@@ -57,11 +57,11 @@ func (s) TestWarningf(t *testing.T) {
 }
 
 func (s) TestError(t *testing.T) {
-	ExpectError("Expected error")
-	ExpectError("Expected ln error")
-	ExpectError("Expected formatted error")
 	numErrors := 10
-	ExpectErrorN("Expected repeated error", 10)
+	TLogger.ExpectError("Expected error")
+	TLogger.ExpectError("Expected ln error")
+	TLogger.ExpectError("Expected formatted error")
+	TLogger.ExpectErrorN("Expected repeated error", 10)
 	grpclog.Error("Expected", "error")
 	grpclog.Errorln("Expected", "ln", "error")
 	grpclog.Errorf("%v %v %v", "Expected", "formatted", "error")

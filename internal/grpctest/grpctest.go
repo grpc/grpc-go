@@ -47,7 +47,7 @@ type Tester struct{}
 
 // Setup updates the tlogger.
 func (Tester) Setup(t *testing.T) {
-	Update(t)
+	TLogger.Update(t)
 }
 
 // Teardown performs a leak check.
@@ -59,7 +59,7 @@ func (Tester) Teardown(t *testing.T) {
 	if atomic.LoadUint32(&lcFailed) == 1 {
 		t.Log("Leak check disabled for future tests")
 	}
-	if ErrorsLeft() {
+	if TLogger.ErrorsLeft() {
 		t.Error("Expected errors not encountered")
 	}
 }
