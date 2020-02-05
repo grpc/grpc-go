@@ -36,7 +36,7 @@ func init() {
 }
 
 // xdsBalancerBuilder register edsBalancerBuilder (now with name
-// "experimental_eds") under the old name "xds_experimental".
+// "eds_experimental") under the old name "xds_experimental".
 type xdsBalancerBuilder struct {
 	edsBalancerBuilder
 }

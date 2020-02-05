@@ -191,6 +191,7 @@ type remoteBalancer struct {
 	done      chan struct{}
 	stats     *rpcStats
 	statsChan chan *lbpb.ClientStats
+	fbChan    chan struct{}
 }
 
 func newRemoteBalancer(intervals []time.Duration, statsChan chan *lbpb.ClientStats) *remoteBalancer {
@@ -199,12 +200,17 @@ func newRemoteBalancer(intervals []time.Duration, statsChan chan *lbpb.ClientSta
 		done:      make(chan struct{}),
 		stats:     newRPCStats(),
 		statsChan: statsChan,
+		fbChan:    make(chan struct{}),
 	}
 }
 
 func (b *remoteBalancer) stop() {
 	close(b.sls)
 	close(b.done)
+}
+
+func (b *remoteBalancer) fallbackNow() {
+	b.fbChan <- struct{}{}
 }
 
 func (b *remoteBalancer) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServer) error {
@@ -250,6 +256,12 @@ func (b *remoteBalancer) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServe
 			resp = &lbpb.LoadBalanceResponse{
 				LoadBalanceResponseType: &lbpb.LoadBalanceResponse_ServerList{
 					ServerList: v,
+				},
+			}
+		case <-b.fbChan:
+			resp = &lbpb.LoadBalanceResponse{
+				LoadBalanceResponseType: &lbpb.LoadBalanceResponse_FallbackResponse{
+					FallbackResponse: &lbpb.FallbackResponse{},
 				},
 			}
 		case <-stream.Context().Done():
@@ -803,12 +815,17 @@ func (s) TestFallback(t *testing.T) {
 	// Close backend and remote balancer connections, should use fallback.
 	tss.beListeners[0].(*restartableListener).stopPreviousConns()
 	tss.lbListener.(*restartableListener).stopPreviousConns()
-	time.Sleep(time.Second)
 
 	var fallbackUsed bool
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 2000; i++ {
 		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+			// Because we are hard-closing the connection, above, it's possible
+			// for the first RPC attempt to be sent on the old connection,
+			// which will lead to an Unavailable error when it is closed.
+			// Ignore unavailable errors.
+			if status.Code(err) != codes.Unavailable {
+				t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+			}
 		}
 		if p.Addr.String() == beLis.Addr().String() {
 			fallbackUsed = true
@@ -817,7 +834,7 @@ func (s) TestFallback(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !fallbackUsed {
-		t.Fatalf("No RPC sent to fallback after 1 second")
+		t.Fatalf("No RPC sent to fallback after 2 seconds")
 	}
 
 	// Restart backend and remote balancer, should not use backends.
@@ -825,10 +842,8 @@ func (s) TestFallback(t *testing.T) {
 	tss.lbListener.(*restartableListener).restart()
 	tss.ls.sls <- sl
 
-	time.Sleep(time.Second)
-
 	var backendUsed2 bool
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 2000; i++ {
 		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
@@ -839,7 +854,112 @@ func (s) TestFallback(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !backendUsed2 {
-		t.Fatalf("No RPC sent to backend behind remote balancer after 1 second")
+		t.Fatalf("No RPC sent to backend behind remote balancer after 2 seconds")
+	}
+}
+
+func TestExplicitFallback(t *testing.T) {
+	defer leakcheck.Check(t)
+
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+
+	tss, cleanup, err := newLoadBalancer(1, nil)
+	if err != nil {
+		t.Fatalf("failed to create new load balancer: %v", err)
+	}
+	defer cleanup()
+
+	// Start a standalone backend.
+	beLis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen %v", err)
+	}
+	defer beLis.Close()
+	standaloneBEs := startBackends(beServerName, true, beLis)
+	defer stopBackends(standaloneBEs)
+
+	be := &lbpb.Server{
+		IpAddress:        tss.beIPs[0],
+		Port:             int32(tss.bePorts[0]),
+		LoadBalanceToken: lbToken,
+	}
+	var bes []*lbpb.Server
+	bes = append(bes, be)
+	sl := &lbpb.ServerList{
+		Servers: bes,
+	}
+	tss.ls.sls <- sl
+	creds := serverNameCheckCreds{}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
+	if err != nil {
+		t.Fatalf("Failed to dial to the backend %v", err)
+	}
+	defer cc.Close()
+	testC := testpb.NewTestServiceClient(cc)
+
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
+		Addr:       tss.lbAddr,
+		Type:       resolver.GRPCLB,
+		ServerName: lbServerName,
+	}, {
+		Addr: beLis.Addr().String(),
+		Type: resolver.Backend,
+	}}})
+
+	var p peer.Peer
+	var backendUsed bool
+	for i := 0; i < 2000; i++ {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		}
+		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
+			backendUsed = true
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !backendUsed {
+		t.Fatalf("No RPC sent to backend behind remote balancer after 2 seconds")
+	}
+
+	// Send fallback signal from remote balancer; should use fallback.
+	tss.ls.fallbackNow()
+
+	var fallbackUsed bool
+	for i := 0; i < 2000; i++ {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		}
+		if p.Addr.String() == beLis.Addr().String() {
+			fallbackUsed = true
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !fallbackUsed {
+		t.Fatalf("No RPC sent to fallback after 2 seconds")
+	}
+
+	// Send another server list; should use backends again.
+	tss.ls.sls <- sl
+
+	backendUsed = false
+	for i := 0; i < 2000; i++ {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		}
+		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
+			backendUsed = true
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !backendUsed {
+		t.Fatalf("No RPC sent to backend behind remote balancer after 2 seconds")
 	}
 }
 

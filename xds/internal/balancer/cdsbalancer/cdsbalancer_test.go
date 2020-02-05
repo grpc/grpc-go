@@ -184,7 +184,7 @@ func cdsCCS(cluster string, xdsClient interface{}) balancer.ClientConnState {
 	const cdsLBConfig = `{
       "loadBalancingConfig":[
         {
-          "experimental_cds":{
+          "cds_experimental":{
             "Cluster": %s
           }
         }

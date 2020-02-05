@@ -207,7 +207,13 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 		conn.Close()
 		return nil, nil, ctx.Err()
 	}
-	return WrapSyscallConn(rawConn, conn), credentials.TLSInfo{State: conn.ConnectionState()}, nil
+	info := credentials.TLSInfo{
+		State: conn.ConnectionState(),
+		CommonAuthInfo: credentials.CommonAuthInfo{
+			SecurityLevel: credentials.PrivacyAndIntegrity,
+		},
+	}
+	return WrapSyscallConn(rawConn, conn), info, nil
 }
 
 func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -221,7 +227,13 @@ func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credenti
 		conn.Close()
 		return nil, nil, err
 	}
-	return WrapSyscallConn(rawConn, conn), credentials.TLSInfo{State: conn.ConnectionState()}, nil
+	info := credentials.TLSInfo{
+		State: conn.ConnectionState(),
+		CommonAuthInfo: credentials.CommonAuthInfo{
+			SecurityLevel: credentials.PrivacyAndIntegrity,
+		},
+	}
+	return WrapSyscallConn(rawConn, conn), info, nil
 }
 
 func (c *advancedTLSCreds) Clone() credentials.TransportCredentials {
