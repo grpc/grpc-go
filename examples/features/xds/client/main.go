@@ -21,9 +21,9 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"google.golang.org/grpc"
@@ -37,27 +37,44 @@ const (
 	defaultName   = "world"
 )
 
-func printHelp() {
-	fmt.Printf(`Usage: [name [target]]
+var help = flag.Bool("help", false, "Print this message")
 
-  name    The name you wish to be greeted by. Defaults to %q
-  target  The URI of the server, e.g. "xds-experimental:///helloworld-service". Defaults to %q
+func init() {
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), `
+Usage: client [name [target]]
+
+  name
+        The name you wish to be greeted by. Defaults to %q
+  target
+        The URI of the server, e.g. "xds-experimental:///helloworld-service". Defaults to %q
 `, defaultName, defaultTarget)
+
+		flag.PrintDefaults()
+	}
 }
 
 func main() {
+	flag.Parse()
+	if *help {
+		flag.Usage()
+		return
+	}
+	args := flag.Args()
+
+	if len(args) > 2 {
+		flag.Usage()
+		return
+	}
+
 	name := defaultName
-	if len(os.Args) > 1 {
-		if os.Args[1] == "--help" {
-			printHelp()
-			return
-		}
-		name = os.Args[1]
+	if len(args) > 0 {
+		name = args[0]
 	}
 
 	target := defaultTarget
-	if len(os.Args) > 2 {
-		target = os.Args[2]
+	if len(args) > 1 {
+		target = args[1]
 	}
 
 	// Set up a connection to the server.

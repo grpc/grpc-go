@@ -21,6 +21,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"math/rand"
@@ -32,6 +33,8 @@ import (
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
+
+var help = flag.Bool("help", false, "Print this message")
 
 const (
 	defaultPort = 50051
@@ -66,34 +69,48 @@ func determineHostname() string {
 	return hostname
 }
 
-func printHelp() {
-	fmt.Printf(`Usage: [port [hostname]]
+func init() {
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), `
+Usage: server [port [hostname]]
 
-  port      The listen port. Defaults to %d
-  hostname  The name clients will see in greet responses. Defaults to the machine's hostname
+  port
+        The listen port. Defaults to %d
+  hostname
+        The name clients will see in greet responses. Defaults to the machine's hostname
 `, defaultPort)
+
+		flag.PrintDefaults()
+	}
 }
 
 func main() {
-	port := defaultPort
-	if len(os.Args) > 1 {
-		if os.Args[1] == "--help" {
-			printHelp()
-			return
-		}
+	flag.Parse()
+	if *help {
+		flag.Usage()
+		return
+	}
+	args := flag.Args()
 
+	if len(args) > 2 {
+		flag.Usage()
+		return
+	}
+
+	port := defaultPort
+	if len(args) > 0 {
 		var err error
-		port, err = strconv.Atoi(os.Args[1])
+		port, err = strconv.Atoi(args[0])
 		if err != nil {
 			log.Printf("Invalid port number: %v", err)
-			printHelp()
+			flag.Usage()
 			return
 		}
 	}
 
 	var hostname string
-	if len(os.Args) > 2 {
-		hostname = os.Args[2]
+	if len(args) > 1 {
+		hostname = args[1]
 	}
 	if hostname == "" {
 		hostname = determineHostname()
