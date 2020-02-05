@@ -507,7 +507,7 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	default:
 	}
 	// trigger teardown of the ac
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{}, ServiceConfig: sc})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}, ServiceConfig: sc})
 
 	select {
 	case <-hcExitChan:
@@ -653,7 +653,7 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalledAddrConnShutDown(t *tes
 		t.Fatal("Health check function has not been invoked after 5s.")
 	}
 	// trigger teardown of the ac, ac in SHUTDOWN state
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{}, ServiceConfig: sc})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}, ServiceConfig: sc})
 
 	// The health check func should exit without calling the setConnectivityState func, as server hasn't sent
 	// any response.

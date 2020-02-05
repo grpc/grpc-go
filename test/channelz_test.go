@@ -1515,15 +1515,29 @@ func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
+	// Wait for ready
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for src := te.cc.GetState(); src != connectivity.Ready; src = te.cc.GetState() {
+		if !te.cc.WaitForStateChange(ctx, src) {
+			t.Fatalf("timed out waiting for state change.  got %v; want %v", src, connectivity.Ready)
+		}
+	}
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}})
+	// Wait for not-ready.
+	for src := te.cc.GetState(); src == connectivity.Ready; src = te.cc.GetState() {
+		if !te.cc.WaitForStateChange(ctx, src) {
+			t.Fatalf("timed out waiting for state change.  got %v; want !%v", src, connectivity.Ready)
+		}
+	}
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0, 0)
 		if len(tcs) != 1 {
 			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
-		if len(tcs[0].SubChans) != 0 {
-			return false, fmt.Errorf("there should be 0 subchannel not %d", len(tcs[0].SubChans))
+		if len(tcs[0].SubChans) != 1 {
+			return false, fmt.Errorf("there should be 1 subchannel not %d", len(tcs[0].SubChans))
 		}
 		scm := channelz.GetSubChannel(subConn)
 		if scm == nil {
@@ -1770,7 +1784,7 @@ func (s) TestCZSubChannelConnectivityState(t *testing.T) {
 			return false, fmt.Errorf("transient failure has not happened on SubChannel yet")
 		}
 		transient = 0
-		r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
+		r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}})
 		for _, e := range scm.Trace.Events {
 			if e.Desc == fmt.Sprintf("Subchannel Connectivity change to %v", connectivity.Ready) {
 				ready++
@@ -1866,7 +1880,7 @@ func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorage()
 	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
-	// avoid calling API to set balancer type, which will void service config's change of balancer.
+	// avoid newTest using WithBalancer, which would override service config's change of balancer below.
 	e.balancer = ""
 	te := newTest(t, e)
 	channelz.SetMaxTraceEntry(1)
@@ -1956,19 +1970,20 @@ func (s) TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
-
-	if err := verifyResultWithDelay(func() (bool, error) {
-		tcs, _ := channelz.GetTopChannels(0, 0)
-		if len(tcs) != 1 {
-			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
+	// Wait for ready
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for src := te.cc.GetState(); src != connectivity.Ready; src = te.cc.GetState() {
+		if !te.cc.WaitForStateChange(ctx, src) {
+			t.Fatalf("timed out waiting for state change.  got %v; want %v", src, connectivity.Ready)
 		}
-		if len(tcs[0].SubChans) != 0 {
-			return false, fmt.Errorf("there should be 0 subchannel not %d", len(tcs[0].SubChans))
+	}
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}})
+	// Wait for not-ready.
+	for src := te.cc.GetState(); src == connectivity.Ready; src = te.cc.GetState() {
+		if !te.cc.WaitForStateChange(ctx, src) {
+			t.Fatalf("timed out waiting for state change.  got %v; want !%v", src, connectivity.Ready)
 		}
-		return true, nil
-	}); err != nil {
-		t.Fatal(err)
 	}
 
 	// verify that the subchannel no longer exist due to trace referencing it got overwritten.
