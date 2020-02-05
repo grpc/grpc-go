@@ -858,9 +858,7 @@ func (s) TestFallback(t *testing.T) {
 	}
 }
 
-func TestExplicitFallback(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestExplicitFallback(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
