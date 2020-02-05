@@ -24,6 +24,16 @@ import (
 	"time"
 )
 
+// stats returns a tuple with accepts, throttles for the current time.
+func (th *Throttler) stats() (int64, int64) {
+	now := timeNowFunc()
+
+	th.mu.Lock()
+	a, t := th.accepts.sum(now), th.throttles.sum(now)
+	th.mu.Unlock()
+	return a, t
+}
+
 // Enums for responses.
 const (
 	E = iota // No response
@@ -88,14 +98,9 @@ func TestRegisterBackendResponse(t *testing.T) {
 				if test.responses[i] != E {
 					th.RegisterBackendResponse(test.responses[i] == T)
 				}
-				gotRequests, gotThrottled := th.stats()
-				gotAccepts := gotRequests - gotThrottled
 
-				if gotAccepts != test.wantAccepts[i] {
-					t.Errorf("allowed for index %d got %d, want %d", i, gotAccepts, test.wantAccepts[i])
-				}
-				if gotThrottled != test.wantThrottled[i] {
-					t.Errorf("throttled for index %d got %d, want %d", i, gotThrottled, test.wantThrottled[i])
+				if gotAccepts, gotThrottled := th.stats(); gotAccepts != test.wantAccepts[i] || gotThrottled != test.wantThrottled[i] {
+					t.Errorf("th.stats() = {%d, %d} for index %d, want {%d, %d}", i, gotAccepts, gotThrottled, test.wantAccepts[i], test.wantThrottled[i])
 				}
 			}
 		})
@@ -170,7 +175,8 @@ func TestParallel(t *testing.T) {
 
 	testDuration := 2 * time.Second
 	numRoutines := 10
-	counts := make([]int64, numRoutines)
+	accepts := make([]int64, numRoutines)
+	throttles := make([]int64, numRoutines)
 	var wg sync.WaitGroup
 	for i := 0; i < numRoutines; i++ {
 		wg.Add(1)
@@ -178,30 +184,37 @@ func TestParallel(t *testing.T) {
 			defer wg.Done()
 
 			ticker := time.NewTicker(testDuration)
-			var count int64
-			for {
+			var accept int64
+			var throttle int64
+			for i := 0; ; i++ {
 				select {
 				case <-ticker.C:
 					ticker.Stop()
-					counts[num] = count
+					accepts[num] = accept
+					throttles[num] = throttle
 					return
 				default:
-					th.RegisterBackendResponse(true)
-					count++
+					if i%2 == 0 {
+						th.RegisterBackendResponse(true)
+						throttle++
+					} else {
+						th.RegisterBackendResponse(false)
+						accept++
+					}
 				}
 			}
 		}(i)
 	}
 	wg.Wait()
 
-	var total int64
-	for i := range counts {
-		total += counts[i]
+	var wantAccepts, wantThrottles int64
+	for i := 0; i < numRoutines; i++ {
+		wantAccepts += accepts[i]
+		wantThrottles += throttles[i]
 	}
 
-	gotRequests, gotThrottled := th.stats()
-	if gotRequests != total || gotThrottled != total {
-		t.Errorf("got requests = %d, throtled = %d, want %d for both", gotRequests, gotThrottled, total)
+	if gotAccepts, gotThrottles := th.stats(); gotAccepts != wantAccepts || gotThrottles != wantThrottles {
+		t.Errorf("th.stats() = {%d, %d}, want {%d, %d}", gotAccepts, gotThrottles, wantAccepts, wantThrottles)
 	}
 }
 

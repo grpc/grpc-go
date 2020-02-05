@@ -71,10 +71,10 @@ type Throttler struct {
 	ratioForAccepts float64
 	requestsPadding float64
 
-	// Number of total requests and throttled requests in the lookback period.
+	// Number of total accepts and throttles in the lookback period.
 	mu        sync.Mutex
-	requests  *lookback
-	throttled *lookback
+	accepts   *lookback
+	throttles *lookback
 }
 
 // New initializes a new adaptive throttler with the default values.
@@ -88,8 +88,8 @@ func newWithArgs(duration time.Duration, bins int64, ratioForAccepts, requestsPa
 	return &Throttler{
 		ratioForAccepts: ratioForAccepts,
 		requestsPadding: requestsPadding,
-		requests:        newLookback(bins, duration),
-		throttled:       newLookback(bins, duration),
+		accepts:         newLookback(bins, duration),
+		throttles:       newLookback(bins, duration),
 	}
 }
 
@@ -104,27 +104,15 @@ func (t *Throttler) ShouldThrottle() bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	requests, throttled := t.requests.sum(now), t.throttled.sum(now)
-	accepts := float64(requests - throttled)
-	reqs := float64(requests)
-	throttleProbability := (reqs - t.ratioForAccepts*accepts) / (reqs + t.requestsPadding)
+	accepts, throttles := float64(t.accepts.sum(now)), float64(t.throttles.sum(now))
+	requests := accepts + throttles
+	throttleProbability := (requests - t.ratioForAccepts*accepts) / (requests + t.requestsPadding)
 	if throttleProbability <= randomProbability {
 		return false
 	}
 
-	t.requests.add(now, 1)
-	t.throttled.add(now, 1)
+	t.throttles.add(now, 1)
 	return true
-}
-
-// stats returns a tuple with requests, throttled for the current time.
-func (t *Throttler) stats() (int64, int64) {
-	now := timeNowFunc()
-
-	t.mu.Lock()
-	requests, throttled := t.requests.sum(now), t.throttled.sum(now)
-	t.mu.Unlock()
-	return requests, throttled
 }
 
 // RegisterBackendResponse registers a response received from the backend for a
@@ -135,9 +123,10 @@ func (t *Throttler) RegisterBackendResponse(throttled bool) {
 	now := timeNowFunc()
 
 	t.mu.Lock()
-	t.requests.add(now, 1)
 	if throttled {
-		t.throttled.add(now, 1)
+		t.throttles.add(now, 1)
+	} else {
+		t.accepts.add(now, 1)
 	}
 	t.mu.Unlock()
 }
