@@ -61,7 +61,7 @@ func determineHostname() string {
 	if err != nil {
 		log.Printf("Failed to get hostname: %v, will generate one", err)
 		rand.Seed(time.Now().UnixNano())
-		return fmt.Sprintf("generated-%d", rand.Int())
+		return fmt.Sprintf("generated-%03d", rand.Int()%100)
 	}
 	return hostname
 }

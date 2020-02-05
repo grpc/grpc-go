@@ -40,9 +40,9 @@ const (
 func printHelp() {
 	fmt.Printf(`Usage: [name [target]]
 
-  name    The name you wish to be greeted by. Defaults to %s
-  target  The server to connect to. Defaults to %s
-`, defaultTarget, defaultName)
+  name    The name you wish to be greeted by. Defaults to %q
+  target  The URI of the server, e.g. "xds-experimental:///helloworld-service". Defaults to %q
+`, defaultName, defaultTarget)
 }
 
 func main() {
@@ -68,7 +68,7 @@ func main() {
 	defer conn.Close()
 	c := pb.NewGreeterClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: name})
 	if err != nil {

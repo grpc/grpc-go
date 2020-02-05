@@ -1,8 +1,10 @@
 # gRPC xDS example
 
 The xDS example is a Hello World client/server capable of being configured with
-the XDS management protocol. Out-of-the-box it behaves the same as hello world.
-The server replies with responses including its hostname.
+the XDS management protocol. Out-of-the-box it behaves the same as [our other
+hello world
+example](https://github.com/grpc/grpc-go/tree/master/examples/helloworld). The
+server replies with responses including its hostname.
 
 **Note** that xDS support is incomplete and experimental, with limited
 compatibility.
@@ -18,7 +20,7 @@ for the bootstrap format.
 
 ## The client
 
-The client needs to import the xDS package to install the resolver and balancers:
+The client application needs to import the xDS package to install the resolver and balancers:
 
 ```go
 _ "google.golang.org/grpc/xds/experimental" // To install the xds resolvers and balancers.
