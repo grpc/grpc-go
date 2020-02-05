@@ -141,13 +141,13 @@ func (g *tLogger) ExpectErrorN(expr string, n int) {
 	g.errors[re] += n
 }
 
-// ErrorsLeft checks if expected errors were not encountered.
-func (g *tLogger) ErrorsLeft() bool {
-	count := 0
-	for _, val := range g.errors {
-		count += val
+// EndTest checks if expected errors were not encountered.
+func (g *tLogger) EndTest(t *testing.T) {
+	for re, count := range g.errors {
+		if count > 0 {
+			t.Errorf("Expected error '%v' not encountered", re.String())
+		}
 	}
-	return count > 0
 }
 
 func (g *tLogger) expected(s string) bool {
