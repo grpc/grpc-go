@@ -135,9 +135,6 @@ func (g *tLogger) ExpectErrorN(expr string, n int) {
 		g.t.Error(err)
 		return
 	}
-	if _, ok := g.errors[re]; !ok {
-		g.errors[re] = 0
-	}
 	g.errors[re] += n
 }
 
