@@ -162,9 +162,9 @@ func (b *baseBalancer) regeneratePicker() {
 			err := b.resolverErr
 			switch {
 			case err == nil:
-				err = fmt.Errorf("last connection error: %v", b.connectionErr)
-			case b.connectionErr != nil:
-				err = fmt.Errorf("last connection error: %v; %v", b.connectionErr, err)
+				err = fmt.Errorf("last connection error: %v", b.connErr)
+			case b.connErr != nil:
+				err = fmt.Errorf("last connection error: %v; %v", b.connErr, err)
 			}
 			b.v2Picker = NewErrPickerV2(balancer.TransientFailureError(err))
 		}
