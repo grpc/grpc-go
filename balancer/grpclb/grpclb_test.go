@@ -40,7 +40,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -381,8 +380,6 @@ func newLoadBalancer(numberOfBackends int, statsChan chan *lbpb.ClientStats) (ts
 }
 
 func (s) TestGRPCLB(t *testing.T) {
-	defer leakcheck.Check(t)
-
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -427,8 +424,6 @@ func (s) TestGRPCLB(t *testing.T) {
 
 // The remote balancer sends response with duplicates to grpclb client.
 func (s) TestGRPCLBWeighted(t *testing.T) {
-	defer leakcheck.Check(t)
-
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -495,8 +490,6 @@ func (s) TestGRPCLBWeighted(t *testing.T) {
 }
 
 func (s) TestDropRequest(t *testing.T) {
-	defer leakcheck.Check(t)
-
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -648,8 +641,6 @@ func (s) TestDropRequest(t *testing.T) {
 
 // When the balancer in use disconnects, grpclb should connect to the next address from resolved balancer address list.
 func (s) TestBalancerDisconnects(t *testing.T) {
-	defer leakcheck.Check(t)
-
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -727,8 +718,6 @@ func (s) TestBalancerDisconnects(t *testing.T) {
 func (s) TestFallback(t *testing.T) {
 	balancer.Register(newLBBuilderWithFallbackTimeout(100 * time.Millisecond))
 	defer balancer.Register(newLBBuilder())
-
-	defer leakcheck.Check(t)
 
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
@@ -855,8 +844,6 @@ func (s) TestFallback(t *testing.T) {
 }
 
 func (s) TestFallBackWithNoServerAddress(t *testing.T) {
-	defer leakcheck.Check(t)
-
 	resolveNowCh := make(chan struct{}, 1)
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	r.ResolveNowCallback = func(resolver.ResolveNowOptions) {
@@ -977,8 +964,6 @@ func (s) TestFallBackWithNoServerAddress(t *testing.T) {
 }
 
 func (s) TestGRPCLBPickFirst(t *testing.T) {
-	defer leakcheck.Check(t)
-
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -1191,7 +1176,6 @@ const (
 )
 
 func (s) TestGRPCLBStatsUnarySuccess(t *testing.T) {
-	defer leakcheck.Check(t)
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1211,7 +1195,6 @@ func (s) TestGRPCLBStatsUnarySuccess(t *testing.T) {
 }
 
 func (s) TestGRPCLBStatsUnaryDrop(t *testing.T) {
-	defer leakcheck.Check(t)
 	if err := runAndCheckStats(t, true, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1232,7 +1215,6 @@ func (s) TestGRPCLBStatsUnaryDrop(t *testing.T) {
 }
 
 func (s) TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
-	defer leakcheck.Check(t)
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1253,7 +1235,6 @@ func (s) TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 }
 
 func (s) TestGRPCLBStatsStreamingSuccess(t *testing.T) {
-	defer leakcheck.Check(t)
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1287,7 +1268,6 @@ func (s) TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 }
 
 func (s) TestGRPCLBStatsStreamingDrop(t *testing.T) {
-	defer leakcheck.Check(t)
 	if err := runAndCheckStats(t, true, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1322,7 +1302,6 @@ func (s) TestGRPCLBStatsStreamingDrop(t *testing.T) {
 }
 
 func (s) TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
-	defer leakcheck.Check(t)
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1349,7 +1328,6 @@ func (s) TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 }
 
 func (s) TestGRPCLBStatsQuashEmpty(t *testing.T) {
-	defer leakcheck.Check(t)
 	ch := make(chan *lbpb.ClientStats)
 	defer close(ch)
 	if err := runAndCheckStats(t, false, ch, func(cc *grpc.ClientConn) {

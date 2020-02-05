@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/codes"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -98,7 +97,6 @@ func startTestServers(count int) (_ *test, err error) {
 }
 
 func (s) TestOneBackend(t *testing.T) {
-	defer leakcheck.Check(t)
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -129,7 +127,6 @@ func (s) TestOneBackend(t *testing.T) {
 }
 
 func (s) TestBackendsRoundRobin(t *testing.T) {
-	defer leakcheck.Check(t)
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -189,7 +186,6 @@ func (s) TestBackendsRoundRobin(t *testing.T) {
 }
 
 func (s) TestAddressesRemoved(t *testing.T) {
-	defer leakcheck.Check(t)
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -231,7 +227,6 @@ func (s) TestAddressesRemoved(t *testing.T) {
 }
 
 func (s) TestCloseWithPendingRPC(t *testing.T) {
-	defer leakcheck.Check(t)
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -265,7 +260,6 @@ func (s) TestCloseWithPendingRPC(t *testing.T) {
 }
 
 func (s) TestNewAddressWhileBlocking(t *testing.T) {
-	defer leakcheck.Check(t)
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -313,7 +307,6 @@ func (s) TestNewAddressWhileBlocking(t *testing.T) {
 }
 
 func (s) TestOneServerDown(t *testing.T) {
-	defer leakcheck.Check(t)
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -411,7 +404,6 @@ func (s) TestOneServerDown(t *testing.T) {
 }
 
 func (s) TestAllServersDown(t *testing.T) {
-	defer leakcheck.Check(t)
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
