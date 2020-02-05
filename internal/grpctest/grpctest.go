@@ -59,6 +59,9 @@ func (Tester) Teardown(t *testing.T) {
 	if atomic.LoadUint32(&lcFailed) == 1 {
 		t.Log("Leak check disabled for future tests")
 	}
+	if ErrorsLeft() {
+		t.Error("Expected errors not encountered")
+	}
 }
 
 func getTestFunc(t *testing.T, xv reflect.Value, name string) func(*testing.T) {

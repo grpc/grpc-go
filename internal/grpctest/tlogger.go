@@ -46,7 +46,7 @@ const (
 type tLogger struct {
 	v      int
 	t      *testing.T
-	errors []*regexp.Regexp
+	errors map[*regexp.Regexp]int
 }
 
 func getStackFrame(stack []byte, frame int) (string, error) {
@@ -109,24 +109,47 @@ func Update(t *testing.T) {
 		grpclog.SetLoggerV2(logger)
 	}
 	logger.t = t
-	logger.errors = nil
+	logger.errors = map[*regexp.Regexp]int{}
 }
 
-// Expect declares an error to be expected. For the next test, all error logs
-// matching the expression (using FindString) will not cause the test to fail.
-// "For the next test" is includes all the time until the next call to Update().
-func Expect(expr string) {
+// ExpectError declares an error to be expected. For the next test, the first
+// error log matching the expression (using FindString) will not cause the test
+// to fail. "For the next test" is includes all the time until the next call to
+// Update(). Note that if an expected error is not encountered, this will cause
+// the test to fail.
+func ExpectError(expr string) {
+	ExpectErrorN(expr, 1)
+}
+
+// ExpectErrorN declares an error to be expected n times.
+func ExpectErrorN(expr string, n int) {
 	re, err := regexp.Compile(expr)
 	if err != nil {
 		logger.t.Error(err)
 		return
 	}
-	logger.errors = append(logger.errors, re)
+	if _, ok := logger.errors[re]; !ok {
+		logger.errors[re] = 0
+	}
+	logger.errors[re] += n
+}
+
+// ErrorsLeft checks if expected errors were not encountered.
+func ErrorsLeft() bool {
+	count := 0
+	for _, val := range logger.errors {
+		count += val
+	}
+	return count > 0
 }
 
 func (g *tLogger) expected(s string) bool {
-	for _, re := range g.errors {
+	for re, count := range g.errors {
 		if re.FindStringIndex(s) != nil {
+			g.errors[re]--
+			if count <= 1 {
+				delete(g.errors, re)
+			}
 			return true
 		}
 	}

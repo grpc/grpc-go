@@ -19,58 +19,53 @@
 package grpctest
 
 import (
-	"reflect"
-	"runtime"
-	"strings"
 	"testing"
 
 	"google.golang.org/grpc/grpclog"
 )
 
-func TestInfo(t *testing.T) {
-	Update(t)
+type s struct {
+	Tester
+}
+
+func Test(t *testing.T) {
+	RunSubTests(t, s{})
+}
+
+func (s) TestInfo(t *testing.T) {
 	grpclog.Info("Info", "message.")
 }
 
-func TestInfoln(t *testing.T) {
-	Update(t)
+func (s) TestInfoln(t *testing.T) {
 	grpclog.Infoln("Info", "message.")
 }
 
-func TestInfof(t *testing.T) {
-	Update(t)
+func (s) TestInfof(t *testing.T) {
 	grpclog.Infof("%v %v.", "Info", "message")
 }
 
-func TestWarning(t *testing.T) {
-	Update(t)
+func (s) TestWarning(t *testing.T) {
 	grpclog.Warning("Warning", "message.")
 }
 
-func TestWarningln(t *testing.T) {
-	Update(t)
+func (s) TestWarningln(t *testing.T) {
 	grpclog.Warningln("Warning", "message.")
 }
 
-func TestWarningf(t *testing.T) {
-	Update(t)
+func (s) TestWarningf(t *testing.T) {
 	grpclog.Warningf("%v %v.", "Warning", "message")
 }
 
-func TestError(t *testing.T) {
-	Update(t)
-	Expect("Expected error")
+func (s) TestError(t *testing.T) {
+	ExpectError("Expected error")
+	ExpectError("Expected ln error")
+	ExpectError("Expected formatted error")
+	numErrors := 10
+	ExpectErrorN("Expected repeated error", 10)
 	grpclog.Error("Expected", "error")
-	Expect("Expected ln error")
 	grpclog.Errorln("Expected", "ln", "error")
-	Expect("Expected formatted error")
 	grpclog.Errorf("%v %v %v", "Expected", "formatted", "error")
-}
-
-func TestSubTests(t *testing.T) {
-	testFuncs := [7]func(*testing.T){TestInfo, TestInfoln, TestInfof, TestWarning, TestWarningln, TestWarningf, TestError}
-	for _, testFunc := range testFuncs {
-		splitFuncName := strings.Split(runtime.FuncForPC(reflect.ValueOf(testFunc).Pointer()).Name(), ".")
-		t.Run(splitFuncName[len(splitFuncName)-1], testFunc)
+	for i := 0; i < numErrors; i++ {
+		grpclog.Error("Expected repeated error")
 	}
 }
