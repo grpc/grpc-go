@@ -861,9 +861,6 @@ func TestFallback(t *testing.T) {
 }
 
 func TestExplicitFallback(t *testing.T) {
-	//	balancer.Register(newLBBuilderWithFallbackTimeout(100 * time.Millisecond))
-	//	defer balancer.Register(newLBBuilder())
-
 	defer leakcheck.Check(t)
 
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
