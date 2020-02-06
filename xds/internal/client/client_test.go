@@ -25,12 +25,21 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 func clientOpts(balancerName string) Options {
 	return Options{
@@ -45,7 +54,7 @@ func clientOpts(balancerName string) Options {
 	}
 }
 
-func TestNew(t *testing.T) {
+func (s) TestNew(t *testing.T) {
 	fakeServer, cleanup, err := fakeserver.StartServer()
 	if err != nil {
 		t.Fatalf("Failed to start fake xDS server: %v", err)
@@ -110,7 +119,7 @@ func TestNew(t *testing.T) {
 
 // TestWatchService tests the happy case of registering a watcher for
 // service updates and receiving a good update.
-func TestWatchService(t *testing.T) {
+func (s) TestWatchService(t *testing.T) {
 	fakeServer, cleanup, err := fakeserver.StartServer()
 	if err != nil {
 		t.Fatalf("Failed to start fake xDS server: %v", err)
@@ -157,7 +166,7 @@ func TestWatchService(t *testing.T) {
 // xDS server does not respond to the requests being sent out as part of
 // registering a service update watcher. The underlying v2Client will timeout
 // and will send us an error.
-func TestWatchServiceWithNoResponseFromServer(t *testing.T) {
+func (s) TestWatchServiceWithNoResponseFromServer(t *testing.T) {
 	fakeServer, cleanup, err := fakeserver.StartServer()
 	if err != nil {
 		t.Fatalf("Failed to start fake xDS server: %v", err)
@@ -201,7 +210,7 @@ func TestWatchServiceWithNoResponseFromServer(t *testing.T) {
 
 // TestWatchServiceEmptyRDS tests the case where the underlying
 // v2Client receives an empty RDS response.
-func TestWatchServiceEmptyRDS(t *testing.T) {
+func (s) TestWatchServiceEmptyRDS(t *testing.T) {
 	fakeServer, cleanup, err := fakeserver.StartServer()
 	if err != nil {
 		t.Fatalf("Failed to start fake xDS server: %v", err)
@@ -253,7 +262,7 @@ func TestWatchServiceEmptyRDS(t *testing.T) {
 // TestWatchServiceWithClientClose tests the case where xDS responses are
 // received after the client is closed, and we make sure that the registered
 // watcher callback is not invoked.
-func TestWatchServiceWithClientClose(t *testing.T) {
+func (s) TestWatchServiceWithClientClose(t *testing.T) {
 	fakeServer, cleanup, err := fakeserver.StartServer()
 	if err != nil {
 		t.Fatalf("Failed to start fake xDS server: %v", err)

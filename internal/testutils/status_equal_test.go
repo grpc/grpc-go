@@ -24,8 +24,17 @@ import (
 	anypb "github.com/golang/protobuf/ptypes/any"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/status"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 var statusErr = status.ErrorProto(&spb.Status{
 	Code:    int32(codes.DataLoss),
@@ -36,7 +45,7 @@ var statusErr = status.ErrorProto(&spb.Status{
 	}},
 })
 
-func TestStatusErrEqual(t *testing.T) {
+func (s) TestStatusErrEqual(t *testing.T) {
 	tests := []struct {
 		name      string
 		err1      error

@@ -22,11 +22,21 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/internal/grpctest"
 )
 
 const (
 	testCacheTimeout = 100 * time.Millisecond
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 func (c *TimeoutCache) getForTesting(key interface{}) (*cacheEntry, bool) {
 	c.mu.Lock()
@@ -38,7 +48,7 @@ func (c *TimeoutCache) getForTesting(key interface{}) (*cacheEntry, bool) {
 // TestCacheExpire attempts to add an entry to the cache and verifies that it
 // was added successfully. It then makes sure that on timeout, it's removed and
 // the associated callback is called.
-func TestCacheExpire(t *testing.T) {
+func (s) TestCacheExpire(t *testing.T) {
 	const k, v = 1, "1"
 	c := NewTimeoutCache(testCacheTimeout)
 
@@ -63,7 +73,7 @@ func TestCacheExpire(t *testing.T) {
 // TestCacheRemove attempts to remove an existing entry from the cache and
 // verifies that the entry is removed and the associated callback is not
 // invoked.
-func TestCacheRemove(t *testing.T) {
+func (s) TestCacheRemove(t *testing.T) {
 	const k, v = 1, "1"
 	c := NewTimeoutCache(testCacheTimeout)
 
@@ -94,7 +104,7 @@ func TestCacheRemove(t *testing.T) {
 
 // TestCacheClearWithoutCallback attempts to clear all entries from the cache
 // and verifies that the associated callbacks are not invoked.
-func TestCacheClearWithoutCallback(t *testing.T) {
+func (s) TestCacheClearWithoutCallback(t *testing.T) {
 	var values []string
 	const itemCount = 3
 	for i := 0; i < itemCount; i++ {
@@ -142,7 +152,7 @@ func TestCacheClearWithoutCallback(t *testing.T) {
 
 // TestCacheClearWithCallback attempts to clear all entries from the cache and
 // verifies that the associated callbacks are invoked.
-func TestCacheClearWithCallback(t *testing.T) {
+func (s) TestCacheClearWithCallback(t *testing.T) {
 	var values []string
 	const itemCount = 3
 	for i := 0; i < itemCount; i++ {
@@ -198,7 +208,7 @@ func TestCacheClearWithCallback(t *testing.T) {
 // TestCacheRetrieveTimeoutRace simulates the case where an entry's timer fires
 // around the same time that Remove() is called for it. It verifies that there
 // is no deadlock.
-func TestCacheRetrieveTimeoutRace(t *testing.T) {
+func (s) TestCacheRetrieveTimeoutRace(t *testing.T) {
 	c := NewTimeoutCache(time.Nanosecond)
 
 	done := make(chan struct{})

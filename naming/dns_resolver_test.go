@@ -26,7 +26,17 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/internal/grpctest"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 func newUpdateWithMD(op Operation, addr, lb string) *Update {
 	return &Update{
@@ -44,7 +54,7 @@ func toMap(u []*Update) map[string]*Update {
 	return m
 }
 
-func TestCompileUpdate(t *testing.T) {
+func (s) TestCompileUpdate(t *testing.T) {
 	tests := []struct {
 		oldAddrs []string
 		newAddrs []string
@@ -109,7 +119,7 @@ func TestCompileUpdate(t *testing.T) {
 	}
 }
 
-func TestResolveFunc(t *testing.T) {
+func (s) TestResolveFunc(t *testing.T) {
 	tests := []struct {
 		addr string
 		want error
@@ -269,14 +279,14 @@ func replaceNetFunc() func() {
 	}
 }
 
-func TestResolve(t *testing.T) {
+func (s) TestResolve(t *testing.T) {
 	defer replaceNetFunc()()
 	testResolver(t, time.Millisecond*5, time.Millisecond*10)
 }
 
 const colonDefaultPort = ":" + defaultPort
 
-func TestIPWatcher(t *testing.T) {
+func (s) TestIPWatcher(t *testing.T) {
 	tests := []struct {
 		target string
 		want   []*Update

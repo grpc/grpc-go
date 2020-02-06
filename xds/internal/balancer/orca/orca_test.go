@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	orcapb "google.golang.org/grpc/xds/internal/proto/udpa/data/orca/v1"
 )
@@ -36,7 +37,15 @@ var (
 	testBytes, _ = proto.Marshal(testMessage)
 )
 
-func TestToMetadata(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestToMetadata(t *testing.T) {
 	tests := []struct {
 		name string
 		r    *orcapb.OrcaLoadReport
@@ -61,7 +70,7 @@ func TestToMetadata(t *testing.T) {
 	}
 }
 
-func TestFromMetadata(t *testing.T) {
+func (s) TestFromMetadata(t *testing.T) {
 	tests := []struct {
 		name string
 		md   metadata.MD

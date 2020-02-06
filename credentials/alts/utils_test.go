@@ -65,7 +65,7 @@ func setupError(testOS string, err error) func() {
 	return setupManufacturerReader(testOS, reader)
 }
 
-func TestIsRunningOnGCP(t *testing.T) {
+func (s) TestIsRunningOnGCP(t *testing.T) {
 	for _, tc := range []struct {
 		description string
 		testOS      string
@@ -90,7 +90,7 @@ func TestIsRunningOnGCP(t *testing.T) {
 	}
 }
 
-func TestIsRunningOnGCPNoProductNameFile(t *testing.T) {
+func (s) TestIsRunningOnGCPNoProductNameFile(t *testing.T) {
 	reverseFunc := setupError("linux", os.ErrNotExist)
 	if isRunningOnGCP() {
 		t.Errorf("ErrNotExist: isRunningOnGCP()=true, want false")
@@ -98,7 +98,7 @@ func TestIsRunningOnGCPNoProductNameFile(t *testing.T) {
 	reverseFunc()
 }
 
-func TestAuthInfoFromContext(t *testing.T) {
+func (s) TestAuthInfoFromContext(t *testing.T) {
 	ctx := context.Background()
 	altsAuthInfo := &fakeALTSAuthInfo{}
 	p := &peer.Peer{
@@ -127,7 +127,7 @@ func TestAuthInfoFromContext(t *testing.T) {
 	}
 }
 
-func TestAuthInfoFromPeer(t *testing.T) {
+func (s) TestAuthInfoFromPeer(t *testing.T) {
 	altsAuthInfo := &fakeALTSAuthInfo{}
 	p := &peer.Peer{
 		AuthInfo: altsAuthInfo,
@@ -155,7 +155,7 @@ func TestAuthInfoFromPeer(t *testing.T) {
 	}
 }
 
-func TestClientAuthorizationCheck(t *testing.T) {
+func (s) TestClientAuthorizationCheck(t *testing.T) {
 	ctx := context.Background()
 	altsAuthInfo := &fakeALTSAuthInfo{testServiceAccount1}
 	p := &peer.Peer{

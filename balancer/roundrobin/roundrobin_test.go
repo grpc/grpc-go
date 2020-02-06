@@ -32,13 +32,21 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	_ "google.golang.org/grpc/grpclog/glogger"
-	"google.golang.org/grpc/internal/leakcheck"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 type testServer struct {
 	testpb.UnimplementedTestServiceServer
@@ -90,8 +98,7 @@ func startTestServers(count int) (_ *test, err error) {
 	return t, nil
 }
 
-func TestOneBackend(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestOneBackend(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -121,8 +128,7 @@ func TestOneBackend(t *testing.T) {
 	}
 }
 
-func TestBackendsRoundRobin(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestBackendsRoundRobin(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -181,8 +187,7 @@ func TestBackendsRoundRobin(t *testing.T) {
 	}
 }
 
-func TestAddressesRemoved(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestAddressesRemoved(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -239,8 +244,7 @@ func TestAddressesRemoved(t *testing.T) {
 
 }
 
-func TestCloseWithPendingRPC(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCloseWithPendingRPC(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -273,8 +277,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	wg.Wait()
 }
 
-func TestNewAddressWhileBlocking(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestNewAddressWhileBlocking(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -321,8 +324,7 @@ func TestNewAddressWhileBlocking(t *testing.T) {
 	wg.Wait()
 }
 
-func TestOneServerDown(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestOneServerDown(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -419,8 +421,7 @@ func TestOneServerDown(t *testing.T) {
 	}
 }
 
-func TestAllServersDown(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestAllServersDown(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 

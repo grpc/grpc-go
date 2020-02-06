@@ -24,9 +24,18 @@ import (
 	"time"
 
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/internal/grpctest"
 )
 
-func TestShutdown(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestShutdown(t *testing.T) {
 	const testService = "tteesstt"
 	s := NewServer()
 	s.SetServingStatus(testService, healthpb.HealthCheckResponse_SERVING)

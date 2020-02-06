@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/leakcheck"
 	scpb "google.golang.org/grpc/internal/proto/grpc_service_config"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -56,10 +55,8 @@ func init() {
 	}
 }
 
-type s struct{}
-
-func (s) Teardown(t *testing.T) {
-	leakcheck.Check(t)
+type s struct {
+	grpctest.Tester
 }
 
 func Test(t *testing.T) {
@@ -388,7 +385,7 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	edsLB.waitForSubConnStateChange(&scStateChange{sc: fsc, state: state})
 }
 
-func TestXDSBalancerConfigParsing(t *testing.T) {
+func (s) TestXDSBalancerConfigParsing(t *testing.T) {
 	const testEDSName = "eds.service"
 	var testLRSName = "lrs.server"
 	b := bytes.NewBuffer(nil)
@@ -499,7 +496,7 @@ func TestXDSBalancerConfigParsing(t *testing.T) {
 		})
 	}
 }
-func TestLoadbalancingConfigParsing(t *testing.T) {
+func (s) TestLoadbalancingConfigParsing(t *testing.T) {
 	tests := []struct {
 		name string
 		s    string
@@ -541,7 +538,7 @@ func TestLoadbalancingConfigParsing(t *testing.T) {
 	}
 }
 
-func TestEqualStringPointers(t *testing.T) {
+func (s) TestEqualStringPointers(t *testing.T) {
 	var (
 		ta1 = "test-a"
 		ta2 = "test-a"

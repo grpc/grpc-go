@@ -52,7 +52,7 @@ func (v2c *v2Client) cloneCDSCacheForTesting() map[string]CDSUpdate {
 	return cloneCache
 }
 
-func TestValidateCluster(t *testing.T) {
+func (s) TestValidateCluster(t *testing.T) {
 	emptyUpdate := CDSUpdate{ServiceName: "", EnableLRS: false}
 	tests := []struct {
 		name       string
@@ -165,7 +165,7 @@ func TestValidateCluster(t *testing.T) {
 // TestCDSHandleResponse starts a fake xDS server, makes a ClientConn to it,
 // and creates a v2Client using it. Then, it registers a CDS watcher and tests
 // different CDS responses.
-func TestCDSHandleResponse(t *testing.T) {
+func (s) TestCDSHandleResponse(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
@@ -238,7 +238,7 @@ func TestCDSHandleResponse(t *testing.T) {
 
 // TestCDSHandleResponseWithoutWatch tests the case where the v2Client receives
 // a CDS response without a registered watcher.
-func TestCDSHandleResponseWithoutWatch(t *testing.T) {
+func (s) TestCDSHandleResponseWithoutWatch(t *testing.T) {
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
@@ -327,7 +327,7 @@ func testCDSCaching(t *testing.T, cdsTestOps []cdsTestOp, errCh *testutils.Chann
 
 // TestCDSCaching tests some end-to-end CDS flows using a fake xDS server, and
 // verifies the CDS data cached at the v2Client.
-func TestCDSCaching(t *testing.T) {
+func (s) TestCDSCaching(t *testing.T) {
 	ops := []cdsTestOp{
 		// Add an CDS watch for a cluster name (clusterName1), which returns one
 		// matching resource in the response.
@@ -376,7 +376,7 @@ func TestCDSCaching(t *testing.T) {
 // TestCDSWatchExpiryTimer tests the case where the client does not receive an
 // CDS response for the request that it sends out. We want the watch callback
 // to be invoked with an error once the watchExpiryTimer fires.
-func TestCDSWatchExpiryTimer(t *testing.T) {
+func (s) TestCDSWatchExpiryTimer(t *testing.T) {
 	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
 	defaultWatchExpiryTimeout = 500 * time.Millisecond
 	defer func() {

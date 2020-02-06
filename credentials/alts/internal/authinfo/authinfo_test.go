@@ -23,7 +23,16 @@ import (
 	"testing"
 
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
+	"google.golang.org/grpc/internal/grpctest"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 const (
 	testAppProtocol    = "my_app"
@@ -34,7 +43,7 @@ const (
 	testLocalHostname  = "local_hostname"
 )
 
-func TestALTSAuthInfo(t *testing.T) {
+func (s) TestALTSAuthInfo(t *testing.T) {
 	for _, tc := range []struct {
 		result             *altspb.HandshakerResult
 		outAppProtocol     string

@@ -104,7 +104,7 @@ func testRekeyEncryptRoundtrip(client ALTSRecordCrypto, server ALTSRecordCrypto,
 }
 
 // Test encrypt and decrypt on roundtrip messages for aes128gcmRekey.
-func TestAES128GCMRekeyEncryptRoundtrip(t *testing.T) {
+func (s) TestAES128GCMRekeyEncryptRoundtrip(t *testing.T) {
 	// Test for aes128gcmRekey.
 	key := make([]byte, 44)
 	client, server := getRekeyCryptoPair(key, nil, t)

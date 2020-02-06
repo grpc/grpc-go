@@ -31,7 +31,7 @@ import (
 // changes.
 //
 // Init 0 and 1; 0 is up, use 0; add 2, use 0; remove 2, use 0.
-func TestEDSPriority_HighPriorityReady(t *testing.T) {
+func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	cc := newTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil)
 
@@ -97,7 +97,7 @@ func TestEDSPriority_HighPriorityReady(t *testing.T) {
 //
 // Init 0 and 1; 0 is up, use 0; 0 is down, 1 is up, use 1; add 2, use 1; 1 is
 // down, use 2; remove 2, use 1.
-func TestEDSPriority_SwitchPriority(t *testing.T) {
+func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	cc := newTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil)
 
@@ -204,7 +204,7 @@ func TestEDSPriority_SwitchPriority(t *testing.T) {
 // Add a lower priority while the higher priority is down.
 //
 // Init 0 and 1; 0 and 1 both down; add 2, use 2.
-func TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
+func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	cc := newTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil)
 
@@ -266,7 +266,7 @@ func TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 // When a higher priority becomes available, all lower priorities are closed.
 //
 // Init 0,1,2; 0 and 1 down, use 2; 0 up, close 1 and 2.
-func TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
+func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	defer time.Sleep(10 * time.Millisecond)
 
 	cc := newTestClientConn(t)
@@ -338,7 +338,7 @@ func TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 // doesn't get ready.
 //
 // Init 0,1; 0 is not ready (in connecting), after timeout, use 1.
-func TestEDSPriority_InitTimeout(t *testing.T) {
+func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 	const testPriorityInitTimeout = time.Second
 	defer func() func() {
 		old := defaultPriorityInitTimeout
@@ -396,7 +396,7 @@ func TestEDSPriority_InitTimeout(t *testing.T) {
 //
 //  - start with 2 locality with p0 and p1
 //  - add localities to existing p0 and p1
-func TestEDSPriority_MultipleLocalities(t *testing.T) {
+func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	cc := newTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil)
 
@@ -499,7 +499,7 @@ func TestEDSPriority_MultipleLocalities(t *testing.T) {
 }
 
 // EDS removes all localities, and re-adds them.
-func TestEDSPriority_RemovesAllLocalities(t *testing.T) {
+func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	const testPriorityInitTimeout = time.Second
 	defer func() func() {
 		old := defaultPriorityInitTimeout
@@ -625,7 +625,7 @@ func TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	}
 }
 
-func TestPriorityType(t *testing.T) {
+func (s) TestPriorityType(t *testing.T) {
 	p0 := newPriorityType(0)
 	p1 := newPriorityType(1)
 	p2 := newPriorityType(2)

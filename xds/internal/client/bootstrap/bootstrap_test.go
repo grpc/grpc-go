@@ -25,6 +25,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/internal/grpctest"
 
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	structpb "github.com/golang/protobuf/ptypes/struct"
@@ -54,11 +55,19 @@ var (
 	}
 )
 
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
 // TestNewConfig exercises the functionality in NewConfig with different
 // bootstrap file contents. It overrides the fileReadFunc by returning
 // bootstrap file contents defined in this test, instead of reading from a
 // file.
-func TestNewConfig(t *testing.T) {
+func (s) TestNewConfig(t *testing.T) {
 	bootstrapFileMap := map[string]string{
 		"empty":          "",
 		"badJSON":        `["test": 123]`,
@@ -266,7 +275,7 @@ func TestNewConfig(t *testing.T) {
 	}
 }
 
-func TestNewConfigEnvNotSet(t *testing.T) {
+func (s) TestNewConfigEnvNotSet(t *testing.T) {
 	os.Unsetenv(fileEnv)
 	config, err := NewConfig()
 	if err == nil {

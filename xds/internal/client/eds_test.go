@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils"
 )
 
-func TestEDSParseRespProto(t *testing.T) {
+func (s) TestEDSParseRespProto(t *testing.T) {
 	tests := []struct {
 		name    string
 		m       *xdspb.ClusterLoadAssignment
@@ -161,7 +161,7 @@ var (
 	}
 )
 
-func TestEDSHandleResponse(t *testing.T) {
+func (s) TestEDSHandleResponse(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
@@ -241,7 +241,7 @@ func TestEDSHandleResponse(t *testing.T) {
 
 // TestEDSHandleResponseWithoutWatch tests the case where the v2Client
 // receives an EDS response without a registered EDS watcher.
-func TestEDSHandleResponseWithoutWatch(t *testing.T) {
+func (s) TestEDSHandleResponseWithoutWatch(t *testing.T) {
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
@@ -253,7 +253,7 @@ func TestEDSHandleResponseWithoutWatch(t *testing.T) {
 	}
 }
 
-func TestEDSWatchExpiryTimer(t *testing.T) {
+func (s) TestEDSWatchExpiryTimer(t *testing.T) {
 	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
 	defaultWatchExpiryTimeout = 500 * time.Millisecond
 	defer func() {

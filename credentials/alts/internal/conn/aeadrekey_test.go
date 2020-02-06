@@ -31,7 +31,7 @@ type rekeyAEADTestVector struct {
 }
 
 // Test encrypt and decrypt using (adapted) test vectors for AES-GCM.
-func TestAES128GCMRekeyEncrypt(t *testing.T) {
+func (s) TestAES128GCMRekeyEncrypt(t *testing.T) {
 	for _, test := range []rekeyAEADTestVector{
 		// NIST vectors from:
 		// http://csrc.nist.gov/groups/ST/toolkit/BCM/documents/proposedmodes/gcm/gcm-revised-spec.pdf
