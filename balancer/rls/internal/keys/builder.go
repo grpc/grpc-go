@@ -81,6 +81,9 @@ func MakeBuilderMap(cfg *rlspb.RouteLookupConfig) (BuilderMap, error) {
 			if name.GetService() == "" {
 				return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains a Name field with no Service {%+v}", kbs)
 			}
+			if strings.Contains(name.GetMethod(), `/`) {
+				return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains a method with a slash {%+v}", kbs)
+			}
 			path := "/" + name.GetService() + "/" + name.GetMethod()
 			if _, ok := bm[path]; ok {
 				return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated Name field {%+v}", kbs)

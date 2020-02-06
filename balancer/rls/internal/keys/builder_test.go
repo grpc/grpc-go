@@ -51,6 +51,47 @@ var (
 )
 
 func TestMakeBuilderMap(t *testing.T) {
+	wantBuilderMap1 := map[string]builder{
+		"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}, {key: "k2", names: []string{"n1"}}}},
+	}
+	wantBuilderMap2 := map[string]builder{
+		"/gFoo/":        {matchers: []matcher{{key: "k1", names: []string{"n1"}}, {key: "k2", names: []string{"n1"}}}},
+		"/gBar/method1": {matchers: []matcher{{key: "k1", names: []string{"n1", "n2"}}}},
+		"/gFoobar/":     {matchers: []matcher{{key: "k1", names: []string{"n1", "n2"}}}},
+	}
+
+	tests := []struct {
+		desc           string
+		cfg            *rlspb.RouteLookupConfig
+		wantBuilderMap BuilderMap
+	}{
+		{
+			desc: "One good GrpcKeyBuilder",
+			cfg: &rlspb.RouteLookupConfig{
+				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{goodKeyBuilder1},
+			},
+			wantBuilderMap: wantBuilderMap1,
+		},
+		{
+			desc: "Two good GrpcKeyBuilders",
+			cfg: &rlspb.RouteLookupConfig{
+				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{goodKeyBuilder1, goodKeyBuilder2},
+			},
+			wantBuilderMap: wantBuilderMap2,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			builderMap, err := MakeBuilderMap(test.cfg)
+			if err != nil || !cmp.Equal(builderMap, test.wantBuilderMap, cmp.AllowUnexported(builder{}, matcher{})) {
+				t.Errorf("MakeBuilderMap(%+v) returned {%v, %v}, want: {%v, nil}", test.cfg, builderMap, err, test.wantBuilderMap)
+			}
+		})
+	}
+}
+
+func TestMakeBuilderMapErrors(t *testing.T) {
 	emptyServiceKeyBuilder := &rlspb.GrpcKeyBuilder{
 		Names: []*rlspb.GrpcKeyBuilder_Name{
 			{Service: "bFoo", Method: "method1"},
@@ -73,92 +114,70 @@ func TestMakeBuilderMap(t *testing.T) {
 			{Key: "k1", Names: []string{"n1", "n2"}},
 		},
 	}
-	wantBuilderMap1 := map[string]builder{
-		"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}, {key: "k2", names: []string{"n1"}}}},
-	}
-	wantBuilderMap2 := map[string]builder{
-		"/gFoo/":        {matchers: []matcher{{key: "k1", names: []string{"n1"}}, {key: "k2", names: []string{"n1"}}}},
-		"/gBar/method1": {matchers: []matcher{{key: "k1", names: []string{"n1", "n2"}}}},
-		"/gFoobar/":     {matchers: []matcher{{key: "k1", names: []string{"n1", "n2"}}}},
+	methodNameWithSlashKeyBuilder := &rlspb.GrpcKeyBuilder{
+		Names:   []*rlspb.GrpcKeyBuilder_Name{{Service: "gBar", Method: "method1/foo"}},
+		Headers: []*rlspb.NameMatcher{{Key: "k1", Names: []string{"n1", "n2"}}},
 	}
 
 	tests := []struct {
-		desc           string
-		cfg            *rlspb.RouteLookupConfig
-		wantBuilderMap BuilderMap
-		wantErrPrefix  string
+		desc          string
+		cfg           *rlspb.RouteLookupConfig
+		wantErrPrefix string
 	}{
 		{
-			desc:           "No GrpcKeyBuilder",
-			cfg:            &rlspb.RouteLookupConfig{},
-			wantBuilderMap: nil,
-			wantErrPrefix:  "rls: RouteLookupConfig does not contain any GrpcKeyBuilder",
+			desc:          "No GrpcKeyBuilder",
+			cfg:           &rlspb.RouteLookupConfig{},
+			wantErrPrefix: "rls: RouteLookupConfig does not contain any GrpcKeyBuilder",
 		},
 		{
 			desc: "Two GrpcKeyBuilders with same Name",
 			cfg: &rlspb.RouteLookupConfig{
 				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{goodKeyBuilder1, goodKeyBuilder1},
 			},
-			wantBuilderMap: nil,
-			wantErrPrefix:  "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated Name field",
+			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated Name field",
 		},
 		{
 			desc: "GrpcKeyBuilder with empty Service field",
 			cfg: &rlspb.RouteLookupConfig{
 				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{emptyServiceKeyBuilder, goodKeyBuilder1},
 			},
-			wantBuilderMap: nil,
-			wantErrPrefix:  "rls: GrpcKeyBuilder in RouteLookupConfig contains a Name field with no Service",
+			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains a Name field with no Service",
 		},
 		{
 			desc: "GrpcKeyBuilder with no Name",
 			cfg: &rlspb.RouteLookupConfig{
 				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{{}, goodKeyBuilder1},
 			},
-			wantBuilderMap: nil,
-			wantErrPrefix:  "rls: GrpcKeyBuilder in RouteLookupConfig does not contain any Name",
+			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig does not contain any Name",
 		},
 		{
 			desc: "GrpcKeyBuilder with requiredMatch field set",
 			cfg: &rlspb.RouteLookupConfig{
 				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{requiredMatchKeyBuilder, goodKeyBuilder1},
 			},
-			wantBuilderMap: nil,
-			wantErrPrefix:  "rls: GrpcKeyBuilder in RouteLookupConfig has required_match field set",
+			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig has required_match field set",
 		},
 		{
 			desc: "GrpcKeyBuilder two headers with same key",
 			cfg: &rlspb.RouteLookupConfig{
 				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{repeatedHeadersKeyBuilder, goodKeyBuilder1},
 			},
-			wantBuilderMap: nil,
-			wantErrPrefix:  "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated Key field in headers",
+			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated Key field in headers",
 		},
 		{
-			desc: "One good GrpcKeyBuilder",
+			desc: "GrpcKeyBuilder with slash in method name",
 			cfg: &rlspb.RouteLookupConfig{
-				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{goodKeyBuilder1},
+				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{methodNameWithSlashKeyBuilder},
 			},
-			wantBuilderMap: wantBuilderMap1,
-		},
-		{
-			desc: "Two good GrpcKeyBuilders",
-			cfg: &rlspb.RouteLookupConfig{
-				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{goodKeyBuilder1, goodKeyBuilder2},
-			},
-			wantBuilderMap: wantBuilderMap2,
+			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains a method with a slash",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			builderMap, err := MakeBuilderMap(test.cfg)
-			if (err != nil) != (test.wantErrPrefix != "") {
-				t.Errorf("MakeBuilderMap(%+v) returned err: %v, want: %v", test.cfg, err, test.wantErrPrefix)
-			}
-			if (err != nil && !strings.HasPrefix(err.Error(), test.wantErrPrefix)) ||
-				!cmp.Equal(builderMap, test.wantBuilderMap, cmp.AllowUnexported(builder{}, matcher{})) {
-				t.Errorf("MakeBuilderMap(%+v) returned {%v, %v}, want: {%v, %v}", test.cfg, builderMap, err, test.wantBuilderMap, test.wantErrPrefix)
+			if builderMap != nil || err == nil || !strings.HasPrefix(err.Error(), test.wantErrPrefix) {
+				t.Errorf("MakeBuilderMap(%+v) returned {%v, %v}, want: {nil, %v}", test.cfg, builderMap, err, test.wantErrPrefix)
 			}
 		})
 	}
