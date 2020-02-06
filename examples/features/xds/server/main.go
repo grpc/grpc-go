@@ -34,7 +34,7 @@ import (
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
 
-var help = flag.Bool("help", false, "Print this message")
+var help = flag.Bool("help", false, "Print usage information")
 
 const (
 	defaultPort = 50051

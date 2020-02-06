@@ -37,7 +37,7 @@ const (
 	defaultName   = "world"
 )
 
-var help = flag.Bool("help", false, "Print this message")
+var help = flag.Bool("help", false, "Print usage information")
 
 func init() {
 	flag.Usage = func() {
