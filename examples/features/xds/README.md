@@ -1,6 +1,6 @@
 # gRPC xDS example
 
-xDS is the protocol initially used by envoy, that is evolving into a universal
+xDS is the protocol initially used by Envoy, that is evolving into a universal
 data plan API for service mesh.
 
 The xDS example is a Hello World client/server capable of being configured with
@@ -33,5 +33,5 @@ Then, use `xds-experimental` target scheme for the ClientConn.
 
 ```
 $ export GRPC_XDS_BOOTSTRAP=/path/to/bootstrap.json
-$ go run client/main.go "xDS work" xds-experimental:///target_service
+$ go run client/main.go "xDS world" xds-experimental:///target_service
 ```
