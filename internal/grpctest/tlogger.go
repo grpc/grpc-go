@@ -121,7 +121,7 @@ func (g *tLogger) Update(t *testing.T) {
 
 // ExpectError declares an error to be expected. For the next test, the first
 // error log matching the expression (using FindString) will not cause the test
-// to fail. "For the next test" is includes all the time until the next call to
+// to fail. "For the next test" includes all the time until the next call to
 // Update(). Note that if an expected error is not encountered, this will cause
 // the test to fail.
 func (g *tLogger) ExpectError(expr string) {
@@ -145,6 +145,7 @@ func (g *tLogger) EndTest(t *testing.T) {
 			t.Errorf("Expected error '%v' not encountered", re.String())
 		}
 	}
+	g.errors = map[*regexp.Regexp]int{}
 }
 
 func (g *tLogger) expected(s string) bool {
