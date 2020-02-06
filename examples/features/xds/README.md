@@ -1,5 +1,8 @@
 # gRPC xDS example
 
+xDS is the protocol initially used by envoy, that is evolving into a universal
+data plan API for service mesh.
+
 The xDS example is a Hello World client/server capable of being configured with
 the XDS management protocol. Out-of-the-box it behaves the same as [our other
 hello world
