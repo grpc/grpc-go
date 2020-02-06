@@ -22,12 +22,22 @@ import (
 	"sort"
 	"sync"
 	"testing"
+
+	"google.golang.org/grpc/internal/grpctest"
 )
 
 const (
 	numWriters = 10
 	numWrites  = 10
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 // wantReads contains the set of values expected to be read by the reader
 // goroutine in the tests.
@@ -43,7 +53,7 @@ func init() {
 
 // TestSingleWriter starts one reader and one writer goroutine and makes sure
 // that the reader gets all the value added to the buffer by the writer.
-func TestSingleWriter(t *testing.T) {
+func (s) TestSingleWriter(t *testing.T) {
 	ub := NewUnbounded()
 	reads := []int{}
 
@@ -77,7 +87,7 @@ func TestSingleWriter(t *testing.T) {
 
 // TestMultipleWriters starts multiple writers and one reader goroutine and
 // makes sure that the reader gets all the data written by all writers.
-func TestMultipleWriters(t *testing.T) {
+func (s) TestMultipleWriters(t *testing.T) {
 	ub := NewUnbounded()
 	reads := []int{}
 

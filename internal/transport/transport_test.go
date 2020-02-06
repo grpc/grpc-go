@@ -37,10 +37,19 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/status"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 type server struct {
 	lis        net.Listener
@@ -466,7 +475,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 
 // TestInflightStreamClosing ensures that closing in-flight stream
 // sends status error to concurrent stream reader.
-func TestInflightStreamClosing(t *testing.T) {
+func (s) TestInflightStreamClosing(t *testing.T) {
 	serverConfig := &ServerConfig{}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer cancel()
@@ -502,7 +511,7 @@ func TestInflightStreamClosing(t *testing.T) {
 	}
 }
 
-func TestClientSendAndReceive(t *testing.T) {
+func (s) TestClientSendAndReceive(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
 	defer cancel()
 	callHdr := &CallHdr{
@@ -540,7 +549,7 @@ func TestClientSendAndReceive(t *testing.T) {
 	server.stop()
 }
 
-func TestClientErrorNotify(t *testing.T) {
+func (s) TestClientErrorNotify(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
 	defer cancel()
 	go server.stop()
@@ -572,7 +581,7 @@ func performOneRPC(ct ClientTransport) {
 	}
 }
 
-func TestClientMix(t *testing.T) {
+func (s) TestClientMix(t *testing.T) {
 	s, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
 	defer cancel()
 	go func(s *server) {
@@ -589,7 +598,7 @@ func TestClientMix(t *testing.T) {
 	}
 }
 
-func TestLargeMessage(t *testing.T) {
+func (s) TestLargeMessage(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
 	defer cancel()
 	callHdr := &CallHdr{
@@ -622,7 +631,7 @@ func TestLargeMessage(t *testing.T) {
 	server.stop()
 }
 
-func TestLargeMessageWithDelayRead(t *testing.T) {
+func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 	// Disable dynamic flow control.
 	sc := &ServerConfig{
 		InitialWindowSize:     defaultWindowSize,
@@ -719,7 +728,7 @@ func TestLargeMessageWithDelayRead(t *testing.T) {
 	}
 }
 
-func TestGracefulClose(t *testing.T) {
+func (s) TestGracefulClose(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, pingpong)
 	defer cancel()
 	defer func() {
@@ -782,7 +791,7 @@ func TestGracefulClose(t *testing.T) {
 	wg.Wait()
 }
 
-func TestLargeMessageSuspension(t *testing.T) {
+func (s) TestLargeMessageSuspension(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, suspended)
 	defer cancel()
 	callHdr := &CallHdr{
@@ -817,7 +826,7 @@ func TestLargeMessageSuspension(t *testing.T) {
 	server.stop()
 }
 
-func TestMaxStreams(t *testing.T) {
+func (s) TestMaxStreams(t *testing.T) {
 	serverConfig := &ServerConfig{
 		MaxStreams: 1,
 	}
@@ -888,7 +897,7 @@ func TestMaxStreams(t *testing.T) {
 	}
 }
 
-func TestServerContextCanceledOnClosedConnection(t *testing.T) {
+func (s) TestServerContextCanceledOnClosedConnection(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, suspended)
 	defer cancel()
 	callHdr := &CallHdr{
@@ -950,7 +959,7 @@ func TestServerContextCanceledOnClosedConnection(t *testing.T) {
 	server.stop()
 }
 
-func TestClientConnDecoupledFromApplicationRead(t *testing.T) {
+func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 	connectOptions := ConnectOptions{
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
@@ -1037,7 +1046,7 @@ func TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 	}
 }
 
-func TestServerConnDecoupledFromApplicationRead(t *testing.T) {
+func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	serverConfig := &ServerConfig{
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
@@ -1106,7 +1115,7 @@ func TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 
 }
 
-func TestServerWithMisbehavedClient(t *testing.T) {
+func (s) TestServerWithMisbehavedClient(t *testing.T) {
 	server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
 	defer server.stop()
 	// Create a client that can override server stream quota.
@@ -1206,7 +1215,7 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 	}
 }
 
-func TestClientWithMisbehavedServer(t *testing.T) {
+func (s) TestClientWithMisbehavedServer(t *testing.T) {
 	// Create a misbehaving server.
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -1295,7 +1304,7 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 
 var encodingTestStatus = status.New(codes.Internal, "\n")
 
-func TestEncodingRequiredStatus(t *testing.T) {
+func (s) TestEncodingRequiredStatus(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, encodingRequiredStatus)
 	defer cancel()
 	callHdr := &CallHdr{
@@ -1321,7 +1330,7 @@ func TestEncodingRequiredStatus(t *testing.T) {
 	server.stop()
 }
 
-func TestInvalidHeaderField(t *testing.T) {
+func (s) TestInvalidHeaderField(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, invalidHeaderField)
 	defer cancel()
 	callHdr := &CallHdr{
@@ -1341,7 +1350,7 @@ func TestInvalidHeaderField(t *testing.T) {
 	server.stop()
 }
 
-func TestHeaderChanClosedAfterReceivingAnInvalidHeader(t *testing.T) {
+func (s) TestHeaderChanClosedAfterReceivingAnInvalidHeader(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, invalidHeaderField)
 	defer cancel()
 	defer server.stop()
@@ -1359,7 +1368,7 @@ func TestHeaderChanClosedAfterReceivingAnInvalidHeader(t *testing.T) {
 	}
 }
 
-func TestIsReservedHeader(t *testing.T) {
+func (s) TestIsReservedHeader(t *testing.T) {
 	tests := []struct {
 		h    string
 		want bool
@@ -1384,7 +1393,7 @@ func TestIsReservedHeader(t *testing.T) {
 	}
 }
 
-func TestContextErr(t *testing.T) {
+func (s) TestContextErr(t *testing.T) {
 	for _, test := range []struct {
 		// input
 		errIn error
@@ -1408,7 +1417,7 @@ type windowSizeConfig struct {
 	clientConn   int32
 }
 
-func TestAccountCheckWindowSizeWithLargeWindow(t *testing.T) {
+func (s) TestAccountCheckWindowSizeWithLargeWindow(t *testing.T) {
 	wc := windowSizeConfig{
 		serverStream: 10 * 1024 * 1024,
 		serverConn:   12 * 1024 * 1024,
@@ -1418,7 +1427,7 @@ func TestAccountCheckWindowSizeWithLargeWindow(t *testing.T) {
 	testFlowControlAccountCheck(t, 1024*1024, wc)
 }
 
-func TestAccountCheckWindowSizeWithSmallWindow(t *testing.T) {
+func (s) TestAccountCheckWindowSizeWithSmallWindow(t *testing.T) {
 	wc := windowSizeConfig{
 		serverStream: defaultWindowSize,
 		// Note this is smaller than initialConnWindowSize which is the current default.
@@ -1429,11 +1438,11 @@ func TestAccountCheckWindowSizeWithSmallWindow(t *testing.T) {
 	testFlowControlAccountCheck(t, 1024*1024, wc)
 }
 
-func TestAccountCheckDynamicWindowSmallMessage(t *testing.T) {
+func (s) TestAccountCheckDynamicWindowSmallMessage(t *testing.T) {
 	testFlowControlAccountCheck(t, 1024, windowSizeConfig{})
 }
 
-func TestAccountCheckDynamicWindowLargeMessage(t *testing.T) {
+func (s) TestAccountCheckDynamicWindowLargeMessage(t *testing.T) {
 	testFlowControlAccountCheck(t, 1024*1024, windowSizeConfig{})
 }
 
@@ -1583,7 +1592,7 @@ func waitWhileTrue(t *testing.T, condition func() (bool, error)) {
 
 // If any error occurs on a call to Stream.Read, future calls
 // should continue to return that same error.
-func TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
+func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	testRecvBuffer := newRecvBuffer()
 	s := &Stream{
 		ctx:         context.Background(),
@@ -1629,19 +1638,19 @@ func TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	}
 }
 
-func TestPingPong1B(t *testing.T) {
+func (s) TestPingPong1B(t *testing.T) {
 	runPingPongTest(t, 1)
 }
 
-func TestPingPong1KB(t *testing.T) {
+func (s) TestPingPong1KB(t *testing.T) {
 	runPingPongTest(t, 1024)
 }
 
-func TestPingPong64KB(t *testing.T) {
+func (s) TestPingPong64KB(t *testing.T) {
 	runPingPongTest(t, 65536)
 }
 
-func TestPingPong1MB(t *testing.T) {
+func (s) TestPingPong1MB(t *testing.T) {
 	runPingPongTest(t, 1048576)
 }
 
@@ -1722,7 +1731,7 @@ func (t *tableSizeLimit) getIndex(i int) uint32 {
 	return t.limits[i]
 }
 
-func TestHeaderTblSize(t *testing.T) {
+func (s) TestHeaderTblSize(t *testing.T) {
 	limits := &tableSizeLimit{}
 	updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {
 		e.SetMaxDynamicTableSizeLimit(v)

@@ -240,7 +240,7 @@ func (tc *testClosure) next() balancer.SubConn {
 	return ret
 }
 
-func TestIsRoundRobin(t *testing.T) {
+func (s) TestIsRoundRobin(t *testing.T) {
 	var (
 		sc1 = testSubConns[0]
 		sc2 = testSubConns[1]

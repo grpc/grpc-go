@@ -25,9 +25,18 @@ import (
 
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/grpctest"
 )
 
 const ignorePrefix = "XXX_"
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 func ignore(name string) bool {
 	if !unicode.IsUpper([]rune(name)[0]) {
@@ -38,7 +47,7 @@ func ignore(name string) bool {
 
 // A reflection based test to make sure internal.Locality contains all the
 // fields (expect for XXX_) from the proto message.
-func TestLocalityMatchProtoMessage(t *testing.T) {
+func (s) TestLocalityMatchProtoMessage(t *testing.T) {
 	want1 := make(map[string]string)
 	for ty, i := reflect.TypeOf(Locality{}), 0; i < ty.NumField(); i++ {
 		f := ty.Field(i)

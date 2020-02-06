@@ -43,7 +43,7 @@ func (v2c *v2Client) cloneRDSCacheForTesting() map[string]string {
 	return cloneCache
 }
 
-func TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
+func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 	tests := []struct {
 		name        string
 		rc          *xdspb.RouteConfiguration
@@ -192,7 +192,7 @@ func doLDS(t *testing.T, v2c *v2Client, fakeServer *fakeserver.Server) {
 // TestRDSHandleResponse starts a fake xDS server, makes a ClientConn to it,
 // and creates a v2Client using it. Then, it registers an LDS and RDS watcher
 // and tests different RDS responses.
-func TestRDSHandleResponse(t *testing.T) {
+func (s) TestRDSHandleResponse(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
@@ -269,7 +269,7 @@ func TestRDSHandleResponse(t *testing.T) {
 
 // TestRDSHandleResponseWithoutLDSWatch tests the case where the v2Client
 // receives an RDS response without a registered LDS watcher.
-func TestRDSHandleResponseWithoutLDSWatch(t *testing.T) {
+func (s) TestRDSHandleResponseWithoutLDSWatch(t *testing.T) {
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
@@ -283,7 +283,7 @@ func TestRDSHandleResponseWithoutLDSWatch(t *testing.T) {
 
 // TestRDSHandleResponseWithoutRDSWatch tests the case where the v2Client
 // receives an RDS response without a registered RDS watcher.
-func TestRDSHandleResponseWithoutRDSWatch(t *testing.T) {
+func (s) TestRDSHandleResponseWithoutRDSWatch(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
@@ -374,7 +374,7 @@ func testRDSCaching(t *testing.T, rdsTestOps []rdsTestOp, errCh *testutils.Chann
 
 // TestRDSCaching tests some end-to-end RDS flows using a fake xDS server, and
 // verifies the RDS data cached at the v2Client.
-func TestRDSCaching(t *testing.T) {
+func (s) TestRDSCaching(t *testing.T) {
 	ops := []rdsTestOp{
 		// Add an RDS watch for a resource name (goodRouteName1), which returns one
 		// matching resource in the response.
@@ -426,7 +426,7 @@ func TestRDSCaching(t *testing.T) {
 // TestRDSWatchExpiryTimer tests the case where the client does not receive an
 // RDS response for the request that it sends out. We want the watch callback
 // to be invoked with an error once the watchExpiryTimer fires.
-func TestRDSWatchExpiryTimer(t *testing.T) {
+func (s) TestRDSWatchExpiryTimer(t *testing.T) {
 	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
 	defaultWatchExpiryTimeout = 500 * time.Millisecond
 	defer func() {
@@ -461,7 +461,7 @@ func TestRDSWatchExpiryTimer(t *testing.T) {
 	waitForNilErr(t, callbackCh)
 }
 
-func TestHostFromTarget(t *testing.T) {
+func (s) TestHostFromTarget(t *testing.T) {
 	tests := []struct {
 		name    string
 		target  string

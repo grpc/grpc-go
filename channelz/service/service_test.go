@@ -33,10 +33,19 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/grpctest"
 )
 
 func init() {
 	channelz.TurnOn()
+}
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
 }
 
 func cleanupWrapper(cleanup func() error, t *testing.T) {
@@ -284,7 +293,7 @@ func init() {
 	proto.RegisterType((*OtherSecurityValue)(nil), "grpc.credentials.OtherChannelzSecurityValue")
 }
 
-func TestGetTopChannels(t *testing.T) {
+func (s) TestGetTopChannels(t *testing.T) {
 	tcs := []*dummyChannel{
 		{
 			state:                    connectivity.Connecting,
@@ -337,7 +346,7 @@ func TestGetTopChannels(t *testing.T) {
 	}
 }
 
-func TestGetServers(t *testing.T) {
+func (s) TestGetServers(t *testing.T) {
 	ss := []*dummyServer{
 		{
 			callsStarted:             6,
@@ -384,7 +393,7 @@ func TestGetServers(t *testing.T) {
 	}
 }
 
-func TestGetServerSockets(t *testing.T) {
+func (s) TestGetServerSockets(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorage()
 	defer cleanupWrapper(czCleanup, t)
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
@@ -423,7 +432,7 @@ func TestGetServerSockets(t *testing.T) {
 
 // This test makes a GetServerSockets with a non-zero start ID, and expect only
 // sockets with ID >= the given start ID.
-func TestGetServerSocketsNonZeroStartID(t *testing.T) {
+func (s) TestGetServerSocketsNonZeroStartID(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorage()
 	defer cleanupWrapper(czCleanup, t)
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
@@ -453,7 +462,7 @@ func TestGetServerSocketsNonZeroStartID(t *testing.T) {
 	}
 }
 
-func TestGetChannel(t *testing.T) {
+func (s) TestGetChannel(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorage()
 	defer cleanupWrapper(czCleanup, t)
 	refNames := []string{"top channel 1", "nested channel 1", "sub channel 2", "nested channel 3"}
@@ -551,7 +560,7 @@ func TestGetChannel(t *testing.T) {
 	}
 }
 
-func TestGetSubChannel(t *testing.T) {
+func (s) TestGetSubChannel(t *testing.T) {
 	var (
 		subchanCreated            = "SubChannel Created"
 		subchanConnectivityChange = fmt.Sprintf("Subchannel Connectivity change to %v", connectivity.Ready)
@@ -628,7 +637,7 @@ func TestGetSubChannel(t *testing.T) {
 	}
 }
 
-func TestGetSocket(t *testing.T) {
+func (s) TestGetSocket(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorage()
 	defer cleanupWrapper(czCleanup, t)
 	ss := []*dummySocket{

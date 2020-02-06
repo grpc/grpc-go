@@ -38,7 +38,7 @@ import (
 
 const (
 	defaultTimeout = 10 * time.Second
-	edsName        = "experimental_eds"
+	edsName        = "eds_experimental"
 )
 
 var (

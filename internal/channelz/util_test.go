@@ -32,9 +32,18 @@ import (
 
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/grpctest"
 )
 
-func TestGetSocketOpt(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestGetSocketOpt(t *testing.T) {
 	network, addr := "tcp", ":0"
 	ln, err := net.Listen(network, addr)
 	if err != nil {

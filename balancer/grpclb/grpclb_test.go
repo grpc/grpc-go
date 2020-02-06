@@ -39,7 +39,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/grpclog/glogger"
-	"google.golang.org/grpc/internal/leakcheck"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -58,6 +58,14 @@ var (
 	// This will test that custom dialer is passed from Dial to grpclb.
 	fakeName = "fake.Name"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 type serverNameCheckCreds struct {
 	mu sync.Mutex
@@ -183,6 +191,7 @@ type remoteBalancer struct {
 	done      chan struct{}
 	stats     *rpcStats
 	statsChan chan *lbpb.ClientStats
+	fbChan    chan struct{}
 }
 
 func newRemoteBalancer(intervals []time.Duration, statsChan chan *lbpb.ClientStats) *remoteBalancer {
@@ -191,12 +200,17 @@ func newRemoteBalancer(intervals []time.Duration, statsChan chan *lbpb.ClientSta
 		done:      make(chan struct{}),
 		stats:     newRPCStats(),
 		statsChan: statsChan,
+		fbChan:    make(chan struct{}),
 	}
 }
 
 func (b *remoteBalancer) stop() {
 	close(b.sls)
 	close(b.done)
+}
+
+func (b *remoteBalancer) fallbackNow() {
+	b.fbChan <- struct{}{}
 }
 
 func (b *remoteBalancer) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServer) error {
@@ -242,6 +256,12 @@ func (b *remoteBalancer) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServe
 			resp = &lbpb.LoadBalanceResponse{
 				LoadBalanceResponseType: &lbpb.LoadBalanceResponse_ServerList{
 					ServerList: v,
+				},
+			}
+		case <-b.fbChan:
+			resp = &lbpb.LoadBalanceResponse{
+				LoadBalanceResponseType: &lbpb.LoadBalanceResponse_FallbackResponse{
+					FallbackResponse: &lbpb.FallbackResponse{},
 				},
 			}
 		case <-stream.Context().Done():
@@ -371,9 +391,7 @@ func newLoadBalancer(numberOfBackends int, statsChan chan *lbpb.ClientStats) (ts
 	return
 }
 
-func TestGRPCLB(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestGRPCLB(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -417,9 +435,7 @@ func TestGRPCLB(t *testing.T) {
 }
 
 // The remote balancer sends response with duplicates to grpclb client.
-func TestGRPCLBWeighted(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestGRPCLBWeighted(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -485,9 +501,7 @@ func TestGRPCLBWeighted(t *testing.T) {
 	}
 }
 
-func TestDropRequest(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestDropRequest(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -638,9 +652,7 @@ func TestDropRequest(t *testing.T) {
 }
 
 // When the balancer in use disconnects, grpclb should connect to the next address from resolved balancer address list.
-func TestBalancerDisconnects(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestBalancerDisconnects(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -715,11 +727,9 @@ func TestBalancerDisconnects(t *testing.T) {
 	t.Fatalf("No RPC sent to second backend after 1 second")
 }
 
-func TestFallback(t *testing.T) {
+func (s) TestFallback(t *testing.T) {
 	balancer.Register(newLBBuilderWithFallbackTimeout(100 * time.Millisecond))
 	defer balancer.Register(newLBBuilder())
-
-	defer leakcheck.Check(t)
 
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
@@ -805,12 +815,17 @@ func TestFallback(t *testing.T) {
 	// Close backend and remote balancer connections, should use fallback.
 	tss.beListeners[0].(*restartableListener).stopPreviousConns()
 	tss.lbListener.(*restartableListener).stopPreviousConns()
-	time.Sleep(time.Second)
 
 	var fallbackUsed bool
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 2000; i++ {
 		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+			// Because we are hard-closing the connection, above, it's possible
+			// for the first RPC attempt to be sent on the old connection,
+			// which will lead to an Unavailable error when it is closed.
+			// Ignore unavailable errors.
+			if status.Code(err) != codes.Unavailable {
+				t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+			}
 		}
 		if p.Addr.String() == beLis.Addr().String() {
 			fallbackUsed = true
@@ -819,7 +834,7 @@ func TestFallback(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !fallbackUsed {
-		t.Fatalf("No RPC sent to fallback after 1 second")
+		t.Fatalf("No RPC sent to fallback after 2 seconds")
 	}
 
 	// Restart backend and remote balancer, should not use backends.
@@ -827,10 +842,8 @@ func TestFallback(t *testing.T) {
 	tss.lbListener.(*restartableListener).restart()
 	tss.ls.sls <- sl
 
-	time.Sleep(time.Second)
-
 	var backendUsed2 bool
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 2000; i++ {
 		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
@@ -841,13 +854,114 @@ func TestFallback(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !backendUsed2 {
-		t.Fatalf("No RPC sent to backend behind remote balancer after 1 second")
+		t.Fatalf("No RPC sent to backend behind remote balancer after 2 seconds")
 	}
 }
 
-func TestFallBackWithNoServerAddress(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestExplicitFallback(t *testing.T) {
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
 
+	tss, cleanup, err := newLoadBalancer(1, nil)
+	if err != nil {
+		t.Fatalf("failed to create new load balancer: %v", err)
+	}
+	defer cleanup()
+
+	// Start a standalone backend.
+	beLis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen %v", err)
+	}
+	defer beLis.Close()
+	standaloneBEs := startBackends(beServerName, true, beLis)
+	defer stopBackends(standaloneBEs)
+
+	be := &lbpb.Server{
+		IpAddress:        tss.beIPs[0],
+		Port:             int32(tss.bePorts[0]),
+		LoadBalanceToken: lbToken,
+	}
+	var bes []*lbpb.Server
+	bes = append(bes, be)
+	sl := &lbpb.ServerList{
+		Servers: bes,
+	}
+	tss.ls.sls <- sl
+	creds := serverNameCheckCreds{}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
+	if err != nil {
+		t.Fatalf("Failed to dial to the backend %v", err)
+	}
+	defer cc.Close()
+	testC := testpb.NewTestServiceClient(cc)
+
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
+		Addr:       tss.lbAddr,
+		Type:       resolver.GRPCLB,
+		ServerName: lbServerName,
+	}, {
+		Addr: beLis.Addr().String(),
+		Type: resolver.Backend,
+	}}})
+
+	var p peer.Peer
+	var backendUsed bool
+	for i := 0; i < 2000; i++ {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		}
+		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
+			backendUsed = true
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !backendUsed {
+		t.Fatalf("No RPC sent to backend behind remote balancer after 2 seconds")
+	}
+
+	// Send fallback signal from remote balancer; should use fallback.
+	tss.ls.fallbackNow()
+
+	var fallbackUsed bool
+	for i := 0; i < 2000; i++ {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		}
+		if p.Addr.String() == beLis.Addr().String() {
+			fallbackUsed = true
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !fallbackUsed {
+		t.Fatalf("No RPC sent to fallback after 2 seconds")
+	}
+
+	// Send another server list; should use backends again.
+	tss.ls.sls <- sl
+
+	backendUsed = false
+	for i := 0; i < 2000; i++ {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		}
+		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
+			backendUsed = true
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !backendUsed {
+		t.Fatalf("No RPC sent to backend behind remote balancer after 2 seconds")
+	}
+}
+
+func (s) TestFallBackWithNoServerAddress(t *testing.T) {
 	resolveNowCh := make(chan struct{}, 1)
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	r.ResolveNowCallback = func(resolver.ResolveNowOptions) {
@@ -967,9 +1081,7 @@ func TestFallBackWithNoServerAddress(t *testing.T) {
 	}
 }
 
-func TestGRPCLBPickFirst(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestGRPCLBPickFirst(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -1181,8 +1293,7 @@ const (
 	failtosendURI = "failtosend"
 )
 
-func TestGRPCLBStatsUnarySuccess(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestGRPCLBStatsUnarySuccess(t *testing.T) {
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1201,8 +1312,7 @@ func TestGRPCLBStatsUnarySuccess(t *testing.T) {
 	}
 }
 
-func TestGRPCLBStatsUnaryDrop(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestGRPCLBStatsUnaryDrop(t *testing.T) {
 	if err := runAndCheckStats(t, true, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1222,8 +1332,7 @@ func TestGRPCLBStatsUnaryDrop(t *testing.T) {
 	}
 }
 
-func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1243,8 +1352,7 @@ func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 	}
 }
 
-func TestGRPCLBStatsStreamingSuccess(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1277,8 +1385,7 @@ func TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 	}
 }
 
-func TestGRPCLBStatsStreamingDrop(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestGRPCLBStatsStreamingDrop(t *testing.T) {
 	if err := runAndCheckStats(t, true, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1312,8 +1419,7 @@ func TestGRPCLBStatsStreamingDrop(t *testing.T) {
 	}
 }
 
-func TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1339,8 +1445,7 @@ func TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 	}
 }
 
-func TestGRPCLBStatsQuashEmpty(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestGRPCLBStatsQuashEmpty(t *testing.T) {
 	ch := make(chan *lbpb.ClientStats)
 	defer close(ch)
 	if err := runAndCheckStats(t, false, ch, func(cc *grpc.ClientConn) {

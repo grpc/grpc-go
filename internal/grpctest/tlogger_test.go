@@ -16,51 +16,56 @@
  *
  */
 
-package tlogger
+package grpctest
 
 import (
-	"reflect"
-	"runtime"
-	"strings"
 	"testing"
 
 	"google.golang.org/grpc/grpclog"
 )
 
-func TestInfo(t *testing.T) {
-	Update(t)
+type s struct {
+	Tester
+}
+
+func Test(t *testing.T) {
+	RunSubTests(t, s{})
+}
+
+func (s) TestInfo(t *testing.T) {
 	grpclog.Info("Info", "message.")
 }
 
-func TestInfoln(t *testing.T) {
-	Update(t)
+func (s) TestInfoln(t *testing.T) {
 	grpclog.Infoln("Info", "message.")
 }
 
-func TestInfof(t *testing.T) {
-	Update(t)
+func (s) TestInfof(t *testing.T) {
 	grpclog.Infof("%v %v.", "Info", "message")
 }
 
-func TestWarning(t *testing.T) {
-	Update(t)
+func (s) TestWarning(t *testing.T) {
 	grpclog.Warning("Warning", "message.")
 }
 
-func TestWarningln(t *testing.T) {
-	Update(t)
+func (s) TestWarningln(t *testing.T) {
 	grpclog.Warningln("Warning", "message.")
 }
 
-func TestWarningf(t *testing.T) {
-	Update(t)
+func (s) TestWarningf(t *testing.T) {
 	grpclog.Warningf("%v %v.", "Warning", "message")
 }
 
-func TestSubTests(t *testing.T) {
-	testFuncs := [6]func(*testing.T){TestInfo, TestInfoln, TestInfof, TestWarning, TestWarningln, TestWarningf}
-	for _, testFunc := range testFuncs {
-		splitFuncName := strings.Split(runtime.FuncForPC(reflect.ValueOf(testFunc).Pointer()).Name(), ".")
-		t.Run(splitFuncName[len(splitFuncName)-1], testFunc)
+func (s) TestError(t *testing.T) {
+	const numErrors = 10
+	TLogger.ExpectError("Expected error")
+	TLogger.ExpectError("Expected ln error")
+	TLogger.ExpectError("Expected formatted error")
+	TLogger.ExpectErrorN("Expected repeated error", numErrors)
+	grpclog.Error("Expected", "error")
+	grpclog.Errorln("Expected", "ln", "error")
+	grpclog.Errorf("%v %v %v", "Expected", "formatted", "error")
+	for i := 0; i < numErrors; i++ {
+		grpclog.Error("Expected repeated error")
 	}
 }

@@ -24,11 +24,20 @@ import (
 
 	"github.com/golang/protobuf/jsonpb"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
+	"google.golang.org/grpc/internal/grpctest"
 	scpb "google.golang.org/grpc/internal/proto/grpc_service_config"
 )
 
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
 // TestXdsConfigMarshalToJSON is an example to print json format of xds_config.
-func TestXdsConfigMarshalToJSON(t *testing.T) {
+func (s) TestXdsConfigMarshalToJSON(t *testing.T) {
 	c := &scpb.XdsConfig{
 		ChildPolicy: []*scpb.LoadBalancingConfig{
 			{Policy: &scpb.LoadBalancingConfig_Grpclb{

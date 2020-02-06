@@ -62,8 +62,6 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/grpctest/tlogger"
-	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
@@ -84,31 +82,8 @@ func init() {
 	channelz.TurnOn()
 }
 
-type s struct{}
-
-var lcFailed uint32
-
-type errorer struct {
-	t *testing.T
-}
-
-func (e errorer) Errorf(format string, args ...interface{}) {
-	atomic.StoreUint32(&lcFailed, 1)
-	e.t.Errorf(format, args...)
-}
-
-func (s) Setup(t *testing.T) {
-	tlogger.Update(t)
-}
-
-func (s) Teardown(t *testing.T) {
-	if atomic.LoadUint32(&lcFailed) == 1 {
-		return
-	}
-	leakcheck.Check(errorer{t: t})
-	if atomic.LoadUint32(&lcFailed) == 1 {
-		t.Log("Leak check disabled for future tests")
-	}
+type s struct {
+	grpctest.Tester
 }
 
 func Test(t *testing.T) {
@@ -6556,7 +6531,6 @@ func (s) TestServeExitsWhenListenerClosed(t *testing.T) {
 
 // Service handler returns status with invalid utf8 message.
 func (s) TestStatusInvalidUTF8Message(t *testing.T) {
-
 	var (
 		origMsg = string([]byte{0xff, 0xfe, 0xfd})
 		wantMsg = "���"
@@ -6584,6 +6558,7 @@ func (s) TestStatusInvalidUTF8Message(t *testing.T) {
 // will fail to marshal the status because of the invalid utf8 message. Details
 // will be dropped when sending.
 func (s) TestStatusInvalidUTF8Details(t *testing.T) {
+	grpctest.TLogger.ExpectError("transport: failed to marshal rpc status")
 
 	var (
 		origMsg = string([]byte{0xff, 0xfe, 0xfd})

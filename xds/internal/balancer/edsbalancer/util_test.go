@@ -69,7 +69,7 @@ func init() {
 	newRandomWRR = newTestWRR
 }
 
-func TestDropper(t *testing.T) {
+func (s) TestDropper(t *testing.T) {
 	const repeat = 2
 
 	type args struct {

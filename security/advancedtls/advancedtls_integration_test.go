@@ -172,7 +172,10 @@ func callAndVerifyWithClientConn(connCtx context.Context, msg string, creds cred
 // (could be change the client's trust certificate, or change server authorization function, etc)
 func TestEnd2End(t *testing.T) {
 	cs := &certStore{}
-	cs.loadCerts()
+	err := cs.loadCerts()
+	if err != nil {
+		t.Fatalf("failed to load certs: %v", err)
+	}
 	stage := &stageInfo{}
 	for _, test := range []struct {
 		desc             string
@@ -330,7 +333,7 @@ func TestEnd2End(t *testing.T) {
 			}
 			serverTLSCreds, err := NewServerCreds(serverOptions)
 			if err != nil {
-				t.Fatalf("Failed to create server creds: %v", err)
+				t.Fatalf("failed to create server creds: %v", err)
 			}
 			s := grpc.NewServer(grpc.Creds(serverTLSCreds))
 			defer s.Stop()
@@ -338,7 +341,7 @@ func TestEnd2End(t *testing.T) {
 				lis, err := net.Listen("tcp", port)
 				// defer lis.Close()
 				if err != nil {
-					t.Fatalf("Failed to listen: %v", err)
+					t.Fatalf("failed to listen: %v", err)
 				}
 				pb.RegisterGreeterServer(s, &serverImpl{})
 				if err := s.Serve(lis); err != nil {

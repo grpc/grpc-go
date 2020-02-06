@@ -83,7 +83,7 @@ func checkCacheCC(ccc *lbCacheClientConn, sccLen, sctaLen int) error {
 }
 
 // Test that SubConn won't be immediately removed.
-func TestLBCacheClientConnExpire(t *testing.T) {
+func (s) TestLBCacheClientConnExpire(t *testing.T) {
 	mcc := newMockClientConn()
 	if err := checkMockCC(mcc, 0); err != nil {
 		t.Fatal(err)
@@ -135,7 +135,7 @@ func TestLBCacheClientConnExpire(t *testing.T) {
 
 // Test that NewSubConn with the same address of a SubConn being removed will
 // reuse the SubConn and cancel the removing.
-func TestLBCacheClientConnReuse(t *testing.T) {
+func (s) TestLBCacheClientConnReuse(t *testing.T) {
 	mcc := newMockClientConn()
 	if err := checkMockCC(mcc, 0); err != nil {
 		t.Fatal(err)
@@ -220,7 +220,7 @@ func TestLBCacheClientConnReuse(t *testing.T) {
 
 // Test that if the timer to remove a SubConn fires at the same time NewSubConn
 // cancels the timer, it doesn't cause deadlock.
-func TestLBCache_RemoveTimer_New_Race(t *testing.T) {
+func (s) TestLBCache_RemoveTimer_New_Race(t *testing.T) {
 	mcc := newMockClientConn()
 	if err := checkMockCC(mcc, 0); err != nil {
 		t.Fatal(err)

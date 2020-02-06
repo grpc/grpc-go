@@ -56,7 +56,7 @@ func subConnFromPicker(p balancer.V2Picker) func() balancer.SubConn {
 }
 
 // 1 balancer, 1 backend -> 2 backends -> 1 backend.
-func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
+func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
 	bg.start()
@@ -113,7 +113,7 @@ func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 }
 
 // 2 balancers, each with 1 backend.
-func TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
+func (s) TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
 	bg.start()
@@ -143,7 +143,7 @@ func TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 }
 
 // 2 balancers, each with more than 1 backends.
-func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
+func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
 	bg.start()
@@ -228,7 +228,7 @@ func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 }
 
 // 2 balancers with different weights.
-func TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
+func (s) TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
 	bg.start()
@@ -264,7 +264,7 @@ func TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 }
 
 // totally 3 balancers, add/remove balancer.
-func TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
+func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
 	bg.start()
@@ -326,7 +326,7 @@ func TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 }
 
 // 2 balancers, change balancer weight.
-func TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
+func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
 	bg.start()
@@ -370,7 +370,7 @@ func TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 	}
 }
 
-func TestBalancerGroup_LoadReport(t *testing.T) {
+func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 	testLoadStore := newTestLoadStore()
 
 	cc := newTestClientConn(t)
@@ -454,7 +454,7 @@ func TestBalancerGroup_LoadReport(t *testing.T) {
 // - b2, weight 3, backends [0,3]
 // - b3, weight 1, backends [1,2]
 // Start the balancer group again and check for behavior.
-func TestBalancerGroup_start_close(t *testing.T) {
+func (s) TestBalancerGroup_start_close(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
 
@@ -538,7 +538,7 @@ func TestBalancerGroup_start_close(t *testing.T) {
 // This test starts the balancer group with a test balancer, will updates picker
 // whenever it gets an address update. It's expected that start() doesn't block
 // because of deadlock.
-func TestBalancerGroup_start_close_deadlock(t *testing.T) {
+func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc, nil)
 
@@ -620,7 +620,7 @@ func initBalancerGroupForCachingTest(t *testing.T) (*balancerGroup, *testClientC
 
 // Test that if a sub-balancer is removed, and re-added within close timeout,
 // the subConns won't be re-created.
-func TestBalancerGroup_locality_caching(t *testing.T) {
+func (s) TestBalancerGroup_locality_caching(t *testing.T) {
 	defer replaceDefaultSubBalancerCloseTimeout(10 * time.Second)()
 	bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
 
@@ -668,7 +668,7 @@ func TestBalancerGroup_locality_caching(t *testing.T) {
 // Sub-balancers are put in cache when they are removed. If balancer group is
 // closed within close timeout, all subconns should still be rmeoved
 // immediately.
-func TestBalancerGroup_locality_caching_close_group(t *testing.T) {
+func (s) TestBalancerGroup_locality_caching_close_group(t *testing.T) {
 	defer replaceDefaultSubBalancerCloseTimeout(10 * time.Second)()
 	bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
 
@@ -697,7 +697,7 @@ func TestBalancerGroup_locality_caching_close_group(t *testing.T) {
 
 // Sub-balancers in cache will be closed if not re-added within timeout, and
 // subConns will be removed.
-func TestBalancerGroup_locality_caching_not_readd_within_timeout(t *testing.T) {
+func (s) TestBalancerGroup_locality_caching_not_readd_within_timeout(t *testing.T) {
 	defer replaceDefaultSubBalancerCloseTimeout(time.Second)()
 	_, cc, addrToSC := initBalancerGroupForCachingTest(t)
 
@@ -729,7 +729,7 @@ type noopBalancerBuilderWrapper struct {
 
 // After removing a sub-balancer, re-add with same ID, but different balancer
 // builder. Old subconns should be removed, and new subconns should be created.
-func TestBalancerGroup_locality_caching_readd_with_different_builder(t *testing.T) {
+func (s) TestBalancerGroup_locality_caching_readd_with_different_builder(t *testing.T) {
 	defer replaceDefaultSubBalancerCloseTimeout(10 * time.Second)()
 	bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
 

@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -29,14 +30,23 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	_ "google.golang.org/grpc/grpclog/glogger"
-	"google.golang.org/grpc/internal/leakcheck"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 type testServer struct {
 	testpb.UnimplementedTestServiceServer
@@ -88,8 +98,7 @@ func startTestServers(count int) (_ *test, err error) {
 	return t, nil
 }
 
-func TestOneBackend(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestOneBackend(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -119,8 +128,7 @@ func TestOneBackend(t *testing.T) {
 	}
 }
 
-func TestBackendsRoundRobin(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestBackendsRoundRobin(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -179,8 +187,7 @@ func TestBackendsRoundRobin(t *testing.T) {
 	}
 }
 
-func TestAddressesRemoved(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestAddressesRemoved(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -210,19 +217,34 @@ func TestAddressesRemoved(t *testing.T) {
 	}
 
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
-	for i := 0; i < 1000; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-		defer cancel()
-		if _, err := testc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); status.Code(err) == codes.DeadlineExceeded {
-			return
-		}
-		time.Sleep(time.Millisecond)
+	// Removing addresses results in an error reported to the clientconn, but
+	// the existing connections remain.  RPCs should still succeed.
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 	}
-	t.Fatalf("No RPC failed after removing all addresses, want RPC to fail with DeadlineExceeded")
+
+	// Stop the server to bring the channel state into transient failure.
+	test.cleanup()
+	// Wait for not-ready.
+	for src := cc.GetState(); src == connectivity.Ready; src = cc.GetState() {
+		if !cc.WaitForStateChange(ctx, src) {
+			t.Fatalf("timed out waiting for state change.  got %v; want !%v", src, connectivity.Ready)
+		}
+	}
+	// Report an empty server list again; because the state is not ready, the
+	// empty address list error should surface to the user.
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
+
+	const msgWant = "produced zero addresses"
+	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}); err == nil || !strings.Contains(status.Convert(err).Message(), msgWant) {
+		t.Fatalf("EmptyCall() = _, %v, want _, Contains(Message(), %q)", err, msgWant)
+	}
+
 }
 
-func TestCloseWithPendingRPC(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCloseWithPendingRPC(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -255,8 +277,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	wg.Wait()
 }
 
-func TestNewAddressWhileBlocking(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestNewAddressWhileBlocking(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -303,8 +324,7 @@ func TestNewAddressWhileBlocking(t *testing.T) {
 	wg.Wait()
 }
 
-func TestOneServerDown(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestOneServerDown(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -401,8 +421,7 @@ func TestOneServerDown(t *testing.T) {
 	}
 }
 
-func TestAllServersDown(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestAllServersDown(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
