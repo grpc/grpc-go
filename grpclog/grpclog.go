@@ -50,6 +50,15 @@ func Infoln(args ...interface{}) {
 	logger.Infoln(args...)
 }
 
+// InfoDepth logs to the INFO log at the specified depth.
+func InfoDepth(depth int, args ...interface{}) {
+	if depthLogger, ok := logger.(DepthLogger); ok {
+		depthLogger.InfoDepth(depth, args...)
+	} else {
+		Info(args...)
+	}
+}
+
 // Warning logs to the WARNING log.
 func Warning(args ...interface{}) {
 	logger.Warning(args...)
@@ -65,6 +74,15 @@ func Warningln(args ...interface{}) {
 	logger.Warningln(args...)
 }
 
+// WarningDepth logs to the WARNING log at the specified depth.
+func WarningDepth(depth int, args ...interface{}) {
+	if depthLogger, ok := logger.(DepthLogger); ok {
+		depthLogger.WarningDepth(depth, args...)
+	} else {
+		Warning(args...)
+	}
+}
+
 // Error logs to the ERROR log.
 func Error(args ...interface{}) {
 	logger.Error(args...)
@@ -78,6 +96,15 @@ func Errorf(format string, args ...interface{}) {
 // Errorln logs to the ERROR log. Arguments are handled in the manner of fmt.Println.
 func Errorln(args ...interface{}) {
 	logger.Errorln(args...)
+}
+
+// ErrorDepth logs to the ERROR log at the specified depth.
+func ErrorDepth(depth int, args ...interface{}) {
+	if depthLogger, ok := logger.(DepthLogger); ok {
+		depthLogger.ErrorDepth(depth, args...)
+	} else {
+		Error(args...)
+	}
 }
 
 // Fatal logs to the FATAL log. Arguments are handled in the manner of fmt.Print.
@@ -102,6 +129,15 @@ func Fatalln(args ...interface{}) {
 	logger.Fatalln(args...)
 	// Make sure fatal logs will exit.
 	os.Exit(1)
+}
+
+// FatalDepth logs to the FATAL log at the specified depth.
+func FatalDepth(depth int, args ...interface{}) {
+	if depthLogger, ok := logger.(DepthLogger); ok {
+		depthLogger.FatalDepth(depth, args...)
+	} else {
+		Fatal(args...)
+	}
 }
 
 // Print prints to the logger. Arguments are handled in the manner of fmt.Print.

@@ -44,6 +44,10 @@ func (s) TestInfof(t *testing.T) {
 	grpclog.Infof("%v %v.", "Info", "message")
 }
 
+func (s) TestInfoDepth(t *testing.T) {
+	grpclog.InfoDepth(0, "Info", "depth", "message.")
+}
+
 func (s) TestWarning(t *testing.T) {
 	grpclog.Warning("Warning", "message.")
 }
@@ -54,6 +58,10 @@ func (s) TestWarningln(t *testing.T) {
 
 func (s) TestWarningf(t *testing.T) {
 	grpclog.Warningf("%v %v.", "Warning", "message")
+}
+
+func (s) TestWarningDepth(t *testing.T) {
+	grpclog.WarningDepth(0, "Warning", "depth", "message.")
 }
 
 func (s) TestError(t *testing.T) {

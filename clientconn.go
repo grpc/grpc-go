@@ -150,7 +150,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if channelz.IsOn() {
 		if cc.dopts.channelzParentID != 0 {
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, cc.dopts.channelzParentID, target)
-			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
+			channelz.AddTraceEvent(cc.channelzID, 0, &channelz.TraceEventDesc{
 				Desc:     "Channel Created",
 				Severity: channelz.CtINFO,
 				Parent: &channelz.TraceEventDesc{
@@ -160,7 +160,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			})
 		} else {
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, 0, target)
-			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
+			channelz.AddTraceEvent(cc.channelzID, 0, &channelz.TraceEventDesc{
 				Desc:     "Channel Created",
 				Severity: channelz.CtINFO,
 			})
@@ -720,7 +720,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSub
 	}
 	if channelz.IsOn() {
 		ac.channelzID = channelz.RegisterSubChannel(ac, cc.channelzID, "")
-		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+		channelz.AddTraceEvent(ac.channelzID, 0, &channelz.TraceEventDesc{
 			Desc:     "Subchannel Created",
 			Severity: channelz.CtINFO,
 			Parent: &channelz.TraceEventDesc{
@@ -1009,7 +1009,7 @@ func (cc *ClientConn) Close() error {
 				Severity: channelz.CtINFO,
 			}
 		}
-		channelz.AddTraceEvent(cc.channelzID, ted)
+		channelz.AddTraceEvent(cc.channelzID, 0, ted)
 		// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to
 		// the entity being deleted, and thus prevent it from being deleted right away.
 		channelz.RemoveEntry(cc.channelzID)
@@ -1424,7 +1424,7 @@ func (ac *addrConn) tearDown(err error) {
 		ac.mu.Lock()
 	}
 	if channelz.IsOn() {
-		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+		channelz.AddTraceEvent(ac.channelzID, 0, &channelz.TraceEventDesc{
 			Desc:     "Subchannel Deleted",
 			Severity: channelz.CtINFO,
 			Parent: &channelz.TraceEventDesc{

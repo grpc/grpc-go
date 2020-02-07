@@ -193,3 +193,16 @@ func (g *loggerT) Fatalf(format string, args ...interface{}) {
 func (g *loggerT) V(l int) bool {
 	return l <= g.v
 }
+
+// DepthLogger is a LoggerV2 that can log at different call frame.
+type DepthLogger interface {
+	LoggerV2
+	// InfoDepth logs to INFO log at the specified depth. Arguments are handled in the manner of fmt.Print.
+	InfoDepth(depth int, args ...interface{})
+	// WarningDepth logs to WARNING log at the specified depth. Arguments are handled in the manner of fmt.Print.
+	WarningDepth(depth int, args ...interface{})
+	// ErrorDetph logs to ERROR log at the specified depth. Arguments are handled in the manner of fmt.Print.
+	ErrorDepth(depth int, args ...interface{})
+	// FatalDepth logs to FATAL log at the specified depth. Arguments are handled in the manner of fmt.Print.
+	FatalDepth(depth int, args ...interface{})
+}

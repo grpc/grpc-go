@@ -294,17 +294,17 @@ type TraceEventDesc struct {
 }
 
 // AddTraceEvent adds trace related to the entity with specified id, using the provided TraceEventDesc.
-func AddTraceEvent(id int64, desc *TraceEventDesc) {
+func AddTraceEvent(id int64, depth int, desc *TraceEventDesc) {
 	for d := desc; d != nil; d = d.Parent {
 		switch d.Severity {
 		case CtUNKNOWN:
-			grpclog.Infoln(d.Desc)
+			grpclog.InfoDepth(depth+1, d.Desc)
 		case CtINFO:
-			grpclog.Infoln(d.Desc)
+			grpclog.InfoDepth(depth+1, d.Desc)
 		case CtWarning:
-			grpclog.Warningln(d.Desc)
+			grpclog.WarningDepth(depth+1, d.Desc)
 		case CtError:
-			grpclog.Errorln(d.Desc)
+			grpclog.ErrorDepth(depth+1, d.Desc)
 		}
 	}
 	if getMaxTraceEntry() == 0 {
