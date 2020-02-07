@@ -21,6 +21,7 @@
 package keys
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -176,7 +177,7 @@ func TestMakeBuilderMapErrors(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			builderMap, err := MakeBuilderMap(test.cfg)
-			if builderMap != nil || err == nil || !strings.HasPrefix(err.Error(), test.wantErrPrefix) {
+			if builderMap != nil || !strings.HasPrefix(fmt.Sprint(err), test.wantErrPrefix) {
 				t.Errorf("MakeBuilderMap(%+v) returned {%v, %v}, want: {nil, %v}", test.cfg, builderMap, err, test.wantErrPrefix)
 			}
 		})
