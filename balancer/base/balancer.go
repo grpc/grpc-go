@@ -213,21 +213,35 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 		}
 		return
 	}
-	b.scStates[sc] = s
-	switch s {
-	case connectivity.Idle:
+	if s == connectivity.Idle {
 		sc.Connect()
-	case connectivity.Shutdown:
+	}
+	if oldS == connectivity.TransientFailure && s != connectivity.Ready && s != connectivity.Shutdown {
+		// Once a subconn enters TRANSIENT_FAILURE, keep it in that state until
+		// it becomes READY in order to prevent the aggregated state from being
+		// always CONNECTING when many backends exist but are all down.
+		// SHUTDOWN is also allowed as that ends the SubConn.
+		s = connectivity.TransientFailure
+	}
+	if s == connectivity.Shutdown {
 		// When an address was removed by resolver, b called RemoveSubConn but
 		// kept the sc's state in scStates. Remove state for this sc here.
 		delete(b.scStates, sc)
+	} else {
+		b.scStates[sc] = s
 	}
 
 	oldAggrState := b.state
 	b.state = b.csEvltr.RecordTransition(oldS, s)
 
 	// Set or clear the last connection error accordingly.
-	b.connErr = state.ConnectionError
+	if b.state == connectivity.Ready {
+		// Clear whenever we have any ready SubConn.
+		b.connErr = nil
+	} else if state.ConnectionError != nil {
+		// Set any other time if we got an error.
+		b.connErr = state.ConnectionError
+	}
 
 	// Regenerate picker when one of the following happens:
 	//  - this sc became ready from not-ready
