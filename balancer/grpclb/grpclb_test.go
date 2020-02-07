@@ -38,7 +38,6 @@ import (
 	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
