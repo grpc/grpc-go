@@ -134,7 +134,7 @@ func (f Features) String() string {
 		f.NetworkMode, f.UseBufConn, f.EnableKeepalive, f.BenchTime, f.EnableTrace,
 		f.Latency, f.Kbps, f.MTU, f.MaxConcurrentCalls, reqPayloadString,
 		respPayloadString, f.ModeCompressor, f.EnableChannelz, f.EnableProfiling,
-                f.EnablePreloader)
+		f.EnablePreloader)
 }
 
 // SharedFeatures returns the shared features as a pretty printable string.

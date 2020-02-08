@@ -1558,7 +1558,7 @@ func MethodFromServerStream(stream ServerStream) (string, bool) {
 // prepareMsg returns the hdr, payload and data
 // using the compressors passed or using the
 // passed preparedmsg
-func prepareMsg(m interface{}, codec baseCodec, cp Compressor, comp encoding.Compressor stat *profiling.Stat) (hdr, payload, data []byte, err error) {
+func prepareMsg(m interface{}, codec baseCodec, cp Compressor, comp encoding.Compressor, stat *profiling.Stat) (hdr, payload, data []byte, err error) {
 	if preparedMsg, ok := m.(*PreparedMsg); ok {
 		return preparedMsg.hdr, preparedMsg.payload, preparedMsg.encodedData, nil
 	}
