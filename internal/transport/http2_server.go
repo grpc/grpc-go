@@ -461,7 +461,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	t.controlBuf.put(&registerStream{
 		streamID: s.id,
 		wq:       s.wq,
-		stat:     s.Stat(),
+		stat:     s.stat,
 	})
 	handle(s)
 	return false

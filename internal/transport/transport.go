@@ -460,6 +460,7 @@ func (s *Stream) write(m recvMsg) {
 
 // Stat returns the streams's underlying *profiling.Stat.
 func (s *Stream) Stat() *profiling.Stat {
+	// TODO(adtac): is this nil check really needed?
 	if s == nil {
 		return nil
 	}
