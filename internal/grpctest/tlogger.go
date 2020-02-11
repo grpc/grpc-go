@@ -26,6 +26,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"google.golang.org/grpc/grpclog"
@@ -50,16 +51,18 @@ type tLogger struct {
 	t           *testing.T
 	errors      map[*regexp.Regexp]int
 	initialized bool
+	m           sync.Mutex
 }
 
 func init() {
-	TLogger = &tLogger{0, nil, map[*regexp.Regexp]int{}, false}
+	TLogger = &tLogger{0, nil, map[*regexp.Regexp]int{}, false, sync.Mutex{}}
 	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
 	if vl, err := strconv.Atoi(vLevel); err == nil {
 		TLogger.v = vl
 	}
 }
 
+// getStackFrame gets, from the stack byte string, the appropriate stack frame.
 func getStackFrame(stack []byte, frame int) (string, error) {
 	s := strings.Split(string(stack), "\n")
 	if frame >= (len(s)-1)/2 {
@@ -69,7 +72,10 @@ func getStackFrame(stack []byte, frame int) (string, error) {
 	return fmt.Sprintf("%v:", split[len(split)-1]), nil
 }
 
+// log logs the message with the specified parameters to the tLogger.
 func (g *tLogger) log(ltype logType, format string, args ...interface{}) {
+	g.m.Lock()
+	defer g.m.Unlock()
 	s := debug.Stack()
 	prefix, err := getStackFrame(s, callingFrame)
 	args = append([]interface{}{prefix}, args...)
@@ -111,6 +117,8 @@ func (g *tLogger) log(ltype logType, format string, args ...interface{}) {
 // Update updates the testing.T that the testing logger logs to. Should be done
 // before every test. It also initializes the tLogger if it has not already.
 func (g *tLogger) Update(t *testing.T) {
+	g.m.Lock()
+	defer g.m.Unlock()
 	if !g.initialized {
 		grpclog.SetLoggerV2(TLogger)
 		g.initialized = true
@@ -130,6 +138,8 @@ func (g *tLogger) ExpectError(expr string) {
 
 // ExpectErrorN declares an error to be expected n times.
 func (g *tLogger) ExpectErrorN(expr string, n int) {
+	g.m.Lock()
+	defer g.m.Unlock()
 	re, err := regexp.Compile(expr)
 	if err != nil {
 		g.t.Error(err)
@@ -140,6 +150,8 @@ func (g *tLogger) ExpectErrorN(expr string, n int) {
 
 // EndTest checks if expected errors were not encountered.
 func (g *tLogger) EndTest(t *testing.T) {
+	g.m.Lock()
+	defer g.m.Unlock()
 	for re, count := range g.errors {
 		if count > 0 {
 			t.Errorf("Expected error '%v' not encountered", re.String())
@@ -148,6 +160,8 @@ func (g *tLogger) EndTest(t *testing.T) {
 	g.errors = map[*regexp.Regexp]int{}
 }
 
+// expected determines if the error string is protected or not. Does not lock
+// tlogger, so do not call outside of a function that does.
 func (g *tLogger) expected(s string) bool {
 	for re, count := range g.errors {
 		if re.FindStringIndex(s) != nil {
@@ -210,5 +224,7 @@ func (g *tLogger) Fatalf(format string, args ...interface{}) {
 }
 
 func (g *tLogger) V(l int) bool {
+	g.m.Lock()
+	defer g.m.Unlock()
 	return l <= g.v
 }
