@@ -213,7 +213,7 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 		}
 		return
 	}
-	if oldS == connectivity.TransientFailure || s == connectivity.Connecting {
+	if oldS == connectivity.TransientFailure && s == connectivity.Connecting {
 		// Once a subconn enters TRANSIENT_FAILURE, ignore subsequent
 		// CONNECTING transitions to prevent the aggregated state from being
 		// always CONNECTING when many backends exist but are all down.
