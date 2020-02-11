@@ -227,18 +227,12 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 		// When an address was removed by resolver, b called RemoveSubConn but
 		// kept the sc's state in scStates. Remove state for this sc here.
 		delete(b.scStates, sc)
+	case connectivity.TransientFailure:
+		// Save error to be reported via picker.
+		b.connErr = state.ConnectionError
 	}
 
 	b.state = b.csEvltr.RecordTransition(oldS, s)
-
-	// Set or clear the last connection error accordingly.
-	if b.state == connectivity.Ready {
-		// Clear whenever we have any ready SubConn.
-		b.connErr = nil
-	} else if state.ConnectionError != nil {
-		// Set any other time if we got an error.
-		b.connErr = state.ConnectionError
-	}
 
 	// Regenerate picker when one of the following happens:
 	//  - this sc entered or left ready
