@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/grpclog"
+	grpclogi "google.golang.org/grpc/internal/grpclog"
 )
 
 const (
@@ -298,13 +299,13 @@ func AddTraceEvent(id int64, depth int, desc *TraceEventDesc) {
 	for d := desc; d != nil; d = d.Parent {
 		switch d.Severity {
 		case CtUNKNOWN:
-			grpclog.InfoDepth(depth+1, d.Desc)
+			grpclogi.InfoDepth(depth+1, d.Desc)
 		case CtINFO:
-			grpclog.InfoDepth(depth+1, d.Desc)
+			grpclogi.InfoDepth(depth+1, d.Desc)
 		case CtWarning:
-			grpclog.WarningDepth(depth+1, d.Desc)
+			grpclogi.WarningDepth(depth+1, d.Desc)
 		case CtError:
-			grpclog.ErrorDepth(depth+1, d.Desc)
+			grpclogi.ErrorDepth(depth+1, d.Desc)
 		}
 	}
 	if getMaxTraceEntry() == 0 {

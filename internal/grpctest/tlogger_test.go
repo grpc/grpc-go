@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/grpclog"
+	grpclogi "google.golang.org/grpc/internal/grpclog"
 )
 
 type s struct {
@@ -45,7 +46,7 @@ func (s) TestInfof(t *testing.T) {
 }
 
 func (s) TestInfoDepth(t *testing.T) {
-	grpclog.InfoDepth(0, "Info", "depth", "message.")
+	grpclogi.InfoDepth(0, "Info", "depth", "message.")
 }
 
 func (s) TestWarning(t *testing.T) {
@@ -61,7 +62,7 @@ func (s) TestWarningf(t *testing.T) {
 }
 
 func (s) TestWarningDepth(t *testing.T) {
-	grpclog.WarningDepth(0, "Warning", "depth", "message.")
+	grpclogi.WarningDepth(0, "Warning", "depth", "message.")
 }
 
 func (s) TestError(t *testing.T) {
