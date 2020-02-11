@@ -35,7 +35,7 @@ import (
 
 // The value chosen here is based on the default value of the
 // initial_fetch_timeout field in corepb.ConfigSource proto.
-var defaultWatchExpiryTimeout = 15 * time.Second
+var defaultWatchExpiryTimeout = 5 * time.Second
 
 // v2Client performs the actual xDS RPCs using the xDS v2 API. It creates a
 // single ADS stream on which the different types of xDS requests and responses
