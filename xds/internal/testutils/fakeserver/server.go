@@ -87,7 +87,7 @@ type Server struct {
 // port for gRPC requests. The returned cancel function should be invoked by
 // the caller upon completion of the test.
 func StartServer() (*Server, func(), error) {
-	lis, err := net.Listen("tcp", "localhost:0")
+	lis, err := net.Listen("tcp", "localhost:19234")
 	if err != nil {
 		return nil, func() {}, fmt.Errorf("net.Listen() failed: %v", err)
 	}

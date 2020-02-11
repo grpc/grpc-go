@@ -1,0 +1,18 @@
+{
+	"xds_servers": [
+		{
+			"server_uri": "localhost:19234"
+		}
+	],
+	"node": {
+		"id": "b7f9c818-fb46-43ca-8662-d3bdbcf7ec18~10.0.0.1",
+		"metadata": {
+			"TRAFFICDIRECTOR_GCP_PROJECT_NUMBER": "123456789012",
+			"TRAFFICDIRECTOR_NETWORK_NAME": "default"
+		},
+		"locality": {
+			"zone": "us-central1-a"
+		}
+	}
+}
+
