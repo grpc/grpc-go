@@ -231,7 +231,6 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 		b.scStates[sc] = s
 	}
 
-	oldAggrState := b.state
 	b.state = b.csEvltr.RecordTransition(oldS, s)
 
 	// Set or clear the last connection error accordingly.
@@ -246,10 +245,10 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 	// Regenerate picker when one of the following happens:
 	//  - this sc became ready from not-ready
 	//  - this sc became not-ready from ready
-	//  - the aggregated state of balancer became TransientFailure from non-TransientFailure
-	//  - the aggregated state of balancer became non-TransientFailure from TransientFailure
+	//  - the aggregated state of balancer is TransientFailure
+	//    (may need to update error message)
 	if (s == connectivity.Ready) != (oldS == connectivity.Ready) ||
-		(b.state == connectivity.TransientFailure) != (oldAggrState == connectivity.TransientFailure) {
+		b.state == connectivity.TransientFailure {
 		b.regeneratePicker()
 	}
 
