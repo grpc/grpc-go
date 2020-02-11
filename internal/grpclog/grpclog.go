@@ -19,10 +19,10 @@
 // Package grpclog (internal) defines depth logging for grpc.
 package grpclog
 
-// Logger TODO(gargut): Write.
+// Logger is the logger used for the non-depth log functions.
 var Logger LoggerV2
 
-// DepthLogger TODO(gargut): Write.
+// DepthLogger is the logger used for the depth log functions.
 var DepthLogger DepthLoggerV2
 
 // InfoDepth logs to the INFO log at the specified depth.
