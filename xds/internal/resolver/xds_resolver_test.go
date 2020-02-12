@@ -325,7 +325,7 @@ func TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	}
 }
 
-// TestXDSResolverUpdates tests the cases where the resolver gets a good updates
+// TestXDSResolverUpdates tests the cases where the resolver gets a good update
 // after an error, and an error after the good update.
 func TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	xdsC := fakeclient.NewClient()
