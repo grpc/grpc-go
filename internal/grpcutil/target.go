@@ -16,8 +16,9 @@
  *
  */
 
-// Package target provides functionality to parse target URI strings.
-package target
+// Package grpcutil provides a bunch of utility functions to be used across the
+// gRPC codebase.
+package grpcutil
 
 import (
 	"strings"
@@ -35,12 +36,12 @@ func split2(s, sep string) (string, string, bool) {
 	return spl[0], spl[1], true
 }
 
-// Parse splits target into a resolver.Target struct containing scheme,
+// ParseTarget splits target into a resolver.Target struct containing scheme,
 // authority and endpoint.
 //
 // If target is not a valid scheme://authority/endpoint, it returns {Endpoint:
 // target}.
-func Parse(target string) (ret resolver.Target) {
+func ParseTarget(target string) (ret resolver.Target) {
 	var ok bool
 	ret.Scheme, ret.Endpoint, ok = split2(target, "://")
 	if !ok {
