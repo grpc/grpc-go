@@ -1,4 +1,5 @@
 // +build !appengine
+// +build !darwin
 // +build go1.11
 
 /*
