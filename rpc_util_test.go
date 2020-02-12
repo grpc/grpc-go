@@ -66,7 +66,7 @@ func (s) TestSimpleParsing(t *testing.T) {
 	} {
 		buf := fullReader{bytes.NewReader(test.p)}
 		parser := &parser{r: buf}
-		pt, b, err := parser.recvMsg(math.MaxInt32)
+		pt, b, err := parser.recvMsg(math.MaxInt32, nil)
 		if err != test.err || !bytes.Equal(b, test.b) || pt != test.pt {
 			t.Fatalf("parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, %v", test.p, pt, b, err, test.pt, test.b, test.err)
 		}
@@ -88,14 +88,14 @@ func (s) TestMultipleParsing(t *testing.T) {
 		{compressionNone, []byte("d")},
 	}
 	for i, want := range wantRecvs {
-		pt, data, err := parser.recvMsg(math.MaxInt32)
+		pt, data, err := parser.recvMsg(math.MaxInt32, nil)
 		if err != nil || pt != want.pt || !reflect.DeepEqual(data, want.data) {
 			t.Fatalf("after %d calls, parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, <nil>",
 				i, p, pt, data, err, want.pt, want.data)
 		}
 	}
 
-	pt, data, err := parser.recvMsg(math.MaxInt32)
+	pt, data, err := parser.recvMsg(math.MaxInt32, nil)
 	if err != io.EOF {
 		t.Fatalf("after %d recvMsgs calls, parser{%v}.recvMsg(_) = %v, %v, %v\nwant _, _, %v",
 			len(wantRecvs), p, pt, data, err, io.EOF)
@@ -113,7 +113,7 @@ func (s) TestEncode(t *testing.T) {
 	}{
 		{nil, []byte{0, 0, 0, 0, 0}, []byte{}, nil},
 	} {
-		data, err := encode(encoding.GetCodec(protoenc.Name), test.msg)
+		data, err := encode(encoding.GetCodec(protoenc.Name), test.msg, nil)
 		if err != test.err || !bytes.Equal(data, test.data) {
 			t.Errorf("encode(_, %v) = %v, %v; want %v, %v", test.msg, data, err, test.data, test.err)
 			continue
@@ -217,12 +217,12 @@ func (s) TestParseDialTarget(t *testing.T) {
 func bmEncode(b *testing.B, mSize int) {
 	cdc := encoding.GetCodec(protoenc.Name)
 	msg := &perfpb.Buffer{Body: make([]byte, mSize)}
-	encodeData, _ := encode(cdc, msg)
+	encodeData, _ := encode(cdc, msg, nil)
 	encodedSz := int64(len(encodeData))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		encode(cdc, msg)
+		encode(cdc, msg, nil)
 	}
 	b.SetBytes(encodedSz)
 }

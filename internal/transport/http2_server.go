@@ -21,6 +21,7 @@ package transport
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -42,6 +43,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/internal/profiling"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -331,6 +333,20 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		method:         state.data.method,
 		contentSubtype: state.data.contentSubtype,
 	}
+
+	if profiling.IsEnabled() {
+		s.stat = profiling.NewStat("server")
+		// See comment above StreamStatMetadataSize definition for more information
+		// on this encoding.
+		s.stat.Metadata = make([]byte, profiling.StreamStatMetadataConnectionIDSize+profiling.StreamStatMetadataStreamIDSize)
+		written := 0
+		binary.BigEndian.PutUint64(s.stat.Metadata[written:written+profiling.StreamStatMetadataConnectionIDSize], t.connectionID)
+		written += profiling.StreamStatMetadataConnectionIDSize
+		binary.BigEndian.PutUint32(s.stat.Metadata[written:written+profiling.StreamStatMetadataStreamIDSize], streamID)
+		profiling.StreamStats.Push(s.stat)
+		defer s.stat.NewTimer("/http2/recv/header").Egress()
+	}
+
 	if frame.StreamEnded() {
 		// s is just created by the caller. No lock needed.
 		s.state = streamReadDone
@@ -434,15 +450,18 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			ctxDone:    s.ctxDone,
 			recv:       s.buf,
 			freeBuffer: t.bufferPool.put,
+			stat:       s.stat,
 		},
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
 		},
+		stat: s.stat,
 	}
 	// Register the stream with loopy.
 	t.controlBuf.put(&registerStream{
 		streamID: s.id,
 		wq:       s.wq,
+		stat:     s.stat,
 	})
 	handle(s)
 	return false
@@ -569,6 +588,15 @@ func (t *http2Server) updateFlowControl(n uint32) {
 }
 
 func (t *http2Server) handleData(f *http2.DataFrame) {
+	var timer *profiling.Timer
+	if profiling.IsEnabled() {
+		timer = profiling.NewTimer("/http2/recv/dataFrame/loopyReader")
+	}
+
+	// We don't defer timer.Egress() here because it should be called by
+	// google.golang.org/grpc/internal/transport.(*recvBuffer).put when the
+	// recvMsg is actually put into the buffer.
+
 	size := f.Header().Length
 	var sendBDPPing bool
 	if t.bdpEst != nil {
@@ -604,9 +632,11 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	if !ok {
 		return
 	}
+	s.stat.AppendTimer(timer)
 	if size > 0 {
 		if err := s.fc.onData(size); err != nil {
 			t.closeStream(s, true, http2.ErrCodeFlowControl, false)
+			timer.Egress()
 			return
 		}
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
@@ -629,6 +659,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		s.compareAndSwapState(streamActive, streamReadDone)
 		s.write(recvMsg{err: io.EOF})
 	}
+	timer.Egress()
 }
 
 func (t *http2Server) handleRSTStream(f *http2.RSTStreamFrame) {
@@ -828,6 +859,9 @@ func (t *http2Server) writeHeaderLocked(s *Stream) error {
 // TODO(zhaoq): Now it indicates the end of entire stream. Revisit if early
 // OK is adopted.
 func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
+	if s.stat != nil {
+		defer s.stat.NewTimer("/WriteStatus").Egress()
+	}
 	if s.getState() == streamDone {
 		return nil
 	}
@@ -889,7 +923,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 
 // Write converts the data into HTTP2 data frame and sends it out. Non-nil error
 // is returns if it fails (e.g., framing error, transport error).
-func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
+func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, stat *profiling.Stat, opts *Options) error {
 	if !s.isHeaderSent() { // Headers haven't been written yet.
 		if err := t.WriteHeader(s, nil); err != nil {
 			if _, ok := err.(ConnectionError); ok {
@@ -923,6 +957,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		h:           hdr,
 		d:           data,
 		onEachWrite: t.setResetPingStrikes,
+		stat:        stat,
 	}
 	if err := s.wq.get(int32(len(hdr) + len(data))); err != nil {
 		select {
