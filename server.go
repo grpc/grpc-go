@@ -116,6 +116,8 @@ type serverOptions struct {
 	dc                    Decompressor
 	unaryInt              UnaryServerInterceptor
 	streamInt             StreamServerInterceptor
+	chainUnaryInts        []UnaryServerInterceptor
+	chainStreamInts       []StreamServerInterceptor
 	inTapHandle           tap.ServerInHandle
 	statsHandler          stats.Handler
 	maxConcurrentStreams  uint32
@@ -311,6 +313,16 @@ func UnaryInterceptor(i UnaryServerInterceptor) ServerOption {
 	})
 }
 
+// ChainUnaryInterceptor returns a ServerOption that specifies the chained interceptor
+// for unary RPCs. The first interceptor will be the outer most,
+// while the last interceptor will be the inner most wrapper around the real call.
+// All unary interceptors added by this method will be chained.
+func ChainUnaryInterceptor(interceptors ...UnaryServerInterceptor) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.chainUnaryInts = append(o.chainUnaryInts, interceptors...)
+	})
+}
+
 // StreamInterceptor returns a ServerOption that sets the StreamServerInterceptor for the
 // server. Only one stream interceptor can be installed.
 func StreamInterceptor(i StreamServerInterceptor) ServerOption {
@@ -319,6 +331,16 @@ func StreamInterceptor(i StreamServerInterceptor) ServerOption {
 			panic("The stream server interceptor was already set and may not be reset.")
 		}
 		o.streamInt = i
+	})
+}
+
+// ChainStreamInterceptor returns a ServerOption that specifies the chained interceptor
+// for stream RPCs. The first interceptor will be the outer most,
+// while the last interceptor will be the inner most wrapper around the real call.
+// All stream interceptors added by this method will be chained.
+func ChainStreamInterceptor(interceptors ...StreamServerInterceptor) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.chainStreamInts = append(o.chainStreamInts, interceptors...)
 	})
 }
 
@@ -404,6 +426,8 @@ func NewServer(opt ...ServerOption) *Server {
 		done:   grpcsync.NewEvent(),
 		czData: new(channelzData),
 	}
+	chainUnaryServerInterceptors(s)
+	chainStreamServerInterceptors(s)
 	s.cv = sync.NewCond(&s.mu)
 	if EnableTracing {
 		_, file, line, _ := runtime.Caller(1)
@@ -719,7 +743,9 @@ func (s *Server) serveStreams(st transport.ServerTransport) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			timer := stream.Stat().NewTimer("/grpc")
 			s.handleStream(st, stream, s.traceInfo(st, stream))
+			timer.Egress()
 		}()
 	}, func(ctx context.Context, method string) context.Context {
 		if !EnableTracing {
@@ -842,31 +868,87 @@ func (s *Server) incrCallsFailed() {
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
-	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
+	stat := stream.Stat()
+	overallTimer := stat.NewTimer("/Server/sendResponse")
+
+	timer := stat.NewTimer("/encoding")
+	codec := s.getCodec(stream.ContentSubtype())
+	data, err := encode(codec, msg, stat)
+	timer.Egress()
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to encode response: ", err)
+		overallTimer.Egress()
 		return err
 	}
-	compData, err := compress(data, cp, comp)
+
+	timer = stat.NewTimer("/compression")
+	compData, err := compress(data, cp, comp, stat)
+	timer.Egress()
+
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to compress response: ", err)
+		overallTimer.Egress()
 		return err
 	}
+
+	timer = stat.NewTimer("/header")
 	hdr, payload := msgHeader(data, compData)
+	timer.Egress()
 	// TODO(dfawley): should we be checking len(data) instead?
 	if len(payload) > s.opts.maxSendMessageSize {
+		overallTimer.Egress()
 		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(payload), s.opts.maxSendMessageSize)
 	}
-	err = t.Write(stream, hdr, payload, opts)
+
+	timer = stat.NewTimer("/transport/enqueue")
+	err = t.Write(stream, hdr, payload, stat, opts)
+	timer.Egress()
 	if err == nil && s.opts.statsHandler != nil {
 		s.opts.statsHandler.HandleRPC(stream.Context(), outPayload(false, msg, data, payload, time.Now()))
 	}
+	overallTimer.Egress()
 	return err
 }
 
+// chainUnaryServerInterceptors chains all unary server interceptors into one.
+func chainUnaryServerInterceptors(s *Server) {
+	// Prepend opts.unaryInt to the chaining interceptors if it exists, since unaryInt will
+	// be executed before any other chained interceptors.
+	interceptors := s.opts.chainUnaryInts
+	if s.opts.unaryInt != nil {
+		interceptors = append([]UnaryServerInterceptor{s.opts.unaryInt}, s.opts.chainUnaryInts...)
+	}
+
+	var chainedInt UnaryServerInterceptor
+	if len(interceptors) == 0 {
+		chainedInt = nil
+	} else if len(interceptors) == 1 {
+		chainedInt = interceptors[0]
+	} else {
+		chainedInt = func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (interface{}, error) {
+			return interceptors[0](ctx, req, info, getChainUnaryHandler(interceptors, 0, info, handler))
+		}
+	}
+
+	s.opts.unaryInt = chainedInt
+}
+
+// getChainUnaryHandler recursively generate the chained UnaryHandler
+func getChainUnaryHandler(interceptors []UnaryServerInterceptor, curr int, info *UnaryServerInfo, finalHandler UnaryHandler) UnaryHandler {
+	if curr == len(interceptors)-1 {
+		return finalHandler
+	}
+
+	return func(ctx context.Context, req interface{}) (interface{}, error) {
+		return interceptors[curr+1](ctx, req, info, getChainUnaryHandler(interceptors, curr+1, info, finalHandler))
+	}
+}
+
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
+	stat := stream.Stat()
+	overallTimer := stat.NewTimer("/processUnaryRPC")
 	sh := s.opts.statsHandler
-	if sh != nil || trInfo != nil || channelz.IsOn() {
+	if overallTimer != nil || sh != nil || trInfo != nil || channelz.IsOn() {
 		if channelz.IsOn() {
 			s.incrCallsStarted()
 		}
@@ -918,6 +1000,10 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 					s.incrCallsSucceeded()
 				}
 			}
+
+			if overallTimer != nil {
+				overallTimer.Egress()
+			}
 		}()
 	}
 
@@ -955,6 +1041,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 
 	// If dc is set and matches the stream's compression, use it.  Otherwise, try
 	// to find a matching registered compressor for decomp.
+	timer := stat.NewTimer("/recv/compression/compressor")
 	if rc := stream.RecvCompress(); s.opts.dc != nil && s.opts.dc.Type() == rc {
 		dc = s.opts.dc
 	} else if rc != "" && rc != encoding.Identity {
@@ -962,6 +1049,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		if decomp == nil {
 			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", rc)
 			t.WriteStatus(stream, st)
+			timer.Egress()
 			return st.Err()
 		}
 	}
@@ -980,12 +1068,15 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			stream.SetSendCompress(rc)
 		}
 	}
+	timer.Egress()
 
 	var payInfo *payloadInfo
 	if sh != nil || binlog != nil {
 		payInfo = &payloadInfo{}
 	}
-	d, err := recvAndDecompress(&parser{r: stream}, stream, dc, s.opts.maxReceiveMessageSize, payInfo, decomp)
+
+	timer = stat.NewTimer("/recv")
+	d, err := recvAndDecompress(&parser{r: stream}, stream, dc, s.opts.maxReceiveMessageSize, payInfo, decomp, stat)
 	if err != nil {
 		if st, ok := status.FromError(err); ok {
 			if e := t.WriteStatus(stream, st); e != nil {
@@ -994,13 +1085,27 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		return err
 	}
+	timer.Egress()
+
 	if channelz.IsOn() {
 		t.IncrMsgRecv()
 	}
 	df := func(v interface{}) error {
-		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
+		overallTimer := stat.NewTimer("/encoding")
+
+		// Do not create a closure on timer.
+		timer := stat.NewTimer("/getCodec")
+		codec := s.getCodec(stream.ContentSubtype())
+		timer.Egress()
+
+		timer = stat.NewTimer("/unmarshal")
+		err := codec.Unmarshal(d, v)
+		timer.Egress()
+		if err != nil {
+			overallTimer.Egress()
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
+
 		if sh != nil {
 			sh.HandleRPC(stream.Context(), &stats.InPayload{
 				RecvTime:   time.Now(),
@@ -1018,10 +1123,15 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		if trInfo != nil {
 			trInfo.tr.LazyLog(&payload{sent: false, msg: v}, true)
 		}
+		overallTimer.Egress()
 		return nil
 	}
 	ctx := NewContextWithServerTransportStream(stream.Context(), stream)
+
+	// TODO(adtac): measure interceptor code separately?
+	timer = stat.NewTimer("/applicationHandler")
 	reply, appErr := md.Handler(srv.server, ctx, df, s.opts.unaryInt)
+	timer.Egress()
 	if appErr != nil {
 		appStatus, ok := status.FromError(appErr)
 		if !ok {
@@ -1113,7 +1223,43 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	return err
 }
 
+// chainStreamServerInterceptors chains all stream server interceptors into one.
+func chainStreamServerInterceptors(s *Server) {
+	// Prepend opts.streamInt to the chaining interceptors if it exists, since streamInt will
+	// be executed before any other chained interceptors.
+	interceptors := s.opts.chainStreamInts
+	if s.opts.streamInt != nil {
+		interceptors = append([]StreamServerInterceptor{s.opts.streamInt}, s.opts.chainStreamInts...)
+	}
+
+	var chainedInt StreamServerInterceptor
+	if len(interceptors) == 0 {
+		chainedInt = nil
+	} else if len(interceptors) == 1 {
+		chainedInt = interceptors[0]
+	} else {
+		chainedInt = func(srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler) error {
+			return interceptors[0](srv, ss, info, getChainStreamHandler(interceptors, 0, info, handler))
+		}
+	}
+
+	s.opts.streamInt = chainedInt
+}
+
+// getChainStreamHandler recursively generate the chained StreamHandler
+func getChainStreamHandler(interceptors []StreamServerInterceptor, curr int, info *StreamServerInfo, finalHandler StreamHandler) StreamHandler {
+	if curr == len(interceptors)-1 {
+		return finalHandler
+	}
+
+	return func(srv interface{}, ss ServerStream) error {
+		return interceptors[curr+1](srv, ss, info, getChainStreamHandler(interceptors, curr+1, info, finalHandler))
+	}
+}
+
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
+	stat := stream.Stat()
+	overallTimer := stat.NewTimer("/processStreamingRPC")
 	if channelz.IsOn() {
 		s.incrCallsStarted()
 	}
@@ -1139,7 +1285,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		statsHandler:          sh,
 	}
 
-	if sh != nil || trInfo != nil || channelz.IsOn() {
+	if overallTimer != nil || sh != nil || trInfo != nil || channelz.IsOn() {
 		// See comment in processUnaryRPC on defers.
 		defer func() {
 			if trInfo != nil {
@@ -1171,6 +1317,10 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 					s.incrCallsSucceeded()
 				}
 			}
+
+			if overallTimer != nil {
+				overallTimer.Egress()
+			}
 		}()
 	}
 
@@ -1199,6 +1349,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 
 	// If dc is set and matches the stream's compression, use it.  Otherwise, try
 	// to find a matching registered compressor for decomp.
+	timer := stat.NewTimer("/recv/compression/compressor")
 	if rc := stream.RecvCompress(); s.opts.dc != nil && s.opts.dc.Type() == rc {
 		ss.dc = s.opts.dc
 	} else if rc != "" && rc != encoding.Identity {
@@ -1206,6 +1357,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		if ss.decomp == nil {
 			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", rc)
 			t.WriteStatus(ss.s, st)
+			timer.Egress()
 			return st.Err()
 		}
 	}
@@ -1224,6 +1376,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			stream.SetSendCompress(rc)
 		}
 	}
+	timer.Egress()
 
 	if trInfo != nil {
 		trInfo.tr.LazyLog(&trInfo.firstLine, false)
@@ -1234,14 +1387,19 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		server = srv.server
 	}
 	if s.opts.streamInt == nil {
+		timer = stat.NewTimer("/applicationHandler")
 		appErr = sd.Handler(server, ss)
+		timer.Egress()
 	} else {
 		info := &StreamServerInfo{
 			FullMethod:     stream.Method(),
 			IsClientStream: sd.ClientStreams,
 			IsServerStream: sd.ServerStreams,
 		}
+		// TODO(adtac): measure intercept code separately?
+		timer = stat.NewTimer("/applicationHandler")
 		appErr = s.opts.streamInt(server, ss, info, sd.Handler)
+		timer.Egress()
 	}
 	if appErr != nil {
 		appStatus, ok := status.FromError(appErr)
@@ -1281,6 +1439,16 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 }
 
 func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Stream, trInfo *traceInfo) {
+	stat := stream.Stat()
+	// If the request is well-formed, we must stop the /stream/recv/grpc/header
+	// timer before either of processUnaryRPC or processStreamingRPC is called.
+	// If the request is malformed, the handler may exit early or use the unknown
+	// stream description handler. Since the latter's processing isn't header
+	// processing, we cannot stop the timer *after* the completion of the unknown
+	// stream description handler. For these reasons, we cannot defer the
+	// timer.Egress() call.
+	timer := stat.NewTimer("/grpc/stream/recv/header")
+
 	sm := stream.Method()
 	if sm != "" && sm[0] == '/' {
 		sm = sm[1:]
@@ -1302,6 +1470,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 		if trInfo != nil {
 			trInfo.tr.Finish()
 		}
+		timer.Egress()
 		return
 	}
 	service := sm[:pos]
@@ -1310,16 +1479,19 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	srv, knownService := s.m[service]
 	if knownService {
 		if md, ok := srv.md[method]; ok {
+			timer.Egress()
 			s.processUnaryRPC(t, stream, srv, md, trInfo)
 			return
 		}
 		if sd, ok := srv.sd[method]; ok {
+			timer.Egress()
 			s.processStreamingRPC(t, stream, srv, sd, trInfo)
 			return
 		}
 	}
 	// Unknown service, or known server unknown method.
 	if unknownDesc := s.opts.unknownStreamDesc; unknownDesc != nil {
+		timer.Egress()
 		s.processStreamingRPC(t, stream, nil, unknownDesc, trInfo)
 		return
 	}
@@ -1343,6 +1515,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	if trInfo != nil {
 		trInfo.tr.Finish()
 	}
+	timer.Egress()
 }
 
 // The key to save ServerTransportStream in the context.
