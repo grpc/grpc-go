@@ -102,7 +102,7 @@ type ProtocolInfo struct {
 	SecurityProtocol string
 	// SecurityVersion is the security protocol version.
 	//
-	// Deprecated: please use Peer.AuthInfo.
+	// Deprecated: please use Peer.AuthInfo. This value is static and is not calculated per connection.
 	SecurityVersion string
 	// ServerName is the user-configured server name.
 	ServerName string
