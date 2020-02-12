@@ -49,13 +49,14 @@ const (
 type tLogger struct {
 	v           int
 	t           *testing.T
-	errors      map[*regexp.Regexp]int
-	m           sync.Mutex
 	initialized bool
+
+	m      sync.Mutex // protects errors
+	errors map[*regexp.Regexp]int
 }
 
 func init() {
-	TLogger = &tLogger{0, nil, map[*regexp.Regexp]int{}, sync.Mutex{}, false}
+	TLogger = &tLogger{errors: map[*regexp.Regexp]int{}}
 	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
 	if vl, err := strconv.Atoi(vLevel); err == nil {
 		TLogger.v = vl
