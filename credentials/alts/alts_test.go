@@ -128,6 +128,9 @@ func (s) TestInfo(t *testing.T) {
 	if got, want := info.SecurityProtocol, "alts"; got != want {
 		t.Errorf("info.SecurityProtocol=%v, want %v", got, want)
 	}
+	if got, want := info.SecurityVersion, "1.0"; got != want {
+		t.Errorf("info.SecurityVersion=%v, want %v", got, want)
+	}
 	if got, want := info.ServerName, ""; got != want {
 		t.Errorf("info.ServerName=%v, want %v", got, want)
 	}
