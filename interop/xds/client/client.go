@@ -54,7 +54,7 @@ var (
 	statsPort     = flag.Int("stats_port", 8081, "Port to expose peer distribution stats service")
 
 	mu               sync.Mutex
-	currentRequestId int32 = 0
+	currentRequestID int32
 	watchers               = make(map[statsWatcherKey]*statsWatcher)
 )
 
@@ -66,7 +66,7 @@ type statsService struct{}
 // driver when verifying that the client is distributing RPCs as expected.
 func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalancerStatsRequest) (*testpb.LoadBalancerStatsResponse, error) {
 	mu.Lock()
-	watcherKey := statsWatcherKey{currentRequestId, currentRequestId + in.GetNumRpcs()}
+	watcherKey := statsWatcherKey{currentRequestID, currentRequestID + in.GetNumRpcs()}
 	watcher, ok := watchers[watcherKey]
 	if !ok {
 		watcher = &statsWatcher{
@@ -89,9 +89,9 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 			select {
 			case r := <-watcher.c:
 				if r.GetServerId() != "" {
-					watcher.rpcsByPeer[r.GetServerId()] += 1
+					watcher.rpcsByPeer[r.GetServerId()]++
 				} else {
-					watcher.numFailures += 1
+					watcher.numFailures++
 				}
 				watcher.remainingRpcs--
 				if watcher.remainingRpcs == 0 {
@@ -147,8 +147,8 @@ func sendRpcs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 			ctx, cancel := context.WithTimeout(context.Background(), *rpcTimeout)
 			p := new(peer.Peer)
 			mu.Lock()
-			savedRequestId := currentRequestId
-			currentRequestId += 1
+			savedRequestID := currentRequestID
+			currentRequestID++
 			savedWatchers := make(map[statsWatcherKey]*statsWatcher)
 			for key, value := range watchers {
 				savedWatchers[key] = value
@@ -160,7 +160,7 @@ func sendRpcs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 			cancel()
 
 			for key, value := range savedWatchers {
-				if key.startID <= savedRequestId && savedRequestId < key.endID {
+				if key.startID <= savedRequestID && savedRequestID < key.endID {
 					value.c <- *r
 				}
 			}
