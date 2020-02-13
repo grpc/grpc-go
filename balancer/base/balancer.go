@@ -213,6 +213,12 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 		}
 		return
 	}
+	if oldS == connectivity.TransientFailure && s == connectivity.Connecting {
+		// Once a subconn enters TRANSIENT_FAILURE, ignore subsequent
+		// CONNECTING transitions to prevent the aggregated state from being
+		// always CONNECTING when many backends exist but are all down.
+		return
+	}
 	b.scStates[sc] = s
 	switch s {
 	case connectivity.Idle:
@@ -221,21 +227,19 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 		// When an address was removed by resolver, b called RemoveSubConn but
 		// kept the sc's state in scStates. Remove state for this sc here.
 		delete(b.scStates, sc)
+	case connectivity.TransientFailure:
+		// Save error to be reported via picker.
+		b.connErr = state.ConnectionError
 	}
 
-	oldAggrState := b.state
 	b.state = b.csEvltr.RecordTransition(oldS, s)
 
-	// Set or clear the last connection error accordingly.
-	b.connErr = state.ConnectionError
-
 	// Regenerate picker when one of the following happens:
-	//  - this sc became ready from not-ready
-	//  - this sc became not-ready from ready
-	//  - the aggregated state of balancer became TransientFailure from non-TransientFailure
-	//  - the aggregated state of balancer became non-TransientFailure from TransientFailure
+	//  - this sc entered or left ready
+	//  - the aggregated state of balancer is TransientFailure
+	//    (may need to update error message)
 	if (s == connectivity.Ready) != (oldS == connectivity.Ready) ||
-		(b.state == connectivity.TransientFailure) != (oldAggrState == connectivity.TransientFailure) {
+		b.state == connectivity.TransientFailure {
 		b.regeneratePicker()
 	}
 
