@@ -68,10 +68,7 @@ type LoggerV2 interface {
 // Not mutex-protected, should be called before any gRPC functions.
 func SetLoggerV2(l LoggerV2) {
 	grpclog.Logger = l
-	grpclog.DepthLogger = nil
-	if depthLogger, ok := l.(grpclog.DepthLoggerV2); ok {
-		grpclog.DepthLogger = depthLogger
-	}
+	grpclog.DepthLogger, _ = l.(grpclog.DepthLoggerV2)
 }
 
 const (

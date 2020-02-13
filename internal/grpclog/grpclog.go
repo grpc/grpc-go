@@ -62,6 +62,8 @@ func FatalDepth(depth int, args ...interface{}) {
 }
 
 // LoggerV2 does underlying logging work for grpclog.
+// This is a copy of the LoggerV2 defined in the external grpclog package. It
+// is defined here to avoid a circular dependency.
 type LoggerV2 interface {
 	// Info logs to INFO log. Arguments are handled in the manner of fmt.Print.
 	Info(args ...interface{})
@@ -100,6 +102,8 @@ type LoggerV2 interface {
 // DepthLoggerV2 logs at a specified call frame. If a LoggerV2 also implements
 // DepthLoggerV2, the below functions will be called with the appropriate stack
 // depth set for trivial functions the logger may ignore.
+// This is a copy of the DepthLoggerV2 defined in the external grpclog package.
+// It is defined here to avoid a circular dependency.
 //
 // This API is EXPERIMENTAL.
 type DepthLoggerV2 interface {

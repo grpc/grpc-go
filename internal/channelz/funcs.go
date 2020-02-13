@@ -30,8 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc/grpclog"
-	grpclogi "google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpclog"
 )
 
 const (
@@ -217,7 +216,7 @@ func RegisterChannel(c Channel, pid int64, ref string) int64 {
 // by pid). It returns the unique channelz tracking id assigned to this subchannel.
 func RegisterSubChannel(c Channel, pid int64, ref string) int64 {
 	if pid == 0 {
-		grpclog.Error("a SubChannel's parent id cannot be 0")
+		grpclog.ErrorDepth(0, "a SubChannel's parent id cannot be 0")
 		return 0
 	}
 	id := idGen.genID()
@@ -254,7 +253,7 @@ func RegisterServer(s Server, ref string) int64 {
 // this listen socket.
 func RegisterListenSocket(s Socket, pid int64, ref string) int64 {
 	if pid == 0 {
-		grpclog.Error("a ListenSocket's parent id cannot be 0")
+		grpclog.ErrorDepth(0, "a ListenSocket's parent id cannot be 0")
 		return 0
 	}
 	id := idGen.genID()
@@ -269,7 +268,7 @@ func RegisterListenSocket(s Socket, pid int64, ref string) int64 {
 // this normal socket.
 func RegisterNormalSocket(s Socket, pid int64, ref string) int64 {
 	if pid == 0 {
-		grpclog.Error("a NormalSocket's parent id cannot be 0")
+		grpclog.ErrorDepth(0, "a NormalSocket's parent id cannot be 0")
 		return 0
 	}
 	id := idGen.genID()
@@ -299,13 +298,13 @@ func AddTraceEvent(id int64, depth int, desc *TraceEventDesc) {
 	for d := desc; d != nil; d = d.Parent {
 		switch d.Severity {
 		case CtUNKNOWN:
-			grpclogi.InfoDepth(depth+1, d.Desc)
+			grpclog.InfoDepth(depth+1, d.Desc)
 		case CtINFO:
-			grpclogi.InfoDepth(depth+1, d.Desc)
+			grpclog.InfoDepth(depth+1, d.Desc)
 		case CtWarning:
-			grpclogi.WarningDepth(depth+1, d.Desc)
+			grpclog.WarningDepth(depth+1, d.Desc)
 		case CtError:
-			grpclogi.ErrorDepth(depth+1, d.Desc)
+			grpclog.ErrorDepth(depth+1, d.Desc)
 		}
 	}
 	if getMaxTraceEntry() == 0 {

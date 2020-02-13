@@ -161,10 +161,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			})
 		} else {
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, 0, target)
-			channelz.AddTraceEvent(cc.channelzID, 0, &channelz.TraceEventDesc{
-				Desc:     "Channel Created",
-				Severity: channelz.CtINFO,
-			})
+			channelz.Info(cc.channelzID, "Channel Created")
 		}
 		cc.csMgr.channelzID = cc.channelzID
 	}
