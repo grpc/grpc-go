@@ -67,7 +67,7 @@ type testStreamHandler struct {
 func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 	p := &parser{r: s}
 	for {
-		pf, req, err := p.recvMsg(math.MaxInt32, nil)
+		pf, req, err := p.recvMsg(math.MaxInt32)
 		if err == io.EOF {
 			break
 		}
@@ -104,13 +104,13 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 		}
 	}
 	// send a response back to end the stream.
-	data, err := encode(testCodec{}, &expectedResponse, nil)
+	data, err := encode(testCodec{}, &expectedResponse)
 	if err != nil {
 		t.Errorf("Failed to encode the response: %v", err)
 		return
 	}
 	hdr, payload := msgHeader(data, nil)
-	h.t.Write(s, hdr, payload, nil, &transport.Options{})
+	h.t.Write(s, hdr, payload, &transport.Options{})
 	h.t.WriteStatus(s, status.New(codes.OK, ""))
 }
 

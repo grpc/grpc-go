@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/profiling"
 	ppb "google.golang.org/grpc/profiling/proto"
 )
 
@@ -125,12 +124,8 @@ func streamStatsCatapultJSONSingle(stat *ppb.Stat, baseSec int64, baseNsec int32
 		return nil
 	}
 
-	// See comment above StreamStatMetadataSize definition for more information
-	// on this encoding.
-	read := 0
-	connectionCounter := binary.BigEndian.Uint64(stat.Metadata[read : read+profiling.StreamStatMetadataConnectionIDSize])
-	read += profiling.StreamStatMetadataConnectionIDSize
-	streamID := binary.BigEndian.Uint32(stat.Metadata[read : read+profiling.StreamStatMetadataStreamIDSize])
+	connectionCounter := binary.BigEndian.Uint64(stat.Metadata[0:8])
+	streamID := binary.BigEndian.Uint32(stat.Metadata[8:12])
 	opid := fmt.Sprintf("/%s/%d/%d", stat.Tags, connectionCounter, streamID)
 
 	var loopyReaderGoID, loopyWriterGoID int64
