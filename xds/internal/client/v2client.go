@@ -100,7 +100,7 @@ func newV2Client(cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) 
 		nodeProto: nodeProto,
 		backoff:   backoff,
 
-		streamCh: make(chan adsStream),
+		streamCh: make(chan adsStream, 1),
 		sendCh:   buffer.NewUnbounded(),
 
 		watchMap: make(map[string]*watchInfo),
