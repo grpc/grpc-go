@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	_ "google.golang.org/grpc/balancer/grpclb"
 	"google.golang.org/grpc/grpclog"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/peer"
@@ -40,10 +39,10 @@ type statsWatcherKey struct {
 }
 
 type statsWatcher struct {
-	mu            sync.Mutex
 	rpcsByPeer    map[string]int32
 	numFailures   int32
 	remainingRpcs int32
+	c             chan testpb.SimpleResponse
 }
 
 var (
@@ -74,6 +73,7 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 			rpcsByPeer:    make(map[string]int32),
 			numFailures:   0,
 			remainingRpcs: in.GetNumRpcs(),
+			c:             make(chan testpb.SimpleResponse),
 		}
 		watchers[watcherKey] = watcher
 	}
@@ -82,38 +82,35 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(in.GetTimeoutSec())*time.Second)
 	defer cancel()
 
-	done := make(chan bool)
+	responseCh := make(chan testpb.LoadBalancerStatsResponse)
 	// Wait until the requested RPCs have all been recorded or timeout occurs.
 	go func() {
 		for {
 			select {
-			default:
-				watcher.mu.Lock()
-				remainingRpcs := watcher.remainingRpcs
-				watcher.mu.Unlock()
-				if remainingRpcs == 0 {
-					done <- true
-					close(done)
+			case r := <-watcher.c:
+				if r.GetServerId() != "" {
+					watcher.rpcsByPeer[r.GetServerId()] += 1
+				} else {
+					watcher.numFailures += 1
+				}
+				watcher.remainingRpcs--
+				if watcher.remainingRpcs == 0 {
+					responseCh <- testpb.LoadBalancerStatsResponse{NumFailures: watcher.numFailures + watcher.remainingRpcs, RpcsByPeer: watcher.rpcsByPeer}
 					return
 				}
 			case <-ctx.Done():
-				done <- false
-				close(done)
+				grpclog.Info("Timed out, returning partial stats")
+				responseCh <- testpb.LoadBalancerStatsResponse{NumFailures: watcher.numFailures + watcher.remainingRpcs, RpcsByPeer: watcher.rpcsByPeer}
 				return
 			}
 		}
 	}()
 
-	success := <-done
-	if !success {
-		grpclog.Info("Timed out, returning partial stats")
-	}
+	response := <-responseCh
 	mu.Lock()
 	delete(watchers, watcherKey)
 	mu.Unlock()
-	watcher.mu.Lock()
-	defer watcher.mu.Unlock()
-	return &testpb.LoadBalancerStatsResponse{NumFailures: watcher.numFailures + watcher.remainingRpcs, RpcsByPeer: watcher.rpcsByPeer}, nil
+	return &response, nil
 }
 
 func main() {
@@ -163,16 +160,9 @@ func sendRpcs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 			cancel()
 
 			for key, value := range savedWatchers {
-				value.mu.Lock()
 				if key.startID <= savedRequestId && savedRequestId < key.endID {
-					if success {
-						value.rpcsByPeer[r.GetServerId()] += 1
-					} else {
-						value.numFailures += 1
-					}
-					value.remainingRpcs -= 1
+					value.c <- *r
 				}
-				value.mu.Unlock()
 			}
 
 			if success && *printResponse {
