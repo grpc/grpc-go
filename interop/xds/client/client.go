@@ -55,7 +55,7 @@ var (
 
 	mu               sync.Mutex
 	currentRequestID int32
-	watchers               = make(map[statsWatcherKey]*statsWatcher)
+	watchers         = make(map[statsWatcherKey]*statsWatcher)
 )
 
 type statsService struct{}
