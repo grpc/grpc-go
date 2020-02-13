@@ -1,6 +1,10 @@
 # Health
 
-<!-- TODO: add preface on health -->
+gRPC provides a health library to communicate a systems health to their clients.
+It works by providing a service definition via the [health/v1](https://github.com/grpc/grpc-proto/blob/master/grpc/health/v1/health.proto) api.
+
+By using the health library, clients can gracefully fail out servers as they encounter issues. 
+Most languages provide an implementation out of box, making it interoperable between systems.
 
 ## Try it
 
