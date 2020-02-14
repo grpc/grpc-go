@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
-	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"

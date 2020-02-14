@@ -74,9 +74,9 @@ func getStackFrame(stack []byte, frame int) (string, error) {
 }
 
 // log logs the message with the specified parameters to the tLogger.
-func (g *tLogger) log(ltype logType, format string, args ...interface{}) {
+func (g *tLogger) log(ltype logType, depth int, format string, args ...interface{}) {
 	s := debug.Stack()
-	prefix, err := getStackFrame(s, callingFrame)
+	prefix, err := getStackFrame(s, callingFrame+depth)
 	args = append([]interface{}{prefix}, args...)
 	if err != nil {
 		g.t.Error(err)
@@ -176,51 +176,67 @@ func (g *tLogger) expected(s string) bool {
 }
 
 func (g *tLogger) Info(args ...interface{}) {
-	g.log(logLog, "", args...)
+	g.log(logLog, 0, "", args...)
 }
 
 func (g *tLogger) Infoln(args ...interface{}) {
-	g.log(logLog, "", args...)
+	g.log(logLog, 0, "", args...)
 }
 
 func (g *tLogger) Infof(format string, args ...interface{}) {
-	g.log(logLog, format, args...)
+	g.log(logLog, 0, format, args...)
+}
+
+func (g *tLogger) InfoDepth(depth int, args ...interface{}) {
+	g.log(logLog, depth, "", args...)
 }
 
 func (g *tLogger) Warning(args ...interface{}) {
-	g.log(logLog, "", args...)
+	g.log(logLog, 0, "", args...)
 }
 
 func (g *tLogger) Warningln(args ...interface{}) {
-	g.log(logLog, "", args...)
+	g.log(logLog, 0, "", args...)
 }
 
 func (g *tLogger) Warningf(format string, args ...interface{}) {
-	g.log(logLog, format, args...)
+	g.log(logLog, 0, format, args...)
+}
+
+func (g *tLogger) WarningDepth(depth int, args ...interface{}) {
+	g.log(logLog, depth, "", args...)
 }
 
 func (g *tLogger) Error(args ...interface{}) {
-	g.log(errorLog, "", args...)
+	g.log(errorLog, 0, "", args...)
 }
 
 func (g *tLogger) Errorln(args ...interface{}) {
-	g.log(errorLog, "", args...)
+	g.log(errorLog, 0, "", args...)
 }
 
 func (g *tLogger) Errorf(format string, args ...interface{}) {
-	g.log(errorLog, format, args...)
+	g.log(errorLog, 0, format, args...)
+}
+
+func (g *tLogger) ErrorDepth(depth int, args ...interface{}) {
+	g.log(errorLog, depth, "", args...)
 }
 
 func (g *tLogger) Fatal(args ...interface{}) {
-	g.log(fatalLog, "", args...)
+	g.log(fatalLog, 0, "", args...)
 }
 
 func (g *tLogger) Fatalln(args ...interface{}) {
-	g.log(fatalLog, "", args...)
+	g.log(fatalLog, 0, "", args...)
 }
 
 func (g *tLogger) Fatalf(format string, args ...interface{}) {
-	g.log(fatalLog, format, args...)
+	g.log(fatalLog, 0, format, args...)
+}
+
+func (g *tLogger) FatalDepth(depth int, args ...interface{}) {
+	g.log(fatalLog, depth, "", args...)
 }
 
 func (g *tLogger) V(l int) bool {
