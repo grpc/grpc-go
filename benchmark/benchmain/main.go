@@ -65,7 +65,6 @@ import (
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/profiling"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/test/bufconn"
 )
@@ -79,8 +78,6 @@ var (
 		fmt.Sprintf("Preloader mode - One of: %v", strings.Join(allToggleModes, ", ")), allToggleModes)
 	channelzOn = flags.StringWithAllowedValues("channelz", toggleModeOff,
 		fmt.Sprintf("Channelz mode - One of: %v", strings.Join(allToggleModes, ", ")), allToggleModes)
-	profilingFlag = flags.StringWithAllowedValues("profiling", toggleModeOff,
-		fmt.Sprintf("Profiling mode - One of: %v", strings.Join(allToggleModes, ", ")), allToggleModes)
 	compressorMode = flags.StringWithAllowedValues("compression", compModeOff,
 		fmt.Sprintf("Compression mode - One of: %v", strings.Join(allCompModes, ", ")), allCompModes)
 	networkMode = flags.StringWithAllowedValues("networkMode", networkModeNone,
@@ -500,7 +497,6 @@ type featureOpts struct {
 	respPayloadCurves  []*stats.PayloadCurve
 	compModes          []string
 	enableChannelz     []bool
-	enableProfiling    []bool
 	enablePreloader    []bool
 }
 
@@ -536,8 +532,6 @@ func makeFeaturesNum(b *benchOpts) []int {
 			featuresNum[i] = len(b.features.compModes)
 		case stats.EnableChannelzIndex:
 			featuresNum[i] = len(b.features.enableChannelz)
-		case stats.EnableProfilingIndex:
-			featuresNum[i] = len(b.features.enableProfiling)
 		case stats.EnablePreloaderIndex:
 			featuresNum[i] = len(b.features.enablePreloader)
 		default:
@@ -601,7 +595,6 @@ func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 			MaxConcurrentCalls: b.features.maxConcurrentCalls[curPos[stats.MaxConcurrentCallsIndex]],
 			ModeCompressor:     b.features.compModes[curPos[stats.CompModesIndex]],
 			EnableChannelz:     b.features.enableChannelz[curPos[stats.EnableChannelzIndex]],
-			EnableProfiling:    b.features.enableProfiling[curPos[stats.EnableProfilingIndex]],
 			EnablePreloader:    b.features.enablePreloader[curPos[stats.EnablePreloaderIndex]],
 		}
 		if len(b.features.reqPayloadCurves) == 0 {
@@ -668,7 +661,6 @@ func processFlags() *benchOpts {
 			respSizeBytes:      append([]int(nil), *readRespSizeBytes...),
 			compModes:          setCompressorMode(*compressorMode),
 			enableChannelz:     setToggleMode(*channelzOn),
-			enableProfiling:    setToggleMode(*profilingFlag),
 			enablePreloader:    setToggleMode(*preloaderMode),
 		},
 	}
@@ -763,13 +755,6 @@ func main() {
 		grpc.EnableTracing = bf.EnableTrace
 		if bf.EnableChannelz {
 			channelz.TurnOn()
-		}
-		profiling.Enable(bf.EnableProfiling)
-		if bf.EnableProfiling {
-			if err := profiling.InitStats(1 << 12); err != nil {
-				fmt.Fprintf(os.Stderr, "error in InitStats: %v\n", err)
-				return
-			}
 		}
 		if opts.rModes.unary {
 			unaryBenchmark(start, stop, bf, s)

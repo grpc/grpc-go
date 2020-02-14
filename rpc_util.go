@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/encoding/proto"
-	"google.golang.org/grpc/internal/profiling"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -507,13 +506,10 @@ type parser struct {
 // No other error values or types must be returned, which also means
 // that the underlying io.Reader must not return an incompatible
 // error.
-func (p *parser) recvMsg(maxReceiveMessageSize int, stat *profiling.Stat) (pf payloadFormat, msg []byte, err error) {
-	timer := stat.NewTimer("/header")
+func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byte, err error) {
 	if _, err := p.r.Read(p.header[:]); err != nil {
-		timer.Egress()
 		return 0, nil, err
 	}
-	timer.Egress()
 
 	pf = payloadFormat(p.header[0])
 	length := binary.BigEndian.Uint32(p.header[1:])
@@ -527,26 +523,22 @@ func (p *parser) recvMsg(maxReceiveMessageSize int, stat *profiling.Stat) (pf pa
 	if int(length) > maxReceiveMessageSize {
 		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
-
 	// TODO(bradfitz,zhaoq): garbage. reuse buffer after proto decoding instead
 	// of making it for each message:
-	timer = stat.NewTimer("/message")
 	msg = make([]byte, int(length))
 	if _, err := p.r.Read(msg); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
-		timer.Egress()
 		return 0, nil, err
 	}
-	timer.Egress()
 	return pf, msg, nil
 }
 
 // encode serializes msg and returns a buffer containing the message, or an
 // error if it is too large to be transmitted by grpc.  If msg is nil, it
 // generates an empty message.
-func encode(c baseCodec, msg interface{}, stat *profiling.Stat) ([]byte, error) {
+func encode(c baseCodec, msg interface{}) ([]byte, error) {
 	if msg == nil { // NOTE: typed nils will not be caught by this check
 		return nil, nil
 	}
@@ -564,7 +556,7 @@ func encode(c baseCodec, msg interface{}, stat *profiling.Stat) ([]byte, error) 
 // compressors are nil, returns nil.
 //
 // TODO(dfawley): eliminate cp parameter by wrapping Compressor in an encoding.Compressor.
-func compress(in []byte, cp Compressor, compressor encoding.Compressor, stat *profiling.Stat) ([]byte, error) {
+func compress(in []byte, cp Compressor, compressor encoding.Compressor) ([]byte, error) {
 	if compressor == nil && cp == nil {
 		return nil, nil
 	}
@@ -573,34 +565,20 @@ func compress(in []byte, cp Compressor, compressor encoding.Compressor, stat *pr
 	}
 	cbuf := &bytes.Buffer{}
 	if compressor != nil {
-		timer := stat.NewTimer("/compresslib/init")
 		z, err := compressor.Compress(cbuf)
 		if err != nil {
-			timer.Egress()
 			return nil, wrapErr(err)
 		}
-		timer.Egress()
-
-		timer = stat.NewTimer("/compresslib/write")
 		if _, err := z.Write(in); err != nil {
-			timer.Egress()
 			return nil, wrapErr(err)
 		}
-		timer.Egress()
-
-		timer = stat.NewTimer("/compresslib/close")
 		if err := z.Close(); err != nil {
-			timer.Egress()
 			return nil, wrapErr(err)
 		}
-		timer.Egress()
 	} else {
-		timer := stat.NewTimer("/compressor")
 		if err := cp.Do(cbuf, in); err != nil {
-			timer.Egress()
 			return nil, wrapErr(err)
 		}
-		timer.Egress()
 	}
 	return cbuf.Bytes(), nil
 }
@@ -659,29 +637,19 @@ type payloadInfo struct {
 	uncompressedBytes []byte
 }
 
-func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, stat *profiling.Stat) ([]byte, error) {
-	overallTimer := stat.NewTimer("/recvAndDecompress")
-	timer := stat.NewTimer("/recvMsg")
-	pf, d, err := p.recvMsg(maxReceiveMessageSize, stat)
-	timer.Egress()
+func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor) ([]byte, error) {
+	pf, d, err := p.recvMsg(maxReceiveMessageSize)
 	if err != nil {
-		overallTimer.Egress()
 		return nil, err
 	}
-
 	if payInfo != nil {
 		payInfo.wireLength = len(d)
 	}
 
-	timer = stat.NewTimer("/checkRecvPayload")
 	if st := checkRecvPayload(pf, s.RecvCompress(), compressor != nil || dc != nil); st != nil {
-		timer.Egress()
-		overallTimer.Egress()
 		return nil, st.Err()
 	}
-	timer.Egress()
 
-	timer = stat.NewTimer("/compression")
 	var size int
 	if pf == compressionMade {
 		// To match legacy behavior, if the decompressor is set by WithDecompressor or RPCDecompressor,
@@ -693,22 +661,16 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 			d, size, err = decompress(compressor, d, maxReceiveMessageSize)
 		}
 		if err != nil {
-			timer.Egress()
-			overallTimer.Egress()
 			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
 		}
 	} else {
 		size = len(d)
 	}
-	timer.Egress()
-
 	if size > maxReceiveMessageSize {
 		// TODO: Revisit the error code. Currently keep it consistent with java
 		// implementation.
-		overallTimer.Egress()
 		return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", size, maxReceiveMessageSize)
 	}
-	overallTimer.Egress()
 	return d, nil
 }
 
@@ -743,19 +705,14 @@ func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize 
 // For the two compressor parameters, both should not be set, but if they are,
 // dc takes precedence over compressor.
 // TODO(dfawley): wrap the old compressor/decompressor using the new API?
-func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interface{}, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, stat *profiling.Stat) error {
-	d, err := recvAndDecompress(p, s, dc, maxReceiveMessageSize, payInfo, compressor, stat)
+func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interface{}, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor) error {
+	d, err := recvAndDecompress(p, s, dc, maxReceiveMessageSize, payInfo, compressor)
 	if err != nil {
 		return err
 	}
-
-	timer := stat.NewTimer("/encoding")
 	if err := c.Unmarshal(d, m); err != nil {
-		timer.Egress()
 		return status.Errorf(codes.Internal, "grpc: failed to unmarshal the received message %v", err)
 	}
-	timer.Egress()
-
 	if payInfo != nil {
 		payInfo.uncompressedBytes = d
 	}
