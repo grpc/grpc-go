@@ -39,7 +39,6 @@ import (
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal/profiling"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
@@ -263,7 +262,7 @@ func (ht *serverHandlerTransport) writeCommonHeaders(s *Stream) {
 	}
 }
 
-func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data []byte, stat *profiling.Stat, opts *Options) error {
+func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
 	return ht.do(func() {
 		ht.writeCommonHeaders(s)
 		ht.rw.Write(hdr)
@@ -325,7 +324,6 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 
 	req := ht.req
 
-	// TODO(adtac): set stat?
 	s := &Stream{
 		id:             0, // irrelevant
 		requestRead:    func(int) {},

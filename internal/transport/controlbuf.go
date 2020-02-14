@@ -27,7 +27,6 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	"google.golang.org/grpc/internal/profiling"
 )
 
 var updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {
@@ -100,7 +99,6 @@ type cbItem interface {
 type registerStream struct {
 	streamID uint32
 	wq       *writeQuota
-	stat     *profiling.Stat
 }
 
 func (*registerStream) isTransportResponseFrame() bool { return false }
@@ -138,7 +136,6 @@ type dataFrame struct {
 	// onEachWrite is called every time
 	// a part of d is written out.
 	onEachWrite func()
-	stat        *profiling.Stat
 }
 
 func (*dataFrame) isTransportResponseFrame() bool { return false }
@@ -594,7 +591,6 @@ func (l *loopyWriter) incomingSettingsHandler(s *incomingSettings) error {
 }
 
 func (l *loopyWriter) registerStreamHandler(h *registerStream) error {
-	timer := h.stat.NewTimer("/http2/recv/header/loopyWriter/registerOutStream")
 	str := &outStream{
 		id:    h.streamID,
 		state: empty,
@@ -602,7 +598,6 @@ func (l *loopyWriter) registerStreamHandler(h *registerStream) error {
 		wq:    h.wq,
 	}
 	l.estdStreams[h.streamID] = str
-	timer.Egress()
 	return nil
 }
 
@@ -701,10 +696,8 @@ func (l *loopyWriter) writeHeader(streamID uint32, endStream bool, hf []hpack.He
 }
 
 func (l *loopyWriter) preprocessData(df *dataFrame) error {
-	timer := df.stat.NewTimer("/http2/send/dataFrame/loopyWriter/preprocess")
 	str, ok := l.estdStreams[df.streamID]
 	if !ok {
-		timer.Egress()
 		return nil
 	}
 	// If we got data for a stream it means that
@@ -714,7 +707,6 @@ func (l *loopyWriter) preprocessData(df *dataFrame) error {
 		str.state = active
 		l.activeStreams.enqueue(str)
 	}
-	timer.Egress()
 	return nil
 }
 
@@ -843,10 +835,6 @@ func (l *loopyWriter) processData() (bool, error) {
 	// Every dataFrame has two buffers; h that keeps grpc-message header and d that is acutal data.
 	// As an optimization to keep wire traffic low, data from d is copied to h to make as big as the
 	// maximum possilbe HTTP2 frame size.
-
-	if dataItem.stat != nil {
-		defer dataItem.stat.NewTimer("/http2/send/dataFrame/loopyWriter").Egress()
-	}
 
 	if len(dataItem.h) == 0 && len(dataItem.d) == 0 { // Empty data frame
 		// Client sends out empty data frame with endStream = true

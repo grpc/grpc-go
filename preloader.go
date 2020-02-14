@@ -50,14 +50,12 @@ func (p *PreparedMsg) Encode(s Stream, msg interface{}) error {
 	}
 
 	// prepare the msg
-	// Stream is deprecated and does not provide a way to retrieve the internal
-	// ServerStream/ClientStream's stat, so we'll pass nil here and in compress.
-	data, err := encode(rpcInfo.preloaderInfo.codec, msg, nil)
+	data, err := encode(rpcInfo.preloaderInfo.codec, msg)
 	if err != nil {
 		return err
 	}
 	p.encodedData = data
-	compData, err := compress(data, rpcInfo.preloaderInfo.cp, rpcInfo.preloaderInfo.comp, nil)
+	compData, err := compress(data, rpcInfo.preloaderInfo.cp, rpcInfo.preloaderInfo.comp)
 	if err != nil {
 		return err
 	}

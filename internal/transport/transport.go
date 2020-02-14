@@ -33,7 +33,6 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal/profiling"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
@@ -145,7 +144,6 @@ type recvBufferReader struct {
 	last        *bytes.Buffer // Stores the remaining data in the previous calls.
 	err         error
 	freeBuffer  func(*bytes.Buffer)
-	stat        *profiling.Stat
 }
 
 // Read reads the next len(p) bytes from last. If last is drained, it tries to
@@ -177,8 +175,7 @@ func (r *recvBufferReader) read(p []byte) (n int, err error) {
 	case <-r.ctxDone:
 		return 0, ContextErr(r.ctx.Err())
 	case m := <-r.recv.get():
-		n, err = r.readAdditional(m, p)
-		return
+		return r.readAdditional(m, p)
 	}
 }
 
@@ -287,8 +284,6 @@ type Stream struct {
 	// contentSubtype is the content-subtype for requests.
 	// this must be lowercase or the behavior is undefined.
 	contentSubtype string
-
-	stat *profiling.Stat
 }
 
 // isHeaderSent is only valid on the server-side.
@@ -458,15 +453,6 @@ func (s *Stream) write(m recvMsg) {
 	s.buf.put(m)
 }
 
-// Stat returns the streams's underlying *profiling.Stat.
-func (s *Stream) Stat() *profiling.Stat {
-	// TODO(adtac): is this nil check really needed?
-	if s == nil {
-		return nil
-	}
-	return s.stat
-}
-
 // Read reads all p bytes from the wire for this stream.
 func (s *Stream) Read(p []byte) (n int, err error) {
 	// Don't request a read if there was an error earlier
@@ -474,8 +460,7 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 		return 0, er
 	}
 	s.requestRead(len(p))
-	n, err = io.ReadFull(s.trReader, p)
-	return
+	return io.ReadFull(s.trReader, p)
 }
 
 // tranportReader reads all the data available for this Stream from the transport and
@@ -483,12 +468,11 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 // The error is io.EOF when the stream is done or another non-nil error if
 // the stream broke.
 type transportReader struct {
-	reader *recvBufferReader
+	reader io.Reader
 	// The handler to control the window update procedure for both this
 	// particular stream and the associated transport.
 	windowHandler func(int)
 	er            error
-	stat          *profiling.Stat
 }
 
 func (t *transportReader) Read(p []byte) (n int, err error) {
@@ -648,7 +632,7 @@ type ClientTransport interface {
 
 	// Write sends the data for the given stream. A nil stream indicates
 	// the write is to be performed on the transport as a whole.
-	Write(s *Stream, hdr []byte, data []byte, stat *profiling.Stat, opts *Options) error
+	Write(s *Stream, hdr []byte, data []byte, opts *Options) error
 
 	// NewStream creates a Stream for an RPC.
 	NewStream(ctx context.Context, callHdr *CallHdr) (*Stream, error)
@@ -699,7 +683,7 @@ type ServerTransport interface {
 
 	// Write sends the data for the given stream.
 	// Write may not be called on all streams.
-	Write(s *Stream, hdr []byte, data []byte, stat *profiling.Stat, opts *Options) error
+	Write(s *Stream, hdr []byte, data []byte, opts *Options) error
 
 	// WriteStatus sends the status of a stream to the client.  WriteStatus is
 	// the final call made on a stream and always occurs.

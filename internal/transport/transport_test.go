@@ -126,7 +126,7 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 		return
 	}
 	// send a response back to the client.
-	h.t.Write(s, nil, resp, nil, &Options{})
+	h.t.Write(s, nil, resp, &Options{})
 	// send the trailer to end the stream.
 	h.t.WriteStatus(s, status.New(codes.OK, ""))
 }
@@ -154,7 +154,7 @@ func (h *testStreamHandler) handleStreamPingPong(t *testing.T, s *Stream) {
 		buf[0] = byte(0)
 		binary.BigEndian.PutUint32(buf[1:], uint32(sz))
 		copy(buf[5:], msg)
-		h.t.Write(s, nil, buf, nil, &Options{})
+		h.t.Write(s, nil, buf, &Options{})
 	}
 }
 
@@ -275,7 +275,7 @@ func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *Stream) {
 	// This write will cause server to run out of stream level,
 	// flow control and the other side won't send a window update
 	// until that happens.
-	if err := h.t.Write(s, nil, resp, nil, &Options{}); err != nil {
+	if err := h.t.Write(s, nil, resp, &Options{}); err != nil {
 		t.Errorf("server Write got %v, want <nil>", err)
 		return
 	}
@@ -533,7 +533,7 @@ func (s) TestClientSendAndReceive(t *testing.T) {
 		t.Fatalf("wrong stream id: %d", s2.id)
 	}
 	opts := Options{Last: true}
-	if err := ct.Write(s1, nil, expectedRequest, nil, &opts); err != nil && err != io.EOF {
+	if err := ct.Write(s1, nil, expectedRequest, &opts); err != nil && err != io.EOF {
 		t.Fatalf("failed to send data: %v", err)
 	}
 	p := make([]byte, len(expectedResponse))
@@ -568,7 +568,7 @@ func performOneRPC(ct ClientTransport) {
 		return
 	}
 	opts := Options{Last: true}
-	if err := ct.Write(s, []byte{}, expectedRequest, nil, &opts); err == nil || err == io.EOF {
+	if err := ct.Write(s, []byte{}, expectedRequest, &opts); err == nil || err == io.EOF {
 		time.Sleep(5 * time.Millisecond)
 		// The following s.Recv()'s could error out because the
 		// underlying transport is gone.
@@ -614,7 +614,7 @@ func (s) TestLargeMessage(t *testing.T) {
 			if err != nil {
 				t.Errorf("%v.NewStream(_, _) = _, %v, want _, <nil>", ct, err)
 			}
-			if err := ct.Write(s, []byte{}, expectedRequestLarge, nil, &Options{Last: true}); err != nil && err != io.EOF {
+			if err := ct.Write(s, []byte{}, expectedRequestLarge, &Options{Last: true}); err != nil && err != io.EOF {
 				t.Errorf("%v.Write(_, _, _) = %v, want  <nil>", ct, err)
 			}
 			p := make([]byte, len(expectedResponseLarge))
@@ -705,7 +705,7 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 	// This write will cause client to run out of stream level,
 	// flow control and the other side won't send a window update
 	// until that happens.
-	if err := ct.Write(s, []byte{}, expectedRequestLarge, nil, &Options{}); err != nil {
+	if err := ct.Write(s, []byte{}, expectedRequestLarge, &Options{}); err != nil {
 		t.Fatalf("write(_, _, _) = %v, want  <nil>", err)
 	}
 	p := make([]byte, len(expectedResponseLarge))
@@ -720,7 +720,7 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 	if _, err := s.Read(p); err != nil || !bytes.Equal(p, expectedResponseLarge) {
 		t.Fatalf("s.Read(_) = _, %v, want _, <nil>", err)
 	}
-	if err := ct.Write(s, []byte{}, expectedRequestLarge, nil, &Options{Last: true}); err != nil {
+	if err := ct.Write(s, []byte{}, expectedRequestLarge, &Options{Last: true}); err != nil {
 		t.Fatalf("Write(_, _, _) = %v, want <nil>", err)
 	}
 	if _, err = s.Read(p); err != io.EOF {
@@ -752,7 +752,7 @@ func (s) TestGracefulClose(t *testing.T) {
 	outgoingHeader[0] = byte(0)
 	binary.BigEndian.PutUint32(outgoingHeader[1:], uint32(len(msg)))
 	incomingHeader := make([]byte, 5)
-	if err := ct.Write(s, outgoingHeader, msg, nil, &Options{}); err != nil {
+	if err := ct.Write(s, outgoingHeader, msg, &Options{}); err != nil {
 		t.Fatalf("Error while writing: %v", err)
 	}
 	if _, err := s.Read(incomingHeader); err != nil {
@@ -777,13 +777,13 @@ func (s) TestGracefulClose(t *testing.T) {
 				t.Errorf("_.NewStream(_, _) = _, %v, want _, %v", err, ErrConnClosing)
 				return
 			}
-			ct.Write(str, nil, nil, nil, &Options{Last: true})
+			ct.Write(str, nil, nil, &Options{Last: true})
 			if _, err := str.Read(make([]byte, 8)); err != errStreamDrain && err != ErrConnClosing {
 				t.Errorf("_.Read(_) = _, %v, want _, %v or %v", err, errStreamDrain, ErrConnClosing)
 			}
 		}()
 	}
-	ct.Write(s, nil, nil, nil, &Options{Last: true})
+	ct.Write(s, nil, nil, &Options{Last: true})
 	if _, err := s.Read(incomingHeader); err != io.EOF {
 		t.Fatalf("Client expected EOF from the server. Got: %v", err)
 	}
@@ -813,8 +813,8 @@ func (s) TestLargeMessageSuspension(t *testing.T) {
 	}()
 	// Write should not be done successfully due to flow control.
 	msg := make([]byte, initialWindowSize*8)
-	ct.Write(s, nil, msg, nil, &Options{})
-	err = ct.Write(s, nil, msg, nil, &Options{Last: true})
+	ct.Write(s, nil, msg, &Options{})
+	err = ct.Write(s, nil, msg, &Options{Last: true})
 	if err != errStreamDone {
 		t.Fatalf("Write got %v, want io.EOF", err)
 	}
@@ -1006,7 +1006,7 @@ func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 		t.Fatalf("Didn't find stream corresponding to client cstream.id: %v on the server", cstream1.id)
 	}
 	// Exhaust client's connection window.
-	if err := st.Write(sstream1, []byte{}, make([]byte, defaultWindowSize), nil, &Options{}); err != nil {
+	if err := st.Write(sstream1, []byte{}, make([]byte, defaultWindowSize), &Options{}); err != nil {
 		t.Fatalf("Server failed to write data. Err: %v", err)
 	}
 	notifyChan = make(chan struct{})
@@ -1031,7 +1031,7 @@ func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 		t.Fatalf("Didn't find stream corresponding to client cstream.id: %v on the server", cstream2.id)
 	}
 	// Server should be able to send data on the new stream, even though the client hasn't read anything on the first stream.
-	if err := st.Write(sstream2, []byte{}, make([]byte, defaultWindowSize), nil, &Options{}); err != nil {
+	if err := st.Write(sstream2, []byte{}, make([]byte, defaultWindowSize), &Options{}); err != nil {
 		t.Fatalf("Server failed to write data. Err: %v", err)
 	}
 
@@ -1075,7 +1075,7 @@ func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 		t.Fatalf("Failed to create 1st stream. Err: %v", err)
 	}
 	// Exhaust server's connection window.
-	if err := client.Write(cstream1, nil, make([]byte, defaultWindowSize), nil, &Options{Last: true}); err != nil {
+	if err := client.Write(cstream1, nil, make([]byte, defaultWindowSize), &Options{Last: true}); err != nil {
 		t.Fatalf("Client failed to write data. Err: %v", err)
 	}
 	//Client should be able to create another stream and send data on it.
@@ -1083,7 +1083,7 @@ func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create 2nd stream. Err: %v", err)
 	}
-	if err := client.Write(cstream2, nil, make([]byte, defaultWindowSize), nil, &Options{}); err != nil {
+	if err := client.Write(cstream2, nil, make([]byte, defaultWindowSize), &Options{}); err != nil {
 		t.Fatalf("Client failed to write data. Err: %v", err)
 	}
 	// Get the streams on server.
@@ -1316,7 +1316,7 @@ func (s) TestEncodingRequiredStatus(t *testing.T) {
 		return
 	}
 	opts := Options{Last: true}
-	if err := ct.Write(s, nil, expectedRequest, nil, &opts); err != nil && err != errStreamDone {
+	if err := ct.Write(s, nil, expectedRequest, &opts); err != nil && err != errStreamDone {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
 	p := make([]byte, http2MaxFrameLen)
@@ -1494,7 +1494,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 			opts := Options{}
 			header := make([]byte, 5)
 			for i := 1; i <= 10; i++ {
-				if err := client.Write(stream, nil, buf, nil, &opts); err != nil {
+				if err := client.Write(stream, nil, buf, &opts); err != nil {
 					t.Errorf("Error on client while writing message: %v", err)
 					return
 				}
@@ -1531,7 +1531,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	st.mu.Unlock()
 	// Close all streams
 	for _, stream := range clientStreams {
-		client.Write(stream, nil, nil, nil, &Options{Last: true})
+		client.Write(stream, nil, nil, &Options{Last: true})
 		if _, err := stream.Read(make([]byte, 5)); err != io.EOF {
 			t.Fatalf("Client expected an EOF from the server. Got: %v", err)
 		}
@@ -1687,13 +1687,13 @@ func runPingPongTest(t *testing.T, msgSize int) {
 	for {
 		select {
 		case <-done:
-			client.Write(stream, nil, nil, nil, &Options{Last: true})
+			client.Write(stream, nil, nil, &Options{Last: true})
 			if _, err := stream.Read(incomingHeader); err != io.EOF {
 				t.Fatalf("Client expected EOF from the server. Got: %v", err)
 			}
 			return
 		default:
-			if err := client.Write(stream, outgoingHeader, msg, nil, opts); err != nil {
+			if err := client.Write(stream, outgoingHeader, msg, opts); err != nil {
 				t.Fatalf("Error on client while writing message. Err: %v", err)
 			}
 			if _, err := stream.Read(incomingHeader); err != nil {

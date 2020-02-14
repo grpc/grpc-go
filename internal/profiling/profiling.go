@@ -221,12 +221,3 @@ func InitStats(streamStatsSize uint32) error {
 
 	return nil
 }
-
-const (
-	// StreamStatMetadataConnectionIDSize is the number of bytes reserved for the
-	// connection ID in a stream stat's metadata field.
-	StreamStatMetadataConnectionIDSize = 8
-	// StreamStatMetadataStreamIDSize is the number of bytes reserved for the
-	// stream ID in a stream stat's metadata field.
-	StreamStatMetadataStreamIDSize = 4
-)
