@@ -285,11 +285,11 @@ func (v2c *v2Client) processAckInfo(t *ackInfo) (target []string, typeURL, versi
 //  - sent on the current stream if there's one
 //    - the current stream is cleared when any send on it fails
 //
-// For each new stream, all the existing requests will be resent. Note that this
-// goroutine doesn't do anything on the old stream when there's a new one. It's
-// the caller's job to cleanup the old stream. In fact, there should be only one
-// stream in progress, and new one should only be created when the old one
-// failes (recv returns an error).
+// For each new stream, all the existing requests will be resent.
+//
+// Note that this goroutine doesn't do anything to the old stream when there's a
+// new one. In fact, there should be only one stream in progress, and new one
+// should only be created when the old one fails (recv returns an error).
 func (v2c *v2Client) send() {
 	var stream adsStream
 	for {
