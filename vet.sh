@@ -151,6 +151,7 @@ grpc.WithMaxMsgSize
 grpc.WithServiceConfig
 grpc.WithTimeout
 http.CloseNotifier
+info.SecurityVersion
 naming.Resolver
 naming.Update
 naming.Watcher
