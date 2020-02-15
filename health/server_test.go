@@ -24,10 +24,19 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/internal/grpctest"
 )
 
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
 // Make sure the service implementation complies with the proto definition.
-func TestRegister(t *testing.T) {
+func (s) TestRegister(t *testing.T) {
 	s := grpc.NewServer()
 	healthgrpc.RegisterHealthServer(s, health.NewServer())
 	s.Stop()

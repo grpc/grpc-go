@@ -37,7 +37,7 @@ import (
 // TestMaxConnectionIdle tests that a server will send GoAway to an idle
 // client. An idle client is one who doesn't make any RPC calls for a duration
 // of MaxConnectionIdle time.
-func TestMaxConnectionIdle(t *testing.T) {
+func (s) TestMaxConnectionIdle(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepaliveParams: keepalive.ServerParameters{
 			MaxConnectionIdle: 2 * time.Second,
@@ -74,7 +74,7 @@ func TestMaxConnectionIdle(t *testing.T) {
 
 // TestMaxConenctionIdleBusyClient tests that a server will not send GoAway to
 // a busy client.
-func TestMaxConnectionIdleBusyClient(t *testing.T) {
+func (s) TestMaxConnectionIdleBusyClient(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepaliveParams: keepalive.ServerParameters{
 			MaxConnectionIdle: 2 * time.Second,
@@ -107,7 +107,7 @@ func TestMaxConnectionIdleBusyClient(t *testing.T) {
 
 // TestMaxConnectionAge tests that a server will send GoAway after a duration
 // of MaxConnectionAge.
-func TestMaxConnectionAge(t *testing.T) {
+func (s) TestMaxConnectionAge(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepaliveParams: keepalive.ServerParameters{
 			MaxConnectionAge:      1 * time.Second,
@@ -152,7 +152,7 @@ const (
 //
 // This test creates a regular net.Conn connection to the server and sends the
 // clientPreface and the initial Settings frame, and then remains unresponsive.
-func TestKeepaliveServerClosesUnresponsiveClient(t *testing.T) {
+func (s) TestKeepaliveServerClosesUnresponsiveClient(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepaliveParams: keepalive.ServerParameters{
 			Time:    1 * time.Second,
@@ -211,7 +211,7 @@ func TestKeepaliveServerClosesUnresponsiveClient(t *testing.T) {
 
 // TestKeepaliveServerWithResponsiveClient tests that a server doesn't close
 // the connection with a client that responds to keepalive pings.
-func TestKeepaliveServerWithResponsiveClient(t *testing.T) {
+func (s) TestKeepaliveServerWithResponsiveClient(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepaliveParams: keepalive.ServerParameters{
 			Time:    1 * time.Second,
@@ -239,7 +239,7 @@ func TestKeepaliveServerWithResponsiveClient(t *testing.T) {
 // transport once the keepalive logic kicks in. Here, we set the
 // `PermitWithoutStream` parameter to true which ensures that the keepalive
 // logic is running even without any active streams.
-func TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
+func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	client, cancel := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
 		Time:                1 * time.Second,
@@ -269,7 +269,7 @@ func TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 // close the transport. Here, we do not set the `PermitWithoutStream` parameter
 // to true which ensures that the keepalive logic is turned off without any
 // active streams, and therefore the transport stays open.
-func TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
+func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	client, cancel := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
 		Time:    1 * time.Second,
@@ -296,7 +296,7 @@ func TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 // TestKeepaliveClientClosesWithActiveStreams creates a server which does not
 // respond to keepalive pings, and makes sure that the client closes the
 // transport even when there is an active stream.
-func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
+func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	client, cancel := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
 		Time:    1 * time.Second,
@@ -328,7 +328,7 @@ func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 // TestKeepaliveClientStaysHealthyWithResponsiveServer creates a server which
 // responds to keepalive pings, and makes sure than a client transport stays
 // healthy without any active streams.
-func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
+func (s) TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 	server, client, cancel := setUpWithOptions(t, 0, &ServerConfig{}, normal, ConnectOptions{
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:                1 * time.Second,
@@ -357,7 +357,7 @@ func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 // ping every [Time+Timeout] instead of every [Time] period, and this test
 // explicitly makes sure the fix works and the client sends a ping every [Time]
 // period.
-func TestKeepaliveClientFrequency(t *testing.T) {
+func (s) TestKeepaliveClientFrequency(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
 			MinTime:             1200 * time.Millisecond, // 1.2 seconds
@@ -401,7 +401,7 @@ func TestKeepaliveClientFrequency(t *testing.T) {
 // server closes a client transport when it sends too many keepalive pings
 // (when there are no active streams), based on the configured
 // EnforcementPolicy.
-func TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
+func (s) TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
 			MinTime: 2 * time.Second,
@@ -444,7 +444,7 @@ func TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 // server closes a client transport when it sends too many keepalive pings
 // (even when there is an active stream), based on the configured
 // EnforcementPolicy.
-func TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
+func (s) TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
 			MinTime: 2 * time.Second,
@@ -490,7 +490,7 @@ func TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 // server does not close a client transport (with no active streams) which
 // sends keepalive pings in accordance to the configured keepalive
 // EnforcementPolicy.
-func TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
+func (s) TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
 			MinTime:             100 * time.Millisecond,
@@ -524,7 +524,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 // server does not close a client transport (with active streams) which
 // sends keepalive pings in accordance to the configured keepalive
 // EnforcementPolicy.
-func TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
+func (s) TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
 			MinTime: 100 * time.Millisecond,
@@ -562,7 +562,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 // transport does not have any active streams and `PermitWithoutStream` is set
 // to false. This should ensure that the keepalive functionality on the client
 // side enters a dormant state.
-func TestKeepaliveServerEnforcementWithDormantKeepaliveOnClient(t *testing.T) {
+func (s) TestKeepaliveServerEnforcementWithDormantKeepaliveOnClient(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
 			MinTime: 2 * time.Second,
@@ -592,7 +592,7 @@ func TestKeepaliveServerEnforcementWithDormantKeepaliveOnClient(t *testing.T) {
 
 // TestTCPUserTimeout tests that the TCP_USER_TIMEOUT socket option is set to
 // the keepalive timeout, as detailed in proposal A18.
-func TestTCPUserTimeout(t *testing.T) {
+func (s) TestTCPUserTimeout(t *testing.T) {
 	tests := []struct {
 		time        time.Duration
 		timeout     time.Duration

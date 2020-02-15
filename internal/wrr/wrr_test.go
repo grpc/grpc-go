@@ -24,7 +24,16 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/grpctest"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 const iterCount = 10000
 
@@ -95,11 +104,11 @@ func testWRRNext(t *testing.T, newWRR func() WRR) {
 	}
 }
 
-func TestRandomWRRNext(t *testing.T) {
+func (s) TestRandomWRRNext(t *testing.T) {
 	testWRRNext(t, NewRandom)
 }
 
-func TestEdfWrrNext(t *testing.T) {
+func (s) TestEdfWrrNext(t *testing.T) {
 	testWRRNext(t, NewEDF)
 }
 

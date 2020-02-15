@@ -20,9 +20,11 @@ package grpc
 
 import (
 	"fmt"
+	"net"
 	"testing"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -87,4 +89,33 @@ func (s) TestBalancerErrorResolverPolling(t *testing.T) {
 			go r.CC.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "x"}}})
 		},
 		WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, balName)))
+}
+
+// TestRoundRobinZeroAddressesResolverPolling reports no addresses to the round
+// robin balancer and verifies ResolveNow is called on the resolver with the
+// appropriate backoff strategy being consulted between ResolveNow calls.
+func (s) TestRoundRobinZeroAddressesResolverPolling(t *testing.T) {
+	// We need to start a real server or else the connecting loop will call
+	// ResolveNow after every iteration, even after a valid resolver result is
+	// returned.
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	defer lis.Close()
+	s := NewServer()
+	defer s.Stop()
+	go s.Serve(lis)
+
+	testResolverErrorPolling(t,
+		func(r *manual.Resolver) {
+			// No addresses so the balancer will fail.
+			r.CC.UpdateState(resolver.State{})
+		}, func(r *manual.Resolver) {
+			// UpdateState will block if ResolveNow is being called (which
+			// blocks on rn), so call it in a goroutine.  Include a valid
+			// address so the balancer will be happy.
+			go r.CC.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
+		},
+		WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, roundrobin.Name)))
 }

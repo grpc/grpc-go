@@ -29,7 +29,16 @@ import (
 	"testing"
 
 	core "google.golang.org/grpc/credentials/alts/internal"
+	"google.golang.org/grpc/internal/grpctest"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 var (
 	nextProtocols   = []string{"ALTSRP_GCM_AES128"}
@@ -118,7 +127,7 @@ func testPingPong(t *testing.T, np string) {
 	}
 }
 
-func TestPingPong(t *testing.T) {
+func (s) TestPingPong(t *testing.T) {
 	for _, np := range nextProtocols {
 		testPingPong(t, np)
 	}
@@ -145,7 +154,7 @@ func testSmallReadBuffer(t *testing.T, np string) {
 	}
 }
 
-func TestSmallReadBuffer(t *testing.T) {
+func (s) TestSmallReadBuffer(t *testing.T) {
 	for _, np := range nextProtocols {
 		testSmallReadBuffer(t, np)
 	}
@@ -169,7 +178,7 @@ func testLargeMsg(t *testing.T, np string) {
 	}
 }
 
-func TestLargeMsg(t *testing.T) {
+func (s) TestLargeMsg(t *testing.T) {
 	for _, np := range nextProtocols {
 		testLargeMsg(t, np)
 	}
@@ -191,7 +200,7 @@ func testIncorrectMsgType(t *testing.T, np string) {
 	}
 }
 
-func TestIncorrectMsgType(t *testing.T) {
+func (s) TestIncorrectMsgType(t *testing.T) {
 	for _, np := range nextProtocols {
 		testIncorrectMsgType(t, np)
 	}
@@ -224,7 +233,7 @@ func testFrameTooLarge(t *testing.T, np string) {
 	}
 }
 
-func TestFrameTooLarge(t *testing.T) {
+func (s) TestFrameTooLarge(t *testing.T) {
 	for _, np := range nextProtocols {
 		testFrameTooLarge(t, np)
 	}
@@ -267,7 +276,7 @@ func testWriteLargeData(t *testing.T, np string) {
 	}
 }
 
-func TestWriteLargeData(t *testing.T) {
+func (s) TestWriteLargeData(t *testing.T) {
 	for _, np := range nextProtocols {
 		testWriteLargeData(t, np)
 	}

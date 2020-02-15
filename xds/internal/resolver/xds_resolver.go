@@ -155,7 +155,7 @@ type xdsResolver struct {
 const jsonFormatSC = `{
     "loadBalancingConfig":[
       {
-        "experimental_cds":{
+        "cds_experimental":{
           "Cluster": "%s"
         }
       }
@@ -171,7 +171,7 @@ func (r *xdsResolver) run() {
 		case update := <-r.updateCh:
 			if update.err != nil {
 				r.cc.ReportError(update.err)
-				return
+				continue
 			}
 			sc := fmt.Sprintf(jsonFormatSC, update.su.Cluster)
 			r.cc.UpdateState(resolver.State{

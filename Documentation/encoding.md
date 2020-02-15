@@ -8,13 +8,8 @@ into bytes and vice-versa for the purposes of network transmission.
 ## Codecs (Serialization and Deserialization)
 
 A `Codec` contains code to serialize a message into a byte slice (`Marshal`) and
-deserialize a byte slice back into a message (`Unmarshal`).  Optionally, a
-`ReturnBuffer` method to potentially reuse the byte slice returned by the
-`Marshal` method may also be implemented; note that this is an experimental
-feature with an API that is still in flux.
-
-`Codec`s are registered by name into a global registry maintained in the
-`encoding` package.
+deserialize a byte slice back into a message (`Unmarshal`).  `Codec`s are
+registered by name into a global registry maintained in the `encoding` package.
 
 ### Implementing a `Codec`
 

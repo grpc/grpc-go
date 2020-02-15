@@ -144,7 +144,7 @@ func sendBadResp(t *testing.T, xdsname string, fakeServer *fakeserver.Server, ve
 // are nacked.
 //
 // This test also verifies the version for different types are independent.
-func TestV2ClientAck(t *testing.T) {
+func (s) TestV2ClientAck(t *testing.T) {
 	var (
 		versionLDS = 1000
 		versionRDS = 2000
@@ -195,7 +195,7 @@ func TestV2ClientAck(t *testing.T) {
 
 // Test when the first response is invalid, and is nacked, the nack requests
 // should have an empty version string.
-func TestV2ClientAckFirstIsNack(t *testing.T) {
+func (s) TestV2ClientAckFirstIsNack(t *testing.T) {
 	var versionLDS = 1000
 
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
@@ -227,7 +227,7 @@ func TestV2ClientAckFirstIsNack(t *testing.T) {
 
 // Test when a nack is sent after a new watch, we nack with the previous acked
 // version (instead of resetting to empty string).
-func TestV2ClientAckNackAfterNewWatch(t *testing.T) {
+func (s) TestV2ClientAckNackAfterNewWatch(t *testing.T) {
 	var versionLDS = 1000
 
 	fakeServer, cc, cleanup := startServerAndGetCC(t)

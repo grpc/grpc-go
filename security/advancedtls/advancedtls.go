@@ -207,7 +207,13 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 		conn.Close()
 		return nil, nil, ctx.Err()
 	}
-	return WrapSyscallConn(rawConn, conn), credentials.TLSInfo{State: conn.ConnectionState()}, nil
+	info := credentials.TLSInfo{
+		State: conn.ConnectionState(),
+		CommonAuthInfo: credentials.CommonAuthInfo{
+			SecurityLevel: credentials.PrivacyAndIntegrity,
+		},
+	}
+	return WrapSyscallConn(rawConn, conn), info, nil
 }
 
 func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -221,7 +227,13 @@ func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credenti
 		conn.Close()
 		return nil, nil, err
 	}
-	return WrapSyscallConn(rawConn, conn), credentials.TLSInfo{State: conn.ConnectionState()}, nil
+	info := credentials.TLSInfo{
+		State: conn.ConnectionState(),
+		CommonAuthInfo: credentials.CommonAuthInfo{
+			SecurityLevel: credentials.PrivacyAndIntegrity,
+		},
+	}
+	return WrapSyscallConn(rawConn, conn), info, nil
 }
 
 func (c *advancedTLSCreds) Clone() credentials.TransportCredentials {
@@ -322,8 +334,8 @@ func buildVerifyFunc(c *advancedTLSCreds,
 	}
 }
 
-// NewClient uses ClientOptions to construct a TransportCredentials based on TLS.
-func NewClient(o *ClientOptions) (credentials.TransportCredentials, error) {
+// NewClientCreds uses ClientOptions to construct a TransportCredentials based on TLS.
+func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) {
 	conf, err := o.config()
 	if err != nil {
 		return nil, err
@@ -338,8 +350,8 @@ func NewClient(o *ClientOptions) (credentials.TransportCredentials, error) {
 	return tc, nil
 }
 
-// NewServer uses ServerOptions to construct a TransportCredentials based on TLS.
-func NewServer(o *ServerOptions) (credentials.TransportCredentials, error) {
+// NewServerCreds uses ServerOptions to construct a TransportCredentials based on TLS.
+func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) {
 	conf, err := o.config()
 	if err != nil {
 		return nil, err

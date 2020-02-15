@@ -109,11 +109,11 @@ var fileDescriptor_f598b2ec2dba5eee = []byte{
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
-var _ grpc.ClientConn
+var _ grpc.ClientConnInterface
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion4
+const _ = grpc.SupportPackageIsVersion6
 
 // OpenRcaServiceClient is the client API for OpenRcaService service.
 //
@@ -123,10 +123,10 @@ type OpenRcaServiceClient interface {
 }
 
 type openRcaServiceClient struct {
-	cc *grpc.ClientConn
+	cc grpc.ClientConnInterface
 }
 
-func NewOpenRcaServiceClient(cc *grpc.ClientConn) OpenRcaServiceClient {
+func NewOpenRcaServiceClient(cc grpc.ClientConnInterface) OpenRcaServiceClient {
 	return &openRcaServiceClient{cc}
 }
 

@@ -20,7 +20,7 @@ package binarylog
 
 import "testing"
 
-func TestParseMethodName(t *testing.T) {
+func (s) TestParseMethodName(t *testing.T) {
 	testCases := []struct {
 		methodName      string
 		service, method string
@@ -43,7 +43,7 @@ func TestParseMethodName(t *testing.T) {
 	}
 }
 
-func TestParseMethodNameInvalid(t *testing.T) {
+func (s) TestParseMethodNameInvalid(t *testing.T) {
 	testCases := []string{
 		"/",
 		"/sm",

@@ -24,9 +24,18 @@ import (
 	"testing"
 
 	cpb "google.golang.org/genproto/googleapis/rpc/code"
+	"google.golang.org/grpc/internal/grpctest"
 )
 
-func TestUnmarshalJSON(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestUnmarshalJSON(t *testing.T) {
 	for s, v := range cpb.Code_value {
 		want := Code(v)
 		var got Code
@@ -36,7 +45,7 @@ func TestUnmarshalJSON(t *testing.T) {
 	}
 }
 
-func TestJSONUnmarshal(t *testing.T) {
+func (s) TestJSONUnmarshal(t *testing.T) {
 	var got []Code
 	want := []Code{OK, NotFound, Internal, Canceled}
 	in := `["OK", "NOT_FOUND", "INTERNAL", "CANCELLED"]`
@@ -46,7 +55,7 @@ func TestJSONUnmarshal(t *testing.T) {
 	}
 }
 
-func TestUnmarshalJSON_NilReceiver(t *testing.T) {
+func (s) TestUnmarshalJSON_NilReceiver(t *testing.T) {
 	var got *Code
 	in := OK.String()
 	if err := got.UnmarshalJSON([]byte(in)); err == nil {
@@ -54,7 +63,7 @@ func TestUnmarshalJSON_NilReceiver(t *testing.T) {
 	}
 }
 
-func TestUnmarshalJSON_UnknownInput(t *testing.T) {
+func (s) TestUnmarshalJSON_UnknownInput(t *testing.T) {
 	var got Code
 	for _, in := range [][]byte{[]byte(""), []byte("xxx"), []byte("Code(17)"), nil} {
 		if err := got.UnmarshalJSON([]byte(in)); err == nil {
@@ -63,7 +72,7 @@ func TestUnmarshalJSON_UnknownInput(t *testing.T) {
 	}
 }
 
-func TestUnmarshalJSON_MarshalUnmarshal(t *testing.T) {
+func (s) TestUnmarshalJSON_MarshalUnmarshal(t *testing.T) {
 	for i := 0; i < _maxCode; i++ {
 		var cUnMarshaled Code
 		c := Code(i)

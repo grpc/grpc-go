@@ -682,14 +682,19 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 	}
 	if t.statsHandler != nil {
-		header, _, _ := metadata.FromOutgoingContextRaw(ctx)
+		header, ok := metadata.FromOutgoingContext(ctx)
+		if ok {
+			header.Set("user-agent", t.userAgent)
+		} else {
+			header = metadata.Pairs("user-agent", t.userAgent)
+		}
 		outHeader := &stats.OutHeader{
 			Client:      true,
 			FullMethod:  callHdr.Method,
 			RemoteAddr:  t.remoteAddr,
 			LocalAddr:   t.localAddr,
 			Compression: callHdr.SendCompress,
-			Header:      header.Copy(),
+			Header:      header,
 		}
 		t.statsHandler.HandleRPC(s.ctx, outHeader)
 	}
@@ -849,7 +854,6 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	df := &dataFrame{
 		streamID:  s.id,
 		endStream: opts.Last,
-		rb:        opts.ReturnBuffer,
 	}
 	if hdr != nil || data != nil { // If it's not an empty data frame.
 		// Add some data to grpc message header so that we can equally
@@ -865,9 +869,6 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		if err := s.wq.get(int32(len(hdr) + len(data))); err != nil {
 			return err
 		}
-	}
-	if df.rb != nil {
-		df.rb.Add(1)
 	}
 	return t.controlBuf.put(df)
 }

@@ -45,6 +45,10 @@ func (g *glogger) Infof(format string, args ...interface{}) {
 	glog.InfoDepth(2, fmt.Sprintf(format, args...))
 }
 
+func (g *glogger) InfoDepth(depth int, args ...interface{}) {
+	glog.InfoDepth(depth+2, args...)
+}
+
 func (g *glogger) Warning(args ...interface{}) {
 	glog.WarningDepth(2, args...)
 }
@@ -55,6 +59,10 @@ func (g *glogger) Warningln(args ...interface{}) {
 
 func (g *glogger) Warningf(format string, args ...interface{}) {
 	glog.WarningDepth(2, fmt.Sprintf(format, args...))
+}
+
+func (g *glogger) WarningDepth(depth int, args ...interface{}) {
+	glog.WarningDepth(depth+2, args...)
 }
 
 func (g *glogger) Error(args ...interface{}) {
@@ -69,6 +77,10 @@ func (g *glogger) Errorf(format string, args ...interface{}) {
 	glog.ErrorDepth(2, fmt.Sprintf(format, args...))
 }
 
+func (g *glogger) ErrorDepth(depth int, args ...interface{}) {
+	glog.ErrorDepth(depth+2, args...)
+}
+
 func (g *glogger) Fatal(args ...interface{}) {
 	glog.FatalDepth(2, args...)
 }
@@ -79,6 +91,10 @@ func (g *glogger) Fatalln(args ...interface{}) {
 
 func (g *glogger) Fatalf(format string, args ...interface{}) {
 	glog.FatalDepth(2, fmt.Sprintf(format, args...))
+}
+
+func (g *glogger) FatalDepth(depth int, args ...interface{}) {
+	glog.FatalDepth(depth+2, args...)
 }
 
 func (g *glogger) V(l int) bool {

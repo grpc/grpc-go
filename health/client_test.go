@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 )
 
-func TestClientHealthCheckBackoff(t *testing.T) {
+func (s) TestClientHealthCheckBackoff(t *testing.T) {
 	const maxRetries = 5
 
 	var want []time.Duration
