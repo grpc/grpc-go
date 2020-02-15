@@ -1310,15 +1310,12 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			rawStatusCode = &code
 		}
 	} else {
-		var (
-			code = codes.Internal // when header does not include HTTP status, return INTERNAL
-			ok   bool
-		)
+		code := codes.Internal // when header does not include HTTP status, return INTERNAL
 
 		if httpStatus != nil {
-			code, ok = HTTPStatusConvTab[*(httpStatus)]
-			if !ok {
-				code = codes.Unknown
+			code = codes.Unknown
+			if c, ok := HTTPStatusConvTab[*(httpStatus)]; ok {
+				code = c
 			}
 		}
 
