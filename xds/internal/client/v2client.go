@@ -52,6 +52,7 @@ type v2Client struct {
 	nodeProto *corepb.Node
 	backoff   func(int) time.Duration
 
+	streamCh chan adsStream
 	// sendCh in the channel onto which watchInfo objects are pushed by the
 	// watch API, and it is read and acted upon by the send() goroutine.
 	sendCh *buffer.Unbounded
@@ -98,11 +99,14 @@ func newV2Client(cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) 
 		cc:        cc,
 		nodeProto: nodeProto,
 		backoff:   backoff,
-		sendCh:    buffer.NewUnbounded(),
-		watchMap:  make(map[string]*watchInfo),
-		ackMap:    make(map[string]string),
-		rdsCache:  make(map[string]string),
-		cdsCache:  make(map[string]CDSUpdate),
+
+		streamCh: make(chan adsStream, 1),
+		sendCh:   buffer.NewUnbounded(),
+
+		watchMap: make(map[string]*watchInfo),
+		ackMap:   make(map[string]string),
+		rdsCache: make(map[string]string),
+		cdsCache: make(map[string]CDSUpdate),
 	}
 	v2c.ctx, v2c.cancelCtx = context.WithCancel(context.Background())
 
@@ -119,6 +123,8 @@ func (v2c *v2Client) close() {
 // stream failed without receiving a single reply) and runs the sender and
 // receiver routines to send and receive data from the stream respectively.
 func (v2c *v2Client) run() {
+	go v2c.send()
+
 	retries := 0
 	for {
 		select {
@@ -147,16 +153,14 @@ func (v2c *v2Client) run() {
 			continue
 		}
 
-		// send() could be blocked on reading updates from the different update
-		// channels when it is not actually sending out messages. So, we need a
-		// way to break out of send() when recv() returns. This done channel is
-		// used to for that purpose.
-		done := make(chan struct{})
-		go v2c.send(stream, done)
+		select {
+		case <-v2c.streamCh:
+		default:
+		}
+		v2c.streamCh <- stream
 		if v2c.recv(stream) {
 			retries = 0
 		}
-		close(done)
 	}
 }
 
@@ -270,17 +274,34 @@ func (v2c *v2Client) processAckInfo(t *ackInfo) (target []string, typeURL, versi
 	return
 }
 
-// send reads watch infos from update channel and sends out actual xDS requests
-// on the provided ADS stream.
-func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
-	if !v2c.sendExisting(stream) {
-		return
-	}
-
+// send is a separate goroutine for sending watch requests on the xds stream.
+//
+// It watches the stream channel for new streams, and the request channel for
+// new requests to send on the stream.
+//
+// For each new request (watchInfo), it's
+//  - processed and added to the watch map
+//    - so resend will pick them up when there are new streams)
+//  - sent on the current stream if there's one
+//    - the current stream is cleared when any send on it fails
+//
+// For each new stream, all the existing requests will be resent.
+//
+// Note that this goroutine doesn't do anything to the old stream when there's a
+// new one. In fact, there should be only one stream in progress, and new one
+// should only be created when the old one fails (recv returns an error).
+func (v2c *v2Client) send() {
+	var stream adsStream
 	for {
 		select {
 		case <-v2c.ctx.Done():
 			return
+		case newStream := <-v2c.streamCh:
+			stream = newStream
+			if !v2c.sendExisting(stream) {
+				// send failed, clear the current stream.
+				stream = nil
+			}
 		case u := <-v2c.sendCh.Get():
 			v2c.sendCh.Load()
 
@@ -298,11 +319,17 @@ func (v2c *v2Client) send(stream adsStream, done chan struct{}) {
 			if !send {
 				continue
 			}
-			if !v2c.sendRequest(stream, target, typeURL, version, nonce) {
-				return
+			if stream == nil {
+				// There's no stream yet. Skip the request. This request
+				// will be resent to the new streams. If no stream is
+				// created, the watcher will timeout (same as server not
+				// sending response back).
+				continue
 			}
-		case <-done:
-			return
+			if !v2c.sendRequest(stream, target, typeURL, version, nonce) {
+				// send failed, clear the current stream.
+				stream = nil
+			}
 		}
 	}
 }
