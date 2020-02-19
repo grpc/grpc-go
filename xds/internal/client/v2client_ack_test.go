@@ -154,7 +154,7 @@ func (s) TestV2ClientAck(t *testing.T) {
 
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
@@ -200,7 +200,7 @@ func (s) TestV2ClientAckFirstIsNack(t *testing.T) {
 
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
@@ -232,7 +232,7 @@ func (s) TestV2ClientAckNackAfterNewWatch(t *testing.T) {
 
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 

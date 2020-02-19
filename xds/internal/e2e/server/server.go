@@ -147,42 +147,50 @@ func main() {
 
 	fmt.Printf("xds server serving on %s\n", s.Address)
 
-	// time.Sleep(time.Second)
-	fmt.Println("\nlds")
-	ldsReq, err := s.XDSRequestChan.TimedReceive(10 * time.Second)
-	fmt.Println(ldsReq, err)
-	time.Sleep(time.Second * 10)
-	s.XDSResponseChan <- &fakeserver.Response{
-		Resp: goodLDSResponse1,
-	}
-	s.XDSRequestChan.TimedReceive(10 * time.Second) // ack
+	for {
+		fmt.Println()
+		fmt.Println(" ----- beginning ----- ")
+		fmt.Println(" Press Enter to start serving xDS")
+		fmt.Scanln()
 
-	// time.Sleep(time.Second)
-	fmt.Println("\nrds")
-	rdsReq, err := s.XDSRequestChan.TimedReceive(10 * time.Second)
-	fmt.Println(rdsReq, err)
-	s.XDSResponseChan <- &fakeserver.Response{
-		Resp: goodRDSResponse1,
-	}
-	s.XDSRequestChan.TimedReceive(10 * time.Second) // ack
+		// time.Sleep(time.Second)
+		fmt.Println("\nlds")
+		ldsReq, err := s.XDSRequestChan.TimedReceive(10 * time.Second)
+		fmt.Println(ldsReq, err)
+		// time.Sleep(time.Second * 10)
+		s.XDSResponseChan <- &fakeserver.Response{
+			Resp: goodLDSResponse1,
+		}
+		s.XDSRequestChan.TimedReceive(10 * time.Second) // ack
 
-	// time.Sleep(time.Second)
-	fmt.Println("\ncds")
-	cdsReq, err := s.XDSRequestChan.TimedReceive(10 * time.Second)
-	fmt.Println(cdsReq, err)
-	s.XDSResponseChan <- &fakeserver.Response{
-		Resp: goodCDSResponse2,
-	}
-	s.XDSRequestChan.TimedReceive(10 * time.Second) // ack
+		// time.Sleep(time.Second)
+		fmt.Println("\nrds")
+		rdsReq, err := s.XDSRequestChan.TimedReceive(10 * time.Second)
+		fmt.Println(rdsReq, err)
+		s.XDSResponseChan <- &fakeserver.Response{
+			Resp: goodRDSResponse1,
+		}
+		s.XDSRequestChan.TimedReceive(10 * time.Second) // ack
 
-	fmt.Println("\ncds")
-	edsReq, err := s.XDSRequestChan.TimedReceive(10 * time.Second)
-	fmt.Println(edsReq, err)
-	s.XDSResponseChan <- &fakeserver.Response{
-		Resp: goodEDSResponse1,
-	}
-	s.XDSRequestChan.TimedReceive(10 * time.Second) // ack
+		// time.Sleep(time.Second)
+		fmt.Println("\ncds")
+		cdsReq, err := s.XDSRequestChan.TimedReceive(10 * time.Second)
+		fmt.Println(cdsReq, err)
+		s.XDSResponseChan <- &fakeserver.Response{
+			Resp: goodCDSResponse2,
+		}
+		s.XDSRequestChan.TimedReceive(10 * time.Second) // ack
 
-	fmt.Println("end")
+		fmt.Println("\ncds")
+		edsReq, err := s.XDSRequestChan.TimedReceive(10 * time.Second)
+		fmt.Println(edsReq, err)
+		s.XDSResponseChan <- &fakeserver.Response{
+			Resp: goodEDSResponse1,
+		}
+		s.XDSRequestChan.TimedReceive(10 * time.Second) // ack
+
+		fmt.Println(" ----- end ----- ")
+		fmt.Println()
+	}
 	select {}
 }

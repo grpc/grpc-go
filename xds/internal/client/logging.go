@@ -16,24 +16,32 @@
  *
  */
 
-package bootstrap
+package client
 
-import "google.golang.org/grpc/grpclog"
+import (
+	"fmt"
 
-const (
-	prefix = "[xds-bootstrap] "
+	"google.golang.org/grpc/grpclog"
 )
 
-func debugf(format string, args ...interface{}) {
+const (
+	prefix = "[xds-client %p] "
+)
+
+func debugf(p *Client, format string, args ...interface{}) {
 	if grpclog.V(2) {
-		grpclog.Infof(prefix+format, args...)
+		grpclog.Infof(fmt.Sprintf(prefix, p)+format, args...)
 	}
 }
 
-func infof(format string, args ...interface{}) {
-	grpclog.Infof(prefix+format, args...)
+func infof(p *Client, format string, args ...interface{}) {
+	grpclog.Infof(fmt.Sprintf(prefix, p)+format, args...)
 }
 
-func warningf(format string, args ...interface{}) {
-	grpclog.Warningf(prefix+format, args...)
+func warningf(p *Client, format string, args ...interface{}) {
+	grpclog.Warningf(fmt.Sprintf(prefix, p)+format, args...)
+}
+
+func errorf(p *Client, format string, args ...interface{}) {
+	grpclog.Errorf(fmt.Sprintf(prefix, p)+format, args...)
 }
