@@ -77,6 +77,7 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 		updateCh: buffer.NewUnbounded(),
 	}
 	go b.run()
+	infof(b, "Created")
 	return b
 }
 
@@ -254,6 +255,7 @@ func (b *cdsBalancer) run() {
 				b.edsLB = nil
 			}
 			// This is the *ONLY* point of return from this function.
+			infof(b, "Shutdown")
 			return
 		}
 	}
