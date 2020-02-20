@@ -94,6 +94,7 @@ func (sbc *subBalancerWithConfig) updateBalancerStateWithCachedPicker() {
 
 func (sbc *subBalancerWithConfig) startBalancer() {
 	b := sbc.builder.Build(sbc, balancer.BuildOptions{})
+	infof(sbc.group.parent, "Created child policy %p of type %v", b, sbc.builder.Name())
 	sbc.balancer = b
 	if ub, ok := b.(balancer.V2Balancer); ok {
 		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: sbc.addrs}})
@@ -150,6 +151,10 @@ type pickerState struct {
 	state  connectivity.State
 }
 
+func (s *pickerState) String() string {
+	return fmt.Sprintf("weight:%v,picker:%p,state:%v", s.weight, s.picker, s.state)
+}
+
 // balancerGroup takes a list of balancers, and make then into one balancer.
 //
 // Note that this struct doesn't implement balancer.Balancer, because it's not
@@ -175,6 +180,7 @@ type pickerState struct {
 // guaranteed that no updates will be sent to parent ClientConn from a closed
 // balancer group.
 type balancerGroup struct {
+	parent    *edsBalancer // For logging purpose, used as component ID.
 	cc        balancer.ClientConn
 	loadStore lrs.Store
 
@@ -227,8 +233,9 @@ type balancerGroup struct {
 // TODO: make it a parameter for newBalancerGroup().
 var defaultSubBalancerCloseTimeout = 15 * time.Minute
 
-func newBalancerGroup(cc balancer.ClientConn, loadStore lrs.Store) *balancerGroup {
+func newBalancerGroup(parent *edsBalancer, cc balancer.ClientConn, loadStore lrs.Store) *balancerGroup {
 	return &balancerGroup{
+		parent:    parent,
 		cc:        cc,
 		loadStore: loadStore,
 
@@ -484,7 +491,7 @@ func (bg *balancerGroup) newSubConn(config *subBalancerWithConfig, addrs []resol
 // updateBalancerState: create an aggregated picker and an aggregated
 // connectivity state, then forward to ClientConn.
 func (bg *balancerGroup) updateBalancerState(id internal.Locality, state balancer.State) {
-	grpclog.Infof("balancer group: update balancer state: %v, %v", id, state)
+	infof(bg.parent, "Balancer state update from locality %v, new state: %+v", id, state)
 
 	bg.incomingMu.Lock()
 	defer bg.incomingMu.Unlock()
@@ -498,6 +505,7 @@ func (bg *balancerGroup) updateBalancerState(id internal.Locality, state balance
 	pickerSt.picker = newLoadReportPicker(state.Picker, id, bg.loadStore)
 	pickerSt.state = state.ConnectivityState
 	if bg.incomingStarted {
+		infof(bg.parent, "Child pickers with weight: %+v", bg.idToPickerState)
 		bg.cc.UpdateState(buildPickerAndState(bg.idToPickerState))
 	}
 }

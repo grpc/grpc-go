@@ -42,8 +42,8 @@ const (
 )
 
 var (
-	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerImplInterface {
-		return newEDSBalancerImpl(cc, loadStore)
+	newEDSBalancer = func(parent *edsBalancer, cc balancer.ClientConn, loadStore lrs.Store) edsBalancerImplInterface {
+		return newEDSBalancerImpl(parent, cc, loadStore)
 	}
 )
 
@@ -65,7 +65,7 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		xdsClientUpdate: make(chan interface{}),
 	}
 	loadStore := lrs.NewStore()
-	x.edsImpl = newEDSBalancer(x.cc, loadStore)
+	x.edsImpl = newEDSBalancer(x, x.cc, loadStore)
 	x.client = newXDSClientWrapper(x, x.handleEDSUpdate, x.loseContact, x.buildOpts, loadStore)
 	go x.run()
 	infof(x, "Created")
