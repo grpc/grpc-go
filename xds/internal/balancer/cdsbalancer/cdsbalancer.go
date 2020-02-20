@@ -203,7 +203,12 @@ func (b *cdsBalancer) run() {
 				b.client = update.client
 			}
 			if update.clusterName != "" {
-				b.cancelWatch = b.client.WatchCluster(update.clusterName, b.handleClusterUpdate)
+				cancelWatch := b.client.WatchCluster(update.clusterName, b.handleClusterUpdate)
+				infof(b, "Watch started on resource name %v with xds-client %p", update.clusterName, b.client)
+				b.cancelWatch = func() {
+					cancelWatch()
+					infof(b, "Watch cancelled on resource name %v with xds-client %p", update.clusterName, b.client)
+				}
 				b.clusterToWatch = update.clusterName
 			}
 		case *scUpdate:
