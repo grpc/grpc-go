@@ -219,21 +219,24 @@ func (b *cdsBalancer) run() {
 			b.edsLB.UpdateSubConnState(update.subConn, update.state)
 		case *watchUpdate:
 			if err := update.err; err != nil {
+				warningf(b, "Watch error from xds-client %p: %v", b.client, err)
 				if b.edsLB != nil {
 					b.edsLB.ResolverError(err)
 				}
 				break
 			}
 
+			infof(b, "Watch update from xds-client %p, content: %+v", b.client, update.cds)
 			// The first good update from the watch API leads to the
 			// instantiation of an edsBalancer. Further updates/errors are
 			// propagated to the existing edsBalancer.
 			if b.edsLB == nil {
 				b.edsLB = newEDSBalancer(b.cc, b.bOpts)
 				if b.edsLB == nil {
-					grpclog.Error("xds: failed to build edsBalancer")
+					errorf(b, "Failed to create child policy of type EDS")
 					break
 				}
+				infof(b, "Creating child policy %p of type %T", b.edsLB, b.edsLB)
 			}
 			lbCfg := &edsbalancer.EDSConfig{EDSServiceName: update.cds.ServiceName}
 			if update.cds.EnableLRS {
@@ -285,6 +288,7 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 		return errBalancerClosed
 	}
 
+	infof(b, "Receive update from resolver, balancer config: %+v", state.BalancerConfig)
 	// The errors checked here should ideally never happen because the
 	// ServiceConfig in this case is prepared by the xdsResolver and is not
 	// something that is received on the wire.
