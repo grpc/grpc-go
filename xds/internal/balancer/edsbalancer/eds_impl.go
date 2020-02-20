@@ -57,7 +57,8 @@ type balancerGroupWithConfig struct {
 // The localities are picked as weighted round robin. A configurable child
 // policy is used to manage endpoints in each locality.
 type edsBalancerImpl struct {
-	cc balancer.ClientConn
+	parent *edsBalancer // For logging purpose, used as component ID.
+	cc     balancer.ClientConn
 
 	subBalancerBuilder   balancer.Builder
 	loadStore            lrs.Store
@@ -89,8 +90,9 @@ type edsBalancerImpl struct {
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
-func newEDSBalancerImpl(cc balancer.ClientConn, loadStore lrs.Store) *edsBalancerImpl {
+func newEDSBalancerImpl(parent *edsBalancer, cc balancer.ClientConn, loadStore lrs.Store) *edsBalancerImpl {
 	edsImpl := &edsBalancerImpl{
+		parent:             parent,
 		cc:                 cc,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
 
@@ -228,13 +230,12 @@ func (edsImpl *edsBalancerImpl) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) 
 			// be started when necessary (e.g. when higher is down, or if it's a
 			// new lowest priority).
 			bgwc = &balancerGroupWithConfig{
-				bg: newBalancerGroup(
-					edsImpl.ccWrapperWithPriority(priority), edsImpl.loadStore,
-				),
+				bg:      newBalancerGroup(edsImpl.parent, edsImpl.ccWrapperWithPriority(priority), edsImpl.loadStore),
 				configs: make(map[internal.Locality]*localityConfig),
 			}
 			edsImpl.priorityToLocalities[priority] = bgwc
 			priorityChanged = true
+			infof(edsImpl.parent, "New priority %v added", priority)
 		}
 		edsImpl.handleEDSResponsePerPriority(bgwc, newLocalities)
 	}
@@ -248,6 +249,7 @@ func (edsImpl *edsBalancerImpl) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) 
 			bgwc.bg.close()
 			delete(edsImpl.priorityToState, p)
 			priorityChanged = true
+			infof(edsImpl.parent, "Priority %v deleted", p)
 		}
 	}
 
@@ -304,6 +306,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 			// weightChanged is false for new locality, because there's no need
 			// to update weight in bg.
 			addrsChanged = true
+			infof(edsImpl.parent, "New locality %v added", lid)
 		} else {
 			// Compare weight and addrs.
 			if config.weight != newWeight {
@@ -312,6 +315,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 			if !reflect.DeepEqual(config.addrs, newAddrs) {
 				addrsChanged = true
 			}
+			infof(edsImpl.parent, "Locality %v updated, weightedChanged: %v, addrsChanged: %v", lid, weightChanged, addrsChanged)
 		}
 
 		if weightChanged {
@@ -330,6 +334,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 		if _, ok := newLocalitiesSet[lid]; !ok {
 			bgwc.bg.remove(lid)
 			delete(bgwc.configs, lid)
+			infof(edsImpl.parent, "Locality %v deleted", lid)
 		}
 	}
 }

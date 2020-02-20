@@ -236,7 +236,7 @@ func (b *cdsBalancer) run() {
 					errorf(b, "Failed to create child policy of type EDS")
 					break
 				}
-				infof(b, "Creating child policy %p of type %T", b.edsLB, b.edsLB)
+				infof(b, "Created child policy %p of type %s", b.edsLB, edsName)
 			}
 			lbCfg := &edsbalancer.EDSConfig{EDSServiceName: update.cds.ServiceName}
 			if update.cds.EnableLRS {
