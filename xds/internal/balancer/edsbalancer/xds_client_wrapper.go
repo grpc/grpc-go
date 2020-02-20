@@ -48,6 +48,8 @@ var (
 // creating a new xds client, and start watching EDS. The given callbacks will
 // be called with EDS updates or errors.
 type xdsclientWrapper struct {
+	parent *edsBalancer
+
 	newEDSUpdate func(*xdsclient.EDSUpdate) error
 	loseContact  func()
 	bbo          balancer.BuildOptions
@@ -76,8 +78,9 @@ type xdsclientWrapper struct {
 //
 // The given callbacks won't be called until the underlying xds_client is
 // working and sends updates.
-func newXDSClientWrapper(newEDSUpdate func(*xdsclient.EDSUpdate) error, loseContact func(), bbo balancer.BuildOptions, loadStore lrs.Store) *xdsclientWrapper {
+func newXDSClientWrapper(parent *edsBalancer, newEDSUpdate func(*xdsclient.EDSUpdate) error, loseContact func(), bbo balancer.BuildOptions, loadStore lrs.Store) *xdsclientWrapper {
 	return &xdsclientWrapper{
+		parent:       parent,
 		newEDSUpdate: newEDSUpdate,
 		loseContact:  loseContact,
 		bbo:          bbo,
@@ -182,16 +185,22 @@ func (c *xdsclientWrapper) startEDSWatch(nameToWatch string) {
 	}
 
 	c.edsServiceName = nameToWatch
-	c.cancelEDSWatch = c.xdsclient.WatchEDS(c.edsServiceName, func(update *xdsclient.EDSUpdate, err error) {
+	cancelEDSWatch := c.xdsclient.WatchEDS(c.edsServiceName, func(update *xdsclient.EDSUpdate, err error) {
 		if err != nil {
 			// TODO: this should trigger a call to `c.loseContact`, when the
 			// error indicates "lose contact".
 			return
 		}
+		infof(c.parent, "Watch update from xds-client %p, content: %+v", c.xdsclient, update)
 		if err := c.newEDSUpdate(update); err != nil {
 			grpclog.Warningf("xds: processing new EDS update failed due to %v.", err)
 		}
 	})
+	infof(c.parent, "Watch started on resource name %v with xds-client %p", c.edsServiceName, c.xdsclient)
+	c.cancelEDSWatch = func() {
+		cancelEDSWatch()
+		infof(c.parent, "Watch cancelled on resource name %v with xds-client %p", c.edsServiceName, c.xdsclient)
+	}
 }
 
 // startLoadReport starts load reporting. If there's already a load reporting in
