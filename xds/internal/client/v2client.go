@@ -153,7 +153,7 @@ func (v2c *v2Client) run() {
 		cli := adsgrpc.NewAggregatedDiscoveryServiceClient(v2c.cc)
 		stream, err := cli.StreamAggregatedResources(v2c.ctx, grpc.WaitForReady(true))
 		if err != nil {
-			errorf(v2c.parent, "xds: ADS stream creation failed: %v", err)
+			warningf(v2c.parent, "xds: ADS stream creation failed: %v", err)
 			continue
 		}
 		infof(v2c.parent, "ADS stream created")
@@ -346,7 +346,7 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 		resp, err := stream.Recv()
 		// TODO: call watch callbacks with error when stream is broken.
 		if err != nil {
-			errorf(v2c.parent, "ADS stream is closed with error: %v", err)
+			warningf(v2c.parent, "ADS stream is closed with error: %v", err)
 			return success
 		}
 		infof(v2c.parent, "ADS response received, type: %v", resp.GetTypeUrl())
