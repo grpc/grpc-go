@@ -41,3 +41,7 @@ func infof(p *cdsBalancer, format string, args ...interface{}) {
 func warningf(p *cdsBalancer, format string, args ...interface{}) {
 	grpclog.Warningf(fmt.Sprintf(prefix, p)+format, args...)
 }
+
+func errorf(p *cdsBalancer, format string, args ...interface{}) {
+	grpclog.Errorf(fmt.Sprintf(prefix, p)+format, args...)
+}
