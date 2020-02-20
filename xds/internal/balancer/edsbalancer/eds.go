@@ -66,8 +66,9 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 	}
 	loadStore := lrs.NewStore()
 	x.edsImpl = newEDSBalancer(x.cc, loadStore)
-	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, loadStore)
+	x.client = newXDSClientWrapper(x, x.handleEDSUpdate, x.loseContact, x.buildOpts, loadStore)
 	go x.run()
+	infof(x, "Created")
 	return x
 }
 
@@ -148,6 +149,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 			x.edsImpl.HandleSubConnStateChange(u.sc, u.state.ConnectivityState)
 		}
 	case *balancer.ClientConnState:
+		infof(x, "Receive update from resolver, balancer config: %+v", u.BalancerConfig)
 		cfg, _ := u.BalancerConfig.(*EDSConfig)
 		if cfg == nil {
 			// service config parsing failed. should never happen.
@@ -254,4 +256,5 @@ func (x *edsBalancer) loseContact() {
 
 func (x *edsBalancer) Close() {
 	x.cancel()
+	infof(x, "Shutdown")
 }
