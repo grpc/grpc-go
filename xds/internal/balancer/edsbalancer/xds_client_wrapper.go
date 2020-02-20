@@ -189,6 +189,7 @@ func (c *xdsclientWrapper) startEDSWatch(nameToWatch string) {
 		if err != nil {
 			// TODO: this should trigger a call to `c.loseContact`, when the
 			// error indicates "lose contact".
+			warningf(c.parent, "Watch error from xds-client %p: %v", c.xdsclient, err)
 			return
 		}
 		infof(c.parent, "Watch update from xds-client %p, content: %+v", c.xdsclient, update)
