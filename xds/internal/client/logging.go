@@ -42,6 +42,3 @@ func warningf(p *Client, format string, args ...interface{}) {
 	grpclog.Warningf(fmt.Sprintf(prefix, p)+format, args...)
 }
 
-func errorf(p *Client, format string, args ...interface{}) {
-	grpclog.Errorf(fmt.Sprintf(prefix, p)+format, args...)
-}
