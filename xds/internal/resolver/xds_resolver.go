@@ -86,8 +86,12 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 	}
 	r.client = client
 	r.ctx, r.cancelCtx = context.WithCancel(context.Background())
-	r.cancelWatch = r.client.WatchService(r.target.Endpoint, r.handleServiceUpdate)
-	infof(r, "Watch started on resource %v with xds-client %p", r.target.Endpoint, r.client)
+	cancelWatch := r.client.WatchService(r.target.Endpoint, r.handleServiceUpdate)
+	infof(r, "Watch started on resource name %v with xds-client %p", r.target.Endpoint, r.client)
+	r.cancelWatch = func() {
+		cancelWatch()
+		infof(r, "Watch cancel on resource name %v with xds-client %p", r.target.Endpoint, r.client)
+	}
 
 	go r.run()
 	return r, nil
