@@ -40,7 +40,10 @@ import (
 	"google.golang.org/grpc/xds/internal"
 )
 
-const testService = "grpc.service.test"
+const (
+	testService  = "grpc.service.test"
+	testHostname = "grpc.server.name"
+)
 
 var (
 	dropCategories = []string{"drop_for_real", "drop_for_fun"}
@@ -359,11 +362,8 @@ func (lrss *lrsServer) StreamLoadStats(stream lrsgrpc.LoadReportingService_Strea
 	if err != nil {
 		return err
 	}
-	if !proto.Equal(req, &lrspb.LoadStatsRequest{
-		ClusterStats: []*endpointpb.ClusterStats{{
-			ClusterName: testService,
-		}},
-	}) {
+
+	if req.GetNode().GetMetadata().GetFields()[nodeMetadataHostnameKey].GetStringValue() != testHostname {
 		return status.Errorf(codes.FailedPrecondition, "unexpected req: %+v", req)
 	}
 	if err := stream.Send(&lrspb.LoadStatsResponse{
@@ -448,7 +448,7 @@ func Test_lrsStore_ReportTo(t *testing.T) {
 	defer cancel()
 	done := make(chan struct{})
 	go func() {
-		ls.ReportTo(ctx, cc, testService, nil)
+		ls.ReportTo(ctx, cc, testService, testHostname, nil)
 		close(done)
 	}()
 

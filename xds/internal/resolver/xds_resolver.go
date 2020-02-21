@@ -74,7 +74,7 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 		dopts = []grpc.DialOption{grpc.WithContextDialer(rbo.Dialer)}
 	}
 
-	client, err := newXDSClient(xdsclient.Options{Config: *config, DialOpts: dopts})
+	client, err := newXDSClient(xdsclient.Options{Config: *config, DialOpts: dopts, TargetName: t.Endpoint})
 	if err != nil {
 		return nil, err
 	}

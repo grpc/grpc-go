@@ -168,7 +168,7 @@ func (tls *testLoadStore) CallServerLoad(l internal.Locality, name string, d flo
 	tls.callsCost = append(tls.callsCost, testServerLoad{name: name, d: d})
 }
 
-func (*testLoadStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterName string, node *corepb.Node) {
+func (*testLoadStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterName string, hostname string, node *corepb.Node) {
 	panic("not implemented")
 }
 

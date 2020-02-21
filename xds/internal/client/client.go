@@ -41,12 +41,17 @@ type Options struct {
 	Config bootstrap.Config
 	// DialOpts contains dial options to be used when dialing the xDS server.
 	DialOpts []grpc.DialOption
+	// TargetName is the target of the parent ClientConn.
+	TargetName string
 }
 
 // Client is a full fledged gRPC client which queries a set of discovery APIs
 // (collectively termed as xDS) on a remote management server, to discover
-// various dynamic resources. A single client object will be shared by the xds
-// resolver and balancer implementations.
+// various dynamic resources.
+//
+// A single client object will be shared by the xds resolver and balancer
+// implementations. But the same client can only be shared by the same parent
+// ClientConn.
 type Client struct {
 	opts Options
 	cc   *grpc.ClientConn // Connection to the xDS server

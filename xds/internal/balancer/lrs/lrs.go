@@ -19,6 +19,8 @@ package lrs
 
 import (
 	"context"
+	"github.com/golang/protobuf/proto"
+	structpb "github.com/golang/protobuf/ptypes/struct"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -44,7 +46,7 @@ type Store interface {
 	CallFinished(l internal.Locality, err error)
 	CallServerLoad(l internal.Locality, name string, d float64)
 	// Report the load of clusterName to cc.
-	ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterName string, node *corepb.Node)
+	ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterName string, hostname string, node *corepb.Node)
 }
 
 type rpcCountData struct {
@@ -280,10 +282,12 @@ func (ls *lrsStore) buildStats(clusterName string) []*endpointpb.ClusterStats {
 	return ret
 }
 
+const nodeMetadataHostnameKey = "PROXYLESS_CLIENT_HOSTNAME"
+
 // ReportTo makes a streaming lrs call to cc and blocks.
 //
 // It retries the call (with backoff) until ctx is canceled.
-func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterName string, node *corepb.Node) {
+func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterName string, hostname string, node *corepb.Node) {
 	c := lrsgrpc.NewLoadReportingServiceClient(cc)
 	var (
 		retryCount int
@@ -313,11 +317,21 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterNa
 			grpclog.Warningf("lrs: failed to create stream: %v", err)
 			continue
 		}
+		nodeTemp := proto.Clone(node).(*corepb.Node)
+		if nodeTemp == nil {
+			nodeTemp = &corepb.Node{}
+		}
+		if nodeTemp.Metadata == nil {
+			nodeTemp.Metadata = &structpb.Struct{}
+		}
+		if nodeTemp.Metadata.Fields == nil {
+			nodeTemp.Metadata.Fields = make(map[string]*structpb.Value)
+		}
+		nodeTemp.Metadata.Fields[nodeMetadataHostnameKey] = &structpb.Value{
+			Kind: &structpb.Value_StringValue{StringValue: hostname},
+		}
 		if err := stream.Send(&lrspb.LoadStatsRequest{
-			ClusterStats: []*endpointpb.ClusterStats{{
-				ClusterName: clusterName,
-			}},
-			Node: node,
+			Node: nodeTemp,
 		}); err != nil {
 			grpclog.Warningf("lrs: failed to send first request: %v", err)
 			continue
