@@ -42,7 +42,7 @@ type statsWatcher struct {
 	rpcsByPeer    map[string]int32
 	numFailures   int32
 	remainingRpcs int32
-	c             chan testpb.SimpleResponse
+	c             chan *testpb.SimpleResponse
 }
 
 var (
@@ -73,7 +73,7 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 			rpcsByPeer:    make(map[string]int32),
 			numFailures:   0,
 			remainingRpcs: in.GetNumRpcs(),
-			c:             make(chan testpb.SimpleResponse),
+			c:             make(chan *testpb.SimpleResponse),
 		}
 		watchers[watcherKey] = watcher
 	}
@@ -82,35 +82,30 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(in.GetTimeoutSec())*time.Second)
 	defer cancel()
 
-	responseCh := make(chan testpb.LoadBalancerStatsResponse)
-	// Wait until the requested RPCs have all been recorded or timeout occurs.
-	go func() {
-		for {
-			select {
-			case r := <-watcher.c:
-				if r.GetServerId() != "" {
-					watcher.rpcsByPeer[r.GetServerId()]++
-				} else {
-					watcher.numFailures++
-				}
-				watcher.remainingRpcs--
-				if watcher.remainingRpcs == 0 {
-					responseCh <- testpb.LoadBalancerStatsResponse{NumFailures: watcher.numFailures + watcher.remainingRpcs, RpcsByPeer: watcher.rpcsByPeer}
-					return
-				}
-			case <-ctx.Done():
-				grpclog.Info("Timed out, returning partial stats")
-				responseCh <- testpb.LoadBalancerStatsResponse{NumFailures: watcher.numFailures + watcher.remainingRpcs, RpcsByPeer: watcher.rpcsByPeer}
-				return
-			}
-		}
+	defer func() {
+		mu.Lock()
+		delete(watchers, watcherKey)
+		mu.Unlock()
 	}()
 
-	response := <-responseCh
-	mu.Lock()
-	delete(watchers, watcherKey)
-	mu.Unlock()
-	return &response, nil
+	// Wait until the requested RPCs have all been recorded or timeout occurs.
+	for {
+		select {
+		case r := <-watcher.c:
+			if r != nil {
+				watcher.rpcsByPeer[(*r).GetServerId()]++
+			} else {
+				watcher.numFailures++
+			}
+			watcher.remainingRpcs--
+			if watcher.remainingRpcs == 0 {
+				return &testpb.LoadBalancerStatsResponse{NumFailures: watcher.numFailures + watcher.remainingRpcs, RpcsByPeer: watcher.rpcsByPeer}, nil
+			}
+		case <-ctx.Done():
+			grpclog.Info("Timed out, returning partial stats")
+			return &testpb.LoadBalancerStatsResponse{NumFailures: watcher.numFailures + watcher.remainingRpcs, RpcsByPeer: watcher.rpcsByPeer}, nil
+		}
+	}
 }
 
 func main() {
@@ -136,10 +131,10 @@ func main() {
 	}
 	ticker := time.NewTicker(time.Second / time.Duration(*qps**numChannels))
 	defer ticker.Stop()
-	sendRpcs(clients, ticker)
+	sendRPCs(clients, ticker)
 }
 
-func sendRpcs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
+func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 	var i int
 	for range ticker.C {
 		go func(i int) {
@@ -149,9 +144,11 @@ func sendRpcs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 			mu.Lock()
 			savedRequestID := currentRequestID
 			currentRequestID++
-			savedWatchers := make(map[statsWatcherKey]*statsWatcher)
+			savedWatchers := []*statsWatcher{}
 			for key, value := range watchers {
-				savedWatchers[key] = value
+				if key.startID <= savedRequestID && savedRequestID < key.endID {
+					savedWatchers = append(savedWatchers, value)
+				}
 			}
 			mu.Unlock()
 			r, err := c.UnaryCall(ctx, &testpb.SimpleRequest{FillServerId: true}, grpc.Peer(p))
@@ -159,10 +156,8 @@ func sendRpcs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 			success := err == nil
 			cancel()
 
-			for key, value := range savedWatchers {
-				if key.startID <= savedRequestID && savedRequestID < key.endID {
-					value.c <- *r
-				}
+			for _, watcher := range savedWatchers {
+				watcher.c <- r
 			}
 
 			if success && *printResponse {

@@ -22,6 +22,7 @@ package main
 import (
 	"context"
 	"flag"
+	"log"
 	"net"
 	"os"
 	"strconv"
@@ -32,10 +33,18 @@ import (
 )
 
 var (
-	port        = flag.Int("port", 8080, "The server port")
-	serverID    = flag.String("server_id", "go_server", "Server ID included in response")
-	hostname, _ = os.Hostname()
+	port     = flag.Int("port", 8080, "The server port")
+	serverID = flag.String("server_id", "go_server", "Server ID included in response")
+	hostname = getHostname()
 )
+
+func getHostname() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Fatalf("failed to get hostname: %v", err)
+	}
+	return hostname
+}
 
 type server struct {
 	testpb.UnimplementedTestServiceServer
