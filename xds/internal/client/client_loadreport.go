@@ -53,7 +53,7 @@ func (c *Client) ReportLoad(server string, clusterName string, loadStore lrs.Sto
 		closeCC = true
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	go loadStore.ReportTo(ctx, c.cc, clusterName, c.opts.Config.NodeProto)
+	go loadStore.ReportTo(ctx, c.cc, clusterName, c.opts.TargetName, c.opts.Config.NodeProto)
 	return func() {
 		cancel()
 		if closeCC {
