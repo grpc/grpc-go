@@ -33,7 +33,3 @@ func debugf(format string, args ...interface{}) {
 func infof(format string, args ...interface{}) {
 	grpclog.Infof(prefix+format, args...)
 }
-
-func warningf(format string, args ...interface{}) {
-	grpclog.Warningf(prefix+format, args...)
-}
