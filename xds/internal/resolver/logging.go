@@ -28,12 +28,6 @@ const (
 	prefix = "[xds-resolver %p] "
 )
 
-func debugf(p *xdsResolver, format string, args ...interface{}) {
-	if grpclog.V(2) {
-		grpclog.Infof(fmt.Sprintf(prefix, p)+format, args...)
-	}
-}
-
 func infof(p *xdsResolver, format string, args ...interface{}) {
 	grpclog.Infof(fmt.Sprintf(prefix, p)+format, args...)
 }

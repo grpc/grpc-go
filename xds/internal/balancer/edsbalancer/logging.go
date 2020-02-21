@@ -28,20 +28,10 @@ const (
 	prefix = "[eds-lb %p] "
 )
 
-func debugf(p *edsBalancer, format string, args ...interface{}) {
-	if grpclog.V(2) {
-		grpclog.Infof(fmt.Sprintf(prefix, p)+format, args...)
-	}
-}
-
 func infof(p *edsBalancer, format string, args ...interface{}) {
 	grpclog.Infof(fmt.Sprintf(prefix, p)+format, args...)
 }
 
 func warningf(p *edsBalancer, format string, args ...interface{}) {
 	grpclog.Warningf(fmt.Sprintf(prefix, p)+format, args...)
-}
-
-func errorf(p *edsBalancer, format string, args ...interface{}) {
-	grpclog.Errorf(fmt.Sprintf(prefix, p)+format, args...)
 }

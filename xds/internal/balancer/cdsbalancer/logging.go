@@ -28,12 +28,6 @@ const (
 	prefix = "[cds-lb %p] "
 )
 
-func debugf(p *cdsBalancer, format string, args ...interface{}) {
-	if grpclog.V(2) {
-		grpclog.Infof(fmt.Sprintf(prefix, p)+format, args...)
-	}
-}
-
 func infof(p *cdsBalancer, format string, args ...interface{}) {
 	grpclog.Infof(fmt.Sprintf(prefix, p)+format, args...)
 }
