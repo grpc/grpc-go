@@ -19,8 +19,6 @@ package lrs
 
 import (
 	"context"
-	"github.com/golang/protobuf/proto"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,7 +27,9 @@ import (
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
+	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
+	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
@@ -346,12 +346,14 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterNa
 			grpclog.Warningf("lrs: failed to convert report interval: %v", err)
 			continue
 		}
-		if len(first.Clusters) != 1 {
-			grpclog.Warningf("lrs: received multiple clusters %v, expect one cluster", first.Clusters)
-			continue
+		var clusterFoundInResponse bool
+		for _, c := range first.Clusters {
+			if c == clusterName {
+				clusterFoundInResponse = true
+			}
 		}
-		if first.Clusters[0] != clusterName {
-			grpclog.Warningf("lrs: received cluster is unexpected. Got %v, want %v", first.Clusters[0], clusterName)
+		if !clusterFoundInResponse {
+			grpclog.Warningf("lrs: clusters from Response not found. Got %v, want %v", first.Clusters, clusterName)
 			continue
 		}
 		if first.ReportEndpointGranularity {

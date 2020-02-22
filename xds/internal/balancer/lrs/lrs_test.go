@@ -367,7 +367,7 @@ func (lrss *lrsServer) StreamLoadStats(stream lrsgrpc.LoadReportingService_Strea
 		return status.Errorf(codes.FailedPrecondition, "unexpected req: %+v", req)
 	}
 	if err := stream.Send(&lrspb.LoadStatsResponse{
-		Clusters:              []string{testService},
+		Clusters:              []string{testService, "another-cluster"},
 		LoadReportingInterval: lrss.reportingInterval,
 	}); err != nil {
 		return err
