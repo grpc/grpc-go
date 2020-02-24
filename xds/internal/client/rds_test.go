@@ -196,7 +196,7 @@ func (s) TestRDSHandleResponse(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	doLDS(t, v2c, fakeServer)
 
@@ -273,7 +273,7 @@ func (s) TestRDSHandleResponseWithoutLDSWatch(t *testing.T) {
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 
 	if v2c.handleRDSResponse(goodRDSResponse1) == nil {
@@ -287,7 +287,7 @@ func (s) TestRDSHandleResponseWithoutRDSWatch(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	doLDS(t, v2c, fakeServer)
 
@@ -322,7 +322,7 @@ func testRDSCaching(t *testing.T, rdsTestOps []rdsTestOp, errCh *testutils.Chann
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 	doLDS(t, v2c, fakeServer)
@@ -436,7 +436,7 @@ func (s) TestRDSWatchExpiryTimer(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 	doLDS(t, v2c, fakeServer)
