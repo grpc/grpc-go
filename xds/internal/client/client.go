@@ -91,7 +91,7 @@ func New(opts Options) (*Client, error) {
 	c.logger = grpclog.NewPrefixLogger(loggingPrefix(c))
 	c.logger.Infof("Created ClientConn to xDS server: %s", opts.Config.BalancerName)
 
-	c.v2c = newV2Client(c.logger, cc, opts.Config.NodeProto, backoff.DefaultExponential.Backoff)
+	c.v2c = newV2Client(cc, opts.Config.NodeProto, backoff.DefaultExponential.Backoff, c.logger)
 	c.logger.Infof("Created")
 	return c, nil
 }

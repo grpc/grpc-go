@@ -74,7 +74,7 @@ func (s) TestLDSGetRouteConfig(t *testing.T) {
 	}
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
-	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -96,7 +96,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 
 	tests := []struct {
@@ -199,7 +199,7 @@ func (s) TestLDSHandleResponseWithoutWatch(t *testing.T) {
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 
 	if v2c.handleLDSResponse(goodLDSResponse1) == nil {
@@ -220,7 +220,7 @@ func (s) TestLDSWatchExpiryTimer(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 
 	callbackCh := testutils.NewChannel()

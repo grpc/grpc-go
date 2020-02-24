@@ -78,7 +78,7 @@ type xdsclientWrapper struct {
 //
 // The given callbacks won't be called until the underlying xds_client is
 // working and sends updates.
-func newXDSClientWrapper(logger *grpclog.PrefixLogger, newEDSUpdate func(*xdsclient.EDSUpdate) error, loseContact func(), bbo balancer.BuildOptions, loadStore lrs.Store) *xdsclientWrapper {
+func newXDSClientWrapper(newEDSUpdate func(*xdsclient.EDSUpdate) error, loseContact func(), bbo balancer.BuildOptions, loadStore lrs.Store, logger *grpclog.PrefixLogger) *xdsclientWrapper {
 	return &xdsclientWrapper{
 		logger:       logger,
 		newEDSUpdate: newEDSUpdate,

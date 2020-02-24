@@ -90,7 +90,7 @@ type edsBalancerImpl struct {
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
-func newEDSBalancerImpl(logger *grpclog.PrefixLogger, cc balancer.ClientConn, loadStore lrs.Store) *edsBalancerImpl {
+func newEDSBalancerImpl(cc balancer.ClientConn, loadStore lrs.Store, logger *grpclog.PrefixLogger) *edsBalancerImpl {
 	edsImpl := &edsBalancerImpl{
 		cc:                 cc,
 		logger:             logger,
@@ -230,7 +230,7 @@ func (edsImpl *edsBalancerImpl) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) 
 			// be started when necessary (e.g. when higher is down, or if it's a
 			// new lowest priority).
 			bgwc = &balancerGroupWithConfig{
-				bg:      newBalancerGroup(edsImpl.logger, edsImpl.ccWrapperWithPriority(priority), edsImpl.loadStore),
+				bg:      newBalancerGroup(edsImpl.ccWrapperWithPriority(priority), edsImpl.loadStore, edsImpl.logger),
 				configs: make(map[internal.Locality]*localityConfig),
 			}
 			edsImpl.priorityToLocalities[priority] = bgwc

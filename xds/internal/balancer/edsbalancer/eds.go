@@ -42,8 +42,8 @@ const (
 )
 
 var (
-	newEDSBalancer = func(logger *grpclog.PrefixLogger, cc balancer.ClientConn, loadStore lrs.Store) edsBalancerImplInterface {
-		return newEDSBalancerImpl(logger, cc, loadStore)
+	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
+		return newEDSBalancerImpl(cc, loadStore, logger)
 	}
 )
 
@@ -66,8 +66,8 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 	}
 	loadStore := lrs.NewStore()
 	x.logger = grpclog.NewPrefixLogger(loggingPrefix(x))
-	x.edsImpl = newEDSBalancer(x.logger, x.cc, loadStore)
-	x.client = newXDSClientWrapper(x.logger, x.handleEDSUpdate, x.loseContact, x.buildOpts, loadStore)
+	x.edsImpl = newEDSBalancer(x.cc, loadStore, x.logger)
+	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, loadStore, x.logger)
 	x.logger.Infof("Created")
 	go x.run()
 	return x

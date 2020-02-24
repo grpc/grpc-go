@@ -405,7 +405,7 @@ func (s) TestV2ClientBackoffAfterRecvError(t *testing.T) {
 		return 0
 	}
 
-	v2c := newV2Client(nil, cc, goodNodeProto, clientBackoff)
+	v2c := newV2Client(cc, goodNodeProto, clientBackoff, nil)
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
@@ -440,7 +440,7 @@ func (s) TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
@@ -485,7 +485,7 @@ func (s) TestV2ClientCancelWatch(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
@@ -539,7 +539,7 @@ func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 	}
 	defer cc.Close()
 
-	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 

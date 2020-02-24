@@ -232,7 +232,7 @@ type balancerGroup struct {
 // TODO: make it a parameter for newBalancerGroup().
 var defaultSubBalancerCloseTimeout = 15 * time.Minute
 
-func newBalancerGroup(logger *grpclog.PrefixLogger, cc balancer.ClientConn, loadStore lrs.Store) *balancerGroup {
+func newBalancerGroup(cc balancer.ClientConn, loadStore lrs.Store, logger *grpclog.PrefixLogger) *balancerGroup {
 	return &balancerGroup{
 		cc:        cc,
 		logger:    logger,
