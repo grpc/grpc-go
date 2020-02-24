@@ -33,6 +33,8 @@ import (
 	rlspb "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
 )
 
+const defaultDialTarget = "dummy"
+
 type fakeThrottler struct {
 	shouldThrottle              bool
 	gotBackendResponseThrottled bool
@@ -71,7 +73,7 @@ func TestLookupThrottled(t *testing.T) {
 	_, cc, cleanup := setup(t)
 	defer cleanup()
 
-	rlsClient := New(cc, &fakeThrottler{shouldThrottle: true})
+	rlsClient := New(cc, &fakeThrottler{shouldThrottle: true}, defaultDialTarget)
 	_, err := rlsClient.Lookup(context.Background(), nil)
 	if err != ErrRequestThrottled {
 		t.Errorf("rlsClient.Lookup() = %v, want %v", err, ErrRequestThrottled)
@@ -84,7 +86,7 @@ func TestLookupFailure(t *testing.T) {
 	defer cleanup()
 
 	throttler := &fakeThrottler{shouldThrottle: false}
-	rlsClient := New(cc, throttler)
+	rlsClient := New(cc, throttler, defaultDialTarget)
 
 	// We setup the fake server to return an error.
 	server.ResponseChan <- fakeserver.Response{Err: errors.New("rls failure")}
@@ -103,7 +105,7 @@ func TestLookupCanceled(t *testing.T) {
 	_, cc, cleanup := setup(t)
 	defer cleanup()
 
-	rlsClient := New(cc, &fakeThrottler{shouldThrottle: false})
+	rlsClient := New(cc, &fakeThrottler{shouldThrottle: false}, defaultDialTarget)
 	// Give the Lookup RPC a big deadline, but don't setup the fake server to
 	// return anything. So the Lookup call will block and we will cancel the
 	// context in parallel, causing the Lookup call to return with a status
@@ -133,7 +135,7 @@ func TestLookupDeadlineExceeded(t *testing.T) {
 	_, cc, cleanup := setup(t)
 	defer cleanup()
 
-	rlsClient := New(cc, &fakeThrottler{shouldThrottle: false})
+	rlsClient := New(cc, &fakeThrottler{shouldThrottle: false}, defaultDialTarget)
 	// Give the Lookup RPC a small deadline, but don't setup the fake server to
 	// return anything. So the Lookup call will block and eventuall expire.
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -150,11 +152,10 @@ func TestLookupSuccess(t *testing.T) {
 	defer cleanup()
 
 	throttler := &fakeThrottler{shouldThrottle: false}
-	rlsClient := New(cc, throttler)
+	rlsClient := New(cc, throttler, defaultDialTarget)
 
 	const (
 		defaultTestTimeout = 1 * time.Second
-		rlsReqTarget       = "firestore.googleapis.com"
 		rlsReqPath         = "/service/method"
 		rlsRespTarget      = "us_east_1.firestore.googleapis.com"
 		rlsHeaderData      = "headerData"
@@ -173,7 +174,7 @@ func TestLookupSuccess(t *testing.T) {
 		"k2": "v2",
 	}
 	wantLookupRequest := &rlspb.RouteLookupRequest{
-		Server:     rlsReqTarget,
+		Server:     defaultDialTarget,
 		Path:       rlsReqPath,
 		TargetType: "grpc",
 		KeyMap:     rlsReqKeyMap,
@@ -185,11 +186,7 @@ func TestLookupSuccess(t *testing.T) {
 
 	// Make the actual Lookup API call, and make sure that the fake server
 	// received the expected RouteLookupRequest proto.
-	gotResult, err := rlsClient.Lookup(context.Background(), &LookupArgs{
-		Target: rlsReqTarget,
-		Path:   rlsReqPath,
-		KeyMap: rlsReqKeyMap,
-	})
+	gotResult, err := rlsClient.Lookup(context.Background(), &LookupArgs{Path: rlsReqPath, KeyMap: rlsReqKeyMap})
 	if err != nil {
 		t.Fatalf("rlsClient.Lookup() failed: %v", err)
 	}

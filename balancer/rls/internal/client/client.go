@@ -43,27 +43,31 @@ type adaptiveThrottlerInterface interface {
 // Client is a simple wrapper around a RouteLookupService client with adaptive
 // throttling.
 type Client struct {
-	cc        *grpc.ClientConn
-	stub      rlspb.RouteLookupServiceClient
+	// A client channel to the RLS server.
+	cc   *grpc.ClientConn
+	stub rlspb.RouteLookupServiceClient
+	// Adaptive throttler to throttle client requests.
 	throttler adaptiveThrottlerInterface
+	// User's original dial target, e.g. "firestore.googleapis.com".
+	dialTarget string
 }
 
 // New returns an RLS client with the provided arguments. The RLS LB policy
 // creates a grpc.ClientConn to the RLS server using appropriate credentials
 // from the parent channel, and creates an adaptive throttler implementation
-// using default values and passes them here.
-func New(cc *grpc.ClientConn, throttler adaptiveThrottlerInterface) *Client {
+// using default values and passes them here. dialTarget corresponds to the
+// original user dial target. This needs to be sent in every RLS request.
+func New(cc *grpc.ClientConn, throttler adaptiveThrottlerInterface, dialTarget string) *Client {
 	return &Client{
-		cc:        cc,
-		stub:      rlspb.NewRouteLookupServiceClient(cc),
-		throttler: throttler,
+		cc:         cc,
+		stub:       rlspb.NewRouteLookupServiceClient(cc),
+		throttler:  throttler,
+		dialTarget: dialTarget,
 	}
 }
 
 // LookupArgs wraps the values to be sent in an RLS request.
 type LookupArgs struct {
-	// Target is the user's dial target, e.g. "firestore.googleapis.com".
-	Target string
 	// Path is full RPC path, e.g. "/service/method".
 	Path string
 	// KeyMap is the request's keys built by the RLS LB using the
@@ -94,7 +98,7 @@ func (c *Client) Lookup(ctx context.Context, args *LookupArgs) (*LookupResult, e
 	}
 
 	resp, err := c.stub.RouteLookup(ctx, &rlspb.RouteLookupRequest{
-		Server:     args.Target,
+		Server:     c.dialTarget,
 		Path:       args.Path,
 		TargetType: grpcTargetType,
 		KeyMap:     args.KeyMap,
