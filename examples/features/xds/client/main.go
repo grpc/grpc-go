@@ -87,16 +87,11 @@ func main() {
 	defer conn.Close()
 	c := pb.NewGreeterClient(conn)
 
-	for {
-		func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-			defer cancel()
-			r, err := c.SayHello(ctx, &pb.HelloRequest{Name: name})
-			if err != nil {
-				log.Printf("could not greet: %v", err)
-			}
-			log.Printf("Greeting: %s", r.GetMessage())
-		}()
-		time.Sleep(time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: name})
+	if err != nil {
+		log.Fatalf("could not greet: %v", err)
 	}
+	log.Printf("Greeting: %s", r.GetMessage())
 }
