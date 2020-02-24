@@ -346,6 +346,11 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterNa
 			grpclog.Warningf("lrs: failed to convert report interval: %v", err)
 			continue
 		}
+		// The LRS client should join the clusters it knows with the cluster
+		// list from response, and send loads for them.
+		//
+		// But the LRS client now only supports one cluster. TODO: extent it to
+		// support multiple clusters.
 		var clusterFoundInResponse bool
 		for _, c := range first.Clusters {
 			if c == clusterName {
