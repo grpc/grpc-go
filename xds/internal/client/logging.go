@@ -24,9 +24,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-const (
-	prefix = "[xds-client %p] "
-)
+const prefix = "[xds-client %p] "
 
 func debugf(p *Client, format string, args ...interface{}) {
 	if grpclog.V(2) {

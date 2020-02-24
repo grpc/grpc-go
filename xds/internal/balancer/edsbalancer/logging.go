@@ -24,9 +24,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-const (
-	prefix = "[eds-lb %p] "
-)
+const prefix = "[eds-lb %p] "
 
 func infof(p *edsBalancer, format string, args ...interface{}) {
 	grpclog.Infof(fmt.Sprintf(prefix, p)+format, args...)

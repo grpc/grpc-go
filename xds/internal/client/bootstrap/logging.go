@@ -20,9 +20,7 @@ package bootstrap
 
 import "google.golang.org/grpc/grpclog"
 
-const (
-	prefix = "[xds-bootstrap] "
-)
+const prefix = "[xds-bootstrap] "
 
 func debugf(format string, args ...interface{}) {
 	if grpclog.V(2) {

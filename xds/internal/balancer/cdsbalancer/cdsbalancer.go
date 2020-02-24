@@ -233,7 +233,7 @@ func (b *cdsBalancer) run() {
 			if b.edsLB == nil {
 				b.edsLB = newEDSBalancer(b.cc, b.bOpts)
 				if b.edsLB == nil {
-					errorf(b, "Failed to create child policy of type EDS")
+					errorf(b, "Failed to create child policy of type %s", edsName)
 					break
 				}
 				infof(b, "Created child policy %p of type %s", b.edsLB, edsName)

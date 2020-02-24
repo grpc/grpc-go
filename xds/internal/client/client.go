@@ -77,9 +77,7 @@ func New(opts Options) (*Client, error) {
 	}
 	dopts = append(dopts, opts.DialOpts...)
 
-	c := &Client{
-		opts: opts,
-	}
+	c := &Client{opts: opts}
 
 	cc, err := grpc.Dial(opts.Config.BalancerName, dopts...)
 	if err != nil {

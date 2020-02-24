@@ -24,9 +24,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-const (
-	prefix = "[xds-resolver %p] "
-)
+const prefix = "[xds-resolver %p] "
 
 func infof(p *xdsResolver, format string, args ...interface{}) {
 	grpclog.Infof(fmt.Sprintf(prefix, p)+format, args...)
