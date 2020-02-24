@@ -50,7 +50,7 @@ func (pl *PrefixLogger) Errorf(format string, args ...interface{}) {
 	Logger.Errorf(format, args...)
 }
 
-// Debug does info logging at verbose level 2.
+// Debugf does info logging at verbose level 2.
 func (pl *PrefixLogger) Debugf(format string, args ...interface{}) {
 	if Logger.V(2) {
 		pl.Infof(format, args...)
