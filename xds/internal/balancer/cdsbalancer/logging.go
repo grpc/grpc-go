@@ -20,20 +20,10 @@ package cdsbalancer
 
 import (
 	"fmt"
-
-	"google.golang.org/grpc/grpclog"
 )
 
 const prefix = "[cds-lb %p] "
 
-func infof(p *cdsBalancer, format string, args ...interface{}) {
-	grpclog.Infof(fmt.Sprintf(prefix, p)+format, args...)
-}
-
-func warningf(p *cdsBalancer, format string, args ...interface{}) {
-	grpclog.Warningf(fmt.Sprintf(prefix, p)+format, args...)
-}
-
-func errorf(p *cdsBalancer, format string, args ...interface{}) {
-	grpclog.Errorf(fmt.Sprintf(prefix, p)+format, args...)
+func loggingPrefix(p *cdsBalancer) string {
+	return fmt.Sprintf(prefix, p)
 }

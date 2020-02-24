@@ -18,16 +18,8 @@
 
 package bootstrap
 
-import "google.golang.org/grpc/grpclog"
+import "google.golang.org/grpc/internal/grpclog"
 
 const prefix = "[xds-bootstrap] "
 
-func debugf(format string, args ...interface{}) {
-	if grpclog.V(2) {
-		grpclog.Infof(prefix+format, args...)
-	}
-}
-
-func infof(format string, args ...interface{}) {
-	grpclog.Infof(prefix+format, args...)
-}
+var logger = grpclog.NewPrefixLogger(prefix)

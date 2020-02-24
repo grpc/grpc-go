@@ -20,20 +20,10 @@ package resolver
 
 import (
 	"fmt"
-
-	"google.golang.org/grpc/grpclog"
 )
 
 const prefix = "[xds-resolver %p] "
 
-func infof(p *xdsResolver, format string, args ...interface{}) {
-	grpclog.Infof(fmt.Sprintf(prefix, p)+format, args...)
-}
-
-func warningf(p *xdsResolver, format string, args ...interface{}) {
-	grpclog.Warningf(fmt.Sprintf(prefix, p)+format, args...)
-}
-
-func errorf(p *xdsResolver, format string, args ...interface{}) {
-	grpclog.Errorf(fmt.Sprintf(prefix, p)+format, args...)
+func loggingPrefix(p *xdsResolver) string {
+	return fmt.Sprintf(prefix, p)
 }

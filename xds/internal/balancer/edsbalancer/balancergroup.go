@@ -24,8 +24,8 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/cache"
+	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
@@ -67,7 +67,6 @@ type subBalancerWithConfig struct {
 }
 
 func (sbc *subBalancerWithConfig) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
-	grpclog.Fatalln("not implemented")
 }
 
 // UpdateState overrides balancer.ClientConn, to keep state and picker.
@@ -94,7 +93,7 @@ func (sbc *subBalancerWithConfig) updateBalancerStateWithCachedPicker() {
 
 func (sbc *subBalancerWithConfig) startBalancer() {
 	b := sbc.builder.Build(sbc, balancer.BuildOptions{})
-	infof(sbc.group.parent, "Created child policy %p of type %v", b, sbc.builder.Name())
+	sbc.group.logger.Infof("Created child policy %p of type %v", b, sbc.builder.Name())
 	sbc.balancer = b
 	if ub, ok := b.(balancer.V2Balancer); ok {
 		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: sbc.addrs}})
@@ -180,8 +179,8 @@ func (s *pickerState) String() string {
 // guaranteed that no updates will be sent to parent ClientConn from a closed
 // balancer group.
 type balancerGroup struct {
-	parent    *edsBalancer // For logging purpose, used as component ID.
 	cc        balancer.ClientConn
+	logger    *grpclog.PrefixLogger
 	loadStore lrs.Store
 
 	// outgoingMu guards all operations in the direction:
@@ -233,10 +232,10 @@ type balancerGroup struct {
 // TODO: make it a parameter for newBalancerGroup().
 var defaultSubBalancerCloseTimeout = 15 * time.Minute
 
-func newBalancerGroup(parent *edsBalancer, cc balancer.ClientConn, loadStore lrs.Store) *balancerGroup {
+func newBalancerGroup(logger *grpclog.PrefixLogger, cc balancer.ClientConn, loadStore lrs.Store) *balancerGroup {
 	return &balancerGroup{
-		parent:    parent,
 		cc:        cc,
+		logger:    logger,
 		loadStore: loadStore,
 
 		idToBalancerConfig: make(map[internal.Locality]*subBalancerWithConfig),
@@ -269,7 +268,7 @@ func (bg *balancerGroup) start() {
 // weight should never be zero.
 func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balancer.Builder) {
 	if weight == 0 {
-		grpclog.Errorf("balancerGroup.add called with weight 0, locality: %v. Locality is not added to balancer group", id)
+		bg.logger.Errorf("balancerGroup.add called with weight 0, locality: %v. Locality is not added to balancer group", id)
 		return
 	}
 
@@ -356,7 +355,7 @@ func (bg *balancerGroup) remove(id internal.Locality) {
 		}
 		delete(bg.idToBalancerConfig, id)
 	} else {
-		grpclog.Infof("balancer group: trying to remove a non-existing locality from balancer group: %v", id)
+		bg.logger.Infof("balancer group: trying to remove a non-existing locality from balancer group: %v", id)
 	}
 	bg.outgoingMu.Unlock()
 
@@ -403,7 +402,7 @@ func (bg *balancerGroup) cleanupSubConns(config *subBalancerWithConfig) {
 // picker (which is balancer's snapshot).
 func (bg *balancerGroup) changeWeight(id internal.Locality, newWeight uint32) {
 	if newWeight == 0 {
-		grpclog.Errorf("balancerGroup.changeWeight called with newWeight 0. Weight is not changed")
+		bg.logger.Errorf("balancerGroup.changeWeight called with newWeight 0. Weight is not changed")
 		return
 	}
 	bg.incomingMu.Lock()
@@ -428,7 +427,6 @@ func (bg *balancerGroup) changeWeight(id internal.Locality, newWeight uint32) {
 
 // SubConn state change: find the corresponding balancer and then forward.
 func (bg *balancerGroup) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	grpclog.Infof("balancer group: handle subconn state change: %p, %v", sc, state)
 	bg.incomingMu.Lock()
 	config, ok := bg.scToSubBalancer[sc]
 	if !ok {
@@ -491,7 +489,7 @@ func (bg *balancerGroup) newSubConn(config *subBalancerWithConfig, addrs []resol
 // updateBalancerState: create an aggregated picker and an aggregated
 // connectivity state, then forward to ClientConn.
 func (bg *balancerGroup) updateBalancerState(id internal.Locality, state balancer.State) {
-	infof(bg.parent, "Balancer state update from locality %v, new state: %+v", id, state)
+	bg.logger.Infof("Balancer state update from locality %v, new state: %+v", id, state)
 
 	bg.incomingMu.Lock()
 	defer bg.incomingMu.Unlock()
@@ -499,13 +497,13 @@ func (bg *balancerGroup) updateBalancerState(id internal.Locality, state balance
 	if !ok {
 		// All state starts in IDLE. If ID is not in map, it's either removed,
 		// or never existed.
-		grpclog.Warningf("balancer group: pickerState for %v not found when update picker/state", id)
+		bg.logger.Warningf("balancer group: pickerState for %v not found when update picker/state", id)
 		return
 	}
 	pickerSt.picker = newLoadReportPicker(state.Picker, id, bg.loadStore)
 	pickerSt.state = state.ConnectivityState
 	if bg.incomingStarted {
-		infof(bg.parent, "Child pickers with weight: %+v", bg.idToPickerState)
+		bg.logger.Infof("Child pickers with weight: %+v", bg.idToPickerState)
 		bg.cc.UpdateState(buildPickerAndState(bg.idToPickerState))
 	}
 }

@@ -47,7 +47,7 @@ func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if !ok {
 			return fmt.Errorf("xds: unexpected resource type: %T in CDS response", resource.Message)
 		}
-		infof(v2c.parent, "Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, cluster)
+		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, cluster)
 		update, err := validateCluster(cluster)
 		if err != nil {
 			return err
@@ -59,7 +59,7 @@ func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
 			update.ServiceName = cluster.GetName()
 		}
 		localCache[cluster.GetName()] = update
-		debugf(v2c.parent, "Resource with name %v, type %T, value %+v added to cache", cluster.GetName(), update, update)
+		v2c.logger.Debugf("Resource with name %v, type %T, value %+v added to cache", cluster.GetName(), update, update)
 		if cluster.GetName() == wi.target[0] {
 			returnUpdate = update
 		}

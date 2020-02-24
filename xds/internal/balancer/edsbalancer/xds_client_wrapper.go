@@ -22,7 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/grpclog"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -48,7 +48,7 @@ var (
 // creating a new xds client, and start watching EDS. The given callbacks will
 // be called with EDS updates or errors.
 type xdsclientWrapper struct {
-	parent *edsBalancer
+	logger *grpclog.PrefixLogger
 
 	newEDSUpdate func(*xdsclient.EDSUpdate) error
 	loseContact  func()
@@ -78,9 +78,9 @@ type xdsclientWrapper struct {
 //
 // The given callbacks won't be called until the underlying xds_client is
 // working and sends updates.
-func newXDSClientWrapper(parent *edsBalancer, newEDSUpdate func(*xdsclient.EDSUpdate) error, loseContact func(), bbo balancer.BuildOptions, loadStore lrs.Store) *xdsclientWrapper {
+func newXDSClientWrapper(logger *grpclog.PrefixLogger, newEDSUpdate func(*xdsclient.EDSUpdate) error, loseContact func(), bbo balancer.BuildOptions, loadStore lrs.Store) *xdsclientWrapper {
 	return &xdsclientWrapper{
-		parent:       parent,
+		logger:       logger,
 		newEDSUpdate: newEDSUpdate,
 		loseContact:  loseContact,
 		bbo:          bbo,
@@ -150,7 +150,7 @@ func (c *xdsclientWrapper) updateXDSClient(config *EDSConfig, attr *attributes.A
 		// bootstrap file should result in a failure, and not in using
 		// credentials from the parent channel (passed through the
 		// resolver.BuildOptions).
-		clientConfig.Creds = defaultDialCreds(clientConfig.BalancerName, c.bbo)
+		clientConfig.Creds = c.defaultDialCreds(clientConfig.BalancerName)
 	}
 	var dopts []grpc.DialOption
 	if dialer := c.bbo.Dialer; dialer != nil {
@@ -163,7 +163,7 @@ func (c *xdsclientWrapper) updateXDSClient(config *EDSConfig, attr *attributes.A
 		// all the config passed in should be validated.
 		//
 		// This could leave c.xdsclient as nil if this is the first update.
-		grpclog.Warningf("eds: failed to create xdsclient, error: %v", err)
+		c.logger.Warningf("eds: failed to create xdsclient, error: %v", err)
 		return false
 	}
 	return c.replaceXDSClient(newClient, clientConfig.BalancerName)
@@ -180,7 +180,6 @@ func (c *xdsclientWrapper) updateXDSClient(config *EDSConfig, attr *attributes.A
 // NOT do that. Caller needs to call startLoadReport separately.
 func (c *xdsclientWrapper) startEDSWatch(nameToWatch string) {
 	if c.xdsclient == nil {
-		grpclog.Warningf("xds: xdsclient is nil when trying to start an EDS watch. This means xdsclient wasn't passed in from the resolver, and xdsclient.New failed")
 		return
 	}
 
@@ -189,18 +188,18 @@ func (c *xdsclientWrapper) startEDSWatch(nameToWatch string) {
 		if err != nil {
 			// TODO: this should trigger a call to `c.loseContact`, when the
 			// error indicates "lose contact".
-			warningf(c.parent, "Watch error from xds-client %p: %v", c.xdsclient, err)
+			c.logger.Warningf("Watch error from xds-client %p: %v", c.xdsclient, err)
 			return
 		}
-		infof(c.parent, "Watch update from xds-client %p, content: %+v", c.xdsclient, update)
+		c.logger.Infof("Watch update from xds-client %p, content: %+v", c.xdsclient, update)
 		if err := c.newEDSUpdate(update); err != nil {
-			grpclog.Warningf("xds: processing new EDS update failed due to %v.", err)
+			c.logger.Warningf("xds: processing new EDS update failed due to %v.", err)
 		}
 	})
-	infof(c.parent, "Watch started on resource name %v with xds-client %p", c.edsServiceName, c.xdsclient)
+	c.logger.Infof("Watch started on resource name %v with xds-client %p", c.edsServiceName, c.xdsclient)
 	c.cancelEDSWatch = func() {
 		cancelEDSWatch()
-		infof(c.parent, "Watch cancelled on resource name %v with xds-client %p", c.edsServiceName, c.xdsclient)
+		c.logger.Infof("Watch cancelled on resource name %v with xds-client %p", c.edsServiceName, c.xdsclient)
 	}
 }
 
@@ -212,7 +211,7 @@ func (c *xdsclientWrapper) startEDSWatch(nameToWatch string) {
 // watch).
 func (c *xdsclientWrapper) startLoadReport(edsServiceNameBeingWatched string, loadReportServer *string) {
 	if c.xdsclient == nil {
-		grpclog.Warningf("xds: xdsclient is nil when trying to start load reporting. This means xdsclient wasn't passed in from the resolver, and xdsclient.New failed")
+		c.logger.Warningf("xds: xdsclient is nil when trying to start load reporting. This means xdsclient wasn't passed in from the resolver, and xdsclient.New failed")
 		return
 	}
 	if c.loadStore != nil {
@@ -240,7 +239,7 @@ func (c *xdsclientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attr
 	// config. If it's an empty string, fallback user's dial target.
 	nameToWatch := config.EDSServiceName
 	if nameToWatch == "" {
-		grpclog.Warningf("eds: cluster name to watch is an empty string. Fallback to user's dial target")
+		c.logger.Warningf("eds: cluster name to watch is an empty string. Fallback to user's dial target")
 		nameToWatch = c.bbo.Target.Endpoint
 	}
 
@@ -286,18 +285,18 @@ func (c *xdsclientWrapper) close() {
 // contains DialCreds, we use it as is. If it contains a CredsBundle, we use
 // just the transport credentials from the bundle. If we don't find any
 // credentials on the parent channel, we resort to using an insecure channel.
-func defaultDialCreds(balancerName string, rbo balancer.BuildOptions) grpc.DialOption {
+func (c *xdsclientWrapper) defaultDialCreds(balancerName string) grpc.DialOption {
 	switch {
-	case rbo.DialCreds != nil:
-		if err := rbo.DialCreds.OverrideServerName(balancerName); err != nil {
-			grpclog.Warningf("xds: failed to override server name in credentials: %v, using Insecure", err)
+	case c.bbo.DialCreds != nil:
+		if err := c.bbo.DialCreds.OverrideServerName(balancerName); err != nil {
+			c.logger.Warningf("xds: failed to override server name in credentials: %v, using Insecure", err)
 			return grpc.WithInsecure()
 		}
-		return grpc.WithTransportCredentials(rbo.DialCreds)
-	case rbo.CredsBundle != nil:
-		return grpc.WithTransportCredentials(rbo.CredsBundle.TransportCredentials())
+		return grpc.WithTransportCredentials(c.bbo.DialCreds)
+	case c.bbo.CredsBundle != nil:
+		return grpc.WithTransportCredentials(c.bbo.CredsBundle.TransportCredentials())
 	default:
-		grpclog.Warning("xds: no credentials available, using Insecure")
+		c.logger.Warningf("xds: no credentials available, using Insecure")
 		return grpc.WithInsecure()
 	}
 }

@@ -103,13 +103,13 @@ func NewConfig() (*Config, error) {
 	if !ok {
 		return nil, fmt.Errorf("xds: Environment variable %v not defined", fileEnv)
 	}
-	infof("Got bootstrap file location from %v environment variable: %v", fileEnv, fName)
+	logger.Infof("Got bootstrap file location from %v environment variable: %v", fileEnv, fName)
 
 	data, err := fileReadFunc(fName)
 	if err != nil {
 		return nil, fmt.Errorf("xds: Failed to read bootstrap file %s with error %v", fName, err)
 	}
-	debugf("Bootstrap content: %s", data)
+	logger.Debugf("Bootstrap content: %s", data)
 
 	var jsonData map[string]json.RawMessage
 	if err := json.Unmarshal(data, &jsonData); err != nil {
@@ -160,6 +160,6 @@ func NewConfig() (*Config, error) {
 	}
 	config.NodeProto.BuildVersion = gRPCVersion
 
-	infof("Bootstrap config for creating xds-client: %+v", config)
+	logger.Infof("Bootstrap config for creating xds-client: %+v", config)
 	return config, nil
 }

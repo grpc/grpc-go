@@ -26,6 +26,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/buffer"
+	"google.golang.org/grpc/internal/grpclog"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -50,8 +51,8 @@ type v2Client struct {
 	cc        *grpc.ClientConn
 	nodeProto *corepb.Node
 	backoff   func(int) time.Duration
-	// Pointer to the parent xds-client, for logging purpose.
-	parent *Client
+
+	logger *grpclog.PrefixLogger
 
 	streamCh chan adsStream
 	// sendCh in the channel onto which watchInfo objects are pushed by the
@@ -95,12 +96,13 @@ type v2Client struct {
 }
 
 // newV2Client creates a new v2Client initialized with the passed arguments.
-func newV2Client(parent *Client, cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration) *v2Client {
+func newV2Client(logger *grpclog.PrefixLogger, cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration) *v2Client {
 	v2c := &v2Client{
 		cc:        cc,
 		nodeProto: nodeProto,
 		backoff:   backoff,
-		parent:    parent,
+
+		logger: logger,
 
 		streamCh: make(chan adsStream, 1),
 		sendCh:   buffer.NewUnbounded(),
@@ -153,10 +155,10 @@ func (v2c *v2Client) run() {
 		cli := adsgrpc.NewAggregatedDiscoveryServiceClient(v2c.cc)
 		stream, err := cli.StreamAggregatedResources(v2c.ctx, grpc.WaitForReady(true))
 		if err != nil {
-			warningf(v2c.parent, "xds: ADS stream creation failed: %v", err)
+			v2c.logger.Warningf("xds: ADS stream creation failed: %v", err)
 			continue
 		}
-		infof(v2c.parent, "ADS stream created")
+		v2c.logger.Infof("ADS stream created")
 
 		select {
 		case <-v2c.streamCh:
@@ -190,7 +192,7 @@ func (v2c *v2Client) sendRequest(stream adsStream, resourceNames []string, typeU
 	if err := stream.Send(req); err != nil {
 		return false
 	}
-	debugf(v2c.parent, "ADS request sent: %v", req)
+	v2c.logger.Debugf("ADS request sent: %v", req)
 	return true
 }
 
@@ -346,11 +348,11 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 		resp, err := stream.Recv()
 		// TODO: call watch callbacks with error when stream is broken.
 		if err != nil {
-			warningf(v2c.parent, "ADS stream is closed with error: %v", err)
+			v2c.logger.Warningf("ADS stream is closed with error: %v", err)
 			return success
 		}
-		infof(v2c.parent, "ADS response received, type: %v", resp.GetTypeUrl())
-		debugf(v2c.parent, "ADS response received: %v", resp)
+		v2c.logger.Infof("ADS response received, type: %v", resp.GetTypeUrl())
+		v2c.logger.Debugf("ADS response received: %v", resp)
 		var respHandleErr error
 		switch resp.GetTypeUrl() {
 		case ldsURL:
@@ -362,7 +364,7 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 		case edsURL:
 			respHandleErr = v2c.handleEDSResponse(resp)
 		default:
-			warningf(v2c.parent, "Resource type %v unknown in response from server", resp.GetTypeUrl())
+			v2c.logger.Warningf("Resource type %v unknown in response from server", resp.GetTypeUrl())
 			continue
 		}
 
@@ -373,7 +375,7 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 				version: "",
 				nonce:   resp.GetNonce(),
 			})
-			warningf(v2c.parent, "Sending NACK for response type: %v, version: %v, nonce: %v, reason: %v", typeURL, resp.GetVersionInfo(), resp.GetNonce(), respHandleErr)
+			v2c.logger.Warningf("Sending NACK for response type: %v, version: %v, nonce: %v, reason: %v", typeURL, resp.GetVersionInfo(), resp.GetNonce(), respHandleErr)
 			continue
 		}
 		v2c.sendCh.Put(&ackInfo{
@@ -381,7 +383,7 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 			version: resp.GetVersionInfo(),
 			nonce:   resp.GetNonce(),
 		})
-		infof(v2c.parent, "Sending ACK for response type: %v, version: %v, nonce: %v", typeURL, resp.GetVersionInfo(), resp.GetNonce())
+		v2c.logger.Infof("Sending ACK for response type: %v, version: %v, nonce: %v", typeURL, resp.GetVersionInfo(), resp.GetNonce())
 		success = true
 	}
 }
@@ -450,7 +452,7 @@ func (v2c *v2Client) watchEDS(clusterName string, edsCb edsCallback) (cancel fun
 
 func (v2c *v2Client) watch(wi *watchInfo) (cancel func()) {
 	v2c.sendCh.Put(wi)
-	infof(v2c.parent, "Sending ADS request for new watch of type: %v, resource names: %v", wi.typeURL, wi.target)
+	v2c.logger.Infof("Sending ADS request for new watch of type: %v, resource names: %v", wi.typeURL, wi.target)
 	return func() {
 		v2c.mu.Lock()
 		defer v2c.mu.Unlock()
@@ -493,7 +495,7 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 				cluster = ""
 				err = fmt.Errorf("xds: no LDS watcher found when handling RDS watch for route {%v} from cache", routeName)
 			}
-			infof(v2c.parent, "Resource with name %v, type %v found in cache", routeName, wi.typeURL)
+			v2c.logger.Infof("Resource with name %v, type %v found in cache", routeName, wi.typeURL)
 			wi.callback.(rdsCallback)(rdsUpdate{clusterName: cluster}, err)
 			return
 		}
@@ -511,7 +513,7 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 			if v2c.watchMap[cdsURL] == nil {
 				err = fmt.Errorf("xds: no CDS watcher found when handling CDS watch for cluster {%v} from cache", clusterName)
 			}
-			infof(v2c.parent, "Resource with name %v, type %v found in cache", clusterName, wi.typeURL)
+			v2c.logger.Infof("Resource with name %v, type %v found in cache", clusterName, wi.typeURL)
 			wi.callback.(cdsCallback)(update, err)
 			return
 		}

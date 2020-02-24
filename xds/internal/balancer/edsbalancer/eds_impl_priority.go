@@ -52,7 +52,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityChange() {
 
 	// priorityInUse wasn't set, use 0.
 	if !edsImpl.priorityInUse.isSet() {
-		infof(edsImpl.parent, "Switching priority from unset to %v", 0)
+		edsImpl.logger.Infof("Switching priority from unset to %v", 0)
 		edsImpl.startPriority(newPriorityType(0))
 		return
 	}
@@ -61,7 +61,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityChange() {
 	if _, ok := edsImpl.priorityToLocalities[edsImpl.priorityInUse]; !ok {
 		oldP := edsImpl.priorityInUse
 		edsImpl.priorityInUse = edsImpl.priorityLowest
-		infof(edsImpl.parent, "Switching priority from %v to %v, because former was deleted", oldP, edsImpl.priorityInUse)
+		edsImpl.logger.Infof("Switching priority from %v to %v, because former was deleted", oldP, edsImpl.priorityInUse)
 		if s, ok := edsImpl.priorityToState[edsImpl.priorityLowest]; ok {
 			edsImpl.cc.UpdateState(*s)
 		} else {
@@ -82,7 +82,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityChange() {
 	if s, ok := edsImpl.priorityToState[edsImpl.priorityInUse]; ok && s.ConnectivityState != connectivity.Ready {
 		pNext := edsImpl.priorityInUse.nextLower()
 		if _, ok := edsImpl.priorityToLocalities[pNext]; ok {
-			infof(edsImpl.parent, "Switching priority from %v to %v, because latter was added, and former wasn't Ready")
+			edsImpl.logger.Infof("Switching priority from %v to %v, because latter was added, and former wasn't Ready")
 			edsImpl.startPriority(pNext)
 		}
 	}
@@ -184,7 +184,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityWithNewStateReady(priority priorit
 	}
 
 	if edsImpl.priorityInUse.lowerThan(priority) {
-		infof(edsImpl.parent, "Switching priority from %v to %v, because latter became Ready", edsImpl.priorityInUse, priority)
+		edsImpl.logger.Infof("Switching priority from %v to %v, because latter became Ready", edsImpl.priorityInUse, priority)
 		edsImpl.priorityInUse = priority
 		for i := priority.nextLower(); !i.lowerThan(edsImpl.priorityLowest); i = i.nextLower() {
 			edsImpl.priorityToLocalities[i].bg.close()
@@ -224,7 +224,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityWithNewStateTransientFailure(prior
 	if _, okNext := edsImpl.priorityToLocalities[pNext]; !okNext {
 		return true
 	}
-	infof(edsImpl.parent, "Switching priority from %v to %v, because former became TransientFailure", priority, pNext)
+	edsImpl.logger.Infof("Switching priority from %v to %v, because former became TransientFailure", priority, pNext)
 	edsImpl.startPriority(pNext)
 	return true
 }
@@ -265,7 +265,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityWithNewStateConnecting(priority pr
 		if _, okNext := edsImpl.priorityToLocalities[pNext]; !okNext {
 			return true
 		}
-		infof(edsImpl.parent, "Switching priority from %v to %v, because former became Connecting from Ready", priority, pNext)
+		edsImpl.logger.Infof("Switching priority from %v to %v, because former became Connecting from Ready", priority, pNext)
 		edsImpl.startPriority(pNext)
 		return true
 	case connectivity.Idle:

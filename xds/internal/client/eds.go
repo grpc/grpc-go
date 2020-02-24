@@ -182,7 +182,7 @@ func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if !ok {
 			return fmt.Errorf("xds: unexpected resource type: %T in EDS response", resource.Message)
 		}
-		infof(v2c.parent, "Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, cla)
+		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, cla)
 
 		if cla.GetClusterName() != wi.target[0] {
 			// We won't validate the remaining resources. If one of the

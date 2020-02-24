@@ -72,10 +72,13 @@ func (s) TestLDSGetRouteConfig(t *testing.T) {
 			wantErr:   false,
 		},
 	}
-
+	_, cc, cleanup := startServerAndGetCC(t)
+	defer cleanup()
+	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 })
+	defer v2c.close()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotRoute, err := getRouteConfigNameFromListener(test.lis, nil)
+			gotRoute, err := v2c.getRouteConfigNameFromListener(test.lis)
 			if gotRoute != test.wantRoute {
 				t.Errorf("getRouteConfigNameFromListener(%+v) = %v, want %v", test.lis, gotRoute, test.wantRoute)
 			}

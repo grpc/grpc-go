@@ -222,8 +222,8 @@ func setup() (*cdsBalancer, *testEDSBalancer, func()) {
 
 	edsB := newTestEDSBalancer()
 	oldEDSBalancerBuilder := newEDSBalancer
-	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.V2Balancer {
-		return edsB
+	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.V2Balancer, error) {
+		return edsB, nil
 	}
 
 	return cdsB.(*cdsBalancer), edsB, func() {

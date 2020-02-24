@@ -27,7 +27,7 @@ import (
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
@@ -57,8 +57,8 @@ type balancerGroupWithConfig struct {
 // The localities are picked as weighted round robin. A configurable child
 // policy is used to manage endpoints in each locality.
 type edsBalancerImpl struct {
-	parent *edsBalancer // For logging purpose, used as component ID.
 	cc     balancer.ClientConn
+	logger *grpclog.PrefixLogger
 
 	subBalancerBuilder   balancer.Builder
 	loadStore            lrs.Store
@@ -90,10 +90,10 @@ type edsBalancerImpl struct {
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
-func newEDSBalancerImpl(parent *edsBalancer, cc balancer.ClientConn, loadStore lrs.Store) *edsBalancerImpl {
+func newEDSBalancerImpl(logger *grpclog.PrefixLogger, cc balancer.ClientConn, loadStore lrs.Store) *edsBalancerImpl {
 	edsImpl := &edsBalancerImpl{
-		parent:             parent,
 		cc:                 cc,
+		logger:             logger,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
 
 		priorityToLocalities: make(map[priorityType]*balancerGroupWithConfig),
@@ -119,7 +119,7 @@ func (edsImpl *edsBalancerImpl) HandleChildPolicy(name string, config json.RawMe
 	}
 	newSubBalancerBuilder := balancer.Get(name)
 	if newSubBalancerBuilder == nil {
-		grpclog.Infof("edsBalancerImpl: failed to find balancer with name %q, keep using %q", name, edsImpl.subBalancerBuilder.Name())
+		edsImpl.logger.Infof("edsBalancerImpl: failed to find balancer with name %q, keep using %q", name, edsImpl.subBalancerBuilder.Name())
 		return
 	}
 	edsImpl.subBalancerBuilder = newSubBalancerBuilder
@@ -230,12 +230,12 @@ func (edsImpl *edsBalancerImpl) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) 
 			// be started when necessary (e.g. when higher is down, or if it's a
 			// new lowest priority).
 			bgwc = &balancerGroupWithConfig{
-				bg:      newBalancerGroup(edsImpl.parent, edsImpl.ccWrapperWithPriority(priority), edsImpl.loadStore),
+				bg:      newBalancerGroup(edsImpl.logger, edsImpl.ccWrapperWithPriority(priority), edsImpl.loadStore),
 				configs: make(map[internal.Locality]*localityConfig),
 			}
 			edsImpl.priorityToLocalities[priority] = bgwc
 			priorityChanged = true
-			infof(edsImpl.parent, "New priority %v added", priority)
+			edsImpl.logger.Infof("New priority %v added", priority)
 		}
 		edsImpl.handleEDSResponsePerPriority(bgwc, newLocalities)
 	}
@@ -249,7 +249,7 @@ func (edsImpl *edsBalancerImpl) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) 
 			bgwc.bg.close()
 			delete(edsImpl.priorityToState, p)
 			priorityChanged = true
-			infof(edsImpl.parent, "Priority %v deleted", p)
+			edsImpl.logger.Infof("Priority %v deleted", p)
 		}
 	}
 
@@ -306,7 +306,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 			// weightChanged is false for new locality, because there's no need
 			// to update weight in bg.
 			addrsChanged = true
-			infof(edsImpl.parent, "New locality %v added", lid)
+			edsImpl.logger.Infof("New locality %v added", lid)
 		} else {
 			// Compare weight and addrs.
 			if config.weight != newWeight {
@@ -315,7 +315,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 			if !reflect.DeepEqual(config.addrs, newAddrs) {
 				addrsChanged = true
 			}
-			infof(edsImpl.parent, "Locality %v updated, weightedChanged: %v, addrsChanged: %v", lid, weightChanged, addrsChanged)
+			edsImpl.logger.Infof("Locality %v updated, weightedChanged: %v, addrsChanged: %v", lid, weightChanged, addrsChanged)
 		}
 
 		if weightChanged {
@@ -334,7 +334,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 		if _, ok := newLocalitiesSet[lid]; !ok {
 			bgwc.bg.remove(lid)
 			delete(bgwc.configs, lid)
-			infof(edsImpl.parent, "Locality %v deleted", lid)
+			edsImpl.logger.Infof("Locality %v deleted", lid)
 		}
 	}
 }
@@ -352,7 +352,7 @@ func (edsImpl *edsBalancerImpl) HandleSubConnStateChange(sc balancer.SubConn, s 
 	}
 	edsImpl.subConnMu.Unlock()
 	if bgwc == nil {
-		grpclog.Infof("edsBalancerImpl: priority not found for sc state change")
+		edsImpl.logger.Infof("edsBalancerImpl: priority not found for sc state change")
 		return
 	}
 	if bg := bgwc.bg; bg != nil {
@@ -365,7 +365,7 @@ func (edsImpl *edsBalancerImpl) HandleSubConnStateChange(sc balancer.SubConn, s 
 func (edsImpl *edsBalancerImpl) updateState(priority priorityType, s balancer.State) {
 	_, ok := edsImpl.priorityToLocalities[priority]
 	if !ok {
-		grpclog.Infof("eds: received picker update from unknown priority")
+		edsImpl.logger.Infof("eds: received picker update from unknown priority")
 		return
 	}
 
@@ -397,9 +397,10 @@ type edsBalancerWrapperCC struct {
 func (ebwcc *edsBalancerWrapperCC) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	return ebwcc.parent.newSubConn(ebwcc.priority, addrs, opts)
 }
+
 func (ebwcc *edsBalancerWrapperCC) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
-	grpclog.Fatalln("not implemented")
 }
+
 func (ebwcc *edsBalancerWrapperCC) UpdateState(state balancer.State) {
 	ebwcc.parent.updateState(ebwcc.priority, state)
 }

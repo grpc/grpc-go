@@ -47,7 +47,7 @@ func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if !ok {
 			return fmt.Errorf("xds: unexpected resource type: %T in LDS response", resource.Message)
 		}
-		infof(v2c.parent, "Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, lis)
+		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, lis)
 		if lis.GetName() != wi.target[0] {
 			// We ignore listeners we are not watching for because LDS is
 			// special in the sense that there is only one resource we are
@@ -57,7 +57,7 @@ func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 			continue
 		}
 		var err error
-		routeName, err = getRouteConfigNameFromListener(lis, v2c.parent)
+		routeName, err = v2c.getRouteConfigNameFromListener(lis)
 		if err != nil {
 			return err
 		}
@@ -74,7 +74,7 @@ func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 
 // getRouteConfigNameFromListener checks if the provided Listener proto meets
 // the expected criteria. If so, it returns a non-empty routeConfigName.
-func getRouteConfigNameFromListener(lis *xdspb.Listener, parent *Client) (string, error) {
+func (v2c *v2Client) getRouteConfigNameFromListener(lis *xdspb.Listener) (string, error) {
 	if lis.GetApiListener() == nil {
 		return "", fmt.Errorf("xds: no api_listener field in LDS response %+v", lis)
 	}
@@ -86,7 +86,7 @@ func getRouteConfigNameFromListener(lis *xdspb.Listener, parent *Client) (string
 	if !ok {
 		return "", fmt.Errorf("xds: unexpected api_listener type: %T in LDS response", apiAny.Message)
 	}
-	infof(parent, "Resource with type %T, contains %v", apiLis, apiLis)
+	v2c.logger.Infof("Resource with type %T, contains %v", apiLis, apiLis)
 	switch apiLis.RouteSpecifier.(type) {
 	case *httppb.HttpConnectionManager_Rds:
 		name := apiLis.GetRds().GetRouteConfigName()
