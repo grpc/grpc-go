@@ -73,7 +73,9 @@ func retrieveSnapshot(ctx context.Context, c ppb.ProfilingClient, f string) erro
 func remoteCommand() error {
 	ctx := context.Background()
 	if *flagTimeout > 0 {
-		ctx, _ = context.WithTimeout(context.Background(), time.Duration(*flagTimeout)*time.Second)
+		var cancel func()
+		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(*flagTimeout)*time.Second)
+		defer cancel()
 	}
 
 	grpclog.Infof("dialing %s", *flagAddress)
