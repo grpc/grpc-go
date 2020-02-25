@@ -506,37 +506,17 @@ func TestMatchTypeForDomain(t *testing.T) {
 		d    string
 		want domainMatchType
 	}{
-		{
-			d:    "",
-			want: domainMatchTypeInvalid,
-		},
-		{
-			d:    "*",
-			want: domainMatchTypeUniversal,
-		},
-		{
-			d:    "bar.*",
-			want: domainMatchTypePrefix,
-		},
-		{
-			d:    "*.abc.com",
-			want: domainMatchTypeSuffix,
-		},
-		{
-			d:    "foo.bar.com",
-			want: domainMatchTypeExact,
-		},
-		{
-			d:    "foo.*.com",
-			want: domainMatchTypeInvalid,
-		},
+		{d: "", want: domainMatchTypeInvalid},
+		{d: "*", want: domainMatchTypeUniversal},
+		{d: "bar.*", want: domainMatchTypePrefix},
+		{d: "*.abc.com", want: domainMatchTypeSuffix},
+		{d: "foo.bar.com", want: domainMatchTypeExact},
+		{d: "foo.*.com", want: domainMatchTypeInvalid},
 	}
 	for _, tt := range tests {
-		t.Run(tt.d, func(t *testing.T) {
-			if got := matchTypeForDomain(tt.d); got != tt.want {
-				t.Errorf("matchTypeForDomain() = %v, want %v", got, tt.want)
-			}
-		})
+		if got := matchTypeForDomain(tt.d); got != tt.want {
+			t.Errorf("matchTypeForDomain(%q) = %v, want %v", tt.d, got, tt.want)
+		}
 	}
 }
 

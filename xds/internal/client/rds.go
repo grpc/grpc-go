@@ -134,12 +134,10 @@ func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target strin
 		// The matched virtual host is invalid.
 		return ""
 	}
-	route := dr.GetRoute()
-	if route == nil {
-		// The matched virtual host's route is invalid.
-		return ""
+	if route := dr.GetRoute(); route != nil {
+		return route.GetCluster()
 	}
-	return route.GetCluster()
+	return ""
 }
 
 // hostFromTarget calls net.SplitHostPort and returns the host.
@@ -160,7 +158,7 @@ func hostFromTarget(target string) (string, error) {
 type domainMatchType int
 
 const (
-	domainMatchTypeInvalid = iota
+	domainMatchTypeInvalid domainMatchType = iota
 	domainMatchTypeUniversal
 	domainMatchTypePrefix
 	domainMatchTypeSuffix
@@ -192,8 +190,7 @@ func matchTypeForDomain(d string) domainMatchType {
 }
 
 func match(domain, host string) (domainMatchType, bool) {
-	typ := matchTypeForDomain(domain)
-	switch typ {
+	switch typ := matchTypeForDomain(domain); typ {
 	case domainMatchTypeInvalid:
 		return typ, false
 	case domainMatchTypeUniversal:
@@ -206,8 +203,9 @@ func match(domain, host string) (domainMatchType, bool) {
 		return typ, strings.HasSuffix(host, strings.TrimPrefix(domain, "*"))
 	case domainMatchTypeExact:
 		return typ, domain == host
+	default:
+		return domainMatchTypeInvalid, false
 	}
-	return domainMatchTypeInvalid, false
 }
 
 // findBestMatchingVirtualHost returns the virtual host whose domains field best
@@ -228,7 +226,7 @@ func match(domain, host string) (domainMatchType, bool) {
 func findBestMatchingVirtualHost(host string, vHosts []*routepb.VirtualHost) *routepb.VirtualHost {
 	var (
 		matchVh   *routepb.VirtualHost
-		matchType domainMatchType
+		matchType = domainMatchTypeInvalid
 		matchLen  int
 	)
 	for _, vh := range vHosts {
@@ -238,15 +236,9 @@ func findBestMatchingVirtualHost(host string, vHosts []*routepb.VirtualHost) *ro
 				// The rds response is invalid.
 				return nil
 			}
-			if matchType.betterThan(typ) {
-				// The previous match has better type.
-				continue
-			}
-			if matchType == typ && matchLen >= len(domain) {
-				// The previous match has better length.
-				continue
-			}
-			if !matched {
+			if matchType.betterThan(typ) || matchType == typ && matchLen >= len(domain) || !matched {
+				// The previous match has better type, or the previous match has
+				// better length, or this domain isn't a match.
 				continue
 			}
 			matchVh = vh
