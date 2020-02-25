@@ -557,9 +557,9 @@ func buildPickerAndState(m map[internal.Locality]*pickerState) balancer.State {
 		aggregatedState = connectivity.TransientFailure
 	}
 	if aggregatedState == connectivity.TransientFailure {
-		return balancer.State{aggregatedState, base.NewErrPickerV2(balancer.ErrTransientFailure)}
+		return balancer.State{ConnectivityState: aggregatedState, Picker: base.NewErrPickerV2(balancer.ErrTransientFailure)}
 	}
-	return balancer.State{aggregatedState, newPickerGroup(readyPickerWithWeights)}
+	return balancer.State{ConnectivityState: aggregatedState, Picker: newPickerGroup(readyPickerWithWeights)}
 }
 
 // RandomWRR constructor, to be modified in tests.
