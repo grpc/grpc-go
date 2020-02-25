@@ -335,7 +335,7 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterNa
 		// The LRS client should join the clusters it knows with the cluster
 		// list from response, and send loads for them.
 		//
-		// But the LRS client now only supports one cluster. TODO: extent it to
+		// But the LRS client now only supports one cluster. TODO: extend it to
 		// support multiple clusters.
 		var clusterFoundInResponse bool
 		for _, c := range first.Clusters {
@@ -344,7 +344,7 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterNa
 			}
 		}
 		if !clusterFoundInResponse {
-			grpclog.Warningf("lrs: clusters from Response not found. Got %v, want %v", first.Clusters, clusterName)
+			grpclog.Warningf("lrs: received clusters %v does not contain expected {%v}", first.Clusters, clusterName)
 			continue
 		}
 		if first.ReportEndpointGranularity {
