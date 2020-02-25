@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 	"github.com/golang/protobuf/ptypes"
 )
 
@@ -114,29 +115,31 @@ func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target strin
 	//
 	// For logging purposes, we can log in line. But if we want to populate
 	// error details for nack, a detailed error needs to be returned.
-
 	host, err := hostFromTarget(target)
 	if err != nil {
 		return ""
 	}
-	for _, vh := range rc.GetVirtualHosts() {
-		for _, domain := range vh.GetDomains() {
-			// TODO: Add support for wildcard matching here?
-			if domain != host || len(vh.GetRoutes()) == 0 {
-				continue
-			}
-			dr := vh.Routes[len(vh.Routes)-1]
-			if match := dr.GetMatch(); match == nil || match.GetPrefix() != "" {
-				continue
-			}
-			route := dr.GetRoute()
-			if route == nil {
-				continue
-			}
-			return route.GetCluster()
-		}
+	vh := findBestMatchingVirtualHost(host, rc.GetVirtualHosts())
+	if vh == nil {
+		// No matching virtual host found.
+		return ""
 	}
-	return ""
+	if len(vh.Routes) == 0 {
+		// The matched virtual host has no routes, this is invalid because there
+		// should be at least one default route.
+		return ""
+	}
+	dr := vh.Routes[len(vh.Routes)-1]
+	if match := dr.GetMatch(); match == nil || match.GetPrefix() != "" {
+		// The matched virtual host is invalid.
+		return ""
+	}
+	route := dr.GetRoute()
+	if route == nil {
+		// The matched virtual host's route is invalid.
+		return ""
+	}
+	return route.GetCluster()
 }
 
 // hostFromTarget calls net.SplitHostPort and returns the host.
@@ -152,4 +155,89 @@ func hostFromTarget(target string) (string, error) {
 		return "", err
 	}
 	return h, nil
+}
+
+type domainMatchType int
+
+const (
+	domainMatchTypeInvalid = iota
+	domainMatchTypeUniversal
+	domainMatchTypePrefix
+	domainMatchTypeSuffix
+	domainMatchTypeExact
+)
+
+// Exact > Suffix > Prefix > Universal > Invalid.
+func (t domainMatchType) betterThan(b domainMatchType) bool {
+	return t > b
+}
+
+func matchTypeForDomain(d string) domainMatchType {
+	if d == "" {
+		return domainMatchTypeInvalid
+	}
+	if d == "*" {
+		return domainMatchTypeUniversal
+	}
+	if strings.HasPrefix(d, "*") {
+		return domainMatchTypeSuffix
+	}
+	if strings.HasSuffix(d, "*") {
+		return domainMatchTypePrefix
+	}
+	if strings.Contains(d, "*") {
+		return domainMatchTypeInvalid
+	}
+	return domainMatchTypeExact
+}
+
+func match(domain, host string) (domainMatchType, bool) {
+	typ := matchTypeForDomain(domain)
+	switch typ {
+	case domainMatchTypeInvalid:
+		return typ, false
+	case domainMatchTypeUniversal:
+		return typ, true
+	case domainMatchTypePrefix:
+		// abc.*
+		return typ, strings.HasPrefix(host, strings.TrimSuffix(domain, "*"))
+	case domainMatchTypeSuffix:
+		// *.123
+		return typ, strings.HasSuffix(host, strings.TrimPrefix(domain, "*"))
+	case domainMatchTypeExact:
+		return typ, domain == host
+	}
+	return domainMatchTypeInvalid, false
+}
+
+func findBestMatchingVirtualHost(host string, vHosts []*routepb.VirtualHost) *routepb.VirtualHost {
+	var (
+		matchVh   *routepb.VirtualHost
+		matchType domainMatchType
+		matchLen  int
+	)
+	for _, vh := range vHosts {
+		for _, domain := range vh.GetDomains() {
+			typ, matched := match(domain, host)
+			if typ == domainMatchTypeInvalid {
+				// The rds response is invalid.
+				return nil
+			}
+			if matchType.betterThan(typ) {
+				// The previous match has better type.
+				continue
+			}
+			if matchType == typ && matchLen >= len(domain) {
+				// The previous match has better length.
+				continue
+			}
+			if !matched {
+				continue
+			}
+			matchVh = vh
+			matchType = typ
+			matchLen = len(domain)
+		}
+	}
+	return matchVh
 }
