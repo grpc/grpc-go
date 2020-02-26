@@ -41,8 +41,10 @@ var (
 				},
 			},
 		},
-		BuildVersion:   gRPCVersion,
-		ClientFeatures: []string{clientFeatureNoOverprovisioning},
+		BuildVersion:         gRPCVersion,
+		UserAgentName:        gRPCUserAgentName,
+		UserAgentVersionType: &corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+		ClientFeatures:       []string{clientFeatureNoOverprovisioning},
 	}
 	nilCredsConfig = &Config{
 		BalancerName: "trafficdirector.googleapis.com:443",
@@ -235,8 +237,10 @@ func (s) TestNewConfig(t *testing.T) {
 		{"emptyNodeProto", &Config{
 			BalancerName: "trafficdirector.googleapis.com:443",
 			NodeProto: &corepb.Node{
-				BuildVersion:   gRPCVersion,
-				ClientFeatures: []string{clientFeatureNoOverprovisioning},
+				BuildVersion:         gRPCVersion,
+				UserAgentName:        gRPCUserAgentName,
+				UserAgentVersionType: &corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+				ClientFeatures:       []string{clientFeatureNoOverprovisioning},
 			},
 		}, false},
 		{"noBalancerName", nil, true},
