@@ -41,7 +41,8 @@ var (
 				},
 			},
 		},
-		BuildVersion: gRPCVersion,
+		BuildVersion:   gRPCVersion,
+		ClientFeatures: []string{clientFeatureNoOverprovisioning},
 	}
 	nilCredsConfig = &Config{
 		BalancerName: "trafficdirector.googleapis.com:443",
@@ -233,7 +234,10 @@ func (s) TestNewConfig(t *testing.T) {
 		{"badJSON", nil, true},
 		{"emptyNodeProto", &Config{
 			BalancerName: "trafficdirector.googleapis.com:443",
-			NodeProto:    &corepb.Node{BuildVersion: gRPCVersion},
+			NodeProto: &corepb.Node{
+				BuildVersion:   gRPCVersion,
+				ClientFeatures: []string{clientFeatureNoOverprovisioning},
+			},
 		}, false},
 		{"noBalancerName", nil, true},
 		{"emptyXdsServer", nil, true},

@@ -40,6 +40,8 @@ const (
 	fileEnv = "GRPC_XDS_BOOTSTRAP"
 	// Type name for Google default credentials.
 	googleDefaultCreds = "google_default"
+
+	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
 )
 
 var gRPCVersion = fmt.Sprintf("gRPC-Go %s", grpc.Version)
@@ -159,7 +161,11 @@ func NewConfig() (*Config, error) {
 	if config.NodeProto == nil {
 		config.NodeProto = &corepb.Node{}
 	}
+	// TODO: BuildVersion is not deprecated, and is replaced by user_agent_name
+	// and user_agent_version. But the management servers are still using the
+	// old field. Switch to the new one when the servers are ready.
 	config.NodeProto.BuildVersion = gRPCVersion
+	config.NodeProto.ClientFeatures = append(config.NodeProto.ClientFeatures, clientFeatureNoOverprovisioning)
 
 	grpclog.Infof("xds: bootstrap.NewConfig returning: %+v", config)
 	return config, nil
