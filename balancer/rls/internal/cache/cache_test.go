@@ -19,10 +19,12 @@
 package cache
 
 import (
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 const testCacheMaxSize = 1000000
@@ -79,7 +81,7 @@ func TestGet(t *testing.T) {
 			for i, key := range test.keysToAdd {
 				lru.Add(key, test.valsToAdd[i])
 			}
-			if gotEntry := lru.Get(test.keyToGet); !cmp.Equal(gotEntry, test.wantEntry) {
+			if gotEntry := lru.Get(test.keyToGet); !cmp.Equal(gotEntry, test.wantEntry, cmpopts.IgnoreInterfaces(struct{ sync.Locker }{})) {
 				t.Errorf("lru.Get(%+v) = %+v, want %+v", test.keyToGet, gotEntry, test.wantEntry)
 			}
 		})

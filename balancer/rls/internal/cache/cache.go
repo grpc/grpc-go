@@ -22,6 +22,7 @@ package cache
 
 import (
 	"container/list"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/grpclog"
@@ -42,20 +43,31 @@ type Key struct {
 
 // Entry wraps all the data to be stored in a cache entry.
 type Entry struct {
+	// Mu synchronizes access to this particular cache entry. The LB policy
+	// will also hold another mutex to synchornize access to the cache as a
+	// whole. To avoid holding the top-level mutex for the whole duration for
+	// which one particular cache entry is acted up, we use this entry mutex.
+	Mu sync.Mutex
 	// ExpiryTime is the absolute time at which the data cached as part of this
 	// entry stops being valid. When an RLS request succeeds, this is set to
 	// the current time plus the max_age field from the LB policy config. An
 	// entry with this field in the past is not used to process picks.
 	ExpiryTime time.Time
+	// BackoffExpiryTime is the absolute time at which an entry which has gone
+	// through backoff stops being valid.  When an RLS request fails, this is
+	// set to the current time plus twice the backoff time. The cache expiry
+	// timer will only delete entries for which both ExpiryTime and
+	// BackoffExpiryTime are in the past.
+	BackoffExpiryTime time.Time
 	// StaleTime is the absolute time after which this entry will be
 	// proactively refreshed if we receive a request for it. When an RLS
 	// request succeeds, this is set to the current time plus the stale_age
 	// from the LB policy config.
 	StaleTime time.Time
-	// BackoffExpiryTime is the absolute time at which the backoff period for
-	// this entry ends.  When an RLS request fails, this is set to the current
-	// time plus twice the backoff time.
-	BackoffExpiryTime time.Time
+	// BackoffTime is the absolute time at which the backoff period for this
+	// entry ends. The backoff timer is setup with this value. No new RLS
+	// requests are sent out for this entry until the backoff period ends.
+	BackoffTime time.Time
 	// EarliestEvictTime is the absolute time before which this entry should
 	// not be evicted from the cache. This is set to a default value of 5
 	// seconds when the entry is created. This is required to make sure that a
