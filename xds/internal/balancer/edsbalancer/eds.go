@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
@@ -42,8 +42,8 @@ const (
 )
 
 var (
-	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerImplInterface {
-		return newEDSBalancerImpl(cc, loadStore)
+	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
+		return newEDSBalancerImpl(cc, loadStore, logger)
 	}
 )
 
@@ -65,8 +65,10 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		xdsClientUpdate: make(chan interface{}),
 	}
 	loadStore := lrs.NewStore()
-	x.edsImpl = newEDSBalancer(x.cc, loadStore)
-	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, loadStore)
+	x.logger = grpclog.NewPrefixLogger(loggingPrefix(x))
+	x.edsImpl = newEDSBalancer(x.cc, loadStore, x.logger)
+	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, loadStore, x.logger)
+	x.logger.Infof("Created")
 	go x.run()
 	return x
 }
@@ -110,6 +112,8 @@ type edsBalancer struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 
+	logger *grpclog.PrefixLogger
+
 	// edsBalancer continuously monitor the channels below, and will handle events from them in sync.
 	grpcUpdate      chan interface{}
 	xdsClientUpdate chan interface{}
@@ -148,6 +152,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 			x.edsImpl.HandleSubConnStateChange(u.sc, u.state.ConnectivityState)
 		}
 	case *balancer.ClientConnState:
+		x.logger.Infof("Receive update from resolver, balancer config: %+v", u.BalancerConfig)
 		cfg, _ := u.BalancerConfig.(*EDSConfig)
 		if cfg == nil {
 			// service config parsing failed. should never happen.
@@ -197,11 +202,11 @@ type subConnStateUpdate struct {
 }
 
 func (x *edsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	grpclog.Error("UpdateSubConnState should be called instead of HandleSubConnStateChange")
+	x.logger.Errorf("UpdateSubConnState should be called instead of HandleSubConnStateChange")
 }
 
 func (x *edsBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
-	grpclog.Error("UpdateResolverState should be called instead of HandleResolvedAddrs")
+	x.logger.Errorf("UpdateResolverState should be called instead of HandleResolvedAddrs")
 }
 
 func (x *edsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
@@ -254,4 +259,5 @@ func (x *edsBalancer) loseContact() {
 
 func (x *edsBalancer) Close() {
 	x.cancel()
+	x.logger.Infof("Shutdown")
 }

@@ -52,7 +52,7 @@ func init() {
 //  - change drop rate
 func (s) TestEDS_OneLocality(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil)
 
 	// One locality with one backend.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -158,7 +158,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 //  - update locality weight
 func (s) TestEDS_TwoLocalities(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil)
 
 	// Two localities, each with one backend.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -288,7 +288,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 // healthy ones are used.
 func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil)
 
 	// Two localities, each 3 backend, one Healthy, one Unhealthy, one Unknown.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -359,7 +359,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 }
 
 func (s) TestClose(t *testing.T) {
-	edsb := newEDSBalancerImpl(nil, nil)
+	edsb := newEDSBalancerImpl(nil, nil, nil)
 	// This is what could happen when switching between fallback and eds. This
 	// make sure it doesn't panic.
 	edsb.Close()
@@ -416,7 +416,7 @@ func (tcp *testConstPicker) Pick(info balancer.PickInfo) (balancer.PickResult, e
 // eds response.
 func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil)
 
 	t.Logf("update sub-balancer to test-const-balancer")
 	edsb.HandleChildPolicy("test-const-balancer", nil)
@@ -575,7 +575,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	testLoadStore := newTestLoadStore()
 
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, testLoadStore)
+	edsb := newEDSBalancerImpl(cc, testLoadStore, nil)
 
 	backendToBalancerID := make(map[balancer.SubConn]internal.Locality)
 

@@ -27,12 +27,10 @@ import (
 	"io/ioutil"
 	"os"
 
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/jsonpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
-	"google.golang.org/grpc/grpclog"
-
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 const (
@@ -103,18 +101,19 @@ func NewConfig() (*Config, error) {
 
 	fName, ok := os.LookupEnv(fileEnv)
 	if !ok {
-		return nil, fmt.Errorf("xds: %s environment variable not set", fileEnv)
+		return nil, fmt.Errorf("xds: Environment variable %v not defined", fileEnv)
 	}
+	logger.Infof("Got bootstrap file location from %v environment variable: %v", fileEnv, fName)
 
-	grpclog.Infof("xds: Reading bootstrap file from %s", fName)
 	data, err := fileReadFunc(fName)
 	if err != nil {
-		return nil, fmt.Errorf("xds: bootstrap file {%v} read failed: %v", fName, err)
+		return nil, fmt.Errorf("xds: Failed to read bootstrap file %s with error %v", fName, err)
 	}
+	logger.Debugf("Bootstrap content: %s", data)
 
 	var jsonData map[string]json.RawMessage
 	if err := json.Unmarshal(data, &jsonData); err != nil {
-		return nil, fmt.Errorf("xds: json.Unmarshal(%v) failed during bootstrap: %v", string(data), err)
+		return nil, fmt.Errorf("xds: Failed to parse file %s (content %v) with error: %v", fName, string(data), err)
 	}
 
 	m := jsonpb.Unmarshaler{AllowUnknownFields: true}
@@ -143,14 +142,14 @@ func NewConfig() (*Config, error) {
 					break
 				}
 			}
-		default:
-			// Do not fail the xDS bootstrap when an unknown field is seen.
-			grpclog.Warningf("xds: unexpected data in bootstrap file: {%v, %v}", k, string(v))
 		}
+		// Do not fail the xDS bootstrap when an unknown field is seen. This can
+		// happen when an older version client reads a newer version bootstrap
+		// file with new fields.
 	}
 
 	if config.BalancerName == "" {
-		return nil, fmt.Errorf("xds: xds_server name is expected, but not found in bootstrap file")
+		return nil, fmt.Errorf("xds: Required field %q not found in bootstrap", "xds_servers.server_uri")
 	}
 
 	// If we don't find a nodeProto in the bootstrap file, we just create an
@@ -161,6 +160,6 @@ func NewConfig() (*Config, error) {
 	}
 	config.NodeProto.BuildVersion = gRPCVersion
 
-	grpclog.Infof("xds: bootstrap.NewConfig returning: %+v", config)
+	logger.Infof("Bootstrap config for creating xds-client: %+v", config)
 	return config, nil
 }

@@ -26,8 +26,8 @@ import (
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/buffer"
+	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
@@ -46,16 +46,15 @@ var (
 
 	// newEDSBalancer is a helper function to build a new edsBalancer and will be
 	// overridden in unittests.
-	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.V2Balancer {
+	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.V2Balancer, error) {
 		builder := balancer.Get(edsName)
 		if builder == nil {
-			grpclog.Errorf("xds: no balancer builder with name %v", edsName)
-			return nil
+			return nil, fmt.Errorf("xds: no balancer builder with name %v", edsName)
 		}
 		// We directly pass the parent clientConn to the
 		// underlying edsBalancer because the cdsBalancer does
 		// not deal with subConns.
-		return builder.Build(cc, opts).(balancer.V2Balancer)
+		return builder.Build(cc, opts).(balancer.V2Balancer), nil
 	}
 )
 
@@ -76,6 +75,8 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 		bOpts:    opts,
 		updateCh: buffer.NewUnbounded(),
 	}
+	b.logger = grpclog.NewPrefixLogger(loggingPrefix(b))
+	b.logger.Infof("Created")
 	go b.run()
 	return b
 }
@@ -153,6 +154,8 @@ type cdsBalancer struct {
 	edsLB          balancer.V2Balancer
 	clusterToWatch string
 
+	logger *grpclog.PrefixLogger
+
 	// The only thing protected by this mutex is the closed boolean. This is
 	// checked by all methods before acting on updates.
 	mu     sync.Mutex
@@ -202,32 +205,41 @@ func (b *cdsBalancer) run() {
 				b.client = update.client
 			}
 			if update.clusterName != "" {
-				b.cancelWatch = b.client.WatchCluster(update.clusterName, b.handleClusterUpdate)
+				cancelWatch := b.client.WatchCluster(update.clusterName, b.handleClusterUpdate)
+				b.logger.Infof("Watch started on resource name %v with xds-client %p", update.clusterName, b.client)
+				b.cancelWatch = func() {
+					cancelWatch()
+					b.logger.Infof("Watch cancelled on resource name %v with xds-client %p", update.clusterName, b.client)
+				}
 				b.clusterToWatch = update.clusterName
 			}
 		case *scUpdate:
 			if b.edsLB == nil {
-				grpclog.Errorf("xds: received scUpdate {%+v} with no edsBalancer", update)
+				b.logger.Errorf("xds: received scUpdate {%+v} with no edsBalancer", update)
 				break
 			}
 			b.edsLB.UpdateSubConnState(update.subConn, update.state)
 		case *watchUpdate:
 			if err := update.err; err != nil {
+				b.logger.Warningf("Watch error from xds-client %p: %v", b.client, err)
 				if b.edsLB != nil {
 					b.edsLB.ResolverError(err)
 				}
 				break
 			}
 
+			b.logger.Infof("Watch update from xds-client %p, content: %+v", b.client, update.cds)
 			// The first good update from the watch API leads to the
 			// instantiation of an edsBalancer. Further updates/errors are
 			// propagated to the existing edsBalancer.
 			if b.edsLB == nil {
-				b.edsLB = newEDSBalancer(b.cc, b.bOpts)
+				var err error
+				b.edsLB, err = newEDSBalancer(b.cc, b.bOpts)
 				if b.edsLB == nil {
-					grpclog.Error("xds: failed to build edsBalancer")
+					b.logger.Errorf("Failed to create child policy of type %s, %v", edsName, err)
 					break
 				}
+				b.logger.Infof("Created child policy %p of type %s", b.edsLB, edsName)
 			}
 			lbCfg := &edsbalancer.EDSConfig{EDSServiceName: update.cds.ServiceName}
 			if update.cds.EnableLRS {
@@ -242,7 +254,7 @@ func (b *cdsBalancer) run() {
 				BalancerConfig: lbCfg,
 			}
 			if err := b.edsLB.UpdateClientConnState(ccState); err != nil {
-				grpclog.Errorf("xds: edsBalancer.UpdateClientConnState(%+v) returned error: %v", ccState, err)
+				b.logger.Errorf("xds: edsBalancer.UpdateClientConnState(%+v) returned error: %v", ccState, err)
 			}
 		case *closeUpdate:
 			if b.cancelWatch != nil {
@@ -254,6 +266,7 @@ func (b *cdsBalancer) run() {
 				b.edsLB = nil
 			}
 			// This is the *ONLY* point of return from this function.
+			b.logger.Infof("Shutdown")
 			return
 		}
 	}
@@ -263,7 +276,7 @@ func (b *cdsBalancer) run() {
 // received information on to the update channel for run() to pick it up.
 func (b *cdsBalancer) handleClusterUpdate(cu xdsclient.CDSUpdate, err error) {
 	if b.isClosed() {
-		grpclog.Warningf("xds: received cluster update {%+v} after cdsBalancer was closed", cu)
+		b.logger.Warningf("xds: received cluster update {%+v} after cdsBalancer was closed", cu)
 		return
 	}
 	b.updateCh.Put(&watchUpdate{cds: cu, err: err})
@@ -274,30 +287,31 @@ func (b *cdsBalancer) handleClusterUpdate(cu xdsclient.CDSUpdate, err error) {
 // xdsResolver.
 func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	if b.isClosed() {
-		grpclog.Warningf("xds: received ClientConnState {%+v} after cdsBalancer was closed", state)
+		b.logger.Warningf("xds: received ClientConnState {%+v} after cdsBalancer was closed", state)
 		return errBalancerClosed
 	}
 
+	b.logger.Infof("Receive update from resolver, balancer config: %+v", state.BalancerConfig)
 	// The errors checked here should ideally never happen because the
 	// ServiceConfig in this case is prepared by the xdsResolver and is not
 	// something that is received on the wire.
 	lbCfg, ok := state.BalancerConfig.(*lbConfig)
 	if !ok {
-		grpclog.Warningf("xds: unexpected LoadBalancingConfig type: %T", state.BalancerConfig)
+		b.logger.Warningf("xds: unexpected LoadBalancingConfig type: %T", state.BalancerConfig)
 		return balancer.ErrBadResolverState
 	}
 	if lbCfg.ClusterName == "" {
-		grpclog.Warning("xds: no clusterName found in LoadBalancingConfig: %+v", lbCfg)
+		b.logger.Warningf("xds: no clusterName found in LoadBalancingConfig: %+v", lbCfg)
 		return balancer.ErrBadResolverState
 	}
 	client := state.ResolverState.Attributes.Value(xdsinternal.XDSClientID)
 	if client == nil {
-		grpclog.Warning("xds: no xdsClient found in resolver state attributes")
+		b.logger.Warningf("xds: no xdsClient found in resolver state attributes")
 		return balancer.ErrBadResolverState
 	}
 	newClient, ok := client.(xdsClientInterface)
 	if !ok {
-		grpclog.Warningf("xds: unexpected xdsClient type: %T", client)
+		b.logger.Warningf("xds: unexpected xdsClient type: %T", client)
 		return balancer.ErrBadResolverState
 	}
 	b.updateCh.Put(&ccUpdate{client: newClient, clusterName: lbCfg.ClusterName})
@@ -310,7 +324,7 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 // resource not found errors.
 func (b *cdsBalancer) ResolverError(err error) {
 	if b.isClosed() {
-		grpclog.Warningf("xds: received resolver error {%v} after cdsBalancer was closed", err)
+		b.logger.Warningf("xds: received resolver error {%v} after cdsBalancer was closed", err)
 		return
 	}
 
@@ -320,7 +334,7 @@ func (b *cdsBalancer) ResolverError(err error) {
 // UpdateSubConnState handles subConn updates from gRPC.
 func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	if b.isClosed() {
-		grpclog.Warningf("xds: received subConn update {%v, %v} after cdsBalancer was closed", sc, state)
+		b.logger.Warningf("xds: received subConn update {%v, %v} after cdsBalancer was closed", sc, state)
 		return
 	}
 	b.updateCh.Put(&scUpdate{subConn: sc, state: state})
@@ -342,9 +356,9 @@ func (b *cdsBalancer) isClosed() bool {
 }
 
 func (b *cdsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	grpclog.Error("UpdateSubConnState should be called instead of HandleSubConnStateChange")
+	b.logger.Errorf("UpdateSubConnState should be called instead of HandleSubConnStateChange")
 }
 
 func (b *cdsBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
-	grpclog.Error("UpdateClientConnState should be called instead of HandleResolvedAddrs")
+	b.logger.Errorf("UpdateClientConnState should be called instead of HandleResolvedAddrs")
 }

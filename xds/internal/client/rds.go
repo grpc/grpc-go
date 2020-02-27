@@ -55,6 +55,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if !ok {
 			return fmt.Errorf("xds: unexpected resource type: %T in RDS response", resource.Message)
 		}
+		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v", rc.GetName(), rc, rc)
 		cluster := getClusterFromRouteConfiguration(rc, target)
 		if cluster == "" {
 			return fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v", rc)
@@ -62,6 +63,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 
 		// If we get here, it means that this resource was a good one.
 		localCache[rc.GetName()] = cluster
+		v2c.logger.Debugf("Resource with name %v, type %T, value %+v added to cache", rc.GetName(), cluster, cluster)
 
 		// TODO: remove cache, and only process resources that are interesting.
 		if rc.GetName() == wi.target[0] {

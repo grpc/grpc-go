@@ -33,7 +33,7 @@ import (
 // Init 0 and 1; 0 is up, use 0; add 2, use 0; remove 2, use 0.
 func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil)
 
 	// Two localities, with priorities [0, 1], each with one backend.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -99,7 +99,7 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 // down, use 2; remove 2, use 1.
 func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil)
 
 	// Two localities, with priorities [0, 1], each with one backend.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -206,7 +206,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 // Init 0 and 1; 0 and 1 both down; add 2, use 2.
 func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil)
 
 	// Two localities, with different priorities, each with one backend.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -270,7 +270,7 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	defer time.Sleep(10 * time.Millisecond)
 
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil)
 
 	// Two localities, with priorities [0,1,2], each with one backend.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -349,7 +349,7 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 	}()()
 
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil)
 
 	// Two localities, with different priorities, each with one backend.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -398,7 +398,7 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 //  - add localities to existing p0 and p1
 func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil)
 
 	// Two localities, with different priorities, each with one backend.
 	clab0 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -510,7 +510,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	}()()
 
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil)
 
 	// Two localities, with different priorities, each with one backend.
 	clab0 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)

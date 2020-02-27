@@ -58,7 +58,7 @@ func subConnFromPicker(p balancer.V2Picker) func() balancer.SubConn {
 // 1 balancer, 1 backend -> 2 backends -> 1 backend.
 func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 	bg.start()
 
 	// Add one balancer to group.
@@ -115,7 +115,7 @@ func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 // 2 balancers, each with 1 backend.
 func (s) TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 	bg.start()
 
 	// Add two balancers to group and send one resolved address to both
@@ -145,7 +145,7 @@ func (s) TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 // 2 balancers, each with more than 1 backends.
 func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 	bg.start()
 
 	// Add two balancers to group and send one resolved address to both
@@ -230,7 +230,7 @@ func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 // 2 balancers with different weights.
 func (s) TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 	bg.start()
 
 	// Add two balancers to group and send two resolved addresses to both
@@ -266,7 +266,7 @@ func (s) TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 // totally 3 balancers, add/remove balancer.
 func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 	bg.start()
 
 	// Add three balancers to group and send one resolved address to both
@@ -328,7 +328,7 @@ func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 // 2 balancers, change balancer weight.
 func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 	bg.start()
 
 	// Add two balancers to group and send two resolved addresses to both
@@ -374,7 +374,7 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 	testLoadStore := newTestLoadStore()
 
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, testLoadStore)
+	bg := newBalancerGroup(cc, testLoadStore, nil)
 	bg.start()
 
 	backendToBalancerID := make(map[balancer.SubConn]internal.Locality)
@@ -456,7 +456,7 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 // Start the balancer group again and check for behavior.
 func (s) TestBalancerGroup_start_close(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -540,7 +540,7 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 // because of deadlock.
 func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 
 	bg.add(testBalancerIDs[0], 2, &testConstBalancerBuilder{})
 	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
@@ -564,7 +564,7 @@ func replaceDefaultSubBalancerCloseTimeout(n time.Duration) func() {
 // own map, and one sub-balancer in cache.
 func initBalancerGroupForCachingTest(t *testing.T) (*balancerGroup, *testClientConn, map[resolver.Address]balancer.SubConn) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.

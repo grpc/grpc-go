@@ -27,7 +27,6 @@ import (
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
 	"github.com/golang/protobuf/ptypes"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/xds/internal"
 )
 
@@ -154,7 +153,7 @@ func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
 // ParseEDSRespProtoForTesting parses EDS response, and panic if parsing fails.
 // This is used by EDS balancer tests.
 //
-// TODO: delete this. The EDS balancer should build an EDSUpdate directly,
+// TODO: delete this. The EDS balancer tests should build an EDSUpdate directly,
 //  instead of building and parsing a proto message.
 func ParseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) *EDSUpdate {
 	u, err := ParseEDSRespProto(m)
@@ -183,9 +182,9 @@ func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if !ok {
 			return fmt.Errorf("xds: unexpected resource type: %T in EDS response", resource.Message)
 		}
+		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, cla)
 
 		if cla.GetClusterName() != wi.target[0] {
-			grpclog.Warningf("xds: got uninteresting EDS resource, got %s, want %s", cla.GetClusterName(), wi.target[0])
 			// We won't validate the remaining resources. If one of the
 			// uninteresting ones is invalid, we will still ACK the response.
 			continue

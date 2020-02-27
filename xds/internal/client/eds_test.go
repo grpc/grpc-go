@@ -165,7 +165,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 
 	tests := []struct {
@@ -245,7 +245,7 @@ func (s) TestEDSHandleResponseWithoutWatch(t *testing.T) {
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 
 	if v2c.handleEDSResponse(goodEDSResponse1) == nil {
@@ -263,7 +263,7 @@ func (s) TestEDSWatchExpiryTimer(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
