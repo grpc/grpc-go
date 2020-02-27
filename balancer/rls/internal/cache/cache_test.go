@@ -81,7 +81,11 @@ func TestGet(t *testing.T) {
 			for i, key := range test.keysToAdd {
 				lru.Add(key, test.valsToAdd[i])
 			}
-			if gotEntry := lru.Get(test.keyToGet); !cmp.Equal(gotEntry, test.wantEntry, cmpopts.IgnoreInterfaces(struct{ sync.Locker }{})) {
+			opts := []cmp.Option{
+				cmpopts.IgnoreInterfaces(struct{ sync.Locker }{}),
+				cmpopts.IgnoreUnexported(Entry{}),
+			}
+			if gotEntry := lru.Get(test.keyToGet); !cmp.Equal(gotEntry, test.wantEntry, opts...) {
 				t.Errorf("lru.Get(%+v) = %+v, want %+v", test.keyToGet, gotEntry, test.wantEntry)
 			}
 		})
@@ -104,26 +108,6 @@ func TestRemove(t *testing.T) {
 		lru.Remove(k)
 		if entry := lru.Get(k); entry != nil {
 			t.Fatalf("lru.Get(%+v) after a call to lru.Remove succeeds, should have failed", k)
-		}
-	}
-}
-
-// TestRemove verifies the removeOldest method.
-func TestGetWithRemoveOldest(t *testing.T) {
-	keys := []Key{
-		{Path: "/service1/method1", KeyMap: "k1=v1,k2=v2"},
-		{Path: "/service2/method2", KeyMap: "k1=v1,k2=v2"},
-		{Path: "/service3/method3", KeyMap: "k1=v1,k2=v2"},
-	}
-
-	lru := NewLRU(testCacheMaxSize, nil)
-	for _, key := range keys {
-		lru.Add(key, &Entry{})
-	}
-	for _, key := range keys {
-		lru.removeOldest()
-		if entry := lru.Get(key); entry != nil {
-			t.Fatalf("lru.Get(%+v) after a call to lru.removeOldest succeeds, should have failed", key)
 		}
 	}
 }

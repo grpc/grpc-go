@@ -27,7 +27,6 @@ import (
 
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/status"
 )
 
 // Key represents the cache key used to uniquely identify a cache entry.
@@ -44,9 +43,9 @@ type Key struct {
 // Entry wraps all the data to be stored in a cache entry.
 type Entry struct {
 	// Mu synchronizes access to this particular cache entry. The LB policy
-	// will also hold another mutex to synchornize access to the cache as a
+	// will also hold another mutex to synchronize access to the cache as a
 	// whole. To avoid holding the top-level mutex for the whole duration for
-	// which one particular cache entry is acted up, we use this entry mutex.
+	// which one particular cache entry is acted upon, we use this entry mutex.
 	Mu sync.Mutex
 	// ExpiryTime is the absolute time at which the data cached as part of this
 	// entry stops being valid. When an RLS request succeeds, this is set to
@@ -74,9 +73,10 @@ type Entry struct {
 	// new entry added to the cache is not evicted before the RLS response
 	// arrives (usually when the cache is too small).
 	EarliestEvictTime time.Time
-	// CallStatus stores the RPC status of the previous RLS request. Picks for
-	// entries with a non-OK status are failed with the error stored here.
-	CallStatus *status.Status
+	// CallStatus stores the RPC status of the previous RLS request for this
+	// entry. Picks for entries with a non-nil value for this field are failed
+	// with the error stored here.
+	CallStatus error
 	// Backoff contains all backoff related state. When an RLS request
 	// succeeds, backoff state is reset.
 	Backoff *BackoffState
@@ -85,6 +85,16 @@ type Entry struct {
 	HeaderData string
 	// TODO(easwars): Add support to store the ChildPolicy here. Need a
 	// balancerWrapper type to be implemented for this.
+
+	// size stores the size of this cache entry. Uses only a subset of the
+	// fields. See `entrySize` for this is computed.
+	size int
+	// key contains the cache key corresponding to this entry. This is required
+	// from methods like `removeElement` which only have a pointer to the
+	// list.Element which contains a reference to the cache.Entry. But these
+	// methods need the cache.Key to be able to remove the entry from the
+	// underlying map.
+	key Key
 }
 
 // BackoffState wraps all backoff related state associated with a cache entry.
@@ -102,15 +112,6 @@ type BackoffState struct {
 	// expires. This will trigger a new picker to be returned to the
 	// ClientConn, to force queued up RPCs to be retried.
 	Callback func()
-}
-
-// lruEntry is the actual entry which is stored in the LRU cache. It requires
-// the key (in addition to the actual entry) as well, since the onEvicted
-// callback and expiry timer would need the key to perform their job.
-type lruEntry struct {
-	key  Key
-	val  *Entry
-	size int
 }
 
 // LRU is a cache with a least recently used eviction policy.
@@ -160,6 +161,7 @@ func entrySize(key Key, value *Entry) int {
 // removeToFit removes older entries from the cache to make room for a new
 // entry of size newSize.
 func (lru *LRU) removeToFit(newSize int) {
+	now := time.Now()
 	for lru.usedSize+newSize > lru.maxSize {
 		elem := lru.ll.Back()
 		if elem == nil {
@@ -169,15 +171,15 @@ func (lru *LRU) removeToFit(newSize int) {
 			return
 		}
 
-		entry := elem.Value.(*lruEntry).val
-		if t := entry.EarliestEvictTime; !t.IsZero() && t.Before(time.Now()) {
+		entry := elem.Value.(*Entry)
+		if t := entry.EarliestEvictTime; !t.IsZero() && t.Before(now) {
 			// When the oldest entry is too new (it hasn't even spent a default
 			// minimum amount of time in the cache), we abort and allow the
 			// cache to grow bigger than the configured maxSize.
 			grpclog.Info("rls: LRU eviction finds oldest entry to be too new. Allowing cache to exceed maxSize momentarily")
 			return
 		}
-		lru.removeOldest()
+		lru.removeElement(elem)
 	}
 }
 
@@ -188,16 +190,18 @@ func (lru *LRU) Add(key Key, value *Entry) {
 	if !ok {
 		lru.removeToFit(size)
 		lru.usedSize += size
-		elem := lru.ll.PushFront(&lruEntry{key, value, size})
+		value.size = size
+		value.key = key
+		elem := lru.ll.PushFront(value)
 		lru.cache[key] = elem
 		return
 	}
 
-	lruE := elem.Value.(*lruEntry)
-	sizeDiff := size - lruE.size
+	existing := elem.Value.(*Entry)
+	sizeDiff := size - existing.size
 	lru.removeToFit(sizeDiff)
-	lruE.val = value
-	lruE.size = size
+	value.size = size
+	elem.Value = value
 	lru.ll.MoveToFront(elem)
 	lru.usedSize += sizeDiff
 }
@@ -209,20 +213,13 @@ func (lru *LRU) Remove(key Key) {
 	}
 }
 
-func (lru *LRU) removeOldest() {
-	elem := lru.ll.Back()
-	if elem != nil {
-		lru.removeElement(elem)
-	}
-}
-
 func (lru *LRU) removeElement(e *list.Element) {
-	lruE := e.Value.(*lruEntry)
+	entry := e.Value.(*Entry)
 	lru.ll.Remove(e)
-	delete(lru.cache, lruE.key)
-	lru.usedSize -= lruE.size
+	delete(lru.cache, entry.key)
+	lru.usedSize -= entry.size
 	if lru.onEvicted != nil {
-		lru.onEvicted(lruE.key, lruE.val)
+		lru.onEvicted(entry.key, entry)
 	}
 }
 
@@ -233,5 +230,5 @@ func (lru *LRU) Get(key Key) *Entry {
 		return nil
 	}
 	lru.ll.MoveToFront(elem)
-	return elem.Value.(*lruEntry).val
+	return elem.Value.(*Entry)
 }
