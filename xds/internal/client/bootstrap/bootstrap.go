@@ -37,10 +37,12 @@ const (
 	// Environment variable which holds the name of the xDS bootstrap file.
 	fileEnv = "GRPC_XDS_BOOTSTRAP"
 	// Type name for Google default credentials.
-	googleDefaultCreds = "google_default"
+	googleDefaultCreds              = "google_default"
+	gRPCUserAgentName               = "gRPC Go"
+	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
 )
 
-var gRPCVersion = fmt.Sprintf("gRPC-Go %s", grpc.Version)
+var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
 
 // For overriding in unit tests.
 var fileReadFunc = ioutil.ReadFile
@@ -158,7 +160,13 @@ func NewConfig() (*Config, error) {
 	if config.NodeProto == nil {
 		config.NodeProto = &corepb.Node{}
 	}
+	// BuildVersion is deprecated, and is replaced by user_agent_name and
+	// user_agent_version. But the management servers are still using the old
+	// field, so we will keep both set.
 	config.NodeProto.BuildVersion = gRPCVersion
+	config.NodeProto.UserAgentName = gRPCUserAgentName
+	config.NodeProto.UserAgentVersionType = &corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version}
+	config.NodeProto.ClientFeatures = append(config.NodeProto.ClientFeatures, clientFeatureNoOverprovisioning)
 
 	logger.Infof("Bootstrap config for creating xds-client: %+v", config)
 	return config, nil
