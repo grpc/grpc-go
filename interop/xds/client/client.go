@@ -94,7 +94,7 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 		select {
 		case r := <-watcher.c:
 			if r != nil {
-				watcher.rpcsByPeer[(*r).GetServerId()]++
+				watcher.rpcsByPeer[(*r).GetHostname()]++
 			} else {
 				watcher.numFailures++
 			}
