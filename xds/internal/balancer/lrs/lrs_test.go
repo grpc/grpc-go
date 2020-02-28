@@ -28,11 +28,13 @@ import (
 	"testing"
 	"time"
 
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 	"github.com/golang/protobuf/proto"
 	durationpb "github.com/golang/protobuf/ptypes/duration"
+	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -41,8 +43,9 @@ import (
 )
 
 const (
-	testService  = "grpc.service.test"
-	testHostname = "grpc.server.name"
+	testService             = "grpc.service.test"
+	testHostname            = "grpc.server.name"
+	nodeMetadataHostnameKey = "PROXYLESS_CLIENT_HOSTNAME"
 )
 
 var (
@@ -448,7 +451,16 @@ func Test_lrsStore_ReportTo(t *testing.T) {
 	defer cancel()
 	done := make(chan struct{})
 	go func() {
-		ls.ReportTo(ctx, cc, testService, testHostname, nil)
+		node := &corepb.Node{
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					nodeMetadataHostnameKey: {
+						Kind: &structpb.Value_StringValue{StringValue: testHostname},
+					},
+				},
+			},
+		}
+		ls.ReportTo(ctx, cc, testService, node)
 		close(done)
 	}()
 
