@@ -229,8 +229,9 @@ func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 		client.Close()
 		t.Fatalf("Unexpected success (err=nil) while dialing")
 	}
-	if err != context.DeadlineExceeded {
-		t.Fatalf("DialContext(_) = %v; want context.DeadlineExceeded", err)
+	expectedMsg := "server handshake"
+	if !strings.Contains(err.Error(), context.DeadlineExceeded.Error()) || !strings.Contains(err.Error(), expectedMsg) {
+		t.Fatalf("DialContext(_) = %v; want a message that includes both %q and %q", err, context.DeadlineExceeded.Error(), expectedMsg)
 	}
 	<-done
 	if numConns < 2 {
