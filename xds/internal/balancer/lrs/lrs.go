@@ -314,9 +314,6 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterNa
 			continue
 		}
 		if err := stream.Send(&lrspb.LoadStatsRequest{
-			ClusterStats: []*endpointpb.ClusterStats{{
-				ClusterName: clusterName,
-			}},
 			Node: node,
 		}); err != nil {
 			grpclog.Warningf("lrs: failed to send first request: %v", err)
