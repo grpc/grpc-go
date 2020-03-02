@@ -23,9 +23,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
@@ -168,7 +168,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 
 		// We will update the edsImpl with the new child policy, if we got a
 		// different one.
-		if x.edsImpl != nil && !reflect.DeepEqual(cfg.ChildPolicy, x.config.ChildPolicy) {
+		if x.edsImpl != nil && !cmp.Equal(cfg.ChildPolicy, x.config.ChildPolicy) {
 			if cfg.ChildPolicy != nil {
 				x.edsImpl.HandleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
 			} else {

@@ -18,7 +18,6 @@ package edsbalancer
 
 import (
 	"fmt"
-	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -67,7 +66,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	p1 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSCSt.SubConn, sc1) {
+		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
@@ -94,7 +93,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab3.Build()))
 
 	scToRemove := <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove, sc1) {
+	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
 	}
 	edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
@@ -103,7 +102,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	p3 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p3.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSCSt.SubConn, sc2) {
+		if !cmp.Equal(gotSCSt.SubConn, sc2, cmp.AllowUnexported(testSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
 		}
 	}
@@ -117,7 +116,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	edsb.HandleSubConnStateChange(sc3, connectivity.Connecting)
 	edsb.HandleSubConnStateChange(sc3, connectivity.Ready)
 	scToRemove = <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove, sc2) {
+	if !cmp.Equal(scToRemove, sc2, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove)
 	}
 	edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
@@ -126,7 +125,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	p4 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p4.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSCSt.SubConn, sc3) {
+		if !cmp.Equal(gotSCSt.SubConn, sc3, cmp.AllowUnexported(testSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc3)
 		}
 	}
@@ -209,7 +208,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab3.Build()))
 
 	scToRemove := <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove, sc1) {
+	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
 	}
 	edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
@@ -270,7 +269,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	// locality doesn't exist. If this changes in the future, this removeSubConn
 	// behavior will also change.
 	scToRemove2 := <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove2, sc2) {
+	if !cmp.Equal(scToRemove2, sc2, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove2)
 	}
 
@@ -435,7 +434,7 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	p0 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		_, err := p0.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(err, errTestConstPicker) {
+		if err != errTestConstPicker {
 			t.Fatalf("picker.Pick, got err %q, want err %q", err, errTestConstPicker)
 		}
 	}
@@ -466,7 +465,8 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		scToRemove := <-cc.removeSubConnCh
-		if !reflect.DeepEqual(scToRemove, sc1) && !reflect.DeepEqual(scToRemove, sc2) {
+		if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testSubConn{})) &&
+			!cmp.Equal(scToRemove, sc2, cmp.AllowUnexported(testSubConn{})) {
 			t.Fatalf("RemoveSubConn, want (%v or %v), got %v", sc1, sc2, scToRemove)
 		}
 		edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
@@ -480,7 +480,7 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	p2 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		_, err := p2.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(err, errTestConstPicker) {
+		if err != errTestConstPicker {
 			t.Fatalf("picker.Pick, got err %q, want err %q", err, errTestConstPicker)
 		}
 	}
@@ -619,10 +619,10 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 		}
 	}
 
-	if !reflect.DeepEqual(testLoadStore.callsStarted, wantStart) {
+	if !cmp.Equal(testLoadStore.callsStarted, wantStart) {
 		t.Fatalf("want started: %v, got: %v", testLoadStore.callsStarted, wantStart)
 	}
-	if !reflect.DeepEqual(testLoadStore.callsEnded, wantEnd) {
+	if !cmp.Equal(testLoadStore.callsEnded, wantEnd) {
 		t.Fatalf("want ended: %v, got: %v", testLoadStore.callsEnded, wantEnd)
 	}
 }

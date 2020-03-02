@@ -18,10 +18,10 @@ package edsbalancer
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
@@ -75,7 +75,7 @@ func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	p1 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSCSt.SubConn, sc1) {
+		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
@@ -97,7 +97,7 @@ func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	// Remove the first address.
 	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[1:2])
 	scToRemove := <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove, sc1) {
+	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
 	}
 	bg.handleSubConnStateChange(scToRemove, connectivity.Shutdown)
@@ -106,7 +106,7 @@ func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	p3 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSC, _ := p3.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSC.SubConn, sc2) {
+		if !cmp.Equal(gotSC.SubConn, sc2, cmp.AllowUnexported(testSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSC, sc2)
 		}
 	}
@@ -190,7 +190,7 @@ func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	// Remove sc3's addresses.
 	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[3:4])
 	scToRemove := <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove, sc3) {
+	if !cmp.Equal(scToRemove, sc3, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc3, scToRemove)
 	}
 	bg.handleSubConnStateChange(scToRemove, connectivity.Shutdown)
@@ -300,7 +300,7 @@ func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	// Remove the second balancer, while the others two are ready.
 	bg.remove(testBalancerIDs[1])
 	scToRemove := <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove, sc2) {
+	if !cmp.Equal(scToRemove, sc2, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove)
 	}
 	p2 := <-cc.newPickerCh
@@ -314,7 +314,7 @@ func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	// Remove the first balancer, while the third is transient failure.
 	bg.remove(testBalancerIDs[0])
 	scToRemove = <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove, sc1) {
+	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
 	}
 	p3 := <-cc.newPickerCh
@@ -434,13 +434,13 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 		}
 	}
 
-	if !reflect.DeepEqual(testLoadStore.callsStarted, wantStart) {
+	if !cmp.Equal(testLoadStore.callsStarted, wantStart) {
 		t.Fatalf("want started: %v, got: %v", testLoadStore.callsStarted, wantStart)
 	}
-	if !reflect.DeepEqual(testLoadStore.callsEnded, wantEnd) {
+	if !cmp.Equal(testLoadStore.callsEnded, wantEnd) {
 		t.Fatalf("want ended: %v, got: %v", testLoadStore.callsEnded, wantEnd)
 	}
-	if !reflect.DeepEqual(testLoadStore.callsCost, wantCost) {
+	if !cmp.Equal(testLoadStore.callsCost, wantCost, cmp.AllowUnexported(testServerLoad{})) {
 		t.Fatalf("want cost: %v, got: %v", testLoadStore.callsCost, wantCost)
 	}
 }

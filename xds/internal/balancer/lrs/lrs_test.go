@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"reflect"
 	"sort"
 	"sync"
 	"testing"
@@ -75,7 +74,7 @@ func (rcd *rpcCountDataForTest) Equal(b *rpcCountDataForTest) bool {
 	return rcd.inProgress == b.inProgress &&
 		rcd.errored == b.errored &&
 		rcd.succeeded == b.succeeded &&
-		reflect.DeepEqual(rcd.serverLoads, b.serverLoads)
+		cmp.Equal(rcd.serverLoads, b.serverLoads)
 }
 
 // equalClusterStats sorts requests and clear report internal before comparing.
