@@ -18,10 +18,10 @@
 package edsbalancer
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -139,7 +139,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	p1 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSCSt.SubConn, sc1) {
+		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
@@ -175,7 +175,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	p2 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p2.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSCSt.SubConn, sc2) {
+		if !cmp.Equal(gotSCSt.SubConn, sc2, cmp.AllowUnexported(testSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
 		}
 	}
@@ -188,7 +188,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 
 	// p2 SubConns are removed.
 	scToRemove := <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove, sc2) {
+	if !cmp.Equal(scToRemove, sc2, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove)
 	}
 
@@ -257,7 +257,7 @@ func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	p2 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p2.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSCSt.SubConn, sc2) {
+		if !cmp.Equal(gotSCSt.SubConn, sc2, cmp.AllowUnexported(testSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
 		}
 	}
@@ -306,7 +306,7 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	p2 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p2.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSCSt.SubConn, sc2) {
+		if !cmp.Equal(gotSCSt.SubConn, sc2, cmp.AllowUnexported(testSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
 		}
 	}
@@ -319,8 +319,10 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	// With localities caching, the lower priorities are closed after a timeout,
 	// in goroutines. The order is no longer guaranteed.
 	scToRemove := []balancer.SubConn{<-cc.removeSubConnCh, <-cc.removeSubConnCh}
-	if !(reflect.DeepEqual(scToRemove[0], sc1) && reflect.DeepEqual(scToRemove[1], sc2)) &&
-		!(reflect.DeepEqual(scToRemove[0], sc2) && reflect.DeepEqual(scToRemove[1], sc1)) {
+	if !(cmp.Equal(scToRemove[0], sc1, cmp.AllowUnexported(testSubConn{})) &&
+		cmp.Equal(scToRemove[1], sc2, cmp.AllowUnexported(testSubConn{}))) &&
+		!(cmp.Equal(scToRemove[0], sc2, cmp.AllowUnexported(testSubConn{})) &&
+			cmp.Equal(scToRemove[1], sc1, cmp.AllowUnexported(testSubConn{}))) {
 		t.Errorf("RemoveSubConn, want [%v, %v], got %v", sc1, sc2, scToRemove)
 	}
 
@@ -328,7 +330,7 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	p0 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p0.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSCSt.SubConn, sc0) {
+		if !cmp.Equal(gotSCSt.SubConn, sc0, cmp.AllowUnexported(testSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
 	}
@@ -386,7 +388,7 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 	p1 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSCSt.SubConn, sc1) {
+		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
@@ -445,7 +447,7 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	edsb.HandleSubConnStateChange(sc0, connectivity.Ready)
 
 	scToRemove := <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove, sc1) {
+	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
 	}
 
@@ -539,7 +541,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 
 	// p0 subconn should be removed.
 	scToRemove := <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove, sc0) {
+	if !cmp.Equal(scToRemove, sc0, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc0, scToRemove)
 	}
 
@@ -590,7 +592,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 
 	// p1 subconn should be removed.
 	scToRemove1 := <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove1, sc11) {
+	if !cmp.Equal(scToRemove1, sc11, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc11, scToRemove1)
 	}
 

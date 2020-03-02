@@ -21,13 +21,14 @@ package client
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
 	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+	"github.com/golang/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 )
@@ -363,7 +364,7 @@ func testRDSCaching(t *testing.T, rdsTestOps []rdsTestOp, errCh *testutils.Chann
 			<-callbackCh
 		}
 
-		if !reflect.DeepEqual(v2c.cloneRDSCacheForTesting(), rdsTestOp.wantRDSCache) {
+		if !cmp.Equal(v2c.cloneRDSCacheForTesting(), rdsTestOp.wantRDSCache) {
 			errCh.Send(fmt.Errorf("gotRDSCache: %v, wantRDSCache: %v", v2c.rdsCache, rdsTestOp.wantRDSCache))
 			return
 		}
@@ -596,7 +597,7 @@ func TestFindBestMatchingVirtualHost(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := findBestMatchingVirtualHost(tt.host, tt.vHosts); !reflect.DeepEqual(got, tt.want) {
+			if got := findBestMatchingVirtualHost(tt.host, tt.vHosts); !cmp.Equal(got, tt.want, cmp.Comparer(proto.Equal)) {
 				t.Errorf("findBestMatchingVirtualHost() = %v, want %v", got, tt.want)
 			}
 		})

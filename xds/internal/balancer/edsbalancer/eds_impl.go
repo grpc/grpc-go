@@ -18,10 +18,10 @@ package edsbalancer
 
 import (
 	"encoding/json"
-	"reflect"
 	"sync"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
@@ -312,7 +312,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 			if config.weight != newWeight {
 				weightChanged = true
 			}
-			if !reflect.DeepEqual(config.addrs, newAddrs) {
+			if !cmp.Equal(config.addrs, newAddrs) {
 				addrsChanged = true
 			}
 			edsImpl.logger.Infof("Locality %v updated, weightedChanged: %v, addrsChanged: %v", lid, weightChanged, addrsChanged)

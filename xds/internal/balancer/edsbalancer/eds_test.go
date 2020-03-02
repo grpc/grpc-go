@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"testing"
 
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -111,7 +110,7 @@ func (f *fakeEDSBalancer) waitForChildPolicy(wantPolicy *loadBalancingConfig) er
 		return fmt.Errorf("error waiting for childPolicy: %v", err)
 	}
 	gotPolicy := val.(*loadBalancingConfig)
-	if !reflect.DeepEqual(gotPolicy, wantPolicy) {
+	if !cmp.Equal(gotPolicy, wantPolicy) {
 		return fmt.Errorf("got childPolicy %v, want %v", gotPolicy, wantPolicy)
 	}
 	return nil
@@ -123,7 +122,7 @@ func (f *fakeEDSBalancer) waitForSubConnStateChange(wantState *scStateChange) er
 		return fmt.Errorf("error waiting for subconnStateChange: %v", err)
 	}
 	gotState := val.(*scStateChange)
-	if !reflect.DeepEqual(gotState, wantState) {
+	if !cmp.Equal(gotState, wantState, cmp.AllowUnexported(scStateChange{})) {
 		return fmt.Errorf("got subconnStateChange %v, want %v", gotState, wantState)
 	}
 	return nil
@@ -532,7 +531,7 @@ func (s) TestLoadbalancingConfigParsing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var cfg EDSConfig
-			if err := json.Unmarshal([]byte(tt.s), &cfg); err != nil || !reflect.DeepEqual(&cfg, tt.want) {
+			if err := json.Unmarshal([]byte(tt.s), &cfg); err != nil || !cmp.Equal(&cfg, tt.want) {
 				t.Errorf("test name: %s, parseFullServiceConfig() = %+v, err: %v, want %+v, <nil>", tt.name, cfg, err, tt.want)
 			}
 		})

@@ -66,7 +66,7 @@ func (s) TestLocalityMatchProtoMessage(t *testing.T) {
 		want2[f.Name] = f.Type.Name()
 	}
 
-	if !reflect.DeepEqual(want1, want2) {
-		t.Fatalf("internal type and proto message have different fields:\n%+v", cmp.Diff(want1, want2))
+	if diff := cmp.Diff(want1, want2); diff != "" {
+		t.Fatalf("internal type and proto message have different fields: (-got +want):\n%+v", diff)
 	}
 }

@@ -21,7 +21,6 @@ package client
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
@@ -30,6 +29,7 @@ import (
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 )
@@ -155,7 +155,7 @@ func (s) TestValidateCluster(t *testing.T) {
 			if (gotErr != nil) != test.wantErr {
 				t.Errorf("validateCluster(%+v) returned error: %v, wantErr: %v", test.cluster, gotErr, test.wantErr)
 			}
-			if !reflect.DeepEqual(gotUpdate, test.wantUpdate) {
+			if !cmp.Equal(gotUpdate, test.wantUpdate) {
 				t.Errorf("validateCluster(%+v) = %v, want: %v", test.cluster, gotUpdate, test.wantUpdate)
 			}
 		})
@@ -316,7 +316,7 @@ func testCDSCaching(t *testing.T, cdsTestOps []cdsTestOp, errCh *testutils.Chann
 			<-callbackCh
 		}
 
-		if !reflect.DeepEqual(v2c.cloneCDSCacheForTesting(), cdsTestOp.wantCDSCache) {
+		if !cmp.Equal(v2c.cloneCDSCacheForTesting(), cdsTestOp.wantCDSCache) {
 			errCh.Send(fmt.Errorf("gotCDSCache: %v, wantCDSCache: %v", v2c.rdsCache, cdsTestOp.wantCDSCache))
 			return
 		}
