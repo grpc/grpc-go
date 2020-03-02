@@ -114,11 +114,8 @@ type BackoffState struct {
 	Callback func()
 }
 
-// LRU is a cache with a least recently used eviction policy.
-//
-// It is not safe for concurrent access. The RLS LB policy will provide a mutex
-// which will synchronize access to this cache from its multiple users: the LB
-// policy, picker and the expiry timer.
+// LRU is a cache with a least recently used eviction policy. It is not safe
+// for concurrent access.
 type LRU struct {
 	maxSize   int
 	usedSize  int
