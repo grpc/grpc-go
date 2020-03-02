@@ -47,7 +47,6 @@ const (
 	goodRouteName2           = "GoodRouteConfig2"
 	goodEDSName              = "GoodClusterAssignment1"
 	uninterestingRouteName   = "UninterestingRouteName"
-	goodMatchingDomain       = "lds.target.good"
 	uninterestingDomain      = "uninteresting.domain"
 	goodClusterName1         = "GoodClusterName1"
 	goodClusterName2         = "GoodClusterName2"
@@ -297,7 +296,7 @@ var (
 				},
 			},
 			{
-				Domains: []string{goodMatchingDomain},
+				Domains: []string{goodLDSTarget1},
 				Routes: []*routepb.Route{
 					{
 						Match: &routepb.RouteMatch{PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: ""}},
@@ -329,7 +328,7 @@ var (
 				},
 			},
 			{
-				Domains: []string{goodMatchingDomain},
+				Domains: []string{goodLDSTarget1},
 				Routes: []*routepb.Route{
 					{
 						Match: &routepb.RouteMatch{PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: ""}},

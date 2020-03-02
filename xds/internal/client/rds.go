@@ -20,7 +20,6 @@ package client
 
 import (
 	"fmt"
-	"net"
 	"strings"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
@@ -102,13 +101,12 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 //
 // The RouteConfiguration includes a list of VirtualHosts, which may have zero
 // or more elements. We are interested in the element whose domains field
-// matches the server name specified in the "xds:" URI (with port, if any,
-// stripped off). The only field in the VirtualHost proto that the we are
-// interested in is the list of routes. We only look at the last route in the
-// list (the default route), whose match field must be empty and whose route
-// field must be set.  Inside that route message, the cluster field will
-// contain the clusterName we are looking for.
-func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target string) string {
+// matches the server name specified in the "xds:" URI. The only field in the
+// VirtualHost proto that the we are interested in is the list of routes. We
+// only look at the last route in the list (the default route), whose match
+// field must be empty and whose route field must be set.  Inside that route
+// message, the cluster field will contain the clusterName we are looking for.
+func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, host string) string {
 	// TODO: return error for better error logging and nack.
 	//
 	// Currently this returns "" on error, and the caller will return an error.
@@ -117,10 +115,6 @@ func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target strin
 	//
 	// For logging purposes, we can log in line. But if we want to populate
 	// error details for nack, a detailed error needs to be returned.
-	host, err := hostFromTarget(target)
-	if err != nil {
-		return ""
-	}
 	vh := findBestMatchingVirtualHost(host, rc.GetVirtualHosts())
 	if vh == nil {
 		// No matching virtual host found.
@@ -140,21 +134,6 @@ func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target strin
 		return route.GetCluster()
 	}
 	return ""
-}
-
-// hostFromTarget calls net.SplitHostPort and returns the host.
-//
-// It returns the original string instead of error if port is missing.
-func hostFromTarget(target string) (string, error) {
-	const portMissingErrDesc = "missing port in address"
-	h, _, err := net.SplitHostPort(target)
-	if err != nil {
-		if addrErr, ok := err.(*net.AddrError); ok && strings.Contains(addrErr.Err, portMissingErrDesc) {
-			return target, nil
-		}
-		return "", err
-	}
-	return h, nil
 }
 
 type domainMatchType int
