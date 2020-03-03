@@ -627,6 +627,69 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	}
 }
 
+// When the child policy update picker inline in a handleClientUpdate call
+// (e.g., roundrobin handling empty addresses). There could be deadlock caused
+// by acquiring a locked mutex.
+func (s) TestEDSPriority_ChildPolicyUpdatePickerInline(t *testing.T) {
+	cc := newTestClientConn(t)
+	edsb := newEDSBalancerImpl(cc, nil, nil)
+
+	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.AddLocality(testSubZones[0], 1, 0, nil, nil)
+	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+
+	// addrs1 := <-cc.newSubConnAddrsCh
+	// if got, want := addrs1[0].Addr, testEndpointAddrs[0]; got != want {
+	// 	t.Fatalf("sc is created with addr %v, want %v", got, want)
+	// }
+	// sc1 := <-cc.newSubConnCh
+	//
+	// // p0 is ready.
+	// edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
+	// edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
+	//
+	// // Test roundrobin with only p0 subconns.
+	// p1 := <-cc.newPickerCh
+	// want := []balancer.SubConn{sc1}
+	// if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
+	// 	// t.Fatalf("want %v, got %v", want, err)
+	// 	t.Fatalf("want %v, got %v", want, err)
+	// }
+	//
+	// // Add p2, it shouldn't cause any udpates.
+	// clab2 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	// clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
+	// clab2.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
+	// clab2.AddLocality(testSubZones[2], 1, 2, testEndpointAddrs[2:3], nil)
+	// edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
+	//
+	// select {
+	// case <-cc.newPickerCh:
+	// 	t.Fatalf("got unexpected new picker")
+	// case <-cc.newSubConnCh:
+	// 	t.Fatalf("got unexpected new SubConn")
+	// case <-cc.removeSubConnCh:
+	// 	t.Fatalf("got unexpected remove SubConn")
+	// case <-time.After(time.Millisecond * 100):
+	// }
+	//
+	// // Remove p2, no updates.
+	// clab3 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	// clab3.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
+	// clab3.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
+	// edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab3.Build()))
+	//
+	// select {
+	// case <-cc.newPickerCh:
+	// 	t.Fatalf("got unexpected new picker")
+	// case <-cc.newSubConnCh:
+	// 	t.Fatalf("got unexpected new SubConn")
+	// case <-cc.removeSubConnCh:
+	// 	t.Fatalf("got unexpected remove SubConn")
+	// case <-time.After(time.Millisecond * 100):
+	// }
+}
+
 func (s) TestPriorityType(t *testing.T) {
 	p0 := newPriorityType(0)
 	p1 := newPriorityType(1)
