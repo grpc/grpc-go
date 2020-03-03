@@ -20,133 +20,462 @@ package rls
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 
+	"google.golang.org/grpc/balancer"
 	rlspb "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
+	"google.golang.org/grpc/resolver"
+
+	_ "google.golang.org/grpc/balancer/grpclb"               // grpclb for config parsing.
+	_ "google.golang.org/grpc/internal/resolver/passthrough" // passthrough resolver.
 )
 
-// Equal is used by cmp.Equal to check equality.
-func (lb *lbParsedConfig) Equal(other *lbParsedConfig) bool {
-	switch {
-	case lb == nil && other != nil:
-		return false
-	case lb != nil && other == nil:
-		return false
-	case lb == nil && other == nil:
-		return true
-	}
-	return proto.Equal(lb.rlsProto, other.rlsProto) &&
-		cmp.Equal(lb.childPolicy, other.childPolicy) &&
-		lb.targetField == other.targetField
+const balancerWithoutConfigParserName = "dummy_balancer"
+
+type dummyBB struct {
+	balancer.Builder
 }
 
-func TestLBConfigUnmarshalJSON(t *testing.T) {
+func (*dummyBB) Name() string {
+	return balancerWithoutConfigParserName
+}
+
+func init() {
+	balancer.Register(&dummyBB{})
+}
+
+func (lbCfg *lbConfig) Equal(other *lbConfig) bool {
+	// This only ignores the keyBuilderMap field because its internals are not
+	// exported, and hence not possible to specify in the want section of the
+	// test.
+	return lbCfg.lookupService == other.lookupService &&
+		lbCfg.lookupServiceTimeout == other.lookupServiceTimeout &&
+		lbCfg.maxAge == other.maxAge &&
+		lbCfg.staleAge == other.staleAge &&
+		lbCfg.cacheSizeBytes == other.cacheSizeBytes &&
+		lbCfg.rpStrategy == other.rpStrategy &&
+		lbCfg.cpName == other.cpName &&
+		lbCfg.cpTargetField == other.cpTargetField &&
+		cmp.Equal(lbCfg.cpConfig, other.cpConfig)
+}
+
+func TestParseConfig(t *testing.T) {
 	tests := []struct {
 		desc    string
 		input   []byte
-		wantCfg *lbParsedConfig
+		wantCfg *lbConfig
 	}{
+		// This input validates a few cases:
+		// - A top-level unknown field should not fail.
+		// - An unknown field in routeLookupConfig proto should not fail.
+		// - lookupServiceTimeout is set to its default value, since it is not specified in the input.
+		// - maxAge is set to maxMaxAge since the value is too large in the input.
+		// - staleAge is ignore because it is higher than maxAge in the input.
 		{
-			desc: "all-good-lbCfg",
-			// This input validates a few cases:
-			// - A top-level unknown field should not fail.
-			// - An unknown field in routeLookupConfig proto should not fail.
-			// - When the child_policy list contains known and unknown child
-			//   policies, we should end up picking the first one that we know.
+			desc: "with transformations",
 			input: []byte(`{
 				"top-level-unknown-field": "unknown-value",
 				"routeLookupConfig": {
 					"unknown-field": "unknown-value",
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "passthrough:///target",
+					"maxAge" : "500s",
+					"staleAge": "600s",
 					"cacheSizeBytes": 1000,
-					"defaultTarget": "foobar"
+					"request_processing_strategy": "ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS",
+					"defaultTarget": "passthrough:///default"
 				},
 				"childPolicy": [
 					{"cds_experimental": {"Cluster": "my-fav-cluster"}},
-					{"grpclb": {}},
-					{"unknown-policy": {"unknown-field": "unknown-value"}}
+					{"unknown-policy": {"unknown-field": "unknown-value"}},
+					{"grpclb": {"childPolicy": [{"pickfirst": {}}]}}
 				],
-				"childPolicyConfigTargetFieldName": "serviceName"
+				"childPolicyConfigTargetFieldName": "service_name"
 			}`),
-			wantCfg: &lbParsedConfig{
-				rlsProto: &rlspb.RouteLookupConfig{
-					CacheSizeBytes: 1000,
-					DefaultTarget:  "foobar",
+			wantCfg: &lbConfig{
+				lookupService:        resolver.Target{Scheme: "passthrough", Endpoint: "target"},
+				lookupServiceTimeout: 10 * time.Second, // This is the default value.
+				maxAge:               5 * time.Minute,  // This is max maxAge.
+				staleAge:             time.Duration(0), // StaleAge is ignore because it was higher than maxAge.
+				cacheSizeBytes:       1000,
+				rpStrategy:           rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
+				cpName:               "grpclb",
+				cpTargetField:        "service_name",
+				cpConfig:             map[string]json.RawMessage{"childPolicy": json.RawMessage(`[{"pickfirst": {}}]`)},
+			},
+		},
+		{
+			desc: "without transformations",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "passthrough:///target",
+					"lookupServiceTimeout" : "100s",
+					"maxAge": "60s",
+					"staleAge" : "50s",
+					"cacheSizeBytes": 1000,
+					"request_processing_strategy": "ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS",
+					"defaultTarget": "passthrough:///default"
 				},
-				childPolicy: &loadBalancingConfig{
-					Name:   "grpclb",
-					Config: json.RawMessage(`{}`),
-				},
-				targetField: "serviceName",
+				"childPolicy": [{"grpclb": {"childPolicy": [{"pickfirst": {}}]}}],
+				"childPolicyConfigTargetFieldName": "service_name"
+			}`),
+			wantCfg: &lbConfig{
+				lookupService:        resolver.Target{Scheme: "passthrough", Endpoint: "target"},
+				lookupServiceTimeout: 100 * time.Second,
+				maxAge:               60 * time.Second,
+				staleAge:             50 * time.Second,
+				cacheSizeBytes:       1000,
+				rpStrategy:           rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
+				cpName:               "grpclb",
+				cpTargetField:        "service_name",
+				cpConfig:             map[string]json.RawMessage{"childPolicy": json.RawMessage(`[{"pickfirst": {}}]`)},
 			},
 		},
 	}
 
+	builder := &rlsBB{}
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			lbCfg := &lbParsedConfig{}
-			err := lbCfg.UnmarshalJSON(test.input)
+			lbCfg, err := builder.ParseConfig(test.input)
 			if err != nil || !cmp.Equal(lbCfg, test.wantCfg) {
-				t.Errorf("lbCfg.UnmarshalJSON(%s) = {%+v, %v} want {%+v, %v}", string(test.input), lbCfg, err, test.wantCfg, nil)
+				t.Errorf("ParseConfig(%s) = {%+v, %v}, want {%+v, nil}", string(test.input), lbCfg, err, test.wantCfg)
 			}
 		})
 	}
 }
 
-func TestLBConfigUnmarshalJSONErrors(t *testing.T) {
+func TestParseConfigErrors(t *testing.T) {
+	tests := []struct {
+		desc    string
+		input   []byte
+		wantErr string
+	}{
+		{
+			desc:    "empty input",
+			input:   nil,
+			wantErr: "rls: json unmarshal failed for service config",
+		},
+		{
+			desc:    "bad json",
+			input:   []byte(`bad bad json`),
+			wantErr: "rls: json unmarshal failed for service config",
+		},
+		{
+			desc: "bad grpcKeyBuilder",
+			input: []byte(`{
+					"routeLookupConfig": {
+						"grpcKeybuilders": [{
+							"names": [{"service": "service", "method": "method"}],
+							"headers": [{"key": "k1", "requiredMatch": true, "names": ["v1"]}]
+						}]
+					}
+				}`),
+			wantErr: "rls: GrpcKeyBuilder in RouteLookupConfig has required_match field set",
+		},
+		{
+			desc: "empty lookup service",
+			input: []byte(`{
+					"routeLookupConfig": {
+						"grpcKeybuilders": [{
+							"names": [{"service": "service", "method": "method"}],
+							"headers": [{"key": "k1", "names": ["v1"]}]
+						}]
+					}
+				}`),
+			wantErr: "rls: empty lookup_service in service config",
+		},
+		{
+			desc: "invalid lookup service URI",
+			input: []byte(`{
+					"routeLookupConfig": {
+						"grpcKeybuilders": [{
+							"names": [{"service": "service", "method": "method"}],
+							"headers": [{"key": "k1", "names": ["v1"]}]
+						}],
+						"lookupService": "badScheme:///target"
+					}
+				}`),
+			wantErr: "rls: invalid target URI in lookup_service",
+		},
+		{
+			desc: "invalid lookup service timeout",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "passthrough:///target",
+					"lookupServiceTimeout" : "315576000001s"
+				}
+			}`),
+			wantErr: "bad Duration: time: invalid duration",
+		},
+		{
+			desc: "invalid max age",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "passthrough:///target",
+					"lookupServiceTimeout" : "10s",
+					"maxAge" : "315576000001s"
+				}
+			}`),
+			wantErr: "bad Duration: time: invalid duration",
+		},
+		{
+			desc: "invalid stale age",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "passthrough:///target",
+					"lookupServiceTimeout" : "10s",
+					"maxAge" : "10s",
+					"staleAge" : "315576000001s"
+				}
+			}`),
+			wantErr: "bad Duration: time: invalid duration",
+		},
+		{
+			desc: "invalid max age stale age combo",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "passthrough:///target",
+					"lookupServiceTimeout" : "10s",
+					"staleAge" : "10s"
+				}
+			}`),
+			wantErr: "rls: stale_age is set, but max_age is not in service config",
+		},
+		{
+			desc: "invalid cache size",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "passthrough:///target",
+					"lookupServiceTimeout" : "10s",
+					"maxAge": "30s",
+					"staleAge" : "25s"
+				}
+			}`),
+			wantErr: "rls: cache_size_bytes must be greater than 0 in service config",
+		},
+		{
+			desc: "invalid request processing strategy",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "passthrough:///target",
+					"lookupServiceTimeout" : "10s",
+					"maxAge": "30s",
+					"staleAge" : "25s",
+					"cacheSizeBytes": 1000
+				}
+			}`),
+			wantErr: "rls: request_processing_strategy cannot be left unspecified in service config",
+		},
+		{
+			desc: "request processing strategy without default target",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "passthrough:///target",
+					"lookupServiceTimeout" : "10s",
+					"maxAge": "30s",
+					"staleAge" : "25s",
+					"cacheSizeBytes": 1000,
+					"request_processing_strategy": "ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS"
+				}
+			}`),
+			wantErr: "default_target is not set",
+		},
+		{
+			desc: "no child policy",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "passthrough:///target",
+					"lookupServiceTimeout" : "10s",
+					"maxAge": "30s",
+					"staleAge" : "25s",
+					"cacheSizeBytes": 1000,
+					"request_processing_strategy": "ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS",
+					"defaultTarget": "passthrough:///default"
+				}
+			}`),
+			wantErr: "rls: childPolicy is invalid in service config",
+		},
+		{
+			desc: "no known child policy",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "passthrough:///target",
+					"lookupServiceTimeout" : "10s",
+					"maxAge": "30s",
+					"staleAge" : "25s",
+					"cacheSizeBytes": 1000,
+					"request_processing_strategy": "ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS",
+					"defaultTarget": "passthrough:///default"
+				},
+				"childPolicy": [
+					{"cds_experimental": {"Cluster": "my-fav-cluster"}},
+					{"unknown-policy": {"unknown-field": "unknown-value"}}
+				]
+			}`),
+			wantErr: "rls: childPolicy is invalid in service config",
+		},
+		{
+			desc: "no childPolicyConfigTargetFieldName",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "passthrough:///target",
+					"lookupServiceTimeout" : "10s",
+					"maxAge": "30s",
+					"staleAge" : "25s",
+					"cacheSizeBytes": 1000,
+					"request_processing_strategy": "ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS",
+					"defaultTarget": "passthrough:///default"
+				},
+				"childPolicy": [
+					{"cds_experimental": {"Cluster": "my-fav-cluster"}},
+					{"unknown-policy": {"unknown-field": "unknown-value"}},
+					{"grpclb": {}}
+				]
+			}`),
+			wantErr: "rls: childPolicyConfigTargetFieldName field is not set in service config",
+		},
+		{
+			desc: "child policy config validation failure",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "passthrough:///target",
+					"lookupServiceTimeout" : "10s",
+					"maxAge": "30s",
+					"staleAge" : "25s",
+					"cacheSizeBytes": 1000,
+					"request_processing_strategy": "ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS",
+					"defaultTarget": "passthrough:///default"
+				},
+				"childPolicy": [
+					{"cds_experimental": {"Cluster": "my-fav-cluster"}},
+					{"unknown-policy": {"unknown-field": "unknown-value"}},
+					{"grpclb": {"childPolicy": "not-an-array"}}
+				],
+				"childPolicyConfigTargetFieldName": "service_name"
+			}`),
+			wantErr: "rls: childPolicy config validation failed",
+		},
+	}
+
+	builder := &rlsBB{}
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			lbCfg, err := builder.ParseConfig(test.input)
+			if lbCfg != nil || !strings.Contains(fmt.Sprint(err), test.wantErr) {
+				t.Errorf("ParseConfig(%s) = {%+v, %v}, want {nil, %s}", string(test.input), lbCfg, err, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateChildPolicyConfig(t *testing.T) {
+	jsonCfg := json.RawMessage(`[{"round_robin" : {}}, {"pick_first" : {}}]`)
+	wantChildConfig := map[string]json.RawMessage{"childPolicy": jsonCfg}
+	cp := &loadBalancingConfig{
+		Name:   "grpclb",
+		Config: []byte(`{"childPolicy": [{"round_robin" : {}}, {"pick_first" : {}}]}`),
+	}
+	cpTargetField := "serviceName"
+
+	gotChildConfig, err := validateChildPolicyConfig(cp, cpTargetField)
+	if err != nil || !cmp.Equal(gotChildConfig, wantChildConfig) {
+		t.Errorf("validateChildPolicyConfig(%v, %v) = {%v, %v}, want {%v, nil}", cp, cpTargetField, gotChildConfig, err, wantChildConfig)
+	}
+}
+
+func TestValidateChildPolicyConfigErrors(t *testing.T) {
 	tests := []struct {
 		desc          string
-		input         []byte
+		cp            *loadBalancingConfig
 		wantErrPrefix string
 	}{
 		{
-			desc:          "empty input",
-			input:         nil,
-			wantErrPrefix: "bad input json data",
+			desc: "unknown child policy",
+			cp: &loadBalancingConfig{
+				Name:   "unknown",
+				Config: []byte(`{}`),
+			},
+			wantErrPrefix: "rls: balancer builder not found for child_policy",
 		},
 		{
-			desc:          "bad JSON",
-			input:         []byte(`bad bad json`),
-			wantErrPrefix: "bad input json data",
+			desc: "balancer builder does not implement ConfigParser",
+			cp: &loadBalancingConfig{
+				Name:   balancerWithoutConfigParserName,
+				Config: []byte(`{}`),
+			},
+			wantErrPrefix: "rls: balancer builder for child_policy does not implement balancer.ConfigParser",
 		},
 		{
-			desc: "bad RLS proto",
-			input: []byte(`{
-				"routeLookupConfig": "not-a-proto"
-			}`),
-			wantErrPrefix: "bad routeLookupConfig proto",
-		},
-		{
-			desc: "bad child policy config",
-			input: []byte(`{
-				"childPolicy": "not-a-valid-loadbalancing-config"
-			}`),
-			wantErrPrefix: "bad childPolicy config",
-		},
-		{
-			desc: "child policy config not an array",
-			input: []byte(`{
-				"childPolicy": {
-					"cds_experimental":{
-						"Cluster": "my-fav-cluster"
-					}
-				}
-			}`),
-			wantErrPrefix: "bad childPolicy config",
+			desc: "child policy config parsing failure",
+			cp: &loadBalancingConfig{
+				Name:   "grpclb",
+				Config: []byte(`{"childPolicy": "not-an-array"}`),
+			},
+			wantErrPrefix: "rls: childPolicy config validation failed",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			lbCfg := &lbParsedConfig{}
-			if err := lbCfg.UnmarshalJSON(test.input); err == nil || !strings.HasPrefix(err.Error(), test.wantErrPrefix) {
-				t.Errorf("lbCfg.UnmarshalJSON(%s) = %v, want %q", string(test.input), err, test.wantErrPrefix)
-			}
-			if !cmp.Equal(lbCfg, &lbParsedConfig{}) {
-				t.Errorf("lbCfg.UnmarshalJSON(%s) change lbCfg object to: {%+v}, wanted unchanged", string(test.input), lbCfg)
+			gotChildConfig, gotErr := validateChildPolicyConfig(test.cp, "")
+			if gotChildConfig != nil || !strings.HasPrefix(fmt.Sprint(gotErr), test.wantErrPrefix) {
+				t.Errorf("validateChildPolicyConfig(%v) = {%v, %v}, want {nil, %v}", test.cp, gotChildConfig, gotErr, test.wantErrPrefix)
 			}
 		})
 	}
