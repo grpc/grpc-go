@@ -73,7 +73,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 			name: "no-routes-in-rc",
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
-					{Domains: []string{goodMatchingDomain}},
+					{Domains: []string{goodLDSTarget1}},
 				},
 			},
 			wantCluster: "",
@@ -83,7 +83,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
 					{
-						Domains: []string{goodMatchingDomain},
+						Domains: []string{goodLDSTarget1},
 						Routes: []*routepb.Route{
 							{
 								Action: &routepb.Route_Route{
@@ -103,7 +103,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
 					{
-						Domains: []string{goodMatchingDomain},
+						Domains: []string{goodLDSTarget1},
 						Routes: []*routepb.Route{
 							{
 								Match:  &routepb.RouteMatch{},
@@ -120,7 +120,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
 					{
-						Domains: []string{goodMatchingDomain},
+						Domains: []string{goodLDSTarget1},
 						Routes:  []*routepb.Route{{}},
 					},
 				},
@@ -132,7 +132,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 			rc: &xdspb.RouteConfiguration{
 				VirtualHosts: []*routepb.VirtualHost{
 					{
-						Domains: []string{goodMatchingDomain},
+						Domains: []string{goodLDSTarget1},
 						Routes: []*routepb.Route{
 							{
 								Action: &routepb.Route_Route{
@@ -460,46 +460,6 @@ func (s) TestRDSWatchExpiryTimer(t *testing.T) {
 		t.Fatalf("Timeout expired when expecting an RDS request")
 	}
 	waitForNilErr(t, callbackCh)
-}
-
-func (s) TestHostFromTarget(t *testing.T) {
-	tests := []struct {
-		name    string
-		target  string
-		want    string
-		wantErr bool
-	}{
-		{
-			name:    "correct",
-			target:  "foo.bar.com:1234",
-			want:    "foo.bar.com",
-			wantErr: false,
-		},
-		{
-			name:    "error",
-			target:  "invalid:1234:3421",
-			want:    "",
-			wantErr: true,
-		},
-		{
-			name:    "correct but missing port",
-			target:  "foo.bar.com",
-			want:    "foo.bar.com",
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := hostFromTarget(tt.target)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("hostFromTarget() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("hostFromTarget() got = %v, want %v", got, tt.want)
-			}
-		})
-	}
 }
 
 func TestMatchTypeForDomain(t *testing.T) {
