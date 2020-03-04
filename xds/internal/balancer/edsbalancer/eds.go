@@ -43,8 +43,8 @@ const (
 )
 
 var (
-	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
-		return newEDSBalancerImpl(cc, nil, loadStore, logger)
+	newEDSBalancer = func(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), loadStore lrs.Store, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
+		return newEDSBalancerImpl(cc, enqueueState, loadStore, logger)
 	}
 )
 
@@ -68,7 +68,7 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 	}
 	loadStore := lrs.NewStore()
 	x.logger = grpclog.NewPrefixLogger(loggingPrefix(x))
-	x.edsImpl = newEDSBalancer(x.cc, loadStore, x.logger)
+	x.edsImpl = newEDSBalancer(x.cc, x.enqueueChildBalancerState, loadStore, x.logger)
 	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, loadStore, x.logger)
 	x.logger.Infof("Created")
 	go x.run()
@@ -272,6 +272,13 @@ func (x *edsBalancer) loseContact() {
 type balancerStateWithPriority struct {
 	priority priorityType
 	s        balancer.State
+}
+
+func (x *edsBalancer) enqueueChildBalancerState(p priorityType, s balancer.State) {
+	x.childPolicyUpdate.Put(&balancerStateWithPriority{
+		priority: p,
+		s:        s,
+	})
 }
 
 func (x *edsBalancer) Close() {

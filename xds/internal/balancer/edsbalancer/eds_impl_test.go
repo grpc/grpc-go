@@ -51,7 +51,9 @@ func init() {
 //  - change drop rate
 func (s) TestEDS_OneLocality(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, func(p priorityType, state balancer.State) {
+		cc.UpdateState(state)
+	}, nil, nil)
 
 	// One locality with one backend.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)

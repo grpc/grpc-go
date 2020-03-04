@@ -58,8 +58,9 @@ type balancerGroupWithConfig struct {
 // policy is used to manage endpoints in each locality.
 type edsBalancerImpl struct {
 	cc     balancer.ClientConn
-	parent *edsBalancer
 	logger *grpclog.PrefixLogger
+
+	enqueueChildBalancerStateUpdate func(priorityType, balancer.State)
 
 	subBalancerBuilder   balancer.Builder
 	loadStore            lrs.Store
@@ -91,12 +92,13 @@ type edsBalancerImpl struct {
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
-func newEDSBalancerImpl(cc balancer.ClientConn, parent *edsBalancer, loadStore lrs.Store, logger *grpclog.PrefixLogger) *edsBalancerImpl {
+func newEDSBalancerImpl(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), loadStore lrs.Store, logger *grpclog.PrefixLogger) *edsBalancerImpl {
 	edsImpl := &edsBalancerImpl{
 		cc:                 cc,
 		logger:             logger,
-		parent:             parent,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
+
+		enqueueChildBalancerStateUpdate: enqueueState,
 
 		priorityToLocalities: make(map[priorityType]*balancerGroupWithConfig),
 		priorityToState:      make(map[priorityType]*balancer.State),
@@ -406,13 +408,11 @@ func (ebwcc *edsBalancerWrapperCC) UpdateBalancerState(state connectivity.State,
 }
 
 func (ebwcc *edsBalancerWrapperCC) UpdateState(state balancer.State) {
-	fmt.Printf(" ------- %p\n", ebwcc.parent.parent)
-	if ebwcc.parent.parent != nil {
-		ebwcc.parent.parent.childPolicyUpdate.Put(&balancerStateWithPriority{
-			priority: ebwcc.priority,
-			s:        state,
-		})
-	}
+	ebwcc.parent.enqueueChildBalancerStateUpdate(ebwcc.priority, state)
+	//ebwcc.parent.parent.childPolicyUpdate.Put(&balancerStateWithPriority{
+	//	priority: ebwcc.priority,
+	//	s:        state,
+	//})
 }
 
 func (edsImpl *edsBalancerImpl) newSubConn(priority priorityType, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
