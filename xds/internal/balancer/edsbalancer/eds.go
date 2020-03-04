@@ -140,7 +140,6 @@ func (x *edsBalancer) run() {
 			x.handleGRPCUpdate(update)
 		case update := <-x.xdsClientUpdate:
 			x.handleXDSClientUpdate(update)
-			fmt.Println(" +++++++++++ after handle XDS client update ")
 		case update := <-x.childPolicyUpdate.Get():
 			x.childPolicyUpdate.Load()
 			u := update.(*balancerStateWithPriority)

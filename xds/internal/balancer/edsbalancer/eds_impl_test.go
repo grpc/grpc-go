@@ -63,10 +63,8 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
 	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
 
-	fmt.Println("waiting for picker")
 	// Pick with only the first backend.
 	p1 := <-cc.newPickerCh
-	fmt.Println("got picker")
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
 		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testSubConn{})) {
@@ -538,7 +536,6 @@ func (tb *testInlineUpdateBalancer) HandleSubConnStateChange(sc balancer.SubConn
 var errTestInlineStateUpdate = fmt.Errorf("I don't like addresses, empty or not")
 
 func (tb *testInlineUpdateBalancer) HandleResolvedAddrs(a []resolver.Address, err error) {
-	fmt.Println("address")
 	tb.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.Ready,
 		Picker:            &testConstPicker{err: errTestInlineStateUpdate},

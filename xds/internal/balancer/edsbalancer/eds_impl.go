@@ -366,8 +366,6 @@ func (edsImpl *edsBalancerImpl) HandleSubConnStateChange(sc balancer.SubConn, s 
 
 // updateState first handles priority, and then wraps picker in a drop picker
 // before forwarding the update.
-//
-// FIXME: this is not called by the goroutine.
 func (edsImpl *edsBalancerImpl) updateState(priority priorityType, s balancer.State) {
 	_, ok := edsImpl.priorityToLocalities[priority]
 	if !ok {
@@ -409,10 +407,6 @@ func (ebwcc *edsBalancerWrapperCC) UpdateBalancerState(state connectivity.State,
 
 func (ebwcc *edsBalancerWrapperCC) UpdateState(state balancer.State) {
 	ebwcc.parent.enqueueChildBalancerStateUpdate(ebwcc.priority, state)
-	//ebwcc.parent.parent.childPolicyUpdate.Put(&balancerStateWithPriority{
-	//	priority: ebwcc.priority,
-	//	s:        state,
-	//})
 }
 
 func (edsImpl *edsBalancerImpl) newSubConn(priority priorityType, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
