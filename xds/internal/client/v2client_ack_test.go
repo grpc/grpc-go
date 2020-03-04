@@ -240,11 +240,11 @@ func (s) TestV2ClientAckNackAfterNewWatch(t *testing.T) {
 	// Start the watch, send a good response, and check for ack.
 	cbLDS := startXDS(t, "LDS", v2c, fakeServer.XDSRequestChan, goodLDSRequest, "", "")
 	nonce := sendGoodResp(t, "LDS", fakeServer, versionLDS, goodLDSResponse1, goodLDSRequest, cbLDS)
-	versionLDS++
 
 	// Start a new watch. The version in the new request should be the version
-	// from the previous response, thus versionLDS-1.
-	cbLDS = startXDS(t, "LDS", v2c, fakeServer.XDSRequestChan, goodLDSRequest, strconv.Itoa(versionLDS-1), nonce)
+	// from the previous response, thus versionLDS before ++.
+	cbLDS = startXDS(t, "LDS", v2c, fakeServer.XDSRequestChan, goodLDSRequest, strconv.Itoa(versionLDS), nonce)
+	versionLDS++
 
 	// This is an invalid response after the new watch.
 	nonce = sendXDSRespWithVersion(fakeServer.XDSResponseChan, &xdspb.DiscoveryResponse{
