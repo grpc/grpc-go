@@ -58,6 +58,7 @@ type balancerGroupWithConfig struct {
 // policy is used to manage endpoints in each locality.
 type edsBalancerImpl struct {
 	cc     balancer.ClientConn
+	parent *edsBalancer
 	logger *grpclog.PrefixLogger
 
 	subBalancerBuilder   balancer.Builder
@@ -90,10 +91,11 @@ type edsBalancerImpl struct {
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
-func newEDSBalancerImpl(cc balancer.ClientConn, loadStore lrs.Store, logger *grpclog.PrefixLogger) *edsBalancerImpl {
+func newEDSBalancerImpl(cc balancer.ClientConn, parent *edsBalancer, loadStore lrs.Store, logger *grpclog.PrefixLogger) *edsBalancerImpl {
 	edsImpl := &edsBalancerImpl{
 		cc:                 cc,
 		logger:             logger,
+		parent:             parent,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
 
 		priorityToLocalities: make(map[priorityType]*balancerGroupWithConfig),
@@ -362,6 +364,8 @@ func (edsImpl *edsBalancerImpl) HandleSubConnStateChange(sc balancer.SubConn, s 
 
 // updateState first handles priority, and then wraps picker in a drop picker
 // before forwarding the update.
+//
+// FIXME: this is not called by the goroutine.
 func (edsImpl *edsBalancerImpl) updateState(priority priorityType, s balancer.State) {
 	_, ok := edsImpl.priorityToLocalities[priority]
 	if !ok {
@@ -402,7 +406,13 @@ func (ebwcc *edsBalancerWrapperCC) UpdateBalancerState(state connectivity.State,
 }
 
 func (ebwcc *edsBalancerWrapperCC) UpdateState(state balancer.State) {
-	ebwcc.parent.updateState(ebwcc.priority, state)
+	fmt.Printf(" ------- %p\n", ebwcc.parent.parent)
+	if ebwcc.parent.parent != nil {
+		ebwcc.parent.parent.childPolicyUpdate.Put(&balancerStateWithPriority{
+			priority: ebwcc.priority,
+			s:        state,
+		})
+	}
 }
 
 func (edsImpl *edsBalancerImpl) newSubConn(priority priorityType, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {

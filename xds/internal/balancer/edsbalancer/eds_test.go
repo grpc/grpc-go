@@ -101,8 +101,9 @@ func (f *fakeEDSBalancer) HandleChildPolicy(name string, config json.RawMessage)
 	f.childPolicy.Send(&loadBalancingConfig{Name: name, Config: config})
 }
 
-func (f *fakeEDSBalancer) Close()                                         {}
-func (f *fakeEDSBalancer) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) {}
+func (f *fakeEDSBalancer) Close()                                              {}
+func (f *fakeEDSBalancer) HandleEDSResponse(edsResp *xdsclient.EDSUpdate)      {}
+func (f *fakeEDSBalancer) updateState(priority priorityType, s balancer.State) {}
 
 func (f *fakeEDSBalancer) waitForChildPolicy(wantPolicy *loadBalancingConfig) error {
 	val, err := f.childPolicy.Receive()
