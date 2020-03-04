@@ -512,6 +512,69 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	}
 }
 
+func init() {
+	balancer.Register(&testInlineUpdateBalancerBuilder{})
+}
+
+// A test balancer that updates balancer.State inline when handling ClientConn
+// state.
+type testInlineUpdateBalancerBuilder struct{}
+
+func (*testInlineUpdateBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return &testInlineUpdateBalancer{cc: cc}
+}
+
+func (*testInlineUpdateBalancerBuilder) Name() string {
+	return "test-inline-update-balancer"
+}
+
+type testInlineUpdateBalancer struct {
+	cc balancer.ClientConn
+}
+
+func (tb *testInlineUpdateBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+}
+
+var errTestInlineStateUpdate = fmt.Errorf("I don't like addresses, empty or not")
+
+func (tb *testInlineUpdateBalancer) HandleResolvedAddrs(a []resolver.Address, err error) {
+	fmt.Println("address")
+	tb.cc.UpdateState(balancer.State{
+		ConnectivityState: connectivity.Ready,
+		Picker:            &testConstPicker{err: errTestInlineStateUpdate},
+	})
+}
+
+func (*testInlineUpdateBalancer) Close() {
+}
+
+// When the child policy update picker inline in a handleClientUpdate call
+// (e.g., roundrobin handling empty addresses). There could be deadlock caused
+// by acquiring a locked mutex.
+func (s) TestEDS_ChildPolicyUpdatePickerInline(t *testing.T) {
+	cc := newTestClientConn(t)
+	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = func(p priorityType, state balancer.State) {
+		// For this test, euqueue needs to happen asynchronously (like in the
+		// real implementation).
+		go edsb.updateState(p, state)
+	}
+
+	edsb.HandleChildPolicy("test-inline-update-balancer", nil)
+
+	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
+	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+
+	p0 := <-cc.newPickerCh
+	for i := 0; i < 5; i++ {
+		_, err := p0.Pick(balancer.PickInfo{})
+		if err != errTestInlineStateUpdate {
+			t.Fatalf("picker.Pick, got err %q, want err %q", err, errTestInlineStateUpdate)
+		}
+	}
+}
+
 func (s) TestDropPicker(t *testing.T) {
 	const pickCount = 12
 	var constPicker = &testConstPicker{
