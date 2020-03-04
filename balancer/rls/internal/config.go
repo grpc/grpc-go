@@ -219,6 +219,13 @@ func (*rlsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig,
 	if cfgJSON.ChildPolicyConfigTargetFieldName == "" {
 		return nil, fmt.Errorf("rls: childPolicyConfigTargetFieldName field is not set in service config {%+v}", string(c))
 	}
+	// TODO(easwars): When we start instantiating the child policy from the
+	// parent RLS LB policy, we could make this function a method on the
+	// lbConfig object and share the code. We would be parsing the child policy
+	// config again during that time. The only difference betweeen now and then
+	// would be that we would be using real targetField name instead of the
+	// dummy. So, we could make the targetName field a parameter to this
+	// function during the refactor.
 	cpCfg, err := validateChildPolicyConfig(childPolicy, cfgJSON.ChildPolicyConfigTargetFieldName)
 	if err != nil {
 		return nil, err
@@ -232,9 +239,15 @@ func (*rlsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig,
 		staleAge:             staleAge,
 		cacheSizeBytes:       cacheSizeBytes,
 		rpStrategy:           rpStrategy,
-		cpName:               childPolicy.Name,
-		cpTargetField:        cfgJSON.ChildPolicyConfigTargetFieldName,
-		cpConfig:             cpCfg,
+		// TODO(easwars): Once we refactor validateChildPolicyConfig and make
+		// it a method on the lbConfig object, we could directly store the
+		// balancer.Builder and/or balancer.ConfigParser here instead of the
+		// Name. That would mean that we would have to create the lbConfig
+		// object here first before validating the childPolicy config, but
+		// that's a minor detail.
+		cpName:        childPolicy.Name,
+		cpTargetField: cfgJSON.ChildPolicyConfigTargetFieldName,
+		cpConfig:      cpCfg,
 	}, nil
 }
 
