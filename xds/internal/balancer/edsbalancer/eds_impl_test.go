@@ -533,7 +533,7 @@ type testInlineUpdateBalancer struct {
 func (tb *testInlineUpdateBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
 }
 
-var errTestInlineStateUpdate = fmt.Errorf("I don't like addresses, empty or not")
+var errTestInlineStateUpdate = fmt.Errorf("don't like addresses, empty or not")
 
 func (tb *testInlineUpdateBalancer) HandleResolvedAddrs(a []resolver.Address, err error) {
 	tb.cc.UpdateState(balancer.State{
