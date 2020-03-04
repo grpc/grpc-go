@@ -51,9 +51,8 @@ func init() {
 //  - change drop rate
 func (s) TestEDS_OneLocality(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, func(p priorityType, state balancer.State) {
-		cc.UpdateState(state)
-	}, nil, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// One locality with one backend.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -162,6 +161,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 func (s) TestEDS_TwoLocalities(t *testing.T) {
 	cc := newTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, each with one backend.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -292,6 +292,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	cc := newTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, each 3 backend, one Healthy, one Unhealthy, one Unknown.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -420,6 +421,7 @@ func (tcp *testConstPicker) Pick(info balancer.PickInfo) (balancer.PickResult, e
 func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	cc := newTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	t.Logf("update sub-balancer to test-const-balancer")
 	edsb.HandleChildPolicy("test-const-balancer", nil)
@@ -580,6 +582,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 
 	cc := newTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, testLoadStore, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	backendToBalancerID := make(map[balancer.SubConn]internal.Locality)
 
