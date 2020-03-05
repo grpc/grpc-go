@@ -67,11 +67,13 @@ type v2Client struct {
 	// these are set to nil. All accesses to the map protected and any value
 	// inside the map should be protected with the above mutex.
 	watchMap map[string]*watchInfo
-	// ackMap contains the version that was acked (the version in the ack
+	// versionMap contains the version that was acked (the version in the ack
 	// request that was sent on wire). The key is typeURL, the value is the
-	// version string, becaues the versions for different resource types
-	// should be independent.
-	ackMap map[string]string
+	// version string, becaues the versions for different resource types should
+	// be independent.
+	versionMap map[string]string
+	// nonceMap contains the nonce from the most recent received response.
+	nonceMap map[string]string
 	// rdsCache maintains a mapping of {routeConfigName --> clusterName} from
 	// validated route configurations received in RDS responses. We cache all
 	// valid route configurations, whether or not we are interested in them
@@ -107,10 +109,11 @@ func newV2Client(cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) 
 		streamCh: make(chan adsStream, 1),
 		sendCh:   buffer.NewUnbounded(),
 
-		watchMap: make(map[string]*watchInfo),
-		ackMap:   make(map[string]string),
-		rdsCache: make(map[string]string),
-		cdsCache: make(map[string]CDSUpdate),
+		watchMap:   make(map[string]*watchInfo),
+		versionMap: make(map[string]string),
+		nonceMap:   make(map[string]string),
+		rdsCache:   make(map[string]string),
+		cdsCache:   make(map[string]CDSUpdate),
 	}
 	v2c.ctx, v2c.cancelCtx = context.WithCancel(context.Background())
 
@@ -179,7 +182,7 @@ func (v2c *v2Client) run() {
 // string
 // - If this is an ack, version will be the version from the response
 // - If this is a nack, version will be the previous acked version (from
-// ackMap). If there was no ack before, it will be an empty string
+// versionMap). If there was no ack before, it will be an empty string
 func (v2c *v2Client) sendRequest(stream adsStream, resourceNames []string, typeURL, version, nonce string) bool {
 	req := &xdspb.DiscoveryRequest{
 		Node:          v2c.nodeProto,
@@ -208,7 +211,8 @@ func (v2c *v2Client) sendExisting(stream adsStream) bool {
 	defer v2c.mu.Unlock()
 
 	// Reset the ack versions when the stream restarts.
-	v2c.ackMap = make(map[string]string)
+	v2c.versionMap = make(map[string]string)
+	v2c.nonceMap = make(map[string]string)
 
 	for typeURL, wi := range v2c.watchMap {
 		if !v2c.sendRequest(stream, wi.target, typeURL, "", "") {
@@ -239,10 +243,12 @@ func (v2c *v2Client) processWatchInfo(t *watchInfo) (target []string, typeURL, v
 	v2c.checkCacheAndUpdateWatchMap(t)
 	// TODO: if watch is called again with the same resource names,
 	// there's no need to send another request.
-	//
-	// TODO: should we reset version (for ack) when a new watch is
-	// started? Or do this only if the resource names are different
-	// (so we send a new request)?
+
+	// We don't reset version or nonce when a new watch is started. The version
+	// and nonce from previous response are carried by the request unless the
+	// stream is recreated.
+	version = v2c.versionMap[typeURL]
+	nonce = v2c.nonceMap[typeURL]
 	return
 }
 
@@ -270,13 +276,14 @@ func (v2c *v2Client) processAckInfo(t *ackInfo) (target []string, typeURL, versi
 	target = wi.target
 	if version == "" {
 		// This is a nack, get the previous acked version.
-		version = v2c.ackMap[typeURL]
+		version = v2c.versionMap[typeURL]
 		// version will still be an empty string if typeURL isn't
-		// found in ackMap, this can happen if there wasn't any ack
+		// found in versionMap, this can happen if there wasn't any ack
 		// before.
 	} else {
-		v2c.ackMap[typeURL] = version
+		v2c.versionMap[typeURL] = version
 	}
+	v2c.nonceMap[typeURL] = nonce
 	return
 }
 
