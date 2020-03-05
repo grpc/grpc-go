@@ -60,6 +60,8 @@ type edsBalancerImpl struct {
 	cc     balancer.ClientConn
 	logger *grpclog.PrefixLogger
 
+	enqueueChildBalancerStateUpdate func(priorityType, balancer.State)
+
 	subBalancerBuilder   balancer.Builder
 	loadStore            lrs.Store
 	priorityToLocalities map[priorityType]*balancerGroupWithConfig
@@ -90,11 +92,13 @@ type edsBalancerImpl struct {
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
-func newEDSBalancerImpl(cc balancer.ClientConn, loadStore lrs.Store, logger *grpclog.PrefixLogger) *edsBalancerImpl {
+func newEDSBalancerImpl(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), loadStore lrs.Store, logger *grpclog.PrefixLogger) *edsBalancerImpl {
 	edsImpl := &edsBalancerImpl{
 		cc:                 cc,
 		logger:             logger,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
+
+		enqueueChildBalancerStateUpdate: enqueueState,
 
 		priorityToLocalities: make(map[priorityType]*balancerGroupWithConfig),
 		priorityToState:      make(map[priorityType]*balancer.State),
@@ -402,7 +406,7 @@ func (ebwcc *edsBalancerWrapperCC) UpdateBalancerState(state connectivity.State,
 }
 
 func (ebwcc *edsBalancerWrapperCC) UpdateState(state balancer.State) {
-	ebwcc.parent.updateState(ebwcc.priority, state)
+	ebwcc.parent.enqueueChildBalancerStateUpdate(ebwcc.priority, state)
 }
 
 func (edsImpl *edsBalancerImpl) newSubConn(priority priorityType, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {

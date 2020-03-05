@@ -51,7 +51,8 @@ func init() {
 //  - change drop rate
 func (s) TestEDS_OneLocality(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// One locality with one backend.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -157,7 +158,8 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 //  - update locality weight
 func (s) TestEDS_TwoLocalities(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, each with one backend.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -287,7 +289,8 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 // healthy ones are used.
 func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, each 3 backend, one Healthy, one Unhealthy, one Unknown.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -358,7 +361,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 }
 
 func (s) TestClose(t *testing.T) {
-	edsb := newEDSBalancerImpl(nil, nil, nil)
+	edsb := newEDSBalancerImpl(nil, nil, nil, nil)
 	// This is what could happen when switching between fallback and eds. This
 	// make sure it doesn't panic.
 	edsb.Close()
@@ -415,7 +418,8 @@ func (tcp *testConstPicker) Pick(info balancer.PickInfo) (balancer.PickResult, e
 // eds response.
 func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil)
+	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	t.Logf("update sub-balancer to test-const-balancer")
 	edsb.HandleChildPolicy("test-const-balancer", nil)
@@ -506,6 +510,68 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	}
 }
 
+func init() {
+	balancer.Register(&testInlineUpdateBalancerBuilder{})
+}
+
+// A test balancer that updates balancer.State inline when handling ClientConn
+// state.
+type testInlineUpdateBalancerBuilder struct{}
+
+func (*testInlineUpdateBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return &testInlineUpdateBalancer{cc: cc}
+}
+
+func (*testInlineUpdateBalancerBuilder) Name() string {
+	return "test-inline-update-balancer"
+}
+
+type testInlineUpdateBalancer struct {
+	cc balancer.ClientConn
+}
+
+func (tb *testInlineUpdateBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+}
+
+var errTestInlineStateUpdate = fmt.Errorf("don't like addresses, empty or not")
+
+func (tb *testInlineUpdateBalancer) HandleResolvedAddrs(a []resolver.Address, err error) {
+	tb.cc.UpdateState(balancer.State{
+		ConnectivityState: connectivity.Ready,
+		Picker:            &testConstPicker{err: errTestInlineStateUpdate},
+	})
+}
+
+func (*testInlineUpdateBalancer) Close() {
+}
+
+// When the child policy update picker inline in a handleClientUpdate call
+// (e.g., roundrobin handling empty addresses). There could be deadlock caused
+// by acquiring a locked mutex.
+func (s) TestEDS_ChildPolicyUpdatePickerInline(t *testing.T) {
+	cc := newTestClientConn(t)
+	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = func(p priorityType, state balancer.State) {
+		// For this test, euqueue needs to happen asynchronously (like in the
+		// real implementation).
+		go edsb.updateState(p, state)
+	}
+
+	edsb.HandleChildPolicy("test-inline-update-balancer", nil)
+
+	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
+	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+
+	p0 := <-cc.newPickerCh
+	for i := 0; i < 5; i++ {
+		_, err := p0.Pick(balancer.PickInfo{})
+		if err != errTestInlineStateUpdate {
+			t.Fatalf("picker.Pick, got err %q, want err %q", err, errTestInlineStateUpdate)
+		}
+	}
+}
+
 func (s) TestDropPicker(t *testing.T) {
 	const pickCount = 12
 	var constPicker = &testConstPicker{
@@ -575,7 +641,8 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	testLoadStore := newTestLoadStore()
 
 	cc := newTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, testLoadStore, nil)
+	edsb := newEDSBalancerImpl(cc, nil, testLoadStore, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	backendToBalancerID := make(map[balancer.SubConn]internal.Locality)
 

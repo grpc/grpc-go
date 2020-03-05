@@ -98,8 +98,10 @@ func (edsImpl *edsBalancerImpl) startPriority(priority priorityType) {
 	p := edsImpl.priorityToLocalities[priority]
 	// NOTE: this will eventually send addresses to sub-balancers. If the
 	// sub-balancer tries to update picker, it will result in a deadlock on
-	// priorityMu. But it's not an expected behavior for the balancer to
-	// update picker when handling addresses.
+	// priorityMu in the update is handled synchronously. The deadlock is
+	// currently avoided by handling balancer update in a goroutine (the run
+	// goroutine in the parent eds balancer). When priority balancer is split
+	// into its own, this asynchronous state handling needs to be copied.
 	p.bg.start()
 	// startPriority can be called when
 	// 1. first EDS resp, start p0
