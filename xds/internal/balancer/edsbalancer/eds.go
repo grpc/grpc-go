@@ -217,7 +217,7 @@ func (x *edsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connec
 }
 
 func (x *edsBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
-	x.logger.Errorf("UpdateResolverState should be called instead of HandleResolvedAddrs")
+	x.logger.Errorf("UpdateClientConnState should be called instead of HandleResolvedAddrs")
 }
 
 func (x *edsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
