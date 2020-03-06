@@ -46,16 +46,17 @@ type dialOptions struct {
 	chainUnaryInts  []UnaryClientInterceptor
 	chainStreamInts []StreamClientInterceptor
 
-	cp          Compressor
-	dc          Decompressor
-	bs          internalbackoff.Strategy
-	block       bool
-	insecure    bool
-	timeout     time.Duration
-	scChan      <-chan ServiceConfig
-	authority   string
-	copts       transport.ConnectOptions
-	callOptions []CallOption
+	cp              Compressor
+	dc              Decompressor
+	bs              internalbackoff.Strategy
+	block           bool
+	returnLastError bool
+	insecure        bool
+	timeout         time.Duration
+	scChan          <-chan ServiceConfig
+	authority       string
+	copts           transport.ConnectOptions
+	callOptions     []CallOption
 	// This is used by v1 balancer dial option WithBalancer to support v1
 	// balancer, and also by WithBalancerName dial option.
 	balancerBuilder             balancer.Builder
@@ -295,6 +296,16 @@ func withBackoff(bs internalbackoff.Strategy) DialOption {
 func WithBlock() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.block = true
+	})
+}
+
+// WithReturnLastError returns a DialOption which makes the client connection
+// return the last connection error that occurred instead of a context.DeadlineExceeded error.
+// Implies WithBlock()
+func WithReturnLastError() DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.block = true
+		o.returnLastError = true
 	})
 }
 
