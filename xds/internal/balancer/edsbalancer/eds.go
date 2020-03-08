@@ -23,13 +23,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/buffer"
+	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
@@ -42,8 +43,8 @@ const (
 )
 
 var (
-	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerImplInterface {
-		return newEDSBalancerImpl(cc, loadStore)
+	newEDSBalancer = func(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), loadStore lrs.Store, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
+		return newEDSBalancerImpl(cc, enqueueState, loadStore, logger)
 	}
 )
 
@@ -57,16 +58,19 @@ type edsBalancerBuilder struct{}
 func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	ctx, cancel := context.WithCancel(context.Background())
 	x := &edsBalancer{
-		ctx:             ctx,
-		cancel:          cancel,
-		cc:              cc,
-		buildOpts:       opts,
-		grpcUpdate:      make(chan interface{}),
-		xdsClientUpdate: make(chan interface{}),
+		ctx:               ctx,
+		cancel:            cancel,
+		cc:                cc,
+		buildOpts:         opts,
+		grpcUpdate:        make(chan interface{}),
+		xdsClientUpdate:   make(chan interface{}),
+		childPolicyUpdate: buffer.NewUnbounded(),
 	}
 	loadStore := lrs.NewStore()
-	x.edsImpl = newEDSBalancer(x.cc, loadStore)
-	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, loadStore)
+	x.logger = grpclog.NewPrefixLogger(loggingPrefix(x))
+	x.edsImpl = newEDSBalancer(x.cc, x.enqueueChildBalancerState, loadStore, x.logger)
+	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, loadStore, x.logger)
+	x.logger.Infof("Created")
 	go x.run()
 	return x
 }
@@ -87,6 +91,8 @@ func (b *edsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadB
 // implement to communicate with edsBalancer.
 //
 // It's implemented by the real eds balancer and a fake testing eds balancer.
+//
+// TODO: none of the methods in this interface needs to be exported.
 type edsBalancerImplInterface interface {
 	// HandleEDSResponse passes the received EDS message from traffic director to eds balancer.
 	HandleEDSResponse(edsResp *xdsclient.EDSUpdate)
@@ -94,6 +100,8 @@ type edsBalancerImplInterface interface {
 	HandleChildPolicy(name string, config json.RawMessage)
 	// HandleSubConnStateChange handles state change for SubConn.
 	HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State)
+	// updateState handle a balancer state update from the priority.
+	updateState(priority priorityType, s balancer.State)
 	// Close closes the eds balancer.
 	Close()
 }
@@ -110,9 +118,12 @@ type edsBalancer struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 
+	logger *grpclog.PrefixLogger
+
 	// edsBalancer continuously monitor the channels below, and will handle events from them in sync.
-	grpcUpdate      chan interface{}
-	xdsClientUpdate chan interface{}
+	grpcUpdate        chan interface{}
+	xdsClientUpdate   chan interface{}
+	childPolicyUpdate *buffer.Unbounded
 
 	client  *xdsclientWrapper // may change when passed a different service config
 	config  *EDSConfig        // may change when passed a different service config
@@ -129,6 +140,10 @@ func (x *edsBalancer) run() {
 			x.handleGRPCUpdate(update)
 		case update := <-x.xdsClientUpdate:
 			x.handleXDSClientUpdate(update)
+		case update := <-x.childPolicyUpdate.Get():
+			x.childPolicyUpdate.Load()
+			u := update.(*balancerStateWithPriority)
+			x.edsImpl.updateState(u.priority, u.s)
 		case <-x.ctx.Done():
 			if x.client != nil {
 				x.client.close()
@@ -148,6 +163,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 			x.edsImpl.HandleSubConnStateChange(u.sc, u.state.ConnectivityState)
 		}
 	case *balancer.ClientConnState:
+		x.logger.Infof("Receive update from resolver, balancer config: %+v", u.BalancerConfig)
 		cfg, _ := u.BalancerConfig.(*EDSConfig)
 		if cfg == nil {
 			// service config parsing failed. should never happen.
@@ -163,7 +179,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 
 		// We will update the edsImpl with the new child policy, if we got a
 		// different one.
-		if x.edsImpl != nil && !reflect.DeepEqual(cfg.ChildPolicy, x.config.ChildPolicy) {
+		if x.edsImpl != nil && !cmp.Equal(cfg.ChildPolicy, x.config.ChildPolicy) {
 			if cfg.ChildPolicy != nil {
 				x.edsImpl.HandleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
 			} else {
@@ -197,11 +213,11 @@ type subConnStateUpdate struct {
 }
 
 func (x *edsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	grpclog.Error("UpdateSubConnState should be called instead of HandleSubConnStateChange")
+	x.logger.Errorf("UpdateSubConnState should be called instead of HandleSubConnStateChange")
 }
 
 func (x *edsBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
-	grpclog.Error("UpdateResolverState should be called instead of HandleResolvedAddrs")
+	x.logger.Errorf("UpdateClientConnState should be called instead of HandleResolvedAddrs")
 }
 
 func (x *edsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
@@ -252,6 +268,19 @@ func (x *edsBalancer) loseContact() {
 	}
 }
 
+type balancerStateWithPriority struct {
+	priority priorityType
+	s        balancer.State
+}
+
+func (x *edsBalancer) enqueueChildBalancerState(p priorityType, s balancer.State) {
+	x.childPolicyUpdate.Put(&balancerStateWithPriority{
+		priority: p,
+		s:        s,
+	})
+}
+
 func (x *edsBalancer) Close() {
 	x.cancel()
+	x.logger.Infof("Shutdown")
 }

@@ -20,10 +20,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -126,7 +127,7 @@ func (tb *testEDSBalancer) waitForClientConnUpdate(wantCCS balancer.ClientConnSt
 		return errors.New("Timeout when expecting ClientConn update on EDS balancer")
 	case gotCCS := <-tb.ccsCh:
 		timer.Stop()
-		if !reflect.DeepEqual(gotCCS, wantCCS) {
+		if !cmp.Equal(gotCCS, wantCCS, cmpopts.IgnoreUnexported(attributes.Attributes{})) {
 			return fmt.Errorf("received ClientConnState: %+v, want %+v", gotCCS, wantCCS)
 		}
 		return nil
@@ -142,7 +143,7 @@ func (tb *testEDSBalancer) waitForSubConnUpdate(wantSCS subConnWithState) error 
 		return errors.New("Timeout when expecting SubConn update on EDS balancer")
 	case gotSCS := <-tb.scStateCh:
 		timer.Stop()
-		if !reflect.DeepEqual(gotSCS, wantSCS) {
+		if !cmp.Equal(gotSCS, wantSCS, cmp.AllowUnexported(subConnWithState{})) {
 			return fmt.Errorf("received SubConnState: %+v, want %+v", gotSCS, wantSCS)
 		}
 		return nil
@@ -222,8 +223,8 @@ func setup() (*cdsBalancer, *testEDSBalancer, func()) {
 
 	edsB := newTestEDSBalancer()
 	oldEDSBalancerBuilder := newEDSBalancer
-	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.V2Balancer {
-		return edsB
+	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.V2Balancer, error) {
+		return edsB, nil
 	}
 
 	return cdsB.(*cdsBalancer), edsB, func() {
@@ -505,7 +506,7 @@ func (s) TestParseConfig(t *testing.T) {
 				t.Fatalf("bb.ParseConfig(%v) = %v, wantErr %v", string(test.input), gotErr, test.wantErr)
 			}
 			if !test.wantErr {
-				if !reflect.DeepEqual(gotCfg, test.wantCfg) {
+				if !cmp.Equal(gotCfg, test.wantCfg) {
 					t.Fatalf("bb.ParseConfig(%v) = %v, want %v", string(test.input), gotCfg, test.wantCfg)
 				}
 			}

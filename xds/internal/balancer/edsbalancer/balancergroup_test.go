@@ -18,10 +18,10 @@ package edsbalancer
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
@@ -58,7 +58,7 @@ func subConnFromPicker(p balancer.V2Picker) func() balancer.SubConn {
 // 1 balancer, 1 backend -> 2 backends -> 1 backend.
 func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 	bg.start()
 
 	// Add one balancer to group.
@@ -75,7 +75,7 @@ func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	p1 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSCSt.SubConn, sc1) {
+		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
@@ -97,7 +97,7 @@ func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	// Remove the first address.
 	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[1:2])
 	scToRemove := <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove, sc1) {
+	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
 	}
 	bg.handleSubConnStateChange(scToRemove, connectivity.Shutdown)
@@ -106,7 +106,7 @@ func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	p3 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSC, _ := p3.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSC.SubConn, sc2) {
+		if !cmp.Equal(gotSC.SubConn, sc2, cmp.AllowUnexported(testSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSC, sc2)
 		}
 	}
@@ -115,7 +115,7 @@ func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 // 2 balancers, each with 1 backend.
 func (s) TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 	bg.start()
 
 	// Add two balancers to group and send one resolved address to both
@@ -145,7 +145,7 @@ func (s) TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 // 2 balancers, each with more than 1 backends.
 func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 	bg.start()
 
 	// Add two balancers to group and send one resolved address to both
@@ -190,7 +190,7 @@ func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	// Remove sc3's addresses.
 	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[3:4])
 	scToRemove := <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove, sc3) {
+	if !cmp.Equal(scToRemove, sc3, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc3, scToRemove)
 	}
 	bg.handleSubConnStateChange(scToRemove, connectivity.Shutdown)
@@ -230,7 +230,7 @@ func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 // 2 balancers with different weights.
 func (s) TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 	bg.start()
 
 	// Add two balancers to group and send two resolved addresses to both
@@ -266,7 +266,7 @@ func (s) TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 // totally 3 balancers, add/remove balancer.
 func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 	bg.start()
 
 	// Add three balancers to group and send one resolved address to both
@@ -300,7 +300,7 @@ func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	// Remove the second balancer, while the others two are ready.
 	bg.remove(testBalancerIDs[1])
 	scToRemove := <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove, sc2) {
+	if !cmp.Equal(scToRemove, sc2, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove)
 	}
 	p2 := <-cc.newPickerCh
@@ -314,7 +314,7 @@ func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	// Remove the first balancer, while the third is transient failure.
 	bg.remove(testBalancerIDs[0])
 	scToRemove = <-cc.removeSubConnCh
-	if !reflect.DeepEqual(scToRemove, sc1) {
+	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
 	}
 	p3 := <-cc.newPickerCh
@@ -328,7 +328,7 @@ func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 // 2 balancers, change balancer weight.
 func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 	bg.start()
 
 	// Add two balancers to group and send two resolved addresses to both
@@ -374,7 +374,7 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 	testLoadStore := newTestLoadStore()
 
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, testLoadStore)
+	bg := newBalancerGroup(cc, testLoadStore, nil)
 	bg.start()
 
 	backendToBalancerID := make(map[balancer.SubConn]internal.Locality)
@@ -434,13 +434,13 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 		}
 	}
 
-	if !reflect.DeepEqual(testLoadStore.callsStarted, wantStart) {
+	if !cmp.Equal(testLoadStore.callsStarted, wantStart) {
 		t.Fatalf("want started: %v, got: %v", testLoadStore.callsStarted, wantStart)
 	}
-	if !reflect.DeepEqual(testLoadStore.callsEnded, wantEnd) {
+	if !cmp.Equal(testLoadStore.callsEnded, wantEnd) {
 		t.Fatalf("want ended: %v, got: %v", testLoadStore.callsEnded, wantEnd)
 	}
-	if !reflect.DeepEqual(testLoadStore.callsCost, wantCost) {
+	if !cmp.Equal(testLoadStore.callsCost, wantCost, cmp.AllowUnexported(testServerLoad{})) {
 		t.Fatalf("want cost: %v, got: %v", testLoadStore.callsCost, wantCost)
 	}
 }
@@ -456,7 +456,7 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 // Start the balancer group again and check for behavior.
 func (s) TestBalancerGroup_start_close(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -540,7 +540,7 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 // because of deadlock.
 func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 
 	bg.add(testBalancerIDs[0], 2, &testConstBalancerBuilder{})
 	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
@@ -564,7 +564,7 @@ func replaceDefaultSubBalancerCloseTimeout(n time.Duration) func() {
 // own map, and one sub-balancer in cache.
 func initBalancerGroupForCachingTest(t *testing.T) (*balancerGroup, *testClientConn, map[resolver.Address]balancer.SubConn) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc, nil)
+	bg := newBalancerGroup(cc, nil, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.

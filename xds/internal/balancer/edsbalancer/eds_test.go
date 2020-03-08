@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"testing"
 
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -32,6 +31,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpctest"
 	scpb "google.golang.org/grpc/internal/proto/grpc_service_config"
 	"google.golang.org/grpc/resolver"
@@ -101,8 +101,9 @@ func (f *fakeEDSBalancer) HandleChildPolicy(name string, config json.RawMessage)
 	f.childPolicy.Send(&loadBalancingConfig{Name: name, Config: config})
 }
 
-func (f *fakeEDSBalancer) Close()                                         {}
-func (f *fakeEDSBalancer) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) {}
+func (f *fakeEDSBalancer) Close()                                              {}
+func (f *fakeEDSBalancer) HandleEDSResponse(edsResp *xdsclient.EDSUpdate)      {}
+func (f *fakeEDSBalancer) updateState(priority priorityType, s balancer.State) {}
 
 func (f *fakeEDSBalancer) waitForChildPolicy(wantPolicy *loadBalancingConfig) error {
 	val, err := f.childPolicy.Receive()
@@ -110,7 +111,7 @@ func (f *fakeEDSBalancer) waitForChildPolicy(wantPolicy *loadBalancingConfig) er
 		return fmt.Errorf("error waiting for childPolicy: %v", err)
 	}
 	gotPolicy := val.(*loadBalancingConfig)
-	if !reflect.DeepEqual(gotPolicy, wantPolicy) {
+	if !cmp.Equal(gotPolicy, wantPolicy) {
 		return fmt.Errorf("got childPolicy %v, want %v", gotPolicy, wantPolicy)
 	}
 	return nil
@@ -122,7 +123,7 @@ func (f *fakeEDSBalancer) waitForSubConnStateChange(wantState *scStateChange) er
 		return fmt.Errorf("error waiting for subconnStateChange: %v", err)
 	}
 	gotState := val.(*scStateChange)
-	if !reflect.DeepEqual(gotState, wantState) {
+	if !cmp.Equal(gotState, wantState, cmp.AllowUnexported(scStateChange{})) {
 		return fmt.Errorf("got subconnStateChange %v, want %v", gotState, wantState)
 	}
 	return nil
@@ -185,7 +186,7 @@ func waitForNewEDSLB(t *testing.T, ch *testutils.Channel) *fakeEDSBalancer {
 // cleanup.
 func setup(edsLBCh *testutils.Channel, xdsClientCh *testutils.Channel) func() {
 	origNewEDSBalancer := newEDSBalancer
-	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerImplInterface {
+	newEDSBalancer = func(cc balancer.ClientConn, enqueue func(priorityType, balancer.State), loadStore lrs.Store, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
 		edsLB := newFakeEDSBalancer(cc, loadStore)
 		defer func() { edsLBCh.Send(edsLB) }()
 		return edsLB
@@ -531,7 +532,7 @@ func (s) TestLoadbalancingConfigParsing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var cfg EDSConfig
-			if err := json.Unmarshal([]byte(tt.s), &cfg); err != nil || !reflect.DeepEqual(&cfg, tt.want) {
+			if err := json.Unmarshal([]byte(tt.s), &cfg); err != nil || !cmp.Equal(&cfg, tt.want) {
 				t.Errorf("test name: %s, parseFullServiceConfig() = %+v, err: %v, want %+v, <nil>", tt.name, cfg, err, tt.want)
 			}
 		})

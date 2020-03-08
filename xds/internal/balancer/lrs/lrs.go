@@ -314,9 +314,6 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterNa
 			continue
 		}
 		if err := stream.Send(&lrspb.LoadStatsRequest{
-			ClusterStats: []*endpointpb.ClusterStats{{
-				ClusterName: clusterName,
-			}},
 			Node: node,
 		}); err != nil {
 			grpclog.Warningf("lrs: failed to send first request: %v", err)
@@ -332,12 +329,19 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterNa
 			grpclog.Warningf("lrs: failed to convert report interval: %v", err)
 			continue
 		}
-		if len(first.Clusters) != 1 {
-			grpclog.Warningf("lrs: received multiple clusters %v, expect one cluster", first.Clusters)
-			continue
+		// The LRS client should join the clusters it knows with the cluster
+		// list from response, and send loads for them.
+		//
+		// But the LRS client now only supports one cluster. TODO: extend it to
+		// support multiple clusters.
+		var clusterFoundInResponse bool
+		for _, c := range first.Clusters {
+			if c == clusterName {
+				clusterFoundInResponse = true
+			}
 		}
-		if first.Clusters[0] != clusterName {
-			grpclog.Warningf("lrs: received cluster is unexpected. Got %v, want %v", first.Clusters[0], clusterName)
+		if !clusterFoundInResponse {
+			grpclog.Warningf("lrs: received clusters %v does not contain expected {%v}", first.Clusters, clusterName)
 			continue
 		}
 		if first.ReportEndpointGranularity {

@@ -27,8 +27,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
+	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
@@ -41,16 +41,23 @@ type Options struct {
 	Config bootstrap.Config
 	// DialOpts contains dial options to be used when dialing the xDS server.
 	DialOpts []grpc.DialOption
+	// TargetName is the target of the parent ClientConn.
+	TargetName string
 }
 
 // Client is a full fledged gRPC client which queries a set of discovery APIs
 // (collectively termed as xDS) on a remote management server, to discover
-// various dynamic resources. A single client object will be shared by the xds
-// resolver and balancer implementations.
+// various dynamic resources.
+//
+// A single client object will be shared by the xds resolver and balancer
+// implementations. But the same client can only be shared by the same parent
+// ClientConn.
 type Client struct {
 	opts Options
 	cc   *grpc.ClientConn // Connection to the xDS server
 	v2c  *v2Client        // Actual xDS client implementation using the v2 API
+
+	logger *grpclog.PrefixLogger
 
 	mu              sync.Mutex
 	serviceCallback func(ServiceUpdate, error)
@@ -78,17 +85,19 @@ func New(opts Options) (*Client, error) {
 	}
 	dopts = append(dopts, opts.DialOpts...)
 
+	c := &Client{opts: opts}
+
 	cc, err := grpc.Dial(opts.Config.BalancerName, dopts...)
 	if err != nil {
 		// An error from a non-blocking dial indicates something serious.
 		return nil, fmt.Errorf("xds: failed to dial balancer {%s}: %v", opts.Config.BalancerName, err)
 	}
+	c.cc = cc
+	c.logger = grpclog.NewPrefixLogger(loggingPrefix(c))
+	c.logger.Infof("Created ClientConn to xDS server: %s", opts.Config.BalancerName)
 
-	c := &Client{
-		opts: opts,
-		cc:   cc,
-		v2c:  newV2Client(cc, opts.Config.NodeProto, backoff.DefaultExponential.Backoff),
-	}
+	c.v2c = newV2Client(cc, opts.Config.NodeProto, backoff.DefaultExponential.Backoff, c.logger)
+	c.logger.Infof("Created")
 	return c, nil
 }
 
@@ -98,6 +107,7 @@ func (c *Client) Close() {
 	// the client is closed?
 	c.v2c.close()
 	c.cc.Close()
+	c.logger.Infof("Shutdown")
 }
 
 // ServiceUpdate contains update about the service.
@@ -107,7 +117,7 @@ type ServiceUpdate struct {
 
 // handleLDSUpdate is the LDS watcher callback we registered with the v2Client.
 func (c *Client) handleLDSUpdate(u ldsUpdate, err error) {
-	grpclog.Infof("xds: client received LDS update: %+v, err: %v", u, err)
+	c.logger.Infof("xds: client received LDS update: %+v, err: %v", u, err)
 	if err != nil {
 		c.mu.Lock()
 		if c.serviceCallback != nil {
@@ -124,7 +134,7 @@ func (c *Client) handleLDSUpdate(u ldsUpdate, err error) {
 
 // handleRDSUpdate is the RDS watcher callback we registered with the v2Client.
 func (c *Client) handleRDSUpdate(u rdsUpdate, err error) {
-	grpclog.Infof("xds: client received RDS update: %+v, err: %v", u, err)
+	c.logger.Infof("xds: client received RDS update: %+v, err: %v", u, err)
 	if err != nil {
 		c.mu.Lock()
 		if c.serviceCallback != nil {

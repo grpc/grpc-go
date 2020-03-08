@@ -18,6 +18,7 @@
 package edsbalancer
 
 import (
+	"fmt"
 	"time"
 
 	"google.golang.org/grpc/balancer"
@@ -51,13 +52,16 @@ func (edsImpl *edsBalancerImpl) handlePriorityChange() {
 
 	// priorityInUse wasn't set, use 0.
 	if !edsImpl.priorityInUse.isSet() {
+		edsImpl.logger.Infof("Switching priority from unset to %v", 0)
 		edsImpl.startPriority(newPriorityType(0))
 		return
 	}
 
 	// priorityInUse was deleted, use the new lowest.
 	if _, ok := edsImpl.priorityToLocalities[edsImpl.priorityInUse]; !ok {
+		oldP := edsImpl.priorityInUse
 		edsImpl.priorityInUse = edsImpl.priorityLowest
+		edsImpl.logger.Infof("Switching priority from %v to %v, because former was deleted", oldP, edsImpl.priorityInUse)
 		if s, ok := edsImpl.priorityToState[edsImpl.priorityLowest]; ok {
 			edsImpl.cc.UpdateState(*s)
 		} else {
@@ -78,6 +82,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityChange() {
 	if s, ok := edsImpl.priorityToState[edsImpl.priorityInUse]; ok && s.ConnectivityState != connectivity.Ready {
 		pNext := edsImpl.priorityInUse.nextLower()
 		if _, ok := edsImpl.priorityToLocalities[pNext]; ok {
+			edsImpl.logger.Infof("Switching priority from %v to %v, because latter was added, and former wasn't Ready")
 			edsImpl.startPriority(pNext)
 		}
 	}
@@ -93,8 +98,10 @@ func (edsImpl *edsBalancerImpl) startPriority(priority priorityType) {
 	p := edsImpl.priorityToLocalities[priority]
 	// NOTE: this will eventually send addresses to sub-balancers. If the
 	// sub-balancer tries to update picker, it will result in a deadlock on
-	// priorityMu. But it's not an expected behavior for the balancer to
-	// update picker when handling addresses.
+	// priorityMu in the update is handled synchronously. The deadlock is
+	// currently avoided by handling balancer update in a goroutine (the run
+	// goroutine in the parent eds balancer). When priority balancer is split
+	// into its own, this asynchronous state handling needs to be copied.
 	p.bg.start()
 	// startPriority can be called when
 	// 1. first EDS resp, start p0
@@ -179,6 +186,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityWithNewStateReady(priority priorit
 	}
 
 	if edsImpl.priorityInUse.lowerThan(priority) {
+		edsImpl.logger.Infof("Switching priority from %v to %v, because latter became Ready", edsImpl.priorityInUse, priority)
 		edsImpl.priorityInUse = priority
 		for i := priority.nextLower(); !i.lowerThan(edsImpl.priorityLowest); i = i.nextLower() {
 			edsImpl.priorityToLocalities[i].bg.close()
@@ -218,6 +226,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityWithNewStateTransientFailure(prior
 	if _, okNext := edsImpl.priorityToLocalities[pNext]; !okNext {
 		return true
 	}
+	edsImpl.logger.Infof("Switching priority from %v to %v, because former became TransientFailure", priority, pNext)
 	edsImpl.startPriority(pNext)
 	return true
 }
@@ -258,6 +267,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityWithNewStateConnecting(priority pr
 		if _, okNext := edsImpl.priorityToLocalities[pNext]; !okNext {
 			return true
 		}
+		edsImpl.logger.Infof("Switching priority from %v to %v, because former became Connecting from Ready", priority, pNext)
 		edsImpl.startPriority(pNext)
 		return true
 	case connectivity.Idle:
@@ -322,4 +332,11 @@ func (p priorityType) nextLower() priorityType {
 		set: true,
 		p:   p.p + 1,
 	}
+}
+
+func (p priorityType) String() string {
+	if !p.set {
+		return "Nil"
+	}
+	return fmt.Sprint(p.p)
 }

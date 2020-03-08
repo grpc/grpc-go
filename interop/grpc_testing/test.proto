@@ -109,6 +109,9 @@ message SimpleResponse {
 
   // gRPCLB Path.
   GrpclbRouteType grpclb_route_type = 5;
+
+  // Server hostname.
+  string hostname = 6;
 }
 
 // Client-streaming request.
@@ -199,4 +202,25 @@ service TestService {
 service UnimplementedService {
   // A call that no server should implement
   rpc UnimplementedCall(grpc.testing.Empty) returns (grpc.testing.Empty);
+}
+
+message LoadBalancerStatsRequest {
+  // Request stats for the next num_rpcs sent by client.
+  int32 num_rpcs = 1;
+  // If num_rpcs have not completed within timeout_sec, return partial results.
+  int32 timeout_sec = 2;
+}
+
+message LoadBalancerStatsResponse {
+  // The number of completed RPCs for each peer.
+  map<string, int32> rpcs_by_peer = 1;
+  // The number of RPCs that failed to record a remote peer.
+  int32 num_failures = 2;
+}
+
+// A service used to obtain stats for verifying LB behavior.
+service LoadBalancerStatsService {
+  // Gets the backend distribution for RPCs sent by a test client.
+  rpc GetClientStats(LoadBalancerStatsRequest)
+      returns (LoadBalancerStatsResponse) {}
 }

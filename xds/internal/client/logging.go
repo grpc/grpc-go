@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2020 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,14 @@
  *
  */
 
-package grpc
+package client
 
-// Version is the current grpc version.
-const Version = "1.29.0-dev"
+import (
+	"fmt"
+)
+
+const prefix = "[xds-client %p] "
+
+func loggingPrefix(p *Client) string {
+	return fmt.Sprintf(prefix, p)
+}

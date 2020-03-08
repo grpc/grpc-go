@@ -34,6 +34,9 @@ import (
 
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/reflection"
 )
 
 var help = flag.Bool("help", false, "Print usage information")
@@ -124,6 +127,12 @@ func main() {
 	}
 	s := grpc.NewServer()
 	pb.RegisterGreeterServer(s, newServer(hostname))
+
+	reflection.Register(s)
+	healthServer := health.NewServer()
+	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	healthpb.RegisterHealthServer(s, healthServer)
+
 	log.Printf("serving on %s, hostname %s", lis.Addr(), hostname)
 	s.Serve(lis)
 }

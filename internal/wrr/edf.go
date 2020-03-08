@@ -61,7 +61,7 @@ func (pq *edfPriorityQueue) Pop() interface{} {
 }
 
 // Current time in EDF scheduler.
-func (edf edfWrr) currentTime() float64 {
+func (edf *edfWrr) currentTime() float64 {
 	if len(edf.items) == 0 {
 		return 0.0
 	}

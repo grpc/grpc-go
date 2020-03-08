@@ -1925,6 +1925,10 @@ func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// If nested channel deletion is last trace event before the next validation, it will fail, as the top channel will hold a reference to it.
+	// This line forces a trace event on the top channel in that case.
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: parseCfg(r, `{"loadBalancingPolicy": "round_robin"}`)})
+
 	// verify that the nested channel no longer exist due to trace referencing it got overwritten.
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm := channelz.GetChannel(nestedConn)

@@ -239,21 +239,33 @@ func (*MethodConfig) XXX_OneofWrappers() []interface{} {
 	}
 }
 
-// The names of the methods to which this configuration applies. There must
-// be at least one name. Each name entry must be unique across the entire
-// ClientConfig. If the 'method' field is empty, then this MethodConfig
-// specifies the defaults for all methods for the specified service.
+// The names of the methods to which this configuration applies.
+// - MethodConfig without names (empty list) will be skipped.
+// - Each name entry must be unique across the entire ServiceConfig.
+// - If the 'method' field is empty, this MethodConfig specifies the defaults
+//   for all methods for the specified service.
+// - If the 'service' field is empty, the 'method' field must be empty, and
+//   this MethodConfig specifies the default for all methods (it's the default
+//   config).
 //
-// For example, let's say that the service config contains the following
-// MethodConfig entries:
+// When determining which MethodConfig to use for a given RPC, the most
+// specific match wins. For example, let's say that the service config
+// contains the following MethodConfig entries:
 //
+// method_config { name { } ... }
 // method_config { name { service: "MyService" } ... }
 // method_config { name { service: "MyService" method: "Foo" } ... }
 //
-// For a request for MyService/Foo, we will use the second entry, because it
-// exactly matches the service and method name.
-// For a request for MyService/Bar, we will use the first entry, because it
-// provides the default for all methods of MyService.
+// MyService/Foo will use the third entry, because it exactly matches the
+// service and method name. MyService/Bar will use the second entry, because
+// it provides the default for all methods of MyService. AnotherService/Baz
+// will use the first entry, because it doesn't match the other two.
+//
+// In JSON representation, value "", value `null`, and not present are the
+// same. The following are the same Name:
+// - { "service": "s" }
+// - { "service": "s", "method": null }
+// - { "service": "s", "method": "" }
 type MethodConfig_Name struct {
 	Service              string   `protobuf:"bytes,1,opt,name=service,proto3" json:"service,omitempty"`
 	Method               string   `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
@@ -709,10 +721,15 @@ func (m *XdsConfig) GetLrsLoadReportingServerName() *wrappers.StringValue {
 
 // Selects LB policy and provides corresponding configuration.
 //
-// In general, all instances of this field should be repeated.
-// Clients will iterate through the list in order and stop at the first
-// policy that they support.  This allows the service config to specify
-// custom policies that may not be known to all clients.
+// In general, all instances of this field should be repeated. Clients will
+// iterate through the list in order and stop at the first policy that they
+// support.  This allows the service config to specify custom policies that may
+// not be known to all clients.
+//
+// - If the config for the first supported policy is invalid, the whole service
+//   config is invalid.
+// - If the list doesn't contain any supported policy, the whole service config
+//   is invalid.
 type LoadBalancingConfig struct {
 	// Exactly one LB policy may be configured.
 	//

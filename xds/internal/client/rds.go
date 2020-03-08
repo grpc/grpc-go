@@ -20,10 +20,10 @@ package client
 
 import (
 	"fmt"
-	"net"
 	"strings"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 	"github.com/golang/protobuf/ptypes"
 )
 
@@ -55,6 +55,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if !ok {
 			return fmt.Errorf("xds: unexpected resource type: %T in RDS response", resource.Message)
 		}
+		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v", rc.GetName(), rc, rc)
 		cluster := getClusterFromRouteConfiguration(rc, target)
 		if cluster == "" {
 			return fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v", rc)
@@ -62,6 +63,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 
 		// If we get here, it means that this resource was a good one.
 		localCache[rc.GetName()] = cluster
+		v2c.logger.Debugf("Resource with name %v, type %T, value %+v added to cache", rc.GetName(), cluster, cluster)
 
 		// TODO: remove cache, and only process resources that are interesting.
 		if rc.GetName() == wi.target[0] {
@@ -99,13 +101,12 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 //
 // The RouteConfiguration includes a list of VirtualHosts, which may have zero
 // or more elements. We are interested in the element whose domains field
-// matches the server name specified in the "xds:" URI (with port, if any,
-// stripped off). The only field in the VirtualHost proto that the we are
-// interested in is the list of routes. We only look at the last route in the
-// list (the default route), whose match field must be empty and whose route
-// field must be set.  Inside that route message, the cluster field will
-// contain the clusterName we are looking for.
-func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target string) string {
+// matches the server name specified in the "xds:" URI. The only field in the
+// VirtualHost proto that the we are interested in is the list of routes. We
+// only look at the last route in the list (the default route), whose match
+// field must be empty and whose route field must be set.  Inside that route
+// message, the cluster field will contain the clusterName we are looking for.
+func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, host string) string {
 	// TODO: return error for better error logging and nack.
 	//
 	// Currently this returns "" on error, and the caller will return an error.
@@ -114,42 +115,117 @@ func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, target strin
 	//
 	// For logging purposes, we can log in line. But if we want to populate
 	// error details for nack, a detailed error needs to be returned.
-
-	host, err := hostFromTarget(target)
-	if err != nil {
+	vh := findBestMatchingVirtualHost(host, rc.GetVirtualHosts())
+	if vh == nil {
+		// No matching virtual host found.
 		return ""
 	}
-	for _, vh := range rc.GetVirtualHosts() {
-		for _, domain := range vh.GetDomains() {
-			// TODO: Add support for wildcard matching here?
-			if domain != host || len(vh.GetRoutes()) == 0 {
-				continue
-			}
-			dr := vh.Routes[len(vh.Routes)-1]
-			if match := dr.GetMatch(); match == nil || match.GetPrefix() != "" {
-				continue
-			}
-			route := dr.GetRoute()
-			if route == nil {
-				continue
-			}
-			return route.GetCluster()
-		}
+	if len(vh.Routes) == 0 {
+		// The matched virtual host has no routes, this is invalid because there
+		// should be at least one default route.
+		return ""
+	}
+	dr := vh.Routes[len(vh.Routes)-1]
+	if match := dr.GetMatch(); match == nil || match.GetPrefix() != "" {
+		// The matched virtual host is invalid.
+		return ""
+	}
+	if route := dr.GetRoute(); route != nil {
+		return route.GetCluster()
 	}
 	return ""
 }
 
-// hostFromTarget calls net.SplitHostPort and returns the host.
-//
-// It returns the original string instead of error if port is missing.
-func hostFromTarget(target string) (string, error) {
-	const portMissingErrDesc = "missing port in address"
-	h, _, err := net.SplitHostPort(target)
-	if err != nil {
-		if addrErr, ok := err.(*net.AddrError); ok && strings.Contains(addrErr.Err, portMissingErrDesc) {
-			return target, nil
-		}
-		return "", err
+type domainMatchType int
+
+const (
+	domainMatchTypeInvalid domainMatchType = iota
+	domainMatchTypeUniversal
+	domainMatchTypePrefix
+	domainMatchTypeSuffix
+	domainMatchTypeExact
+)
+
+// Exact > Suffix > Prefix > Universal > Invalid.
+func (t domainMatchType) betterThan(b domainMatchType) bool {
+	return t > b
+}
+
+func matchTypeForDomain(d string) domainMatchType {
+	if d == "" {
+		return domainMatchTypeInvalid
 	}
-	return h, nil
+	if d == "*" {
+		return domainMatchTypeUniversal
+	}
+	if strings.HasPrefix(d, "*") {
+		return domainMatchTypeSuffix
+	}
+	if strings.HasSuffix(d, "*") {
+		return domainMatchTypePrefix
+	}
+	if strings.Contains(d, "*") {
+		return domainMatchTypeInvalid
+	}
+	return domainMatchTypeExact
+}
+
+func match(domain, host string) (domainMatchType, bool) {
+	switch typ := matchTypeForDomain(domain); typ {
+	case domainMatchTypeInvalid:
+		return typ, false
+	case domainMatchTypeUniversal:
+		return typ, true
+	case domainMatchTypePrefix:
+		// abc.*
+		return typ, strings.HasPrefix(host, strings.TrimSuffix(domain, "*"))
+	case domainMatchTypeSuffix:
+		// *.123
+		return typ, strings.HasSuffix(host, strings.TrimPrefix(domain, "*"))
+	case domainMatchTypeExact:
+		return typ, domain == host
+	default:
+		return domainMatchTypeInvalid, false
+	}
+}
+
+// findBestMatchingVirtualHost returns the virtual host whose domains field best
+// matches host
+//
+// The domains field support 4 different matching pattern types:
+//  - Exact match
+//  - Suffix match (e.g. “*ABC”)
+//  - Prefix match (e.g. “ABC*)
+//  - Universal match (e.g. “*”)
+//
+// The best match is defined as:
+//  - A match is better if it’s matching pattern type is better
+//    - Exact match > suffix match > prefix match > universal match
+//  - If two matches are of the same pattern type, the longer match is better
+//    - This is to compare the length of the matching pattern, e.g. “*ABCDE” >
+//    “*ABC”
+func findBestMatchingVirtualHost(host string, vHosts []*routepb.VirtualHost) *routepb.VirtualHost {
+	var (
+		matchVh   *routepb.VirtualHost
+		matchType = domainMatchTypeInvalid
+		matchLen  int
+	)
+	for _, vh := range vHosts {
+		for _, domain := range vh.GetDomains() {
+			typ, matched := match(domain, host)
+			if typ == domainMatchTypeInvalid {
+				// The rds response is invalid.
+				return nil
+			}
+			if matchType.betterThan(typ) || matchType == typ && matchLen >= len(domain) || !matched {
+				// The previous match has better type, or the previous match has
+				// better length, or this domain isn't a match.
+				continue
+			}
+			matchVh = vh
+			matchType = typ
+			matchLen = len(domain)
+		}
+	}
+	return matchVh
 }

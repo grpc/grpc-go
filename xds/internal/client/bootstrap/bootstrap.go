@@ -27,22 +27,22 @@ import (
 	"io/ioutil"
 	"os"
 
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/jsonpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
-	"google.golang.org/grpc/grpclog"
-
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 const (
 	// Environment variable which holds the name of the xDS bootstrap file.
 	fileEnv = "GRPC_XDS_BOOTSTRAP"
 	// Type name for Google default credentials.
-	googleDefaultCreds = "google_default"
+	googleDefaultCreds              = "google_default"
+	gRPCUserAgentName               = "gRPC Go"
+	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
 )
 
-var gRPCVersion = fmt.Sprintf("gRPC-Go %s", grpc.Version)
+var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
 
 // For overriding in unit tests.
 var fileReadFunc = ioutil.ReadFile
@@ -103,18 +103,19 @@ func NewConfig() (*Config, error) {
 
 	fName, ok := os.LookupEnv(fileEnv)
 	if !ok {
-		return nil, fmt.Errorf("xds: %s environment variable not set", fileEnv)
+		return nil, fmt.Errorf("xds: Environment variable %v not defined", fileEnv)
 	}
+	logger.Infof("Got bootstrap file location from %v environment variable: %v", fileEnv, fName)
 
-	grpclog.Infof("xds: Reading bootstrap file from %s", fName)
 	data, err := fileReadFunc(fName)
 	if err != nil {
-		return nil, fmt.Errorf("xds: bootstrap file {%v} read failed: %v", fName, err)
+		return nil, fmt.Errorf("xds: Failed to read bootstrap file %s with error %v", fName, err)
 	}
+	logger.Debugf("Bootstrap content: %s", data)
 
 	var jsonData map[string]json.RawMessage
 	if err := json.Unmarshal(data, &jsonData); err != nil {
-		return nil, fmt.Errorf("xds: json.Unmarshal(%v) failed during bootstrap: %v", string(data), err)
+		return nil, fmt.Errorf("xds: Failed to parse file %s (content %v) with error: %v", fName, string(data), err)
 	}
 
 	m := jsonpb.Unmarshaler{AllowUnknownFields: true}
@@ -143,14 +144,14 @@ func NewConfig() (*Config, error) {
 					break
 				}
 			}
-		default:
-			// Do not fail the xDS bootstrap when an unknown field is seen.
-			grpclog.Warningf("xds: unexpected data in bootstrap file: {%v, %v}", k, string(v))
 		}
+		// Do not fail the xDS bootstrap when an unknown field is seen. This can
+		// happen when an older version client reads a newer version bootstrap
+		// file with new fields.
 	}
 
 	if config.BalancerName == "" {
-		return nil, fmt.Errorf("xds: xds_server name is expected, but not found in bootstrap file")
+		return nil, fmt.Errorf("xds: Required field %q not found in bootstrap", "xds_servers.server_uri")
 	}
 
 	// If we don't find a nodeProto in the bootstrap file, we just create an
@@ -159,8 +160,14 @@ func NewConfig() (*Config, error) {
 	if config.NodeProto == nil {
 		config.NodeProto = &corepb.Node{}
 	}
+	// BuildVersion is deprecated, and is replaced by user_agent_name and
+	// user_agent_version. But the management servers are still using the old
+	// field, so we will keep both set.
 	config.NodeProto.BuildVersion = gRPCVersion
+	config.NodeProto.UserAgentName = gRPCUserAgentName
+	config.NodeProto.UserAgentVersionType = &corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version}
+	config.NodeProto.ClientFeatures = append(config.NodeProto.ClientFeatures, clientFeatureNoOverprovisioning)
 
-	grpclog.Infof("xds: bootstrap.NewConfig returning: %+v", config)
+	logger.Infof("Bootstrap config for creating xds-client: %+v", config)
 	return config, nil
 }

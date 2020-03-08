@@ -24,6 +24,9 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 
@@ -44,7 +47,6 @@ const (
 	goodRouteName2           = "GoodRouteConfig2"
 	goodEDSName              = "GoodClusterAssignment1"
 	uninterestingRouteName   = "UninterestingRouteName"
-	goodMatchingDomain       = "lds.target.good"
 	uninterestingDomain      = "uninteresting.domain"
 	goodClusterName1         = "GoodClusterName1"
 	goodClusterName2         = "GoodClusterName2"
@@ -294,7 +296,7 @@ var (
 				},
 			},
 			{
-				Domains: []string{goodMatchingDomain},
+				Domains: []string{goodLDSTarget1},
 				Routes: []*routepb.Route{
 					{
 						Match: &routepb.RouteMatch{PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: ""}},
@@ -326,7 +328,7 @@ var (
 				},
 			},
 			{
-				Domains: []string{goodMatchingDomain},
+				Domains: []string{goodLDSTarget1},
 				Routes: []*routepb.Route{
 					{
 						Match: &routepb.RouteMatch{PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: ""}},
@@ -402,7 +404,7 @@ func (s) TestV2ClientBackoffAfterRecvError(t *testing.T) {
 		return 0
 	}
 
-	v2c := newV2Client(cc, goodNodeProto, clientBackoff)
+	v2c := newV2Client(cc, goodNodeProto, clientBackoff, nil)
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
@@ -437,7 +439,7 @@ func (s) TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
@@ -482,7 +484,7 @@ func (s) TestV2ClientCancelWatch(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 })
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
@@ -510,5 +512,70 @@ func (s) TestV2ClientCancelWatch(t *testing.T) {
 
 	if _, err := callbackCh.Receive(); err != testutils.ErrRecvTimeout {
 		t.Fatalf("Watch callback invoked after the watcher was cancelled")
+	}
+}
+
+func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
+	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
+	defaultWatchExpiryTimeout = 500 * time.Millisecond
+	defer func() {
+		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
+	}()
+
+	fakeServer, sCleanup, err := fakeserver.StartServer()
+	if err != nil {
+		t.Fatalf("Failed to start fake xDS server: %v", err)
+	}
+	defer sCleanup()
+
+	const scheme = "xds_client_test_whatever"
+	rb := manual.NewBuilderWithScheme(scheme)
+	rb.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: "no.such.server"}}})
+
+	cc, err := grpc.Dial(scheme+":///whatever", grpc.WithInsecure(), grpc.WithResolvers(rb))
+	if err != nil {
+		t.Fatalf("Failed to dial ClientConn: %v", err)
+	}
+	defer cc.Close()
+
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	defer v2c.close()
+	t.Log("Started xds v2Client...")
+
+	callbackCh := testutils.NewChannel()
+	// This watch is started when the xds-ClientConn is in Transient Failure,
+	// and no xds stream is created.
+	v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
+		t.Logf("Received LDS callback with ldsUpdate {%+v} and error {%v}", u, err)
+		if err != nil {
+			callbackCh.Send(err)
+		}
+		callbackCh.Send(u)
+	})
+	// The watcher should receive an update, with a timeout error in it.
+	if v, err := callbackCh.TimedReceive(time.Second); err != nil {
+		t.Fatal("Timeout when expecting LDS update")
+	} else if _, ok := v.(error); !ok {
+		t.Fatalf("Expect an error from watcher, got %v", v)
+	}
+
+	// Send the real server address to the ClientConn, the stream should be
+	// created, and the previous watch should be sent.
+	rb.UpdateState(resolver.State{
+		Addresses: []resolver.Address{{Addr: fakeServer.Address}},
+	})
+
+	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+		t.Fatalf("Timeout expired when expecting an LDS request")
+	}
+	t.Log("FakeServer received request...")
+
+	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
+	t.Log("Good LDS response pushed to fakeServer...")
+
+	if v, err := callbackCh.Receive(); err != nil {
+		t.Fatal("Timeout when expecting LDS update")
+	} else if _, ok := v.(ldsUpdate); !ok {
+		t.Fatalf("Expect an LDS update from watcher, got %v", v)
 	}
 }
