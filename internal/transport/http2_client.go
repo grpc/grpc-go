@@ -21,6 +21,7 @@ package transport
 import (
 	"context"
 	"fmt"
+	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"io"
 	"math"
 	"net"
@@ -34,7 +35,6 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 
-	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
@@ -1194,7 +1194,6 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		// If a gRPC Response-Headers has already been received, then it means that the peer is speaking gRPC and we are in gRPC mode.
 		isGRPC    = !initialHeader
 		mdata     = make(map[string][]string)
-		statusGen *status.Status
 	)
 
 	for _, hf := range frame.Fields {
@@ -1213,46 +1212,12 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 				s.recvCompress = hf.Value
 			}
 		case "grpc-status":
-			if _, err := strconv.Atoi(hf.Value); err != nil {
-				if isGRPC {
-					err = status.Errorf(codes.Internal, "transport: malformed grpc-status: %v", err)
-					t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
-					return
-				}
-				break
-			}
 			mdata["grpc-status"] = []string{hf.Value}
 		case "grpc-message":
 			mdata["grpc-message"] = []string{decodeGrpcMessage(hf.Value)}
 		case "grpc-status-details-bin":
-			v, err := decodeBinHeader(hf.Value)
-			if err != nil {
-				if isGRPC {
-					err = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
-					t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
-					return
-				}
-				break
-			}
-			pbStatus := &spb.Status{}
-			if err := proto.Unmarshal(v, pbStatus); err != nil {
-				if isGRPC {
-					err = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
-					t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
-					return
-				}
-				break
-			}
-			statusGen = status.FromProto(pbStatus)
+			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
 		case ":status":
-			if _, err := strconv.Atoi(hf.Value); err != nil {
-				if !isGRPC {
-					err = status.Errorf(codes.Internal, "transport: malformed http-status: %v", err)
-					t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
-					return
-				}
-				break
-			}
 			mdata[":status"] = []string{hf.Value}
 		case "grpc-tags-bin":
 			v, err := decodeBinHeader(hf.Value)
@@ -1370,13 +1335,28 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	// if client received END_STREAM from server while stream was still active, send RST_STREAM
 	rst := s.getState() == streamActive
 
-	if statusGen == nil {
+	var statusGen *status.Status
+	if sg := mdata["grpc-status-details-bin"]; len(sg) == 1 {
+		v, err := decodeBinHeader(sg[0])
+		if err != nil {
+				err = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
+				t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+				return
+		}
+		pbStatus := &spb.Status{}
+		if err := proto.Unmarshal(v, pbStatus); err != nil {
+				err = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
+				t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+				return
+		}
+		statusGen = status.FromProto(pbStatus)
+	} else {
 		var rawStatusMsg string
 		if rsm := mdata["grpc-message"]; len(rsm) == 1 {
 			rawStatusMsg = rsm[0]
 		}
-		// gRPC status doesn't exist.
-		// Set rawStatusCode to be unknown and return nil error.
+		// if gRPC status doesn't exist, Set rawStatusCode to be
+		// unknown and return nil error.
 		// So that, if the stream has ended this Unknown status
 		// will be propagated to the user.
 		// Otherwise, it will be ignored. In which case, status from
