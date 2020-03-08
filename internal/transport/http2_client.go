@@ -1192,8 +1192,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 
 	var (
 		// If a gRPC Response-Headers has already been received, then it means that the peer is speaking gRPC and we are in gRPC mode.
-		isGRPC    = !initialHeader
-		mdata     = make(map[string][]string)
+		isGRPC = !initialHeader
+		mdata  = make(map[string][]string)
 	)
 
 	for _, hf := range frame.Fields {
@@ -1339,15 +1339,15 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	if sg := mdata["grpc-status-details-bin"]; len(sg) == 1 {
 		v, err := decodeBinHeader(sg[0])
 		if err != nil {
-				err = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
-				t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
-				return
+			err = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
+			t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+			return
 		}
 		pbStatus := &spb.Status{}
 		if err := proto.Unmarshal(v, pbStatus); err != nil {
-				err = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
-				t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
-				return
+			err = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
+			t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+			return
 		}
 		statusGen = status.FromProto(pbStatus)
 	} else {
