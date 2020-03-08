@@ -37,6 +37,7 @@ import (
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/status"
 )
 
 func init() {
@@ -44,30 +45,6 @@ func init() {
 }
 
 func statusRawProto(s *Status) *spb.Status { return s.s }
-
-// statusError is an alias of a status proto.  It implements error and Status,
-// and a nil statusError should never be returned by this package.
-type statusError spb.Status
-
-func (se *statusError) Error() string {
-	p := (*spb.Status)(se)
-	return fmt.Sprintf("rpc error: code = %s desc = %s", codes.Code(p.GetCode()), p.GetMessage())
-}
-
-func (se *statusError) GRPCStatus() *Status {
-	return &Status{s: (*spb.Status)(se)}
-}
-
-// Is implements future error.Is functionality.
-// A statusError is equivalent if the code and message are identical.
-func (se *statusError) Is(target error) bool {
-	tse, ok := target.(*statusError)
-	if !ok {
-		return false
-	}
-
-	return proto.Equal((*spb.Status)(se), (*spb.Status)(tse))
-}
 
 // Status represents an RPC status code, message, and details.  It is immutable
 // and should be created with New, Newf, or FromProto.
@@ -105,7 +82,7 @@ func (s *Status) Err() error {
 	if s.Code() == codes.OK {
 		return nil
 	}
-	return (*statusError)(s.s)
+	return (*status.StatusError)(s.s)
 }
 
 // New returns a Status representing c and msg.
@@ -146,9 +123,10 @@ func FromError(err error) (s *Status, ok bool) {
 		return nil, true
 	}
 	if se, ok := err.(interface {
-		GRPCStatus() *Status
+		GRPCStatus() *spb.Status
 	}); ok {
-		return se.GRPCStatus(), true
+		s := se.GRPCStatus()
+		return FromProto(s), true
 	}
 	return New(codes.Unknown, err.Error()), false
 }
@@ -204,9 +182,9 @@ func Code(err error) codes.Code {
 		return codes.OK
 	}
 	if se, ok := err.(interface {
-		GRPCStatus() *Status
+		GRPCStatus() *spb.Status
 	}); ok {
-		return se.GRPCStatus().Code()
+		return codes.Code(se.GRPCStatus().Code)
 	}
 	return codes.Unknown
 }

@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"testing"
 
+	"google.golang.org/grpc/internal/status"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	apb "github.com/golang/protobuf/ptypes/any"
@@ -63,7 +64,7 @@ func (s) TestErrorsWithSameParameters(t *testing.T) {
 	e1 := Errorf(codes.AlreadyExists, description)
 	e2 := Errorf(codes.AlreadyExists, description)
 	if e1 == e2 || !errEqual(e1, e2) {
-		t.Fatalf("Errors should be equivalent but unique - e1: %v, %v  e2: %p, %v", e1.(*statusError), e1, e2.(*statusError), e2)
+		t.Fatalf("Errors should be equivalent but unique - e1: %v, %v  e2: %p, %v", e1.(*status.StatusError), e1, e2.(*status.StatusError), e2)
 	}
 }
 
@@ -115,7 +116,7 @@ func (s) TestError(t *testing.T) {
 func (s) TestErrorOK(t *testing.T) {
 	err := Error(codes.OK, "foo")
 	if err != nil {
-		t.Fatalf("Error(codes.OK, _) = %p; want nil", err.(*statusError))
+		t.Fatalf("Error(codes.OK, _) = %p; want nil", err.(*status.StatusError))
 	}
 }
 
@@ -153,13 +154,11 @@ func (c customError) Error() string {
 	return fmt.Sprintf("rpc error: code = %s desc = %s", c.Code, c.Message)
 }
 
-func (c customError) GRPCStatus() *Status {
-	return &Status{
-		s: &spb.Status{
+func (c customError) GRPCStatus() *spb.Status {
+	return &spb.Status{
 			Code:    int32(c.Code),
 			Message: c.Message,
 			Details: c.Details,
-		},
 	}
 }
 
