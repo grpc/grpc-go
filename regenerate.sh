@@ -29,6 +29,9 @@ mkdir -p ${GOBIN}
 echo "go install github.com/golang/protobuf/protoc-gen-go"
 (cd test/tools && go install github.com/golang/protobuf/protoc-gen-go)
 
+echo "go install cmd/protoc-gen-go-grpc"
+(cd cmd/protoc-gen-go-grpc && go install .)
+
 echo "git clone https://github.com/grpc/grpc-proto"
 git clone --quiet https://github.com/grpc/grpc-proto ${WORKDIR}/grpc-proto
 
@@ -56,7 +59,7 @@ SOURCES+=($(
 OPTS=Mgrpc/service_config/service_config.proto=/internal/proto/grpc_service_config
 for src in ${SOURCES[@]}; do
   echo "protoc ${src}"
-  protoc --go_opt=plugins=grpc --go_out=${OPTS}:${WORKDIR}/out \
+  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS}:${WORKDIR}/out \
     -I"." \
     -I${WORKDIR}/grpc-proto \
     -I${WORKDIR}/googleapis \
