@@ -39,8 +39,7 @@ if [[ "$1" = "-install" ]]; then
       golang.org/x/lint/golint \
       golang.org/x/tools/cmd/goimports \
       honnef.co/go/tools/cmd/staticcheck \
-      github.com/client9/misspell/cmd/misspell \
-      github.com/golang/protobuf/protoc-gen-go
+      github.com/client9/misspell/cmd/misspell
     popd
   else
     # Ye olde `go get` incantation.
@@ -50,8 +49,7 @@ if [[ "$1" = "-install" ]]; then
       golang.org/x/lint/golint \
       golang.org/x/tools/cmd/goimports \
       honnef.co/go/tools/cmd/staticcheck \
-      github.com/client9/misspell/cmd/misspell \
-      github.com/golang/protobuf/protoc-gen-go
+      github.com/client9/misspell/cmd/misspell
   fi
   if [[ -z "${VET_SKIP_PROTO}" ]]; then
     if [[ "${TRAVIS}" = "true" ]]; then

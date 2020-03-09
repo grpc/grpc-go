@@ -16,8 +16,10 @@
 // of unary/streaming requests/responses.
 syntax = "proto3";
 
-import "messages.proto";
-import "control.proto";
+option go_package = "google.golang.org/grpc/benchmark/grpc_testing";
+
+import "benchmark/grpc_testing/messages.proto";
+import "benchmark/grpc_testing/control.proto";
 
 package grpc.testing;
 
