@@ -16,6 +16,8 @@
 
 syntax = "proto3";
 
+option go_package = "google.golang.org/grpc/benchmark/grpc_testing";
+
 package grpc.testing;
 
 // The type of payload that should be returned.

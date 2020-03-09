@@ -16,8 +16,6 @@
  *
  */
 
-//go:generate ./regenerate.sh
-
 // Package grpclb defines a grpclb balancer.
 //
 // To install grpclb balancer, import this package as:

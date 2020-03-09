@@ -14,8 +14,10 @@
 
 syntax = "proto3";
 
-import "payloads.proto";
-import "stats.proto";
+option go_package = "google.golang.org/grpc/benchmark/grpc_testing";
+
+import "benchmark/grpc_testing/payloads.proto";
+import "benchmark/grpc_testing/stats.proto";
 
 package grpc.testing;
 

@@ -16,6 +16,8 @@
 // of unary/streaming requests/responses.
 syntax = "proto3";
 
+option go_package = "google.golang.org/grpc/test/grpc_testing";
+
 package grpc.testing;
 
 message Empty {}
