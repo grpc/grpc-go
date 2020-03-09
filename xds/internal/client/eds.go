@@ -37,6 +37,19 @@ type OverloadDropConfig struct {
 	Denominator uint32
 }
 
+func (d OverloadDropConfig) equal(d2 OverloadDropConfig) bool {
+	if d.Category != d2.Category {
+		return false
+	}
+	if d.Numerator != d2.Numerator {
+		return false
+	}
+	if d.Denominator != d2.Denominator {
+		return false
+	}
+	return true
+}
+
 // EndpointHealthStatus represents the health status of an endpoint.
 type EndpointHealthStatus int32
 
