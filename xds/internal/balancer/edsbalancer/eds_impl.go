@@ -169,6 +169,9 @@ func (edsImpl *edsBalancerImpl) updateDrops(dropPolicies []xdsclient.OverloadDro
 			dropsChanged = true
 		}
 	}
+	if len(edsImpl.drops) != len(newDrops) {
+		dropsChanged = true
+	}
 	if dropsChanged {
 		edsImpl.pickerMu.Lock()
 		edsImpl.drops = newDrops
