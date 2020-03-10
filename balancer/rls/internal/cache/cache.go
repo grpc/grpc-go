@@ -79,7 +79,7 @@ type Entry struct {
 	CallStatus error
 	// Backoff contains all backoff related state. When an RLS request
 	// succeeds, backoff state is reset.
-	Backoff *BackoffState
+	Backoff BackoffState
 	// HeaderData is received in an RLS response and is to be sent in the
 	// X-Google-RLS-Data header for matching RPCs.
 	HeaderData string
@@ -88,7 +88,7 @@ type Entry struct {
 
 	// size stores the size of this cache entry. Uses only a subset of the
 	// fields. See `entrySize` for this is computed.
-	size int
+	size int64
 	// key contains the cache key corresponding to this entry. This is required
 	// from methods like `removeElement` which only have a pointer to the
 	// list.Element which contains a reference to the cache.Entry. But these
@@ -117,8 +117,8 @@ type BackoffState struct {
 // LRU is a cache with a least recently used eviction policy. It is not safe
 // for concurrent access.
 type LRU struct {
-	maxSize   int
-	usedSize  int
+	maxSize   int64
+	usedSize  int64
 	onEvicted func(Key, *Entry)
 
 	ll    *list.List
@@ -141,7 +141,7 @@ type LRU struct {
 // The cache package trusts the RLS policy (its only user) to supply a default
 // minimum non-zero maxSize, in the event that the ServiceConfig does not
 // provide a value for it.
-func NewLRU(maxSize int, onEvicted func(Key, *Entry)) *LRU {
+func NewLRU(maxSize int64, onEvicted func(Key, *Entry)) *LRU {
 	return &LRU{
 		maxSize:   maxSize,
 		onEvicted: onEvicted,
@@ -150,14 +150,21 @@ func NewLRU(maxSize int, onEvicted func(Key, *Entry)) *LRU {
 	}
 }
 
+// Resize sets the size limit of the LRU to newMaxSize and removes older
+// entries, if required, to comply with the new limit.
+func (lru *LRU) Resize(newMaxSize int64) {
+	lru.maxSize = newMaxSize
+	lru.removeToFit(0)
+}
+
 // TODO(easwars): If required, make this function more sophisticated.
-func entrySize(key Key, value *Entry) int {
-	return len(key.Path) + len(key.KeyMap) + len(value.HeaderData)
+func entrySize(key Key, value *Entry) int64 {
+	return int64(len(key.Path) + len(key.KeyMap) + len(value.HeaderData))
 }
 
 // removeToFit removes older entries from the cache to make room for a new
 // entry of size newSize.
-func (lru *LRU) removeToFit(newSize int) {
+func (lru *LRU) removeToFit(newSize int64) {
 	now := time.Now()
 	for lru.usedSize+newSize > lru.maxSize {
 		elem := lru.ll.Back()
