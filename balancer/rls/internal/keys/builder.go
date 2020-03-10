@@ -24,6 +24,7 @@ package keys
 import (
 	"errors"
 	"fmt"
+	"github.com/google/go-cmp/cmp"
 	"sort"
 	"strings"
 
@@ -120,6 +121,10 @@ func (bm BuilderMap) RLSKey(md metadata.MD, path string) KeyMap {
 		}
 	}
 	return b.keys(md)
+}
+
+func BuilderMapEqual(a, b BuilderMap) bool {
+	return cmp.Equal(a, b, cmp.AllowUnexported(builder{}, matcher{}))
 }
 
 // builder provides the actual functionality of building RLS keys. These are
