@@ -38,6 +38,19 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
+const (
+	// This is max duration that we are willing to cache RLS responses. If the
+	// service config doesn't specify a value for max_age or if it specified a
+	// value greater that this, we will use this value instead.
+	maxMaxAge = 5 * time.Minute
+	// If lookup_service_timeout is not specified in the service config, we use
+	// a default of 10 seconds.
+	defaultLookupServiceTimeout = 10 * time.Second
+	// This is set to the targetNameField in the child policy config during
+	// service config validation.
+	dummyChildPolicyTarget = "target_name_to_be_filled_in_later"
+)
+
 // lbConfig contains the parsed and validated contents of the
 // loadBalancingConfig section of the service config. The RLS LB policy will
 // use this to directly access config data instead of ploughing through proto
@@ -46,12 +59,13 @@ type lbConfig struct {
 	serviceconfig.LoadBalancingConfig
 
 	kbMap                keys.BuilderMap
-	lookupService        resolver.Target
+	lookupService        string
 	lookupServiceTimeout time.Duration
 	maxAge               time.Duration
 	staleAge             time.Duration
 	cacheSizeBytes       int64
 	rpStrategy           rlspb.RouteLookupConfig_RequestProcessingStrategy
+	defaultTarget        string
 	cpName               string
 	cpTargetField        string
 	cpConfig             map[string]json.RawMessage
@@ -233,12 +247,13 @@ func (*rlsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig,
 
 	return &lbConfig{
 		kbMap:                kbMap,
-		lookupService:        parsedTarget,
+		lookupService:        lookupService,
 		lookupServiceTimeout: lookupServiceTimeout,
 		maxAge:               maxAge,
 		staleAge:             staleAge,
 		cacheSizeBytes:       cacheSizeBytes,
 		rpStrategy:           rpStrategy,
+		defaultTarget:        defaultTarget,
 		// TODO(easwars): Once we refactor validateChildPolicyConfig and make
 		// it a method on the lbConfig object, we could directly store the
 		// balancer.Builder and/or balancer.ConfigParser here instead of the
