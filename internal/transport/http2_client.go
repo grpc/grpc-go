@@ -686,6 +686,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		} else {
 			header = metadata.Pairs("user-agent", t.userAgent)
 		}
+		// Note: The header fields are compressed with hpack after this call returns.
+		// No WireLength field is set here.
 		outHeader := &stats.OutHeader{
 			Client:      true,
 			FullMethod:  callHdr.Method,
