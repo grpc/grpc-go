@@ -145,12 +145,12 @@ func (edsImpl *edsBalancerImpl) HandleChildPolicy(name string, config json.RawMe
 
 // updateDrops compares new drop policies with the old. If they are different,
 // it updates the drop policies and send ClientConn an updated picker.
-func (edsImpl *edsBalancerImpl) updateDrops(dropPolicies []xdsclient.OverloadDropConfig) {
-	if cmp.Equal(dropPolicies, edsImpl.dropConfig) {
+func (edsImpl *edsBalancerImpl) updateDrops(dropConfig []xdsclient.OverloadDropConfig) {
+	if cmp.Equal(dropConfig, edsImpl.dropConfig) {
 		return
 	}
 	edsImpl.pickerMu.Lock()
-	edsImpl.dropConfig = dropPolicies
+	edsImpl.dropConfig = dropConfig
 	var newDrops []*dropper
 	for _, c := range edsImpl.dropConfig {
 		newDrops = append(newDrops, newDropper(c))
