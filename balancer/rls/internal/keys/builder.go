@@ -124,6 +124,7 @@ func (bm BuilderMap) RLSKey(md metadata.MD, path string) KeyMap {
 	return b.keys(md)
 }
 
+// BuilderMapEqual returns true if the provided BuilderMap objects are equal.
 func BuilderMapEqual(a, b BuilderMap) bool {
 	return cmp.Equal(a, b, cmp.AllowUnexported(builder{}, matcher{}))
 }
