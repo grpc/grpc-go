@@ -148,6 +148,20 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 			t.Errorf("The second 50%% picks should be non-drops, got error %v", err)
 		}
 	}
+
+	// The same locality, remove drops.
+	clab6 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab6.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[2:3], nil)
+	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab6.Build()))
+
+	// Pick without drops.
+	p6 := <-cc.newPickerCh
+	for i := 0; i < 5; i++ {
+		gotSCSt, _ := p6.Pick(balancer.PickInfo{})
+		if !cmp.Equal(gotSCSt.SubConn, sc3, cmp.AllowUnexported(testSubConn{})) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc3)
+		}
+	}
 }
 
 // 2 locality
