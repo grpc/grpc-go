@@ -24,9 +24,10 @@ package keys
 import (
 	"errors"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
 	"sort"
 	"strings"
+
+	"github.com/google/go-cmp/cmp"
 
 	rlspb "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/metadata"
