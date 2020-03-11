@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/google/go-cmp/cmp"
 	rlspb "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/metadata"
 )
@@ -120,6 +121,11 @@ func (bm BuilderMap) RLSKey(md metadata.MD, path string) KeyMap {
 		}
 	}
 	return b.keys(md)
+}
+
+// BuilderMapEqual returns true if the provided BuilderMap objects are equal.
+func BuilderMapEqual(a, b BuilderMap) bool {
+	return cmp.Equal(a, b, cmp.AllowUnexported(builder{}, matcher{}))
 }
 
 // builder provides the actual functionality of building RLS keys. These are
