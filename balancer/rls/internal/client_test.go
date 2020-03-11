@@ -30,6 +30,7 @@ import (
 	rlspb "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/balancer/rls/internal/testutils/fakeserver"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -68,7 +69,7 @@ func TestLookupFailure(t *testing.T) {
 	rlsClient := newRLSClient(cc, defaultDialTarget, defaultRPCTimeout)
 
 	errCh := make(chan error)
-	cancel := rlsClient.lookup("", nil, func(target, headerData string, err error) {
+	rlsClient.lookup("", nil, func(target, headerData string, err error) {
 		if err == nil {
 			errCh <- errors.New("rlsClient.lookup() succeeded, should have failed")
 			return
@@ -79,7 +80,6 @@ func TestLookupFailure(t *testing.T) {
 		}
 		errCh <- nil
 	})
-	defer cancel()
 
 	timer := time.NewTimer(defaultTestTimeout)
 	select {
@@ -90,29 +90,6 @@ func TestLookupFailure(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-	}
-}
-
-// TestLookupCanceled tests the case where the lookup is cancelled, and
-// verifies that the provided callback is not invoked.
-func TestLookupCanceled(t *testing.T) {
-	_, cc, cleanup := setup(t)
-	defer cleanup()
-
-	rlsClient := newRLSClient(cc, defaultDialTarget, defaultRPCTimeout)
-
-	errCh := make(chan error)
-	cancel := rlsClient.lookup("", nil, func(_, _ string, err error) {
-		errCh <- errors.New("lookup callback invoked after lookup was cancelled")
-	})
-	cancel()
-
-	timer := time.NewTimer(defaultTestTimeout)
-	select {
-	case err := <-errCh:
-		timer.Stop()
-		t.Fatal(err)
-	case <-timer.C:
 	}
 }
 
@@ -127,14 +104,13 @@ func TestLookupDeadlineExceeded(t *testing.T) {
 	rlsClient := newRLSClient(cc, defaultDialTarget, 100*time.Millisecond)
 
 	errCh := make(chan error)
-	cancel := rlsClient.lookup("", nil, func(target, headerData string, err error) {
-		if grpc.Code(err) != codes.DeadlineExceeded {
+	rlsClient.lookup("", nil, func(target, headerData string, err error) {
+		if st, ok := status.FromError(err); !ok || st.Code() != codes.DeadlineExceeded {
 			errCh <- fmt.Errorf("rlsClient.lookup() returned error: %v, want %v", err, codes.DeadlineExceeded)
 			return
 		}
 		errCh <- nil
 	})
-	defer cancel()
 
 	timer := time.NewTimer(defaultTestTimeout)
 	select {
@@ -160,14 +136,6 @@ func TestLookupSuccess(t *testing.T) {
 		rlsHeaderData      = "headerData"
 	)
 
-	// We setup the fake server to return this response when it receives a
-	// request.
-	server.ResponseChan <- fakeserver.Response{
-		Resp: &rlspb.RouteLookupResponse{
-			Target:     rlsRespTarget,
-			HeaderData: rlsHeaderData,
-		},
-	}
 	rlsReqKeyMap := map[string]string{
 		"k1": "v1",
 		"k2": "v2",
@@ -182,7 +150,7 @@ func TestLookupSuccess(t *testing.T) {
 	rlsClient := newRLSClient(cc, defaultDialTarget, defaultRPCTimeout)
 
 	errCh := make(chan error)
-	cancel := rlsClient.lookup(rlsReqPath, rlsReqKeyMap, func(t, hd string, err error) {
+	rlsClient.lookup(rlsReqPath, rlsReqKeyMap, func(t, hd string, err error) {
 		if err != nil {
 			errCh <- fmt.Errorf("rlsClient.Lookup() failed: %v", err)
 			return
@@ -193,7 +161,6 @@ func TestLookupSuccess(t *testing.T) {
 		}
 		errCh <- nil
 	})
-	defer cancel()
 
 	// Make sure that the fake server received the expected RouteLookupRequest
 	// proto.
@@ -209,6 +176,16 @@ func TestLookupSuccess(t *testing.T) {
 	case <-timer.C:
 		t.Fatalf("Timed out wile waiting for a RouteLookupRequest")
 	}
+
+	// We setup the fake server to return this response when it receives a
+	// request.
+	server.ResponseChan <- fakeserver.Response{
+		Resp: &rlspb.RouteLookupResponse{
+			Target:     rlsRespTarget,
+			HeaderData: rlsHeaderData,
+		},
+	}
+
 	timer = time.NewTimer(defaultTestTimeout)
 	select {
 	case <-timer.C:

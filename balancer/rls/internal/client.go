@@ -23,9 +23,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	rlspb "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
 )
 
@@ -63,14 +60,9 @@ func newRLSClient(cc *grpc.ClientConn, dialTarget string, rpcTimeout time.Durati
 
 type lookupCallback func(target, headerData string, err error)
 
-// lookup starts a RouteLookup RPC in a separate goroutine and returns a
-// function to be invoked by the caller to cleanup resources allocated here or
-// for early cancellation of the RPC.
-//
-// Once the RouteLookup RPC completes, the results are returns in the provided
-// callback along with any errors, if present. If the returned cleanup function
-// was invoked before the RPC finished, the callback will not be invoked.
-func (c *rlsClient) lookup(path string, keyMap map[string]string, cb lookupCallback) func() {
+// lookup starts a RouteLookup RPC in a separate goroutine and returns the
+// results (and error, if any) in the provided callback.
+func (c *rlsClient) lookup(path string, keyMap map[string]string, cb lookupCallback) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.rpcTimeout)
 	go func() {
 		resp, err := c.stub.RouteLookup(ctx, &rlspb.RouteLookupRequest{
@@ -79,12 +71,7 @@ func (c *rlsClient) lookup(path string, keyMap map[string]string, cb lookupCallb
 			TargetType: grpcTargetType,
 			KeyMap:     keyMap,
 		})
-		if st, ok := status.FromError(err); ok && st.Code() == codes.Canceled {
-			// This indicates that the cancel function we returned was invoked to
-			// cancel the RPC. Don't invoke the callback in this case.
-			return
-		}
 		cb(resp.GetTarget(), resp.GetHeaderData(), err)
+		cancel()
 	}()
-	return cancel
 }
