@@ -27,7 +27,11 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
-const testCacheMaxSize = 1000000
+const (
+	defaultTestCacheSize    = 5
+	defaultTestCacheMaxSize = 1000000
+	defaultTestTimeout      = 1 * time.Second
+)
 
 // TestGet verifies the Add and Get methods of cache.LRU.
 func TestGet(t *testing.T) {
@@ -77,7 +81,7 @@ func TestGet(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			lru := NewLRU(testCacheMaxSize, nil)
+			lru := NewLRU(defaultTestCacheMaxSize, nil)
 			for i, key := range test.keysToAdd {
 				lru.Add(key, test.valsToAdd[i])
 			}
@@ -100,7 +104,7 @@ func TestRemove(t *testing.T) {
 		{Path: "/service3/method3", KeyMap: "k1=v1,k2=v2"},
 	}
 
-	lru := NewLRU(testCacheMaxSize, nil)
+	lru := NewLRU(defaultTestCacheMaxSize, nil)
 	for _, k := range keys {
 		lru.Add(k, &Entry{})
 	}
@@ -115,12 +119,7 @@ func TestRemove(t *testing.T) {
 // TestExceedingSizeCausesEviction verifies the case where adding a new entry
 // to the cache leads to eviction of old entries to make space for the new one.
 func TestExceedingSizeCausesEviction(t *testing.T) {
-	const (
-		testCacheSize = 5
-		testTimeout   = 2 * time.Second
-	)
-
-	evictCh := make(chan Key, testCacheSize)
+	evictCh := make(chan Key, defaultTestCacheSize)
 	onEvicted := func(k Key, _ *Entry) {
 		t.Logf("evicted key {%+v} from cache", k)
 		evictCh <- k
@@ -129,7 +128,7 @@ func TestExceedingSizeCausesEviction(t *testing.T) {
 	keysToFill := []Key{{Path: "a"}, {Path: "b"}, {Path: "c"}, {Path: "d"}, {Path: "e"}}
 	keysCausingEviction := []Key{{Path: "f"}, {Path: "g"}, {Path: "h"}, {Path: "i"}, {Path: "j"}}
 
-	lru := NewLRU(testCacheSize, onEvicted)
+	lru := NewLRU(defaultTestCacheSize, onEvicted)
 	for _, key := range keysToFill {
 		lru.Add(key, &Entry{})
 	}
@@ -137,7 +136,7 @@ func TestExceedingSizeCausesEviction(t *testing.T) {
 	for i, key := range keysCausingEviction {
 		lru.Add(key, &Entry{})
 
-		timer := time.NewTimer(testTimeout)
+		timer := time.NewTimer(defaultTestTimeout)
 		select {
 		case <-timer.C:
 			t.Fatal("Test timeout waiting for eviction")
@@ -153,12 +152,7 @@ func TestExceedingSizeCausesEviction(t *testing.T) {
 // TestAddCausesMultipleEvictions verifies the case where adding one new entry
 // causes the eviction of multiple old entries to make space for the new one.
 func TestAddCausesMultipleEvictions(t *testing.T) {
-	const (
-		testCacheSize = 5
-		testTimeout   = 2 * time.Second
-	)
-
-	evictCh := make(chan Key, testCacheSize)
+	evictCh := make(chan Key, defaultTestCacheSize)
 	onEvicted := func(k Key, _ *Entry) {
 		evictCh <- k
 	}
@@ -166,7 +160,7 @@ func TestAddCausesMultipleEvictions(t *testing.T) {
 	keysToFill := []Key{{Path: "a"}, {Path: "b"}, {Path: "c"}, {Path: "d"}, {Path: "e"}}
 	keyCausingEviction := Key{Path: "abcde"}
 
-	lru := NewLRU(testCacheSize, onEvicted)
+	lru := NewLRU(defaultTestCacheSize, onEvicted)
 	for _, key := range keysToFill {
 		lru.Add(key, &Entry{})
 	}
@@ -174,7 +168,7 @@ func TestAddCausesMultipleEvictions(t *testing.T) {
 	lru.Add(keyCausingEviction, &Entry{})
 
 	for i := range keysToFill {
-		timer := time.NewTimer(testTimeout)
+		timer := time.NewTimer(defaultTestTimeout)
 		select {
 		case <-timer.C:
 			t.Fatal("Test timeout waiting for eviction")
@@ -191,25 +185,20 @@ func TestAddCausesMultipleEvictions(t *testing.T) {
 // existing entry to increase its size leads to the eviction of older entries
 // to make space for the new one.
 func TestModifyCausesMultipleEvictions(t *testing.T) {
-	const (
-		testCacheSize = 5
-		testTimeout   = 2 * time.Second
-	)
-
-	evictCh := make(chan Key, testCacheSize)
+	evictCh := make(chan Key, defaultTestCacheSize)
 	onEvicted := func(k Key, _ *Entry) {
 		evictCh <- k
 	}
 
 	keysToFill := []Key{{Path: "a"}, {Path: "b"}, {Path: "c"}, {Path: "d"}, {Path: "e"}}
-	lru := NewLRU(testCacheSize, onEvicted)
+	lru := NewLRU(defaultTestCacheSize, onEvicted)
 	for _, key := range keysToFill {
 		lru.Add(key, &Entry{})
 	}
 
 	lru.Add(keysToFill[len(keysToFill)-1], &Entry{HeaderData: "xxxx"})
 	for i := range keysToFill[:len(keysToFill)-1] {
-		timer := time.NewTimer(testTimeout)
+		timer := time.NewTimer(defaultTestTimeout)
 		select {
 		case <-timer.C:
 			t.Fatal("Test timeout waiting for eviction")
@@ -219,5 +208,55 @@ func TestModifyCausesMultipleEvictions(t *testing.T) {
 				t.Fatalf("Evicted key %+v, wanted %+v", k, keysToFill[i])
 			}
 		}
+	}
+}
+
+func TestLRUResize(t *testing.T) {
+	tests := []struct {
+		desc            string
+		maxSize         int64
+		keysToFill      []Key
+		newMaxSize      int64
+		wantEvictedKeys []Key
+	}{
+		{
+			desc:            "resize causes multiple evictions",
+			maxSize:         5,
+			keysToFill:      []Key{{Path: "a"}, {Path: "b"}, {Path: "c"}, {Path: "d"}, {Path: "e"}},
+			newMaxSize:      3,
+			wantEvictedKeys: []Key{{Path: "a"}, {Path: "b"}},
+		},
+		{
+			desc:            "resize causes no evictions",
+			maxSize:         50,
+			keysToFill:      []Key{{Path: "a"}, {Path: "b"}, {Path: "c"}, {Path: "d"}, {Path: "e"}},
+			newMaxSize:      10,
+			wantEvictedKeys: []Key{},
+		},
+		{
+			desc:            "resize to higher value",
+			maxSize:         5,
+			keysToFill:      []Key{{Path: "a"}, {Path: "b"}, {Path: "c"}, {Path: "d"}, {Path: "e"}},
+			newMaxSize:      10,
+			wantEvictedKeys: []Key{},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			var evictedKeys []Key
+			onEvicted := func(k Key, _ *Entry) {
+				evictedKeys = append(evictedKeys, k)
+			}
+
+			lru := NewLRU(test.maxSize, onEvicted)
+			for _, key := range test.keysToFill {
+				lru.Add(key, &Entry{})
+			}
+			lru.Resize(test.newMaxSize)
+			if !cmp.Equal(evictedKeys, test.wantEvictedKeys, cmpopts.EquateEmpty()) {
+				t.Fatalf("lru.Resize evicted keys {%v}, should have evicted {%v}", evictedKeys, test.wantEvictedKeys)
+			}
+		})
 	}
 }
