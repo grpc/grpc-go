@@ -88,7 +88,3 @@ func (c *rlsClient) lookup(path string, keyMap map[string]string, cb lookupCallb
 	}()
 	return cancel
 }
-
-func (c *rlsClient) close() {
-	c.cc.Close()
-}
