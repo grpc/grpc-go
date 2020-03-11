@@ -1,12 +1,15 @@
 #!/bin/bash
 
-if [[ `uname -a` = *"Darwin"* ]]; then
-  echo "It seems you are running on Mac. This script does not work on Mac. See https://github.com/grpc/grpc-go/issues/2047"
-  exit 1
-fi
-
 set -ex  # Exit on error; debugging enabled.
 set -o pipefail  # Fail a pipe if any sub-command fails.
+
+# negate_and_run makes sure that no output is seen when executing the command
+# passed to it as args.
+negate_and_run() {
+  # This is required instead of the earlier (! $COMMAND) because subshells and
+  # pipefail don't work the same on Darwin as in Linux.
+  ! eval "$*"
+}
 
 die() {
   echo "$@" >&2
@@ -14,7 +17,7 @@ die() {
 }
 
 fail_on_output() {
-  tee /dev/stderr | (! read)
+  tee /dev/stderr | negate_and_run read
 }
 
 # Check to make sure it's safe to modify the user's git repo.
@@ -70,21 +73,21 @@ elif [[ "$#" -ne 0 ]]; then
 fi
 
 # - Ensure all source files contain a copyright message.
-(! git grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" -- '*.go')
+negate_and_run 'git grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" -- *.go'
 
 # - Make sure all tests in grpc and grpc/test use leakcheck via Teardown.
-(! grep 'func Test[^(]' *_test.go)
-(! grep 'func Test[^(]' test/*.go)
+negate_and_run 'grep "func Test[^(]" *_test.go'
+negate_and_run 'grep "func Test[^(]" test/*.go'
 
 # - Do not import x/net/context.
-(! git grep -l 'x/net/context' -- "*.go")
+negate_and_run 'git grep -l "x/net/context" -- *.go'
 
 # - Do not import math/rand for real library code.  Use internal/grpcrand for
 #   thread safety.
-git grep -l '"math/rand"' -- "*.go" 2>&1 | (! grep -v '^examples\|^stress\|grpcrand\|^benchmark\|wrr_test')
+git grep -l '"math/rand"' -- "*.go" 2>&1 | negate_and_run 'grep -v "^examples\|^stress\|grpcrand\|^benchmark\|wrr_test"'
 
 # - Ensure all ptypes proto packages are renamed when importing.
-(! git grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/" -- "*.go")
+negate_and_run 'git grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/" -- "*.go"'
 
 # - Check imports that are illegal in appengine (until Go 1.11).
 # TODO: Remove when we drop Go 1.10 support
