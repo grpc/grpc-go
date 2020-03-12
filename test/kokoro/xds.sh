@@ -1,15 +1,13 @@
 #!/bin/bash
 
 set -exu -o pipefail
-if [[ -f /VERSION ]]; then
-  cat /VERSION
-fi
+[[ -f /VERSION ]] && cat /VERSION
 
 cd github
 
-export GOPATH=${HOME}/gopath
-pushd grpc-go/interop/xds/client
-go build
+export GOPATH="${HOME}/gopath"
+pushd grpc-go
+go build ./interop/xds/client
 popd
 
 git clone https://github.com/grpc/grpc.git
