@@ -84,8 +84,8 @@ type Entry struct {
 	// HeaderData is received in an RLS response and is to be sent in the
 	// X-Google-RLS-Data header for matching RPCs.
 	HeaderData string
-	// ChildPicker is a very thin wrapper around the child policy wrapper
-	// object. The type is declared as a V2Picker interface since the users of
+	// ChildPicker is a very thin wrapper around the child policy wrapper.
+	// The type is declared as a V2Picker interface since the users of
 	// the cache only care about the picker provided by the child policy, and
 	// this makes it easy for testing.
 	ChildPicker balancer.V2Picker

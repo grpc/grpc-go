@@ -24,11 +24,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/internal/grpcrand"
+
 	"github.com/google/go-cmp/cmp"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/rls/internal/cache"
 	"google.golang.org/grpc/balancer/rls/internal/keys"
@@ -41,9 +43,7 @@ const (
 	maxAge             = 5 * time.Second
 )
 
-func initKeyBuilderMap(t *testing.T) keys.BuilderMap {
-	t.Helper()
-
+func initKeyBuilderMap() (keys.BuilderMap, error) {
 	kb1 := &rlspb.GrpcKeyBuilder{
 		Names:   []*rlspb.GrpcKeyBuilder_Name{{Service: "gFoo"}},
 		Headers: []*rlspb.NameMatcher{{Key: "k1", Names: []string{"n1"}}},
@@ -56,68 +56,64 @@ func initKeyBuilderMap(t *testing.T) keys.BuilderMap {
 		Names:   []*rlspb.GrpcKeyBuilder_Name{{Service: "gFoobar"}},
 		Headers: []*rlspb.NameMatcher{{Key: "k3", Names: []string{"n3"}}},
 	}
-	kbm, err := keys.MakeBuilderMap(&rlspb.RouteLookupConfig{
+	return keys.MakeBuilderMap(&rlspb.RouteLookupConfig{
 		GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{kb1, kb2, kb3},
 	})
-	if err != nil {
-		t.Fatalf("Failed to create keyBuilderMap: %v", err)
-	}
-	return kbm
 }
 
+// fakeSubConn embeds the balancer.SubConn interface and contains an id which
+// helps verify that the expected subConn was returned by the picker.
+type fakeSubConn struct {
+	balancer.SubConn
+	id int
+}
+
+// fakeChildPicker sends a PickResult with a fakeSubConn with the configured id.
 type fakeChildPicker struct {
-	pickCh     chan struct{}
-	pickResult balancer.PickResult
-	err        error
+	id int
 }
 
 func (p *fakeChildPicker) Pick(_ balancer.PickInfo) (balancer.PickResult, error) {
-	p.pickCh <- struct{}{}
-	return p.pickResult, p.err
+	return balancer.PickResult{SubConn: &fakeSubConn{id: p.id}}, nil
 }
 
 // TestPickKeyBuilder verifies the different possible scenarios for
 // forming an RLS key for an incoming RPC.
 func TestPickKeyBuilder(t *testing.T) {
-	kbm := initKeyBuilderMap(t)
+	kbm, err := initKeyBuilderMap()
+	if err != nil {
+		t.Fatalf("Failed to create keyBuilderMap: %v", err)
+	}
 
 	tests := []struct {
-		desc       string
-		rpcPath    string
-		md         metadata.MD
-		wantKey    cache.Key
-		wantResult balancer.PickResult
+		desc    string
+		rpcPath string
+		md      metadata.MD
+		wantKey cache.Key
 	}{
 		{
-			desc:       "non existent service in keyBuilder map",
-			rpcPath:    "/gNonExistentService/method",
-			md:         metadata.New(map[string]string{"n1": "v1", "n3": "v3"}),
-			wantKey:    cache.Key{Path: "/gNonExistentService/method", KeyMap: ""},
-			wantResult: balancer.PickResult{},
+			desc:    "non existent service in keyBuilder map",
+			rpcPath: "/gNonExistentService/method",
+			md:      metadata.New(map[string]string{"n1": "v1", "n3": "v3"}),
+			wantKey: cache.Key{Path: "/gNonExistentService/method", KeyMap: ""},
 		},
 		{
-			desc:       "no metadata in incoming context",
-			rpcPath:    "/gFoo/method",
-			md:         metadata.MD{},
-			wantKey:    cache.Key{Path: "/gFoo/method", KeyMap: ""},
-			wantResult: balancer.PickResult{},
+			desc:    "no metadata in incoming context",
+			rpcPath: "/gFoo/method",
+			md:      metadata.MD{},
+			wantKey: cache.Key{Path: "/gFoo/method", KeyMap: ""},
 		},
 		{
-			desc:       "keyBuilderMatch",
-			rpcPath:    "/gFoo/method",
-			md:         metadata.New(map[string]string{"n1": "v1", "n3": "v3"}),
-			wantKey:    cache.Key{Path: "/gFoo/method", KeyMap: "k1=v1"},
-			wantResult: balancer.PickResult{},
+			desc:    "keyBuilderMatch",
+			rpcPath: "/gFoo/method",
+			md:      metadata.New(map[string]string{"n1": "v1", "n3": "v3"}),
+			wantKey: cache.Key{Path: "/gFoo/method", KeyMap: "k1=v1"},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			cp := &fakeChildPicker{
-				pickCh:     make(chan struct{}, 1),
-				pickResult: balancer.PickResult{},
-				err:        nil,
-			}
+			randID := grpcrand.Intn(math.MaxInt32)
 			p := picker{
 				kbm:      kbm,
 				strategy: rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
@@ -133,7 +129,7 @@ func TestPickKeyBuilder(t *testing.T) {
 						// Cache entry is configured with a child policy whose
 						// picker always returns an empty PickResult and nil
 						// error.
-						ChildPicker: cp,
+						ChildPicker: &fakeChildPicker{id: randID},
 					}, false
 				},
 				// The other hooks are not set here because they are not expected to be
@@ -147,16 +143,12 @@ func TestPickKeyBuilder(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Pick() failed with error: %v", err)
 			}
-			if !cmp.Equal(gotResult, test.wantResult) {
-				t.Fatalf("Pick() returned %v, want %v", gotResult, test.wantResult)
+			sc, ok := gotResult.SubConn.(*fakeSubConn)
+			if !ok {
+				t.Fatalf("Pick() returned a SubConn of type %T, want %T", gotResult.SubConn, &fakeSubConn{})
 			}
-
-			timer := time.NewTimer(defaultTestTimeout)
-			select {
-			case <-cp.pickCh:
-				timer.Stop()
-			case <-timer.C:
-				t.Fatal("Timeout waiting for Pick to be called on child policy")
+			if sc.id != randID {
+				t.Fatalf("Pick() returned SubConn %d, want %d", sc.id, randID)
 			}
 		})
 	}
@@ -167,7 +159,10 @@ func TestPick(t *testing.T) {
 		rpcPath       = "/gFoo/method"
 		wantKeyMapStr = "k1=v1"
 	)
-	kbm := initKeyBuilderMap(t)
+	kbm, err := initKeyBuilderMap()
+	if err != nil {
+		t.Fatalf("Failed to create keyBuilderMap: %v", err)
+	}
 	md := metadata.New(map[string]string{"n1": "v1", "n3": "v3"})
 	wantKey := cache.Key{Path: rpcPath, KeyMap: wantKeyMapStr}
 	rlsLastErr := errors.New("last RLS request failed")
@@ -552,18 +547,12 @@ func TestPick(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			rlsCh := make(chan error, 1)
-			defaultPickCh := make(chan error, 1)
-
-			// Fake the child picker in the cache entry with one which pushes
-			// on a channel when it is invoked.
-			var childPicker *fakeChildPicker
-			if test.useChildPick {
-				childPicker = &fakeChildPicker{
-					pickCh:     make(chan struct{}, 1),
-					pickResult: balancer.PickResult{},
-					err:        nil,
-				}
-			}
+			randID := grpcrand.Intn(math.MaxInt32)
+			// We instantiate a fakeChildPicker which will return a fakeSubConn
+			// with configured id. Either the childPicker or the defaultPicker
+			// is configured to use this fakePicker based on whether
+			// useChidlPick or useDefaultPick is set in the test.
+			childPicker := &fakeChildPicker{id: randID}
 
 			p := picker{
 				kbm:      kbm,
@@ -573,13 +562,6 @@ func TestPick(t *testing.T) {
 						t.Fatalf("cache lookup using cacheKey %v, want %v", key, wantKey)
 					}
 					if test.useChildPick {
-						// If the test has set `useChildPick` to true,
-						// `chidlPicker` would have been initialized to a non-nil
-						// `fakeChildPicker` object. It is not possible to
-						// initialize this from the test table, because we want a
-						// unique instance of the `fakeChildPicker` object for each
-						// test and be able to make sure that the pick was
-						// delegated to it by reading on its pick channel.
 						test.cacheEntry.ChildPicker = childPicker
 					}
 					return test.cacheEntry, test.pending
@@ -600,71 +582,47 @@ func TestPick(t *testing.T) {
 					}
 					rlsCh <- nil
 				},
-				defaultPick: func(_ balancer.PickInfo) (balancer.PickResult, error) {
+				defaultPick: func(info balancer.PickInfo) (balancer.PickResult, error) {
 					if !test.useDefaultPick {
-						defaultPickCh <- errors.New("Using default pick when the test doesn't want to use default pick")
+						return balancer.PickResult{}, errors.New("Using default pick when the test doesn't want to use default pick")
 					}
-					defaultPickCh <- nil
-					return balancer.PickResult{}, nil
+					return childPicker.Pick(info)
 				},
 			}
 
-			// Spawn goroutines to verify that the appropriate picker was
-			// invoked *the default picker or the child picker) and whether an
-			// RLS request was made.
-			var g errgroup.Group
-			g.Go(func() error {
-				if test.useChildPick {
-					timer := time.NewTimer(defaultTestTimeout)
-					select {
-					case <-childPicker.pickCh:
-						timer.Stop()
-						return nil
-					case <-timer.C:
-						return errors.New("Timeout waiting for Pick to be called on child policy")
-					}
-				}
-				return nil
-			})
-			g.Go(func() error {
-				if test.useDefaultPick {
-					timer := time.NewTimer(defaultTestTimeout)
-					select {
-					case err := <-defaultPickCh:
-						timer.Stop()
-						return err
-					case <-timer.C:
-						return errors.New("Timeout waiting for Pick to be called on default policy")
-					}
-				}
-				return nil
-			})
-			g.Go(func() error {
-				if test.newRLSRequest {
-					timer := time.NewTimer(defaultTestTimeout)
-					select {
-					case err := <-rlsCh:
-						timer.Stop()
-						return err
-					case <-timer.C:
-						return errors.New("Timeout waiting for RLS request to be sent out")
-					}
-				}
-				return nil
-			})
-
-			if gotResult, err := p.Pick(balancer.PickInfo{
+			gotResult, err := p.Pick(balancer.PickInfo{
 				FullMethodName: rpcPath,
 				Ctx:            metadata.NewOutgoingContext(context.Background(), md),
-			}); err != test.wantErr || !cmp.Equal(gotResult, test.wantResult) {
-				t.Fatalf("Pick() = {%v, %v}, want: {%v, %v}", gotResult, err, test.wantResult, test.wantErr)
+			})
+			if err != test.wantErr {
+				t.Fatalf("Pick() returned error {%v}, want {%v}", err, test.wantErr)
+			}
+			if test.useChildPick || test.useDefaultPick {
+				// For cases where the pick is not queued, but is delegated to
+				// either the child picker or the default picker, we verify that
+				// the expected fakeSubConn is returned.
+				sc, ok := gotResult.SubConn.(*fakeSubConn)
+				if !ok {
+					t.Fatalf("Pick() returned a SubConn of type %T, want %T", gotResult.SubConn, &fakeSubConn{})
+				}
+				if sc.id != randID {
+					t.Fatalf("Pick() returned SubConn %d, want %d", sc.id, randID)
+				}
 			}
 
-			// If any of the spawned goroutines returned an error (which
-			// indicates that some expectation of the test was not met), we
-			// fail.
-			if err := g.Wait(); err != nil {
-				t.Fatal(err)
+			// If the test specified that a new RLS request should be made,
+			// verify it.
+			if test.newRLSRequest {
+				timer := time.NewTimer(defaultTestTimeout)
+				select {
+				case err := <-rlsCh:
+					timer.Stop()
+					if err != nil {
+						t.Fatal(err)
+					}
+				case <-timer.C:
+					t.Fatal("Timeout waiting for RLS request to be sent out")
+				}
 			}
 		})
 	}

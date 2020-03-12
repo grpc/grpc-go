@@ -72,14 +72,15 @@ type picker struct {
 	// shouldThrottle decides if the current RPC should be throttled at the
 	// client side. It uses an adaptive throttling algorithm.
 	shouldThrottle func() bool
-	// startRLS kicks of an RLS request in the background for the provided RPC
+	// startRLS kicks off an RLS request in the background for the provided RPC
 	// path and keyMap. An entry in the pending request map is created before
 	// sending out the request and an entry in the data cache is created or
 	// updated upon receipt of a response. See implementation in the LB policy
 	// for details.
 	startRLS func(string, keys.KeyMap)
 	// defaultPick enables the picker to delegate the pick decision to the
-	// default picker.
+	// picker returned by the child LB policy pointing to the default target
+	// specified in the service config.
 	defaultPick func(balancer.PickInfo) (balancer.PickResult, error)
 }
 
