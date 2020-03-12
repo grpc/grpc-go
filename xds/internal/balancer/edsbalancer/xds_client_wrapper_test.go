@@ -21,6 +21,7 @@ package edsbalancer
 import (
 	"errors"
 	"testing"
+	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -109,9 +110,25 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 				EDSServiceName: test.edsServiceName,
 			}, nil)
 
-			req, err := fakeServer.XDSRequestChan.Receive()
-			if err != nil {
-				t.Fatalf("EDS RPC failed with err: %v", err)
+			var (
+				req interface{}
+				err error
+			)
+			for {
+				// Each new watch will first cancel the previous watch, and then
+				// start a new watch. The cancel will trigger a request as well.
+				// This loop keeps receiving until error, and keeps the last
+				// request.
+				r, e := fakeServer.XDSRequestChan.TimedReceive(time.Millisecond * 100)
+				if e != nil {
+					t.Logf("EDS RPC failed with err: %v", err)
+					err = e
+					break
+				}
+				req = r
+			}
+			if req == nil {
+				t.Fatalf("Expected xDS request, but got error: %v", err)
 			}
 			edsReq := req.(*fakeserver.Request)
 			if edsReq.Err != nil {
@@ -142,7 +159,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 //   edsBalancer with the received error.
 func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	edsRespChan := testutils.NewChannel()
-	newEDS := func(update *xdsclient.EDSUpdate) error {
+	newEDS := func(update xdsclient.EndpointsUpdate) error {
 		edsRespChan.Send(update)
 		return nil
 	}
@@ -159,7 +176,7 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	if gotCluster != testEDSClusterName {
 		t.Fatalf("xdsClient.WatchEndpoints() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
 	}
-	xdsC.InvokeWatchEDSCallback(nil, errors.New("EDS watch callback error"))
+	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, errors.New("EDS watch callback error"))
 
 	// The callback is called with an error, expect no update from edsRespChan.
 	//

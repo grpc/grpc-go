@@ -34,18 +34,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
-	if v2c.watchMap[ldsURL] == nil {
-		return fmt.Errorf("xds: unexpected RDS response when no LDS watcher is registered: %+v", resp)
-	}
-	target := v2c.watchMap[ldsURL].target[0]
-
-	wi := v2c.watchMap[rdsURL]
-	if wi == nil {
-		return fmt.Errorf("xds: no RDS watcher found when handling RDS response: %+v", resp)
-	}
-
-	returnCluster := ""
-	localCache := make(map[string]string)
+	returnUpdate := make(map[string]interface{})
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
@@ -55,40 +44,19 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if !ok {
 			return fmt.Errorf("xds: unexpected resource type: %T in RDS response", resource.Message)
 		}
-		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v", rc.GetName(), rc, rc)
-		cluster := getClusterFromRouteConfiguration(rc, target)
+		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v. Picking routes for current watching hostname %v", rc.GetName(), rc, rc, v2c.hostname)
+
+		// Use the hostname (resourceName for LDS) to find the routes.
+		cluster := getClusterFromRouteConfiguration(rc, v2c.hostname)
 		if cluster == "" {
 			return fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v", rc)
 		}
 
 		// If we get here, it means that this resource was a good one.
-		localCache[rc.GetName()] = cluster
-		v2c.logger.Debugf("Resource with name %v, type %T, value %+v added to cache", rc.GetName(), cluster, cluster)
-
-		// TODO: remove cache, and only process resources that are interesting.
-		if rc.GetName() == wi.target[0] {
-			returnCluster = cluster
-		}
+		returnUpdate[rc.GetName()] = rdsUpdate{clusterName: cluster}
 	}
 
-	// Update the cache in the v2Client only after we have confirmed that all
-	// resources in the received response were good.
-	for k, v := range localCache {
-		// TODO: Need to handle deletion of entries from the cache based on LDS
-		// watch calls. Not handling it does not affect correctness, but leads
-		// to unnecessary memory consumption.
-		v2c.rdsCache[k] = v
-	}
-
-	if returnCluster != "" {
-		// We stop the expiry timer and invoke the callback only when we have
-		// received the resource that we are watching for. Since RDS is an
-		// incremental protocol, the fact that we did not receive the resource
-		// that we are watching for in this response does not mean that the
-		// server does not know about it.
-		wi.stopTimer()
-		wi.rdsCallback(rdsUpdate{clusterName: returnCluster}, nil)
-	}
+	v2c.parent.newUpdate(rdsURL, returnUpdate)
 	return nil
 }
 

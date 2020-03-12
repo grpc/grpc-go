@@ -102,7 +102,7 @@ func (f *fakeEDSBalancer) HandleChildPolicy(name string, config json.RawMessage)
 }
 
 func (f *fakeEDSBalancer) Close()                                              {}
-func (f *fakeEDSBalancer) HandleEDSResponse(edsResp *xdsclient.EDSUpdate)      {}
+func (f *fakeEDSBalancer) HandleEDSResponse(edsResp xdsclient.EndpointsUpdate) {}
 func (f *fakeEDSBalancer) updateState(priority priorityType, s balancer.State) {}
 
 func (f *fakeEDSBalancer) waitForChildPolicy(wantPolicy *loadBalancingConfig) error {
@@ -247,7 +247,7 @@ func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
 		})
 
 		xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, balancerName)
-		xdsC.InvokeWatchEDSCallback(&xdsclient.EDSUpdate{}, nil)
+		xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
 	}
 }
 
@@ -328,7 +328,7 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 		},
 	})
 	xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, testBalancerNameFooBar)
-	xdsC.InvokeWatchEDSCallback(&xdsclient.EDSUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
 	edsLB := waitForNewEDSLB(t, edsLBCh)
 	edsLB.waitForChildPolicy(&loadBalancingConfig{
 		Name:   string(fakeBalancerA),
@@ -377,7 +377,7 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	})
 
 	xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, testBalancerNameFooBar)
-	xdsC.InvokeWatchEDSCallback(&xdsclient.EDSUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
 	edsLB := waitForNewEDSLB(t, edsLBCh)
 
 	fsc := &fakeSubConn{}

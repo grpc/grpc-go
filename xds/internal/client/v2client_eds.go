@@ -30,52 +30,6 @@ import (
 	"google.golang.org/grpc/xds/internal"
 )
 
-// OverloadDropConfig contains the config to drop overloads.
-type OverloadDropConfig struct {
-	Category    string
-	Numerator   uint32
-	Denominator uint32
-}
-
-// EndpointHealthStatus represents the health status of an endpoint.
-type EndpointHealthStatus int32
-
-const (
-	// EndpointHealthStatusUnknown represents HealthStatus UNKNOWN.
-	EndpointHealthStatusUnknown EndpointHealthStatus = iota
-	// EndpointHealthStatusHealthy represents HealthStatus HEALTHY.
-	EndpointHealthStatusHealthy
-	// EndpointHealthStatusUnhealthy represents HealthStatus UNHEALTHY.
-	EndpointHealthStatusUnhealthy
-	// EndpointHealthStatusDraining represents HealthStatus DRAINING.
-	EndpointHealthStatusDraining
-	// EndpointHealthStatusTimeout represents HealthStatus TIMEOUT.
-	EndpointHealthStatusTimeout
-	// EndpointHealthStatusDegraded represents HealthStatus DEGRADED.
-	EndpointHealthStatusDegraded
-)
-
-// Endpoint contains information of an endpoint.
-type Endpoint struct {
-	Address      string
-	HealthStatus EndpointHealthStatus
-	Weight       uint32
-}
-
-// Locality contains information of a locality.
-type Locality struct {
-	Endpoints []Endpoint
-	ID        internal.Locality
-	Priority  uint32
-	Weight    uint32
-}
-
-// EDSUpdate contains an EDS update.
-type EDSUpdate struct {
-	Drops      []OverloadDropConfig
-	Localities []Locality
-}
-
 func parseAddress(socketAddress *corepb.SocketAddress) string {
 	return net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue())))
 }
@@ -113,12 +67,12 @@ func parseEndpoints(lbEndpoints []*endpointpb.LbEndpoint) []Endpoint {
 	return endpoints
 }
 
-// ParseEDSRespProto turns EDS response proto message to EDSUpdate.
+// ParseEDSRespProto turns EDS response proto message to EndpointsUpdate.
 //
 // This is temporarily exported to be used in eds balancer, before it switches
 // to use xds client. TODO: unexport.
-func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
-	ret := &EDSUpdate{}
+func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (EndpointsUpdate, error) {
+	ret := EndpointsUpdate{}
 	for _, dropPolicy := range m.GetPolicy().GetDropOverloads() {
 		ret.Drops = append(ret.Drops, parseDropPolicy(dropPolicy))
 	}
@@ -126,7 +80,7 @@ func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
 	for _, locality := range m.Endpoints {
 		l := locality.GetLocality()
 		if l == nil {
-			return nil, fmt.Errorf("EDS response contains a locality without ID, locality: %+v", locality)
+			return EndpointsUpdate{}, fmt.Errorf("EDS response contains a locality without ID, locality: %+v", locality)
 		}
 		lid := internal.Locality{
 			Region:  l.Region,
@@ -144,7 +98,7 @@ func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
 	}
 	for i := 0; i < len(priorities); i++ {
 		if _, ok := priorities[uint32(i)]; !ok {
-			return nil, fmt.Errorf("priority %v missing (with different priorities %v received)", i, priorities)
+			return EndpointsUpdate{}, fmt.Errorf("priority %v missing (with different priorities %v received)", i, priorities)
 		}
 	}
 	return ret, nil
@@ -153,9 +107,9 @@ func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
 // ParseEDSRespProtoForTesting parses EDS response, and panic if parsing fails.
 // This is used by EDS balancer tests.
 //
-// TODO: delete this. The EDS balancer tests should build an EDSUpdate directly,
+// TODO: delete this. The EDS balancer tests should build an EndpointsUpdate directly,
 //  instead of building and parsing a proto message.
-func ParseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) *EDSUpdate {
+func ParseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) EndpointsUpdate {
 	u, err := ParseEDSRespProto(m)
 	if err != nil {
 		panic(err.Error())
@@ -167,12 +121,7 @@ func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
-	wi := v2c.watchMap[edsURL]
-	if wi == nil {
-		return fmt.Errorf("xds: no EDS watcher found when handling EDS response: %+v", resp)
-	}
-
-	var returnUpdate *EDSUpdate
+	returnUpdate := make(map[string]interface{})
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
@@ -184,29 +133,14 @@ func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 		}
 		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, cla)
 
-		if cla.GetClusterName() != wi.target[0] {
-			// We won't validate the remaining resources. If one of the
-			// uninteresting ones is invalid, we will still ACK the response.
-			continue
-		}
-
 		u, err := ParseEDSRespProto(cla)
 		if err != nil {
 			return err
 		}
 
-		returnUpdate = u
-		// Break from the loop because the request resource is found. But
-		// this also means we won't validate the remaining resources. If one
-		// of the uninteresting ones is invalid, we will still ACK the
-		// response.
-		break
+		returnUpdate[cla.GetClusterName()] = u
 	}
 
-	if returnUpdate != nil {
-		wi.stopTimer()
-		wi.edsCallback(returnUpdate, nil)
-	}
-
+	v2c.parent.newUpdate(edsURL, returnUpdate)
 	return nil
 }

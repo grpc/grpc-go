@@ -95,7 +95,7 @@ func (b *edsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadB
 // TODO: none of the methods in this interface needs to be exported.
 type edsBalancerImplInterface interface {
 	// HandleEDSResponse passes the received EDS message from traffic director to eds balancer.
-	HandleEDSResponse(edsResp *xdsclient.EDSUpdate)
+	HandleEDSResponse(edsResp xdsclient.EndpointsUpdate)
 	// HandleChildPolicy updates the eds balancer the intra-cluster load balancing policy to use.
 	HandleChildPolicy(name string, config json.RawMessage)
 	// HandleSubConnStateChange handles state change for SubConn.
@@ -196,9 +196,9 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 
 func (x *edsBalancer) handleXDSClientUpdate(update interface{}) {
 	switch u := update.(type) {
-	// TODO: this func should accept (*xdsclient.EDSUpdate, error), and process
+	// TODO: this func should accept (xdsclient.EndpointsUpdate, error), and process
 	// the error, instead of having a separate loseContact signal.
-	case *xdsclient.EDSUpdate:
+	case xdsclient.EndpointsUpdate:
 		x.edsImpl.HandleEDSResponse(u)
 	case *loseContact:
 		// loseContact can be useful for going into fallback.
@@ -246,7 +246,7 @@ func (x *edsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	return nil
 }
 
-func (x *edsBalancer) handleEDSUpdate(resp *xdsclient.EDSUpdate) error {
+func (x *edsBalancer) handleEDSUpdate(resp xdsclient.EndpointsUpdate) error {
 	// TODO: this function should take (resp, error), and send them together on
 	// the channel. There doesn't need to be a separate `loseContact` function.
 	select {
