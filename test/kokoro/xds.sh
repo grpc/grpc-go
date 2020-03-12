@@ -21,7 +21,7 @@ GRPC_GO_LOG_VERBOSITY_LEVEL=99 GRPC_GO_LOG_SEVERITY_LEVEL=info \
     --project_id=grpc-testing \
     --gcp_suffix=$(date '+%s') \
     --verbose \
-    --client_cmd="${REPO_ROOT}/interop/xds/client/client \
+    --client_cmd="grpc-go/interop/xds/client/client \
       --server=xds-experimental:///{server_uri} \
       --stats_port={stats_port} \
       --qps={qps}"
