@@ -8,16 +8,8 @@ fi
 cd github
 
 export GOPATH=~/gopath
-REPO_ROOT=${GOPATH}/src/google.golang.org/grpc
-
-mkdir -p ${GOPATH}/src/google.golang.org
-mv grpc-go/ ${REPO_ROOT}
-pushd ${REPO_ROOT}
-go get -v ./...
-go build ...grpc
-pushd interop/xds/client
+pushd grpc-go/interop/xds/client
 go build
-popd
 popd
 
 git clone https://github.com/grpc/grpc.git
