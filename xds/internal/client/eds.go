@@ -205,7 +205,7 @@ func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 
 	if returnUpdate != nil {
 		wi.stopTimer()
-		wi.callback.(edsCallback)(returnUpdate, nil)
+		wi.edsCallback(returnUpdate, nil)
 	}
 
 	return nil

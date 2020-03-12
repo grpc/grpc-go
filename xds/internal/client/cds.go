@@ -71,7 +71,7 @@ func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
 		err = fmt.Errorf("xds: CDS target %s not found in received response %+v", wi.target, resp)
 	}
 	wi.stopTimer()
-	wi.callback.(cdsCallback)(returnUpdate, err)
+	wi.cdsCallback(returnUpdate, err)
 	return nil
 }
 
