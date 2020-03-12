@@ -6,8 +6,8 @@ set -exu -o pipefail
 cd github
 
 export GOPATH="${HOME}/gopath"
-pushd grpc-go
-go build ./interop/xds/client
+pushd grpc-go/interop/xds/client
+go build
 popd
 
 git clone https://github.com/grpc/grpc.git
