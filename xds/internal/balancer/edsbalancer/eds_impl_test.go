@@ -603,22 +603,22 @@ func (s) TestDropPicker(t *testing.T) {
 		{
 			name: "one drop",
 			drops: []*dropper{
-				newDropper(1, 2, ""),
+				newDropper(xdsclient.OverloadDropConfig{Numerator: 1, Denominator: 2}),
 			},
 		},
 		{
 			name: "two drops",
 			drops: []*dropper{
-				newDropper(1, 3, ""),
-				newDropper(1, 2, ""),
+				newDropper(xdsclient.OverloadDropConfig{Numerator: 1, Denominator: 3}),
+				newDropper(xdsclient.OverloadDropConfig{Numerator: 1, Denominator: 2}),
 			},
 		},
 		{
 			name: "three drops",
 			drops: []*dropper{
-				newDropper(1, 3, ""),
-				newDropper(1, 4, ""),
-				newDropper(1, 2, ""),
+				newDropper(xdsclient.OverloadDropConfig{Numerator: 1, Denominator: 3}),
+				newDropper(xdsclient.OverloadDropConfig{Numerator: 1, Denominator: 4}),
+				newDropper(xdsclient.OverloadDropConfig{Numerator: 1, Denominator: 2}),
 			},
 		},
 	}
@@ -634,7 +634,7 @@ func (s) TestDropPicker(t *testing.T) {
 				wantCount = pickCount
 			)
 			for _, dp := range tt.drops {
-				wantCount = wantCount * int(dp.denominator-dp.numerator) / int(dp.denominator)
+				wantCount = wantCount * int(dp.c.Denominator-dp.c.Numerator) / int(dp.c.Denominator)
 			}
 
 			for i := 0; i < pickCount; i++ {

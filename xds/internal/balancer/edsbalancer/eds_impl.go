@@ -87,6 +87,7 @@ type edsBalancerImpl struct {
 	subConnToPriority map[balancer.SubConn]priorityType
 
 	pickerMu   sync.Mutex
+	dropConfig []xdsclient.OverloadDropConfig
 	drops      []*dropper
 	innerState balancer.State // The state of the picker without drop support.
 }
@@ -144,46 +145,25 @@ func (edsImpl *edsBalancerImpl) HandleChildPolicy(name string, config json.RawMe
 
 // updateDrops compares new drop policies with the old. If they are different,
 // it updates the drop policies and send ClientConn an updated picker.
-func (edsImpl *edsBalancerImpl) updateDrops(dropPolicies []xdsclient.OverloadDropConfig) {
-	var (
-		newDrops     []*dropper
-		dropsChanged bool
-	)
-	for i, dropPolicy := range dropPolicies {
-		var (
-			numerator   = dropPolicy.Numerator
-			denominator = dropPolicy.Denominator
+func (edsImpl *edsBalancerImpl) updateDrops(dropConfig []xdsclient.OverloadDropConfig) {
+	if cmp.Equal(dropConfig, edsImpl.dropConfig) {
+		return
+	}
+	edsImpl.pickerMu.Lock()
+	edsImpl.dropConfig = dropConfig
+	var newDrops []*dropper
+	for _, c := range edsImpl.dropConfig {
+		newDrops = append(newDrops, newDropper(c))
+	}
+	edsImpl.drops = newDrops
+	if edsImpl.innerState.Picker != nil {
+		// Update picker with old inner picker, new drops.
+		edsImpl.cc.UpdateState(balancer.State{
+			ConnectivityState: edsImpl.innerState.ConnectivityState,
+			Picker:            newDropPicker(edsImpl.innerState.Picker, newDrops, edsImpl.loadStore)},
 		)
-		newDrops = append(newDrops, newDropper(numerator, denominator, dropPolicy.Category))
-
-		// The following reading edsImpl.drops doesn't need mutex because it can only
-		// be updated by the code following.
-		if dropsChanged {
-			continue
-		}
-		if i >= len(edsImpl.drops) {
-			dropsChanged = true
-			continue
-		}
-		if oldDrop := edsImpl.drops[i]; numerator != oldDrop.numerator || denominator != oldDrop.denominator {
-			dropsChanged = true
-		}
 	}
-	if len(edsImpl.drops) != len(newDrops) {
-		dropsChanged = true
-	}
-	if dropsChanged {
-		edsImpl.pickerMu.Lock()
-		edsImpl.drops = newDrops
-		if edsImpl.innerState.Picker != nil {
-			// Update picker with old inner picker, new drops.
-			edsImpl.cc.UpdateState(balancer.State{
-				ConnectivityState: edsImpl.innerState.ConnectivityState,
-				Picker:            newDropPicker(edsImpl.innerState.Picker, newDrops, edsImpl.loadStore)},
-			)
-		}
-		edsImpl.pickerMu.Unlock()
-	}
+	edsImpl.pickerMu.Unlock()
 }
 
 // HandleEDSResponse handles the EDS response and creates/deletes localities and
@@ -454,7 +434,7 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	for _, dp := range d.drops {
 		if dp.drop() {
 			drop = true
-			category = dp.category
+			category = dp.c.Category
 			break
 		}
 	}

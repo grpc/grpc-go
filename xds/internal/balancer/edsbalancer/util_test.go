@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/internal/wrr"
+	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
 // testWRR is a deterministic WRR implementation.
@@ -104,7 +105,12 @@ func (s) TestDropper(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := newDropper(tt.args.numerator, tt.args.denominator, "")
+			d := newDropper(xdsclient.OverloadDropConfig{
+				Category:    "",
+				Numerator:   tt.args.numerator,
+				Denominator: tt.args.denominator,
+			})
+
 			var (
 				dCount    int
 				wantCount = int(tt.args.numerator) * repeat
