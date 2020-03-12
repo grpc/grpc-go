@@ -32,7 +32,7 @@ import (
 // xdsClientInterface contains only the xds_client methods needed by EDS
 // balancer. It's defined so we can override xdsclientNew function in tests.
 type xdsClientInterface interface {
-	WatchEndpoints(clusterName string, edsCb func(*xdsclient.EDSUpdate, error)) (cancel func())
+	WatchEndpoints(clusterName string, edsCb func(xdsclient.EndpointsUpdate, error)) (cancel func())
 	ReportLoad(server string, clusterName string, loadStore lrs.Store) (cancel func())
 	Close()
 }
@@ -50,7 +50,7 @@ var (
 type xdsclientWrapper struct {
 	logger *grpclog.PrefixLogger
 
-	newEDSUpdate func(*xdsclient.EDSUpdate) error
+	newEDSUpdate func(xdsclient.EndpointsUpdate) error
 	loseContact  func()
 	bbo          balancer.BuildOptions
 	loadStore    lrs.Store
@@ -78,7 +78,7 @@ type xdsclientWrapper struct {
 //
 // The given callbacks won't be called until the underlying xds_client is
 // working and sends updates.
-func newXDSClientWrapper(newEDSUpdate func(*xdsclient.EDSUpdate) error, loseContact func(), bbo balancer.BuildOptions, loadStore lrs.Store, logger *grpclog.PrefixLogger) *xdsclientWrapper {
+func newXDSClientWrapper(newEDSUpdate func(xdsclient.EndpointsUpdate) error, loseContact func(), bbo balancer.BuildOptions, loadStore lrs.Store, logger *grpclog.PrefixLogger) *xdsclientWrapper {
 	return &xdsclientWrapper{
 		logger:       logger,
 		newEDSUpdate: newEDSUpdate,
@@ -184,7 +184,10 @@ func (c *xdsclientWrapper) startEndpointsWatch(nameToWatch string) {
 	}
 
 	c.edsServiceName = nameToWatch
-	cancelEDSWatch := c.xdsclient.WatchEndpoints(c.edsServiceName, func(update *xdsclient.EDSUpdate, err error) {
+	if c.cancelEndpointsWatch != nil {
+		c.cancelEndpointsWatch()
+	}
+	cancelEDSWatch := c.xdsclient.WatchEndpoints(c.edsServiceName, func(update xdsclient.EndpointsUpdate, err error) {
 		if err != nil {
 			// TODO: this should trigger a call to `c.loseContact`, when the
 			// error indicates "lose contact".

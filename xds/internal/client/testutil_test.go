@@ -20,6 +20,7 @@ package client
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/google/go-cmp/cmp"
@@ -29,19 +30,53 @@ import (
 )
 
 type watchHandleTestcase struct {
+	typeURL      string
+	resourceName string
+
 	responseToHandle *xdspb.DiscoveryResponse
 	wantHandleErr    bool
 	wantUpdate       interface{}
 	wantUpdateErr    bool
+}
 
-	// Only one of the following should be non-nil. The one corresponding with
-	// typeURL will be called.
-	ldsWatch      func(target string, ldsCb ldsCallbackFunc) (cancel func())
-	rdsWatch      func(routeName string, rdsCb rdsCallbackFunc) (cancel func())
-	cdsWatch      func(clusterName string, cdsCb cdsCallbackFunc) (cancel func())
-	edsWatch      func(clusterName string, edsCb edsCallbackFunc) (cancel func())
-	watchReqChan  *testutils.Channel // The request sent for watch will be sent to this channel.
-	handleXDSResp func(response *xdspb.DiscoveryResponse) error
+type testUpdateReceiver struct {
+	f func(typeURL string, d map[string]interface{})
+}
+
+func (t *testUpdateReceiver) newLDSUpdate(d map[string]ldsUpdate) {
+	dd := make(map[string]interface{})
+	for k, v := range d {
+		dd[k] = v
+	}
+	t.newUpdate(ldsURL, dd)
+}
+
+func (t *testUpdateReceiver) newRDSUpdate(d map[string]rdsUpdate) {
+	dd := make(map[string]interface{})
+	for k, v := range d {
+		dd[k] = v
+	}
+	t.newUpdate(rdsURL, dd)
+}
+
+func (t *testUpdateReceiver) newCDSUpdate(d map[string]ClusterUpdate) {
+	dd := make(map[string]interface{})
+	for k, v := range d {
+		dd[k] = v
+	}
+	t.newUpdate(cdsURL, dd)
+}
+
+func (t *testUpdateReceiver) newEDSUpdate(d map[string]EndpointsUpdate) {
+	dd := make(map[string]interface{})
+	for k, v := range d {
+		dd[k] = v
+	}
+	t.newUpdate(edsURL, dd)
+}
+
+func (t *testUpdateReceiver) newUpdate(typeURL string, d map[string]interface{}) {
+	t.f(typeURL, d)
 }
 
 // testWatchHandle is called to test response handling for each xDS.
@@ -51,44 +86,38 @@ type watchHandleTestcase struct {
 // handleXDSResp with responseToHandle (if it's set). It then compares the
 // update received by watch callback with the expected results.
 func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
+	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	defer cleanup()
+
 	type updateErr struct {
 		u   interface{}
 		err error
 	}
 	gotUpdateCh := testutils.NewChannel()
 
-	var cancelWatch func()
+	v2c := newV2Client(&testUpdateReceiver{
+		f: func(typeURL string, d map[string]interface{}) {
+			if typeURL == test.typeURL {
+				if u, ok := d[test.resourceName]; ok {
+					gotUpdateCh.Send(updateErr{u, nil})
+				}
+			}
+		},
+	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	defer v2c.close()
+
+	// RDS needs an existin LDS watch for the hostname.
+	if test.typeURL == rdsURL {
+		doLDS(t, v2c, fakeServer)
+	}
+
 	// Register the watcher, this will also trigger the v2Client to send the xDS
 	// request.
-	switch {
-	case test.ldsWatch != nil:
-		cancelWatch = test.ldsWatch(goodLDSTarget1, func(u ldsUpdate, err error) {
-			t.Logf("in v2c.watchLDS callback, ldsUpdate: %+v, err: %v", u, err)
-			gotUpdateCh.Send(updateErr{u, err})
-		})
-	case test.rdsWatch != nil:
-		cancelWatch = test.rdsWatch(goodRouteName1, func(u rdsUpdate, err error) {
-			t.Logf("in v2c.watchRDS callback, rdsUpdate: %+v, err: %v", u, err)
-			gotUpdateCh.Send(updateErr{u, err})
-		})
-	case test.cdsWatch != nil:
-		cancelWatch = test.cdsWatch(clusterName1, func(u CDSUpdate, err error) {
-			t.Logf("in v2c.watchCDS callback, cdsUpdate: %+v, err: %v", u, err)
-			gotUpdateCh.Send(updateErr{u, err})
-		})
-	case test.edsWatch != nil:
-		cancelWatch = test.edsWatch(goodEDSName, func(u *EDSUpdate, err error) {
-			t.Logf("in v2c.watchEDS callback, edsUpdate: %+v, err: %v", u, err)
-			gotUpdateCh.Send(updateErr{*u, err})
-		})
-	default:
-		t.Fatalf("no watch() is set")
-	}
-	defer cancelWatch()
+	v2c.addWatch(test.typeURL, test.resourceName)
 
 	// Wait till the request makes it to the fakeServer. This ensures that
 	// the watch request has been processed by the v2Client.
-	if _, err := test.watchReqChan.Receive(); err != nil {
+	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
 		t.Fatalf("Timeout waiting for an xDS request: %v", err)
 	}
 
@@ -98,7 +127,18 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	//
 	// Also note that this won't trigger ACK, so there's no need to clear the
 	// request channel afterwards.
-	if err := test.handleXDSResp(test.responseToHandle); (err != nil) != test.wantHandleErr {
+	var handleXDSResp func(response *xdspb.DiscoveryResponse) error
+	switch test.typeURL {
+	case ldsURL:
+		handleXDSResp = v2c.handleLDSResponse
+	case rdsURL:
+		handleXDSResp = v2c.handleRDSResponse
+	case cdsURL:
+		handleXDSResp = v2c.handleCDSResponse
+	case edsURL:
+		handleXDSResp = v2c.handleEDSResponse
+	}
+	if err := handleXDSResp(test.responseToHandle); (err != nil) != test.wantHandleErr {
 		t.Fatalf("v2c.handleRDSResponse() returned err: %v, wantErr: %v", err, test.wantHandleErr)
 	}
 
@@ -121,7 +161,7 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 		t.Fatal("Timeout expecting xDS update")
 	}
 	gotUpdate := uErr.(updateErr).u
-	opt := cmp.AllowUnexported(rdsUpdate{}, ldsUpdate{}, CDSUpdate{}, EDSUpdate{})
+	opt := cmp.AllowUnexported(rdsUpdate{}, ldsUpdate{}, ClusterUpdate{}, EndpointsUpdate{})
 	if diff := cmp.Diff(gotUpdate, wantUpdate, opt); diff != "" {
 		t.Fatalf("got update : %+v, want %+v, diff: %s", gotUpdate, wantUpdate, diff)
 	}

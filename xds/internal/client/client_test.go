@@ -19,12 +19,11 @@
 package client
 
 import (
-	"errors"
-	"fmt"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
@@ -41,6 +40,16 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+const (
+	testXDSServer   = "xds-server"
+	chanRecvTimeout = 100 * time.Millisecond
+
+	testLDSName = "test-lds"
+	testRDSName = "test-rds"
+	testCDSName = "test-cds"
+	testEDSName = "test-eds"
+)
+
 func clientOpts(balancerName string) Options {
 	return Options{
 		Config: bootstrap.Config{
@@ -48,9 +57,6 @@ func clientOpts(balancerName string) Options {
 			Creds:        grpc.WithInsecure(),
 			NodeProto:    &corepb.Node{},
 		},
-		// WithTimeout is deprecated. But we are OK to call it here from the
-		// test, so we clearly know that the dial failed.
-		DialOpts: []grpc.DialOption{grpc.WithTimeout(5 * time.Second), grpc.WithBlock()},
 	}
 }
 
@@ -117,185 +123,88 @@ func (s) TestNew(t *testing.T) {
 	}
 }
 
-// TestWatchService tests the happy case of registering a watcher for
-// service updates and receiving a good update.
-func (s) TestWatchService(t *testing.T) {
-	fakeServer, cleanup, err := fakeserver.StartServer()
-	if err != nil {
-		t.Fatalf("Failed to start fake xDS server: %v", err)
-	}
-	defer cleanup()
+type testXDSV2Client struct {
+	r updateHandler
 
-	xdsClient, err := New(clientOpts(fakeServer.Address))
-	if err != nil {
-		t.Fatalf("New returned error: %v", err)
-	}
-	defer xdsClient.Close()
-	t.Log("Created an xdsClient...")
-
-	callbackCh := testutils.NewChannel()
-	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
-		if err != nil {
-			callbackCh.Send(fmt.Errorf("xdsClient.WatchService returned error: %v", err))
-			return
-		}
-		if su.Cluster != goodClusterName1 {
-			callbackCh.Send(fmt.Errorf("got clusterName: %+v, want clusterName: %+v", su.Cluster, goodClusterName1))
-			return
-		}
-		callbackCh.Send(nil)
-	})
-	defer cancelWatch()
-	t.Log("Registered a watcher for service updates...")
-
-	// Make the fakeServer send LDS response.
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-		t.Fatalf("Timeout expired when expecting an LDS request")
-	}
-	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
-
-	// Make the fakeServer send RDS response.
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-		t.Fatalf("Timeout expired when expecting an RDS request")
-	}
-	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodRDSResponse1}
-	waitForNilErr(t, callbackCh)
+	addWatches    map[string]chan string
+	removeWatches map[string]chan string
 }
 
-// TestWatchServiceWithNoResponseFromServer tests the case where the
-// xDS server does not respond to the requests being sent out as part of
-// registering a service update watcher. The underlying v2Client will timeout
-// and will send us an error.
-func (s) TestWatchServiceWithNoResponseFromServer(t *testing.T) {
-	fakeServer, cleanup, err := fakeserver.StartServer()
-	if err != nil {
-		t.Fatalf("Failed to start fake xDS server: %v", err)
+func overrideNewXDSV2Client() (<-chan *testXDSV2Client, func()) {
+	oldNewXDSV2Client := newXDSV2Client
+	ch := make(chan *testXDSV2Client, 1)
+	newXDSV2Client = func(parent *Client, cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration, logger *grpclog.PrefixLogger) xdsv2Client {
+		ret := newTestXDSV2Client(parent)
+		ch <- ret
+		return ret
 	}
-	defer cleanup()
-
-	xdsClient, err := New(clientOpts(fakeServer.Address))
-	if err != nil {
-		t.Fatalf("New returned error: %v", err)
-	}
-	defer xdsClient.Close()
-	t.Log("Created an xdsClient...")
-
-	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 500 * time.Millisecond
-	defer func() {
-		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
-	}()
-
-	callbackCh := testutils.NewChannel()
-	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
-		if su.Cluster != "" {
-			callbackCh.Send(fmt.Errorf("got clusterName: %+v, want empty clusterName", su.Cluster))
-			return
-		}
-		if err == nil {
-			callbackCh.Send(errors.New("xdsClient.WatchService returned error non-nil error"))
-			return
-		}
-		callbackCh.Send(nil)
-	})
-	defer cancelWatch()
-	t.Log("Registered a watcher for service updates...")
-
-	// Wait for one request from the client, but send no reponses.
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-		t.Fatalf("Timeout expired when expecting an LDS request")
-	}
-	waitForNilErr(t, callbackCh)
+	return ch, func() { newXDSV2Client = oldNewXDSV2Client }
 }
 
-// TestWatchServiceEmptyRDS tests the case where the underlying
-// v2Client receives an empty RDS response.
-func (s) TestWatchServiceEmptyRDS(t *testing.T) {
-	fakeServer, cleanup, err := fakeserver.StartServer()
-	if err != nil {
-		t.Fatalf("Failed to start fake xDS server: %v", err)
+func newTestXDSV2Client(r updateHandler) *testXDSV2Client {
+	addWatches := make(map[string]chan string)
+	addWatches[ldsURL] = make(chan string, 10)
+	addWatches[rdsURL] = make(chan string, 10)
+	addWatches[cdsURL] = make(chan string, 10)
+	addWatches[edsURL] = make(chan string, 10)
+	removeWatches := make(map[string]chan string)
+	removeWatches[ldsURL] = make(chan string, 10)
+	removeWatches[rdsURL] = make(chan string, 10)
+	removeWatches[cdsURL] = make(chan string, 10)
+	removeWatches[edsURL] = make(chan string, 10)
+	return &testXDSV2Client{
+		r:             r,
+		addWatches:    addWatches,
+		removeWatches: removeWatches,
 	}
-	defer cleanup()
-
-	xdsClient, err := New(clientOpts(fakeServer.Address))
-	if err != nil {
-		t.Fatalf("New returned error: %v", err)
-	}
-	defer xdsClient.Close()
-	t.Log("Created an xdsClient...")
-
-	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 500 * time.Millisecond
-	defer func() {
-		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
-	}()
-
-	callbackCh := testutils.NewChannel()
-	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
-		if su.Cluster != "" {
-			callbackCh.Send(fmt.Errorf("got clusterName: %+v, want empty clusterName", su.Cluster))
-			return
-		}
-		if err == nil {
-			callbackCh.Send(errors.New("xdsClient.WatchService returned error non-nil error"))
-			return
-		}
-		callbackCh.Send(nil)
-	})
-	defer cancelWatch()
-	t.Log("Registered a watcher for service updates...")
-
-	// Make the fakeServer send LDS response.
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-		t.Fatalf("Timeout expired when expecting an LDS request")
-	}
-	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
-
-	// Make the fakeServer send an empty RDS response.
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-		t.Fatalf("Timeout expired when expecting an RDS request")
-	}
-	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: noVirtualHostsInRDSResponse}
-	waitForNilErr(t, callbackCh)
 }
 
-// TestWatchServiceWithClientClose tests the case where xDS responses are
-// received after the client is closed, and we make sure that the registered
-// watcher callback is not invoked.
-func (s) TestWatchServiceWithClientClose(t *testing.T) {
-	fakeServer, cleanup, err := fakeserver.StartServer()
-	if err != nil {
-		t.Fatalf("Failed to start fake xDS server: %v", err)
-	}
+func (c *testXDSV2Client) addWatch(resourceType, resourceName string) {
+	c.addWatches[resourceType] <- resourceName
+}
+
+func (c *testXDSV2Client) removeWatch(resourceType, resourceName string) {
+	c.removeWatches[resourceType] <- resourceName
+}
+
+func (c *testXDSV2Client) close() {}
+
+// TestWatchCallAnotherWatch covers the case where watch() is called inline by a
+// callback. It makes sure it doesn't cause a deadlock.
+func (s) TestWatchCallAnotherWatch(t *testing.T) {
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
-	xdsClient, err := New(clientOpts(fakeServer.Address))
+	c, err := New(clientOpts(testXDSServer))
 	if err != nil {
-		t.Fatalf("New returned error: %v", err)
+		t.Fatalf("failed to create client: %v", err)
 	}
-	defer xdsClient.Close()
-	t.Log("Created an xdsClient...")
+	defer c.Close()
 
-	callbackCh := testutils.NewChannel()
-	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
-		callbackCh.Send(errors.New("watcher callback invoked after client close"))
+	v2Client := <-v2ClientCh
+
+	clusterUpdateCh := testutils.NewChannel()
+	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
+		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
+		// Calls another watch inline, to ensure there's deadlock.
+		c.WatchCluster("another-random-name", func(ClusterUpdate, error) {})
 	})
-	defer cancelWatch()
-	t.Log("Registered a watcher for service updates...")
 
-	// Make the fakeServer send LDS response.
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-		t.Fatalf("Timeout expired when expecting an LDS request")
-	}
-	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
+	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
+	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
+		testCDSName: wantUpdate,
+	})
 
-	xdsClient.Close()
-	t.Log("Closing the xdsClient...")
-
-	// Push an RDS response from the fakeserver
-	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodRDSResponse1}
-	if cbErr, err := callbackCh.Receive(); err != testutils.ErrRecvTimeout {
-		t.Fatal(cbErr)
+	if u, err := clusterUpdateCh.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
+		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
+	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}
+	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
+		testCDSName: wantUpdate2,
+	})
+
+	if u, err := clusterUpdateCh.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate2, nil}) {
+		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
+	}
 }
