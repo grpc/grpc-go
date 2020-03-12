@@ -161,7 +161,7 @@ func waitForNewXDSClientWithEDSWatch(t *testing.T, ch *testutils.Channel, wantNa
 	}
 	_, err = xdsC.WaitForWatchEDS()
 	if err != nil {
-		t.Fatalf("xdsClient.WatchEDS failed with error: %v", err)
+		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 		return nil
 	}
 	return xdsC

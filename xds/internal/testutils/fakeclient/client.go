@@ -113,8 +113,8 @@ func (xdsC *Client) WaitForCancelClusterWatch() error {
 	return err
 }
 
-// WatchEDS registers an EDS watch for provided clusterName.
-func (xdsC *Client) WatchEDS(clusterName string, callback func(*xdsclient.EDSUpdate, error)) (cancel func()) {
+// WatchEndpoints registers an EDS watch for provided clusterName.
+func (xdsC *Client) WatchEndpoints(clusterName string, callback func(*xdsclient.EDSUpdate, error)) (cancel func()) {
 	xdsC.mu.Lock()
 	defer xdsC.mu.Unlock()
 
@@ -125,7 +125,7 @@ func (xdsC *Client) WatchEDS(clusterName string, callback func(*xdsclient.EDSUpd
 	}
 }
 
-// WaitForWatchEDS waits for WatchEDS to be invoked on this client within a
+// WaitForWatchEDS waits for WatchEndpoints to be invoked on this client within a
 // reasonable timeout, and returns the clusterName being watched.
 func (xdsC *Client) WaitForWatchEDS() (string, error) {
 	val, err := xdsC.edsWatchCh.Receive()
