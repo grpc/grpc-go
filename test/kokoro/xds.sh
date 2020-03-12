@@ -7,7 +7,7 @@ fi
 
 cd github
 
-export GOPATH=~/gopath
+export GOPATH=${HOME}/gopath
 pushd grpc-go/interop/xds/client
 go build
 popd
