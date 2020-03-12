@@ -3,12 +3,11 @@
 set -ex  # Exit on error; debugging enabled.
 set -o pipefail  # Fail a pipe if any sub-command fails.
 
-# negate_and_run makes sure that no output is seen when executing the command
-# passed to it as args.
-negate_and_run() {
+# not makes sure the command passed to it does not exit with a return code of 0.
+not() {
   # This is required instead of the earlier (! $COMMAND) because subshells and
   # pipefail don't work the same on Darwin as in Linux.
-  ! eval "$*"
+  ! "$@"
 }
 
 die() {
@@ -17,7 +16,7 @@ die() {
 }
 
 fail_on_output() {
-  tee /dev/stderr | negate_and_run read
+  tee /dev/stderr | not read
 }
 
 # Check to make sure it's safe to modify the user's git repo.
@@ -63,7 +62,7 @@ if [[ "$1" = "-install" ]]; then
       unzip ${PROTOC_FILENAME}
       bin/protoc --version
       popd
-    elif ! which protoc > /dev/null; then
+    elif not which protoc > /dev/null; then
       die "Please install protoc into your path"
     fi
   fi
@@ -73,21 +72,22 @@ elif [[ "$#" -ne 0 ]]; then
 fi
 
 # - Ensure all source files contain a copyright message.
-negate_and_run 'git grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" -- *.go'
+not git grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" -- "*.go"
+
 
 # - Make sure all tests in grpc and grpc/test use leakcheck via Teardown.
-negate_and_run 'grep "func Test[^(]" *_test.go'
-negate_and_run 'grep "func Test[^(]" test/*.go'
+not grep "func Test[^(]" *_test.go
+not grep "func Test[^(]" test/*.go
 
 # - Do not import x/net/context.
-negate_and_run 'git grep -l "x/net/context" -- *.go'
+not git grep -l "x/net/context" -- *.go
 
 # - Do not import math/rand for real library code.  Use internal/grpcrand for
 #   thread safety.
-git grep -l '"math/rand"' -- "*.go" 2>&1 | negate_and_run 'grep -v "^examples\|^stress\|grpcrand\|^benchmark\|wrr_test"'
+git grep -l '"math/rand"' -- "*.go" 2>&1 | not grep -v "^examples\|^stress\|grpcrand\|^benchmark\|wrr_test"
 
 # - Ensure all ptypes proto packages are renamed when importing.
-negate_and_run 'git grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/" -- "*.go"'
+not git grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/" -- "*.go"
 
 # - Check imports that are illegal in appengine (until Go 1.11).
 # TODO: Remove when we drop Go 1.10 support
@@ -95,8 +95,8 @@ go list -f {{.Dir}} ./... | xargs go run test/go_vet/vet.go
 
 # - gofmt, goimports, golint (with exceptions for generated code), go vet.
 gofmt -s -d -l . 2>&1 | fail_on_output
-goimports -l . 2>&1 | (! grep -vE "(_mock|\.pb)\.go")
-golint ./... 2>&1 | (! grep -vE "(_mock|\.pb)\.go:")
+goimports -l . 2>&1 | not grep -vE "(_mock|\.pb)\.go"
+golint ./... 2>&1 | not grep -vE "(_mock|\.pb)\.go:"
 go vet -all ./...
 
 misspell -error .
@@ -122,9 +122,9 @@ fi
 SC_OUT="$(mktemp)"
 staticcheck -go 1.9 -checks 'inherit,-ST1015' ./... > "${SC_OUT}" || true
 # Error if anything other than deprecation warnings are printed.
-(! grep -v "is deprecated:.*SA1019" "${SC_OUT}")
+not grep -v "is deprecated:.*SA1019" "${SC_OUT}"
 # Only ignore the following deprecated types/fields/functions.
-(! grep -Fv '.HandleResolvedAddrs
+not grep -Fv '.HandleResolvedAddrs
 .HandleSubConnStateChange
 .HeaderMap
 .NewAddress
@@ -160,4 +160,5 @@ naming.Update
 naming.Watcher
 resolver.Backend
 resolver.GRPCLB' "${SC_OUT}"
-)
+
+echo SUCCESS
