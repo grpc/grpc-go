@@ -180,7 +180,8 @@ func (c *Client) WatchCluster(clusterName string, cdsCb func(CDSUpdate, error)) 
 	return c.v2c.watchCDS(clusterName, cdsCb)
 }
 
-// WatchEDS watches the ghost.
-func (c *Client) WatchEDS(clusterName string, edsCb func(*EDSUpdate, error)) (cancel func()) {
+// WatchEndpoints uses EDS to discover information about the endpoints in the
+// provided clusterName.
+func (c *Client) WatchEndpoints(clusterName string, edsCb func(*EDSUpdate, error)) (cancel func()) {
 	return c.v2c.watchEDS(clusterName, edsCb)
 }
