@@ -19,13 +19,10 @@
 package client
 
 import (
-	"errors"
-	"fmt"
 	"testing"
 	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	"google.golang.org/grpc/xds/internal/testutils"
 )
 
 func (s) TestLDSGetRouteConfig(t *testing.T) {
@@ -74,7 +71,7 @@ func (s) TestLDSGetRouteConfig(t *testing.T) {
 	}
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	v2c := newV2Client(nil, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -93,12 +90,6 @@ func (s) TestLDSGetRouteConfig(t *testing.T) {
 // and creates a v2Client using it. Then, it registers a watchLDS and tests
 // different LDS responses.
 func (s) TestLDSHandleResponse(t *testing.T) {
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	defer v2c.close()
-
 	tests := []struct {
 		name          string
 		ldsResponse   *xdspb.DiscoveryResponse
@@ -150,12 +141,13 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			wantUpdateErr: false,
 		},
 		// Response contains two good listeners (one interesting and one
-		// uninteresting), and one badly marshaled listener.
+		// uninteresting), and one badly marshaled listener. This will cause a
+		// nack because the uninteresting listener will still be parsed.
 		{
 			name:          "good-bad-ugly-listeners",
 			ldsResponse:   goodBadUglyLDSResponse,
-			wantErr:       false,
-			wantUpdate:    &ldsUpdate{routeName: goodRouteName1},
+			wantErr:       true,
+			wantUpdate:    nil,
 			wantUpdateErr: false,
 		},
 		// Response contains one listener, but we are not interested in it.
@@ -163,8 +155,8 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			name:          "one-uninteresting-listener",
 			ldsResponse:   goodLDSResponse2,
 			wantErr:       false,
-			wantUpdate:    &ldsUpdate{routeName: ""},
-			wantUpdateErr: true,
+			wantUpdate:    nil,
+			wantUpdateErr: false,
 		},
 		// Response constains no resources. This is the case where the server
 		// does not know about the target we are interested in.
@@ -172,22 +164,20 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			name:          "empty-response",
 			ldsResponse:   emptyLDSResponse,
 			wantErr:       false,
-			wantUpdate:    &ldsUpdate{routeName: ""},
-			wantUpdateErr: true,
+			wantUpdate:    nil,
+			wantUpdateErr: false,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
+				typeURL:          ldsURL,
+				resourceName:     goodLDSTarget1,
 				responseToHandle: test.ldsResponse,
 				wantHandleErr:    test.wantErr,
 				wantUpdate:       test.wantUpdate,
 				wantUpdateErr:    test.wantUpdateErr,
-
-				ldsWatch:      v2c.watchLDS,
-				watchReqChan:  fakeServer.XDSRequestChan,
-				handleXDSResp: v2c.handleLDSResponse,
 			})
 		})
 	}
@@ -199,46 +189,16 @@ func (s) TestLDSHandleResponseWithoutWatch(t *testing.T) {
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	v2c := newV2Client(&testUpdateReceiver{
+		f: func(string, map[string]interface{}) {},
+	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 
-	if v2c.handleLDSResponse(goodLDSResponse1) == nil {
+	if v2c.handleLDSResponse(badResourceTypeInLDSResponse) == nil {
 		t.Fatal("v2c.handleLDSResponse() succeeded, should have failed")
 	}
-}
 
-// TestLDSWatchExpiryTimer tests the case where the client does not receive an
-// LDS response for the request that it sends out. We want the watch callback
-// to be invoked with an error once the watchExpiryTimer fires.
-func (s) TestLDSWatchExpiryTimer(t *testing.T) {
-	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 500 * time.Millisecond
-	defer func() {
-		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
-	}()
-
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	defer v2c.close()
-
-	callbackCh := testutils.NewChannel()
-	v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
-		t.Logf("in v2c.watchLDS callback, ldsUpdate: %+v, err: %v", u, err)
-		if u.routeName != "" {
-			callbackCh.Send(fmt.Errorf("received routeName %v in ldsCallback, wanted empty string", u.routeName))
-		}
-		if err == nil {
-			callbackCh.Send(errors.New("received nil error in ldsCallback"))
-		}
-		callbackCh.Send(nil)
-	})
-
-	// Wait till the request makes it to the fakeServer. This ensures that
-	// the watch request has been processed by the v2Client.
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-		t.Fatalf("Timeout expired when expecting an LDS request")
+	if v2c.handleLDSResponse(goodLDSResponse1) != nil {
+		t.Fatal("v2c.handleLDSResponse() succeeded, should have failed")
 	}
-	waitForNilErr(t, callbackCh)
 }

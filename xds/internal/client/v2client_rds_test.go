@@ -19,30 +19,15 @@
 package client
 
 import (
-	"errors"
-	"fmt"
 	"testing"
 	"time"
 
-	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 )
-
-func (v2c *v2Client) cloneRDSCacheForTesting() map[string]string {
-	v2c.mu.Lock()
-	defer v2c.mu.Unlock()
-
-	cloneCache := make(map[string]string)
-	for k, v := range v2c.rdsCache {
-		cloneCache[k] = v
-	}
-	return cloneCache
-}
 
 func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 	tests := []struct {
@@ -169,24 +154,9 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 // pre-requirement for RDS, and RDS handle would fail without an existing LDS
 // watch.
 func doLDS(t *testing.T, v2c *v2Client, fakeServer *fakeserver.Server) {
-	// Register an LDS watcher, and wait till the request is sent out, the
-	// response is received and the callback is invoked.
-	cbCh := testutils.NewChannel()
-	v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
-		t.Logf("v2c.watchLDS callback, ldsUpdate: %+v, err: %v", u, err)
-		cbCh.Send(err)
-	})
-
+	v2c.addWatch(ldsURL, goodLDSTarget1)
 	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
 		t.Fatalf("Timeout waiting for LDS request: %v", err)
-	}
-
-	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
-	waitForNilErr(t, cbCh)
-
-	// Read the LDS ack, to clear RequestChan for following tests.
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-		t.Fatalf("Timeout waiting for LDS ACK: %v", err)
 	}
 }
 
@@ -194,13 +164,6 @@ func doLDS(t *testing.T, v2c *v2Client, fakeServer *fakeserver.Server) {
 // and creates a v2Client using it. Then, it registers an LDS and RDS watcher
 // and tests different RDS responses.
 func (s) TestRDSHandleResponse(t *testing.T) {
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	defer v2c.close()
-	doLDS(t, v2c, fakeServer)
-
 	tests := []struct {
 		name          string
 		rdsResponse   *xdspb.DiscoveryResponse
@@ -251,18 +214,15 @@ func (s) TestRDSHandleResponse(t *testing.T) {
 			wantUpdateErr: false,
 		},
 	}
-
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
+				typeURL:          rdsURL,
+				resourceName:     goodRouteName1,
 				responseToHandle: test.rdsResponse,
 				wantHandleErr:    test.wantErr,
 				wantUpdate:       test.wantUpdate,
 				wantUpdateErr:    test.wantUpdateErr,
-
-				rdsWatch:      v2c.watchRDS,
-				watchReqChan:  fakeServer.XDSRequestChan,
-				handleXDSResp: v2c.handleRDSResponse,
 			})
 		})
 	}
@@ -274,7 +234,9 @@ func (s) TestRDSHandleResponseWithoutLDSWatch(t *testing.T) {
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	v2c := newV2Client(&testUpdateReceiver{
+		f: func(string, map[string]interface{}) {},
+	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 
 	if v2c.handleRDSResponse(goodRDSResponse1) == nil {
@@ -288,181 +250,22 @@ func (s) TestRDSHandleResponseWithoutRDSWatch(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	v2c := newV2Client(&testUpdateReceiver{
+		f: func(string, map[string]interface{}) {},
+	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 	doLDS(t, v2c, fakeServer)
 
-	if v2c.handleRDSResponse(goodRDSResponse1) == nil {
+	if v2c.handleRDSResponse(badResourceTypeInRDSResponse) == nil {
+		t.Fatal("v2c.handleRDSResponse() succeeded, should have failed")
+	}
+
+	if v2c.handleRDSResponse(goodRDSResponse1) != nil {
 		t.Fatal("v2c.handleRDSResponse() succeeded, should have failed")
 	}
 }
 
-// rdsTestOp contains all data related to one particular test operation. Not
-// all fields make sense for all tests.
-type rdsTestOp struct {
-	// target is the resource name to watch for.
-	target string
-	// responseToSend is the xDS response sent to the client
-	responseToSend *fakeserver.Response
-	// wantOpErr specfies whether the main operation should return an error.
-	wantOpErr bool
-	// wantRDSCache is the expected rdsCache at the end of an operation.
-	wantRDSCache map[string]string
-	// wantWatchCallback specifies if the watch callback should be invoked.
-	wantWatchCallback bool
-}
-
-// testRDSCaching is a helper function which starts a fake xDS server, makes a
-// ClientConn to it, creates a v2Client using it, registers an LDS watcher and
-// pushes a good LDS response. It then reads a bunch of test operations to be
-// performed from rdsTestOps and returns error, if any, on the provided error
-// channel. This is executed in a separate goroutine.
-func testRDSCaching(t *testing.T, rdsTestOps []rdsTestOp, errCh *testutils.Channel) {
-	t.Helper()
-
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	defer v2c.close()
-	t.Log("Started xds v2Client...")
-	doLDS(t, v2c, fakeServer)
-
-	callbackCh := make(chan struct{}, 1)
-	for _, rdsTestOp := range rdsTestOps {
-		// Register a watcher if required, and use a channel to signal the
-		// successful invocation of the callback.
-		if rdsTestOp.target != "" {
-			v2c.watchRDS(rdsTestOp.target, func(u rdsUpdate, err error) {
-				t.Logf("Received callback with rdsUpdate {%+v} and error {%v}", u, err)
-				callbackCh <- struct{}{}
-			})
-			t.Logf("Registered a watcher for RDS target: %v...", rdsTestOp.target)
-
-			// Wait till the request makes it to the fakeServer. This ensures that
-			// the watch request has been processed by the v2Client.
-			if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-				errCh.Send(fmt.Errorf("Timeout waiting for RDS request: %v", err))
-			}
-			t.Log("FakeServer received request...")
-		}
-
-		// Directly push the response through a call to handleRDSResponse,
-		// thereby bypassing the fakeServer.
-		if rdsTestOp.responseToSend != nil {
-			resp := rdsTestOp.responseToSend.Resp.(*discoverypb.DiscoveryResponse)
-			if err := v2c.handleRDSResponse(resp); (err != nil) != rdsTestOp.wantOpErr {
-				errCh.Send(fmt.Errorf("v2c.handleRDSResponse(%+v) returned err: %v", resp, err))
-				return
-			}
-		}
-
-		// If the test needs the callback to be invoked, just verify that
-		// it was invoked. Since we verify the contents of the cache, it's
-		// ok not to verify the contents of the callback.
-		if rdsTestOp.wantWatchCallback {
-			<-callbackCh
-		}
-
-		if !cmp.Equal(v2c.cloneRDSCacheForTesting(), rdsTestOp.wantRDSCache) {
-			errCh.Send(fmt.Errorf("gotRDSCache: %v, wantRDSCache: %v", v2c.rdsCache, rdsTestOp.wantRDSCache))
-			return
-		}
-	}
-	t.Log("Completed all test ops successfully...")
-	errCh.Send(nil)
-}
-
-// TestRDSCaching tests some end-to-end RDS flows using a fake xDS server, and
-// verifies the RDS data cached at the v2Client.
-func (s) TestRDSCaching(t *testing.T) {
-	ops := []rdsTestOp{
-		// Add an RDS watch for a resource name (goodRouteName1), which returns one
-		// matching resource in the response.
-		{
-			target:            goodRouteName1,
-			responseToSend:    &fakeserver.Response{Resp: goodRDSResponse1},
-			wantRDSCache:      map[string]string{goodRouteName1: goodClusterName1},
-			wantWatchCallback: true,
-		},
-		// Push an RDS response with a new resource. This resource is considered
-		// good because its domain field matches our LDS watch target, but the
-		// routeConfigName does not match our RDS watch (so the watch callback will
-		// not be invoked). But this should still be cached.
-		{
-			responseToSend: &fakeserver.Response{Resp: goodRDSResponse2},
-			wantRDSCache: map[string]string{
-				goodRouteName1: goodClusterName1,
-				goodRouteName2: goodClusterName2,
-			},
-		},
-		// Push an uninteresting RDS response. This should cause handleRDSResponse
-		// to return an error. But the watch callback should not be invoked, and
-		// the cache should not be updated.
-		{
-			responseToSend: &fakeserver.Response{Resp: uninterestingRDSResponse},
-			wantOpErr:      true,
-			wantRDSCache: map[string]string{
-				goodRouteName1: goodClusterName1,
-				goodRouteName2: goodClusterName2,
-			},
-		},
-		// Switch the watch target to goodRouteName2, which was already cached.  No
-		// response is received from the server (as expected), but we want the
-		// callback to be invoked with the new clusterName.
-		{
-			target: goodRouteName2,
-			wantRDSCache: map[string]string{
-				goodRouteName1: goodClusterName1,
-				goodRouteName2: goodClusterName2,
-			},
-			wantWatchCallback: true,
-		},
-	}
-	errCh := testutils.NewChannel()
-	go testRDSCaching(t, ops, errCh)
-	waitForNilErr(t, errCh)
-}
-
-// TestRDSWatchExpiryTimer tests the case where the client does not receive an
-// RDS response for the request that it sends out. We want the watch callback
-// to be invoked with an error once the watchExpiryTimer fires.
-func (s) TestRDSWatchExpiryTimer(t *testing.T) {
-	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 500 * time.Millisecond
-	defer func() {
-		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
-	}()
-
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	defer v2c.close()
-	t.Log("Started xds v2Client...")
-	doLDS(t, v2c, fakeServer)
-
-	callbackCh := testutils.NewChannel()
-	v2c.watchRDS(goodRouteName1, func(u rdsUpdate, err error) {
-		t.Logf("Received callback with rdsUpdate {%+v} and error {%v}", u, err)
-		if u.clusterName != "" {
-			callbackCh.Send(fmt.Errorf("received clusterName %v in rdsCallback, wanted empty string", u.clusterName))
-		}
-		if err == nil {
-			callbackCh.Send(errors.New("received nil error in rdsCallback"))
-		}
-		callbackCh.Send(nil)
-	})
-
-	// Wait till the request makes it to the fakeServer. This ensures that
-	// the watch request has been processed by the v2Client.
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-		t.Fatalf("Timeout expired when expecting an RDS request")
-	}
-	waitForNilErr(t, callbackCh)
-}
-
-func TestMatchTypeForDomain(t *testing.T) {
+func (s) TestMatchTypeForDomain(t *testing.T) {
 	tests := []struct {
 		d    string
 		want domainMatchType
@@ -481,7 +284,7 @@ func TestMatchTypeForDomain(t *testing.T) {
 	}
 }
 
-func TestMatch(t *testing.T) {
+func (s) TestMatch(t *testing.T) {
 	tests := []struct {
 		name        string
 		domain      string
@@ -508,7 +311,7 @@ func TestMatch(t *testing.T) {
 	}
 }
 
-func TestFindBestMatchingVirtualHost(t *testing.T) {
+func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
 	var (
 		oneExactMatch = &routepb.VirtualHost{
 			Name:    "one-exact-match",

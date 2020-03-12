@@ -343,25 +343,7 @@ var (
 		},
 	}
 	marshaledGoodRouteConfig2, _ = proto.Marshal(goodRouteConfig2)
-	uninterestingRouteConfig     = &xdspb.RouteConfiguration{
-		Name: uninterestingRouteName,
-		VirtualHosts: []*routepb.VirtualHost{
-			{
-				Domains: []string{uninterestingDomain},
-				Routes: []*routepb.Route{
-					{
-						Action: &routepb.Route_Route{
-							Route: &routepb.RouteAction{
-								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: uninterestingClusterName},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	marshaledUninterestingRouteConfig, _ = proto.Marshal(uninterestingRouteConfig)
-	goodRDSResponse1                     = &xdspb.DiscoveryResponse{
+	goodRDSResponse1             = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: rdsURL,
@@ -375,15 +357,6 @@ var (
 			{
 				TypeUrl: rdsURL,
 				Value:   marshaledGoodRouteConfig2,
-			},
-		},
-		TypeUrl: rdsURL,
-	}
-	uninterestingRDSResponse = &xdspb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: rdsURL,
-				Value:   marshaledUninterestingRouteConfig,
 			},
 		},
 		TypeUrl: rdsURL,
@@ -404,14 +377,15 @@ func (s) TestV2ClientBackoffAfterRecvError(t *testing.T) {
 		return 0
 	}
 
-	v2c := newV2Client(cc, goodNodeProto, clientBackoff, nil)
+	callbackCh := make(chan struct{})
+	v2c := newV2Client(&testUpdateReceiver{
+		f: func(string, map[string]interface{}) { close(callbackCh) },
+	}, cc, goodNodeProto, clientBackoff, nil)
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
-	callbackCh := make(chan struct{})
-	v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
-		close(callbackCh)
-	})
+	// v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {})
+	v2c.addWatch(ldsURL, goodLDSTarget1)
 	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
 		t.Fatalf("Timeout expired when expecting an LDS request")
 	}
@@ -439,15 +413,21 @@ func (s) TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	callbackCh := testutils.NewChannel()
+	v2c := newV2Client(&testUpdateReceiver{
+		f: func(typeURL string, d map[string]interface{}) {
+			if typeURL == ldsURL {
+				if u, ok := d[goodLDSTarget1]; ok {
+					t.Logf("Received LDS callback with ldsUpdate {%+v}", u)
+					callbackCh.Send(struct{}{})
+				}
+			}
+		},
+	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
-	callbackCh := testutils.NewChannel()
-	v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
-		t.Logf("Received LDS callback with ldsUpdate {%+v} and error {%v}", u, err)
-		callbackCh.Send(struct{}{})
-	})
+	v2c.addWatch(ldsURL, goodLDSTarget1)
 	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
 		t.Fatalf("Timeout expired when expecting an LDS request")
 	}
@@ -478,43 +458,11 @@ func (s) TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	}
 }
 
-// TestV2ClientCancelWatch verifies that the registered watch callback is not
-// invoked if a response is received after the watcher is cancelled.
-func (s) TestV2ClientCancelWatch(t *testing.T) {
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	defer v2c.close()
-	t.Log("Started xds v2Client...")
-
-	callbackCh := testutils.NewChannel()
-	cancelFunc := v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
-		t.Logf("Received LDS callback with ldsUpdate {%+v} and error {%v}", u, err)
-		callbackCh.Send(struct{}{})
-	})
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-		t.Fatalf("Timeout expired when expecting an LDS request")
-	}
-	t.Log("FakeServer received request...")
-
-	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
-	t.Log("Good LDS response pushed to fakeServer...")
-
-	if _, err := callbackCh.Receive(); err != nil {
-		t.Fatal("Timeout when expecting LDS update")
-	}
-
-	cancelFunc()
-
-	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
-	t.Log("Another good LDS response pushed to fakeServer...")
-
-	if _, err := callbackCh.Receive(); err != testutils.ErrRecvTimeout {
-		t.Fatalf("Watch callback invoked after the watcher was cancelled")
-	}
-}
-
+// TestV2ClientWatchWithoutStream verifies the case where a watch is started
+// when the xds stream is not created. The watcher should not receive any update
+// (because there won't be any xds response, and timeout is done at a upper
+// level). And when the stream is re-created, the watcher should get future
+// updates.
 func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
 	defaultWatchExpiryTimeout = 500 * time.Millisecond
@@ -538,25 +486,27 @@ func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 	}
 	defer cc.Close()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	callbackCh := testutils.NewChannel()
+	v2c := newV2Client(&testUpdateReceiver{
+		f: func(typeURL string, d map[string]interface{}) {
+			if typeURL == ldsURL {
+				if u, ok := d[goodLDSTarget1]; ok {
+					t.Logf("Received LDS callback with ldsUpdate {%+v}", u)
+					callbackCh.Send(u)
+				}
+			}
+		},
+	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 	t.Log("Started xds v2Client...")
 
-	callbackCh := testutils.NewChannel()
 	// This watch is started when the xds-ClientConn is in Transient Failure,
 	// and no xds stream is created.
-	v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {
-		t.Logf("Received LDS callback with ldsUpdate {%+v} and error {%v}", u, err)
-		if err != nil {
-			callbackCh.Send(err)
-		}
-		callbackCh.Send(u)
-	})
+	v2c.addWatch(ldsURL, goodLDSTarget1)
+
 	// The watcher should receive an update, with a timeout error in it.
-	if v, err := callbackCh.TimedReceive(time.Second); err != nil {
-		t.Fatal("Timeout when expecting LDS update")
-	} else if _, ok := v.(error); !ok {
-		t.Fatalf("Expect an error from watcher, got %v", v)
+	if v, err := callbackCh.TimedReceive(100 * time.Millisecond); err == nil {
+		t.Fatalf("Expect an timeout error from watcher, got %v", v)
 	}
 
 	// Send the real server address to the ClientConn, the stream should be
