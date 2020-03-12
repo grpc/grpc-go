@@ -231,7 +231,7 @@ func (c *xdsclientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attr
 	clientChanged := c.updateXDSClient(config, attr)
 
 	var (
-		restartWatchEndpoints bool
+		restartEndpointsWatch bool
 		restartLoadReport     bool
 	)
 
@@ -250,13 +250,13 @@ func (c *xdsclientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attr
 	// Only need to restart load reporting when:
 	// - no need to restart EDS, but loadReportServer name changed
 	if clientChanged || c.edsServiceName != nameToWatch {
-		restartWatchEndpoints = true
+		restartEndpointsWatch = true
 		restartLoadReport = true
 	} else if !equalStringPointers(c.loadReportServer, config.LrsLoadReportingServerName) {
 		restartLoadReport = true
 	}
 
-	if restartWatchEndpoints {
+	if restartEndpointsWatch {
 		c.startEndpointsWatch(nameToWatch)
 	}
 
