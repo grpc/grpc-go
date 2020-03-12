@@ -17,7 +17,7 @@
 
 // All structs/functions in this file should be unexported. They are used in EDS
 // balancer tests now, to generate test inputs. Eventually, EDS balancer tests
-// should generate EDSUpdate directly, instead of generating and parsing the
+// should generate EndpointsUpdate directly, instead of generating and parsing the
 // proto message.
 // TODO: unexported everything in this file.
 

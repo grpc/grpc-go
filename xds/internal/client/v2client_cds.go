@@ -31,13 +31,7 @@ func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
-	wi := v2c.watchMap[cdsURL]
-	if wi == nil {
-		return fmt.Errorf("xds: no CDS watcher found when handling CDS response: %+v", resp)
-	}
-
-	var returnUpdate CDSUpdate
-	localCache := make(map[string]CDSUpdate)
+	returnUpdate := make(map[string]interface{})
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
@@ -58,25 +52,16 @@ func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if update.ServiceName == "" {
 			update.ServiceName = cluster.GetName()
 		}
-		localCache[cluster.GetName()] = update
 		v2c.logger.Debugf("Resource with name %v, type %T, value %+v added to cache", cluster.GetName(), update, update)
-		if cluster.GetName() == wi.target[0] {
-			returnUpdate = update
-		}
+		returnUpdate[cluster.GetName()] = update
 	}
-	v2c.cdsCache = localCache
 
-	var err error
-	if returnUpdate.ServiceName == "" {
-		err = fmt.Errorf("xds: CDS target %s not found in received response %+v", wi.target, resp)
-	}
-	wi.stopTimer()
-	wi.cdsCallback(returnUpdate, err)
+	v2c.parent.newUpdate(cdsURL, returnUpdate)
 	return nil
 }
 
-func validateCluster(cluster *xdspb.Cluster) (CDSUpdate, error) {
-	emptyUpdate := CDSUpdate{ServiceName: "", EnableLRS: false}
+func validateCluster(cluster *xdspb.Cluster) (ClusterUpdate, error) {
+	emptyUpdate := ClusterUpdate{ServiceName: "", EnableLRS: false}
 	switch {
 	case cluster.GetType() != xdspb.Cluster_EDS:
 		return emptyUpdate, fmt.Errorf("xds: unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
@@ -86,7 +71,7 @@ func validateCluster(cluster *xdspb.Cluster) (CDSUpdate, error) {
 		return emptyUpdate, fmt.Errorf("xds: unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
 
-	return CDSUpdate{
+	return ClusterUpdate{
 		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
 		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
 	}, nil

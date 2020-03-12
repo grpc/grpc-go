@@ -170,7 +170,7 @@ func (edsImpl *edsBalancerImpl) updateDrops(dropConfig []xdsclient.OverloadDropC
 // SubConns. It also handles drops.
 //
 // HandleChildPolicy and HandleEDSResponse must be called by the same goroutine.
-func (edsImpl *edsBalancerImpl) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) {
+func (edsImpl *edsBalancerImpl) HandleEDSResponse(edsResp xdsclient.EndpointsUpdate) {
 	// TODO: Unhandled fields from EDS response:
 	//  - edsResp.GetPolicy().GetOverprovisioningFactor()
 	//  - locality.GetPriority()

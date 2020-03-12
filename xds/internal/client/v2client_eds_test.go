@@ -18,8 +18,6 @@
 package client
 
 import (
-	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -29,14 +27,13 @@ import (
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/testutils"
 )
 
 func (s) TestEDSParseRespProto(t *testing.T) {
 	tests := []struct {
 		name    string
 		m       *xdspb.ClusterLoadAssignment
-		want    *EDSUpdate
+		want    EndpointsUpdate
 		wantErr bool
 	}{
 		{
@@ -47,7 +44,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 				clab0.AddLocality("locality-2", 1, 2, []string{"addr2:159"}, nil)
 				return clab0.Build()
 			}(),
-			want:    nil,
+			want:    EndpointsUpdate{},
 			wantErr: true,
 		},
 		{
@@ -57,7 +54,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 				clab0.AddLocality("", 1, 0, []string{"addr1:314"}, nil)
 				return clab0.Build()
 			}(),
-			want:    nil,
+			want:    EndpointsUpdate{},
 			wantErr: true,
 		},
 		{
@@ -74,7 +71,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 				})
 				return clab0.Build()
 			}(),
-			want: &EDSUpdate{
+			want: EndpointsUpdate{
 				Drops: nil,
 				Localities: []Locality{
 					{
@@ -162,17 +159,11 @@ var (
 )
 
 func (s) TestEDSHandleResponse(t *testing.T) {
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	defer v2c.close()
-
 	tests := []struct {
 		name          string
 		edsResponse   *xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    *EDSUpdate
+		wantUpdate    *EndpointsUpdate
 		wantUpdateErr bool
 	}{
 		// Any in resource is badly marshaled.
@@ -204,7 +195,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			name:        "one-good-assignment",
 			edsResponse: goodEDSResponse1,
 			wantErr:     false,
-			wantUpdate: &EDSUpdate{
+			wantUpdate: &EndpointsUpdate{
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{Address: "addr1:314"}},
@@ -226,14 +217,12 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
+				typeURL:          edsURL,
+				resourceName:     goodEDSName,
 				responseToHandle: test.edsResponse,
 				wantHandleErr:    test.wantErr,
 				wantUpdate:       test.wantUpdate,
 				wantUpdateErr:    test.wantUpdateErr,
-
-				edsWatch:      v2c.watchEDS,
-				watchReqChan:  fakeServer.XDSRequestChan,
-				handleXDSResp: v2c.handleEDSResponse,
 			})
 		})
 	}
@@ -245,44 +234,16 @@ func (s) TestEDSHandleResponseWithoutWatch(t *testing.T) {
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	v2c := newV2Client(&testUpdateReceiver{
+		f: func(string, map[string]interface{}) {},
+	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 
-	if v2c.handleEDSResponse(goodEDSResponse1) == nil {
+	if v2c.handleEDSResponse(badResourceTypeInEDSResponse) == nil {
 		t.Fatal("v2c.handleEDSResponse() succeeded, should have failed")
 	}
-}
 
-func (s) TestEDSWatchExpiryTimer(t *testing.T) {
-	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 500 * time.Millisecond
-	defer func() {
-		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
-	}()
-
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	defer v2c.close()
-	t.Log("Started xds v2Client...")
-
-	callbackCh := testutils.NewChannel()
-	v2c.watchEDS(goodRouteName1, func(u *EDSUpdate, err error) {
-		t.Logf("Received callback with edsUpdate {%+v} and error {%v}", u, err)
-		if u != nil {
-			callbackCh.Send(fmt.Errorf("received EDSUpdate %v in edsCallback, wanted nil", u))
-		}
-		if err == nil {
-			callbackCh.Send(errors.New("received nil error in edsCallback"))
-		}
-		callbackCh.Send(nil)
-	})
-
-	// Wait till the request makes it to the fakeServer. This ensures that
-	// the watch request has been processed by the v2Client.
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-		t.Fatalf("Timeout expired when expecting an CDS request")
+	if v2c.handleEDSResponse(goodEDSResponse1) != nil {
+		t.Fatal("v2c.handleEDSResponse() succeeded, should have failed")
 	}
-	waitForNilErr(t, callbackCh)
 }
