@@ -1525,9 +1525,9 @@ var ErrClientConnTimeout = errors.New("grpc: timed out when dialing")
 
 func (cc *ClientConn) getResolver(scheme string) resolver.Builder {
 	for _, rb := range cc.dopts.resolvers {
-		if cc.parsedTarget.Scheme == rb.Scheme() {
+		if scheme == rb.Scheme() {
 			return rb
 		}
 	}
-	return resolver.Get(cc.parsedTarget.Scheme)
+	return resolver.Get(scheme)
 }
