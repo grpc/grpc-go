@@ -278,6 +278,32 @@ func TestClientServerHandshake(t *testing.T) {
 			false,
 		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
+		// Server: set serverCert, but not setting any of |serverRoot|, |serverGetRoot| or
+		// |serverVerifyFunc|, with mutual TLS on
+		// Expected Behavior: server side failure
+		// Reason: server side needs to provide any verification mechanism when mTLS in on, even setting
+		// |vType| to SkipVerification. Servers should at least provide their own
+		// verification logic.
+		{
+			"Client_peer_cert_reload_root_verifyFuncGood_Server_peer_cert_root_cert_mutualTLS",
+			[]tls.Certificate{clientPeerCert},
+			nil,
+			nil,
+			getRootCAsForClient,
+			verifyFuncGood,
+			CertVerification,
+			false,
+			true,
+			true,
+			[]tls.Certificate{serverPeerCert},
+			nil,
+			nil,
+			nil,
+			nil,
+			SkipVerification,
+			true,
+		},
+		// Client: set clientGetRoot, clientVerifyFunc and clientCert
 		// Server: set serverGetRoot and serverCert with mutual TLS on
 		// Expected Behavior: success
 		{
@@ -496,8 +522,8 @@ func TestClientServerHandshake(t *testing.T) {
 					GetRootCAs:  test.serverGetRoot,
 				},
 				RequireClientCert: test.serverMutualTLS,
-				VerifyPeer: test.serverVerifyFunc,
-				VType: test.serverVType,
+				VerifyPeer:        test.serverVerifyFunc,
+				VType:             test.serverVType,
 			}
 			go func(done chan credentials.AuthInfo, lis net.Listener, serverOptions *ServerOptions) {
 				serverRawConn, err := lis.Accept()

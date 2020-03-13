@@ -215,7 +215,7 @@ func TestEnd2End(t *testing.T) {
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
-			clientVType: CertVerification,
+			clientVType:   CertVerification,
 			serverCert:    []tls.Certificate{cs.serverPeer1},
 			serverGetCert: nil,
 			serverRoot:    nil,
@@ -256,7 +256,7 @@ func TestEnd2End(t *testing.T) {
 				return &VerificationResults{}, nil
 			},
 			clientVType: CertVerification,
-			serverCert: nil,
+			serverCert:  nil,
 			serverGetCert: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
@@ -320,7 +320,7 @@ func TestEnd2End(t *testing.T) {
 				return nil, fmt.Errorf("custom authz check fails")
 			},
 			clientVType: CertVerification,
-			serverCert: nil,
+			serverCert:  nil,
 			serverGetCert: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
@@ -336,6 +336,39 @@ func TestEnd2End(t *testing.T) {
 			},
 			serverVType: CertVerification,
 		},
+		// Test Scenarios:
+		// At initialization(stage = 0), client will be initialized with cert clientPeer1 and clientTrust1, server with serverPeer1 and serverTrust1.
+		// The mutual authentication works at the beginning, since clientPeer1 trusted by serverTrust1, serverPeer1 by clientTrust1, and also the
+		// custom verification check on server side allows all connections.
+		// At stage 1, server disallows the the connections by setting custom verification check. The following calls should fail. Previous
+		// connections should not be affected.
+		// At stage 2, server allows all the connections again and the authentications should go back to normal.
+		{
+			desc:          "TestServerCustomVerification",
+			clientCert:    []tls.Certificate{cs.clientPeer1},
+			clientGetCert: nil,
+			clientGetRoot: nil,
+			clientRoot:    cs.clientTrust1,
+			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
+				return &VerificationResults{}, nil
+			},
+			clientVType:   CertVerification,
+			serverCert:    []tls.Certificate{cs.serverPeer1},
+			serverGetCert: nil,
+			serverRoot:    cs.serverTrust1,
+			serverGetRoot: nil,
+			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
+				switch stage.read() {
+				case 0, 2:
+					return &VerificationResults{}, nil
+				case 1:
+					return nil, fmt.Errorf("custom authz check fails")
+				default:
+					return nil, fmt.Errorf("custom authz check fails")
+				}
+			},
+			serverVType: CertVerification,
+		},
 	} {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
@@ -348,8 +381,8 @@ func TestEnd2End(t *testing.T) {
 					GetRootCAs:  test.serverGetRoot,
 				},
 				RequireClientCert: true,
-				VerifyPeer: test.serverVerifyFunc,
-				VType: test.serverVType,
+				VerifyPeer:        test.serverVerifyFunc,
+				VType:             test.serverVType,
 			}
 			serverTLSCreds, err := NewServerCreds(serverOptions)
 			if err != nil {
@@ -387,10 +420,10 @@ func TestEnd2End(t *testing.T) {
 			ctx1, cancel1 := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel1()
 			conn, greetClient, err := callAndVerifyWithClientConn(ctx1, "rpc call 1", clientTLSCreds, false)
-			defer conn.Close()
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer conn.Close()
 			// ---------------------------------------------------------------------------
 			stage.increase()
 			// ------------------------Scenario 2-----------------------------------------
@@ -404,10 +437,10 @@ func TestEnd2End(t *testing.T) {
 			ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel2()
 			conn2, greetClient, err := callAndVerifyWithClientConn(ctx2, "rpc call 3", clientTLSCreds, true)
-			defer conn2.Close()
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer conn2.Close()
 			//// ---------------------------------------------------------------------------
 			stage.increase()
 			// ------------------------Scenario 4-----------------------------------------
@@ -415,10 +448,10 @@ func TestEnd2End(t *testing.T) {
 			ctx3, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel3()
 			conn3, greetClient, err := callAndVerifyWithClientConn(ctx3, "rpc call 4", clientTLSCreds, false)
-			defer conn3.Close()
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer conn3.Close()
 			// ---------------------------------------------------------------------------
 			stage.reset()
 		})
