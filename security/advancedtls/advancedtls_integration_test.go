@@ -40,7 +40,7 @@ var (
 )
 
 // stageInfo contains a stage number indicating the current phase of each integration test, and a mutex.
-// Based on the stage number of current test, we will use different certificates and server authorization
+// Based on the stage number of current test, we will use different certificates and custom verification
 // functions to check if our tests behave as expected.
 type stageInfo struct {
 	mutex sync.Mutex
@@ -166,10 +166,10 @@ func callAndVerifyWithClientConn(connCtx context.Context, msg string, creds cred
 
 // The advanced TLS features are tested in different stages.
 // At stage 0, we establish a good connection between client and server.
-// At stage 1, we change one factor(it could be we change the server's certificate, or server authorization function, etc),
+// At stage 1, we change one factor(it could be we change the server's certificate, or custom verification function, etc),
 // and test if the following connections would be dropped.
 // At stage 2, we re-establish the connection by changing the counterpart of the factor we modified in stage 1.
-// (could be change the client's trust certificate, or change server authorization function, etc)
+// (could be change the client's trust certificate, or change custom verification function, etc)
 func TestEnd2End(t *testing.T) {
 	cs := &certStore{}
 	err := cs.loadCerts()
@@ -184,10 +184,13 @@ func TestEnd2End(t *testing.T) {
 		clientRoot       *x509.CertPool
 		clientGetRoot    func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		clientVerifyFunc CustomVerificationFunc
+		clientVType      VerificationAuthType
 		serverCert       []tls.Certificate
 		serverGetCert    func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 		serverRoot       *x509.CertPool
 		serverGetRoot    func(params *GetRootCAsParams) (*GetRootCAsResults, error)
+		serverVerifyFunc CustomVerificationFunc
+		serverVType      VerificationAuthType
 	}{
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert clientPeer1 and clientTrust1, server with serverPeer1 and serverTrust1.
@@ -212,6 +215,7 @@ func TestEnd2End(t *testing.T) {
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
+			clientVType: CertVerification,
 			serverCert:    []tls.Certificate{cs.serverPeer1},
 			serverGetCert: nil,
 			serverRoot:    nil,
@@ -223,6 +227,10 @@ func TestEnd2End(t *testing.T) {
 					return &GetRootCAsResults{TrustCerts: cs.serverTrust2}, nil
 				}
 			},
+			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
+				return &VerificationResults{}, nil
+			},
+			serverVType: CertVerification,
 		},
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert clientPeer1 and clientTrust1, server with serverPeer1 and serverTrust1.
@@ -247,6 +255,7 @@ func TestEnd2End(t *testing.T) {
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
+			clientVType: CertVerification,
 			serverCert: nil,
 			serverGetCert: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 				switch stage.read() {
@@ -258,17 +267,21 @@ func TestEnd2End(t *testing.T) {
 			},
 			serverRoot:    cs.serverTrust1,
 			serverGetRoot: nil,
+			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
+				return &VerificationResults{}, nil
+			},
+			serverVType: CertVerification,
 		},
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert clientPeer1 and clientTrust1, server with serverPeer1 and serverTrust1.
 		// The mutual authentication works at the beginning, since clientPeer1 trusted by serverTrust1, serverPeer1 by clientTrust1, and also the
-		// custom server authorization check allows the CommonName on serverPeer1.
+		// custom verification check allows the CommonName on serverPeer1.
 		// At stage 1, server changes serverPeer1 to serverPeer2, and client changes clientTrust1 to clientTrust2. Although serverPeer2 is trusted by
 		// clientTrust2, our authorization check only accepts serverPeer1, and hence the following calls should fail. Previous connections should
 		// not be affected.
 		// At stage 2, the client changes authorization check to only accept serverPeer2. Now we should see the connection becomes normal again.
 		{
-			desc:          "TestClientCustomServerAuthz",
+			desc:          "TestClientCustomVerification",
 			clientCert:    []tls.Certificate{cs.clientPeer1},
 			clientGetCert: nil,
 			clientGetRoot: func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
@@ -306,6 +319,7 @@ func TestEnd2End(t *testing.T) {
 				}
 				return nil, fmt.Errorf("custom authz check fails")
 			},
+			clientVType: CertVerification,
 			serverCert: nil,
 			serverGetCert: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 				switch stage.read() {
@@ -317,6 +331,10 @@ func TestEnd2End(t *testing.T) {
 			},
 			serverRoot:    cs.serverTrust1,
 			serverGetRoot: nil,
+			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
+				return &VerificationResults{}, nil
+			},
+			serverVType: CertVerification,
 		},
 	} {
 		test := test
@@ -330,6 +348,8 @@ func TestEnd2End(t *testing.T) {
 					GetRootCAs:  test.serverGetRoot,
 				},
 				RequireClientCert: true,
+				VerifyPeer: test.serverVerifyFunc,
+				VType: test.serverVType,
 			}
 			serverTLSCreds, err := NewServerCreds(serverOptions)
 			if err != nil {
@@ -356,6 +376,7 @@ func TestEnd2End(t *testing.T) {
 					RootCACerts: test.clientRoot,
 					GetRootCAs:  test.clientGetRoot,
 				},
+				VType: test.clientVType,
 			}
 			clientTLSCreds, err := NewClientCreds(clientOptions)
 			if err != nil {
