@@ -7,7 +7,8 @@ cd github
 
 export GOPATH="${HOME}/gopath"
 pushd grpc-go/interop/xds/client
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+BRANCH=$(git name-rev --name-only "${KOKORO_GITHUB_COMMIT}")
+BRANCH="${BRANCH#remotes/origin/}"
 go build
 popd
 
