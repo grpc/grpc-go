@@ -285,7 +285,7 @@ func TestClientServerHandshake(t *testing.T) {
 		// |vType| to SkipVerification. Servers should at least provide their own
 		// verification logic.
 		{
-			"Client_peer_cert_reload_root_verifyFuncGood_Server_peer_cert_root_cert_mutualTLS",
+			"Client_peer_cert_reload_root_verifyFuncGood_Server_no_verification_mutualTLS",
 			[]tls.Certificate{clientPeerCert},
 			nil,
 			nil,
@@ -487,7 +487,7 @@ func TestClientServerHandshake(t *testing.T) {
 		// Expected Behavior: server side and client side return failure due to
 		// server custom check fails
 		{
-			"Client_peer_cert_reload_root_verifyFuncGood_Server_peer_cert_reload_root_mutualTLS",
+			"Client_peer_cert_reload_root_verifyFuncGood_Server_bad_custom_verification_mutualTLS",
 			[]tls.Certificate{clientPeerCert},
 			nil,
 			nil,

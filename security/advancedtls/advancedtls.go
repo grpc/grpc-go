@@ -35,7 +35,7 @@ import (
 
 // VerificationFuncParams contains the parameters available to users when implementing CustomVerificationFunc.
 type VerificationFuncParams struct {
-	// This field is only meaningful in client side. This will be an empty string on server side.
+	// This field is only meaningful for client side. On server side, this field would be an empty string.
 	ServerName     string
 	RawCerts       [][]byte
 	VerifiedChains [][]*x509.Certificate
