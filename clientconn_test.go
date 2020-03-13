@@ -221,7 +221,7 @@ func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 	client, err := DialContext(ctx,
 		lis.Addr().String(),
 		WithInsecure(),
-		WithReturnLastError(),
+		WithReturnConnectionError(),
 		withBackoff(noBackoff{}),
 		withMinConnectDeadline(func() time.Duration { return time.Second / 4 }))
 	lis.Close()

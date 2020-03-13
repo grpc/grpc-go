@@ -299,10 +299,13 @@ func WithBlock() DialOption {
 	})
 }
 
-// WithReturnLastError returns a DialOption which makes the client connection
-// return the last connection error that occurred instead of a context.DeadlineExceeded error.
+// WithReturnConnectionError returns a DialOption which makes the client connection
+// return a string containing both the last connection error that occurred and
+// the context.DeadlineExceeded error.
 // Implies WithBlock()
-func WithReturnLastError() DialOption {
+//
+// This API is EXPERIMENTAL.
+func WithReturnConnectionError() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.block = true
 		o.returnLastError = true
