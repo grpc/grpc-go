@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 )
@@ -83,8 +84,11 @@ type Entry struct {
 	// HeaderData is received in an RLS response and is to be sent in the
 	// X-Google-RLS-Data header for matching RPCs.
 	HeaderData string
-	// TODO(easwars): Add support to store the ChildPolicy here. Need a
-	// balancerWrapper type to be implemented for this.
+	// ChildPicker is a very thin wrapper around the child policy wrapper.
+	// The type is declared as a V2Picker interface since the users of
+	// the cache only care about the picker provided by the child policy, and
+	// this makes it easy for testing.
+	ChildPicker balancer.V2Picker
 
 	// size stores the size of this cache entry. Uses only a subset of the
 	// fields. See `entrySize` for this is computed.

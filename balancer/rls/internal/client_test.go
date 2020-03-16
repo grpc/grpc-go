@@ -130,10 +130,9 @@ func TestLookupSuccess(t *testing.T) {
 	defer cleanup()
 
 	const (
-		defaultTestTimeout = 1 * time.Second
-		rlsReqPath         = "/service/method"
-		rlsRespTarget      = "us_east_1.firestore.googleapis.com"
-		rlsHeaderData      = "headerData"
+		rlsReqPath    = "/service/method"
+		rlsRespTarget = "us_east_1.firestore.googleapis.com"
+		rlsHeaderData = "headerData"
 	)
 
 	rlsReqKeyMap := map[string]string{
