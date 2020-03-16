@@ -38,10 +38,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-const (
-	defaultTestTimeout = 1 * time.Second
-	maxAge             = 5 * time.Second
-)
+const defaultTestMaxAge = 5 * time.Second
 
 func initKeyBuilderMap() (keys.BuilderMap, error) {
 	kb1 := &rlspb.GrpcKeyBuilder{
@@ -124,8 +121,8 @@ func TestPickKeyBuilder(t *testing.T) {
 
 					now := time.Now()
 					return &cache.Entry{
-						ExpiryTime: now.Add(maxAge),
-						StaleTime:  now.Add(maxAge),
+						ExpiryTime: now.Add(defaultTestMaxAge),
+						StaleTime:  now.Add(defaultTestMaxAge),
 						// Cache entry is configured with a child policy whose
 						// picker always returns an empty PickResult and nil
 						// error.
@@ -271,7 +268,7 @@ func TestPick(t *testing.T) {
 		},
 		{
 			desc:         "cacheHit_noPending_stale_boExpired_dataNotExpired_throttled_defaultTargetOnMiss",
-			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(maxAge)},
+			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
 			throttle:     true, // Proactive refresh is throttled.
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
@@ -279,7 +276,7 @@ func TestPick(t *testing.T) {
 		},
 		{
 			desc:         "cacheHit_noPending_stale_boExpired_dataNotExpired_throttled_clientSeesError",
-			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(maxAge)},
+			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
 			throttle:     true, // Proactive refresh is throttled.
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
@@ -287,7 +284,7 @@ func TestPick(t *testing.T) {
 		},
 		{
 			desc:         "cacheHit_noPending_stale_boExpired_dataNotExpired_throttled_defaultTargetOnError",
-			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(maxAge)},
+			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
 			throttle:     true, // Proactive refresh is throttled.
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
@@ -317,7 +314,7 @@ func TestPick(t *testing.T) {
 		},
 		{
 			desc:          "cacheHit_noPending_stale_boExpired_dataNotExpired_notThrottled_defaultTargetOnMiss",
-			cacheEntry:    &cache.Entry{ExpiryTime: time.Now().Add(maxAge)},
+			cacheEntry:    &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
 			newRLSRequest: true, // Proactive refresh.
 			useChildPick:  true,
 			strategy:      rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
@@ -325,7 +322,7 @@ func TestPick(t *testing.T) {
 		},
 		{
 			desc:          "cacheHit_noPending_stale_boExpired_dataNotExpired_notThrottled_clientSeesError",
-			cacheEntry:    &cache.Entry{ExpiryTime: time.Now().Add(maxAge)},
+			cacheEntry:    &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
 			newRLSRequest: true, // Proactive refresh.
 			useChildPick:  true,
 			strategy:      rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
@@ -333,7 +330,7 @@ func TestPick(t *testing.T) {
 		},
 		{
 			desc:          "cacheHit_noPending_stale_boExpired_dataNotExpired_notThrottled_defaultTargetOnError",
-			cacheEntry:    &cache.Entry{ExpiryTime: time.Now().Add(maxAge)},
+			cacheEntry:    &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
 			newRLSRequest: true, // Proactive refresh.
 			useChildPick:  true,
 			strategy:      rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
@@ -341,14 +338,14 @@ func TestPick(t *testing.T) {
 		},
 		{
 			desc:           "cacheHit_noPending_stale_boNotExpired_dataExpired_defaultTargetOnError",
-			cacheEntry:     &cache.Entry{BackoffTime: time.Now().Add(maxAge)},
+			cacheEntry:     &cache.Entry{BackoffTime: time.Now().Add(defaultTestMaxAge)},
 			useDefaultPick: true,
 			strategy:       rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
 			wantErr:        nil,
 		},
 		{
 			desc:           "cacheHit_noPending_stale_boNotExpired_dataExpired_defaultTargetOnMiss",
-			cacheEntry:     &cache.Entry{BackoffTime: time.Now().Add(maxAge)},
+			cacheEntry:     &cache.Entry{BackoffTime: time.Now().Add(defaultTestMaxAge)},
 			useDefaultPick: true,
 			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
 			wantErr:        nil,
@@ -356,7 +353,7 @@ func TestPick(t *testing.T) {
 		{
 			desc: "cacheHit_noPending_stale_boNotExpired_dataExpired_clientSeesError",
 			cacheEntry: &cache.Entry{
-				BackoffTime: time.Now().Add(maxAge),
+				BackoffTime: time.Now().Add(defaultTestMaxAge),
 				CallStatus:  rlsLastErr,
 			},
 			strategy: rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
@@ -365,8 +362,8 @@ func TestPick(t *testing.T) {
 		{
 			desc: "cacheHit_noPending_stale_boNotExpired_dataNotExpired_defaultTargetOnError",
 			cacheEntry: &cache.Entry{
-				ExpiryTime:  time.Now().Add(maxAge),
-				BackoffTime: time.Now().Add(maxAge),
+				ExpiryTime:  time.Now().Add(defaultTestMaxAge),
+				BackoffTime: time.Now().Add(defaultTestMaxAge),
 				CallStatus:  rlsLastErr,
 			},
 			useChildPick: true,
@@ -376,8 +373,8 @@ func TestPick(t *testing.T) {
 		{
 			desc: "cacheHit_noPending_stale_boNotExpired_dataNotExpired_defaultTargetOnMiss",
 			cacheEntry: &cache.Entry{
-				ExpiryTime:  time.Now().Add(maxAge),
-				BackoffTime: time.Now().Add(maxAge),
+				ExpiryTime:  time.Now().Add(defaultTestMaxAge),
+				BackoffTime: time.Now().Add(defaultTestMaxAge),
 				CallStatus:  rlsLastErr,
 			},
 			useChildPick: true,
@@ -387,8 +384,8 @@ func TestPick(t *testing.T) {
 		{
 			desc: "cacheHit_noPending_stale_boNotExpired_dataNotExpired_clientSeesError",
 			cacheEntry: &cache.Entry{
-				ExpiryTime:  time.Now().Add(maxAge),
-				BackoffTime: time.Now().Add(maxAge),
+				ExpiryTime:  time.Now().Add(defaultTestMaxAge),
+				BackoffTime: time.Now().Add(defaultTestMaxAge),
 				CallStatus:  rlsLastErr,
 			},
 			useChildPick: true,
@@ -398,8 +395,8 @@ func TestPick(t *testing.T) {
 		{
 			desc: "cacheHit_noPending_notStale_dataNotExpired_defaultTargetOnError",
 			cacheEntry: &cache.Entry{
-				ExpiryTime: time.Now().Add(maxAge),
-				StaleTime:  time.Now().Add(maxAge),
+				ExpiryTime: time.Now().Add(defaultTestMaxAge),
+				StaleTime:  time.Now().Add(defaultTestMaxAge),
 			},
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
@@ -408,8 +405,8 @@ func TestPick(t *testing.T) {
 		{
 			desc: "cacheHit_noPending_notStale_dataNotExpired_defaultTargetOnMiss",
 			cacheEntry: &cache.Entry{
-				ExpiryTime: time.Now().Add(maxAge),
-				StaleTime:  time.Now().Add(maxAge),
+				ExpiryTime: time.Now().Add(defaultTestMaxAge),
+				StaleTime:  time.Now().Add(defaultTestMaxAge),
 			},
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
@@ -418,8 +415,8 @@ func TestPick(t *testing.T) {
 		{
 			desc: "cacheHit_noPending_notStale_dataNotExpired_clientSeesError",
 			cacheEntry: &cache.Entry{
-				ExpiryTime: time.Now().Add(maxAge),
-				StaleTime:  time.Now().Add(maxAge),
+				ExpiryTime: time.Now().Add(defaultTestMaxAge),
+				StaleTime:  time.Now().Add(defaultTestMaxAge),
 			},
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
@@ -449,7 +446,7 @@ func TestPick(t *testing.T) {
 		{
 			desc: "cacheHit_pending_dataExpired_boNotExpired_defaultTargetOnError",
 			cacheEntry: &cache.Entry{
-				BackoffTime: time.Now().Add(maxAge),
+				BackoffTime: time.Now().Add(defaultTestMaxAge),
 				CallStatus:  rlsLastErr,
 			},
 			useDefaultPick: true,
@@ -459,7 +456,7 @@ func TestPick(t *testing.T) {
 		{
 			desc: "cacheHit_pending_dataExpired_boNotExpired_defaultTargetOnMiss",
 			cacheEntry: &cache.Entry{
-				BackoffTime: time.Now().Add(maxAge),
+				BackoffTime: time.Now().Add(defaultTestMaxAge),
 				CallStatus:  rlsLastErr,
 			},
 			pending:        true,
@@ -470,7 +467,7 @@ func TestPick(t *testing.T) {
 		{
 			desc: "cacheHit_pending_dataExpired_boNotExpired_clientSeesError",
 			cacheEntry: &cache.Entry{
-				BackoffTime: time.Now().Add(maxAge),
+				BackoffTime: time.Now().Add(defaultTestMaxAge),
 				CallStatus:  rlsLastErr,
 			},
 			pending:  true,
@@ -479,7 +476,7 @@ func TestPick(t *testing.T) {
 		},
 		{
 			desc:         "cacheHit_pending_dataNotExpired_defaultTargetOnError",
-			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(maxAge)},
+			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
 			pending:      true,
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
@@ -487,7 +484,7 @@ func TestPick(t *testing.T) {
 		},
 		{
 			desc:         "cacheHit_pending_dataNotExpired_defaultTargetOnMiss",
-			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(maxAge)},
+			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
 			pending:      true,
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
@@ -495,7 +492,7 @@ func TestPick(t *testing.T) {
 		},
 		{
 			desc:         "cacheHit_pending_dataNotExpired_clientSeesError",
-			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(maxAge)},
+			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
 			pending:      true,
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
