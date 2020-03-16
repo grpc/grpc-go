@@ -185,45 +185,38 @@ func TestPick(t *testing.T) {
 		useChildPick bool
 		// Request processing strategy as used by the picker.
 		strategy rlspb.RouteLookupConfig_RequestProcessingStrategy
-		// Expected pick result returned by the picker under test.
-		wantResult balancer.PickResult
 		// Expected error returned by the picker under test.
 		wantErr error
 	}{
 		{
-			desc:       "cacheMiss_pending_defaultTargetOnError",
-			pending:    true,
-			strategy:   rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantResult: balancer.PickResult{},
-			wantErr:    balancer.ErrNoSubConnAvailable,
+			desc:     "cacheMiss_pending_defaultTargetOnError",
+			pending:  true,
+			strategy: rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
+			wantErr:  balancer.ErrNoSubConnAvailable,
 		},
 		{
-			desc:       "cacheMiss_pending_clientSeesError",
-			pending:    true,
-			strategy:   rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantResult: balancer.PickResult{},
-			wantErr:    balancer.ErrNoSubConnAvailable,
+			desc:     "cacheMiss_pending_clientSeesError",
+			pending:  true,
+			strategy: rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
+			wantErr:  balancer.ErrNoSubConnAvailable,
 		},
 		{
 			desc:           "cacheMiss_pending_defaultTargetOnMiss",
 			pending:        true,
 			useDefaultPick: true,
 			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantResult:     balancer.PickResult{},
 			wantErr:        nil,
 		},
 		{
 			desc:          "cacheMiss_noPending_notThrottled_defaultTargetOnError",
 			newRLSRequest: true,
 			strategy:      rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantResult:    balancer.PickResult{},
 			wantErr:       balancer.ErrNoSubConnAvailable,
 		},
 		{
 			desc:          "cacheMiss_noPending_notThrottled_clientSeesError",
 			newRLSRequest: true,
 			strategy:      rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantResult:    balancer.PickResult{},
 			wantErr:       balancer.ErrNoSubConnAvailable,
 		},
 		{
@@ -231,7 +224,6 @@ func TestPick(t *testing.T) {
 			newRLSRequest:  true,
 			useDefaultPick: true,
 			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantResult:     balancer.PickResult{},
 			wantErr:        nil,
 		},
 		{
@@ -239,22 +231,19 @@ func TestPick(t *testing.T) {
 			throttle:       true,
 			useDefaultPick: true,
 			strategy:       rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantResult:     balancer.PickResult{},
 			wantErr:        nil,
 		},
 		{
-			desc:       "cacheMiss_noPending_throttled_clientSeesError",
-			throttle:   true,
-			strategy:   rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantResult: balancer.PickResult{},
-			wantErr:    errRLSThrottled,
+			desc:     "cacheMiss_noPending_throttled_clientSeesError",
+			throttle: true,
+			strategy: rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
+			wantErr:  errRLSThrottled,
 		},
 		{
 			desc:           "cacheMiss_noPending_throttled_defaultTargetOnMiss",
 			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
 			throttle:       true,
 			useDefaultPick: true,
-			wantResult:     balancer.PickResult{},
 			wantErr:        nil,
 		},
 		{
@@ -263,7 +252,6 @@ func TestPick(t *testing.T) {
 			throttle:       true,
 			useDefaultPick: true,
 			strategy:       rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantResult:     balancer.PickResult{},
 			wantErr:        nil,
 		},
 		{
@@ -271,7 +259,6 @@ func TestPick(t *testing.T) {
 			cacheEntry: &cache.Entry{}, // Everything is expired in this entry
 			throttle:   true,
 			strategy:   rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantResult: balancer.PickResult{},
 			wantErr:    errRLSThrottled,
 		},
 		{
@@ -280,7 +267,6 @@ func TestPick(t *testing.T) {
 			throttle:       true,
 			useDefaultPick: true,
 			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantResult:     balancer.PickResult{},
 			wantErr:        nil,
 		},
 		{
@@ -289,7 +275,6 @@ func TestPick(t *testing.T) {
 			throttle:     true, // Proactive refresh is throttled.
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantResult:   balancer.PickResult{},
 			wantErr:      nil,
 		},
 		{
@@ -298,7 +283,6 @@ func TestPick(t *testing.T) {
 			throttle:     true, // Proactive refresh is throttled.
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantResult:   balancer.PickResult{},
 			wantErr:      nil,
 		},
 		{
@@ -307,7 +291,6 @@ func TestPick(t *testing.T) {
 			throttle:     true, // Proactive refresh is throttled.
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantResult:   balancer.PickResult{},
 			wantErr:      nil,
 		},
 		{
@@ -315,7 +298,6 @@ func TestPick(t *testing.T) {
 			cacheEntry:    &cache.Entry{}, // Everything is expired in this entry
 			newRLSRequest: true,
 			strategy:      rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantResult:    balancer.PickResult{},
 			wantErr:       balancer.ErrNoSubConnAvailable,
 		},
 		{
@@ -323,7 +305,6 @@ func TestPick(t *testing.T) {
 			cacheEntry:    &cache.Entry{}, // Everything is expired in this entry
 			newRLSRequest: true,
 			strategy:      rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantResult:    balancer.PickResult{},
 			wantErr:       balancer.ErrNoSubConnAvailable,
 		},
 		{
@@ -332,7 +313,6 @@ func TestPick(t *testing.T) {
 			newRLSRequest:  true,
 			useDefaultPick: true,
 			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantResult:     balancer.PickResult{},
 			wantErr:        nil,
 		},
 		{
@@ -341,7 +321,6 @@ func TestPick(t *testing.T) {
 			newRLSRequest: true, // Proactive refresh.
 			useChildPick:  true,
 			strategy:      rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantResult:    balancer.PickResult{},
 			wantErr:       nil,
 		},
 		{
@@ -350,7 +329,6 @@ func TestPick(t *testing.T) {
 			newRLSRequest: true, // Proactive refresh.
 			useChildPick:  true,
 			strategy:      rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantResult:    balancer.PickResult{},
 			wantErr:       nil,
 		},
 		{
@@ -359,7 +337,6 @@ func TestPick(t *testing.T) {
 			newRLSRequest: true, // Proactive refresh.
 			useChildPick:  true,
 			strategy:      rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantResult:    balancer.PickResult{},
 			wantErr:       nil,
 		},
 		{
@@ -367,7 +344,6 @@ func TestPick(t *testing.T) {
 			cacheEntry:     &cache.Entry{BackoffTime: time.Now().Add(maxAge)},
 			useDefaultPick: true,
 			strategy:       rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantResult:     balancer.PickResult{},
 			wantErr:        nil,
 		},
 		{
@@ -375,7 +351,6 @@ func TestPick(t *testing.T) {
 			cacheEntry:     &cache.Entry{BackoffTime: time.Now().Add(maxAge)},
 			useDefaultPick: true,
 			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantResult:     balancer.PickResult{},
 			wantErr:        nil,
 		},
 		{
@@ -384,9 +359,8 @@ func TestPick(t *testing.T) {
 				BackoffTime: time.Now().Add(maxAge),
 				CallStatus:  rlsLastErr,
 			},
-			strategy:   rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantResult: balancer.PickResult{},
-			wantErr:    rlsLastErr,
+			strategy: rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
+			wantErr:  rlsLastErr,
 		},
 		{
 			desc: "cacheHit_noPending_stale_boNotExpired_dataNotExpired_defaultTargetOnError",
@@ -397,7 +371,6 @@ func TestPick(t *testing.T) {
 			},
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantResult:   balancer.PickResult{},
 			wantErr:      nil,
 		},
 		{
@@ -409,7 +382,6 @@ func TestPick(t *testing.T) {
 			},
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantResult:   balancer.PickResult{},
 			wantErr:      nil,
 		},
 		{
@@ -421,7 +393,6 @@ func TestPick(t *testing.T) {
 			},
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantResult:   balancer.PickResult{},
 			wantErr:      nil,
 		},
 		{
@@ -432,7 +403,6 @@ func TestPick(t *testing.T) {
 			},
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantResult:   balancer.PickResult{},
 			wantErr:      nil,
 		},
 		{
@@ -443,7 +413,6 @@ func TestPick(t *testing.T) {
 			},
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantResult:   balancer.PickResult{},
 			wantErr:      nil,
 		},
 		{
@@ -454,14 +423,12 @@ func TestPick(t *testing.T) {
 			},
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantResult:   balancer.PickResult{},
 			wantErr:      nil,
 		},
 		{
 			desc:       "cacheHit_pending_dataExpired_boExpired_defaultTargetOnError",
 			cacheEntry: &cache.Entry{},
 			strategy:   rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantResult: balancer.PickResult{},
 			wantErr:    balancer.ErrNoSubConnAvailable,
 		},
 		{
@@ -470,7 +437,6 @@ func TestPick(t *testing.T) {
 			pending:        true,
 			useDefaultPick: true,
 			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantResult:     balancer.PickResult{},
 			wantErr:        nil,
 		},
 		{
@@ -478,7 +444,6 @@ func TestPick(t *testing.T) {
 			cacheEntry: &cache.Entry{},
 			pending:    true,
 			strategy:   rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantResult: balancer.PickResult{},
 			wantErr:    balancer.ErrNoSubConnAvailable,
 		},
 		{
@@ -489,7 +454,6 @@ func TestPick(t *testing.T) {
 			},
 			useDefaultPick: true,
 			strategy:       rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantResult:     balancer.PickResult{},
 			wantErr:        nil,
 		},
 		{
@@ -501,7 +465,6 @@ func TestPick(t *testing.T) {
 			pending:        true,
 			useDefaultPick: true,
 			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantResult:     balancer.PickResult{},
 			wantErr:        nil,
 		},
 		{
@@ -510,10 +473,9 @@ func TestPick(t *testing.T) {
 				BackoffTime: time.Now().Add(maxAge),
 				CallStatus:  rlsLastErr,
 			},
-			pending:    true,
-			strategy:   rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantResult: balancer.PickResult{},
-			wantErr:    rlsLastErr,
+			pending:  true,
+			strategy: rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
+			wantErr:  rlsLastErr,
 		},
 		{
 			desc:         "cacheHit_pending_dataNotExpired_defaultTargetOnError",
@@ -521,7 +483,6 @@ func TestPick(t *testing.T) {
 			pending:      true,
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantResult:   balancer.PickResult{},
 			wantErr:      nil,
 		},
 		{
@@ -530,7 +491,6 @@ func TestPick(t *testing.T) {
 			pending:      true,
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantResult:   balancer.PickResult{},
 			wantErr:      nil,
 		},
 		{
@@ -539,7 +499,6 @@ func TestPick(t *testing.T) {
 			pending:      true,
 			useChildPick: true,
 			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantResult:   balancer.PickResult{},
 			wantErr:      nil,
 		},
 	}
