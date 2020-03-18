@@ -18,7 +18,7 @@ This example doesn't include instuctions to setup xDS environment. Please
 refer to documentation specific for your xDS management server.
 
 The client also needs a bootstrap file. See [gRFC
-A27](https://github.com/grpc/proposal/pull/170/files#diff-05ea4a5894abbc0261b006741220598cR100)
+A27](https://github.com/grpc/proposal/blob/master/A27-xds-global-load-balancing.md#xdsclient-and-bootstrap-file)
 for the bootstrap format.
 
 ## The client
