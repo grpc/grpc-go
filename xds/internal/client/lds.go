@@ -68,7 +68,7 @@ func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 		err = fmt.Errorf("xds: LDS target %s not found in received response %+v", wi.target, resp)
 	}
 	wi.stopTimer()
-	wi.callback.(ldsCallback)(ldsUpdate{routeName: routeName}, err)
+	wi.ldsCallback(ldsUpdate{routeName: routeName}, err)
 	return nil
 }
 
