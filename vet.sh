@@ -72,19 +72,18 @@ elif [[ "$#" -ne 0 ]]; then
 fi
 
 # - Ensure all source files contain a copyright message.
-not git grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" -- "*.go"
-
+not git grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" -- '*.go'
 
 # - Make sure all tests in grpc and grpc/test use leakcheck via Teardown.
-not grep "func Test[^(]" *_test.go
-not grep "func Test[^(]" test/*.go
+not grep 'func Test[^(]' *_test.go
+not grep 'func Test[^(]' test/*.go
 
 # - Do not import x/net/context.
-not git grep -l "x/net/context" -- *.go
+not git grep -l 'x/net/context' -- "*.go"
 
 # - Do not import math/rand for real library code.  Use internal/grpcrand for
 #   thread safety.
-git grep -l '"math/rand"' -- "*.go" 2>&1 | not grep -v "^examples\|^stress\|grpcrand\|^benchmark\|wrr_test"
+git grep -l '"math/rand"' -- "*.go" 2>&1 | not grep -v '^examples\|^stress\|grpcrand\|^benchmark\|wrr_test'
 
 # - Ensure all ptypes proto packages are renamed when importing.
 not git grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/" -- "*.go"
