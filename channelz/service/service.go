@@ -24,10 +24,8 @@ package service
 import (
 	"context"
 	"net"
-	"time"
 
 	"github.com/golang/protobuf/ptypes"
-	durpb "github.com/golang/protobuf/ptypes/duration"
 	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
 	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
@@ -41,10 +39,6 @@ import (
 
 func init() {
 	channelz.TurnOn()
-}
-
-func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
-	return ptypes.DurationProto(time.Duration(sec*1e9 + usec*1e3))
 }
 
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
