@@ -21,16 +21,42 @@
 // Package rls implements the RLS LB policy.
 package rls
 
-const rlsBalancerName = "rls"
+import (
+	"time"
+
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/rls/internal/adaptive"
+)
+
+const (
+	rlsBalancerName = "rls"
+	// The default interval at which the cache expiry goroutine runs to cleanup
+	// expired entries from the data cache.
+	defaultCacheExpiryFreq = 1 * time.Minute
+)
+
+func init() {
+	balancer.Register(&rlsBB{})
+}
 
 // rlsBB helps build RLS load balancers and parse the service config to be
 // passed to the RLS load balancer.
-type rlsBB struct {
-	// TODO(easwars): Implement the Build() method and register the builder.
-}
+type rlsBB struct{}
 
 // Name returns the name of the RLS LB policy and helps implement the
 // balancer.Balancer interface.
 func (*rlsBB) Name() string {
 	return rlsBalancerName
+}
+
+func (*rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	lb := &rlsBalancer{
+		cc:         cc,
+		opts:       opts,
+		throttler:  adaptive.New(),
+		expiryFreq: defaultCacheExpiryFreq,
+		ccUpdateCh: make(chan *balancer.ClientConnState),
+	}
+	go lb.run()
+	return lb
 }

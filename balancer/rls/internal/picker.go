@@ -34,16 +34,16 @@ import (
 var errRLSThrottled = balancer.TransientFailureError(errors.New("RLS call throttled at client side"))
 
 // Compile time assert to ensure we implement V2Picker.
-var _ balancer.V2Picker = (*picker)(nil)
+var _ balancer.V2Picker = (*rlsPicker)(nil)
 
-// RLS picker selects the subConn to be used for a particular RPC. It does not
+// RLS rlsPicker selects the subConn to be used for a particular RPC. It does not
 // manage subConns directly and usually deletegates to pickers provided by
 // child policies.
 //
-// The RLS LB policy creates a new picker object whenever its ServiceConfig is
-// updated and provides a bunch of hooks for the picker to get the latest state
+// The RLS LB policy creates a new rlsPicker object whenever its ServiceConfig is
+// updated and provides a bunch of hooks for the rlsPicker to get the latest state
 // that it can used to make its decision.
-type picker struct {
+type rlsPicker struct {
 	// The keyBuilder map used to generate RLS keys for the RPC. This is built
 	// by the LB policy based on the received ServiceConfig.
 	kbm keys.BuilderMap
@@ -52,16 +52,16 @@ type picker struct {
 	// to make the pick decision is not in the cache.
 	strategy rlspb.RouteLookupConfig_RequestProcessingStrategy
 
-	// The following hooks are setup by the LB policy to enable the picker to
+	// The following hooks are setup by the LB policy to enable the rlsPicker to
 	// access state stored in the policy. This approach has the following
 	// advantages:
-	// 1. The picker is loosely coupled with the LB policy in the sense that
+	// 1. The rlsPicker is loosely coupled with the LB policy in the sense that
 	//    updates happening on the LB policy like the receipt of an RLS
-	//    response, or an update to the default picker etc are not explicitly
-	//    pushed to the picker, but are readily available to the picker when it
+	//    response, or an update to the default rlsPicker etc are not explicitly
+	//    pushed to the rlsPicker, but are readily available to the rlsPicker when it
 	//    invokes these hooks. And the LB policy takes care of synchronizing
 	//    access to these shared state.
-	// 2. It makes unit testing the picker easy since any number of these hooks
+	// 2. It makes unit testing the rlsPicker easy since any number of these hooks
 	//    could be overridden.
 
 	// readCache is used to read from the data cache and the pending request
@@ -77,24 +77,24 @@ type picker struct {
 	// sending out the request and an entry in the data cache is created or
 	// updated upon receipt of a response. See implementation in the LB policy
 	// for details.
-	startRLS func(string, keys.KeyMap)
-	// defaultPick enables the picker to delegate the pick decision to the
-	// picker returned by the child LB policy pointing to the default target
+	startRLS func(string, keys.KeyMap, cache.BackoffState)
+	// defaultPick enables the rlsPicker to delegate the pick decision to the
+	// rlsPicker returned by the child LB policy pointing to the default target
 	// specified in the service config.
 	defaultPick func(balancer.PickInfo) (balancer.PickResult, error)
 }
 
 // This helper function decides if the pick should delegate to the default
-// picker based on the request processing strategy. This is used when the data
+// rlsPicker based on the request processing strategy. This is used when the data
 // cache does not have a valid entry for the current RPC and the RLS request is
 // throttled, or if the current data cache entry is in backoff.
-func (p *picker) shouldDelegateToDefault() bool {
+func (p *rlsPicker) shouldDelegateToDefault() bool {
 	return p.strategy == rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR ||
 		p.strategy == rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS
 }
 
 // Pick makes the routing decision for every outbound RPC.
-func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	// For every incoming request, we first build the RLS keys using the
 	// keyBuilder we received from the LB policy. If no metadata is present in
 	// the context, we end up using an empty key.
@@ -138,7 +138,11 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			// The proactive refresh has been throttled. Nothing to worry, just
 			// keep using the existing entry.
 		} else {
-			p.startRLS(info.FullMethodName, km)
+			var boState cache.BackoffState
+			if entry != nil {
+				boState = entry.Backoff
+			}
+			p.startRLS(info.FullMethodName, km, boState)
 		}
 	}
 
@@ -150,7 +154,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			return entry.ChildPicker.Pick(info)
 		} else if entry.BackoffTime.After(now) {
 			// The entry has expired, but is in backoff. We either delegate to
-			// the default picker or return the error from the last failed RLS
+			// the default rlsPicker or return the error from the last failed RLS
 			// request for this entry.
 			if p.shouldDelegateToDefault() {
 				return p.defaultPick(info)
@@ -163,7 +167,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	// was not in backoff (which is also essentially equivalent to not finding
 	// an entry), and we started an RLS request in the background. We either
 	// queue the pick or delegate to the default pick. In the former case, upon
-	// receipt of an RLS response, the LB policy will send a new picker to the
+	// receipt of an RLS response, the LB policy will send a new rlsPicker to the
 	// channel, and the pick will be retried.
 	if p.strategy == rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR ||
 		p.strategy == rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR {
