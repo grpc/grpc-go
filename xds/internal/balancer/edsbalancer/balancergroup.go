@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
@@ -30,7 +31,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	orcapb "google.golang.org/grpc/xds/internal/proto/udpa/data/orca/v1"
 )
 
 // subBalancerWithConfig is used to keep the configurations that will be used to start
