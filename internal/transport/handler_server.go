@@ -296,7 +296,8 @@ func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
 			// Note: The header fields are compressed with hpack after this call returns.
 			// No WireLength field is set here.
 			ht.stats.HandleRPC(s.Context(), &stats.OutHeader{
-				Header: md.Copy(),
+				Header:      md.Copy(),
+				Compression: s.sendCompress,
 			})
 		}
 	}
