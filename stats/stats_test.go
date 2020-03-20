@@ -446,6 +446,9 @@ func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
+	if st.Compression != e.compression {
+		t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
+	}
 	if d.client {
 		// additional headers might be injected so instead of testing equality, test that all the
 		// expected headers keys have the expected header values.
@@ -460,9 +463,6 @@ func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 		}
 		if st.LocalAddr.String() != e.serverAddr {
 			t.Fatalf("st.LocalAddr = %v, want %v", st.LocalAddr, e.serverAddr)
-		}
-		if st.Compression != e.compression {
-			t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
 		}
 		// additional headers might be injected so instead of testing equality, test that all the
 		// expected headers keys have the expected header values.
@@ -575,15 +575,15 @@ func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
+	if st.Compression != e.compression {
+		t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
+	}
 	if d.client {
 		if st.FullMethod != e.method {
 			t.Fatalf("st.FullMethod = %s, want %v", st.FullMethod, e.method)
 		}
 		if st.RemoteAddr.String() != e.serverAddr {
 			t.Fatalf("st.RemoteAddr = %v, want %v", st.RemoteAddr, e.serverAddr)
-		}
-		if st.Compression != e.compression {
-			t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
 		}
 		// additional headers might be injected so instead of testing equality, test that all the
 		// expected headers keys have the expected header values.
