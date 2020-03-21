@@ -9,7 +9,8 @@ Most languages provide an implementation out of box, making it interoperable bet
 ## Try it
 
 ```
-go run server/main.go
+go run server/main.go -port=50051 -sleep=5s
+go run server/main.go -port=50052 -sleep=10s
 ```
 
 ```

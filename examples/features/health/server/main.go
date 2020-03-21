@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -8,17 +9,35 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 var (
+	defaultSleep = time.Second * 5
+
 	port = flag.Int("port", 50051, "the port to serve on")
+	sleep = flag.Duration("sleep", defaultSleep, "duration between changes in health")
 
 	system = "" // empty string represents the health of the system
 )
 
+type echoServer struct {
+	pb.UnimplementedEchoServer
+}
+
+func (e *echoServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+	return &pb.EchoResponse{
+		Message: fmt.Sprintf("hello from localhost:%d", *port),
+	}, nil
+}
+
+var _ pb.EchoServer = &echoServer{}
+
 func main() {
+	flag.Parse()
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -27,6 +46,7 @@ func main() {
 	s := grpc.NewServer()
 	healthcheck := health.NewServer()
 	healthpb.RegisterHealthServer(s, healthcheck)
+	pb.RegisterEchoServer(s, &echoServer{})
 
 	go func() {
 		// asynchronously inspect dependencies and toggle serving status as needed
@@ -41,7 +61,7 @@ func main() {
 				next = healthpb.HealthCheckResponse_SERVING
 			}
 
-			time.Sleep(time.Second * 5)
+			time.Sleep(*sleep)
 		}
 	}()
 
