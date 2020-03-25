@@ -21,16 +21,37 @@
 // Package rls implements the RLS LB policy.
 package rls
 
+import (
+	"context"
+
+	"google.golang.org/grpc/balancer"
+)
+
 const rlsBalancerName = "rls"
+
+func init() {
+	balancer.Register(&rlsBB{})
+}
 
 // rlsBB helps build RLS load balancers and parse the service config to be
 // passed to the RLS load balancer.
-type rlsBB struct {
-	// TODO(easwars): Implement the Build() method and register the builder.
-}
+type rlsBB struct{}
 
 // Name returns the name of the RLS LB policy and helps implement the
 // balancer.Balancer interface.
 func (*rlsBB) Name() string {
 	return rlsBalancerName
+}
+
+func (*rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	ctx, cancel := context.WithCancel(context.Background())
+	lb := &rlsBalancer{
+		ctx:        ctx,
+		cancel:     cancel,
+		cc:         cc,
+		opts:       opts,
+		ccUpdateCh: make(chan *balancer.ClientConnState),
+	}
+	go lb.run()
+	return lb
 }

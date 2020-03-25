@@ -51,12 +51,17 @@ type Server struct {
 // Start makes a new Server and gets it to start listening on a local port for
 // gRPC requests. The returned cancel function should be invoked by the caller
 // upon completion of the test.
-func Start() (*Server, func(), error) {
+func Start(opts ...grpc.ServerOption) (*Server, func(), error) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		return nil, func() {}, fmt.Errorf("net.Listen() failed: %v", err)
 	}
+	return StartWithListener(lis, opts...)
+}
 
+// StartWithListener is similar to Start, but uses the provided listener instead
+// of creating a new one.
+func StartWithListener(lis net.Listener, opts ...grpc.ServerOption) (*Server, func(), error) {
 	s := &Server{
 		// Give the channels a buffer size of 1 so that we can setup
 		// expectations for one lookup call, without blocking.
@@ -65,7 +70,7 @@ func Start() (*Server, func(), error) {
 		Address:      lis.Addr().String(),
 	}
 
-	server := grpc.NewServer()
+	server := grpc.NewServer(opts...)
 	rlsgrpc.RegisterRouteLookupServiceServer(server, s)
 	go server.Serve(lis)
 
