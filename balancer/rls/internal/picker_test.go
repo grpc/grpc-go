@@ -59,7 +59,7 @@ func initKeyBuilderMap() (keys.BuilderMap, error) {
 }
 
 // fakeSubConn embeds the balancer.SubConn interface and contains an id which
-// helps verify that the expected subConn was returned by the picker.
+// helps verify that the expected subConn was returned by the rlsPicker.
 type fakeSubConn struct {
 	balancer.SubConn
 	id int
@@ -74,8 +74,8 @@ func (p *fakeChildPicker) Pick(_ balancer.PickInfo) (balancer.PickResult, error)
 	return balancer.PickResult{SubConn: &fakeSubConn{id: p.id}}, nil
 }
 
-// TestPickKeyBuilder verifies the different possible scenarios for
-// forming an RLS key for an incoming RPC.
+// TestPickKeyBuilder verifies the different possible scenarios for forming an
+// RLS key for an incoming RPC.
 func TestPickKeyBuilder(t *testing.T) {
 	kbm, err := initKeyBuilderMap()
 	if err != nil {
@@ -111,12 +111,12 @@ func TestPickKeyBuilder(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			randID := grpcrand.Intn(math.MaxInt32)
-			p := picker{
+			p := rlsPicker{
 				kbm:      kbm,
 				strategy: rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
 				readCache: func(key cache.Key) (*cache.Entry, bool) {
 					if !cmp.Equal(key, test.wantKey) {
-						t.Fatalf("picker using cacheKey %v, want %v", key, test.wantKey)
+						t.Fatalf("rlsPicker using cacheKey %v, want %v", key, test.wantKey)
 					}
 
 					now := time.Now()
@@ -124,7 +124,7 @@ func TestPickKeyBuilder(t *testing.T) {
 						ExpiryTime: now.Add(defaultTestMaxAge),
 						StaleTime:  now.Add(defaultTestMaxAge),
 						// Cache entry is configured with a child policy whose
-						// picker always returns an empty PickResult and nil
+						// rlsPicker always returns an empty PickResult and nil
 						// error.
 						ChildPicker: &fakeChildPicker{id: randID},
 					}, false
@@ -180,9 +180,9 @@ func TestPick(t *testing.T) {
 		// Whether or not the test ends up delegating to the child policy in
 		// the cache entry.
 		useChildPick bool
-		// Request processing strategy as used by the picker.
+		// Request processing strategy as used by the rlsPicker.
 		strategy rlspb.RouteLookupConfig_RequestProcessingStrategy
-		// Expected error returned by the picker under test.
+		// Expected error returned by the rlsPicker under test.
 		wantErr error
 	}{
 		{
@@ -510,7 +510,7 @@ func TestPick(t *testing.T) {
 			// useChidlPick or useDefaultPick is set in the test.
 			childPicker := &fakeChildPicker{id: randID}
 
-			p := picker{
+			p := rlsPicker{
 				kbm:      kbm,
 				strategy: test.strategy,
 				readCache: func(key cache.Key) (*cache.Entry, bool) {
@@ -555,8 +555,8 @@ func TestPick(t *testing.T) {
 			}
 			if test.useChildPick || test.useDefaultPick {
 				// For cases where the pick is not queued, but is delegated to
-				// either the child picker or the default picker, we verify that
-				// the expected fakeSubConn is returned.
+				// either the child rlsPicker or the default rlsPicker, we
+				// verify that the expected fakeSubConn is returned.
 				sc, ok := gotResult.SubConn.(*fakeSubConn)
 				if !ok {
 					t.Fatalf("Pick() returned a SubConn of type %T, want %T", gotResult.SubConn, &fakeSubConn{})
