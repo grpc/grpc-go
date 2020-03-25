@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/balancer/rls/internal/testutils"
+
 	"google.golang.org/grpc/internal/grpcrand"
 
 	"github.com/google/go-cmp/cmp"
@@ -502,7 +504,7 @@ func TestPick(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			rlsCh := make(chan error, 1)
+			rlsCh := testutils.NewChannel()
 			randID := grpcrand.Intn(math.MaxInt32)
 			// We instantiate a fakeChildPicker which will return a fakeSubConn
 			// with configured id. Either the childPicker or the defaultPicker
@@ -525,18 +527,18 @@ func TestPick(t *testing.T) {
 				shouldThrottle: func() bool { return test.throttle },
 				startRLS: func(path string, km keys.KeyMap) {
 					if !test.newRLSRequest {
-						rlsCh <- errors.New("RLS request attempted when none was expected")
+						rlsCh.Send(errors.New("RLS request attempted when none was expected"))
 						return
 					}
 					if path != rpcPath {
-						rlsCh <- fmt.Errorf("RLS request initiated for rpcPath %s, want %s", path, rpcPath)
+						rlsCh.Send(fmt.Errorf("RLS request initiated for rpcPath %s, want %s", path, rpcPath))
 						return
 					}
 					if km.Str != wantKeyMapStr {
-						rlsCh <- fmt.Errorf("RLS request initiated with keys %v, want %v", km.Str, wantKeyMapStr)
+						rlsCh.Send(fmt.Errorf("RLS request initiated with keys %v, want %v", km.Str, wantKeyMapStr))
 						return
 					}
-					rlsCh <- nil
+					rlsCh.Send(nil)
 				},
 				defaultPick: func(info balancer.PickInfo) (balancer.PickResult, error) {
 					if !test.useDefaultPick {
@@ -569,15 +571,8 @@ func TestPick(t *testing.T) {
 			// If the test specified that a new RLS request should be made,
 			// verify it.
 			if test.newRLSRequest {
-				timer := time.NewTimer(defaultTestTimeout)
-				select {
-				case err := <-rlsCh:
-					timer.Stop()
-					if err != nil {
-						t.Fatal(err)
-					}
-				case <-timer.C:
-					t.Fatal("Timeout waiting for RLS request to be sent out")
+				if rlsErr, err := rlsCh.Receive(); err != nil || rlsErr != nil {
+					t.Fatalf("startRLS() = %v, error receiving from channel: %v", rlsErr, err)
 				}
 			}
 		})
