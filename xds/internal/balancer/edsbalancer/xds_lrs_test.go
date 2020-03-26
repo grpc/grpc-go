@@ -48,10 +48,10 @@ func (s) TestXDSLoadReporting(t *testing.T) {
 
 	gotCluster, err := xdsC.WaitForWatchEDS()
 	if err != nil {
-		t.Fatalf("xdsClient.WatchEDS failed with error: %v", err)
+		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
 	if gotCluster != testEDSClusterName {
-		t.Fatalf("xdsClient.WatchEDS() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
+		t.Fatalf("xdsClient.WatchEndpoints() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
 	}
 
 	got, err := xdsC.WaitForReportLoad()

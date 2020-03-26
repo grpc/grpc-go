@@ -48,7 +48,10 @@ type watchInfo struct {
 	target  []string
 	state   watchState
 
-	callback    interface{}
+	ldsCallback ldsCallbackFunc
+	rdsCallback rdsCallbackFunc
+	cdsCallback cdsCallbackFunc
+	edsCallback edsCallbackFunc
 	expiryTimer *time.Timer
 }
 
@@ -76,12 +79,12 @@ type ackInfo struct {
 type ldsUpdate struct {
 	routeName string
 }
-type ldsCallback func(ldsUpdate, error)
+type ldsCallbackFunc func(ldsUpdate, error)
 
 type rdsUpdate struct {
 	clusterName string
 }
-type rdsCallback func(rdsUpdate, error)
+type rdsCallbackFunc func(rdsUpdate, error)
 
 // CDSUpdate contains information from a received CDS response, which is of
 // interest to the registered CDS watcher.
@@ -92,6 +95,6 @@ type CDSUpdate struct {
 	// EnableLRS indicates whether or not load should be reported through LRS.
 	EnableLRS bool
 }
-type cdsCallback func(CDSUpdate, error)
+type cdsCallbackFunc func(CDSUpdate, error)
 
-type edsCallback func(*EDSUpdate, error)
+type edsCallbackFunc func(*EDSUpdate, error)

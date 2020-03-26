@@ -87,7 +87,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		// that we are watching for in this response does not mean that the
 		// server does not know about it.
 		wi.stopTimer()
-		wi.callback.(rdsCallback)(rdsUpdate{clusterName: returnCluster}, nil)
+		wi.rdsCallback(rdsUpdate{clusterName: returnCluster}, nil)
 	}
 	return nil
 }

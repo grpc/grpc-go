@@ -148,6 +148,20 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 			t.Errorf("The second 50%% picks should be non-drops, got error %v", err)
 		}
 	}
+
+	// The same locality, remove drops.
+	clab6 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab6.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[2:3], nil)
+	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab6.Build()))
+
+	// Pick without drops.
+	p6 := <-cc.newPickerCh
+	for i := 0; i < 5; i++ {
+		gotSCSt, _ := p6.Pick(balancer.PickInfo{})
+		if !cmp.Equal(gotSCSt.SubConn, sc3, cmp.AllowUnexported(testSubConn{})) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc3)
+		}
+	}
 }
 
 // 2 locality
@@ -589,22 +603,22 @@ func (s) TestDropPicker(t *testing.T) {
 		{
 			name: "one drop",
 			drops: []*dropper{
-				newDropper(1, 2, ""),
+				newDropper(xdsclient.OverloadDropConfig{Numerator: 1, Denominator: 2}),
 			},
 		},
 		{
 			name: "two drops",
 			drops: []*dropper{
-				newDropper(1, 3, ""),
-				newDropper(1, 2, ""),
+				newDropper(xdsclient.OverloadDropConfig{Numerator: 1, Denominator: 3}),
+				newDropper(xdsclient.OverloadDropConfig{Numerator: 1, Denominator: 2}),
 			},
 		},
 		{
 			name: "three drops",
 			drops: []*dropper{
-				newDropper(1, 3, ""),
-				newDropper(1, 4, ""),
-				newDropper(1, 2, ""),
+				newDropper(xdsclient.OverloadDropConfig{Numerator: 1, Denominator: 3}),
+				newDropper(xdsclient.OverloadDropConfig{Numerator: 1, Denominator: 4}),
+				newDropper(xdsclient.OverloadDropConfig{Numerator: 1, Denominator: 2}),
 			},
 		},
 	}
@@ -620,7 +634,7 @@ func (s) TestDropPicker(t *testing.T) {
 				wantCount = pickCount
 			)
 			for _, dp := range tt.drops {
-				wantCount = wantCount * int(dp.denominator-dp.numerator) / int(dp.denominator)
+				wantCount = wantCount * int(dp.c.Denominator-dp.c.Numerator) / int(dp.c.Denominator)
 			}
 
 			for i := 0; i < pickCount; i++ {

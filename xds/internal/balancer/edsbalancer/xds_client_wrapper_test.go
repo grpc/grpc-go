@@ -154,10 +154,10 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC))
 	gotCluster, err := xdsC.WaitForWatchEDS()
 	if err != nil {
-		t.Fatalf("xdsClient.WatchEDS failed with error: %v", err)
+		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
 	if gotCluster != testEDSClusterName {
-		t.Fatalf("xdsClient.WatchEDS() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
+		t.Fatalf("xdsClient.WatchEndpoints() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
 	}
 	xdsC.InvokeWatchEDSCallback(nil, errors.New("EDS watch callback error"))
 
@@ -189,10 +189,10 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC1))
 	gotCluster, err := xdsC1.WaitForWatchEDS()
 	if err != nil {
-		t.Fatalf("xdsClient.WatchEDS failed with error: %v", err)
+		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
 	if gotCluster != testEDSClusterName {
-		t.Fatalf("xdsClient.WatchEDS() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
+		t.Fatalf("xdsClient.WatchEndpoints() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
 	}
 
 	// Pass a new client in the attributes. Verify that the watch is
@@ -203,10 +203,10 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC2))
 	gotCluster, err = xdsC2.WaitForWatchEDS()
 	if err != nil {
-		t.Fatalf("xdsClient.WatchEDS failed with error: %v", err)
+		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
 	if gotCluster != testEDSClusterName {
-		t.Fatalf("xdsClient.WatchEDS() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
+		t.Fatalf("xdsClient.WatchEndpoints() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
 	}
 
 	if err := xdsC1.WaitForClose(); err != testutils.ErrRecvTimeout {

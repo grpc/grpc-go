@@ -36,10 +36,10 @@ type watchHandleTestcase struct {
 
 	// Only one of the following should be non-nil. The one corresponding with
 	// typeURL will be called.
-	ldsWatch      func(target string, ldsCb ldsCallback) (cancel func())
-	rdsWatch      func(routeName string, rdsCb rdsCallback) (cancel func())
-	cdsWatch      func(clusterName string, cdsCb cdsCallback) (cancel func())
-	edsWatch      func(clusterName string, edsCb edsCallback) (cancel func())
+	ldsWatch      func(target string, ldsCb ldsCallbackFunc) (cancel func())
+	rdsWatch      func(routeName string, rdsCb rdsCallbackFunc) (cancel func())
+	cdsWatch      func(clusterName string, cdsCb cdsCallbackFunc) (cancel func())
+	edsWatch      func(clusterName string, edsCb edsCallbackFunc) (cancel func())
 	watchReqChan  *testutils.Channel // The request sent for watch will be sent to this channel.
 	handleXDSResp func(response *xdspb.DiscoveryResponse) error
 }

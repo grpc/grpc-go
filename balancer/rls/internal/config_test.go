@@ -30,10 +30,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"google.golang.org/grpc/balancer"
+	_ "google.golang.org/grpc/balancer/grpclb" // grpclb for config parsing.
 	rlspb "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
-	"google.golang.org/grpc/resolver"
-
-	_ "google.golang.org/grpc/balancer/grpclb"               // grpclb for config parsing.
 	_ "google.golang.org/grpc/internal/resolver/passthrough" // passthrough resolver.
 )
 
@@ -61,6 +59,7 @@ func (lbCfg *lbConfig) Equal(other *lbConfig) bool {
 		lbCfg.staleAge == other.staleAge &&
 		lbCfg.cacheSizeBytes == other.cacheSizeBytes &&
 		lbCfg.rpStrategy == other.rpStrategy &&
+		lbCfg.defaultTarget == other.defaultTarget &&
 		lbCfg.cpName == other.cpName &&
 		lbCfg.cpTargetField == other.cpTargetField &&
 		cmp.Equal(lbCfg.cpConfig, other.cpConfig)
@@ -103,12 +102,13 @@ func TestParseConfig(t *testing.T) {
 				"childPolicyConfigTargetFieldName": "service_name"
 			}`),
 			wantCfg: &lbConfig{
-				lookupService:        resolver.Target{Scheme: "passthrough", Endpoint: "target"},
+				lookupService:        "passthrough:///target",
 				lookupServiceTimeout: 10 * time.Second, // This is the default value.
 				maxAge:               5 * time.Minute,  // This is max maxAge.
 				staleAge:             time.Duration(0), // StaleAge is ignore because it was higher than maxAge.
 				cacheSizeBytes:       1000,
 				rpStrategy:           rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
+				defaultTarget:        "passthrough:///default",
 				cpName:               "grpclb",
 				cpTargetField:        "service_name",
 				cpConfig:             map[string]json.RawMessage{"childPolicy": json.RawMessage(`[{"pickfirst": {}}]`)},
@@ -134,12 +134,13 @@ func TestParseConfig(t *testing.T) {
 				"childPolicyConfigTargetFieldName": "service_name"
 			}`),
 			wantCfg: &lbConfig{
-				lookupService:        resolver.Target{Scheme: "passthrough", Endpoint: "target"},
+				lookupService:        "passthrough:///target",
 				lookupServiceTimeout: 100 * time.Second,
 				maxAge:               60 * time.Second,
 				staleAge:             50 * time.Second,
 				cacheSizeBytes:       1000,
 				rpStrategy:           rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
+				defaultTarget:        "passthrough:///default",
 				cpName:               "grpclb",
 				cpTargetField:        "service_name",
 				cpConfig:             map[string]json.RawMessage{"childPolicy": json.RawMessage(`[{"pickfirst": {}}]`)},
