@@ -30,12 +30,14 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
+
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/status/statustype"
 )
 
 // StatusError is an alias of a status proto.  It implements error and Status,
-// and a nil StatusError should never be returned by this package.
+// and a nil statusError should never be returned by this package.
 type StatusError spb.Status
 
 func (se *StatusError) Error() string {
@@ -43,8 +45,8 @@ func (se *StatusError) Error() string {
 	return fmt.Sprintf("rpc error: code = %s desc = %s", codes.Code(p.GetCode()), p.GetMessage())
 }
 
-func (se *StatusError) GRPCStatus() *spb.Status {
-	return (*spb.Status)(se)
+func (se *StatusError) GRPCStatus() *statustype.Status {
+	return statustype.FromProto((*spb.Status)(se))
 }
 
 // Is implements future error.Is functionality.
@@ -54,6 +56,5 @@ func (se *StatusError) Is(target error) bool {
 	if !ok {
 		return false
 	}
-
 	return proto.Equal((*spb.Status)(se), (*spb.Status)(tse))
 }
