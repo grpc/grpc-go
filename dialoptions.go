@@ -308,9 +308,11 @@ func WithInsecure() DialOption {
 	})
 }
 
-// WithoutProxy returns a DialOption which disables the use of proxies for this
+// WithNoProxy returns a DialOption which disables the use of proxies for this
 // ClientConn. This is ignored if WithDialer or WithContextDialer are used.
-func WithoutProxy() DialOption {
+//
+// This API is EXPERIMENTAL.
+func WithNoProxy() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.withoutProxy = true
 	})
