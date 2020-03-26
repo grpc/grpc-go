@@ -184,13 +184,13 @@ func TestEnd2End(t *testing.T) {
 		clientRoot       *x509.CertPool
 		clientGetRoot    func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		clientVerifyFunc CustomVerificationFunc
-		clientVType      VerificationAuthType
+		clientVType      VerificationType
 		serverCert       []tls.Certificate
 		serverGetCert    func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 		serverRoot       *x509.CertPool
 		serverGetRoot    func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		serverVerifyFunc CustomVerificationFunc
-		serverVType      VerificationAuthType
+		serverVType      VerificationType
 	}{
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert clientPeer1 and clientTrust1, server with serverPeer1 and serverTrust1.

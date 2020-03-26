@@ -17,7 +17,7 @@
  */
 
 // Package advancedtls is a utility library containing functions to construct
-// credentials.TransportCredentials that can perform credential reloading and custom
+// credentials. TransportCredentials that can perform credential reloading and custom
 // verification check.
 package advancedtls
 
@@ -33,7 +33,9 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// VerificationFuncParams contains the parameters available to users when implementing CustomVerificationFunc.
+// VerificationFuncParams contains the parameters available to users when implementing |CustomVerificationFunc|.
+// The fields contain in this struct are used when making custom verification decisions, and are hence read-only.
+// Setting these fields wouldn't have any effect.
 type VerificationFuncParams struct {
 	// This field is only meaningful for client side. On server side, this field would be an empty string.
 	ServerName     string
@@ -41,7 +43,7 @@ type VerificationFuncParams struct {
 	VerifiedChains [][]*x509.Certificate
 }
 
-// VerificationResults contains the information about results of CustomVerificationFunc.
+// VerificationResults contains the information about results of |CustomVerificationFunc|.
 // VerificationResults is an empty struct for now. It may be extended in the future to include more information.
 type VerificationResults struct{}
 
@@ -73,13 +75,13 @@ type RootCertificateOptions struct {
 	GetRootCAs func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 }
 
-// VerificationAuthType is the enum type that represents different levels of verification users
+// VerificationType is the enum type that represents different levels of verification users
 // could set, both on client side and on server side.
-type VerificationAuthType int
+type VerificationType int
 
 const (
 	// CertAndHostVerification indicates doing both certificate signature check and hostname check.
-	CertAndHostVerification VerificationAuthType = iota
+	CertAndHostVerification VerificationType = iota
 	// CertVerification indicates doing certificate signature check only.
 	CertVerification
 	// SkipVerification indicates skipping both certificate signature check and hostname check.
@@ -91,9 +93,9 @@ const (
 // Certificates or GetClientCertificate indicates the certificates sent from the client to the
 // server to prove client's identities. The rules for setting these two fields are:
 // If requiring mutual authentication on server side:
-//     Either Certificates or GetClientCertificate must be set; the other will be ignored
+//     Either Certificates or GetClientCertificate must be set; the other will be ignored.
 // Otherwise:
-//     Nothing needed(the two fields will be ignored)
+//     Nothing needed(the two fields will be ignored).
 type ClientOptions struct {
 	// If field Certificates is set, field GetClientCertificate will be ignored. The client will use
 	// Certificates every time when asked for a certificate, without performing certificate reloading.
@@ -115,18 +117,18 @@ type ClientOptions struct {
 	// verification and hostname verification.
 	// If setting to |CertVerification|, we would only perform verification for the certificate sent from
 	// the server. Setting this field without proper custom verification check would leave the
-	// application to the MITM attack.
+	// application susceptible to the MITM attack.
 	// If setting to |SkipVerification|, we would skip all the verification. Setting this field without
 	// proper custom verification check would leave the peer completely unauthenticated, and is
 	// highly discouraged unless you really have reasons to do so.
-	VType VerificationAuthType
+	VType VerificationType
 }
 
 // ServerOptions contains all the fields and functions needed to be filled by the client.
 // General rules for certificate setting on server side:
 // Certificates or GetClientCertificate indicates the certificates sent from the server to
 // the client to prove server's identities. The rules for setting these two fields are:
-// Either Certificates or GetCertificate must be set; the other will be ignored
+// Either Certificates or GetCertificate must be set; the other will be ignored.
 type ServerOptions struct {
 	// If field Certificates is set, field GetClientCertificate will be ignored. The server will use
 	// Certificates every time when asked for a certificate, without performing certificate reloading.
@@ -150,17 +152,17 @@ type ServerOptions struct {
 	// hostname check on server side.
 	// If setting to |CertVerification|, we would perform verification for certificates sent from the
 	// client. Setting this field without proper custom authorization would leave the application
-	// to the MITM attack.
+	// susceptible to the MITM attack.
 	// If setting to |SkipVerification|, we would skip all the verification. Setting this field without
 	// proper custom authorization would leave the peer completely unauthenticated, and is
 	// highly discouraged unless you really have reasons to do so.
-	VType VerificationAuthType
+	VType VerificationType
 }
 
 func (o *ClientOptions) config() (*tls.Config, error) {
-	if o.RootCACerts == nil && o.GetRootCAs == nil && o.VerifyPeer == nil {
+	if o.VType == SkipVerification && o.VerifyPeer == nil {
 		return nil, fmt.Errorf(
-			"client needs to provide root CA certs, or a custom verification function")
+			"client needs to provide custom verification mechanism if choose to skip default verification")
 	}
 	// We have to set InsecureSkipVerify to true to skip the default checks and use the
 	// verification function we built from buildVerifyFunc.
@@ -178,8 +180,9 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 	if o.Certificates == nil && o.GetCertificate == nil {
 		return nil, fmt.Errorf("either Certificates or GetCertificate must be specified")
 	}
-	if o.RequireClientCert && o.GetRootCAs == nil && o.RootCACerts == nil && o.VerifyPeer == nil {
-		return nil, fmt.Errorf("server needs to provide some verification mechanisms if requiring client cert")
+	if o.RequireClientCert && o.VType == SkipVerification && o.VerifyPeer == nil {
+		return nil, fmt.Errorf(
+			"server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
 	clientAuth := tls.NoClientCert
 	if o.RequireClientCert {
@@ -204,7 +207,7 @@ type advancedTLSCreds struct {
 	verifyFunc CustomVerificationFunc
 	getRootCAs func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 	isClient   bool
-	vType      VerificationAuthType
+	vType      VerificationType
 }
 
 func (c advancedTLSCreds) Info() credentials.ProtocolInfo {
@@ -283,8 +286,8 @@ func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 // The function buildVerifyFunc is used when users want root cert reloading, and possibly custom
 // verification check.
 // We have to build our own verification function here because current tls module:
-// 1. does not have a good support on root cert reloading
-// 2. will ignore basic certificate check when setting InsecureSkipVerify to true
+// 1. does not have a good support on root cert reloading.
+// 2. will ignore basic certificate check when setting InsecureSkipVerify to true.
 func buildVerifyFunc(c *advancedTLSCreds,
 	serverName string,
 	rawConn net.Conn) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
@@ -298,7 +301,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 			} else {
 				rootCAs = c.config.ClientCAs
 			}
-			// reload root CA certs
+			// Reload root CA certs.
 			if rootCAs == nil && c.getRootCAs != nil {
 				results, err := c.getRootCAs(&GetRootCAsParams{
 					RawConn:  rawConn,
@@ -309,7 +312,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				}
 				rootCAs = results.TrustCerts
 			}
-			// verify peers' certificates against RootCAs and get verifiedChains
+			// Verify peers' certificates against RootCAs and get verifiedChains.
 			certs := make([]*x509.Certificate, len(rawCerts))
 			for i, asn1Data := range rawCerts {
 				cert, err := x509.ParseCertificate(asn1Data)
@@ -331,7 +334,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 			for _, cert := range certs[1:] {
 				opts.Intermediates.AddCert(cert)
 			}
-			// perform default hostname check if specified
+			// Perform default hostname check if specified.
 			var err error
 			if c.isClient && c.vType == CertAndHostVerification && serverName != "" {
 				opts.DNSName = serverName
@@ -341,7 +344,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				return err
 			}
 		}
-		// perform custom verification check if specified
+		// Perform custom verification check if specified.
 		if c.verifyFunc != nil {
 			_, err := c.verifyFunc(&VerificationFuncParams{
 				ServerName:     serverName,

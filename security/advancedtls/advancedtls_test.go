@@ -77,7 +77,7 @@ func TestClientServerHandshake(t *testing.T) {
 		clientRoot                 *x509.CertPool
 		clientGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		clientVerifyFunc           CustomVerificationFunc
-		clientVType                VerificationAuthType
+		clientVType                VerificationType
 		clientExpectCreateError    bool
 		clientExpectHandshakeError bool
 		serverMutualTLS            bool
@@ -86,7 +86,7 @@ func TestClientServerHandshake(t *testing.T) {
 		serverRoot                 *x509.CertPool
 		serverGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		serverVerifyFunc           CustomVerificationFunc
-		serverVType                VerificationAuthType
+		serverVType                VerificationType
 		serverExpectError          bool
 	}{
 		// Client: nil setting
