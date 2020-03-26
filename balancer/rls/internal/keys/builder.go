@@ -131,14 +131,9 @@ func (bm BuilderMap) Equal(am BuilderMap) bool {
 		return false
 	}
 
-	var keys []string
-	for k := range bm {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		bBuilder := bm[k]
-		aBuilder, ok := am[k]
+	for key := range bm {
+		bBuilder := bm[key]
+		aBuilder, ok := am[key]
 		if !ok {
 			return false
 		}
@@ -165,6 +160,9 @@ type builder struct {
 
 // Equal reports whether b and a represent equivalent key builders.
 func (b builder) Equal(a builder) bool {
+	if (b.matchers == nil) != (a.matchers == nil) {
+		return false
+	}
 	if len(b.matchers) != len(a.matchers) {
 		return false
 	}
@@ -193,6 +191,9 @@ type matcher struct {
 // Equal reports if m and are are equivalent matchers.
 func (m matcher) Equal(a matcher) bool {
 	if m.key != a.key {
+		return false
+	}
+	if (m.names == nil) != (a.names == nil) {
 		return false
 	}
 	if len(m.names) != len(a.names) {

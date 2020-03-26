@@ -441,7 +441,7 @@ func TestBuilderEqual(t *testing.T) {
 			desc:      "nil and non-nil builders",
 			a:         builder{matchers: nil},
 			b:         builder{matchers: []matcher{}},
-			wantEqual: true,
+			wantEqual: false,
 		},
 		{
 			desc:      "empty and non-empty builders",
