@@ -198,7 +198,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			network, addr := parseDialTarget(addr)
 			return (&net.Dialer{}).DialContext(ctx, network, addr)
 		}
-		if !cc.dopts.withoutProxy {
+		if cc.dopts.withProxy {
 			cc.dopts.copts.Dialer = newProxyDialer(cc.dopts.copts.Dialer)
 		}
 	}
