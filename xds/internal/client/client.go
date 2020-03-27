@@ -52,7 +52,6 @@ type Options struct {
 type xdsv2Client interface {
 	addWatch(resourceType string, resourceName string)
 	removeWatch(resourceType string, resourceName string)
-
 	close()
 }
 

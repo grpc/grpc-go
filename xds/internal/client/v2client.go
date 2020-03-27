@@ -36,8 +36,11 @@ type adsStream adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClien
 
 var _ xdsv2Client = &v2Client{}
 
-// Interface to be overridden in test.
-type updateReceiver interface {
+// updateHandler handles the update (parsed from xds responses). It's
+// implemented by the upper level Client.
+//
+// It's an interface to be overridden in test.
+type updateHandler interface {
 	newUpdate(typeURL string, d map[string]interface{})
 }
 
@@ -48,7 +51,7 @@ type updateReceiver interface {
 // This client's main purpose is to make the RPC, build/parse proto messages,
 // and do ACK/NACK. It's a naive implementation that sends whatever the upper
 // layer tells it to send. It will call the callback with everything in every
-// response. It doesn't keep cache, or check for duplicates.
+// response. It doesn't keep a cache of responses, or check for duplicates.
 //
 // The reason for splitting this out from the top level xdsClient object is
 // because there is already an xDS v3Aplha API in development. If and when we
@@ -56,7 +59,7 @@ type updateReceiver interface {
 type v2Client struct {
 	ctx       context.Context
 	cancelCtx context.CancelFunc
-	parent    updateReceiver
+	parent    updateHandler
 
 	// ClientConn to the xDS gRPC server. Owned by the parent xdsClient.
 	cc        *grpc.ClientConn
@@ -65,8 +68,11 @@ type v2Client struct {
 
 	logger *grpclog.PrefixLogger
 
+	// streamCh is the channel where new ADS streams are pushed to (when the old
+	// stream is broken). It's monitored by the sending goroutine, so requests
+	// are sent to the most up-to-date stream.
 	streamCh chan adsStream
-	// sendCh in the channel onto which watchAction objects are pushed by the
+	// sendCh is the channel onto which watchAction objects are pushed by the
 	// watch API, and it is read and acted upon by the send() goroutine.
 	sendCh *buffer.Unbounded
 
@@ -94,7 +100,7 @@ type v2Client struct {
 }
 
 // newV2Client creates a new v2Client initialized with the passed arguments.
-func newV2Client(parent updateReceiver, cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration, logger *grpclog.PrefixLogger) *v2Client {
+func newV2Client(parent updateHandler, cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration, logger *grpclog.PrefixLogger) *v2Client {
 	v2c := &v2Client{
 		cc:        cc,
 		parent:    parent,
@@ -264,7 +270,7 @@ func (v2c *v2Client) processWatchInfo(t *watchAction) (target []string, typeURL,
 	// stream is recreated.
 	version = v2c.versionMap[typeURL]
 	nonce = v2c.nonceMap[typeURL]
-	return
+	return target, typeURL, version, nonce, send
 }
 
 type ackAction struct {
@@ -286,7 +292,7 @@ func (v2c *v2Client) processAckInfo(t *ackAction) (target []string, typeURL, ver
 		// canceled while the ackAction is in queue), because there's no resource
 		// name. And if we send a request with empty resource name list, the
 		// server may treat it as a wild card and send us everything.
-		return // This returns all zero values, and false for send.
+		return nil, "", "", "", false
 	}
 
 	send = true
@@ -306,7 +312,7 @@ func (v2c *v2Client) processAckInfo(t *ackAction) (target []string, typeURL, ver
 
 	nonce = t.nonce
 	v2c.nonceMap[typeURL] = nonce
-	return
+	return target, typeURL, version, nonce, send
 }
 
 // send is a separate goroutine for sending watch requests on the xds stream.
@@ -331,8 +337,7 @@ func (v2c *v2Client) send() {
 		select {
 		case <-v2c.ctx.Done():
 			return
-		case newStream := <-v2c.streamCh:
-			stream = newStream
+		case stream = <-v2c.streamCh:
 			if !v2c.sendExisting(stream) {
 				// send failed, clear the current stream.
 				stream = nil

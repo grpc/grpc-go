@@ -127,7 +127,7 @@ func (s) TestNew(t *testing.T) {
 }
 
 type testXDSV2Client struct {
-	r updateReceiver
+	r updateHandler
 
 	addWatches    map[string]chan string
 	removeWatches map[string]chan string
@@ -144,7 +144,7 @@ func overrideNewXDSV2Client() (<-chan *testXDSV2Client, func()) {
 	return ch, func() { newXDSV2Client = oldNewXDSV2Client }
 }
 
-func newTestXDSV2Client(r updateReceiver) *testXDSV2Client {
+func newTestXDSV2Client(r updateHandler) *testXDSV2Client {
 	addWatches := make(map[string]chan string)
 	addWatches[ldsURL] = make(chan string, 10)
 	addWatches[rdsURL] = make(chan string, 10)

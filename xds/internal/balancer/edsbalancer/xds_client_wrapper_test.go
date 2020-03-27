@@ -110,25 +110,25 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 				EDSServiceName: test.edsServiceName,
 			}, nil)
 
-			var (
-				req interface{}
-				err error
-			)
-			for {
+			var req interface{}
+			for i := 0; i < 2; i++ {
 				// Each new watch will first cancel the previous watch, and then
 				// start a new watch. The cancel will trigger a request as well.
-				// This loop keeps receiving until error, and keeps the last
-				// request.
-				r, e := fakeServer.XDSRequestChan.TimedReceive(time.Millisecond * 100)
-				if e != nil {
-					t.Logf("EDS RPC failed with err: %v", err)
-					err = e
-					break
+				// This loop receives the two requests and keeps the last.
+				r, err := fakeServer.XDSRequestChan.TimedReceive(time.Millisecond * 100)
+				if err != nil {
+					t.Fatalf("i: %v, expected xDS request, but got error: %v", i, err)
 				}
 				req = r
+				// If edsServiceName is empty string, the client doesn't cancel
+				// and resend request. The request from channel was from client
+				// init, and we don't expect a second request.
+				if test.edsServiceName == "" {
+					break
+				}
 			}
-			if req == nil {
-				t.Fatalf("Expected xDS request, but got error: %v", err)
+			if r, err := fakeServer.XDSRequestChan.TimedReceive(time.Millisecond * 100); err == nil {
+				t.Fatalf("Expected req channel recv timeout, but got request: %v", r)
 			}
 			edsReq := req.(*fakeserver.Request)
 			if edsReq.Err != nil {

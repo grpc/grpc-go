@@ -32,7 +32,8 @@ import (
 // the registered watcher callback.
 func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 	v2c.mu.Lock()
-	defer v2c.mu.Unlock()
+	hostname := v2c.hostname
+	v2c.mu.Unlock()
 
 	returnUpdate := make(map[string]interface{})
 	for _, r := range resp.GetResources() {
@@ -47,7 +48,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v. Picking routes for current watching hostname %v", rc.GetName(), rc, rc, v2c.hostname)
 
 		// Use the hostname (resourceName for LDS) to find the routes.
-		cluster := getClusterFromRouteConfiguration(rc, v2c.hostname)
+		cluster := getClusterFromRouteConfiguration(rc, hostname)
 		if cluster == "" {
 			return fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v", rc)
 		}

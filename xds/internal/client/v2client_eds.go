@@ -118,9 +118,6 @@ func ParseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) EndpointsUpdate
 }
 
 func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
-	v2c.mu.Lock()
-	defer v2c.mu.Unlock()
-
 	returnUpdate := make(map[string]interface{})
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny

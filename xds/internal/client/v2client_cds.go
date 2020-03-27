@@ -28,9 +28,6 @@ import (
 // handleCDSResponse processes an CDS response received from the xDS server. On
 // receipt of a good response, it also invokes the registered watcher callback.
 func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
-	v2c.mu.Lock()
-	defer v2c.mu.Unlock()
-
 	returnUpdate := make(map[string]interface{})
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
