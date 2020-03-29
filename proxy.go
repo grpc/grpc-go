@@ -118,10 +118,10 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr stri
 // newProxyDialer returns a dialer that connects to proxy first if necessary.
 // The returned dialer checks if a proxy is necessary, dial to the proxy with the
 // provided dialer, does HTTP CONNECT handshake and returns the connection.
-func newProxyDialer(dialer func(context.Context, string) (net.Conn, error)) func(context.Context, string) (net.Conn, error) {
+func newProxyDialer(dialer func(context.Context, string) (net.Conn, error), endpoint string) func(context.Context, string) (net.Conn, error) {
 	return func(ctx context.Context, addr string) (conn net.Conn, err error) {
 		var newAddr string
-		proxyURL, err := mapAddress(ctx, addr)
+		proxyURL, err := mapAddress(ctx, endpoint)
 		if err != nil {
 			if err != errDisabled {
 				return nil, err

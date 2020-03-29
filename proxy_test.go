@@ -143,7 +143,7 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 			return net.DialTimeout("tcp", addr, time.Until(deadline))
 		}
 		return net.Dial("tcp", addr)
-	})
+	}, blis.Addr().String())
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	c, err := dialer(ctx, blis.Addr().String())
