@@ -246,6 +246,9 @@ func (v2c *v2Client) processWatchInfo(t *watchAction) (target []string, typeURL,
 
 	if t.remove {
 		delete(current, t.resource)
+		if len(current) == 0 {
+			delete(v2c.watchMap, t.typeURL)
+		}
 	} else {
 		current[t.resource] = true
 	}
