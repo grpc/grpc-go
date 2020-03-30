@@ -52,12 +52,12 @@ func New(c codes.Code, msg string) *Status {
 
 // Newf returns New(c, fmt.Sprintf(format, a...)).
 func Newf(c codes.Code, format string, a ...interface{}) *Status {
-	return status.Newf(c, format, a...)
+	return New(c, fmt.Sprintf(format, a...))
 }
 
 // Error returns an error representing c and msg.  If c is OK, returns nil.
 func Error(c codes.Code, msg string) error {
-	return status.New(c, msg).Err()
+	return New(c, msg).Err()
 }
 
 // Errorf returns Error(c, fmt.Sprintf(format, a...)).
@@ -120,10 +120,10 @@ func FromContextError(err error) *Status {
 	case nil:
 		return nil
 	case context.DeadlineExceeded:
-		return status.New(codes.DeadlineExceeded, err.Error())
+		return New(codes.DeadlineExceeded, err.Error())
 	case context.Canceled:
-		return status.New(codes.Canceled, err.Error())
+		return New(codes.Canceled, err.Error())
 	default:
-		return status.New(codes.Unknown, err.Error())
+		return New(codes.Unknown, err.Error())
 	}
 }
