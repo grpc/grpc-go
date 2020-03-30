@@ -83,7 +83,7 @@ type v2Client struct {
 	// messages. When the user of this client object cancels a watch call,
 	// these are set to nil. All accesses to the map protected and any value
 	// inside the map should be protected with the above mutex.
-	watchMap map[string]*stringSet
+	watchMap map[string]map[string]bool
 	// versionMap contains the version that was acked (the version in the ack
 	// request that was sent on wire). The key is typeURL, the value is the
 	// version string, becaues the versions for different resource types should
@@ -112,7 +112,7 @@ func newV2Client(parent updateHandler, cc *grpc.ClientConn, nodeProto *corepb.No
 		streamCh: make(chan adsStream, 1),
 		sendCh:   buffer.NewUnbounded(),
 
-		watchMap:   make(map[string]*stringSet),
+		watchMap:   make(map[string]map[string]bool),
 		versionMap: make(map[string]string),
 		nonceMap:   make(map[string]string),
 	}
@@ -216,7 +216,7 @@ func (v2c *v2Client) sendExisting(stream adsStream) bool {
 	v2c.nonceMap = make(map[string]string)
 
 	for typeURL, s := range v2c.watchMap {
-		if !v2c.sendRequest(stream, s.toSlice(), typeURL, "", "") {
+		if !v2c.sendRequest(stream, mapToSlice(s), typeURL, "", "") {
 			return false
 		}
 	}
@@ -237,17 +237,17 @@ func (v2c *v2Client) processWatchInfo(t *watchAction) (target []string, typeURL,
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
-	var current *stringSet
+	var current map[string]bool
 	current, ok := v2c.watchMap[t.typeURL]
 	if !ok {
-		current = newStringSet()
+		current = make(map[string]bool)
 		v2c.watchMap[t.typeURL] = current
 	}
 
 	if t.remove {
-		current.remove(t.resource)
+		delete(current, t.resource)
 	} else {
-		current.add(t.resource)
+		current[t.resource] = true
 	}
 
 	// Special handling for LDS, because RDS needs the LDS resource_name for
@@ -255,7 +255,7 @@ func (v2c *v2Client) processWatchInfo(t *watchAction) (target []string, typeURL,
 	if t.typeURL == ldsURL {
 		// Set hostname to the first LDS resource_name, and reset it when the
 		// LDS watch is removed.
-		if l := current.len(); l == 1 {
+		if l := len(current); l == 1 {
 			v2c.hostname = t.resource
 		} else if l == 0 {
 			v2c.hostname = ""
@@ -264,7 +264,7 @@ func (v2c *v2Client) processWatchInfo(t *watchAction) (target []string, typeURL,
 
 	send = true
 	typeURL = t.typeURL
-	target = current.toSlice()
+	target = mapToSlice(current)
 	// We don't reset version or nonce when a new watch is started. The version
 	// and nonce from previous response are carried by the request unless the
 	// stream is recreated.
@@ -286,7 +286,7 @@ func (v2c *v2Client) processAckInfo(t *ackAction) (target []string, typeURL, ver
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 	s, ok := v2c.watchMap[t.typeURL]
-	if !ok || s.len() == 0 {
+	if !ok || len(s) == 0 {
 		// We don't send the request ack if there's no active watch (this can be
 		// either the server sends responses before any request, or the watch is
 		// canceled while the ackAction is in queue), because there's no resource
@@ -297,7 +297,7 @@ func (v2c *v2Client) processAckInfo(t *ackAction) (target []string, typeURL, ver
 
 	send = true
 	typeURL = t.typeURL
-	target = s.toSlice()
+	target = mapToSlice(s)
 
 	version = t.version
 	if version == "" {

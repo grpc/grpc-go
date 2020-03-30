@@ -44,19 +44,19 @@ func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	var ccb func()
 	switch wiu.wi.typeURL {
 	case ldsURL:
-		if s, ok := c.ldsWatchers[wiu.wi.target]; ok && s.has(wiu.wi) {
+		if s, ok := c.ldsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
 			ccb = func() { wiu.wi.ldsCallback(wiu.update.(ldsUpdate), wiu.err) }
 		}
 	case rdsURL:
-		if s, ok := c.rdsWatchers[wiu.wi.target]; ok && s.has(wiu.wi) {
+		if s, ok := c.rdsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
 			ccb = func() { wiu.wi.rdsCallback(wiu.update.(rdsUpdate), wiu.err) }
 		}
 	case cdsURL:
-		if s, ok := c.cdsWatchers[wiu.wi.target]; ok && s.has(wiu.wi) {
+		if s, ok := c.cdsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
 			ccb = func() { wiu.wi.cdsCallback(wiu.update.(ClusterUpdate), wiu.err) }
 		}
 	case edsURL:
-		if s, ok := c.edsWatchers[wiu.wi.target]; ok && s.has(wiu.wi) {
+		if s, ok := c.edsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
 			ccb = func() { wiu.wi.edsCallback(wiu.update.(EndpointsUpdate), wiu.err) }
 		}
 	}
@@ -76,7 +76,7 @@ func (c *Client) newUpdate(typeURL string, d map[string]interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	var watchers map[string]*watchInfoSet
+	var watchers map[string]map[*watchInfo]bool
 	switch typeURL {
 	case ldsURL:
 		watchers = c.ldsWatchers
@@ -89,9 +89,9 @@ func (c *Client) newUpdate(typeURL string, d map[string]interface{}) {
 	}
 	for name, update := range d {
 		if s, ok := watchers[name]; ok {
-			s.forEach(func(wi *watchInfo) {
+			for wi := range s {
 				c.scheduleCallback(wi, update, nil)
-			})
+			}
 		}
 	}
 	// TODO: for LDS and CDS, handle removing resources, which means if a

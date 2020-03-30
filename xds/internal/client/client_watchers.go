@@ -47,7 +47,7 @@ type watchInfo struct {
 
 func (c *Client) watch(wi *watchInfo) (cancel func()) {
 	c.logger.Debugf("new watch for type %v, resource name %v", wi.typeURL, wi.target)
-	var watchers map[string]*watchInfoSet
+	var watchers map[string]map[*watchInfo]bool
 	switch wi.typeURL {
 	case ldsURL:
 		watchers = c.ldsWatchers
@@ -68,13 +68,13 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 		// If this type+name is already being watched, will not notify the
 		// underlying xdsv2Client.
 		c.logger.Debugf("first watch for type %v, resource name %v, will send a new xDS request", wi.typeURL, wi.target)
-		s = newWatchInfoSet()
+		s = make(map[*watchInfo]bool)
 		watchers[resourceName] = s
 		c.v2c.addWatch(wi.typeURL, resourceName)
 	}
 	// No matter what, add the new watcher to the set, so it's callback will be
 	// call for new responses.
-	s.add(wi)
+	s[wi] = true
 
 	// If the resource is in cache, call the callback with the value.
 	switch wi.typeURL {
@@ -108,8 +108,8 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 			wi.expiryTimer.Stop()
 			// Remove this watcher, so it's callback will not be called in the
 			// future.
-			s.remove(wi)
-			if s.len() == 0 {
+			delete(s, wi)
+			if len(s) == 0 {
 				c.logger.Debugf("last watch for type %v, resource name %v canceled, will send a new xDS request", wi.typeURL, wi.target)
 				// If this was the last watcher, also tell xdsv2Client to stop
 				// watching this resource.

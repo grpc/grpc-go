@@ -77,13 +77,13 @@ type Client struct {
 
 	updateCh    *buffer.Unbounded // chan *watcherInfoWithUpdate
 	mu          sync.Mutex
-	ldsWatchers map[string]*watchInfoSet
+	ldsWatchers map[string]map[*watchInfo]bool
 	ldsCache    map[string]ldsUpdate
-	rdsWatchers map[string]*watchInfoSet
+	rdsWatchers map[string]map[*watchInfo]bool
 	rdsCache    map[string]rdsUpdate
-	cdsWatchers map[string]*watchInfoSet
+	cdsWatchers map[string]map[*watchInfo]bool
 	cdsCache    map[string]ClusterUpdate
-	edsWatchers map[string]*watchInfoSet
+	edsWatchers map[string]map[*watchInfo]bool
 	edsCache    map[string]EndpointsUpdate
 }
 
@@ -112,13 +112,13 @@ func New(opts Options) (*Client, error) {
 		opts: opts,
 
 		updateCh:    buffer.NewUnbounded(),
-		ldsWatchers: make(map[string]*watchInfoSet),
+		ldsWatchers: make(map[string]map[*watchInfo]bool),
 		ldsCache:    make(map[string]ldsUpdate),
-		rdsWatchers: make(map[string]*watchInfoSet),
+		rdsWatchers: make(map[string]map[*watchInfo]bool),
 		rdsCache:    make(map[string]rdsUpdate),
-		cdsWatchers: make(map[string]*watchInfoSet),
+		cdsWatchers: make(map[string]map[*watchInfo]bool),
 		cdsCache:    make(map[string]ClusterUpdate),
-		edsWatchers: make(map[string]*watchInfoSet),
+		edsWatchers: make(map[string]map[*watchInfo]bool),
 		edsCache:    make(map[string]EndpointsUpdate),
 	}
 
