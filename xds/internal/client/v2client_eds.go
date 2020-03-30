@@ -118,7 +118,7 @@ func ParseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) EndpointsUpdate
 }
 
 func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
-	returnUpdate := make(map[string]interface{})
+	returnUpdate := make(map[string]EndpointsUpdate)
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
@@ -138,6 +138,6 @@ func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 		returnUpdate[cla.GetClusterName()] = u
 	}
 
-	v2c.parent.newUpdate(edsURL, returnUpdate)
+	v2c.parent.newEDSUpdate(returnUpdate)
 	return nil
 }

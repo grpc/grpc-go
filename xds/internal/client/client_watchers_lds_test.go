@@ -45,7 +45,7 @@ func (s) TestLDSWatch(t *testing.T) {
 	})
 
 	wantUpdate := ldsUpdate{routeName: testRDSName}
-	v2Client.r.newUpdate(ldsURL, map[string]interface{}{
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
 		testLDSName: wantUpdate,
 	})
 
@@ -57,8 +57,8 @@ func (s) TestLDSWatch(t *testing.T) {
 	}
 
 	// Another update for a different resource name.
-	v2Client.r.newUpdate(ldsURL, map[string]interface{}{
-		"randomName": ldsUpdate{},
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
+		"randomName": {},
 	})
 
 	if u, err := ldsUpdateCh.TimedReceive(chanRecvTimeout); err != testutils.ErrRecvTimeout {
@@ -70,7 +70,7 @@ func (s) TestLDSWatch(t *testing.T) {
 
 	// Cancel watch, and send update again.
 	cancelWatch()
-	v2Client.r.newUpdate(ldsURL, map[string]interface{}{
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
 		testLDSName: wantUpdate,
 	})
 
@@ -113,7 +113,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 	}
 
 	wantUpdate := ldsUpdate{routeName: testRDSName}
-	v2Client.r.newUpdate(ldsURL, map[string]interface{}{
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
 		testLDSName: wantUpdate,
 	})
 
@@ -128,7 +128,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 
 	// Cancel the last watch, and send update again.
 	cancelLastWatch()
-	v2Client.r.newUpdate(ldsURL, map[string]interface{}{
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
 		testLDSName: wantUpdate,
 	})
 
@@ -188,7 +188,7 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 
 	wantUpdate1 := ldsUpdate{routeName: testRDSName + "1"}
 	wantUpdate2 := ldsUpdate{routeName: testRDSName + "2"}
-	v2Client.r.newUpdate(ldsURL, map[string]interface{}{
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
 		testLDSName + "1": wantUpdate1,
 		testLDSName + "2": wantUpdate2,
 	})
@@ -232,7 +232,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	})
 
 	wantUpdate := ldsUpdate{routeName: testRDSName}
-	v2Client.r.newUpdate(ldsURL, map[string]interface{}{
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
 		testLDSName: wantUpdate,
 	})
 

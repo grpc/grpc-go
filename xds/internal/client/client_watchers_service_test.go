@@ -51,12 +51,12 @@ func (s) TestServiceWatch(t *testing.T) {
 	wantUpdate := ServiceUpdate{Cluster: testCDSName}
 
 	<-v2Client.addWatches[ldsURL]
-	v2Client.r.newUpdate(ldsURL, map[string]interface{}{
-		testLDSName: ldsUpdate{routeName: testRDSName},
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
+		testLDSName: {routeName: testRDSName},
 	})
 	<-v2Client.addWatches[rdsURL]
-	v2Client.r.newUpdate(rdsURL, map[string]interface{}{
-		testRDSName: rdsUpdate{clusterName: testCDSName},
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
+		testRDSName: {clusterName: testCDSName},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || u != wantUpdate {
@@ -92,12 +92,12 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 	wantUpdate := ServiceUpdate{Cluster: testCDSName}
 
 	<-v2Client.addWatches[ldsURL]
-	v2Client.r.newUpdate(ldsURL, map[string]interface{}{
-		testLDSName: ldsUpdate{routeName: testRDSName},
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
+		testLDSName: {routeName: testRDSName},
 	})
 	<-v2Client.addWatches[rdsURL]
-	v2Client.r.newUpdate(rdsURL, map[string]interface{}{
-		testRDSName: rdsUpdate{clusterName: testCDSName},
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
+		testRDSName: {clusterName: testCDSName},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || u != wantUpdate {
@@ -108,14 +108,14 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 	}
 
 	// Another LDS update with a different RDS_name.
-	v2Client.r.newUpdate(ldsURL, map[string]interface{}{
-		testLDSName: ldsUpdate{routeName: testRDSName + "2"},
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
+		testLDSName: {routeName: testRDSName + "2"},
 	})
 	<-v2Client.addWatches[rdsURL]
 
 	// Another update for the old name.
-	v2Client.r.newUpdate(rdsURL, map[string]interface{}{
-		testRDSName: rdsUpdate{clusterName: testCDSName},
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
+		testRDSName: {clusterName: testCDSName},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err == nil {
@@ -127,8 +127,8 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 
 	wantUpdate2 := ServiceUpdate{Cluster: testCDSName + "2"}
 	// RDS update for the new name.
-	v2Client.r.newUpdate(rdsURL, map[string]interface{}{
-		testRDSName + "2": rdsUpdate{clusterName: testCDSName + "2"},
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
+		testRDSName + "2": {clusterName: testCDSName + "2"},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || u != wantUpdate2 {
@@ -164,12 +164,12 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 	wantUpdate := ServiceUpdate{Cluster: testCDSName}
 
 	<-v2Client.addWatches[ldsURL]
-	v2Client.r.newUpdate(ldsURL, map[string]interface{}{
-		testLDSName: ldsUpdate{routeName: testRDSName},
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
+		testLDSName: {routeName: testRDSName},
 	})
 	<-v2Client.addWatches[rdsURL]
-	v2Client.r.newUpdate(rdsURL, map[string]interface{}{
-		testRDSName: rdsUpdate{clusterName: testCDSName},
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
+		testRDSName: {clusterName: testCDSName},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || u != wantUpdate {
@@ -196,11 +196,11 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 
 	// Send update again, first callback should be called, second should
 	// timeout.
-	v2Client.r.newUpdate(ldsURL, map[string]interface{}{
-		testLDSName: ldsUpdate{routeName: testRDSName},
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
+		testLDSName: {routeName: testRDSName},
 	})
-	v2Client.r.newUpdate(rdsURL, map[string]interface{}{
-		testRDSName: rdsUpdate{clusterName: testCDSName},
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
+		testRDSName: {clusterName: testCDSName},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || u != wantUpdate {

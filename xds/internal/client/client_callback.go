@@ -67,6 +67,38 @@ func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	}
 }
 
+func (c *Client) newLDSUpdate(d map[string]ldsUpdate) {
+	dd := make(map[string]interface{})
+	for k, v := range d {
+		dd[k] = v
+	}
+	c.newUpdate(ldsURL, dd)
+}
+
+func (c *Client) newRDSUpdate(d map[string]rdsUpdate) {
+	dd := make(map[string]interface{})
+	for k, v := range d {
+		dd[k] = v
+	}
+	c.newUpdate(rdsURL, dd)
+}
+
+func (c *Client) newCDSUpdate(d map[string]ClusterUpdate) {
+	dd := make(map[string]interface{})
+	for k, v := range d {
+		dd[k] = v
+	}
+	c.newUpdate(cdsURL, dd)
+}
+
+func (c *Client) newEDSUpdate(d map[string]EndpointsUpdate) {
+	dd := make(map[string]interface{})
+	for k, v := range d {
+		dd[k] = v
+	}
+	c.newUpdate(edsURL, dd)
+}
+
 // newUpdate is called by the underlying xdsv2Client when it receives an xDS
 // response.
 //

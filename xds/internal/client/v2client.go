@@ -41,7 +41,10 @@ var _ xdsv2Client = &v2Client{}
 //
 // It's an interface to be overridden in test.
 type updateHandler interface {
-	newUpdate(typeURL string, d map[string]interface{})
+	newLDSUpdate(d map[string]ldsUpdate)
+	newRDSUpdate(d map[string]rdsUpdate)
+	newCDSUpdate(d map[string]ClusterUpdate)
+	newEDSUpdate(d map[string]EndpointsUpdate)
 }
 
 // v2Client performs the actual xDS RPCs using the xDS v2 API. It creates a
