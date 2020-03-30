@@ -85,7 +85,7 @@ func TestMakeBuilderMap(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			builderMap, err := MakeBuilderMap(test.cfg)
-			if err != nil || !cmp.Equal(builderMap, test.wantBuilderMap, cmp.AllowUnexported(builder{}, matcher{})) {
+			if err != nil || !BuilderMapEqual(builderMap, test.wantBuilderMap) {
 				t.Errorf("MakeBuilderMap(%+v) returned {%v, %v}, want: {%v, nil}", test.cfg, builderMap, err, test.wantBuilderMap)
 			}
 		})

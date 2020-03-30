@@ -813,10 +813,11 @@ func (t *http2Server) writeHeaderLocked(s *Stream) error {
 		return ErrHeaderListSizeLimitViolation
 	}
 	if t.stats != nil {
-		// Note: WireLength is not set in outHeader.
-		// TODO(mmukhi): Revisit this later, if needed.
+		// Note: Headers are compressed with hpack after this call returns.
+		// No WireLength field is set here.
 		outHeader := &stats.OutHeader{
-			Header: s.header.Copy(),
+			Header:      s.header.Copy(),
+			Compression: s.sendCompress,
 		}
 		t.stats.HandleRPC(s.Context(), outHeader)
 	}
@@ -880,6 +881,8 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 	rst := s.getState() == streamActive
 	t.finishStream(s, rst, http2.ErrCodeNo, trailingHeader, true)
 	if t.stats != nil {
+		// Note: The trailer fields are compressed with hpack after this call returns.
+		// No WireLength field is set here.
 		t.stats.HandleRPC(s.Context(), &stats.OutTrailer{
 			Trailer: s.trailer.Copy(),
 		})

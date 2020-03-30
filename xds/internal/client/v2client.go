@@ -401,11 +401,11 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 // function.
 // The provided callback should not block or perform any expensive operations
 // or call other methods of the v2Client object.
-func (v2c *v2Client) watchLDS(target string, ldsCb ldsCallback) (cancel func()) {
+func (v2c *v2Client) watchLDS(target string, ldsCb ldsCallbackFunc) (cancel func()) {
 	return v2c.watch(&watchInfo{
-		typeURL:  ldsURL,
-		target:   []string{target},
-		callback: ldsCb,
+		typeURL:     ldsURL,
+		target:      []string{target},
+		ldsCallback: ldsCb,
 	})
 }
 
@@ -415,11 +415,11 @@ func (v2c *v2Client) watchLDS(target string, ldsCb ldsCallback) (cancel func()) 
 // function.
 // The provided callback should not block or perform any expensive operations
 // or call other methods of the v2Client object.
-func (v2c *v2Client) watchRDS(routeName string, rdsCb rdsCallback) (cancel func()) {
+func (v2c *v2Client) watchRDS(routeName string, rdsCb rdsCallbackFunc) (cancel func()) {
 	return v2c.watch(&watchInfo{
-		typeURL:  rdsURL,
-		target:   []string{routeName},
-		callback: rdsCb,
+		typeURL:     rdsURL,
+		target:      []string{routeName},
+		rdsCallback: rdsCb,
 	})
 	// TODO: Once a registered RDS watch is cancelled, we should send an RDS
 	// request with no resources. This will let the server know that we are no
@@ -432,11 +432,11 @@ func (v2c *v2Client) watchRDS(routeName string, rdsCb rdsCallback) (cancel func(
 // function.
 // The provided callback should not block or perform any expensive operations
 // or call other methods of the v2Client object.
-func (v2c *v2Client) watchCDS(clusterName string, cdsCb cdsCallback) (cancel func()) {
+func (v2c *v2Client) watchCDS(clusterName string, cdsCb cdsCallbackFunc) (cancel func()) {
 	return v2c.watch(&watchInfo{
-		typeURL:  cdsURL,
-		target:   []string{clusterName},
-		callback: cdsCb,
+		typeURL:     cdsURL,
+		target:      []string{clusterName},
+		cdsCallback: cdsCb,
 	})
 }
 
@@ -446,11 +446,11 @@ func (v2c *v2Client) watchCDS(clusterName string, cdsCb cdsCallback) (cancel fun
 // function.
 // The provided callback should not block or perform any expensive operations
 // or call other methods of the v2Client object.
-func (v2c *v2Client) watchEDS(clusterName string, edsCb edsCallback) (cancel func()) {
+func (v2c *v2Client) watchEDS(clusterName string, edsCb edsCallbackFunc) (cancel func()) {
 	return v2c.watch(&watchInfo{
-		typeURL:  edsURL,
-		target:   []string{clusterName},
-		callback: edsCb,
+		typeURL:     edsURL,
+		target:      []string{clusterName},
+		edsCallback: edsCb,
 	})
 	// TODO: Once a registered EDS watch is cancelled, we should send an EDS
 	// request with no resources. This will let the server know that we are no
@@ -491,7 +491,7 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 	case ldsURL:
 		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
 			v2c.mu.Lock()
-			wi.callback.(ldsCallback)(ldsUpdate{}, fmt.Errorf("xds: LDS target %s not found, watcher timeout", wi.target))
+			wi.ldsCallback(ldsUpdate{}, fmt.Errorf("xds: LDS target %s not found, watcher timeout", wi.target))
 			v2c.mu.Unlock()
 		})
 	case rdsURL:
@@ -503,14 +503,14 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 				err = fmt.Errorf("xds: no LDS watcher found when handling RDS watch for route {%v} from cache", routeName)
 			}
 			v2c.logger.Infof("Resource with name %v, type %v found in cache", routeName, wi.typeURL)
-			wi.callback.(rdsCallback)(rdsUpdate{clusterName: cluster}, err)
+			wi.rdsCallback(rdsUpdate{clusterName: cluster}, err)
 			return
 		}
 		// Add the watch expiry timer only for new watches we don't find in
 		// the cache, and return from here.
 		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
 			v2c.mu.Lock()
-			wi.callback.(rdsCallback)(rdsUpdate{}, fmt.Errorf("xds: RDS target %s not found, watcher timeout", wi.target))
+			wi.rdsCallback(rdsUpdate{}, fmt.Errorf("xds: RDS target %s not found, watcher timeout", wi.target))
 			v2c.mu.Unlock()
 		})
 	case cdsURL:
@@ -521,18 +521,18 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 				err = fmt.Errorf("xds: no CDS watcher found when handling CDS watch for cluster {%v} from cache", clusterName)
 			}
 			v2c.logger.Infof("Resource with name %v, type %v found in cache", clusterName, wi.typeURL)
-			wi.callback.(cdsCallback)(update, err)
+			wi.cdsCallback(update, err)
 			return
 		}
 		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
 			v2c.mu.Lock()
-			wi.callback.(cdsCallback)(CDSUpdate{}, fmt.Errorf("xds: CDS target %s not found, watcher timeout", wi.target))
+			wi.cdsCallback(CDSUpdate{}, fmt.Errorf("xds: CDS target %s not found, watcher timeout", wi.target))
 			v2c.mu.Unlock()
 		})
 	case edsURL:
 		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
 			v2c.mu.Lock()
-			wi.callback.(edsCallback)(nil, fmt.Errorf("xds: EDS target %s not found, watcher timeout", wi.target))
+			wi.edsCallback(nil, fmt.Errorf("xds: EDS target %s not found, watcher timeout", wi.target))
 			v2c.mu.Unlock()
 		})
 	}
