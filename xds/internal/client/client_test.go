@@ -196,7 +196,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	})
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
-	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
+	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
 		testCDSName: wantUpdate,
 	})
 
@@ -208,7 +208,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	}
 
 	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}
-	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
+	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
 		testCDSName: wantUpdate2,
 	})
 

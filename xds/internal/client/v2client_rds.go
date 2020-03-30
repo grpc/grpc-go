@@ -35,7 +35,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 	hostname := v2c.hostname
 	v2c.mu.Unlock()
 
-	returnUpdate := make(map[string]interface{})
+	returnUpdate := make(map[string]rdsUpdate)
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
@@ -57,7 +57,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		returnUpdate[rc.GetName()] = rdsUpdate{clusterName: cluster}
 	}
 
-	v2c.parent.newUpdate(rdsURL, returnUpdate)
+	v2c.parent.newRDSUpdate(returnUpdate)
 	return nil
 }
 

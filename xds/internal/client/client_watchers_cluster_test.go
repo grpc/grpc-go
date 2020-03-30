@@ -46,7 +46,7 @@ func (s) TestClusterWatch(t *testing.T) {
 	})
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
-	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
+	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
 		testCDSName: wantUpdate,
 	})
 
@@ -58,7 +58,7 @@ func (s) TestClusterWatch(t *testing.T) {
 	}
 
 	// Another update for a different resource name.
-	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
+	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
 		"randomName": ClusterUpdate{},
 	})
 
@@ -71,7 +71,7 @@ func (s) TestClusterWatch(t *testing.T) {
 
 	// Cancel watch, and send update again.
 	cancelWatch()
-	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
+	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
 		testCDSName: wantUpdate,
 	})
 
@@ -114,7 +114,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 	}
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
-	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
+	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
 		testCDSName: wantUpdate,
 	})
 
@@ -129,7 +129,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 
 	// Cancel the last watch, and send update again.
 	cancelLastWatch()
-	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
+	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
 		testCDSName: wantUpdate,
 	})
 
@@ -189,7 +189,7 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 
 	wantUpdate1 := ClusterUpdate{ServiceName: testEDSName + "1"}
 	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}
-	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
+	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
 		testCDSName + "1": wantUpdate1,
 		testCDSName + "2": wantUpdate2,
 	})
@@ -233,7 +233,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	})
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
-	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
+	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
 		testCDSName: wantUpdate,
 	})
 

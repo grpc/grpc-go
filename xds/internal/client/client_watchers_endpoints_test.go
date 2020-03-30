@@ -65,7 +65,7 @@ func (s) TestEndpointsWatch(t *testing.T) {
 	})
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
-	v2Client.r.newUpdate(edsURL, map[string]interface{}{
+	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
 		testCDSName: wantUpdate,
 	})
 
@@ -77,7 +77,7 @@ func (s) TestEndpointsWatch(t *testing.T) {
 	}
 
 	// Another update for a different resource name.
-	v2Client.r.newUpdate(edsURL, map[string]interface{}{
+	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
 		"randomName": EndpointsUpdate{},
 	})
 
@@ -90,7 +90,7 @@ func (s) TestEndpointsWatch(t *testing.T) {
 
 	// Cancel watch, and send update again.
 	cancelWatch()
-	v2Client.r.newUpdate(edsURL, map[string]interface{}{
+	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
 		testCDSName: wantUpdate,
 	})
 
@@ -133,7 +133,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 	}
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
-	v2Client.r.newUpdate(edsURL, map[string]interface{}{
+	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
 		testCDSName: wantUpdate,
 	})
 
@@ -148,7 +148,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 
 	// Cancel the last watch, and send update again.
 	cancelLastWatch()
-	v2Client.r.newUpdate(edsURL, map[string]interface{}{
+	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
 		testCDSName: wantUpdate,
 	})
 
@@ -208,7 +208,7 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 
 	wantUpdate1 := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
 	wantUpdate2 := EndpointsUpdate{Localities: []Locality{testLocalities[1]}}
-	v2Client.r.newUpdate(edsURL, map[string]interface{}{
+	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
 		testCDSName + "1": wantUpdate1,
 		testCDSName + "2": wantUpdate2,
 	})
@@ -252,7 +252,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	})
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
-	v2Client.r.newUpdate(edsURL, map[string]interface{}{
+	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
 		testCDSName: wantUpdate,
 	})
 

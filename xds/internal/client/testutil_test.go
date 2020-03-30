@@ -43,6 +43,38 @@ type testUpdateReceiver struct {
 	f func(typeURL string, d map[string]interface{})
 }
 
+func (t *testUpdateReceiver) newLDSUpdate(d map[string]ldsUpdate) {
+	dd := make(map[string]interface{})
+	for k, v := range d {
+		dd[k] = v
+	}
+	t.newUpdate(ldsURL, dd)
+}
+
+func (t *testUpdateReceiver) newRDSUpdate(d map[string]rdsUpdate) {
+	dd := make(map[string]interface{})
+	for k, v := range d {
+		dd[k] = v
+	}
+	t.newUpdate(rdsURL, dd)
+}
+
+func (t *testUpdateReceiver) newCDSUpdate(d map[string]ClusterUpdate) {
+	dd := make(map[string]interface{})
+	for k, v := range d {
+		dd[k] = v
+	}
+	t.newUpdate(cdsURL, dd)
+}
+
+func (t *testUpdateReceiver) newEDSUpdate(d map[string]EndpointsUpdate) {
+	dd := make(map[string]interface{})
+	for k, v := range d {
+		dd[k] = v
+	}
+	t.newUpdate(edsURL, dd)
+}
+
 func (t *testUpdateReceiver) newUpdate(typeURL string, d map[string]interface{}) {
 	t.f(typeURL, d)
 }

@@ -45,7 +45,7 @@ func (s) TestRDSWatch(t *testing.T) {
 	})
 
 	wantUpdate := rdsUpdate{clusterName: testCDSName}
-	v2Client.r.newUpdate(rdsURL, map[string]interface{}{
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName: wantUpdate,
 	})
 
@@ -57,7 +57,7 @@ func (s) TestRDSWatch(t *testing.T) {
 	}
 
 	// Another update for a different resource name.
-	v2Client.r.newUpdate(rdsURL, map[string]interface{}{
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		"randomName": rdsUpdate{},
 	})
 
@@ -70,7 +70,7 @@ func (s) TestRDSWatch(t *testing.T) {
 
 	// Cancel watch, and send update again.
 	cancelWatch()
-	v2Client.r.newUpdate(rdsURL, map[string]interface{}{
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName: wantUpdate,
 	})
 
@@ -113,7 +113,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 	}
 
 	wantUpdate := rdsUpdate{clusterName: testCDSName}
-	v2Client.r.newUpdate(rdsURL, map[string]interface{}{
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName: wantUpdate,
 	})
 
@@ -128,7 +128,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 
 	// Cancel the last watch, and send update again.
 	cancelLastWatch()
-	v2Client.r.newUpdate(rdsURL, map[string]interface{}{
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName: wantUpdate,
 	})
 
@@ -188,7 +188,7 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 
 	wantUpdate1 := rdsUpdate{clusterName: testCDSName + "1"}
 	wantUpdate2 := rdsUpdate{clusterName: testCDSName + "2"}
-	v2Client.r.newUpdate(rdsURL, map[string]interface{}{
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName + "1": wantUpdate1,
 		testRDSName + "2": wantUpdate2,
 	})
@@ -232,7 +232,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 	})
 
 	wantUpdate := rdsUpdate{clusterName: testCDSName}
-	v2Client.r.newUpdate(rdsURL, map[string]interface{}{
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName: wantUpdate,
 	})
 
