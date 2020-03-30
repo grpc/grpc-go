@@ -31,14 +31,13 @@ import (
 	"context"
 	"fmt"
 
-	"google.golang.org/grpc/internal/status"
-
 	spb "google.golang.org/genproto/googleapis/rpc/status"
-
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/status/statustype"
+	"google.golang.org/grpc/internal/status"
 )
+
+type Status = status.Status
 
 func init() {
 	internal.StatusRawProto = statusRawProto
@@ -46,36 +45,34 @@ func init() {
 
 func statusRawProto(s *Status) *spb.Status { return s.Proto() }
 
-type Status = statustype.Status
-
 // New returns a Status representing c and msg.
 func New(c codes.Code, msg string) *Status {
-	return statustype.New(c, msg)
+	return status.New(c, msg)
 }
 
 // Newf returns New(c, fmt.Sprintf(format, a...)).
 func Newf(c codes.Code, format string, a ...interface{}) *Status {
-	return statustype.Newf(c, fmt.Sprintf(format, a...))
+	return status.Newf(c, format, a...)
 }
 
 // Error returns an error representing c and msg.  If c is OK, returns nil.
 func Error(c codes.Code, msg string) error {
-	return statustype.New(c, msg).Err()
+	return status.New(c, msg).Err()
 }
 
 // Errorf returns Error(c, fmt.Sprintf(format, a...)).
 func Errorf(c codes.Code, format string, a ...interface{}) error {
-	return (*status.StatusError)(statustype.Newf(c, format, a...).Proto())
+	return Error(c, fmt.Sprintf(format, a...))
 }
 
 // ErrorProto returns an error representing s.  If s.Code is OK, returns nil.
 func ErrorProto(s *spb.Status) error {
-	return statustype.FromProto(s).Err()
+	return FromProto(s).Err()
 }
 
 // FromProto returns a Status representing s.
 func FromProto(s *spb.Status) *Status {
-	return statustype.FromProto(s)
+	return status.FromProto(s)
 }
 
 // FromError returns a Status representing err if it was produced from this
@@ -86,10 +83,9 @@ func FromError(err error) (s *Status, ok bool) {
 		return nil, true
 	}
 	if se, ok := err.(interface {
-		GRPCStatus() *spb.Status
+		GRPCStatus() *Status
 	}); ok {
-		s := se.GRPCStatus()
-		return FromProto(s), true
+		return se.GRPCStatus(), true
 	}
 	return New(codes.Unknown, err.Error()), false
 }
@@ -109,9 +105,9 @@ func Code(err error) codes.Code {
 		return codes.OK
 	}
 	if se, ok := err.(interface {
-		GRPCStatus() *spb.Status
+		GRPCStatus() *Status
 	}); ok {
-		return codes.Code(se.GRPCStatus().Code)
+		return se.GRPCStatus().Code()
 	}
 	return codes.Unknown
 }
@@ -124,10 +120,10 @@ func FromContextError(err error) *Status {
 	case nil:
 		return nil
 	case context.DeadlineExceeded:
-		return New(codes.DeadlineExceeded, err.Error())
+		return status.New(codes.DeadlineExceeded, err.Error())
 	case context.Canceled:
-		return New(codes.Canceled, err.Error())
+		return status.New(codes.Canceled, err.Error())
 	default:
-		return New(codes.Unknown, err.Error())
+		return status.New(codes.Unknown, err.Error())
 	}
 }

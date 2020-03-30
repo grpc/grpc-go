@@ -24,10 +24,6 @@ import (
 	"fmt"
 	"testing"
 
-	"google.golang.org/grpc/internal/status/statustype"
-
-	"google.golang.org/grpc/internal/status"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	apb "github.com/golang/protobuf/ptypes/any"
@@ -38,6 +34,7 @@ import (
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/status"
 )
 
 type s struct {
@@ -158,17 +155,11 @@ func (c customError) Error() string {
 }
 
 func (c customError) GRPCStatus() *Status {
-	s := statustype.New(c.Code, c.Message)
-	var a []proto.Message
-	for _, d := range c.Details {
-		any, err := ptypes.MarshalAny(d)
-		if err != nil {
-			break
-		}
-		a = append(a, any)
-	}
-	s, _ = s.WithDetails(a...)
-	return s
+	return status.FromProto(&spb.Status{
+		Code:    int32(c.Code),
+		Message: c.Message,
+		Details: c.Details,
+	})
 }
 
 func (s) TestFromErrorImplementsInterface(t *testing.T) {
@@ -349,7 +340,7 @@ func str(s *Status) string {
 	if s == nil {
 		return "nil"
 	}
-	if s.s == nil {
+	if s.Proto() == nil {
 		return "<Code=OK>"
 	}
 	return fmt.Sprintf("<Code=%v, Message=%q, Details=%+v>", s.Code(), s.Message(), s.Details())

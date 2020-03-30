@@ -27,14 +27,121 @@
 package status
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
-
+	"github.com/golang/protobuf/ptypes"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/internal/status/statustype"
 )
+
+// Status represents an RPC status code, message, and details.  It is immutable
+// and should be created with New, Newf, or FromProto.
+type Status struct {
+	s *spb.Status
+}
+
+// New returns a Status representing c and msg.
+func New(c codes.Code, msg string) *Status {
+	return &Status{s: &spb.Status{Code: int32(c), Message: msg}}
+}
+
+// Newf returns New(c, fmt.Sprintf(format, a...)).
+func Newf(c codes.Code, format string, a ...interface{}) *Status {
+	return New(c, fmt.Sprintf(format, a...))
+}
+
+// FromProto returns a Status representing s.
+func FromProto(s *spb.Status) *Status {
+	if s != nil {
+		fmt.Println(s)
+	}
+	return &Status{s: proto.Clone(s).(*spb.Status)}
+}
+
+// Error returns an error representing c and msg.  If c is OK, returns nil.
+func Error(c codes.Code, msg string) error {
+	return New(c, msg).Err()
+}
+
+// Errorf returns Error(c, fmt.Sprintf(format, a...)).
+func Errorf(c codes.Code, format string, a ...interface{}) error {
+	return Error(c, fmt.Sprintf(format, a...))
+}
+
+// Code returns the status code contained in s.
+func (s *Status) Code() codes.Code {
+	if s == nil || s.s == nil {
+		return codes.OK
+	}
+	return codes.Code(s.s.Code)
+}
+
+// Message returns the message contained in s.
+func (s *Status) Message() string {
+	if s == nil || s.s == nil {
+		return ""
+	}
+	return s.s.Message
+}
+
+// Proto returns s's status as an spb.Status proto message.
+func (s *Status) Proto() *spb.Status {
+	if s == nil {
+		return nil
+	}
+	return proto.Clone(s.s).(*spb.Status)
+}
+
+// Err returns an immutable error representing s; returns nil if s.Code() is OK.
+func (s *Status) Err() error {
+	if s.Code() == codes.OK {
+		return nil
+	}
+	return (*StatusError)(s.Proto())
+}
+
+func (s *Status) Error() string {
+	p := s.Proto()
+	return fmt.Sprintf("rpc error: code = %s desc = %s", codes.Code(p.GetCode()), p.GetMessage())
+}
+
+// WithDetails returns a new status with the provided details messages appended to the status.
+// If any errors are encountered, it returns nil and the first error encountered.
+func (s *Status) WithDetails(details ...proto.Message) (*Status, error) {
+	if s.Code() == codes.OK {
+		return nil, errors.New("no error details for status with code OK")
+	}
+	// s.Code() != OK implies that s.Proto() != nil.
+	p := s.Proto()
+	for _, detail := range details {
+		any, err := ptypes.MarshalAny(detail)
+		if err != nil {
+			return nil, err
+		}
+		p.Details = append(p.Details, any)
+	}
+	return &Status{s: p}, nil
+}
+
+// Details returns a slice of details messages attached to the status.
+// If a detail cannot be decoded, the error is returned in place of the detail.
+func (s *Status) Details() []interface{} {
+	if s == nil || s.s == nil {
+		return nil
+	}
+	details := make([]interface{}, 0, len(s.s.Details))
+	for _, any := range s.s.Details {
+		detail := &ptypes.DynamicAny{}
+		if err := ptypes.UnmarshalAny(any, detail); err != nil {
+			details = append(details, err)
+			continue
+		}
+		details = append(details, detail.Message)
+	}
+	return details
+}
 
 // StatusError is an alias of a status proto.  It implements error and Status,
 // and a nil statusError should never be returned by this package.
@@ -45,8 +152,8 @@ func (se *StatusError) Error() string {
 	return fmt.Sprintf("rpc error: code = %s desc = %s", codes.Code(p.GetCode()), p.GetMessage())
 }
 
-func (se *StatusError) GRPCStatus() *statustype.Status {
-	return statustype.FromProto((*spb.Status)(se))
+func (se *StatusError) GRPCStatus() *Status {
+	return FromProto((*spb.Status)(se))
 }
 
 // Is implements future error.Is functionality.
