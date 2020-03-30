@@ -16,7 +16,7 @@ shopt -u extglob
 go build
 popd
 
-git clone -b "${branch}" https://github.com/grpc/grpc.git
+git clone -b "${branch}" --single-branch --depth=1 https://github.com/grpc/grpc.git
 
 grpc/tools/run_tests/helper_scripts/prep_xds.sh
 GRPC_GO_LOG_VERBOSITY_LEVEL=99 GRPC_GO_LOG_SEVERITY_LEVEL=info \
