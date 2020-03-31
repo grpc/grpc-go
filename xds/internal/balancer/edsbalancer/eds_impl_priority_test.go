@@ -715,7 +715,6 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	p2 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc2}
 	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
-		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -778,7 +777,6 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	p2 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc2}
 	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
-		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
