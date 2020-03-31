@@ -162,11 +162,11 @@ func newTestXDSV2Client(r updateHandler) *testXDSV2Client {
 	}
 }
 
-func (c *testXDSV2Client) addWatch(resourceType string, resourceName string) {
+func (c *testXDSV2Client) addWatch(resourceType, resourceName string) {
 	c.addWatches[resourceType] <- resourceName
 }
 
-func (c *testXDSV2Client) removeWatch(resourceType string, resourceName string) {
+func (c *testXDSV2Client) removeWatch(resourceType, resourceName string) {
 	c.removeWatches[resourceType] <- resourceName
 }
 

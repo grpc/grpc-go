@@ -30,11 +30,10 @@ type ldsCallbackFunc func(ldsUpdate, error)
 
 // watchLDS starts a listener watcher for the service..
 //
-// Note that during race, there's a small window where the callback can be
-// called after the watcher is canceled. The caller needs to handle this case.
+// Note that during race (e.g. an xDS response is received while the user is
+// calling cancel()), there's a small window where the callback can be called
+// after the watcher is canceled. The caller needs to handle this case.
 func (c *Client) watchLDS(serviceName string, cb ldsCallbackFunc) (cancel func()) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	wi := &watchInfo{
 		typeURL:     ldsURL,
 		target:      serviceName,

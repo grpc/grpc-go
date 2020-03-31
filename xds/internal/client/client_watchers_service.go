@@ -28,8 +28,6 @@ type ServiceUpdate struct {
 	Cluster string
 }
 
-type serviceCallbackFunc = func(ServiceUpdate, error)
-
 // WatchService uses LDS and RDS to discover information about the provided
 // serviceName.
 //
@@ -37,9 +35,10 @@ type serviceCallbackFunc = func(ServiceUpdate, error)
 // watcher and the callback will get an error. It's this case because an xDS
 // client is expected to be used only by one ClientConn.
 //
-// Note that during race, there's a small window where the callback can be
-// called after the watcher is canceled. The caller needs to handle this case.
-func (c *Client) WatchService(serviceName string, cb serviceCallbackFunc) (cancel func()) {
+// Note that during race (e.g. an xDS response is received while the user is
+// calling cancel()), there's a small window where the callback can be called
+// after the watcher is canceled. The caller needs to handle this case.
+func (c *Client) WatchService(serviceName string, cb func(ServiceUpdate, error)) (cancel func()) {
 	c.mu.Lock()
 	if len(c.ldsWatchers) != 0 {
 		go cb(ServiceUpdate{}, fmt.Errorf("unexpected WatchService when there's another service being watched"))
@@ -59,7 +58,7 @@ func (c *Client) WatchService(serviceName string, cb serviceCallbackFunc) (cance
 type serviceUpdateWatcher struct {
 	c         *Client
 	ldsCancel func()
-	serviceCB serviceCallbackFunc
+	serviceCB func(ServiceUpdate, error)
 
 	mu        sync.Mutex
 	closed    bool
@@ -73,7 +72,7 @@ func (w *serviceUpdateWatcher) handleLDSResp(update ldsUpdate, err error) {
 	if w.closed {
 		return
 	}
-	// Todo: this error case returns early, without canceling the existing RDS
+	// TODO: this error case returns early, without canceling the existing RDS
 	// watch. If we decided to stop the RDS watch when LDS errors, move this
 	// after rdsCancel(). We may also need to check the error type and do
 	// different things based on that (e.g. cancel RDS watch only on
@@ -110,5 +109,6 @@ func (w *serviceUpdateWatcher) close() {
 	w.ldsCancel()
 	if w.rdsCancel != nil {
 		w.rdsCancel()
+		w.rdsCancel = nil
 	}
 }

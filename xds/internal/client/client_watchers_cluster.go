@@ -33,19 +33,16 @@ type ClusterUpdate struct {
 	EnableLRS bool
 }
 
-type cdsCallbackFunc = func(ClusterUpdate, error)
-
 // WatchCluster uses CDS to discover information about the provided
 // clusterName.
 //
 // WatchCluster can be called multiple times, with same or different
 // clusterNames. Each call will start an independent watcher for the resource.
 //
-// Note that during race, there's a small window where the callback can be
-// called after the watcher is canceled. The caller needs to handle this case.
-func (c *Client) WatchCluster(clusterName string, cb cdsCallbackFunc) (cancel func()) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// Note that during race (e.g. an xDS response is received while the user is
+// calling cancel()), there's a small window where the callback can be called
+// after the watcher is canceled. The caller needs to handle this case.
+func (c *Client) WatchCluster(clusterName string, cb func(ClusterUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
 		typeURL:     cdsURL,
 		target:      clusterName,

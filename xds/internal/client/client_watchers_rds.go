@@ -30,11 +30,10 @@ type rdsCallbackFunc func(rdsUpdate, error)
 
 // watchRDS starts a listener watcher for the service..
 //
-// Note that during race, there's a small window where the callback can be
-// called after the watcher is canceled. The caller needs to handle this case.
+// Note that during race (e.g. an xDS response is received while the user is
+// calling cancel()), there's a small window where the callback can be called
+// after the watcher is canceled. The caller needs to handle this case.
 func (c *Client) watchRDS(routeName string, cb rdsCallbackFunc) (cancel func()) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	wi := &watchInfo{
 		typeURL:     rdsURL,
 		target:      routeName,

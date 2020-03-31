@@ -40,12 +40,14 @@ type watchInfo struct {
 
 	ldsCallback ldsCallbackFunc
 	rdsCallback rdsCallbackFunc
-	cdsCallback cdsCallbackFunc
-	edsCallback edsCallbackFunc
+	cdsCallback func(ClusterUpdate, error)
+	edsCallback func(EndpointsUpdate, error)
 	expiryTimer *time.Timer
 }
 
 func (c *Client) watch(wi *watchInfo) (cancel func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.logger.Debugf("new watch for type %v, resource name %v", wi.typeURL, wi.target)
 	var watchers map[string]map[*watchInfo]bool
 	switch wi.typeURL {

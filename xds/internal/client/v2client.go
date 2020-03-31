@@ -260,7 +260,8 @@ func (v2c *v2Client) processWatchInfo(t *watchAction) (target []string, typeURL,
 	// response host matching.
 	if t.typeURL == ldsURL {
 		// Set hostname to the first LDS resource_name, and reset it when the
-		// LDS watch is removed.
+		// last LDS watch is removed. The upper level Client isn't expected to
+		// watchLDS more than once.
 		if l := len(current); l == 1 {
 			v2c.hostname = t.resource
 		} else if l == 0 {
@@ -428,7 +429,7 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 	}
 }
 
-func (v2c *v2Client) addWatch(resourceType string, resourceName string) {
+func (v2c *v2Client) addWatch(resourceType, resourceName string) {
 	v2c.sendCh.Put(&watchAction{
 		typeURL:  resourceType,
 		remove:   false,
@@ -436,7 +437,7 @@ func (v2c *v2Client) addWatch(resourceType string, resourceName string) {
 	})
 }
 
-func (v2c *v2Client) removeWatch(resourceType string, resourceName string) {
+func (v2c *v2Client) removeWatch(resourceType, resourceName string) {
 	v2c.sendCh.Put(&watchAction{
 		typeURL:  resourceType,
 		remove:   true,

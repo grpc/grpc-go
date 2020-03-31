@@ -50,8 +50,8 @@ type Options struct {
 
 // Interface to be overridden in tests.
 type xdsv2Client interface {
-	addWatch(resourceType string, resourceName string)
-	removeWatch(resourceType string, resourceName string)
+	addWatch(resourceType, resourceName string)
+	removeWatch(resourceType, resourceName string)
 	close()
 }
 
