@@ -2248,6 +2248,74 @@ func testPreloaderClientSend(t *testing.T, e env) {
 	}
 }
 
+// preparedMsgSendServer is a TestServiceServer whose
+// StreamingOutputCall makes a SendMsg calls using PreparedMsg,
+// sending prepared messaged with payload "0".
+// TestPreloaderSenderSend verifies it is being sent correctly.
+//
+// All other TestServiceServer methods crash if called.
+type preparedMsgSendServer struct {
+	testpb.TestServiceServer
+}
+
+func (s preparedMsgSendServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
+	preparedMsg := &grpc.PreparedMsg{}
+	err := preparedMsg.Encode(stream, &testpb.StreamingOutputCallResponse{
+		Payload: &testpb.Payload{
+			Body: []byte{'0'},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	stream.SendMsg(preparedMsg)
+	return nil
+}
+
+func (s) TestPreloaderSenderSend(t *testing.T) {
+	for _, e := range listTestEnv() {
+		testPreloaderSenderSend(t, e)
+	}
+}
+
+func testPreloaderSenderSend(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(preparedMsgSendServer{})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+
+	req := &testpb.StreamingOutputCallRequest{}
+	stream, err := tc.StreamingOutputCall(context.Background(), req)
+	if err != nil {
+		t.Errorf("%v.StreamingOutputCall(_) = _, %v, want <nil>", tc, err)
+		return
+	}
+	var ngot int
+	var buf bytes.Buffer
+	for {
+		reply, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		ngot++
+		if buf.Len() > 0 {
+			buf.WriteByte(',')
+		}
+		buf.Write(reply.GetPayload().GetBody())
+	}
+	if want := 1; ngot != want {
+		t.Errorf("Got %d replies, want %d", ngot, want)
+	}
+	if got, want := buf.String(), "0"; got != want {
+		t.Errorf("Got replies %q; want %q", got, want)
+	}
+}
+
 func (s) TestMaxMsgSizeClientDefault(t *testing.T) {
 	for _, e := range listTestEnv() {
 		testMaxMsgSizeClientDefault(t, e)
