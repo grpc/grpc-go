@@ -699,8 +699,13 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 
 	// p0 will remove the subconn, and ClientConn will send a sc update to
 	// transient failure.
-	scToRemove := <-cc.removeSubConnCh
-	edsb.HandleSubConnStateChange(scToRemove, connectivity.TransientFailure)
+	var scToRemove balancer.SubConn
+	select {
+	case <-time.After(time.Second):
+		t.Fatalf("lalala")
+	case scToRemove = <-cc.removeSubConnCh:
+	}
+	edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
 
 	var addrs2 []resolver.Address
 	select {
