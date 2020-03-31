@@ -131,8 +131,7 @@ func (bm BuilderMap) Equal(am BuilderMap) bool {
 		return false
 	}
 
-	for key := range bm {
-		bBuilder := bm[key]
+	for key, bBuilder := range bm {
 		aBuilder, ok := am[key]
 		if !ok {
 			return false
