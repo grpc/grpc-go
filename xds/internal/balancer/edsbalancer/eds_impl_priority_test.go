@@ -57,7 +57,6 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	p1 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1}
 	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
-		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -124,7 +123,6 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	p0 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc0}
 	if err := isRoundRobin(want, subConnFromPicker(p0)); err != nil {
-		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -427,7 +425,6 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	p0 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc0}
 	if err := isRoundRobin(want, subConnFromPicker(p0)); err != nil {
-		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -446,7 +443,6 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	p1 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc1}
 	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
-		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -686,7 +682,6 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	p1 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1}
 	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
-		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -746,7 +741,6 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	p1 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1}
 	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
-		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
 

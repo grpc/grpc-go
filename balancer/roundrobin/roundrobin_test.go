@@ -216,7 +216,7 @@ func (s) TestAddressesRemoved(t *testing.T) {
 
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
 
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel2()
 	// Wait for state to change to transient failure.
 	for src := cc.GetState(); src != connectivity.TransientFailure; src = cc.GetState() {
