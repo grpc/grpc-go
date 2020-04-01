@@ -314,9 +314,7 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterNa
 			continue
 		}
 		grpclog.Infof("lrs: created LRS stream")
-		req := &lrspb.LoadStatsRequest{
-			Node: node,
-		}
+		req := &lrspb.LoadStatsRequest{Node: node}
 		grpclog.Infof("lrs: sending init LoadStatsRequest: %v", req)
 		if err := stream.Send(req); err != nil {
 			grpclog.Warningf("lrs: failed to send first request: %v", err)
@@ -370,9 +368,7 @@ func (ls *lrsStore) sendLoads(ctx context.Context, stream lrsgrpc.LoadReportingS
 		case <-ctx.Done():
 			return
 		}
-		req := &lrspb.LoadStatsRequest{
-			ClusterStats: ls.buildStats(clusterName),
-		}
+		req := &lrspb.LoadStatsRequest{ClusterStats: ls.buildStats(clusterName)}
 		grpclog.Infof("lrs: sending LRS loads: %+v", req)
 		if err := stream.Send(req); err != nil {
 			grpclog.Warningf("lrs: failed to send report: %v", err)
