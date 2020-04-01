@@ -126,6 +126,26 @@ func (sbc *subBalancerWithConfig) updateClientConnState(s balancer.ClientConnSta
 	return b.UpdateClientConnState(s)
 }
 
+func (sbc *subBalancerWithConfig) resolverError(err error) {
+	b := sbc.balancer
+	if b == nil {
+		// This sub-balancer was closed. This should never happen because
+		// sub-balancers are closed when the locality is removed from EDS, or
+		// the balancer group is closed. There should be no further address
+		// updates when either of this happened.
+		//
+		// This will be a common case with priority support, because a
+		// sub-balancer (and the whole balancer group) could be closed because
+		// it's the lower priority, but it can still get address updates.
+		return
+	}
+	ub, ok := b.(balancer.V2Balancer)
+	if !ok {
+		return
+	}
+	ub.ResolverError(err)
+}
+
 func (sbc *subBalancerWithConfig) stopBalancer() {
 	sbc.balancer.Close()
 	sbc.balancer = nil
@@ -451,10 +471,14 @@ func (bg *BalancerGroup) UpdateClientConnState(id internal.LocalityID, s balance
 	return nil
 }
 
-// TODO: handleServiceConfig()
-//
-// For BNS address for slicer, comes from endpoint.Metadata. It will be sent
-// from parent to sub-balancers as service config.
+// ResolverError forwards resolver errors to all sub-balancers.
+func (bg *BalancerGroup) ResolverError(err error) {
+	bg.outgoingMu.Lock()
+	for _, config := range bg.idToBalancerConfig {
+		config.resolverError(err)
+	}
+	bg.outgoingMu.Unlock()
+}
 
 // Following are actions from sub-balancers, forward to ClientConn.
 
