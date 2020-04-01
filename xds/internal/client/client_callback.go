@@ -76,42 +76,20 @@ func (c *Client) newLDSUpdate(d map[string]ldsUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	watchers := c.ldsWatchers
 	for name, update := range d {
-		if s, ok := watchers[name]; ok {
+		if s, ok := c.ldsWatchers[name]; ok {
 			for wi := range s {
 				c.scheduleCallback(wi, update, nil)
 			}
+			// Sync cache.
+			c.logger.Debugf("LDS resource with name %v, value %+v added to cache", name, update)
+			c.ldsCache[name] = update
 		}
 	}
 	// TODO: handle removing resources, which means if a resource exists in the
 	// previous update, but not in the new update. This needs the balancers and
 	// resolvers to handle errors correctly.
-	//
-	// var emptyUpdate interface{}
-	// switch typeURL {
-	// case ldsURL:
-	// 	emptyUpdate = ldsUpdate{}
-	// case cdsURL:
-	// 	emptyUpdate = ClusterUpdate{}
-	// }
-	// if emptyUpdate != nil {
-	// 	for name, s := range watchers {
-	// 		if _, ok := d[name]; !ok {
-	// 			s.forEach(func(wi *watchInfo) {
-	// 				c.scheduleCallback(wi, emptyUpdate, errorf(errTypeResourceRemoved, "resource removed"))
-	// 			})
-	// 		}
-	// 	}
-	// }
 
-	// Sync cache.
-	for name, update := range d {
-		if _, ok := c.ldsWatchers[name]; ok {
-			c.logger.Debugf("LDS resource with name %v, value %+v added to cache", name, update)
-			c.ldsCache[name] = update
-		}
-	}
 	// TODO: remove item from cache and remove corresponding RDS cached data.
 }
 
@@ -124,17 +102,12 @@ func (c *Client) newRDSUpdate(d map[string]rdsUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	watchers := c.rdsWatchers
 	for name, update := range d {
-		if s, ok := watchers[name]; ok {
+		if s, ok := c.rdsWatchers[name]; ok {
 			for wi := range s {
 				c.scheduleCallback(wi, update, nil)
 			}
-		}
-	}
-	// Sync cache.
-	for name, update := range d {
-		if _, ok := c.rdsWatchers[name]; ok {
+			// Sync cache.
 			c.logger.Debugf("RDS resource with name %v, value %+v added to cache", name, update)
 			c.rdsCache[name] = update
 		}
@@ -150,42 +123,20 @@ func (c *Client) newCDSUpdate(d map[string]ClusterUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	watchers := c.cdsWatchers
 	for name, update := range d {
-		if s, ok := watchers[name]; ok {
+		if s, ok := c.cdsWatchers[name]; ok {
 			for wi := range s {
 				c.scheduleCallback(wi, update, nil)
 			}
+			// Sync cache.
+			c.logger.Debugf("CDS resource with name %v, value %+v added to cache", name, update)
+			c.cdsCache[name] = update
 		}
 	}
 	// TODO: handle removing resources, which means if a resource exists in the
 	// previous update, but not in the new update. This needs the balancers and
 	// resolvers to handle errors correctly.
-	//
-	// var emptyUpdate interface{}
-	// switch typeURL {
-	// case ldsURL:
-	// 	emptyUpdate = ldsUpdate{}
-	// case cdsURL:
-	// 	emptyUpdate = ClusterUpdate{}
-	// }
-	// if emptyUpdate != nil {
-	// 	for name, s := range watchers {
-	// 		if _, ok := d[name]; !ok {
-	// 			s.forEach(func(wi *watchInfo) {
-	// 				c.scheduleCallback(wi, emptyUpdate, errorf(errTypeResourceRemoved, "resource removed"))
-	// 			})
-	// 		}
-	// 	}
-	// }
 
-	// Sync cache.
-	for name, update := range d {
-		if _, ok := c.cdsWatchers[name]; ok {
-			c.logger.Debugf("CDS resource with name %v, value %+v added to cache", name, update)
-			c.cdsCache[name] = update
-		}
-	}
 	// TODO: remove item from cache and remove corresponding EDS cached data.
 }
 
@@ -198,17 +149,12 @@ func (c *Client) newEDSUpdate(d map[string]EndpointsUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	watchers := c.edsWatchers
 	for name, update := range d {
-		if s, ok := watchers[name]; ok {
+		if s, ok := c.edsWatchers[name]; ok {
 			for wi := range s {
 				c.scheduleCallback(wi, update, nil)
 			}
-		}
-	}
-	// Sync cache.
-	for name, update := range d {
-		if _, ok := c.edsWatchers[name]; ok {
+			// Sync cache.
 			c.logger.Debugf("EDS resource with name %v, value %+v added to cache", name, update)
 			c.edsCache[name] = update
 		}

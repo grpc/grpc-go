@@ -160,6 +160,9 @@ func (c *Client) run() {
 
 // Close closes the gRPC connection to the xDS server.
 func (c *Client) Close() {
+	if c.done.HasFired() {
+		return
+	}
 	c.done.Fire()
 	// TODO: Should we invoke the registered callbacks here with an error that
 	// the client is closed?

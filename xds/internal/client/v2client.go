@@ -444,3 +444,10 @@ func (v2c *v2Client) removeWatch(resourceType, resourceName string) {
 		resource: resourceName,
 	})
 }
+
+func mapToSlice(m map[string]bool) (ret []string) {
+	for i := range m {
+		ret = append(ret, i)
+	}
+	return
+}

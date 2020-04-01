@@ -47,7 +47,7 @@ func (c *Client) WatchService(serviceName string, cb func(ServiceUpdate, error))
 	}
 	c.mu.Unlock()
 
-	w := &serviceUpdateWatcher{c: c, serviceCB: cb}
+	w := &serviceUpdateWatcher{c: c, serviceCb: cb}
 	w.ldsCancel = c.watchLDS(serviceName, w.handleLDSResp)
 
 	return w.close
@@ -58,7 +58,7 @@ func (c *Client) WatchService(serviceName string, cb func(ServiceUpdate, error))
 type serviceUpdateWatcher struct {
 	c         *Client
 	ldsCancel func()
-	serviceCB func(ServiceUpdate, error)
+	serviceCb func(ServiceUpdate, error)
 
 	mu        sync.Mutex
 	closed    bool
@@ -78,7 +78,7 @@ func (w *serviceUpdateWatcher) handleLDSResp(update ldsUpdate, err error) {
 	// different things based on that (e.g. cancel RDS watch only on
 	// resourceRemovedError, but not on connectionError).
 	if err != nil {
-		w.serviceCB(ServiceUpdate{}, err)
+		w.serviceCb(ServiceUpdate{}, err)
 		return
 	}
 
@@ -96,10 +96,10 @@ func (w *serviceUpdateWatcher) handleRDSResp(update rdsUpdate, err error) {
 		return
 	}
 	if err != nil {
-		w.serviceCB(ServiceUpdate{}, err)
+		w.serviceCb(ServiceUpdate{}, err)
 		return
 	}
-	w.serviceCB(ServiceUpdate{Cluster: update.clusterName}, nil)
+	w.serviceCb(ServiceUpdate{Cluster: update.clusterName}, nil)
 }
 
 func (w *serviceUpdateWatcher) close() {
