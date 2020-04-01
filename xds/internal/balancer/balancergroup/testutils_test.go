@@ -1,5 +1,6 @@
 /*
- * Copyright 2019 gRPC authors.
+ *
+ * Copyright 2020 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,33 +13,26 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package edsbalancer
+package balancergroup
 
 import (
-	"google.golang.org/grpc/internal/wrr"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"testing"
+
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/xds/internal/testutils"
 )
 
-var newRandomWRR = wrr.NewRandom
-
-type dropper struct {
-	c xdsclient.OverloadDropConfig
-	w wrr.WRR
+type s struct {
+	grpctest.Tester
 }
 
-func newDropper(c xdsclient.OverloadDropConfig) *dropper {
-	w := newRandomWRR()
-	w.Add(true, int64(c.Numerator))
-	w.Add(false, int64(c.Denominator-c.Numerator))
-
-	return &dropper{
-		c: c,
-		w: w,
-	}
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
 }
 
-func (d *dropper) drop() (ret bool) {
-	return d.w.Next().(bool)
+func init() {
+	NewRandomWRR = testutils.NewTestWRR
 }
