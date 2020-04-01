@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
@@ -46,7 +47,7 @@ type localityConfig struct {
 // balancerGroupWithConfig contains the localities with the same priority. It
 // manages all localities using a balancerGroup.
 type balancerGroupWithConfig struct {
-	bg      *balancerGroup
+	bg      *balancergroup.BalancerGroup
 	configs map[internal.Locality]*localityConfig
 }
 
@@ -136,9 +137,9 @@ func (edsImpl *edsBalancerImpl) HandleChildPolicy(name string, config json.RawMe
 			// TODO: (eds) add support to balancer group to support smoothly
 			//  switching sub-balancers (keep old balancer around until new
 			//  balancer becomes ready).
-			bgwc.bg.remove(id)
-			bgwc.bg.add(id, config.weight, edsImpl.subBalancerBuilder)
-			bgwc.bg.handleResolvedAddrs(id, config.addrs)
+			bgwc.bg.Remove(id)
+			bgwc.bg.Add(id, config.weight, edsImpl.subBalancerBuilder)
+			bgwc.bg.HandleResolvedAddrs(id, config.addrs)
 		}
 	}
 }
@@ -217,7 +218,7 @@ func (edsImpl *edsBalancerImpl) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) 
 			// be started when necessary (e.g. when higher is down, or if it's a
 			// new lowest priority).
 			bgwc = &balancerGroupWithConfig{
-				bg:      newBalancerGroup(edsImpl.ccWrapperWithPriority(priority), edsImpl.loadStore, edsImpl.logger),
+				bg:      balancergroup.NewBalancerGroup(edsImpl.ccWrapperWithPriority(priority), edsImpl.loadStore, edsImpl.logger),
 				configs: make(map[internal.Locality]*localityConfig),
 			}
 			edsImpl.priorityToLocalities[priority] = bgwc
@@ -233,7 +234,7 @@ func (edsImpl *edsBalancerImpl) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) 
 	for p, bgwc := range edsImpl.priorityToLocalities {
 		if _, ok := newLocalitiesWithPriority[p]; !ok {
 			delete(edsImpl.priorityToLocalities, p)
-			bgwc.bg.close()
+			bgwc.bg.Close()
 			delete(edsImpl.priorityToState, p)
 			priorityChanged = true
 			edsImpl.logger.Infof("Priority %v deleted", p)
@@ -284,7 +285,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 		config, ok := bgwc.configs[lid]
 		if !ok {
 			// A new balancer, add it to balancer group and balancer map.
-			bgwc.bg.add(lid, newWeight, edsImpl.subBalancerBuilder)
+			bgwc.bg.Add(lid, newWeight, edsImpl.subBalancerBuilder)
 			config = &localityConfig{
 				weight: newWeight,
 			}
@@ -307,19 +308,19 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 
 		if weightChanged {
 			config.weight = newWeight
-			bgwc.bg.changeWeight(lid, newWeight)
+			bgwc.bg.ChangeWeight(lid, newWeight)
 		}
 
 		if addrsChanged {
 			config.addrs = newAddrs
-			bgwc.bg.handleResolvedAddrs(lid, newAddrs)
+			bgwc.bg.HandleResolvedAddrs(lid, newAddrs)
 		}
 	}
 
 	// Delete localities that are removed in the latest response.
 	for lid := range bgwc.configs {
 		if _, ok := newLocalitiesSet[lid]; !ok {
-			bgwc.bg.remove(lid)
+			bgwc.bg.Remove(lid)
 			delete(bgwc.configs, lid)
 			edsImpl.logger.Infof("Locality %v deleted", lid)
 		}
@@ -343,7 +344,7 @@ func (edsImpl *edsBalancerImpl) HandleSubConnStateChange(sc balancer.SubConn, s 
 		return
 	}
 	if bg := bgwc.bg; bg != nil {
-		bg.handleSubConnStateChange(sc, s)
+		bg.HandleSubConnStateChange(sc, s)
 	}
 }
 
@@ -407,7 +408,7 @@ func (edsImpl *edsBalancerImpl) newSubConn(priority priorityType, addrs []resolv
 func (edsImpl *edsBalancerImpl) Close() {
 	for _, bgwc := range edsImpl.priorityToLocalities {
 		if bg := bgwc.bg; bg != nil {
-			bg.close()
+			bg.Close()
 		}
 	}
 }
