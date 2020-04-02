@@ -25,10 +25,10 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -249,12 +249,10 @@ type jsonMC struct {
 	RetryPolicy             *jsonRetryPolicy
 }
 
-type loadBalancingConfig map[string]json.RawMessage
-
 // TODO(lyuxuan): delete this struct after cleaning up old service config implementation.
 type jsonSC struct {
 	LoadBalancingPolicy *string
-	LoadBalancingConfig *[]loadBalancingConfig
+	LoadBalancingConfig *internalserviceconfig.BalancerConfig
 	MethodConfig        *[]jsonMC
 	RetryThrottling     *retryThrottlingPolicy
 	HealthCheckConfig   *healthCheckConfig
@@ -280,40 +278,10 @@ func parseServiceConfig(js string) *serviceconfig.ParseResult {
 		healthCheckConfig: rsc.HealthCheckConfig,
 		rawJSONString:     js,
 	}
-	if rsc.LoadBalancingConfig != nil {
-		for i, lbcfg := range *rsc.LoadBalancingConfig {
-			if len(lbcfg) != 1 {
-				err := fmt.Errorf("invalid loadBalancingConfig: entry %v does not contain exactly 1 policy/config pair: %q", i, lbcfg)
-				grpclog.Warningf(err.Error())
-				return &serviceconfig.ParseResult{Err: err}
-			}
-			var name string
-			var jsonCfg json.RawMessage
-			for name, jsonCfg = range lbcfg {
-			}
-			builder := balancer.Get(name)
-			if builder == nil {
-				continue
-			}
-			sc.lbConfig = &lbConfig{name: name}
-			if parser, ok := builder.(balancer.ConfigParser); ok {
-				var err error
-				sc.lbConfig.cfg, err = parser.ParseConfig(jsonCfg)
-				if err != nil {
-					return &serviceconfig.ParseResult{Err: fmt.Errorf("error parsing loadBalancingConfig for policy %q: %v", name, err)}
-				}
-			} else if string(jsonCfg) != "{}" {
-				grpclog.Warningf("non-empty balancer configuration %q, but balancer does not implement ParseConfig", string(jsonCfg))
-			}
-			break
-		}
-		if sc.lbConfig == nil {
-			// We had a loadBalancingConfig field but did not encounter a
-			// supported policy.  The config is considered invalid in this
-			// case.
-			err := fmt.Errorf("invalid loadBalancingConfig: no supported policies found")
-			grpclog.Warningf(err.Error())
-			return &serviceconfig.ParseResult{Err: err}
+	if c := rsc.LoadBalancingConfig; c != nil {
+		sc.lbConfig = &lbConfig{
+			name: c.Name,
+			cfg:  c.Config,
 		}
 	}
 
