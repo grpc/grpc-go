@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -225,8 +226,9 @@ func (s) TestAddressesRemoved(t *testing.T) {
 		}
 	}
 
-	if _, err := testc.EmptyCall(ctx2, &testpb.Empty{}, grpc.WaitForReady(true)); status.Code(err) != codes.DeadlineExceeded {
-		t.Fatalf("Want RPC to fail with DeadlineExceeded after removing all addresses")
+	const msgWant = "produced zero addresses"
+	if _, err := testc.EmptyCall(ctx2, &testpb.Empty{}); err == nil || !strings.Contains(status.Convert(err).Message(), msgWant) {
+		t.Fatalf("EmptyCall() = _, %v, want _, Contains(Message(), %q)", err, msgWant)
 	}
 }
 
