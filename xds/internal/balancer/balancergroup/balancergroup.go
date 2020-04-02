@@ -156,7 +156,7 @@ func (s *pickerState) String() string {
 	return fmt.Sprintf("weight:%v,picker:%p,state:%v", s.weight, s.picker, s.state)
 }
 
-// BalancerGroup takes a list of balancers, and make then into one balancer.
+// BalancerGroup takes a list of balancers, and make them into one balancer.
 //
 // Note that this struct doesn't implement balancer.Balancer, because it's not
 // intended to be used directly as a balancer. It's expected to be used as a
@@ -231,12 +231,12 @@ type BalancerGroup struct {
 // DefaultSubBalancerCloseTimeout is defined as a variable instead of const for
 // testing.
 //
-// TODO: make it a parameter for NewBalancerGroup().
+// TODO: make it a parameter for New().
 var DefaultSubBalancerCloseTimeout = 15 * time.Minute
 
-// NewBalancerGroup creates a new BalancerGroup. Note that the BalancerGroup
+// New creates a new BalancerGroup. Note that the BalancerGroup
 // needs to be started to work.
-func NewBalancerGroup(cc balancer.ClientConn, loadStore lrs.Store, logger *grpclog.PrefixLogger) *BalancerGroup {
+func New(cc balancer.ClientConn, loadStore lrs.Store, logger *grpclog.PrefixLogger) *BalancerGroup {
 	return &BalancerGroup{
 		cc:        cc,
 		logger:    logger,
@@ -585,7 +585,7 @@ func buildPickerAndState(m map[internal.Locality]*pickerState) balancer.State {
 	return balancer.State{ConnectivityState: aggregatedState, Picker: newPickerGroup(readyPickerWithWeights)}
 }
 
-// NewRandomWRR is the WRR constructor used to picker sub-pickers from
+// NewRandomWRR is the WRR constructor used to pick sub-pickers from
 // sub-balancers. It's to be modified in tests.
 var NewRandomWRR = wrr.NewRandom
 
