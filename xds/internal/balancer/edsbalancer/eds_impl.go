@@ -218,7 +218,7 @@ func (edsImpl *edsBalancerImpl) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) 
 			// be started when necessary (e.g. when higher is down, or if it's a
 			// new lowest priority).
 			bgwc = &balancerGroupWithConfig{
-				bg:      balancergroup.NewBalancerGroup(edsImpl.ccWrapperWithPriority(priority), edsImpl.loadStore, edsImpl.logger),
+				bg:      balancergroup.New(edsImpl.ccWrapperWithPriority(priority), edsImpl.loadStore, edsImpl.logger),
 				configs: make(map[internal.Locality]*localityConfig),
 			}
 			edsImpl.priorityToLocalities[priority] = bgwc
