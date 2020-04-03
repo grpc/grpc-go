@@ -33,8 +33,8 @@ import (
 )
 
 var (
-	port = flag.Int("port", 50051, "the port to serve on")
-	sleep = flag.Duration("sleep", time.Second * 5, "duration between changes in health")
+	port  = flag.Int("port", 50051, "the port to serve on")
+	sleep = flag.Duration("sleep", time.Second*5, "duration between changes in health")
 
 	system = "" // empty string represents the health of the system
 )

@@ -57,8 +57,8 @@ func main() {
 	defer cleanup()
 	r.InitialState(resolver.State{
 		Addresses: []resolver.Address{
-			{ Addr: "localhost:50051" },
-			{ Addr: "localhost:50052" },
+			{Addr: "localhost:50051"},
+			{Addr: "localhost:50052"},
 		},
 	})
 
