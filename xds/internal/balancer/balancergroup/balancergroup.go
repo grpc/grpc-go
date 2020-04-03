@@ -62,7 +62,7 @@ type subBalancerWithConfig struct {
 	// The static part of sub-balancer. Keeps balancerBuilders and addresses.
 	// To be used when restarting sub-balancer.
 	builder balancer.Builder
-	addrs   []resolver.Address
+	ccState balancer.ClientConnState
 	// The dynamic part of sub-balancer. Only used when balancer group is
 	// started. Gets cleared when sub-balancer is closed.
 	balancer balancer.Balancer
@@ -98,13 +98,13 @@ func (sbc *subBalancerWithConfig) startBalancer() {
 	sbc.group.logger.Infof("Created child policy %p of type %v", b, sbc.builder.Name())
 	sbc.balancer = b
 	if ub, ok := b.(balancer.V2Balancer); ok {
-		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: sbc.addrs}})
+		ub.UpdateClientConnState(sbc.ccState)
 	} else {
-		b.HandleResolvedAddrs(sbc.addrs, nil)
+		b.HandleResolvedAddrs(sbc.ccState.ResolverState.Addresses, nil)
 	}
 }
 
-func (sbc *subBalancerWithConfig) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+func (sbc *subBalancerWithConfig) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	b := sbc.balancer
 	if b == nil {
 		// This sub-balancer was closed. This can happen when EDS removes a
@@ -114,14 +114,14 @@ func (sbc *subBalancerWithConfig) handleSubConnStateChange(sc balancer.SubConn, 
 		return
 	}
 	if ub, ok := b.(balancer.V2Balancer); ok {
-		ub.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: state})
+		ub.UpdateSubConnState(sc, state)
 	} else {
-		b.HandleSubConnStateChange(sc, state)
+		b.HandleSubConnStateChange(sc, state.ConnectivityState)
 	}
 }
 
-func (sbc *subBalancerWithConfig) updateAddrs(addrs []resolver.Address) {
-	sbc.addrs = addrs
+func (sbc *subBalancerWithConfig) updateClientConnState(s balancer.ClientConnState) error {
+	sbc.ccState = s
 	b := sbc.balancer
 	if b == nil {
 		// This sub-balancer was closed. This should never happen because
@@ -132,13 +132,13 @@ func (sbc *subBalancerWithConfig) updateAddrs(addrs []resolver.Address) {
 		// This will be a common case with priority support, because a
 		// sub-balancer (and the whole balancer group) could be closed because
 		// it's the lower priority, but it can still get address updates.
-		return
+		return nil
 	}
 	if ub, ok := b.(balancer.V2Balancer); ok {
-		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: addrs}})
-	} else {
-		b.HandleResolvedAddrs(addrs, nil)
+		return ub.UpdateClientConnState(s)
 	}
+	b.HandleResolvedAddrs(s.ResolverState.Addresses, nil)
+	return nil
 }
 
 func (sbc *subBalancerWithConfig) stopBalancer() {
@@ -213,7 +213,7 @@ type BalancerGroup struct {
 	// incomingMu guards all operations in the direction:
 	// Sub-balancer-->ClientConn. Including NewSubConn, RemoveSubConn, and
 	// updatePicker. It also guards the map from SubConn to balancer ID, so
-	// handleSubConnStateChange needs to hold it shortly to find the
+	// updateSubConnState needs to hold it shortly to find the
 	// sub-balancer to forward the update.
 	//
 	// The corresponding boolean incomingStarted is used to stop further updates
@@ -435,37 +435,35 @@ func (bg *BalancerGroup) ChangeWeight(id internal.Locality, newWeight uint32) {
 
 // Following are actions from the parent grpc.ClientConn, forward to sub-balancers.
 
-// HandleSubConnStateChange handles the state for the subconn. It finds the
+// UpdateSubConnState handles the state for the subconn. It finds the
 // corresponding balancer and forwards the update.
-func (bg *BalancerGroup) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+func (bg *BalancerGroup) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	bg.incomingMu.Lock()
 	config, ok := bg.scToSubBalancer[sc]
 	if !ok {
 		bg.incomingMu.Unlock()
 		return
 	}
-	if state == connectivity.Shutdown {
+	if state.ConnectivityState == connectivity.Shutdown {
 		// Only delete sc from the map when state changed to Shutdown.
 		delete(bg.scToSubBalancer, sc)
 	}
 	bg.incomingMu.Unlock()
 
 	bg.outgoingMu.Lock()
-	config.handleSubConnStateChange(sc, state)
+	config.updateSubConnState(sc, state)
 	bg.outgoingMu.Unlock()
 }
 
-// HandleResolvedAddrs handles addresses from resolver. It finds the balancer
-// and forwards the update.
-//
-// TODO: change this to UpdateClientConnState to handle addresses and balancer
-// config.
-func (bg *BalancerGroup) HandleResolvedAddrs(id internal.Locality, addrs []resolver.Address) {
+// UpdateClientConnState handles ClientState (including balancer config and
+// addresses) from resolver. It finds the balancer and forwards the update.
+func (bg *BalancerGroup) UpdateClientConnState(id internal.Locality, s balancer.ClientConnState) error {
 	bg.outgoingMu.Lock()
+	defer bg.outgoingMu.Unlock()
 	if config, ok := bg.idToBalancerConfig[id]; ok {
-		config.updateAddrs(addrs)
+		return config.updateClientConnState(s)
 	}
-	bg.outgoingMu.Unlock()
+	return nil
 }
 
 // TODO: handleServiceConfig()
@@ -515,7 +513,12 @@ func (bg *BalancerGroup) updateBalancerState(id internal.Locality, state balance
 		bg.logger.Warningf("balancer group: pickerState for %v not found when update picker/state", id)
 		return
 	}
-	pickerSt.picker = newLoadReportPicker(state.Picker, id, bg.loadStore)
+	newPicker := state.Picker
+	if bg.loadStore != nil {
+		// Only wrap the picker to do load reporting if loadStore was set.
+		newPicker = newLoadReportPicker(state.Picker, id, bg.loadStore)
+	}
+	pickerSt.picker = newPicker
 	pickerSt.state = state.ConnectivityState
 	if bg.incomingStarted {
 		bg.logger.Infof("Child pickers with weight: %+v", bg.idToPickerState)

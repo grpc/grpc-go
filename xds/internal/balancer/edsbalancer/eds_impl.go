@@ -139,7 +139,9 @@ func (edsImpl *edsBalancerImpl) HandleChildPolicy(name string, config json.RawMe
 			//  balancer becomes ready).
 			bgwc.bg.Remove(id)
 			bgwc.bg.Add(id, config.weight, edsImpl.subBalancerBuilder)
-			bgwc.bg.HandleResolvedAddrs(id, config.addrs)
+			bgwc.bg.UpdateClientConnState(id, balancer.ClientConnState{
+				ResolverState: resolver.State{Addresses: config.addrs},
+			})
 		}
 	}
 }
@@ -313,7 +315,9 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 
 		if addrsChanged {
 			config.addrs = newAddrs
-			bgwc.bg.HandleResolvedAddrs(lid, newAddrs)
+			bgwc.bg.UpdateClientConnState(lid, balancer.ClientConnState{
+				ResolverState: resolver.State{Addresses: newAddrs},
+			})
 		}
 	}
 
@@ -344,7 +348,7 @@ func (edsImpl *edsBalancerImpl) HandleSubConnStateChange(sc balancer.SubConn, s 
 		return
 	}
 	if bg := bgwc.bg; bg != nil {
-		bg.HandleSubConnStateChange(sc, s)
+		bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: s})
 	}
 }
 

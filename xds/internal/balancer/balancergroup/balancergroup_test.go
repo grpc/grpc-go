@@ -65,12 +65,12 @@ func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	// Add one balancer to group.
 	bg.Add(testBalancerIDs[0], 1, rrBuilder)
 	// Send one resolved address.
-	bg.HandleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:1])
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
 
 	// Send subconn state change.
 	sc1 := <-cc.NewSubConnCh
-	bg.HandleSubConnStateChange(sc1, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc1, connectivity.Ready)
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with one backend.
 	p1 := <-cc.NewPickerCh
@@ -82,11 +82,11 @@ func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	}
 
 	// Send two addresses.
-	bg.HandleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 	// Expect one new subconn, send state update.
 	sc2 := <-cc.NewSubConnCh
-	bg.HandleSubConnStateChange(sc2, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc2, connectivity.Ready)
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin pick.
 	p2 := <-cc.NewPickerCh
@@ -96,12 +96,12 @@ func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	}
 
 	// Remove the first address.
-	bg.HandleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[1:2])
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[1:2]}})
 	scToRemove := <-cc.RemoveSubConnCh
 	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
 	}
-	bg.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
+	bg.UpdateSubConnState(scToRemove, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 
 	// Test pick with only the second subconn.
 	p3 := <-cc.NewPickerCh
@@ -122,18 +122,18 @@ func (s) TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
 	bg.Add(testBalancerIDs[0], 1, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:1])
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
 	sc1 := <-cc.NewSubConnCh
 
 	bg.Add(testBalancerIDs[1], 1, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[0:1])
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
 	sc2 := <-cc.NewSubConnCh
 
 	// Send state changes for both subconns.
-	bg.HandleSubConnStateChange(sc1, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc1, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc2, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc2, connectivity.Ready)
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin on the last picker.
 	p1 := <-cc.NewPickerCh
@@ -152,24 +152,24 @@ func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
 	bg.Add(testBalancerIDs[0], 1, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 	sc1 := <-cc.NewSubConnCh
 	sc2 := <-cc.NewSubConnCh
 
 	bg.Add(testBalancerIDs[1], 1, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 	sc3 := <-cc.NewSubConnCh
 	sc4 := <-cc.NewSubConnCh
 
 	// Send state changes for both subconns.
-	bg.HandleSubConnStateChange(sc1, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc1, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc2, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc2, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc3, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc3, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc4, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc4, connectivity.Ready)
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin on the last picker.
 	p1 := <-cc.NewPickerCh
@@ -179,7 +179,7 @@ func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	}
 
 	// Turn sc2's connection down, should be RR between balancers.
-	bg.HandleSubConnStateChange(sc2, connectivity.TransientFailure)
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	p2 := <-cc.NewPickerCh
 	// Expect two sc1's in the result, because balancer1 will be picked twice,
 	// but there's only one sc in it.
@@ -189,12 +189,12 @@ func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	}
 
 	// Remove sc3's addresses.
-	bg.HandleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[3:4])
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[3:4]}})
 	scToRemove := <-cc.RemoveSubConnCh
 	if !cmp.Equal(scToRemove, sc3, cmp.AllowUnexported(testutils.TestSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc3, scToRemove)
 	}
-	bg.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
+	bg.UpdateSubConnState(scToRemove, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 	p3 := <-cc.NewPickerCh
 	want = []balancer.SubConn{sc1, sc4}
 	if err := testutils.IsRoundRobin(want, subConnFromPicker(p3)); err != nil {
@@ -202,7 +202,7 @@ func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	}
 
 	// Turn sc1's connection down.
-	bg.HandleSubConnStateChange(sc1, connectivity.TransientFailure)
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	p4 := <-cc.NewPickerCh
 	want = []balancer.SubConn{sc4}
 	if err := testutils.IsRoundRobin(want, subConnFromPicker(p4)); err != nil {
@@ -210,7 +210,7 @@ func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	}
 
 	// Turn last connection to connecting.
-	bg.HandleSubConnStateChange(sc4, connectivity.Connecting)
+	bg.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	p5 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
 		if _, err := p5.Pick(balancer.PickInfo{}); err != balancer.ErrNoSubConnAvailable {
@@ -219,7 +219,7 @@ func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	}
 
 	// Turn all connections down.
-	bg.HandleSubConnStateChange(sc4, connectivity.TransientFailure)
+	bg.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	p6 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
 		if _, err := p6.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
@@ -237,24 +237,24 @@ func (s) TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
 	bg.Add(testBalancerIDs[0], 2, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 	sc1 := <-cc.NewSubConnCh
 	sc2 := <-cc.NewSubConnCh
 
 	bg.Add(testBalancerIDs[1], 1, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 	sc3 := <-cc.NewSubConnCh
 	sc4 := <-cc.NewSubConnCh
 
 	// Send state changes for both subconns.
-	bg.HandleSubConnStateChange(sc1, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc1, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc2, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc2, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc3, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc3, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc4, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc4, connectivity.Ready)
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin on the last picker.
 	p1 := <-cc.NewPickerCh
@@ -273,24 +273,24 @@ func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	// Add three balancers to group and send one resolved address to both
 	// balancers.
 	bg.Add(testBalancerIDs[0], 1, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:1])
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
 	sc1 := <-cc.NewSubConnCh
 
 	bg.Add(testBalancerIDs[1], 1, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[1:2])
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[1:2]}})
 	sc2 := <-cc.NewSubConnCh
 
 	bg.Add(testBalancerIDs[2], 1, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[2], testBackendAddrs[1:2])
+	bg.UpdateClientConnState(testBalancerIDs[2], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[1:2]}})
 	sc3 := <-cc.NewSubConnCh
 
 	// Send state changes for both subconns.
-	bg.HandleSubConnStateChange(sc1, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc1, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc2, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc2, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc3, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc3, connectivity.Ready)
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	p1 := <-cc.NewPickerCh
 	want := []balancer.SubConn{sc1, sc2, sc3}
@@ -311,7 +311,7 @@ func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	}
 
 	// move balancer 3 into transient failure.
-	bg.HandleSubConnStateChange(sc3, connectivity.TransientFailure)
+	bg.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	// Remove the first balancer, while the third is transient failure.
 	bg.Remove(testBalancerIDs[0])
 	scToRemove = <-cc.RemoveSubConnCh
@@ -335,24 +335,24 @@ func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
 	bg.Add(testBalancerIDs[0], 2, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 	sc1 := <-cc.NewSubConnCh
 	sc2 := <-cc.NewSubConnCh
 
 	bg.Add(testBalancerIDs[1], 1, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 	sc3 := <-cc.NewSubConnCh
 	sc4 := <-cc.NewSubConnCh
 
 	// Send state changes for both subconns.
-	bg.HandleSubConnStateChange(sc1, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc1, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc2, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc2, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc3, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc3, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc4, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc4, connectivity.Ready)
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin on the last picker.
 	p1 := <-cc.NewPickerCh
@@ -383,28 +383,28 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
 	bg.Add(testBalancerIDs[0], 2, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 	sc1 := <-cc.NewSubConnCh
 	sc2 := <-cc.NewSubConnCh
 	backendToBalancerID[sc1] = testBalancerIDs[0]
 	backendToBalancerID[sc2] = testBalancerIDs[0]
 
 	bg.Add(testBalancerIDs[1], 1, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 	sc3 := <-cc.NewSubConnCh
 	sc4 := <-cc.NewSubConnCh
 	backendToBalancerID[sc3] = testBalancerIDs[1]
 	backendToBalancerID[sc4] = testBalancerIDs[1]
 
 	// Send state changes for both subconns.
-	bg.HandleSubConnStateChange(sc1, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc1, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc2, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc2, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc3, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc3, connectivity.Ready)
-	bg.HandleSubConnStateChange(sc4, connectivity.Connecting)
-	bg.HandleSubConnStateChange(sc4, connectivity.Ready)
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	bg.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	bg.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin on the last picker.
 	p1 := <-cc.NewPickerCh
@@ -462,9 +462,9 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
 	bg.Add(testBalancerIDs[0], 2, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 	bg.Add(testBalancerIDs[1], 1, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 
 	bg.Start()
 
@@ -473,8 +473,8 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 		addrs := <-cc.NewSubConnAddrsCh
 		sc := <-cc.NewSubConnCh
 		m1[addrs[0]] = sc
-		bg.HandleSubConnStateChange(sc, connectivity.Connecting)
-		bg.HandleSubConnStateChange(sc, connectivity.Ready)
+		bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+		bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
 
 	// Test roundrobin on the last picker.
@@ -490,19 +490,19 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 
 	bg.Close()
 	for i := 0; i < 4; i++ {
-		bg.HandleSubConnStateChange(<-cc.RemoveSubConnCh, connectivity.Shutdown)
+		bg.UpdateSubConnState(<-cc.RemoveSubConnCh, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 	}
 
 	// Add b3, weight 1, backends [1,2].
 	bg.Add(testBalancerIDs[2], 1, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[2], testBackendAddrs[1:3])
+	bg.UpdateClientConnState(testBalancerIDs[2], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[1:3]}})
 
 	// Remove b1.
 	bg.Remove(testBalancerIDs[0])
 
 	// Update b2 to weight 3, backends [0,3].
 	bg.ChangeWeight(testBalancerIDs[1], 3)
-	bg.HandleResolvedAddrs(testBalancerIDs[1], append([]resolver.Address(nil), testBackendAddrs[0], testBackendAddrs[3]))
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: append([]resolver.Address(nil), testBackendAddrs[0], testBackendAddrs[3])}})
 
 	bg.Start()
 
@@ -511,8 +511,8 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 		addrs := <-cc.NewSubConnAddrsCh
 		sc := <-cc.NewSubConnCh
 		m2[addrs[0]] = sc
-		bg.HandleSubConnStateChange(sc, connectivity.Connecting)
-		bg.HandleSubConnStateChange(sc, connectivity.Ready)
+		bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+		bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
 
 	// Test roundrobin on the last picker.
@@ -544,9 +544,9 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	bg := New(cc, nil, nil)
 
 	bg.Add(testBalancerIDs[0], 2, &testutils.TestConstBalancerBuilder{})
-	bg.HandleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 	bg.Add(testBalancerIDs[1], 1, &testutils.TestConstBalancerBuilder{})
-	bg.HandleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 
 	bg.Start()
 }
@@ -570,9 +570,9 @@ func initBalancerGroupForCachingTest(t *testing.T) (*BalancerGroup, *testutils.T
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
 	bg.Add(testBalancerIDs[0], 2, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 	bg.Add(testBalancerIDs[1], 1, rrBuilder)
-	bg.HandleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 
 	bg.Start()
 
@@ -581,8 +581,8 @@ func initBalancerGroupForCachingTest(t *testing.T) (*BalancerGroup, *testutils.T
 		addrs := <-cc.NewSubConnAddrsCh
 		sc := <-cc.NewSubConnCh
 		m1[addrs[0]] = sc
-		bg.HandleSubConnStateChange(sc, connectivity.Connecting)
-		bg.HandleSubConnStateChange(sc, connectivity.Ready)
+		bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+		bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
 
 	// Test roundrobin on the last picker.
@@ -627,7 +627,7 @@ func (s) TestBalancerGroup_locality_caching(t *testing.T) {
 
 	// Turn down subconn for addr2, shouldn't get picker update because
 	// sub-balancer1 was removed.
-	bg.HandleSubConnStateChange(addrToSC[testBackendAddrs[2]], connectivity.TransientFailure)
+	bg.UpdateSubConnState(addrToSC[testBackendAddrs[2]], balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	for i := 0; i < 10; i++ {
 		select {
 		case <-cc.NewPickerCh:
@@ -760,7 +760,7 @@ func (s) TestBalancerGroup_locality_caching_readd_with_different_builder(t *test
 		}
 	}
 
-	bg.HandleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[4:6])
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[4:6]}})
 
 	newSCTimeout := time.After(time.Millisecond * 500)
 	scToAdd := map[resolver.Address]int{
@@ -777,8 +777,8 @@ func (s) TestBalancerGroup_locality_caching_readd_with_different_builder(t *test
 			scToAdd[addr[0]] = c - 1
 			sc := <-cc.NewSubConnCh
 			addrToSC[addr[0]] = sc
-			bg.HandleSubConnStateChange(sc, connectivity.Connecting)
-			bg.HandleSubConnStateChange(sc, connectivity.Ready)
+			bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+			bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 		case <-newSCTimeout:
 			t.Fatalf("timeout waiting for subConns (from new sub-balancer) to be newed")
 		}
