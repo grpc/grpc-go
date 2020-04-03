@@ -23,7 +23,8 @@
 // package, and gRPC clients should expect a corresponding error to be
 // returned from the RPC call.
 //
-
+// This package upholds the invariants that a non-nil error may not
+// contain an OK code, and an OK code must result in a nil error.
 package status
 
 import (
@@ -54,9 +55,6 @@ func Newf(c codes.Code, format string, a ...interface{}) *Status {
 
 // FromProto returns a Status representing s.
 func FromProto(s *spb.Status) *Status {
-	if s != nil {
-		fmt.Println(s)
-	}
 	return &Status{s: proto.Clone(s).(*spb.Status)}
 }
 
