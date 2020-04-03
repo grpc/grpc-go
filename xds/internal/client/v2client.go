@@ -255,11 +255,25 @@ func (v2c *v2Client) processWatchInfo(t *watchInfo) (target []string, typeURL, v
 // processAckInfo pulls the fields needed by the ack request from a ackInfo.
 //
 // If no active watch is found for this ack, it returns false for send.
-func (v2c *v2Client) processAckInfo(t *ackInfo) (target []string, typeURL, version, nonce string, send bool) {
+func (v2c *v2Client) processAckInfo(t *ackInfo, stream adsStream) (target []string, typeURL, version, nonce string, send bool) {
+	if t.stream != stream {
+		// If ACK's stream isn't the current sending stream, this means the ACK
+		// was pushed to queue before the old stream broke, and a new stream has
+		// been started since. Return immediately here so we don't update the
+		// nonce for the new stream.
+		return
+	}
 	typeURL = t.typeURL
 
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
+
+	// Update the nonce no matter if we are going to send the ACK request on
+	// wire. We may not send the request if the watch is canceled. But the nonce
+	// needs to be updated so the next request will have the right nonce.
+	nonce = t.nonce
+	v2c.nonceMap[typeURL] = nonce
+
 	wi, ok := v2c.watchMap[typeURL]
 	if !ok {
 		// We don't send the request ack if there's no active watch (this can be
@@ -267,13 +281,10 @@ func (v2c *v2Client) processAckInfo(t *ackInfo) (target []string, typeURL, versi
 		// canceled while the ackInfo is in queue), because there's no resource
 		// name. And if we send a request with empty resource name list, the
 		// server may treat it as a wild card and send us everything.
-		return // This returns all zero values, and false for send.
+		return nil, "", "", "", false
 	}
 	send = true
-
 	version = t.version
-	nonce = t.nonce
-	target = wi.target
 	if version == "" {
 		// This is a nack, get the previous acked version.
 		version = v2c.versionMap[typeURL]
@@ -283,8 +294,8 @@ func (v2c *v2Client) processAckInfo(t *ackInfo) (target []string, typeURL, versi
 	} else {
 		v2c.versionMap[typeURL] = version
 	}
-	v2c.nonceMap[typeURL] = nonce
-	return
+	target = wi.target
+	return target, typeURL, version, nonce, send
 }
 
 // send is a separate goroutine for sending watch requests on the xds stream.
@@ -327,7 +338,7 @@ func (v2c *v2Client) send() {
 			case *watchInfo:
 				target, typeURL, version, nonce, send = v2c.processWatchInfo(t)
 			case *ackInfo:
-				target, typeURL, version, nonce, send = v2c.processAckInfo(t)
+				target, typeURL, version, nonce, send = v2c.processAckInfo(t, stream)
 			}
 			if !send {
 				continue
@@ -381,6 +392,7 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 				typeURL: typeURL,
 				version: "",
 				nonce:   resp.GetNonce(),
+				stream:  stream,
 			})
 			v2c.logger.Warningf("Sending NACK for response type: %v, version: %v, nonce: %v, reason: %v", typeURL, resp.GetVersionInfo(), resp.GetNonce(), respHandleErr)
 			continue
@@ -389,6 +401,7 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 			typeURL: typeURL,
 			version: resp.GetVersionInfo(),
 			nonce:   resp.GetNonce(),
+			stream:  stream,
 		})
 		v2c.logger.Infof("Sending ACK for response type: %v, version: %v, nonce: %v", typeURL, resp.GetVersionInfo(), resp.GetNonce())
 		success = true
