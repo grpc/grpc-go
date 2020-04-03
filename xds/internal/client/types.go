@@ -72,8 +72,12 @@ func (wi *watchInfo) stopTimer() {
 
 type ackInfo struct {
 	typeURL string
-	version string // Nack if version is an empty string.
+	version string // NACK if version is an empty string.
 	nonce   string
+	// ACK/NACK are tagged with the stream it's for. When the stream is down,
+	// all the ACK/NACK for this stream will be dropped, and the version/nonce
+	// won't be updated.
+	stream adsStream
 }
 
 type ldsUpdate struct {

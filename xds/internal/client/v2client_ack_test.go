@@ -98,6 +98,10 @@ func startXDS(t *testing.T, xdsname string, v2c *v2Client, reqChan *testutils.Ch
 //
 // It also waits and checks that the ack request contains the given version, and
 // the generated nonce.
+//
+// TODO: make this and other helper function either consistently return error,
+// and fatal() in the test code, or all call t.Fatal(), and mark them as
+// helper().
 func sendGoodResp(t *testing.T, xdsname string, fakeServer *fakeserver.Server, version int, goodResp *xdspb.DiscoveryResponse, wantReq *xdspb.DiscoveryRequest, callbackCh *testutils.Channel) (nonce string) {
 	nonce = sendXDSRespWithVersion(fakeServer.XDSResponseChan, goodResp, version)
 	t.Logf("Good %s response pushed to fakeServer...", xdsname)
@@ -262,4 +266,111 @@ func (s) TestV2ClientAckNackAfterNewWatch(t *testing.T) {
 
 	sendGoodResp(t, "LDS", fakeServer, versionLDS, goodLDSResponse1, goodLDSRequest, cbLDS)
 	versionLDS++
+}
+
+// TestV2ClientAckNewWatchAfterCancel verifies the new request for a new watch
+// after the previous watch is canceled, has the right version.
+func (s) TestV2ClientAckNewWatchAfterCancel(t *testing.T) {
+	var versionCDS = 3000
+
+	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	defer cleanup()
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	defer v2c.close()
+	t.Log("Started xds v2Client...")
+
+	// Start a CDS watch.
+	callbackCh := testutils.NewChannel()
+	cancel := v2c.watchCDS(goodClusterName1, func(u CDSUpdate, err error) {
+		t.Logf("Received %s callback with ldsUpdate {%+v} and error {%v}", "CDS", u, err)
+		callbackCh.Send(struct{}{})
+	})
+	if err := compareXDSRequest(fakeServer.XDSRequestChan, goodCDSRequest, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("FakeServer received %s request...", "CDS")
+
+	// Send a good CDS response, this function waits for the ACK with the right
+	// version.
+	nonce := sendGoodResp(t, "CDS", fakeServer, versionCDS, goodCDSResponse1, goodCDSRequest, callbackCh)
+
+	// Cancel the CDS watch, and start a new one. The new watch should have the
+	// version from the response above.
+	cancel()
+	v2c.watchCDS(goodClusterName1, func(u CDSUpdate, err error) {
+		t.Logf("Received %s callback with ldsUpdate {%+v} and error {%v}", "CDS", u, err)
+		callbackCh.Send(struct{}{})
+	})
+	if err := compareXDSRequest(fakeServer.XDSRequestChan, goodCDSRequest, strconv.Itoa(versionCDS), nonce); err != nil {
+		t.Fatalf("Failed to receive %s request: %v", "CDS", err)
+	}
+	versionCDS++
+
+	// Send a bad response with the next version.
+	sendBadResp(t, "CDS", fakeServer, versionCDS, goodCDSRequest)
+	versionCDS++
+
+	// send another good response, and check for ack, with the new version.
+	sendGoodResp(t, "CDS", fakeServer, versionCDS, goodCDSResponse1, goodCDSRequest, callbackCh)
+	versionCDS++
+}
+
+// TestV2ClientAckCancelResponseRace verifies if the response and ACK request
+// race with cancel (which means the ACK request will not be sent on wire,
+// because there's no active watch), the nonce will still be updated, and the
+// new request with the new watch will have the correct nonce.
+func (s) TestV2ClientAckCancelResponseRace(t *testing.T) {
+	var versionCDS = 3000
+
+	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	defer cleanup()
+	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	defer v2c.close()
+	t.Log("Started xds v2Client...")
+
+	// Start a CDS watch.
+	callbackCh := testutils.NewChannel()
+	cancel := v2c.watchCDS(goodClusterName1, func(u CDSUpdate, err error) {
+		t.Logf("Received %s callback with ldsUpdate {%+v} and error {%v}", "CDS", u, err)
+		callbackCh.Send(struct{}{})
+	})
+	if err := compareXDSRequest(fakeServer.XDSRequestChan, goodCDSRequest, "", ""); err != nil {
+		t.Fatalf("Failed to receive %s request: %v", "CDS", err)
+	}
+	t.Logf("FakeServer received %s request...", "CDS")
+
+	// send another good response, and check for ack, with the new version.
+	sendGoodResp(t, "CDS", fakeServer, versionCDS, goodCDSResponse1, goodCDSRequest, callbackCh)
+	versionCDS++
+
+	// Cancel the watch before the next response is sent. This mimics the case
+	// watch is canceled while response is on wire.
+	cancel()
+
+	// Send a good response.
+	nonce := sendXDSRespWithVersion(fakeServer.XDSResponseChan, goodCDSResponse1, versionCDS)
+	t.Logf("Good %s response pushed to fakeServer...", "CDS")
+
+	// Expect no ACK because watch was canceled.
+	if req, err := fakeServer.XDSRequestChan.Receive(); err != testutils.ErrRecvTimeout {
+		t.Fatalf("Got unexpected xds request after watch is canceled: %v", req)
+	}
+
+	// Start a new watch. The new watch should have the nonce from the response
+	// above, and version from the first good response.
+	v2c.watchCDS(goodClusterName1, func(u CDSUpdate, err error) {
+		t.Logf("Received %s callback with ldsUpdate {%+v} and error {%v}", "CDS", u, err)
+		callbackCh.Send(struct{}{})
+	})
+	if err := compareXDSRequest(fakeServer.XDSRequestChan, goodCDSRequest, strconv.Itoa(versionCDS-1), nonce); err != nil {
+		t.Fatalf("Failed to receive %s request: %v", "CDS", err)
+	}
+
+	// Send a bad response with the next version.
+	sendBadResp(t, "CDS", fakeServer, versionCDS, goodCDSRequest)
+	versionCDS++
+
+	// send another good response, and check for ack, with the new version.
+	sendGoodResp(t, "CDS", fakeServer, versionCDS, goodCDSResponse1, goodCDSRequest, callbackCh)
+	versionCDS++
 }
