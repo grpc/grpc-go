@@ -112,11 +112,10 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats sta
 // at this point to be speaking over HTTP/2, so it's able to speak valid
 // gRPC.
 type serverHandlerTransport struct {
-	rw                http.ResponseWriter
-	req               *http.Request
-	timeoutSet        bool
-	timeout           time.Duration
-	didPendingHeaders bool
+	rw         http.ResponseWriter
+	req        *http.Request
+	timeoutSet bool
+	timeout    time.Duration
 
 	headerMD metadata.MD
 
@@ -186,9 +185,11 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) erro
 	ht.writeStatusMu.Lock()
 	defer ht.writeStatusMu.Unlock()
 
-	s.updateHeaderSent()
+	headersWritten := s.updateHeaderSent()
 	err := ht.do(func() {
-		ht.writePendingHeaders(s)
+		if !headersWritten {
+			ht.writePendingHeaders(s)
+		}
 
 		// And flush, in case no header or body has been sent yet.
 		// This forces a separation of headers and trailers if this is the
@@ -242,11 +243,6 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) erro
 // writePendingHeaders sets common and custom headers on the first
 // write call (Write, WriteHeader, or WriteStatus)
 func (ht *serverHandlerTransport) writePendingHeaders(s *Stream) {
-	if ht.didPendingHeaders {
-		return
-	}
-	ht.didPendingHeaders = true
-
 	ht.writeCommonHeaders(s)
 	ht.writeCustomHeaders(s)
 }
@@ -291,9 +287,11 @@ func (ht *serverHandlerTransport) writeCustomHeaders(s *Stream) {
 }
 
 func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
-	s.updateHeaderSent()
+	headersWritten := s.updateHeaderSent()
 	return ht.do(func() {
-		ht.writePendingHeaders(s)
+		if !headersWritten {
+			ht.writePendingHeaders(s)
+		}
 		ht.rw.Write(hdr)
 		ht.rw.Write(data)
 		ht.rw.(http.Flusher).Flush()
@@ -305,9 +303,11 @@ func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
 		return err
 	}
 
-	s.updateHeaderSent()
+	headersWritten := s.updateHeaderSent()
 	err := ht.do(func() {
-		ht.writePendingHeaders(s)
+		if !headersWritten {
+			ht.writePendingHeaders(s)
+		}
 
 		ht.rw.WriteHeader(200)
 		ht.rw.(http.Flusher).Flush()
