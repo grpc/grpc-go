@@ -98,6 +98,10 @@ func startXDS(t *testing.T, xdsname string, v2c *v2Client, reqChan *testutils.Ch
 //
 // It also waits and checks that the ack request contains the given version, and
 // the generated nonce.
+//
+// TODO: make this and other helper function either consistently return error,
+// and fatal() in the test code, or all call t.Fatal(), and mark them as
+// helper().
 func sendGoodResp(t *testing.T, xdsname string, fakeServer *fakeserver.Server, version int, goodResp *xdspb.DiscoveryResponse, wantReq *xdspb.DiscoveryRequest, callbackCh *testutils.Channel) (nonce string) {
 	nonce = sendXDSRespWithVersion(fakeServer.XDSResponseChan, goodResp, version)
 	t.Logf("Good %s response pushed to fakeServer...", xdsname)
@@ -266,8 +270,6 @@ func (s) TestV2ClientAckNackAfterNewWatch(t *testing.T) {
 
 // TestV2ClientAckNewWatchAfterCancel verifies the new request for a new watch
 // after the previous watch is canceled, has the right version.
-//
-// This test also verifies the version for different types are independent.
 func (s) TestV2ClientAckNewWatchAfterCancel(t *testing.T) {
 	var versionCDS = 3000
 
@@ -284,7 +286,7 @@ func (s) TestV2ClientAckNewWatchAfterCancel(t *testing.T) {
 		callbackCh.Send(struct{}{})
 	})
 	if err := compareXDSRequest(fakeServer.XDSRequestChan, goodCDSRequest, "", ""); err != nil {
-		t.Fatalf("Failed to receive %s request: %v", "CDS", err)
+		t.Fatal(err)
 	}
 	t.Logf("FakeServer received %s request...", "CDS")
 
@@ -315,10 +317,8 @@ func (s) TestV2ClientAckNewWatchAfterCancel(t *testing.T) {
 
 // TestV2ClientAckCancelResponseRace verifies if the response and ACK request
 // race with cancel (which means the ACK request will not be sent on wire,
-// because there's no active watch), the version will still be updates, and the
-// new request with the new watch will have the correct version number.
-//
-// This test also verifies the version for different types are independent.
+// because there's no active watch), the nonce will still be updated, and the
+// new request with the new watch will have the correct nonce.
 func (s) TestV2ClientAckCancelResponseRace(t *testing.T) {
 	var versionCDS = 3000
 
