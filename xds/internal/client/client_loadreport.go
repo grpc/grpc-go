@@ -44,9 +44,11 @@ func (c *Client) ReportLoad(server string, clusterName string, loadStore lrs.Sto
 		cc      *grpc.ClientConn
 		closeCC bool
 	)
+	c.logger.Infof("Starting load report to server: %s", server)
 	if server == "" || server == c.opts.Config.BalancerName {
 		cc = c.cc
 	} else {
+		c.logger.Infof("LRS server is different from xDS server, starting a new ClientConn")
 		dopts := append([]grpc.DialOption{c.opts.Config.Creds}, c.opts.DialOpts...)
 		ccNew, err := grpc.Dial(server, dopts...)
 		if err != nil {
