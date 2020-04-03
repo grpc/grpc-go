@@ -260,6 +260,13 @@ func (v2c *v2Client) processAckInfo(t *ackInfo) (target []string, typeURL, versi
 
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
+
+	// Update the nonce no matter if we are going to send the ACK request on
+	// wire. We may not send the request if the watch is canceled. But the nonce
+	// needs to be updated so the next request will have the right nonce.
+	nonce = t.nonce
+	v2c.nonceMap[typeURL] = nonce
+
 	wi, ok := v2c.watchMap[typeURL]
 	if !ok {
 		// We don't send the request ack if there's no active watch (this can be
@@ -267,13 +274,10 @@ func (v2c *v2Client) processAckInfo(t *ackInfo) (target []string, typeURL, versi
 		// canceled while the ackInfo is in queue), because there's no resource
 		// name. And if we send a request with empty resource name list, the
 		// server may treat it as a wild card and send us everything.
-		return // This returns all zero values, and false for send.
+		return nil, "", "", "", false
 	}
 	send = true
-
 	version = t.version
-	nonce = t.nonce
-	target = wi.target
 	if version == "" {
 		// This is a nack, get the previous acked version.
 		version = v2c.versionMap[typeURL]
@@ -283,8 +287,8 @@ func (v2c *v2Client) processAckInfo(t *ackInfo) (target []string, typeURL, versi
 	} else {
 		v2c.versionMap[typeURL] = version
 	}
-	v2c.nonceMap[typeURL] = nonce
-	return
+	target = wi.target
+	return target, typeURL, version, nonce, send
 }
 
 // send is a separate goroutine for sending watch requests on the xds stream.
