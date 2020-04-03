@@ -255,7 +255,14 @@ func (v2c *v2Client) processWatchInfo(t *watchInfo) (target []string, typeURL, v
 // processAckInfo pulls the fields needed by the ack request from a ackInfo.
 //
 // If no active watch is found for this ack, it returns false for send.
-func (v2c *v2Client) processAckInfo(t *ackInfo) (target []string, typeURL, version, nonce string, send bool) {
+func (v2c *v2Client) processAckInfo(t *ackInfo, stream adsStream) (target []string, typeURL, version, nonce string, send bool) {
+	if t.stream != stream {
+		// If ACK's stream isn't the current sending stream, this means the ACK
+		// was pushed to queue before the old stream broke, and a new stream has
+		// been started since. Return immediately here so we don't update the
+		// nonce for the new stream.
+		return
+	}
 	typeURL = t.typeURL
 
 	v2c.mu.Lock()
@@ -331,7 +338,7 @@ func (v2c *v2Client) send() {
 			case *watchInfo:
 				target, typeURL, version, nonce, send = v2c.processWatchInfo(t)
 			case *ackInfo:
-				target, typeURL, version, nonce, send = v2c.processAckInfo(t)
+				target, typeURL, version, nonce, send = v2c.processAckInfo(t, stream)
 			}
 			if !send {
 				continue
@@ -385,6 +392,7 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 				typeURL: typeURL,
 				version: "",
 				nonce:   resp.GetNonce(),
+				stream:  stream,
 			})
 			v2c.logger.Warningf("Sending NACK for response type: %v, version: %v, nonce: %v, reason: %v", typeURL, resp.GetVersionInfo(), resp.GetNonce(), respHandleErr)
 			continue
@@ -393,6 +401,7 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 			typeURL: typeURL,
 			version: resp.GetVersionInfo(),
 			nonce:   resp.GetNonce(),
+			stream:  stream,
 		})
 		v2c.logger.Infof("Sending ACK for response type: %v, version: %v, nonce: %v", typeURL, resp.GetVersionInfo(), resp.GetNonce())
 		success = true
