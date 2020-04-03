@@ -58,14 +58,14 @@ func FromProto(s *spb.Status) *Status {
 	return &Status{s: proto.Clone(s).(*spb.Status)}
 }
 
-// Error returns an error representing c and msg.  If c is OK, returns nil.
-func Error(c codes.Code, msg string) error {
+// Err returns an error representing c and msg.  If c is OK, returns nil.
+func Err(c codes.Code, msg string) error {
 	return New(c, msg).Err()
 }
 
 // Errorf returns Error(c, fmt.Sprintf(format, a...)).
 func Errorf(c codes.Code, format string, a ...interface{}) error {
-	return Error(c, fmt.Sprintf(format, a...))
+	return Err(c, fmt.Sprintf(format, a...))
 }
 
 // Code returns the status code contained in s.
@@ -97,7 +97,7 @@ func (s *Status) Err() error {
 	if s.Code() == codes.OK {
 		return nil
 	}
-	return (*StatusError)(s.Proto())
+	return (*Error)(s.Proto())
 }
 
 func (s *Status) Error() string {
@@ -141,23 +141,24 @@ func (s *Status) Details() []interface{} {
 	return details
 }
 
-// StatusError is an alias of a status proto.  It implements error and Status,
-// and a nil statusError should never be returned by this package.
-type StatusError spb.Status
+// Error is an alias of a status proto. It implements error and Status,
+// and a nil Error should never be returned by this package.
+type Error spb.Status
 
-func (se *StatusError) Error() string {
+func (se *Error) Error() string {
 	p := (*spb.Status)(se)
 	return fmt.Sprintf("rpc error: code = %s desc = %s", codes.Code(p.GetCode()), p.GetMessage())
 }
 
-func (se *StatusError) GRPCStatus() *Status {
+// GRPCStatus returns the Status represented by se.
+func (se *Error) GRPCStatus() *Status {
 	return FromProto((*spb.Status)(se))
 }
 
 // Is implements future error.Is functionality.
-// A statusError is equivalent if the code and message are identical.
-func (se *StatusError) Is(target error) bool {
-	tse, ok := target.(*StatusError)
+// A Error is equivalent if the code and message are identical.
+func (se *Error) Is(target error) bool {
+	tse, ok := target.(*Error)
 	if !ok {
 		return false
 	}
