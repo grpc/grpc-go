@@ -491,7 +491,7 @@ func (s) TestHandlerTransport_HandleStreams_ErrDetails(t *testing.T) {
 func checkHeaderAndTrailer(t *testing.T, rw testHandlerResponseWriter, wantHeader, wantTrailer http.Header) {
 	// For trailer-only responses, the trailer values might be reported as part of the Header. They will however
 	// be present in Trailer in either case. Hence, normalize the header by removing all trailer values.
-	actualHeader := rw.Result().Header.Clone()
+	actualHeader := cloneHeader(rw.Result().Header)
 	for _, trailerKey := range actualHeader["Trailer"] {
 		actualHeader.Del(trailerKey)
 	}
@@ -502,4 +502,22 @@ func checkHeaderAndTrailer(t *testing.T, rw testHandlerResponseWriter, wantHeade
 	if actualTrailer := rw.Result().Trailer; !reflect.DeepEqual(actualTrailer, wantTrailer) {
 		t.Errorf("Trailer mismatch.\n got: %#v\n want: %#v", actualTrailer, wantTrailer)
 	}
+}
+
+// cloneHeader performs a deep clone of an http.Header, since the (http.Header).Clone() method was only added in
+// Go 1.13.
+func cloneHeader(hdr http.Header) http.Header {
+	if hdr == nil {
+		return nil
+	}
+
+	hdrClone := make(http.Header, len(hdr))
+
+	for k, vv := range hdr {
+		vvClone := make([]string, len(vv))
+		copy(vvClone, vv)
+		hdrClone[k] = vvClone
+	}
+
+	return hdrClone
 }
