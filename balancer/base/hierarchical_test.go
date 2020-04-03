@@ -99,11 +99,11 @@ func TestSplitHierarchicalAddresses(t *testing.T) {
 				{Addr: "b1", Attributes: attributes.New(hierarchicalPathKey, []string{"b"})},
 			},
 			want: map[string][]resolver.Address{
-				"a": []resolver.Address{
+				"a": {
 					{Addr: "a0", Attributes: attributes.New(hierarchicalPathKey, []string{})},
 					{Addr: "a1", Attributes: attributes.New(hierarchicalPathKey, []string{})},
 				},
-				"b": []resolver.Address{
+				"b": {
 					{Addr: "b0", Attributes: attributes.New(hierarchicalPathKey, []string{})},
 					{Addr: "b1", Attributes: attributes.New(hierarchicalPathKey, []string{})},
 				},
@@ -119,7 +119,7 @@ func TestSplitHierarchicalAddresses(t *testing.T) {
 				{Addr: "b1", Attributes: nil},
 			},
 			want: map[string][]resolver.Address{
-				"a": []resolver.Address{
+				"a": {
 					{Addr: "a0", Attributes: attributes.New(hierarchicalPathKey, []string{})},
 					{Addr: "a1", Attributes: attributes.New(hierarchicalPathKey, []string{})},
 				},
@@ -136,7 +136,7 @@ func TestSplitHierarchicalAddresses(t *testing.T) {
 				{Addr: "b1", Attributes: attributes.New(hierarchicalPathKey, 314)},
 			},
 			want: map[string][]resolver.Address{
-				"a": []resolver.Address{
+				"a": {
 					{Addr: "a0", Attributes: attributes.New(hierarchicalPathKey, []string{})},
 					{Addr: "a1", Attributes: attributes.New(hierarchicalPathKey, []string{})},
 				},
@@ -155,13 +155,13 @@ func TestSplitHierarchicalAddresses(t *testing.T) {
 
 func TestSplitHierarchicalAddressesE2E(t *testing.T) {
 	hierarchy := map[string]map[string][]string{
-		"p0": map[string][]string{
-			"wt0": []string{"addr0", "addr1"},
-			"wt1": []string{"addr2", "addr3"},
+		"p0": {
+			"wt0": {"addr0", "addr1"},
+			"wt1": {"addr2", "addr3"},
 		},
-		"p1": map[string][]string{
-			"wt10": []string{"addr10", "addr11"},
-			"wt11": []string{"addr12", "addr13"},
+		"p1": {
+			"wt10": {"addr10", "addr11"},
+			"wt11": {"addr12", "addr13"},
 		},
 	}
 
