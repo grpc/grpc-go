@@ -1,3 +1,21 @@
+/*
+ *
+ * Copyright 2018 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package main
 
 import (
@@ -11,6 +29,7 @@ import (
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 	_ "google.golang.org/grpc/health"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 )
 
 var serviceConfig = `{
@@ -20,18 +39,13 @@ var serviceConfig = `{
 	}
 }`
 
-const (
-	exampleScheme      = "example"
-	exampleServiceName = "health.example.grpc.io"
-)
-
-var addrs = []string{"localhost:50051", "localhost:50052"}
-
 func callUnaryEcho(c pb.EchoClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	r, err := c.UnaryEcho(ctx, &pb.EchoRequest{})
-	if err == nil {
+	if err != nil {
+		fmt.Println(fmt.Sprintf("UnaryEcho: _, %v", err))
+	} else {
 		fmt.Println("UnaryEcho: ", r.GetMessage())
 	}
 }
@@ -39,7 +53,16 @@ func callUnaryEcho(c pb.EchoClient) {
 func main() {
 	flag.Parse()
 
-	address := fmt.Sprintf("%s:///%s", exampleScheme, exampleServiceName)
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	r.InitialState(resolver.State{
+		Addresses: []resolver.Address{
+			{ Addr: "localhost:50051" },
+			{ Addr: "localhost:50052" },
+		},
+	})
+
+	address := fmt.Sprintf("%s:///unused", r.Scheme())
 
 	options := []grpc.DialOption{
 		grpc.WithInsecure(),
@@ -59,43 +82,4 @@ func main() {
 		callUnaryEcho(echoClient)
 		time.Sleep(time.Second)
 	}
-}
-
-// Following is an example name resolver implementation. Read the name
-// resolution example to learn more about it.
-
-type exampleResolverBuilder struct{}
-
-func (*exampleResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
-	r := &exampleResolver{
-		target: target,
-		cc:     cc,
-		addrsStore: map[string][]string{
-			exampleServiceName: addrs,
-		},
-	}
-	r.start()
-	return r, nil
-}
-func (*exampleResolverBuilder) Scheme() string { return exampleScheme }
-
-type exampleResolver struct {
-	target     resolver.Target
-	cc         resolver.ClientConn
-	addrsStore map[string][]string
-}
-
-func (r *exampleResolver) start() {
-	addrStrs := r.addrsStore[r.target.Endpoint]
-	addrs := make([]resolver.Address, len(addrStrs))
-	for i, s := range addrStrs {
-		addrs[i] = resolver.Address{Addr: s}
-	}
-	r.cc.UpdateState(resolver.State{Addresses: addrs})
-}
-func (*exampleResolver) ResolveNow(o resolver.ResolveNowOptions) {}
-func (*exampleResolver) Close()                                  {}
-
-func init() {
-	resolver.Register(&exampleResolverBuilder{})
 }
