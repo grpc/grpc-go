@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -56,7 +57,6 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	p1 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1}
 	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
-		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -123,7 +123,6 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	p0 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc0}
 	if err := isRoundRobin(want, subConnFromPicker(p0)); err != nil {
-		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -426,7 +425,6 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	p0 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc0}
 	if err := isRoundRobin(want, subConnFromPicker(p0)); err != nil {
-		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -445,7 +443,6 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	p1 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc1}
 	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
-		// t.Fatalf("want %v, got %v", want, err)
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -655,5 +652,125 @@ func (s) TestPriorityType(t *testing.T) {
 
 	if got := p1.equal(newPriorityType(1)); !got {
 		t.Errorf("want p1 to be equal to priority with value 1, got p1==1: %v", got)
+	}
+}
+
+// Test the case where the high priority contains no backends. The low priority
+// will be used.
+func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
+	cc := newTestClientConn(t)
+	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+
+	// Two localities, with priorities [0, 1], each with one backend.
+	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
+	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
+	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+
+	addrs1 := <-cc.newSubConnAddrsCh
+	if got, want := addrs1[0].Addr, testEndpointAddrs[0]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc1 := <-cc.newSubConnCh
+
+	// p0 is ready.
+	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
+
+	// Test roundrobin with only p0 subconns.
+	p1 := <-cc.newPickerCh
+	want := []balancer.SubConn{sc1}
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
+		t.Fatalf("want %v, got %v", want, err)
+	}
+
+	// Remove addresses from priority 0, should use p1.
+	clab2 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab2.AddLocality(testSubZones[0], 1, 0, nil, nil)
+	clab2.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
+	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
+
+	// p0 will remove the subconn, and ClientConn will send a sc update to
+	// shutdown.
+	scToRemove := <-cc.removeSubConnCh
+	edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
+
+	addrs2 := <-cc.newSubConnAddrsCh
+	if got, want := addrs2[0].Addr, testEndpointAddrs[1]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc2 := <-cc.newSubConnCh
+
+	// p1 is ready.
+	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
+	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
+
+	// Test roundrobin with only p1 subconns.
+	p2 := <-cc.newPickerCh
+	want = []balancer.SubConn{sc2}
+	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
+		t.Fatalf("want %v, got %v", want, err)
+	}
+}
+
+// Test the case where the high priority contains no healthy backends. The low
+// priority will be used.
+func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
+	cc := newTestClientConn(t)
+	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+
+	// Two localities, with priorities [0, 1], each with one backend.
+	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
+	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
+	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+
+	addrs1 := <-cc.newSubConnAddrsCh
+	if got, want := addrs1[0].Addr, testEndpointAddrs[0]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc1 := <-cc.newSubConnCh
+
+	// p0 is ready.
+	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
+
+	// Test roundrobin with only p0 subconns.
+	p1 := <-cc.newPickerCh
+	want := []balancer.SubConn{sc1}
+	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
+		t.Fatalf("want %v, got %v", want, err)
+	}
+
+	// Set priority 0 endpoints to all unhealthy, should use p1.
+	clab2 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], &xdsclient.AddLocalityOptions{
+		Health: []corepb.HealthStatus{corepb.HealthStatus_UNHEALTHY},
+	})
+	clab2.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
+	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
+
+	// p0 will remove the subconn, and ClientConn will send a sc update to
+	// transient failure.
+	scToRemove := <-cc.removeSubConnCh
+	edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
+
+	addrs2 := <-cc.newSubConnAddrsCh
+	if got, want := addrs2[0].Addr, testEndpointAddrs[1]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc2 := <-cc.newSubConnCh
+
+	// p1 is ready.
+	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
+	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
+
+	// Test roundrobin with only p1 subconns.
+	p2 := <-cc.newPickerCh
+	want = []balancer.SubConn{sc2}
+	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
+		t.Fatalf("want %v, got %v", want, err)
 	}
 }
