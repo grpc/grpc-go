@@ -1192,67 +1192,46 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 
-	var (
-		// If a gRPC Response-Headers has already been received, then it means that the peer is speaking gRPC and we are in gRPC mode.
-		isGRPC = !initialHeader
-		mdata  = make(map[string][]string)
-	)
+	// If a gRPC Response-Headers has already been received, then it means that the peer is speaking gRPC and we are in gRPC mode.
+	var mdata = make(map[string][]string)
 
 	for _, hf := range frame.Fields {
-		switch hf.Name {
-		case "content-type":
-			// TODO: do we want to propagate the whole content-type in the metadata,
-			// or come up with a way to just propagate the content-subtype if it was set?
-			// ie {"content-type": "application/grpc+proto"} or {"content-subtype": "proto"}
-			// in the metadata?
-			if _, validContentType := contentSubtype(hf.Value); validContentType {
-				isGRPC = true
-			}
-			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
-		case "grpc-encoding":
-			if !endStream {
-				s.recvCompress = hf.Value
-			}
-		case "grpc-status":
-			mdata["grpc-status"] = []string{hf.Value}
-		case "grpc-message":
-			mdata["grpc-message"] = []string{decodeGrpcMessage(hf.Value)}
-		case "grpc-status-details-bin":
-			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
-		case ":status":
-			mdata[":status"] = []string{hf.Value}
-		case "grpc-tags-bin":
-			v, err := decodeBinHeader(hf.Value)
-			if err != nil {
-				if isGRPC {
-					err = status.Errorf(codes.Internal, "transport: malformed grpc-tags-bin: %v", err)
-					t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
-					return
-				}
-				break
-			}
-			mdata[hf.Name] = append(mdata[hf.Name], string(v))
-		case "grpc-trace-bin":
-			v, err := decodeBinHeader(hf.Value)
-			if err != nil {
-				if isGRPC {
-					err = status.Errorf(codes.Internal, "transport: malformed grpc-trace-bin: %v", err)
-					t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
-					return
-				}
-				break
-			}
-			mdata[hf.Name] = append(mdata[hf.Name], string(v))
-		default:
-			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
-				break
-			}
-			v, err := decodeMetadataHeader(hf.Name, hf.Value)
-			if err != nil {
-				errorf("Failed to decode metadata header (%q, %q): %v", hf.Name, hf.Value, err)
-				break
-			}
-			mdata[hf.Name] = append(mdata[hf.Name], v)
+		v, err := decodeMetadataHeader(hf.Name, hf.Value)
+		if err != nil {
+			errorf("Failed to decode metadata header (%q, %q): %v", hf.Name, hf.Value, err)
+			mdata[hf.Name] = []string{}
+			break
+		}
+		mdata[hf.Name] = append(mdata[hf.Name], v)
+	}
+
+	var isGRPC = !initialHeader
+	// TODO: do we want to propagate the whole content-type in the metadata,
+	// or come up with a way to just propagate the content-subtype if it was set?
+	// ie {"content-type": "application/grpc+proto"} or {"content-subtype": "proto"}
+	// in the metadata?
+	if contentTypes := mdata["content-type"]; len(contentTypes) == 1 {
+		if _, ok := contentSubtype(contentTypes[0]); ok {
+			isGRPC = true
+		}
+	}
+	if grpcEncoding := mdata["grpc-encoding"]; len(grpcEncoding) == 1 && !endStream {
+		s.recvCompress = grpcEncoding[0]
+	}
+	if grpcMessages := mdata["grpc-message"]; len(grpcMessages) == 1 {
+		mdata["grpc-message"] = []string{decodeGrpcMessage(grpcMessages[0])}
+	}
+
+	if isGRPC {
+		if tagsBin, ok := mdata["grpc-tags-bin"]; ok && len(tagsBin) == 0 {
+			statusErr := status.Error(codes.Internal, "transport: malformed grpc-tags-bin")
+			t.closeStream(s, statusErr, true, http2.ErrCodeProtocol, status.Convert(statusErr), nil, endStream)
+			return
+		}
+		if traceBin, ok := mdata["grpc-trace-bin"]; ok && len(traceBin) == 0 {
+			statusErr := status.Error(codes.Internal, "transport: malformed grpc-trace-bin")
+			t.closeStream(s, statusErr, true, http2.ErrCodeProtocol, status.Convert(statusErr), nil, endStream)
+			return
 		}
 	}
 
@@ -1335,25 +1314,22 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 
-	// if client received END_STREAM from server while stream was still active, send RST_STREAM
-	rst := s.getState() == streamActive
-
 	var statusGen *status.Status
-	if sg := mdata["grpc-status-details-bin"]; len(sg) == 1 {
-		v, err := decodeBinHeader(sg[0])
-		if err != nil {
-			err = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
-			t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+	if sg, ok := mdata["grpc-status-details-bin"]; ok {
+		if len(sg) == 0 {
+			statusErr := status.Error(codes.Internal, "transport: malformed grpc-status-details-bin")
+			t.closeStream(s, statusErr, true, http2.ErrCodeProtocol, status.Convert(statusErr), nil, endStream)
 			return
 		}
 		pbStatus := &spb.Status{}
-		if err := proto.Unmarshal(v, pbStatus); err != nil {
+		if err := proto.Unmarshal([]byte(sg[0]), pbStatus); err != nil {
 			err = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
 			t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
 			return
 		}
 		statusGen = status.FromProto(pbStatus)
-	} else {
+	}
+	if statusGen == nil {
 		var rawStatusMsg string
 		if rsm := mdata["grpc-message"]; len(rsm) == 1 {
 			rawStatusMsg = rsm[0]
@@ -1376,9 +1352,11 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 		statusGen = status.New(codes.Code(rawStatusCode), rawStatusMsg)
 	}
-
 	delete(mdata, "grpc-message")
 	delete(mdata, "grpc-status")
+
+	// if client received END_STREAM from server while stream was still active, send RST_STREAM
+	rst := s.getState() == streamActive
 	t.closeStream(s, io.EOF, rst, http2.ErrCodeNo, statusGen, mdata, true)
 }
 
