@@ -1187,8 +1187,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	// frame.Truncated is set to true when framer detects that the current header
 	// list size hits MaxHeaderListSize limit.
 	if frame.Truncated {
-		err := status.Error(codes.Internal, "peer header list size exceeded limit")
-		t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+		se := status.New(codes.Internal, "peer header list size exceeded limit")
+		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 		return
 	}
 
@@ -1224,13 +1224,13 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 
 	if isGRPC {
 		if tagsBin, ok := mdata["grpc-tags-bin"]; ok && len(tagsBin) == 0 {
-			statusErr := status.Error(codes.Internal, "transport: malformed grpc-tags-bin")
-			t.closeStream(s, statusErr, true, http2.ErrCodeProtocol, status.Convert(statusErr), nil, endStream)
+			se := status.New(codes.Internal, "transport: malformed grpc-tags-bin")
+			t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 			return
 		}
 		if traceBin, ok := mdata["grpc-trace-bin"]; ok && len(traceBin) == 0 {
-			statusErr := status.Error(codes.Internal, "transport: malformed grpc-trace-bin")
-			t.closeStream(s, statusErr, true, http2.ErrCodeProtocol, status.Convert(statusErr), nil, endStream)
+			se := status.New(codes.Internal, "transport: malformed grpc-trace-bin")
+			t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 			return
 		}
 	}
@@ -1240,8 +1240,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		if httpStatuses := mdata[":status"]; len(httpStatuses) == 1 {
 			httpStatusCode, err := strconv.Atoi(httpStatuses[0])
 			if err != nil {
-				err = status.Errorf(codes.Internal, "transport: malformed http-status: %v", err)
-				t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+				se := status.Newf(codes.Internal, "transport: malformed http-status: %v", err)
+				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 				return
 			}
 			httpStatus = &httpStatusCode
@@ -1317,14 +1317,14 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	var statusGen *status.Status
 	if sg, ok := mdata["grpc-status-details-bin"]; ok {
 		if len(sg) == 0 {
-			statusErr := status.Error(codes.Internal, "transport: malformed grpc-status-details-bin")
-			t.closeStream(s, statusErr, true, http2.ErrCodeProtocol, status.Convert(statusErr), nil, endStream)
+			se := status.New(codes.Internal, "transport: malformed grpc-status-details-bin")
+			t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 			return
 		}
 		pbStatus := &spb.Status{}
 		if err := proto.Unmarshal([]byte(sg[0]), pbStatus); err != nil {
-			err = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
-			t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+			se := status.Newf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
+			t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 			return
 		}
 		statusGen = status.FromProto(pbStatus)
@@ -1344,8 +1344,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		if rsc := mdata["grpc-status"]; len(rsc) == 1 {
 			code, err := strconv.Atoi(rsc[0])
 			if err != nil {
-				err = status.Errorf(codes.Internal, "transport: malformed grpc-status: %v", err)
-				t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+				se := status.Newf(codes.Internal, "transport: malformed grpc-status: %v", err)
+				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 				return
 			}
 			rawStatusCode = int32(code)
