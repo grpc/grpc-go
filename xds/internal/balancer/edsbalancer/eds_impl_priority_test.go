@@ -659,7 +659,7 @@ func (s) TestPriorityType(t *testing.T) {
 // Test the case where the high priority contains no backends. The low priority
 // will be used.
 func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
-	cc := newTestClientConn(t)
+	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
@@ -669,20 +669,20 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
 
-	addrs1 := <-cc.newSubConnAddrsCh
+	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testEndpointAddrs[0]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
-	sc1 := <-cc.newSubConnCh
+	sc1 := <-cc.NewSubConnCh
 
 	// p0 is ready.
 	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
 	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
 
 	// Test roundrobin with only p0 subconns.
-	p1 := <-cc.newPickerCh
+	p1 := <-cc.NewPickerCh
 	want := []balancer.SubConn{sc1}
-	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -694,23 +694,23 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 
 	// p0 will remove the subconn, and ClientConn will send a sc update to
 	// shutdown.
-	scToRemove := <-cc.removeSubConnCh
+	scToRemove := <-cc.RemoveSubConnCh
 	edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
 
-	addrs2 := <-cc.newSubConnAddrsCh
+	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testEndpointAddrs[1]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
-	sc2 := <-cc.newSubConnCh
+	sc2 := <-cc.NewSubConnCh
 
 	// p1 is ready.
 	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
 	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
 
 	// Test roundrobin with only p1 subconns.
-	p2 := <-cc.newPickerCh
+	p2 := <-cc.NewPickerCh
 	want = []balancer.SubConn{sc2}
-	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -718,7 +718,7 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 // Test the case where the high priority contains no healthy backends. The low
 // priority will be used.
 func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
-	cc := newTestClientConn(t)
+	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
@@ -728,20 +728,20 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
 
-	addrs1 := <-cc.newSubConnAddrsCh
+	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testEndpointAddrs[0]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
-	sc1 := <-cc.newSubConnCh
+	sc1 := <-cc.NewSubConnCh
 
 	// p0 is ready.
 	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
 	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
 
 	// Test roundrobin with only p0 subconns.
-	p1 := <-cc.newPickerCh
+	p1 := <-cc.NewPickerCh
 	want := []balancer.SubConn{sc1}
-	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -755,23 +755,23 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 
 	// p0 will remove the subconn, and ClientConn will send a sc update to
 	// transient failure.
-	scToRemove := <-cc.removeSubConnCh
+	scToRemove := <-cc.RemoveSubConnCh
 	edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
 
-	addrs2 := <-cc.newSubConnAddrsCh
+	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testEndpointAddrs[1]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
-	sc2 := <-cc.newSubConnCh
+	sc2 := <-cc.NewSubConnCh
 
 	// p1 is ready.
 	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
 	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
 
 	// Test roundrobin with only p1 subconns.
-	p2 := <-cc.newPickerCh
+	p2 := <-cc.NewPickerCh
 	want = []balancer.SubConn{sc2}
-	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
