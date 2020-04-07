@@ -246,6 +246,8 @@ func (h *altsHandshaker) ServerHandshake(ctx context.Context) (net.Conn, credent
 	if err != nil {
 		return nil, nil, err
 	}
+	inBytes := make([]byte, n)
+	copy(inBytes, p)
 
 	// Prepare server parameters.
 	// TODO: currently only ALTS parameters are provided. Might need to use
@@ -259,7 +261,7 @@ func (h *altsHandshaker) ServerHandshake(ctx context.Context) (net.Conn, credent
 			ServerStart: &altspb.StartServerHandshakeReq{
 				ApplicationProtocols: appProtocols,
 				HandshakeParameters:  params,
-				InBytes:              p[:n],
+				InBytes:              inBytes,
 				RpcVersions:          h.serverOpts.RPCVersions,
 			},
 		},
