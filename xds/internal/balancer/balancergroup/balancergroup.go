@@ -99,9 +99,9 @@ func (sbc *subBalancerWithConfig) startBalancer() {
 	sbc.balancer = b
 	if ub, ok := b.(balancer.V2Balancer); ok {
 		ub.UpdateClientConnState(sbc.ccState)
-	} else {
-		b.HandleResolvedAddrs(sbc.ccState.ResolverState.Addresses, nil)
+		return
 	}
+	b.HandleResolvedAddrs(sbc.ccState.ResolverState.Addresses, nil)
 }
 
 func (sbc *subBalancerWithConfig) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
@@ -115,9 +115,9 @@ func (sbc *subBalancerWithConfig) updateSubConnState(sc balancer.SubConn, state 
 	}
 	if ub, ok := b.(balancer.V2Balancer); ok {
 		ub.UpdateSubConnState(sc, state)
-	} else {
-		b.HandleSubConnStateChange(sc, state.ConnectivityState)
+		return
 	}
+	b.HandleSubConnStateChange(sc, state.ConnectivityState)
 }
 
 func (sbc *subBalancerWithConfig) updateClientConnState(s balancer.ClientConnState) error {
