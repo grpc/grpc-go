@@ -25,7 +25,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/roundrobin"
 	externalserviceconfig "google.golang.org/grpc/serviceconfig"
 )
 
@@ -36,11 +35,15 @@ type testBalancerConfigType struct {
 var testBalancerConfig = testBalancerConfigType{}
 
 const (
-	testBalancerBuilderName = "test-bb"
-	testBalancerConfigJson  = `{"test-balancer-config":"true"}`
+	testBalancerBuilderName          = "test-bb"
+	testBalancerBuilderNotParserName = "test-bb-not-parser"
+
+	testBalancerConfigJson = `{"test-balancer-config":"true"}`
 )
 
-type testBalancerBuilder struct{}
+type testBalancerBuilder struct {
+	balancer.Builder
+}
 
 func (testBalancerBuilder) ParseConfig(js json.RawMessage) (externalserviceconfig.LoadBalancingConfig, error) {
 	if string(js) != testBalancerConfigJson {
@@ -49,16 +52,21 @@ func (testBalancerBuilder) ParseConfig(js json.RawMessage) (externalserviceconfi
 	return testBalancerConfig, nil
 }
 
-func (testBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	panic("implement me")
-}
-
 func (testBalancerBuilder) Name() string {
 	return testBalancerBuilderName
 }
 
+type testBalancerBuilderNotParser struct {
+	balancer.Builder
+}
+
+func (testBalancerBuilderNotParser) Name() string {
+	return testBalancerBuilderNotParserName
+}
+
 func init() {
 	balancer.Register(testBalancerBuilder{})
+	balancer.Register(testBalancerBuilderNotParser{})
 }
 
 func TestBalancerConfigUnmarshalJSON(t *testing.T) {
@@ -74,7 +82,9 @@ func TestBalancerConfigUnmarshalJSON(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "more than one entry for a name",
+			// The config should be a slice of maps, but each map should have
+			// exactly one entry.
+			name:    "more than one entry for a map",
 			json:    `[{"balancer1":"1","balancer2":"2"}]`,
 			wantErr: true,
 		},
@@ -103,9 +113,9 @@ func TestBalancerConfigUnmarshalJSON(t *testing.T) {
 		},
 		{
 			name: "balancer registered but builder not parser",
-			json: fmt.Sprintf("[{%q: %v}]", roundrobin.Name, testBalancerConfigJson),
+			json: fmt.Sprintf("[{%q: %v}]", testBalancerBuilderNotParserName, testBalancerConfigJson),
 			want: BalancerConfig{
-				Name:   roundrobin.Name,
+				Name:   testBalancerBuilderNotParserName,
 				Config: nil,
 			},
 			wantErr: false,
