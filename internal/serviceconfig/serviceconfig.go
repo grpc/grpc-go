@@ -38,6 +38,7 @@ type BalancerConfig struct {
 
 type intermediateBalancerConfig []map[string]json.RawMessage
 
+// UnmarshalJSON implements json unmarshaller.
 func (bc *BalancerConfig) UnmarshalJSON(b []byte) error {
 	var ir intermediateBalancerConfig
 	err := json.Unmarshal(b, &ir)

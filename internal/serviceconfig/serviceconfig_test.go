@@ -38,7 +38,7 @@ const (
 	testBalancerBuilderName          = "test-bb"
 	testBalancerBuilderNotParserName = "test-bb-not-parser"
 
-	testBalancerConfigJson = `{"test-balancer-config":"true"}`
+	testBalancerConfigJSON = `{"test-balancer-config":"true"}`
 )
 
 type testBalancerBuilder struct {
@@ -46,7 +46,7 @@ type testBalancerBuilder struct {
 }
 
 func (testBalancerBuilder) ParseConfig(js json.RawMessage) (externalserviceconfig.LoadBalancingConfig, error) {
-	if string(js) != testBalancerConfigJson {
+	if string(js) != testBalancerConfigJSON {
 		return nil, fmt.Errorf("unexpected config json")
 	}
 	return testBalancerConfig, nil
@@ -95,7 +95,7 @@ func TestBalancerConfigUnmarshalJSON(t *testing.T) {
 		},
 		{
 			name: "OK",
-			json: fmt.Sprintf("[{%q: %v}]", testBalancerBuilderName, testBalancerConfigJson),
+			json: fmt.Sprintf("[{%q: %v}]", testBalancerBuilderName, testBalancerConfigJSON),
 			want: BalancerConfig{
 				Name:   testBalancerBuilderName,
 				Config: testBalancerConfig,
@@ -104,7 +104,7 @@ func TestBalancerConfigUnmarshalJSON(t *testing.T) {
 		},
 		{
 			name: "first balancer not registered",
-			json: fmt.Sprintf(`[{"balancer1":"1"},{%q: %v}]`, testBalancerBuilderName, testBalancerConfigJson),
+			json: fmt.Sprintf(`[{"balancer1":"1"},{%q: %v}]`, testBalancerBuilderName, testBalancerConfigJSON),
 			want: BalancerConfig{
 				Name:   testBalancerBuilderName,
 				Config: testBalancerConfig,
@@ -113,7 +113,7 @@ func TestBalancerConfigUnmarshalJSON(t *testing.T) {
 		},
 		{
 			name: "balancer registered but builder not parser",
-			json: fmt.Sprintf("[{%q: %v}]", testBalancerBuilderNotParserName, testBalancerConfigJson),
+			json: fmt.Sprintf("[{%q: %v}]", testBalancerBuilderNotParserName, testBalancerConfigJSON),
 			want: BalancerConfig{
 				Name:   testBalancerBuilderNotParserName,
 				Config: nil,
