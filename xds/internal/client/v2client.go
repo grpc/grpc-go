@@ -282,20 +282,24 @@ func (v2c *v2Client) processWatchInfo(t *watchAction) (target []string, typeURL,
 
 type ackAction struct {
 	typeURL string
-	version string // Nack if version is an empty string.
+	version string // NACK if version is an empty string.
 	nonce   string
+	// ACK/NACK are tagged with the stream it's for. When the stream is down,
+	// all the ACK/NACK for this stream will be dropped, and the version/nonce
+	// won't be updated.
+	stream adsStream
 }
 
 // processAckInfo pulls the fields needed by the ack request from a ackAction.
 //
 // If no active watch is found for this ack, it returns false for send.
-func (v2c *v2Client) processAckInfo(t *ackInfo, stream adsStream) (target []string, typeURL, version, nonce string, send bool) {
+func (v2c *v2Client) processAckInfo(t *ackAction, stream adsStream) (target []string, typeURL, version, nonce string, send bool) {
 	if t.stream != stream {
 		// If ACK's stream isn't the current sending stream, this means the ACK
 		// was pushed to queue before the old stream broke, and a new stream has
 		// been started since. Return immediately here so we don't update the
 		// nonce for the new stream.
-		return
+		return nil, "", "", "", false
 	}
 	typeURL = t.typeURL
 
@@ -308,8 +312,8 @@ func (v2c *v2Client) processAckInfo(t *ackInfo, stream adsStream) (target []stri
 	nonce = t.nonce
 	v2c.nonceMap[typeURL] = nonce
 
-	wi, ok := v2c.watchMap[t.typeURL]
-	if !ok || len(wi) == 0 {
+	s, ok := v2c.watchMap[typeURL]
+	if !ok || len(s) == 0 {
 		// We don't send the request ack if there's no active watch (this can be
 		// either the server sends responses before any request, or the watch is
 		// canceled while the ackAction is in queue), because there's no resource
@@ -317,9 +321,7 @@ func (v2c *v2Client) processAckInfo(t *ackInfo, stream adsStream) (target []stri
 		// server may treat it as a wild card and send us everything.
 		return nil, "", "", "", false
 	}
-
 	send = true
-	typeURL = t.typeURL
 	target = mapToSlice(s)
 
 	version = t.version
@@ -332,11 +334,6 @@ func (v2c *v2Client) processAckInfo(t *ackInfo, stream adsStream) (target []stri
 	} else {
 		v2c.versionMap[typeURL] = version
 	}
-	target = wi.target
-	return target, typeURL, version, nonce, send
-
-	nonce = t.nonce
-	v2c.nonceMap[typeURL] = nonce
 	return target, typeURL, version, nonce, send
 }
 
@@ -379,8 +376,6 @@ func (v2c *v2Client) send() {
 			case *watchAction:
 				target, typeURL, version, nonce, send = v2c.processWatchInfo(t)
 			case *ackAction:
-				target, typeURL, version, nonce, send = v2c.processAckInfo(t)
-			case *ackInfo:
 				target, typeURL, version, nonce, send = v2c.processAckInfo(t, stream)
 			}
 			if !send {
