@@ -17,13 +17,14 @@
 package orca
 
 import (
-	"reflect"
 	"strings"
 	"testing"
 
+	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
 	"github.com/golang/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
-	orcapb "google.golang.org/grpc/xds/internal/proto/udpa/data/orca/v1/orca_load_report"
 )
 
 var (
@@ -36,7 +37,15 @@ var (
 	testBytes, _ = proto.Marshal(testMessage)
 )
 
-func TestToMetadata(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestToMetadata(t *testing.T) {
 	tests := []struct {
 		name string
 		r    *orcapb.OrcaLoadReport
@@ -54,14 +63,14 @@ func TestToMetadata(t *testing.T) {
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ToMetadata(tt.r); !reflect.DeepEqual(got, tt.want) {
+			if got := ToMetadata(tt.r); !cmp.Equal(got, tt.want) {
 				t.Errorf("ToMetadata() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestFromMetadata(t *testing.T) {
+func (s) TestFromMetadata(t *testing.T) {
 	tests := []struct {
 		name string
 		md   metadata.MD
@@ -79,7 +88,7 @@ func TestFromMetadata(t *testing.T) {
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := FromMetadata(tt.md); !proto.Equal(got, tt.want) {
+			if got := FromMetadata(tt.md); !cmp.Equal(got, tt.want, cmp.Comparer(proto.Equal)) {
 				t.Errorf("FromMetadata() = %v, want %v", got, tt.want)
 			}
 		})

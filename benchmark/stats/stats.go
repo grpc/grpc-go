@@ -29,6 +29,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc"
 )
 
 // FeatureIndex is an enum for features that usually differ across individual
@@ -45,6 +47,8 @@ const (
 	MaxConcurrentCallsIndex
 	ReqSizeBytesIndex
 	RespSizeBytesIndex
+	ReqPayloadCurveIndex
+	RespPayloadCurveIndex
 	CompModesIndex
 	EnableChannelzIndex
 	EnablePreloaderIndex
@@ -88,9 +92,17 @@ type Features struct {
 	// benchmark run.
 	MaxConcurrentCalls int
 	// ReqSizeBytes is the request size in bytes used in this benchmark run.
+	// Unused if ReqPayloadCurve is non-nil.
 	ReqSizeBytes int
 	// RespSizeBytes is the response size in bytes used in this benchmark run.
+	// Unused if RespPayloadCurve is non-nil.
 	RespSizeBytes int
+	// ReqPayloadCurve is a histogram representing the shape a random
+	// distribution request payloads should take.
+	ReqPayloadCurve *PayloadCurve
+	// RespPayloadCurve is a histogram representing the shape a random
+	// distribution request payloads should take.
+	RespPayloadCurve *PayloadCurve
 	// ModeCompressor represents the compressor mode used.
 	ModeCompressor string
 	// EnableChannelz indicates if channelz was turned on.
@@ -101,12 +113,23 @@ type Features struct {
 
 // String returns all the feature values as a string.
 func (f Features) String() string {
+	var reqPayloadString, respPayloadString string
+	if f.ReqPayloadCurve != nil {
+		reqPayloadString = fmt.Sprintf("reqPayloadCurve_%s", f.ReqPayloadCurve.ShortHash())
+	} else {
+		reqPayloadString = fmt.Sprintf("reqSize_%vB", f.ReqSizeBytes)
+	}
+	if f.RespPayloadCurve != nil {
+		respPayloadString = fmt.Sprintf("respPayloadCurve_%s", f.RespPayloadCurve.ShortHash())
+	} else {
+		respPayloadString = fmt.Sprintf("respSize_%vB", f.RespSizeBytes)
+	}
 	return fmt.Sprintf("networkMode_%v-bufConn_%v-keepalive_%v-benchTime_%v-"+
-		"trace_%v-latency_%v-kbps_%v-MTU_%v-maxConcurrentCalls_%v-"+
-		"reqSize_%vB-respSize_%vB-compressor_%v-channelz_%v-preloader_%v",
-		f.NetworkMode, f.UseBufConn, f.EnableKeepalive, f.BenchTime,
-		f.EnableTrace, f.Latency, f.Kbps, f.MTU, f.MaxConcurrentCalls,
-		f.ReqSizeBytes, f.RespSizeBytes, f.ModeCompressor, f.EnableChannelz, f.EnablePreloader)
+		"trace_%v-latency_%v-kbps_%v-MTU_%v-maxConcurrentCalls_%v-%s-%s-"+
+		"compressor_%v-channelz_%v-preloader_%v",
+		f.NetworkMode, f.UseBufConn, f.EnableKeepalive, f.BenchTime, f.EnableTrace,
+		f.Latency, f.Kbps, f.MTU, f.MaxConcurrentCalls, reqPayloadString,
+		respPayloadString, f.ModeCompressor, f.EnableChannelz, f.EnablePreloader)
 }
 
 // SharedFeatures returns the shared features as a pretty printable string.
@@ -156,6 +179,10 @@ func (f Features) partialString(b *bytes.Buffer, wantFeatures []bool, sep, delim
 				b.WriteString(fmt.Sprintf("ReqSize%v%vB%v", sep, f.ReqSizeBytes, delim))
 			case RespSizeBytesIndex:
 				b.WriteString(fmt.Sprintf("RespSize%v%vB%v", sep, f.RespSizeBytes, delim))
+			case ReqPayloadCurveIndex:
+				b.WriteString(fmt.Sprintf("ReqPayloadCurve%vSHA-256:%v%v", sep, f.ReqPayloadCurve.Hash(), delim))
+			case RespPayloadCurveIndex:
+				b.WriteString(fmt.Sprintf("RespPayloadCurve%vSHA-256:%v%v", sep, f.RespPayloadCurve.Hash(), delim))
 			case CompModesIndex:
 				b.WriteString(fmt.Sprintf("Compressor%v%v%v", sep, f.ModeCompressor, delim))
 			case EnableChannelzIndex:
@@ -174,6 +201,10 @@ func (f Features) partialString(b *bytes.Buffer, wantFeatures []bool, sep, delim
 // benchmark execution, and could later be read for pretty-printing or
 // comparison with other benchmark results.
 type BenchResults struct {
+	// GoVersion is the version of the compiler the benchmark was compiled with.
+	GoVersion string
+	// GrpcVersion is the gRPC version being benchmarked.
+	GrpcVersion string
 	// RunMode is the workload mode for this benchmark run. This could be unary,
 	// stream or unconstrained.
 	RunMode string
@@ -262,7 +293,13 @@ func (s *Stats) StartRun(mode string, f Features, sf []bool) {
 	defer s.mu.Unlock()
 
 	runtime.ReadMemStats(&s.startMS)
-	s.results = append(s.results, BenchResults{RunMode: mode, Features: f, SharedFeatures: sf})
+	s.results = append(s.results, BenchResults{
+		GoVersion:      runtime.Version(),
+		GrpcVersion:    grpc.Version,
+		RunMode:        mode,
+		Features:       f,
+		SharedFeatures: sf,
+	})
 }
 
 // EndRun is to be invoked to indicate the end of the ongoing benchmark run. It
@@ -365,6 +402,10 @@ func (s *Stats) computeLatencies(result *BenchResults) {
 // dump returns a printable version.
 func (s *Stats) dump(result *BenchResults) {
 	var b bytes.Buffer
+
+	// Go and gRPC version information.
+	b.WriteString(fmt.Sprintf("%s/grpc%s\n", result.GoVersion, result.GrpcVersion))
+
 	// This prints the run mode and all features of the bench on a line.
 	b.WriteString(fmt.Sprintf("%s-%s:\n", result.RunMode, result.Features.String()))
 

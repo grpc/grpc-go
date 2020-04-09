@@ -33,10 +33,19 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/grpctest"
 )
 
 func init() {
 	channelz.TurnOn()
+}
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
 }
 
 func cleanupWrapper(cleanup func() error, t *testing.T) {
@@ -284,7 +293,7 @@ func init() {
 	proto.RegisterType((*OtherSecurityValue)(nil), "grpc.credentials.OtherChannelzSecurityValue")
 }
 
-func TestGetTopChannels(t *testing.T) {
+func (s) TestGetTopChannels(t *testing.T) {
 	tcs := []*dummyChannel{
 		{
 			state:                    connectivity.Connecting,
@@ -337,7 +346,7 @@ func TestGetTopChannels(t *testing.T) {
 	}
 }
 
-func TestGetServers(t *testing.T) {
+func (s) TestGetServers(t *testing.T) {
 	ss := []*dummyServer{
 		{
 			callsStarted:             6,
@@ -384,7 +393,7 @@ func TestGetServers(t *testing.T) {
 	}
 }
 
-func TestGetServerSockets(t *testing.T) {
+func (s) TestGetServerSockets(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorage()
 	defer cleanupWrapper(czCleanup, t)
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
@@ -423,7 +432,7 @@ func TestGetServerSockets(t *testing.T) {
 
 // This test makes a GetServerSockets with a non-zero start ID, and expect only
 // sockets with ID >= the given start ID.
-func TestGetServerSocketsNonZeroStartID(t *testing.T) {
+func (s) TestGetServerSocketsNonZeroStartID(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorage()
 	defer cleanupWrapper(czCleanup, t)
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
@@ -453,18 +462,18 @@ func TestGetServerSocketsNonZeroStartID(t *testing.T) {
 	}
 }
 
-func TestGetChannel(t *testing.T) {
+func (s) TestGetChannel(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorage()
 	defer cleanupWrapper(czCleanup, t)
 	refNames := []string{"top channel 1", "nested channel 1", "sub channel 2", "nested channel 3"}
 	ids := make([]int64, 4)
 	ids[0] = channelz.RegisterChannel(&dummyChannel{}, 0, refNames[0])
-	channelz.AddTraceEvent(ids[0], &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(ids[0], 0, &channelz.TraceEventDesc{
 		Desc:     "Channel Created",
 		Severity: channelz.CtINFO,
 	})
 	ids[1] = channelz.RegisterChannel(&dummyChannel{}, ids[0], refNames[1])
-	channelz.AddTraceEvent(ids[1], &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(ids[1], 0, &channelz.TraceEventDesc{
 		Desc:     "Channel Created",
 		Severity: channelz.CtINFO,
 		Parent: &channelz.TraceEventDesc{
@@ -474,7 +483,7 @@ func TestGetChannel(t *testing.T) {
 	})
 
 	ids[2] = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[2])
-	channelz.AddTraceEvent(ids[2], &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(ids[2], 0, &channelz.TraceEventDesc{
 		Desc:     "SubChannel Created",
 		Severity: channelz.CtINFO,
 		Parent: &channelz.TraceEventDesc{
@@ -483,7 +492,7 @@ func TestGetChannel(t *testing.T) {
 		},
 	})
 	ids[3] = channelz.RegisterChannel(&dummyChannel{}, ids[1], refNames[3])
-	channelz.AddTraceEvent(ids[3], &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(ids[3], 0, &channelz.TraceEventDesc{
 		Desc:     "Channel Created",
 		Severity: channelz.CtINFO,
 		Parent: &channelz.TraceEventDesc{
@@ -491,11 +500,11 @@ func TestGetChannel(t *testing.T) {
 			Severity: channelz.CtINFO,
 		},
 	})
-	channelz.AddTraceEvent(ids[0], &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(ids[0], 0, &channelz.TraceEventDesc{
 		Desc:     fmt.Sprintf("Channel Connectivity change to %v", connectivity.Ready),
 		Severity: channelz.CtINFO,
 	})
-	channelz.AddTraceEvent(ids[0], &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(ids[0], 0, &channelz.TraceEventDesc{
 		Desc:     "Resolver returns an empty address list",
 		Severity: channelz.CtWarning,
 	})
@@ -551,7 +560,7 @@ func TestGetChannel(t *testing.T) {
 	}
 }
 
-func TestGetSubChannel(t *testing.T) {
+func (s) TestGetSubChannel(t *testing.T) {
 	var (
 		subchanCreated            = "SubChannel Created"
 		subchanConnectivityChange = fmt.Sprintf("Subchannel Connectivity change to %v", connectivity.Ready)
@@ -562,12 +571,12 @@ func TestGetSubChannel(t *testing.T) {
 	refNames := []string{"top channel 1", "sub channel 1", "socket 1", "socket 2"}
 	ids := make([]int64, 4)
 	ids[0] = channelz.RegisterChannel(&dummyChannel{}, 0, refNames[0])
-	channelz.AddTraceEvent(ids[0], &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(ids[0], 0, &channelz.TraceEventDesc{
 		Desc:     "Channel Created",
 		Severity: channelz.CtINFO,
 	})
 	ids[1] = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[1])
-	channelz.AddTraceEvent(ids[1], &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(ids[1], 0, &channelz.TraceEventDesc{
 		Desc:     subchanCreated,
 		Severity: channelz.CtINFO,
 		Parent: &channelz.TraceEventDesc{
@@ -577,11 +586,11 @@ func TestGetSubChannel(t *testing.T) {
 	})
 	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[2])
 	ids[3] = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[3])
-	channelz.AddTraceEvent(ids[1], &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(ids[1], 0, &channelz.TraceEventDesc{
 		Desc:     subchanConnectivityChange,
 		Severity: channelz.CtINFO,
 	})
-	channelz.AddTraceEvent(ids[1], &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(ids[1], 0, &channelz.TraceEventDesc{
 		Desc:     subChanPickNewAddress,
 		Severity: channelz.CtINFO,
 	})
@@ -628,7 +637,7 @@ func TestGetSubChannel(t *testing.T) {
 	}
 }
 
-func TestGetSocket(t *testing.T) {
+func (s) TestGetSocket(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorage()
 	defer cleanupWrapper(czCleanup, t)
 	ss := []*dummySocket{

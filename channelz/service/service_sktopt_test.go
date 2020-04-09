@@ -124,7 +124,7 @@ func protoToSocketOption(skopts []*channelzpb.SocketOption) *channelz.SocketOpti
 	return skdata
 }
 
-func TestGetSocketOptions(t *testing.T) {
+func (s) TestGetSocketOptions(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorage()
 	defer cleanupWrapper(czCleanup, t)
 	ss := []*dummySocket{

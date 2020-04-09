@@ -22,18 +22,28 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	apb "github.com/golang/protobuf/ptypes/any"
 	dpb "github.com/golang/protobuf/ptypes/duration"
+	"github.com/google/go-cmp/cmp"
 	cpb "google.golang.org/genproto/googleapis/rpc/code"
 	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/status"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 // errEqual is essentially a copy of testutils.StatusErrEqual(), to avoid a
 // cyclic dependency.
@@ -49,16 +59,16 @@ func errEqual(err1, err2 error) bool {
 	return proto.Equal(status1.Proto(), status2.Proto())
 }
 
-func TestErrorsWithSameParameters(t *testing.T) {
+func (s) TestErrorsWithSameParameters(t *testing.T) {
 	const description = "some description"
 	e1 := Errorf(codes.AlreadyExists, description)
 	e2 := Errorf(codes.AlreadyExists, description)
 	if e1 == e2 || !errEqual(e1, e2) {
-		t.Fatalf("Errors should be equivalent but unique - e1: %v, %v  e2: %p, %v", e1.(*statusError), e1, e2.(*statusError), e2)
+		t.Fatalf("Errors should be equivalent but unique - e1: %v, %v  e2: %p, %v", e1.(*status.Error), e1, e2.(*status.Error), e2)
 	}
 }
 
-func TestFromToProto(t *testing.T) {
+func (s) TestFromToProto(t *testing.T) {
 	s := &spb.Status{
 		Code:    int32(codes.Internal),
 		Message: "test test test",
@@ -71,7 +81,7 @@ func TestFromToProto(t *testing.T) {
 	}
 }
 
-func TestFromNilProto(t *testing.T) {
+func (s) TestFromNilProto(t *testing.T) {
 	tests := []*Status{nil, FromProto(nil)}
 	for _, s := range tests {
 		if c := s.Code(); c != codes.OK {
@@ -89,7 +99,7 @@ func TestFromNilProto(t *testing.T) {
 	}
 }
 
-func TestError(t *testing.T) {
+func (s) TestError(t *testing.T) {
 	err := Error(codes.Internal, "test description")
 	if got, want := err.Error(), "rpc error: code = Internal desc = test description"; got != want {
 		t.Fatalf("err.Error() = %q; want %q", got, want)
@@ -103,21 +113,21 @@ func TestError(t *testing.T) {
 	}
 }
 
-func TestErrorOK(t *testing.T) {
+func (s) TestErrorOK(t *testing.T) {
 	err := Error(codes.OK, "foo")
 	if err != nil {
-		t.Fatalf("Error(codes.OK, _) = %p; want nil", err.(*statusError))
+		t.Fatalf("Error(codes.OK, _) = %p; want nil", err.(*status.Error))
 	}
 }
 
-func TestErrorProtoOK(t *testing.T) {
+func (s) TestErrorProtoOK(t *testing.T) {
 	s := &spb.Status{Code: int32(codes.OK)}
 	if got := ErrorProto(s); got != nil {
 		t.Fatalf("ErrorProto(%v) = %v; want nil", s, got)
 	}
 }
 
-func TestFromError(t *testing.T) {
+func (s) TestFromError(t *testing.T) {
 	code, message := codes.Internal, "test description"
 	err := Error(code, message)
 	s, ok := FromError(err)
@@ -126,7 +136,7 @@ func TestFromError(t *testing.T) {
 	}
 }
 
-func TestFromErrorOK(t *testing.T) {
+func (s) TestFromErrorOK(t *testing.T) {
 	code, message := codes.OK, ""
 	s, ok := FromError(nil)
 	if !ok || s.Code() != code || s.Message() != message || s.Err() != nil {
@@ -145,16 +155,14 @@ func (c customError) Error() string {
 }
 
 func (c customError) GRPCStatus() *Status {
-	return &Status{
-		s: &spb.Status{
-			Code:    int32(c.Code),
-			Message: c.Message,
-			Details: c.Details,
-		},
-	}
+	return status.FromProto(&spb.Status{
+		Code:    int32(c.Code),
+		Message: c.Message,
+		Details: c.Details,
+	})
 }
 
-func TestFromErrorImplementsInterface(t *testing.T) {
+func (s) TestFromErrorImplementsInterface(t *testing.T) {
 	code, message := codes.Internal, "test description"
 	details := []*apb.Any{{
 		TypeUrl: "testUrl",
@@ -175,7 +183,7 @@ func TestFromErrorImplementsInterface(t *testing.T) {
 	}
 }
 
-func TestFromErrorUnknownError(t *testing.T) {
+func (s) TestFromErrorUnknownError(t *testing.T) {
 	code, message := codes.Unknown, "unknown error"
 	err := errors.New("unknown error")
 	s, ok := FromError(err)
@@ -184,7 +192,7 @@ func TestFromErrorUnknownError(t *testing.T) {
 	}
 }
 
-func TestConvertKnownError(t *testing.T) {
+func (s) TestConvertKnownError(t *testing.T) {
 	code, message := codes.Internal, "test description"
 	err := Error(code, message)
 	s := Convert(err)
@@ -193,7 +201,7 @@ func TestConvertKnownError(t *testing.T) {
 	}
 }
 
-func TestConvertUnknownError(t *testing.T) {
+func (s) TestConvertUnknownError(t *testing.T) {
 	code, message := codes.Unknown, "unknown error"
 	err := errors.New("unknown error")
 	s := Convert(err)
@@ -202,7 +210,7 @@ func TestConvertUnknownError(t *testing.T) {
 	}
 }
 
-func TestStatus_ErrorDetails(t *testing.T) {
+func (s) TestStatus_ErrorDetails(t *testing.T) {
 	tests := []struct {
 		code    codes.Code
 		details []proto.Message
@@ -261,7 +269,7 @@ func TestStatus_ErrorDetails(t *testing.T) {
 	}
 }
 
-func TestStatus_WithDetails_Fail(t *testing.T) {
+func (s) TestStatus_WithDetails_Fail(t *testing.T) {
 	tests := []*Status{
 		nil,
 		FromProto(nil),
@@ -274,7 +282,7 @@ func TestStatus_WithDetails_Fail(t *testing.T) {
 	}
 }
 
-func TestStatus_ErrorDetails_Fail(t *testing.T) {
+func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 	tests := []struct {
 		s *Status
 		i []interface{}
@@ -318,20 +326,24 @@ func TestStatus_ErrorDetails_Fail(t *testing.T) {
 	}
 	for _, tc := range tests {
 		got := tc.s.Details()
-		if !reflect.DeepEqual(got, tc.i) {
+		if !cmp.Equal(got, tc.i, cmp.Comparer(proto.Equal), cmp.Comparer(equalError)) {
 			t.Errorf("(%v).Details() = %+v, want %+v", str(tc.s), got, tc.i)
 		}
 	}
+}
+
+func equalError(x, y error) bool {
+	return x == y || (x != nil && y != nil && x.Error() == y.Error())
 }
 
 func str(s *Status) string {
 	if s == nil {
 		return "nil"
 	}
-	if s.s == nil {
+	if s.Proto() == nil {
 		return "<Code=OK>"
 	}
-	return fmt.Sprintf("<Code=%v, Message=%q, Details=%+v>", codes.Code(s.s.GetCode()), s.s.GetMessage(), s.s.GetDetails())
+	return fmt.Sprintf("<Code=%v, Message=%q, Details=%+v>", s.Code(), s.Message(), s.Details())
 }
 
 // mustMarshalAny converts a protobuf message to an any.
@@ -343,7 +355,7 @@ func mustMarshalAny(msg proto.Message) *apb.Any {
 	return any
 }
 
-func TestFromContextError(t *testing.T) {
+func (s) TestFromContextError(t *testing.T) {
 	testCases := []struct {
 		in   error
 		want *Status

@@ -19,178 +19,355 @@
 package resolver
 
 import (
-	"encoding/json"
+	"context"
+	"errors"
 	"fmt"
-	"reflect"
+	"net"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	xdsinternal "google.golang.org/grpc/xds/internal"
+	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
+	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
-// This is initialized at init time.
-var fbb *fakeBalancerBuilder
+const (
+	targetStr    = "target"
+	cluster      = "cluster"
+	balancerName = "dummyBalancer"
+)
 
-// We register a fake balancer builder and the actual xds_resolver here. We use
-// the fake balancer builder to verify the service config pushed by the
-// resolver.
-func init() {
-	resolver.Register(NewBuilder())
-	fbb = &fakeBalancerBuilder{
-		wantLBConfig: &wrappedLBConfig{lbCfg: json.RawMessage(`{
-      "childPolicy":[
-        {
-          "round_robin": {}
-        }
-      ]
-    }`)},
-		errCh: make(chan error),
+var (
+	validConfig = bootstrap.Config{
+		BalancerName: balancerName,
+		Creds:        grpc.WithInsecure(),
+		NodeProto:    &corepb.Node{},
 	}
-	balancer.Register(fbb)
-}
+	target = resolver.Target{Endpoint: targetStr}
+)
 
 // testClientConn is a fake implemetation of resolver.ClientConn. All is does
-// is to store the state received from the resolver locally and close the
-// provided done channel.
+// is to store the state received from the resolver locally and signal that
+// event through a channel.
 type testClientConn struct {
-	done     chan struct{}
-	gotState resolver.State
+	resolver.ClientConn
+	stateCh *testutils.Channel
+	errorCh *testutils.Channel
 }
 
 func (t *testClientConn) UpdateState(s resolver.State) {
-	t.gotState = s
-	close(t.done)
+	t.stateCh.Send(s)
 }
 
-func (*testClientConn) NewAddress(addresses []resolver.Address) { panic("unimplemented") }
-func (*testClientConn) NewServiceConfig(serviceConfig string)   { panic("unimplemented") }
+func (t *testClientConn) ReportError(err error) {
+	t.errorCh.Send(err)
+}
 
-// TestXDSRsolverSchemeAndAddresses creates a new xds resolver, verifies that
-// it returns an empty address list and the appropriate xds-experimental
-// scheme.
-func TestXDSRsolverSchemeAndAddresses(t *testing.T) {
-	b := NewBuilder()
-	wantScheme := "xds-experimental"
-	if b.Scheme() != wantScheme {
-		t.Fatalf("got scheme %s, want %s", b.Scheme(), wantScheme)
-	}
+func (t *testClientConn) ParseServiceConfig(jsonSC string) *serviceconfig.ParseResult {
+	return internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(jsonSC)
+}
 
-	tcc := &testClientConn{done: make(chan struct{})}
-	r, err := b.Build(resolver.Target{}, tcc, resolver.BuildOption{})
-	if err != nil {
-		t.Fatalf("xdsBuilder.Build() failed with error: %v", err)
-	}
-	defer r.Close()
-
-	<-tcc.done
-	if len(tcc.gotState.Addresses) != 0 {
-		t.Fatalf("got address list from resolver %v, want empty list", tcc.gotState.Addresses)
+func newTestClientConn() *testClientConn {
+	return &testClientConn{
+		stateCh: testutils.NewChannel(),
+		errorCh: testutils.NewChannel(),
 	}
 }
 
-// fakeBalancer is used to verify that the xds_resolver returns the expected
-// serice config.
-type fakeBalancer struct {
-	wantLBConfig *wrappedLBConfig
-	errCh        chan error
-}
-
-func (*fakeBalancer) HandleSubConnStateChange(_ balancer.SubConn, _ connectivity.State) {
-	panic("unimplemented")
-}
-func (*fakeBalancer) HandleResolvedAddrs(_ []resolver.Address, _ error) {
-	panic("unimplemented")
-}
-
-// UpdateClientConnState verifies that the received LBConfig matches the
-// provided one, and if not, sends an error on the provided channel.
-func (f *fakeBalancer) UpdateClientConnState(ccs balancer.ClientConnState) {
-	gotLBConfig, ok := ccs.BalancerConfig.(*wrappedLBConfig)
-	if !ok {
-		f.errCh <- fmt.Errorf("in fakeBalancer got lbConfig of type %T, want %T", ccs.BalancerConfig, &wrappedLBConfig{})
-		return
-	}
-
-	var gotCfg, wantCfg xdsinternal.LBConfig
-	if err := wantCfg.UnmarshalJSON(f.wantLBConfig.lbCfg); err != nil {
-		f.errCh <- fmt.Errorf("unable to unmarshal balancer config %s into xds config", string(f.wantLBConfig.lbCfg))
-		return
-	}
-	if err := gotCfg.UnmarshalJSON(gotLBConfig.lbCfg); err != nil {
-		f.errCh <- fmt.Errorf("unable to unmarshal balancer config %s into xds config", string(gotLBConfig.lbCfg))
-		return
-	}
-	if !reflect.DeepEqual(gotCfg, wantCfg) {
-		f.errCh <- fmt.Errorf("in fakeBalancer got lbConfig %v, want %v", gotCfg, wantCfg)
-		return
-	}
-
-	f.errCh <- nil
-}
-
-func (*fakeBalancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConnState) {
-	panic("unimplemented")
-}
-
-func (*fakeBalancer) Close() {}
-
-// fakeBalancerBuilder builds a fake balancer and also provides a ParseConfig
-// method (which doesn't really the parse config, but just stores it as is).
-type fakeBalancerBuilder struct {
-	wantLBConfig *wrappedLBConfig
-	errCh        chan error
-}
-
-func (f *fakeBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &fakeBalancer{f.wantLBConfig, f.errCh}
-}
-
-func (f *fakeBalancerBuilder) Name() string {
-	return "xds_experimental"
-}
-
-func (f *fakeBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	return &wrappedLBConfig{lbCfg: c}, nil
-}
-
-// wrappedLBConfig simply wraps the provided LB config with a
-// serviceconfig.LoadBalancingConfig interface.
-type wrappedLBConfig struct {
-	serviceconfig.LoadBalancingConfig
-	lbCfg json.RawMessage
-}
-
-// TestXDSRsolverServiceConfig verifies that the xds_resolver returns the
-// expected service config.
-//
-// The following sequence of events happen in this test:
-// * The xds_experimental balancer (fake) and resolver builders are initialized
-//   at init time.
-// * We dial a dummy address here with the xds-experimental scheme. This should
-//   pick the xds_resolver, which should return the hard-coded service config,
-//   which should reach the fake balancer that we registered (because the
-//   service config asks for the xds balancer).
-// * In the fake balancer, we verify that we receive the expected LB config.
-func TestXDSRsolverServiceConfig(t *testing.T) {
-	xdsAddr := fmt.Sprintf("%s:///dummy", xdsScheme)
-	cc, err := grpc.Dial(xdsAddr, grpc.WithInsecure())
-	if err != nil {
-		t.Fatalf("grpc.Dial(%s) failed with error: %v", xdsAddr, err)
-	}
-	defer cc.Close()
-
-	timer := time.NewTimer(5 * time.Second)
-	select {
-	case <-timer.C:
-		t.Fatal("timed out waiting for service config to reach balancer")
-	case err := <-fbb.errCh:
-		if err != nil {
-			t.Error(err)
+func getXDSClientMakerFunc(wantOpts xdsclient.Options) func(xdsclient.Options) (xdsClientInterface, error) {
+	return func(gotOpts xdsclient.Options) (xdsClientInterface, error) {
+		if gotOpts.Config.BalancerName != wantOpts.Config.BalancerName {
+			return nil, fmt.Errorf("got balancerName: %s, want: %s", gotOpts.Config.BalancerName, wantOpts.Config.BalancerName)
 		}
+		// We cannot compare two DialOption objects to see if they are equal
+		// because each of these is a function pointer. So, the only thing we
+		// can do here is to check if the got option is nil or not based on
+		// what the want option is. We should be able to do extensive
+		// credential testing in e2e tests.
+		if (gotOpts.Config.Creds != nil) != (wantOpts.Config.Creds != nil) {
+			return nil, fmt.Errorf("got len(creds): %s, want: %s", gotOpts.Config.Creds, wantOpts.Config.Creds)
+		}
+		if len(gotOpts.DialOpts) != len(wantOpts.DialOpts) {
+			return nil, fmt.Errorf("got len(DialOpts): %v, want: %v", len(gotOpts.DialOpts), len(wantOpts.DialOpts))
+		}
+		return fakeclient.NewClient(), nil
+	}
+}
+
+func errorDialer(_ context.Context, _ string) (net.Conn, error) {
+	return nil, errors.New("dial error")
+}
+
+// TestResolverBuilder tests the xdsResolverBuilder's Build method with
+// different parameters.
+func TestResolverBuilder(t *testing.T) {
+	tests := []struct {
+		name          string
+		rbo           resolver.BuildOptions
+		config        bootstrap.Config
+		xdsClientFunc func(xdsclient.Options) (xdsClientInterface, error)
+		wantErr       bool
+	}{
+		{
+			name:    "empty-config",
+			rbo:     resolver.BuildOptions{},
+			config:  bootstrap.Config{},
+			wantErr: true,
+		},
+		{
+			name: "no-balancer-name-in-config",
+			rbo:  resolver.BuildOptions{},
+			config: bootstrap.Config{
+				Creds:     grpc.WithInsecure(),
+				NodeProto: &corepb.Node{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "no-creds-in-config",
+			rbo:  resolver.BuildOptions{},
+			config: bootstrap.Config{
+				BalancerName: balancerName,
+				NodeProto:    &corepb.Node{},
+			},
+			xdsClientFunc: getXDSClientMakerFunc(xdsclient.Options{Config: validConfig}),
+			wantErr:       false,
+		},
+		{
+			name:   "error-dialer-in-rbo",
+			rbo:    resolver.BuildOptions{Dialer: errorDialer},
+			config: validConfig,
+			xdsClientFunc: getXDSClientMakerFunc(xdsclient.Options{
+				Config:   validConfig,
+				DialOpts: []grpc.DialOption{grpc.WithContextDialer(errorDialer)},
+			}),
+			wantErr: false,
+		},
+		{
+			name:          "simple-good",
+			rbo:           resolver.BuildOptions{},
+			config:        validConfig,
+			xdsClientFunc: getXDSClientMakerFunc(xdsclient.Options{Config: validConfig}),
+			wantErr:       false,
+		},
+		{
+			name:   "newXDSClient-throws-error",
+			rbo:    resolver.BuildOptions{},
+			config: validConfig,
+			xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) {
+				return nil, errors.New("newXDSClient-throws-error")
+			},
+			wantErr: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Fake out the bootstrap process by providing our own config.
+			oldConfigMaker := newXDSConfig
+			newXDSConfig = func() (*bootstrap.Config, error) {
+				if test.config.BalancerName == "" {
+					return nil, fmt.Errorf("no balancer name found in config")
+				}
+				return &test.config, nil
+			}
+			// Fake out the xdsClient creation process by providing a fake.
+			oldClientMaker := newXDSClient
+			newXDSClient = test.xdsClientFunc
+			defer func() {
+				newXDSConfig = oldConfigMaker
+				newXDSClient = oldClientMaker
+			}()
+
+			builder := resolver.Get(xdsScheme)
+			if builder == nil {
+				t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
+			}
+
+			r, err := builder.Build(target, newTestClientConn(), test.rbo)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("builder.Build(%v) returned err: %v, wantErr: %v", target, err, test.wantErr)
+			}
+			if err != nil {
+				// This is the case where we expect an error and got it.
+				return
+			}
+			r.Close()
+		})
+	}
+}
+
+type setupOpts struct {
+	config        *bootstrap.Config
+	xdsClientFunc func(xdsclient.Options) (xdsClientInterface, error)
+}
+
+func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *testClientConn, func()) {
+	t.Helper()
+
+	oldConfigMaker := newXDSConfig
+	newXDSConfig = func() (*bootstrap.Config, error) { return opts.config, nil }
+	oldClientMaker := newXDSClient
+	newXDSClient = opts.xdsClientFunc
+	cancel := func() {
+		newXDSConfig = oldConfigMaker
+		newXDSClient = oldClientMaker
+	}
+
+	builder := resolver.Get(xdsScheme)
+	if builder == nil {
+		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
+	}
+
+	tcc := newTestClientConn()
+	r, err := builder.Build(target, tcc, resolver.BuildOptions{})
+	if err != nil {
+		t.Fatalf("builder.Build(%v) returned err: %v", target, err)
+	}
+	return r.(*xdsResolver), tcc, cancel
+}
+
+// waitForWatchService waits for the WatchService method to be called on the
+// xdsClient within a reasonable amount of time, and also verifies that the
+// watch is called with the expected target.
+func waitForWatchService(t *testing.T, xdsC *fakeclient.Client, wantTarget string) {
+	t.Helper()
+
+	gotTarget, err := xdsC.WaitForWatchService()
+	if err != nil {
+		t.Fatalf("xdsClient.WatchService failed with error: %v", err)
+	}
+	if gotTarget != wantTarget {
+		t.Fatalf("xdsClient.WatchService() called with target: %v, want %v", gotTarget, wantTarget)
+	}
+}
+
+// TestXDSResolverWatchCallbackAfterClose tests the case where a service update
+// from the underlying xdsClient is received after the resolver is closed.
+func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
+		config:        &validConfig,
+		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
+	})
+	defer cancel()
+
+	waitForWatchService(t, xdsC, targetStr)
+
+	// Call the watchAPI callback after closing the resolver, and make sure no
+	// update is triggerred on the ClientConn.
+	xdsR.Close()
+	xdsC.InvokeWatchServiceCallback(cluster, nil)
+	if gotVal, gotErr := tcc.stateCh.Receive(); gotErr != testutils.ErrRecvTimeout {
+		t.Fatalf("ClientConn.UpdateState called after xdsResolver is closed: %v", gotVal)
+	}
+}
+
+// TestXDSResolverBadServiceUpdate tests the case the xdsClient returns a bad
+// service update.
+func TestXDSResolverBadServiceUpdate(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
+		config:        &validConfig,
+		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
+	})
+	defer func() {
+		cancel()
+		xdsR.Close()
+	}()
+
+	waitForWatchService(t, xdsC, targetStr)
+
+	// Invoke the watchAPI callback with a bad service update and wait for the
+	// ReportError method to be called on the ClientConn.
+	suErr := errors.New("bad serviceupdate")
+	xdsC.InvokeWatchServiceCallback("", suErr)
+	if gotErrVal, gotErr := tcc.errorCh.Receive(); gotErr != nil || gotErrVal != suErr {
+		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr)
+	}
+}
+
+// TestXDSResolverGoodServiceUpdate tests the happy case where the resolver
+// gets a good service update from the xdsClient.
+func TestXDSResolverGoodServiceUpdate(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
+		config:        &validConfig,
+		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
+	})
+	defer func() {
+		cancel()
+		xdsR.Close()
+	}()
+
+	waitForWatchService(t, xdsC, targetStr)
+
+	// Invoke the watchAPI callback with a good service update and wait for the
+	// UpdateState method to be called on the ClientConn.
+	xdsC.InvokeWatchServiceCallback(cluster, nil)
+	gotState, err := tcc.stateCh.Receive()
+	if err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+	rState := gotState.(resolver.State)
+	if gotClient := rState.Attributes.Value(xdsinternal.XDSClientID); gotClient != xdsC {
+		t.Fatalf("ClientConn.UpdateState got xdsClient: %v, want %v", gotClient, xdsC)
+	}
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+}
+
+// TestXDSResolverUpdates tests the cases where the resolver gets a good update
+// after an error, and an error after the good update.
+func TestXDSResolverGoodUpdateAfterError(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
+		config:        &validConfig,
+		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
+	})
+	defer func() {
+		cancel()
+		xdsR.Close()
+	}()
+
+	waitForWatchService(t, xdsC, targetStr)
+
+	// Invoke the watchAPI callback with a bad service update and wait for the
+	// ReportError method to be called on the ClientConn.
+	suErr := errors.New("bad serviceupdate")
+	xdsC.InvokeWatchServiceCallback("", suErr)
+	if gotErrVal, gotErr := tcc.errorCh.Receive(); gotErr != nil || gotErrVal != suErr {
+		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr)
+	}
+
+	// Invoke the watchAPI callback with a good service update and wait for the
+	// UpdateState method to be called on the ClientConn.
+	xdsC.InvokeWatchServiceCallback(cluster, nil)
+	gotState, err := tcc.stateCh.Receive()
+	if err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+	rState := gotState.(resolver.State)
+	if gotClient := rState.Attributes.Value(xdsinternal.XDSClientID); gotClient != xdsC {
+		t.Fatalf("ClientConn.UpdateState got xdsClient: %v, want %v", gotClient, xdsC)
+	}
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+
+	// Invoke the watchAPI callback with a bad service update and wait for the
+	// ReportError method to be called on the ClientConn.
+	suErr2 := errors.New("bad serviceupdate 2")
+	xdsC.InvokeWatchServiceCallback("", suErr2)
+	if gotErrVal, gotErr := tcc.errorCh.Receive(); gotErr != nil || gotErrVal != suErr2 {
+		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr2)
 	}
 }

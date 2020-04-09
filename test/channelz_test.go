@@ -230,7 +230,7 @@ func (s) TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: parseCfg(`{"loadBalancingPolicy": "round_robin"}`)})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: parseCfg(r, `{"loadBalancingPolicy": "round_robin"}`)})
 
 	// wait for the shutdown of grpclb balancer
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -1273,11 +1273,23 @@ func (s) TestCZServerSocketMetricsKeepAlive(t *testing.T) {
 	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
-	te.customServerOptions = append(te.customServerOptions, grpc.KeepaliveParams(keepalive.ServerParameters{Time: time.Second, Timeout: 500 * time.Millisecond}))
+	// We setup the server keepalive parameters to send one keepalive every
+	// second, and verify that the actual number of keepalives is very close to
+	// the number of seconds elapsed in the test.  We had a bug wherein the
+	// server was sending one keepalive every [Time+Timeout] instead of every
+	// [Time] period, and since Timeout is configured to a low value here, we
+	// should be able to verify that the fix works with the above mentioned
+	// logic.
+	kpOption := grpc.KeepaliveParams(keepalive.ServerParameters{
+		Time:    time.Second,
+		Timeout: 100 * time.Millisecond,
+	})
+	te.customServerOptions = append(te.customServerOptions, kpOption)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
+	start := time.Now()
 	doIdleCallToInvokeKeepAlive(tc, t)
 
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -1289,8 +1301,9 @@ func (s) TestCZServerSocketMetricsKeepAlive(t *testing.T) {
 		if len(ns) != 1 {
 			return false, fmt.Errorf("there should be one server normal socket, not %d", len(ns))
 		}
-		if ns[0].SocketData.KeepAlivesSent != 2 { // doIdleCallToInvokeKeepAlive func is set up to send 2 KeepAlives.
-			return false, fmt.Errorf("there should be 2 KeepAlives sent, not %d", ns[0].SocketData.KeepAlivesSent)
+		wantKeepalivesCount := int64(time.Since(start).Seconds()) - 1
+		if gotKeepalivesCount := ns[0].SocketData.KeepAlivesSent; gotKeepalivesCount != wantKeepalivesCount {
+			return false, fmt.Errorf("got keepalivesCount: %v, want keepalivesCount: %v", gotKeepalivesCount, wantKeepalivesCount)
 		}
 		return true, nil
 	}); err != nil {
@@ -1423,7 +1436,7 @@ func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: parseCfg(`{"loadBalancingPolicy": "round_robin"}`)})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: parseCfg(r, `{"loadBalancingPolicy": "round_robin"}`)})
 
 	// wait for the shutdown of grpclb balancer
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -1502,15 +1515,29 @@ func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
+	// Wait for ready
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for src := te.cc.GetState(); src != connectivity.Ready; src = te.cc.GetState() {
+		if !te.cc.WaitForStateChange(ctx, src) {
+			t.Fatalf("timed out waiting for state change.  got %v; want %v", src, connectivity.Ready)
+		}
+	}
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}})
+	// Wait for not-ready.
+	for src := te.cc.GetState(); src == connectivity.Ready; src = te.cc.GetState() {
+		if !te.cc.WaitForStateChange(ctx, src) {
+			t.Fatalf("timed out waiting for state change.  got %v; want !%v", src, connectivity.Ready)
+		}
+	}
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0, 0)
 		if len(tcs) != 1 {
 			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
-		if len(tcs[0].SubChans) != 0 {
-			return false, fmt.Errorf("there should be 0 subchannel not %d", len(tcs[0].SubChans))
+		if len(tcs[0].SubChans) != 1 {
+			return false, fmt.Errorf("there should be 1 subchannel not %d", len(tcs[0].SubChans))
 		}
 		scm := channelz.GetSubChannel(subConn)
 		if scm == nil {
@@ -1567,7 +1594,7 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: parseCfg(`{"loadBalancingPolicy": "round_robin"}`)})
+	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: parseCfg(r, `{"loadBalancingPolicy": "round_robin"}`)})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm := channelz.GetChannel(cid)
@@ -1584,7 +1611,7 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newSC := parseCfg(`{
+	newSC := parseCfg(r, `{
     "methodConfig": [
         {
             "name": [
@@ -1757,7 +1784,7 @@ func (s) TestCZSubChannelConnectivityState(t *testing.T) {
 			return false, fmt.Errorf("transient failure has not happened on SubChannel yet")
 		}
 		transient = 0
-		r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
+		r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}})
 		for _, e := range scm.Trace.Events {
 			if e.Desc == fmt.Sprintf("Subchannel Connectivity change to %v", connectivity.Ready) {
 				ready++
@@ -1853,7 +1880,7 @@ func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorage()
 	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
-	// avoid calling API to set balancer type, which will void service config's change of balancer.
+	// avoid newTest using WithBalancer, which would override service config's change of balancer below.
 	e.balancer = ""
 	te := newTest(t, e)
 	channelz.SetMaxTraceEntry(1)
@@ -1882,7 +1909,7 @@ func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: parseCfg(`{"loadBalancingPolicy": "round_robin"}`)})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: parseCfg(r, `{"loadBalancingPolicy": "round_robin"}`)})
 
 	// wait for the shutdown of grpclb balancer
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -1897,6 +1924,10 @@ func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+
+	// If nested channel deletion is last trace event before the next validation, it will fail, as the top channel will hold a reference to it.
+	// This line forces a trace event on the top channel in that case.
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: parseCfg(r, `{"loadBalancingPolicy": "round_robin"}`)})
 
 	// verify that the nested channel no longer exist due to trace referencing it got overwritten.
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -1943,19 +1974,20 @@ func (s) TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
-
-	if err := verifyResultWithDelay(func() (bool, error) {
-		tcs, _ := channelz.GetTopChannels(0, 0)
-		if len(tcs) != 1 {
-			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
+	// Wait for ready
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for src := te.cc.GetState(); src != connectivity.Ready; src = te.cc.GetState() {
+		if !te.cc.WaitForStateChange(ctx, src) {
+			t.Fatalf("timed out waiting for state change.  got %v; want %v", src, connectivity.Ready)
 		}
-		if len(tcs[0].SubChans) != 0 {
-			return false, fmt.Errorf("there should be 0 subchannel not %d", len(tcs[0].SubChans))
+	}
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}})
+	// Wait for not-ready.
+	for src := te.cc.GetState(); src == connectivity.Ready; src = te.cc.GetState() {
+		if !te.cc.WaitForStateChange(ctx, src) {
+			t.Fatalf("timed out waiting for state change.  got %v; want !%v", src, connectivity.Ready)
 		}
-		return true, nil
-	}); err != nil {
-		t.Fatal(err)
 	}
 
 	// verify that the subchannel no longer exist due to trace referencing it got overwritten.

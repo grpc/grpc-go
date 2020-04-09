@@ -22,12 +22,21 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 )
 
-func TestPipeListener(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestPipeListener(t *testing.T) {
 	pl := testutils.NewPipeListener()
-	recvdBytes := make(chan []byte)
+	recvdBytes := make(chan []byte, 1)
 	const want = "hello world"
 
 	go func() {
@@ -66,7 +75,7 @@ func TestPipeListener(t *testing.T) {
 	}
 }
 
-func TestUnblocking(t *testing.T) {
+func (s) TestUnblocking(t *testing.T) {
 	for _, test := range []struct {
 		desc                 string
 		blockFuncShouldError bool

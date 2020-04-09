@@ -23,11 +23,20 @@ import (
 	"testing"
 	"unicode"
 
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/google/go-cmp/cmp"
-	basepb "google.golang.org/grpc/xds/internal/proto/envoy/api/v2/core/base"
+	"google.golang.org/grpc/internal/grpctest"
 )
 
 const ignorePrefix = "XXX_"
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 func ignore(name string) bool {
 	if !unicode.IsUpper([]rune(name)[0]) {
@@ -38,7 +47,7 @@ func ignore(name string) bool {
 
 // A reflection based test to make sure internal.Locality contains all the
 // fields (expect for XXX_) from the proto message.
-func TestLocalityMatchProtoMessage(t *testing.T) {
+func (s) TestLocalityMatchProtoMessage(t *testing.T) {
 	want1 := make(map[string]string)
 	for ty, i := reflect.TypeOf(Locality{}), 0; i < ty.NumField(); i++ {
 		f := ty.Field(i)
@@ -49,7 +58,7 @@ func TestLocalityMatchProtoMessage(t *testing.T) {
 	}
 
 	want2 := make(map[string]string)
-	for ty, i := reflect.TypeOf(basepb.Locality{}), 0; i < ty.NumField(); i++ {
+	for ty, i := reflect.TypeOf(corepb.Locality{}), 0; i < ty.NumField(); i++ {
 		f := ty.Field(i)
 		if ignore(f.Name) {
 			continue
@@ -57,7 +66,7 @@ func TestLocalityMatchProtoMessage(t *testing.T) {
 		want2[f.Name] = f.Type.Name()
 	}
 
-	if !reflect.DeepEqual(want1, want2) {
-		t.Fatalf("internal type and proto message have different fields:\n%+v", cmp.Diff(want1, want2))
+	if diff := cmp.Diff(want1, want2); diff != "" {
+		t.Fatalf("internal type and proto message have different fields: (-got +want):\n%+v", diff)
 	}
 }

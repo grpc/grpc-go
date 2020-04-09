@@ -24,9 +24,18 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/grpc_testing"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 func errWithDetails(t *testing.T, s *status.Status, details ...proto.Message) error {
 	t.Helper()
@@ -37,7 +46,7 @@ func errWithDetails(t *testing.T, s *status.Status, details ...proto.Message) er
 	return res.Err()
 }
 
-func TestErrorIs(t *testing.T) {
+func (s) TestErrorIs(t *testing.T) {
 	// Test errors.
 	testErr := status.Error(codes.Internal, "internal server error")
 	testErrWithDetails := errWithDetails(t, status.New(codes.Internal, "internal server error"), &grpc_testing.Empty{})

@@ -39,7 +39,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
+func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 	type testCase struct {
 		name    string
 		req     *http.Request
@@ -263,12 +263,38 @@ func newHandleStreamTest(t *testing.T) *handleStreamTest {
 	}
 }
 
-func TestHandlerTransport_HandleStreams(t *testing.T) {
+func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 	st := newHandleStreamTest(t)
 	handleStream := func(s *Stream) {
 		if want := "/service/foo.bar"; s.method != want {
 			t.Errorf("stream method = %q; want %q", s.method, want)
 		}
+
+		err := s.SetHeader(metadata.Pairs("custom-header", "Custom header value"))
+		if err != nil {
+			t.Error(err)
+		}
+		err = s.SetTrailer(metadata.Pairs("custom-trailer", "Custom trailer value"))
+		if err != nil {
+			t.Error(err)
+		}
+
+		md := metadata.Pairs("custom-header", "Another custom header value")
+		err = s.SendHeader(md)
+		delete(md, "custom-header")
+		if err != nil {
+			t.Error(err)
+		}
+
+		err = s.SetHeader(metadata.Pairs("too-late", "Header value that should be ignored"))
+		if err == nil {
+			t.Error("expected SetHeader call after SendHeader to fail")
+		}
+		err = s.SendHeader(metadata.Pairs("too-late", "This header value should be ignored as well"))
+		if err == nil {
+			t.Error("expected second SendHeader call to fail")
+		}
+
 		st.bodyw.Close() // no body
 		st.ht.WriteStatus(s, status.New(codes.OK, ""))
 	}
@@ -277,23 +303,25 @@ func TestHandlerTransport_HandleStreams(t *testing.T) {
 		func(ctx context.Context, method string) context.Context { return ctx },
 	)
 	wantHeader := http.Header{
-		"Date":         nil,
-		"Content-Type": {"application/grpc"},
-		"Trailer":      {"Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
-		"Grpc-Status":  {"0"},
+		"Date":          {},
+		"Content-Type":  {"application/grpc"},
+		"Trailer":       {"Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
+		"Custom-Header": {"Custom header value", "Another custom header value"},
 	}
-	if !reflect.DeepEqual(st.rw.HeaderMap, wantHeader) {
-		t.Errorf("Header+Trailer Map: %#v; want %#v", st.rw.HeaderMap, wantHeader)
+	wantTrailer := http.Header{
+		"Grpc-Status":    {"0"},
+		"Custom-Trailer": {"Custom trailer value"},
 	}
+	checkHeaderAndTrailer(t, st.rw, wantHeader, wantTrailer)
 }
 
 // Tests that codes.Unimplemented will close the body, per comment in handler_server.go.
-func TestHandlerTransport_HandleStreams_Unimplemented(t *testing.T) {
+func (s) TestHandlerTransport_HandleStreams_Unimplemented(t *testing.T) {
 	handleStreamCloseBodyTest(t, codes.Unimplemented, "thingy is unimplemented")
 }
 
 // Tests that codes.InvalidArgument will close the body, per comment in handler_server.go.
-func TestHandlerTransport_HandleStreams_InvalidArgument(t *testing.T) {
+func (s) TestHandlerTransport_HandleStreams_InvalidArgument(t *testing.T) {
 	handleStreamCloseBodyTest(t, codes.InvalidArgument, "bad arg")
 }
 
@@ -308,19 +336,18 @@ func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) 
 		func(ctx context.Context, method string) context.Context { return ctx },
 	)
 	wantHeader := http.Header{
-		"Date":         nil,
+		"Date":         {},
 		"Content-Type": {"application/grpc"},
 		"Trailer":      {"Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
+	}
+	wantTrailer := http.Header{
 		"Grpc-Status":  {fmt.Sprint(uint32(statusCode))},
 		"Grpc-Message": {encodeGrpcMessage(msg)},
 	}
-
-	if !reflect.DeepEqual(st.rw.HeaderMap, wantHeader) {
-		t.Errorf("Header+Trailer mismatch.\n got: %#v\nwant: %#v", st.rw.HeaderMap, wantHeader)
-	}
+	checkHeaderAndTrailer(t, st.rw, wantHeader, wantTrailer)
 }
 
-func TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
+func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 	bodyr, bodyw := io.Pipe()
 	req := &http.Request{
 		ProtoMajor: 2,
@@ -360,20 +387,20 @@ func TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		func(ctx context.Context, method string) context.Context { return ctx },
 	)
 	wantHeader := http.Header{
-		"Date":         nil,
+		"Date":         {},
 		"Content-Type": {"application/grpc"},
 		"Trailer":      {"Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
+	}
+	wantTrailer := http.Header{
 		"Grpc-Status":  {"4"},
 		"Grpc-Message": {encodeGrpcMessage("too slow")},
 	}
-	if !reflect.DeepEqual(rw.HeaderMap, wantHeader) {
-		t.Errorf("Header+Trailer Map mismatch.\n got: %#v\nwant: %#v", rw.HeaderMap, wantHeader)
-	}
+	checkHeaderAndTrailer(t, rw, wantHeader, wantTrailer)
 }
 
 // TestHandlerTransport_HandleStreams_MultiWriteStatus ensures that
 // concurrent "WriteStatus"s do not panic writing to closed "writes" channel.
-func TestHandlerTransport_HandleStreams_MultiWriteStatus(t *testing.T) {
+func (s) TestHandlerTransport_HandleStreams_MultiWriteStatus(t *testing.T) {
 	testHandlerTransportHandleStreams(t, func(st *handleStreamTest, s *Stream) {
 		if want := "/service/foo.bar"; s.method != want {
 			t.Errorf("stream method = %q; want %q", s.method, want)
@@ -394,7 +421,7 @@ func TestHandlerTransport_HandleStreams_MultiWriteStatus(t *testing.T) {
 
 // TestHandlerTransport_HandleStreams_WriteStatusWrite ensures that "Write"
 // following "WriteStatus" does not panic writing to closed "writes" channel.
-func TestHandlerTransport_HandleStreams_WriteStatusWrite(t *testing.T) {
+func (s) TestHandlerTransport_HandleStreams_WriteStatusWrite(t *testing.T) {
 	testHandlerTransportHandleStreams(t, func(st *handleStreamTest, s *Stream) {
 		if want := "/service/foo.bar"; s.method != want {
 			t.Errorf("stream method = %q; want %q", s.method, want)
@@ -414,7 +441,7 @@ func testHandlerTransportHandleStreams(t *testing.T, handleStream func(st *handl
 	)
 }
 
-func TestHandlerTransport_HandleStreams_ErrDetails(t *testing.T) {
+func (s) TestHandlerTransport_HandleStreams_ErrDetails(t *testing.T) {
 	errDetails := []proto.Message{
 		&epb.RetryInfo{
 			RetryDelay: &dpb.Duration{Seconds: 60},
@@ -447,15 +474,50 @@ func TestHandlerTransport_HandleStreams_ErrDetails(t *testing.T) {
 		func(ctx context.Context, method string) context.Context { return ctx },
 	)
 	wantHeader := http.Header{
-		"Date":                    nil,
-		"Content-Type":            {"application/grpc"},
-		"Trailer":                 {"Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
+		"Date":         {},
+		"Content-Type": {"application/grpc"},
+		"Trailer":      {"Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
+	}
+	wantTrailer := http.Header{
 		"Grpc-Status":             {fmt.Sprint(uint32(statusCode))},
 		"Grpc-Message":            {encodeGrpcMessage(msg)},
 		"Grpc-Status-Details-Bin": {encodeBinHeader(stBytes)},
 	}
 
-	if !reflect.DeepEqual(hst.rw.HeaderMap, wantHeader) {
-		t.Errorf("Header+Trailer mismatch.\n got: %#v\nwant: %#v", hst.rw.HeaderMap, wantHeader)
+	checkHeaderAndTrailer(t, hst.rw, wantHeader, wantTrailer)
+}
+
+// checkHeaderAndTrailer checks that the resulting header and trailer matches the expectation.
+func checkHeaderAndTrailer(t *testing.T, rw testHandlerResponseWriter, wantHeader, wantTrailer http.Header) {
+	// For trailer-only responses, the trailer values might be reported as part of the Header. They will however
+	// be present in Trailer in either case. Hence, normalize the header by removing all trailer values.
+	actualHeader := cloneHeader(rw.Result().Header)
+	for _, trailerKey := range actualHeader["Trailer"] {
+		actualHeader.Del(trailerKey)
 	}
+
+	if !reflect.DeepEqual(actualHeader, wantHeader) {
+		t.Errorf("Header mismatch.\n got: %#v\n want: %#v", actualHeader, wantHeader)
+	}
+	if actualTrailer := rw.Result().Trailer; !reflect.DeepEqual(actualTrailer, wantTrailer) {
+		t.Errorf("Trailer mismatch.\n got: %#v\n want: %#v", actualTrailer, wantTrailer)
+	}
+}
+
+// cloneHeader performs a deep clone of an http.Header, since the (http.Header).Clone() method was only added in
+// Go 1.13.
+func cloneHeader(hdr http.Header) http.Header {
+	if hdr == nil {
+		return nil
+	}
+
+	hdrClone := make(http.Header, len(hdr))
+
+	for k, vv := range hdr {
+		vvClone := make([]string, len(vv))
+		copy(vvClone, vv)
+		hdrClone[k] = vvClone
+	}
+
+	return hdrClone
 }

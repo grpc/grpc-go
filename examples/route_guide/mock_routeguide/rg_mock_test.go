@@ -28,14 +28,23 @@ import (
 	"github.com/golang/protobuf/proto"
 	rgmock "google.golang.org/grpc/examples/route_guide/mock_routeguide"
 	rgpb "google.golang.org/grpc/examples/route_guide/routeguide"
+	"google.golang.org/grpc/internal/grpctest"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 var msg = &rgpb.RouteNote{
 	Location: &rgpb.Point{Latitude: 17, Longitude: 29},
 	Message:  "Taxi-cab",
 }
 
-func TestRouteChat(t *testing.T) {
+func (s) TestRouteChat(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 

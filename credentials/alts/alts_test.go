@@ -24,9 +24,18 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
+	"google.golang.org/grpc/internal/grpctest"
 )
 
-func TestInfoServerName(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestInfoServerName(t *testing.T) {
 	// This is not testing any handshaker functionality, so it's fine to only
 	// use NewServerCreds and not NewClientCreds.
 	alts := NewServerCreds(DefaultServerOptions())
@@ -35,7 +44,7 @@ func TestInfoServerName(t *testing.T) {
 	}
 }
 
-func TestOverrideServerName(t *testing.T) {
+func (s) TestOverrideServerName(t *testing.T) {
 	wantServerName := "server.name"
 	// This is not testing any handshaker functionality, so it's fine to only
 	// use NewServerCreds and not NewClientCreds.
@@ -46,7 +55,7 @@ func TestOverrideServerName(t *testing.T) {
 	}
 }
 
-func TestCloneClient(t *testing.T) {
+func (s) TestCloneClient(t *testing.T) {
 	wantServerName := "server.name"
 	opt := DefaultClientOptions()
 	opt.TargetServiceAccounts = []string{"not", "empty"}
@@ -78,7 +87,7 @@ func TestCloneClient(t *testing.T) {
 	}
 }
 
-func TestCloneServer(t *testing.T) {
+func (s) TestCloneServer(t *testing.T) {
 	wantServerName := "server.name"
 	c := NewServerCreds(DefaultServerOptions())
 	c.OverrideServerName(wantServerName)
@@ -108,7 +117,7 @@ func TestCloneServer(t *testing.T) {
 	}
 }
 
-func TestInfo(t *testing.T) {
+func (s) TestInfo(t *testing.T) {
 	// This is not testing any handshaker functionality, so it's fine to only
 	// use NewServerCreds and not NewClientCreds.
 	c := NewServerCreds(DefaultServerOptions())
@@ -127,7 +136,7 @@ func TestInfo(t *testing.T) {
 	}
 }
 
-func TestCompareRPCVersions(t *testing.T) {
+func (s) TestCompareRPCVersions(t *testing.T) {
 	for _, tc := range []struct {
 		v1     *altspb.RpcProtocolVersions_Version
 		v2     *altspb.RpcProtocolVersions_Version
@@ -165,7 +174,7 @@ func TestCompareRPCVersions(t *testing.T) {
 	}
 }
 
-func TestCheckRPCVersions(t *testing.T) {
+func (s) TestCheckRPCVersions(t *testing.T) {
 	for _, tc := range []struct {
 		desc             string
 		local            *altspb.RpcProtocolVersions

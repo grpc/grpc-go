@@ -2928,11 +2928,11 @@ var fileDescriptor_6ee37dfd35a8ab00 = []byte{
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
-var _ grpc.ClientConn
+var _ grpc.ClientConnInterface
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion4
+const _ = grpc.SupportPackageIsVersion6
 
 // ChannelzClient is the client API for Channelz service.
 //
@@ -2956,10 +2956,10 @@ type ChannelzClient interface {
 }
 
 type channelzClient struct {
-	cc *grpc.ClientConn
+	cc grpc.ClientConnInterface
 }
 
-func NewChannelzClient(cc *grpc.ClientConn) ChannelzClient {
+func NewChannelzClient(cc grpc.ClientConnInterface) ChannelzClient {
 	return &channelzClient{cc}
 }
 

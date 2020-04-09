@@ -34,10 +34,19 @@ import (
 	pb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/binarylog"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	testpb "google.golang.org/grpc/stats/grpc_testing"
 	"google.golang.org/grpc/status"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 func init() {
 	// Setting environment variable in tests doesn't work because of the init
@@ -104,6 +113,7 @@ var (
 )
 
 type testServer struct {
+	testpb.UnimplementedTestServiceServer
 	te *test
 }
 
@@ -881,61 +891,61 @@ func testClientBinaryLog(t *testing.T, c *rpcConfig) error {
 	return nil
 }
 
-func TestClientBinaryLogUnaryRPC(t *testing.T) {
+func (s) TestClientBinaryLogUnaryRPC(t *testing.T) {
 	if err := testClientBinaryLog(t, &rpcConfig{success: true, callType: unaryRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestClientBinaryLogUnaryRPCError(t *testing.T) {
+func (s) TestClientBinaryLogUnaryRPCError(t *testing.T) {
 	if err := testClientBinaryLog(t, &rpcConfig{success: false, callType: unaryRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestClientBinaryLogClientStreamRPC(t *testing.T) {
+func (s) TestClientBinaryLogClientStreamRPC(t *testing.T) {
 	count := 5
 	if err := testClientBinaryLog(t, &rpcConfig{count: count, success: true, callType: clientStreamRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestClientBinaryLogClientStreamRPCError(t *testing.T) {
+func (s) TestClientBinaryLogClientStreamRPCError(t *testing.T) {
 	count := 1
 	if err := testClientBinaryLog(t, &rpcConfig{count: count, success: false, callType: clientStreamRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestClientBinaryLogServerStreamRPC(t *testing.T) {
+func (s) TestClientBinaryLogServerStreamRPC(t *testing.T) {
 	count := 5
 	if err := testClientBinaryLog(t, &rpcConfig{count: count, success: true, callType: serverStreamRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestClientBinaryLogServerStreamRPCError(t *testing.T) {
+func (s) TestClientBinaryLogServerStreamRPCError(t *testing.T) {
 	count := 5
 	if err := testClientBinaryLog(t, &rpcConfig{count: count, success: false, callType: serverStreamRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestClientBinaryLogFullDuplexRPC(t *testing.T) {
+func (s) TestClientBinaryLogFullDuplexRPC(t *testing.T) {
 	count := 5
 	if err := testClientBinaryLog(t, &rpcConfig{count: count, success: true, callType: fullDuplexStreamRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestClientBinaryLogFullDuplexRPCError(t *testing.T) {
+func (s) TestClientBinaryLogFullDuplexRPCError(t *testing.T) {
 	count := 5
 	if err := testClientBinaryLog(t, &rpcConfig{count: count, success: false, callType: fullDuplexStreamRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestClientBinaryLogCancel(t *testing.T) {
+func (s) TestClientBinaryLogCancel(t *testing.T) {
 	count := 5
 	if err := testClientBinaryLog(t, &rpcConfig{count: count, success: false, callType: cancelRPC}); err != nil {
 		t.Fatal(err)
@@ -983,54 +993,54 @@ func testServerBinaryLog(t *testing.T, c *rpcConfig) error {
 	return nil
 }
 
-func TestServerBinaryLogUnaryRPC(t *testing.T) {
+func (s) TestServerBinaryLogUnaryRPC(t *testing.T) {
 	if err := testServerBinaryLog(t, &rpcConfig{success: true, callType: unaryRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestServerBinaryLogUnaryRPCError(t *testing.T) {
+func (s) TestServerBinaryLogUnaryRPCError(t *testing.T) {
 	if err := testServerBinaryLog(t, &rpcConfig{success: false, callType: unaryRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestServerBinaryLogClientStreamRPC(t *testing.T) {
+func (s) TestServerBinaryLogClientStreamRPC(t *testing.T) {
 	count := 5
 	if err := testServerBinaryLog(t, &rpcConfig{count: count, success: true, callType: clientStreamRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestServerBinaryLogClientStreamRPCError(t *testing.T) {
+func (s) TestServerBinaryLogClientStreamRPCError(t *testing.T) {
 	count := 1
 	if err := testServerBinaryLog(t, &rpcConfig{count: count, success: false, callType: clientStreamRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestServerBinaryLogServerStreamRPC(t *testing.T) {
+func (s) TestServerBinaryLogServerStreamRPC(t *testing.T) {
 	count := 5
 	if err := testServerBinaryLog(t, &rpcConfig{count: count, success: true, callType: serverStreamRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestServerBinaryLogServerStreamRPCError(t *testing.T) {
+func (s) TestServerBinaryLogServerStreamRPCError(t *testing.T) {
 	count := 5
 	if err := testServerBinaryLog(t, &rpcConfig{count: count, success: false, callType: serverStreamRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestServerBinaryLogFullDuplex(t *testing.T) {
+func (s) TestServerBinaryLogFullDuplex(t *testing.T) {
 	count := 5
 	if err := testServerBinaryLog(t, &rpcConfig{count: count, success: true, callType: fullDuplexStreamRPC}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestServerBinaryLogFullDuplexError(t *testing.T) {
+func (s) TestServerBinaryLogFullDuplexError(t *testing.T) {
 	count := 5
 	if err := testServerBinaryLog(t, &rpcConfig{count: count, success: false, callType: fullDuplexStreamRPC}); err != nil {
 		t.Fatal(err)
