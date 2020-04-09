@@ -217,7 +217,14 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	defer func() {
 		select {
 		case <-ctx.Done():
-			conn, err = nil, ctx.Err()
+			switch {
+			case ctx.Err() == err:
+				conn = nil
+			case err == nil || !cc.dopts.returnLastError:
+				conn, err = nil, ctx.Err()
+			default:
+				conn, err = nil, fmt.Errorf("%v: %v", ctx.Err(), err)
+			}
 		default:
 		}
 	}()
@@ -322,6 +329,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			}
 			if !cc.WaitForStateChange(ctx, s) {
 				// ctx got timeout or canceled.
+				if err = cc.blockingpicker.connectionError(); err != nil && cc.dopts.returnLastError {
+					return nil, err
+				}
 				return nil, ctx.Err()
 			}
 		}
