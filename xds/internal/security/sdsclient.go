@@ -266,8 +266,3 @@ func (c *sdsClient) close() {
 	c.cc.Close()
 	c.cancel()
 }
-
-// TODO: Testing
-// 2. Connect from here witl TLS creds
-// stream breaks
-// no reponse
