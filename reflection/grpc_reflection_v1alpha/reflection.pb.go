@@ -105,7 +105,8 @@ func (*ServerReflectionRequest_FileContainingSymbol) isServerReflectionRequest_M
 
 func (*ServerReflectionRequest_FileContainingExtension) isServerReflectionRequest_MessageRequest() {}
 
-func (*ServerReflectionRequest_AllExtensionNumbersOfType) isServerReflectionRequest_MessageRequest() {}
+func (*ServerReflectionRequest_AllExtensionNumbersOfType) isServerReflectionRequest_MessageRequest() {
+}
 
 func (*ServerReflectionRequest_ListServices) isServerReflectionRequest_MessageRequest() {}
 
@@ -289,7 +290,8 @@ type ServerReflectionResponse_ErrorResponse struct {
 	ErrorResponse *ErrorResponse `protobuf:"bytes,7,opt,name=error_response,json=errorResponse,proto3,oneof"`
 }
 
-func (*ServerReflectionResponse_FileDescriptorResponse) isServerReflectionResponse_MessageResponse() {}
+func (*ServerReflectionResponse_FileDescriptorResponse) isServerReflectionResponse_MessageResponse() {
+}
 
 func (*ServerReflectionResponse_AllExtensionNumbersResponse) isServerReflectionResponse_MessageResponse() {
 }
