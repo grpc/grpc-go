@@ -16,7 +16,7 @@
  *
  */
 
-// Package fakeserver provides a fake implementation of an xDS server.
+// Package fakeserver provides a fake implementation of multiple xDS services.
 package fakeserver
 
 import (
@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -34,6 +35,7 @@ import (
 
 	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
+	sdsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 )
@@ -45,23 +47,21 @@ const (
 	defaultDialTimeout       = 5 * time.Second
 )
 
-// Request wraps the request protobuf (xds/LRS) and error received by the
-// Server in a call to stream.Recv().
+// Request wraps the request protobuf and error received by the Server in a call
+// to stream.Recv().
 type Request struct {
 	Req proto.Message
 	Err error
 }
 
-// Response wraps the response protobuf (xds/LRS) and error that the Server
-// should send out to the client through a call to stream.Send()
+// Response wraps the response protobuf and error that the Server should send
+// out to the client through a call to stream.Send()
 type Response struct {
 	Resp proto.Message
 	Err  error
 }
 
-// Server is a fake implementation of xDS and LRS protocols. It listens on the
-// same port for both services and exposes a bunch of channels to send/receive
-// messages.
+// Server is a fake implementation of services used by the xDS code.
 type Server struct {
 	// XDSRequestChan is a channel on which received xDS requests are made
 	// available to the users of this Server.
@@ -75,37 +75,64 @@ type Server struct {
 	// LRSResponseChan is a channel on which the Server accepts the LRS
 	// response to be sent to the client.
 	LRSResponseChan chan *Response
-	// Address is the host:port on which the Server is listening for requests.
+	// SDSRequestChan is a channel on which received SDS requests are made
+	// available to the users of this Server.
+	SDSRequestChan *testutils.Channel
+	// SDSResponseChan is a channel on which the Server accepts SDS responses
+	// to be sent to the client.
+	SDSResponseChan chan *Response
+	// Address is the address on which the Server is listening for xDS and LRS
+	// requests.
 	Address string
+	// Path is the UDS path on which the Server is listening for SDS requests.
+	Path string
 
-	// The underlying fake implementation of xDS and LRS.
+	// The underlying fake service implementations.
 	xdsS *xdsServer
 	lrsS *lrsServer
+	sdsS *sdsServer
 }
 
 // StartServer makes a new Server and gets it to start listening on a local
 // port for gRPC requests. The returned cancel function should be invoked by
 // the caller upon completion of the test.
 func StartServer() (*Server, func(), error) {
-	lis, err := net.Listen("tcp", "localhost:0")
+	tcpLis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("net.Listen() failed: %v", err)
+	}
+
+	socketFile := "/tmp/testsock" + fmt.Sprintf("%d", time.Now().UnixNano())
+	// Paranoia: Delete socket file if one exists with same name.
+	os.Remove(socketFile)
+	udsLis, err := net.Listen("unix", socketFile)
 	if err != nil {
 		return nil, func() {}, fmt.Errorf("net.Listen() failed: %v", err)
 	}
 
 	s := &Server{
 		XDSRequestChan:  testutils.NewChannelWithSize(defaultChannelBufferSize),
-		LRSRequestChan:  testutils.NewChannelWithSize(defaultChannelBufferSize),
 		XDSResponseChan: make(chan *Response, defaultChannelBufferSize),
+
+		LRSRequestChan:  testutils.NewChannelWithSize(defaultChannelBufferSize),
 		LRSResponseChan: make(chan *Response, 1), // The server only ever sends one response.
-		Address:         lis.Addr().String(),
+
+		SDSRequestChan:  testutils.NewChannelWithSize(defaultChannelBufferSize),
+		SDSResponseChan: make(chan *Response, defaultChannelBufferSize),
+
+		Address: tcpLis.Addr().String(),
+		Path:    fmt.Sprintf("unix://%s", udsLis.Addr().String()),
 	}
 	s.xdsS = &xdsServer{reqChan: s.XDSRequestChan, respChan: s.XDSResponseChan}
 	s.lrsS = &lrsServer{reqChan: s.LRSRequestChan, respChan: s.LRSResponseChan}
+	s.sdsS = &sdsServer{reqChan: s.SDSRequestChan, respChan: s.SDSResponseChan}
 
 	server := grpc.NewServer()
 	lrsgrpc.RegisterLoadReportingServiceServer(server, s.lrsS)
 	adsgrpc.RegisterAggregatedDiscoveryServiceServer(server, s.xdsS)
-	go server.Serve(lis)
+	sdsgrpc.RegisterSecretDiscoveryServiceServer(server, s.sdsS)
+	go server.Serve(tcpLis)
+	go server.Serve(udsLis)
 
 	return s, func() { server.Stop() }, nil
 }
@@ -207,4 +234,52 @@ func (lrsS *lrsServer) StreamLoadStats(s lrsgrpc.LoadReportingService_StreamLoad
 		}
 		lrsS.reqChan.Send(&Request{req, err})
 	}
+}
+
+type sdsServer struct {
+	sdsgrpc.SecretDiscoveryServiceServer
+	reqChan  *testutils.Channel
+	respChan chan *Response
+}
+
+func (sdsS *sdsServer) StreamSecrets(s sdsgrpc.SecretDiscoveryService_StreamSecretsServer) error {
+	errCh := make(chan error, 2)
+	go func() {
+		for {
+			req, err := s.Recv()
+			if err != nil {
+				errCh <- err
+				return
+			}
+			sdsS.reqChan.Send(&Request{req, err})
+		}
+	}()
+	go func() {
+		var retErr error
+		defer func() {
+			errCh <- retErr
+		}()
+
+		for {
+			select {
+			case r := <-sdsS.respChan:
+				if r.Err != nil {
+					retErr = r.Err
+					return
+				}
+				if err := s.Send(r.Resp.(*discoverypb.DiscoveryResponse)); err != nil {
+					retErr = err
+					return
+				}
+			case <-s.Context().Done():
+				retErr = s.Context().Err()
+				return
+			}
+		}
+	}()
+
+	if err := <-errCh; err != nil {
+		return err
+	}
+	return nil
 }
