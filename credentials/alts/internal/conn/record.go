@@ -111,25 +111,32 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 	}
 	overhead := MsgLenFieldSize + msgTypeFieldSize + crypto.EncryptionOverhead()
 	payloadLengthLimit := altsRecordDefaultLength - overhead
+	// We pre-allocate protectedBuf to be at least of size
+	// 2*altsRecordDefaultLength-1 during initialization. We only read from
+	// the network into protectedBuf when protectedBuf does not contain a
+	// complete frame, which is at most altsRecordDefaultLength-1 (bytes).
+	// And we read at most altsRecordDefaultLength (bytes) data into
+	// protectedBuf at one time. Therefore, 2*altsRecordDefaultLength-1 is
+	// large enough to buffer data read from the network. If protected is
+	// not nil, and its size is larger than 2*altsRecordDefaultLength-1, we
+	// allocate protectedBuf to be size of len(protected), then we copy the
+	// protected content to protectedBuf.
+	protectedBufLen := 2*altsRecordDefaultLength - 1
+	if len(protected) > protectedBufLen {
+		protectedBufLen = len(protected)
+	}
+	protectedBuf := make([]byte, 0, protectedBufLen)
 	if protected == nil {
-		// We pre-allocate protected to be of size
-		// 2*altsRecordDefaultLength-1 during initialization. We only
-		// read from the network into protected when protected does not
-		// contain a complete frame, which is at most
-		// altsRecordDefaultLength-1 (bytes). And we read at most
-		// altsRecordDefaultLength (bytes) data into protected at one
-		// time. Therefore, 2*altsRecordDefaultLength-1 is large enough
-		// to buffer data read from the network.
-		protected = make([]byte, 0, 2*altsRecordDefaultLength-1)
+		copy(protectedBuf, protected)
 	}
 
 	altsConn := &conn{
 		Conn:               c,
 		crypto:             crypto,
 		payloadLengthLimit: payloadLengthLimit,
-		protected:          protected,
+		protected:          protectedBuf,
 		writeBuf:           make([]byte, altsWriteBufferInitialSize),
-		nextFrame:          protected,
+		nextFrame:          protectedBuf,
 		overhead:           overhead,
 	}
 	return altsConn, nil
