@@ -48,7 +48,7 @@ type localityConfig struct {
 // manages all localities using a balancerGroup.
 type balancerGroupWithConfig struct {
 	bg      *balancergroup.BalancerGroup
-	configs map[internal.Locality]*localityConfig
+	configs map[internal.LocalityID]*localityConfig
 }
 
 // edsBalancerImpl does load balancing based on the EDS responses. Note that it
@@ -221,7 +221,7 @@ func (edsImpl *edsBalancerImpl) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) 
 			// new lowest priority).
 			bgwc = &balancerGroupWithConfig{
 				bg:      balancergroup.New(edsImpl.ccWrapperWithPriority(priority), edsImpl.loadStore, edsImpl.logger),
-				configs: make(map[internal.Locality]*localityConfig),
+				configs: make(map[internal.LocalityID]*localityConfig),
 			}
 			edsImpl.priorityToLocalities[priority] = bgwc
 			priorityChanged = true
@@ -255,7 +255,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 	// newLocalitiesSet contains all names of localities in the new EDS response
 	// for the same priority. It's used to delete localities that are removed in
 	// the new EDS response.
-	newLocalitiesSet := make(map[internal.Locality]struct{})
+	newLocalitiesSet := make(map[internal.LocalityID]struct{})
 	for _, locality := range newLocalities {
 		// One balancer for each locality.
 

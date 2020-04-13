@@ -33,7 +33,7 @@ import (
 
 var (
 	rrBuilder        = balancer.Get(roundrobin.Name)
-	testBalancerIDs  = []internal.Locality{{Region: "b1"}, {Region: "b2"}, {Region: "b3"}}
+	testBalancerIDs  = []internal.LocalityID{{Region: "b1"}, {Region: "b2"}, {Region: "b3"}}
 	testBackendAddrs []resolver.Address
 )
 
@@ -378,7 +378,7 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 	bg := New(cc, testLoadStore, nil)
 	bg.Start()
 
-	backendToBalancerID := make(map[balancer.SubConn]internal.Locality)
+	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityID)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -409,8 +409,8 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 	// Test roundrobin on the last picker.
 	p1 := <-cc.NewPickerCh
 	var (
-		wantStart []internal.Locality
-		wantEnd   []internal.Locality
+		wantStart []internal.LocalityID
+		wantEnd   []internal.LocalityID
 		wantCost  []testutils.TestServerLoad
 	)
 	for i := 0; i < 10; i++ {

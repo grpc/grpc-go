@@ -53,7 +53,7 @@ type subBalancerWithConfig struct {
 	// of the actions are forwarded to the parent ClientConn with no change.
 	// Some are forward to balancer group with the sub-balancer ID.
 	balancer.ClientConn
-	id    internal.Locality
+	id    internal.LocalityID
 	group *BalancerGroup
 
 	mu    sync.Mutex
@@ -193,7 +193,7 @@ type BalancerGroup struct {
 	// to sub-balancers after they are closed.
 	outgoingMu         sync.Mutex
 	outgoingStarted    bool
-	idToBalancerConfig map[internal.Locality]*subBalancerWithConfig
+	idToBalancerConfig map[internal.LocalityID]*subBalancerWithConfig
 	// Cache for sub-balancers when they are removed.
 	balancerCache *cache.TimeoutCache
 
@@ -225,7 +225,7 @@ type BalancerGroup struct {
 	// started.
 	//
 	// If an ID is not in map, it's either removed or never added.
-	idToPickerState map[internal.Locality]*pickerState
+	idToPickerState map[internal.LocalityID]*pickerState
 }
 
 // DefaultSubBalancerCloseTimeout is defined as a variable instead of const for
@@ -242,10 +242,10 @@ func New(cc balancer.ClientConn, loadStore lrs.Store, logger *grpclog.PrefixLogg
 		logger:    logger,
 		loadStore: loadStore,
 
-		idToBalancerConfig: make(map[internal.Locality]*subBalancerWithConfig),
+		idToBalancerConfig: make(map[internal.LocalityID]*subBalancerWithConfig),
 		balancerCache:      cache.NewTimeoutCache(DefaultSubBalancerCloseTimeout),
 		scToSubBalancer:    make(map[balancer.SubConn]*subBalancerWithConfig),
-		idToPickerState:    make(map[internal.Locality]*pickerState),
+		idToPickerState:    make(map[internal.LocalityID]*pickerState),
 	}
 }
 
@@ -276,7 +276,7 @@ func (bg *BalancerGroup) Start() {
 // Add adds a balancer built by builder to the group, with given id and weight.
 //
 // weight should never be zero.
-func (bg *BalancerGroup) Add(id internal.Locality, weight uint32, builder balancer.Builder) {
+func (bg *BalancerGroup) Add(id internal.LocalityID, weight uint32, builder balancer.Builder) {
 	if weight == 0 {
 		bg.logger.Errorf("BalancerGroup.add called with weight 0, locality: %v. Locality is not added to balancer group", id)
 		return
@@ -347,7 +347,7 @@ func (bg *BalancerGroup) Add(id internal.Locality, weight uint32, builder balanc
 //
 // It also removes the picker generated from this balancer from the picker
 // group. It always results in a picker update.
-func (bg *BalancerGroup) Remove(id internal.Locality) {
+func (bg *BalancerGroup) Remove(id internal.LocalityID) {
 	bg.outgoingMu.Lock()
 	if sbToRemove, ok := bg.idToBalancerConfig[id]; ok {
 		if bg.outgoingStarted {
@@ -410,7 +410,7 @@ func (bg *BalancerGroup) cleanupSubConns(config *subBalancerWithConfig) {
 // NOTE: It always results in a picker update now. This probably isn't
 // necessary. But it seems better to do the update because it's a change in the
 // picker (which is balancer's snapshot).
-func (bg *BalancerGroup) ChangeWeight(id internal.Locality, newWeight uint32) {
+func (bg *BalancerGroup) ChangeWeight(id internal.LocalityID, newWeight uint32) {
 	if newWeight == 0 {
 		bg.logger.Errorf("BalancerGroup.changeWeight called with newWeight 0. Weight is not changed")
 		return
@@ -457,7 +457,7 @@ func (bg *BalancerGroup) UpdateSubConnState(sc balancer.SubConn, state balancer.
 
 // UpdateClientConnState handles ClientState (including balancer config and
 // addresses) from resolver. It finds the balancer and forwards the update.
-func (bg *BalancerGroup) UpdateClientConnState(id internal.Locality, s balancer.ClientConnState) error {
+func (bg *BalancerGroup) UpdateClientConnState(id internal.LocalityID, s balancer.ClientConnState) error {
 	bg.outgoingMu.Lock()
 	defer bg.outgoingMu.Unlock()
 	if config, ok := bg.idToBalancerConfig[id]; ok {
@@ -501,7 +501,7 @@ func (bg *BalancerGroup) newSubConn(config *subBalancerWithConfig, addrs []resol
 
 // updateBalancerState: create an aggregated picker and an aggregated
 // connectivity state, then forward to ClientConn.
-func (bg *BalancerGroup) updateBalancerState(id internal.Locality, state balancer.State) {
+func (bg *BalancerGroup) updateBalancerState(id internal.LocalityID, state balancer.State) {
 	bg.logger.Infof("Balancer state update from locality %v, new state: %+v", id, state)
 
 	bg.incomingMu.Lock()
@@ -561,7 +561,7 @@ func (bg *BalancerGroup) Close() {
 	bg.balancerCache.Clear(true)
 }
 
-func buildPickerAndState(m map[internal.Locality]*pickerState) balancer.State {
+func buildPickerAndState(m map[internal.LocalityID]*pickerState) balancer.State {
 	var readyN, connectingN int
 	readyPickerWithWeights := make([]pickerState, 0, len(m))
 	for _, ps := range m {
@@ -632,11 +632,11 @@ const (
 type loadReportPicker struct {
 	p balancer.V2Picker
 
-	id        internal.Locality
+	id        internal.LocalityID
 	loadStore lrs.Store
 }
 
-func newLoadReportPicker(p balancer.V2Picker, id internal.Locality, loadStore lrs.Store) *loadReportPicker {
+func newLoadReportPicker(p balancer.V2Picker, id internal.LocalityID, loadStore lrs.Store) *loadReportPicker {
 	return &loadReportPicker{
 		p:         p,
 		id:        id,

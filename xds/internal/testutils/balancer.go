@@ -158,8 +158,8 @@ type TestServerLoad struct {
 
 // TestLoadStore is a load store to be used in tests.
 type TestLoadStore struct {
-	CallsStarted []internal.Locality
-	CallsEnded   []internal.Locality
+	CallsStarted []internal.LocalityID
+	CallsEnded   []internal.LocalityID
 	CallsCost    []TestServerLoad
 }
 
@@ -174,17 +174,17 @@ func (*TestLoadStore) CallDropped(category string) {
 }
 
 // CallStarted records a call started.
-func (tls *TestLoadStore) CallStarted(l internal.Locality) {
+func (tls *TestLoadStore) CallStarted(l internal.LocalityID) {
 	tls.CallsStarted = append(tls.CallsStarted, l)
 }
 
 // CallFinished records a call finished.
-func (tls *TestLoadStore) CallFinished(l internal.Locality, err error) {
+func (tls *TestLoadStore) CallFinished(l internal.LocalityID, err error) {
 	tls.CallsEnded = append(tls.CallsEnded, l)
 }
 
 // CallServerLoad records a call server load.
-func (tls *TestLoadStore) CallServerLoad(l internal.Locality, name string, d float64) {
+func (tls *TestLoadStore) CallServerLoad(l internal.LocalityID, name string, d float64) {
 	tls.CallsCost = append(tls.CallsCost, TestServerLoad{Name: name, D: d})
 }
 

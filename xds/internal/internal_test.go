@@ -49,7 +49,7 @@ func ignore(name string) bool {
 // fields (expect for XXX_) from the proto message.
 func (s) TestLocalityMatchProtoMessage(t *testing.T) {
 	want1 := make(map[string]string)
-	for ty, i := reflect.TypeOf(Locality{}), 0; i < ty.NumField(); i++ {
+	for ty, i := reflect.TypeOf(LocalityID{}), 0; i < ty.NumField(); i++ {
 		f := ty.Field(i)
 		if ignore(f.Name) {
 			continue
