@@ -24,7 +24,7 @@ import (
 	"sync"
 	"testing"
 
-	envoy_api_v2_core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -189,7 +189,7 @@ func (tls *TestLoadStore) CallServerLoad(l internal.Locality, name string, d flo
 }
 
 // ReportTo panics.
-func (*TestLoadStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterName string, node *envoy_api_v2_core.Node) {
+func (*TestLoadStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterName string, node *corepb.Node) {
 	panic("not implemented")
 }
 
