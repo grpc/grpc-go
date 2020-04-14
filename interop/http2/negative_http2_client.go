@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- *
- * Client used to test http2 error edge cases like GOAWAYs and RST_STREAMs
- *
- * Documentation:
- *	 https://github.com/grpc/grpc/blob/master/doc/negative-http2-interop-test-descriptions.md
  */
 
+// Binary http2 is used to test http2 error edge cases like GOAWAYs and
+// RST_STREAMs
+//
+// Documentation:
+// https://github.com/grpc/grpc/blob/master/doc/negative-http2-interop-test-descriptions.md
 package main
 
 import (

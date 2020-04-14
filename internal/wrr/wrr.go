@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+// Package wrr contains the interface and common implementations of wrr
+// algorithms.
 package wrr
 
 // WRR defines an interface that implements weighted round robin.

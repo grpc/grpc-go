@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+// Package internal contains functions/structs shared by xds
+// balancers/resolvers.
 package internal
 
 import (
