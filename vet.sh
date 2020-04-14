@@ -100,6 +100,8 @@ gofmt -s -d -l . 2>&1 | fail_on_output
 goimports -l . 2>&1 | not grep -vE "(_mock|\.pb)\.go"
 golint ./... 2>&1 | not grep -vE "(_mock|\.pb)\.go:"
 go vet -all ./...
+# - special golint on package comments.
+go list ./... | xargs -n 1 ./test/go_vet/lint_package_format.sh
 
 misspell -error .
 
