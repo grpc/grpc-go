@@ -30,7 +30,7 @@ If you are trying to access grpc-go from within China, please see the
 Prerequisites
 -------------
 gRPC-Go officially supports the
-[three latest releases of Go](https://golang.org/doc/devel/release.html).
+[three latest major releases of Go](https://golang.org/doc/devel/release.html).
 
 Documentation
 -------------
