@@ -114,12 +114,12 @@ lint_package_comment() {
   # at least one file with package comment, good. Otherwise, fail.
   if [ ${fileCount} -le ${lintPackageCommentErrorsCount} ]; then
     echo "Package $1 (with ${fileCount} files) is missing package comment"
-    return 123
+    return 1
   fi
 }
 echo "+ running golint for package comment"
 set +x
-for i in $(go list ./...); do lint_package_comment "$i"; done;
+for i in $(go list ./...); do lint_package_comment "$i" || true; done;
 set -x
 
 misspell -error .
