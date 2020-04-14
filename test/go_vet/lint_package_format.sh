@@ -2,8 +2,7 @@
 
 # Number of files in this go package.
 fileCount=$(go list -f '{{len .GoFiles}}' $1)
-if [ $fileCount -eq 0 ]
-then
+if [ ${fileCount} -eq 0 ]; then
   exit 0
 fi
 
@@ -13,8 +12,7 @@ lintPackageCommentErrorsCount=$(golint --min_confidence 0 $1 | grep -c "should h
 # golint complains about every file that's missing the package comment. If the
 # number of files for this package is greater than the number of errors, there's
 # at least one file with package comment, good. Otherwise, fail.
-if [ $fileCount -le $lintPackageCommentErrorsCount ]
-then
-  echo "Package" $1 "(with" $fileCount "files) is missing package comment"
+if [ ${fileCount} -le ${lintPackageCommentErrorsCount} ]; then
+  echo "Package $1 (with ${fileCount} files) is missing package comment"
   exit 123
 fi
