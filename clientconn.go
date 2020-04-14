@@ -1224,16 +1224,9 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 	onCloseCalled := make(chan struct{})
 	reconnect := grpcsync.NewEvent()
 
-	authority := ac.cc.authority
 	// addr.ServerName takes precedent over ClientConn authority, if present.
-	if addr.ServerName != "" {
-		authority = addr.ServerName
-	}
-
-	target := transport.TargetInfo{
-		Addr:      addr.Addr,
-		Metadata:  addr.Metadata,
-		Authority: authority,
+	if addr.ServerName == "" {
+		addr.ServerName = ac.cc.authority
 	}
 
 	once := sync.Once{}
@@ -1279,7 +1272,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		copts.ChannelzParentID = ac.channelzID
 	}
 
-	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, onPrefaceReceipt, onGoAway, onClose)
+	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, addr, copts, onPrefaceReceipt, onGoAway, onClose)
 	if err != nil {
 		// newTr is either nil, or closed.
 		channelz.Warningf(ac.channelzID, "grpc: addrConn.createTransport failed to connect to %v. Err: %v. Reconnecting...", addr, err)
