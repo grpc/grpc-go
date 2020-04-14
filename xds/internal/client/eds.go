@@ -65,7 +65,7 @@ type Endpoint struct {
 // Locality contains information of a locality.
 type Locality struct {
 	Endpoints []Endpoint
-	ID        internal.Locality
+	ID        internal.LocalityID
 	Priority  uint32
 	Weight    uint32
 }
@@ -128,7 +128,7 @@ func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
 		if l == nil {
 			return nil, fmt.Errorf("EDS response contains a locality without ID, locality: %+v", locality)
 		}
-		lid := internal.Locality{
+		lid := internal.LocalityID{
 			Region:  l.Region,
 			Zone:    l.Zone,
 			SubZone: l.SubZone,

@@ -30,7 +30,7 @@ type clientID string
 // created by the resolver and passed to the balancer.
 const XDSClientID = clientID("xdsClientID")
 
-// Locality is xds.Locality without XXX fields, so it can be used as map
+// LocalityID is xds.Locality without XXX fields, so it can be used as map
 // keys.
 //
 // xds.Locality cannot be map keys because one of the XXX fields is a slice.
@@ -38,22 +38,21 @@ const XDSClientID = clientID("xdsClientID")
 // This struct should only be used as map keys. Use the proto message directly
 // in all other places.
 //
-// TODO: rename to LocalityID.
-type Locality struct {
+type LocalityID struct {
 	Region  string
 	Zone    string
 	SubZone string
 }
 
-func (lamk Locality) String() string {
-	return fmt.Sprintf("%s-%s-%s", lamk.Region, lamk.Zone, lamk.SubZone)
+func (l LocalityID) String() string {
+	return fmt.Sprintf("%s-%s-%s", l.Region, l.Zone, l.SubZone)
 }
 
 // ToProto convert Locality to the proto representation.
-func (lamk Locality) ToProto() *corepb.Locality {
+func (l LocalityID) ToProto() *corepb.Locality {
 	return &corepb.Locality{
-		Region:  lamk.Region,
-		Zone:    lamk.Zone,
-		SubZone: lamk.SubZone,
+		Region:  l.Region,
+		Zone:    l.Zone,
+		SubZone: l.SubZone,
 	}
 }
