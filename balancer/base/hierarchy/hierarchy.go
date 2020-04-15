@@ -16,6 +16,8 @@
  *
  */
 
+// Package hierarchy contains functions to set and get hierarchy string from
+// addresses.
 package hierarchy
 
 import (
