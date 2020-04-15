@@ -19,36 +19,35 @@
 // Package weightedroundrobin defines a weighted roundrobin balancer.
 package weightedroundrobin
 
-import "google.golang.org/grpc/attributes"
-
-const (
-	// Name is the name of weighted_round_robin balancer.
-	Name = "weighted_round_robin"
-
-	// Attribute key used to store AddrInfo in the Attributes field of
-	// resolver.Address.
-	attributeKey = "/balancer/weightedroundrobin/addrInfo"
+import (
+	"google.golang.org/grpc/resolver"
 )
 
-// AddrInfo will be stored inside Address metadata in order to use weighted roundrobin
-// balancer.
+// Name is the name of weighted_round_robin balancer.
+const Name = "weighted_round_robin"
+
+// attributeKey is the type used as the key to store AddrInfo in the Attributes
+// field of resolver.Address.
+type attributeKey struct{}
+
+// AddrInfo will be stored inside Address metadata in order to use weighted
+// roundrobin balancer.
 type AddrInfo struct {
 	Weight uint32
 }
 
-// AddAddrInfoToAttributes returns a new Attributes containing all key/value
-// pairs in a with ai being added to it.
-func AddAddrInfoToAttributes(ai *AddrInfo, a *attributes.Attributes) *attributes.Attributes {
-	return a.WithValues(attributeKey, ai)
+// SetAddrInfo sets addInfo in the Attributes field of addr.
+func SetAddrInfo(addrInfo *AddrInfo, addr *resolver.Address) {
+	addr.Attributes = addr.Attributes.WithValues(attributeKey{}, addrInfo)
 }
 
-// GetAddrInfoFromAttributes returns the AddrInfo stored in a. Returns nil if no
-// AddrInfo is present in a.
-func GetAddrInfoFromAttributes(a *attributes.Attributes) *AddrInfo {
-	if a == nil {
+// GetAddrInfo returns the AddrInfo stored in the Attributes fields of addr.
+// Returns nil if no AddrInfo is present.
+func GetAddrInfo(addr *resolver.Address) *AddrInfo {
+	if addr == nil || addr.Attributes == nil {
 		return nil
 	}
-	ai := a.Value(attributeKey)
+	ai := addr.Attributes.Value(attributeKey{})
 	if ai == nil {
 		return nil
 	}

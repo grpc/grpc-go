@@ -22,8 +22,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-
 	"google.golang.org/grpc/attributes"
+	"google.golang.org/grpc/resolver"
 )
 
 func TestAddAddrInfoToAndFromAttributes(t *testing.T) {
@@ -61,8 +61,9 @@ func TestAddAddrInfoToAndFromAttributes(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			outputAttributes := AddAddrInfoToAttributes(test.inputAddrInfo, test.inputAttributes)
-			gotAddrInfo := GetAddrInfoFromAttributes(outputAttributes)
+			addr := &resolver.Address{Attributes: test.inputAttributes}
+			SetAddrInfo(test.inputAddrInfo, addr)
+			gotAddrInfo := GetAddrInfo(addr)
 			if !cmp.Equal(gotAddrInfo, test.wantAddrInfo) {
 				t.Errorf("gotAddrInfo: %v, wantAddrInfo: %v", gotAddrInfo, test.wantAddrInfo)
 			}

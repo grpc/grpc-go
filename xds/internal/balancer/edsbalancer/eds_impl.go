@@ -278,7 +278,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 			}
 			if edsImpl.subBalancerBuilder.Name() == weightedroundrobin.Name && lbEndpoint.Weight != 0 {
 				ai := &weightedroundrobin.AddrInfo{Weight: lbEndpoint.Weight}
-				address.Attributes = weightedroundrobin.AddAddrInfoToAttributes(ai, address.Attributes)
+				weightedroundrobin.SetAddrInfo(ai, &address)
 				// Metadata field in resolver.Address is deprecated. The
 				// attributes field should be used to specify arbitrary
 				// attributes about the address. We still need to populate the
