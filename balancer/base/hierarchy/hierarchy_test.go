@@ -16,7 +16,7 @@
  *
  */
 
-package base
+package hierarchy
 
 import (
 	"testing"
@@ -26,7 +26,7 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-func TestRetrieveHierarchicalPath(t *testing.T) {
+func TestGet(t *testing.T) {
 	tests := []struct {
 		name string
 		addr resolver.Address
@@ -47,14 +47,14 @@ func TestRetrieveHierarchicalPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := RetrieveHierarchicalPath(tt.addr); !cmp.Equal(got, tt.want) {
-				t.Errorf("RetrieveHierarchicalPath() = %v, want %v", got, tt.want)
+			if got := Get(tt.addr); !cmp.Equal(got, tt.want) {
+				t.Errorf("Get() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestOverrideHierarchicalPath(t *testing.T) {
+func TestSet(t *testing.T) {
 	tests := []struct {
 		name string
 		addr resolver.Address
@@ -75,16 +75,16 @@ func TestOverrideHierarchicalPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			newAddr := OverrideHierarchicalPath(tt.addr, tt.path)
-			newPath := RetrieveHierarchicalPath(newAddr)
+			newAddr := Set(tt.addr, tt.path)
+			newPath := Get(newAddr)
 			if !cmp.Equal(newPath, tt.path) {
-				t.Errorf("path after OverrideHierarchicalPath() = %v, want %v", newPath, tt.path)
+				t.Errorf("path after Set() = %v, want %v", newPath, tt.path)
 			}
 		})
 	}
 }
 
-func TestSplitHierarchicalAddresses(t *testing.T) {
+func TestGroup(t *testing.T) {
 	tests := []struct {
 		name  string
 		addrs []resolver.Address
@@ -145,15 +145,15 @@ func TestSplitHierarchicalAddresses(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := SplitHierarchicalAddresses(tt.addrs); !cmp.Equal(got, tt.want, cmp.AllowUnexported(attributes.Attributes{})) {
-				t.Errorf("SplitHierarchicalAddresses() = %v, want %v", got, tt.want)
+			if got := Group(tt.addrs); !cmp.Equal(got, tt.want, cmp.AllowUnexported(attributes.Attributes{})) {
+				t.Errorf("Group() = %v, want %v", got, tt.want)
 				t.Errorf("diff: %v", cmp.Diff(got, tt.want, cmp.AllowUnexported(attributes.Attributes{})))
 			}
 		})
 	}
 }
 
-func TestSplitHierarchicalAddressesE2E(t *testing.T) {
+func TestGroupE2E(t *testing.T) {
 	hierarchy := map[string]map[string][]string{
 		"p0": {
 			"wt0": {"addr0", "addr1"},
@@ -182,9 +182,9 @@ func TestSplitHierarchicalAddressesE2E(t *testing.T) {
 	}
 
 	gotHierarchy := make(map[string]map[string][]string)
-	for p1, wts := range SplitHierarchicalAddresses(addrsWithHierarchy) {
+	for p1, wts := range Group(addrsWithHierarchy) {
 		gotHierarchy[p1] = make(map[string][]string)
-		for p2, addrs := range SplitHierarchicalAddresses(wts) {
+		for p2, addrs := range Group(wts) {
 			for _, addr := range addrs {
 				gotHierarchy[p1][p2] = append(gotHierarchy[p1][p2], addr.Addr)
 			}

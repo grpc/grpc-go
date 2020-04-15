@@ -16,7 +16,7 @@
  *
  */
 
-package base
+package hierarchy
 
 import (
 	"google.golang.org/grpc/attributes"
@@ -27,8 +27,8 @@ type hierarchicalPathKeyType string
 
 const hierarchicalPathKey = hierarchicalPathKeyType("grpc.internal.address.hierarchical_path")
 
-// RetrieveHierarchicalPath returns the hierarchical path of addr.
-func RetrieveHierarchicalPath(addr resolver.Address) []string {
+// Get returns the hierarchical path of addr.
+func Get(addr resolver.Address) []string {
 	attrs := addr.Attributes
 	if attrs == nil {
 		return nil
@@ -40,8 +40,8 @@ func RetrieveHierarchicalPath(addr resolver.Address) []string {
 	return path
 }
 
-// OverrideHierarchicalPath overrides the hierarchical path in addr with path.
-func OverrideHierarchicalPath(addr resolver.Address, path []string) resolver.Address {
+// Set overrides the hierarchical path in addr with path.
+func Set(addr resolver.Address, path []string) resolver.Address {
 	if addr.Attributes == nil {
 		addr.Attributes = attributes.New(hierarchicalPathKey, path)
 		return addr
@@ -50,7 +50,7 @@ func OverrideHierarchicalPath(addr resolver.Address, path []string) resolver.Add
 	return addr
 }
 
-// SplitHierarchicalAddresses splits a slice of addresses into groups based on
+// Group splits a slice of addresses into groups based on
 // the first hierarchy path. The first hierarchy path will be removed from the
 // result.
 //
@@ -76,10 +76,10 @@ func OverrideHierarchicalPath(addr resolver.Address, path []string) resolver.Add
 //     {addr3, path: [wt3]},
 //   ],
 // }
-func SplitHierarchicalAddresses(addrs []resolver.Address) map[string][]resolver.Address {
+func Group(addrs []resolver.Address) map[string][]resolver.Address {
 	ret := make(map[string][]resolver.Address)
 	for _, addr := range addrs {
-		oldPath := RetrieveHierarchicalPath(addr)
+		oldPath := Get(addr)
 		if len(oldPath) == 0 {
 			// When hierarchical path is not set, or has no path in it, skip the
 			// address. Another option is to return this address with path "",
@@ -89,7 +89,7 @@ func SplitHierarchicalAddresses(addrs []resolver.Address) map[string][]resolver.
 		}
 		curPath := oldPath[0]
 		newPath := oldPath[1:]
-		newAddr := OverrideHierarchicalPath(addr, newPath)
+		newAddr := Set(addr, newPath)
 		ret[curPath] = append(ret[curPath], newAddr)
 	}
 	return ret
