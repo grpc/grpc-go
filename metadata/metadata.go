@@ -163,8 +163,8 @@ func AppendToOutgoingContext(ctx context.Context, kv ...string) context.Context 
 	return context.WithValue(ctx, mdOutgoingKey{}, rawMD{md: md.md, added: added})
 }
 
-// FromIncomingContext returns the incoming metadata in ctx if it exists.  The
-// returned MD should not be modified. Writing to it may cause races.
+// FromIncomingContext returns the incoming metadata in ctx if it exists.
+// The returned MD should not be modified. Writing to it may cause races.
 // Modification should be made to copies of the returned MD.
 func FromIncomingContext(ctx context.Context) (md MD, ok bool) {
 	md, ok = ctx.Value(mdIncomingKey{}).(MD)
@@ -186,8 +186,8 @@ func FromOutgoingContextRaw(ctx context.Context) (MD, [][]string, bool) {
 	return raw.md, raw.added, true
 }
 
-// FromOutgoingContext returns the outgoing metadata in ctx if it exists.  The
-// returned MD should not be modified. Writing to it may cause races.
+// FromOutgoingContext returns the outgoing metadata in ctx if it exists.
+// The returned MD should not be modified. Writing to it may cause races.
 // Modification should be made to copies of the returned MD.
 func FromOutgoingContext(ctx context.Context) (MD, bool) {
 	raw, ok := ctx.Value(mdOutgoingKey{}).(rawMD)
