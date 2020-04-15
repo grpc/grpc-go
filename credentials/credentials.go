@@ -29,6 +29,7 @@ import (
 	"net"
 
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/internal"
 )
 
@@ -191,6 +192,31 @@ type requestInfoKey struct{}
 func RequestInfoFromContext(ctx context.Context) (ri RequestInfo, ok bool) {
 	ri, ok = ctx.Value(requestInfoKey{}).(RequestInfo)
 	return
+}
+
+// AddressInfo contains address related data attached to the context passed to
+// ClientHandshake. This makes it possible for balancer implementations to pass
+// arbitrary data to the handshaker. Individual credential implementations
+// control the actual format of the data that they are willing to receive.
+//
+// This API is experimental.
+type AddressInfo struct {
+	// Attr is a generic key/value store.
+	Attr *attributes.Attributes
+}
+
+// addressInfoKey is a struct used as the key to store AddressInfo in a context.
+type addressInfoKey struct{}
+
+// WithAddressInfo returns a copy of parent with ai stored as a value.
+func WithAddressInfo(parent context.Context, ai AddressInfo) context.Context {
+	return context.WithValue(parent, addressInfoKey{}, ai)
+}
+
+// AddressInfoFromContext returns the AddressInfo stored in ctx.
+func AddressInfoFromContext(ctx context.Context) AddressInfo {
+	ai, _ := ctx.Value(addressInfoKey{}).(AddressInfo)
+	return ai
 }
 
 // CheckSecurityLevel checks if a connection's security level is greater than or equal to the specified one.

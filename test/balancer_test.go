@@ -20,20 +20,27 @@ package test
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancerload"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
 )
@@ -43,7 +50,7 @@ const testBalancerName = "testbalancer"
 // testBalancer creates one subconn with the first address from resolved
 // addresses.
 //
-// It's used to test options for NewSubConn are applies correctly.
+// It's used to test whether options for NewSubConn are applied correctly.
 type testBalancer struct {
 	cc balancer.ClientConn
 	sc balancer.SubConn
@@ -96,8 +103,7 @@ func (b *testBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectiv
 	}
 }
 
-func (b *testBalancer) Close() {
-}
+func (b *testBalancer) Close() {}
 
 type picker struct {
 	err error
@@ -344,5 +350,154 @@ func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
 	})
 	if got := <-b.addrsChan; !reflect.DeepEqual(got, nonGRPCLBAddresses) {
 		t.Fatalf("With both backend and grpclb addresses, balancer got addresses %v, want %v", got, nonGRPCLBAddresses)
+	}
+}
+
+const aiBalancerName = "addrInfo-attribute-balancer"
+
+// aiBalancerBuilder builds a balancer and passes the attribute key and value
+// with which it was configured at creation time by the test.
+type aiBalancerBuilder struct {
+	attrKey string
+	attrVal string
+}
+
+func (bb *aiBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return &aiBalancer{cc: cc, attrKey: bb.attrKey, attrVal: bb.attrVal}
+}
+
+func (bb *aiBalancerBuilder) Name() string {
+	return aiBalancerName
+}
+
+// aiBalancer receives an attribute key and value which it adds to the address
+// that it calls NewSubConn on. This key/value pair reaches the credential
+// handshaker and the test verifies the same.
+type aiBalancer struct {
+	balancer.Balancer
+	cc      balancer.ClientConn
+	attrKey string
+	attrVal string
+}
+
+// UpdateClientConnState adds an attribute with the configured key/value to the
+// addresses received and invokes NewSubConn.
+func (b *aiBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
+	addrs := ccs.ResolverState.Addresses
+	if len(addrs) == 0 {
+		return nil
+	}
+
+	// Only use the first address.
+	attr := attributes.New(b.attrKey, b.attrVal)
+	addrs[0].Attributes = attr
+	sc, err := b.cc.NewSubConn([]resolver.Address{addrs[0]}, balancer.NewSubConnOptions{})
+	if err != nil {
+		return err
+	}
+	sc.Connect()
+	return nil
+}
+
+func (b *aiBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	b.cc.UpdateState(balancer.State{ConnectivityState: state.ConnectivityState, Picker: &aiPicker{result: balancer.PickResult{SubConn: sc}, err: state.ConnectionError}})
+}
+
+func (b *aiBalancer) ResolverError(error) {}
+func (b *aiBalancer) Close()              {}
+
+type aiPicker struct {
+	result balancer.PickResult
+	err    error
+}
+
+func (aip *aiPicker) Pick(_ balancer.PickInfo) (balancer.PickResult, error) {
+	return aip.result, aip.err
+}
+
+// addrInfoTransportCreds is a transport credential implementation which stores
+// the Attributes struct passed in the context locally for the test to inspect.
+type addrInfoTransportCreds struct {
+	credentials.TransportCredentials
+	attr *attributes.Attributes
+}
+
+func (ac *addrInfoTransportCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	ai := credentials.AddressInfoFromContext(ctx)
+	ac.attr = ai.Attr
+	return rawConn, nil, nil
+}
+func (ac *addrInfoTransportCreds) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+func (ac *addrInfoTransportCreds) Clone() credentials.TransportCredentials {
+	return nil
+}
+
+// TestAddressAttributesInNewSubConn verifies that the Attributes passed from a
+// balancer in the resolver.Address that is passes to NewSubConn reaches all the
+// way to the ClientHandshake method of the credentials configured on the parent
+// channel.
+func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
+	const (
+		testAttrKey = "foo"
+		testAttrVal = "bar"
+	)
+
+	balancer.Register(&aiBalancerBuilder{attrKey: testAttrKey, attrVal: testAttrVal})
+	defer internal.BalancerUnregister(aiBalancerName)
+	t.Logf("Registered balancer %s...", aiBalancerName)
+
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	t.Logf("Registered manual resolver with scheme %s...", r.Scheme())
+
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s := grpc.NewServer()
+	testpb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+	t.Logf("Started gRPC server at %s...", lis.Addr().String())
+
+	creds := &addrInfoTransportCreds{}
+	dopts := []grpc.DialOption{
+		grpc.WithTransportCredentials(creds),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, aiBalancerName)),
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cc.Close()
+	tc := testpb.NewTestServiceClient(cc)
+	t.Log("Created a ClientConn...")
+
+	// The first RPC should fail because there's no address.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err == nil || status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
+	}
+	t.Log("Made an RPC which was expected to fail...")
+
+	state := resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}}
+	r.UpdateState(state)
+	t.Logf("Pushing resolver state update: %v through the manual resolver", state)
+
+	// The second RPC should succeed.
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
+	}
+	t.Log("Made an RPC which succeeded...")
+
+	wantAttr := attributes.New(testAttrKey, testAttrVal)
+	if gotAttr := creds.attr; !cmp.Equal(gotAttr, wantAttr, cmp.AllowUnexported(attributes.Attributes{})) {
+		t.Fatalf("received attributes %v in creds, want %v", gotAttr, wantAttr)
 	}
 }

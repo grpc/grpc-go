@@ -1272,6 +1272,12 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		copts.ChannelzParentID = ac.channelzID
 	}
 
+	// Balancer implementations can specify arbitrary data in the Attributes
+	// field of resolver.Address, which is shoved into connectCtx that is passed
+	// to the transport layer. The transport layer passes the same context to
+	// the credential handshaker. This makes is possible for address specific
+	// arbitrary data from balancers to reach the credential handshaker.
+	connectCtx = credentials.WithAddressInfo(connectCtx, credentials.AddressInfo{Attr: addr.Attributes})
 	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, addr, copts, onPrefaceReceipt, onGoAway, onClose)
 	if err != nil {
 		// newTr is either nil, or closed.
