@@ -106,7 +106,7 @@ func (cdsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, 
 // xdsClientInterface contains methods from xdsClient.Client which are used by
 // the cdsBalancer. This will be faked out in unittests.
 type xdsClientInterface interface {
-	WatchCluster(string, func(xdsclient.CDSUpdate, error)) func()
+	WatchCluster(string, func(xdsclient.ClusterUpdate, error)) func()
 	Close()
 }
 
@@ -132,7 +132,7 @@ type scUpdate struct {
 // results in creating a new edsBalancer (if one doesn't already exist) and
 // pushing the update to it.
 type watchUpdate struct {
-	cds xdsclient.CDSUpdate
+	cds xdsclient.ClusterUpdate
 	err error
 }
 
@@ -274,7 +274,7 @@ func (b *cdsBalancer) run() {
 
 // handleClusterUpdate is the CDS watch API callback. It simply pushes the
 // received information on to the update channel for run() to pick it up.
-func (b *cdsBalancer) handleClusterUpdate(cu xdsclient.CDSUpdate, err error) {
+func (b *cdsBalancer) handleClusterUpdate(cu xdsclient.ClusterUpdate, err error) {
 	if b.isClosed() {
 		b.logger.Warningf("xds: received cluster update {%+v} after cdsBalancer was closed", cu)
 		return

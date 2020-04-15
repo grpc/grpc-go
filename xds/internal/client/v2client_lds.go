@@ -29,15 +29,7 @@ import (
 // handleLDSResponse processes an LDS response received from the xDS server. On
 // receipt of a good response, it also invokes the registered watcher callback.
 func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
-	v2c.mu.Lock()
-	defer v2c.mu.Unlock()
-
-	wi := v2c.watchMap[ldsURL]
-	if wi == nil {
-		return fmt.Errorf("xds: no LDS watcher found when handling LDS response: %+v", resp)
-	}
-
-	routeName := ""
+	returnUpdate := make(map[string]ldsUpdate)
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
@@ -48,27 +40,14 @@ func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 			return fmt.Errorf("xds: unexpected resource type: %T in LDS response", resource.Message)
 		}
 		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, lis)
-		if lis.GetName() != wi.target[0] {
-			// We ignore listeners we are not watching for because LDS is
-			// special in the sense that there is only one resource we are
-			// interested in, and this resource does not change over the
-			// lifetime of the v2Client. So, we don't have to cache other
-			// listeners which we are not interested in.
-			continue
-		}
-		var err error
-		routeName, err = v2c.getRouteConfigNameFromListener(lis)
+		routeName, err := v2c.getRouteConfigNameFromListener(lis)
 		if err != nil {
 			return err
 		}
+		returnUpdate[lis.GetName()] = ldsUpdate{routeName: routeName}
 	}
 
-	var err error
-	if routeName == "" {
-		err = fmt.Errorf("xds: LDS target %s not found in received response %+v", wi.target, resp)
-	}
-	wi.stopTimer()
-	wi.ldsCallback(ldsUpdate{routeName: routeName}, err)
+	v2c.parent.newLDSUpdate(returnUpdate)
 	return nil
 }
 
