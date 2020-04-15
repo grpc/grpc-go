@@ -52,6 +52,12 @@ func (s) TestClusterWatch(t *testing.T) {
 	})
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
+	// This is calling v2Client.r to send the update, but r is set to Client, so
+	// this is same as calling Client to update. The one thing this covers is
+	// that `NewXDSV2Client` is called with the right parent.
+	//
+	// TODO: in a future cleanup, this (and the same thing in other tests) can
+	// be changed call Client directly.
 	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
 		testCDSName: wantUpdate,
 	})

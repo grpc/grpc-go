@@ -31,13 +31,13 @@ var (
 	testLocalities = []Locality{
 		{
 			Endpoints: []Endpoint{{Address: "addr1:314"}},
-			ID:        internal.Locality{SubZone: "locality-1"},
+			ID:        internal.LocalityID{SubZone: "locality-1"},
 			Priority:  1,
 			Weight:    1,
 		},
 		{
 			Endpoints: []Endpoint{{Address: "addr2:159"}},
-			ID:        internal.Locality{SubZone: "locality-2"},
+			ID:        internal.LocalityID{SubZone: "locality-2"},
 			Priority:  0,
 			Weight:    1,
 		},

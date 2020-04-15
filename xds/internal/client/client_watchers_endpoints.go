@@ -60,7 +60,7 @@ type Endpoint struct {
 // Locality contains information of a locality.
 type Locality struct {
 	Endpoints []Endpoint
-	ID        internal.Locality
+	ID        internal.LocalityID
 	Priority  uint32
 	Weight    uint32
 }
