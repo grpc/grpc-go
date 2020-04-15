@@ -133,8 +133,23 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 			wantCluster: "",
 		},
 		{
-			name:        "good-route-config",
+			name:        "good-route-config-with-empty-string-route",
 			rc:          goodRouteConfig1,
+			wantCluster: goodClusterName1,
+		},
+		{
+			// default route's match is not empty string, but "/".
+			name: "good-route-config-with-slash-string-route",
+			rc: &xdspb.RouteConfiguration{
+				Name: goodRouteName1,
+				VirtualHosts: []*routepb.VirtualHost{{
+					Domains: []string{goodLDSTarget1},
+					Routes: []*routepb.Route{{
+						Match: &routepb.RouteMatch{PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: "/"}},
+						Action: &routepb.Route_Route{
+							Route: &routepb.RouteAction{
+								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: goodClusterName1},
+							}}}}}}},
 			wantCluster: goodClusterName1,
 		},
 	}
