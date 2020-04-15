@@ -95,8 +95,8 @@ func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, host string)
 		return ""
 	}
 	dr := vh.Routes[len(vh.Routes)-1]
-	if match := dr.GetMatch(); match == nil || match.GetPrefix() != "" {
-		// The matched virtual host is invalid.
+	if match := dr.GetMatch(); match == nil || (match.GetPrefix() != "" && match.GetPrefix() != "/") {
+		// The matched virtual host is invalid. Match is not "" or "/".
 		return ""
 	}
 	if route := dr.GetRoute(); route != nil {
