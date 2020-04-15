@@ -16,6 +16,7 @@
  *
  */
 
+// Binary metrics_client is a client to retrieve metrics from the server.
 package main
 
 import (

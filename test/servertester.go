@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package test contains tests.
 package test
 
 import (
