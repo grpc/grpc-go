@@ -50,6 +50,9 @@ func New(kvs ...interface{}) *Attributes {
 // times, the last value overwrites all previous values for that key.  To
 // remove an existing key, use a nil value.
 func (a *Attributes) WithValues(kvs ...interface{}) *Attributes {
+	if a == nil {
+		a = New()
+	}
 	if len(kvs)%2 != 0 {
 		panic(fmt.Sprintf("attributes.New called with unexpected input: len(kvs) = %v", len(kvs)))
 	}
