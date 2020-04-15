@@ -102,7 +102,7 @@ func (edsImpl *edsBalancerImpl) startPriority(priority priorityType) {
 	// currently avoided by handling balancer update in a goroutine (the run
 	// goroutine in the parent eds balancer). When priority balancer is split
 	// into its own, this asynchronous state handling needs to be copied.
-	p.bg.start()
+	p.bg.Start()
 	// startPriority can be called when
 	// 1. first EDS resp, start p0
 	// 2. a high priority goes Failure, start next
@@ -189,7 +189,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityWithNewStateReady(priority priorit
 		edsImpl.logger.Infof("Switching priority from %v to %v, because latter became Ready", edsImpl.priorityInUse, priority)
 		edsImpl.priorityInUse = priority
 		for i := priority.nextLower(); !i.lowerThan(edsImpl.priorityLowest); i = i.nextLower() {
-			edsImpl.priorityToLocalities[i].bg.close()
+			edsImpl.priorityToLocalities[i].bg.Close()
 		}
 		return true
 	}

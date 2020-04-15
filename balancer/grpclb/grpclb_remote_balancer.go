@@ -350,9 +350,6 @@ func (ccw *remoteBalancerCCWrapper) callRemoteBalancer() (backoff bool, _ error)
 	if initResp == nil {
 		return true, fmt.Errorf("grpclb: reply from remote balancer did not include initial response")
 	}
-	if initResp.LoadBalancerDelegate != "" {
-		return true, fmt.Errorf("grpclb: Delegation is not supported")
-	}
 
 	ccw.wg.Add(1)
 	go func() {

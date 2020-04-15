@@ -34,6 +34,7 @@ import (
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/status"
 )
 
 type s struct {
@@ -63,7 +64,7 @@ func (s) TestErrorsWithSameParameters(t *testing.T) {
 	e1 := Errorf(codes.AlreadyExists, description)
 	e2 := Errorf(codes.AlreadyExists, description)
 	if e1 == e2 || !errEqual(e1, e2) {
-		t.Fatalf("Errors should be equivalent but unique - e1: %v, %v  e2: %p, %v", e1.(*statusError), e1, e2.(*statusError), e2)
+		t.Fatalf("Errors should be equivalent but unique - e1: %v, %v  e2: %p, %v", e1.(*status.Error), e1, e2.(*status.Error), e2)
 	}
 }
 
@@ -115,7 +116,7 @@ func (s) TestError(t *testing.T) {
 func (s) TestErrorOK(t *testing.T) {
 	err := Error(codes.OK, "foo")
 	if err != nil {
-		t.Fatalf("Error(codes.OK, _) = %p; want nil", err.(*statusError))
+		t.Fatalf("Error(codes.OK, _) = %p; want nil", err.(*status.Error))
 	}
 }
 
@@ -154,13 +155,11 @@ func (c customError) Error() string {
 }
 
 func (c customError) GRPCStatus() *Status {
-	return &Status{
-		s: &spb.Status{
-			Code:    int32(c.Code),
-			Message: c.Message,
-			Details: c.Details,
-		},
-	}
+	return status.FromProto(&spb.Status{
+		Code:    int32(c.Code),
+		Message: c.Message,
+		Details: c.Details,
+	})
 }
 
 func (s) TestFromErrorImplementsInterface(t *testing.T) {
@@ -341,10 +340,10 @@ func str(s *Status) string {
 	if s == nil {
 		return "nil"
 	}
-	if s.s == nil {
+	if s.Proto() == nil {
 		return "<Code=OK>"
 	}
-	return fmt.Sprintf("<Code=%v, Message=%q, Details=%+v>", codes.Code(s.s.GetCode()), s.s.GetMessage(), s.s.GetDetails())
+	return fmt.Sprintf("<Code=%v, Message=%q, Details=%+v>", s.Code(), s.Message(), s.Details())
 }
 
 // mustMarshalAny converts a protobuf message to an any.

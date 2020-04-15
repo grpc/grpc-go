@@ -29,7 +29,7 @@ If you are trying to access grpc-go from within China, please see the
 
 Prerequisites
 -------------
-gRPC-Go requires Go 1.9 or later.
+gRPC-Go supports the three latest releases of Go.
 
 Documentation
 -------------

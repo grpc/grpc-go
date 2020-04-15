@@ -40,9 +40,9 @@ const negativeOneUInt64 = ^uint64(0)
 // them to a server when requested.
 type Store interface {
 	CallDropped(category string)
-	CallStarted(l internal.Locality)
-	CallFinished(l internal.Locality, err error)
-	CallServerLoad(l internal.Locality, name string, d float64)
+	CallStarted(l internal.LocalityID)
+	CallFinished(l internal.LocalityID, err error)
+	CallServerLoad(l internal.LocalityID, name string, d float64)
 	// Report the load of clusterName to cc.
 	ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterName string, node *corepb.Node)
 }
@@ -145,7 +145,7 @@ type lrsStore struct {
 	lastReported time.Time
 
 	drops            sync.Map // map[string]*uint64
-	localityRPCCount sync.Map // map[internal.Locality]*rpcCountData
+	localityRPCCount sync.Map // map[internal.LocalityID]*rpcCountData
 }
 
 // NewStore creates a store for load reports.
@@ -169,7 +169,7 @@ func (ls *lrsStore) CallDropped(category string) {
 	atomic.AddUint64(p.(*uint64), 1)
 }
 
-func (ls *lrsStore) CallStarted(l internal.Locality) {
+func (ls *lrsStore) CallStarted(l internal.LocalityID) {
 	p, ok := ls.localityRPCCount.Load(l)
 	if !ok {
 		tp := newRPCCountData()
@@ -178,7 +178,7 @@ func (ls *lrsStore) CallStarted(l internal.Locality) {
 	p.(*rpcCountData).incrInProgress()
 }
 
-func (ls *lrsStore) CallFinished(l internal.Locality, err error) {
+func (ls *lrsStore) CallFinished(l internal.LocalityID, err error) {
 	p, ok := ls.localityRPCCount.Load(l)
 	if !ok {
 		// The map is never cleared, only values in the map are reset. So the
@@ -193,7 +193,7 @@ func (ls *lrsStore) CallFinished(l internal.Locality, err error) {
 	}
 }
 
-func (ls *lrsStore) CallServerLoad(l internal.Locality, name string, d float64) {
+func (ls *lrsStore) CallServerLoad(l internal.LocalityID, name string, d float64) {
 	p, ok := ls.localityRPCCount.Load(l)
 	if !ok {
 		// The map is never cleared, only values in the map are reset. So the
@@ -222,7 +222,7 @@ func (ls *lrsStore) buildStats(clusterName string) []*endpointpb.ClusterStats {
 		return true
 	})
 	ls.localityRPCCount.Range(func(locality, countP interface{}) bool {
-		tempLocality := locality.(internal.Locality)
+		tempLocality := locality.(internal.LocalityID)
 		tempCount := countP.(*rpcCountData)
 
 		tempSucceeded := tempCount.loadAndClearSucceeded()
