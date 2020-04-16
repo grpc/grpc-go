@@ -27,19 +27,15 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-
-	"google.golang.org/grpc/connectivity"
-
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/tap"
-
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/tap"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
 )
