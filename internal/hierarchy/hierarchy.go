@@ -18,6 +18,8 @@
 
 // Package hierarchy contains functions to set and get hierarchy string from
 // addresses.
+//
+// This package is experimental.
 package hierarchy
 
 import (
@@ -25,9 +27,9 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-type hierarchicalPathKeyType string
+type pathKeyType string
 
-const hierarchicalPathKey = hierarchicalPathKeyType("grpc.internal.address.hierarchical_path")
+const pathKey = pathKeyType("grpc.internal.address.hierarchical_path")
 
 // Get returns the hierarchical path of addr.
 func Get(addr resolver.Address) []string {
@@ -35,7 +37,7 @@ func Get(addr resolver.Address) []string {
 	if attrs == nil {
 		return nil
 	}
-	path, ok := attrs.Value(hierarchicalPathKey).([]string)
+	path, ok := attrs.Value(pathKey).([]string)
 	if !ok {
 		return nil
 	}
@@ -45,10 +47,10 @@ func Get(addr resolver.Address) []string {
 // Set overrides the hierarchical path in addr with path.
 func Set(addr resolver.Address, path []string) resolver.Address {
 	if addr.Attributes == nil {
-		addr.Attributes = attributes.New(hierarchicalPathKey, path)
+		addr.Attributes = attributes.New(pathKey, path)
 		return addr
 	}
-	addr.Attributes = addr.Attributes.WithValues(hierarchicalPathKey, path)
+	addr.Attributes = addr.Attributes.WithValues(pathKey, path)
 	return addr
 }
 
@@ -78,15 +80,14 @@ func Set(addr resolver.Address, path []string) resolver.Address {
 //     {addr3, path: [wt3]},
 //   ],
 // }
+//
+// If hierarchical path is not set, or has no path in it, the address is
+// dropped.
 func Group(addrs []resolver.Address) map[string][]resolver.Address {
 	ret := make(map[string][]resolver.Address)
 	for _, addr := range addrs {
 		oldPath := Get(addr)
 		if len(oldPath) == 0 {
-			// When hierarchical path is not set, or has no path in it, skip the
-			// address. Another option is to return this address with path "",
-			// this shouldn't conflict with anything because "" isn't a valid
-			// path.
 			continue
 		}
 		curPath := oldPath[0]
