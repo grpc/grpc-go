@@ -146,8 +146,8 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		backoff:        backoff.DefaultExponential,
 	}
 
-	if opt.Backoff != nil {
-		lb.backoff = opt.Backoff
+	if opt.BackoffStrategy != nil {
+		lb.backoff = opt.BackoffStrategy
 	}
 
 	var err error

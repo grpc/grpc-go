@@ -186,7 +186,7 @@ type BuildOptions struct {
 	// See the documentation for the resolver.Target type for details about what it contains.
 	Target resolver.Target
 	// backoff for calling remote balancer.
-	Backoff backoff.Strategy
+	BackoffStrategy backoff.Strategy
 }
 
 // Builder creates a balancer.
