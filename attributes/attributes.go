@@ -51,7 +51,7 @@ func New(kvs ...interface{}) *Attributes {
 // remove an existing key, use a nil value.
 func (a *Attributes) WithValues(kvs ...interface{}) *Attributes {
 	if a == nil {
-		a = New()
+		return New(kvs...)
 	}
 	if len(kvs)%2 != 0 {
 		panic(fmt.Sprintf("attributes.New called with unexpected input: len(kvs) = %v", len(kvs)))
@@ -69,5 +69,8 @@ func (a *Attributes) WithValues(kvs ...interface{}) *Attributes {
 // Value returns the value associated with these attributes for key, or nil if
 // no value is associated with key.
 func (a *Attributes) Value(key interface{}) interface{} {
+	if a == nil {
+		return nil
+	}
 	return a.m[key]
 }

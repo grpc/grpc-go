@@ -29,33 +29,33 @@ import (
 func TestAddAddrInfoToAndFromAttributes(t *testing.T) {
 	tests := []struct {
 		desc            string
-		inputAddrInfo   *AddrInfo
+		inputAddrInfo   AddrInfo
 		inputAttributes *attributes.Attributes
-		wantAddrInfo    *AddrInfo
+		wantAddrInfo    AddrInfo
 	}{
 		{
 			desc:            "empty attributes",
-			inputAddrInfo:   &AddrInfo{Weight: 100},
+			inputAddrInfo:   AddrInfo{Weight: 100},
 			inputAttributes: nil,
-			wantAddrInfo:    &AddrInfo{Weight: 100},
+			wantAddrInfo:    AddrInfo{Weight: 100},
 		},
 		{
 			desc:            "non-empty attributes",
-			inputAddrInfo:   &AddrInfo{Weight: 100},
+			inputAddrInfo:   AddrInfo{Weight: 100},
 			inputAttributes: attributes.New("foo", "bar"),
-			wantAddrInfo:    &AddrInfo{Weight: 100},
+			wantAddrInfo:    AddrInfo{Weight: 100},
 		},
 		{
 			desc:            "addrInfo not present in empty attributes",
-			inputAddrInfo:   nil,
+			inputAddrInfo:   AddrInfo{},
 			inputAttributes: nil,
-			wantAddrInfo:    nil,
+			wantAddrInfo:    AddrInfo{},
 		},
 		{
 			desc:            "addrInfo not present in non-empty attributes",
-			inputAddrInfo:   nil,
+			inputAddrInfo:   AddrInfo{},
 			inputAttributes: attributes.New("foo", "bar"),
-			wantAddrInfo:    nil,
+			wantAddrInfo:    AddrInfo{},
 		},
 	}
 

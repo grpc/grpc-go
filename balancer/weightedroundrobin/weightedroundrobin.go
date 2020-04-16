@@ -37,22 +37,24 @@ type AddrInfo struct {
 }
 
 // SetAddrInfo sets addInfo in the Attributes field of addr.
-func SetAddrInfo(addrInfo *AddrInfo, addr *resolver.Address) {
+// This is an EXPERIMENTAL API.
+func SetAddrInfo(addrInfo AddrInfo, addr *resolver.Address) {
 	addr.Attributes = addr.Attributes.WithValues(attributeKey{}, addrInfo)
 }
 
 // GetAddrInfo returns the AddrInfo stored in the Attributes fields of addr.
 // Returns nil if no AddrInfo is present.
-func GetAddrInfo(addr *resolver.Address) *AddrInfo {
+// This is an EXPERIMENTAL API.
+func GetAddrInfo(addr *resolver.Address) AddrInfo {
 	if addr == nil || addr.Attributes == nil {
-		return nil
+		return AddrInfo{}
 	}
 	ai := addr.Attributes.Value(attributeKey{})
 	if ai == nil {
-		return nil
+		return AddrInfo{}
 	}
-	if _, ok := ai.(*AddrInfo); !ok {
-		return nil
+	if _, ok := ai.(AddrInfo); !ok {
+		return AddrInfo{}
 	}
-	return ai.(*AddrInfo)
+	return ai.(AddrInfo)
 }
