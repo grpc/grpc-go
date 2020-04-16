@@ -124,6 +124,7 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 		protectedBuf = make([]byte, 0, 2*altsRecordDefaultLength-1)
 	} else {
 		protectedBuf = make([]byte, len(protected))
+		copy(protectedBuf, protected)
 	}
 
 	altsConn := &conn{
