@@ -34,16 +34,19 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 		name        string
 		rc          *xdspb.RouteConfiguration
 		wantCluster string
+		wantError   bool
 	}{
 		{
 			name:        "no-virtual-hosts-in-rc",
 			rc:          emptyRouteConfig,
 			wantCluster: "",
+			wantError:   true,
 		},
 		{
 			name:        "no-domains-in-rc",
 			rc:          noDomainsInRouteConfig,
 			wantCluster: "",
+			wantError:   true,
 		},
 		{
 			name: "non-matching-domain-in-rc",
@@ -53,6 +56,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 				},
 			},
 			wantCluster: "",
+			wantError:   true,
 		},
 		{
 			name: "no-routes-in-rc",
@@ -62,6 +66,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 				},
 			},
 			wantCluster: "",
+			wantError:   true,
 		},
 		{
 			name: "default-route-match-field-is-nil",
@@ -82,6 +87,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 				},
 			},
 			wantCluster: "",
+			wantError:   true,
 		},
 		{
 			name: "default-route-match-field-is-non-nil",
@@ -99,6 +105,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 				},
 			},
 			wantCluster: "",
+			wantError:   true,
 		},
 		{
 			name: "default-route-routeaction-field-is-nil",
@@ -111,6 +118,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 				},
 			},
 			wantCluster: "",
+			wantError:   true,
 		},
 		{
 			name: "default-route-cluster-field-is-empty",
@@ -131,11 +139,13 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 				},
 			},
 			wantCluster: "",
+			wantError:   true,
 		},
 		{
 			name:        "good-route-config-with-empty-string-route",
 			rc:          goodRouteConfig1,
 			wantCluster: goodClusterName1,
+			wantError:   false,
 		},
 		{
 			// default route's match is not empty string, but "/".
@@ -156,7 +166,8 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if gotCluster := getClusterFromRouteConfiguration(test.rc, goodLDSTarget1); gotCluster != test.wantCluster {
+			gotCluster, gotError := getClusterFromRouteConfiguration(test.rc, goodLDSTarget1)
+			if gotCluster != test.wantCluster || (gotError != nil) != test.wantError {
 				t.Errorf("getClusterFromRouteConfiguration(%+v, %v) = %v, want %v", test.rc, goodLDSTarget1, gotCluster, test.wantCluster)
 			}
 		})
