@@ -16,6 +16,7 @@
  *
  */
 
+// Package weightedtarget implements the weighted_target balancer.
 package weightedtarget
 
 import (
