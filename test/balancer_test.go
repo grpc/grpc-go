@@ -491,7 +491,7 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	// The second RPC should succeed.
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 	}
 	t.Log("Made an RPC which succeeded...")
