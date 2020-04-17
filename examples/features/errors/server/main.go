@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	pb "google.golang.org/grpc/examples/helloworld/proto"
 )
 
 var port = flag.Int("port", 50052, "port number")

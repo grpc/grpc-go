@@ -20,7 +20,7 @@ make the following changes:
 +++ b/examples/helloworld/greeter_server/main.go
 @@ -40,6 +40,7 @@ import (
         "google.golang.org/grpc"
-        pb "google.golang.org/grpc/examples/helloworld/helloworld"
+        pb "google.golang.org/grpc/examples/helloworld/proto"
 +       "google.golang.org/grpc/reflection"
  )
 

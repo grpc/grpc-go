@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc"
 
 	ecpb "google.golang.org/grpc/examples/features/proto/echo"
-	hwpb "google.golang.org/grpc/examples/helloworld/helloworld"
+	hwpb "google.golang.org/grpc/examples/helloworld/proto"
 )
 
 var port = flag.Int("port", 50051, "the port to serve on")

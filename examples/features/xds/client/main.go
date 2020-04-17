@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	pb "google.golang.org/grpc/examples/helloworld/proto"
 
 	_ "google.golang.org/grpc/xds/experimental" // To install the xds resolvers and balancers.
 )

@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/channelz/service"
 	"google.golang.org/grpc/internal/grpcrand"
 
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	pb "google.golang.org/grpc/examples/helloworld/proto"
 )
 
 var (

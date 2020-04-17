@@ -28,7 +28,7 @@ import (
 
 	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	pb "google.golang.org/grpc/examples/helloworld/proto"
 	"google.golang.org/grpc/status"
 )
 
