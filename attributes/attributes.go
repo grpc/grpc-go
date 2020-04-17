@@ -74,3 +74,14 @@ func (a *Attributes) Value(key interface{}) interface{} {
 	}
 	return a.m[key]
 }
+
+// Clone returns a new Attributes containing all key/value pairs found in a.
+// Since Attributes stores its key/value paris as type `interface{}`, it is not
+// possible to perform deep copies here.
+func (a *Attributes) Clone() *Attributes {
+	b := &Attributes{m: make(map[interface{}]interface{}, len(a.m))}
+	for k, v := range a.m {
+		b.m[k] = v
+	}
+	return b
+}

@@ -20,6 +20,7 @@
 package weightedroundrobin
 
 import (
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -36,17 +37,26 @@ type AddrInfo struct {
 	Weight uint32
 }
 
-// SetAddrInfo sets addInfo in the Attributes field of addr.
+// SetAddrInfo returns a copy of addr in which the Attributes field is updated
+// with addrInfo.
+//
 // This is an EXPERIMENTAL API.
-func SetAddrInfo(addrInfo AddrInfo, addr *resolver.Address) {
-	addr.Attributes = addr.Attributes.WithValues(attributeKey{}, addrInfo)
+func SetAddrInfo(addrInfo AddrInfo, addr resolver.Address) resolver.Address {
+	newAddr := addr
+	if newAddr.Attributes == nil {
+		newAddr.Attributes = attributes.New(attributeKey{}, addrInfo)
+		return newAddr
+	}
+	newAddr.Attributes = addr.Attributes.Clone().WithValues(attributeKey{}, addrInfo)
+	return newAddr
 }
 
 // GetAddrInfo returns the AddrInfo stored in the Attributes fields of addr.
 // Returns nil if no AddrInfo is present.
+//
 // This is an EXPERIMENTAL API.
-func GetAddrInfo(addr *resolver.Address) AddrInfo {
-	if addr == nil || addr.Attributes == nil {
+func GetAddrInfo(addr resolver.Address) AddrInfo {
+	if addr.Attributes == nil {
 		return AddrInfo{}
 	}
 	ai := addr.Attributes.Value(attributeKey{})
