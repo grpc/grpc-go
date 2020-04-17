@@ -79,6 +79,9 @@ func (a *Attributes) Value(key interface{}) interface{} {
 // Since Attributes stores its key/value paris as type `interface{}`, it is not
 // possible to perform deep copies here.
 func (a *Attributes) Clone() *Attributes {
+	if a == nil {
+		return nil
+	}
 	b := &Attributes{m: make(map[interface{}]interface{}, len(a.m))}
 	for k, v := range a.m {
 		b.m[k] = v

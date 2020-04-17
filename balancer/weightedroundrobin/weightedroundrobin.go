@@ -20,7 +20,6 @@
 package weightedroundrobin
 
 import (
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -43,10 +42,6 @@ type AddrInfo struct {
 // This is an EXPERIMENTAL API.
 func SetAddrInfo(addrInfo AddrInfo, addr resolver.Address) resolver.Address {
 	newAddr := addr
-	if newAddr.Attributes == nil {
-		newAddr.Attributes = attributes.New(attributeKey{}, addrInfo)
-		return newAddr
-	}
 	newAddr.Attributes = addr.Attributes.Clone().WithValues(attributeKey{}, addrInfo)
 	return newAddr
 }
