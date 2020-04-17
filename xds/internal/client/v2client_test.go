@@ -43,8 +43,10 @@ const (
 	defaultTestTimeout       = 1 * time.Second
 	goodLDSTarget1           = "lds.target.good:1111"
 	goodLDSTarget2           = "lds.target.good:2222"
+	goodLDSTarget3           = "lds.target.good:3333"
 	goodRouteName1           = "GoodRouteConfig1"
 	goodRouteName2           = "GoodRouteConfig2"
+	goodRouteName3           = "GoodRouteConfig3"
 	goodEDSName              = "GoodClusterAssignment1"
 	uninterestingRouteName   = "UninterestingRouteName"
 	uninterestingDomain      = "uninteresting.domain"
@@ -92,14 +94,28 @@ var (
 			},
 		},
 	}
+	goodHTTPConnManager2 = &httppb.HttpConnectionManager{
+		RouteSpecifier: &httppb.HttpConnectionManager_RouteConfig{
+			RouteConfig: &xdspb.RouteConfiguration{
+				Name: goodRouteName3,
+			},
+		},
+	}
 	marshaledConnMgr1, _ = proto.Marshal(goodHTTPConnManager1)
+	marshaledConnMgr2, _ = proto.Marshal(goodHTTPConnManager2)
 	emptyHTTPConnManager = &httppb.HttpConnectionManager{
 		RouteSpecifier: &httppb.HttpConnectionManager_Rds{
 			Rds: &httppb.Rds{},
 		},
 	}
-	emptyMarshaledConnMgr, _ = proto.Marshal(emptyHTTPConnManager)
-	connMgrWithScopedRoutes  = &httppb.HttpConnectionManager{
+	emptyHTTPConnManager1 = &httppb.HttpConnectionManager{
+		RouteSpecifier: &httppb.HttpConnectionManager_RouteConfig{
+			RouteConfig: &xdspb.RouteConfiguration{},
+		},
+	}
+	emptyMarshaledConnMgr, _  = proto.Marshal(emptyHTTPConnManager)
+	emptyMarshaledConnMgr1, _ = proto.Marshal(emptyHTTPConnManager1)
+	connMgrWithScopedRoutes   = &httppb.HttpConnectionManager{
 		RouteSpecifier: &httppb.HttpConnectionManager_ScopedRoutes{},
 	}
 	marshaledConnMgrWithScopedRoutes, _ = proto.Marshal(connMgrWithScopedRoutes)
@@ -122,7 +138,16 @@ var (
 			},
 		},
 	}
-	marshaledListener2, _     = proto.Marshal(goodListener2)
+	marshaledListener2, _ = proto.Marshal(goodListener2)
+	goodListener3         = &xdspb.Listener{
+		Name: goodLDSTarget3,
+		ApiListener: &listenerpb.ApiListener{
+			ApiListener: &anypb.Any{
+				TypeUrl: httpConnManagerURL,
+				Value:   marshaledConnMgr2,
+			},
+		},
+	}
 	noAPIListener             = &xdspb.Listener{Name: goodLDSTarget1}
 	marshaledNoAPIListener, _ = proto.Marshal(noAPIListener)
 	badAPIListener1           = &xdspb.Listener{
@@ -159,6 +184,15 @@ var (
 			ApiListener: &anypb.Any{
 				TypeUrl: httpConnManagerURL,
 				Value:   emptyMarshaledConnMgr,
+			},
+		},
+	}
+	listenerWithEmptyHTTPConnMgr1 = &xdspb.Listener{
+		Name: goodLDSTarget3,
+		ApiListener: &listenerpb.ApiListener{
+			ApiListener: &anypb.Any{
+				TypeUrl: httpConnManagerURL,
+				Value:   emptyMarshaledConnMgr1,
 			},
 		},
 	}

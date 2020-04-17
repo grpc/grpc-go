@@ -74,9 +74,13 @@ func (v2c *v2Client) getRouteConfigNameFromListener(lis *xdspb.Listener) (string
 		}
 		return name, nil
 	case *httppb.HttpConnectionManager_RouteConfig:
-		// TODO: Add support for specifying the RouteConfiguration inline
+		// Add support for specifying the RouteConfiguration inline
 		// in the LDS response.
-		return "", fmt.Errorf("xds: LDS response contains RDS config inline. Not supported for now: %+v", apiLis)
+		name := apiLis.GetRouteConfig().GetName()
+		if name == "" {
+			return "", fmt.Errorf("xds: empty route_specifier in LDS response: %+v", lis)
+		}
+		return name, nil
 	case nil:
 		return "", fmt.Errorf("xds: no RouteSpecifier in received LDS response: %+v", apiLis)
 	default:

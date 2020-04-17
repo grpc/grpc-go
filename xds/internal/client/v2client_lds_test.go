@@ -68,6 +68,18 @@ func (s) TestLDSGetRouteConfig(t *testing.T) {
 			wantRoute: goodRouteName1,
 			wantErr:   false,
 		},
+		{
+			name:      "empty-httpConnMgr1-in-apiListener",
+			lis:       listenerWithEmptyHTTPConnMgr1,
+			wantRoute: "",
+			wantErr:   true,
+		},
+		{
+			name:      "goodListener3",
+			lis:       goodListener3,
+			wantRoute: goodRouteName3,
+			wantErr:   false,
+		},
 	}
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
