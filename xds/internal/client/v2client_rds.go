@@ -48,9 +48,9 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v. Picking routes for current watching hostname %v", rc.GetName(), rc, rc, v2c.hostname)
 
 		// Use the hostname (resourceName for LDS) to find the routes.
-		cluster := getClusterFromRouteConfiguration(rc, hostname)
+		cluster, err := getClusterFromRouteConfiguration(rc, hostname)
 		if cluster == "" {
-			return fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v", rc)
+			return fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v with err: %v", rc, err)
 		}
 
 		// If we get here, it means that this resource was a good one.
@@ -62,7 +62,8 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 }
 
 // getClusterFromRouteConfiguration checks if the provided RouteConfiguration
-// meets the expected criteria. If so, it returns a non-empty clusterName.
+// meets the expected criteria. If so, it returns a non-empty clusterName with
+// nil error.
 //
 // A RouteConfiguration resource is considered valid when only if it contains a
 // VirtualHost whose domain field matches the server name from the URI passed
@@ -75,8 +76,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 // only look at the last route in the list (the default route), whose match
 // field must be empty and whose route field must be set.  Inside that route
 // message, the cluster field will contain the clusterName we are looking for.
-func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, host string) string {
-	// TODO: return error for better error logging and nack.
+func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, host string) (string, error) {
 	//
 	// Currently this returns "" on error, and the caller will return an error.
 	// But the error doesn't contain details of why the response is invalid
@@ -87,22 +87,22 @@ func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, host string)
 	vh := findBestMatchingVirtualHost(host, rc.GetVirtualHosts())
 	if vh == nil {
 		// No matching virtual host found.
-		return ""
+		return "", fmt.Errorf("no matching virtual host found")
 	}
 	if len(vh.Routes) == 0 {
 		// The matched virtual host has no routes, this is invalid because there
 		// should be at least one default route.
-		return ""
+		return "", fmt.Errorf("matched virtual host has no routes")
 	}
 	dr := vh.Routes[len(vh.Routes)-1]
 	if match := dr.GetMatch(); match == nil || (match.GetPrefix() != "" && match.GetPrefix() != "/") {
 		// The matched virtual host is invalid. Match is not "" or "/".
-		return ""
+		return "", fmt.Errorf("matched virtual host is invalid")
 	}
 	if route := dr.GetRoute(); route != nil {
-		return route.GetCluster()
+		return route.GetCluster(), nil
 	}
-	return ""
+	return "", fmt.Errorf("matched route is nil")
 }
 
 type domainMatchType int
