@@ -16,7 +16,7 @@
  *
  */
 
-package mock_helloworld_test
+package mock_proto_test
 
 import (
 	"context"
@@ -26,8 +26,8 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/proto"
+	hwmock "google.golang.org/grpc/examples/helloworld/mock_proto"
 	helloworld "google.golang.org/grpc/examples/helloworld/proto"
-	hwmock "google.golang.org/grpc/examples/helloworld/mock_helloworld"
 	"google.golang.org/grpc/internal/grpctest"
 )
 
