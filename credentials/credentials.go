@@ -195,9 +195,10 @@ func RequestInfoFromContext(ctx context.Context) (ri RequestInfo, ok bool) {
 }
 
 // AddressInfo contains address related data attached to the context passed to
-// ClientHandshake. This makes it possible for balancer implementations to pass
-// arbitrary data to the handshaker. Individual credential implementations
-// control the actual format of the data that they are willing to receive.
+// ClientHandshake. This makes it possible to pass arbitrary data to the
+// handshaker from gRPC, resolver, balancer etc. Individual credential
+// implementations control the actual format of the data that they are willing
+// to receive.
 //
 // This API is experimental.
 type AddressInfo struct {

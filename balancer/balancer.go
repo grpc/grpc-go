@@ -111,6 +111,7 @@ type NewSubConnOptions struct {
 	// CredsBundle is the credentials bundle that will be used in the created
 	// SubConn. If it's nil, the original creds from grpc DialOptions will be
 	// used.
+	//
 	// Deprecated: Use the Attributes field in resolver.Address to pass
 	// arbitrary data to the credential handshaker.
 	CredsBundle credentials.Bundle
@@ -138,9 +139,6 @@ type ClientConn interface {
 	// NewSubConn is called by balancer to create a new SubConn.
 	// It doesn't block and wait for the connections to be established.
 	// Behaviors of the SubConn can be controlled by options.
-	//
-	// Attributes field in resolver.Address can be used to pass arbitrary data
-	// to the credential handshaker.
 	NewSubConn([]resolver.Address, NewSubConnOptions) (SubConn, error)
 	// RemoveSubConn removes the SubConn from ClientConn.
 	// The SubConn will be shutdown.
