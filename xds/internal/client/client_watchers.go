@@ -117,7 +117,24 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 				// watching this resource.
 				delete(watchers, resourceName)
 				c.v2c.removeWatch(wi.typeURL, resourceName)
-				// TODO: remove item from cache.
+				// remove item from cache.
+				switch wi.typeURL {
+				case ldsURL:
+					delete(c.ldsCache, resourceName)
+					c.logger.Debugf("delete LDS cache with name %v", resourceName)
+
+				case rdsURL:
+					delete(c.rdsCache, resourceName)
+					c.logger.Debugf("delete RDS cache with name %v", resourceName)
+
+				case cdsURL:
+					delete(c.cdsCache, resourceName)
+					c.logger.Debugf("delete CDS cache with name %v", resourceName)
+
+				case edsURL:
+					delete(c.edsCache, resourceName)
+					c.logger.Debugf("delete EDS cache with name %v", resourceName)
+				}
 			}
 		}
 	}
