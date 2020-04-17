@@ -67,7 +67,7 @@ The user code uses this function to create an instance of the struct greeterClie
 We will mock this interface GreeterClient and use an instance of that mock to make rpc calls. These calls instead of going to server will return pre-determined values.
 
 To create a mock we’ll use [mockgen](https://github.com/golang/mock#running-mockgen).
-From the directory ``` examples/helloworld/ ``` run ``` mockgen google.golang.org/grpc/examples/helloworld/helloworld GreeterClient > mock_helloworld/hw_mock.go ```
+From the directory ``` examples/helloworld/ ``` run ``` mockgen google.golang.org/grpc/examples/helloworld/proto GreeterClient > mock_helloworld/hw_mock.go ```
 
 Notice that in the above command we specify GreeterClient as the interface to be mocked.
 
@@ -141,7 +141,7 @@ import (
 )
 ```
 
-Now considering a test that takes the RouteGuide client object as a parameter, makes a RouteChat rpc call and sends a message on the resulting stream. Furthermore, this test expects to see the same message to be received on the stream. 
+Now considering a test that takes the RouteGuide client object as a parameter, makes a RouteChat rpc call and sends a message on the resulting stream. Furthermore, this test expects to see the same message to be received on the stream.
 
 ```go
 var msg = ...

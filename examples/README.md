@@ -3,7 +3,7 @@ gRPC in 3 minutes (Go)
 
 BACKGROUND
 -------------
-For this sample, we've already generated the server and client stubs from [helloworld.proto](helloworld/helloworld/helloworld.proto).
+For this sample, we've already generated the server and client stubs from [helloworld.proto](helloworld/proto/helloworld.proto).
 
 PREREQUISITES
 -------------
@@ -60,5 +60,5 @@ OPTIONAL - Rebuilding the generated code
    Or run `protoc` command (with the grpc plugin)
 
    ```
-   $ protoc -I helloworld/ helloworld/helloworld.proto --go_out=plugins=grpc:helloworld
+   $ protoc -I proto/ proto/helloworld.proto --go_out=plugins=grpc:proto
    ```
