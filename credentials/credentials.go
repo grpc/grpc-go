@@ -194,30 +194,31 @@ func RequestInfoFromContext(ctx context.Context) (ri RequestInfo, ok bool) {
 	return
 }
 
-// AddressInfo contains address related data attached to the context passed to
-// ClientHandshake. This makes it possible to pass arbitrary data to the
-// handshaker from gRPC, resolver, balancer etc. Individual credential
-// implementations control the actual format of the data that they are willing
-// to receive.
+// ClientHandshakeInfo holds data to be passed to ClientHandshake. This makes
+// it possible to pass arbitrary data to the handshaker from gRPC, resolver,
+// balancer etc. Individual credential implementations control the actual
+// format of the data that they are willing to receive.
 //
 // This API is experimental.
-type AddressInfo struct {
+type ClientHandshakeInfo struct {
 	// Attr is a generic key/value store.
 	Attr *attributes.Attributes
 }
 
-// addressInfoKey is a struct used as the key to store AddressInfo in a context.
-type addressInfoKey struct{}
+// clientHandshakeInfoKey is a struct used as the key to store
+// ClientHandshakeInfo in a context.
+type clientHandshakeInfoKey struct{}
 
-// WithAddressInfo returns a copy of parent with ai stored as a value.
-func WithAddressInfo(parent context.Context, ai AddressInfo) context.Context {
-	return context.WithValue(parent, addressInfoKey{}, ai)
+// WithClientHandshakeInfo returns a copy of parent with chi stored as a value.
+func WithClientHandshakeInfo(parent context.Context, chi ClientHandshakeInfo) context.Context {
+	return context.WithValue(parent, clientHandshakeInfoKey{}, chi)
 }
 
-// AddressInfoFromContext returns the AddressInfo stored in ctx.
-func AddressInfoFromContext(ctx context.Context) AddressInfo {
-	ai, _ := ctx.Value(addressInfoKey{}).(AddressInfo)
-	return ai
+// ClientHandshakeInfoFromContext returns the ClientHandshakeInfo struct stored
+// in ctx.
+func ClientHandshakeInfoFromContext(ctx context.Context) ClientHandshakeInfo {
+	chi, _ := ctx.Value(clientHandshakeInfoKey{}).(ClientHandshakeInfo)
+	return chi
 }
 
 // CheckSecurityLevel checks if a connection's security level is greater than or equal to the specified one.

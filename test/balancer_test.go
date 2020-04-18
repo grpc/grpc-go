@@ -353,27 +353,27 @@ func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
 	}
 }
 
-const aiBalancerName = "addrInfo-attribute-balancer"
+const attrBalancerName = "attribute-balancer"
 
-// aiBalancerBuilder builds a balancer and passes the attribute key and value
+// attrBalancerBuilder builds a balancer and passes the attribute key and value
 // with which it was configured at creation time by the test.
-type aiBalancerBuilder struct {
+type attrBalancerBuilder struct {
 	attrKey string
 	attrVal string
 }
 
-func (bb *aiBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &aiBalancer{cc: cc, attrKey: bb.attrKey, attrVal: bb.attrVal}
+func (bb *attrBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return &attrBalancer{cc: cc, attrKey: bb.attrKey, attrVal: bb.attrVal}
 }
 
-func (bb *aiBalancerBuilder) Name() string {
-	return aiBalancerName
+func (bb *attrBalancerBuilder) Name() string {
+	return attrBalancerName
 }
 
-// aiBalancer receives an attribute key and value which it adds to the address
-// that it calls NewSubConn on. This key/value pair reaches the credential
-// handshaker and the test verifies the same.
-type aiBalancer struct {
+// attrBalancer receives an attribute key and value which it adds to the
+// address that it calls NewSubConn on. This key/value pair reaches the
+// credential handshaker and the test verifies the same.
+type attrBalancer struct {
 	balancer.Balancer
 	cc      balancer.ClientConn
 	attrKey string
@@ -382,7 +382,7 @@ type aiBalancer struct {
 
 // UpdateClientConnState adds an attribute with the configured key/value to the
 // addresses received and invokes NewSubConn.
-func (b *aiBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
+func (b *attrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	addrs := ccs.ResolverState.Addresses
 	if len(addrs) == 0 {
 		return nil
@@ -399,12 +399,12 @@ func (b *aiBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	return nil
 }
 
-func (b *aiBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+func (b *attrBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	b.cc.UpdateState(balancer.State{ConnectivityState: state.ConnectivityState, Picker: &aiPicker{result: balancer.PickResult{SubConn: sc}, err: state.ConnectionError}})
 }
 
-func (b *aiBalancer) ResolverError(error) {}
-func (b *aiBalancer) Close()              {}
+func (b *attrBalancer) ResolverError(error) {}
+func (b *attrBalancer) Close()              {}
 
 type aiPicker struct {
 	result balancer.PickResult
@@ -415,22 +415,23 @@ func (aip *aiPicker) Pick(_ balancer.PickInfo) (balancer.PickResult, error) {
 	return aip.result, aip.err
 }
 
-// addrInfoTransportCreds is a transport credential implementation which stores
-// the Attributes struct passed in the context locally for the test to inspect.
-type addrInfoTransportCreds struct {
+// attrTransportCreds is a transport credential implementation which stores
+// Attributes from the ClientHandshakeInfo struct passed in the context locally
+// for the test to inspect.
+type attrTransportCreds struct {
 	credentials.TransportCredentials
 	attr *attributes.Attributes
 }
 
-func (ac *addrInfoTransportCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	ai := credentials.AddressInfoFromContext(ctx)
+func (ac *attrTransportCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	ai := credentials.ClientHandshakeInfoFromContext(ctx)
 	ac.attr = ai.Attr
 	return rawConn, nil, nil
 }
-func (ac *addrInfoTransportCreds) Info() credentials.ProtocolInfo {
+func (ac *attrTransportCreds) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{}
 }
-func (ac *addrInfoTransportCreds) Clone() credentials.TransportCredentials {
+func (ac *attrTransportCreds) Clone() credentials.TransportCredentials {
 	return nil
 }
 
@@ -444,9 +445,9 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 		testAttrVal = "bar"
 	)
 
-	balancer.Register(&aiBalancerBuilder{attrKey: testAttrKey, attrVal: testAttrVal})
-	defer internal.BalancerUnregister(aiBalancerName)
-	t.Logf("Registered balancer %s...", aiBalancerName)
+	balancer.Register(&attrBalancerBuilder{attrKey: testAttrKey, attrVal: testAttrVal})
+	defer internal.BalancerUnregister(attrBalancerName)
+	t.Logf("Registered balancer %s...", attrBalancerName)
 
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
@@ -463,10 +464,10 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	defer s.Stop()
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
 
-	creds := &addrInfoTransportCreds{}
+	creds := &attrTransportCreds{}
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(creds),
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, aiBalancerName)),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, attrBalancerName)),
 	}
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
 	if err != nil {

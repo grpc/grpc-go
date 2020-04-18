@@ -215,6 +215,11 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		}
 	}
 	if transportCreds != nil {
+		// gRPC, resolver, balancer etc. can specify arbitrary data in the
+		// Attributes field of resolver.Address, which is shoved into connectCtx
+		// and passed to the credential handshaker. This makes it possible for
+		// address specific arbitrary data to reach the credential handshaker.
+		connectCtx = credentials.WithClientHandshakeInfo(connectCtx, credentials.ClientHandshakeInfo{Attr: addr.Attributes})
 		scheme = "https"
 		conn, authInfo, err = transportCreds.ClientHandshake(connectCtx, addr.ServerName, conn)
 		if err != nil {
