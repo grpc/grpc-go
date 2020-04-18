@@ -20,9 +20,7 @@ package attributes_test
 
 import (
 	"fmt"
-	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/attributes"
 )
 
@@ -47,14 +45,4 @@ func ExampleAttributes_WithValues() {
 	// Output:
 	// Key one: 1
 	// Key two: two
-}
-
-func TestAttributesClone(t *testing.T) {
-	type keyOne struct{}
-	type keyTwo struct{}
-	a := attributes.New(keyOne{}, 1, keyTwo{}, "two")
-	b := a.Clone()
-	if !cmp.Equal(b, a, cmp.AllowUnexported(attributes.Attributes{})) {
-		t.Errorf("attributes.Clone() returned %v, want %v", b, a)
-	}
 }

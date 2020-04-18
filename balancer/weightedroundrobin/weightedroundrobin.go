@@ -42,7 +42,7 @@ type AddrInfo struct {
 // This is an EXPERIMENTAL API.
 func SetAddrInfo(addrInfo AddrInfo, addr resolver.Address) resolver.Address {
 	newAddr := addr
-	newAddr.Attributes = addr.Attributes.Clone().WithValues(attributeKey{}, addrInfo)
+	newAddr.Attributes = addr.Attributes.WithValues(attributeKey{}, addrInfo)
 	return newAddr
 }
 
