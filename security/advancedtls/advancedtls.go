@@ -33,7 +33,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// VerificationFuncParams contains the parameters available to users when implementing |CustomVerificationFunc|.
+// VerificationFuncParams contains the parameters available to users when implementing CustomVerificationFunc.
 // The fields contain in this struct are used when making custom verification decisions, and are hence read-only.
 // Setting these fields wouldn't have any effect.
 type VerificationFuncParams struct {
@@ -43,7 +43,7 @@ type VerificationFuncParams struct {
 	VerifiedChains [][]*x509.Certificate
 }
 
-// VerificationResults contains the information about results of |CustomVerificationFunc|.
+// VerificationResults contains the information about results of CustomVerificationFunc.
 // VerificationResults is an empty struct for now. It may be extended in the future to include more information.
 type VerificationResults struct{}
 
@@ -106,19 +106,19 @@ type ClientOptions struct {
 	GetClientCertificate func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 	// VerifyPeer is a custom verification check after certificate signature check.
 	// If this is set, we will perform this customized check after doing the normal check(s)
-	// indicated by setting |VType|.
+	// indicated by setting VType.
 	VerifyPeer CustomVerificationFunc
 	// ServerNameOverride is for testing only. If set to a non-empty string,
 	// it will override the virtual host name of authority (e.g. :authority header field) in requests.
 	ServerNameOverride string
 	// RootCertificateOptions is REQUIRED to be correctly set on client side.
 	RootCertificateOptions
-	// If setting this field to |CertAndHostVerification|, we would perform both the certificate
+	// If setting this field to CertAndHostVerification, we would perform both the certificate
 	// verification and hostname verification.
-	// If setting to |CertVerification|, we would only perform verification for the certificate sent from
+	// If setting to CertVerification, we would only perform verification for the certificate sent from
 	// the server. Setting this field without proper custom verification check would leave the
 	// application susceptible to the MITM attack.
-	// If setting to |SkipVerification|, we would skip all the verification. Setting this field without
+	// If setting to SkipVerification, we would skip all the verification. Setting this field without
 	// proper custom verification check would leave the peer completely unauthenticated, and is
 	// highly discouraged unless you really have reasons to do so.
 	VType VerificationType
@@ -139,21 +139,21 @@ type ServerOptions struct {
 	GetCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 	// VerifyPeer is a custom verification check after certificate signature check.
 	// If this is set, we will perform this customized check after doing the normal check(s)
-	// indicated by setting |VType|.
+	// indicated by setting VType.
 	VerifyPeer CustomVerificationFunc
-	// RootCertificateOptions is only required when mutual TLS is enabled(|RequireClientCert| is true).
+	// RootCertificateOptions is only required when mutual TLS is enabled(RequireClientCert is true).
 	RootCertificateOptions
 	// If the server want the client to send certificates.
 	RequireClientCert bool
-	// Note that this field will only take into effect when we set |RequireClientCert| to true,
+	// Note that this field will only take into effect when we set RequireClientCert to true,
 	// meaning we are using mTLS and want to verify the client certificates.
-	// If setting this field to |CertAndHostVerification|, we would only perform the certificate
-	// verification, which has the same effect as setting to |CertVerification|, because we don't have
+	// If setting this field to CertAndHostVerification, we would only perform the certificate
+	// verification, which has the same effect as setting to CertVerification, because we don't have
 	// hostname check on server side.
-	// If setting to |CertVerification|, we would perform verification for certificates sent from the
+	// If setting to CertVerification, we would perform verification for certificates sent from the
 	// client. Setting this field without proper custom authorization would leave the application
 	// susceptible to the MITM attack.
-	// If setting to |SkipVerification|, we would skip all the verification. Setting this field without
+	// If setting to SkipVerification, we would skip all the verification. Setting this field without
 	// proper custom authorization would leave the peer completely unauthenticated, and is
 	// highly discouraged unless you really have reasons to do so.
 	VType VerificationType
@@ -186,7 +186,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 	}
 	clientAuth := tls.NoClientCert
 	if o.RequireClientCert {
-		// We have to set |clientAuth| to RequireAnyClientCert to force underlying TLS package to use the
+		// We have to set clientAuth to RequireAnyClientCert to force underlying TLS package to use the
 		// verification function we built from buildVerifyFunc.
 		clientAuth = tls.RequireAnyClientCert
 	}
