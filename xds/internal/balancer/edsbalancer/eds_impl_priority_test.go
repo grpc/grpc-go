@@ -42,7 +42,7 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
 
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testEndpointAddrs[0]; got != want {
@@ -51,8 +51,8 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 
 	// p0 is ready.
-	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
 
 	// Test roundrobin with only p0 subconns.
 	p1 := <-cc.NewPickerCh
@@ -66,7 +66,7 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab2.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	clab2.AddLocality(testSubZones[2], 1, 2, testEndpointAddrs[2:3], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
 
 	select {
 	case <-cc.NewPickerCh:
@@ -82,7 +82,7 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	clab3 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab3.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab3.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab3.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab3.Build()))
 
 	select {
 	case <-cc.NewPickerCh:
@@ -108,7 +108,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
 
 	addrs0 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs0[0].Addr, testEndpointAddrs[0]; got != want {
@@ -117,8 +117,8 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// p0 is ready.
-	edsb.HandleSubConnStateChange(sc0, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc0, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc0, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc0, connectivity.Ready)
 
 	// Test roundrobin with only p0 subconns.
 	p0 := <-cc.NewPickerCh
@@ -128,14 +128,14 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	}
 
 	// Turn down 0, 1 is used.
-	edsb.HandleSubConnStateChange(sc0, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc0, connectivity.TransientFailure)
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testEndpointAddrs[1]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
-	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
 
 	// Test pick with 1.
 	p1 := <-cc.NewPickerCh
@@ -151,7 +151,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab2.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	clab2.AddLocality(testSubZones[2], 1, 2, testEndpointAddrs[2:3], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
 
 	select {
 	case <-cc.NewPickerCh:
@@ -164,14 +164,14 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	}
 
 	// Turn down 1, use 2
-	edsb.HandleSubConnStateChange(sc1, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc1, connectivity.TransientFailure)
 	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testEndpointAddrs[2]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc2 := <-cc.NewSubConnCh
-	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
 
 	// Test pick with 2.
 	p2 := <-cc.NewPickerCh
@@ -186,7 +186,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	clab3 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab3.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab3.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab3.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab3.Build()))
 
 	// p2 SubConns are removed.
 	scToRemove := <-cc.RemoveSubConnCh
@@ -215,7 +215,7 @@ func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
 
 	addrs0 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs0[0].Addr, testEndpointAddrs[0]; got != want {
@@ -224,14 +224,14 @@ func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// Turn down 0, 1 is used.
-	edsb.HandleSubConnStateChange(sc0, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc0, connectivity.TransientFailure)
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testEndpointAddrs[1]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
 	// Turn down 1, pick should error.
-	edsb.HandleSubConnStateChange(sc1, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc1, connectivity.TransientFailure)
 
 	// Test pick failure.
 	pFail := <-cc.NewPickerCh
@@ -246,15 +246,15 @@ func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab2.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	clab2.AddLocality(testSubZones[2], 1, 2, testEndpointAddrs[2:3], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
 
 	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testEndpointAddrs[2]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc2 := <-cc.NewSubConnCh
-	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
 
 	// Test pick with 2.
 	p2 := <-cc.NewPickerCh
@@ -281,7 +281,7 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	clab1.AddLocality(testSubZones[2], 1, 2, testEndpointAddrs[2:3], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
 
 	addrs0 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs0[0].Addr, testEndpointAddrs[0]; got != want {
@@ -290,21 +290,21 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// Turn down 0, 1 is used.
-	edsb.HandleSubConnStateChange(sc0, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc0, connectivity.TransientFailure)
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testEndpointAddrs[1]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
 	// Turn down 1, 2 is used.
-	edsb.HandleSubConnStateChange(sc1, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc1, connectivity.TransientFailure)
 	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testEndpointAddrs[2]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc2 := <-cc.NewSubConnCh
-	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
 
 	// Test pick with 2.
 	p2 := <-cc.NewPickerCh
@@ -316,7 +316,7 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	}
 
 	// When 0 becomes ready, 0 should be used, 1 and 2 should all be closed.
-	edsb.HandleSubConnStateChange(sc0, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc0, connectivity.Ready)
 
 	// sc1 and sc2 should be removed.
 	//
@@ -362,7 +362,7 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
 
 	addrs0 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs0[0].Addr, testEndpointAddrs[0]; got != want {
@@ -371,7 +371,7 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// Keep 0 in connecting, 1 will be used after init timeout.
-	edsb.HandleSubConnStateChange(sc0, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc0, connectivity.Connecting)
 
 	// Make sure new SubConn is created before timeout.
 	select {
@@ -386,8 +386,8 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 	}
 	sc1 := <-cc.NewSubConnCh
 
-	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
 
 	// Test pick with 1.
 	p1 := <-cc.NewPickerCh
@@ -412,15 +412,15 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	clab0 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab0.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab0.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab0.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab0.Build()))
 
 	addrs0 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs0[0].Addr, testEndpointAddrs[0]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc0 := <-cc.NewSubConnCh
-	edsb.HandleSubConnStateChange(sc0, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc0, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc0, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc0, connectivity.Ready)
 
 	// Test roundrobin with only p0 subconns.
 	p0 := <-cc.NewPickerCh
@@ -430,15 +430,15 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	}
 
 	// Turn down p0 subconns, p1 subconns will be created.
-	edsb.HandleSubConnStateChange(sc0, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc0, connectivity.TransientFailure)
 
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testEndpointAddrs[1]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
-	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
 
 	// Test roundrobin with only p1 subconns.
 	p1 := <-cc.NewPickerCh
@@ -448,7 +448,7 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	}
 
 	// Reconnect p0 subconns, p1 subconn will be closed.
-	edsb.HandleSubConnStateChange(sc0, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc0, connectivity.Ready)
 
 	scToRemove := <-cc.RemoveSubConnCh
 	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
@@ -468,15 +468,15 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
 	clab1.AddLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:3], nil)
 	clab1.AddLocality(testSubZones[3], 1, 1, testEndpointAddrs[3:4], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
 
 	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testEndpointAddrs[2]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc2 := <-cc.NewSubConnCh
-	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
 
 	// Test roundrobin with only two p0 subconns.
 	p3 := <-cc.NewPickerCh
@@ -486,15 +486,15 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	}
 
 	// Turn down p0 subconns, p1 subconns will be created.
-	edsb.HandleSubConnStateChange(sc0, connectivity.TransientFailure)
-	edsb.HandleSubConnStateChange(sc2, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc0, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc2, connectivity.TransientFailure)
 
 	sc3 := <-cc.NewSubConnCh
-	edsb.HandleSubConnStateChange(sc3, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc3, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc3, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc3, connectivity.Ready)
 	sc4 := <-cc.NewSubConnCh
-	edsb.HandleSubConnStateChange(sc4, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc4, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc4, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc4, connectivity.Ready)
 
 	// Test roundrobin with only p1 subconns.
 	p4 := <-cc.NewPickerCh
@@ -523,15 +523,15 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	clab0 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab0.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab0.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab0.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab0.Build()))
 
 	addrs0 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs0[0].Addr, testEndpointAddrs[0]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc0 := <-cc.NewSubConnCh
-	edsb.HandleSubConnStateChange(sc0, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc0, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc0, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc0, connectivity.Ready)
 
 	// Test roundrobin with only p0 subconns.
 	p0 := <-cc.NewPickerCh
@@ -542,7 +542,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 
 	// Remove all priorities.
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
 
 	// p0 subconn should be removed.
 	scToRemove := <-cc.RemoveSubConnCh
@@ -562,7 +562,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	clab2 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[2:3], nil)
 	clab2.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[3:4], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
 
 	addrs01 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs01[0].Addr, testEndpointAddrs[2]; got != want {
@@ -580,8 +580,8 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc11 := <-cc.NewSubConnCh
-	edsb.HandleSubConnStateChange(sc11, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc11, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc11, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc11, connectivity.Ready)
 
 	// Test roundrobin with only p1 subconns.
 	p1 := <-cc.NewPickerCh
@@ -593,7 +593,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	// Remove p1 from EDS, to fallback to p0.
 	clab3 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab3.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[2:3], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab3.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab3.Build()))
 
 	// p1 subconn should be removed.
 	scToRemove1 := <-cc.RemoveSubConnCh
@@ -611,8 +611,8 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 
 	// Send an ready update for the p0 sc that was received when re-adding
 	// localities to EDS.
-	edsb.HandleSubConnStateChange(sc01, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc01, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc01, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc01, connectivity.Ready)
 
 	// Test roundrobin with only p0 subconns.
 	p2 := <-cc.NewPickerCh
@@ -667,7 +667,7 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
 
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testEndpointAddrs[0]; got != want {
@@ -676,8 +676,8 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 
 	// p0 is ready.
-	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
 
 	// Test roundrobin with only p0 subconns.
 	p1 := <-cc.NewPickerCh
@@ -690,12 +690,12 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	clab2 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab2.AddLocality(testSubZones[0], 1, 0, nil, nil)
 	clab2.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
 
 	// p0 will remove the subconn, and ClientConn will send a sc update to
 	// shutdown.
 	scToRemove := <-cc.RemoveSubConnCh
-	edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
+	edsb.handleSubConnStateChange(scToRemove, connectivity.Shutdown)
 
 	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testEndpointAddrs[1]; got != want {
@@ -704,8 +704,8 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	sc2 := <-cc.NewSubConnCh
 
 	// p1 is ready.
-	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
 
 	// Test roundrobin with only p1 subconns.
 	p2 := <-cc.NewPickerCh
@@ -726,7 +726,7 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab1.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
 
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testEndpointAddrs[0]; got != want {
@@ -735,8 +735,8 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 
 	// p0 is ready.
-	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
 
 	// Test roundrobin with only p0 subconns.
 	p1 := <-cc.NewPickerCh
@@ -751,12 +751,12 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 		Health: []corepb.HealthStatus{corepb.HealthStatus_UNHEALTHY},
 	})
 	clab2.AddLocality(testSubZones[1], 1, 1, testEndpointAddrs[1:2], nil)
-	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
 
 	// p0 will remove the subconn, and ClientConn will send a sc update to
 	// transient failure.
 	scToRemove := <-cc.RemoveSubConnCh
-	edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
+	edsb.handleSubConnStateChange(scToRemove, connectivity.Shutdown)
 
 	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testEndpointAddrs[1]; got != want {
@@ -765,8 +765,8 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	sc2 := <-cc.NewSubConnCh
 
 	// p1 is ready.
-	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
-	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
 
 	// Test roundrobin with only p1 subconns.
 	p2 := <-cc.NewPickerCh

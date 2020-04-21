@@ -114,12 +114,12 @@ func newEDSBalancerImpl(cc balancer.ClientConn, enqueueState func(priorityType, 
 	return edsImpl
 }
 
-// HandleChildPolicy updates the child balancers handling endpoints. Child
+// handleChildPolicy updates the child balancers handling endpoints. Child
 // policy is roundrobin by default. If the specified balancer is not installed,
 // the old child balancer will be used.
 //
 // HandleChildPolicy and HandleEDSResponse must be called by the same goroutine.
-func (edsImpl *edsBalancerImpl) HandleChildPolicy(name string, config json.RawMessage) {
+func (edsImpl *edsBalancerImpl) handleChildPolicy(name string, config json.RawMessage) {
 	if edsImpl.subBalancerBuilder.Name() == name {
 		return
 	}
@@ -169,11 +169,11 @@ func (edsImpl *edsBalancerImpl) updateDrops(dropConfig []xdsclient.OverloadDropC
 	edsImpl.pickerMu.Unlock()
 }
 
-// HandleEDSResponse handles the EDS response and creates/deletes localities and
+// handleEDSResponse handles the EDS response and creates/deletes localities and
 // SubConns. It also handles drops.
 //
 // HandleChildPolicy and HandleEDSResponse must be called by the same goroutine.
-func (edsImpl *edsBalancerImpl) HandleEDSResponse(edsResp xdsclient.EndpointsUpdate) {
+func (edsImpl *edsBalancerImpl) handleEDSResponse(edsResp xdsclient.EndpointsUpdate) {
 	// TODO: Unhandled fields from EDS response:
 	//  - edsResp.GetPolicy().GetOverprovisioningFactor()
 	//  - locality.GetPriority()
@@ -331,8 +331,8 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 	}
 }
 
-// HandleSubConnStateChange handles the state change and update pickers accordingly.
-func (edsImpl *edsBalancerImpl) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+// handleSubConnStateChange handles the state change and update pickers accordingly.
+func (edsImpl *edsBalancerImpl) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
 	edsImpl.subConnMu.Lock()
 	var bgwc *balancerGroupWithConfig
 	if p, ok := edsImpl.subConnToPriority[sc]; ok {
@@ -408,8 +408,8 @@ func (edsImpl *edsBalancerImpl) newSubConn(priority priorityType, addrs []resolv
 	return sc, nil
 }
 
-// Close closes the balancer.
-func (edsImpl *edsBalancerImpl) Close() {
+// close closes the balancer.
+func (edsImpl *edsBalancerImpl) close() {
 	for _, bgwc := range edsImpl.priorityToLocalities {
 		if bg := bgwc.bg; bg != nil {
 			bg.Close()
