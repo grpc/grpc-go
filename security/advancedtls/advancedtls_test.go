@@ -92,10 +92,10 @@ func TestClientServerHandshake(t *testing.T) {
 		// Client: nil setting
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: server side failure
-		// Reason: if clientRoot, clientGetRoot and verifyFunc is not set, client side
-		// doesn't provide any verification mechanism. We don't allow this even setting
-		// vType to SkipVerification. Clients should at least provide their own
-		// verification logic.
+		// Reason: if clientRoot, clientGetRoot and verifyFunc is not set, client
+		// side doesn't provide any verification mechanism. We don't allow this
+		// even setting vType to SkipVerification. Clients should at least provide
+		// their own verification logic.
 		{
 			"Client_no_trust_cert_Server_peer_cert",
 			nil,
@@ -142,8 +142,9 @@ func TestClientServerHandshake(t *testing.T) {
 		// Client: only set clientRoot
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: server side failure and client handshake failure
-		// Reason: client side sets vType to CertAndHostVerification, and will do default
-		// hostname check. All the default hostname checks will fail in this test suites.
+		// Reason: client side sets vType to CertAndHostVerification, and will do
+		// default hostname check. All the default hostname checks will fail in
+		// this test suites.
 		{
 			"Client_root_cert_Server_peer_cert",
 			nil,
@@ -166,8 +167,9 @@ func TestClientServerHandshake(t *testing.T) {
 		// Client: only set clientGetRoot
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: server side failure and client handshake failure
-		// Reason: client side sets vType to CertAndHostVerification, and will do default
-		// hostname check. All the default hostname checks will fail in this test suites.
+		// Reason: client side sets vType to CertAndHostVerification, and will do
+		// default hostname check. All the default hostname checks will fail in
+		// this test suites.
 		{
 			"Client_reload_root_Server_peer_cert",
 			nil,
@@ -278,12 +280,12 @@ func TestClientServerHandshake(t *testing.T) {
 			false,
 		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
-		// Server: set serverCert, but not setting any of serverRoot, serverGetRoot or
-		// serverVerifyFunc, with mutual TLS on
+		// Server: set serverCert, but not setting any of serverRoot, serverGetRoot
+		// or serverVerifyFunc, with mutual TLS on
 		// Expected Behavior: server side failure
-		// Reason: server side needs to provide any verification mechanism when mTLS in on, even setting
-		// vType to SkipVerification. Servers should at least provide their own
-		// verification logic.
+		// Reason: server side needs to provide any verification mechanism when
+		// mTLS in on, even setting vType to SkipVerification. Servers should at
+		// least provide their own verification logic.
 		{
 			"Client_peer_cert_reload_root_verifyFuncGood_Server_no_verification_mutualTLS",
 			[]tls.Certificate{clientPeerCert},
@@ -326,7 +328,8 @@ func TestClientServerHandshake(t *testing.T) {
 			false,
 		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
-		// Server: set serverGetRoot returning error and serverCert with mutual TLS on
+		// Server: set serverGetRoot returning error and serverCert with mutual
+		// TLS on
 		// Expected Behavior: server side failure
 		// Reason: server side reloading returns failure
 		{
@@ -374,7 +377,8 @@ func TestClientServerHandshake(t *testing.T) {
 			CertVerification,
 			false,
 		},
-		// Client: set everything but with the wrong peer cert not trusted by server
+		// Client: set everything but with the wrong peer cert not trusted by
+		// server
 		// Server: set serverGetRoot and serverGetCert with mutual TLS on
 		// Expected Behavior: server side returns failure because of
 		// certificate mismatch
@@ -429,7 +433,8 @@ func TestClientServerHandshake(t *testing.T) {
 			true,
 		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
-		// Server: set everything but with the wrong peer cert not trusted by client
+		// Server: set everything but with the wrong peer cert not trusted by
+		// client
 		// Expected Behavior: server side and client side return failure due to
 		// certificate mismatch and handshake failure
 		{
