@@ -125,7 +125,6 @@ func startXDS(t *testing.T, xdsname string, v2c *v2Client, reqChan *testutils.Ch
 //
 // It also waits and checks that the ack request contains the given version, and
 // the generated nonce.
-//
 func sendGoodResp(t *testing.T, xdsname string, fakeServer *fakeserver.Server, version int, goodResp *xdspb.DiscoveryResponse, wantReq *xdspb.DiscoveryRequest, callbackCh *testutils.Channel) (string, error) {
 	nonce := sendXDSRespWithVersion(fakeServer.XDSResponseChan, goodResp, version)
 	t.Logf("Good %s response pushed to fakeServer...", xdsname)
