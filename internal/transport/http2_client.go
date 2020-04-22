@@ -219,7 +219,8 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		// Attributes field of resolver.Address, which is shoved into connectCtx
 		// and passed to the credential handshaker. This makes it possible for
 		// address specific arbitrary data to reach the credential handshaker.
-		connectCtx = credentials.WithClientHandshakeInfo(connectCtx, credentials.ClientHandshakeInfo{Attr: addr.Attributes})
+		contextWithHandshakeInfo := internal.NewClientHandshakeInfoContext.(func(context.Context, credentials.ClientHandshakeInfo) context.Context)
+		connectCtx = contextWithHandshakeInfo(connectCtx, credentials.ClientHandshakeInfo{Attr: addr.Attributes})
 		scheme = "https"
 		conn, authInfo, err = transportCreds.ClientHandshake(connectCtx, addr.ServerName, conn)
 		if err != nil {

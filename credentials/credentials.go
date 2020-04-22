@@ -125,15 +125,18 @@ var ErrConnDispatched = errors.New("credentials: rawConn is dispatched out of gR
 // TransportCredentials defines the common interface for all the live gRPC wire
 // protocols and supported transport security protocols (e.g., TLS, SSL).
 type TransportCredentials interface {
-	// ClientHandshake does the authentication handshake specified by the corresponding
-	// authentication protocol on rawConn for clients. It returns the authenticated
-	// connection and the corresponding auth information about the connection.
-	// The auth information should embed CommonAuthInfo to return additional information about
-	// the credentials. Implementations must use the provided context to implement timely cancellation.
-	// gRPC will try to reconnect if the error returned is a temporary error
-	// (io.EOF, context.DeadlineExceeded or err.Temporary() == true).
-	// If the returned error is a wrapper error, implementations should make sure that
+	// ClientHandshake does the authentication handshake specified by the
+	// corresponding authentication protocol on rawConn for clients. It returns
+	// the authenticated connection and the corresponding auth information
+	// about the connection.  The auth information should embed CommonAuthInfo
+	// to return additional information about the credentials. Implementations
+	// must use the provided context to implement timely cancellation.  gRPC
+	// will try to reconnect if the error returned is a temporary error
+	// (io.EOF, context.DeadlineExceeded or err.Temporary() == true).  If the
+	// returned error is a wrapper error, implementations should make sure that
 	// the error implements Temporary() to have the correct retry behaviors.
+	// Additionally, ClientHandshakeInfo data will be available via the context
+	// passed to this call.
 	//
 	// If the returned net.Conn is closed, it MUST close the net.Conn provided.
 	ClientHandshake(context.Context, string, net.Conn) (net.Conn, AuthInfo, error)
@@ -209,13 +212,10 @@ type ClientHandshakeInfo struct {
 // ClientHandshakeInfo in a context.
 type clientHandshakeInfoKey struct{}
 
-// WithClientHandshakeInfo returns a copy of parent with chi stored as a value.
-func WithClientHandshakeInfo(parent context.Context, chi ClientHandshakeInfo) context.Context {
-	return context.WithValue(parent, clientHandshakeInfoKey{}, chi)
-}
-
 // ClientHandshakeInfoFromContext returns the ClientHandshakeInfo struct stored
 // in ctx.
+//
+// This API is experimental.
 func ClientHandshakeInfoFromContext(ctx context.Context) ClientHandshakeInfo {
 	chi, _ := ctx.Value(clientHandshakeInfoKey{}).(ClientHandshakeInfo)
 	return chi
@@ -250,6 +250,9 @@ func CheckSecurityLevel(ctx context.Context, level SecurityLevel) error {
 func init() {
 	internal.NewRequestInfoContext = func(ctx context.Context, ri RequestInfo) context.Context {
 		return context.WithValue(ctx, requestInfoKey{}, ri)
+	}
+	internal.NewClientHandshakeInfoContext = func(ctx context.Context, chi ClientHandshakeInfo) context.Context {
+		return context.WithValue(ctx, clientHandshakeInfoKey{}, chi)
 	}
 }
 
