@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
 
@@ -135,10 +136,37 @@ func (v2c *v2Client) close() {
 // receiver routines to send and receive data from the stream respectively.
 func (v2c *v2Client) run() {
 	go v2c.send()
-	// TODO: start a goroutine monitoring ClientConn's connectivity state, and
-	// report error (and log) when stats is transient failure.
 
 	retries := 0
+	// start a goroutine monitoring ClientConn's connectivity state, and
+	// report error (and log) when stats is transient failure.
+	go func() {
+		// Wait for the server's MaxConnectionAge timeout to kick in
+		t := time.NewTimer(time.Second * 4)
+		for {
+			select {
+			case <-t.C:
+				go func() {
+					state := v2c.cc.GetState()
+					switch state {
+					case connectivity.Idle:
+						v2c.logger.Infof("connectivity state: Idle")
+					case connectivity.Connecting:
+						v2c.logger.Infof("connectivity state: Connecting")
+					case connectivity.Ready:
+						v2c.logger.Infof("connectivity state: Ready")
+					case connectivity.TransientFailure:
+						v2c.logger.Warningf("connectivity state: TRANSIENT_FAILURE")
+					case connectivity.Shutdown:
+						v2c.logger.Warningf("connectivity state: Shutdown")
+					default:
+						v2c.logger.Warningf("unknown connectivity state")
+					}
+				}()
+			}
+		}
+	}()
+
 	for {
 		select {
 		case <-v2c.ctx.Done():
