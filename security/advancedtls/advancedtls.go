@@ -37,8 +37,8 @@ import (
 // implementing CustomVerificationFunc.
 // The fields in this struct are read-only.
 type VerificationFuncParams struct {
-	// The target server name that the client connects to when establish the
-	// connection.This field is only meaningful for client side. On server side,
+	// The target server name that the client connects to when establishing the
+	// connection. This field is only meaningful for client side. On server side,
 	// this field would be an empty string.
 	ServerName string
 	// The raw certificates sent from peer.
@@ -339,14 +339,15 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				}
 				certs[i] = cert
 			}
+			keyUsages := []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+			if !c.isClient {
+				keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+			}
 			opts := x509.VerifyOptions{
 				Roots:         rootCAs,
 				CurrentTime:   time.Now(),
 				Intermediates: x509.NewCertPool(),
-				KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-			}
-			if !c.isClient {
-				opts.KeyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+				KeyUsages:     keyUsages,
 			}
 			for _, cert := range certs[1:] {
 				opts.Intermediates.AddCert(cert)
