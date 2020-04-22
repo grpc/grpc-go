@@ -34,7 +34,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/balancerload"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
@@ -353,59 +353,6 @@ func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
 	}
 }
 
-const attrBalancerName = "attribute-balancer"
-
-// attrBalancerBuilder builds a balancer and passes the attribute key and value
-// with which it was configured at creation time by the test.
-type attrBalancerBuilder struct {
-	attrKey string
-	attrVal string
-}
-
-func (bb *attrBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &attrBalancer{cc: cc, attrKey: bb.attrKey, attrVal: bb.attrVal}
-}
-
-func (bb *attrBalancerBuilder) Name() string {
-	return attrBalancerName
-}
-
-// attrBalancer receives an attribute key and value which it adds to the
-// address that it calls NewSubConn on. This key/value pair reaches the
-// credential handshaker and the test verifies the same.
-type attrBalancer struct {
-	balancer.Balancer
-	cc      balancer.ClientConn
-	attrKey string
-	attrVal string
-}
-
-// UpdateClientConnState adds an attribute with the configured key/value to the
-// addresses received and invokes NewSubConn.
-func (b *attrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
-	addrs := ccs.ResolverState.Addresses
-	if len(addrs) == 0 {
-		return nil
-	}
-
-	// Only use the first address.
-	attr := attributes.New(b.attrKey, b.attrVal)
-	addrs[0].Attributes = attr
-	sc, err := b.cc.NewSubConn([]resolver.Address{addrs[0]}, balancer.NewSubConnOptions{})
-	if err != nil {
-		return err
-	}
-	sc.Connect()
-	return nil
-}
-
-func (b *attrBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	b.cc.UpdateState(balancer.State{ConnectivityState: state.ConnectivityState, Picker: &aiPicker{result: balancer.PickResult{SubConn: sc}, err: state.ConnectionError}})
-}
-
-func (b *attrBalancer) ResolverError(error) {}
-func (b *attrBalancer) Close()              {}
-
 type aiPicker struct {
 	result balancer.PickResult
 	err    error
@@ -425,7 +372,7 @@ type attrTransportCreds struct {
 
 func (ac *attrTransportCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	ai := credentials.ClientHandshakeInfoFromContext(ctx)
-	ac.attr = ai.Attr
+	ac.attr = ai.Attributes
 	return rawConn, nil, nil
 }
 func (ac *attrTransportCreds) Info() credentials.ProtocolInfo {
@@ -441,12 +388,35 @@ func (ac *attrTransportCreds) Clone() credentials.TransportCredentials {
 // channel.
 func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	const (
-		testAttrKey = "foo"
-		testAttrVal = "bar"
+		testAttrKey      = "foo"
+		testAttrVal      = "bar"
+		attrBalancerName = "attribute-balancer"
 	)
 
-	balancer.Register(&attrBalancerBuilder{attrKey: testAttrKey, attrVal: testAttrVal})
-	defer internal.BalancerUnregister(attrBalancerName)
+	// Register a stub balancer which adds attributes to the first address that
+	// it receives and then calls NewSubConn on it.
+	bf := stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			addrs := ccs.ResolverState.Addresses
+			if len(addrs) == 0 {
+				return nil
+			}
+
+			// Only use the first address.
+			attr := attributes.New(testAttrKey, testAttrVal)
+			addrs[0].Attributes = attr
+			sc, err := bd.ClientConn.NewSubConn([]resolver.Address{addrs[0]}, balancer.NewSubConnOptions{})
+			if err != nil {
+				return err
+			}
+			sc.Connect()
+			return nil
+		},
+		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
+			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: state.ConnectivityState, Picker: &aiPicker{result: balancer.PickResult{SubConn: sc}, err: state.ConnectionError}})
+		},
+	}
+	stub.Register(attrBalancerName, bf)
 	t.Logf("Registered balancer %s...", attrBalancerName)
 
 	r, cleanup := manual.GenerateAndRegisterManualResolver()

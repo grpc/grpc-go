@@ -1830,7 +1830,7 @@ type attrTransportCreds struct {
 
 func (ac *attrTransportCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	ai := credentials.ClientHandshakeInfoFromContext(ctx)
-	ac.attr = ai.Attr
+	ac.attr = ai.Attributes
 	return rawConn, nil, nil
 }
 func (ac *attrTransportCreds) Info() credentials.ProtocolInfo {

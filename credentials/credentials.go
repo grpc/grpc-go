@@ -204,8 +204,9 @@ func RequestInfoFromContext(ctx context.Context) (ri RequestInfo, ok bool) {
 //
 // This API is experimental.
 type ClientHandshakeInfo struct {
-	// Attr is a generic key/value store.
-	Attr *attributes.Attributes
+	// Attributes contains the attributes for the address. It could be provided
+	// by the gRPC, resolver, balancer etc.
+	Attributes *attributes.Attributes
 }
 
 // clientHandshakeInfoKey is a struct used as the key to store
