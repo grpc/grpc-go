@@ -40,17 +40,20 @@ type AddrInfo struct {
 // with addrInfo.
 //
 // This is an EXPERIMENTAL API.
-func SetAddrInfo(addrInfo AddrInfo, addr resolver.Address) resolver.Address {
+func SetAddrInfo(addr resolver.Address, addrInfo AddrInfo) resolver.Address {
 	addr.Attributes = addr.Attributes.WithValues(attributeKey{}, addrInfo)
 	return addr
 }
 
 // GetAddrInfo returns the AddrInfo stored in the Attributes fields of addr.
-// Returns nil if no AddrInfo is present.
 //
 // This is an EXPERIMENTAL API.
 func GetAddrInfo(addr resolver.Address) AddrInfo {
 	v := addr.Attributes.Value(attributeKey{})
+	if v == nil {
+		return AddrInfo{}
+	}
+
 	ai, _ := v.(AddrInfo)
 	return ai
 }
