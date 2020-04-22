@@ -70,8 +70,8 @@ func (t *testConfigBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfi
 	return stringBalancerConfig{s: string(c[1 : len(c)-1])}, nil
 }
 
-// testConfigBalancer takes the balancer config string and use it as a backend
-// address.
+// testConfigBalancer is a roundrobin balancer, but it takes the balancer config
+// string and append it to the backend addresses.
 type testConfigBalancer struct {
 	balancer.Balancer
 	balancer.V2Balancer

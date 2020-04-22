@@ -45,7 +45,7 @@ type lbConfig struct {
 	Targets map[string]target
 }
 
-func parseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+func parseConfig(c json.RawMessage) (*lbConfig, error) {
 	var cfg lbConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
 		return nil, err

@@ -96,12 +96,8 @@ func Test_parseConfig(t *testing.T) {
 				t.Errorf("parseConfig() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if tt.wantErr {
-				return
-			}
 			if !cmp.Equal(got, tt.want) {
-				t.Errorf("parseConfig() got = %v, want %v", got, tt.want)
-				t.Errorf("diff: %v", cmp.Diff(got, tt.want))
+				t.Errorf("parseConfig() got unexpected result, diff: %v", cmp.Diff(got, tt.want))
 			}
 		})
 	}

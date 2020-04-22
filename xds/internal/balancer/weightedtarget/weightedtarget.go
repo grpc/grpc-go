@@ -41,7 +41,7 @@ func init() {
 
 type weightedTargetBB struct{}
 
-func (wt *weightedTargetBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (wt *weightedTargetBB) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	b := &weightedTargetBalancer{}
 	b.logger = grpclog.NewPrefixLogger(loggingPrefix(b))
 	b.bg = balancergroup.New(cc, nil, b.logger)
@@ -61,10 +61,11 @@ func (wt *weightedTargetBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBa
 type weightedTargetBalancer struct {
 	logger *grpclog.PrefixLogger
 
-	// The keys in BalancerGroup is currently a locality struct, because
-	// balancer group also does load reporting (which is disabled here since
-	// LoadStore isn't set). The keys are all set to Locality{Region: name}
-	// until load reporting is refactor and moved out from balancer group.
+	// TODO: Make this package not dependent on any xds specific code.
+	// BalancerGroup uses xdsinternal.LocalityID as the key in the map of child
+	// policies that it maintains and reports load using LRS. Once these two
+	// dependencies are removed from the balancerGroup, this package will not
+	// have any dependencies on xds code.
 	bg *balancergroup.BalancerGroup
 
 	targets map[string]target
@@ -93,7 +94,7 @@ func (w *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnStat
 	}
 
 	// For sub-balancers in the new config
-	// - if it's new. add to balancer group
+	// - if it's new. add to balancer group,
 	// - if it's old, but has a new weight, update weight in balancer group.
 	//
 	// For all sub-balancers, forward the address/balancer config update.
@@ -110,9 +111,9 @@ func (w *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnStat
 		}
 
 		// Forwards all the update:
-		// - Addresses are from the map after splitting with hierarchy path.
-		// - Top level service config and attributes are the same
-		// - Balancer config comes from the targets map
+		// - Addresses are from the map after splitting with hierarchy path,
+		// - Top level service config and attributes are the same,
+		// - Balancer config comes from the targets map.
 		//
 		// TODO: handle error? How to aggregate errors and return?
 		_ = w.bg.UpdateClientConnState(l, balancer.ClientConnState{
