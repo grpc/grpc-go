@@ -41,9 +41,8 @@ type AddrInfo struct {
 //
 // This is an EXPERIMENTAL API.
 func SetAddrInfo(addrInfo AddrInfo, addr resolver.Address) resolver.Address {
-	newAddr := addr
-	newAddr.Attributes = addr.Attributes.WithValues(attributeKey{}, addrInfo)
-	return newAddr
+	addr.Attributes = addr.Attributes.WithValues(attributeKey{}, addrInfo)
+	return addr
 }
 
 // GetAddrInfo returns the AddrInfo stored in the Attributes fields of addr.
@@ -51,15 +50,7 @@ func SetAddrInfo(addrInfo AddrInfo, addr resolver.Address) resolver.Address {
 //
 // This is an EXPERIMENTAL API.
 func GetAddrInfo(addr resolver.Address) AddrInfo {
-	if addr.Attributes == nil {
-		return AddrInfo{}
-	}
-	ai := addr.Attributes.Value(attributeKey{})
-	if ai == nil {
-		return AddrInfo{}
-	}
-	if _, ok := ai.(AddrInfo); !ok {
-		return AddrInfo{}
-	}
-	return ai.(AddrInfo)
+	v := addr.Attributes.Value(attributeKey{})
+	ai, _ := v.(AddrInfo)
+	return ai
 }
