@@ -22,7 +22,6 @@ package rls
 
 import (
 	"sync"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
@@ -37,9 +36,7 @@ var (
 	_ balancer.V2Balancer = (*rlsBalancer)(nil)
 
 	// For overriding in tests.
-	newRLSClientFunc = func(cc *grpc.ClientConn, target string, timeout time.Duration) *rlsClient {
-		return newRLSClient(cc, target, timeout)
-	}
+	newRLSClientFunc = newRLSClient
 )
 
 // rlsBalancer implements the RLS LB policy.
@@ -65,7 +62,8 @@ type rlsBalancer struct {
 // the update will happen asynchronously.
 func (lb *rlsBalancer) run() {
 	for {
-		// TODO(easwars): Handle other updates.
+		// TODO(easwars): Handle other updates like subConn state changes, RLS
+		// responses from the server etc.
 		select {
 		case u := <-lb.ccUpdateCh:
 			lb.handleClientConnUpdate(u)
@@ -90,14 +88,7 @@ func (lb *rlsBalancer) handleClientConnUpdate(ccs *balancer.ClientConnState) {
 	}
 
 	newCfg := ccs.BalancerConfig.(*lbConfig)
-	oldCfg := lb.lbCfg
-	if oldCfg == nil {
-		// This is the first time we are receiving a service config.
-		lb.lbCfg = &lbConfig{}
-		oldCfg = lb.lbCfg
-	}
-
-	if oldCfg.Equal(newCfg) {
+	if lb.lbCfg.Equal(newCfg) {
 		grpclog.Info("rls: new service config matches existing config")
 		return
 	}
@@ -121,11 +112,12 @@ func (lb *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error
 func (lb *rlsBalancer) ResolverError(error) {
 	// ResolverError is called by gRPC when the name resolver reports an error.
 	// TODO(easwars): How do we handle this?
+	grpclog.Fatal("rls: ResolverError is not yet unimplemented")
 }
 
 // UpdateSubConnState implements balancer.V2Balancer interface.
 func (lb *rlsBalancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConnState) {
-	grpclog.Error("rlsbalancer.UpdateSubConnState is not yet implemented")
+	grpclog.Fatal("rls: UpdateSubConnState is not yet implemented")
 }
 
 // Cleans up the resources allocated by the LB policy including the clientConn
@@ -143,12 +135,12 @@ func (lb *rlsBalancer) Close() {
 
 // HandleSubConnStateChange implements balancer.Balancer interface.
 func (lb *rlsBalancer) HandleSubConnStateChange(_ balancer.SubConn, _ connectivity.State) {
-	grpclog.Errorf("UpdateSubConnState should be called instead of HandleSubConnStateChange")
+	grpclog.Fatal("UpdateSubConnState should be called instead of HandleSubConnStateChange")
 }
 
 // HandleResolvedAddrs implements balancer.Balancer interface.
 func (lb *rlsBalancer) HandleResolvedAddrs(_ []resolver.Address, _ error) {
-	grpclog.Errorf("UpdateClientConnState should be called instead of HandleResolvedAddrs")
+	grpclog.Fatal("UpdateClientConnState should be called instead of HandleResolvedAddrs")
 }
 
 // updateControlChannel updates the RLS client if required.

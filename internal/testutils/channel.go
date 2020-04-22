@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-// Package testutils provides utility types, for use in tests.
 package testutils
 
 import (

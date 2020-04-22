@@ -47,6 +47,7 @@ func (*rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer
 		done:       grpcsync.NewEvent(),
 		cc:         cc,
 		opts:       opts,
+		lbCfg:      &lbConfig{},
 		ccUpdateCh: make(chan *balancer.ClientConnState),
 	}
 	go lb.run()
