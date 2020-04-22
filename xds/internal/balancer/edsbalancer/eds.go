@@ -91,19 +91,17 @@ func (b *edsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadB
 // implement to communicate with edsBalancer.
 //
 // It's implemented by the real eds balancer and a fake testing eds balancer.
-//
-// TODO: none of the methods in this interface needs to be exported.
 type edsBalancerImplInterface interface {
-	// HandleEDSResponse passes the received EDS message from traffic director to eds balancer.
-	HandleEDSResponse(edsResp xdsclient.EndpointsUpdate)
-	// HandleChildPolicy updates the eds balancer the intra-cluster load balancing policy to use.
-	HandleChildPolicy(name string, config json.RawMessage)
-	// HandleSubConnStateChange handles state change for SubConn.
-	HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State)
+	// handleEDSResponse passes the received EDS message from traffic director to eds balancer.
+	handleEDSResponse(edsResp xdsclient.EndpointsUpdate)
+	// handleChildPolicy updates the eds balancer the intra-cluster load balancing policy to use.
+	handleChildPolicy(name string, config json.RawMessage)
+	// handleSubConnStateChange handles state change for SubConn.
+	handleSubConnStateChange(sc balancer.SubConn, state connectivity.State)
 	// updateState handle a balancer state update from the priority.
 	updateState(priority priorityType, s balancer.State)
-	// Close closes the eds balancer.
-	Close()
+	// close closes the eds balancer.
+	close()
 }
 
 var _ balancer.V2Balancer = (*edsBalancer)(nil) // Assert that we implement V2Balancer
@@ -149,7 +147,7 @@ func (x *edsBalancer) run() {
 				x.client.close()
 			}
 			if x.edsImpl != nil {
-				x.edsImpl.Close()
+				x.edsImpl.close()
 			}
 			return
 		}
@@ -160,7 +158,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 	switch u := update.(type) {
 	case *subConnStateUpdate:
 		if x.edsImpl != nil {
-			x.edsImpl.HandleSubConnStateChange(u.sc, u.state.ConnectivityState)
+			x.edsImpl.handleSubConnStateChange(u.sc, u.state.ConnectivityState)
 		}
 	case *balancer.ClientConnState:
 		x.logger.Infof("Receive update from resolver, balancer config: %+v", u.BalancerConfig)
@@ -181,9 +179,9 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 		// different one.
 		if x.edsImpl != nil && !cmp.Equal(cfg.ChildPolicy, x.config.ChildPolicy) {
 			if cfg.ChildPolicy != nil {
-				x.edsImpl.HandleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
+				x.edsImpl.handleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
 			} else {
-				x.edsImpl.HandleChildPolicy(roundrobin.Name, nil)
+				x.edsImpl.handleChildPolicy(roundrobin.Name, nil)
 			}
 		}
 
@@ -199,7 +197,7 @@ func (x *edsBalancer) handleXDSClientUpdate(update interface{}) {
 	// TODO: this func should accept (xdsclient.EndpointsUpdate, error), and process
 	// the error, instead of having a separate loseContact signal.
 	case xdsclient.EndpointsUpdate:
-		x.edsImpl.HandleEDSResponse(u)
+		x.edsImpl.handleEDSResponse(u)
 	case *loseContact:
 		// loseContact can be useful for going into fallback.
 	default:
