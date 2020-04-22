@@ -725,29 +725,25 @@ func checkEnd(t *testing.T, d *gotData, e *expectedData) {
 func checkConnBegin(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
-		st *stats.ConnBegin
 	)
-	if st, ok = d.s.(*stats.ConnBegin); !ok {
+	if _, ok = d.s.(*stats.ConnBegin); !ok {
 		t.Fatalf("got %T, want ConnBegin", d.s)
 	}
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
-	st.IsClient() // TODO remove this.
 }
 
 func checkConnEnd(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
-		st *stats.ConnEnd
 	)
-	if st, ok = d.s.(*stats.ConnEnd); !ok {
+	if _, ok = d.s.(*stats.ConnEnd); !ok {
 		t.Fatalf("got %T, want ConnEnd", d.s)
 	}
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
-	st.IsClient() // TODO remove this.
 }
 
 type statshandler struct {
