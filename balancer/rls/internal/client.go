@@ -62,7 +62,7 @@ func newRLSClient(cc *grpc.ClientConn, dialTarget string, rpcTimeout time.Durati
 	}
 }
 
-type lookupCallback func(target, headerData string, err error)
+type lookupCallback func(targets []string, headerData string, err error)
 
 // lookup starts a RouteLookup RPC in a separate goroutine and returns the
 // results (and error, if any) in the provided callback.
@@ -75,7 +75,7 @@ func (c *rlsClient) lookup(path string, keyMap map[string]string, cb lookupCallb
 			TargetType: grpcTargetType,
 			KeyMap:     keyMap,
 		})
-		cb(resp.GetTarget(), resp.GetHeaderData(), err)
+		cb(resp.GetTargets(), resp.GetHeaderData(), err)
 		cancel()
 	}()
 }

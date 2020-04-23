@@ -135,7 +135,7 @@ type GrpcKeyBuilder struct {
 	Names []*GrpcKeyBuilder_Name `protobuf:"bytes,1,rep,name=names,proto3" json:"names,omitempty"`
 	// Extract keys from all listed headers.
 	// For gRPC, it is an error to specify "required_match" on the NameMatcher
-	// protos, and we ignore it if set.
+	// protos.
 	Headers              []*NameMatcher `protobuf:"bytes,2,rep,name=headers,proto3" json:"headers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
 	XXX_unrecognized     []byte         `json:"-"`
@@ -379,7 +379,7 @@ type RouteLookupConfig struct {
 	// Defaults to 10 seconds if not specified.
 	LookupServiceTimeout *duration.Duration `protobuf:"bytes,4,opt,name=lookup_service_timeout,json=lookupServiceTimeout,proto3" json:"lookup_service_timeout,omitempty"`
 	// How long are responses valid for (like HTTP Cache-Control).
-	// If omitted (i.e. 0), responses are considered not to be cacheable.
+	// If omitted or zero, the longest valid cache time is used.
 	// This value is clamped to 5 minutes to avoid unflushable bad responses.
 	MaxAge *duration.Duration `protobuf:"bytes,5,opt,name=max_age,json=maxAge,proto3" json:"max_age,omitempty"`
 	// After a response has been in the client cache for this amount of time

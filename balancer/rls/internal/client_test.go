@@ -69,13 +69,13 @@ func TestLookupFailure(t *testing.T) {
 	rlsClient := newRLSClient(cc, defaultDialTarget, defaultRPCTimeout)
 
 	errCh := make(chan error)
-	rlsClient.lookup("", nil, func(target, headerData string, err error) {
+	rlsClient.lookup("", nil, func(targets []string, headerData string, err error) {
 		if err == nil {
 			errCh <- errors.New("rlsClient.lookup() succeeded, should have failed")
 			return
 		}
-		if target != "" || headerData != "" {
-			errCh <- fmt.Errorf("rlsClient.lookup() = (%s, %s), should be empty strings", target, headerData)
+		if len(targets) != 0 || headerData != "" {
+			errCh <- fmt.Errorf("rlsClient.lookup() = (%v, %s), want (nil, \"\")", targets, headerData)
 			return
 		}
 		errCh <- nil
@@ -104,7 +104,7 @@ func TestLookupDeadlineExceeded(t *testing.T) {
 	rlsClient := newRLSClient(cc, defaultDialTarget, 100*time.Millisecond)
 
 	errCh := make(chan error)
-	rlsClient.lookup("", nil, func(target, headerData string, err error) {
+	rlsClient.lookup("", nil, func(_ []string, _ string, err error) {
 		if st, ok := status.FromError(err); !ok || st.Code() != codes.DeadlineExceeded {
 			errCh <- fmt.Errorf("rlsClient.lookup() returned error: %v, want %v", err, codes.DeadlineExceeded)
 			return
@@ -130,9 +130,8 @@ func TestLookupSuccess(t *testing.T) {
 	defer cleanup()
 
 	const (
-		rlsReqPath    = "/service/method"
-		rlsRespTarget = "us_east_1.firestore.googleapis.com"
-		rlsHeaderData = "headerData"
+		rlsReqPath     = "/service/method"
+		wantHeaderData = "headerData"
 	)
 
 	rlsReqKeyMap := map[string]string{
@@ -145,17 +144,18 @@ func TestLookupSuccess(t *testing.T) {
 		TargetType: "grpc",
 		KeyMap:     rlsReqKeyMap,
 	}
+	wantRespTargets := []string{"us_east_1.firestore.googleapis.com"}
 
 	rlsClient := newRLSClient(cc, defaultDialTarget, defaultRPCTimeout)
 
 	errCh := make(chan error)
-	rlsClient.lookup(rlsReqPath, rlsReqKeyMap, func(t, hd string, err error) {
+	rlsClient.lookup(rlsReqPath, rlsReqKeyMap, func(targets []string, hd string, err error) {
 		if err != nil {
 			errCh <- fmt.Errorf("rlsClient.Lookup() failed: %v", err)
 			return
 		}
-		if t != rlsRespTarget || hd != rlsHeaderData {
-			errCh <- fmt.Errorf("rlsClient.lookup() = (%s, %s), want (%s, %s)", t, hd, rlsRespTarget, rlsHeaderData)
+		if !cmp.Equal(targets, wantRespTargets) || hd != wantHeaderData {
+			errCh <- fmt.Errorf("rlsClient.lookup() = (%v, %s), want (%v, %s)", targets, hd, wantRespTargets, wantHeaderData)
 			return
 		}
 		errCh <- nil
@@ -180,8 +180,8 @@ func TestLookupSuccess(t *testing.T) {
 	// request.
 	server.ResponseChan <- fakeserver.Response{
 		Resp: &rlspb.RouteLookupResponse{
-			Target:     rlsRespTarget,
-			HeaderData: rlsHeaderData,
+			Targets:    wantRespTargets,
+			HeaderData: wantHeaderData,
 		},
 	}
 
