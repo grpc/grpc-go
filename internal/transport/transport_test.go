@@ -34,9 +34,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
@@ -1814,5 +1817,56 @@ func (s) TestHeaderTblSize(t *testing.T) {
 	}
 	if i == 1000 {
 		t.Fatalf("expected len(limits) = 2 within 10s, got != 2")
+	}
+}
+
+// attrTransportCreds is a transport credential implementation which stores
+// Attributes from the ClientHandshakeInfo struct passed in the context locally
+// for the test to inspect.
+type attrTransportCreds struct {
+	credentials.TransportCredentials
+	attr *attributes.Attributes
+}
+
+func (ac *attrTransportCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	ai := credentials.ClientHandshakeInfoFromContext(ctx)
+	ac.attr = ai.Attributes
+	return rawConn, nil, nil
+}
+func (ac *attrTransportCreds) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+func (ac *attrTransportCreds) Clone() credentials.TransportCredentials {
+	return nil
+}
+
+// TestClientHandshakeInfo adds attributes to the resolver.Address passes to
+// NewClientTransport and verifies that these attributes are received by the
+// transport credential handshaker.
+func (s) TestClientHandshakeInfo(t *testing.T) {
+	server := setUpServerOnly(t, 0, &ServerConfig{}, pingpong)
+	defer server.stop()
+
+	const (
+		testAttrKey = "foo"
+		testAttrVal = "bar"
+	)
+	addr := resolver.Address{
+		Addr:       "localhost:" + server.port,
+		Attributes: attributes.New(testAttrKey, testAttrVal),
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
+	defer cancel()
+	creds := &attrTransportCreds{}
+
+	tr, err := NewClientTransport(ctx, context.Background(), addr, ConnectOptions{TransportCredentials: creds}, func() {}, func(GoAwayReason) {}, func() {})
+	if err != nil {
+		t.Fatalf("NewClientTransport(): %v", err)
+	}
+	defer tr.Close()
+
+	wantAttr := attributes.New(testAttrKey, testAttrVal)
+	if gotAttr := creds.attr; !cmp.Equal(gotAttr, wantAttr, cmp.AllowUnexported(attributes.Attributes{})) {
+		t.Fatalf("received attributes %v in creds, want %v", gotAttr, wantAttr)
 	}
 }

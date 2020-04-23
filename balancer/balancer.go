@@ -111,6 +111,9 @@ type NewSubConnOptions struct {
 	// CredsBundle is the credentials bundle that will be used in the created
 	// SubConn. If it's nil, the original creds from grpc DialOptions will be
 	// used.
+	//
+	// Deprecated: Use the Attributes field in resolver.Address to pass
+	// arbitrary data to the credential handshaker.
 	CredsBundle credentials.Bundle
 	// HealthCheckEnabled indicates whether health check service should be
 	// enabled on this SubConn
