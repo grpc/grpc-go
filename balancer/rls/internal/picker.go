@@ -31,10 +31,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-var errRLSThrottled = balancer.TransientFailureError(errors.New("RLS call throttled at client side"))
-
-// Compile time assert to ensure we implement V2Picker.
-var _ balancer.V2Picker = (*rlsPicker)(nil)
+var errRLSThrottled = errors.New("RLS call throttled at client side")
 
 // RLS rlsPicker selects the subConn to be used for a particular RPC. It does
 // not manage subConns directly and usually deletegates to pickers provided by

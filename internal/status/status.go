@@ -97,7 +97,7 @@ func (s *Status) Err() error {
 	if s.Code() == codes.OK {
 		return nil
 	}
-	return (*Error)(s.Proto())
+	return (*ErrorT)(s.Proto())
 }
 
 // WithDetails returns a new status with the provided details messages appended to the status.
@@ -136,26 +136,26 @@ func (s *Status) Details() []interface{} {
 	return details
 }
 
-// Error is an alias of a status proto. It implements error and Status,
-// and a nil Error should never be returned by this package.
-type Error spb.Status
+// ErrorT is an alias of a status proto. It implements error and Status,
+// and a nil *ErrorT should never be returned by this package.
+type ErrorT spb.Status
 
-func (se *Error) Error() string {
-	p := (*spb.Status)(se)
+func (e *ErrorT) Error() string {
+	p := (*spb.Status)(e)
 	return fmt.Sprintf("rpc error: code = %s desc = %s", codes.Code(p.GetCode()), p.GetMessage())
 }
 
 // GRPCStatus returns the Status represented by se.
-func (se *Error) GRPCStatus() *Status {
-	return FromProto((*spb.Status)(se))
+func (e *ErrorT) GRPCStatus() *Status {
+	return FromProto((*spb.Status)(e))
 }
 
 // Is implements future error.Is functionality.
-// A Error is equivalent if the code and message are identical.
-func (se *Error) Is(target error) bool {
-	tse, ok := target.(*Error)
+// A ErrorT is equivalent if the code and message are identical.
+func (e *ErrorT) Is(target error) bool {
+	tse, ok := target.(*ErrorT)
 	if !ok {
 		return false
 	}
-	return proto.Equal((*spb.Status)(se), (*spb.Status)(tse))
+	return proto.Equal((*spb.Status)(e), (*spb.Status)(tse))
 }

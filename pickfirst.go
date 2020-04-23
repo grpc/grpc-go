@@ -94,7 +94,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(cs balancer.ClientConnState) e
 
 func (b *pickfirstBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
 	if grpclog.V(2) {
-		grpclog.Infof("pickfirstBalancer: HandleSubConnStateChange: %p, %v", sc, s)
+		grpclog.Infof("pickfirstBalancer: UpdateSubConnState: %p, %v", sc, s)
 	}
 	if b.sc != sc {
 		if grpclog.V(2) {

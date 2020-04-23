@@ -567,6 +567,7 @@ func newTest(t *testing.T, e env) *test {
 }
 
 func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network, address string) (net.Listener, error)) net.Listener {
+	te.t.Helper()
 	te.t.Logf("Running test in %s environment...", te.e.name)
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(te.maxStream)}
 	if te.maxServerMsgSize != nil {
@@ -698,6 +699,7 @@ func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) *listene
 // startServer starts a gRPC server exposing the provided TestService
 // implementation. Callers should defer a call to te.tearDown to clean up
 func (te *test) startServer(ts testpb.TestServiceServer) {
+	te.t.Helper()
 	te.listenAndServe(ts, net.Listen)
 }
 
@@ -4708,208 +4710,6 @@ func testClientResourceExhaustedCancelFullDuplex(t *testing.T, e env) {
 	}
 }
 
-type clientTimeoutCreds struct {
-	timeoutReturned bool
-}
-
-func (c *clientTimeoutCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	if !c.timeoutReturned {
-		c.timeoutReturned = true
-		return nil, nil, context.DeadlineExceeded
-	}
-	return rawConn, nil, nil
-}
-func (c *clientTimeoutCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return rawConn, nil, nil
-}
-func (c *clientTimeoutCreds) Info() credentials.ProtocolInfo {
-	return credentials.ProtocolInfo{}
-}
-func (c *clientTimeoutCreds) Clone() credentials.TransportCredentials {
-	return nil
-}
-func (c *clientTimeoutCreds) OverrideServerName(s string) error {
-	return nil
-}
-
-func (s) TestNonFailFastRPCSucceedOnTimeoutCreds(t *testing.T) {
-	te := newTest(t, env{name: "timeout-cred", network: "tcp", security: "clientTimeoutCreds"})
-	te.userAgent = testAppUA
-	te.startServer(&testServer{security: te.e.security})
-	defer te.tearDown()
-
-	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
-	// This unary call should succeed, because ClientHandshake will succeed for the second time.
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		te.t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want <nil>", err)
-	}
-}
-
-type serverDispatchCred struct {
-	rawConnCh chan net.Conn
-}
-
-func newServerDispatchCred() *serverDispatchCred {
-	return &serverDispatchCred{
-		rawConnCh: make(chan net.Conn, 1),
-	}
-}
-func (c *serverDispatchCred) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return rawConn, nil, nil
-}
-func (c *serverDispatchCred) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	select {
-	case c.rawConnCh <- rawConn:
-	default:
-	}
-	return nil, nil, credentials.ErrConnDispatched
-}
-func (c *serverDispatchCred) Info() credentials.ProtocolInfo {
-	return credentials.ProtocolInfo{}
-}
-func (c *serverDispatchCred) Clone() credentials.TransportCredentials {
-	return nil
-}
-func (c *serverDispatchCred) OverrideServerName(s string) error {
-	return nil
-}
-func (c *serverDispatchCred) getRawConn() net.Conn {
-	return <-c.rawConnCh
-}
-
-func (s) TestServerCredsDispatch(t *testing.T) {
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to listen: %v", err)
-	}
-	cred := newServerDispatchCred()
-	s := grpc.NewServer(grpc.Creds(cred))
-	go s.Serve(lis)
-	defer s.Stop()
-
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(cred))
-	if err != nil {
-		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
-	}
-	defer cc.Close()
-
-	rawConn := cred.getRawConn()
-	// Give grpc a chance to see the error and potentially close the connection.
-	// And check that connection is not closed after that.
-	time.Sleep(100 * time.Millisecond)
-	// Check rawConn is not closed.
-	if n, err := rawConn.Write([]byte{0}); n <= 0 || err != nil {
-		t.Errorf("Read() = %v, %v; want n>0, <nil>", n, err)
-	}
-}
-
-type authorityCheckCreds struct {
-	got string
-}
-
-func (c *authorityCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return rawConn, nil, nil
-}
-func (c *authorityCheckCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	c.got = authority
-	return rawConn, nil, nil
-}
-func (c *authorityCheckCreds) Info() credentials.ProtocolInfo {
-	return credentials.ProtocolInfo{}
-}
-func (c *authorityCheckCreds) Clone() credentials.TransportCredentials {
-	return c
-}
-func (c *authorityCheckCreds) OverrideServerName(s string) error {
-	return nil
-}
-
-// This test makes sure that the authority client handshake gets is the endpoint
-// in dial target, not the resolved ip address.
-func (s) TestCredsHandshakeAuthority(t *testing.T) {
-	const testAuthority = "test.auth.ori.ty"
-
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to listen: %v", err)
-	}
-	cred := &authorityCheckCreds{}
-	s := grpc.NewServer()
-	go s.Serve(lis)
-	defer s.Stop()
-
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
-
-	cc, err := grpc.Dial(r.Scheme()+":///"+testAuthority, grpc.WithTransportCredentials(cred))
-	if err != nil {
-		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
-	}
-	defer cc.Close()
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	for {
-		s := cc.GetState()
-		if s == connectivity.Ready {
-			break
-		}
-		if !cc.WaitForStateChange(ctx, s) {
-			// ctx got timeout or canceled.
-			t.Fatalf("ClientConn is not ready after 100 ms")
-		}
-	}
-
-	if cred.got != testAuthority {
-		t.Fatalf("client creds got authority: %q, want: %q", cred.got, testAuthority)
-	}
-}
-
-// This test makes sure that the authority client handshake gets is the endpoint
-// of the ServerName of the address when it is set.
-func (s) TestCredsHandshakeServerNameAuthority(t *testing.T) {
-	const testAuthority = "test.auth.ori.ty"
-	const testServerName = "test.server.name"
-
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to listen: %v", err)
-	}
-	cred := &authorityCheckCreds{}
-	s := grpc.NewServer()
-	go s.Serve(lis)
-	defer s.Stop()
-
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
-
-	cc, err := grpc.Dial(r.Scheme()+":///"+testAuthority, grpc.WithTransportCredentials(cred))
-	if err != nil {
-		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
-	}
-	defer cc.Close()
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String(), ServerName: testServerName}}})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	for {
-		s := cc.GetState()
-		if s == connectivity.Ready {
-			break
-		}
-		if !cc.WaitForStateChange(ctx, s) {
-			// ctx got timeout or canceled.
-			t.Fatalf("ClientConn is not ready after 100 ms")
-		}
-	}
-
-	if cred.got != testServerName {
-		t.Fatalf("client creds got authority: %q, want: %q", cred.got, testAuthority)
-	}
-}
-
 type clientFailCreds struct{}
 
 func (c *clientFailCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -4952,7 +4752,6 @@ func (s) TestFailfastRPCFailOnFatalHandshakeError(t *testing.T) {
 	}
 }
 
->>>>>>> c9ad8dff... balancer: move Balancer and Picker to V2; delete legacy API
 func (s) TestFlowControlLogicalRace(t *testing.T) {
 	// Test for a regression of https://github.com/grpc/grpc-go/issues/632,
 	// and other flow control bugs.

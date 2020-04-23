@@ -123,8 +123,7 @@ func (sbc *subBalancerWithConfig) updateClientConnState(s balancer.ClientConnSta
 		// it's the lower priority, but it can still get address updates.
 		return nil
 	}
-	return ub.UpdateClientConnState(s)
-	return nil
+	return b.UpdateClientConnState(s)
 }
 
 func (sbc *subBalancerWithConfig) stopBalancer() {

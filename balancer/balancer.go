@@ -27,9 +27,11 @@ import (
 	"net"
 	"strings"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
+	istatus "google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -149,7 +151,7 @@ type ClientConn interface {
 	// changed.
 	//
 	// gRPC will update the connectivity state of the ClientConn, and will call
-	// pick on the new picker to pick new SubConns.
+	// Pick on the new Picker to pick new SubConns.
 	UpdateState(State)
 
 	// ResolveNow is called by balancer to notify gRPC to do a name resolving.
@@ -250,20 +252,23 @@ type PickResult struct {
 }
 
 type dropRPCError struct {
-	error
-	status *status.Status
+	*istatus.ErrorT
 }
 
-func (e *dropRPCError) DropRPC() bool { return true }
-
-func (e *dropRPCError) GRPCStatus() *status.Status { return e.status }
+func (e dropRPCError) DropRPC() bool { return true }
 
 // DropRPCError wraps err in an error implementing DropRPC() bool, returning
 // true.  If err is not a status error, it will be converted to one with code
-// Unknown and the message containing the err.Error() result.
+// Unknown and the message containing the err.Error() result.  DropRPCError
+// should not be called with a nil error.
 func DropRPCError(err error) error {
-	st := status.Convert(err)
-	return &dropRPCError{error: st.Err(), status: st}
+	if err == nil {
+		return dropRPCError{ErrorT: status.Error(codes.Unknown, "nil error passed to DropRPCError").(*istatus.ErrorT)}
+	}
+	if se, ok := err.(*istatus.ErrorT); ok {
+		return dropRPCError{ErrorT: se}
+	}
+	return dropRPCError{ErrorT: status.Convert(err).Err().(*istatus.ErrorT)}
 }
 
 // TransientFailureError returns e.  It exists for backward compatibility and

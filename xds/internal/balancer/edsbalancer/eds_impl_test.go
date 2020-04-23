@@ -383,58 +383,7 @@ func (s) TestClose(t *testing.T) {
 	edsb := newEDSBalancerImpl(nil, nil, nil, nil)
 	// This is what could happen when switching between fallback and eds. This
 	// make sure it doesn't panic.
-	edsb.Close()
-}
-
-func init() {
-	balancer.Register(&testConstBalancerBuilder{})
-}
-
-var errTestConstPicker = fmt.Errorf("const picker error")
-
-type testConstBalancerBuilder struct{}
-
-func (*testConstBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &testConstBalancer{cc: cc}
-}
-
-func (*testConstBalancerBuilder) Name() string {
-	return "test-const-balancer"
-}
-
-type testConstBalancer struct {
-	cc balancer.ClientConn
-}
-
-func (tb *testConstBalancer) ResolverError(error) {
-	panic("not implemented")
-}
-
-func (tb *testConstBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
-	tb.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &testConstPicker{err: errTestConstPicker}})
-}
-
-func (tb *testConstBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	a := s.ResolverState.Addresses
-	if len(a) > 0 {
-		tb.cc.NewSubConn(a, balancer.NewSubConnOptions{})
-	}
-	return nil
-}
-
-func (*testConstBalancer) Close() {
-}
-
-type testConstPicker struct {
-	err error
-	sc  balancer.SubConn
-}
-
-func (tcp *testConstPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	if tcp.err != nil {
-		return balancer.PickResult{}, tcp.err
-	}
-	return balancer.PickResult{SubConn: tcp.sc}, nil
+	edsb.close()
 }
 
 // Create XDS balancer, and update sub-balancer before handling eds responses.

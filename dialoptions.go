@@ -57,8 +57,7 @@ type dialOptions struct {
 	authority       string
 	copts           transport.ConnectOptions
 	callOptions     []CallOption
-	// This is used by v1 balancer dial option WithBalancer to support v1
-	// balancer, and also by WithBalancerName dial option.
+	// This is used by WithBalancerName dial option.
 	balancerBuilder             balancer.Builder
 	channelzParentID            int64
 	disableServiceConfig        bool

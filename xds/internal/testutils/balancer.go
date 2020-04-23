@@ -70,7 +70,7 @@ type TestClientConn struct {
 	NewSubConnCh      chan balancer.SubConn   // the last 10 subconn created.
 	RemoveSubConnCh   chan balancer.SubConn   // the last 10 subconn removed.
 
-	NewPickerCh chan balancer.V2Picker  // the last picker updated.
+	NewPickerCh chan balancer.Picker    // the last picker updated.
 	NewStateCh  chan connectivity.State // the last state.
 
 	subConnIdx int
@@ -85,7 +85,7 @@ func NewTestClientConn(t *testing.T) *TestClientConn {
 		NewSubConnCh:      make(chan balancer.SubConn, 10),
 		RemoveSubConnCh:   make(chan balancer.SubConn, 10),
 
-		NewPickerCh: make(chan balancer.V2Picker, 1),
+		NewPickerCh: make(chan balancer.Picker, 1),
 		NewStateCh:  make(chan connectivity.State, 1),
 	}
 }
@@ -285,15 +285,20 @@ type testConstBalancer struct {
 	cc balancer.ClientConn
 }
 
-func (tb *testConstBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+func (tb *testConstBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	tb.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &TestConstPicker{Err: ErrTestConstPicker}})
 }
 
-func (tb *testConstBalancer) HandleResolvedAddrs(a []resolver.Address, err error) {
-	if len(a) == 0 {
-		return
+func (tb *testConstBalancer) ResolverError(error) {
+	panic("not implemented")
+}
+
+func (tb *testConstBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+	if len(s.ResolverState.Addresses) == 0 {
+		return nil
 	}
-	tb.cc.NewSubConn(a, balancer.NewSubConnOptions{})
+	tb.cc.NewSubConn(s.ResolverState.Addresses, balancer.NewSubConnOptions{})
+	return nil
 }
 
 func (*testConstBalancer) Close() {
