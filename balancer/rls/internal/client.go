@@ -43,8 +43,6 @@ const grpcTargetType = "grpc"
 // throttling and asks this client to make an RPC call only after checking with
 // the throttler.
 type rlsClient struct {
-	// The clientConn to the RLS server is owned by the RLS LB policy.
-	cc   *grpc.ClientConn
 	stub rlspb.RouteLookupServiceClient
 	// origDialTarget is the original dial target of the user and sent in each
 	// RouteLookup RPC made to the RLS server.
@@ -56,7 +54,6 @@ type rlsClient struct {
 
 func newRLSClient(cc *grpc.ClientConn, dialTarget string, rpcTimeout time.Duration) *rlsClient {
 	return &rlsClient{
-		cc:             cc,
 		stub:           rlspb.NewRouteLookupServiceClient(cc),
 		origDialTarget: dialTarget,
 		rpcTimeout:     rpcTimeout,

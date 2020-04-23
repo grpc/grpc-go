@@ -48,10 +48,10 @@ type rlsBalancer struct {
 	// Mutex protects all the state maintained by the LB policy.
 	// TODO(easwars): Once we add the cache, we will also have another lock for
 	// the cache alone.
-	mu        sync.Mutex
-	lbCfg     *lbConfig        // Most recently received service config.
-	rlsCC     *grpc.ClientConn // ClientConn to the RLS server.
-	rlsClient *rlsClient       // RLS client wrapper.
+	mu    sync.Mutex
+	lbCfg *lbConfig        // Most recently received service config.
+	rlsCC *grpc.ClientConn // ClientConn to the RLS server.
+	rlsC  *rlsClient       // RLS client wrapper.
 
 	ccUpdateCh chan *balancer.ClientConnState
 }
@@ -161,7 +161,7 @@ func (lb *rlsBalancer) updateControlChannel(newCfg *lbConfig) {
 		// This is the case where only the timeout has changed. We will continue
 		// to use the existing clientConn. but will create a new rlsClient with
 		// the new timeout.
-		lb.rlsClient = newRLSClientFunc(lb.rlsCC, lb.opts.Target.Endpoint, timeout)
+		lb.rlsC = newRLSClientFunc(lb.rlsCC, lb.opts.Target.Endpoint, timeout)
 		return
 	}
 
@@ -185,7 +185,7 @@ func (lb *rlsBalancer) updateControlChannel(newCfg *lbConfig) {
 		lb.rlsCC.Close()
 	}
 	lb.rlsCC = cc
-	lb.rlsClient = newRLSClientFunc(cc, lb.opts.Target.Endpoint, timeout)
+	lb.rlsC = newRLSClientFunc(cc, lb.opts.Target.Endpoint, timeout)
 }
 
 func dialCreds(opts balancer.BuildOptions) grpc.DialOption {
