@@ -26,7 +26,7 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-func TestAddAddrInfoToAndFromAttributes(t *testing.T) {
+func TestAddrInfoToAndFromAttributes(t *testing.T) {
 	tests := []struct {
 		desc            string
 		inputAddrInfo   AddrInfo
@@ -69,5 +69,14 @@ func TestAddAddrInfoToAndFromAttributes(t *testing.T) {
 			}
 
 		})
+	}
+}
+
+func TestGetAddInfoEmpty(t *testing.T) {
+	addr := resolver.Address{Attributes: attributes.New()}
+	gotAddrInfo := GetAddrInfo(addr)
+	wantAddrInfo := AddrInfo{}
+	if !cmp.Equal(gotAddrInfo, wantAddrInfo) {
+		t.Errorf("gotAddrInfo: %v, wantAddrInfo: %v", gotAddrInfo, wantAddrInfo)
 	}
 }

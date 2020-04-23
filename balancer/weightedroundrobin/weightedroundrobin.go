@@ -50,10 +50,6 @@ func SetAddrInfo(addr resolver.Address, addrInfo AddrInfo) resolver.Address {
 // This is an EXPERIMENTAL API.
 func GetAddrInfo(addr resolver.Address) AddrInfo {
 	v := addr.Attributes.Value(attributeKey{})
-	if v == nil {
-		return AddrInfo{}
-	}
-
 	ai, _ := v.(AddrInfo)
 	return ai
 }
