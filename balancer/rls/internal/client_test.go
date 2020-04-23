@@ -75,7 +75,7 @@ func TestLookupFailure(t *testing.T) {
 			return
 		}
 		if len(targets) != 0 || headerData != "" {
-			errCh <- fmt.Errorf("rlsClient.lookup() = (%v, %s), should be empty strings", targets, headerData)
+			errCh <- fmt.Errorf("rlsClient.lookup() = (%v, %s), want (nil, \"\")", targets, headerData)
 			return
 		}
 		errCh <- nil
