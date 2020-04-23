@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -384,7 +383,58 @@ func (s) TestClose(t *testing.T) {
 	edsb := newEDSBalancerImpl(nil, nil, nil, nil)
 	// This is what could happen when switching between fallback and eds. This
 	// make sure it doesn't panic.
-	edsb.close()
+	edsb.Close()
+}
+
+func init() {
+	balancer.Register(&testConstBalancerBuilder{})
+}
+
+var errTestConstPicker = fmt.Errorf("const picker error")
+
+type testConstBalancerBuilder struct{}
+
+func (*testConstBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return &testConstBalancer{cc: cc}
+}
+
+func (*testConstBalancerBuilder) Name() string {
+	return "test-const-balancer"
+}
+
+type testConstBalancer struct {
+	cc balancer.ClientConn
+}
+
+func (tb *testConstBalancer) ResolverError(error) {
+	panic("not implemented")
+}
+
+func (tb *testConstBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
+	tb.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &testConstPicker{err: errTestConstPicker}})
+}
+
+func (tb *testConstBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+	a := s.ResolverState.Addresses
+	if len(a) > 0 {
+		tb.cc.NewSubConn(a, balancer.NewSubConnOptions{})
+	}
+	return nil
+}
+
+func (*testConstBalancer) Close() {
+}
+
+type testConstPicker struct {
+	err error
+	sc  balancer.SubConn
+}
+
+func (tcp *testConstPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	if tcp.err != nil {
+		return balancer.PickResult{}, tcp.err
+	}
+	return balancer.PickResult{SubConn: tcp.sc}, nil
 }
 
 // Create XDS balancer, and update sub-balancer before handling eds responses.
@@ -504,16 +554,21 @@ type testInlineUpdateBalancer struct {
 	cc balancer.ClientConn
 }
 
-func (tb *testInlineUpdateBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+func (tb *testInlineUpdateBalancer) ResolverError(error) {
+	panic("not implemented")
+}
+
+func (tb *testInlineUpdateBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
 }
 
 var errTestInlineStateUpdate = fmt.Errorf("don't like addresses, empty or not")
 
-func (tb *testInlineUpdateBalancer) HandleResolvedAddrs(a []resolver.Address, err error) {
+func (tb *testInlineUpdateBalancer) UpdateClientConnState(balancer.ClientConnState) error {
 	tb.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.Ready,
 		Picker:            &testutils.TestConstPicker{Err: errTestInlineStateUpdate},
 	})
+	return nil
 }
 
 func (*testInlineUpdateBalancer) Close() {

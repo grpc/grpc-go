@@ -43,7 +43,7 @@ func (s) TestOneBackendPickfirst(t *testing.T) {
 	defer rcleanup()
 
 	numServers := 1
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
@@ -76,7 +76,7 @@ func (s) TestBackendsPickfirst(t *testing.T) {
 	defer rcleanup()
 
 	numServers := 2
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
@@ -109,7 +109,7 @@ func (s) TestNewAddressWhileBlockingPickfirst(t *testing.T) {
 	defer rcleanup()
 
 	numServers := 1
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
@@ -145,7 +145,7 @@ func (s) TestCloseWithPendingRPCPickfirst(t *testing.T) {
 	defer rcleanup()
 
 	numServers := 1
-	_, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	_, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
@@ -181,7 +181,7 @@ func (s) TestOneServerDownPickfirst(t *testing.T) {
 	defer rcleanup()
 
 	numServers := 2
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
@@ -222,7 +222,7 @@ func (s) TestAllServersDownPickfirst(t *testing.T) {
 	defer rcleanup()
 
 	numServers := 2
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
@@ -265,7 +265,7 @@ func (s) TestAddressesRemovedPickfirst(t *testing.T) {
 	defer rcleanup()
 
 	numServers := 3
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))

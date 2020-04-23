@@ -27,7 +27,6 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -48,14 +47,33 @@ func (b *magicalLB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) ba
 	return b
 }
 
-func (b *magicalLB) HandleSubConnStateChange(balancer.SubConn, connectivity.State) {}
+func (b *magicalLB) ResolverError(error) {}
 
-func (b *magicalLB) HandleResolvedAddrs([]resolver.Address, error) {}
+func (b *magicalLB) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {}
+
+func (b *magicalLB) UpdateClientConnState(balancer.ClientConnState) error {
+	return nil
+}
 
 func (b *magicalLB) Close() {}
 
 func init() {
 	balancer.Register(&magicalLB{})
+}
+
+func startServers(t *testing.T, numServers int, maxStreams uint32) ([]*server, func()) {
+	var servers []*server
+	for i := 0; i < numServers; i++ {
+		s := newTestServer()
+		servers = append(servers, s)
+		go s.start(t, 0, maxStreams)
+		s.wait(t, 2*time.Second)
+	}
+	return servers, func() {
+		for i := 0; i < numServers; i++ {
+			servers[i].stop()
+		}
+	}
 }
 
 func checkPickFirst(cc *ClientConn, servers []*server) error {
@@ -133,7 +151,7 @@ func (s) TestSwitchBalancer(t *testing.T) {
 	defer rcleanup()
 
 	const numServers = 2
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
@@ -165,7 +183,7 @@ func (s) TestBalancerDialOption(t *testing.T) {
 	defer rcleanup()
 
 	const numServers = 2
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}), WithBalancerName(roundrobin.Name))
@@ -481,7 +499,7 @@ func (s) TestSwitchBalancerGRPCLBWithGRPCLBNotRegistered(t *testing.T) {
 	defer rcleanup()
 
 	const numServers = 3
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))

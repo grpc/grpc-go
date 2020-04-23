@@ -68,9 +68,6 @@ type subBalancerWithConfig struct {
 	balancer balancer.Balancer
 }
 
-func (sbc *subBalancerWithConfig) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
-}
-
 // UpdateState overrides balancer.ClientConn, to keep state and picker.
 func (sbc *subBalancerWithConfig) UpdateState(state balancer.State) {
 	sbc.mu.Lock()
@@ -97,11 +94,7 @@ func (sbc *subBalancerWithConfig) startBalancer() {
 	b := sbc.builder.Build(sbc, balancer.BuildOptions{})
 	sbc.group.logger.Infof("Created child policy %p of type %v", b, sbc.builder.Name())
 	sbc.balancer = b
-	if ub, ok := b.(balancer.V2Balancer); ok {
-		ub.UpdateClientConnState(sbc.ccState)
-		return
-	}
-	b.HandleResolvedAddrs(sbc.ccState.ResolverState.Addresses, nil)
+	b.UpdateClientConnState(sbc.ccState)
 }
 
 func (sbc *subBalancerWithConfig) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
@@ -113,11 +106,7 @@ func (sbc *subBalancerWithConfig) updateSubConnState(sc balancer.SubConn, state 
 		// happen.
 		return
 	}
-	if ub, ok := b.(balancer.V2Balancer); ok {
-		ub.UpdateSubConnState(sc, state)
-		return
-	}
-	b.HandleSubConnStateChange(sc, state.ConnectivityState)
+	b.UpdateSubConnState(sc, state)
 }
 
 func (sbc *subBalancerWithConfig) updateClientConnState(s balancer.ClientConnState) error {
@@ -134,10 +123,7 @@ func (sbc *subBalancerWithConfig) updateClientConnState(s balancer.ClientConnSta
 		// it's the lower priority, but it can still get address updates.
 		return nil
 	}
-	if ub, ok := b.(balancer.V2Balancer); ok {
-		return ub.UpdateClientConnState(s)
-	}
-	b.HandleResolvedAddrs(s.ResolverState.Addresses, nil)
+	return ub.UpdateClientConnState(s)
 	return nil
 }
 
@@ -148,7 +134,7 @@ func (sbc *subBalancerWithConfig) stopBalancer() {
 
 type pickerState struct {
 	weight uint32
-	picker balancer.V2Picker
+	picker balancer.Picker
 	state  connectivity.State
 }
 
@@ -583,7 +569,7 @@ func buildPickerAndState(m map[internal.LocalityID]*pickerState) balancer.State 
 		aggregatedState = connectivity.TransientFailure
 	}
 	if aggregatedState == connectivity.TransientFailure {
-		return balancer.State{ConnectivityState: aggregatedState, Picker: base.NewErrPickerV2(balancer.ErrTransientFailure)}
+		return balancer.State{ConnectivityState: aggregatedState, Picker: base.NewErrPicker(balancer.ErrTransientFailure)}
 	}
 	return balancer.State{ConnectivityState: aggregatedState, Picker: newPickerGroup(readyPickerWithWeights)}
 }
@@ -620,7 +606,7 @@ func (pg *pickerGroup) Pick(info balancer.PickInfo) (balancer.PickResult, error)
 	if pg.length <= 0 {
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
-	p := pg.w.Next().(balancer.V2Picker)
+	p := pg.w.Next().(balancer.Picker)
 	return p.Pick(info)
 }
 
@@ -630,13 +616,13 @@ const (
 )
 
 type loadReportPicker struct {
-	p balancer.V2Picker
+	p balancer.Picker
 
 	id        internal.LocalityID
 	loadStore lrs.Store
 }
 
-func newLoadReportPicker(p balancer.V2Picker, id internal.LocalityID, loadStore lrs.Store) *loadReportPicker {
+func newLoadReportPicker(p balancer.Picker, id internal.LocalityID, loadStore lrs.Store) *loadReportPicker {
 	return &loadReportPicker{
 		p:         p,
 		id:        id,

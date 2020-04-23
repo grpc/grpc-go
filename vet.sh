@@ -132,7 +132,6 @@ not grep -Fv '.CredsBundle
 .NewServiceConfig
 .Metadata is deprecated: use Attributes
 .Type is deprecated: use Attributes
-.UpdateBalancerState
 balancer.Picker
 grpc.CallCustomCodec
 grpc.Code

@@ -389,10 +389,6 @@ type edsBalancerWrapperCC struct {
 func (ebwcc *edsBalancerWrapperCC) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	return ebwcc.parent.newSubConn(ebwcc.priority, addrs, opts)
 }
-
-func (ebwcc *edsBalancerWrapperCC) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
-}
-
 func (ebwcc *edsBalancerWrapperCC) UpdateState(state balancer.State) {
 	ebwcc.parent.enqueueChildBalancerStateUpdate(ebwcc.priority, state)
 }
@@ -419,11 +415,11 @@ func (edsImpl *edsBalancerImpl) close() {
 
 type dropPicker struct {
 	drops     []*dropper
-	p         balancer.V2Picker
+	p         balancer.Picker
 	loadStore lrs.Store
 }
 
-func newDropPicker(p balancer.V2Picker, drops []*dropper, loadStore lrs.Store) *dropPicker {
+func newDropPicker(p balancer.Picker, drops []*dropper, loadStore lrs.Store) *dropPicker {
 	return &dropPicker{
 		drops:     drops,
 		p:         p,
@@ -447,7 +443,7 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		if d.loadStore != nil {
 			d.loadStore.CallDropped(category)
 		}
-		return balancer.PickResult{}, status.Errorf(codes.Unavailable, "RPC is dropped")
+		return balancer.PickResult{}, balancer.DropRPCError(status.Errorf(codes.Unavailable, "RPC is dropped"))
 	}
 	// TODO: (eds) don't drop unless the inner picker is READY. Similar to
 	// https://github.com/grpc/grpc-go/issues/2622.
