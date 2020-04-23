@@ -285,6 +285,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 				// Metadata field here to allow users of this field to migrate
 				// to the new one.
 				// TODO(easwars): Remove this once all users have migrated.
+				// See https://github.com/grpc/grpc-go/issues/3563.
 				address.Metadata = &ai
 			}
 			newAddrs = append(newAddrs, address)
