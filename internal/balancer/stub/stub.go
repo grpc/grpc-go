@@ -60,16 +60,19 @@ func (b *bal) UpdateClientConnState(c balancer.ClientConnState) error {
 	}
 	return nil
 }
+
 func (b *bal) ResolverError(e error) {
 	if b.bf.ResolverError != nil {
 		b.bf.ResolverError(b.bd, e)
 	}
 }
+
 func (b *bal) UpdateSubConnState(sc balancer.SubConn, scs balancer.SubConnState) {
 	if b.bf.UpdateSubConnState != nil {
 		b.bf.UpdateSubConnState(b.bd, sc, scs)
 	}
 }
+
 func (b *bal) Close() {
 	if b.bf.Close != nil {
 		b.bf.Close(b.bd)
