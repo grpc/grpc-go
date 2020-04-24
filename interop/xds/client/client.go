@@ -47,7 +47,7 @@ type statsWatcher struct {
 }
 
 var (
-	failOnFailedRpc = flag.Bool("fail_on_failed_rpc", false, "Fail client if any RPCs fail")
+	failOnFailedRPC = flag.Bool("fail_on_failed_rpc", false, "Fail client if any RPCs fail")
 	numChannels     = flag.Int("num_channels", 1, "Num of channels")
 	printResponse   = flag.Bool("print_response", false, "Write RPC response to stdout")
 	qps             = flag.Int("qps", 1, "QPS per channel")
@@ -162,7 +162,7 @@ func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 				watcher.c <- r
 			}
 
-			if err != nil && *failOnFailedRpc {
+			if err != nil && *failOnFailedRPC {
 				grpclog.Fatalf("RPC failed: %v", err)
 			}
 			if success && *printResponse {
