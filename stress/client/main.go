@@ -16,8 +16,6 @@
  *
  */
 
-//go:generate protoc -I ../grpc_testing --go_out=plugins=grpc:../grpc_testing ../grpc_testing/metrics.proto
-
 // client starts an interop client to do stress test and a metrics server to report qps.
 package main
 

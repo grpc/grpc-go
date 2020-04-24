@@ -16,8 +16,6 @@
  *
  */
 
-//go:generate protoc -I grpc_testing --go_out=plugins=grpc:grpc_testing grpc_testing/control.proto grpc_testing/messages.proto grpc_testing/payloads.proto grpc_testing/services.proto grpc_testing/stats.proto
-
 /*
 Package benchmark implements the building blocks to setup end-to-end gRPC benchmarks.
 */

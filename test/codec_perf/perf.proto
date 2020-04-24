@@ -16,6 +16,8 @@
 // reasons of import cycles.
 syntax = "proto3";
 
+option go_package = "google.golang.org/grpc/test/codec_perf";
+
 package codec.perf;
 
 // Buffer is a message that contains a body of bytes that is used to exercise
