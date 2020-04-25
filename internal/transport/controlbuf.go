@@ -860,26 +860,30 @@ func (l *loopyWriter) processData() (bool, error) {
 		idx int
 		buf []byte
 	)
+
+	// Figure out the maximum size we can send
+	maxSize := http2MaxFrameLen
+	if strQuota := int(l.oiws) - str.bytesOutStanding; strQuota <= 0 { // stream-level flow control.
+		str.state = waitingOnStreamQuota
+		return false, nil
+	} else if maxSize > strQuota {
+		maxSize = strQuota
+	}
+	if maxSize > int(l.sendQuota) {
+		maxSize = int(l.sendQuota)
+	}
+
 	if len(dataItem.h) != 0 { // data header has not been written out yet.
 		buf = dataItem.h
 	} else {
 		idx = 1
 		buf = dataItem.d
 	}
-	size := http2MaxFrameLen
-	if len(buf) < size {
-		size = len(buf)
-	}
-	if strQuota := int(l.oiws) - str.bytesOutStanding; strQuota <= 0 { // stream-level flow control.
-		str.state = waitingOnStreamQuota
-		return false, nil
-	} else if strQuota < size {
-		size = strQuota
+	size := len(buf)
+	if maxSize < size {
+		size = maxSize
 	}
 
-	if l.sendQuota < uint32(size) { // connection-level flow control.
-		size = int(l.sendQuota)
-	}
 	// Now that outgoing flow controls are checked we can replenish str's write quota
 	str.wq.replenish(size)
 	var endStream bool
