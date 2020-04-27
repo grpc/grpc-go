@@ -26,7 +26,9 @@ import (
 )
 
 type target struct {
-	Weight      uint32
+	// Weight is the weight of the child policy.
+	Weight uint32
+	// ChildPolicy is the child policy and it's config.
 	ChildPolicy *internalserviceconfig.BalancerConfig
 }
 
