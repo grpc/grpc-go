@@ -130,6 +130,7 @@ not grep -Fv '.CredsBundle
 .NewAddress
 .NewServiceConfig
 .Type is deprecated: use Attributes
+balancer.ErrTransientFailure
 balancer.Picker
 grpc.CallCustomCodec
 grpc.Code

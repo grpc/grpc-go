@@ -27,15 +27,12 @@ import (
 	"net"
 	"strings"
 
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
-	istatus "google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/status"
 )
 
 var (
@@ -233,6 +230,10 @@ var (
 	ErrNoSubConnAvailable = errors.New("no SubConn is available")
 	// ErrTransientFailure indicates all SubConns are in TransientFailure.
 	// WaitForReady RPCs will block, non-WaitForReady RPCs will fail.
+	//
+	// Deprecated: return an appropriate error based on the last resolution or
+	// connection attempt instead.  The behavior is the same for any non-gRPC
+	// status error.
 	ErrTransientFailure = errors.New("all SubConns are in TransientFailure")
 )
 
@@ -249,26 +250,6 @@ type PickResult struct {
 	// type, Done may not be called.  May be nil if the balancer does not wish
 	// to be notified when the RPC completes.
 	Done func(DoneInfo)
-}
-
-type dropRPCError struct {
-	*istatus.ErrorT
-}
-
-func (e dropRPCError) DropRPC() bool { return true }
-
-// DropRPCError wraps err in an error implementing DropRPC() bool, returning
-// true.  If err is not a status error, it will be converted to one with code
-// Unknown and the message containing the err.Error() result.  DropRPCError
-// should not be called with a nil error.
-func DropRPCError(err error) error {
-	if err == nil {
-		return dropRPCError{ErrorT: status.Error(codes.Unknown, "nil error passed to DropRPCError").(*istatus.ErrorT)}
-	}
-	if se, ok := err.(*istatus.ErrorT); ok {
-		return dropRPCError{ErrorT: se}
-	}
-	return dropRPCError{ErrorT: status.Convert(err).Err().(*istatus.ErrorT)}
 }
 
 // TransientFailureError returns e.  It exists for backward compatibility and
@@ -296,10 +277,9 @@ type Picker interface {
 	// - If the error is ErrNoSubConnAvailable, gRPC will block until a new
 	//   Picker is provided by the balancer (using ClientConn.UpdateState).
 	//
-	// - If the error implements DropRPC() bool, returning true, gRPC will
-	//   terminate all RPCs with the code and message provided.  If the error
-	//   is not a status error, it will be converted by gRPC to a status error
-	//   with code Unknown.
+	// - If the error is a status error (implemented by the grpc/status
+	//   package), gRPC will terminate the RPC with the code and message
+	//   provided.
 	//
 	// - For all other errors, wait for ready RPCs will wait, but non-wait for
 	//   ready RPCs will be terminated with this error's Error() string and

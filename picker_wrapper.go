@@ -130,13 +130,12 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 			if err == balancer.ErrNoSubConnAvailable {
 				continue
 			}
-			if drop, ok := err.(interface{ DropRPC() bool }); ok && drop.DropRPC() {
-				// End the RPC unconditionally.  If not a status error, Convert
-				// will transform it into one with code Unknown.
-				return nil, nil, status.Convert(err).Err()
+			if _, ok := status.FromError(err); ok {
+				// Status error: end the RPC unconditionally with this status.
+				return nil, nil, err
 			}
 			// For all other errors, wait for ready RPCs should block and other
-			// RPCs should fail.
+			// RPCs should fail with unavailable.
 			if !failfast {
 				lastPickErr = err
 				continue

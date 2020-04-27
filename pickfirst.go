@@ -20,12 +20,11 @@ package grpc
 
 import (
 	"errors"
+	"fmt"
 
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/status"
 )
 
 // PickFirstBalancerName is the name of the pick_first balancer.
@@ -56,8 +55,8 @@ func (b *pickfirstBalancer) ResolverError(err error) {
 	case connectivity.TransientFailure, connectivity.Idle, connectivity.Connecting:
 		// Set a failing picker if we don't have a good picker.
 		b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure,
-			Picker: &picker{err: status.Errorf(codes.Unavailable, "name resolver error: %v", err)}},
-		)
+			Picker: &picker{err: fmt.Errorf("name resolver error: %v", err)},
+		})
 	}
 	if grpclog.V(2) {
 		grpclog.Infof("pickfirstBalancer: ResolverError called with error %v", err)
@@ -78,8 +77,8 @@ func (b *pickfirstBalancer) UpdateClientConnState(cs balancer.ClientConnState) e
 			}
 			b.state = connectivity.TransientFailure
 			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure,
-				Picker: &picker{err: status.Errorf(codes.Unavailable, "error creating connection: %v", err)}},
-			)
+				Picker: &picker{err: fmt.Errorf("error creating connection: %v", err)},
+			})
 			return balancer.ErrBadResolverState
 		}
 		b.state = connectivity.Idle

@@ -64,7 +64,7 @@ func (s) TestErrorsWithSameParameters(t *testing.T) {
 	e1 := Errorf(codes.AlreadyExists, description)
 	e2 := Errorf(codes.AlreadyExists, description)
 	if e1 == e2 || !errEqual(e1, e2) {
-		t.Fatalf("Errors should be equivalent but unique - e1: %v, %v  e2: %p, %v", e1.(*status.ErrorT), e1, e2.(*status.ErrorT), e2)
+		t.Fatalf("Errors should be equivalent but unique - e1: %v, %v  e2: %p, %v", e1.(*status.Error), e1, e2.(*status.Error), e2)
 	}
 }
 
@@ -116,7 +116,7 @@ func (s) TestError(t *testing.T) {
 func (s) TestErrorOK(t *testing.T) {
 	err := Error(codes.OK, "foo")
 	if err != nil {
-		t.Fatalf("Error(codes.OK, _) = %p; want nil", err.(*status.ErrorT))
+		t.Fatalf("Error(codes.OK, _) = %p; want nil", err.(*status.Error))
 	}
 }
 
