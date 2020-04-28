@@ -277,9 +277,16 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 				Addr: lbEndpoint.Address,
 			}
 			if edsImpl.subBalancerBuilder.Name() == weightedroundrobin.Name && lbEndpoint.Weight != 0 {
-				address.Metadata = &weightedroundrobin.AddrInfo{
-					Weight: lbEndpoint.Weight,
-				}
+				ai := weightedroundrobin.AddrInfo{Weight: lbEndpoint.Weight}
+				address = weightedroundrobin.SetAddrInfo(address, ai)
+				// Metadata field in resolver.Address is deprecated. The
+				// attributes field should be used to specify arbitrary
+				// attributes about the address. We still need to populate the
+				// Metadata field here to allow users of this field to migrate
+				// to the new one.
+				// TODO(easwars): Remove this once all users have migrated.
+				// See https://github.com/grpc/grpc-go/issues/3563.
+				address.Metadata = &ai
 			}
 			newAddrs = append(newAddrs, address)
 		}
