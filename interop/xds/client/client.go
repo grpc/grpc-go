@@ -47,13 +47,12 @@ type statsWatcher struct {
 }
 
 var (
-	failOnFailedRPC = flag.Bool("fail_on_failed_rpc", false, "Fail client if any RPCs fail")
-	numChannels     = flag.Int("num_channels", 1, "Num of channels")
-	printResponse   = flag.Bool("print_response", false, "Write RPC response to stdout")
-	qps             = flag.Int("qps", 1, "QPS per channel")
-	rpcTimeout      = flag.Duration("rpc_timeout", 10*time.Second, "Per RPC timeout")
-	server          = flag.String("server", "localhost:8080", "Address of server to connect to")
-	statsPort       = flag.Int("stats_port", 8081, "Port to expose peer distribution stats service")
+	numChannels   = flag.Int("num_channels", 1, "Num of channels")
+	printResponse = flag.Bool("print_response", false, "Write RPC response to stdout")
+	qps           = flag.Int("qps", 1, "QPS per channel")
+	rpcTimeout    = flag.Duration("rpc_timeout", 10*time.Second, "Per RPC timeout")
+	server        = flag.String("server", "localhost:8080", "Address of server to connect to")
+	statsPort     = flag.Int("stats_port", 8081, "Port to expose peer distribution stats service")
 
 	mu               sync.Mutex
 	currentRequestID int32
@@ -124,7 +123,7 @@ func main() {
 
 	clients := make([]testpb.TestServiceClient, *numChannels)
 	for i := 0; i < *numChannels; i++ {
-		conn, err := grpc.DialContext(context.Background(), *server, grpc.WithInsecure())
+		conn, err := grpc.DialContext(context.Background(), *server, grpc.WithInsecure(), grpc.WithBlock())
 		if err != nil {
 			grpclog.Fatalf("Fail to dial: %v", err)
 		}
@@ -162,9 +161,6 @@ func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 				watcher.c <- r
 			}
 
-			if err != nil && *failOnFailedRPC {
-				grpclog.Fatalf("RPC failed: %v", err)
-			}
 			if success && *printResponse {
 				fmt.Printf("Greeting: Hello world, this is %s, from %v\n", r.GetHostname(), p.Addr)
 			}

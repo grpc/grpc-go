@@ -30,5 +30,4 @@ GRPC_GO_LOG_VERBOSITY_LEVEL=99 GRPC_GO_LOG_SEVERITY_LEVEL=info \
     --client_cmd="grpc-go/interop/xds/client/client \
       --server=xds-experimental:///{server_uri} \
       --stats_port={stats_port} \
-      --qps={qps} \
-      {fail_on_failed_rpc}"
+      --qps={qps}"
