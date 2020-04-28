@@ -78,7 +78,7 @@ func (s) TestLookupFailure(t *testing.T) {
 			return
 		}
 		if len(targets) != 0 || headerData != "" {
-			errCh <- fmt.Errorf("rlsClient.lookup() = (%v, %s), want (nil, \"\")", targets, headerData)
+			errCh.Send(fmt.Errorf("rlsClient.lookup() = (%v, %s), want (nil, \"\")", targets, headerData))
 			return
 		}
 		errCh.Send(nil)
@@ -144,7 +144,7 @@ func (s) TestLookupSuccess(t *testing.T) {
 			return
 		}
 		if !cmp.Equal(targets, wantRespTargets) || hd != wantHeaderData {
-			errCh <- fmt.Errorf("rlsClient.lookup() = (%v, %s), want (%v, %s)", targets, hd, wantRespTargets, wantHeaderData)
+			errCh.Send(fmt.Errorf("rlsClient.lookup() = (%v, %s), want (%v, %s)", targets, hd, wantRespTargets, wantHeaderData))
 			return
 		}
 		errCh.Send(nil)
