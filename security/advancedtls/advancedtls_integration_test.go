@@ -216,8 +216,7 @@ func TestEnd2End(t *testing.T) {
 		// should see it again accepts the connection, since clientPeer2 is trusted
 		// by serverTrust2.
 		{
-			desc:       "TestClientPeerCertReloadServerTrustCertReload",
-			clientCert: nil,
+			desc: "TestClientPeerCertReloadServerTrustCertReload",
 			clientGetCert: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
@@ -226,15 +225,12 @@ func TestEnd2End(t *testing.T) {
 					return &cs.clientPeer2, nil
 				}
 			},
-			clientGetRoot: nil,
-			clientRoot:    cs.clientTrust1,
+			clientRoot: cs.clientTrust1,
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
-			clientVType:   CertVerification,
-			serverCert:    []tls.Certificate{cs.serverPeer1},
-			serverGetCert: nil,
-			serverRoot:    nil,
+			clientVType: CertVerification,
+			serverCert:  []tls.Certificate{cs.serverPeer1},
 			serverGetRoot: func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 				switch stage.read() {
 				case 0, 1:
@@ -261,9 +257,8 @@ func TestEnd2End(t *testing.T) {
 		// should see it again accepts the connection, since serverPeer2 is trusted
 		// by clientTrust2.
 		{
-			desc:          "TestServerPeerCertReloadClientTrustCertReload",
-			clientCert:    []tls.Certificate{cs.clientPeer1},
-			clientGetCert: nil,
+			desc:       "TestServerPeerCertReloadClientTrustCertReload",
+			clientCert: []tls.Certificate{cs.clientPeer1},
 			clientGetRoot: func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 				switch stage.read() {
 				case 0, 1:
@@ -272,12 +267,10 @@ func TestEnd2End(t *testing.T) {
 					return &GetRootCAsResults{TrustCerts: cs.clientTrust2}, nil
 				}
 			},
-			clientRoot: nil,
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
 			clientVType: CertVerification,
-			serverCert:  nil,
 			serverGetCert: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
@@ -286,8 +279,7 @@ func TestEnd2End(t *testing.T) {
 					return &cs.serverPeer2, nil
 				}
 			},
-			serverRoot:    cs.serverTrust1,
-			serverGetRoot: nil,
+			serverRoot: cs.serverTrust1,
 			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
@@ -307,9 +299,8 @@ func TestEnd2End(t *testing.T) {
 		// At stage 2, the client changes authorization check to only accept
 		// serverPeer2. Now we should see the connection becomes normal again.
 		{
-			desc:          "TestClientCustomVerification",
-			clientCert:    []tls.Certificate{cs.clientPeer1},
-			clientGetCert: nil,
+			desc:       "TestClientCustomVerification",
+			clientCert: []tls.Certificate{cs.clientPeer1},
 			clientGetRoot: func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 				switch stage.read() {
 				case 0:
@@ -318,7 +309,6 @@ func TestEnd2End(t *testing.T) {
 					return &GetRootCAsResults{TrustCerts: cs.clientTrust2}, nil
 				}
 			},
-			clientRoot: nil,
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				if len(params.RawCerts) == 0 {
 					return nil, fmt.Errorf("no peer certs")
@@ -346,7 +336,6 @@ func TestEnd2End(t *testing.T) {
 				return nil, fmt.Errorf("custom authz check fails")
 			},
 			clientVType: CertVerification,
-			serverCert:  nil,
 			serverGetCert: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
@@ -355,8 +344,7 @@ func TestEnd2End(t *testing.T) {
 					return &cs.serverPeer2, nil
 				}
 			},
-			serverRoot:    cs.serverTrust1,
-			serverGetRoot: nil,
+			serverRoot: cs.serverTrust1,
 			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
@@ -374,19 +362,15 @@ func TestEnd2End(t *testing.T) {
 		// At stage 2, server allows all the connections again and the
 		// authentications should go back to normal.
 		{
-			desc:          "TestServerCustomVerification",
-			clientCert:    []tls.Certificate{cs.clientPeer1},
-			clientGetCert: nil,
-			clientGetRoot: nil,
-			clientRoot:    cs.clientTrust1,
+			desc:       "TestServerCustomVerification",
+			clientCert: []tls.Certificate{cs.clientPeer1},
+			clientRoot: cs.clientTrust1,
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
-			clientVType:   CertVerification,
-			serverCert:    []tls.Certificate{cs.serverPeer1},
-			serverGetCert: nil,
-			serverRoot:    cs.serverTrust1,
-			serverGetRoot: nil,
+			clientVType: CertVerification,
+			serverCert:  []tls.Certificate{cs.serverPeer1},
+			serverRoot:  cs.serverTrust1,
 			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				switch stage.read() {
 				case 0, 2:
