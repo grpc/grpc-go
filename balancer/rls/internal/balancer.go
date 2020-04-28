@@ -25,15 +25,12 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/resolver"
 )
 
 var (
-	_ balancer.Balancer   = (*rlsBalancer)(nil)
-	_ balancer.V2Balancer = (*rlsBalancer)(nil)
+	_ balancer.Balancer = (*rlsBalancer)(nil)
 
 	// For overriding in tests.
 	newRLSClientFunc = newRLSClient
@@ -122,7 +119,7 @@ func (lb *rlsBalancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConn
 
 // Cleans up the resources allocated by the LB policy including the clientConn
 // to the RLS server.
-// Implements balancer.Balancer and balancer.V2Balancer interfaces.
+// Implements balancer.Balancer.
 func (lb *rlsBalancer) Close() {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
@@ -131,16 +128,6 @@ func (lb *rlsBalancer) Close() {
 	if lb.rlsCC != nil {
 		lb.rlsCC.Close()
 	}
-}
-
-// HandleSubConnStateChange implements balancer.Balancer interface.
-func (lb *rlsBalancer) HandleSubConnStateChange(_ balancer.SubConn, _ connectivity.State) {
-	grpclog.Fatal("UpdateSubConnState should be called instead of HandleSubConnStateChange")
-}
-
-// HandleResolvedAddrs implements balancer.Balancer interface.
-func (lb *rlsBalancer) HandleResolvedAddrs(_ []resolver.Address, _ error) {
-	grpclog.Fatal("UpdateClientConnState should be called instead of HandleResolvedAddrs")
 }
 
 // updateControlChannel updates the RLS client if required.

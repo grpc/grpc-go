@@ -93,7 +93,7 @@ func (s) TestUpdateControlChannelFirstConfig(t *testing.T) {
 	if bb == nil {
 		t.Fatalf("balancer.Get(%s) = nil", rlsBalancerName)
 	}
-	rlsB := bb.Build(&testBalancerCC{}, balancer.BuildOptions{}).(balancer.V2Balancer)
+	rlsB := bb.Build(&testBalancerCC{}, balancer.BuildOptions{})
 	defer rlsB.Close()
 	t.Log("Built RLS LB policy ...")
 
@@ -126,7 +126,7 @@ func (s) TestUpdateControlChannelSwitch(t *testing.T) {
 	if bb == nil {
 		t.Fatalf("balancer.Get(%s) = nil", rlsBalancerName)
 	}
-	rlsB := bb.Build(&testBalancerCC{}, balancer.BuildOptions{}).(balancer.V2Balancer)
+	rlsB := bb.Build(&testBalancerCC{}, balancer.BuildOptions{})
 	defer rlsB.Close()
 	t.Log("Built RLS LB policy ...")
 
@@ -164,7 +164,7 @@ func (s) TestUpdateControlChannelTimeout(t *testing.T) {
 	if bb == nil {
 		t.Fatalf("balancer.Get(%s) = nil", rlsBalancerName)
 	}
-	rlsB := bb.Build(&testBalancerCC{}, balancer.BuildOptions{}).(balancer.V2Balancer)
+	rlsB := bb.Build(&testBalancerCC{}, balancer.BuildOptions{})
 	defer rlsB.Close()
 	t.Log("Built RLS LB policy ...")
 
@@ -209,7 +209,7 @@ func (s) TestUpdateControlChannelWithCreds(t *testing.T) {
 	}
 	rlsB := bb.Build(&testBalancerCC{}, balancer.BuildOptions{
 		DialCreds: cCreds,
-	}).(balancer.V2Balancer)
+	})
 	defer rlsB.Close()
 	t.Log("Built RLS LB policy ...")
 
