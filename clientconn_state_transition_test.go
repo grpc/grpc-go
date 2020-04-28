@@ -449,9 +449,9 @@ type stateRecordingBalancer struct {
 	balancer.Balancer
 }
 
-func (b *stateRecordingBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
-	b.notifier <- s
-	b.Balancer.HandleSubConnStateChange(sc, s)
+func (b *stateRecordingBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
+	b.notifier <- s.ConnectivityState
+	b.Balancer.UpdateSubConnState(sc, s)
 }
 
 func (b *stateRecordingBalancer) ResetNotifier(r chan<- connectivity.State) {

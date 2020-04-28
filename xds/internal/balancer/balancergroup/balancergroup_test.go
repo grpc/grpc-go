@@ -49,7 +49,7 @@ func init() {
 	DefaultSubBalancerCloseTimeout = time.Millisecond
 }
 
-func subConnFromPicker(p balancer.V2Picker) func() balancer.SubConn {
+func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	return func() balancer.SubConn {
 		scst, _ := p.Pick(balancer.PickInfo{})
 		return scst.SubConn

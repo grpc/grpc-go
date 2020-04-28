@@ -79,7 +79,7 @@ type ServiceConfig struct {
 	serviceconfig.Config
 
 	// LB is the load balancer the service providers recommends. The balancer
-	// specified via grpc.WithBalancer will override this.  This is deprecated;
+	// specified via grpc.WithBalancerName will override this.  This is deprecated;
 	// lbConfigs is preferred.  If lbConfig and LB are both present, lbConfig
 	// will be used.
 	LB *string

@@ -75,7 +75,7 @@ func (c *testCredsBundle) NewWithMode(mode string) (credentials.Bundle, error) {
 }
 
 func (s) TestCredsBundleBoth(t *testing.T) {
-	te := newTest(t, env{name: "creds-bundle", network: "tcp", balancer: "v1", security: "empty"})
+	te := newTest(t, env{name: "creds-bundle", network: "tcp", security: "empty"})
 	te.tapHandle = authHandle
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithCredentialsBundle(&testCredsBundle{t: t}),
@@ -98,7 +98,7 @@ func (s) TestCredsBundleBoth(t *testing.T) {
 }
 
 func (s) TestCredsBundleTransportCredentials(t *testing.T) {
-	te := newTest(t, env{name: "creds-bundle", network: "tcp", balancer: "v1", security: "empty"})
+	te := newTest(t, env{name: "creds-bundle", network: "tcp", security: "empty"})
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithCredentialsBundle(&testCredsBundle{t: t, mode: bundleTLSOnly}),
 	}
@@ -120,7 +120,7 @@ func (s) TestCredsBundleTransportCredentials(t *testing.T) {
 }
 
 func (s) TestCredsBundlePerRPCCredentials(t *testing.T) {
-	te := newTest(t, env{name: "creds-bundle", network: "tcp", balancer: "v1", security: "empty"})
+	te := newTest(t, env{name: "creds-bundle", network: "tcp", security: "empty"})
 	te.tapHandle = authHandle
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithCredentialsBundle(&testCredsBundle{t: t, mode: bundlePerRPCOnly}),
@@ -157,7 +157,7 @@ func (c *clientTimeoutCreds) Clone() credentials.TransportCredentials {
 }
 
 func (s) TestNonFailFastRPCSucceedOnTimeoutCreds(t *testing.T) {
-	te := newTest(t, env{name: "timeout-cred", network: "tcp", security: "empty", balancer: "v1"})
+	te := newTest(t, env{name: "timeout-cred", network: "tcp", security: "empty"})
 	te.userAgent = testAppUA
 	te.startServer(&testServer{security: te.e.security})
 	defer te.tearDown()
@@ -181,7 +181,7 @@ func (m *methodTestCreds) RequireTransportSecurity() bool { return false }
 
 func (s) TestGRPCMethodAccessibleToCredsViaContextRequestInfo(t *testing.T) {
 	const wantMethod = "/grpc.testing.TestService/EmptyCall"
-	te := newTest(t, env{name: "context-request-info", network: "tcp", balancer: "v1"})
+	te := newTest(t, env{name: "context-request-info", network: "tcp"})
 	te.userAgent = testAppUA
 	te.startServer(&testServer{security: te.e.security})
 	defer te.tearDown()

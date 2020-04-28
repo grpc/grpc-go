@@ -396,10 +396,6 @@ type edsBalancerWrapperCC struct {
 func (ebwcc *edsBalancerWrapperCC) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	return ebwcc.parent.newSubConn(ebwcc.priority, addrs, opts)
 }
-
-func (ebwcc *edsBalancerWrapperCC) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
-}
-
 func (ebwcc *edsBalancerWrapperCC) UpdateState(state balancer.State) {
 	ebwcc.parent.enqueueChildBalancerStateUpdate(ebwcc.priority, state)
 }
@@ -426,11 +422,11 @@ func (edsImpl *edsBalancerImpl) close() {
 
 type dropPicker struct {
 	drops     []*dropper
-	p         balancer.V2Picker
+	p         balancer.Picker
 	loadStore lrs.Store
 }
 
-func newDropPicker(p balancer.V2Picker, drops []*dropper, loadStore lrs.Store) *dropPicker {
+func newDropPicker(p balancer.Picker, drops []*dropper, loadStore lrs.Store) *dropPicker {
 	return &dropPicker{
 		drops:     drops,
 		p:         p,

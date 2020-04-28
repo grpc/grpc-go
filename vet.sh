@@ -125,14 +125,12 @@ staticcheck -go 1.9 -checks 'inherit,-ST1015' ./... > "${SC_OUT}" || true
 not grep -v "is deprecated:.*SA1019" "${SC_OUT}"
 # Only ignore the following deprecated types/fields/functions.
 not grep -Fv '.CredsBundle
-.HandleResolvedAddrs
-.HandleSubConnStateChange
 .HeaderMap
+.Metadata is deprecated: use Attributes
 .NewAddress
 .NewServiceConfig
-.Metadata is deprecated: use Attributes
 .Type is deprecated: use Attributes
-.UpdateBalancerState
+balancer.ErrTransientFailure
 balancer.Picker
 grpc.CallCustomCodec
 grpc.Code
@@ -144,9 +142,7 @@ grpc.NewGZIPCompressor
 grpc.NewGZIPDecompressor
 grpc.RPCCompressor
 grpc.RPCDecompressor
-grpc.RoundRobin
 grpc.ServiceConfig
-grpc.WithBalancer
 grpc.WithBalancerName
 grpc.WithCompressor
 grpc.WithDecompressor
@@ -156,9 +152,6 @@ grpc.WithServiceConfig
 grpc.WithTimeout
 http.CloseNotifier
 info.SecurityVersion
-naming.Resolver
-naming.Update
-naming.Watcher
 resolver.Backend
 resolver.GRPCLB' "${SC_OUT}"
 

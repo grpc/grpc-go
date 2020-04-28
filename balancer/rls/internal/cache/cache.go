@@ -85,10 +85,10 @@ type Entry struct {
 	// X-Google-RLS-Data header for matching RPCs.
 	HeaderData string
 	// ChildPicker is a very thin wrapper around the child policy wrapper.
-	// The type is declared as a V2Picker interface since the users of
+	// The type is declared as a Picker interface since the users of
 	// the cache only care about the picker provided by the child policy, and
 	// this makes it easy for testing.
-	ChildPicker balancer.V2Picker
+	ChildPicker balancer.Picker
 
 	// size stores the size of this cache entry. Uses only a subset of the
 	// fields. See `entrySize` for this is computed.

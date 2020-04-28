@@ -47,7 +47,6 @@ import (
 	"golang.org/x/net/http2/hpack"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
@@ -397,7 +396,7 @@ type env struct {
 	network      string // The type of network such as tcp, unix, etc.
 	security     string // The security protocol such as TLS, SSH, etc.
 	httpHandler  bool   // whether to use the http.Handler ServerTransport; requires TLS
-	balancer     string // One of "round_robin", "pick_first", "v1", or "".
+	balancer     string // One of "round_robin", "pick_first", or "".
 	customDialer func(string, string, time.Duration) (net.Conn, error)
 }
 
@@ -416,8 +415,8 @@ func (e env) dialer(addr string, timeout time.Duration) (net.Conn, error) {
 }
 
 var (
-	tcpClearEnv   = env{name: "tcp-clear-v1-balancer", network: "tcp", balancer: "v1"}
-	tcpTLSEnv     = env{name: "tcp-tls-v1-balancer", network: "tcp", security: "tls", balancer: "v1"}
+	tcpClearEnv   = env{name: "tcp-clear-v1-balancer", network: "tcp"}
+	tcpTLSEnv     = env{name: "tcp-tls-v1-balancer", network: "tcp", security: "tls"}
 	tcpClearRREnv = env{name: "tcp-clear", network: "tcp", balancer: "round_robin"}
 	tcpTLSRREnv   = env{name: "tcp-tls", network: "tcp", security: "tls", balancer: "round_robin"}
 	handlerEnv    = env{name: "handler-tls", network: "tcp", security: "tls", httpHandler: true, balancer: "round_robin"}
@@ -568,6 +567,7 @@ func newTest(t *testing.T, e env) *test {
 }
 
 func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network, address string) (net.Listener, error)) net.Listener {
+	te.t.Helper()
 	te.t.Logf("Running test in %s environment...", te.e.name)
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(te.maxStream)}
 	if te.maxServerMsgSize != nil {
@@ -699,6 +699,7 @@ func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) *listene
 // startServer starts a gRPC server exposing the provided TestService
 // implementation. Callers should defer a call to te.tearDown to clean up
 func (te *test) startServer(ts testpb.TestServiceServer) {
+	te.t.Helper()
 	te.listenAndServe(ts, net.Listen)
 }
 
@@ -809,11 +810,8 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	} else {
 		scheme = te.resolverScheme + ":///"
 	}
-	switch te.e.balancer {
-	case "v1":
-		opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(nil)))
-	case "round_robin":
-		opts = append(opts, grpc.WithBalancerName(roundrobin.Name))
+	if te.e.balancer != "" {
+		opts = append(opts, grpc.WithBalancerName(te.e.balancer))
 	}
 	if te.clientInitialWindowSize > 0 {
 		opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
@@ -4709,6 +4707,48 @@ func testClientResourceExhaustedCancelFullDuplex(t *testing.T, e env) {
 	err = <-recvErr
 	if status.Code(err) != codes.Canceled {
 		t.Fatalf("server got error %v, want error code: %s", err, codes.Canceled)
+	}
+}
+
+type clientFailCreds struct{}
+
+func (c *clientFailCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return rawConn, nil, nil
+}
+func (c *clientFailCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return nil, nil, fmt.Errorf("client handshake fails with fatal error")
+}
+func (c *clientFailCreds) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+func (c *clientFailCreds) Clone() credentials.TransportCredentials {
+	return c
+}
+func (c *clientFailCreds) OverrideServerName(s string) error {
+	return nil
+}
+
+// This test makes sure that failfast RPCs fail if client handshake fails with
+// fatal errors.
+func (s) TestFailfastRPCFailOnFatalHandshakeError(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+
+	cc, err := grpc.Dial("passthrough:///"+lis.Addr().String(), grpc.WithTransportCredentials(&clientFailCreds{}))
+	if err != nil {
+		t.Fatalf("grpc.Dial(_) = %v", err)
+	}
+	defer cc.Close()
+
+	tc := testpb.NewTestServiceClient(cc)
+	// This unary call should fail, but not timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(false)); status.Code(err) != codes.Unavailable {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want <Unavailable>", err)
 	}
 }
 

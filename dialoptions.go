@@ -57,8 +57,7 @@ type dialOptions struct {
 	authority       string
 	copts           transport.ConnectOptions
 	callOptions     []CallOption
-	// This is used by v1 balancer dial option WithBalancer to support v1
-	// balancer, and also by WithBalancerName dial option.
+	// This is used by WithBalancerName dial option.
 	balancerBuilder             balancer.Builder
 	channelzParentID            int64
 	disableServiceConfig        bool
@@ -197,19 +196,6 @@ func WithCompressor(cp Compressor) DialOption {
 func WithDecompressor(dc Decompressor) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.dc = dc
-	})
-}
-
-// WithBalancer returns a DialOption which sets a load balancer with the v1 API.
-// Name resolver will be ignored if this DialOption is specified.
-//
-// Deprecated: use the new balancer APIs in balancer package and
-// WithBalancerName.  Will be removed in a future 1.x release.
-func WithBalancer(b Balancer) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.balancerBuilder = &balancerWrapperBuilder{
-			b: b,
-		}
 	})
 }
 

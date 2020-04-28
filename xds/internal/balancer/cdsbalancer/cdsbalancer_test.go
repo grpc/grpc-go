@@ -219,11 +219,11 @@ func edsCCS(service string, enableLRS bool, xdsClient interface{}) balancer.Clie
 func setup() (*cdsBalancer, *testEDSBalancer, func()) {
 	builder := cdsBB{}
 	tcc := &testClientConn{}
-	cdsB := builder.Build(tcc, balancer.BuildOptions{}).(balancer.V2Balancer)
+	cdsB := builder.Build(tcc, balancer.BuildOptions{})
 
 	edsB := newTestEDSBalancer()
 	oldEDSBalancerBuilder := newEDSBalancer
-	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.V2Balancer, error) {
+	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, error) {
 		return edsB, nil
 	}
 

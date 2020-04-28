@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -103,8 +102,6 @@ type edsBalancerImplInterface interface {
 	// close closes the eds balancer.
 	close()
 }
-
-var _ balancer.V2Balancer = (*edsBalancer)(nil) // Assert that we implement V2Balancer
 
 // edsBalancer manages xdsClient and the actual EDS balancer implementation that
 // does load balancing.
@@ -208,14 +205,6 @@ func (x *edsBalancer) handleXDSClientUpdate(update interface{}) {
 type subConnStateUpdate struct {
 	sc    balancer.SubConn
 	state balancer.SubConnState
-}
-
-func (x *edsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	x.logger.Errorf("UpdateSubConnState should be called instead of HandleSubConnStateChange")
-}
-
-func (x *edsBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
-	x.logger.Errorf("UpdateClientConnState should be called instead of HandleResolvedAddrs")
 }
 
 func (x *edsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {

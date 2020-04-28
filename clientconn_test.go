@@ -36,20 +36,10 @@ import (
 	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/naming"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/testdata"
 )
-
-func assertState(wantState connectivity.State, cc *ClientConn) (connectivity.State, bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	var state connectivity.State
-	for state = cc.GetState(); state != wantState && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
-	}
-	return state, state == wantState
-}
 
 func (s) TestDialWithTimeout(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -361,42 +351,6 @@ func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 
 }
 
-func (s) TestConnectivityStates(t *testing.T) {
-	servers, resolver, cleanup := startServers(t, 2, math.MaxUint32)
-	defer cleanup()
-	cc, err := Dial("passthrough:///foo.bar.com", WithBalancer(RoundRobin(resolver)), WithInsecure())
-	if err != nil {
-		t.Fatalf("Dial(\"foo.bar.com\", WithBalancer(_)) = _, %v, want _ <nil>", err)
-	}
-	defer cc.Close()
-	wantState := connectivity.Ready
-	if state, ok := assertState(wantState, cc); !ok {
-		t.Fatalf("asserState(%s) = %s, false, want %s, true", wantState, state, wantState)
-	}
-	// Send an update to delete the server connection (tearDown addrConn).
-	update := []*naming.Update{
-		{
-			Op:   naming.Delete,
-			Addr: "localhost:" + servers[0].port,
-		},
-	}
-	resolver.w.inject(update)
-	wantState = connectivity.TransientFailure
-	if state, ok := assertState(wantState, cc); !ok {
-		t.Fatalf("asserState(%s) = %s, false, want %s, true", wantState, state, wantState)
-	}
-	update[0] = &naming.Update{
-		Op:   naming.Add,
-		Addr: "localhost:" + servers[1].port,
-	}
-	resolver.w.inject(update)
-	wantState = connectivity.Ready
-	if state, ok := assertState(wantState, cc); !ok {
-		t.Fatalf("asserState(%s) = %s, false, want %s, true", wantState, state, wantState)
-	}
-
-}
-
 func (s) TestWithTimeout(t *testing.T) {
 	conn, err := Dial("passthrough:///Non-Existent.Server:80", WithTimeout(time.Millisecond), WithBlock(), WithInsecure())
 	if err == nil {
@@ -592,43 +546,6 @@ func (s) TestDialContextFailFast(t *testing.T) {
 	}
 }
 
-// blockingBalancer mimics the behavior of balancers whose initialization takes a long time.
-// In this test, reading from blockingBalancer.Notify() blocks forever.
-type blockingBalancer struct {
-	ch chan []Address
-}
-
-func newBlockingBalancer() Balancer {
-	return &blockingBalancer{ch: make(chan []Address)}
-}
-func (b *blockingBalancer) Start(target string, config BalancerConfig) error {
-	return nil
-}
-func (b *blockingBalancer) Up(addr Address) func(error) {
-	return nil
-}
-func (b *blockingBalancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error) {
-	return Address{}, nil, nil
-}
-func (b *blockingBalancer) Notify() <-chan []Address {
-	return b.ch
-}
-func (b *blockingBalancer) Close() error {
-	close(b.ch)
-	return nil
-}
-
-func (s) TestDialWithBlockingBalancer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	dialDone := make(chan struct{})
-	go func() {
-		DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithInsecure(), WithBalancer(newBlockingBalancer()))
-		close(dialDone)
-	}()
-	cancel()
-	<-dialDone
-}
-
 // securePerRPCCredentials always requires transport security.
 type securePerRPCCredentials struct{}
 
@@ -721,50 +638,6 @@ func (s) TestConnectParamsWithMinConnectTimeout(t *testing.T) {
 
 	if got := conn.dopts.minConnectTimeout(); got != mct {
 		t.Errorf("unexpect minConnectTimeout on the connection: %v, want %v", got, mct)
-	}
-}
-
-// emptyBalancer returns an empty set of servers.
-type emptyBalancer struct {
-	ch chan []Address
-}
-
-func newEmptyBalancer() Balancer {
-	return &emptyBalancer{ch: make(chan []Address, 1)}
-}
-func (b *emptyBalancer) Start(_ string, _ BalancerConfig) error {
-	b.ch <- nil
-	return nil
-}
-func (b *emptyBalancer) Up(_ Address) func(error) {
-	return nil
-}
-func (b *emptyBalancer) Get(_ context.Context, _ BalancerGetOptions) (Address, func(), error) {
-	return Address{}, nil, nil
-}
-func (b *emptyBalancer) Notify() <-chan []Address {
-	return b.ch
-}
-func (b *emptyBalancer) Close() error {
-	close(b.ch)
-	return nil
-}
-
-func (s) TestNonblockingDialWithEmptyBalancer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	dialDone := make(chan error)
-	go func() {
-		dialDone <- func() error {
-			conn, err := DialContext(ctx, "Non-Existent.Server:80", WithInsecure(), WithBalancer(newEmptyBalancer()))
-			if err != nil {
-				return err
-			}
-			return conn.Close()
-		}()
-	}()
-	if err := <-dialDone; err != nil {
-		t.Fatalf("unexpected error dialing connection: %s", err)
 	}
 }
 

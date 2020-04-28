@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -504,16 +503,21 @@ type testInlineUpdateBalancer struct {
 	cc balancer.ClientConn
 }
 
-func (tb *testInlineUpdateBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+func (tb *testInlineUpdateBalancer) ResolverError(error) {
+	panic("not implemented")
+}
+
+func (tb *testInlineUpdateBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
 }
 
 var errTestInlineStateUpdate = fmt.Errorf("don't like addresses, empty or not")
 
-func (tb *testInlineUpdateBalancer) HandleResolvedAddrs(a []resolver.Address, err error) {
+func (tb *testInlineUpdateBalancer) UpdateClientConnState(balancer.ClientConnState) error {
 	tb.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.Ready,
 		Picker:            &testutils.TestConstPicker{Err: errTestInlineStateUpdate},
 	})
+	return nil
 }
 
 func (*testInlineUpdateBalancer) Close() {

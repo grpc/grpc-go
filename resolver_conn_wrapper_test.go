@@ -29,6 +29,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
@@ -130,12 +131,12 @@ const happyBalancerName = "happy balancer"
 func init() {
 	// Register a balancer that never returns an error from
 	// UpdateClientConnState, and doesn't do anything else either.
-	fb := &funcBalancer{
-		updateClientConnState: func(s balancer.ClientConnState) error {
+	bf := stub.BalancerFuncs{
+		UpdateClientConnState: func(*stub.BalancerData, balancer.ClientConnState) error {
 			return nil
 		},
 	}
-	balancer.Register(&funcBalancerBuilder{name: happyBalancerName, instance: fb})
+	stub.Register(happyBalancerName, bf)
 }
 
 // TestResolverErrorPolling injects resolver errors and verifies ResolveNow is
