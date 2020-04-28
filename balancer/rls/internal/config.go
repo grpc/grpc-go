@@ -71,6 +71,40 @@ type lbConfig struct {
 	cpConfig             map[string]json.RawMessage
 }
 
+func (lbCfg *lbConfig) Equal(other *lbConfig) bool {
+	return lbCfg.kbMap.Equal(other.kbMap) &&
+		lbCfg.lookupService == other.lookupService &&
+		lbCfg.lookupServiceTimeout == other.lookupServiceTimeout &&
+		lbCfg.maxAge == other.maxAge &&
+		lbCfg.staleAge == other.staleAge &&
+		lbCfg.cacheSizeBytes == other.cacheSizeBytes &&
+		lbCfg.rpStrategy == other.rpStrategy &&
+		lbCfg.defaultTarget == other.defaultTarget &&
+		lbCfg.cpName == other.cpName &&
+		lbCfg.cpTargetField == other.cpTargetField &&
+		cpConfigEqual(lbCfg.cpConfig, other.cpConfig)
+}
+
+func cpConfigEqual(am, bm map[string]json.RawMessage) bool {
+	if (bm == nil) != (am == nil) {
+		return false
+	}
+	if len(bm) != len(am) {
+		return false
+	}
+
+	for k, jsonA := range am {
+		jsonB, ok := bm[k]
+		if !ok {
+			return false
+		}
+		if !bytes.Equal(jsonA, jsonB) {
+			return false
+		}
+	}
+	return true
+}
+
 // This struct resembles the JSON respresentation of the loadBalancing config
 // and makes it easier to unmarshal.
 type lbConfigJSON struct {

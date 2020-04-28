@@ -22,6 +22,7 @@ package fakeserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -29,9 +30,14 @@ import (
 	"google.golang.org/grpc"
 	rlsgrpc "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
 	rlspb "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
+	"google.golang.org/grpc/internal/testutils"
 )
 
-const defaultDialTimeout = 5 * time.Second
+const (
+	defaultDialTimeout       = 5 * time.Second
+	defaultRPCTimeout        = 5 * time.Second
+	defaultChannelBufferSize = 50
+)
 
 // Response wraps the response protobuf (xds/LRS) and error that the Server
 // should send out to the client through a call to stream.Send()
@@ -43,29 +49,31 @@ type Response struct {
 // Server is a fake implementation of RLS. It exposes channels to send/receive
 // RLS requests and responses.
 type Server struct {
-	RequestChan  chan *rlspb.RouteLookupRequest
+	RequestChan  *testutils.Channel
 	ResponseChan chan Response
 	Address      string
 }
 
-// Start makes a new Server and gets it to start listening on a local port for
-// gRPC requests. The returned cancel function should be invoked by the caller
-// upon completion of the test.
-func Start() (*Server, func(), error) {
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		return nil, func() {}, fmt.Errorf("net.Listen() failed: %v", err)
+// Start makes a new Server which uses the provided net.Listener. If lis is nil,
+// it creates a new net.Listener on a local port. The returned cancel function
+// should be invoked by the caller upon completion of the test.
+func Start(lis net.Listener, opts ...grpc.ServerOption) (*Server, func(), error) {
+	if lis == nil {
+		var err error
+		lis, err = net.Listen("tcp", "localhost:0")
+		if err != nil {
+			return nil, func() {}, fmt.Errorf("net.Listen() failed: %v", err)
+		}
 	}
-
 	s := &Server{
 		// Give the channels a buffer size of 1 so that we can setup
 		// expectations for one lookup call, without blocking.
-		RequestChan:  make(chan *rlspb.RouteLookupRequest, 1),
+		RequestChan:  testutils.NewChannelWithSize(defaultChannelBufferSize),
 		ResponseChan: make(chan Response, 1),
 		Address:      lis.Addr().String(),
 	}
 
-	server := grpc.NewServer()
+	server := grpc.NewServer(opts...)
 	rlsgrpc.RegisterRouteLookupServiceServer(server, s)
 	go server.Serve(lis)
 
@@ -74,9 +82,17 @@ func Start() (*Server, func(), error) {
 
 // RouteLookup implements the RouteLookupService.
 func (s *Server) RouteLookup(ctx context.Context, req *rlspb.RouteLookupRequest) (*rlspb.RouteLookupResponse, error) {
-	s.RequestChan <- req
-	resp := <-s.ResponseChan
-	return resp.Resp, resp.Err
+	s.RequestChan.Send(req)
+
+	// The leakchecker fails if we don't exit out of here in a reasonable time.
+	timer := time.NewTimer(defaultRPCTimeout)
+	select {
+	case <-timer.C:
+		return nil, errors.New("default RPC timeout exceeded")
+	case resp := <-s.ResponseChan:
+		timer.Stop()
+		return resp.Resp, resp.Err
+	}
 }
 
 // ClientConn returns a grpc.ClientConn connected to the fakeServer.

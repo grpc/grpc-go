@@ -49,20 +49,22 @@ func init() {
 	balancer.Register(&dummyBB{})
 }
 
-func (lbCfg *lbConfig) Equal(other *lbConfig) bool {
-	// This only ignores the keyBuilderMap field because its internals are not
-	// exported, and hence not possible to specify in the want section of the
-	// test.
-	return lbCfg.lookupService == other.lookupService &&
-		lbCfg.lookupServiceTimeout == other.lookupServiceTimeout &&
-		lbCfg.maxAge == other.maxAge &&
-		lbCfg.staleAge == other.staleAge &&
-		lbCfg.cacheSizeBytes == other.cacheSizeBytes &&
-		lbCfg.rpStrategy == other.rpStrategy &&
-		lbCfg.defaultTarget == other.defaultTarget &&
-		lbCfg.cpName == other.cpName &&
-		lbCfg.cpTargetField == other.cpTargetField &&
-		cmp.Equal(lbCfg.cpConfig, other.cpConfig)
+// testEqual reports whether the lbCfgs a and b are equal. This is to be used
+// only from tests. This ignores the keyBuilderMap field because its internals
+// are not exported, and hence not possible to specify in the want section of
+// the test. This is fine because we already have tests to make sure that the
+// keyBuilder is parsed properly from the service config.
+func testEqual(a, b *lbConfig) bool {
+	return a.lookupService == b.lookupService &&
+		a.lookupServiceTimeout == b.lookupServiceTimeout &&
+		a.maxAge == b.maxAge &&
+		a.staleAge == b.staleAge &&
+		a.cacheSizeBytes == b.cacheSizeBytes &&
+		a.rpStrategy == b.rpStrategy &&
+		a.defaultTarget == b.defaultTarget &&
+		a.cpName == b.cpName &&
+		a.cpTargetField == b.cpTargetField &&
+		cmp.Equal(a.cpConfig, b.cpConfig)
 }
 
 func TestParseConfig(t *testing.T) {
@@ -152,7 +154,7 @@ func TestParseConfig(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			lbCfg, err := builder.ParseConfig(test.input)
-			if err != nil || !cmp.Equal(lbCfg, test.wantCfg) {
+			if err != nil || !testEqual(lbCfg.(*lbConfig), test.wantCfg) {
 				t.Errorf("ParseConfig(%s) = {%+v, %v}, want {%+v, nil}", string(test.input), lbCfg, err, test.wantCfg)
 			}
 		})
