@@ -51,7 +51,7 @@ var (
 	numChannels     = flag.Int("num_channels", 1, "Num of channels")
 	printResponse   = flag.Bool("print_response", false, "Write RPC response to stdout")
 	qps             = flag.Int("qps", 1, "QPS per channel")
-	rpcTimeout      = flag.Duration("rpc_timeout", 10*time.Second, "Per RPC timeout")
+	rpcTimeout      = flag.Duration("rpc_timeout", 20*time.Second, "Per RPC timeout")
 	server          = flag.String("server", "localhost:8080", "Address of server to connect to")
 	statsPort       = flag.Int("stats_port", 8081, "Port to expose peer distribution stats service")
 
