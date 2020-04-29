@@ -62,7 +62,12 @@ type subBalancerWithConfig struct {
 	// The static part of sub-balancer. Keeps balancerBuilders and addresses.
 	// To be used when restarting sub-balancer.
 	builder balancer.Builder
-	ccState balancer.ClientConnState
+	// ccState is a cache of the addresses/balancer config, so when the balancer
+	// is restarted after close, it will get the previous update. It's a pointer
+	// and is set to nil at init, so when the balancer built for the first time
+	// (not a restart), it won't receive an empty update. Note that this isn't
+	// reset to nil when the underlying balancer is closed.
+	ccState *balancer.ClientConnState
 	// The dynamic part of sub-balancer. Only used when balancer group is
 	// started. Gets cleared when sub-balancer is closed.
 	balancer balancer.Balancer
@@ -94,7 +99,9 @@ func (sbc *subBalancerWithConfig) startBalancer() {
 	b := sbc.builder.Build(sbc, balancer.BuildOptions{})
 	sbc.group.logger.Infof("Created child policy %p of type %v", b, sbc.builder.Name())
 	sbc.balancer = b
-	b.UpdateClientConnState(sbc.ccState)
+	if sbc.ccState != nil {
+		b.UpdateClientConnState(*sbc.ccState)
+	}
 }
 
 func (sbc *subBalancerWithConfig) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
@@ -110,7 +117,7 @@ func (sbc *subBalancerWithConfig) updateSubConnState(sc balancer.SubConn, state 
 }
 
 func (sbc *subBalancerWithConfig) updateClientConnState(s balancer.ClientConnState) error {
-	sbc.ccState = s
+	sbc.ccState = &s
 	b := sbc.balancer
 	if b == nil {
 		// This sub-balancer was closed. This should never happen because
@@ -133,12 +140,17 @@ func (sbc *subBalancerWithConfig) stopBalancer() {
 
 type pickerState struct {
 	weight uint32
-	picker balancer.Picker
-	state  connectivity.State
+	state  balancer.State
+	// stateToAggregate is the connectivity state used only for state
+	// aggregation. It could be different from state.ConnectivityState. For
+	// example when a sub-balancer transitions from TransientFailure to
+	// connecting, state.ConnectivityState is Connecting, but stateToAggregate
+	// is still TransientFailure.
+	stateToAggregate connectivity.State
 }
 
 func (s *pickerState) String() string {
-	return fmt.Sprintf("weight:%v,picker:%p,state:%v", s.weight, s.picker, s.state)
+	return fmt.Sprintf("weight:%v,picker:%p,state:%v,stateToAggregate:%v", s.weight, s.state.Picker, s.state.ConnectivityState, s.stateToAggregate)
 }
 
 // BalancerGroup takes a list of balancers, and make them into one balancer.
@@ -272,10 +284,14 @@ func (bg *BalancerGroup) Add(id internal.LocalityID, weight uint32, builder bala
 	bg.incomingMu.Lock()
 	bg.idToPickerState[id] = &pickerState{
 		weight: weight,
-		// Start everything in IDLE. It's doesn't affect the overall state
-		// because we don't count IDLE when aggregating (as opposite to e.g.
-		// READY, 1 READY results in overall READY).
-		state: connectivity.Idle,
+		// Start everything in CONNECTING, so if one of the sub-balancers
+		// reports TransientFailure, the RPCs will still wait for the other
+		// sub-balancers.
+		state: balancer.State{
+			ConnectivityState: connectivity.Connecting,
+			Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
+		},
+		stateToAggregate: connectivity.Connecting,
 	}
 	bg.incomingMu.Unlock()
 
@@ -498,13 +514,18 @@ func (bg *BalancerGroup) updateBalancerState(id internal.LocalityID, state balan
 		bg.logger.Warningf("balancer group: pickerState for %v not found when update picker/state", id)
 		return
 	}
-	newPicker := state.Picker
 	if bg.loadStore != nil {
 		// Only wrap the picker to do load reporting if loadStore was set.
-		newPicker = newLoadReportPicker(state.Picker, id, bg.loadStore)
+		state.Picker = newLoadReportPicker(state.Picker, id, bg.loadStore)
 	}
-	pickerSt.picker = newPicker
-	pickerSt.state = state.ConnectivityState
+	if !(pickerSt.state.ConnectivityState == connectivity.TransientFailure && state.ConnectivityState == connectivity.Connecting) {
+		// If old state is TransientFailure, and new state is Connecting, don't
+		// update the state, to prevent the aggregated state from being always
+		// CONNECTING. Otherwise, stateToAggregate is the same as
+		// state.ConnectivityState.
+		pickerSt.stateToAggregate = state.ConnectivityState
+	}
+	pickerSt.state = state
 	if bg.incomingStarted {
 		bg.logger.Infof("Child pickers with weight: %+v", bg.idToPickerState)
 		bg.cc.UpdateState(buildPickerAndState(bg.idToPickerState))
@@ -519,10 +540,13 @@ func (bg *BalancerGroup) Close() {
 		bg.incomingStarted = false
 
 		for _, pState := range bg.idToPickerState {
-			// Reset everything to IDLE but keep the entry in map (to keep the
-			// weight).
-			pState.picker = nil
-			pState.state = connectivity.Idle
+			// Reset everything to init state (Connecting) but keep the entry in
+			// map (to keep the weight).
+			pState.state = balancer.State{
+				ConnectivityState: connectivity.Connecting,
+				Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
+			}
+			pState.stateToAggregate = connectivity.Connecting
 		}
 
 		// Also remove all SubConns.
@@ -550,7 +574,7 @@ func buildPickerAndState(m map[internal.LocalityID]*pickerState) balancer.State 
 	var readyN, connectingN int
 	readyPickerWithWeights := make([]pickerState, 0, len(m))
 	for _, ps := range m {
-		switch ps.state {
+		switch ps.stateToAggregate {
 		case connectivity.Ready:
 			readyN++
 			readyPickerWithWeights = append(readyPickerWithWeights, *ps)
@@ -567,10 +591,23 @@ func buildPickerAndState(m map[internal.LocalityID]*pickerState) balancer.State 
 	default:
 		aggregatedState = connectivity.TransientFailure
 	}
-	if aggregatedState == connectivity.TransientFailure {
-		return balancer.State{ConnectivityState: aggregatedState, Picker: base.NewErrPicker(balancer.ErrTransientFailure)}
+
+	// Make sure picker's return error is consistent with the aggregatedState.
+	//
+	// TODO: This is true for balancers like weighted_target, but not for
+	// routing. For routing, we want to always build picker with all sub-pickers
+	// (not even ready sub-pickers), so even if the overall state is Ready, pick
+	// for certain RPCs can behave like Connecting or TransientFailure.
+	var picker balancer.Picker
+	switch aggregatedState {
+	case connectivity.TransientFailure:
+		picker = base.NewErrPicker(balancer.ErrTransientFailure)
+	case connectivity.Connecting:
+		picker = base.NewErrPicker(balancer.ErrNoSubConnAvailable)
+	default:
+		picker = newPickerGroup(readyPickerWithWeights)
 	}
-	return balancer.State{ConnectivityState: aggregatedState, Picker: newPickerGroup(readyPickerWithWeights)}
+	return balancer.State{ConnectivityState: aggregatedState, Picker: picker}
 }
 
 // NewRandomWRR is the WRR constructor used to pick sub-pickers from
@@ -592,7 +629,7 @@ type pickerGroup struct {
 func newPickerGroup(readyPickerWithWeights []pickerState) *pickerGroup {
 	w := NewRandomWRR()
 	for _, ps := range readyPickerWithWeights {
-		w.Add(ps.picker, int64(ps.weight))
+		w.Add(ps.state.Picker, int64(ps.weight))
 	}
 
 	return &pickerGroup{
