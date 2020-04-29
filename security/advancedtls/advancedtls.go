@@ -46,6 +46,10 @@ type VerificationFuncParams struct {
 	// The verification chain obtained by checking peer RawCerts against the
 	// trust certificate bundle(s), if applicable.
 	VerifiedChains [][]*x509.Certificate
+	// The leaf certificate sent from peer, if choosing to verify the peer
+	// certificate(s) and that verification passed. This field would be nil if
+	// either user chose not to verify or the verification failed.
+	Leaf *x509.Certificate
 }
 
 // VerificationResults contains the information about results of
@@ -313,6 +317,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 	rawConn net.Conn) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		chains := verifiedChains
+		var leafCert *x509.Certificate
 		if c.vType == CertAndHostVerification || c.vType == CertVerification {
 			// perform possible trust credential reloading and certificate check
 			rootCAs := c.config.RootCAs
@@ -361,6 +366,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 			if err != nil {
 				return err
 			}
+			leafCert = certs[0]
 		}
 		// Perform custom verification check if specified.
 		if c.verifyFunc != nil {
@@ -368,6 +374,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				ServerName:     serverName,
 				RawCerts:       rawCerts,
 				VerifiedChains: chains,
+				Leaf:           leafCert,
 			})
 			return err
 		}
