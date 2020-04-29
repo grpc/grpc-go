@@ -473,7 +473,7 @@ func WithStreamInterceptor(f StreamClientInterceptor) DialOption {
 }
 
 // WithChainStreamInterceptor returns a DialOption that specifies the chained
-// interceptor for unary RPCs. The first interceptor will be the outer most,
+// interceptor for streaming RPCs. The first interceptor will be the outer most,
 // while the last interceptor will be the inner most wrapper around the real call.
 // All interceptors added by this method will be chained, and the interceptor
 // defined by WithStreamInterceptor will always be prepended to the chain.
