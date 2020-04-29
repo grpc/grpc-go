@@ -49,8 +49,7 @@ func newTestConfigBalancerBuilder() *testConfigBalancerBuilder {
 func (t *testConfigBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	rr := t.Builder.Build(cc, opts)
 	return &testConfigBalancer{
-		Balancer:   rr,
-		V2Balancer: rr.(balancer.V2Balancer),
+		Balancer: rr,
 	}
 }
 
@@ -74,7 +73,6 @@ func (t *testConfigBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfi
 // string and append it to the backend addresses.
 type testConfigBalancer struct {
 	balancer.Balancer
-	balancer.V2Balancer
 }
 
 func (b *testConfigBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
@@ -85,11 +83,11 @@ func (b *testConfigBalancer) UpdateClientConnState(s balancer.ClientConnState) e
 	oneMoreAddr := resolver.Address{Addr: c.s}
 	s.BalancerConfig = nil
 	s.ResolverState.Addresses = append(s.ResolverState.Addresses, oneMoreAddr)
-	return b.Balancer.(balancer.V2Balancer).UpdateClientConnState(s)
+	return b.Balancer.UpdateClientConnState(s)
 }
 
 func (b *testConfigBalancer) Close() {
-	b.V2Balancer.Close()
+	b.Balancer.Close()
 }
 
 var (
@@ -119,7 +117,7 @@ func init() {
 // functionality tests are covered by the balancer group tests.
 func TestWeightedTarget(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{}).(balancer.V2Balancer)
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 
 	// Start with "cluster_1: round_robin".
 	config1, err := wtbParser.ParseConfig([]byte(`{"targets":{"cluster_1":{"weight":1,"childPolicy":[{"round_robin":""}]}}}`))
@@ -219,7 +217,7 @@ func TestWeightedTarget(t *testing.T) {
 	}
 }
 
-func subConnFromPicker(p balancer.V2Picker) func() balancer.SubConn {
+func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	return func() balancer.SubConn {
 		scst, _ := p.Pick(balancer.PickInfo{})
 		return scst.SubConn

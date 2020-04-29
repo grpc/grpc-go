@@ -139,11 +139,7 @@ func (sbc *subBalancerWithConfig) resolverError(err error) {
 		// it's the lower priority, but it can still get address updates.
 		return
 	}
-	ub, ok := b.(balancer.V2Balancer)
-	if !ok {
-		return
-	}
-	ub.ResolverError(err)
+	b.ResolverError(err)
 }
 
 func (sbc *subBalancerWithConfig) stopBalancer() {
