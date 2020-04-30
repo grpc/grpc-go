@@ -224,8 +224,8 @@ func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	bg.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	p6 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		if _, err := p6.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick error %v, got %v", balancer.ErrTransientFailure, err)
+		if _, err := p6.Pick(balancer.PickInfo{}); err != errTransientFailure {
+			t.Fatalf("want pick error %v, got %v", errTransientFailure, err)
 		}
 	}
 }
@@ -322,8 +322,8 @@ func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	}
 	p3 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		if _, err := p3.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick error %v, got %v", balancer.ErrTransientFailure, err)
+		if _, err := p3.Pick(balancer.PickInfo{}); err != errTransientFailure {
+			t.Fatalf("want pick error %v, got %v", errTransientFailure, err)
 		}
 	}
 }
@@ -610,8 +610,8 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
 		r, err := p1.Pick(balancer.PickInfo{})
-		if err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick to fail with %v, got result %v, err %v", balancer.ErrTransientFailure, r, err)
+		if err != errTransientFailure {
+			t.Fatalf("want pick to fail with %v, got result %v, err %v", errTransientFailure, r, err)
 		}
 	}
 
@@ -621,8 +621,8 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 	p2 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
 		r, err := p2.Pick(balancer.PickInfo{})
-		if err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick to fail with %v, got result %v, err %v", balancer.ErrTransientFailure, r, err)
+		if err != errTransientFailure {
+			t.Fatalf("want pick to fail with %v, got result %v, err %v", errTransientFailure, r, err)
 		}
 	}
 }

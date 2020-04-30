@@ -19,6 +19,7 @@
 package balancergroup
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -64,9 +65,9 @@ type subBalancerWithConfig struct {
 	builder balancer.Builder
 	// ccState is a cache of the addresses/balancer config, so when the balancer
 	// is restarted after close, it will get the previous update. It's a pointer
-	// and is set to nil at init, so when the balancer built for the first time
-	// (not a restart), it won't receive an empty update. Note that this isn't
-	// reset to nil when the underlying balancer is closed.
+	// and is set to nil at init, so when the balancer is built for the first
+	// time (not a restart), it won't receive an empty update. Note that this
+	// isn't reset to nil when the underlying balancer is closed.
 	ccState *balancer.ClientConnState
 	// The dynamic part of sub-balancer. Only used when balancer group is
 	// started. Gets cleared when sub-balancer is closed.
@@ -570,6 +571,8 @@ func (bg *BalancerGroup) Close() {
 	bg.balancerCache.Clear(true)
 }
 
+var errTransientFailure = errors.New("no sub-balancer has READY connection to pick")
+
 func buildPickerAndState(m map[internal.LocalityID]*pickerState) balancer.State {
 	var readyN, connectingN int
 	readyPickerWithWeights := make([]pickerState, 0, len(m))
@@ -601,7 +604,7 @@ func buildPickerAndState(m map[internal.LocalityID]*pickerState) balancer.State 
 	var picker balancer.Picker
 	switch aggregatedState {
 	case connectivity.TransientFailure:
-		picker = base.NewErrPicker(balancer.ErrTransientFailure)
+		picker = base.NewErrPicker(errTransientFailure)
 	case connectivity.Connecting:
 		picker = base.NewErrPicker(balancer.ErrNoSubConnAvailable)
 	default:
