@@ -16,6 +16,7 @@
  *
  */
 
+// Binary client is an interop client.
 package main
 
 import (

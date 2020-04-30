@@ -16,8 +16,7 @@
  *
  */
 
-//go:generate protoc --go_out=plugins=grpc:. grpc_testing/test.proto
-
+// Package interop contains functions used by interop client/server.
 package interop
 
 import (

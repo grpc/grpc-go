@@ -20,6 +20,8 @@
 // service.
 syntax = "proto3";
 
+option go_package = "google.golang.org/grpc/stress/grpc_testing";
+
 package grpc.testing;
 
 // Response message containing the gauge name and value

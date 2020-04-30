@@ -17,8 +17,8 @@
  */
 
 // Package advancedtls is a utility library containing functions to construct
-// credentials.TransportCredentials that can perform credential reloading and custom
-// server authorization.
+// credentials.TransportCredentials that can perform credential reloading and
+// custom verification check.
 package advancedtls
 
 import (
@@ -33,98 +33,159 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// VerificationFuncParams contains the parameters available to users when implementing CustomVerificationFunc.
+// VerificationFuncParams contains parameters available to users when
+// implementing CustomVerificationFunc.
+// The fields in this struct are read-only.
 type VerificationFuncParams struct {
-	ServerName     string
-	RawCerts       [][]byte
+	// The target server name that the client connects to when establishing the
+	// connection. This field is only meaningful for client side. On server side,
+	// this field would be an empty string.
+	ServerName string
+	// The raw certificates sent from peer.
+	RawCerts [][]byte
+	// The verification chain obtained by checking peer RawCerts against the
+	// trust certificate bundle(s), if applicable.
 	VerifiedChains [][]*x509.Certificate
+	// The leaf certificate sent from peer, if choosing to verify the peer
+	// certificate(s) and that verification passed. This field would be nil if
+	// either user chose not to verify or the verification failed.
+	Leaf *x509.Certificate
 }
 
-// VerificationResults contains the information about results of CustomVerificationFunc.
-// VerificationResults is an empty struct for now. It may be extended in the future to include more information.
+// VerificationResults contains the information about results of
+// CustomVerificationFunc.
+// VerificationResults is an empty struct for now. It may be extended in the
+// future to include more information.
 type VerificationResults struct{}
 
-// CustomVerificationFunc is the function defined by users to perform custom server authorization.
-// CustomVerificationFunc returns nil if the authorization fails; otherwise returns an empty struct.
+// CustomVerificationFunc is the function defined by users to perform custom
+// verification check.
+// CustomVerificationFunc returns nil if the authorization fails; otherwise
+// returns an empty struct.
 type CustomVerificationFunc func(params *VerificationFuncParams) (*VerificationResults, error)
 
-// GetRootCAsParams contains the parameters available to users when implementing GetRootCAs.
+// GetRootCAsParams contains the parameters available to users when
+// implementing GetRootCAs.
 type GetRootCAsParams struct {
 	RawConn  net.Conn
 	RawCerts [][]byte
 }
 
 // GetRootCAsResults contains the results of GetRootCAs.
-// If users want to reload the root trust certificate, it is required to return the proper TrustCerts in GetRootCAs.
+// If users want to reload the root trust certificate, it is required to return
+// the proper TrustCerts in GetRootCAs.
 type GetRootCAsResults struct {
 	TrustCerts *x509.CertPool
 }
 
-// RootCertificateOptions contains a field and a function for obtaining root trust certificates.
-// It is used by both ClientOptions and ServerOptions. Note that RootCertificateOptions is required
-// to be correctly set on client side; on server side, it is only required when mutual TLS is
-// enabled(RequireClientCert in ServerOptions is true).
+// RootCertificateOptions contains a field and a function for obtaining root
+// trust certificates.
+// It is used by both ClientOptions and ServerOptions.
 type RootCertificateOptions struct {
-	// If field RootCACerts is set, field GetRootCAs will be ignored. RootCACerts will be used
-	// every time when verifying the peer certificates, without performing root certificate reloading.
+	// If field RootCACerts is set, field GetRootCAs will be ignored. RootCACerts
+	// will be used every time when verifying the peer certificates, without
+	// performing root certificate reloading.
 	RootCACerts *x509.CertPool
-	// If GetRootCAs is set and RootCACerts is nil, GetRootCAs will be invoked every time
-	// asked to check certificates sent from the server when a new connection is established.
+	// If GetRootCAs is set and RootCACerts is nil, GetRootCAs will be invoked
+	// every time asked to check certificates sent from the server when a new
+	// connection is established.
 	// This is known as root CA certificate reloading.
 	GetRootCAs func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 }
 
-// ClientOptions contains all the fields and functions needed to be filled by the client.
+// VerificationType is the enum type that represents different levels of
+// verification users could set, both on client side and on server side.
+type VerificationType int
+
+const (
+	// CertAndHostVerification indicates doing both certificate signature check
+	// and hostname check.
+	CertAndHostVerification VerificationType = iota
+	// CertVerification indicates doing certificate signature check only. Setting
+	// this field without proper custom verification check would leave the
+	// application susceptible to the MITM attack.
+	CertVerification
+	// SkipVerification indicates skipping both certificate signature check and
+	// hostname check. If setting this field, proper custom verification needs to
+	// be implemented in order to complete the authentication. Setting this field
+	// with a nil custom verification would raise an error.
+	SkipVerification
+)
+
+// ClientOptions contains all the fields and functions needed to be filled by
+// the client.
 // General rules for certificate setting on client side:
-// Certificates or GetClientCertificate indicates the certificates sent from the client to the
-// server to prove client's identities. The rules for setting these two fields are:
+// Certificates or GetClientCertificate indicates the certificates sent from
+// the client to the server to prove client's identities. The rules for setting
+// these two fields are:
 // If requiring mutual authentication on server side:
-//     Either Certificates or GetClientCertificate must be set; the other will be ignored
+//     Either Certificates or GetClientCertificate must be set; the other will
+//     be ignored.
 // Otherwise:
-//     Nothing needed(the two fields will be ignored)
+//     Nothing needed(the two fields will be ignored).
 type ClientOptions struct {
-	// If field Certificates is set, field GetClientCertificate will be ignored. The client will use
-	// Certificates every time when asked for a certificate, without performing certificate reloading.
+	// If field Certificates is set, field GetClientCertificate will be ignored.
+	// The client will use Certificates every time when asked for a certificate,
+	// without performing certificate reloading.
 	Certificates []tls.Certificate
-	// If GetClientCertificate is set and Certificates is nil, the client will invoke this
-	// function every time asked to present certificates to the server when a new connection is
-	// established. This is known as peer certificate reloading.
+	// If GetClientCertificate is set and Certificates is nil, the client will
+	// invoke this function every time asked to present certificates to the
+	// server when a new connection is established. This is known as peer
+	// certificate reloading.
 	GetClientCertificate func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
-	// VerifyPeer is a custom server authorization checking after certificate signature check.
-	// If this is set, we will replace the hostname check with this customized authorization check.
-	// If this is nil, we fall back to typical hostname check.
+	// VerifyPeer is a custom verification check after certificate signature
+	// check.
+	// If this is set, we will perform this customized check after doing the
+	// normal check(s) indicated by setting VType.
 	VerifyPeer CustomVerificationFunc
 	// ServerNameOverride is for testing only. If set to a non-empty string,
-	// it will override the virtual host name of authority (e.g. :authority header field) in requests.
+	// it will override the virtual host name of authority (e.g. :authority
+	// header field) in requests.
 	ServerNameOverride string
+	// RootCertificateOptions is REQUIRED to be correctly set on client side.
 	RootCertificateOptions
+	// VType is the verification type on the client side.
+	VType VerificationType
 }
 
-// ServerOptions contains all the fields and functions needed to be filled by the client.
+// ServerOptions contains all the fields and functions needed to be filled by
+// the client.
 // General rules for certificate setting on server side:
-// Certificates or GetClientCertificate indicates the certificates sent from the server to
-// the client to prove server's identities. The rules for setting these two fields are:
-// Either Certificates or GetCertificate must be set; the other will be ignored
+// Certificates or GetClientCertificate indicates the certificates sent from
+// the server to the client to prove server's identities. The rules for setting
+// these two fields are:
+// Either Certificates or GetCertificate must be set; the other will be ignored.
 type ServerOptions struct {
-	// If field Certificates is set, field GetClientCertificate will be ignored. The server will use
-	// Certificates every time when asked for a certificate, without performing certificate reloading.
+	// If field Certificates is set, field GetClientCertificate will be ignored.
+	// The server will use Certificates every time when asked for a certificate,
+	// without performing certificate reloading.
 	Certificates []tls.Certificate
-	// If GetClientCertificate is set and Certificates is nil, the server will invoke this
-	// function every time asked to present certificates to the client when a new connection is
-	// established. This is known as peer certificate reloading.
+	// If GetClientCertificate is set and Certificates is nil, the server will
+	// invoke this function every time asked to present certificates to the
+	// client when a new connection is established. This is known as peer
+	// certificate reloading.
 	GetCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+	// VerifyPeer is a custom verification check after certificate signature
+	// check.
+	// If this is set, we will perform this customized check after doing the
+	// normal check(s) indicated by setting VType.
+	VerifyPeer CustomVerificationFunc
+	// RootCertificateOptions is only required when mutual TLS is
+	// enabled(RequireClientCert is true).
 	RootCertificateOptions
 	// If the server want the client to send certificates.
 	RequireClientCert bool
+	// VType is the verification type on the server side.
+	VType VerificationType
 }
 
 func (o *ClientOptions) config() (*tls.Config, error) {
-	if o.RootCACerts == nil && o.GetRootCAs == nil && o.VerifyPeer == nil {
+	if o.VType == SkipVerification && o.VerifyPeer == nil {
 		return nil, fmt.Errorf(
-			"client needs to provide root CA certs, or a custom verification function")
+			"client needs to provide custom verification mechanism if choose to skip default verification")
 	}
-	// We have to set InsecureSkipVerify to true to skip the default checks and use the
-	// verification function we built from buildVerifyFunc.
+	// We have to set InsecureSkipVerify to true to skip the default checks and
+	// use the verification function we built from buildVerifyFunc.
 	config := &tls.Config{
 		ServerName:           o.ServerNameOverride,
 		Certificates:         o.Certificates,
@@ -139,21 +200,16 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 	if o.Certificates == nil && o.GetCertificate == nil {
 		return nil, fmt.Errorf("either Certificates or GetCertificate must be specified")
 	}
-	if o.RequireClientCert && o.GetRootCAs == nil && o.RootCACerts == nil {
-		return nil, fmt.Errorf("server needs to provide root CA certs if requiring client cert")
+	if o.RequireClientCert && o.VType == SkipVerification && o.VerifyPeer == nil {
+		return nil, fmt.Errorf(
+			"server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
 	clientAuth := tls.NoClientCert
 	if o.RequireClientCert {
-		// We fall back to normal config settings if users don't need to reload root certificates.
-		// If using RequireAndVerifyClientCert, the underlying stack would use the default
-		// checking and ignore the verification function we built from buildVerifyFunc.
-		// If using RequireAnyClientCert, the code would skip all the checks and use the
-		// function from buildVerifyFunc.
-		if o.RootCACerts != nil {
-			clientAuth = tls.RequireAndVerifyClientCert
-		} else {
-			clientAuth = tls.RequireAnyClientCert
-		}
+		// We have to set clientAuth to RequireAnyClientCert to force underlying
+		// TLS package to use the verification function we built from
+		// buildVerifyFunc.
+		clientAuth = tls.RequireAnyClientCert
 	}
 	config := &tls.Config{
 		ClientAuth:     clientAuth,
@@ -166,12 +222,14 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 	return config, nil
 }
 
-// advancedTLSCreds is the credentials required for authenticating a connection using TLS.
+// advancedTLSCreds is the credentials required for authenticating a connection
+// using TLS.
 type advancedTLSCreds struct {
 	config     *tls.Config
 	verifyFunc CustomVerificationFunc
 	getRootCAs func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 	isClient   bool
+	vType      VerificationType
 }
 
 func (c advancedTLSCreds) Info() credentials.ProtocolInfo {
@@ -218,10 +276,7 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 
 func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	cfg := cloneTLSConfig(c.config)
-	// We build server side verification function only when root cert reloading is needed.
-	if c.getRootCAs != nil {
-		cfg.VerifyPeerCertificate = buildVerifyFunc(c, "", rawConn)
-	}
+	cfg.VerifyPeerCertificate = buildVerifyFunc(c, "", rawConn)
 	conn := tls.Server(rawConn, cfg)
 	if err := conn.Handshake(); err != nil {
 		conn.Close()
@@ -250,91 +305,85 @@ func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 	return nil
 }
 
-// The function buildVerifyFunc is used when users want root cert reloading, and possibly custom
-// server authorization check.
-// We have to build our own verification function here because current tls module:
-// 1. does not have a good support on root cert reloading
-// 2. will ignore basic certificate check when setting InsecureSkipVerify to true
+// The function buildVerifyFunc is used when users want root cert reloading,
+// and possibly custom verification check.
+// We have to build our own verification function here because current
+// tls module:
+//   1. does not have a good support on root cert reloading.
+//   2. will ignore basic certificate check when setting InsecureSkipVerify
+//   to true.
 func buildVerifyFunc(c *advancedTLSCreds,
 	serverName string,
 	rawConn net.Conn) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-		// If users didn't specify either rootCAs or getRootCAs on client side,
-		// as we see some use cases such as https://github.com/grpc/grpc/pull/20530,
-		// instead of failing, we just don't validate the server cert and let
-		// application decide via VerifyPeer
-		if c.isClient && c.config.RootCAs == nil && c.getRootCAs == nil {
-			if c.verifyFunc != nil {
-				_, err := c.verifyFunc(&VerificationFuncParams{
-					ServerName:     serverName,
-					RawCerts:       rawCerts,
-					VerifiedChains: verifiedChains,
+		chains := verifiedChains
+		var leafCert *x509.Certificate
+		if c.vType == CertAndHostVerification || c.vType == CertVerification {
+			// perform possible trust credential reloading and certificate check
+			rootCAs := c.config.RootCAs
+			if !c.isClient {
+				rootCAs = c.config.ClientCAs
+			}
+			// Reload root CA certs.
+			if rootCAs == nil && c.getRootCAs != nil {
+				results, err := c.getRootCAs(&GetRootCAsParams{
+					RawConn:  rawConn,
+					RawCerts: rawCerts,
 				})
+				if err != nil {
+					return err
+				}
+				rootCAs = results.TrustCerts
+			}
+			// Verify peers' certificates against RootCAs and get verifiedChains.
+			certs := make([]*x509.Certificate, len(rawCerts))
+			for i, asn1Data := range rawCerts {
+				cert, err := x509.ParseCertificate(asn1Data)
+				if err != nil {
+					return err
+				}
+				certs[i] = cert
+			}
+			keyUsages := []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+			if !c.isClient {
+				keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+			}
+			opts := x509.VerifyOptions{
+				Roots:         rootCAs,
+				CurrentTime:   time.Now(),
+				Intermediates: x509.NewCertPool(),
+				KeyUsages:     keyUsages,
+			}
+			for _, cert := range certs[1:] {
+				opts.Intermediates.AddCert(cert)
+			}
+			// Perform default hostname check if specified.
+			if c.isClient && c.vType == CertAndHostVerification && serverName != "" {
+				opts.DNSName = serverName
+			}
+			var err error
+			chains, err = certs[0].Verify(opts)
+			if err != nil {
 				return err
 			}
+			leafCert = certs[0]
 		}
-		var rootCAs *x509.CertPool
-		if c.isClient {
-			rootCAs = c.config.RootCAs
-		} else {
-			rootCAs = c.config.ClientCAs
-		}
-		// reload root CA certs
-		if rootCAs == nil && c.getRootCAs != nil {
-			results, err := c.getRootCAs(&GetRootCAsParams{
-				RawConn:  rawConn,
-				RawCerts: rawCerts,
+		// Perform custom verification check if specified.
+		if c.verifyFunc != nil {
+			_, err := c.verifyFunc(&VerificationFuncParams{
+				ServerName:     serverName,
+				RawCerts:       rawCerts,
+				VerifiedChains: chains,
+				Leaf:           leafCert,
 			})
-			if err != nil {
-				return err
-			}
-			rootCAs = results.TrustCerts
-		}
-		// verify peers' certificates against RootCAs and get verifiedChains
-		certs := make([]*x509.Certificate, len(rawCerts))
-		for i, asn1Data := range rawCerts {
-			cert, err := x509.ParseCertificate(asn1Data)
-			if err != nil {
-				return err
-			}
-			certs[i] = cert
-		}
-		opts := x509.VerifyOptions{
-			Roots:         rootCAs,
-			CurrentTime:   time.Now(),
-			Intermediates: x509.NewCertPool(),
-		}
-		if !c.isClient {
-			opts.KeyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
-		} else {
-			opts.KeyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
-		}
-		for _, cert := range certs[1:] {
-			opts.Intermediates.AddCert(cert)
-		}
-		// We use default hostname check if users don't specify verifyFunc function
-		if c.isClient && c.verifyFunc == nil && serverName != "" {
-			opts.DNSName = serverName
-		}
-		verifiedChains, err := certs[0].Verify(opts)
-		if err != nil {
 			return err
-		}
-		if c.isClient && c.verifyFunc != nil {
-			if c.verifyFunc != nil {
-				_, err := c.verifyFunc(&VerificationFuncParams{
-					ServerName:     serverName,
-					RawCerts:       rawCerts,
-					VerifiedChains: verifiedChains,
-				})
-				return err
-			}
 		}
 		return nil
 	}
 }
 
-// NewClientCreds uses ClientOptions to construct a TransportCredentials based on TLS.
+// NewClientCreds uses ClientOptions to construct a TransportCredentials based
+// on TLS.
 func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) {
 	conf, err := o.config()
 	if err != nil {
@@ -345,12 +394,14 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 		isClient:   true,
 		getRootCAs: o.GetRootCAs,
 		verifyFunc: o.VerifyPeer,
+		vType:      o.VType,
 	}
 	tc.config.NextProtos = appendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
 }
 
-// NewServerCreds uses ServerOptions to construct a TransportCredentials based on TLS.
+// NewServerCreds uses ServerOptions to construct a TransportCredentials based
+// on TLS.
 func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) {
 	conf, err := o.config()
 	if err != nil {
@@ -360,6 +411,8 @@ func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) 
 		config:     conf,
 		isClient:   false,
 		getRootCAs: o.GetRootCAs,
+		verifyFunc: o.VerifyPeer,
+		vType:      o.VType,
 	}
 	tc.config.NextProtos = appendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil

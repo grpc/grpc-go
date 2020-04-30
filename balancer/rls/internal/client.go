@@ -43,7 +43,6 @@ const grpcTargetType = "grpc"
 // throttling and asks this client to make an RPC call only after checking with
 // the throttler.
 type rlsClient struct {
-	cc   *grpc.ClientConn
 	stub rlspb.RouteLookupServiceClient
 	// origDialTarget is the original dial target of the user and sent in each
 	// RouteLookup RPC made to the RLS server.
@@ -55,14 +54,13 @@ type rlsClient struct {
 
 func newRLSClient(cc *grpc.ClientConn, dialTarget string, rpcTimeout time.Duration) *rlsClient {
 	return &rlsClient{
-		cc:             cc,
 		stub:           rlspb.NewRouteLookupServiceClient(cc),
 		origDialTarget: dialTarget,
 		rpcTimeout:     rpcTimeout,
 	}
 }
 
-type lookupCallback func(target, headerData string, err error)
+type lookupCallback func(targets []string, headerData string, err error)
 
 // lookup starts a RouteLookup RPC in a separate goroutine and returns the
 // results (and error, if any) in the provided callback.
@@ -75,7 +73,7 @@ func (c *rlsClient) lookup(path string, keyMap map[string]string, cb lookupCallb
 			TargetType: grpcTargetType,
 			KeyMap:     keyMap,
 		})
-		cb(resp.GetTarget(), resp.GetHeaderData(), err)
+		cb(resp.GetTargets(), resp.GetHeaderData(), err)
 		cancel()
 	}()
 }

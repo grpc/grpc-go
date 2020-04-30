@@ -20,6 +20,7 @@
  *
  */
 
+// Binary grpclb_fallback is an interop test client for grpclb fallback.
 package main
 
 import (

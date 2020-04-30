@@ -16,6 +16,8 @@
  *
  */
 
+// Binary worker implements the benchmark worker that can turn into a benchmark
+// client or server.
 package main
 
 import (

@@ -90,18 +90,20 @@ declare -A EXPECTED_CLIENT_OUTPUT=(
     ["features/name_resolving"]="calling helloworld.Greeter/SayHello to \"example:///resolver.example.grpc.io\""
 )
 
+cd ./examples
+
 for example in ${EXAMPLES[@]}; do
     echo "$(tput setaf 4) testing: ${example} $(tput sgr 0)"
 
     # Build server
-    if ! go build -o /dev/null ./examples/${example}/*server/*.go; then
+    if ! go build -o /dev/null ./${example}/*server/*.go; then
         fail "failed to build server"
     else
         pass "successfully built server"
     fi
 
     # Build client
-    if ! go build -o /dev/null ./examples/${example}/*client/*.go; then
+    if ! go build -o /dev/null ./${example}/*client/*.go; then
         fail "failed to build client"
     else
         pass "successfully built client"
@@ -109,10 +111,10 @@ for example in ${EXAMPLES[@]}; do
 
     # Start server
     SERVER_LOG="$(mktemp)"
-    go run ./examples/$example/*server/*.go &> $SERVER_LOG  &
+    go run ./$example/*server/*.go &> $SERVER_LOG  &
 
     CLIENT_LOG="$(mktemp)"
-    if ! timeout 20 go run examples/${example}/*client/*.go &> $CLIENT_LOG; then
+    if ! timeout 20 go run ${example}/*client/*.go &> $CLIENT_LOG; then
         fail "client failed to communicate with server
         got server log:
         $(cat $SERVER_LOG)

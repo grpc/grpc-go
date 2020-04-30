@@ -26,9 +26,12 @@ import (
 	"sync"
 	"time"
 
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/backoff"
+	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
@@ -45,6 +48,18 @@ type Options struct {
 	TargetName string
 }
 
+// Interface to be overridden in tests.
+type xdsv2Client interface {
+	addWatch(resourceType, resourceName string)
+	removeWatch(resourceType, resourceName string)
+	close()
+}
+
+// Function to be overridden in tests.
+var newXDSV2Client = func(parent *Client, cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration, logger *grpclog.PrefixLogger) xdsv2Client {
+	return newV2Client(parent, cc, nodeProto, backoff, logger)
+}
+
 // Client is a full fledged gRPC client which queries a set of discovery APIs
 // (collectively termed as xDS) on a remote management server, to discover
 // various dynamic resources.
@@ -53,16 +68,23 @@ type Options struct {
 // implementations. But the same client can only be shared by the same parent
 // ClientConn.
 type Client struct {
+	done *grpcsync.Event
 	opts Options
 	cc   *grpc.ClientConn // Connection to the xDS server
-	v2c  *v2Client        // Actual xDS client implementation using the v2 API
+	v2c  xdsv2Client      // Actual xDS client implementation using the v2 API
 
 	logger *grpclog.PrefixLogger
 
-	mu              sync.Mutex
-	serviceCallback func(ServiceUpdate, error)
-	ldsCancel       func()
-	rdsCancel       func()
+	updateCh    *buffer.Unbounded // chan *watcherInfoWithUpdate
+	mu          sync.Mutex
+	ldsWatchers map[string]map[*watchInfo]bool
+	ldsCache    map[string]ldsUpdate
+	rdsWatchers map[string]map[*watchInfo]bool
+	rdsCache    map[string]rdsUpdate
+	cdsWatchers map[string]map[*watchInfo]bool
+	cdsCache    map[string]ClusterUpdate
+	edsWatchers map[string]map[*watchInfo]bool
+	edsCache    map[string]EndpointsUpdate
 }
 
 // New returns a new xdsClient configured with opts.
@@ -85,7 +107,20 @@ func New(opts Options) (*Client, error) {
 	}
 	dopts = append(dopts, opts.DialOpts...)
 
-	c := &Client{opts: opts}
+	c := &Client{
+		done: grpcsync.NewEvent(),
+		opts: opts,
+
+		updateCh:    buffer.NewUnbounded(),
+		ldsWatchers: make(map[string]map[*watchInfo]bool),
+		ldsCache:    make(map[string]ldsUpdate),
+		rdsWatchers: make(map[string]map[*watchInfo]bool),
+		rdsCache:    make(map[string]rdsUpdate),
+		cdsWatchers: make(map[string]map[*watchInfo]bool),
+		cdsCache:    make(map[string]ClusterUpdate),
+		edsWatchers: make(map[string]map[*watchInfo]bool),
+		edsCache:    make(map[string]EndpointsUpdate),
+	}
 
 	cc, err := grpc.Dial(opts.Config.BalancerName, dopts...)
 	if err != nil {
@@ -96,92 +131,42 @@ func New(opts Options) (*Client, error) {
 	c.logger = grpclog.NewPrefixLogger(loggingPrefix(c))
 	c.logger.Infof("Created ClientConn to xDS server: %s", opts.Config.BalancerName)
 
-	c.v2c = newV2Client(cc, opts.Config.NodeProto, backoff.DefaultExponential.Backoff, c.logger)
+	c.v2c = newXDSV2Client(c, cc, opts.Config.NodeProto, backoff.DefaultExponential.Backoff, c.logger)
 	c.logger.Infof("Created")
+	go c.run()
 	return c, nil
+}
+
+// run is a goroutine for all the callbacks.
+//
+// Callback can be called in watch(), if an item is found in cache. Without this
+// goroutine, the callback will be called inline, which might cause a deadlock
+// in user's code. Callbacks also cannot be simple `go callback()` because the
+// order matters.
+func (c *Client) run() {
+	for {
+		select {
+		case t := <-c.updateCh.Get():
+			c.updateCh.Load()
+			if c.done.HasFired() {
+				return
+			}
+			c.callCallback(t.(*watcherInfoWithUpdate))
+		case <-c.done.Done():
+			return
+		}
+	}
 }
 
 // Close closes the gRPC connection to the xDS server.
 func (c *Client) Close() {
+	if c.done.HasFired() {
+		return
+	}
+	c.done.Fire()
 	// TODO: Should we invoke the registered callbacks here with an error that
 	// the client is closed?
 	c.v2c.close()
 	c.cc.Close()
 	c.logger.Infof("Shutdown")
-}
-
-// ServiceUpdate contains update about the service.
-type ServiceUpdate struct {
-	Cluster string
-}
-
-// handleLDSUpdate is the LDS watcher callback we registered with the v2Client.
-func (c *Client) handleLDSUpdate(u ldsUpdate, err error) {
-	c.logger.Infof("xds: client received LDS update: %+v, err: %v", u, err)
-	if err != nil {
-		c.mu.Lock()
-		if c.serviceCallback != nil {
-			c.serviceCallback(ServiceUpdate{}, err)
-		}
-		c.mu.Unlock()
-		return
-	}
-
-	c.mu.Lock()
-	c.rdsCancel = c.v2c.watchRDS(u.routeName, c.handleRDSUpdate)
-	c.mu.Unlock()
-}
-
-// handleRDSUpdate is the RDS watcher callback we registered with the v2Client.
-func (c *Client) handleRDSUpdate(u rdsUpdate, err error) {
-	c.logger.Infof("xds: client received RDS update: %+v, err: %v", u, err)
-	if err != nil {
-		c.mu.Lock()
-		if c.serviceCallback != nil {
-			c.serviceCallback(ServiceUpdate{}, err)
-		}
-		c.mu.Unlock()
-		return
-	}
-
-	c.mu.Lock()
-	if c.serviceCallback != nil {
-		c.serviceCallback(ServiceUpdate{Cluster: u.clusterName}, nil)
-	}
-	c.mu.Unlock()
-}
-
-// WatchService uses LDS and RDS protocols to discover information about the
-// provided serviceName.
-func (c *Client) WatchService(serviceName string, callback func(ServiceUpdate, error)) (cancel func()) {
-	// TODO: Error out early if the client is closed. Ideally, this should
-	// never be called after the client is closed though.
-	c.mu.Lock()
-	c.serviceCallback = callback
-	c.ldsCancel = c.v2c.watchLDS(serviceName, c.handleLDSUpdate)
-	c.mu.Unlock()
-
-	return func() {
-		c.mu.Lock()
-		c.serviceCallback = nil
-		if c.ldsCancel != nil {
-			c.ldsCancel()
-		}
-		if c.rdsCancel != nil {
-			c.rdsCancel()
-		}
-		c.mu.Unlock()
-	}
-}
-
-// WatchCluster uses CDS to discover information about the provided
-// clusterName.
-func (c *Client) WatchCluster(clusterName string, cdsCb func(CDSUpdate, error)) (cancel func()) {
-	return c.v2c.watchCDS(clusterName, cdsCb)
-}
-
-// WatchEndpoints uses EDS to discover information about the endpoints in the
-// provided clusterName.
-func (c *Client) WatchEndpoints(clusterName string, edsCb func(*EDSUpdate, error)) (cancel func()) {
-	return c.v2c.watchEDS(clusterName, edsCb)
 }

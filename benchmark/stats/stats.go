@@ -180,9 +180,13 @@ func (f Features) partialString(b *bytes.Buffer, wantFeatures []bool, sep, delim
 			case RespSizeBytesIndex:
 				b.WriteString(fmt.Sprintf("RespSize%v%vB%v", sep, f.RespSizeBytes, delim))
 			case ReqPayloadCurveIndex:
-				b.WriteString(fmt.Sprintf("ReqPayloadCurve%vSHA-256:%v%v", sep, f.ReqPayloadCurve.Hash(), delim))
+				if f.ReqPayloadCurve != nil {
+					b.WriteString(fmt.Sprintf("ReqPayloadCurve%vSHA-256:%v%v", sep, f.ReqPayloadCurve.Hash(), delim))
+				}
 			case RespPayloadCurveIndex:
-				b.WriteString(fmt.Sprintf("RespPayloadCurve%vSHA-256:%v%v", sep, f.RespPayloadCurve.Hash(), delim))
+				if f.RespPayloadCurve != nil {
+					b.WriteString(fmt.Sprintf("RespPayloadCurve%vSHA-256:%v%v", sep, f.RespPayloadCurve.Hash(), delim))
+				}
 			case CompModesIndex:
 				b.WriteString(fmt.Sprintf("Compressor%v%v%v", sep, f.ModeCompressor, delim))
 			case EnableChannelzIndex:

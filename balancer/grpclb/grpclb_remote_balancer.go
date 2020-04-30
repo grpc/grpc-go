@@ -192,7 +192,7 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 			lb.cc.RemoveSubConn(sc)
 			delete(lb.subConns, a)
 			// Keep the state of this sc in b.scStates until sc's state becomes Shutdown.
-			// The entry will be deleted in HandleSubConnStateChange.
+			// The entry will be deleted in UpdateSubConnState.
 		}
 	}
 

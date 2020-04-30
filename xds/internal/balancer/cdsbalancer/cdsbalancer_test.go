@@ -59,7 +59,7 @@ type testClientConn struct {
 
 // cdsWatchInfo wraps the update and the error sent in a CDS watch callback.
 type cdsWatchInfo struct {
-	update xdsclient.CDSUpdate
+	update xdsclient.ClusterUpdate
 	err    error
 }
 
@@ -219,11 +219,11 @@ func edsCCS(service string, enableLRS bool, xdsClient interface{}) balancer.Clie
 func setup() (*cdsBalancer, *testEDSBalancer, func()) {
 	builder := cdsBB{}
 	tcc := &testClientConn{}
-	cdsB := builder.Build(tcc, balancer.BuildOptions{}).(balancer.V2Balancer)
+	cdsB := builder.Build(tcc, balancer.BuildOptions{})
 
 	edsB := newTestEDSBalancer()
 	oldEDSBalancerBuilder := newEDSBalancer
-	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.V2Balancer, error) {
+	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, error) {
 		return edsB, nil
 	}
 
@@ -369,18 +369,18 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		cdsUpdate xdsclient.CDSUpdate
+		cdsUpdate xdsclient.ClusterUpdate
 		updateErr error
 		wantCCS   balancer.ClientConnState
 	}{
 		{
 			name:      "happy-case-with-lrs",
-			cdsUpdate: xdsclient.CDSUpdate{ServiceName: serviceName, EnableLRS: true},
+			cdsUpdate: xdsclient.ClusterUpdate{ServiceName: serviceName, EnableLRS: true},
 			wantCCS:   edsCCS(serviceName, true, xdsC),
 		},
 		{
 			name:      "happy-case-without-lrs",
-			cdsUpdate: xdsclient.CDSUpdate{ServiceName: serviceName},
+			cdsUpdate: xdsclient.ClusterUpdate{ServiceName: serviceName},
 			wantCCS:   edsCCS(serviceName, false, xdsC),
 		},
 		{
@@ -408,7 +408,7 @@ func (s) TestResolverError(t *testing.T) {
 		cdsB.Close()
 	}()
 
-	cdsUpdate := xdsclient.CDSUpdate{ServiceName: serviceName}
+	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
 	wantCCS := edsCCS(serviceName, false, xdsC)
 	if err := invokeWatchCbAndWait(xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
@@ -433,7 +433,7 @@ func (s) TestUpdateSubConnState(t *testing.T) {
 		cdsB.Close()
 	}()
 
-	cdsUpdate := xdsclient.CDSUpdate{ServiceName: serviceName}
+	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
 	wantCCS := edsCCS(serviceName, false, xdsC)
 	if err := invokeWatchCbAndWait(xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
@@ -453,7 +453,7 @@ func (s) TestClose(t *testing.T) {
 	xdsC, cdsB, edsB, cancel := setupWithWatch(t)
 	defer cancel()
 
-	cdsUpdate := xdsclient.CDSUpdate{ServiceName: serviceName}
+	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
 	wantCCS := edsCCS(serviceName, false, xdsC)
 	if err := invokeWatchCbAndWait(xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)

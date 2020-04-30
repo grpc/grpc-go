@@ -16,6 +16,7 @@
  *
  */
 
+// Binary server is an interop server.
 package main
 
 import (

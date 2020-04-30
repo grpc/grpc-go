@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-//go:generate ./regenerate.sh
-
 package grpc_service_config_test
 
 import (

@@ -16,8 +16,6 @@
  *
  */
 
-//go:generate ./regenerate.sh
-
 // Package service provides an implementation for channelz service server.
 package service
 

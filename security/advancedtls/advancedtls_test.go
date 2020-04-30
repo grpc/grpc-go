@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -43,7 +44,15 @@ func TestClientServerHandshake(t *testing.T) {
 	getRootCAsForClient := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return &GetRootCAsResults{TrustCerts: clientTrustPool}, nil
 	}
-	verifyFuncGood := func(params *VerificationFuncParams) (*VerificationResults, error) {
+	clientVerifyFuncGood := func(params *VerificationFuncParams) (*VerificationResults, error) {
+		if params.ServerName == "" {
+			return nil, errors.New("client side server name should have a value")
+		}
+		// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
+		if len(params.VerifiedChains) > 0 && (params.Leaf == nil || params.Leaf.Subject.CommonName != "foo.bar.com") {
+			return nil, errors.New("client side params parsing error")
+		}
+
 		return &VerificationResults{}, nil
 	}
 	verifyFuncBad := func(params *VerificationFuncParams) (*VerificationResults, error) {
@@ -62,6 +71,17 @@ func TestClientServerHandshake(t *testing.T) {
 	getRootCAsForServer := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return &GetRootCAsResults{TrustCerts: serverTrustPool}, nil
 	}
+	serverVerifyFunc := func(params *VerificationFuncParams) (*VerificationResults, error) {
+		if params.ServerName != "" {
+			return nil, errors.New("server side server name should not have a value")
+		}
+		// "foo.bar.hoo.com" is the common name on client certificate client_cert_1.pem.
+		if len(params.VerifiedChains) > 0 && (params.Leaf == nil || params.Leaf.Subject.CommonName != "foo.bar.hoo.com") {
+			return nil, errors.New("server side params parsing error")
+		}
+
+		return &VerificationResults{}, nil
+	}
 	serverPeerCert, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
 		testdata.Path("server_key_1.pem"))
 	if err != nil {
@@ -73,10 +93,11 @@ func TestClientServerHandshake(t *testing.T) {
 	for _, test := range []struct {
 		desc                       string
 		clientCert                 []tls.Certificate
-		clientGetClientCert        func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
+		clientGetCert              func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 		clientRoot                 *x509.CertPool
 		clientGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		clientVerifyFunc           CustomVerificationFunc
+		clientVType                VerificationType
 		clientExpectCreateError    bool
 		clientExpectHandshakeError bool
 		serverMutualTLS            bool
@@ -84,347 +105,292 @@ func TestClientServerHandshake(t *testing.T) {
 		serverGetCert              func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 		serverRoot                 *x509.CertPool
 		serverGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
+		serverVerifyFunc           CustomVerificationFunc
+		serverVType                VerificationType
 		serverExpectError          bool
 	}{
 		// Client: nil setting
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: server side failure
-		// Reason: if either clientCert or clientGetClientCert is not set and
-		// verifyFunc is not set, we will fail directly
+		// Reason: if clientRoot, clientGetRoot and verifyFunc is not set, client
+		// side doesn't provide any verification mechanism. We don't allow this
+		// even setting vType to SkipVerification. Clients should at least provide
+		// their own verification logic.
 		{
-			"Client_no_trust_cert_Server_peer_cert",
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			true,
-			false,
-			false,
-			[]tls.Certificate{serverPeerCert},
-			nil,
-			nil,
-			nil,
-			true,
+			desc:                    "Client has no trust cert; server sends peer cert",
+			clientVType:             SkipVerification,
+			clientExpectCreateError: true,
+			serverCert:              []tls.Certificate{serverPeerCert},
+			serverVType:             CertAndHostVerification,
+			serverExpectError:       true,
 		},
 		// Client: nil setting except verifyFuncGood
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: success
 		// Reason: we will use verifyFuncGood to verify the server,
-		// if either clientCert or clientGetClientCert is not set
+		// if either clientCert or clientGetCert is not set
 		{
-			"Client_no_trust_cert_verifyFuncGood_Server_peer_cert",
-			nil,
-			nil,
-			nil,
-			nil,
-			verifyFuncGood,
-			false,
-			false,
-			false,
-			[]tls.Certificate{serverPeerCert},
-			nil,
-			nil,
-			nil,
-			false,
+			desc:             "Client has no trust cert with verifyFuncGood; server sends peer cert",
+			clientVerifyFunc: clientVerifyFuncGood,
+			clientVType:      SkipVerification,
+			serverCert:       []tls.Certificate{serverPeerCert},
+			serverVType:      CertAndHostVerification,
 		},
 		// Client: only set clientRoot
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: server side failure and client handshake failure
-		// Reason: not setting advanced TLS features will fall back to normal check, and will hence fail
-		// on default host name check. All the default hostname checks will fail in this test suites.
+		// Reason: client side sets vType to CertAndHostVerification, and will do
+		// default hostname check. All the default hostname checks will fail in
+		// this test suites.
 		{
-			"Client_root_cert_Server_peer_cert",
-			nil,
-			nil,
-			clientTrustPool,
-			nil,
-			nil,
-			false,
-			true,
-			false,
-			[]tls.Certificate{serverPeerCert},
-			nil,
-			nil,
-			nil,
-			true,
+			desc:                       "Client has root cert; server sends peer cert",
+			clientRoot:                 clientTrustPool,
+			clientVType:                CertAndHostVerification,
+			clientExpectHandshakeError: true,
+			serverCert:                 []tls.Certificate{serverPeerCert},
+			serverVType:                CertAndHostVerification,
+			serverExpectError:          true,
 		},
 		// Client: only set clientGetRoot
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: server side failure and client handshake failure
-		// Reason: setting root reloading function without custom verifyFunc will also fail,
-		// since it will also fall back to default host name check
+		// Reason: client side sets vType to CertAndHostVerification, and will do
+		// default hostname check. All the default hostname checks will fail in
+		// this test suites.
 		{
-			"Client_reload_root_Server_peer_cert",
-			nil,
-			nil,
-			nil,
-			getRootCAsForClient,
-			nil,
-			false,
-			true,
-			false,
-			[]tls.Certificate{serverPeerCert},
-			nil,
-			nil,
-			nil,
-			true,
+			desc:                       "Client sets reload root function; server sends peer cert",
+			clientGetRoot:              getRootCAsForClient,
+			clientVType:                CertAndHostVerification,
+			clientExpectHandshakeError: true,
+			serverCert:                 []tls.Certificate{serverPeerCert},
+			serverVType:                CertAndHostVerification,
+			serverExpectError:          true,
 		},
 		// Client: set clientGetRoot and clientVerifyFunc
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: success
 		{
-			"Client_reload_root_verifyFuncGood_Server_peer_cert",
-			nil,
-			nil,
-			nil,
-			getRootCAsForClient,
-			verifyFuncGood,
-			false,
-			false,
-			false,
-			[]tls.Certificate{serverPeerCert},
-			nil,
-			nil,
-			nil,
-			false,
+			desc:             "Client sets reload root function with verifyFuncGood; server sends peer cert",
+			clientGetRoot:    getRootCAsForClient,
+			clientVerifyFunc: clientVerifyFuncGood,
+			clientVType:      CertVerification,
+			serverCert:       []tls.Certificate{serverPeerCert},
+			serverVType:      CertAndHostVerification,
 		},
 		// Client: set clientGetRoot and bad clientVerifyFunc function
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: server side failure and client handshake failure
 		// Reason: custom verification function is bad
 		{
-			"Client_reload_root_verifyFuncBad_Server_peer_cert",
-			nil,
-			nil,
-			nil,
-			getRootCAsForClient,
-			verifyFuncBad,
-			false,
-			true,
-			false,
-			[]tls.Certificate{serverPeerCert},
-			nil,
-			nil,
-			nil,
-			true,
+			desc:                       "Client sets reload root function with verifyFuncBad; server sends peer cert",
+			clientGetRoot:              getRootCAsForClient,
+			clientVerifyFunc:           verifyFuncBad,
+			clientVType:                CertVerification,
+			clientExpectHandshakeError: true,
+			serverCert:                 []tls.Certificate{serverPeerCert},
+			serverVType:                CertVerification,
+			serverExpectError:          true,
 		},
 		// Client: set clientGetRoot and clientVerifyFunc
 		// Server: nil setting
 		// Expected Behavior: server side failure
 		// Reason: server side must either set serverCert or serverGetCert
 		{
-			"Client_reload_root_verifyFuncGood_Server_nil",
-			nil,
-			nil,
-			nil,
-			getRootCAsForClient,
-			verifyFuncGood,
-			false,
-			false,
-			false,
-			nil,
-			nil,
-			nil,
-			nil,
-			true,
-		},
-		// Client: set clientGetRoot and clientVerifyFunc
-		// Server: only set serverCert with mutual TLS on
-		// Expected Behavior: server side failure
-		// Reason: server side must either set serverRoot or serverGetRoot when using mutual TLS
-		{
-			"Client_reload_root_verifyFuncGood_Server_peer_cert_no_root_cert_mutualTLS",
-			nil,
-			nil,
-			nil,
-			getRootCAsForClient,
-			verifyFuncGood,
-			false,
-			false,
-			true,
-			[]tls.Certificate{serverPeerCert},
-			nil,
-			nil,
-			nil,
-			true,
+			desc:              "Client sets reload root function with verifyFuncGood; server sets nil",
+			clientGetRoot:     getRootCAsForClient,
+			clientVerifyFunc:  clientVerifyFuncGood,
+			clientVType:       CertVerification,
+			serverVType:       CertVerification,
+			serverExpectError: true,
 		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
 		// Server: set serverRoot and serverCert with mutual TLS on
 		// Expected Behavior: success
 		{
-			"Client_peer_cert_reload_root_verifyFuncGood_Server_peer_cert_root_cert_mutualTLS",
-			[]tls.Certificate{clientPeerCert},
-			nil,
-			nil,
-			getRootCAsForClient,
-			verifyFuncGood,
-			false,
-			false,
-			true,
-			[]tls.Certificate{serverPeerCert},
-			nil,
-			serverTrustPool,
-			nil,
-			false,
+			desc:             "Client sets peer cert, reload root function with verifyFuncGood; server sets peer cert and root cert; mutualTLS",
+			clientCert:       []tls.Certificate{clientPeerCert},
+			clientGetRoot:    getRootCAsForClient,
+			clientVerifyFunc: clientVerifyFuncGood,
+			clientVType:      CertVerification,
+			serverMutualTLS:  true,
+			serverCert:       []tls.Certificate{serverPeerCert},
+			serverRoot:       serverTrustPool,
+			serverVType:      CertVerification,
+		},
+		// Client: set clientGetRoot, clientVerifyFunc and clientCert
+		// Server: set serverCert, but not setting any of serverRoot, serverGetRoot
+		// or serverVerifyFunc, with mutual TLS on
+		// Expected Behavior: server side failure
+		// Reason: server side needs to provide any verification mechanism when
+		// mTLS in on, even setting vType to SkipVerification. Servers should at
+		// least provide their own verification logic.
+		{
+			desc:                       "Client sets peer cert, reload root function with verifyFuncGood; server sets no verification; mutualTLS",
+			clientCert:                 []tls.Certificate{clientPeerCert},
+			clientGetRoot:              getRootCAsForClient,
+			clientVerifyFunc:           clientVerifyFuncGood,
+			clientVType:                CertVerification,
+			clientExpectHandshakeError: true,
+			serverMutualTLS:            true,
+			serverCert:                 []tls.Certificate{serverPeerCert},
+			serverVType:                SkipVerification,
+			serverExpectError:          true,
 		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
 		// Server: set serverGetRoot and serverCert with mutual TLS on
 		// Expected Behavior: success
 		{
-			"Client_peer_cert_reload_root_verifyFuncGood_Server_peer_cert_reload_root_mutualTLS",
-			[]tls.Certificate{clientPeerCert},
-			nil,
-			nil,
-			getRootCAsForClient,
-			verifyFuncGood,
-			false,
-			false,
-			true,
-			[]tls.Certificate{serverPeerCert},
-			nil,
-			nil,
-			getRootCAsForServer,
-			false,
+			desc:             "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; mutualTLS",
+			clientCert:       []tls.Certificate{clientPeerCert},
+			clientGetRoot:    getRootCAsForClient,
+			clientVerifyFunc: clientVerifyFuncGood,
+			clientVType:      CertVerification,
+			serverMutualTLS:  true,
+			serverCert:       []tls.Certificate{serverPeerCert},
+			serverGetRoot:    getRootCAsForServer,
+			serverVType:      CertVerification,
 		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
-		// Server: set serverGetRoot returning error and serverCert with mutual TLS on
+		// Server: set serverGetRoot returning error and serverCert with mutual
+		// TLS on
 		// Expected Behavior: server side failure
 		// Reason: server side reloading returns failure
 		{
-			"Client_peer_cert_reload_root_verifyFuncGood_Server_peer_cert_bad_reload_root_mutualTLS",
-			[]tls.Certificate{clientPeerCert},
-			nil,
-			nil,
-			getRootCAsForClient,
-			verifyFuncGood,
-			false,
-			false,
-			true,
-			[]tls.Certificate{serverPeerCert},
-			nil,
-			nil,
-			getRootCAsForServerBad,
-			true,
+			desc:              "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, bad reload root function; mutualTLS",
+			clientCert:        []tls.Certificate{clientPeerCert},
+			clientGetRoot:     getRootCAsForClient,
+			clientVerifyFunc:  clientVerifyFuncGood,
+			clientVType:       CertVerification,
+			serverMutualTLS:   true,
+			serverCert:        []tls.Certificate{serverPeerCert},
+			serverGetRoot:     getRootCAsForServerBad,
+			serverVType:       CertVerification,
+			serverExpectError: true,
 		},
-		// Client: set clientGetRoot, clientVerifyFunc and clientGetClientCert
+		// Client: set clientGetRoot, clientVerifyFunc and clientGetCert
 		// Server: set serverGetRoot and serverGetCert with mutual TLS on
 		// Expected Behavior: success
 		{
-			"Client_reload_both_certs_verifyFuncGood_Server_reload_both_certs_mutualTLS",
-			nil,
-			func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			desc: "Client sets reload peer/root function with verifyFuncGood; Server sets reload peer/root function with verifyFuncGood; mutualTLS",
+			clientGetCert: func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				return &clientPeerCert, nil
 			},
-			nil,
-			getRootCAsForClient,
-			verifyFuncGood,
-			false,
-			false,
-			true,
-			nil,
-			func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			clientGetRoot:    getRootCAsForClient,
+			clientVerifyFunc: clientVerifyFuncGood,
+			clientVType:      CertVerification,
+			serverMutualTLS:  true,
+			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 				return &serverPeerCert, nil
 			},
-			nil,
-			getRootCAsForServer,
-			false,
+			serverGetRoot:    getRootCAsForServer,
+			serverVerifyFunc: serverVerifyFunc,
+			serverVType:      CertVerification,
 		},
-		// Client: set everything but with the wrong peer cert not trusted by server
+		// Client: set everything but with the wrong peer cert not trusted by
+		// server
 		// Server: set serverGetRoot and serverGetCert with mutual TLS on
 		// Expected Behavior: server side returns failure because of
 		// certificate mismatch
 		{
-			"Client_wrong_peer_cert_Server_reload_both_certs_mutualTLS",
-			nil,
-			func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			desc: "Client sends wrong peer cert; Server sets reload peer/root function with verifyFuncGood; mutualTLS",
+			clientGetCert: func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				return &serverPeerCert, nil
 			},
-			nil,
-			getRootCAsForClient,
-			verifyFuncGood,
-			false,
-			false,
-			true,
-			nil,
-			func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			clientGetRoot:    getRootCAsForClient,
+			clientVerifyFunc: clientVerifyFuncGood,
+			clientVType:      CertVerification,
+			serverMutualTLS:  true,
+			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 				return &serverPeerCert, nil
 			},
-			nil,
-			getRootCAsForServer,
-			true,
+			serverGetRoot:     getRootCAsForServer,
+			serverVerifyFunc:  serverVerifyFunc,
+			serverVType:       CertVerification,
+			serverExpectError: true,
 		},
 		// Client: set everything but with the wrong trust cert not trusting server
 		// Server: set serverGetRoot and serverGetCert with mutual TLS on
 		// Expected Behavior: server side and client side return failure due to
 		// certificate mismatch and handshake failure
 		{
-			"Client_wrong_trust_cert_Server_reload_both_certs_mutualTLS",
-			nil,
-			func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			desc: "Client has wrong trust cert; Server sets reload peer/root function with verifyFuncGood; mutualTLS",
+			clientGetCert: func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				return &clientPeerCert, nil
 			},
-			nil,
-			getRootCAsForServer,
-			verifyFuncGood,
-			false,
-			true,
-			true,
-			nil,
-			func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			clientGetRoot:              getRootCAsForServer,
+			clientVerifyFunc:           clientVerifyFuncGood,
+			clientVType:                CertVerification,
+			clientExpectHandshakeError: true,
+			serverMutualTLS:            true,
+			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 				return &serverPeerCert, nil
 			},
-			nil,
-			getRootCAsForServer,
-			true,
+			serverGetRoot:     getRootCAsForServer,
+			serverVerifyFunc:  serverVerifyFunc,
+			serverVType:       CertVerification,
+			serverExpectError: true,
 		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
-		// Server: set everything but with the wrong peer cert not trusted by client
+		// Server: set everything but with the wrong peer cert not trusted by
+		// client
 		// Expected Behavior: server side and client side return failure due to
 		// certificate mismatch and handshake failure
 		{
-			"Client_reload_both_certs_verifyFuncGood_Server_wrong_peer_cert",
-			nil,
-			func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			desc: "Client sets reload peer/root function with verifyFuncGood; Server sends wrong peer cert; mutualTLS",
+			clientGetCert: func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				return &clientPeerCert, nil
 			},
-			nil,
-			getRootCAsForClient,
-			verifyFuncGood,
-			false,
-			false,
-			true,
-			nil,
-			func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			clientGetRoot:    getRootCAsForClient,
+			clientVerifyFunc: clientVerifyFuncGood,
+			clientVType:      CertVerification,
+			serverMutualTLS:  true,
+			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 				return &clientPeerCert, nil
 			},
-			nil,
-			getRootCAsForServer,
-			true,
+			serverGetRoot:     getRootCAsForServer,
+			serverVerifyFunc:  serverVerifyFunc,
+			serverVType:       CertVerification,
+			serverExpectError: true,
 		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
 		// Server: set everything but with the wrong trust cert not trusting client
 		// Expected Behavior: server side and client side return failure due to
 		// certificate mismatch and handshake failure
 		{
-			"Client_reload_both_certs_verifyFuncGood_Server_wrong_trust_cert",
-			nil,
-			func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			desc: "Client sets reload peer/root function with verifyFuncGood; Server has wrong trust cert; mutualTLS",
+			clientGetCert: func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				return &clientPeerCert, nil
 			},
-			nil,
-			getRootCAsForClient,
-			verifyFuncGood,
-			false,
-			true,
-			true,
-			nil,
-			func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			clientGetRoot:              getRootCAsForClient,
+			clientVerifyFunc:           clientVerifyFuncGood,
+			clientVType:                CertVerification,
+			clientExpectHandshakeError: true,
+			serverMutualTLS:            true,
+			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 				return &serverPeerCert, nil
 			},
-			nil,
-			getRootCAsForClient,
-			true,
+			serverGetRoot:     getRootCAsForClient,
+			serverVerifyFunc:  serverVerifyFunc,
+			serverVType:       CertVerification,
+			serverExpectError: true,
+		},
+		// Client: set clientGetRoot, clientVerifyFunc and clientCert
+		// Server: set serverGetRoot and serverCert, but with bad verifyFunc
+		// Expected Behavior: server side and client side return failure due to
+		// server custom check fails
+		{
+			desc:                       "Client sets peer cert, reload root function with verifyFuncGood; Server sets bad custom check; mutualTLS",
+			clientCert:                 []tls.Certificate{clientPeerCert},
+			clientGetRoot:              getRootCAsForClient,
+			clientVerifyFunc:           clientVerifyFuncGood,
+			clientVType:                CertVerification,
+			clientExpectHandshakeError: true,
+			serverMutualTLS:            true,
+			serverCert:                 []tls.Certificate{serverPeerCert},
+			serverGetRoot:              getRootCAsForServer,
+			serverVerifyFunc:           verifyFuncBad,
+			serverVType:                CertVerification,
+			serverExpectError:          true,
 		},
 	} {
 		test := test
@@ -443,6 +409,8 @@ func TestClientServerHandshake(t *testing.T) {
 					GetRootCAs:  test.serverGetRoot,
 				},
 				RequireClientCert: test.serverMutualTLS,
+				VerifyPeer:        test.serverVerifyFunc,
+				VType:             test.serverVType,
 			}
 			go func(done chan credentials.AuthInfo, lis net.Listener, serverOptions *ServerOptions) {
 				serverRawConn, err := lis.Accept()
@@ -474,12 +442,13 @@ func TestClientServerHandshake(t *testing.T) {
 			defer conn.Close()
 			clientOptions := &ClientOptions{
 				Certificates:         test.clientCert,
-				GetClientCertificate: test.clientGetClientCert,
+				GetClientCertificate: test.clientGetCert,
 				VerifyPeer:           test.clientVerifyFunc,
 				RootCertificateOptions: RootCertificateOptions{
 					RootCACerts: test.clientRoot,
 					GetRootCAs:  test.clientGetRoot,
 				},
+				VType: test.clientVType,
 			}
 			clientTLS, newClientErr := NewClientCreds(clientOptions)
 			if newClientErr != nil && test.clientExpectCreateError {

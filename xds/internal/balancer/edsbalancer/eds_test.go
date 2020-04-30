@@ -55,7 +55,7 @@ func init() {
 	}
 }
 
-func subConnFromPicker(p balancer.V2Picker) func() balancer.SubConn {
+func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	return func() balancer.SubConn {
 		scst, _ := p.Pick(balancer.PickInfo{})
 		return scst.SubConn
@@ -100,16 +100,16 @@ type fakeEDSBalancer struct {
 	loadStore          lrs.Store
 }
 
-func (f *fakeEDSBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+func (f *fakeEDSBalancer) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
 	f.subconnStateChange.Send(&scStateChange{sc: sc, state: state})
 }
 
-func (f *fakeEDSBalancer) HandleChildPolicy(name string, config json.RawMessage) {
+func (f *fakeEDSBalancer) handleChildPolicy(name string, config json.RawMessage) {
 	f.childPolicy.Send(&loadBalancingConfig{Name: name, Config: config})
 }
 
-func (f *fakeEDSBalancer) Close()                                              {}
-func (f *fakeEDSBalancer) HandleEDSResponse(edsResp *xdsclient.EDSUpdate)      {}
+func (f *fakeEDSBalancer) close()                                              {}
+func (f *fakeEDSBalancer) handleEDSResponse(edsResp xdsclient.EndpointsUpdate) {}
 func (f *fakeEDSBalancer) updateState(priority priorityType, s balancer.State) {}
 
 func (f *fakeEDSBalancer) waitForChildPolicy(wantPolicy *loadBalancingConfig) error {
@@ -254,7 +254,7 @@ func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
 		})
 
 		xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, balancerName)
-		xdsC.InvokeWatchEDSCallback(&xdsclient.EDSUpdate{}, nil)
+		xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
 	}
 }
 
@@ -288,11 +288,15 @@ type fakeBalancer struct {
 	cc balancer.ClientConn
 }
 
-func (b *fakeBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
+func (b *fakeBalancer) ResolverError(error) {
 	panic("implement me")
 }
 
-func (b *fakeBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+func (b *fakeBalancer) UpdateClientConnState(balancer.ClientConnState) error {
+	panic("implement me")
+}
+
+func (b *fakeBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
 	panic("implement me")
 }
 
@@ -335,7 +339,7 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 		},
 	})
 	xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, testBalancerNameFooBar)
-	xdsC.InvokeWatchEDSCallback(&xdsclient.EDSUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
 	edsLB := waitForNewEDSLB(t, edsLBCh)
 	edsLB.waitForChildPolicy(&loadBalancingConfig{
 		Name:   string(fakeBalancerA),
@@ -384,7 +388,7 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	})
 
 	xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, testBalancerNameFooBar)
-	xdsC.InvokeWatchEDSCallback(&xdsclient.EDSUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
 	edsLB := waitForNewEDSLB(t, edsLBCh)
 
 	fsc := &fakeSubConn{}
