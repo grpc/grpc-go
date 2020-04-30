@@ -19,7 +19,6 @@
 package balancergroup
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -571,8 +570,6 @@ func (bg *BalancerGroup) Close() {
 	bg.balancerCache.Clear(true)
 }
 
-var errTransientFailure = errors.New("no sub-balancer has READY connection to pick")
-
 func buildPickerAndState(m map[internal.LocalityID]*pickerState) balancer.State {
 	var readyN, connectingN int
 	readyPickerWithWeights := make([]pickerState, 0, len(m))
@@ -604,7 +601,7 @@ func buildPickerAndState(m map[internal.LocalityID]*pickerState) balancer.State 
 	var picker balancer.Picker
 	switch aggregatedState {
 	case connectivity.TransientFailure:
-		picker = base.NewErrPicker(errTransientFailure)
+		picker = base.NewErrPicker(balancer.ErrTransientFailure)
 	case connectivity.Connecting:
 		picker = base.NewErrPicker(balancer.ErrNoSubConnAvailable)
 	default:
