@@ -76,7 +76,7 @@ func (s) TestLDSGetRouteConfig(t *testing.T) {
 					ApiListener: &anypb.Any{
 						TypeUrl: httpConnManagerURL,
 						Value: func() []byte {
-							goodHTTPConnManager1 = &httppb.HttpConnectionManager{
+							cm := &httppb.HttpConnectionManager{
 								RouteSpecifier: &httppb.HttpConnectionManager_Rds{
 									Rds: &httppb.Rds{
 										ConfigSource: &basepb.ConfigSource{
@@ -85,8 +85,8 @@ func (s) TestLDSGetRouteConfig(t *testing.T) {
 											},
 										},
 										RouteConfigName: goodRouteName1}}}
-							marshaledConnMgr1, _ = proto.Marshal(goodHTTPConnManager1)
-							return marshaledConnMgr1
+							mcm, _ := proto.Marshal(cm)
+							return mcm
 						}()}}},
 			wantRoute: "",
 			wantErr:   true,

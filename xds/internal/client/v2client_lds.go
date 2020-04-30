@@ -68,11 +68,10 @@ func (v2c *v2Client) getRouteConfigNameFromListener(lis *xdspb.Listener) (string
 	v2c.logger.Infof("Resource with type %T, contains %v", apiLis, apiLis)
 	switch apiLis.RouteSpecifier.(type) {
 	case *httppb.HttpConnectionManager_Rds:
-		tempRDS := apiLis.GetRds()
-		if tempRDS.GetConfigSource().GetAds() == nil {
+		if apiLis.GetRds().GetConfigSource().GetAds() == nil {
 			return "", fmt.Errorf("xds: ConfigSource is not ADS in LDS response: %+v", lis)
 		}
-		name := tempRDS.GetRouteConfigName()
+		name := apiLis.GetRds().GetRouteConfigName()
 		if name == "" {
 			return "", fmt.Errorf("xds: empty route_config_name in LDS response: %+v", lis)
 		}
