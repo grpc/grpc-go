@@ -24,6 +24,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -408,11 +409,13 @@ func TestEnd2End(t *testing.T) {
 				lis, err := net.Listen("tcp", port)
 				// defer lis.Close()
 				if err != nil {
-					t.Fatalf("failed to listen: %v", err)
+					fmt.Fprintf(os.Stderr, "failed to listen: %v\n", err)
+					return
 				}
 				pb.RegisterGreeterServer(s, &serverImpl{})
 				if err := s.Serve(lis); err != nil {
-					t.Fatalf("failed to serve: %v", err)
+					fmt.Fprintf(os.Stderr, "failed to serve: %v\n", err)
+					return
 				}
 			}(s)
 			clientOptions := &ClientOptions{
