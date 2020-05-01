@@ -404,17 +404,24 @@ func TestEnd2End(t *testing.T) {
 			}
 			s := grpc.NewServer(grpc.Creds(serverTLSCreds))
 			defer s.Stop()
-			go func(s *grpc.Server) {
+			errChan := make(chan error, 1)
+			go func(errChan chan error, s *grpc.Server) {
 				lis, err := net.Listen("tcp", port)
-				// defer lis.Close()
+				defer lis.Close()
 				if err != nil {
-					t.Fatalf("failed to listen: %v", err)
+					errChan <- fmt.Errorf("failed to listen: %v", err)
+					close(errChan)
+					return
 				}
 				pb.RegisterGreeterServer(s, &serverImpl{})
 				if err := s.Serve(lis); err != nil {
-					t.Fatalf("failed to serve: %v", err)
+					errChan <- fmt.Errorf("failed to serve: %v", err)
+					close(errChan)
+					return
 				}
-			}(s)
+				errChan <- nil
+				close(errChan)
+			}(errChan, s)
 			clientOptions := &ClientOptions{
 				Certificates:         test.clientCert,
 				GetClientCertificate: test.clientGetCert,
@@ -428,6 +435,17 @@ func TestEnd2End(t *testing.T) {
 			clientTLSCreds, err := NewClientCreds(clientOptions)
 			if err != nil {
 				t.Fatalf("clientTLSCreds failed to create")
+			}
+			// We couldn't do a blocking check here because if server goroutine
+			// builds successfully, it will hang there forever. Thus if there is no
+			// error received at this time, we assume server builds successfully.
+			// Note that even if server goroutine is slow and fails after we have
+			// this check, the error will still be detected later when client tries
+			// to reach the server.
+			select {
+			case serverErr := <-errChan:
+				t.Fatalf("server failed to build: %v", serverErr)
+			default:
 			}
 			// ------------------------Scenario 1------------------------------------
 			// stage = 0, initial connection should succeed
