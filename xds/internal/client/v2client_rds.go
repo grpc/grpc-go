@@ -95,9 +95,18 @@ func getClusterFromRouteConfiguration(rc *xdspb.RouteConfiguration, host string)
 		return "", fmt.Errorf("matched virtual host has no routes")
 	}
 	dr := vh.Routes[len(vh.Routes)-1]
-	if match := dr.GetMatch(); match == nil || (match.GetPrefix() != "" && match.GetPrefix() != "/") {
+	match := dr.GetMatch()
+	if match == nil {
+		return "", fmt.Errorf("matched virtual host's default route doesn't have a match")
+	}
+	if prefix := match.GetPrefix(); prefix != "" && prefix != "/" {
 		// The matched virtual host is invalid. Match is not "" or "/".
-		return "", fmt.Errorf("matched virtual host is invalid")
+		return "", fmt.Errorf("matched virtual host's default route is %v, want Prefix empty string or /", match)
+	}
+	if caseSensitive := match.GetCaseSensitive(); caseSensitive != nil && !caseSensitive.Value {
+		// The case sensitive is set to false. Not set or set to true are both
+		// valid.
+		return "", fmt.Errorf("matches virtual host's default route set case-sensitive to false")
 	}
 	if route := dr.GetRoute(); route != nil {
 		return route.GetCluster(), nil

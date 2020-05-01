@@ -25,6 +25,7 @@ import (
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 	"github.com/golang/protobuf/proto"
+	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 )
@@ -138,6 +139,25 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 					},
 				},
 			},
+			wantCluster: "",
+			wantError:   true,
+		},
+		{
+			// default route's match sets case-sensitive to false.
+			name: "good-route-config-but-with-casesensitive-false",
+			rc: &xdspb.RouteConfiguration{
+				Name: goodRouteName1,
+				VirtualHosts: []*routepb.VirtualHost{{
+					Domains: []string{goodLDSTarget1},
+					Routes: []*routepb.Route{{
+						Match: &routepb.RouteMatch{
+							PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: "/"},
+							CaseSensitive: &wrapperspb.BoolValue{Value: false},
+						},
+						Action: &routepb.Route_Route{
+							Route: &routepb.RouteAction{
+								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: goodClusterName1},
+							}}}}}}},
 			wantCluster: "",
 			wantError:   true,
 		},
