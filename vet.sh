@@ -186,4 +186,32 @@ lint_package_comment() {
 }
 lint_package_comment
 
+# Check year in new Copyright lines. This also covers moved files (even if git
+# doesn't log them as moved) by comparing difference between removed Copyright
+# and newly added Copyright.
+git diff master...HEAD | awk '
+# New Copyright lines.
+# + * Copyright 2018 gRPC authors.
+# 1 2 3         4
+/+ \* Copyright/ { added[$4] += 1 }
+
+# Removed Copyright lines.
+# - * Copyright 2018 gRPC authors.
+# 1 2 3         4
+/- \* Copyright/ { removed[$4] += 1 }
+
+END {
+    "date +%Y" | getline thisYear
+    for (year in added) {
+        if (year != thisYear) {
+            diff = added[year] - removed[year]
+            if (diff > 0) {
+                print added[year]+0 " files added with OUTDATED copyright year " year
+                print removed[year]+0 " files removed with copyright year " year
+                exit 123
+            }
+        }
+    }
+}'
+
 echo SUCCESS
