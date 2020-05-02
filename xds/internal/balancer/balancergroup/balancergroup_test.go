@@ -23,6 +23,7 @@ import (
 
 	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
@@ -33,6 +34,7 @@ import (
 
 var (
 	rrBuilder        = balancer.Get(roundrobin.Name)
+	pfBuilder        = balancer.Get(grpc.PickFirstBalancerName)
 	testBalancerIDs  = []internal.LocalityID{{Region: "b1"}, {Region: "b2"}, {Region: "b3"}}
 	testBackendAddrs []resolver.Address
 )
@@ -549,6 +551,80 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 
 	bg.Start()
+}
+
+// Test that at init time, with two sub-balancers, if one sub-balancer reports
+// transient_failure, the picks won't fail with transient_failure, and should
+// instead wait for the other sub-balancer.
+func (s) TestBalancerGroup_InitOneSubBalancerTransientFailure(t *testing.T) {
+	cc := testutils.NewTestClientConn(t)
+	bg := New(cc, nil, nil)
+	bg.Start()
+
+	// Add two balancers to group and send one resolved address to both
+	// balancers.
+	bg.Add(testBalancerIDs[0], 1, rrBuilder)
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
+	sc1 := <-cc.NewSubConnCh
+
+	bg.Add(testBalancerIDs[1], 1, rrBuilder)
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
+	<-cc.NewSubConnCh
+
+	// Set one subconn to TransientFailure, this will trigger one sub-balancer
+	// to report transient failure.
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+
+	p1 := <-cc.NewPickerCh
+	for i := 0; i < 5; i++ {
+		r, err := p1.Pick(balancer.PickInfo{})
+		if err != balancer.ErrNoSubConnAvailable {
+			t.Fatalf("want pick to fail with %v, got result %v, err %v", balancer.ErrNoSubConnAvailable, r, err)
+		}
+	}
+}
+
+// Test that with two sub-balancers, both in transient_failure, if one turns
+// connecting, the overall state stays in transient_failure, and all picks
+// return transient failure error.
+func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *testing.T) {
+	cc := testutils.NewTestClientConn(t)
+	bg := New(cc, nil, nil)
+	bg.Start()
+
+	// Add two balancers to group and send one resolved address to both
+	// balancers.
+	bg.Add(testBalancerIDs[0], 1, pfBuilder)
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
+	sc1 := <-cc.NewSubConnCh
+
+	bg.Add(testBalancerIDs[1], 1, pfBuilder)
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
+	sc2 := <-cc.NewSubConnCh
+
+	// Set both subconn to TransientFailure, this will put both sub-balancers in
+	// transient failure.
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+
+	p1 := <-cc.NewPickerCh
+	for i := 0; i < 5; i++ {
+		r, err := p1.Pick(balancer.PickInfo{})
+		if err != balancer.ErrTransientFailure {
+			t.Fatalf("want pick to fail with %v, got result %v, err %v", balancer.ErrTransientFailure, r, err)
+		}
+	}
+
+	// Set one subconn to Connecting, it shouldn't change the overall state.
+	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+
+	p2 := <-cc.NewPickerCh
+	for i := 0; i < 5; i++ {
+		r, err := p2.Pick(balancer.PickInfo{})
+		if err != balancer.ErrTransientFailure {
+			t.Fatalf("want pick to fail with %v, got result %v, err %v", balancer.ErrTransientFailure, r, err)
+		}
+	}
 }
 
 func replaceDefaultSubBalancerCloseTimeout(n time.Duration) func() {
