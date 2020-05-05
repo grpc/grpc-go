@@ -125,7 +125,9 @@ func (c *TimeoutCache) Clear(runCallback bool) {
 	var entries []*cacheEntry
 	c.mu.Lock()
 	for key := range c.cache {
-		c.removeInternal(key)
+		if e, ok := c.removeInternal(key); ok {
+			entries = append(entries, e)
+		}
 	}
 	c.mu.Unlock()
 
