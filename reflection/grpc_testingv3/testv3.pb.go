@@ -312,7 +312,7 @@ func NewSearchServiceV3Client(cc *grpc.ClientConn) SearchServiceV3Client {
 
 func (c *searchServiceV3Client) Search(ctx context.Context, in *SearchRequestV3, opts ...grpc.CallOption) (*SearchResponseV3, error) {
 	out := new(SearchResponseV3)
-	err := grpc.Invoke(ctx, "/grpc.testingv3.SearchServiceV3/Search", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testingv3.SearchServiceV3/Search", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}

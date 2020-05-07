@@ -52,14 +52,6 @@ func combine(o1 []CallOption, o2 []CallOption) []CallOption {
 	return ret
 }
 
-// Invoke sends the RPC request on the wire and returns after response is
-// received.  This is typically called by generated code.
-//
-// DEPRECATED: Use ClientConn.Invoke instead.
-func Invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) error {
-	return cc.Invoke(ctx, method, args, reply, opts...)
-}
-
 var unaryStreamDesc = &StreamDesc{ServerStreams: false, ClientStreams: false}
 
 func invoke(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, opts ...CallOption) error {
