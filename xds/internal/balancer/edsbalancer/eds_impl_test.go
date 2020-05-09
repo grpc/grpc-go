@@ -46,7 +46,6 @@ func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
 		testEndpointAddrs = append(testEndpointAddrs, fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i))
 	}
-	balancergroup.NewRandomWRR = testutils.NewTestWRR
 	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond
 }
 

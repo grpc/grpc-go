@@ -19,15 +19,16 @@
 package balancergroup
 
 import (
-	"testing"
-
-	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/xds/internal"
 )
 
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
+// BalancerStateAggregator aggregates {id, config, sub-state} into a state, with
+// picker and connectivity states.
+type BalancerStateAggregator interface {
+	// UpdateState updates the state of the id.
+	//
+	// It's up to the implementation whether this will trigger an update to the
+	// parent ClientConn.
+	UpdateState(id internal.LocalityID, state balancer.State)
 }
