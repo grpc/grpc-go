@@ -67,11 +67,11 @@ func parseEndpoints(lbEndpoints []*endpointpb.LbEndpoint) []Endpoint {
 	return endpoints
 }
 
-// ParseEDSRespProto turns EDS response proto message to EndpointsUpdate.
+// parseEDSRespProto turns EDS response proto message to EndpointsUpdate.
 //
 // This is temporarily exported to be used in eds balancer, before it switches
-// to use xds client. TODO: unexport.
-func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (EndpointsUpdate, error) {
+// to use xds client.
+func parseEDSRespProto(m *xdspb.ClusterLoadAssignment) (EndpointsUpdate, error) {
 	ret := EndpointsUpdate{}
 	for _, dropPolicy := range m.GetPolicy().GetDropOverloads() {
 		ret.Drops = append(ret.Drops, parseDropPolicy(dropPolicy))
@@ -104,19 +104,6 @@ func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (EndpointsUpdate, error) 
 	return ret, nil
 }
 
-// ParseEDSRespProtoForTesting parses EDS response, and panic if parsing fails.
-// This is used by EDS balancer tests.
-//
-// TODO: delete this. The EDS balancer tests should build an EndpointsUpdate directly,
-//  instead of building and parsing a proto message.
-func ParseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) EndpointsUpdate {
-	u, err := ParseEDSRespProto(m)
-	if err != nil {
-		panic(err.Error())
-	}
-	return u
-}
-
 func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 	returnUpdate := make(map[string]EndpointsUpdate)
 	for _, r := range resp.GetResources() {
@@ -130,7 +117,7 @@ func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 		}
 		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, cla)
 
-		u, err := ParseEDSRespProto(cla)
+		u, err := parseEDSRespProto(cla)
 		if err != nil {
 			return err
 		}

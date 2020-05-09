@@ -19,7 +19,6 @@
 // balancer tests now, to generate test inputs. Eventually, EDS balancer tests
 // should generate EndpointsUpdate directly, instead of generating and parsing the
 // proto message.
-// TODO: unexported everything in this file.
 
 package client
 
@@ -35,14 +34,14 @@ import (
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 )
 
-// ClusterLoadAssignmentBuilder builds a ClusterLoadAssignment, aka EDS
+// clusterLoadAssignmentBuilder builds a ClusterLoadAssignment, aka EDS
 // response.
-type ClusterLoadAssignmentBuilder struct {
+type clusterLoadAssignmentBuilder struct {
 	v *xdspb.ClusterLoadAssignment
 }
 
-// NewClusterLoadAssignmentBuilder creates a ClusterLoadAssignmentBuilder.
-func NewClusterLoadAssignmentBuilder(clusterName string, dropPercents []uint32) *ClusterLoadAssignmentBuilder {
+// newClusterLoadAssignmentBuilder creates a clusterLoadAssignmentBuilder.
+func newClusterLoadAssignmentBuilder(clusterName string, dropPercents []uint32) *clusterLoadAssignmentBuilder {
 	var drops []*xdspb.ClusterLoadAssignment_Policy_DropOverload
 	for i, d := range dropPercents {
 		drops = append(drops, &xdspb.ClusterLoadAssignment_Policy_DropOverload{
@@ -54,7 +53,7 @@ func NewClusterLoadAssignmentBuilder(clusterName string, dropPercents []uint32) 
 		})
 	}
 
-	return &ClusterLoadAssignmentBuilder{
+	return &clusterLoadAssignmentBuilder{
 		v: &xdspb.ClusterLoadAssignment{
 			ClusterName: clusterName,
 			Policy: &xdspb.ClusterLoadAssignment_Policy{
@@ -64,14 +63,14 @@ func NewClusterLoadAssignmentBuilder(clusterName string, dropPercents []uint32) 
 	}
 }
 
-// AddLocalityOptions contains options when adding locality to the builder.
-type AddLocalityOptions struct {
+// addLocalityOptions contains options when adding locality to the builder.
+type addLocalityOptions struct {
 	Health []corepb.HealthStatus
 	Weight []uint32
 }
 
-// AddLocality adds a locality to the builder.
-func (clab *ClusterLoadAssignmentBuilder) AddLocality(subzone string, weight uint32, priority uint32, addrsWithPort []string, opts *AddLocalityOptions) {
+// addLocality adds a locality to the builder.
+func (clab *clusterLoadAssignmentBuilder) addLocality(subzone string, weight uint32, priority uint32, addrsWithPort []string, opts *addLocalityOptions) {
 	var lbEndPoints []*endpointpb.LbEndpoint
 	for i, a := range addrsWithPort {
 		host, portStr, err := net.SplitHostPort(a)
@@ -122,7 +121,7 @@ func (clab *ClusterLoadAssignmentBuilder) AddLocality(subzone string, weight uin
 	})
 }
 
-// Build builds ClusterLoadAssignment.
-func (clab *ClusterLoadAssignmentBuilder) Build() *xdspb.ClusterLoadAssignment {
+// build builds ClusterLoadAssignment.
+func (clab *clusterLoadAssignmentBuilder) build() *xdspb.ClusterLoadAssignment {
 	return clab.v
 }

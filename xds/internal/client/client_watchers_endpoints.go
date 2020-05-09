@@ -20,9 +20,13 @@ package client
 
 import (
 	"fmt"
+	"net"
+	"strconv"
 	"time"
 
 	"google.golang.org/grpc/xds/internal"
+
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 // OverloadDropConfig contains the config to drop overloads.
@@ -90,4 +94,64 @@ func (c *Client) WatchEndpoints(clusterName string, cb func(EndpointsUpdate, err
 		c.scheduleCallback(wi, EndpointsUpdate{}, fmt.Errorf("xds: EDS target %s not found, watcher timeout", clusterName))
 	})
 	return c.watch(wi)
+}
+
+// BuildEndpointsUpdate builds EndpointsUpdate.
+func BuildEndpointsUpdate(dropPercents []uint32) *EndpointsUpdate {
+	ret := &EndpointsUpdate{}
+
+	for i, d := range dropPercents {
+		drop := OverloadDropConfig{
+			Category:    fmt.Sprintf("test-drop-%d", i),
+			Numerator:   d,
+			Denominator: 100,
+		}
+		ret.Drops = append(ret.Drops, drop)
+	}
+	return ret
+}
+
+// AddLocality adds a locality to the EndpointsUpdate.
+func (eu *EndpointsUpdate) AddLocality(subzone string, weight uint32, priority uint32, addrsWithPort []string, healths []corepb.HealthStatus) {
+	priorities := make(map[uint32]struct{})
+
+	var lbEndPoints []Endpoint
+	for i, a := range addrsWithPort {
+		_, portStr, err := net.SplitHostPort(a)
+		if err != nil {
+			panic("failed to split " + a)
+		}
+		_, err = strconv.Atoi(portStr)
+		if err != nil {
+			panic("failed to atoi " + portStr)
+		}
+
+		ep := Endpoint{
+			Address: a,
+			Weight:  weight,
+		}
+		if healths != nil {
+			if i < len(healths) {
+				ep.HealthStatus = EndpointHealthStatus(healths[i])
+			}
+		}
+		lbEndPoints = append(lbEndPoints, ep)
+
+		var lid internal.LocalityID
+		if subzone != "" {
+			lid = internal.LocalityID{
+				Region:  "",
+				Zone:    "",
+				SubZone: subzone,
+			}
+		}
+
+		priorities[priority] = struct{}{}
+		eu.Localities = append(eu.Localities, Locality{
+			ID:        lid,
+			Endpoints: lbEndPoints,
+			Weight:    weight,
+			Priority:  priority,
+		})
+	}
 }

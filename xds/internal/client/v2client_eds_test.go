@@ -39,10 +39,10 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 		{
 			name: "missing-priority",
 			m: func() *xdspb.ClusterLoadAssignment {
-				clab0 := NewClusterLoadAssignmentBuilder("test", nil)
-				clab0.AddLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
-				clab0.AddLocality("locality-2", 1, 2, []string{"addr2:159"}, nil)
-				return clab0.Build()
+				clab0 := newClusterLoadAssignmentBuilder("test", nil)
+				clab0.addLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
+				clab0.addLocality("locality-2", 1, 2, []string{"addr2:159"}, nil)
+				return clab0.build()
 			}(),
 			want:    EndpointsUpdate{},
 			wantErr: true,
@@ -50,9 +50,9 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 		{
 			name: "missing-locality-ID",
 			m: func() *xdspb.ClusterLoadAssignment {
-				clab0 := NewClusterLoadAssignmentBuilder("test", nil)
-				clab0.AddLocality("", 1, 0, []string{"addr1:314"}, nil)
-				return clab0.Build()
+				clab0 := newClusterLoadAssignmentBuilder("test", nil)
+				clab0.addLocality("", 1, 0, []string{"addr1:314"}, nil)
+				return clab0.build()
 			}(),
 			want:    EndpointsUpdate{},
 			wantErr: true,
@@ -60,16 +60,16 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 		{
 			name: "good",
 			m: func() *xdspb.ClusterLoadAssignment {
-				clab0 := NewClusterLoadAssignmentBuilder("test", nil)
-				clab0.AddLocality("locality-1", 1, 1, []string{"addr1:314"}, &AddLocalityOptions{
+				clab0 := newClusterLoadAssignmentBuilder("test", nil)
+				clab0.addLocality("locality-1", 1, 1, []string{"addr1:314"}, &addLocalityOptions{
 					Health: []corepb.HealthStatus{corepb.HealthStatus_UNHEALTHY},
 					Weight: []uint32{271},
 				})
-				clab0.AddLocality("locality-2", 1, 0, []string{"addr2:159"}, &AddLocalityOptions{
+				clab0.addLocality("locality-2", 1, 0, []string{"addr2:159"}, &addLocalityOptions{
 					Health: []corepb.HealthStatus{corepb.HealthStatus_DRAINING},
 					Weight: []uint32{828},
 				})
-				return clab0.Build()
+				return clab0.build()
 			}(),
 			want: EndpointsUpdate{
 				Drops: nil,
@@ -101,7 +101,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseEDSRespProto(tt.m)
+			got, err := parseEDSRespProto(tt.m)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ParseEDSRespProto() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -135,10 +135,10 @@ var (
 	goodEDSResponse1 = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			func() *anypb.Any {
-				clab0 := NewClusterLoadAssignmentBuilder(goodEDSName, nil)
-				clab0.AddLocality("locality-1", 1, 1, []string{"addr1:314"}, nil)
-				clab0.AddLocality("locality-2", 1, 0, []string{"addr2:159"}, nil)
-				a, _ := ptypes.MarshalAny(clab0.Build())
+				clab0 := newClusterLoadAssignmentBuilder(goodEDSName, nil)
+				clab0.addLocality("locality-1", 1, 1, []string{"addr1:314"}, nil)
+				clab0.addLocality("locality-2", 1, 0, []string{"addr2:159"}, nil)
+				a, _ := ptypes.MarshalAny(clab0.build())
 				return a
 			}(),
 		},
@@ -147,10 +147,10 @@ var (
 	goodEDSResponse2 = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			func() *anypb.Any {
-				clab0 := NewClusterLoadAssignmentBuilder("not-goodEDSName", nil)
-				clab0.AddLocality("locality-1", 1, 1, []string{"addr1:314"}, nil)
-				clab0.AddLocality("locality-2", 1, 0, []string{"addr2:159"}, nil)
-				a, _ := ptypes.MarshalAny(clab0.Build())
+				clab0 := newClusterLoadAssignmentBuilder("not-goodEDSName", nil)
+				clab0.addLocality("locality-1", 1, 1, []string{"addr1:314"}, nil)
+				clab0.addLocality("locality-2", 1, 0, []string{"addr2:159"}, nil)
+				a, _ := ptypes.MarshalAny(clab0.build())
 				return a
 			}(),
 		},
