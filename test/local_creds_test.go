@@ -187,7 +187,7 @@ func (s) TestClientFail(t *testing.T) {
 func (s) TestServerFail(t *testing.T) {
 	// Use insecure at client-side which should lead to server-side failure.
 	err := testE2EFail(false /*useLocal*/)
-	if err == nil || !strings.Contains(err.Error(), "connection closed") {
+	if err == nil {
 		t.Fatalf("testE2EFail(%v) = _; want security handshake fails, %v", true, err)
 	}
 }
