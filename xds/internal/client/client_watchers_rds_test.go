@@ -21,6 +21,7 @@ package client
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
 
@@ -55,7 +56,7 @@ func (s) TestRDSWatch(t *testing.T) {
 		testRDSName: wantUpdate,
 	})
 
-	if u, err := rdsUpdateCh.Receive(); err != nil || u != (rdsUpdateErr{wantUpdate, nil}) {
+	if u, err := rdsUpdateCh.Receive(); err != nil || !cmp.Equal(u, rdsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(rdsUpdate{}, rdsUpdateErr{})) {
 		t.Errorf("unexpected rdsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -112,7 +113,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count; i++ {
-		if u, err := rdsUpdateChs[i].Receive(); err != nil || u != (rdsUpdateErr{wantUpdate, nil}) {
+		if u, err := rdsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, rdsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(rdsUpdate{}, rdsUpdateErr{})) {
 			t.Errorf("i=%v, unexpected rdsUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
@@ -124,7 +125,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count-1; i++ {
-		if u, err := rdsUpdateChs[i].Receive(); err != nil || u != (rdsUpdateErr{wantUpdate, nil}) {
+		if u, err := rdsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, rdsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(rdsUpdate{}, rdsUpdateErr{})) {
 			t.Errorf("i=%v, unexpected rdsUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
@@ -174,12 +175,12 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count; i++ {
-		if u, err := rdsUpdateChs[i].Receive(); err != nil || u != (rdsUpdateErr{wantUpdate1, nil}) {
+		if u, err := rdsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, rdsUpdateErr{wantUpdate1, nil}, cmp.AllowUnexported(rdsUpdate{}, rdsUpdateErr{})) {
 			t.Errorf("i=%v, unexpected rdsUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
 
-	if u, err := rdsUpdateCh2.Receive(); err != nil || u != (rdsUpdateErr{wantUpdate2, nil}) {
+	if u, err := rdsUpdateCh2.Receive(); err != nil || !cmp.Equal(u, rdsUpdateErr{wantUpdate2, nil}, cmp.AllowUnexported(rdsUpdate{}, rdsUpdateErr{})) {
 		t.Errorf("unexpected rdsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 }
@@ -208,7 +209,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 		testRDSName: wantUpdate,
 	})
 
-	if u, err := rdsUpdateCh.Receive(); err != nil || u != (rdsUpdateErr{wantUpdate, nil}) {
+	if u, err := rdsUpdateCh.Receive(); err != nil || !cmp.Equal(u, rdsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(rdsUpdate{}, rdsUpdateErr{})) {
 		t.Errorf("unexpected rdsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -219,7 +220,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 	})
 
 	// New watch should receives the update.
-	if u, err := rdsUpdateCh2.Receive(); err != nil || u != (rdsUpdateErr{wantUpdate, nil}) {
+	if u, err := rdsUpdateCh2.Receive(); err != nil || !cmp.Equal(u, rdsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(rdsUpdate{}, rdsUpdateErr{})) {
 		t.Errorf("unexpected rdsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
