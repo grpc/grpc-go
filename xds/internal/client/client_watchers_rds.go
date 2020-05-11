@@ -24,7 +24,8 @@ import (
 )
 
 type rdsUpdate struct {
-	clusterName string
+	clusterName     string
+	weightedCluster map[string]uint32
 }
 type rdsCallbackFunc func(rdsUpdate, error)
 

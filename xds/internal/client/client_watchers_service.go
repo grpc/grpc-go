@@ -25,7 +25,8 @@ import (
 
 // ServiceUpdate contains update about the service.
 type ServiceUpdate struct {
-	Cluster string
+	Cluster         string
+	WeightedCluster map[string]uint32
 }
 
 // WatchService uses LDS and RDS to discover information about the provided
@@ -99,7 +100,10 @@ func (w *serviceUpdateWatcher) handleRDSResp(update rdsUpdate, err error) {
 		w.serviceCb(ServiceUpdate{}, err)
 		return
 	}
-	w.serviceCb(ServiceUpdate{Cluster: update.clusterName}, nil)
+	w.serviceCb(ServiceUpdate{
+		Cluster:         update.clusterName,
+		WeightedCluster: update.weightedCluster,
+	}, nil)
 }
 
 func (w *serviceUpdateWatcher) close() {

@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 )
@@ -65,7 +66,7 @@ func (s) TestServiceWatch(t *testing.T) {
 		testRDSName: {clusterName: testCDSName},
 	})
 
-	if u, err := serviceUpdateCh.Receive(); err != nil || u != (serviceUpdateErr{wantUpdate, nil}) {
+	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(serviceUpdateErr{})) {
 		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
 	}
 }
@@ -101,7 +102,7 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 		testRDSName: {clusterName: testCDSName},
 	})
 
-	if u, err := serviceUpdateCh.Receive(); err != nil || u != (serviceUpdateErr{wantUpdate, nil}) {
+	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(serviceUpdateErr{})) {
 		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -126,7 +127,7 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 		testRDSName + "2": {clusterName: testCDSName + "2"},
 	})
 
-	if u, err := serviceUpdateCh.Receive(); err != nil || u != (serviceUpdateErr{wantUpdate2, nil}) {
+	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate2, nil}, cmp.AllowUnexported(serviceUpdateErr{})) {
 		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
 	}
 }
@@ -162,7 +163,7 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 		testRDSName: {clusterName: testCDSName},
 	})
 
-	if u, err := serviceUpdateCh.Receive(); err != nil || u != (serviceUpdateErr{wantUpdate, nil}) {
+	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(serviceUpdateErr{})) {
 		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -177,7 +178,7 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 		t.Fatalf("failed to get serviceUpdate: %v", err)
 	}
 	uu := u.(serviceUpdateErr)
-	if uu.u != (ServiceUpdate{}) {
+	if !cmp.Equal(uu.u, ServiceUpdate{}) {
 		t.Errorf("unexpected serviceUpdate: %v, want %v", uu.u, ServiceUpdate{})
 	}
 	if uu.err == nil {
@@ -193,7 +194,7 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 		testRDSName: {clusterName: testCDSName},
 	})
 
-	if u, err := serviceUpdateCh.Receive(); err != nil || u != (serviceUpdateErr{wantUpdate, nil}) {
+	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(serviceUpdateErr{})) {
 		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
