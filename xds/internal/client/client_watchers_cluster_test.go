@@ -44,6 +44,9 @@ func (s) TestClusterWatch(t *testing.T) {
 	}
 	defer c.Close()
 
+	// TODO: add a timeout to this recv.
+	// Note that this won't be necessary if we finish the TODO below to call
+	// Client directly instead of v2Client.r.
 	v2Client := <-v2ClientCh
 
 	clusterUpdateCh := testutils.NewChannel()
