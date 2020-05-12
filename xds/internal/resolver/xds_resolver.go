@@ -163,16 +163,6 @@ type xdsResolver struct {
 	cancelWatch func()
 }
 
-const jsonFormatSC = `{
-    "loadBalancingConfig":[
-      {
-        "cds_experimental":{
-          "Cluster": "%s"
-        }
-      }
-    ]
-  }`
-
 // run is a long running goroutine which blocks on receiving service updates
 // and passes it on the ClientConn.
 func (r *xdsResolver) run() {
@@ -185,7 +175,7 @@ func (r *xdsResolver) run() {
 				r.cc.ReportError(update.err)
 				continue
 			}
-			sc := fmt.Sprintf(jsonFormatSC, update.su.Cluster)
+			sc := serviceUpdateToJSON(update.su)
 			r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.client, sc)
 			r.cc.UpdateState(resolver.State{
 				ServiceConfig: r.cc.ParseServiceConfig(sc),

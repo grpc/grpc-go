@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/serviceconfig"
 )
 
 var (
@@ -46,6 +47,11 @@ var (
 	// ParseServiceConfigForTesting is for creating a fake
 	// ClientConn for resolver testing only
 	ParseServiceConfigForTesting interface{} // func(string) *serviceconfig.ParseResult
+	// EqualServiceConfigForTesting is for testing service config generation and
+	// parsing. Both a and b should be returned by ParseServiceConfigForTesting.
+	// This function removes rawJSON before compareing, and adds back
+	// afterwards.
+	EqualServiceConfigForTesting func(a, b serviceconfig.Config) bool
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.
