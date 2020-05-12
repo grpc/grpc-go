@@ -34,6 +34,7 @@ func (c *Client) scheduleCallback(wi *watchInfo, update interface{}, err error) 
 
 func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	c.mu.Lock()
+	wiu.wi.expiryTimer.Stop()
 	// Use a closure to capture the callback and type assertion, to save one
 	// more switch case.
 	//

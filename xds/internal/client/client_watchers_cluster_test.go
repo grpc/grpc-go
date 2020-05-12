@@ -274,3 +274,45 @@ func (s) TestClusterWatchExpiryTimer(t *testing.T) {
 		t.Errorf("unexpected clusterError: <nil>, want error watcher timeout")
 	}
 }
+
+// TestClusterWatchExpiryTimerStop tests the case where the client does receive
+// an CDS response for the request that it sends out. We want no error even
+// after expiry timeout.
+func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
+	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
+	defaultWatchExpiryTimeout = 500 * time.Millisecond
+	defer func() {
+		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
+	}()
+
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	defer cleanup()
+
+	c, err := New(clientOpts(testXDSServer))
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	defer c.Close()
+
+	v2Client := <-v2ClientCh
+
+	clusterUpdateCh := testutils.NewChannel()
+	c.WatchCluster(testCDSName, func(u ClusterUpdate, err error) {
+		clusterUpdateCh.Send(clusterUpdateErr{u: u, err: err})
+	})
+
+	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
+	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
+		testCDSName: wantUpdate,
+	})
+
+	if u, err := clusterUpdateCh.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
+		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
+	}
+
+	// Wait for an error, the error should never happen.
+	u, err := clusterUpdateCh.TimedReceive(defaultWatchExpiryTimeout * 2)
+	if err != testutils.ErrRecvTimeout {
+		t.Fatalf("got unexpected: %v, %v, want recv timeout", u.(clusterUpdateErr).u, u.(clusterUpdateErr).err)
+	}
+}
