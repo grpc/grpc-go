@@ -50,7 +50,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/health"
@@ -215,43 +214,18 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	if s.security != "" {
 		// Check Auth info
 		var authType, serverName string
-		var secLevel credentials.SecurityLevel
 		switch info := pr.AuthInfo.(type) {
 		case credentials.TLSInfo:
 			authType = info.AuthType()
 			serverName = info.State.ServerName
-			secLevel = info.CommonAuthInfo.SecurityLevel
-		case local.Info:
-			authType = info.AuthType()
-			secLevel = info.CommonAuthInfo.SecurityLevel
 		default:
 			return nil, status.Error(codes.Unauthenticated, "Unknown AuthInfo type")
 		}
 		if authType != s.security {
 			return nil, status.Errorf(codes.Unauthenticated, "Wrong auth type: got %q, want %q", authType, s.security)
 		}
-
-		// Check Auth info specific to credentials.TLSInfo
-		if s.security == "tls" {
-			if secLevel != credentials.PrivacyAndIntegrity {
-				return nil, status.Errorf(codes.Unauthenticated, "Wrong security level: got %q, want %q", secLevel.String(), credentials.PrivacyAndIntegrity.String())
-			}
-			if serverName != "x.test.youtube.com" {
-				return nil, status.Errorf(codes.Unauthenticated, "Unknown server name %q", serverName)
-			}
-		}
-		// Check Auth info specific to local.Info
-		if s.security == "local" {
-			switch pr.Addr.Network() {
-			case "tcp":
-				if secLevel != credentials.NoSecurity {
-					return nil, status.Errorf(codes.Unauthenticated, "Wrong security level: got %q, want %q", secLevel.String(), credentials.NoSecurity.String())
-				}
-			case "unix":
-				if secLevel != credentials.PrivacyAndIntegrity {
-					return nil, status.Errorf(codes.Unauthenticated, "Wrong security level: got %q, want %q", secLevel.String(), credentials.PrivacyAndIntegrity.String())
-				}
-			}
+		if serverName != "x.test.youtube.com" {
+			return nil, status.Errorf(codes.Unauthenticated, "Unknown server name %q", serverName)
 		}
 	}
 	// Simulate some service delay.
@@ -420,7 +394,6 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 type env struct {
 	name         string
 	network      string // The type of network such as tcp, unix, etc.
-	listenerAddr string // The address of listener.
 	security     string // The security protocol such as TLS, SSH, etc.
 	httpHandler  bool   // whether to use the http.Handler ServerTransport; requires TLS
 	balancer     string // One of "round_robin", "pick_first", or "".
@@ -444,7 +417,6 @@ func (e env) dialer(addr string, timeout time.Duration) (net.Conn, error) {
 var (
 	tcpClearEnv   = env{name: "tcp-clear-v1-balancer", network: "tcp"}
 	tcpTLSEnv     = env{name: "tcp-tls-v1-balancer", network: "tcp", security: "tls"}
-	tcpLocalEnv   = env{name: "tcp-local-v1-balancer", network: "tcp", listenerAddr: "[::1]:0", security: "local"}
 	tcpClearRREnv = env{name: "tcp-clear", network: "tcp", balancer: "round_robin"}
 	tcpTLSRREnv   = env{name: "tcp-tls", network: "tcp", security: "tls", balancer: "round_robin"}
 	handlerEnv    = env{name: "handler-tls", network: "tcp", security: "tls", httpHandler: true, balancer: "round_robin"}
@@ -635,9 +607,6 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		sopts = append(sopts, grpc.InitialConnWindowSize(te.serverInitialConnWindowSize))
 	}
 	la := "localhost:0"
-	if te.e.listenerAddr != "" {
-		la = te.e.listenerAddr
-	}
 	switch te.e.network {
 	case "unix":
 		la = "/tmp/testsock" + fmt.Sprintf("%d", time.Now().UnixNano())
@@ -653,8 +622,6 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 			te.t.Fatalf("Failed to generate credentials %v", err)
 		}
 		sopts = append(sopts, grpc.Creds(creds))
-	} else if te.e.security == "local" {
-		sopts = append(sopts, grpc.Creds(local.NewCredentials()))
 	}
 	sopts = append(sopts, te.customServerOptions...)
 	s := grpc.NewServer(sopts...)
@@ -831,8 +798,6 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 			te.t.Fatalf("Failed to load credentials: %v", err)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
-	case "local":
-		opts = append(opts, grpc.WithTransportCredentials(local.NewCredentials()))
 	case "empty":
 		// Don't add any transport creds option.
 	default:

@@ -27,13 +27,34 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/local"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
 func testE2ESucceed(network, address string) error {
 	ss := &stubServer{
-		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			pr, ok := peer.FromContext(ctx)
+			if !ok {
+				return nil, status.Error(codes.DataLoss, "Failed to get peer from ctx")
+			}
+			// Check security level
+			info := pr.AuthInfo.(local.Info)
+			secLevel := info.CommonAuthInfo.SecurityLevel
+			switch network {
+			case "unix":
+				if secLevel != credentials.PrivacyAndIntegrity {
+					return nil, status.Errorf(codes.Unauthenticated, "Wrong security level: got %q, want %q", secLevel.String(), credentials.PrivacyAndIntegrity.String())
+				}
+			case "tcp":
+				if secLevel != credentials.NoSecurity {
+					return nil, status.Errorf(codes.Unauthenticated, "Wrong security level: got %q, want %q", secLevel.String(), credentials.NoSecurity.String())
+				}
+			}
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -52,15 +73,17 @@ func testE2ESucceed(network, address string) error {
 	go s.Serve(lis)
 
 	var cc *grpc.ClientConn
-	if network == "unix" {
-		cc, err = grpc.Dial("passthrough:///"+address, grpc.WithTransportCredentials(local.NewCredentials()), grpc.WithContextDialer(
+	switch network {
+	case "unix":
+		cc, err = grpc.Dial(address, grpc.WithTransportCredentials(local.NewCredentials()), grpc.WithContextDialer(
 			func(ctx context.Context, addr string) (net.Conn, error) {
 				return net.Dial("unix", address)
 			}))
-	} else {
+	case "tcp":
 		cc, err = grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(local.NewCredentials()))
+	default:
+		return fmt.Errorf("unsupported network %q", network)
 	}
-
 	if err != nil {
 		return fmt.Errorf("Failed to dial server: %v, %v", err, lis.Addr().String())
 	}
@@ -73,21 +96,18 @@ func testE2ESucceed(network, address string) error {
 	if _, err := c.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		return fmt.Errorf("EmptyCall(_, _) = _, %v; want _, <nil>", err)
 	}
-
 	return nil
 }
 
 func (s) TestLocalhost(t *testing.T) {
-	err := testE2ESucceed("tcp", "localhost:0")
-	if err != nil {
+	if err := testE2ESucceed("tcp", "localhost:0"); err != nil {
 		t.Fatalf("Failed e2e test for localhost: %v", err)
 	}
 }
 
 func (s) TestUDS(t *testing.T) {
 	addr := fmt.Sprintf("/tmp/grpc_fullstck_test%d", time.Now().UnixNano())
-	err := testE2ESucceed("unix", addr)
-	if err != nil {
+	if err := testE2ESucceed("unix", addr); err != nil {
 		t.Fatalf("Failed e2e test for UDS: %v", err)
 	}
 }
@@ -103,21 +123,11 @@ func (c connWrapper) RemoteAddr() net.Addr {
 
 type lisWrapper struct {
 	net.Listener
+	remote net.Addr
 }
 
-func newLisWrapper(l net.Listener) net.Listener {
-	return &lisWrapper{l}
-}
-
-var remoteAddrs = []net.Addr{
-	&net.IPAddr{
-		IP:   net.ParseIP("10.8.9.10"),
-		Zone: "",
-	},
-	&net.IPAddr{
-		IP:   net.ParseIP("10.8.9.11"),
-		Zone: "",
-	},
+func newLisWrapper(l net.Listener, remote net.Addr) net.Listener {
+	return &lisWrapper{l, remote}
 }
 
 func (l *lisWrapper) Accept() (net.Conn, error) {
@@ -125,18 +135,20 @@ func (l *lisWrapper) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return connWrapper{c, remoteAddrs[0]}, nil
+	return connWrapper{c, l.remote}, nil
 }
 
-func dialer(target string, t time.Duration) (net.Conn, error) {
-	c, err := net.DialTimeout("tcp", target, t)
-	if err != nil {
-		return nil, err
+func spoofDialer(addr net.Addr) func(target string, t time.Duration) (net.Conn, error) {
+	return func(t string, d time.Duration) (net.Conn, error) {
+		c, err := net.DialTimeout("tcp", t, d)
+		if err != nil {
+			return nil, err
+		}
+		return connWrapper{c, addr}, nil
 	}
-	return connWrapper{c, remoteAddrs[1]}, nil
 }
 
-func testE2EFail(useLocal bool) error {
+func testE2EFail(dopts []grpc.DialOption) error {
 	ss := &stubServer{
 		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -154,15 +166,19 @@ func testE2EFail(useLocal bool) error {
 		return fmt.Errorf("Failed to create listener: %v", err)
 	}
 
-	go s.Serve(newLisWrapper(lis))
-
-	var cc *grpc.ClientConn
-	if useLocal {
-		cc, err = grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(local.NewCredentials()), grpc.WithDialer(dialer))
-	} else {
-		cc, err = grpc.Dial(lis.Addr().String(), grpc.WithInsecure(), grpc.WithDialer(dialer))
+	var fakeClientAddr, fakeServerAddr net.Addr
+	fakeClientAddr = &net.IPAddr{
+		IP:   net.ParseIP("10.8.9.10"),
+		Zone: "",
+	}
+	fakeServerAddr = &net.IPAddr{
+		IP:   net.ParseIP("10.8.9.11"),
+		Zone: "",
 	}
 
+	go s.Serve(newLisWrapper(lis, fakeClientAddr))
+
+	cc, err := grpc.Dial(lis.Addr().String(), append(dopts, grpc.WithDialer(spoofDialer(fakeServerAddr)))...)
 	if err != nil {
 		return fmt.Errorf("Failed to dial server: %v, %v", err, lis.Addr().String())
 	}
@@ -176,18 +192,27 @@ func testE2EFail(useLocal bool) error {
 	return err
 }
 
+func isExpected(got, want error) bool {
+	if status.Code(got) == status.Code(want) && strings.Contains(status.Convert(got).Message(), status.Convert(want).Message()) {
+		return true
+	}
+	return false
+}
+
 func (s) TestClientFail(t *testing.T) {
 	// Use local creds at client-side which should lead to client-side failure.
-	err := testE2EFail(true /*useLocal*/)
-	if err == nil || !strings.Contains(err.Error(), "local credentials rejected connection to non-local address") {
-		t.Fatalf("testE2EFail(%v) = _; want security handshake fails, %v", false, err)
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(local.NewCredentials())}
+	want := status.Error(codes.Unavailable, "transport: authentication handshake failed: local credentials rejected connection to non-local address")
+	if err := testE2EFail(opts); !isExpected(err, want) {
+		t.Fatalf("testE2EFail() = %v; want %v", err, want)
 	}
 }
 
 func (s) TestServerFail(t *testing.T) {
 	// Use insecure at client-side which should lead to server-side failure.
-	err := testE2EFail(false /*useLocal*/)
-	if err == nil {
-		t.Fatalf("testE2EFail(%v) = _; want security handshake fails, %v", true, err)
+	opts := []grpc.DialOption{grpc.WithInsecure()}
+	want := status.Error(codes.Unavailable, "connection closed")
+	if err := testE2EFail(opts); !isExpected(err, want) {
+		t.Fatalf("testE2EFail() = %v; want %v", err, want)
 	}
 }

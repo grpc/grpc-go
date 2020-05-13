@@ -197,7 +197,7 @@ func (s) TestServerAndClientHandshake(t *testing.T) {
 			}
 			got, err := serverAndClientHandshake(lis)
 			if got != tc.want {
-				t.Fatalf("ServerAndClientHandshake(%s, %s) returned %s but want %s. Error: %v", tc.testNetwork, tc.testAddr, got.String(), tc.want.String(), err)
+				t.Fatalf("serverAndClientHandshake(%s, %s) = %v, %v; want %v, nil", tc.testNetwork, tc.testAddr, got, err, tc.want)
 			}
 		})
 	}
