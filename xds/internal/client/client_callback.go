@@ -18,20 +18,15 @@
 
 package client
 
-import "fmt"
-
 type watcherInfoWithUpdate struct {
 	wi     *watchInfo
 	update interface{}
 	err    error
 }
 
+// scheduleCallback should only be called by methods of watchInfo, which checks
+// for watcher states and maintain consistency.
 func (c *Client) scheduleCallback(wi *watchInfo, update interface{}, err error) {
-	if err != errCallbackTimeout {
-		// Only stop the timer if this is not a timeout error (it can be either
-		// nil, or some other error).
-		wi.expiryTimer.Stop()
-	}
 	c.updateCh.Put(&watcherInfoWithUpdate{
 		wi:     wi,
 		update: update,
@@ -39,25 +34,8 @@ func (c *Client) scheduleCallback(wi *watchInfo, update interface{}, err error) 
 	})
 }
 
-var errCallbackTimeout = fmt.Errorf("callback timeout")
-
 func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	c.mu.Lock()
-	if wiu.err == errCallbackTimeout {
-		if wiu.wi.updateReceived {
-			// If this is timeout error, and callback has received an update, do
-			// not callback.
-			return
-		}
-		// Replace the error with more details.
-		wiu.err = fmt.Errorf("xds: %s target %s not found, watcher timeout", wiu.wi.typeURL, wiu.wi.target)
-	}
-
-	if wiu.err == nil {
-		// If this is an update, flip the boolean.
-		wiu.wi.updateReceived = true
-	}
-
 	// Use a closure to capture the callback and type assertion, to save one
 	// more switch case.
 	//
@@ -103,7 +81,7 @@ func (c *Client) newLDSUpdate(d map[string]ldsUpdate) {
 	for name, update := range d {
 		if s, ok := c.ldsWatchers[name]; ok {
 			for wi := range s {
-				c.scheduleCallback(wi, update, nil)
+				wi.newUpdate(update)
 			}
 			// Sync cache.
 			c.logger.Debugf("LDS resource with name %v, value %+v added to cache", name, update)
@@ -129,7 +107,7 @@ func (c *Client) newRDSUpdate(d map[string]rdsUpdate) {
 	for name, update := range d {
 		if s, ok := c.rdsWatchers[name]; ok {
 			for wi := range s {
-				c.scheduleCallback(wi, update, nil)
+				wi.newUpdate(update)
 			}
 			// Sync cache.
 			c.logger.Debugf("RDS resource with name %v, value %+v added to cache", name, update)
@@ -150,7 +128,7 @@ func (c *Client) newCDSUpdate(d map[string]ClusterUpdate) {
 	for name, update := range d {
 		if s, ok := c.cdsWatchers[name]; ok {
 			for wi := range s {
-				c.scheduleCallback(wi, update, nil)
+				wi.newUpdate(update)
 			}
 			// Sync cache.
 			c.logger.Debugf("CDS resource with name %v, value %+v added to cache", name, update)
@@ -176,7 +154,7 @@ func (c *Client) newEDSUpdate(d map[string]EndpointsUpdate) {
 	for name, update := range d {
 		if s, ok := c.edsWatchers[name]; ok {
 			for wi := range s {
-				c.scheduleCallback(wi, update, nil)
+				wi.newUpdate(update)
 			}
 			// Sync cache.
 			c.logger.Debugf("EDS resource with name %v, value %+v added to cache", name, update)

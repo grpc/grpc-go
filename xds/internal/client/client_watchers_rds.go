@@ -34,13 +34,14 @@ type rdsCallbackFunc func(rdsUpdate, error)
 // after the watcher is canceled. The caller needs to handle this case.
 func (c *Client) watchRDS(routeName string, cb rdsCallbackFunc) (cancel func()) {
 	wi := &watchInfo{
+		c:           c,
 		typeURL:     rdsURL,
 		target:      routeName,
 		rdsCallback: cb,
 	}
 
 	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
-		c.scheduleCallback(wi, rdsUpdate{}, errCallbackTimeout)
+		wi.timeout()
 	})
 	return c.watch(wi)
 }

@@ -43,13 +43,14 @@ type ClusterUpdate struct {
 // after the watcher is canceled. The caller needs to handle this case.
 func (c *Client) WatchCluster(clusterName string, cb func(ClusterUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
+		c:           c,
 		typeURL:     cdsURL,
 		target:      clusterName,
 		cdsCallback: cb,
 	}
 
 	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
-		c.scheduleCallback(wi, ClusterUpdate{}, errCallbackTimeout)
+		wi.timeout()
 	})
 	return c.watch(wi)
 }
