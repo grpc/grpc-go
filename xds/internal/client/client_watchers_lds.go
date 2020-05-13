@@ -19,7 +19,6 @@
 package client
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -35,13 +34,14 @@ type ldsCallbackFunc func(ldsUpdate, error)
 // after the watcher is canceled. The caller needs to handle this case.
 func (c *Client) watchLDS(serviceName string, cb ldsCallbackFunc) (cancel func()) {
 	wi := &watchInfo{
+		c:           c,
 		typeURL:     ldsURL,
 		target:      serviceName,
 		ldsCallback: cb,
 	}
 
 	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
-		c.scheduleCallback(wi, ldsUpdate{}, fmt.Errorf("xds: LDS target %s not found, watcher timeout", serviceName))
+		wi.timeout()
 	})
 	return c.watch(wi)
 }
