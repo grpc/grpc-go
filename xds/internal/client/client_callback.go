@@ -27,7 +27,6 @@ type watcherInfoWithUpdate struct {
 }
 
 func (c *Client) scheduleCallback(wi *watchInfo, update interface{}, err error) {
-	wi.expiryTimer.Stop()
 	c.updateCh.Put(&watcherInfoWithUpdate{
 		wi:     wi,
 		update: update,
@@ -39,6 +38,7 @@ var errCallbackTimeout = fmt.Errorf("callback timeout")
 
 func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	c.mu.Lock()
+	wiu.wi.expiryTimer.Stop()
 	if wiu.err == errCallbackTimeout {
 		if wiu.wi.updateReceived {
 			// If this is timeout error, and callback has received an update, do
