@@ -19,7 +19,6 @@
 package client
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -50,7 +49,7 @@ func (c *Client) WatchCluster(clusterName string, cb func(ClusterUpdate, error))
 	}
 
 	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
-		c.scheduleCallback(wi, ClusterUpdate{}, fmt.Errorf("xds: CDS target %s not found, watcher timeout", clusterName))
+		c.scheduleCallback(wi, ClusterUpdate{}, errCallbackTimeout)
 	})
 	return c.watch(wi)
 }

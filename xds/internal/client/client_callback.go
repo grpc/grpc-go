@@ -18,6 +18,8 @@
 
 package client
 
+import "fmt"
+
 type watcherInfoWithUpdate struct {
 	wi     *watchInfo
 	update interface{}
@@ -25,6 +27,7 @@ type watcherInfoWithUpdate struct {
 }
 
 func (c *Client) scheduleCallback(wi *watchInfo, update interface{}, err error) {
+	wi.expiryTimer.Stop()
 	c.updateCh.Put(&watcherInfoWithUpdate{
 		wi:     wi,
 		update: update,
@@ -32,9 +35,25 @@ func (c *Client) scheduleCallback(wi *watchInfo, update interface{}, err error) 
 	})
 }
 
+var errCallbackTimeout = fmt.Errorf("callback timeout")
+
 func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	c.mu.Lock()
-	wiu.wi.expiryTimer.Stop()
+	if wiu.err == errCallbackTimeout {
+		if wiu.wi.updateReceived {
+			// If this is timeout error, and callback has received an update, do
+			// not callback.
+			return
+		}
+		// Replace the error with more details.
+		wiu.err = fmt.Errorf("xds: %s target %s not found, watcher timeout", wiu.wi.typeURL, wiu.wi.target)
+	}
+
+	if wiu.err == nil {
+		// If this is an update, flip the boolean.
+		wiu.wi.updateReceived = true
+	}
+
 	// Use a closure to capture the callback and type assertion, to save one
 	// more switch case.
 	//

@@ -19,7 +19,6 @@
 package client
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -41,7 +40,7 @@ func (c *Client) watchRDS(routeName string, cb rdsCallbackFunc) (cancel func()) 
 	}
 
 	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
-		c.scheduleCallback(wi, rdsUpdate{}, fmt.Errorf("xds: RDS target %s not found, watcher timeout", routeName))
+		c.scheduleCallback(wi, rdsUpdate{}, errCallbackTimeout)
 	})
 	return c.watch(wi)
 }

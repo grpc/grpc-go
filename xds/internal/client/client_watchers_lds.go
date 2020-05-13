@@ -19,7 +19,6 @@
 package client
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -41,7 +40,7 @@ func (c *Client) watchLDS(serviceName string, cb ldsCallbackFunc) (cancel func()
 	}
 
 	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
-		c.scheduleCallback(wi, ldsUpdate{}, fmt.Errorf("xds: LDS target %s not found, watcher timeout", serviceName))
+		c.scheduleCallback(wi, ldsUpdate{}, errCallbackTimeout)
 	})
 	return c.watch(wi)
 }

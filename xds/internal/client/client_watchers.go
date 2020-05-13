@@ -38,10 +38,19 @@ type watchInfo struct {
 	typeURL string
 	target  string
 
+	// updateReceived is used to avoid callback receiving timeout error after
+	// receiving an update. This case can happen during a race between the
+	// expiry timer and response, which could push both update and error into
+	// the queue, and update before error.
+	//
+	// This variable must only be read/write by the run goroutine.
+	updateReceived bool
+
 	ldsCallback ldsCallbackFunc
 	rdsCallback rdsCallbackFunc
 	cdsCallback func(ClusterUpdate, error)
 	edsCallback func(EndpointsUpdate, error)
+
 	expiryTimer *time.Timer
 }
 

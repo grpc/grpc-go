@@ -19,7 +19,6 @@
 package client
 
 import (
-	"fmt"
 	"time"
 
 	"google.golang.org/grpc/xds/internal"
@@ -87,7 +86,7 @@ func (c *Client) WatchEndpoints(clusterName string, cb func(EndpointsUpdate, err
 	}
 
 	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
-		c.scheduleCallback(wi, EndpointsUpdate{}, fmt.Errorf("xds: EDS target %s not found, watcher timeout", clusterName))
+		c.scheduleCallback(wi, EndpointsUpdate{}, errCallbackTimeout)
 	})
 	return c.watch(wi)
 }
