@@ -121,7 +121,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *xdspb.RouteConfiguration, host 
 		return rdsUpdate{weightedCluster: m}, nil
 	}
 
-	return rdsUpdate{clusterName: route.GetCluster()}, nil
+	return rdsUpdate{weightedCluster: map[string]uint32{route.GetCluster(): 1}}, nil
 }
 
 func weightedClustersProtoToMap(wc *routepb.WeightedCluster) (map[string]uint32, error) {

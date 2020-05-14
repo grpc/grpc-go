@@ -156,7 +156,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		{
 			name:       "good-route-config-with-empty-string-route",
 			rc:         goodRouteConfig1,
-			wantUpdate: rdsUpdate{clusterName: goodClusterName1},
+			wantUpdate: rdsUpdate{weightedCluster: map[string]uint32{goodClusterName1: 1}},
 			wantError:  false,
 		},
 		{
@@ -172,7 +172,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 							Route: &routepb.RouteAction{
 								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: goodClusterName1},
 							}}}}}}},
-			wantUpdate: rdsUpdate{clusterName: goodClusterName1},
+			wantUpdate: rdsUpdate{weightedCluster: map[string]uint32{goodClusterName1: 1}},
 		},
 		{
 			name: "good-route-config-with-weighted_clusters",
@@ -269,7 +269,7 @@ func (s) TestRDSHandleResponse(t *testing.T) {
 			name:          "one-good-route-config",
 			rdsResponse:   goodRDSResponse1,
 			wantErr:       false,
-			wantUpdate:    &rdsUpdate{clusterName: goodClusterName1},
+			wantUpdate:    &rdsUpdate{weightedCluster: map[string]uint32{goodClusterName1: 1}},
 			wantUpdateErr: false,
 		},
 	}

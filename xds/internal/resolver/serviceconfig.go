@@ -57,8 +57,17 @@ type cdsBalancerConfig struct {
 
 func serviceUpdateToJSON(su xdsclient.ServiceUpdate) string {
 	if su.WeightedCluster == nil {
-		// We can get rid of this, and also build the struct, marshal to json.
-		// But this seems more efficient.
+		// This never happens, because xds_client never sends just the cluster
+		// name. If there's one cluster, it puts it in a map, with one entry.
+		//
+		// This mean we will build a weighted_target balancer even if there's
+		// just one cluster. Otherwise, we will need to switch the top policy
+		// between weighted_target and CDS. In case when the action changes
+		// between one cluster and multiple clusters, changing top level policy
+		// means recreating TCP connection every time.
+		//
+		// Keeping this logic for a while, in case we want to go back to
+		// changing top level policy, to make cases with one cluster efficient.
 		return fmt.Sprintf(jsonFormatClusterOnly, su.Cluster)
 	}
 	targets := make(map[string]cdsWithWeight)
