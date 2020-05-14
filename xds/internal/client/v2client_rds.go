@@ -106,7 +106,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *xdspb.RouteConfiguration, host 
 	if caseSensitive := match.GetCaseSensitive(); caseSensitive != nil && !caseSensitive.Value {
 		// The case sensitive is set to false. Not set or set to true are both
 		// valid.
-		return rdsUpdate{}, fmt.Errorf("matches virtual host's default route set case-sensitive to false")
+		return rdsUpdate{}, fmt.Errorf("matched virtual host's default route set case-sensitive to false")
 	}
 	route := dr.GetRoute()
 	if route == nil {
@@ -116,11 +116,19 @@ func generateRDSUpdateFromRouteConfiguration(rc *xdspb.RouteConfiguration, host 
 	if wc := route.GetWeightedClusters(); wc != nil {
 		m, err := weightedClustersProtoToMap(wc)
 		if err != nil {
-			return rdsUpdate{}, fmt.Errorf("match weighted cluster is invalid: %v", err)
+			return rdsUpdate{}, fmt.Errorf("matched weighted cluster is invalid: %v", err)
 		}
 		return rdsUpdate{weightedCluster: m}, nil
 	}
 
+	// When there's just one cluster, we set weightedCluster to map with one
+	// entry. This mean we will build a weighted_target balancer even if there's
+	// just one cluster.
+	//
+	// Otherwise, we will need to switch the top policy between weighted_target
+	// and CDS. In case when the action changes between one cluster and multiple
+	// clusters, changing top level policy means recreating TCP connection every
+	// time.
 	return rdsUpdate{weightedCluster: map[string]uint32{route.GetCluster(): 1}}, nil
 }
 
@@ -131,7 +139,7 @@ func weightedClustersProtoToMap(wc *routepb.WeightedCluster) (map[string]uint32,
 		totalWeight = t.Value
 	}
 	for _, cw := range wc.Clusters {
-		w := cw.Weight.Value
+		w := cw.Weight.GetValue()
 		ret[cw.Name] = w
 		totalWeight -= w
 	}

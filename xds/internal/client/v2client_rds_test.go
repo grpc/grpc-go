@@ -19,7 +19,6 @@
 package client
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
@@ -157,7 +156,6 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			name:       "good-route-config-with-empty-string-route",
 			rc:         goodRouteConfig1,
 			wantUpdate: rdsUpdate{weightedCluster: map[string]uint32{goodClusterName1: 1}},
-			wantError:  false,
 		},
 		{
 			// default route's match is not empty string, but "/".
@@ -173,6 +171,29 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: goodClusterName1},
 							}}}}}}},
 			wantUpdate: rdsUpdate{weightedCluster: map[string]uint32{goodClusterName1: 1}},
+		},
+
+		{
+			// weights not add up to total-weight.
+			name: "route-config-with-weighted_clusters_weights_not_add_up",
+			rc: &xdspb.RouteConfiguration{
+				Name: goodRouteName1,
+				VirtualHosts: []*routepb.VirtualHost{{
+					Domains: []string{goodLDSTarget1},
+					Routes: []*routepb.Route{{
+						Match: &routepb.RouteMatch{PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: "/"}},
+						Action: &routepb.Route_Route{
+							Route: &routepb.RouteAction{
+								ClusterSpecifier: &routepb.RouteAction_WeightedClusters{
+									WeightedClusters: &routepb.WeightedCluster{
+										Clusters: []*routepb.WeightedCluster_ClusterWeight{
+											{Name: "a", Weight: &wrapperspb.UInt32Value{Value: 2}},
+											{Name: "b", Weight: &wrapperspb.UInt32Value{Value: 3}},
+											{Name: "c", Weight: &wrapperspb.UInt32Value{Value: 5}},
+										},
+										TotalWeight: &wrapperspb.UInt32Value{Value: 30},
+									}}}}}}}}},
+			wantError: true,
 		},
 		{
 			name: "good-route-config-with-weighted_clusters",
@@ -434,7 +455,7 @@ func (s) TestWeightedClustersProtoToMap(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "weight not add up to total",
+			name: "weight not add up to non default total",
 			wc: &routepb.WeightedCluster{
 				Clusters: []*routepb.WeightedCluster_ClusterWeight{
 					{Name: "a", Weight: &wrapperspb.UInt32Value{Value: 1}},
@@ -443,7 +464,18 @@ func (s) TestWeightedClustersProtoToMap(t *testing.T) {
 				},
 				TotalWeight: &wrapperspb.UInt32Value{Value: 10},
 			},
-			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "weight not add up to default total",
+			wc: &routepb.WeightedCluster{
+				Clusters: []*routepb.WeightedCluster_ClusterWeight{
+					{Name: "a", Weight: &wrapperspb.UInt32Value{Value: 2}},
+					{Name: "b", Weight: &wrapperspb.UInt32Value{Value: 3}},
+					{Name: "c", Weight: &wrapperspb.UInt32Value{Value: 5}},
+				},
+				TotalWeight: nil,
+			},
 			wantErr: true,
 		},
 		{
@@ -456,8 +488,7 @@ func (s) TestWeightedClustersProtoToMap(t *testing.T) {
 				},
 				TotalWeight: &wrapperspb.UInt32Value{Value: 10},
 			},
-			want:    map[string]uint32{"a": 2, "b": 3, "c": 5},
-			wantErr: false,
+			want: map[string]uint32{"a": 2, "b": 3, "c": 5},
 		},
 		{
 			name: "ok default total weight is 100",
@@ -469,8 +500,7 @@ func (s) TestWeightedClustersProtoToMap(t *testing.T) {
 				},
 				TotalWeight: nil,
 			},
-			want:    map[string]uint32{"a": 20, "b": 30, "c": 50},
-			wantErr: false,
+			want: map[string]uint32{"a": 20, "b": 30, "c": 50},
 		},
 	}
 	for _, tt := range tests {
@@ -480,7 +510,7 @@ func (s) TestWeightedClustersProtoToMap(t *testing.T) {
 				t.Errorf("weightedClustersProtoToMap() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
+			if !cmp.Equal(got, tt.want) {
 				t.Errorf("weightedClustersProtoToMap() got = %v, want %v", got, tt.want)
 			}
 		})

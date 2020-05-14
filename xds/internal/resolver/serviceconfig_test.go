@@ -30,7 +30,11 @@ import (
 
 const (
 	testCluster1        = "test-cluster-1"
-	testClusterOnlyJSON = `{"loadBalancingConfig":[{"cds_experimental":{"Cluster": "test-cluster-1"}}]}`
+	testClusterOnlyJSON = `{"loadBalancingConfig":[{
+    "weighted_target_experimental": {
+	  "targets": { "test-cluster-1" : { "weight":1, "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}] } }
+	}
+}]}`
 	testWeightedCDSJSON = `{"loadBalancingConfig":[{
     "weighted_target_experimental": {
 	  "targets": {
@@ -54,8 +58,8 @@ func TestServiceUpdateToJSON(t *testing.T) {
 		wantJSON string // wantJSON is not to be compared verbatim.
 	}{
 		{
-			name:     "cluster only",
-			su:       client.ServiceUpdate{Cluster: testCluster1},
+			name:     "one cluster only",
+			su:       client.ServiceUpdate{WeightedCluster: map[string]uint32{testCluster1: 1}},
 			wantJSON: testClusterOnlyJSON,
 		},
 		{

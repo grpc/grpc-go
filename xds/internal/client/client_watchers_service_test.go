@@ -55,7 +55,7 @@ func (s) TestServiceWatch(t *testing.T) {
 		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
 	})
 
-	wantUpdate := ServiceUpdate{Cluster: testCDSName}
+	wantUpdate := ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
 
 	<-v2Client.addWatches[ldsURL]
 	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
@@ -63,7 +63,7 @@ func (s) TestServiceWatch(t *testing.T) {
 	})
 	<-v2Client.addWatches[rdsURL]
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {clusterName: testCDSName},
+		testRDSName: {weightedCluster: map[string]uint32{testCDSName: 1}},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(serviceUpdateErr{})) {
@@ -91,7 +91,7 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
 	})
 
-	wantUpdate := ServiceUpdate{Cluster: testCDSName}
+	wantUpdate := ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
 
 	<-v2Client.addWatches[ldsURL]
 	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
@@ -99,7 +99,7 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 	})
 	<-v2Client.addWatches[rdsURL]
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {clusterName: testCDSName},
+		testRDSName: {weightedCluster: map[string]uint32{testCDSName: 1}},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(serviceUpdateErr{})) {
@@ -114,17 +114,17 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 
 	// Another update for the old name.
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {clusterName: testCDSName},
+		testRDSName: {weightedCluster: map[string]uint32{testCDSName: 1}},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != testutils.ErrRecvTimeout {
 		t.Errorf("unexpected serviceUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 
-	wantUpdate2 := ServiceUpdate{Cluster: testCDSName + "2"}
+	wantUpdate2 := ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName + "2": 1}}
 	// RDS update for the new name.
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName + "2": {clusterName: testCDSName + "2"},
+		testRDSName + "2": {weightedCluster: map[string]uint32{testCDSName + "2": 1}},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate2, nil}, cmp.AllowUnexported(serviceUpdateErr{})) {
@@ -152,7 +152,7 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
 	})
 
-	wantUpdate := ServiceUpdate{Cluster: testCDSName}
+	wantUpdate := ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
 
 	<-v2Client.addWatches[ldsURL]
 	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
@@ -160,7 +160,7 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 	})
 	<-v2Client.addWatches[rdsURL]
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {clusterName: testCDSName},
+		testRDSName: {weightedCluster: map[string]uint32{testCDSName: 1}},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(serviceUpdateErr{})) {
@@ -191,7 +191,7 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 		testLDSName: {routeName: testRDSName},
 	})
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {clusterName: testCDSName},
+		testRDSName: {weightedCluster: map[string]uint32{testCDSName: 1}},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(serviceUpdateErr{})) {
@@ -228,8 +228,8 @@ func (s) TestServiceWatchWithNoResponseFromServer(t *testing.T) {
 
 	callbackCh := testutils.NewChannel()
 	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
-		if su.Cluster != "" {
-			callbackCh.Send(fmt.Errorf("got clusterName: %+v, want empty clusterName", su.Cluster))
+		if su.WeightedCluster != nil {
+			callbackCh.Send(fmt.Errorf("got WeightedCluster: %+v, want nil", su.WeightedCluster))
 			return
 		}
 		if err == nil {
@@ -272,8 +272,8 @@ func (s) TestServiceWatchEmptyRDS(t *testing.T) {
 
 	callbackCh := testutils.NewChannel()
 	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
-		if su.Cluster != "" {
-			callbackCh.Send(fmt.Errorf("got clusterName: %+v, want empty clusterName", su.Cluster))
+		if su.WeightedCluster != nil {
+			callbackCh.Send(fmt.Errorf("got WeightedCluster: %+v, want nil", su.WeightedCluster))
 			return
 		}
 		if err == nil {

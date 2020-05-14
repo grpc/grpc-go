@@ -51,7 +51,7 @@ func (s) TestRDSWatch(t *testing.T) {
 		rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
 	})
 
-	wantUpdate := rdsUpdate{clusterName: testCDSName}
+	wantUpdate := rdsUpdate{weightedCluster: map[string]uint32{testCDSName: 1}}
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName: wantUpdate,
 	})
@@ -107,7 +107,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 		})
 	}
 
-	wantUpdate := rdsUpdate{clusterName: testCDSName}
+	wantUpdate := rdsUpdate{weightedCluster: map[string]uint32{testCDSName: 1}}
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName: wantUpdate,
 	})
@@ -167,8 +167,8 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 		rdsUpdateCh2.Send(rdsUpdateErr{u: update, err: err})
 	})
 
-	wantUpdate1 := rdsUpdate{clusterName: testCDSName + "1"}
-	wantUpdate2 := rdsUpdate{clusterName: testCDSName + "2"}
+	wantUpdate1 := rdsUpdate{weightedCluster: map[string]uint32{testCDSName + "1": 1}}
+	wantUpdate2 := rdsUpdate{weightedCluster: map[string]uint32{testCDSName + "2": 1}}
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName + "1": wantUpdate1,
 		testRDSName + "2": wantUpdate2,
@@ -204,7 +204,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 		rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
 	})
 
-	wantUpdate := rdsUpdate{clusterName: testCDSName}
+	wantUpdate := rdsUpdate{weightedCluster: map[string]uint32{testCDSName: 1}}
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName: wantUpdate,
 	})

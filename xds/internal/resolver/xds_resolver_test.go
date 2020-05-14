@@ -266,7 +266,7 @@ func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	// Call the watchAPI callback after closing the resolver, and make sure no
 	// update is triggerred on the ClientConn.
 	xdsR.Close()
-	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{Cluster: cluster}, nil)
+	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{WeightedCluster: map[string]uint32{cluster: 1}}, nil)
 	if gotVal, gotErr := tcc.stateCh.Receive(); gotErr != testutils.ErrRecvTimeout {
 		t.Fatalf("ClientConn.UpdateState called after xdsResolver is closed: %v", gotVal)
 	}
@@ -316,7 +316,7 @@ func TestXDSResolverGoodServiceUpdate(t *testing.T) {
 		wantJSON string
 	}{
 		{
-			su:       client.ServiceUpdate{Cluster: testCluster1},
+			su:       client.ServiceUpdate{WeightedCluster: map[string]uint32{testCluster1: 1}},
 			wantJSON: testClusterOnlyJSON,
 		},
 		{
@@ -376,7 +376,7 @@ func TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
-	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{Cluster: cluster}, nil)
+	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{WeightedCluster: map[string]uint32{cluster: 1}}, nil)
 	gotState, err := tcc.stateCh.Receive()
 	if err != nil {
 		t.Fatalf("ClientConn.UpdateState returned error: %v", err)

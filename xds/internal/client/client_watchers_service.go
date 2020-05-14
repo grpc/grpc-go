@@ -25,7 +25,6 @@ import (
 
 // ServiceUpdate contains update about the service.
 type ServiceUpdate struct {
-	Cluster         string
 	WeightedCluster map[string]uint32
 }
 
@@ -101,7 +100,6 @@ func (w *serviceUpdateWatcher) handleRDSResp(update rdsUpdate, err error) {
 		return
 	}
 	w.serviceCb(ServiceUpdate{
-		Cluster:         update.clusterName,
 		WeightedCluster: update.weightedCluster,
 	}, nil)
 }

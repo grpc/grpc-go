@@ -20,7 +20,6 @@ package resolver
 
 import (
 	"encoding/json"
-	"fmt"
 
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
@@ -56,20 +55,9 @@ type cdsBalancerConfig struct {
 }
 
 func serviceUpdateToJSON(su xdsclient.ServiceUpdate) string {
-	if su.WeightedCluster == nil {
-		// This never happens, because xds_client never sends just the cluster
-		// name. If there's one cluster, it puts it in a map, with one entry.
-		//
-		// This mean we will build a weighted_target balancer even if there's
-		// just one cluster. Otherwise, we will need to switch the top policy
-		// between weighted_target and CDS. In case when the action changes
-		// between one cluster and multiple clusters, changing top level policy
-		// means recreating TCP connection every time.
-		//
-		// Keeping this logic for a while, in case we want to go back to
-		// changing top level policy, to make cases with one cluster efficient.
-		return fmt.Sprintf(jsonFormatClusterOnly, su.Cluster)
-	}
+	// Even if WeightedCluster has only one entry, we still use weighted_target
+	// as top level balancer, to avoid switching top policy between CDS and
+	// weighted_target, causing TCP connection to be recreated.
 	targets := make(map[string]cdsWithWeight)
 	for name, weight := range su.WeightedCluster {
 		targets[name] = cdsWithWeight{

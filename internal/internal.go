@@ -49,8 +49,8 @@ var (
 	ParseServiceConfigForTesting interface{} // func(string) *serviceconfig.ParseResult
 	// EqualServiceConfigForTesting is for testing service config generation and
 	// parsing. Both a and b should be returned by ParseServiceConfigForTesting.
-	// This function removes rawJSON before compareing, and adds back
-	// afterwards.
+	// This function compares the config without rawJSON stripped, in case the
+	// there's difference in white space.
 	EqualServiceConfigForTesting func(a, b serviceconfig.Config) bool
 )
 
