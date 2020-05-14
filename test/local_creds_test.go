@@ -84,7 +84,8 @@ func testE2ESucceed(network, address string) error {
 				return net.Dial("unix", addr)
 			}))
 	case "tcp":
-		_, port, err := net.SplitHostPort(lis.Addr().String())
+		var port string
+		_, port, err = net.SplitHostPort(lis.Addr().String())
 		if err != nil {
 			return fmt.Errorf("Failed to parse listener address: %v", err)
 		}
