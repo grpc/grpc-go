@@ -35,6 +35,49 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+func (s) TestNewMD(t *testing.T) {
+	for i, tv := range []struct {
+		m      map[string]string
+		errMsg string
+	}{
+		{
+			map[string]string{"hello": "world"},
+			"",
+		},
+		{
+			map[string]string{"grpc-HELLO": "world"},
+			"reserved grpc-internal key",
+		},
+		{
+			map[string]string{"____HELLO/": "world"},
+			"invalid ASCII characters",
+		},
+	} {
+		var err error
+		func() {
+			defer func() {
+				rv := recover()
+				if rv == nil {
+					return
+				}
+				err, _ = rv.(error)
+			}()
+			New(tv.m)
+		}()
+
+		switch {
+		case tv.errMsg == "":
+			if err != nil {
+				t.Fatalf("#%d: unexpected error %v", i, err)
+			}
+		case tv.errMsg != "":
+			if err == nil {
+				t.Fatalf("#%d: expected error", i)
+			}
+		}
+	}
+}
+
 func (s) TestPairsMD(t *testing.T) {
 	for _, test := range []struct {
 		// input

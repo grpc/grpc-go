@@ -24,6 +24,7 @@ package metadata // import "google.golang.org/grpc/metadata"
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -37,6 +38,8 @@ func DecodeKeyValue(k, v string) (string, string, error) {
 // MD is a mapping from metadata keys to values. Users should use the following
 // two convenience functions New and Pairs to generate MD.
 type MD map[string][]string
+
+var regex = regexp.MustCompile("[^0-9a-z-_]+")
 
 // New creates an MD from a given key-value map.
 //
@@ -53,6 +56,12 @@ func New(m map[string]string) MD {
 	md := MD{}
 	for k, val := range m {
 		key := strings.ToLower(k)
+		switch {
+		case strings.HasPrefix(key, "grpc-"):
+			panic(fmt.Errorf("%q has reserved grpc-internal key", key))
+		case len(regex.FindStringIndex(key)) > 0:
+			panic(fmt.Errorf("%q has invalid ASCII characters", key))
+		}
 		md[key] = append(md[key], val)
 	}
 	return md
