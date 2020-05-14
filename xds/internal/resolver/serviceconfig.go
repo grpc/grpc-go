@@ -27,8 +27,6 @@ import (
 const (
 	cdsName            = "cds_experimental"
 	weightedTargetName = "weighted_target_experimental"
-
-	jsonFormatClusterOnly = `{"loadBalancingConfig":[{"cds_experimental":{"Cluster": "%s"}}]}`
 )
 
 type serviceConfig struct {
