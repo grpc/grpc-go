@@ -66,6 +66,7 @@ func testE2ESucceed(network, address string) error {
 
 	testpb.RegisterTestServiceServer(s, ss)
 
+	var err error
 	lis, err := net.Listen(network, address)
 	if err != nil {
 		return fmt.Errorf("Failed to create listener: %v", err)
@@ -101,7 +102,7 @@ func testE2ESucceed(network, address string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	if _, err := c.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+	if _, err = c.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		return fmt.Errorf("EmptyCall(_, _) = _, %v; want _, <nil>", err)
 	}
 	return nil
