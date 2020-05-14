@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
@@ -48,11 +49,11 @@ func testE2ESucceed(network, address string) error {
 			switch network {
 			case "unix":
 				if secLevel != credentials.PrivacyAndIntegrity {
-					return nil, status.Errorf(codes.Unauthenticated, "Wrong security level: got %q, want %q", secLevel.String(), credentials.PrivacyAndIntegrity.String())
+					return nil, status.Errorf(codes.Unauthenticated, fmt.Sprintf("Wrong security level: got %q, want %q", secLevel, credentials.PrivacyAndIntegrity))
 				}
 			case "tcp":
 				if secLevel != credentials.NoSecurity {
-					return nil, status.Errorf(codes.Unauthenticated, "Wrong security level: got %q, want %q", secLevel.String(), credentials.NoSecurity.String())
+					return nil, status.Errorf(codes.Unauthenticated, fmt.Sprintf("Wrong security level: got %q, want %q", secLevel, credentials.NoSecurity))
 				}
 			}
 			return &testpb.Empty{}, nil
@@ -73,19 +74,26 @@ func testE2ESucceed(network, address string) error {
 	go s.Serve(lis)
 
 	var cc *grpc.ClientConn
+	lisAddr := address
+
 	switch network {
 	case "unix":
-		cc, err = grpc.Dial(address, grpc.WithTransportCredentials(local.NewCredentials()), grpc.WithContextDialer(
+		cc, err = grpc.Dial(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()), grpc.WithContextDialer(
 			func(ctx context.Context, addr string) (net.Conn, error) {
-				return net.Dial("unix", address)
+				return net.Dial("unix", addr)
 			}))
 	case "tcp":
-		cc, err = grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(local.NewCredentials()))
+		_, port, err := net.SplitHostPort(lis.Addr().String())
+		if err != nil {
+			return fmt.Errorf("Failed to parse listener address: %v", err)
+		}
+		lisAddr = "localhost:" + port
+		cc, err = grpc.Dial(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()))
 	default:
 		return fmt.Errorf("unsupported network %q", network)
 	}
 	if err != nil {
-		return fmt.Errorf("Failed to dial server: %v, %v", err, lis.Addr().String())
+		return fmt.Errorf("Failed to dial server: %v, %v", err, lisAddr)
 	}
 	defer cc.Close()
 
@@ -193,10 +201,7 @@ func testE2EFail(dopts []grpc.DialOption) error {
 }
 
 func isExpected(got, want error) bool {
-	if status.Code(got) == status.Code(want) && strings.Contains(status.Convert(got).Message(), status.Convert(want).Message()) {
-		return true
-	}
-	return false
+	return status.Code(got) == status.Code(want) && strings.Contains(status.Convert(got).Message(), status.Convert(want).Message())
 }
 
 func (s) TestClientFail(t *testing.T) {
@@ -211,7 +216,7 @@ func (s) TestClientFail(t *testing.T) {
 func (s) TestServerFail(t *testing.T) {
 	// Use insecure at client-side which should lead to server-side failure.
 	opts := []grpc.DialOption{grpc.WithInsecure()}
-	want := status.Error(codes.Unavailable, "connection closed")
+	want := status.Error(codes.Unavailable, "")
 	if err := testE2EFail(opts); !isExpected(err, want) {
 		t.Fatalf("testE2EFail() = %v; want %v", err, want)
 	}
