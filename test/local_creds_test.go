@@ -49,11 +49,11 @@ func testE2ESucceed(network, address string) error {
 			switch network {
 			case "unix":
 				if secLevel != credentials.PrivacyAndIntegrity {
-					return nil, status.Errorf(codes.Unauthenticated, fmt.Sprintf("Wrong security level: got %q, want %q", secLevel, credentials.PrivacyAndIntegrity))
+					return nil, status.Errorf(codes.Unauthenticated, "Wrong security level: got %q, want %q", secLevel, credentials.PrivacyAndIntegrity)
 				}
 			case "tcp":
 				if secLevel != credentials.NoSecurity {
-					return nil, status.Errorf(codes.Unauthenticated, fmt.Sprintf("Wrong security level: got %q, want %q", secLevel, credentials.NoSecurity))
+					return nil, status.Errorf(codes.Unauthenticated, "Wrong security level: got %q, want %q", secLevel, credentials.NoSecurity)
 				}
 			}
 			return &testpb.Empty{}, nil
@@ -66,7 +66,6 @@ func testE2ESucceed(network, address string) error {
 
 	testpb.RegisterTestServiceServer(s, ss)
 
-	var err error
 	lis, err := net.Listen(network, address)
 	if err != nil {
 		return fmt.Errorf("Failed to create listener: %v", err)
@@ -75,7 +74,7 @@ func testE2ESucceed(network, address string) error {
 	go s.Serve(lis)
 
 	var cc *grpc.ClientConn
-	lisAddr := address
+	lisAddr := lis.Addr().String()
 
 	switch network {
 	case "unix":
@@ -84,12 +83,6 @@ func testE2ESucceed(network, address string) error {
 				return net.Dial("unix", addr)
 			}))
 	case "tcp":
-		var port string
-		_, port, err = net.SplitHostPort(lis.Addr().String())
-		if err != nil {
-			return fmt.Errorf("Failed to parse listener address: %v", err)
-		}
-		lisAddr = "localhost:" + port
 		cc, err = grpc.Dial(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()))
 	default:
 		return fmt.Errorf("unsupported network %q", network)
@@ -218,8 +211,7 @@ func (s) TestClientFail(t *testing.T) {
 func (s) TestServerFail(t *testing.T) {
 	// Use insecure at client-side which should lead to server-side failure.
 	opts := []grpc.DialOption{grpc.WithInsecure()}
-	want := status.Error(codes.Unavailable, "")
-	if err := testE2EFail(opts); !isExpected(err, want) {
-		t.Fatalf("testE2EFail() = %v; want %v", err, want)
+	if err := testE2EFail(opts); status.Code(err) != codes.Unavailable {
+		t.Fatalf("testE2EFail() = %v; want %v", err, codes.Unavailable)
 	}
 }
