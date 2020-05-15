@@ -33,9 +33,7 @@ import (
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
-// xDS balancer name is xds_experimental while resolver scheme is
-// xds-experimental since "_" is not a valid character in the URL.
-const xdsScheme = "xds-experimental"
+const xdsScheme = "xds"
 
 // For overriding in unittests.
 var (

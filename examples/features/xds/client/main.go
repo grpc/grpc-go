@@ -49,7 +49,7 @@ Usage: client [name [target]]
   name
         The name you wish to be greeted by. Defaults to %q
   target
-        The URI of the server, e.g. "xds-experimental:///helloworld-service". Defaults to %q
+        The URI of the server, e.g. "xds:///helloworld-service". Defaults to %q
 `, defaultName, defaultTarget)
 
 		flag.PrintDefaults()

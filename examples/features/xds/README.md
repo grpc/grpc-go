@@ -29,9 +29,9 @@ The client application needs to import the xDS package to install the resolver a
 _ "google.golang.org/grpc/xds/experimental" // To install the xds resolvers and balancers.
 ```
 
-Then, use `xds-experimental` target scheme for the ClientConn.
+Then, use `xds` target scheme for the ClientConn.
 
 ```
 $ export GRPC_XDS_BOOTSTRAP=/path/to/bootstrap.json
-$ go run client/main.go "xDS world" xds-experimental:///target_service
+$ go run client/main.go "xDS world" xds:///target_service
 ```
