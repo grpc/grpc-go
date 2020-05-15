@@ -62,6 +62,7 @@ type serviceUpdateWatcher struct {
 
 	mu        sync.Mutex
 	closed    bool
+	rdsName   string
 	rdsCancel func()
 }
 
@@ -82,6 +83,10 @@ func (w *serviceUpdateWatcher) handleLDSResp(update ldsUpdate, err error) {
 		return
 	}
 
+	if w.rdsName == update.routeName {
+		return
+	}
+	w.rdsName = update.routeName
 	if w.rdsCancel != nil {
 		w.rdsCancel()
 	}
