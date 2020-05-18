@@ -135,8 +135,8 @@ func generateRDSUpdateFromRouteConfiguration(rc *xdspb.RouteConfiguration, host 
 func weightedClustersProtoToMap(wc *routepb.WeightedCluster) (map[string]uint32, error) {
 	ret := make(map[string]uint32)
 	var totalWeight uint32 = 100
-	if t := wc.TotalWeight; t != nil {
-		totalWeight = t.Value
+	if t := wc.GetTotalWeight().GetValue(); t != 0 {
+		totalWeight = t
 	}
 	for _, cw := range wc.Clusters {
 		w := cw.Weight.GetValue()

@@ -406,8 +406,8 @@ func init() {
 	internal.EqualServiceConfigForTesting = equalServiceConfig
 }
 
-// equalServiceConfig compares two configs. If modifies the configs to remove
-// rawJSONString before comparing, and adds it backwards.
+// equalServiceConfig compares two configs. The rawJSONString field is ignored,
+// because they may diff in white spaces.
 //
 // If any of them is NOT *ServiceConfig, return false.
 func equalServiceConfig(a, b serviceconfig.Config) bool {
@@ -427,5 +427,8 @@ func equalServiceConfig(a, b serviceconfig.Config) bool {
 		aa.rawJSONString = aaRaw
 		bb.rawJSONString = bbRaw
 	}()
+	// Using reflect.DeepEqual instead of cmp.Equal because many balancer
+	// configs are unexported, and cmp.Equal cannot compare unexported fields
+	// from unexported structs.
 	return reflect.DeepEqual(aa, bb)
 }

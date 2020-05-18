@@ -20,6 +20,7 @@ package resolver
 
 import (
 	"encoding/json"
+	"fmt"
 
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
@@ -52,7 +53,7 @@ type cdsBalancerConfig struct {
 	Cluster string `json:"cluster"`
 }
 
-func serviceUpdateToJSON(su xdsclient.ServiceUpdate) string {
+func serviceUpdateToJSON(su xdsclient.ServiceUpdate) (string, error) {
 	// Even if WeightedCluster has only one entry, we still use weighted_target
 	// as top level balancer, to avoid switching top policy between CDS and
 	// weighted_target, causing TCP connection to be recreated.
@@ -73,7 +74,7 @@ func serviceUpdateToJSON(su xdsclient.ServiceUpdate) string {
 	}
 	bs, err := json.Marshal(sc)
 	if err != nil {
-		panic(err.Error())
+		return "", fmt.Errorf("failed to marshal json: %v", err)
 	}
-	return string(bs)
+	return string(bs), nil
 }

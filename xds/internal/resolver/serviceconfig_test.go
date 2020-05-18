@@ -73,7 +73,11 @@ func TestServiceUpdateToJSON(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotJSON := serviceUpdateToJSON(tt.su)
+			gotJSON, err := serviceUpdateToJSON(tt.su)
+			if err != nil {
+				t.Errorf("serviceUpdateToJSON returned error: %v", err)
+				return
+			}
 
 			gotParsed := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(gotJSON)
 			wantParsed := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(tt.wantJSON)

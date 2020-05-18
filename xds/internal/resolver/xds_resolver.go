@@ -175,7 +175,12 @@ func (r *xdsResolver) run() {
 				r.cc.ReportError(update.err)
 				continue
 			}
-			sc := serviceUpdateToJSON(update.su)
+			sc, err := serviceUpdateToJSON(update.su)
+			if err != nil {
+				r.logger.Warningf("failed to convert update to service config: %v", err)
+				r.cc.ReportError(err)
+				continue
+			}
 			r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.client, sc)
 			r.cc.UpdateState(resolver.State{
 				ServiceConfig: r.cc.ParseServiceConfig(sc),

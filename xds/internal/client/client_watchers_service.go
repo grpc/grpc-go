@@ -25,6 +25,8 @@ import (
 
 // ServiceUpdate contains update about the service.
 type ServiceUpdate struct {
+	// WeightedCluster is a map from cluster names (CDS resource to watch) to
+	// their weights.
 	WeightedCluster map[string]uint32
 }
 
