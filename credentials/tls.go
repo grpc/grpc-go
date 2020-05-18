@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"net/url"
 
 	"google.golang.org/grpc/credentials/internal"
 )
@@ -32,7 +33,8 @@ import (
 // TLSInfo contains the auth information for a TLS authenticated connection.
 // It implements the AuthInfo interface.
 type TLSInfo struct {
-	State tls.ConnectionState
+	State    tls.ConnectionState
+	SpiffeID *url.URL
 	CommonAuthInfo
 }
 
@@ -51,6 +53,42 @@ func (t TLSInfo) GetSecurityValue() ChannelzSecurityValue {
 		v.RemoteCertificate = t.State.PeerCertificates[0].Raw
 	}
 	return v
+}
+
+// ParseSpiffeID parses the Spiffe ID from State and fill it into SpiffeID.
+// An error is returned only when we are sure Spiffe ID is used but the format
+// is wrong.
+func (t *TLSInfo) ParseSpiffeID() error {
+	if len(t.State.PeerCertificates) == 0 || len(t.State.PeerCertificates[0].URIs) == 0 {
+		return nil
+	}
+	spiffeIDCnt := 0
+	var spiffeID url.URL
+	for _, uri := range t.State.PeerCertificates[0].URIs {
+		if uri == nil || uri.Scheme != "spiffe" || uri.Opaque != "" || (uri.User != nil && uri.User.Username() != "") {
+			continue
+		}
+		// From this point, we assume the uri is intended for a Spiffe ID.
+		if len(uri.Host)+len(uri.Scheme)+len(uri.RawPath)+4 > 2048 ||
+			len(uri.Host)+len(uri.Scheme)+len(uri.Path)+4 > 2048 {
+			return fmt.Errorf("invalid SPIFFE ID: total ID length larger than 2048 bytes")
+		}
+		if len(uri.Host) == 0 || len(uri.RawPath) == 0 || len(uri.Path) == 0 {
+			return fmt.Errorf("invalid SPIFFE ID: domain or workload ID is empty")
+		}
+		if len(uri.Host) > 255 {
+			return fmt.Errorf("invalid SPIFFE ID: domain length larger than 255 characters")
+		}
+		// We use a default deep copy since we know the User field of a SPIFFE ID is empty.
+		spiffeID = *uri
+		spiffeIDCnt++
+	}
+	// A standard SPIFFE ID should be unique. If there are more, we don't raise
+	// any errors but simply not plumbing any of them.
+	if spiffeIDCnt == 1 {
+		t.SpiffeID = &spiffeID
+	}
+	return nil
 }
 
 // tlsCreds is the credentials required for authenticating a connection using TLS.
@@ -94,7 +132,16 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 		conn.Close()
 		return nil, nil, ctx.Err()
 	}
-	return internal.WrapSyscallConn(rawConn, conn), TLSInfo{conn.ConnectionState(), CommonAuthInfo{PrivacyAndIntegrity}}, nil
+	tlsInfo := TLSInfo{
+		State: conn.ConnectionState(),
+		CommonAuthInfo: CommonAuthInfo{
+			SecurityLevel: PrivacyAndIntegrity,
+		},
+	}
+	if err := tlsInfo.ParseSpiffeID(); err != nil {
+		return nil, nil, err
+	}
+	return internal.WrapSyscallConn(rawConn, conn), tlsInfo, nil
 }
 
 func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error) {
@@ -103,7 +150,16 @@ func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error)
 		conn.Close()
 		return nil, nil, err
 	}
-	return internal.WrapSyscallConn(rawConn, conn), TLSInfo{conn.ConnectionState(), CommonAuthInfo{PrivacyAndIntegrity}}, nil
+	tlsInfo := TLSInfo{
+		State: conn.ConnectionState(),
+		CommonAuthInfo: CommonAuthInfo{
+			SecurityLevel: PrivacyAndIntegrity,
+		},
+	}
+	if err := tlsInfo.ParseSpiffeID(); err != nil {
+		return nil, nil, err
+	}
+	return internal.WrapSyscallConn(rawConn, conn), tlsInfo, nil
 }
 
 func (c *tlsCreds) Clone() TransportCredentials {
