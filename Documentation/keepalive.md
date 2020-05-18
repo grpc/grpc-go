@@ -2,7 +2,7 @@
 
 gRPC sends http2 pings on the transport to detect if the connection is down. If
 the ping is not acknowledged by the other side within a certain period, the
-connection will be close. Note that pings are only necessary when there's no
+connection will be closed. Note that pings are only necessary when there's no
 activity on the connection.
 
 For how to configure keepalive, see
