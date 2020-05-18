@@ -214,3 +214,18 @@ func (r *xdsResolver) Close() {
 	r.cancelCtx()
 	r.logger.Infof("Shutdown")
 }
+
+// Keep scheme with "-experimental" temporarily. Remove after one release.
+const schemeExperimental = "xds-experimental"
+
+type xdsResolverExperimentalBuilder struct {
+	xdsResolverBuilder
+}
+
+func (*xdsResolverExperimentalBuilder) Scheme() string {
+	return schemeExperimental
+}
+
+func init() {
+	resolver.Register(&xdsResolverExperimentalBuilder{})
+}
