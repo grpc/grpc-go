@@ -33,9 +33,7 @@ import (
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
-// xDS balancer name is xds_experimental while resolver scheme is
-// xds-experimental since "_" is not a valid character in the URL.
-const xdsScheme = "xds-experimental"
+const xdsScheme = "xds"
 
 // For overriding in unittests.
 var (
@@ -215,4 +213,19 @@ func (r *xdsResolver) Close() {
 	r.client.Close()
 	r.cancelCtx()
 	r.logger.Infof("Shutdown")
+}
+
+// Keep scheme with "-experimental" temporarily. Remove after one release.
+const schemeExperimental = "xds-experimental"
+
+type xdsResolverExperimentalBuilder struct {
+	xdsResolverBuilder
+}
+
+func (*xdsResolverExperimentalBuilder) Scheme() string {
+	return schemeExperimental
+}
+
+func init() {
+	resolver.Register(&xdsResolverExperimentalBuilder{})
 }

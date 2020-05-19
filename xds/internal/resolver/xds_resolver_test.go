@@ -54,6 +54,15 @@ var (
 	target = resolver.Target{Endpoint: targetStr}
 )
 
+func TestRegister(t *testing.T) {
+	for _, s := range []string{"xds", "xds-experimental"} {
+		b := resolver.Get(s)
+		if b == nil {
+			t.Errorf("scheme %v is not registered", s)
+		}
+	}
+}
+
 // testClientConn is a fake implemetation of resolver.ClientConn. All is does
 // is to store the state received from the resolver locally and signal that
 // event through a channel.
