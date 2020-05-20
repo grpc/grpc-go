@@ -84,6 +84,8 @@ func (w *serviceUpdateWatcher) handleLDSResp(update ldsUpdate, err error) {
 	}
 
 	if w.rdsName == update.routeName {
+		// If the new routeName is same as the previous, don't cancel and
+		// restart the RDS watch.
 		return
 	}
 	w.rdsName = update.routeName
