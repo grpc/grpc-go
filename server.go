@@ -42,7 +42,6 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
@@ -88,12 +87,6 @@ type service struct {
 	mdata  interface{}
 }
 
-type serverWorkerData struct {
-	st     transport.ServerTransport
-	wg     *sync.WaitGroup
-	stream *transport.Stream
-}
-
 // Server is a gRPC server to serve RPC requests.
 type Server struct {
 	opts serverOptions
@@ -115,7 +108,7 @@ type Server struct {
 	channelzID int64 // channelz unique identification number
 	czData     *channelzData
 
-	serverWorkerChannels []chan *serverWorkerData
+	serverWorkerCh chan *transport.Stream
 }
 
 type serverOptions struct {
@@ -142,7 +135,7 @@ type serverOptions struct {
 	connectionTimeout     time.Duration
 	maxHeaderListSize     *uint32
 	headerTableSize       *uint32
-	numServerWorkers      uint32
+	serverWorkers         bool
 }
 
 var defaultServerOptions = serverOptions{
@@ -420,64 +413,15 @@ func HeaderTableSize(s uint32) ServerOption {
 	})
 }
 
-// NumStreamWorkers returns a ServerOption that sets the number of worker
-// goroutines that should be used to process incoming streams. Setting this to
-// zero (default) will disable workers and spawn a new goroutine for each
-// stream.
+// WithStreamWorkers returns a ServerOption that enables reuse of workers for
+// handling gRPC requests. This is mostly useful only for cases in which the
+// gRPC handlers use significant stack space.
 //
 // This API is EXPERIMENTAL.
-func NumStreamWorkers(numServerWorkers uint32) ServerOption {
-	// TODO: If/when this API gets stabilized (i.e. stream workers become the
-	// only way streams are processed), change the behavior of the zero value to
-	// a sane default. Preliminary experiments suggest that a value equal to the
-	// number of CPUs available is most performant; requires thorough testing.
+func WithStreamWorkers() ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
-		o.numServerWorkers = numServerWorkers
+		o.serverWorkers = true
 	})
-}
-
-// serverWorkerResetThreshold defines how often the stack must be reset. Every
-// N requests, by spawning a new goroutine in its place, a worker can reset its
-// stack so that large stacks don't live in memory forever. 2^16 should allow
-// each goroutine stack to live for at least a few seconds in a typical
-// workload (assuming a QPS of a few thousand requests/sec).
-const serverWorkerResetThreshold = 1 << 16
-
-// serverWorkers blocks on a *transport.Stream channel forever and waits for
-// data to be fed by serveStreams. This allows different requests to be
-// processed by the same goroutine, removing the need for expensive stack
-// re-allocations (see the runtime.morestack problem [1]).
-//
-// [1] https://github.com/golang/go/issues/18138
-func (s *Server) serverWorker(ch chan *serverWorkerData) {
-	// To make sure all server workers don't reset at the same time, choose a
-	// random number of iterations before resetting.
-	threshold := serverWorkerResetThreshold + grpcrand.Intn(serverWorkerResetThreshold)
-	for completed := 0; completed < threshold; completed++ {
-		data, ok := <-ch
-		if !ok {
-			return
-		}
-		s.handleStream(data.st, data.stream, s.traceInfo(data.st, data.stream))
-		data.wg.Done()
-	}
-	go s.serverWorker(ch)
-}
-
-// initServerWorkers creates worker goroutines and channels to process incoming
-// connections to reduce the time spent overall on runtime.morestack.
-func (s *Server) initServerWorkers() {
-	s.serverWorkerChannels = make([]chan *serverWorkerData, s.opts.numServerWorkers)
-	for i := uint32(0); i < s.opts.numServerWorkers; i++ {
-		s.serverWorkerChannels[i] = make(chan *serverWorkerData)
-		go s.serverWorker(s.serverWorkerChannels[i])
-	}
-}
-
-func (s *Server) stopServerWorkers() {
-	for i := uint32(0); i < s.opts.numServerWorkers; i++ {
-		close(s.serverWorkerChannels[i])
-	}
 }
 
 // NewServer creates a gRPC server which has no service registered and has not
@@ -504,8 +448,8 @@ func NewServer(opt ...ServerOption) *Server {
 		s.events = trace.NewEventLog("grpc.Server", fmt.Sprintf("%s:%d", file, line))
 	}
 
-	if s.opts.numServerWorkers > 0 {
-		s.initServerWorkers()
+	if s.opts.serverWorkers {
+		s.serverWorkerCh = make(chan *transport.Stream)
 	}
 
 	if channelz.IsOn() {
@@ -814,25 +758,19 @@ func (s *Server) serveStreams(st transport.ServerTransport) {
 	defer st.Close()
 	var wg sync.WaitGroup
 
-	var roundRobinCounter uint32
 	st.HandleStreams(func(stream *transport.Stream) {
 		wg.Add(1)
-		if s.opts.numServerWorkers > 0 {
-			data := &serverWorkerData{st: st, wg: &wg, stream: stream}
+		if s.opts.serverWorkers {
 			select {
-			case s.serverWorkerChannels[atomic.AddUint32(&roundRobinCounter, 1)%s.opts.numServerWorkers] <- data:
+			case s.serverWorkerCh <- stream:
+				// An idle worker was available to handle the stream.
 			default:
-				// If all stream workers are busy, fallback to the default code path.
-				go func() {
-					s.handleStream(st, stream, s.traceInfo(st, stream))
-					wg.Done()
-				}()
+				// All workers are busy, or there are no workers: create a new one.
+				go s.serverWorker(st, &wg, stream)
 			}
 		} else {
-			go func() {
-				defer wg.Done()
-				s.handleStream(st, stream, s.traceInfo(st, stream))
-			}()
+			// Handle each stream in a separate goroutine.
+			go s.handleWork(st, &wg, stream)
 		}
 	}, func(ctx context.Context, method string) context.Context {
 		if !EnableTracing {
@@ -842,6 +780,43 @@ func (s *Server) serveStreams(st transport.ServerTransport) {
 		return trace.NewContext(ctx, tr)
 	})
 	wg.Wait()
+}
+
+// handleWorker is just a convenience function to cleanly and consistently handle
+// the need to call wg.Done() once done. It is used by both serveStreams as well as
+// from serverWorker.
+// This could potentially be moved to handleStream in a future refactoring.
+func (s *Server) handleWork(st transport.ServerTransport, wg *sync.WaitGroup, stream *transport.Stream) {
+	defer wg.Done()
+	s.handleStream(st, stream, s.traceInfo(st, stream))
+}
+
+// serverWorkers blocks on a *transport.Stream channel and waits for
+// data to be fed by serveStreams. This allows different requests to be
+// processed by the same goroutine, removing the need for expensive stack
+// re-allocations (see the runtime.morestack problem [1]).
+//
+// [1] https://github.com/golang/go/issues/18138
+func (s *Server) serverWorker(st transport.ServerTransport, wg *sync.WaitGroup, stream *transport.Stream) {
+	const idleWorkerTimeout = 1 * time.Second
+
+	// Immediately handle the initial request.
+	s.handleWork(st, wg, stream)
+
+	// Worker loop: this worker will keep serving requests until it remains
+	// idle for a duration of idleWorkerTimeout. There is no need to periodically
+	// return, as the runtime is capable of shrinking the worker stack during GC.
+	for {
+		select {
+		case stream, ok := <-s.serverWorkerCh:
+			if !ok {
+				return
+			}
+			s.handleWork(st, wg, stream)
+		case <-time.After(idleWorkerTimeout):
+			return
+		}
+	}
 }
 
 var _ http.Handler = (*Server)(nil)
@@ -1596,8 +1571,8 @@ func (s *Server) Stop() {
 	for c := range st {
 		c.Close()
 	}
-	if s.opts.numServerWorkers > 0 {
-		s.stopServerWorkers()
+	if s.opts.serverWorkers {
+		close(s.serverWorkerCh)
 	}
 
 	s.mu.Lock()
