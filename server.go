@@ -824,8 +824,8 @@ func (s *Server) serveStreams(st transport.ServerTransport) {
 			default:
 				// If all stream workers are busy, fallback to the default code path.
 				go func() {
+					defer wg.Done()
 					s.handleStream(st, stream, s.traceInfo(st, stream))
-					wg.Done()
 				}()
 			}
 		} else {
