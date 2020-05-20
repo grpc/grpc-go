@@ -221,12 +221,14 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		// address specific arbitrary data to reach the credential handshaker.
 		contextWithHandshakeInfo := internal.NewClientHandshakeInfoContext.(func(context.Context, credentials.ClientHandshakeInfo) context.Context)
 		connectCtx = contextWithHandshakeInfo(connectCtx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
-		scheme = "https"
 		conn, authInfo, err = transportCreds.ClientHandshake(connectCtx, addr.ServerName, conn)
 		if err != nil {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: authentication handshake failed: %v", err)
 		}
 		isSecure = true
+		if transportCreds.Info().SecurityProtocol == "tls" {
+			scheme = "https"
+		}
 	}
 	dynamicWindow := true
 	icwz := int32(initialWindowSize)

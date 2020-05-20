@@ -58,9 +58,11 @@ type PerRPCCredentials interface {
 type SecurityLevel int
 
 const (
-	// NoSecurity indicates a connection is insecure.
+	// Invalid indicates an invalid security level.
 	// The zero SecurityLevel value is invalid for backward compatibility.
-	NoSecurity SecurityLevel = iota + 1
+	Invalid SecurityLevel = iota
+	// NoSecurity indicates a connection is insecure.
+	NoSecurity
 	// IntegrityOnly indicates a connection only provides integrity protection.
 	IntegrityOnly
 	// PrivacyAndIntegrity indicates a connection provides both privacy and integrity protection.
@@ -237,7 +239,7 @@ func CheckSecurityLevel(ctx context.Context, level SecurityLevel) error {
 	}
 	if ci, ok := ri.AuthInfo.(internalInfo); ok {
 		// CommonAuthInfo.SecurityLevel has an invalid value.
-		if ci.GetCommonAuthInfo().SecurityLevel == 0 {
+		if ci.GetCommonAuthInfo().SecurityLevel == Invalid {
 			return nil
 		}
 		if ci.GetCommonAuthInfo().SecurityLevel < level {
