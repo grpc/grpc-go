@@ -60,10 +60,10 @@ func (t *TLSInfo) ParseSpiffeID() error {
 	}
 	if spiffeIDCnt == 1 {
 		t.SpiffeID = &spiffeID
-	} else {
+	} else if spiffeIDCnt > 1 {
 		// A standard SPIFFE ID should be unique. If there are more, we log this
 		// mis-behavior and not plumb any of them.
-		grpclog.Info("invalid SPIFFE ID: multiple SPIFFE IDs")
+		grpclog.Warning("invalid SPIFFE ID: multiple SPIFFE IDs")
 	}
 	return nil
 }
