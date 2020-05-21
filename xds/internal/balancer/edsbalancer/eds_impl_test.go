@@ -18,7 +18,6 @@ package edsbalancer
 
 import (
 	"fmt"
-	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -385,70 +384,6 @@ func (s) TestClose(t *testing.T) {
 	// This is what could happen when switching between fallback and eds. This
 	// make sure it doesn't panic.
 	edsb.close()
-}
-
-// TestEDS_EmptyUpdate covers the cases when eds impl receives an empty update.
-//
-// It should send an error picker with transient failure to the parent.
-func (s) TestEDS_EmptyUpdate(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
-	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
-
-	// The first update is an empty update.
-	edsb.handleEDSResponse(xdsclient.EndpointsUpdate{})
-	// Pick should fail with transient failure, and all priority removed error.
-	perr0 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		_, err := perr0.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(err, errAllPrioritiesRemoved) {
-			t.Fatalf("picker.Pick, got error %v, want error %v", err, errAllPrioritiesRemoved)
-		}
-	}
-
-	// One locality with one backend.
-	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
-	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
-
-	sc1 := <-cc.NewSubConnCh
-	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
-
-	// Pick with only the first backend.
-	p1 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSCSt.SubConn, sc1) {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
-		}
-	}
-
-	edsb.handleEDSResponse(xdsclient.EndpointsUpdate{})
-	// Pick should fail with transient failure, and all priority removed error.
-	perr1 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		_, err := perr1.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(err, errAllPrioritiesRemoved) {
-			t.Fatalf("picker.Pick, got error %v, want error %v", err, errAllPrioritiesRemoved)
-		}
-	}
-
-	// Handle another update with priorities and localities.
-	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
-
-	sc2 := <-cc.NewSubConnCh
-	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
-
-	// Pick with only the first backend.
-	p2 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p2.Pick(balancer.PickInfo{})
-		if !reflect.DeepEqual(gotSCSt.SubConn, sc2) {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
-		}
-	}
 }
 
 // Create XDS balancer, and update sub-balancer before handling eds responses.

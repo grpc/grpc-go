@@ -18,7 +18,6 @@
 package edsbalancer
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -27,8 +26,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 )
-
-var errAllPrioritiesRemoved = errors.New("no locality is provided, all priorities are removed")
 
 // handlePriorityChange handles priority after EDS adds/removes a
 // priority.
@@ -49,7 +46,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityChange() {
 	// Everything was removed by EDS.
 	if !edsImpl.priorityLowest.isSet() {
 		edsImpl.priorityInUse = newPriorityTypeUnset()
-		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(errAllPrioritiesRemoved)})
+		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(balancer.ErrTransientFailure)})
 		return
 	}
 

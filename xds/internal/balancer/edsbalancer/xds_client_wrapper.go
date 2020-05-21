@@ -258,22 +258,17 @@ func (c *xdsclientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attr
 	}
 }
 
-func (c *xdsclientWrapper) cancelWatch() {
-	c.loadReportServer = nil
-	if c.cancelLoadReport != nil {
-		c.cancelLoadReport()
-	}
-	c.edsServiceName = ""
-	if c.cancelEndpointsWatch != nil {
-		c.cancelEndpointsWatch()
-	}
-}
-
 func (c *xdsclientWrapper) close() {
-	c.cancelWatch()
 	if c.xdsclient != nil && c.balancerName != "" {
 		// Only close xdsclient if it's not from attributes.
 		c.xdsclient.Close()
+	}
+
+	if c.cancelLoadReport != nil {
+		c.cancelLoadReport()
+	}
+	if c.cancelEndpointsWatch != nil {
+		c.cancelEndpointsWatch()
 	}
 }
 
