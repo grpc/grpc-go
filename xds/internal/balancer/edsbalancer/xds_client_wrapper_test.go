@@ -64,7 +64,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 	}
 	defer cleanup()
 
-	cw := newXDSClientWrapper(nil, nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, nil)
+	cw := newXDSClientWrapper(nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, nil)
 	defer cw.close()
 
 	for _, test := range []struct {
@@ -159,12 +159,11 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 //   edsBalancer with the received error.
 func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	edsRespChan := testutils.NewChannel()
-	newEDS := func(update xdsclient.EndpointsUpdate) error {
-		edsRespChan.Send(update)
-		return nil
+	newEDS := func(update xdsclient.EndpointsUpdate, err error) {
+		edsRespChan.Send(&edsUpdate{resp: update, err: err})
 	}
 
-	cw := newXDSClientWrapper(newEDS, nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, nil)
+	cw := newXDSClientWrapper(newEDS, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, nil)
 	defer cw.close()
 
 	xdsC := fakeclient.NewClient()
@@ -176,14 +175,20 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	if gotCluster != testEDSClusterName {
 		t.Fatalf("xdsClient.WatchEndpoints() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
 	}
-	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, errors.New("EDS watch callback error"))
+	watchErr := errors.New("EDS watch callback error")
+	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, watchErr)
 
 	// The callback is called with an error, expect no update from edsRespChan.
 	//
 	// TODO: check for loseContact() when errors indicating "lose contact" are
 	// handled correctly.
-	if gotUpdate, gotErr := edsRespChan.Receive(); gotErr != testutils.ErrRecvTimeout {
-		t.Fatalf("edsBalancer got edsUpdate {%+v, %v}, when none was expected", gotUpdate, gotErr)
+	gotUpdate, err := edsRespChan.Receive()
+	if err != nil {
+		t.Fatalf("edsBalancer failed to get edsUpdate %v", err)
+	}
+	update := gotUpdate.(*edsUpdate)
+	if !cmp.Equal(update.resp, (xdsclient.EndpointsUpdate{})) || update.err != watchErr {
+		t.Fatalf("want update {nil, %v}, got %+v", watchErr, update)
 	}
 }
 
@@ -198,7 +203,7 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 	}
 	defer func() { xdsclientNew = oldxdsclientNew }()
 
-	cw := newXDSClientWrapper(nil, nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, nil)
+	cw := newXDSClientWrapper(nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, nil)
 	defer cw.close()
 
 	// Verify that the eds watch is registered for the expected resource name.
