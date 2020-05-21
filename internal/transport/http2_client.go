@@ -863,18 +863,10 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	df := &dataFrame{
 		streamID:  s.id,
 		endStream: opts.Last,
+		h:         hdr,
+		d:         data,
 	}
-	if hdr != nil || data != nil { // If it's not an empty data frame.
-		// Add some data to grpc message header so that we can equally
-		// distribute bytes across frames.
-		emptyLen := http2MaxFrameLen - len(hdr)
-		if emptyLen > len(data) {
-			emptyLen = len(data)
-		}
-		hdr = append(hdr, data[:emptyLen]...)
-		data = data[emptyLen:]
-		df.h, df.d = hdr, data
-		// TODO(mmukhi): The above logic in this if can be moved to loopyWriter's data handler.
+	if hdr != nil || data != nil { // If it's not an empty data frame, check quota.
 		if err := s.wq.get(int32(len(hdr) + len(data))); err != nil {
 			return err
 		}
