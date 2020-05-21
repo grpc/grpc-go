@@ -553,8 +553,8 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	// Test pick return TransientFailure.
 	pFail := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		if _, err := pFail.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick error %v, got %v", balancer.ErrTransientFailure, err)
+		if _, err := pFail.Pick(balancer.PickInfo{}); err != errAllPrioritiesRemoved {
+			t.Fatalf("want pick error %v, got %v", errAllPrioritiesRemoved, err)
 		}
 	}
 
