@@ -32,7 +32,7 @@ import (
 // ALTSRecordCrypto is the interface for gRPC ALTS record protocol.
 type ALTSRecordCrypto interface {
 	// Encrypt encrypts the plaintext and computes the tag (if any) of dst
-	// and plaintext, dst and plaintext do not overlap.
+	// and plaintext. dst and plaintext may fully overlap or not at all.
 	Encrypt(dst, plaintext []byte) ([]byte, error)
 	// EncryptionOverhead returns the tag size (if any) in bytes.
 	EncryptionOverhead() int
