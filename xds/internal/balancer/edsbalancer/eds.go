@@ -168,18 +168,8 @@ func (x *edsBalancer) handleErrorFromUpdate(err error) {
 	// In both cases, the sub-balancers should be closed, and the picks should
 	// all fail.
 	if xdsclient.TypeOfError(err) == xdsclient.ErrorTypeResourceNotFound {
-		// FIXME: does an empty update closes all sub-balancers?
-		// -- Yes
-		//
-		// FIXME: what picker do we get after closing all sub-balancers? It
-		// should update picker with an error picker. Needs tests to verify.
-		// -- Transient failure
 		x.edsImpl.handleEDSResponse(xdsclient.EndpointsUpdate{})
 	}
-
-	// FIXME: do we need to manually update the picker to an error picker with
-	// the err passed in? If we do, we need to make sure the picker won't be
-	// replaced by a later picker update.
 }
 
 func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
