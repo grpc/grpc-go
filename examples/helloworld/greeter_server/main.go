@@ -26,8 +26,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/local"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
 
@@ -47,12 +45,11 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 }
 
 func main() {
-	lis, err := net.Listen("unix", "/tmp/grpc_fullstack_test.10")
+	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	sopts := []grpc.ServerOption{grpc.Creds(local.NewCredentials())}
-	s := grpc.NewServer(sopts...)
+	s := grpc.NewServer()
 	pb.RegisterGreeterServer(s, &server{})
 	reflection.Register(s)
 	if err := s.Serve(lis); err != nil {
