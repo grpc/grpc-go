@@ -30,24 +30,22 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 )
 
-func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
+func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 	tests := []struct {
-		name        string
-		rc          *xdspb.RouteConfiguration
-		wantCluster string
-		wantError   bool
+		name       string
+		rc         *xdspb.RouteConfiguration
+		wantUpdate rdsUpdate
+		wantError  bool
 	}{
 		{
-			name:        "no-virtual-hosts-in-rc",
-			rc:          emptyRouteConfig,
-			wantCluster: "",
-			wantError:   true,
+			name:      "no-virtual-hosts-in-rc",
+			rc:        emptyRouteConfig,
+			wantError: true,
 		},
 		{
-			name:        "no-domains-in-rc",
-			rc:          noDomainsInRouteConfig,
-			wantCluster: "",
-			wantError:   true,
+			name:      "no-domains-in-rc",
+			rc:        noDomainsInRouteConfig,
+			wantError: true,
 		},
 		{
 			name: "non-matching-domain-in-rc",
@@ -56,8 +54,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 					{Domains: []string{uninterestingDomain}},
 				},
 			},
-			wantCluster: "",
-			wantError:   true,
+			wantError: true,
 		},
 		{
 			name: "no-routes-in-rc",
@@ -66,8 +63,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 					{Domains: []string{goodLDSTarget1}},
 				},
 			},
-			wantCluster: "",
-			wantError:   true,
+			wantError: true,
 		},
 		{
 			name: "default-route-match-field-is-nil",
@@ -87,8 +83,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 					},
 				},
 			},
-			wantCluster: "",
-			wantError:   true,
+			wantError: true,
 		},
 		{
 			name: "default-route-match-field-is-non-nil",
@@ -105,8 +100,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 					},
 				},
 			},
-			wantCluster: "",
-			wantError:   true,
+			wantError: true,
 		},
 		{
 			name: "default-route-routeaction-field-is-nil",
@@ -118,8 +112,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 					},
 				},
 			},
-			wantCluster: "",
-			wantError:   true,
+			wantError: true,
 		},
 		{
 			name: "default-route-cluster-field-is-empty",
@@ -139,8 +132,7 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 					},
 				},
 			},
-			wantCluster: "",
-			wantError:   true,
+			wantError: true,
 		},
 		{
 			// default route's match sets case-sensitive to false.
@@ -158,14 +150,12 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 							Route: &routepb.RouteAction{
 								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: goodClusterName1},
 							}}}}}}},
-			wantCluster: "",
-			wantError:   true,
+			wantError: true,
 		},
 		{
-			name:        "good-route-config-with-empty-string-route",
-			rc:          goodRouteConfig1,
-			wantCluster: goodClusterName1,
-			wantError:   false,
+			name:       "good-route-config-with-empty-string-route",
+			rc:         goodRouteConfig1,
+			wantUpdate: rdsUpdate{weightedCluster: map[string]uint32{goodClusterName1: 1}},
 		},
 		{
 			// default route's match is not empty string, but "/".
@@ -180,15 +170,59 @@ func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 							Route: &routepb.RouteAction{
 								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: goodClusterName1},
 							}}}}}}},
-			wantCluster: goodClusterName1,
+			wantUpdate: rdsUpdate{weightedCluster: map[string]uint32{goodClusterName1: 1}},
+		},
+
+		{
+			// weights not add up to total-weight.
+			name: "route-config-with-weighted_clusters_weights_not_add_up",
+			rc: &xdspb.RouteConfiguration{
+				Name: goodRouteName1,
+				VirtualHosts: []*routepb.VirtualHost{{
+					Domains: []string{goodLDSTarget1},
+					Routes: []*routepb.Route{{
+						Match: &routepb.RouteMatch{PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: "/"}},
+						Action: &routepb.Route_Route{
+							Route: &routepb.RouteAction{
+								ClusterSpecifier: &routepb.RouteAction_WeightedClusters{
+									WeightedClusters: &routepb.WeightedCluster{
+										Clusters: []*routepb.WeightedCluster_ClusterWeight{
+											{Name: "a", Weight: &wrapperspb.UInt32Value{Value: 2}},
+											{Name: "b", Weight: &wrapperspb.UInt32Value{Value: 3}},
+											{Name: "c", Weight: &wrapperspb.UInt32Value{Value: 5}},
+										},
+										TotalWeight: &wrapperspb.UInt32Value{Value: 30},
+									}}}}}}}}},
+			wantError: true,
+		},
+		{
+			name: "good-route-config-with-weighted_clusters",
+			rc: &xdspb.RouteConfiguration{
+				Name: goodRouteName1,
+				VirtualHosts: []*routepb.VirtualHost{{
+					Domains: []string{goodLDSTarget1},
+					Routes: []*routepb.Route{{
+						Match: &routepb.RouteMatch{PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: "/"}},
+						Action: &routepb.Route_Route{
+							Route: &routepb.RouteAction{
+								ClusterSpecifier: &routepb.RouteAction_WeightedClusters{
+									WeightedClusters: &routepb.WeightedCluster{
+										Clusters: []*routepb.WeightedCluster_ClusterWeight{
+											{Name: "a", Weight: &wrapperspb.UInt32Value{Value: 2}},
+											{Name: "b", Weight: &wrapperspb.UInt32Value{Value: 3}},
+											{Name: "c", Weight: &wrapperspb.UInt32Value{Value: 5}},
+										},
+										TotalWeight: &wrapperspb.UInt32Value{Value: 10},
+									}}}}}}}}},
+			wantUpdate: rdsUpdate{weightedCluster: map[string]uint32{"a": 2, "b": 3, "c": 5}},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotCluster, gotError := getClusterFromRouteConfiguration(test.rc, goodLDSTarget1)
-			if gotCluster != test.wantCluster || (gotError != nil) != test.wantError {
-				t.Errorf("getClusterFromRouteConfiguration(%+v, %v) = %v, want %v", test.rc, goodLDSTarget1, gotCluster, test.wantCluster)
+			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, goodLDSTarget1)
+			if !cmp.Equal(gotUpdate, test.wantUpdate, cmp.AllowUnexported(rdsUpdate{})) || (gotError != nil) != test.wantError {
+				t.Errorf("generateRDSUpdateFromRouteConfiguration(%+v, %v) = %v, want %v", test.rc, goodLDSTarget1, gotUpdate, test.wantUpdate)
 			}
 		})
 	}
@@ -256,7 +290,7 @@ func (s) TestRDSHandleResponse(t *testing.T) {
 			name:          "one-good-route-config",
 			rdsResponse:   goodRDSResponse1,
 			wantErr:       false,
-			wantUpdate:    &rdsUpdate{clusterName: goodClusterName1},
+			wantUpdate:    &rdsUpdate{weightedCluster: map[string]uint32{goodClusterName1: 1}},
 			wantUpdateErr: false,
 		},
 	}
@@ -408,6 +442,76 @@ func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := findBestMatchingVirtualHost(tt.host, tt.vHosts); !cmp.Equal(got, tt.want, cmp.Comparer(proto.Equal)) {
 				t.Errorf("findBestMatchingVirtualHost() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func (s) TestWeightedClustersProtoToMap(t *testing.T) {
+	tests := []struct {
+		name    string
+		wc      *routepb.WeightedCluster
+		want    map[string]uint32
+		wantErr bool
+	}{
+		{
+			name: "weight not add up to non default total",
+			wc: &routepb.WeightedCluster{
+				Clusters: []*routepb.WeightedCluster_ClusterWeight{
+					{Name: "a", Weight: &wrapperspb.UInt32Value{Value: 1}},
+					{Name: "b", Weight: &wrapperspb.UInt32Value{Value: 1}},
+					{Name: "c", Weight: &wrapperspb.UInt32Value{Value: 1}},
+				},
+				TotalWeight: &wrapperspb.UInt32Value{Value: 10},
+			},
+			wantErr: true,
+		},
+		{
+			name: "weight not add up to default total",
+			wc: &routepb.WeightedCluster{
+				Clusters: []*routepb.WeightedCluster_ClusterWeight{
+					{Name: "a", Weight: &wrapperspb.UInt32Value{Value: 2}},
+					{Name: "b", Weight: &wrapperspb.UInt32Value{Value: 3}},
+					{Name: "c", Weight: &wrapperspb.UInt32Value{Value: 5}},
+				},
+				TotalWeight: nil,
+			},
+			wantErr: true,
+		},
+		{
+			name: "ok non default total weight",
+			wc: &routepb.WeightedCluster{
+				Clusters: []*routepb.WeightedCluster_ClusterWeight{
+					{Name: "a", Weight: &wrapperspb.UInt32Value{Value: 2}},
+					{Name: "b", Weight: &wrapperspb.UInt32Value{Value: 3}},
+					{Name: "c", Weight: &wrapperspb.UInt32Value{Value: 5}},
+				},
+				TotalWeight: &wrapperspb.UInt32Value{Value: 10},
+			},
+			want: map[string]uint32{"a": 2, "b": 3, "c": 5},
+		},
+		{
+			name: "ok default total weight is 100",
+			wc: &routepb.WeightedCluster{
+				Clusters: []*routepb.WeightedCluster_ClusterWeight{
+					{Name: "a", Weight: &wrapperspb.UInt32Value{Value: 20}},
+					{Name: "b", Weight: &wrapperspb.UInt32Value{Value: 30}},
+					{Name: "c", Weight: &wrapperspb.UInt32Value{Value: 50}},
+				},
+				TotalWeight: nil,
+			},
+			want: map[string]uint32{"a": 20, "b": 30, "c": 50},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := weightedClustersProtoToMap(tt.wc)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("weightedClustersProtoToMap() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !cmp.Equal(got, tt.want) {
+				t.Errorf("weightedClustersProtoToMap() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

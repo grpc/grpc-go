@@ -69,11 +69,11 @@ func (xdsC *Client) WaitForWatchService() (string, error) {
 }
 
 // InvokeWatchServiceCallback invokes the registered service watch callback.
-func (xdsC *Client) InvokeWatchServiceCallback(cluster string, err error) {
+func (xdsC *Client) InvokeWatchServiceCallback(u xdsclient.ServiceUpdate, err error) {
 	xdsC.mu.Lock()
 	defer xdsC.mu.Unlock()
 
-	xdsC.serviceCb(xdsclient.ServiceUpdate{Cluster: cluster}, err)
+	xdsC.serviceCb(u, err)
 }
 
 // WatchCluster registers a CDS watch.
