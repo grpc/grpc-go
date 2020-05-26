@@ -16,10 +16,8 @@
  *
  */
 
-// Package xds contains xds implementation, still in experimental state. Users
-// only need to import this package to get all xds functionality.  Things are
-// expected to change fast until we get to a stable state, at which point, all
-// this will be moved to the xds package.
+// Package xds contains xds implementation. Users need to import this package to
+// get all xds functionality.
 package xds
 
 import (
