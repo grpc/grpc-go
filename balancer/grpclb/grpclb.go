@@ -28,11 +28,9 @@ import (
 	"sync"
 	"time"
 
-	durationpb "github.com/golang/protobuf/ptypes/duration"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
-	"google.golang.org/grpc/balancer/grpclb/statedata"
+	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
@@ -40,6 +38,9 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/resolver/dns"
 	"google.golang.org/grpc/resolver"
+
+	durationpb "github.com/golang/protobuf/ptypes/duration"
+	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 )
 
 const (
@@ -421,7 +422,7 @@ func (lb *lbBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 			backendAddrs = append(backendAddrs, a)
 		}
 	}
-	if sd := statedata.Get(ccs.ResolverState); sd != nil {
+	if sd := grpclbstate.Get(ccs.ResolverState); sd != nil {
 		// Override any balancer addresses provided via
 		// ccs.ResolverState.Addresses.
 		remoteBalancerAddrs = sd.BalancerAddresses

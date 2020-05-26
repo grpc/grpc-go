@@ -88,7 +88,7 @@ const (
 	// Deprecated: to select the GRPCLB load balancing policy, use a service
 	// config with a corresponding loadBalancingConfig.  To supply balancer
 	// addresses to the GRPCLB load balancing policy, set State.Attributes
-	// using balancer/grpclb/statedata.Set.
+	// using balancer/grpclb/state.Set.
 	GRPCLB
 )
 

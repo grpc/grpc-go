@@ -30,7 +30,7 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/balancer/grpclb/statedata"
+	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/resolver"
@@ -726,11 +726,11 @@ func testDNSResolver(t *testing.T) {
 			t.Fatalf("UpdateState not called after 2s; aborting")
 		}
 		if !reflect.DeepEqual(a.addrWant, state.Addresses) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrWant)
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v", a.target, state.Addresses, a.addrWant)
 		}
 		sc := scFromState(state)
 		if a.scWant != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
+			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scWant)
 		}
 		r.Close()
 	}
@@ -763,32 +763,32 @@ func testDNSResolverWithSRV(t *testing.T) {
 		{
 			"srv.ipv4.single.fake",
 			[]resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
-			[]resolver.Address{{Addr: "1.2.3.4:1234", Type: resolver.Backend, ServerName: "ipv4.single.fake"}},
+			[]resolver.Address{{Addr: "1.2.3.4:1234", ServerName: "ipv4.single.fake"}},
 			generateSC("srv.ipv4.single.fake"),
 		},
 		{
 			"srv.ipv4.multi.fake",
 			nil,
 			[]resolver.Address{
-				{Addr: "1.2.3.4:1234", Type: resolver.Backend, ServerName: "ipv4.multi.fake"},
-				{Addr: "5.6.7.8:1234", Type: resolver.Backend, ServerName: "ipv4.multi.fake"},
-				{Addr: "9.10.11.12:1234", Type: resolver.Backend, ServerName: "ipv4.multi.fake"},
+				{Addr: "1.2.3.4:1234", ServerName: "ipv4.multi.fake"},
+				{Addr: "5.6.7.8:1234", ServerName: "ipv4.multi.fake"},
+				{Addr: "9.10.11.12:1234", ServerName: "ipv4.multi.fake"},
 			},
 			generateSC("srv.ipv4.multi.fake"),
 		},
 		{
 			"srv.ipv6.single.fake",
 			nil,
-			[]resolver.Address{{Addr: "[2607:f8b0:400a:801::1001]:1234", Type: resolver.Backend, ServerName: "ipv6.single.fake"}},
+			[]resolver.Address{{Addr: "[2607:f8b0:400a:801::1001]:1234", ServerName: "ipv6.single.fake"}},
 			generateSC("srv.ipv6.single.fake"),
 		},
 		{
 			"srv.ipv6.multi.fake",
 			nil,
 			[]resolver.Address{
-				{Addr: "[2607:f8b0:400a:801::1001]:1234", Type: resolver.Backend, ServerName: "ipv6.multi.fake"},
-				{Addr: "[2607:f8b0:400a:801::1002]:1234", Type: resolver.Backend, ServerName: "ipv6.multi.fake"},
-				{Addr: "[2607:f8b0:400a:801::1003]:1234", Type: resolver.Backend, ServerName: "ipv6.multi.fake"},
+				{Addr: "[2607:f8b0:400a:801::1001]:1234", ServerName: "ipv6.multi.fake"},
+				{Addr: "[2607:f8b0:400a:801::1002]:1234", ServerName: "ipv6.multi.fake"},
+				{Addr: "[2607:f8b0:400a:801::1003]:1234", ServerName: "ipv6.multi.fake"},
 			},
 			generateSC("srv.ipv6.multi.fake"),
 		},
@@ -815,16 +815,16 @@ func testDNSResolverWithSRV(t *testing.T) {
 			t.Fatalf("UpdateState not called after 2s; aborting")
 		}
 		if !reflect.DeepEqual(a.addrWant, state.Addresses) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrWant)
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v", a.target, state.Addresses, a.addrWant)
 		}
-		sd := statedata.Get(state)
-		if (sd == nil && len(a.grpclbAddrs) > 0) ||
-			(sd != nil && !reflect.DeepEqual(a.grpclbAddrs, sd.BalancerAddresses)) {
-			t.Errorf("Resolved state of target: %q = %+v (StateData=%+v), want state.Attributes.StateData=%+v\n", a.target, state, sd, a.grpclbAddrs)
+		gs := grpclbstate.Get(state)
+		if (gs == nil && len(a.grpclbAddrs) > 0) ||
+			(gs != nil && !reflect.DeepEqual(a.grpclbAddrs, gs.BalancerAddresses)) {
+			t.Errorf("Resolved state of target: %q = %+v (State=%+v), want state.Attributes.State=%+v", a.target, state, gs, a.grpclbAddrs)
 		}
 		sc := scFromState(state)
 		if a.scWant != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
+			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scWant)
 		}
 	}
 }
@@ -892,11 +892,11 @@ func testDNSResolveNow(t *testing.T) {
 			t.Fatalf("UpdateState not called after 2s; aborting.  state=%v", state)
 		}
 		if !reflect.DeepEqual(a.addrWant, state.Addresses) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrWant)
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v", a.target, state.Addresses, a.addrWant)
 		}
 		sc := scFromState(state)
 		if a.scWant != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
+			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scWant)
 		}
 
 		revertTbl := mutateTbl(a.target)
@@ -913,10 +913,10 @@ func testDNSResolveNow(t *testing.T) {
 		}
 		sc = scFromState(state)
 		if !reflect.DeepEqual(a.addrNext, state.Addresses) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, state.Addresses, a.addrNext)
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v", a.target, state.Addresses, a.addrNext)
 		}
 		if a.scNext != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scNext)
+			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scNext)
 		}
 		revertTbl()
 	}
@@ -959,7 +959,7 @@ func testIPResolver(t *testing.T) {
 			time.Sleep(time.Millisecond)
 		}
 		if !reflect.DeepEqual(v.want, state.Addresses) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", v.target, state.Addresses, v.want)
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v", v.target, state.Addresses, v.want)
 		}
 		r.ResolveNow(resolver.ResolveNowOptions{})
 		for i := 0; i < 50; i++ {
@@ -1052,7 +1052,7 @@ func TestDisableServiceConfig(t *testing.T) {
 		}
 		sc := scFromState(state)
 		if a.scWant != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
+			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scWant)
 		}
 	}
 }
@@ -1111,7 +1111,7 @@ func TestDNSResolverRetry(t *testing.T) {
 	}
 	want := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}}
 	if !reflect.DeepEqual(want, state.Addresses) {
-		t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", target, state.Addresses, want)
+		t.Errorf("Resolved addresses of target: %q = %+v, want %+v", target, state.Addresses, want)
 	}
 	// mutate the host lookup table so the target has 0 address returned.
 	revertTbl := mutateTbl(target)
@@ -1138,7 +1138,7 @@ func TestDNSResolverRetry(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !reflect.DeepEqual(want, state.Addresses) {
-		t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", target, state.Addresses, want)
+		t.Errorf("Resolved addresses of target: %q = %+v, want %+v", target, state.Addresses, want)
 	}
 }
 
@@ -1343,7 +1343,7 @@ func TestRateLimitedResolve(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !reflect.DeepEqual(state.Addresses, wantAddrs) {
-		t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", target, state.Addresses, wantAddrs)
+		t.Errorf("Resolved addresses of target: %q = %+v, want %+v", target, state.Addresses, wantAddrs)
 	}
 }
 

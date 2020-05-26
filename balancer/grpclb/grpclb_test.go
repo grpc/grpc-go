@@ -31,12 +31,9 @@ import (
 	"testing"
 	"time"
 
-	durationpb "github.com/golang/protobuf/ptypes/duration"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	lbgrpc "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
-	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
-	"google.golang.org/grpc/balancer/grpclb/statedata"
+	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpctest"
@@ -45,6 +42,10 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
+
+	durationpb "github.com/golang/protobuf/ptypes/duration"
+	lbgrpc "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
+	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
@@ -425,8 +426,8 @@ func (s) TestGRPCLB(t *testing.T) {
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	rs := statedata.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)},
-		&statedata.StateData{BalancerAddresses: []resolver.Address{{
+	rs := grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)},
+		&grpclbstate.State{BalancerAddresses: []resolver.Address{{
 			Addr:       tss.lbAddr,
 			Type:       resolver.Backend,
 			ServerName: lbServerName,
