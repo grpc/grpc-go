@@ -138,10 +138,7 @@ func (x *edsBalancer) run() {
 			u := update.(*balancerStateWithPriority)
 			x.edsImpl.updateState(u.priority, u.s)
 		case <-x.ctx.Done():
-			if x.client != nil {
-				x.client.close()
-				x.client = nil
-			}
+			x.client.close()
 			x.edsImpl.close()
 			return
 		}
@@ -185,8 +182,9 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 }
 
 func (x *edsBalancer) handleXDSClientUpdate(update *edsUpdate) {
-	if err := update.err; err != nil {
-		// TODO: handle errors from EDS callback.
+	if update.err != nil {
+		// TODO: handle errors from EDS callback. E.g. if CDS resource is
+		// removed, the EDS watch should be canceled.
 		return
 	}
 	x.edsImpl.handleEDSResponse(update.resp)

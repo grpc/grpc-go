@@ -94,6 +94,7 @@ type scStateChange struct {
 }
 
 type fakeEDSBalancer struct {
+	edsBalancerImplInterface
 	cc                 balancer.ClientConn
 	childPolicy        *testutils.Channel
 	subconnStateChange *testutils.Channel
@@ -107,12 +108,6 @@ func (f *fakeEDSBalancer) handleSubConnStateChange(sc balancer.SubConn, state co
 func (f *fakeEDSBalancer) handleChildPolicy(name string, config json.RawMessage) {
 	f.childPolicy.Send(&loadBalancingConfig{Name: name, Config: config})
 }
-
-func (f *fakeEDSBalancer) handleEDSResponse(edsResp xdsclient.EndpointsUpdate) {}
-
-func (f *fakeEDSBalancer) updateState(priority priorityType, s balancer.State) {}
-
-func (f *fakeEDSBalancer) close() {}
 
 func (f *fakeEDSBalancer) waitForChildPolicy(wantPolicy *loadBalancingConfig) error {
 	val, err := f.childPolicy.Receive()
