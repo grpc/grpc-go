@@ -28,10 +28,9 @@ import (
 	"sync"
 	"time"
 
-	durationpb "github.com/golang/protobuf/ptypes/duration"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
+	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
@@ -39,6 +38,9 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/resolver/dns"
 	"google.golang.org/grpc/resolver"
+
+	durationpb "github.com/golang/protobuf/ptypes/duration"
+	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 )
 
 const (
@@ -410,11 +412,6 @@ func (lb *lbBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	lb.handleServiceConfig(gc)
 
 	addrs := ccs.ResolverState.Addresses
-	if len(addrs) == 0 {
-		// There should be at least one address, either grpclb server or
-		// fallback. Empty address is not valid.
-		return balancer.ErrBadResolverState
-	}
 
 	var remoteBalancerAddrs, backendAddrs []resolver.Address
 	for _, a := range addrs {
@@ -424,6 +421,17 @@ func (lb *lbBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		} else {
 			backendAddrs = append(backendAddrs, a)
 		}
+	}
+	if sd := grpclbstate.Get(ccs.ResolverState); sd != nil {
+		// Override any balancer addresses provided via
+		// ccs.ResolverState.Addresses.
+		remoteBalancerAddrs = sd.BalancerAddresses
+	}
+
+	if len(backendAddrs)+len(remoteBalancerAddrs) == 0 {
+		// There should be at least one address, either grpclb server or
+		// fallback. Empty address is not valid.
+		return balancer.ErrBadResolverState
 	}
 
 	if len(remoteBalancerAddrs) == 0 {
