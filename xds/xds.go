@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2019 gRPC authors.
+ * Copyright 2020 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,14 @@
  *
  */
 
-// Package experimental contains xds implementation. Users only need to import
-// this package to get all xds functionality.
+// Package xds contains xds implementation. Users need to import this package to
+// get all xds functionality.
 //
-// Deprecated: import package xds instead.
-package experimental
-
-// TODO: remove this package after one release.
+// See https://github.com/grpc/grpc-go/tree/master/examples/features/xds for
+// example.
+package xds
 
 import (
-	_ "google.golang.org/grpc/xds" // Register the balancers and resolvers.
+	_ "google.golang.org/grpc/xds/internal/balancer" // Register the balancers.
+	_ "google.golang.org/grpc/xds/internal/resolver" // Register the xds_resolver
 )
