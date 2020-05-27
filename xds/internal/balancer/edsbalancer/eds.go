@@ -145,26 +145,28 @@ func (x *edsBalancer) run() {
 	}
 }
 
-// handleErrorFromUpdate handles both the error from ClientConn (from CDS
-// balancer) and the error from xds client (from the watcher).
+// handleErrorFromUpdate handles both the error from parent ClientConn (from CDS
+// balancer) and the error from xds client (from the watcher). fromParent is
+// true if error is from parent ClientConn.
 //
 // If the error is connection error, it should be handled for fallback purposes.
 //
 // If the error is resource-not-found:
 // - If it's from CDS balancer (shows as a resolver error), it means LDS or CDS
-// resources were removed. The EDS watch should be canceled (and is already
-// canceled by the caller of this function).
+// resources were removed. The EDS watch should be canceled.
 // - If it's from xds client, it means EDS resource were removed. The EDS
 // watcher should keep watching.
 // In both cases, the sub-balancers will be closed, and the future picks will
 // fail.
-func (x *edsBalancer) handleErrorFromUpdate(err error) {
-	// If it's a resource-not-found error
-	// - it could come from CDS balancer, so the CDS resources were removed
-	// - it could come from xds client, so the EDS resources were removed
-	// In both cases, the sub-balancers should be closed, and the picks should
-	// all fail.
+func (x *edsBalancer) handleErrorFromUpdate(err error, fromParent bool) {
 	if xdsclient.TypeOfError(err) == xdsclient.ErrorTypeResourceNotFound {
+		if fromParent {
+			// This is an error from the parent ClientConn (can be the parent
+			// CDS balancer), and is a resource-not-found error. This means the
+			// resource (can be either LDS or CDS) was removed. Stop the EDS
+			// watch.
+			x.client.cancelWatch()
+		}
 		x.edsImpl.handleEDSResponse(xdsclient.EndpointsUpdate{})
 	}
 }
@@ -200,13 +202,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 
 		x.config = cfg
 	case error:
-		// This is an error from the resolver (can be the parent CDS balancer).
-		if xdsclient.TypeOfError(u) == xdsclient.ErrorTypeResourceNotFound {
-			// A resource-not-found error, means the resource (can be either LDS
-			// or CDS) was removed. Stop the EDS watch.
-			x.client.cancelWatch()
-		}
-		x.handleErrorFromUpdate(u)
+		x.handleErrorFromUpdate(u, true)
 	default:
 		// unreachable path
 		panic("wrong update type")
@@ -215,7 +211,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 
 func (x *edsBalancer) handleXDSClientUpdate(update *edsUpdate) {
 	if err := update.err; err != nil {
-		x.handleErrorFromUpdate(err)
+		x.handleErrorFromUpdate(err, false)
 		return
 	}
 	x.edsImpl.handleEDSResponse(update.resp)
