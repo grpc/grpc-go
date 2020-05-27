@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-var errAllPrioritiesRemoved = errors.New("no locality is provided, all priorities are removed")
+var errAllPrioritiesRemoved = errors.New("eds: no locality is provided, all priorities are removed")
 
 // handlePriorityChange handles priority after EDS adds/removes a
 // priority.

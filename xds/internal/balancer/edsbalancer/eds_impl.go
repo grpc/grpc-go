@@ -189,6 +189,9 @@ func (edsImpl *edsBalancerImpl) handleEDSResponse(edsResp xdsclient.EndpointsUpd
 	// If the first EDS update is an empty update, nothing is changing from the
 	// previous update (which is the default empty value). We need to explicitly
 	// handle first update being empty, and send a transient failure picker.
+	//
+	// TODO: define Equal() on type EndpointUpdate to avoid DeepEqual. And do
+	// the same for the other types.
 	if !edsImpl.respReceived && reflect.DeepEqual(edsResp, xdsclient.EndpointsUpdate{}) {
 		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(errAllPrioritiesRemoved)})
 	}
