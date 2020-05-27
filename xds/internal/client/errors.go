@@ -51,8 +51,8 @@ func NewErrorf(t ErrorType, format string, args ...interface{}) error {
 	return &xdsClientError{t: t, desc: fmt.Sprintf(format, args...)}
 }
 
-// TypeOfError returns the error's type.
-func TypeOfError(e error) ErrorType {
+// ErrType returns the error's type.
+func ErrType(e error) ErrorType {
 	if xe, ok := e.(*xdsClientError); ok {
 		return xe.t
 	}

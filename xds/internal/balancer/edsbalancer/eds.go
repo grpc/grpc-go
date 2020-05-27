@@ -159,7 +159,7 @@ func (x *edsBalancer) run() {
 // In both cases, the sub-balancers will be closed, and the future picks will
 // fail.
 func (x *edsBalancer) handleErrorFromUpdate(err error, fromParent bool) {
-	if xdsclient.TypeOfError(err) == xdsclient.ErrorTypeResourceNotFound {
+	if xdsclient.ErrType(err) == xdsclient.ErrorTypeResourceNotFound {
 		if fromParent {
 			// This is an error from the parent ClientConn (can be the parent
 			// CDS balancer), and is a resource-not-found error. This means the
