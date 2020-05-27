@@ -359,7 +359,7 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
 	})
 
-	wantUpdate := ServiceUpdate{Cluster: testCDSName}
+	wantUpdate := ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
 
 	<-v2Client.addWatches[ldsURL]
 	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
@@ -367,10 +367,10 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 	})
 	<-v2Client.addWatches[rdsURL]
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {clusterName: testCDSName},
+		testRDSName: {weightedCluster: map[string]uint32{testCDSName: 1}},
 	})
 
-	if u, err := serviceUpdateCh.Receive(); err != nil || u != (serviceUpdateErr{wantUpdate, nil}) {
+	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(serviceUpdateErr{})) {
 		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
