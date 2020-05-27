@@ -412,7 +412,7 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		_, err := p0.Pick(balancer.PickInfo{})
 		if err != testutils.ErrTestConstPicker {
-			t.Fatalf("picker.Pick, got err %q, want err %q", err, testutils.ErrTestConstPicker)
+			t.Fatalf("picker.Pick, got err %+v, want err %+v", err, testutils.ErrTestConstPicker)
 		}
 	}
 
