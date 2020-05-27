@@ -18,6 +18,9 @@
 
 // Package xds contains xds implementation. Users need to import this package to
 // get all xds functionality.
+//
+// See https://github.com/grpc/grpc-go/tree/master/examples/features/xds for
+// example.
 package xds
 
 import (
