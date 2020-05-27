@@ -359,7 +359,6 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
 	})
 
-	// wantUpdate := ServiceUpdate{Cluster: testCDSName}
 	wantUpdate := ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
 
 	<-v2Client.addWatches[ldsURL]
