@@ -455,10 +455,10 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	connectionErr := xdsclient.NewErrorf(xdsclient.ErrorTypeConnection, "connection error")
 	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, connectionErr)
 	if err := xdsC.WaitForCancelEDSWatch(); err == nil {
-		t.Fatalf("watch was canceled, want not canceled (timeout error)")
+		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
 	if err := edsLB.waitForEDSResponse(xdsclient.EndpointsUpdate{}); err == nil {
-		t.Fatalf("eds impl got EDS resp, want timeout error")
+		t.Fatal("eds impl got EDS resp, want timeout error")
 	}
 
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "edsBalancer resource not found error")
@@ -467,7 +467,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	// this is an EDS resource removed (and xds client actually never sends this
 	// error, but we still handles it).
 	if err := xdsC.WaitForCancelEDSWatch(); err == nil {
-		t.Fatalf("watch was canceled, want not canceled (timeout error)")
+		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
 	if err := edsLB.waitForEDSResponse(xdsclient.EndpointsUpdate{}); err != nil {
 		t.Fatalf("eds impl expecting empty update, got %v", err)
@@ -512,10 +512,10 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	connectionErr := xdsclient.NewErrorf(xdsclient.ErrorTypeConnection, "connection error")
 	edsB.ResolverError(connectionErr)
 	if err := xdsC.WaitForCancelEDSWatch(); err == nil {
-		t.Fatalf("watch was canceled, want not canceled (timeout error)")
+		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
 	if err := edsLB.waitForEDSResponse(xdsclient.EndpointsUpdate{}); err == nil {
-		t.Fatalf("eds impl got EDS resp, want timeout error")
+		t.Fatal("eds impl got EDS resp, want timeout error")
 	}
 
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "edsBalancer resource not found error")
