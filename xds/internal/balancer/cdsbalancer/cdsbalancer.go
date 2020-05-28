@@ -289,8 +289,10 @@ func (b *cdsBalancer) handleErrorFromUpdate(err error, fromParent bool) {
 	// This is not necessary today, because xds client never sends connection
 	// errors.
 
-	if fromParent && xdsclient.ErrType(err) == xdsclient.ErrorTypeResourceNotFound && b.cancelWatch != nil {
-		b.cancelWatch()
+	if fromParent && xdsclient.ErrType(err) == xdsclient.ErrorTypeResourceNotFound {
+		if b.cancelWatch != nil {
+			b.cancelWatch()
+		}
 	}
 	if b.edsLB != nil {
 		b.edsLB.ResolverError(err)
