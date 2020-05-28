@@ -7,7 +7,7 @@
 The Go implementation of [gRPC](https://grpc.io/): A high performance, open
 source, general RPC framework that puts mobile and HTTP/2 first. For more
 information see the [gRPC Quick Start:
-Go](https://grpc.io/docs/quickstart/go.html) guide.
+Go](https://grpc.io/docs/languages/go/quickstart/) guide.
 
 Installation
 ------------
