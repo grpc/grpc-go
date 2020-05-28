@@ -429,13 +429,13 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	if err := edsB.waitForResolverError(err1); err == nil {
 		t.Fatal("eds balancer shouldn't get error (shouldn't be built yet)")
 	}
-	if state, err := tcc.newPickerCh.Receive(); err != nil {
+	state, err := tcc.newPickerCh.Receive()
+	if err != nil {
 		t.Fatalf("failed to get picker, expect an error picker")
-	} else {
-		picker := state.(balancer.State).Picker
-		if _, perr := picker.Pick(balancer.PickInfo{}); perr == nil {
-			t.Fatalf("want picker to always fail, got nil")
-		}
+	}
+	picker := state.(balancer.State).Picker
+	if _, perr := picker.Pick(balancer.PickInfo{}); perr == nil {
+		t.Fatalf("want picker to always fail, got nil")
 	}
 
 	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
@@ -486,13 +486,13 @@ func (s) TestResolverError(t *testing.T) {
 	if err := edsB.waitForResolverError(err1); err == nil {
 		t.Fatal("eds balancer shouldn't get error (shouldn't be built yet)")
 	}
-	if state, err := tcc.newPickerCh.Receive(); err != nil {
+	state, err := tcc.newPickerCh.Receive()
+	if err != nil {
 		t.Fatalf("failed to get picker, expect an error picker")
-	} else {
-		picker := state.(balancer.State).Picker
-		if _, perr := picker.Pick(balancer.PickInfo{}); perr == nil {
-			t.Fatalf("want picker to always fail, got nil")
-		}
+	}
+	picker := state.(balancer.State).Picker
+	if _, perr := picker.Pick(balancer.PickInfo{}); perr == nil {
+		t.Fatalf("want picker to always fail, got nil")
 	}
 
 	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
