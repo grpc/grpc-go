@@ -52,7 +52,7 @@ To get the token, call
 on the given context. It returns the metadata map. Next, use the key
 "authorization" to get corresponding value, which is a slice of strings. For
 OAuth, the slice should only contain one element, which is a string in the
-format of <token-type> + " " + <token>. Users can easily get the token by
+format of `<token-type> + " " + <token>`. Users can easily get the token by
 parsing the string, and then verify the validity of it.
 
 If the token is not valid, returns an error with error code
