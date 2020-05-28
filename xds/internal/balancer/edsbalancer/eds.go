@@ -145,6 +145,32 @@ func (x *edsBalancer) run() {
 	}
 }
 
+// handleErrorFromUpdate handles both the error from parent ClientConn (from CDS
+// balancer) and the error from xds client (from the watcher). fromParent is
+// true if error is from parent ClientConn.
+//
+// If the error is connection error, it should be handled for fallback purposes.
+//
+// If the error is resource-not-found:
+// - If it's from CDS balancer (shows as a resolver error), it means LDS or CDS
+// resources were removed. The EDS watch should be canceled.
+// - If it's from xds client, it means EDS resource were removed. The EDS
+// watcher should keep watching.
+// In both cases, the sub-balancers will be closed, and the future picks will
+// fail.
+func (x *edsBalancer) handleErrorFromUpdate(err error, fromParent bool) {
+	if xdsclient.ErrType(err) == xdsclient.ErrorTypeResourceNotFound {
+		if fromParent {
+			// This is an error from the parent ClientConn (can be the parent
+			// CDS balancer), and is a resource-not-found error. This means the
+			// resource (can be either LDS or CDS) was removed. Stop the EDS
+			// watch.
+			x.client.cancelWatch()
+		}
+		x.edsImpl.handleEDSResponse(xdsclient.EndpointsUpdate{})
+	}
+}
+
 func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 	switch u := update.(type) {
 	case *subConnStateUpdate:
@@ -175,6 +201,8 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 		}
 
 		x.config = cfg
+	case error:
+		x.handleErrorFromUpdate(u, true)
 	default:
 		// unreachable path
 		panic("wrong update type")
@@ -182,9 +210,8 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 }
 
 func (x *edsBalancer) handleXDSClientUpdate(update *edsUpdate) {
-	if update.err != nil {
-		// TODO: handle errors from EDS callback. E.g. if CDS resource is
-		// removed, the EDS watch should be canceled.
+	if err := update.err; err != nil {
+		x.handleErrorFromUpdate(err, false)
 		return
 	}
 	x.edsImpl.handleEDSResponse(update.resp)
@@ -206,11 +233,11 @@ func (x *edsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 	}
 }
 
-func (x *edsBalancer) ResolverError(error) {
-	// TODO: Need to distinguish between connection errors and resource removed
-	// errors. For the former, we will need to handle it later on for fallback.
-	// For the latter, handle it by stopping the watch, closing sub-balancers
-	// and pickers.
+func (x *edsBalancer) ResolverError(err error) {
+	select {
+	case x.grpcUpdate <- err:
+	case <-x.ctx.Done():
+	}
 }
 
 func (x *edsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {

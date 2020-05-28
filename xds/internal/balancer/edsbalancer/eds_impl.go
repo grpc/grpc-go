@@ -18,11 +18,13 @@ package edsbalancer
 
 import (
 	"encoding/json"
+	"reflect"
 	"sync"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/codes"
@@ -66,6 +68,7 @@ type edsBalancerImpl struct {
 	subBalancerBuilder   balancer.Builder
 	loadStore            lrs.Store
 	priorityToLocalities map[priorityType]*balancerGroupWithConfig
+	respReceived         bool
 
 	// There's no need to hold any mutexes at the same time. The order to take
 	// mutex should be: priorityMu > subConnMu, but this is implicit via
@@ -182,6 +185,17 @@ func (edsImpl *edsBalancerImpl) handleEDSResponse(edsResp xdsclient.EndpointsUpd
 	//  - if socketAddress is not ip:port
 	//     - socketAddress.GetNamedPort(), socketAddress.GetResolverName()
 	//     - resolve endpoint's name with another resolver
+
+	// If the first EDS update is an empty update, nothing is changing from the
+	// previous update (which is the default empty value). We need to explicitly
+	// handle first update being empty, and send a transient failure picker.
+	//
+	// TODO: define Equal() on type EndpointUpdate to avoid DeepEqual. And do
+	// the same for the other types.
+	if !edsImpl.respReceived && reflect.DeepEqual(edsResp, xdsclient.EndpointsUpdate{}) {
+		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(errAllPrioritiesRemoved)})
+	}
+	edsImpl.respReceived = true
 
 	edsImpl.updateDrops(edsResp.Drops)
 
