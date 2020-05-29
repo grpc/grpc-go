@@ -435,10 +435,12 @@ func TestXDSResolverResourceNotFoundError(t *testing.T) {
 		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
 	}
 	rState := gotState.(resolver.State)
-	if gotClient := rState.Attributes.Value(xdsinternal.XDSClientID); gotClient != xdsC {
-		t.Fatalf("ClientConn.UpdateState got xdsClient: %v, want %v", gotClient, xdsC)
+	// This update shouldn't have xds-client in it, because it doesn't pick an
+	// xds balancer.
+	if gotClient := rState.Attributes.Value(xdsinternal.XDSClientID); gotClient != nil {
+		t.Fatalf("ClientConn.UpdateState got xdsClient: %v, want <nil>", gotClient)
 	}
-	wantParsedConfig := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(testWeightedCDSNoChildJSON)
+	wantParsedConfig := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)("{}")
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantParsedConfig.Config) {
 		t.Errorf("ClientConn.UpdateState got wrong service config")
 		t.Error("gotParsed: ", cmp.Diff(nil, rState.ServiceConfig.Config))
