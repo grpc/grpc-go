@@ -170,8 +170,16 @@ func (r *xdsResolver) run() {
 		case update := <-r.updateCh:
 			if update.err != nil {
 				r.logger.Warningf("Watch error on resource %v from xds-client %p, %v", r.target.Endpoint, r.client, update.err)
-				r.cc.ReportError(update.err)
-				continue
+				if xdsclient.ErrType(update.err) != xdsclient.ErrorTypeResourceNotFound {
+					// Send error to ClientConn, and balancers, if error is not
+					// resource not found.
+					r.cc.ReportError(update.err)
+					continue
+				}
+				// If error is resource-not-found, it means the LDS resource was
+				// removed. The update contains an empty ServiceUpdate struct,
+				// and resolver will generate a weighted_target balancer config
+				// with no sub-balancers.
 			}
 			sc, err := serviceUpdateToJSON(update.su)
 			if err != nil {
