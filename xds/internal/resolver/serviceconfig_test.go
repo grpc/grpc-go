@@ -49,6 +49,11 @@ const (
 	  }
 	}
 }]}`
+	testWeightedCDSNoChildJSON = `{"loadBalancingConfig":[{
+    "weighted_target_experimental": {
+	  "targets": {}
+	}
+}]}`
 )
 
 func TestServiceUpdateToJSON(t *testing.T) {
@@ -61,6 +66,11 @@ func TestServiceUpdateToJSON(t *testing.T) {
 			name:     "one cluster only",
 			su:       client.ServiceUpdate{WeightedCluster: map[string]uint32{testCluster1: 1}},
 			wantJSON: testClusterOnlyJSON,
+		},
+		{
+			name:     "empty weighted clusters",
+			su:       client.ServiceUpdate{WeightedCluster: nil},
+			wantJSON: testWeightedCDSNoChildJSON,
 		},
 		{
 			name: "weighted clusters",
