@@ -88,11 +88,20 @@ func (c *Client) newLDSUpdate(d map[string]ldsUpdate) {
 			c.ldsCache[name] = update
 		}
 	}
-	// TODO: handle removing resources, which means if a resource exists in the
-	// previous update, but not in the new update. This needs the balancers and
-	// resolvers to handle errors correctly.
-
-	// TODO: remove item from cache and remove corresponding RDS cached data.
+	for name := range c.ldsCache {
+		if _, ok := d[name]; !ok {
+			// If resource exists in cache, but not in the new update, delete it
+			// from cache, and also send an resource not found error to indicate
+			// resource removed.
+			delete(c.ldsCache, name)
+			for wi := range c.ldsWatchers[name] {
+				wi.resourceNotFound()
+			}
+		}
+	}
+	// When LDS resource is removed, we don't delete corresponding RDS cached
+	// data. The RDS watch will be canceled, and cache is removed when the last
+	// watch is canceled.
 }
 
 // newRDSUpdate is called by the underlying xdsv2Client when it receives an xDS
@@ -135,11 +144,20 @@ func (c *Client) newCDSUpdate(d map[string]ClusterUpdate) {
 			c.cdsCache[name] = update
 		}
 	}
-	// TODO: handle removing resources, which means if a resource exists in the
-	// previous update, but not in the new update. This needs the balancers and
-	// resolvers to handle errors correctly.
-
-	// TODO: remove item from cache and remove corresponding EDS cached data.
+	for name := range c.cdsCache {
+		if _, ok := d[name]; !ok {
+			// If resource exists in cache, but not in the new update, delete it
+			// from cache, and also send an resource not found error to indicate
+			// resource removed.
+			delete(c.cdsCache, name)
+			for wi := range c.cdsWatchers[name] {
+				wi.resourceNotFound()
+			}
+		}
+	}
+	// When CDS resource is removed, we don't delete corresponding EDS cached
+	// data. The EDS watch will be canceled, and cache is removed when the last
+	// watch is canceled.
 }
 
 // newEDSUpdate is called by the underlying xdsv2Client when it receives an xDS

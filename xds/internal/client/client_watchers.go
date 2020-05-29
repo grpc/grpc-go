@@ -75,6 +75,17 @@ func (wi *watchInfo) newUpdate(update interface{}) {
 	wi.c.scheduleCallback(wi, update, nil)
 }
 
+func (wi *watchInfo) resourceNotFound() {
+	wi.mu.Lock()
+	defer wi.mu.Unlock()
+	if wi.state == watchInfoStateCanceled {
+		return
+	}
+	wi.state = watchInfoStateRespReceived
+	wi.expiryTimer.Stop()
+	wi.sendErrorLocked(NewErrorf(ErrorTypeResourceNotFound, "xds: %s target %s not found in received response", wi.typeURL, wi.target))
+}
+
 func (wi *watchInfo) timeout() {
 	wi.mu.Lock()
 	defer wi.mu.Unlock()
@@ -82,25 +93,25 @@ func (wi *watchInfo) timeout() {
 		return
 	}
 	wi.state = watchInfoStateTimeout
+	wi.sendErrorLocked(fmt.Errorf("xds: %s target %s not found, watcher timeout", wi.typeURL, wi.target))
+}
+
+// Caller must hold wi.mu.
+func (wi *watchInfo) sendErrorLocked(err error) {
 	var (
 		u interface{}
-		t string
 	)
 	switch wi.typeURL {
 	case ldsURL:
 		u = ldsUpdate{}
-		t = "LDS"
 	case rdsURL:
 		u = rdsUpdate{}
-		t = "RDS"
 	case cdsURL:
 		u = ClusterUpdate{}
-		t = "CDS"
 	case edsURL:
 		u = EndpointsUpdate{}
-		t = "EDS"
 	}
-	wi.c.scheduleCallback(wi, u, fmt.Errorf("xds: %s target %s not found, watcher timeout", t, wi.target))
+	wi.c.scheduleCallback(wi, u, err)
 }
 
 func (wi *watchInfo) cancel() {
@@ -185,7 +196,19 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 				// watching this resource.
 				delete(watchers, resourceName)
 				c.v2c.removeWatch(wi.typeURL, resourceName)
-				// TODO: remove item from cache.
+				// Remove the resource from cache. When a watch for this
+				// resource is added later, it will trigger a xDS request with
+				// resource names, and client will receive new xDS responses.
+				switch wi.typeURL {
+				case ldsURL:
+					delete(c.ldsCache, resourceName)
+				case rdsURL:
+					delete(c.rdsCache, resourceName)
+				case cdsURL:
+					delete(c.cdsCache, resourceName)
+				case edsURL:
+					delete(c.edsCache, resourceName)
+				}
 			}
 		}
 	}
