@@ -45,6 +45,18 @@ func (cwt *Channel) Send(value interface{}) {
 	cwt.ch <- value
 }
 
+// Replace clears the value on the underlying channel, and sends the new value.
+//
+// It's expected to be used with a size-1 channel, to only keep the most
+// up-to-date item.
+func (cwt *Channel) Replace(value interface{}) {
+	select {
+	case <-cwt.ch:
+	default:
+	}
+	cwt.ch <- value
+}
+
 // TimedReceive returns the value received on the underlying channel, or
 // ErrRecvTimeout if timeout amount of time elapsed.
 func (cwt *Channel) TimedReceive(timeout time.Duration) (interface{}, error) {
