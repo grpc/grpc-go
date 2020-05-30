@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/peer"
-	_ "google.golang.org/grpc/xds/experimental"
+	_ "google.golang.org/grpc/xds"
 )
 
 type statsWatcherKey struct {

@@ -19,6 +19,8 @@
 package client
 
 import (
+	"fmt"
+	"sync"
 	"time"
 )
 
@@ -33,8 +35,18 @@ const (
 	edsURL = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
 )
 
+type watchInfoState int
+
+const (
+	watchInfoStateStarted watchInfoState = iota
+	watchInfoStateRespReceived
+	watchInfoStateTimeout
+	watchInfoStateCanceled
+)
+
 // watchInfo holds all the information from a watch() call.
 type watchInfo struct {
+	c       *Client
 	typeURL string
 	target  string
 
@@ -42,7 +54,63 @@ type watchInfo struct {
 	rdsCallback rdsCallbackFunc
 	cdsCallback func(ClusterUpdate, error)
 	edsCallback func(EndpointsUpdate, error)
+
 	expiryTimer *time.Timer
+
+	// mu protects state, and c.scheduleCallback().
+	// - No callback should be scheduled after watchInfo is canceled.
+	// - No timeout error should be scheduled after watchInfo is resp received.
+	mu    sync.Mutex
+	state watchInfoState
+}
+
+func (wi *watchInfo) newUpdate(update interface{}) {
+	wi.mu.Lock()
+	defer wi.mu.Unlock()
+	if wi.state == watchInfoStateCanceled {
+		return
+	}
+	wi.state = watchInfoStateRespReceived
+	wi.expiryTimer.Stop()
+	wi.c.scheduleCallback(wi, update, nil)
+}
+
+func (wi *watchInfo) timeout() {
+	wi.mu.Lock()
+	defer wi.mu.Unlock()
+	if wi.state == watchInfoStateCanceled || wi.state == watchInfoStateRespReceived {
+		return
+	}
+	wi.state = watchInfoStateTimeout
+	var (
+		u interface{}
+		t string
+	)
+	switch wi.typeURL {
+	case ldsURL:
+		u = ldsUpdate{}
+		t = "LDS"
+	case rdsURL:
+		u = rdsUpdate{}
+		t = "RDS"
+	case cdsURL:
+		u = ClusterUpdate{}
+		t = "CDS"
+	case edsURL:
+		u = EndpointsUpdate{}
+		t = "EDS"
+	}
+	wi.c.scheduleCallback(wi, u, fmt.Errorf("xds: %s target %s not found, watcher timeout", t, wi.target))
+}
+
+func (wi *watchInfo) cancel() {
+	wi.mu.Lock()
+	defer wi.mu.Unlock()
+	if wi.state == watchInfoStateCanceled {
+		return
+	}
+	wi.expiryTimer.Stop()
+	wi.state = watchInfoStateCanceled
 }
 
 func (c *Client) watch(wi *watchInfo) (cancel func()) {
@@ -83,31 +151,31 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 	case ldsURL:
 		if v, ok := c.ldsCache[resourceName]; ok {
 			c.logger.Debugf("LDS resource with name %v found in cache: %+v", wi.target, v)
-			c.scheduleCallback(wi, v, nil)
+			wi.newUpdate(v)
 		}
 	case rdsURL:
 		if v, ok := c.rdsCache[resourceName]; ok {
 			c.logger.Debugf("RDS resource with name %v found in cache: %+v", wi.target, v)
-			c.scheduleCallback(wi, v, nil)
+			wi.newUpdate(v)
 		}
 	case cdsURL:
 		if v, ok := c.cdsCache[resourceName]; ok {
 			c.logger.Debugf("CDS resource with name %v found in cache: %+v", wi.target, v)
-			c.scheduleCallback(wi, v, nil)
+			wi.newUpdate(v)
 		}
 	case edsURL:
 		if v, ok := c.edsCache[resourceName]; ok {
 			c.logger.Debugf("EDS resource with name %v found in cache: %+v", wi.target, v)
-			c.scheduleCallback(wi, v, nil)
+			wi.newUpdate(v)
 		}
 	}
 
 	return func() {
 		c.logger.Debugf("watch for type %v, resource name %v canceled", wi.typeURL, wi.target)
+		wi.cancel()
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		if s := watchers[resourceName]; s != nil {
-			wi.expiryTimer.Stop()
 			// Remove this watcher, so it's callback will not be called in the
 			// future.
 			delete(s, wi)

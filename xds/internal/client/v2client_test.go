@@ -88,6 +88,9 @@ var (
 	goodHTTPConnManager1 = &httppb.HttpConnectionManager{
 		RouteSpecifier: &httppb.HttpConnectionManager_Rds{
 			Rds: &httppb.Rds{
+				ConfigSource: &basepb.ConfigSource{
+					ConfigSourceSpecifier: &basepb.ConfigSource_Ads{Ads: &basepb.AggregatedConfigSource{}},
+				},
 				RouteConfigName: goodRouteName1,
 			},
 		},

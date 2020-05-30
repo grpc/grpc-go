@@ -113,6 +113,7 @@ func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_U
 			err := stream.RecvMsg(in)
 			switch status.Code(err) {
 			case codes.Canceled:
+				return
 			case codes.OK:
 			default:
 				log.Fatalf("server recv error: %v", err)
@@ -125,6 +126,7 @@ func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_U
 			err := stream.Send(response)
 			switch status.Code(err) {
 			case codes.Unavailable:
+				return
 			case codes.OK:
 			default:
 				log.Fatalf("server send error: %v", err)

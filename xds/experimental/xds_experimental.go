@@ -16,13 +16,14 @@
  *
  */
 
-// Package experimental contains xds implementation, still in experimental
-// state. Users only need to import this package to get all xds functionality.
-// Things are expected to change fast until we get to a stable state, at
-// which point, all this will be moved to the xds package.
+// Package experimental contains xds implementation. Users only need to import
+// this package to get all xds functionality.
+//
+// Deprecated: import package xds instead.
 package experimental
 
+// TODO: remove this package after one release.
+
 import (
-	_ "google.golang.org/grpc/xds/internal/balancer" // Register the balancers.
-	_ "google.golang.org/grpc/xds/internal/resolver" // Register the xds_resolver
+	_ "google.golang.org/grpc/xds" // Register the balancers and resolvers.
 )

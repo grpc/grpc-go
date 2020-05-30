@@ -25,7 +25,9 @@ import (
 
 // ServiceUpdate contains update about the service.
 type ServiceUpdate struct {
-	Cluster string
+	// WeightedCluster is a map from cluster names (CDS resource to watch) to
+	// their weights.
+	WeightedCluster map[string]uint32
 }
 
 // WatchService uses LDS and RDS to discover information about the provided
@@ -62,6 +64,7 @@ type serviceUpdateWatcher struct {
 
 	mu        sync.Mutex
 	closed    bool
+	rdsName   string
 	rdsCancel func()
 }
 
@@ -82,6 +85,12 @@ func (w *serviceUpdateWatcher) handleLDSResp(update ldsUpdate, err error) {
 		return
 	}
 
+	if w.rdsName == update.routeName {
+		// If the new routeName is same as the previous, don't cancel and
+		// restart the RDS watch.
+		return
+	}
+	w.rdsName = update.routeName
 	if w.rdsCancel != nil {
 		w.rdsCancel()
 	}
@@ -99,7 +108,9 @@ func (w *serviceUpdateWatcher) handleRDSResp(update rdsUpdate, err error) {
 		w.serviceCb(ServiceUpdate{}, err)
 		return
 	}
-	w.serviceCb(ServiceUpdate{Cluster: update.clusterName}, nil)
+	w.serviceCb(ServiceUpdate{
+		WeightedCluster: update.weightedCluster,
+	}, nil)
 }
 
 func (w *serviceUpdateWatcher) close() {

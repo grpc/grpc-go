@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 
+	// TODO: change this to xds after the xds package is released.
 	_ "google.golang.org/grpc/xds/experimental" // To install the xds resolvers and balancers.
 )
 
@@ -49,7 +50,7 @@ Usage: client [name [target]]
   name
         The name you wish to be greeted by. Defaults to %q
   target
-        The URI of the server, e.g. "xds-experimental:///helloworld-service". Defaults to %q
+        The URI of the server, e.g. "xds:///helloworld-service". Defaults to %q
 `, defaultName, defaultTarget)
 
 		flag.PrintDefaults()

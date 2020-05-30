@@ -19,7 +19,6 @@
 package client
 
 import (
-	"fmt"
 	"time"
 
 	"google.golang.org/grpc/xds/internal"
@@ -81,13 +80,14 @@ type EndpointsUpdate struct {
 // after the watcher is canceled. The caller needs to handle this case.
 func (c *Client) WatchEndpoints(clusterName string, cb func(EndpointsUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
+		c:           c,
 		typeURL:     edsURL,
 		target:      clusterName,
 		edsCallback: cb,
 	}
 
 	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
-		c.scheduleCallback(wi, EndpointsUpdate{}, fmt.Errorf("xds: EDS target %s not found, watcher timeout", clusterName))
+		wi.timeout()
 	})
 	return c.watch(wi)
 }

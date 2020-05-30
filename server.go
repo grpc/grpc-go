@@ -345,7 +345,7 @@ func StreamInterceptor(i StreamServerInterceptor) ServerOption {
 }
 
 // ChainStreamInterceptor returns a ServerOption that specifies the chained interceptor
-// for stream RPCs. The first interceptor will be the outer most,
+// for streaming RPCs. The first interceptor will be the outer most,
 // while the last interceptor will be the inner most wrapper around the real call.
 // All stream interceptors added by this method will be chained.
 func ChainStreamInterceptor(interceptors ...StreamServerInterceptor) ServerOption {

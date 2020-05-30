@@ -50,8 +50,7 @@ var (
 type xdsclientWrapper struct {
 	logger *grpclog.PrefixLogger
 
-	newEDSUpdate func(xdsclient.EndpointsUpdate) error
-	loseContact  func()
+	newEDSUpdate func(xdsclient.EndpointsUpdate, error)
 	bbo          balancer.BuildOptions
 	loadStore    lrs.Store
 
@@ -78,11 +77,10 @@ type xdsclientWrapper struct {
 //
 // The given callbacks won't be called until the underlying xds_client is
 // working and sends updates.
-func newXDSClientWrapper(newEDSUpdate func(xdsclient.EndpointsUpdate) error, loseContact func(), bbo balancer.BuildOptions, loadStore lrs.Store, logger *grpclog.PrefixLogger) *xdsclientWrapper {
+func newXDSClientWrapper(newEDSUpdate func(xdsclient.EndpointsUpdate, error), bbo balancer.BuildOptions, loadStore lrs.Store, logger *grpclog.PrefixLogger) *xdsclientWrapper {
 	return &xdsclientWrapper{
 		logger:       logger,
 		newEDSUpdate: newEDSUpdate,
-		loseContact:  loseContact,
 		bbo:          bbo,
 		loadStore:    loadStore,
 	}
@@ -188,16 +186,8 @@ func (c *xdsclientWrapper) startEndpointsWatch(nameToWatch string) {
 		c.cancelEndpointsWatch()
 	}
 	cancelEDSWatch := c.xdsclient.WatchEndpoints(c.edsServiceName, func(update xdsclient.EndpointsUpdate, err error) {
-		if err != nil {
-			// TODO: this should trigger a call to `c.loseContact`, when the
-			// error indicates "lose contact".
-			c.logger.Warningf("Watch error from xds-client %p: %v", c.xdsclient, err)
-			return
-		}
 		c.logger.Infof("Watch update from xds-client %p, content: %+v", c.xdsclient, update)
-		if err := c.newEDSUpdate(update); err != nil {
-			c.logger.Warningf("xds: processing new EDS update failed due to %v.", err)
-		}
+		c.newEDSUpdate(update, err)
 	})
 	c.logger.Infof("Watch started on resource name %v with xds-client %p", c.edsServiceName, c.xdsclient)
 	c.cancelEndpointsWatch = func() {
@@ -268,17 +258,22 @@ func (c *xdsclientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attr
 	}
 }
 
-func (c *xdsclientWrapper) close() {
-	if c.xdsclient != nil && c.balancerName != "" {
-		// Only close xdsclient if it's not from attributes.
-		c.xdsclient.Close()
-	}
-
+func (c *xdsclientWrapper) cancelWatch() {
+	c.loadReportServer = nil
 	if c.cancelLoadReport != nil {
 		c.cancelLoadReport()
 	}
+	c.edsServiceName = ""
 	if c.cancelEndpointsWatch != nil {
 		c.cancelEndpointsWatch()
+	}
+}
+
+func (c *xdsclientWrapper) close() {
+	c.cancelWatch()
+	if c.xdsclient != nil && c.balancerName != "" {
+		// Only close xdsclient if it's not from attributes.
+		c.xdsclient.Close()
 	}
 }
 

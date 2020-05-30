@@ -22,7 +22,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
+
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
+	listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v2"
+	anypb "github.com/golang/protobuf/ptypes/any"
 )
 
 func (s) TestLDSGetRouteConfig(t *testing.T) {
@@ -59,6 +65,29 @@ func (s) TestLDSGetRouteConfig(t *testing.T) {
 		{
 			name:      "scopedRoutes-routeConfig-in-apiListener",
 			lis:       listenerWithScopedRoutesRouteConfig,
+			wantRoute: "",
+			wantErr:   true,
+		},
+		{
+			name: "rds.ConfigSource-in-apiListener-is-not-ADS",
+			lis: &xdspb.Listener{
+				Name: goodLDSTarget1,
+				ApiListener: &listenerpb.ApiListener{
+					ApiListener: &anypb.Any{
+						TypeUrl: httpConnManagerURL,
+						Value: func() []byte {
+							cm := &httppb.HttpConnectionManager{
+								RouteSpecifier: &httppb.HttpConnectionManager_Rds{
+									Rds: &httppb.Rds{
+										ConfigSource: &basepb.ConfigSource{
+											ConfigSourceSpecifier: &basepb.ConfigSource_Path{
+												Path: "/some/path",
+											},
+										},
+										RouteConfigName: goodRouteName1}}}
+							mcm, _ := proto.Marshal(cm)
+							return mcm
+						}()}}},
 			wantRoute: "",
 			wantErr:   true,
 		},

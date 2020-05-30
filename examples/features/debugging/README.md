@@ -13,7 +13,7 @@ To turn on the logs for debugging, run the code with the following environment v
 ## Channelz
 We also provide a runtime debugging tool, Channelz, to help users with live debugging.
 
-See the channelz blog post here ([link](https://grpc.io/blog/a_short_introduction_to_channelz)) for
+See the channelz blog post here ([link](https://grpc.io/blog/a-short-introduction-to-channelz/)) for
 details about how to use channelz service to debug live program.
 
 ## Try it

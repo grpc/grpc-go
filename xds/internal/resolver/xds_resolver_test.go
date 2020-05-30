@@ -25,12 +25,14 @@ import (
 	"net"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
+	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
@@ -53,6 +55,15 @@ var (
 	}
 	target = resolver.Target{Endpoint: targetStr}
 )
+
+func TestRegister(t *testing.T) {
+	for _, s := range []string{"xds", "xds-experimental"} {
+		b := resolver.Get(s)
+		if b == nil {
+			t.Errorf("scheme %v is not registered", s)
+		}
+	}
+}
 
 // testClientConn is a fake implemetation of resolver.ClientConn. All is does
 // is to store the state received from the resolver locally and signal that
@@ -264,7 +275,7 @@ func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	// Call the watchAPI callback after closing the resolver, and make sure no
 	// update is triggerred on the ClientConn.
 	xdsR.Close()
-	xdsC.InvokeWatchServiceCallback(cluster, nil)
+	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{WeightedCluster: map[string]uint32{cluster: 1}}, nil)
 	if gotVal, gotErr := tcc.stateCh.Receive(); gotErr != testutils.ErrRecvTimeout {
 		t.Fatalf("ClientConn.UpdateState called after xdsResolver is closed: %v", gotVal)
 	}
@@ -288,7 +299,7 @@ func TestXDSResolverBadServiceUpdate(t *testing.T) {
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr := errors.New("bad serviceupdate")
-	xdsC.InvokeWatchServiceCallback("", suErr)
+	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{}, suErr)
 	if gotErrVal, gotErr := tcc.errorCh.Receive(); gotErr != nil || gotErrVal != suErr {
 		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr)
 	}
@@ -309,19 +320,43 @@ func TestXDSResolverGoodServiceUpdate(t *testing.T) {
 
 	waitForWatchService(t, xdsC, targetStr)
 
-	// Invoke the watchAPI callback with a good service update and wait for the
-	// UpdateState method to be called on the ClientConn.
-	xdsC.InvokeWatchServiceCallback(cluster, nil)
-	gotState, err := tcc.stateCh.Receive()
-	if err != nil {
-		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
-	}
-	rState := gotState.(resolver.State)
-	if gotClient := rState.Attributes.Value(xdsinternal.XDSClientID); gotClient != xdsC {
-		t.Fatalf("ClientConn.UpdateState got xdsClient: %v, want %v", gotClient, xdsC)
-	}
-	if err := rState.ServiceConfig.Err; err != nil {
-		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	for _, tt := range []struct {
+		su       client.ServiceUpdate
+		wantJSON string
+	}{
+		{
+			su:       client.ServiceUpdate{WeightedCluster: map[string]uint32{testCluster1: 1}},
+			wantJSON: testClusterOnlyJSON,
+		},
+		{
+			su: client.ServiceUpdate{WeightedCluster: map[string]uint32{
+				"cluster_1": 75,
+				"cluster_2": 25,
+			}},
+			wantJSON: testWeightedCDSJSON,
+		},
+	} {
+		// Invoke the watchAPI callback with a good service update and wait for the
+		// UpdateState method to be called on the ClientConn.
+		xdsC.InvokeWatchServiceCallback(tt.su, nil)
+		gotState, err := tcc.stateCh.Receive()
+		if err != nil {
+			t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+		}
+		rState := gotState.(resolver.State)
+		if gotClient := rState.Attributes.Value(xdsinternal.XDSClientID); gotClient != xdsC {
+			t.Fatalf("ClientConn.UpdateState got xdsClient: %v, want %v", gotClient, xdsC)
+		}
+		if err := rState.ServiceConfig.Err; err != nil {
+			t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+		}
+
+		wantSCParsed := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(tt.wantJSON)
+		if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
+			t.Errorf("ClientConn.UpdateState received different service config")
+			t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
+			t.Error("want: ", cmp.Diff(nil, wantSCParsed.Config))
+		}
 	}
 }
 
@@ -343,14 +378,14 @@ func TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr := errors.New("bad serviceupdate")
-	xdsC.InvokeWatchServiceCallback("", suErr)
+	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{}, suErr)
 	if gotErrVal, gotErr := tcc.errorCh.Receive(); gotErr != nil || gotErrVal != suErr {
 		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr)
 	}
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
-	xdsC.InvokeWatchServiceCallback(cluster, nil)
+	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{WeightedCluster: map[string]uint32{cluster: 1}}, nil)
 	gotState, err := tcc.stateCh.Receive()
 	if err != nil {
 		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
@@ -366,7 +401,7 @@ func TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr2 := errors.New("bad serviceupdate 2")
-	xdsC.InvokeWatchServiceCallback("", suErr2)
+	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{}, suErr2)
 	if gotErrVal, gotErr := tcc.errorCh.Receive(); gotErr != nil || gotErrVal != suErr2 {
 		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr2)
 	}

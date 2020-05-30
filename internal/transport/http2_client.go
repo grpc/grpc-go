@@ -223,12 +223,14 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		// address specific arbitrary data to reach the credential handshaker.
 		contextWithHandshakeInfo := internal.NewClientHandshakeInfoContext.(func(context.Context, credentials.ClientHandshakeInfo) context.Context)
 		connectCtx = contextWithHandshakeInfo(connectCtx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
-		scheme = "https"
 		conn, authInfo, err = transportCreds.ClientHandshake(connectCtx, addr.ServerName, conn)
 		if err != nil {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: authentication handshake failed: %v", err)
 		}
 		isSecure = true
+		if transportCreds.Info().SecurityProtocol == "tls" {
+			scheme = "https"
+		}
 	}
 	dynamicWindow := true
 	icwz := int32(initialWindowSize)
@@ -863,18 +865,10 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	df := &dataFrame{
 		streamID:  s.id,
 		endStream: opts.Last,
+		h:         hdr,
+		d:         data,
 	}
-	if hdr != nil || data != nil { // If it's not an empty data frame.
-		// Add some data to grpc message header so that we can equally
-		// distribute bytes across frames.
-		emptyLen := http2MaxFrameLen - len(hdr)
-		if emptyLen > len(data) {
-			emptyLen = len(data)
-		}
-		hdr = append(hdr, data[:emptyLen]...)
-		data = data[emptyLen:]
-		df.h, df.d = hdr, data
-		// TODO(mmukhi): The above logic in this if can be moved to loopyWriter's data handler.
+	if hdr != nil || data != nil { // If it's not an empty data frame, check quota.
 		if err := s.wq.get(int32(len(hdr) + len(data))); err != nil {
 			return err
 		}

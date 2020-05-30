@@ -19,12 +19,11 @@
 package client
 
 import (
-	"fmt"
 	"time"
 )
 
 type rdsUpdate struct {
-	clusterName string
+	weightedCluster map[string]uint32
 }
 type rdsCallbackFunc func(rdsUpdate, error)
 
@@ -35,13 +34,14 @@ type rdsCallbackFunc func(rdsUpdate, error)
 // after the watcher is canceled. The caller needs to handle this case.
 func (c *Client) watchRDS(routeName string, cb rdsCallbackFunc) (cancel func()) {
 	wi := &watchInfo{
+		c:           c,
 		typeURL:     rdsURL,
 		target:      routeName,
 		rdsCallback: cb,
 	}
 
 	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
-		c.scheduleCallback(wi, rdsUpdate{}, fmt.Errorf("xds: RDS target %s not found, watcher timeout", routeName))
+		wi.timeout()
 	})
 	return c.watch(wi)
 }
