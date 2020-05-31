@@ -26,23 +26,25 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
-	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpctest"
 	rpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	pb "google.golang.org/grpc/reflection/grpc_testing"
 	pbv3 "google.golang.org/grpc/reflection/grpc_testingv3"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/descriptorpb"
 )
 
 var (
 	s = &serverReflectionServer{}
 	// fileDescriptor of each test proto file.
-	fdTest       *dpb.FileDescriptorProto
-	fdTestv3     *dpb.FileDescriptorProto
-	fdProto2     *dpb.FileDescriptorProto
-	fdProto2Ext  *dpb.FileDescriptorProto
-	fdProto2Ext2 *dpb.FileDescriptorProto
+	fdTest       *descriptorpb.FileDescriptorProto
+	fdTestv3     *descriptorpb.FileDescriptorProto
+	fdProto2     *descriptorpb.FileDescriptorProto
+	fdProto2Ext  *descriptorpb.FileDescriptorProto
+	fdProto2Ext2 *descriptorpb.FileDescriptorProto
 	// fileDescriptor marshalled.
 	fdTestByte       []byte
 	fdTestv3Byte     []byte
@@ -59,20 +61,24 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, x{})
 }
 
-func loadFileDesc(filename string) (*dpb.FileDescriptorProto, []byte) {
-	enc := proto.FileDescriptor(filename)
-	if enc == nil {
-		panic(fmt.Sprintf("failed to find fd for file: %v", filename))
-	}
-	fd, err := decodeFileDesc(enc)
+// intArray is used to sort []int32
+type intArray []int32
+
+func (s intArray) Len() int           { return len(s) }
+func (s intArray) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s intArray) Less(i, j int) bool { return s[i] < s[j] }
+
+func loadFileDesc(filename string) (*descriptorpb.FileDescriptorProto, []byte) {
+	fd, err := protoregistry.GlobalFiles.FindFileByPath(filename)
 	if err != nil {
-		panic(fmt.Sprintf("failed to decode enc: %v", err))
+		panic(fmt.Sprintf("failed to find fd for file: %v", err))
 	}
-	b, err := proto.Marshal(fd)
+	fdp := protodesc.ToFileDescriptorProto(fd)
+	b, err := proto.Marshal(fdp)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal fd: %v", err))
 	}
-	return fd, b
+	return fdp, b
 }
 
 func init() {
@@ -81,87 +87,6 @@ func init() {
 	fdProto2, fdProto2Byte = loadFileDesc("reflection/grpc_testing/proto2.proto")
 	fdProto2Ext, fdProto2ExtByte = loadFileDesc("reflection/grpc_testing/proto2_ext.proto")
 	fdProto2Ext2, fdProto2Ext2Byte = loadFileDesc("reflection/grpc_testing/proto2_ext2.proto")
-}
-
-func (x) TestFileDescForType(t *testing.T) {
-	for _, test := range []struct {
-		st     reflect.Type
-		wantFd *dpb.FileDescriptorProto
-	}{
-		{reflect.TypeOf(pb.SearchResponse_Result{}), fdTest},
-		{reflect.TypeOf(pb.ToBeExtended{}), fdProto2},
-	} {
-		fd, err := s.fileDescForType(test.st)
-		if err != nil || !proto.Equal(fd, test.wantFd) {
-			t.Errorf("fileDescForType(%q) = %q, %v, want %q, <nil>", test.st, fd, err, test.wantFd)
-		}
-	}
-}
-
-func (x) TestTypeForName(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		want reflect.Type
-	}{
-		{"grpc.testing.SearchResponse", reflect.TypeOf(pb.SearchResponse{})},
-	} {
-		r, err := typeForName(test.name)
-		if err != nil || r != test.want {
-			t.Errorf("typeForName(%q) = %q, %v, want %q, <nil>", test.name, r, err, test.want)
-		}
-	}
-}
-
-func (x) TestTypeForNameNotFound(t *testing.T) {
-	for _, test := range []string{
-		"grpc.testing.not_exiting",
-	} {
-		_, err := typeForName(test)
-		if err == nil {
-			t.Errorf("typeForName(%q) = _, %v, want _, <non-nil>", test, err)
-		}
-	}
-}
-
-func (x) TestFileDescContainingExtension(t *testing.T) {
-	for _, test := range []struct {
-		st     reflect.Type
-		extNum int32
-		want   *dpb.FileDescriptorProto
-	}{
-		{reflect.TypeOf(pb.ToBeExtended{}), 13, fdProto2Ext},
-		{reflect.TypeOf(pb.ToBeExtended{}), 17, fdProto2Ext},
-		{reflect.TypeOf(pb.ToBeExtended{}), 19, fdProto2Ext},
-		{reflect.TypeOf(pb.ToBeExtended{}), 23, fdProto2Ext2},
-		{reflect.TypeOf(pb.ToBeExtended{}), 29, fdProto2Ext2},
-	} {
-		fd, err := fileDescContainingExtension(test.st, test.extNum)
-		if err != nil || !proto.Equal(fd, test.want) {
-			t.Errorf("fileDescContainingExtension(%q) = %q, %v, want %q, <nil>", test.st, fd, err, test.want)
-		}
-	}
-}
-
-// intArray is used to sort []int32
-type intArray []int32
-
-func (s intArray) Len() int           { return len(s) }
-func (s intArray) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-func (s intArray) Less(i, j int) bool { return s[i] < s[j] }
-
-func (x) TestAllExtensionNumbersForType(t *testing.T) {
-	for _, test := range []struct {
-		st   reflect.Type
-		want []int32
-	}{
-		{reflect.TypeOf(pb.ToBeExtended{}), []int32{13, 17, 19, 23, 29}},
-	} {
-		r, err := s.allExtensionNumbersForType(test.st)
-		sort.Sort(intArray(r))
-		if err != nil || !reflect.DeepEqual(r, test.want) {
-			t.Errorf("allExtensionNumbersForType(%q) = %v, %v, want %v, <nil>", test.st, r, err, test.want)
-		}
-	}
 }
 
 // Do end2end tests.
@@ -307,7 +232,7 @@ func testFileContainingSymbol(t *testing.T, stream rpb.ServerReflection_ServerRe
 		{"grpc.testingv3.SearchResponseV3.Result.Value.val", fdTestv3Byte},
 		{"grpc.testingv3.SearchResponseV3.Result.Value.str", fdTestv3Byte},
 		{"grpc.testingv3.SearchResponseV3.State", fdTestv3Byte},
-		{"grpc.testingv3.SearchResponseV3.State.FRESH", fdTestv3Byte},
+		{"grpc.testingv3.SearchResponseV3.FRESH", fdTestv3Byte},
 	} {
 		if err := stream.Send(&rpb.ServerReflectionRequest{
 			MessageRequest: &rpb.ServerReflectionRequest_FileContainingSymbol{
