@@ -86,12 +86,12 @@ func (s) TestCheckSecurityLevel(t *testing.T) {
 			want:      true,
 		},
 		{
-			authLevel: Invalid,
+			authLevel: 0,
 			testLevel: IntegrityOnly,
 			want:      true,
 		},
 		{
-			authLevel: Invalid,
+			authLevel: 0,
 			testLevel: PrivacyAndIntegrity,
 			want:      true,
 		},
