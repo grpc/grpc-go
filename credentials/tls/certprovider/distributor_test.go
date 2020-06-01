@@ -20,16 +20,12 @@ package certprovider
 
 import (
 	"context"
-	"crypto/x509"
 	"errors"
 	"fmt"
-	"math/big"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 // TestDistributor invokes the different methods on the Distributor type and
@@ -43,9 +39,9 @@ func (s) TestDistributor(t *testing.T) {
 		t.Fatal(err)
 	}
 	// wantKM1 has both local and root certs.
-	wantKM1 := km
+	wantKM1 := *km
 	// wantKM2 has only local certs. Roots are nil-ed out.
-	wantKM2 := km
+	wantKM2 := *km
 	wantKM2.Roots = nil
 
 	// Create a goroutines which work in lockstep with the rest of the test.
@@ -53,8 +49,8 @@ func (s) TestDistributor(t *testing.T) {
 	// of the test sets it.
 	var wg sync.WaitGroup
 	wg.Add(1)
-	errCh := make(chan error, 1)
-	proceedCh := make(chan struct{}, 1)
+	errCh := make(chan error)
+	proceedCh := make(chan struct{})
 	go func() {
 		defer wg.Done()
 
@@ -62,7 +58,7 @@ func (s) TestDistributor(t *testing.T) {
 		// material has been set on the distributor as yet.
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout/2)
 		defer cancel()
-		if _, err := dist.KeyMaterial(ctx, KeyMaterialOptions{}); !errors.Is(err, context.DeadlineExceeded) {
+		if _, err := dist.KeyMaterial(ctx, KeyMaterialOptions{}); err != context.DeadlineExceeded {
 			errCh <- err
 			return
 		}
@@ -77,7 +73,7 @@ func (s) TestDistributor(t *testing.T) {
 			errCh <- err
 			return
 		}
-		if !cmp.Equal(gotKM, wantKM1, cmpopts.IgnoreUnexported(big.Int{}, x509.CertPool{})) {
+		if !reflect.DeepEqual(gotKM, &wantKM1) {
 			errCh <- fmt.Errorf("provider.KeyMaterial() = %+v, want %+v", gotKM, wantKM1)
 		}
 		proceedCh <- struct{}{}
@@ -92,7 +88,7 @@ func (s) TestDistributor(t *testing.T) {
 				errCh <- err
 				return
 			}
-			if cmp.Equal(gotKM, wantKM2, cmpopts.IgnoreUnexported(big.Int{}, x509.CertPool{})) {
+			if reflect.DeepEqual(gotKM, &wantKM2) {
 				break
 			}
 		}
@@ -103,7 +99,7 @@ func (s) TestDistributor(t *testing.T) {
 		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
 		for {
-			if _, err := dist.KeyMaterial(ctx, KeyMaterialOptions{}); errors.Is(err, ErrProviderClosed) {
+			if _, err := dist.KeyMaterial(ctx, KeyMaterialOptions{}); err == ErrProviderClosed {
 				doneCh := dist.Done()
 				if _, ok := <-doneCh; ok {
 					errCh <- errors.New("distributor done channel not closed")
@@ -115,11 +111,11 @@ func (s) TestDistributor(t *testing.T) {
 	}()
 
 	waitAndDo(t, proceedCh, errCh, func() {
-		dist.Set(wantKM1)
+		dist.Set(&wantKM1)
 	})
 
 	waitAndDo(t, proceedCh, errCh, func() {
-		dist.Set(wantKM2)
+		dist.Set(&wantKM2)
 	})
 
 	waitAndDo(t, proceedCh, errCh, func() {
@@ -139,6 +135,5 @@ func waitAndDo(t *testing.T, proceedCh chan struct{}, errCh chan error, do func(
 		do()
 	case err := <-errCh:
 		t.Fatal(err)
-
 	}
 }

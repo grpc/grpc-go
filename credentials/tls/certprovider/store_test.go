@@ -22,15 +22,11 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"io/ioutil"
-	"math/big"
+	"reflect"
 	"testing"
 	"time"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/testdata"
@@ -185,14 +181,21 @@ func (s) TestStoreWithSingleProvider(t *testing.T) {
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
-	if !cmp.Equal(gotKM, wantKM, cmpopts.IgnoreUnexported(big.Int{}, x509.CertPool{})) {
+	// TODO(easwars): Remove all references to reflect.DeepEqual and use
+	// cmp.Equal instead. Currently, the later panics because x509.Certificate
+	// type defines an Equal method, but does not check for nil. This has been
+	// fixed in
+	// https://github.com/golang/go/commit/89865f8ba64ccb27f439cce6daaa37c9aa38f351,
+	// but this is only available starting go1.14. So, once we remove support
+	// for go1.13, we can make the switch.
+	if !reflect.DeepEqual(gotKM, wantKM) {
 		t.Fatalf("provider.KeyMaterial() = %+v, want %+v", gotKM, wantKM)
 	}
 
 	// Close the provider and retry the KeyMaterial() call, and expect it to
 	// fail with a known error.
 	prov.Close()
-	if _, err := prov.KeyMaterial(ctx, KeyMaterialOptions{}); !errors.Is(err, ErrProviderClosed) {
+	if _, err := prov.KeyMaterial(ctx, KeyMaterialOptions{}); err != ErrProviderClosed {
 		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, ErrProviderClosed)
 	}
 }
@@ -219,7 +222,7 @@ func (s) TestStoreWithSingleProviderWithSharing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
-	if !cmp.Equal(gotKM, wantKM, cmpopts.IgnoreUnexported(big.Int{}, x509.CertPool{})) {
+	if !reflect.DeepEqual(gotKM, wantKM) {
 		t.Fatalf("provider.KeyMaterial() = %+v, want %+v", gotKM, wantKM)
 	}
 
@@ -231,7 +234,7 @@ func (s) TestStoreWithSingleProviderWithSharing(t *testing.T) {
 	}
 
 	prov2.Close()
-	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); !errors.Is(err, ErrProviderClosed) {
+	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != ErrProviderClosed {
 		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, ErrProviderClosed)
 	}
 }
@@ -260,7 +263,7 @@ func (s) TestStoreWithSingleProviderWithoutSharing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
-	if !cmp.Equal(gotKM, wantKM, cmpopts.IgnoreUnexported(big.Int{}, x509.CertPool{})) {
+	if !reflect.DeepEqual(gotKM, wantKM) {
 		t.Fatalf("provider.KeyMaterial() = %+v, want %+v", gotKM, wantKM)
 	}
 
@@ -270,7 +273,7 @@ func (s) TestStoreWithSingleProviderWithoutSharing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
-	if !cmp.Equal(gotKM, wantKM, cmpopts.IgnoreUnexported(big.Int{}, x509.CertPool{})) {
+	if !reflect.DeepEqual(gotKM, wantKM) {
 		t.Fatalf("provider.KeyMaterial() = %+v, want %+v", gotKM, wantKM)
 	}
 
@@ -287,7 +290,7 @@ func (s) TestStoreWithSingleProviderWithoutSharing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
-	if !cmp.Equal(gotKM, wantKM, cmpopts.IgnoreUnexported(big.Int{}, x509.CertPool{})) {
+	if !reflect.DeepEqual(gotKM, wantKM) {
 		t.Fatalf("provider.KeyMaterial() = %+v, want %+v", gotKM, wantKM)
 	}
 
@@ -299,7 +302,7 @@ func (s) TestStoreWithSingleProviderWithoutSharing(t *testing.T) {
 	}
 
 	prov2.Close()
-	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); !errors.Is(err, ErrProviderClosed) {
+	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != ErrProviderClosed {
 		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, ErrProviderClosed)
 	}
 }
@@ -326,7 +329,7 @@ func (s) TestStoreWithMultipleProviders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
-	if !cmp.Equal(gotKM, wantKM, cmpopts.IgnoreUnexported(big.Int{}, x509.CertPool{})) {
+	if !reflect.DeepEqual(gotKM, wantKM) {
 		t.Fatalf("provider.KeyMaterial() = %+v, want %+v", gotKM, wantKM)
 	}
 
@@ -336,7 +339,7 @@ func (s) TestStoreWithMultipleProviders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
-	if !cmp.Equal(gotKM, wantKM, cmpopts.IgnoreUnexported(big.Int{}, x509.CertPool{})) {
+	if !reflect.DeepEqual(gotKM, wantKM) {
 		t.Fatalf("provider.KeyMaterial() = %+v, want %+v", gotKM, wantKM)
 	}
 
@@ -348,7 +351,7 @@ func (s) TestStoreWithMultipleProviders(t *testing.T) {
 	}
 
 	prov2.Close()
-	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); !errors.Is(err, ErrProviderClosed) {
+	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != ErrProviderClosed {
 		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, ErrProviderClosed)
 	}
 }
