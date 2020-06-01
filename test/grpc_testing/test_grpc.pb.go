@@ -194,6 +194,8 @@ func (x *testServiceHalfDuplexCallClient) Recv() (*StreamingOutputCallResponse, 
 }
 
 // TestServiceServer is the server API for TestService service.
+// All implementations must embed UnimplementedTestServiceServer
+// for forward compatibility
 type TestServiceServer interface {
 	// One empty request followed by one empty response.
 	EmptyCall(context.Context, *Empty) (*Empty, error)
@@ -215,9 +217,10 @@ type TestServiceServer interface {
 	// stream of responses are returned to the client when the server starts with
 	// first request.
 	HalfDuplexCall(TestService_HalfDuplexCallServer) error
+	_unimplementedTestServiceServer()
 }
 
-// UnimplementedTestServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedTestServiceServer must be embedded to have forward compatible implementations.
 type UnimplementedTestServiceServer struct {
 }
 
@@ -239,6 +242,7 @@ func (*UnimplementedTestServiceServer) FullDuplexCall(TestService_FullDuplexCall
 func (*UnimplementedTestServiceServer) HalfDuplexCall(TestService_HalfDuplexCallServer) error {
 	return status.Errorf(codes.Unimplemented, "method HalfDuplexCall not implemented")
 }
+func (*UnimplementedTestServiceServer) _unimplementedTestServiceServer() {}
 
 func RegisterTestServiceServer(s *grpc.Server, srv TestServiceServer) {
 	s.RegisterService(&_TestService_serviceDesc, srv)

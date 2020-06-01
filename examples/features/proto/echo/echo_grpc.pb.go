@@ -142,6 +142,8 @@ func (x *echoBidirectionalStreamingEchoClient) Recv() (*EchoResponse, error) {
 }
 
 // EchoServer is the server API for Echo service.
+// All implementations must embed UnimplementedEchoServer
+// for forward compatibility
 type EchoServer interface {
 	// UnaryEcho is unary echo.
 	UnaryEcho(context.Context, *EchoRequest) (*EchoResponse, error)
@@ -151,9 +153,10 @@ type EchoServer interface {
 	ClientStreamingEcho(Echo_ClientStreamingEchoServer) error
 	// BidirectionalStreamingEcho is bidi streaming.
 	BidirectionalStreamingEcho(Echo_BidirectionalStreamingEchoServer) error
+	_unimplementedEchoServer()
 }
 
-// UnimplementedEchoServer can be embedded to have forward compatible implementations.
+// UnimplementedEchoServer must be embedded to have forward compatible implementations.
 type UnimplementedEchoServer struct {
 }
 
@@ -169,6 +172,7 @@ func (*UnimplementedEchoServer) ClientStreamingEcho(Echo_ClientStreamingEchoServ
 func (*UnimplementedEchoServer) BidirectionalStreamingEcho(Echo_BidirectionalStreamingEchoServer) error {
 	return status.Errorf(codes.Unimplemented, "method BidirectionalStreamingEcho not implemented")
 }
+func (*UnimplementedEchoServer) _unimplementedEchoServer() {}
 
 func RegisterEchoServer(s *grpc.Server, srv EchoServer) {
 	s.RegisterService(&_Echo_serviceDesc, srv)

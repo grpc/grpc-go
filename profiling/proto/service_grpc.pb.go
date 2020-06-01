@@ -51,15 +51,18 @@ func (c *profilingClient) GetStreamStats(ctx context.Context, in *GetStreamStats
 }
 
 // ProfilingServer is the server API for Profiling service.
+// All implementations must embed UnimplementedProfilingServer
+// for forward compatibility
 type ProfilingServer interface {
 	// Enable allows users to toggle profiling on and off remotely.
 	Enable(context.Context, *EnableRequest) (*EnableResponse, error)
 	// GetStreamStats is used to retrieve an array of stream-level stats from a
 	// gRPC client/server.
 	GetStreamStats(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error)
+	_unimplementedProfilingServer()
 }
 
-// UnimplementedProfilingServer can be embedded to have forward compatible implementations.
+// UnimplementedProfilingServer must be embedded to have forward compatible implementations.
 type UnimplementedProfilingServer struct {
 }
 
@@ -69,6 +72,7 @@ func (*UnimplementedProfilingServer) Enable(context.Context, *EnableRequest) (*E
 func (*UnimplementedProfilingServer) GetStreamStats(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStreamStats not implemented")
 }
+func (*UnimplementedProfilingServer) _unimplementedProfilingServer() {}
 
 func RegisterProfilingServer(s *grpc.Server, srv ProfilingServer) {
 	s.RegisterService(&_Profiling_serviceDesc, srv)

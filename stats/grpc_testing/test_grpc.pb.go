@@ -145,6 +145,8 @@ func (x *testServiceServerStreamCallClient) Recv() (*SimpleResponse, error) {
 }
 
 // TestServiceServer is the server API for TestService service.
+// All implementations must embed UnimplementedTestServiceServer
+// for forward compatibility
 type TestServiceServer interface {
 	// One request followed by one response.
 	// The server returns the client id as-is.
@@ -157,9 +159,10 @@ type TestServiceServer interface {
 	ClientStreamCall(TestService_ClientStreamCallServer) error
 	// Server stream
 	ServerStreamCall(*SimpleRequest, TestService_ServerStreamCallServer) error
+	_unimplementedTestServiceServer()
 }
 
-// UnimplementedTestServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedTestServiceServer must be embedded to have forward compatible implementations.
 type UnimplementedTestServiceServer struct {
 }
 
@@ -175,6 +178,7 @@ func (*UnimplementedTestServiceServer) ClientStreamCall(TestService_ClientStream
 func (*UnimplementedTestServiceServer) ServerStreamCall(*SimpleRequest, TestService_ServerStreamCallServer) error {
 	return status.Errorf(codes.Unimplemented, "method ServerStreamCall not implemented")
 }
+func (*UnimplementedTestServiceServer) _unimplementedTestServiceServer() {}
 
 func RegisterTestServiceServer(s *grpc.Server, srv TestServiceServer) {
 	s.RegisterService(&_TestService_serviceDesc, srv)

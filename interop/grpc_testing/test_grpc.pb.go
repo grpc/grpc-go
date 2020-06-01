@@ -194,6 +194,8 @@ func (x *testServiceHalfDuplexCallClient) Recv() (*StreamingOutputCallResponse, 
 }
 
 // TestServiceServer is the server API for TestService service.
+// All implementations must embed UnimplementedTestServiceServer
+// for forward compatibility
 type TestServiceServer interface {
 	// One empty request followed by one empty response.
 	EmptyCall(context.Context, *Empty) (*Empty, error)
@@ -215,9 +217,10 @@ type TestServiceServer interface {
 	// stream of responses are returned to the client when the server starts with
 	// first request.
 	HalfDuplexCall(TestService_HalfDuplexCallServer) error
+	_unimplementedTestServiceServer()
 }
 
-// UnimplementedTestServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedTestServiceServer must be embedded to have forward compatible implementations.
 type UnimplementedTestServiceServer struct {
 }
 
@@ -239,6 +242,7 @@ func (*UnimplementedTestServiceServer) FullDuplexCall(TestService_FullDuplexCall
 func (*UnimplementedTestServiceServer) HalfDuplexCall(TestService_HalfDuplexCallServer) error {
 	return status.Errorf(codes.Unimplemented, "method HalfDuplexCall not implemented")
 }
+func (*UnimplementedTestServiceServer) _unimplementedTestServiceServer() {}
 
 func RegisterTestServiceServer(s *grpc.Server, srv TestServiceServer) {
 	s.RegisterService(&_TestService_serviceDesc, srv)
@@ -445,18 +449,22 @@ func (c *unimplementedServiceClient) UnimplementedCall(ctx context.Context, in *
 }
 
 // UnimplementedServiceServer is the server API for UnimplementedService service.
+// All implementations must embed UnimplementedUnimplementedServiceServer
+// for forward compatibility
 type UnimplementedServiceServer interface {
 	// A call that no server should implement
 	UnimplementedCall(context.Context, *Empty) (*Empty, error)
+	_unimplementedUnimplementedServiceServer()
 }
 
-// UnimplementedUnimplementedServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedUnimplementedServiceServer must be embedded to have forward compatible implementations.
 type UnimplementedUnimplementedServiceServer struct {
 }
 
 func (*UnimplementedUnimplementedServiceServer) UnimplementedCall(context.Context, *Empty) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UnimplementedCall not implemented")
 }
+func (*UnimplementedUnimplementedServiceServer) _unimplementedUnimplementedServiceServer() {}
 
 func RegisterUnimplementedServiceServer(s *grpc.Server, srv UnimplementedServiceServer) {
 	s.RegisterService(&_UnimplementedService_serviceDesc, srv)
@@ -519,18 +527,22 @@ func (c *loadBalancerStatsServiceClient) GetClientStats(ctx context.Context, in 
 }
 
 // LoadBalancerStatsServiceServer is the server API for LoadBalancerStatsService service.
+// All implementations must embed UnimplementedLoadBalancerStatsServiceServer
+// for forward compatibility
 type LoadBalancerStatsServiceServer interface {
 	// Gets the backend distribution for RPCs sent by a test client.
 	GetClientStats(context.Context, *LoadBalancerStatsRequest) (*LoadBalancerStatsResponse, error)
+	_unimplementedLoadBalancerStatsServiceServer()
 }
 
-// UnimplementedLoadBalancerStatsServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedLoadBalancerStatsServiceServer must be embedded to have forward compatible implementations.
 type UnimplementedLoadBalancerStatsServiceServer struct {
 }
 
 func (*UnimplementedLoadBalancerStatsServiceServer) GetClientStats(context.Context, *LoadBalancerStatsRequest) (*LoadBalancerStatsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetClientStats not implemented")
 }
+func (*UnimplementedLoadBalancerStatsServiceServer) _unimplementedLoadBalancerStatsServiceServer() {}
 
 func RegisterLoadBalancerStatsServiceServer(s *grpc.Server, srv LoadBalancerStatsServiceServer) {
 	s.RegisterService(&_LoadBalancerStatsService_serviceDesc, srv)

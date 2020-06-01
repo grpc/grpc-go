@@ -48,6 +48,7 @@ var (
 )
 
 type loadBalancerServer struct {
+	lbpb.UnimplementedLoadBalancerServer
 	serverListResponse *lbpb.LoadBalanceResponse
 }
 

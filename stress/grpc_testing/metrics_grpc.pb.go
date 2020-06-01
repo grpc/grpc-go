@@ -74,15 +74,18 @@ func (c *metricsServiceClient) GetGauge(ctx context.Context, in *GaugeRequest, o
 }
 
 // MetricsServiceServer is the server API for MetricsService service.
+// All implementations must embed UnimplementedMetricsServiceServer
+// for forward compatibility
 type MetricsServiceServer interface {
 	// Returns the values of all the gauges that are currently being maintained by
 	// the service
 	GetAllGauges(*EmptyMessage, MetricsService_GetAllGaugesServer) error
 	// Returns the value of one gauge
 	GetGauge(context.Context, *GaugeRequest) (*GaugeResponse, error)
+	_unimplementedMetricsServiceServer()
 }
 
-// UnimplementedMetricsServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedMetricsServiceServer must be embedded to have forward compatible implementations.
 type UnimplementedMetricsServiceServer struct {
 }
 
@@ -92,6 +95,7 @@ func (*UnimplementedMetricsServiceServer) GetAllGauges(*EmptyMessage, MetricsSer
 func (*UnimplementedMetricsServiceServer) GetGauge(context.Context, *GaugeRequest) (*GaugeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetGauge not implemented")
 }
+func (*UnimplementedMetricsServiceServer) _unimplementedMetricsServiceServer() {}
 
 func RegisterMetricsServiceServer(s *grpc.Server, srv MetricsServiceServer) {
 	s.RegisterService(&_MetricsService_serviceDesc, srv)

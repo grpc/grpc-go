@@ -48,7 +48,9 @@ func newCZServer() channelzgrpc.ChannelzServer {
 	return &serverImpl{}
 }
 
-type serverImpl struct{}
+type serverImpl struct {
+	channelzgrpc.UnimplementedChannelzServer
+}
 
 func connectivityStateToProto(s connectivity.State) *channelzpb.ChannelConnectivityState {
 	switch s {

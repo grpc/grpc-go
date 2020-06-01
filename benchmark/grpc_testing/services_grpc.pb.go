@@ -108,6 +108,8 @@ func (x *benchmarkServiceUnconstrainedStreamingCallClient) Recv() (*SimpleRespon
 }
 
 // BenchmarkServiceServer is the server API for BenchmarkService service.
+// All implementations must embed UnimplementedBenchmarkServiceServer
+// for forward compatibility
 type BenchmarkServiceServer interface {
 	// One request followed by one response.
 	// The server returns the client payload as-is.
@@ -118,9 +120,10 @@ type BenchmarkServiceServer interface {
 	// Unconstrainted streaming.
 	// Both server and client keep sending & receiving simultaneously.
 	UnconstrainedStreamingCall(BenchmarkService_UnconstrainedStreamingCallServer) error
+	_unimplementedBenchmarkServiceServer()
 }
 
-// UnimplementedBenchmarkServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedBenchmarkServiceServer must be embedded to have forward compatible implementations.
 type UnimplementedBenchmarkServiceServer struct {
 }
 
@@ -133,6 +136,7 @@ func (*UnimplementedBenchmarkServiceServer) StreamingCall(BenchmarkService_Strea
 func (*UnimplementedBenchmarkServiceServer) UnconstrainedStreamingCall(BenchmarkService_UnconstrainedStreamingCallServer) error {
 	return status.Errorf(codes.Unimplemented, "method UnconstrainedStreamingCall not implemented")
 }
+func (*UnimplementedBenchmarkServiceServer) _unimplementedBenchmarkServiceServer() {}
 
 func RegisterBenchmarkServiceServer(s *grpc.Server, srv BenchmarkServiceServer) {
 	s.RegisterService(&_BenchmarkService_serviceDesc, srv)
@@ -347,6 +351,8 @@ func (c *workerServiceClient) QuitWorker(ctx context.Context, in *Void, opts ...
 }
 
 // WorkerServiceServer is the server API for WorkerService service.
+// All implementations must embed UnimplementedWorkerServiceServer
+// for forward compatibility
 type WorkerServiceServer interface {
 	// Start server with specified workload.
 	// First request sent specifies the ServerConfig followed by ServerStatus
@@ -366,9 +372,10 @@ type WorkerServiceServer interface {
 	CoreCount(context.Context, *CoreRequest) (*CoreResponse, error)
 	// Quit this worker
 	QuitWorker(context.Context, *Void) (*Void, error)
+	_unimplementedWorkerServiceServer()
 }
 
-// UnimplementedWorkerServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedWorkerServiceServer must be embedded to have forward compatible implementations.
 type UnimplementedWorkerServiceServer struct {
 }
 
@@ -384,6 +391,7 @@ func (*UnimplementedWorkerServiceServer) CoreCount(context.Context, *CoreRequest
 func (*UnimplementedWorkerServiceServer) QuitWorker(context.Context, *Void) (*Void, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QuitWorker not implemented")
 }
+func (*UnimplementedWorkerServiceServer) _unimplementedWorkerServiceServer() {}
 
 func RegisterWorkerServiceServer(s *grpc.Server, srv WorkerServiceServer) {
 	s.RegisterService(&_WorkerService_serviceDesc, srv)

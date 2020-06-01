@@ -39,18 +39,22 @@ func (c *routeLookupServiceClient) RouteLookup(ctx context.Context, in *RouteLoo
 }
 
 // RouteLookupServiceServer is the server API for RouteLookupService service.
+// All implementations must embed UnimplementedRouteLookupServiceServer
+// for forward compatibility
 type RouteLookupServiceServer interface {
 	// Lookup returns a target for a single key.
 	RouteLookup(context.Context, *RouteLookupRequest) (*RouteLookupResponse, error)
+	_unimplementedRouteLookupServiceServer()
 }
 
-// UnimplementedRouteLookupServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedRouteLookupServiceServer must be embedded to have forward compatible implementations.
 type UnimplementedRouteLookupServiceServer struct {
 }
 
 func (*UnimplementedRouteLookupServiceServer) RouteLookup(context.Context, *RouteLookupRequest) (*RouteLookupResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RouteLookup not implemented")
 }
+func (*UnimplementedRouteLookupServiceServer) _unimplementedRouteLookupServiceServer() {}
 
 func RegisterRouteLookupServiceServer(s *grpc.Server, srv RouteLookupServiceServer) {
 	s.RegisterService(&_RouteLookupService_serviceDesc, srv)
