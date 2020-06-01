@@ -94,12 +94,12 @@ func (s) TestDistributor(t *testing.T) {
 		}
 		proceedCh <- struct{}{}
 
-		// This call to KeyMaterial() should eventually return ErrProviderClosed
+		// This call to KeyMaterial() should eventually return errProviderClosed
 		// error.
 		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
 		for {
-			if _, err := dist.KeyMaterial(ctx, KeyMaterialOptions{}); err == ErrProviderClosed {
+			if _, err := dist.KeyMaterial(ctx, KeyMaterialOptions{}); err == errProviderClosed {
 				doneCh := dist.Done()
 				if _, ok := <-doneCh; ok {
 					errCh <- errors.New("distributor done channel not closed")

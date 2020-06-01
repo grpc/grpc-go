@@ -29,13 +29,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"strings"
 )
 
 var (
-	// ErrProviderClosed may be returned from a call to KeyMaterial() when the
+	// errProviderClosed may be returned from a call to KeyMaterial() when the
 	// underlying provider instance is closed.
-	ErrProviderClosed = errors.New("provider instance is closed")
+	errProviderClosed = errors.New("provider instance is closed")
 
 	// m is a map from name to provider builder.
 	m = make(map[string]Builder)
@@ -44,13 +43,13 @@ var (
 // Register registers the provider builder, whose name as returned by its
 // Name() method will be used as the name registered with this builder.
 func Register(b Builder) {
-	m[strings.ToLower(b.Name())] = b
+	m[b.Name()] = b
 }
 
-// Get returns the provider builder registered with the given name.
+// getBuilder returns the provider builder registered with the given name.
 // If no builder is registered with the provided name, nil will be returned.
-func Get(name string) Builder {
-	if b, ok := m[strings.ToLower(name)]; ok {
+func getBuilder(name string) Builder {
+	if b, ok := m[name]; ok {
 		return b
 	}
 	return nil
@@ -64,6 +63,8 @@ type Builder interface {
 	// ParseConfig converts config input in a format specific to individual
 	// implementations and returns an implementation of the StableConfig
 	// interface.
+	// Equivalent configurations should return StableConfig types whose
+	// Canonical() method returns the same output.
 	ParseConfig(interface{}) (StableConfig, error)
 
 	// Name returns the name of providers built by this builder.

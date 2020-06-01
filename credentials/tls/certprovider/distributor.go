@@ -20,8 +20,6 @@ package certprovider
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"sync"
 
 	"google.golang.org/grpc/internal/grpcsync"
@@ -38,11 +36,13 @@ import (
 //   by the provider.
 // - When users of the provider call Close(), the channel returned by the
 //   Done() method will be closed. So, provider implementations can select on
-//   the channel returned by Done() to perform cleanup work.
+//   the channel returned by Done() to perform cleanup work, or override
+//   Close(), in which case they must invoke Distributor.Close() when the
+//   provider is closed.
 type Distributor struct {
-	mu     sync.Mutex
-	certs  []tls.Certificate
-	roots  *x509.CertPool
+	mu sync.Mutex
+	km *KeyMaterial
+
 	ready  *grpcsync.Event
 	closed *grpcsync.Event
 }
@@ -58,8 +58,7 @@ func NewDistributor() *Distributor {
 // Set updates the key material in the distributor with km.
 func (d *Distributor) Set(km *KeyMaterial) {
 	d.mu.Lock()
-	d.certs = km.Certs
-	d.roots = km.Roots
+	d.km = km
 	d.ready.Fire()
 	d.mu.Unlock()
 }
@@ -70,7 +69,7 @@ func (d *Distributor) Set(km *KeyMaterial) {
 // arrives.
 func (d *Distributor) KeyMaterial(ctx context.Context, opts KeyMaterialOptions) (*KeyMaterial, error) {
 	if d.closed.HasFired() {
-		return nil, ErrProviderClosed
+		return nil, errProviderClosed
 	}
 
 	if d.ready.HasFired() {
@@ -81,7 +80,7 @@ func (d *Distributor) KeyMaterial(ctx context.Context, opts KeyMaterialOptions) 
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-d.closed.Done():
-		return nil, ErrProviderClosed
+		return nil, errProviderClosed
 	case <-d.ready.Done():
 		return d.keyMaterial(), nil
 	}
@@ -89,7 +88,7 @@ func (d *Distributor) KeyMaterial(ctx context.Context, opts KeyMaterialOptions) 
 
 func (d *Distributor) keyMaterial() *KeyMaterial {
 	d.mu.Lock()
-	km := &KeyMaterial{Certs: d.certs, Roots: d.roots}
+	km := d.km
 	d.mu.Unlock()
 	return km
 }

@@ -90,7 +90,7 @@ func (ps *Store) GetProvider(key Key) Provider {
 		return wp
 	}
 
-	b := Get(key.Name)
+	b := getBuilder(key.Name)
 	if b == nil {
 		return nil
 	}

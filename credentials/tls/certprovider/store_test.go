@@ -135,7 +135,7 @@ func makeProvider(t *testing.T, name, config string) (Provider, *fakeProvider) {
 	t.Helper()
 
 	// Grab the provider builder.
-	b := Get(name)
+	b := getBuilder(name)
 	if b == nil {
 		t.Fatalf("no provider builder found for name : %s", name)
 	}
@@ -195,8 +195,8 @@ func (s) TestStoreWithSingleProvider(t *testing.T) {
 	// Close the provider and retry the KeyMaterial() call, and expect it to
 	// fail with a known error.
 	prov.Close()
-	if _, err := prov.KeyMaterial(ctx, KeyMaterialOptions{}); err != ErrProviderClosed {
-		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, ErrProviderClosed)
+	if _, err := prov.KeyMaterial(ctx, KeyMaterialOptions{}); err != errProviderClosed {
+		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, errProviderClosed)
 	}
 }
 
@@ -234,8 +234,8 @@ func (s) TestStoreWithSingleProviderWithSharing(t *testing.T) {
 	}
 
 	prov2.Close()
-	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != ErrProviderClosed {
-		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, ErrProviderClosed)
+	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != errProviderClosed {
+		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, errProviderClosed)
 	}
 }
 
@@ -302,8 +302,8 @@ func (s) TestStoreWithSingleProviderWithoutSharing(t *testing.T) {
 	}
 
 	prov2.Close()
-	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != ErrProviderClosed {
-		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, ErrProviderClosed)
+	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != errProviderClosed {
+		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, errProviderClosed)
 	}
 }
 
@@ -351,7 +351,7 @@ func (s) TestStoreWithMultipleProviders(t *testing.T) {
 	}
 
 	prov2.Close()
-	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != ErrProviderClosed {
-		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, ErrProviderClosed)
+	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != errProviderClosed {
+		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, errProviderClosed)
 	}
 }
