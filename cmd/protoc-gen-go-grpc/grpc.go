@@ -139,7 +139,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 			serverSignature(g, method))
 	}
 	if *requireUnimplemented {
-		g.P("_unimplemented", serverType, "()")
+		g.P("unimplemented", serverType, "()")
 	}
 	g.P("}")
 	g.P()
@@ -158,7 +158,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 		g.P("return ", nilArg, statusPackage.Ident("Errorf"), "(", codesPackage.Ident("Unimplemented"), `, "method `, method.GoName, ` not implemented")`)
 		g.P("}")
 	}
-	g.P("func (*Unimplemented", serverType, ") _unimplemented", serverType, "() {}")
+	g.P("func (*Unimplemented", serverType, ") unimplemented", serverType, "() {}")
 	g.P()
 
 	// Server registration.
