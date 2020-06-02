@@ -170,6 +170,18 @@ func (r *xdsResolver) run() {
 		case update := <-r.updateCh:
 			if update.err != nil {
 				r.logger.Warningf("Watch error on resource %v from xds-client %p, %v", r.target.Endpoint, r.client, update.err)
+				if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
+					// If error is resource-not-found, it means the LDS resource
+					// was removed. Send an empty service config, which picks
+					// pick-first, with no address, and puts the ClientConn into
+					// transient failure..
+					r.cc.UpdateState(resolver.State{
+						ServiceConfig: r.cc.ParseServiceConfig("{}"),
+					})
+					continue
+				}
+				// Send error to ClientConn, and balancers, if error is not
+				// resource not found.
 				r.cc.ReportError(update.err)
 				continue
 			}

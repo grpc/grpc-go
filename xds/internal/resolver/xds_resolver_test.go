@@ -406,3 +406,47 @@ func TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr2)
 	}
 }
+
+// TestXDSResolverResourceNotFoundError tests the cases where the resolver gets
+// a ResourceNotFoundError. It should generate a service config picking
+// weighted_target, but no child balancers.
+func TestXDSResolverResourceNotFoundError(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
+		config:        &validConfig,
+		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
+	})
+	defer func() {
+		cancel()
+		xdsR.Close()
+	}()
+
+	waitForWatchService(t, xdsC, targetStr)
+
+	// Invoke the watchAPI callback with a bad service update and wait for the
+	// ReportError method to be called on the ClientConn.
+	suErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "resource removed error")
+	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{}, suErr)
+	if gotErrVal, gotErr := tcc.errorCh.Receive(); gotErr != testutils.ErrRecvTimeout {
+		t.Fatalf("ClientConn.ReportError() received %v, %v, want channel recv timeout", gotErrVal, gotErr)
+	}
+	gotState, err := tcc.stateCh.Receive()
+	if err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+	rState := gotState.(resolver.State)
+	// This update shouldn't have xds-client in it, because it doesn't pick an
+	// xds balancer.
+	if gotClient := rState.Attributes.Value(xdsinternal.XDSClientID); gotClient != nil {
+		t.Fatalf("ClientConn.UpdateState got xdsClient: %v, want <nil>", gotClient)
+	}
+	wantParsedConfig := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)("{}")
+	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantParsedConfig.Config) {
+		t.Error("ClientConn.UpdateState got wrong service config")
+		t.Errorf("gotParsed: %s", cmp.Diff(nil, rState.ServiceConfig.Config))
+		t.Errorf("wantParsed: %s", cmp.Diff(nil, wantParsedConfig.Config))
+	}
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+}
