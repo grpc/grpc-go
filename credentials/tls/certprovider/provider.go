@@ -86,6 +86,7 @@ type StableConfig interface {
 // instantiations as they deem fit.
 type Provider interface {
 	// KeyMaterial returns the key material sourced by the provider.
+	// Callers are expected to use the returned value as read-only.
 	//
 	// Implementations must honor the deadline specified in ctx.
 	KeyMaterial(ctx context.Context, opts KeyMaterialOptions) (*KeyMaterial, error)

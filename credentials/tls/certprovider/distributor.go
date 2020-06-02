@@ -29,7 +29,7 @@ import (
 // materials by handling synchronization between the producer and consumers of
 // the key material.
 //
-// Provider implementations must embed this type into themselves and:
+// Provider implementations may choose to embed this type into themselves and:
 // - Whenever they have new key material, they should invoke the Set() method.
 // - When users of the provider call KeyMaterial(), it will be handled by the
 //   distributor which will return the most up-to-date key material furnished
@@ -56,6 +56,9 @@ func NewDistributor() *Distributor {
 }
 
 // Set updates the key material in the distributor with km.
+//
+// Provider implementations which use the distributor must not modify the
+// contents of the KeyMaterial struct pointed to by km.
 func (d *Distributor) Set(km *KeyMaterial) {
 	d.mu.Lock()
 	d.km = km

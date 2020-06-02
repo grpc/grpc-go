@@ -148,7 +148,7 @@ func makeProvider(t *testing.T, name, config string) (Provider, *fakeProvider) {
 
 	// Pass the config to the store to fetch a provider.
 	store := GetStore()
-	key := Key{Name: name, Config: cfg}
+	key := StoreKey{Name: name, Config: cfg}
 	prov := store.GetProvider(key)
 	if prov == nil {
 		t.Fatalf("store.Get(%v) is nil", key)

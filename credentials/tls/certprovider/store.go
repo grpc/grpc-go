@@ -33,8 +33,8 @@ func init() {
 	}
 }
 
-// Key contains data which uniquely identifies a provider instance.
-type Key struct {
+// StoreKey contains data which uniquely identifies a provider instance.
+type StoreKey struct {
 	// Name is the registered name of the provider.
 	Name string
 	// Config is the configuration used by the provider instance.
@@ -42,8 +42,8 @@ type Key struct {
 }
 
 // storeKey acts the key to the map of providers maintained by the store. Go
-// maps need to be indexed by comparable types, so the above Key struct cannot
-// be used since it contains an interface.
+// maps need to be indexed by comparable types, so the above StoreKey struct
+// cannot be used since it contains an interface.
 type storeKey struct {
 	// name of the certificate provider.
 	name string
@@ -77,7 +77,7 @@ func GetStore() *Store {
 // exists for key, its reference count is incremented before returning. If no
 // provider exists for key, a new is created using the registered builder. If
 // no registered builder is found, a nil provider is returned.
-func (ps *Store) GetProvider(key Key) Provider {
+func (ps *Store) GetProvider(key StoreKey) Provider {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
