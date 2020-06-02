@@ -66,7 +66,7 @@ func (x *loadBalancerBalanceLoadClient) Recv() (*LoadBalanceResponse, error) {
 type LoadBalancerServer interface {
 	// Bidirectional rpc to get a list of servers.
 	BalanceLoad(LoadBalancer_BalanceLoadServer) error
-	_unimplementedLoadBalancerServer()
+	unimplementedLoadBalancerServer()
 }
 
 // UnimplementedLoadBalancerServer must be embedded to have forward compatible implementations.
@@ -76,7 +76,7 @@ type UnimplementedLoadBalancerServer struct {
 func (*UnimplementedLoadBalancerServer) BalanceLoad(LoadBalancer_BalanceLoadServer) error {
 	return status.Errorf(codes.Unimplemented, "method BalanceLoad not implemented")
 }
-func (*UnimplementedLoadBalancerServer) _unimplementedLoadBalancerServer() {}
+func (*UnimplementedLoadBalancerServer) unimplementedLoadBalancerServer() {}
 
 func RegisterLoadBalancerServer(s *grpc.Server, srv LoadBalancerServer) {
 	s.RegisterService(&_LoadBalancer_serviceDesc, srv)

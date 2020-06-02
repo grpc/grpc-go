@@ -44,7 +44,7 @@ func (c *greeterClient) SayHello(ctx context.Context, in *HelloRequest, opts ...
 type GreeterServer interface {
 	// Sends a greeting
 	SayHello(context.Context, *HelloRequest) (*HelloReply, error)
-	_unimplementedGreeterServer()
+	unimplementedGreeterServer()
 }
 
 // UnimplementedGreeterServer must be embedded to have forward compatible implementations.
@@ -54,7 +54,7 @@ type UnimplementedGreeterServer struct {
 func (*UnimplementedGreeterServer) SayHello(context.Context, *HelloRequest) (*HelloReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SayHello not implemented")
 }
-func (*UnimplementedGreeterServer) _unimplementedGreeterServer() {}
+func (*UnimplementedGreeterServer) unimplementedGreeterServer() {}
 
 func RegisterGreeterServer(s *grpc.Server, srv GreeterServer) {
 	s.RegisterService(&_Greeter_serviceDesc, srv)

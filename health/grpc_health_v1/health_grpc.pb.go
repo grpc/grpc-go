@@ -110,7 +110,7 @@ type HealthServer interface {
 	// call.  If the call terminates with any other status (including OK),
 	// clients should retry the call with appropriate exponential backoff.
 	Watch(*HealthCheckRequest, Health_WatchServer) error
-	_unimplementedHealthServer()
+	unimplementedHealthServer()
 }
 
 // UnimplementedHealthServer must be embedded to have forward compatible implementations.
@@ -123,7 +123,7 @@ func (*UnimplementedHealthServer) Check(context.Context, *HealthCheckRequest) (*
 func (*UnimplementedHealthServer) Watch(*HealthCheckRequest, Health_WatchServer) error {
 	return status.Errorf(codes.Unimplemented, "method Watch not implemented")
 }
-func (*UnimplementedHealthServer) _unimplementedHealthServer() {}
+func (*UnimplementedHealthServer) unimplementedHealthServer() {}
 
 func RegisterHealthServer(s *grpc.Server, srv HealthServer) {
 	s.RegisterService(&_Health_serviceDesc, srv)

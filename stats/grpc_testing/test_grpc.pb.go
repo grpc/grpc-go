@@ -159,7 +159,7 @@ type TestServiceServer interface {
 	ClientStreamCall(TestService_ClientStreamCallServer) error
 	// Server stream
 	ServerStreamCall(*SimpleRequest, TestService_ServerStreamCallServer) error
-	_unimplementedTestServiceServer()
+	unimplementedTestServiceServer()
 }
 
 // UnimplementedTestServiceServer must be embedded to have forward compatible implementations.
@@ -178,7 +178,7 @@ func (*UnimplementedTestServiceServer) ClientStreamCall(TestService_ClientStream
 func (*UnimplementedTestServiceServer) ServerStreamCall(*SimpleRequest, TestService_ServerStreamCallServer) error {
 	return status.Errorf(codes.Unimplemented, "method ServerStreamCall not implemented")
 }
-func (*UnimplementedTestServiceServer) _unimplementedTestServiceServer() {}
+func (*UnimplementedTestServiceServer) unimplementedTestServiceServer() {}
 
 func RegisterTestServiceServer(s *grpc.Server, srv TestServiceServer) {
 	s.RegisterService(&_TestService_serviceDesc, srv)
