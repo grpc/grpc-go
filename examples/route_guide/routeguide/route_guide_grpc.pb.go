@@ -185,7 +185,7 @@ type RouteGuideServer interface {
 	// Accepts a stream of RouteNotes sent while a route is being traversed,
 	// while receiving other RouteNotes (e.g. from other users).
 	RouteChat(RouteGuide_RouteChatServer) error
-	unimplementedRouteGuideServer()
+	mustEmbedUnimplementedRouteGuideServer()
 }
 
 // UnimplementedRouteGuideServer must be embedded to have forward compatible implementations.
@@ -204,7 +204,7 @@ func (*UnimplementedRouteGuideServer) RecordRoute(RouteGuide_RecordRouteServer) 
 func (*UnimplementedRouteGuideServer) RouteChat(RouteGuide_RouteChatServer) error {
 	return status.Errorf(codes.Unimplemented, "method RouteChat not implemented")
 }
-func (*UnimplementedRouteGuideServer) unimplementedRouteGuideServer() {}
+func (*UnimplementedRouteGuideServer) mustEmbedUnimplementedRouteGuideServer() {}
 
 func RegisterRouteGuideServer(s *grpc.Server, srv RouteGuideServer) {
 	s.RegisterService(&_RouteGuide_serviceDesc, srv)

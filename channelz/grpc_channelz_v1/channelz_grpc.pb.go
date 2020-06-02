@@ -124,7 +124,7 @@ type ChannelzServer interface {
 	GetSubchannel(context.Context, *GetSubchannelRequest) (*GetSubchannelResponse, error)
 	// Returns a single Socket or else a NOT_FOUND code.
 	GetSocket(context.Context, *GetSocketRequest) (*GetSocketResponse, error)
-	unimplementedChannelzServer()
+	mustEmbedUnimplementedChannelzServer()
 }
 
 // UnimplementedChannelzServer must be embedded to have forward compatible implementations.
@@ -152,7 +152,7 @@ func (*UnimplementedChannelzServer) GetSubchannel(context.Context, *GetSubchanne
 func (*UnimplementedChannelzServer) GetSocket(context.Context, *GetSocketRequest) (*GetSocketResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSocket not implemented")
 }
-func (*UnimplementedChannelzServer) unimplementedChannelzServer() {}
+func (*UnimplementedChannelzServer) mustEmbedUnimplementedChannelzServer() {}
 
 func RegisterChannelzServer(s *grpc.Server, srv ChannelzServer) {
 	s.RegisterService(&_Channelz_serviceDesc, srv)

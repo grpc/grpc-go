@@ -82,7 +82,7 @@ type MetricsServiceServer interface {
 	GetAllGauges(*EmptyMessage, MetricsService_GetAllGaugesServer) error
 	// Returns the value of one gauge
 	GetGauge(context.Context, *GaugeRequest) (*GaugeResponse, error)
-	unimplementedMetricsServiceServer()
+	mustEmbedUnimplementedMetricsServiceServer()
 }
 
 // UnimplementedMetricsServiceServer must be embedded to have forward compatible implementations.
@@ -95,7 +95,7 @@ func (*UnimplementedMetricsServiceServer) GetAllGauges(*EmptyMessage, MetricsSer
 func (*UnimplementedMetricsServiceServer) GetGauge(context.Context, *GaugeRequest) (*GaugeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetGauge not implemented")
 }
-func (*UnimplementedMetricsServiceServer) unimplementedMetricsServiceServer() {}
+func (*UnimplementedMetricsServiceServer) mustEmbedUnimplementedMetricsServiceServer() {}
 
 func RegisterMetricsServiceServer(s *grpc.Server, srv MetricsServiceServer) {
 	s.RegisterService(&_MetricsService_serviceDesc, srv)

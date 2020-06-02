@@ -76,7 +76,7 @@ type HandshakerServiceServer interface {
 	// service expects to respond. Client does not have to wait for service's
 	// response before sending next request.
 	DoHandshake(HandshakerService_DoHandshakeServer) error
-	unimplementedHandshakerServiceServer()
+	mustEmbedUnimplementedHandshakerServiceServer()
 }
 
 // UnimplementedHandshakerServiceServer must be embedded to have forward compatible implementations.
@@ -86,7 +86,7 @@ type UnimplementedHandshakerServiceServer struct {
 func (*UnimplementedHandshakerServiceServer) DoHandshake(HandshakerService_DoHandshakeServer) error {
 	return status.Errorf(codes.Unimplemented, "method DoHandshake not implemented")
 }
-func (*UnimplementedHandshakerServiceServer) unimplementedHandshakerServiceServer() {}
+func (*UnimplementedHandshakerServiceServer) mustEmbedUnimplementedHandshakerServiceServer() {}
 
 func RegisterHandshakerServiceServer(s *grpc.Server, srv HandshakerServiceServer) {
 	s.RegisterService(&_HandshakerService_serviceDesc, srv)
