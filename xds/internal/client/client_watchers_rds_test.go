@@ -50,6 +50,9 @@ func (s) TestRDSWatch(t *testing.T) {
 	cancelWatch := c.watchRDS(testRDSName, func(update rdsUpdate, err error) {
 		rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[rdsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate := rdsUpdate{weightedCluster: map[string]uint32{testCDSName: 1}}
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
@@ -105,6 +108,9 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 		cancelLastWatch = c.watchRDS(testRDSName, func(update rdsUpdate, err error) {
 			rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
 		})
+		if _, err := v2Client.addWatches[rdsURL].Receive(); i == 0 && err != nil {
+			t.Fatalf("want new watch to start, got error %v", err)
+		}
 	}
 
 	wantUpdate := rdsUpdate{weightedCluster: map[string]uint32{testCDSName: 1}}
@@ -159,6 +165,9 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 		c.watchRDS(testRDSName+"1", func(update rdsUpdate, err error) {
 			rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
 		})
+		if _, err := v2Client.addWatches[rdsURL].Receive(); i == 0 && err != nil {
+			t.Fatalf("want new watch to start, got error %v", err)
+		}
 	}
 
 	// Third watch for a different name.
@@ -166,6 +175,9 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 	c.watchRDS(testRDSName+"2", func(update rdsUpdate, err error) {
 		rdsUpdateCh2.Send(rdsUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[rdsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate1 := rdsUpdate{weightedCluster: map[string]uint32{testCDSName + "1": 1}}
 	wantUpdate2 := rdsUpdate{weightedCluster: map[string]uint32{testCDSName + "2": 1}}
@@ -203,6 +215,9 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 	c.watchRDS(testRDSName, func(update rdsUpdate, err error) {
 		rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[rdsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate := rdsUpdate{weightedCluster: map[string]uint32{testCDSName: 1}}
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
@@ -218,6 +233,9 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 	c.watchRDS(testRDSName, func(update rdsUpdate, err error) {
 		rdsUpdateCh2.Send(rdsUpdateErr{u: update, err: err})
 	})
+	if n, err := v2Client.addWatches[rdsURL].Receive(); err == nil {
+		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
+	}
 
 	// New watch should receives the update.
 	if u, err := rdsUpdateCh2.Receive(); err != nil || !cmp.Equal(u, rdsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(rdsUpdate{}, rdsUpdateErr{})) {

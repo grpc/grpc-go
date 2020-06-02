@@ -53,6 +53,9 @@ func (s) TestClusterWatch(t *testing.T) {
 	cancelWatch := c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[cdsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
 	// This is calling v2Client.r to send the update, but r is set to Client, so
@@ -115,6 +118,9 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 		cancelLastWatch = c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 			clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 		})
+		if _, err := v2Client.addWatches[cdsURL].Receive(); i == 0 && err != nil {
+			t.Fatalf("want new watch to start, got error %v", err)
+		}
 	}
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
@@ -169,6 +175,9 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 		c.WatchCluster(testCDSName+"1", func(update ClusterUpdate, err error) {
 			clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 		})
+		if _, err := v2Client.addWatches[cdsURL].Receive(); i == 0 && err != nil {
+			t.Fatalf("want new watch to start, got error %v", err)
+		}
 	}
 
 	// Third watch for a different name.
@@ -176,6 +185,9 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 	c.WatchCluster(testCDSName+"2", func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(clusterUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[cdsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate1 := ClusterUpdate{ServiceName: testEDSName + "1"}
 	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}
@@ -213,6 +225,9 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[cdsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
 	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
@@ -228,6 +243,9 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(clusterUpdateErr{u: update, err: err})
 	})
+	if n, err := v2Client.addWatches[cdsURL].Receive(); err == nil {
+		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
+	}
 
 	// New watch should receives the update.
 	if u, err := clusterUpdateCh2.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
@@ -259,12 +277,15 @@ func (s) TestClusterWatchExpiryTimer(t *testing.T) {
 	}
 	defer c.Close()
 
-	<-v2ClientCh
+	v2Client := <-v2ClientCh
 
 	clusterUpdateCh := testutils.NewChannel()
 	c.WatchCluster(testCDSName, func(u ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: u, err: err})
 	})
+	if _, err := v2Client.addWatches[cdsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	u, err := clusterUpdateCh.TimedReceive(defaultWatchExpiryTimeout * 2)
 	if err != nil {
@@ -304,6 +325,9 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 	c.WatchCluster(testCDSName, func(u ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: u, err: err})
 	})
+	if _, err := v2Client.addWatches[cdsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
 	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
@@ -343,11 +367,17 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	c.WatchCluster(testCDSName+"1", func(update ClusterUpdate, err error) {
 		clusterUpdateCh1.Send(clusterUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[cdsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 	// Another watch for a different name.
 	clusterUpdateCh2 := testutils.NewChannel()
 	c.WatchCluster(testCDSName+"2", func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(clusterUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[cdsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate1 := ClusterUpdate{ServiceName: testEDSName + "1"}
 	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}

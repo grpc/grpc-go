@@ -184,11 +184,19 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	v2Client := <-v2ClientCh
 
 	clusterUpdateCh := testutils.NewChannel()
+	firstTime := true
 	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 		// Calls another watch inline, to ensure there's deadlock.
 		c.WatchCluster("another-random-name", func(ClusterUpdate, error) {})
+		if _, err := v2Client.addWatches[cdsURL].Receive(); firstTime && err != nil {
+			t.Fatalf("want new watch to start, got error %v", err)
+		}
+		firstTime = false
 	})
+	if _, err := v2Client.addWatches[cdsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
 	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{

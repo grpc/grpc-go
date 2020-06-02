@@ -49,6 +49,9 @@ func (s) TestLDSWatch(t *testing.T) {
 	cancelWatch := c.watchLDS(testLDSName, func(update ldsUpdate, err error) {
 		ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[ldsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate := ldsUpdate{routeName: testRDSName}
 	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
@@ -105,6 +108,9 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 		cancelLastWatch = c.watchLDS(testLDSName, func(update ldsUpdate, err error) {
 			ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 		})
+		if _, err := v2Client.addWatches[ldsURL].Receive(); i == 0 && err != nil {
+			t.Fatalf("want new watch to start, got error %v", err)
+		}
 	}
 
 	wantUpdate := ldsUpdate{routeName: testRDSName}
@@ -159,6 +165,9 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 		c.watchLDS(testLDSName+"1", func(update ldsUpdate, err error) {
 			ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 		})
+		if _, err := v2Client.addWatches[ldsURL].Receive(); i == 0 && err != nil {
+			t.Fatalf("want new watch to start, got error %v", err)
+		}
 	}
 
 	// Third watch for a different name.
@@ -166,6 +175,9 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 	c.watchLDS(testLDSName+"2", func(update ldsUpdate, err error) {
 		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[ldsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate1 := ldsUpdate{routeName: testRDSName + "1"}
 	wantUpdate2 := ldsUpdate{routeName: testRDSName + "2"}
@@ -203,6 +215,9 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	c.watchLDS(testLDSName, func(update ldsUpdate, err error) {
 		ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[ldsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate := ldsUpdate{routeName: testRDSName}
 	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
@@ -218,6 +233,9 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	c.watchLDS(testLDSName, func(update ldsUpdate, err error) {
 		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
 	})
+	if n, err := v2Client.addWatches[ldsURL].Receive(); err == nil {
+		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
+	}
 
 	// New watch should receives the update.
 	if u, err := ldsUpdateCh2.Receive(); err != nil || u != (ldsUpdateErr{wantUpdate, nil}) {
@@ -252,11 +270,17 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	c.watchLDS(testLDSName+"1", func(update ldsUpdate, err error) {
 		ldsUpdateCh1.Send(ldsUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[ldsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 	// Another watch for a different name.
 	ldsUpdateCh2 := testutils.NewChannel()
 	c.watchLDS(testLDSName+"2", func(update ldsUpdate, err error) {
 		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[ldsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate1 := ldsUpdate{routeName: testEDSName + "1"}
 	wantUpdate2 := ldsUpdate{routeName: testEDSName + "2"}
