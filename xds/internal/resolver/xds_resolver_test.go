@@ -442,9 +442,9 @@ func TestXDSResolverResourceNotFoundError(t *testing.T) {
 	}
 	wantParsedConfig := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)("{}")
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantParsedConfig.Config) {
-		t.Errorf("ClientConn.UpdateState got wrong service config")
-		t.Error("gotParsed: ", cmp.Diff(nil, rState.ServiceConfig.Config))
-		t.Error("wantParsed: ", cmp.Diff(nil, wantParsedConfig.Config))
+		t.Error("ClientConn.UpdateState got wrong service config")
+		t.Errorf("gotParsed: %s", cmp.Diff(nil, rState.ServiceConfig.Config))
+		t.Errorf("wantParsed: %s", cmp.Diff(nil, wantParsedConfig.Config))
 	}
 	if err := rState.ServiceConfig.Err; err != nil {
 		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
