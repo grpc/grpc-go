@@ -100,7 +100,7 @@ func (s) TestDistributor(t *testing.T) {
 		defer cancel()
 		for {
 			if _, err := dist.KeyMaterial(ctx, KeyMaterialOptions{}); err == errProviderClosed {
-				doneCh := dist.Done()
+				doneCh := dist.Ctx.Done()
 				if _, ok := <-doneCh; ok {
 					errCh <- errors.New("distributor done channel not closed")
 					return

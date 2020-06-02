@@ -27,19 +27,24 @@ import (
 
 // Distributor makes it easy for provider implementations to furnish new key
 // materials by handling synchronization between the producer and consumers of
-// the key material.
+// the key material. Distributor implements the Provider interface.
 //
-// Provider implementations may choose to embed this type into themselves and:
-// - Whenever they have new key material, they should invoke the Set() method.
+// Provider implementations may choose to embed the Distributor and:
+// - Whenever they have new key material, they invoke the Set() method.
 // - When users of the provider call KeyMaterial(), it will be handled by the
 //   distributor which will return the most up-to-date key material furnished
 //   by the provider.
-// - When users of the provider call Close(), the channel returned by the
-//   Done() method will be closed. So, provider implementations can select on
-//   the channel returned by Done() to perform cleanup work, or override
-//   Close(), in which case they must invoke Distributor.Close() when the
-//   provider is closed.
+// - When users of the provider call Close(), it will be handled by the
+//   distributor and the exposed Ctx will be canceled. Provider implementations
+//   can select on the channel returned by Ctx.Done() to perform cleanup work.
 type Distributor struct {
+	// Ctx is a context used to signal cancellation of the distributor. Users of
+	// this type can select on the channel returned by Ctx.Done to perform any
+	// cleanup work.
+	Ctx    context.Context
+	cancel context.CancelFunc
+
+	// mu protects the underlying key material.
 	mu sync.Mutex
 	km *KeyMaterial
 
@@ -49,7 +54,10 @@ type Distributor struct {
 
 // NewDistributor returns a new Distributor.
 func NewDistributor() *Distributor {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Distributor{
+		Ctx:    ctx,
+		cancel: cancel,
 		ready:  grpcsync.NewEvent(),
 		closed: grpcsync.NewEvent(),
 	}
@@ -97,15 +105,8 @@ func (d *Distributor) keyMaterial() *KeyMaterial {
 }
 
 // Close closes the distributor and fails any active KeyMaterial() call waiting
-// for new key material. It also closes the channel returned by Done().
+// for new key material. It also cancels the exposed Ctx field.
 func (d *Distributor) Close() {
 	d.closed.Fire()
-}
-
-// Done returns a channel which is closed when the distributor is closed.
-//
-// Provider implementations which embed the distributor should select on this
-// channel to perform any cleanup work.
-func (d *Distributor) Done() <-chan struct{} {
-	return d.closed.Done()
+	d.cancel()
 }

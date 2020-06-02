@@ -106,7 +106,7 @@ type fakeProvider struct {
 func (p *fakeProvider) run() {
 	for {
 		select {
-		case <-p.Distributor.Done():
+		case <-p.Distributor.Ctx.Done():
 			return
 		case km := <-p.kmCh:
 			p.Distributor.Set(km)

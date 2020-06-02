@@ -63,7 +63,7 @@ type Builder interface {
 	// ParseConfig converts config input in a format specific to individual
 	// implementations and returns an implementation of the StableConfig
 	// interface.
-	// Equivalent configurations should return StableConfig types whose
+	// Equivalent configurations must return StableConfig types whose
 	// Canonical() method returns the same output.
 	ParseConfig(interface{}) (StableConfig, error)
 
@@ -74,6 +74,7 @@ type Builder interface {
 // StableConfig wraps the method to return a stable provider configuration.
 type StableConfig interface {
 	// Canonical returns provider config as an arbitrary byte slice.
+	// Equivalent configurations must return the same output.
 	Canonical() []byte
 }
 
