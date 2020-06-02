@@ -124,7 +124,6 @@ type ChannelzServer interface {
 	GetSubchannel(context.Context, *GetSubchannelRequest) (*GetSubchannelResponse, error)
 	// Returns a single Socket or else a NOT_FOUND code.
 	GetSocket(context.Context, *GetSocketRequest) (*GetSocketResponse, error)
-	mustEmbedUnimplementedChannelzServer()
 }
 
 // UnimplementedChannelzServer must be embedded to have forward compatible implementations.

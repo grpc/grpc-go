@@ -82,7 +82,6 @@ type MetricsServiceServer interface {
 	GetAllGauges(*EmptyMessage, MetricsService_GetAllGaugesServer) error
 	// Returns the value of one gauge
 	GetGauge(context.Context, *GaugeRequest) (*GaugeResponse, error)
-	mustEmbedUnimplementedMetricsServiceServer()
 }
 
 // UnimplementedMetricsServiceServer must be embedded to have forward compatible implementations.

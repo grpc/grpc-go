@@ -76,7 +76,6 @@ type HandshakerServiceServer interface {
 	// service expects to respond. Client does not have to wait for service's
 	// response before sending next request.
 	DoHandshake(HandshakerService_DoHandshakeServer) error
-	mustEmbedUnimplementedHandshakerServiceServer()
 }
 
 // UnimplementedHandshakerServiceServer must be embedded to have forward compatible implementations.

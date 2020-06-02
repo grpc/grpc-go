@@ -120,7 +120,6 @@ type BenchmarkServiceServer interface {
 	// Unconstrainted streaming.
 	// Both server and client keep sending & receiving simultaneously.
 	UnconstrainedStreamingCall(BenchmarkService_UnconstrainedStreamingCallServer) error
-	mustEmbedUnimplementedBenchmarkServiceServer()
 }
 
 // UnimplementedBenchmarkServiceServer must be embedded to have forward compatible implementations.
@@ -372,7 +371,6 @@ type WorkerServiceServer interface {
 	CoreCount(context.Context, *CoreRequest) (*CoreResponse, error)
 	// Quit this worker
 	QuitWorker(context.Context, *Void) (*Void, error)
-	mustEmbedUnimplementedWorkerServiceServer()
 }
 
 // UnimplementedWorkerServiceServer must be embedded to have forward compatible implementations.

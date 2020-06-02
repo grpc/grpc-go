@@ -153,7 +153,6 @@ type EchoServer interface {
 	ClientStreamingEcho(Echo_ClientStreamingEchoServer) error
 	// BidirectionalStreamingEcho is bidi streaming.
 	BidirectionalStreamingEcho(Echo_BidirectionalStreamingEchoServer) error
-	mustEmbedUnimplementedEchoServer()
 }
 
 // UnimplementedEchoServer must be embedded to have forward compatible implementations.

@@ -44,7 +44,6 @@ func (c *routeLookupServiceClient) RouteLookup(ctx context.Context, in *RouteLoo
 type RouteLookupServiceServer interface {
 	// Lookup returns a target for a single key.
 	RouteLookup(context.Context, *RouteLookupRequest) (*RouteLookupResponse, error)
-	mustEmbedUnimplementedRouteLookupServiceServer()
 }
 
 // UnimplementedRouteLookupServiceServer must be embedded to have forward compatible implementations.

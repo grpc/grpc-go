@@ -68,7 +68,6 @@ type ServerReflectionServer interface {
 	// The reflection service is structured as a bidirectional stream, ensuring
 	// all related requests go to a single server.
 	ServerReflectionInfo(ServerReflection_ServerReflectionInfoServer) error
-	mustEmbedUnimplementedServerReflectionServer()
 }
 
 // UnimplementedServerReflectionServer must be embedded to have forward compatible implementations.

@@ -75,7 +75,6 @@ func (x *searchServiceStreamingSearchClient) Recv() (*SearchResponse, error) {
 type SearchServiceServer interface {
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
 	StreamingSearch(SearchService_StreamingSearchServer) error
-	mustEmbedUnimplementedSearchServiceServer()
 }
 
 // UnimplementedSearchServiceServer must be embedded to have forward compatible implementations.

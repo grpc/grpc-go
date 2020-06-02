@@ -110,7 +110,6 @@ type HealthServer interface {
 	// call.  If the call terminates with any other status (including OK),
 	// clients should retry the call with appropriate exponential backoff.
 	Watch(*HealthCheckRequest, Health_WatchServer) error
-	mustEmbedUnimplementedHealthServer()
 }
 
 // UnimplementedHealthServer must be embedded to have forward compatible implementations.

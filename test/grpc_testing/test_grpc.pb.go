@@ -217,7 +217,6 @@ type TestServiceServer interface {
 	// stream of responses are returned to the client when the server starts with
 	// first request.
 	HalfDuplexCall(TestService_HalfDuplexCallServer) error
-	mustEmbedUnimplementedTestServiceServer()
 }
 
 // UnimplementedTestServiceServer must be embedded to have forward compatible implementations.

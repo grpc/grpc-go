@@ -159,7 +159,6 @@ type TestServiceServer interface {
 	ClientStreamCall(TestService_ClientStreamCallServer) error
 	// Server stream
 	ServerStreamCall(*SimpleRequest, TestService_ServerStreamCallServer) error
-	mustEmbedUnimplementedTestServiceServer()
 }
 
 // UnimplementedTestServiceServer must be embedded to have forward compatible implementations.

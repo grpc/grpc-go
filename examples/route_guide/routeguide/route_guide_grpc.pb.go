@@ -185,7 +185,6 @@ type RouteGuideServer interface {
 	// Accepts a stream of RouteNotes sent while a route is being traversed,
 	// while receiving other RouteNotes (e.g. from other users).
 	RouteChat(RouteGuide_RouteChatServer) error
-	mustEmbedUnimplementedRouteGuideServer()
 }
 
 // UnimplementedRouteGuideServer must be embedded to have forward compatible implementations.

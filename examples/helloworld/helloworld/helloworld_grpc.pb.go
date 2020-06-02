@@ -44,7 +44,6 @@ func (c *greeterClient) SayHello(ctx context.Context, in *HelloRequest, opts ...
 type GreeterServer interface {
 	// Sends a greeting
 	SayHello(context.Context, *HelloRequest) (*HelloReply, error)
-	mustEmbedUnimplementedGreeterServer()
 }
 
 // UnimplementedGreeterServer must be embedded to have forward compatible implementations.

@@ -59,7 +59,6 @@ type ProfilingServer interface {
 	// GetStreamStats is used to retrieve an array of stream-level stats from a
 	// gRPC client/server.
 	GetStreamStats(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error)
-	mustEmbedUnimplementedProfilingServer()
 }
 
 // UnimplementedProfilingServer must be embedded to have forward compatible implementations.

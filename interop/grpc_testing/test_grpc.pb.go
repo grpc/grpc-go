@@ -217,7 +217,6 @@ type TestServiceServer interface {
 	// stream of responses are returned to the client when the server starts with
 	// first request.
 	HalfDuplexCall(TestService_HalfDuplexCallServer) error
-	mustEmbedUnimplementedTestServiceServer()
 }
 
 // UnimplementedTestServiceServer must be embedded to have forward compatible implementations.
@@ -454,7 +453,6 @@ func (c *unimplementedServiceClient) UnimplementedCall(ctx context.Context, in *
 type UnimplementedServiceServer interface {
 	// A call that no server should implement
 	UnimplementedCall(context.Context, *Empty) (*Empty, error)
-	mustEmbedUnimplementedUnimplementedServiceServer()
 }
 
 // UnimplementedUnimplementedServiceServer must be embedded to have forward compatible implementations.
@@ -532,7 +530,6 @@ func (c *loadBalancerStatsServiceClient) GetClientStats(ctx context.Context, in 
 type LoadBalancerStatsServiceServer interface {
 	// Gets the backend distribution for RPCs sent by a test client.
 	GetClientStats(context.Context, *LoadBalancerStatsRequest) (*LoadBalancerStatsResponse, error)
-	mustEmbedUnimplementedLoadBalancerStatsServiceServer()
 }
 
 // UnimplementedLoadBalancerStatsServiceServer must be embedded to have forward compatible implementations.

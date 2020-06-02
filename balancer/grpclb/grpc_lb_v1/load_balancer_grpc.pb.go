@@ -66,7 +66,6 @@ func (x *loadBalancerBalanceLoadClient) Recv() (*LoadBalanceResponse, error) {
 type LoadBalancerServer interface {
 	// Bidirectional rpc to get a list of servers.
 	BalanceLoad(LoadBalancer_BalanceLoadServer) error
-	mustEmbedUnimplementedLoadBalancerServer()
 }
 
 // UnimplementedLoadBalancerServer must be embedded to have forward compatible implementations.
