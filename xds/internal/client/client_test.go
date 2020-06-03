@@ -126,8 +126,8 @@ func (s) TestNew(t *testing.T) {
 type testXDSV2Client struct {
 	r updateHandler
 
-	addWatches    map[string]chan string
-	removeWatches map[string]chan string
+	addWatches    map[string]*testutils.Channel
+	removeWatches map[string]*testutils.Channel
 }
 
 func overrideNewXDSV2Client() (<-chan *testXDSV2Client, func()) {
@@ -142,16 +142,16 @@ func overrideNewXDSV2Client() (<-chan *testXDSV2Client, func()) {
 }
 
 func newTestXDSV2Client(r updateHandler) *testXDSV2Client {
-	addWatches := make(map[string]chan string)
-	addWatches[ldsURL] = make(chan string, 10)
-	addWatches[rdsURL] = make(chan string, 10)
-	addWatches[cdsURL] = make(chan string, 10)
-	addWatches[edsURL] = make(chan string, 10)
-	removeWatches := make(map[string]chan string)
-	removeWatches[ldsURL] = make(chan string, 10)
-	removeWatches[rdsURL] = make(chan string, 10)
-	removeWatches[cdsURL] = make(chan string, 10)
-	removeWatches[edsURL] = make(chan string, 10)
+	addWatches := make(map[string]*testutils.Channel)
+	addWatches[ldsURL] = testutils.NewChannel()
+	addWatches[rdsURL] = testutils.NewChannel()
+	addWatches[cdsURL] = testutils.NewChannel()
+	addWatches[edsURL] = testutils.NewChannel()
+	removeWatches := make(map[string]*testutils.Channel)
+	removeWatches[ldsURL] = testutils.NewChannel()
+	removeWatches[rdsURL] = testutils.NewChannel()
+	removeWatches[cdsURL] = testutils.NewChannel()
+	removeWatches[edsURL] = testutils.NewChannel()
 	return &testXDSV2Client{
 		r:             r,
 		addWatches:    addWatches,
@@ -160,11 +160,11 @@ func newTestXDSV2Client(r updateHandler) *testXDSV2Client {
 }
 
 func (c *testXDSV2Client) addWatch(resourceType, resourceName string) {
-	c.addWatches[resourceType] <- resourceName
+	c.addWatches[resourceType].Send(resourceName)
 }
 
 func (c *testXDSV2Client) removeWatch(resourceType, resourceName string) {
-	c.removeWatches[resourceType] <- resourceName
+	c.removeWatches[resourceType].Send(resourceName)
 }
 
 func (c *testXDSV2Client) close() {}
@@ -184,11 +184,19 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	v2Client := <-v2ClientCh
 
 	clusterUpdateCh := testutils.NewChannel()
+	firstTime := true
 	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 		// Calls another watch inline, to ensure there's deadlock.
 		c.WatchCluster("another-random-name", func(ClusterUpdate, error) {})
+		if _, err := v2Client.addWatches[cdsURL].Receive(); firstTime && err != nil {
+			t.Fatalf("want new watch to start, got error %v", err)
+		}
+		firstTime = false
 	})
+	if _, err := v2Client.addWatches[cdsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
 	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
