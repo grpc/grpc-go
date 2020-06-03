@@ -74,11 +74,11 @@ func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *Client) newLDSUpdate(d map[string]ldsUpdate) {
+func (c *Client) newLDSUpdate(updates map[string]ldsUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for name, update := range d {
+	for name, update := range updates {
 		if s, ok := c.ldsWatchers[name]; ok {
 			for wi := range s {
 				wi.newUpdate(update)
@@ -89,7 +89,7 @@ func (c *Client) newLDSUpdate(d map[string]ldsUpdate) {
 		}
 	}
 	for name := range c.ldsCache {
-		if _, ok := d[name]; !ok {
+		if _, ok := updates[name]; !ok {
 			// If resource exists in cache, but not in the new update, delete it
 			// from cache, and also send an resource not found error to indicate
 			// resource removed.
@@ -100,8 +100,8 @@ func (c *Client) newLDSUpdate(d map[string]ldsUpdate) {
 		}
 	}
 	// When LDS resource is removed, we don't delete corresponding RDS cached
-	// data. The RDS watch will be canceled, and cache is removed when the last
-	// watch is canceled.
+	// data. The RDS watch will be canceled, and cache entry is removed when the
+	// last watch is canceled.
 }
 
 // newRDSUpdate is called by the underlying xdsv2Client when it receives an xDS
@@ -109,11 +109,11 @@ func (c *Client) newLDSUpdate(d map[string]ldsUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *Client) newRDSUpdate(d map[string]rdsUpdate) {
+func (c *Client) newRDSUpdate(updates map[string]rdsUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for name, update := range d {
+	for name, update := range updates {
 		if s, ok := c.rdsWatchers[name]; ok {
 			for wi := range s {
 				wi.newUpdate(update)
@@ -130,11 +130,11 @@ func (c *Client) newRDSUpdate(d map[string]rdsUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *Client) newCDSUpdate(d map[string]ClusterUpdate) {
+func (c *Client) newCDSUpdate(updates map[string]ClusterUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for name, update := range d {
+	for name, update := range updates {
 		if s, ok := c.cdsWatchers[name]; ok {
 			for wi := range s {
 				wi.newUpdate(update)
@@ -145,7 +145,7 @@ func (c *Client) newCDSUpdate(d map[string]ClusterUpdate) {
 		}
 	}
 	for name := range c.cdsCache {
-		if _, ok := d[name]; !ok {
+		if _, ok := updates[name]; !ok {
 			// If resource exists in cache, but not in the new update, delete it
 			// from cache, and also send an resource not found error to indicate
 			// resource removed.
@@ -156,8 +156,8 @@ func (c *Client) newCDSUpdate(d map[string]ClusterUpdate) {
 		}
 	}
 	// When CDS resource is removed, we don't delete corresponding EDS cached
-	// data. The EDS watch will be canceled, and cache is removed when the last
-	// watch is canceled.
+	// data. The EDS watch will be canceled, and cache entry is removed when the
+	// last watch is canceled.
 }
 
 // newEDSUpdate is called by the underlying xdsv2Client when it receives an xDS
@@ -165,11 +165,11 @@ func (c *Client) newCDSUpdate(d map[string]ClusterUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *Client) newEDSUpdate(d map[string]EndpointsUpdate) {
+func (c *Client) newEDSUpdate(updates map[string]EndpointsUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for name, update := range d {
+	for name, update := range updates {
 		if s, ok := c.edsWatchers[name]; ok {
 			for wi := range s {
 				wi.newUpdate(update)
