@@ -25,12 +25,8 @@ import (
 )
 
 // store is the global singleton certificate provider store.
-var store *Store
-
-func init() {
-	store = &Store{
-		providers: make(map[storeKey]*wrappedProvider),
-	}
+var store = &Store{
+	providers: make(map[storeKey]*wrappedProvider),
 }
 
 // StoreKey contains data which uniquely identifies a provider instance.
@@ -41,7 +37,7 @@ type StoreKey struct {
 	Config StableConfig
 }
 
-// storeKey acts the key to the map of providers maintained by the store. Go
+// storeKey acts as the key to the map of providers maintained by the store. Go
 // maps need to be indexed by comparable types, so the above StoreKey struct
 // cannot be used since it contains an interface.
 type storeKey struct {
@@ -63,6 +59,9 @@ type wrappedProvider struct {
 }
 
 // Store is a collection of provider instances, safe for concurrent access.
+//
+// Users should not create instances of this type directly, they should use
+// GetStore() instead.
 type Store struct {
 	mu        sync.Mutex
 	providers map[storeKey]*wrappedProvider
