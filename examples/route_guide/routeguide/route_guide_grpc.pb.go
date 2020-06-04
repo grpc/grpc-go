@@ -158,7 +158,7 @@ func (x *routeGuideRouteChatClient) Recv() (*RouteNote, error) {
 }
 
 // RouteGuideServer is the server API for RouteGuide service.
-// All implementations must embed UnimplementedRouteGuideServer
+// All implementations should embed UnimplementedRouteGuideServer
 // for forward compatibility
 type RouteGuideServer interface {
 	// A simple RPC.
@@ -187,7 +187,7 @@ type RouteGuideServer interface {
 	RouteChat(RouteGuide_RouteChatServer) error
 }
 
-// UnimplementedRouteGuideServer must be embedded to have forward compatible implementations.
+// UnimplementedRouteGuideServer should be embedded to have forward compatible implementations.
 type UnimplementedRouteGuideServer struct {
 }
 
@@ -203,7 +203,6 @@ func (*UnimplementedRouteGuideServer) RecordRoute(RouteGuide_RecordRouteServer) 
 func (*UnimplementedRouteGuideServer) RouteChat(RouteGuide_RouteChatServer) error {
 	return status.Errorf(codes.Unimplemented, "method RouteChat not implemented")
 }
-func (*UnimplementedRouteGuideServer) mustEmbedUnimplementedRouteGuideServer() {}
 
 func RegisterRouteGuideServer(s *grpc.Server, srv RouteGuideServer) {
 	s.RegisterService(&_RouteGuide_serviceDesc, srv)

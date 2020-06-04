@@ -70,14 +70,14 @@ func (x *searchServiceStreamingSearchClient) Recv() (*SearchResponse, error) {
 }
 
 // SearchServiceServer is the server API for SearchService service.
-// All implementations must embed UnimplementedSearchServiceServer
+// All implementations should embed UnimplementedSearchServiceServer
 // for forward compatibility
 type SearchServiceServer interface {
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
 	StreamingSearch(SearchService_StreamingSearchServer) error
 }
 
-// UnimplementedSearchServiceServer must be embedded to have forward compatible implementations.
+// UnimplementedSearchServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedSearchServiceServer struct {
 }
 
@@ -87,7 +87,6 @@ func (*UnimplementedSearchServiceServer) Search(context.Context, *SearchRequest)
 func (*UnimplementedSearchServiceServer) StreamingSearch(SearchService_StreamingSearchServer) error {
 	return status.Errorf(codes.Unimplemented, "method StreamingSearch not implemented")
 }
-func (*UnimplementedSearchServiceServer) mustEmbedUnimplementedSearchServiceServer() {}
 
 func RegisterSearchServiceServer(s *grpc.Server, srv SearchServiceServer) {
 	s.RegisterService(&_SearchService_serviceDesc, srv)

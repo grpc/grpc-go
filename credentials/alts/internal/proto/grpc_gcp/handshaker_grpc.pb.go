@@ -66,7 +66,7 @@ func (x *handshakerServiceDoHandshakeClient) Recv() (*HandshakerResp, error) {
 }
 
 // HandshakerServiceServer is the server API for HandshakerService service.
-// All implementations must embed UnimplementedHandshakerServiceServer
+// All implementations should embed UnimplementedHandshakerServiceServer
 // for forward compatibility
 type HandshakerServiceServer interface {
 	// Handshaker service accepts a stream of handshaker request, returning a
@@ -78,14 +78,13 @@ type HandshakerServiceServer interface {
 	DoHandshake(HandshakerService_DoHandshakeServer) error
 }
 
-// UnimplementedHandshakerServiceServer must be embedded to have forward compatible implementations.
+// UnimplementedHandshakerServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedHandshakerServiceServer struct {
 }
 
 func (*UnimplementedHandshakerServiceServer) DoHandshake(HandshakerService_DoHandshakeServer) error {
 	return status.Errorf(codes.Unimplemented, "method DoHandshake not implemented")
 }
-func (*UnimplementedHandshakerServiceServer) mustEmbedUnimplementedHandshakerServiceServer() {}
 
 func RegisterHandshakerServiceServer(s *grpc.Server, srv HandshakerServiceServer) {
 	s.RegisterService(&_HandshakerService_serviceDesc, srv)

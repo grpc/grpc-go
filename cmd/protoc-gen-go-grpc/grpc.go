@@ -119,10 +119,15 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 		}
 	}
 
+	mustOrShould := "must"
+	if !*requireUnimplemented {
+		mustOrShould = "should"
+	}
+
 	// Server interface.
 	serverType := service.GoName + "Server"
 	g.P("// ", serverType, " is the server API for ", service.GoName, " service.")
-	g.P("// All implementations must embed Unimplemented", serverType)
+	g.P("// All implementations ", mustOrShould, " embed Unimplemented", serverType)
 	g.P("// for forward compatibility")
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 		g.P("//")
@@ -145,7 +150,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	g.P()
 
 	// Server Unimplemented struct for forward compatibility.
-	g.P("// Unimplemented", serverType, " must be embedded to have forward compatible implementations.")
+	g.P("// Unimplemented", serverType, " ", mustOrShould, " be embedded to have forward compatible implementations.")
 	g.P("type Unimplemented", serverType, " struct {")
 	g.P("}")
 	g.P()
@@ -158,7 +163,9 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 		g.P("return ", nilArg, statusPackage.Ident("Errorf"), "(", codesPackage.Ident("Unimplemented"), `, "method `, method.GoName, ` not implemented")`)
 		g.P("}")
 	}
-	g.P("func (*Unimplemented", serverType, ") mustEmbedUnimplemented", serverType, "() {}")
+	if *requireUnimplemented {
+		g.P("func (*Unimplemented", serverType, ") mustEmbedUnimplemented", serverType, "() {}")
+	}
 	g.P()
 
 	// Server registration.
