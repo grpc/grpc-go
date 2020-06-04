@@ -187,6 +187,7 @@ func (s *rpcStats) String() string {
 }
 
 type remoteBalancer struct {
+	lbgrpc.UnimplementedLoadBalancerServer
 	sls       chan *lbpb.ServerList
 	statsDura time.Duration
 	done      chan struct{}

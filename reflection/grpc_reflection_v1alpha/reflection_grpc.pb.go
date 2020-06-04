@@ -62,13 +62,15 @@ func (x *serverReflectionServerReflectionInfoClient) Recv() (*ServerReflectionRe
 }
 
 // ServerReflectionServer is the server API for ServerReflection service.
+// All implementations should embed UnimplementedServerReflectionServer
+// for forward compatibility
 type ServerReflectionServer interface {
 	// The reflection service is structured as a bidirectional stream, ensuring
 	// all related requests go to a single server.
 	ServerReflectionInfo(ServerReflection_ServerReflectionInfoServer) error
 }
 
-// UnimplementedServerReflectionServer can be embedded to have forward compatible implementations.
+// UnimplementedServerReflectionServer should be embedded to have forward compatible implementations.
 type UnimplementedServerReflectionServer struct {
 }
 

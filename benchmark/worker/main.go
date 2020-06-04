@@ -73,6 +73,7 @@ func (byteBufCodec) String() string {
 // workerServer implements WorkerService rpc handlers.
 // It can create benchmarkServer or benchmarkClient on demand.
 type workerServer struct {
+	testpb.UnimplementedWorkerServiceServer
 	stop       chan<- bool
 	serverPort int
 }

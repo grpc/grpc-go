@@ -145,6 +145,8 @@ func (x *testServiceServerStreamCallClient) Recv() (*SimpleResponse, error) {
 }
 
 // TestServiceServer is the server API for TestService service.
+// All implementations should embed UnimplementedTestServiceServer
+// for forward compatibility
 type TestServiceServer interface {
 	// One request followed by one response.
 	// The server returns the client id as-is.
@@ -159,7 +161,7 @@ type TestServiceServer interface {
 	ServerStreamCall(*SimpleRequest, TestService_ServerStreamCallServer) error
 }
 
-// UnimplementedTestServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedTestServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedTestServiceServer struct {
 }
 

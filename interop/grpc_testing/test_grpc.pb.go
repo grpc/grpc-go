@@ -194,6 +194,8 @@ func (x *testServiceHalfDuplexCallClient) Recv() (*StreamingOutputCallResponse, 
 }
 
 // TestServiceServer is the server API for TestService service.
+// All implementations should embed UnimplementedTestServiceServer
+// for forward compatibility
 type TestServiceServer interface {
 	// One empty request followed by one empty response.
 	EmptyCall(context.Context, *Empty) (*Empty, error)
@@ -217,7 +219,7 @@ type TestServiceServer interface {
 	HalfDuplexCall(TestService_HalfDuplexCallServer) error
 }
 
-// UnimplementedTestServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedTestServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedTestServiceServer struct {
 }
 
@@ -445,12 +447,14 @@ func (c *unimplementedServiceClient) UnimplementedCall(ctx context.Context, in *
 }
 
 // UnimplementedServiceServer is the server API for UnimplementedService service.
+// All implementations should embed UnimplementedUnimplementedServiceServer
+// for forward compatibility
 type UnimplementedServiceServer interface {
 	// A call that no server should implement
 	UnimplementedCall(context.Context, *Empty) (*Empty, error)
 }
 
-// UnimplementedUnimplementedServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedUnimplementedServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedUnimplementedServiceServer struct {
 }
 
@@ -519,12 +523,14 @@ func (c *loadBalancerStatsServiceClient) GetClientStats(ctx context.Context, in 
 }
 
 // LoadBalancerStatsServiceServer is the server API for LoadBalancerStatsService service.
+// All implementations should embed UnimplementedLoadBalancerStatsServiceServer
+// for forward compatibility
 type LoadBalancerStatsServiceServer interface {
 	// Gets the backend distribution for RPCs sent by a test client.
 	GetClientStats(context.Context, *LoadBalancerStatsRequest) (*LoadBalancerStatsResponse, error)
 }
 
-// UnimplementedLoadBalancerStatsServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedLoadBalancerStatsServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedLoadBalancerStatsServiceServer struct {
 }
 

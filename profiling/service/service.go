@@ -76,6 +76,7 @@ func Init(pc *ProfilingConfig) error {
 }
 
 type profilingServer struct {
+	ppb.UnimplementedProfilingServer
 	drainMutex sync.Mutex
 }
 

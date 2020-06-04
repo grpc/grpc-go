@@ -106,6 +106,8 @@ func (c *channelzClient) GetSocket(ctx context.Context, in *GetSocketRequest, op
 }
 
 // ChannelzServer is the server API for Channelz service.
+// All implementations should embed UnimplementedChannelzServer
+// for forward compatibility
 type ChannelzServer interface {
 	// Gets all root channels (i.e. channels the application has directly
 	// created). This does not include subchannels nor non-top level channels.
@@ -124,7 +126,7 @@ type ChannelzServer interface {
 	GetSocket(context.Context, *GetSocketRequest) (*GetSocketResponse, error)
 }
 
-// UnimplementedChannelzServer can be embedded to have forward compatible implementations.
+// UnimplementedChannelzServer should be embedded to have forward compatible implementations.
 type UnimplementedChannelzServer struct {
 }
 

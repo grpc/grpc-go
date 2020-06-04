@@ -672,6 +672,7 @@ func DoPickFirstUnary(tc testpb.TestServiceClient) {
 }
 
 type testServer struct {
+	testpb.UnimplementedTestServiceServer
 }
 
 // NewTestServer creates a test server for test service.

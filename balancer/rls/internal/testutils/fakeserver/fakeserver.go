@@ -49,6 +49,7 @@ type Response struct {
 // Server is a fake implementation of RLS. It exposes channels to send/receive
 // RLS requests and responses.
 type Server struct {
+	rlsgrpc.UnimplementedRouteLookupServiceServer
 	RequestChan  *testutils.Channel
 	ResponseChan chan Response
 	Address      string
