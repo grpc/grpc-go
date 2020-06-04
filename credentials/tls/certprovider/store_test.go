@@ -59,12 +59,14 @@ type fakeProviderBuilder struct {
 }
 
 func (b *fakeProviderBuilder) Build(StableConfig) Provider {
+	ctx, cancel := context.WithCancel(context.Background())
 	p := &fakeProvider{
 		Distributor: NewDistributor(),
+		cancel:      cancel,
 		done:        make(chan struct{}),
 		kmCh:        make(chan *KeyMaterial, 2),
 	}
-	go p.run()
+	go p.run(ctx)
 	return p
 }
 
@@ -95,6 +97,8 @@ func (c *fakeStableConfig) Canonical() []byte {
 type fakeProvider struct {
 	*Distributor
 
+	// Used to cancel the run goroutine when the provider is closed.
+	cancel context.CancelFunc
 	// This channel is closed when the provider is closed. Tests should block on
 	// this to make sure the provider is closed.
 	done chan struct{}
@@ -103,15 +107,20 @@ type fakeProvider struct {
 	kmCh chan *KeyMaterial
 }
 
-func (p *fakeProvider) run() {
+func (p *fakeProvider) run(ctx context.Context) {
 	for {
 		select {
-		case <-p.Distributor.Ctx.Done():
+		case <-ctx.Done():
 			return
 		case km := <-p.kmCh:
 			p.Distributor.Set(km)
 		}
 	}
+}
+
+func (p *fakeProvider) Close() {
+	p.cancel()
+	p.Distributor.Stop()
 }
 
 // loadKeyMaterials is a helper to read cert/key files from testdata and convert

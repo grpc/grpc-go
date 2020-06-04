@@ -20,7 +20,6 @@ package certprovider
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -100,13 +99,9 @@ func (s) TestDistributor(t *testing.T) {
 		defer cancel()
 		for {
 			if _, err := dist.KeyMaterial(ctx, KeyMaterialOptions{}); err == errProviderClosed {
-				doneCh := dist.Ctx.Done()
-				if _, ok := <-doneCh; ok {
-					errCh <- errors.New("distributor done channel not closed")
-					return
-				}
 				break
 			}
+			time.Sleep(100 * time.Millisecond)
 		}
 	}()
 
@@ -119,7 +114,7 @@ func (s) TestDistributor(t *testing.T) {
 	})
 
 	waitAndDo(t, proceedCh, errCh, func() {
-		dist.Close()
+		dist.Stop()
 	})
 
 }

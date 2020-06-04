@@ -29,21 +29,12 @@ import (
 // materials by handling synchronization between the producer and consumers of
 // the key material. Distributor implements the Provider interface.
 //
-// Provider implementations may choose to embed the Distributor and:
-// - Whenever they have new key material, they invoke the Set() method.
-// - When users of the provider call KeyMaterial(), it will be handled by the
-//   distributor which will return the most up-to-date key material furnished
-//   by the provider.
-// - When users of the provider call Close(), it will be handled by the
-//   distributor and the exposed Ctx will be canceled. Provider implementations
-//   can select on the channel returned by Ctx.Done() to perform cleanup work.
+// Provider implementations which choose to use a Distributor should do the
+// following:
+// - invoke the Set() method whenever they have new key material.
+// - delegate to the distributor when handing calls to KeyMaterial().
+// - invoke the Stop() method when they are done using the distributor.
 type Distributor struct {
-	// Ctx is a context used to signal cancellation of the distributor. Users of
-	// this type can select on the channel returned by Ctx.Done to perform any
-	// cleanup work.
-	Ctx    context.Context
-	cancel context.CancelFunc
-
 	// mu protects the underlying key material.
 	mu sync.Mutex
 	km *KeyMaterial
@@ -54,10 +45,7 @@ type Distributor struct {
 
 // NewDistributor returns a new Distributor.
 func NewDistributor() *Distributor {
-	ctx, cancel := context.WithCancel(context.Background())
 	return &Distributor{
-		Ctx:    ctx,
-		cancel: cancel,
 		ready:  grpcsync.NewEvent(),
 		closed: grpcsync.NewEvent(),
 	}
@@ -104,9 +92,8 @@ func (d *Distributor) keyMaterial() *KeyMaterial {
 	return km
 }
 
-// Close closes the distributor and fails any active KeyMaterial() call waiting
-// for new key material. It also cancels the exposed Ctx field.
-func (d *Distributor) Close() {
+// Stop turns down the distributor, releases allocated resources and fails any
+// active KeyMaterial() call waiting for new key material.
+func (d *Distributor) Stop() {
 	d.closed.Fire()
-	d.cancel()
 }
