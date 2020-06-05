@@ -81,6 +81,11 @@ type GetRootCAsResults struct {
 // RootCertificateOptions contains a field and a function for obtaining root
 // trust certificates.
 // It is used by both ClientOptions and ServerOptions.
+// If users want to use default verification, but did not provide a valid
+// RootCertificateOptions:
+//     Assign the system default certificate to RootCAs on the client side;
+//     assign the system default certificate to ClientCAs on the server side
+//	   if the server needs trust certificate.
 type RootCertificateOptions struct {
 	// If field RootCACerts is set, field GetRootCAs will be ignored. RootCACerts
 	// will be used every time when verifying the peer certificates, without
@@ -185,7 +190,7 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 			"client needs to provide custom verification mechanism if choose to skip default verification")
 	}
 	rootCAs := o.RootCACerts
-	if o.VType != SkipVerification && o.RootCACerts == nil && o.GetRootCAs == nil {
+	if o.VType > SkipVerification && o.RootCACerts == nil && o.GetRootCAs == nil {
 		// Set rootCAs to system default
 		systemRootCAs, err := x509.SystemCertPool()
 		if err != nil {
@@ -199,8 +204,10 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 		ServerName:           o.ServerNameOverride,
 		Certificates:         o.Certificates,
 		GetClientCertificate: o.GetClientCertificate,
-		RootCAs:              rootCAs,
 		InsecureSkipVerify:   true,
+	}
+	if rootCAs != nil {
+		config.RootCAs = rootCAs
 	}
 	return config, nil
 }
@@ -214,7 +221,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 			"server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
 	clientCAs := o.RootCACerts
-	if o.VType != SkipVerification && o.RootCACerts == nil && o.GetRootCAs == nil {
+	if o.VType > SkipVerification && o.RootCACerts == nil && o.GetRootCAs == nil && o.RequireClientCert {
 		// Set clientCAs to system default
 		systemRootCAs, err := x509.SystemCertPool()
 		if err != nil {
@@ -233,7 +240,9 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		ClientAuth:     clientAuth,
 		Certificates:   o.Certificates,
 		GetCertificate: o.GetCertificate,
-		ClientCAs:      clientCAs,
+	}
+	if clientCAs != nil {
+		config.ClientCAs = clientCAs
 	}
 	return config, nil
 }
