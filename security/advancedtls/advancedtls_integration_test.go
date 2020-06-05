@@ -405,10 +405,10 @@ func TestEnd2End(t *testing.T) {
 			s := grpc.NewServer(grpc.Creds(serverTLSCreds))
 			defer s.Stop()
 			lis, err := net.Listen("tcp", port)
-			defer lis.Close()
 			if err != nil {
 				t.Fatalf("failed to listen: %v", err)
 			}
+			defer lis.Close()
 			pb.RegisterGreeterServer(s, &serverImpl{})
 			go s.Serve(lis)
 			clientOptions := &ClientOptions{
