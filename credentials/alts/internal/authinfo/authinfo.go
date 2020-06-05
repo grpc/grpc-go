@@ -87,3 +87,8 @@ func (s *altsAuthInfo) LocalServiceAccount() string {
 func (s *altsAuthInfo) PeerRPCVersions() *altspb.RpcProtocolVersions {
 	return s.p.GetPeerRpcVersions()
 }
+
+// PeerAttributes returns the context’s peer attributes.
+func (s *altsAuthInfo) PeerAttributes() map[string]string {
+	return s.p.GetPeerAttributes()
+}
