@@ -184,13 +184,22 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 		return nil, fmt.Errorf(
 			"client needs to provide custom verification mechanism if choose to skip default verification")
 	}
+	rootCAs := o.RootCACerts
+	if o.VType != SkipVerification && o.RootCACerts == nil && o.GetRootCAs == nil {
+		// Set rootCAs to system default
+		systemRootCAs, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, err
+		}
+		rootCAs = systemRootCAs
+	}
 	// We have to set InsecureSkipVerify to true to skip the default checks and
 	// use the verification function we built from buildVerifyFunc.
 	config := &tls.Config{
 		ServerName:           o.ServerNameOverride,
 		Certificates:         o.Certificates,
 		GetClientCertificate: o.GetClientCertificate,
-		RootCAs:              o.RootCACerts,
+		RootCAs:              rootCAs,
 		InsecureSkipVerify:   true,
 	}
 	return config, nil
@@ -204,6 +213,15 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		return nil, fmt.Errorf(
 			"server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
+	clientCAs := o.RootCACerts
+	if o.VType != SkipVerification && o.RootCACerts == nil && o.GetRootCAs == nil {
+		// Set clientCAs to system default
+		systemRootCAs, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, err
+		}
+		clientCAs = systemRootCAs
+	}
 	clientAuth := tls.NoClientCert
 	if o.RequireClientCert {
 		// We have to set clientAuth to RequireAnyClientCert to force underlying
@@ -215,9 +233,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		ClientAuth:     clientAuth,
 		Certificates:   o.Certificates,
 		GetCertificate: o.GetCertificate,
-	}
-	if o.RootCACerts != nil {
-		config.ClientCAs = o.RootCACerts
+		ClientCAs:      clientCAs,
 	}
 	return config, nil
 }
