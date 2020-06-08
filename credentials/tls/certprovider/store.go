@@ -19,9 +19,8 @@
 package certprovider
 
 import (
+	"fmt"
 	"sync"
-
-	"google.golang.org/grpc/grpclog"
 )
 
 // store is the global singleton certificate provider store.
@@ -33,8 +32,10 @@ var store = &Store{
 type StoreKey struct {
 	// Name is the registered name of the provider.
 	Name string
-	// Config is the configuration used by the provider instance.
-	Config StableConfig
+	// Config is a provider specific configuration blob to configure a provider
+	// instance. Implementations of the Provider interface should clearly
+	// document the type of configuration accepted by them.
+	Config interface{}
 }
 
 // storeKey acts as the key to the map of providers maintained by the store. Go
@@ -74,29 +75,34 @@ func GetStore() *Store {
 
 // GetProvider returns a provider instance corresponding to key. If a provider
 // exists for key, its reference count is incremented before returning. If no
-// provider exists for key, a new is created using the registered builder. If
-// no registered builder is found, a nil provider is returned.
-func (ps *Store) GetProvider(key StoreKey) Provider {
+// provider exists for key, a new one is created using the registered builder.
+// If no registered builder is found, or the provider configuration blob is
+// rejected by it, a non-nil error is returned.
+func (ps *Store) GetProvider(key StoreKey) (Provider, error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
+	builder := getBuilder(key.Name)
+	if builder == nil {
+		return nil, fmt.Errorf("no registerd builder for provider name: %s", key.Name)
+	}
+	stableConfig, err := builder.ParseConfig(key.Config)
+	if err != nil {
+		return nil, err
+	}
+
 	sk := storeKey{
 		name:   key.Name,
-		config: string(key.Config.Canonical()),
+		config: string(stableConfig.Canonical()),
 	}
 	if wp, ok := ps.providers[sk]; ok {
 		wp.refCount++
-		return wp
+		return wp, nil
 	}
 
-	b := getBuilder(key.Name)
-	if b == nil {
-		return nil
-	}
-	provider := b.Build(key.Config)
+	provider := builder.Build(stableConfig)
 	if provider == nil {
-		grpclog.Errorf("certprovider.Build(%v) failed", sk)
-		return nil
+		return nil, fmt.Errorf("certprovider.Build(%v) failed", sk)
 	}
 	wp := &wrappedProvider{
 		Provider: provider,
@@ -105,7 +111,7 @@ func (ps *Store) GetProvider(key StoreKey) Provider {
 		store:    ps,
 	}
 	ps.providers[sk] = wp
-	return wp
+	return wp, nil
 }
 
 // Close overrides the Close method of the embedded provider. It releases the

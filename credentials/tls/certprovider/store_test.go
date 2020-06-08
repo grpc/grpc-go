@@ -143,24 +143,9 @@ func loadKeyMaterials() (*KeyMaterial, error) {
 func makeProvider(t *testing.T, name, config string) (Provider, *fakeProvider) {
 	t.Helper()
 
-	// Grab the provider builder.
-	b := getBuilder(name)
-	if b == nil {
-		t.Fatalf("no provider builder found for name : %s", name)
-	}
-
-	// Ask the builder to parse the config.
-	cfg, err := b.ParseConfig(config)
+	prov, err := GetStore().GetProvider(StoreKey{Name: name, Config: config})
 	if err != nil {
-		t.Fatalf("%s.ParseConfig(%v) = %v", name, config, err)
-	}
-
-	// Pass the config to the store to fetch a provider.
-	store := GetStore()
-	key := StoreKey{Name: name, Config: cfg}
-	prov := store.GetProvider(key)
-	if prov == nil {
-		t.Fatalf("store.Get(%v) is nil", key)
+		t.Fatal(err)
 	}
 
 	// The store returns a wrappedProvider, which holds a reference to the

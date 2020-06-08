@@ -27,10 +27,11 @@ import (
 
 // Distributor makes it easy for provider implementations to furnish new key
 // materials by handling synchronization between the producer and consumers of
-// the key material. Distributor implements the Provider interface.
+// the key material.
 //
 // Provider implementations which choose to use a Distributor should do the
 // following:
+// - create a new Distributor using the NewDistributor() function.
 // - invoke the Set() method whenever they have new key material.
 // - delegate to the distributor when handing calls to KeyMaterial().
 // - invoke the Stop() method when they are done using the distributor.
@@ -87,9 +88,8 @@ func (d *Distributor) KeyMaterial(ctx context.Context, opts KeyMaterialOptions) 
 
 func (d *Distributor) keyMaterial() *KeyMaterial {
 	d.mu.Lock()
-	km := d.km
-	d.mu.Unlock()
-	return km
+	defer d.mu.Unlock()
+	return d.km
 }
 
 // Stop turns down the distributor, releases allocated resources and fails any
