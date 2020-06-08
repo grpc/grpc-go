@@ -412,6 +412,11 @@ func TestClientServerHandshake(t *testing.T) {
 				VerifyPeer:        test.serverVerifyFunc,
 				VType:             test.serverVType,
 			}
+			servertConf, _ := serverOptions.config()
+			if serverOptions.VType < SkipVerification && serverOptions.RootCACerts == nil &&
+				serverOptions.GetRootCAs == nil && serverOptions.RequireClientCert && servertConf.ClientCAs == nil {
+				t.Fatalf("Failed to assign default certificate on the server side.")
+			}
 			go func(done chan credentials.AuthInfo, lis net.Listener, serverOptions *ServerOptions) {
 				serverRawConn, err := lis.Accept()
 				if err != nil {
@@ -449,6 +454,11 @@ func TestClientServerHandshake(t *testing.T) {
 					GetRootCAs:  test.clientGetRoot,
 				},
 				VType: test.clientVType,
+			}
+			clientConf, _ := clientOptions.config()
+			if clientOptions.VType < SkipVerification && clientOptions.RootCACerts == nil &&
+				clientOptions.GetRootCAs == nil && clientConf.RootCAs == nil {
+				t.Fatalf("Failed to assign default certificate on the client side.")
 			}
 			clientTLS, newClientErr := NewClientCreds(clientOptions)
 			if newClientErr != nil && test.clientExpectCreateError {
