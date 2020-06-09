@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
@@ -42,6 +44,7 @@ var (
 			Weight:    1,
 		},
 	}
+	endpointsCmpOpts = []cmp.Option{cmp.AllowUnexported(endpointsUpdateErr{}), cmpopts.EquateEmpty()}
 )
 
 type endpointsUpdateErr struct {
@@ -78,7 +81,7 @@ func (s) TestEndpointsWatch(t *testing.T) {
 		testCDSName: wantUpdate,
 	})
 
-	if u, err := endpointsUpdateCh.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+	if u, err := endpointsUpdateCh.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 		t.Errorf("unexpected endpointsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -138,7 +141,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count; i++ {
-		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 			t.Errorf("i=%v, unexpected endpointsUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
@@ -150,7 +153,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count-1; i++ {
-		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 			t.Errorf("i=%v, unexpected endpointsUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
@@ -206,12 +209,12 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count; i++ {
-		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate1, nil}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate1, nil}, endpointsCmpOpts...) {
 			t.Errorf("i=%v, unexpected endpointsUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
 
-	if u, err := endpointsUpdateCh2.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate2, nil}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+	if u, err := endpointsUpdateCh2.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate2, nil}, endpointsCmpOpts...) {
 		t.Errorf("unexpected endpointsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 }
@@ -243,7 +246,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 		testCDSName: wantUpdate,
 	})
 
-	if u, err := endpointsUpdateCh.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+	if u, err := endpointsUpdateCh.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 		t.Errorf("unexpected endpointsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -257,7 +260,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	}
 
 	// New watch should receives the update.
-	if u, err := endpointsUpdateCh2.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+	if u, err := endpointsUpdateCh2.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 		t.Errorf("unexpected endpointsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -301,7 +304,7 @@ func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 		t.Fatalf("failed to get endpointsUpdate: %v", err)
 	}
 	uu := u.(endpointsUpdateErr)
-	if !cmp.Equal(uu.u, EndpointsUpdate{}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+	if !cmp.Equal(uu.u, EndpointsUpdate{}, endpointsCmpOpts...) {
 		t.Errorf("unexpected endpointsUpdate: %v, want %v", uu.u, EndpointsUpdate{})
 	}
 	if uu.err == nil {
