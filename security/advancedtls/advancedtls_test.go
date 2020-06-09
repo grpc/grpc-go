@@ -139,7 +139,8 @@ func TestClientServerHandshake(t *testing.T) {
 		// Client: nil setting
 		// Server: only set serverCert with mutual TLS on
 		// Expected Behavior: server side failure and client handshake failure
-		// Reason: 
+		// Reason: We will use the system default certs, which doesn't trust server's identity,
+		// and hence causing the handshake failure
 		{
 			desc:                       "Client uses default RootCAs; server uses default ClientCAs",
 			clientVType:                CertVerification,
