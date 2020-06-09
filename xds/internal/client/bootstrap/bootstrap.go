@@ -139,7 +139,7 @@ func NewConfig() (*Config, error) {
 			config.BalancerName = xs.ServerURI
 			for _, cc := range xs.ChannelCreds {
 				if cc.Type == googleDefaultCreds {
-					config.Creds = grpc.WithCredentialsBundle(google.NewComputeEngineCredentials())
+					config.Creds = grpc.WithCredentialsBundle(google.NewDefaultCredentials())
 					// We stop at the first credential type that we support.
 					break
 				}
