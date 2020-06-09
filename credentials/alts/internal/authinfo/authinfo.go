@@ -48,6 +48,7 @@ func newAuthInfo(result *altspb.HandshakerResult) *altsAuthInfo {
 			PeerServiceAccount:  result.GetPeerIdentity().GetServiceAccount(),
 			LocalServiceAccount: result.GetLocalIdentity().GetServiceAccount(),
 			PeerRpcVersions:     result.GetPeerRpcVersions(),
+			PeerAttributes:		 result.GetPeerIdentity().GetAttributes(),
 		},
 		CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity},
 	}
@@ -88,7 +89,7 @@ func (s *altsAuthInfo) PeerRPCVersions() *altspb.RpcProtocolVersions {
 	return s.p.GetPeerRpcVersions()
 }
 
-// PeerAttributes returns the context’s peer attributes.
+// PeerRPCVersions returns the context's peer RPC versions.
 func (s *altsAuthInfo) PeerAttributes() map[string]string {
 	return s.p.GetPeerAttributes()
 }
