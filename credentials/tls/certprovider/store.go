@@ -84,7 +84,7 @@ func (ps *Store) GetProvider(key StoreKey) (Provider, error) {
 
 	builder := getBuilder(key.Name)
 	if builder == nil {
-		return nil, fmt.Errorf("no registerd builder for provider name: %s", key.Name)
+		return nil, fmt.Errorf("no registered builder for provider name: %s", key.Name)
 	}
 	stableConfig, err := builder.ParseConfig(key.Config)
 	if err != nil {
