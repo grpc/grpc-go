@@ -40,6 +40,8 @@ const (
 	googleDefaultCreds              = "google_default"
 	gRPCUserAgentName               = "gRPC Go"
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
+
+	gceOauth2Scope = "https://www.googleapis.com/auth/cloud-platform"
 )
 
 var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
@@ -139,7 +141,7 @@ func NewConfig() (*Config, error) {
 			config.BalancerName = xs.ServerURI
 			for _, cc := range xs.ChannelCreds {
 				if cc.Type == googleDefaultCreds {
-					config.Creds = grpc.WithCredentialsBundle(google.NewDefaultCredentials())
+					config.Creds = grpc.WithCredentialsBundle(google.NewDefaultCredentialsWithScope(gceOauth2Scope))
 					// We stop at the first credential type that we support.
 					break
 				}
