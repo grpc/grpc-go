@@ -89,7 +89,7 @@ func (s *altsAuthInfo) PeerRPCVersions() *altspb.RpcProtocolVersions {
 	return s.p.GetPeerRpcVersions()
 }
 
-// PeerRPCVersions returns the context's peer RPC versions.
+// PeerAttributes returns the context's peer attributes.
 func (s *altsAuthInfo) PeerAttributes() map[string]string {
 	return s.p.GetPeerAttributes()
 }

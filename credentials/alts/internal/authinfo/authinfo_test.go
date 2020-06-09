@@ -43,9 +43,9 @@ const (
 	testLocalHostname  = "local_hostname"
 )
 
-var testPeerAttributes = map[string]string{}
-
 func (s) TestALTSAuthInfo(t *testing.T) {
+	testPeerAttributes := make(map[string]string)
+	testPeerAttributes["peer"] = "attributes"
 	for _, tc := range []struct {
 		result             *altspb.HandshakerResult
 		outAppProtocol     string
@@ -149,5 +149,6 @@ func (s) TestALTSAuthInfo(t *testing.T) {
 		if got, want := authInfo.PeerAttributes(), tc.outPeerAttributes; !reflect.DeepEqual(got, want) {
 			t.Errorf("authinfo.PeerAttributes()=%v, want %v", got, want)
 		}
+		
 	}
 }
