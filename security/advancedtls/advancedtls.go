@@ -82,10 +82,7 @@ type GetRootCAsResults struct {
 // trust certificates.
 // It is used by both ClientOptions and ServerOptions.
 // If users want to use default verification, but did not provide a valid
-// RootCertificateOptions:
-//     Assign the system default certificate to RootCAs on the client side;
-//     assign the system default certificate to ClientCAs on the server side
-//	   if the server needs trust certificate.
+// RootCertificateOptions, we use the system default trust certificates.
 type RootCertificateOptions struct {
 	// If field RootCACerts is set, field GetRootCAs will be ignored. RootCACerts
 	// will be used every time when verifying the peer certificates, without
@@ -191,7 +188,7 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 	}
 	rootCAs := o.RootCACerts
 	if o.VType < SkipVerification && o.RootCACerts == nil && o.GetRootCAs == nil {
-		// Set rootCAs to system default
+		// Set rootCAs to system default.
 		systemRootCAs, err := x509.SystemCertPool()
 		if err != nil {
 			return nil, err
@@ -222,7 +219,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 	}
 	clientCAs := o.RootCACerts
 	if o.VType < SkipVerification && o.RootCACerts == nil && o.GetRootCAs == nil && o.RequireClientCert {
-		// Set clientCAs to system default
+		// Set clientCAs to system default.
 		systemRootCAs, err := x509.SystemCertPool()
 		if err != nil {
 			return nil, err
