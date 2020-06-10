@@ -7158,6 +7158,7 @@ func (s) TestCanceledRPCCallOptionRace(t *testing.T) {
 			defer wg.Done()
 			var p peer.Peer
 			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
 			stream, err := ss.client.FullDuplexCall(ctx, grpc.Peer(&p))
 			if err != nil {
 				t.Errorf("_.FullDuplexCall(_) = _, %v", err)
