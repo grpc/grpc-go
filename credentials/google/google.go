@@ -38,20 +38,11 @@ const tokenRequestTimeout = 30 * time.Second
 //
 // This API is experimental.
 func NewDefaultCredentials() credentials.Bundle {
-	return NewDefaultCredentialsWithScope()
-}
-
-// NewDefaultCredentialsWithScope returns a credentials bundle that is
-// configured to work with google services. It also takes the scopes for the RPC
-// creds.
-//
-// This API is experimental.
-func NewDefaultCredentialsWithScope(scope ...string) credentials.Bundle {
 	c := &creds{
 		newPerRPCCreds: func() credentials.PerRPCCredentials {
 			ctx, cancel := context.WithTimeout(context.Background(), tokenRequestTimeout)
 			defer cancel()
-			perRPCCreds, err := oauth.NewApplicationDefault(ctx, scope...)
+			perRPCCreds, err := oauth.NewApplicationDefault(ctx)
 			if err != nil {
 				grpclog.Warningf("google default creds: failed to create application oauth: %v", err)
 			}
