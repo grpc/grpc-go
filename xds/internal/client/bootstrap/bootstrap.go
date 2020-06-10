@@ -40,8 +40,6 @@ const (
 	googleDefaultCreds              = "google_default"
 	gRPCUserAgentName               = "gRPC Go"
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
-
-	gceOauth2Scope = "https://www.googleapis.com/auth/cloud-platform"
 )
 
 var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
