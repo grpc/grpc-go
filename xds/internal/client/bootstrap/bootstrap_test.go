@@ -162,85 +162,6 @@ func (s) TestNewConfig(t *testing.T) {
 				]
 			}]
 		}`,
-	}
-
-	oldFileReadFunc := fileReadFunc
-	fileReadFunc = func(name string) ([]byte, error) {
-		if b, ok := bootstrapFileMap[name]; ok {
-			return []byte(b), nil
-		}
-		return nil, os.ErrNotExist
-	}
-	defer func() {
-		fileReadFunc = oldFileReadFunc
-		os.Unsetenv(fileEnv)
-	}()
-
-	tests := []struct {
-		name       string
-		wantConfig *Config
-		wantError  bool
-	}{
-		{"nonExistentBootstrapFile", nil, true},
-		{"empty", nil, true},
-		{"badJSON", nil, true},
-		{"emptyNodeProto", &Config{
-			BalancerName: "trafficdirector.googleapis.com:443",
-			NodeProto: &corepb.Node{
-				BuildVersion:         gRPCVersion,
-				UserAgentName:        gRPCUserAgentName,
-				UserAgentVersionType: &corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-				ClientFeatures:       []string{clientFeatureNoOverprovisioning},
-			},
-		}, false},
-		{"noBalancerName", nil, true},
-		{"emptyXdsServer", nil, true},
-		{"unknownTopLevelFieldInFile", nilCredsConfig, false},
-		{"unknownFieldInNodeProto", nilCredsConfig, false},
-		{"unknownFieldInXdsServer", nilCredsConfig, false},
-		{"emptyChannelCreds", nilCredsConfig, false},
-		{"nonGoogleDefaultCreds", nilCredsConfig, false},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if err := os.Setenv(fileEnv, test.name); err != nil {
-				t.Fatalf("os.Setenv(%s, %s) failed with error: %v", fileEnv, test.name, err)
-			}
-			config, err := NewConfig()
-			if err != nil {
-				if !test.wantError {
-					t.Fatalf("unexpected error %v", err)
-				}
-				return
-			}
-			if test.wantError {
-				t.Fatalf("wantError: %v, got error %v", test.wantError, err)
-			}
-			if config.BalancerName != test.wantConfig.BalancerName {
-				t.Errorf("config.BalancerName is %s, want %s", config.BalancerName, test.wantConfig.BalancerName)
-			}
-			if !proto.Equal(config.NodeProto, test.wantConfig.NodeProto) {
-				t.Errorf("config.NodeProto is %#v, want %#v", config.NodeProto, test.wantConfig.NodeProto)
-			}
-			if (config.Creds != nil) != (test.wantConfig.Creds != nil) {
-				t.Errorf("config.Creds is %#v, want %#v", config.Creds, test.wantConfig.Creds)
-			}
-		})
-	}
-}
-
-// TestNewConfigWithGoogleDefault is the same as TestNewConfig, but the configs
-// sets creds to google_default.
-//
-// It's a separate test because google_default creds uses compute/metadata
-// package, which causes a leaked goroutine. This test doesn't have goroutine
-// leak check.
-//
-// TODO: once the leak is fixed, this can be merged back to TestNewConfig.
-// https://github.com/googleapis/google-cloud-go/issues/2417
-func TestNewConfigWithGoogleDefault(t *testing.T) {
-	bootstrapFileMap := map[string]string{
 		"multipleChannelCreds": `
 		{
 			"node": {
@@ -310,6 +231,25 @@ func TestNewConfigWithGoogleDefault(t *testing.T) {
 		wantConfig *Config
 		wantError  bool
 	}{
+		{"nonExistentBootstrapFile", nil, true},
+		{"empty", nil, true},
+		{"badJSON", nil, true},
+		{"emptyNodeProto", &Config{
+			BalancerName: "trafficdirector.googleapis.com:443",
+			NodeProto: &corepb.Node{
+				BuildVersion:         gRPCVersion,
+				UserAgentName:        gRPCUserAgentName,
+				UserAgentVersionType: &corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+				ClientFeatures:       []string{clientFeatureNoOverprovisioning},
+			},
+		}, false},
+		{"noBalancerName", nil, true},
+		{"emptyXdsServer", nil, true},
+		{"unknownTopLevelFieldInFile", nilCredsConfig, false},
+		{"unknownFieldInNodeProto", nilCredsConfig, false},
+		{"unknownFieldInXdsServer", nilCredsConfig, false},
+		{"emptyChannelCreds", nilCredsConfig, false},
+		{"nonGoogleDefaultCreds", nilCredsConfig, false},
 		{"multipleChannelCreds", nonNilCredsConfig, false},
 		{"goodBootstrap", nonNilCredsConfig, false},
 		{"multipleXDSServers", nonNilCredsConfig, false},
