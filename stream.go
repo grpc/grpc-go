@@ -460,12 +460,6 @@ func (cs *clientStream) commitAttempt() {
 // shouldRetry returns nil if the RPC should be retried; otherwise it returns
 // the error that should be returned by the operation.
 func (cs *clientStream) shouldRetry(err error) error {
-	if cs.attempt.s == nil && !cs.callInfo.failFast {
-		// In the event of any error from NewStream (attempt.s == nil), we
-		// never attempted to write anything to the wire, so we can retry
-		// indefinitely for non-fail-fast RPCs.
-		return nil
-	}
 	if cs.finished || cs.committed {
 		// RPC is finished or committed; cannot retry.
 		return err
@@ -473,13 +467,11 @@ func (cs *clientStream) shouldRetry(err error) error {
 	// Wait for the trailers.
 	if cs.attempt.s != nil {
 		<-cs.attempt.s.Done()
+		if cs.firstAttempt && cs.attempt.s.Unprocessed() {
+			// First attempt, stream unprocessed: transparently retry.
+			return nil
+		}
 	}
-	if cs.firstAttempt && (cs.attempt.s == nil || cs.attempt.s.Unprocessed()) {
-		// First attempt, stream unprocessed: transparently retry.
-		cs.firstAttempt = false
-		return nil
-	}
-	cs.firstAttempt = false
 	if cs.cc.dopts.disableRetry {
 		return err
 	}
@@ -565,6 +557,7 @@ func (cs *clientStream) retryLocked(lastErr error) error {
 			cs.commitAttemptLocked()
 			return err
 		}
+		cs.firstAttempt = false
 		if err := cs.newAttemptLocked(nil, nil); err != nil {
 			return err
 		}
