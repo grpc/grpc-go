@@ -800,8 +800,11 @@ func (cs *clientStream) finish(err error) {
 	cs.commitAttemptLocked()
 	if cs.attempt != nil {
 		cs.attempt.finish(err)
-		for _, o := range cs.opts {
-			o.after(cs.callInfo, cs.attempt)
+		// after functions all rely upon having a stream.
+		if cs.attempt.s != nil {
+			for _, o := range cs.opts {
+				o.after(cs.callInfo, cs.attempt)
+			}
 		}
 	}
 	cs.mu.Unlock()
