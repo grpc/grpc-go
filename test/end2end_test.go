@@ -7147,25 +7147,42 @@ func (s) TestCanceledRPCCallOptionRace(t *testing.T) {
 	}
 	defer ss.Stop()
 
+	const count = 1000
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	var p peer.Peer
-	stream, err := ss.client.FullDuplexCall(ctx, grpc.Peer(&p))
-	if err != nil {
-		t.Fatalf("_.FullDuplexCall(_) = _, %v", err)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	wg.Add(count)
+	for i := 0; i < count; i++ {
+		go func() {
+			defer wg.Done()
+			var p peer.Peer
+			ctx, cancel := context.WithCancel(ctx)
+			stream, err := ss.client.FullDuplexCall(ctx, grpc.Peer(&p))
+			if err != nil {
+				t.Errorf("_.FullDuplexCall(_) = _, %v", err)
+				return
+			}
+			if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+				t.Errorf("_ has error %v while sending", err)
+				return
+			}
+			if _, err := stream.Recv(); err != nil {
+				t.Errorf("%v.Recv() = %v", stream, err)
+				return
+			}
+			cancel()
+			if _, err := stream.Recv(); status.Code(err) != codes.Canceled {
+				t.Errorf("%v compleled with error %v, want %s", stream, err, codes.Canceled)
+				return
+			}
+			// If recv returns before call options are executed, peer.Addr is not set,
+			// fail the test.
+			if p.Addr == nil {
+				t.Errorf("peer.Addr is nil, want non-nil")
+				return
+			}
+		}()
 	}
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
-		t.Fatalf("_ has error %v while sending", err)
-	}
-	if _, err := stream.Recv(); err != nil {
-		t.Fatalf("%v.Recv() = %v", stream, err)
-	}
-	cancel()
-	if _, err := stream.Recv(); status.Code(err) != codes.Canceled {
-		t.Fatalf("%v compleled with error %v, want %s", stream, err, codes.Canceled)
-	}
-	// If recv returns before call options are executed, peer.Addr is not set,
-	// fail the test.
-	if p.Addr == nil {
-		t.Fatalf("peer.Addr is nil, want non-nil")
-	}
+	wg.Wait()
 }
