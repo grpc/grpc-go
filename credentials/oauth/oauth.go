@@ -187,7 +187,7 @@ func NewServiceAccountFromFile(keyFile string, scope ...string) (credentials.Per
 // }
 //
 
-// NewApplicationDefaultWithScope returns "Application Default Credentials". For more
+// NewApplicationDefault returns "Application Default Credentials". For more
 // detail, see https://developers.google.com/accounts/docs/application-default-credentials.
 func NewApplicationDefault(ctx context.Context, scope ...string) (credentials.PerRPCCredentials, error) {
 	creds, err := google.FindDefaultCredentials(ctx, scope...)
