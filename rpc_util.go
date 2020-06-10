@@ -205,9 +205,7 @@ type HeaderCallOption struct {
 
 func (o HeaderCallOption) before(c *callInfo) error { return nil }
 func (o HeaderCallOption) after(c *callInfo, attempt *csAttempt) {
-	if attempt != nil {
-		*o.HeaderAddr, _ = attempt.s.Header()
-	}
+	*o.HeaderAddr, _ = attempt.s.Header()
 }
 
 // Trailer returns a CallOptions that retrieves the trailer metadata
@@ -225,9 +223,7 @@ type TrailerCallOption struct {
 
 func (o TrailerCallOption) before(c *callInfo) error { return nil }
 func (o TrailerCallOption) after(c *callInfo, attempt *csAttempt) {
-	if attempt != nil {
-		*o.TrailerAddr = attempt.s.Trailer()
-	}
+	*o.TrailerAddr = attempt.s.Trailer()
 }
 
 // Peer returns a CallOption that retrieves peer information for a unary RPC.
@@ -245,10 +241,8 @@ type PeerCallOption struct {
 
 func (o PeerCallOption) before(c *callInfo) error { return nil }
 func (o PeerCallOption) after(c *callInfo, attempt *csAttempt) {
-	if attempt != nil {
-		if x, ok := peer.FromContext(attempt.s.Context()); ok {
-			*o.PeerAddr = *x
-		}
+	if x, ok := peer.FromContext(attempt.s.Context()); ok {
+		*o.PeerAddr = *x
 	}
 }
 
