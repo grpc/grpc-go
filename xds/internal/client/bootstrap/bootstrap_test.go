@@ -56,6 +56,9 @@ var (
 	}
 )
 
+// TODO: enable leak check for this package when
+// https://github.com/googleapis/google-cloud-go/issues/2417 is fixed.
+
 // TestNewConfig exercises the functionality in NewConfig with different
 // bootstrap file contents. It overrides the fileReadFunc by returning
 // bootstrap file contents defined in this test, instead of reading from a
