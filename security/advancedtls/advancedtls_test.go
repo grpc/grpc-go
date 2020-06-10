@@ -136,20 +136,6 @@ func TestClientServerHandshake(t *testing.T) {
 			serverCert:       []tls.Certificate{serverPeerCert},
 			serverVType:      CertAndHostVerification,
 		},
-		// Client: nil setting
-		// Server: only set serverCert with mutual TLS on
-		// Expected Behavior: server side failure and client handshake failure
-		// Reason: We will use the system default certs, which doesn't trust server's identity,
-		// and hence causing the handshake failure
-		{
-			desc:                       "Client uses default RootCAs; server uses default ClientCAs",
-			clientVType:                CertVerification,
-			clientExpectHandshakeError: true,
-			serverMutualTLS:            true,
-			serverCert:                 []tls.Certificate{serverPeerCert},
-			serverVType:                CertAndHostVerification,
-			serverExpectError:          true,
-		},
 		// Client: only set clientRoot
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: server side failure and client handshake failure
@@ -426,11 +412,6 @@ func TestClientServerHandshake(t *testing.T) {
 				VerifyPeer:        test.serverVerifyFunc,
 				VType:             test.serverVType,
 			}
-			servertConfig, _ := serverOptions.config()
-			if serverOptions.VType < SkipVerification && serverOptions.RootCACerts == nil &&
-				serverOptions.GetRootCAs == nil && serverOptions.RequireClientCert && servertConfig.ClientCAs == nil {
-				t.Fatalf("Failed to assign default certificate on the server side.")
-			}
 			go func(done chan credentials.AuthInfo, lis net.Listener, serverOptions *ServerOptions) {
 				serverRawConn, err := lis.Accept()
 				if err != nil {
@@ -468,11 +449,6 @@ func TestClientServerHandshake(t *testing.T) {
 					GetRootCAs:  test.clientGetRoot,
 				},
 				VType: test.clientVType,
-			}
-			clientConfig, _ := clientOptions.config()
-			if clientOptions.VType < SkipVerification && clientOptions.RootCACerts == nil &&
-				clientOptions.GetRootCAs == nil && clientConfig.RootCAs == nil {
-				t.Fatalf("Failed to assign default certificate on the client side.")
 			}
 			clientTLS, newClientErr := NewClientCreds(clientOptions)
 			if newClientErr != nil && test.clientExpectCreateError {
@@ -645,5 +621,57 @@ func TestWrapSyscallConn(t *testing.T) {
 	if _, ok := wrapConn.(syscall.Conn); !ok {
 		t.Errorf("returned conn (type %T) doesn't implement syscall.Conn, want implement",
 			wrapConn)
+	}
+}
+
+func TestSystemRootCertificates(t *testing.T) {
+	serverPeerCert, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
+		testdata.Path("server_key_1.pem"))
+	if err != nil {
+		t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
+	}
+	tests := []struct {
+		desc            string
+		clientVType     VerificationType
+		serverMutualTLS bool
+		serverCert      []tls.Certificate
+		serverVType     VerificationType
+	}{
+		{
+			desc:            "Client uses default RootCAs; server uses default ClientCAs",
+			clientVType:     CertVerification,
+			serverMutualTLS: true,
+			serverCert:      []tls.Certificate{serverPeerCert},
+			serverVType:     CertAndHostVerification,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			serverOptions := &ServerOptions{
+				Certificates:      test.serverCert,
+				RequireClientCert: test.serverMutualTLS,
+				VType:             test.serverVType,
+			}
+			servertConfig, err := serverOptions.config()
+			if err != nil {
+				t.Fatalf("Server is unable to generate config file. Error: %v", err)
+			}
+			if serverOptions.VType < SkipVerification && serverOptions.RootCACerts == nil &&
+				serverOptions.GetRootCAs == nil && serverOptions.RequireClientCert && servertConfig.ClientCAs == nil {
+				t.Fatalf("Failed to assign default certificate on the server side.")
+			}
+			clientOptions := &ClientOptions{
+				VType: test.clientVType,
+			}
+			clientConfig, err := clientOptions.config()
+			if err != nil {
+				t.Fatalf("Client is unable to generate config file. Error: %v", err)
+			}
+			if clientOptions.VType < SkipVerification && clientOptions.RootCACerts == nil &&
+				clientOptions.GetRootCAs == nil && clientConfig.RootCAs == nil {
+				t.Fatalf("Failed to assign default certificate on the client side.")
+			}
+		})
 	}
 }
