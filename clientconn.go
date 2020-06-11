@@ -403,7 +403,7 @@ func getChainStreamer(interceptors []StreamClientInterceptor, curr int, finalStr
 // connectivityStateManager keeps the connectivity.State of ClientConn.
 // This struct will eventually be exported so the balancers can access it.
 type connectivityStateManager struct {
-	mu         sync.Mutex
+	mu         sync.RWMutex
 	state      connectivity.State
 	notifyChan chan struct{}
 	channelzID int64
@@ -431,8 +431,8 @@ func (csm *connectivityStateManager) updateState(state connectivity.State) {
 }
 
 func (csm *connectivityStateManager) getState() connectivity.State {
-	csm.mu.Lock()
-	defer csm.mu.Unlock()
+	csm.mu.RLock()
+	defer csm.mu.RUnlock()
 	return csm.state
 }
 
