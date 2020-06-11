@@ -60,7 +60,7 @@ func (s) TestDistributor(t *testing.T) {
 		// material has been set on the distributor as yet.
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout/2)
 		defer cancel()
-		if _, err := dist.KeyMaterial(ctx, KeyMaterialOptions{}); err != context.DeadlineExceeded {
+		if _, err := dist.KeyMaterial(ctx); err != context.DeadlineExceeded {
 			errCh <- err
 			return
 		}
@@ -70,7 +70,7 @@ func (s) TestDistributor(t *testing.T) {
 		// the local certs and the root certs.
 		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
-		gotKM, err := dist.KeyMaterial(ctx, KeyMaterialOptions{})
+		gotKM, err := dist.KeyMaterial(ctx)
 		if err != nil {
 			errCh <- err
 			return
@@ -85,7 +85,7 @@ func (s) TestDistributor(t *testing.T) {
 		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
 		for {
-			gotKM, err := dist.KeyMaterial(ctx, KeyMaterialOptions{})
+			gotKM, err := dist.KeyMaterial(ctx)
 			if err != nil {
 				errCh <- err
 				return
@@ -101,7 +101,7 @@ func (s) TestDistributor(t *testing.T) {
 		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
 		for {
-			gotKM, err := dist.KeyMaterial(ctx, KeyMaterialOptions{})
+			gotKM, err := dist.KeyMaterial(ctx)
 			if gotKM == nil && err == errProviderTestInternal {
 				break
 			}
@@ -119,7 +119,7 @@ func (s) TestDistributor(t *testing.T) {
 		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
 		for {
-			if _, err := dist.KeyMaterial(ctx, KeyMaterialOptions{}); err == errProviderClosed {
+			if _, err := dist.KeyMaterial(ctx); err == errProviderClosed {
 				break
 			}
 			time.Sleep(100 * time.Millisecond)

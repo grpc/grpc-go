@@ -143,7 +143,7 @@ func loadKeyMaterials() (*KeyMaterial, error) {
 func makeProvider(t *testing.T, name, config string) (Provider, *fakeProvider) {
 	t.Helper()
 
-	prov, err := GetStore().GetProvider(name, config)
+	prov, err := GetProvider(name, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func (s) TestStoreWithSingleProvider(t *testing.T) {
 	// above.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	gotKM, err := prov.KeyMaterial(ctx, KeyMaterialOptions{})
+	gotKM, err := prov.KeyMaterial(ctx)
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
@@ -189,7 +189,7 @@ func (s) TestStoreWithSingleProvider(t *testing.T) {
 	// Close the provider and retry the KeyMaterial() call, and expect it to
 	// fail with a known error.
 	prov.Close()
-	if _, err := prov.KeyMaterial(ctx, KeyMaterialOptions{}); err != errProviderClosed {
+	if _, err := prov.KeyMaterial(ctx); err != errProviderClosed {
 		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, errProviderClosed)
 	}
 }
@@ -212,7 +212,7 @@ func (s) TestStoreWithSingleProviderWithSharing(t *testing.T) {
 	// pushed above.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	gotKM, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{})
+	gotKM, err := prov2.KeyMaterial(ctx)
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
@@ -223,12 +223,12 @@ func (s) TestStoreWithSingleProviderWithSharing(t *testing.T) {
 	// Close the provider1 and retry the KeyMaterial() call on prov2, and expect
 	// it to succeed.
 	prov1.Close()
-	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != nil {
+	if _, err := prov2.KeyMaterial(ctx); err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
 
 	prov2.Close()
-	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != errProviderClosed {
+	if _, err := prov2.KeyMaterial(ctx); err != errProviderClosed {
 		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, errProviderClosed)
 	}
 }
@@ -253,7 +253,7 @@ func (s) TestStoreWithSingleProviderWithoutSharing(t *testing.T) {
 	// pushed above.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	gotKM, err := prov1.KeyMaterial(ctx, KeyMaterialOptions{})
+	gotKM, err := prov1.KeyMaterial(ctx)
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
@@ -263,7 +263,7 @@ func (s) TestStoreWithSingleProviderWithoutSharing(t *testing.T) {
 
 	// Get key materials from the fake provider2 and compare it to the ones we
 	// pushed above.
-	gotKM, err = prov2.KeyMaterial(ctx, KeyMaterialOptions{})
+	gotKM, err = prov2.KeyMaterial(ctx)
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
@@ -280,7 +280,7 @@ func (s) TestStoreWithSingleProviderWithoutSharing(t *testing.T) {
 	newKM.Roots = nil
 	fp1.kmCh <- newKM
 
-	gotKM, err = prov2.KeyMaterial(ctx, KeyMaterialOptions{})
+	gotKM, err = prov2.KeyMaterial(ctx)
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
@@ -291,12 +291,12 @@ func (s) TestStoreWithSingleProviderWithoutSharing(t *testing.T) {
 	// Close the provider1 and retry the KeyMaterial() call on prov2, and expect
 	// it to succeed.
 	prov1.Close()
-	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != nil {
+	if _, err := prov2.KeyMaterial(ctx); err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
 
 	prov2.Close()
-	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != errProviderClosed {
+	if _, err := prov2.KeyMaterial(ctx); err != errProviderClosed {
 		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, errProviderClosed)
 	}
 }
@@ -319,7 +319,7 @@ func (s) TestStoreWithMultipleProviders(t *testing.T) {
 	// pushed above.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	gotKM, err := prov1.KeyMaterial(ctx, KeyMaterialOptions{})
+	gotKM, err := prov1.KeyMaterial(ctx)
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
@@ -329,7 +329,7 @@ func (s) TestStoreWithMultipleProviders(t *testing.T) {
 
 	// Get key materials from the fake provider2 and compare it to the ones we
 	// pushed above.
-	gotKM, err = prov2.KeyMaterial(ctx, KeyMaterialOptions{})
+	gotKM, err = prov2.KeyMaterial(ctx)
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
@@ -340,12 +340,12 @@ func (s) TestStoreWithMultipleProviders(t *testing.T) {
 	// Close the provider1 and retry the KeyMaterial() call on prov2, and expect
 	// it to succeed.
 	prov1.Close()
-	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != nil {
+	if _, err := prov2.KeyMaterial(ctx); err != nil {
 		t.Fatalf("provider.KeyMaterial() = %v", err)
 	}
 
 	prov2.Close()
-	if _, err := prov2.KeyMaterial(ctx, KeyMaterialOptions{}); err != errProviderClosed {
+	if _, err := prov2.KeyMaterial(ctx); err != errProviderClosed {
 		t.Fatalf("provider.KeyMaterial() = %v, wantErr: %v", err, errProviderClosed)
 	}
 }

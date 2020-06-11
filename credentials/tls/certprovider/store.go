@@ -23,8 +23,8 @@ import (
 	"sync"
 )
 
-// store is the global singleton certificate provider store.
-var store = &Store{
+// provStore is the global singleton certificate provider store.
+var provStore = &store{
 	providers: make(map[storeKey]*wrappedProvider),
 }
 
@@ -48,37 +48,28 @@ type wrappedProvider struct {
 	// A reference to the key and store are also kept here to override the
 	// Close method on the provider.
 	storeKey storeKey
-	store    *Store
+	store    *store
 }
 
-// Store is a collection of provider instances, safe for concurrent access.
-//
-// Users should not create instances of this type directly, they should use
-// GetStore() instead.
-type Store struct {
+// store is a collection of provider instances, safe for concurrent access.
+type store struct {
 	mu        sync.Mutex
 	providers map[storeKey]*wrappedProvider
 }
 
-// GetStore returns a global singleton store of provider instances.
-func GetStore() *Store {
-	return store
-}
-
 // GetProvider returns a provider instance corresponding to name and config.
-// name is the registered name of the provider instance while config is a
-// provider specific configuration blob to configure a provider instance.
-// Implementations of the Provider interface should clearly document the type of
-// configuration accepted by them.
+// name is the registered name of the provider and config is the
+// provider-specific configuration. Implementations of the Builder interface
+// should clearly document the type of configuration accepted by them.
 //
 // If a provider exists for the (name+config) combination, its reference count
 // is incremented before returning. If no provider exists for the (name+config)
 // combination, a new one is created using the registered builder. If no
-// registered builder is found, or the provider configuration blob is rejected
-// by it, a non-nil error is returned.
-func (ps *Store) GetProvider(name string, config interface{}) (Provider, error) {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
+// registered builder is found, or the provider configuration is rejected by it,
+// a non-nil error is returned.
+func GetProvider(name string, config interface{}) (Provider, error) {
+	provStore.mu.Lock()
+	defer provStore.mu.Unlock()
 
 	builder := getBuilder(name)
 	if builder == nil {
@@ -93,7 +84,7 @@ func (ps *Store) GetProvider(name string, config interface{}) (Provider, error) 
 		name:   name,
 		config: string(stableConfig.Canonical()),
 	}
-	if wp, ok := ps.providers[sk]; ok {
+	if wp, ok := provStore.providers[sk]; ok {
 		wp.refCount++
 		return wp, nil
 	}
@@ -106,9 +97,9 @@ func (ps *Store) GetProvider(name string, config interface{}) (Provider, error) 
 		Provider: provider,
 		refCount: 1,
 		storeKey: sk,
-		store:    ps,
+		store:    provStore,
 	}
-	ps.providers[sk] = wp
+	provStore.providers[sk] = wp
 	return wp, nil
 }
 

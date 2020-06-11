@@ -61,9 +61,8 @@ func NewDistributor() *Distributor {
 //
 // A non-nil err value indicates the error that the provider implementation ran
 // into when trying to fetch key material, and makes it possible to surface the
-// error to the user. A non-nil error value passed here causes subsequent
-// invocations of the distributor's KeyMaterial() method to return nil key
-// material.
+// error to the user. A non-nil error value passed here causes distributor's
+// KeyMaterial() method to return nil key material.
 func (d *Distributor) Set(km *KeyMaterial, err error) {
 	d.mu.Lock()
 	d.km = km
@@ -77,10 +76,9 @@ func (d *Distributor) Set(km *KeyMaterial, err error) {
 }
 
 // KeyMaterial returns the most recent key material provided to the distributor.
-// If no key material was provided to the distributor at the time of this call,
-// it will block until the deadline on the context expires or fresh key material
-// arrives.
-func (d *Distributor) KeyMaterial(ctx context.Context, opts KeyMaterialOptions) (*KeyMaterial, error) {
+// If no key material was provided at the time of this call, it will block until
+// the deadline on the context expires or fresh key material arrives.
+func (d *Distributor) KeyMaterial(ctx context.Context) (*KeyMaterial, error) {
 	if d.closed.HasFired() {
 		return nil, errProviderClosed
 	}

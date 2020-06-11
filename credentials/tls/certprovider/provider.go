@@ -32,16 +32,17 @@ import (
 )
 
 var (
-	// errProviderClosed may be returned from a call to KeyMaterial() when the
-	// underlying provider instance is closed.
+	// errProviderClosed is returned by Distributor.KeyMaterial when it is
+	// closed.
 	errProviderClosed = errors.New("provider instance is closed")
 
 	// m is a map from name to provider builder.
 	m = make(map[string]Builder)
 )
 
-// Register registers the provider builder, whose name as returned by its
-// Name() method will be used as the name registered with this builder.
+// Register registers the provider builder, whose name as returned by its Name()
+// method will be used as the name registered with this builder. Registered
+// Builders are used by the Store to create Providers.
 func Register(b Builder) {
 	m[b.Name()] = b
 }
@@ -88,17 +89,11 @@ type StableConfig interface {
 type Provider interface {
 	// KeyMaterial returns the key material sourced by the provider.
 	// Callers are expected to use the returned value as read-only.
-	//
-	// Implementations must honor the deadline specified in ctx.
-	KeyMaterial(ctx context.Context, opts KeyMaterialOptions) (*KeyMaterial, error)
+	KeyMaterial(ctx context.Context) (*KeyMaterial, error)
 
 	// Close cleans up resources allocated by the provider.
 	Close()
 }
-
-// KeyMaterialOptions contains additional parameters to configure the Fetch
-// call. It is empty for now, and can be extended in the future.
-type KeyMaterialOptions struct{}
 
 // KeyMaterial wraps the certificates and keys returned by a provider instance.
 type KeyMaterial struct {
