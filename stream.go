@@ -277,7 +277,6 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	cs.binlog = binarylog.GetMethodLogger(method)
 
-	cs.callInfo.stream = cs
 	// Only this initial attempt has stats/tracing.
 	// TODO(dfawley): move to newAttempt when per-attempt stats are implemented.
 	if err := cs.newAttemptLocked(sh, trInfo); err != nil {
@@ -799,6 +798,15 @@ func (cs *clientStream) finish(err error) {
 	}
 	cs.finished = true
 	cs.commitAttemptLocked()
+	if cs.attempt != nil {
+		cs.attempt.finish(err)
+		// after functions all rely upon having a stream.
+		if cs.attempt.s != nil {
+			for _, o := range cs.opts {
+				o.after(cs.callInfo, cs.attempt)
+			}
+		}
+	}
 	cs.mu.Unlock()
 	// For binary logging. only log cancel in finish (could be caused by RPC ctx
 	// canceled or ClientConn closed). Trailer will be logged in RecvMsg.
@@ -818,15 +826,6 @@ func (cs *clientStream) finish(err error) {
 			cs.cc.incrCallsFailed()
 		} else {
 			cs.cc.incrCallsSucceeded()
-		}
-	}
-	if cs.attempt != nil {
-		cs.attempt.finish(err)
-		// after functions all rely upon having a stream.
-		if cs.attempt.s != nil {
-			for _, o := range cs.opts {
-				o.after(cs.callInfo)
-			}
 		}
 	}
 	cs.cancel()
@@ -1066,7 +1065,6 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 		t:        t,
 	}
 
-	as.callInfo.stream = as
 	s, err := as.t.NewStream(as.ctx, as.callHdr)
 	if err != nil {
 		err = toRPCErr(err)
