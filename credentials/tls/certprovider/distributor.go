@@ -32,13 +32,15 @@ import (
 // Provider implementations which choose to use a Distributor should do the
 // following:
 // - create a new Distributor using the NewDistributor() function.
-// - invoke the Set() method whenever they have new key material.
+// - invoke the Set() method whenever they have new key material or errors to
+//   report.
 // - delegate to the distributor when handing calls to KeyMaterial().
 // - invoke the Stop() method when they are done using the distributor.
 type Distributor struct {
 	// mu protects the underlying key material.
-	mu sync.Mutex
-	km *KeyMaterial
+	mu   sync.Mutex
+	km   *KeyMaterial
+	pErr error
 
 	ready  *grpcsync.Event
 	closed *grpcsync.Event
@@ -56,9 +58,20 @@ func NewDistributor() *Distributor {
 //
 // Provider implementations which use the distributor must not modify the
 // contents of the KeyMaterial struct pointed to by km.
-func (d *Distributor) Set(km *KeyMaterial) {
+//
+// A non-nil err value indicates the error that the provider implementation ran
+// into when trying to fetch key material, and makes it possible to surface the
+// error to the user. A non-nil error value passed here causes subsequent
+// invocations of the distributor's KeyMaterial() method to return nil key
+// material.
+func (d *Distributor) Set(km *KeyMaterial, err error) {
 	d.mu.Lock()
 	d.km = km
+	d.pErr = err
+	if err != nil {
+		// If a non-nil err is passed, we ignore the key material being passed.
+		d.km = nil
+	}
 	d.ready.Fire()
 	d.mu.Unlock()
 }
@@ -73,7 +86,7 @@ func (d *Distributor) KeyMaterial(ctx context.Context, opts KeyMaterialOptions) 
 	}
 
 	if d.ready.HasFired() {
-		return d.keyMaterial(), nil
+		return d.keyMaterial()
 	}
 
 	select {
@@ -82,14 +95,14 @@ func (d *Distributor) KeyMaterial(ctx context.Context, opts KeyMaterialOptions) 
 	case <-d.closed.Done():
 		return nil, errProviderClosed
 	case <-d.ready.Done():
-		return d.keyMaterial(), nil
+		return d.keyMaterial()
 	}
 }
 
-func (d *Distributor) keyMaterial() *KeyMaterial {
+func (d *Distributor) keyMaterial() (*KeyMaterial, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.km
+	return d.km, d.pErr
 }
 
 // Stop turns down the distributor, releases allocated resources and fails any

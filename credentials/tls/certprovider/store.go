@@ -28,19 +28,11 @@ var store = &Store{
 	providers: make(map[storeKey]*wrappedProvider),
 }
 
-// StoreKey contains data which uniquely identifies a provider instance.
-type StoreKey struct {
-	// Name is the registered name of the provider.
-	Name string
-	// Config is a provider specific configuration blob to configure a provider
-	// instance. Implementations of the Provider interface should clearly
-	// document the type of configuration accepted by them.
-	Config interface{}
-}
-
-// storeKey acts as the key to the map of providers maintained by the store. Go
-// maps need to be indexed by comparable types, so the above StoreKey struct
-// cannot be used since it contains an interface.
+// storeKey acts as the key to the map of providers maintained by the store. A
+// combination of provider name and configuration is used to uniquely identify
+// every provider instance in the store. Go maps need to be indexed by
+// comparable types, so the provider configuration is converted from
+// `interface{}` to string using the ParseConfig method while creating this key.
 type storeKey struct {
 	// name of the certificate provider.
 	name string
@@ -73,26 +65,32 @@ func GetStore() *Store {
 	return store
 }
 
-// GetProvider returns a provider instance corresponding to key. If a provider
-// exists for key, its reference count is incremented before returning. If no
-// provider exists for key, a new one is created using the registered builder.
-// If no registered builder is found, or the provider configuration blob is
-// rejected by it, a non-nil error is returned.
-func (ps *Store) GetProvider(key StoreKey) (Provider, error) {
+// GetProvider returns a provider instance corresponding to name and config.
+// name is the registered name of the provider instance while config is a
+// provider specific configuration blob to configure a provider instance.
+// Implementations of the Provider interface should clearly document the type of
+// configuration accepted by them.
+//
+// If a provider exists for the (name+config) combination, its reference count
+// is incremented before returning. If no provider exists for the (name+config)
+// combination, a new one is created using the registered builder. If no
+// registered builder is found, or the provider configuration blob is rejected
+// by it, a non-nil error is returned.
+func (ps *Store) GetProvider(name string, config interface{}) (Provider, error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
-	builder := getBuilder(key.Name)
+	builder := getBuilder(name)
 	if builder == nil {
-		return nil, fmt.Errorf("no registered builder for provider name: %s", key.Name)
+		return nil, fmt.Errorf("no registered builder for provider name: %s", name)
 	}
-	stableConfig, err := builder.ParseConfig(key.Config)
+	stableConfig, err := builder.ParseConfig(config)
 	if err != nil {
 		return nil, err
 	}
 
 	sk := storeKey{
-		name:   key.Name,
+		name:   name,
 		config: string(stableConfig.Canonical()),
 	}
 	if wp, ok := ps.providers[sk]; ok {

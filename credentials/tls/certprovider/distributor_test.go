@@ -20,12 +20,15 @@ package certprovider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
 )
+
+var errProviderTestInternal = errors.New("provider internal error")
 
 // TestDistributor invokes the different methods on the Distributor type and
 // verifies the results.
@@ -93,6 +96,24 @@ func (s) TestDistributor(t *testing.T) {
 		}
 		proceedCh <- struct{}{}
 
+		// This call to KeyMaterial() should return nil key material and a
+		// non-nil error.
+		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		for {
+			gotKM, err := dist.KeyMaterial(ctx, KeyMaterialOptions{})
+			if gotKM == nil && err == errProviderTestInternal {
+				break
+			}
+			if err != nil {
+				// If we have gotten any error other than
+				// errProviderTestInternal, we should bail out.
+				errCh <- err
+				return
+			}
+		}
+		proceedCh <- struct{}{}
+
 		// This call to KeyMaterial() should eventually return errProviderClosed
 		// error.
 		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -106,11 +127,15 @@ func (s) TestDistributor(t *testing.T) {
 	}()
 
 	waitAndDo(t, proceedCh, errCh, func() {
-		dist.Set(&wantKM1)
+		dist.Set(&wantKM1, nil)
 	})
 
 	waitAndDo(t, proceedCh, errCh, func() {
-		dist.Set(&wantKM2)
+		dist.Set(&wantKM2, nil)
+	})
+
+	waitAndDo(t, proceedCh, errCh, func() {
+		dist.Set(&wantKM2, errProviderTestInternal)
 	})
 
 	waitAndDo(t, proceedCh, errCh, func() {

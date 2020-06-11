@@ -113,7 +113,7 @@ func (p *fakeProvider) run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case km := <-p.kmCh:
-			p.Distributor.Set(km)
+			p.Distributor.Set(km, nil)
 		}
 	}
 }
@@ -143,7 +143,7 @@ func loadKeyMaterials() (*KeyMaterial, error) {
 func makeProvider(t *testing.T, name, config string) (Provider, *fakeProvider) {
 	t.Helper()
 
-	prov, err := GetStore().GetProvider(StoreKey{Name: name, Config: config})
+	prov, err := GetStore().GetProvider(name, config)
 	if err != nil {
 		t.Fatal(err)
 	}
