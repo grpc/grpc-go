@@ -74,6 +74,8 @@ func NewJWTAccessFromKey(jsonKey []byte) (credentials.PerRPCCredentials, error) 
 }
 
 func (j jwtAccess) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	// TODO: the returned TokenSource is reusable. Store it in a sync.Map, with
+	// uri as the key, to avoid recreating for every RPC.
 	ts, err := google.JWTAccessTokenSourceFromJSON(j.jsonKey, uri[0])
 	if err != nil {
 		return nil, err
@@ -177,9 +179,43 @@ func NewServiceAccountFromFile(keyFile string, scope ...string) (credentials.Per
 // NewApplicationDefault returns "Application Default Credentials". For more
 // detail, see https://developers.google.com/accounts/docs/application-default-credentials.
 func NewApplicationDefault(ctx context.Context, scope ...string) (credentials.PerRPCCredentials, error) {
-	t, err := google.DefaultTokenSource(ctx, scope...)
+	creds, err := google.FindDefaultCredentials(ctx, scope...)
 	if err != nil {
 		return nil, err
 	}
-	return TokenSource{t}, nil
+
+	// If JSON is nil, the authentication is provided by the environment and not
+	// with a credentials file, e.g. when code is running on Google Cloud
+	// Platform. Use the returned token source.
+	if creds.JSON == nil {
+		return TokenSource{creds.TokenSource}, nil
+	}
+
+	// If auth is provided by env variable or creds file, the behavior will be
+	// different based on whether scope is set. Because the returned
+	// creds.TokenSource does oauth with jwt by default, and it requires scope.
+	// We can only use it if scope is not empty, otherwise it will fail with
+	// missing scope error.
+	//
+	// If scope is set, use it, it should just work.
+	//
+	// If scope is not set, we try to use jwt directly without oauth (this only
+	// works if it's a service account).
+
+	if len(scope) != 0 {
+		return TokenSource{creds.TokenSource}, nil
+	}
+
+	// Try to convert JSON to a jwt config without setting the optional scope
+	// parameter to check if it's a service account (the function errors if it's
+	// not). This is necessary because the returned config doesn't show the type
+	// of the account.
+	if _, err := google.JWTConfigFromJSON(creds.JSON); err != nil {
+		// If this fails, it's not a service account, return the original
+		// TokenSource from above.
+		return TokenSource{creds.TokenSource}, nil
+	}
+
+	// If it's a service account, create a JWT only access with the key.
+	return NewJWTAccessFromKey(creds.JSON)
 }
