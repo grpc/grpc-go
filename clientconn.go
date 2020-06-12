@@ -871,12 +871,14 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	if cc.sc == nil {
 		return MethodConfig{}
 	}
-	m, ok := cc.sc.Methods[method]
-	if !ok {
-		i := strings.LastIndex(method, "/")
-		m = cc.sc.Methods[method[:i+1]]
+	if m, ok := cc.sc.Methods[method]; ok {
+		return m
 	}
-	return m
+	i := strings.LastIndex(method, "/")
+	if m, ok := cc.sc.Methods[method[:i+1]]; ok {
+		return m
+	}
+	return cc.sc.Methods[""]
 }
 
 func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {

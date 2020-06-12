@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -228,15 +229,24 @@ type jsonName struct {
 	Method  *string
 }
 
-func (j jsonName) generatePath() (string, bool) {
+var errIgnoreName = errors.New("ignore name")
+
+func (j jsonName) generatePath() (string, error) {
 	if j.Service == nil {
-		return "", false
+		return "", errIgnoreName
+	}
+	if *j.Service == "" {
+		// when 'service' is empty 'method' must be empty as well
+		if j.Method != nil && *j.Method != "" {
+			return "", errors.New("cannot combine empty 'service' and non-empty 'method'")
+		}
+		return "", nil
 	}
 	res := "/" + *j.Service + "/"
 	if j.Method != nil {
 		res += *j.Method
 	}
-	return res, true
+	return res, nil
 }
 
 // TODO(lyuxuan): delete this struct after cleaning up old service config implementation.
@@ -288,6 +298,8 @@ func parseServiceConfig(js string) *serviceconfig.ParseResult {
 	if rsc.MethodConfig == nil {
 		return &serviceconfig.ParseResult{Config: &sc}
 	}
+
+	paths := map[string]struct{}{}
 	for _, m := range *rsc.MethodConfig {
 		if m.Name == nil {
 			continue
@@ -320,10 +332,23 @@ func parseServiceConfig(js string) *serviceconfig.ParseResult {
 				mc.MaxRespSize = newInt(int(*m.MaxResponseMessageBytes))
 			}
 		}
-		for _, n := range *m.Name {
-			if path, valid := n.generatePath(); valid {
-				sc.Methods[path] = mc
+		for i, n := range *m.Name {
+			path, err := n.generatePath()
+			if err != nil {
+				if err == errIgnoreName {
+					continue
+				}
+				grpclog.Warningf("grpc: parseServiceConfig error unmarshaling %s due to methodConfig[%d]: %v", js, i, err)
+				return &serviceconfig.ParseResult{Err: err}
 			}
+
+			if _, ok := paths[path]; ok {
+				err = errors.New("duplicated name")
+				grpclog.Warningf("grpc: parseServiceConfig error unmarshaling %s due to methodConfig[%d]: %v", js, i, err)
+				return &serviceconfig.ParseResult{Err: err}
+			}
+			paths[path] = struct{}{}
+			sc.Methods[path] = mc
 		}
 	}
 
