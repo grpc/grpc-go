@@ -25,15 +25,25 @@ import (
 	"crypto/x509"
 	"net/url"
 	"testing"
+
+	"google.golang.org/grpc/internal/grpctest"
 )
 
-func (s) TestParseSpiffeID(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestSPIFFEIDFromState(t *testing.T) {
 	tests := []struct {
 		name string
 		urls []*url.URL
-		// If we expect ParseSpiffeID to return an error.
+		// If we expect SPIFFEIDFromState to return an error.
 		expectError bool
-		// If we expect TLSInfo.SpiffeID to be plumbed.
+		// If we expect a SPIFFE ID to be returned.
 		expectID bool
 	}{
 		{
@@ -135,14 +145,13 @@ func (s) TestParseSpiffeID(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := TLSInfo{
-				State: tls.ConnectionState{PeerCertificates: []*x509.Certificate{{URIs: tt.urls}}}}
-			err := info.ParseSpiffeID()
+			state := tls.ConnectionState{PeerCertificates: []*x509.Certificate{{URIs: tt.urls}}}
+			id, err := SPIFFEIDFromState(state)
 			if got, want := err != nil, tt.expectError; got != want {
 				t.Errorf("want expectError = %v, but got expectError = %v, with error %v", want, got, err)
 			}
-			if got, want := info.SpiffeID != nil, tt.expectID; got != want {
-				t.Errorf("want expectID = %v, but spiffe ID is %v", want, info.SpiffeID)
+			if got, want := id != nil, tt.expectID; got != want {
+				t.Errorf("want expectID = %v, but SPIFFE ID is %v", want, id)
 			}
 		})
 	}

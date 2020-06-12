@@ -21,10 +21,11 @@
 package credentials
 
 import (
-	"google.golang.org/grpc/grpclog"
+	"crypto/tls"
+	"net/url"
 )
 
-func (t *TLSInfo) ParseSpiffeID() error {
-	grpclog.Info("go version prior to 1.10 doesn't support parsing URIs in certificates. Please consider a newer version")
-	return nil
+//TODO(ZhenLian): delete this file when we remove Go 1.9 tests.
+func SPIFFEIDFromState(state tls.ConnectionState) (*url.URL, error) {
+	return nil, nil
 }

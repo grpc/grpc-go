@@ -18,52 +18,55 @@
  *
  */
 
+// Package credentials defines APIs for parsing SPIFFE ID.
+//
+// All APIs in this package are experimental.
 package credentials
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net/url"
 
 	"google.golang.org/grpc/grpclog"
 )
 
-// ParseSpiffeID parses the Spiffe ID from State and fill it into SpiffeID.
-// An error is returned only when we are sure Spiffe ID is used but the format
-// is wrong.
-// This function can only be used with go version 1.10 and onwards. When used
-// with a prior version, no error will be returned, but the field
-// TLSInfo.SpiffeID wouldn't be plumbed.
-func (t *TLSInfo) ParseSpiffeID() error {
-	if len(t.State.PeerCertificates) == 0 || len(t.State.PeerCertificates[0].URIs) == 0 {
-		return nil
+// SPIFFEIDFromState parses the SPIFFE ID from State. An error is returned only
+// when we are sure SPIFFE ID is used but the format is wrong.
+func SPIFFEIDFromState(state tls.ConnectionState) (*url.URL, error) {
+	if len(state.PeerCertificates) == 0 || len(state.PeerCertificates[0].URIs) == 0 {
+		return nil, nil
 	}
 	spiffeIDCnt := 0
 	var spiffeID url.URL
-	for _, uri := range t.State.PeerCertificates[0].URIs {
+	for _, uri := range state.PeerCertificates[0].URIs {
 		if uri == nil || uri.Scheme != "spiffe" || uri.Opaque != "" || (uri.User != nil && uri.User.Username() != "") {
 			continue
 		}
-		// From this point, we assume the uri is intended for a Spiffe ID.
+		// From this point, we assume the uri is intended for a SPIFFE ID.
 		if len(uri.Host)+len(uri.Scheme)+len(uri.RawPath)+4 > 2048 ||
 			len(uri.Host)+len(uri.Scheme)+len(uri.Path)+4 > 2048 {
-			return fmt.Errorf("invalid SPIFFE ID: total ID length larger than 2048 bytes")
+			return nil, fmt.Errorf("invalid SPIFFE ID: total ID length larger than 2048 bytes")
 		}
 		if len(uri.Host) == 0 || len(uri.RawPath) == 0 || len(uri.Path) == 0 {
-			return fmt.Errorf("invalid SPIFFE ID: domain or workload ID is empty")
+			return nil, fmt.Errorf("invalid SPIFFE ID: domain or workload ID is empty")
 		}
 		if len(uri.Host) > 255 {
-			return fmt.Errorf("invalid SPIFFE ID: domain length larger than 255 characters")
+			return nil, fmt.Errorf("invalid SPIFFE ID: domain length larger than 255 characters")
 		}
-		// We use a default deep copy since we know the User field of a SPIFFE ID is empty.
+		// We use a default deep copy since we know the User field of a SPIFFE ID
+		// is empty.
 		spiffeID = *uri
 		spiffeIDCnt++
 	}
 	if spiffeIDCnt == 1 {
-		t.SpiffeID = &spiffeID
+		return &spiffeID, nil
 	} else if spiffeIDCnt > 1 {
-		// A standard SPIFFE ID should be unique. If there are more, we log this
-		// mis-behavior and not plumb any of them.
+		// A standard SPIFFE ID should be unique. If there are more than one ID, we
+		// should log this error but shouldn't halt the application.
 		grpclog.Warning("invalid SPIFFE ID: multiple SPIFFE IDs")
+		return nil, nil
 	}
-	return nil
+	// SPIFFE ID is not used.
+	return nil, nil
 }

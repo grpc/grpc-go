@@ -25,16 +25,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"net/url"
 
 	"google.golang.org/grpc/credentials/internal"
+	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
 // TLSInfo contains the auth information for a TLS authenticated connection.
 // It implements the AuthInfo interface.
 type TLSInfo struct {
-	State    tls.ConnectionState
-	SpiffeID *url.URL
+	State tls.ConnectionState
 	CommonAuthInfo
 }
 
@@ -102,8 +101,12 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 			SecurityLevel: PrivacyAndIntegrity,
 		},
 	}
-	if err := tlsInfo.ParseSpiffeID(); err != nil {
+	id, err := credinternal.SPIFFEIDFromState(conn.ConnectionState())
+	if err != nil {
 		return nil, nil, err
+	}
+	if id != nil {
+		tlsInfo.SPIFFEID = id
 	}
 	return internal.WrapSyscallConn(rawConn, conn), tlsInfo, nil
 }
@@ -120,8 +123,12 @@ func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error)
 			SecurityLevel: PrivacyAndIntegrity,
 		},
 	}
-	if err := tlsInfo.ParseSpiffeID(); err != nil {
+	id, err := credinternal.SPIFFEIDFromState(conn.ConnectionState())
+	if err != nil {
 		return nil, nil, err
+	}
+	if id != nil {
+		tlsInfo.SPIFFEID = id
 	}
 	return internal.WrapSyscallConn(rawConn, conn), tlsInfo, nil
 }
