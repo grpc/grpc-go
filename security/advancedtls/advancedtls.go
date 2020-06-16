@@ -25,6 +25,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"syscall"
@@ -477,18 +478,22 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 	return cfg.Clone()
 }
 
+var errNoCertificates = errors.New("No certificates configured")
+
 // GetCertificateWithSNI returns the certificate that matches the SNI field
 // based on the given ClientHelloInfo. It should only be called when the
 // client supplies SNI information.
 func (c *advancedTLSCreds) GetCertificateWithSNI(clientHello tls.ClientHelloInfo) ([]tls.Certificate, error) {
 	if len(c.config.Certificates) == 0 {
-		return nil, fmt.Errorf("No certificates")
+		return nil, errNoCertificates
 	}
 
 	if len(c.config.Certificates) == 1 || !c.doesSNI {
+		// Return a list of certificates
 		return c.config.Certificates, nil
 	}
 
+	// Choose the best certificate if users set doesSNI
 	for _, cert := range c.config.Certificates {
 		if err := clientHello.SupportsCertificate(&cert); err == nil {
 			return []tls.Certificate{cert}, nil
