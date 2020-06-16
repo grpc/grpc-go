@@ -624,11 +624,11 @@ func TestWrapSyscallConn(t *testing.T) {
 	}
 }
 
-func TestSystemRootCertificates(t *testing.T) {
+func TestOptionsConfig(t *testing.T) {
 	serverPeerCert, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
 		testdata.Path("server_key_1.pem"))
 	if err != nil {
-		t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
+		t.Fatalf("Server is unable to parse peer certificates, error: %v", err)
 	}
 	tests := []struct {
 		desc            string
@@ -638,7 +638,7 @@ func TestSystemRootCertificates(t *testing.T) {
 		serverVType     VerificationType
 	}{
 		{
-			desc:            "Client uses default RootCAs; server uses default ClientCAs",
+			desc:            "Client uses system-provided RootCAs; server uses system-provided ClientCAs",
 			clientVType:     CertVerification,
 			serverMutualTLS: true,
 			serverCert:      []tls.Certificate{serverPeerCert},
@@ -653,24 +653,28 @@ func TestSystemRootCertificates(t *testing.T) {
 				RequireClientCert: test.serverMutualTLS,
 				VType:             test.serverVType,
 			}
-			servertConfig, err := serverOptions.config()
+			serverConfig, err := serverOptions.config()
 			if err != nil {
-				t.Fatalf("Server is unable to generate config file. Error: %v", err)
+				t.Fatalf("Unable to generate serverConfig, error: %v", err)
 			}
+			// Verify that the system-provided certificates would be used
+			// when no verification method was set in serverOptions.
 			if serverOptions.VType < SkipVerification && serverOptions.RootCACerts == nil &&
-				serverOptions.GetRootCAs == nil && serverOptions.RequireClientCert && servertConfig.ClientCAs == nil {
-				t.Fatalf("Failed to assign default certificate on the server side.")
+				serverOptions.GetRootCAs == nil && serverOptions.RequireClientCert && serverConfig.ClientCAs == nil {
+				t.Fatalf("Failed to assign system-provided certificates on the server side.")
 			}
 			clientOptions := &ClientOptions{
 				VType: test.clientVType,
 			}
 			clientConfig, err := clientOptions.config()
 			if err != nil {
-				t.Fatalf("Client is unable to generate config file. Error: %v", err)
+				t.Fatalf("Unable to generate clientConfig, error: %v", err)
 			}
+			// Verify that the system-provided certificates would be used
+			// when no verification method was set in clientOptions.
 			if clientOptions.VType < SkipVerification && clientOptions.RootCACerts == nil &&
 				clientOptions.GetRootCAs == nil && clientConfig.RootCAs == nil {
-				t.Fatalf("Failed to assign default certificate on the client side.")
+				t.Fatalf("Failed to assign system-provided certificates on the client side.")
 			}
 		})
 	}
