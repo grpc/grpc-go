@@ -481,8 +481,8 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 var errNoCertificates = errors.New("No certificates configured")
 
 // GetCertificateWithSNI returns the certificate that matches the SNI field
-// based on the given ClientHelloInfo. It should only be called when the
-// client supplies SNI information.
+// based on the given ClientHelloInfo if doesSNI is set to True
+// Otherwise it returns the list of Certificates
 func (c *advancedTLSCreds) GetCertificateWithSNI(clientHello tls.ClientHelloInfo) ([]tls.Certificate, error) {
 	if len(c.config.Certificates) == 0 {
 		return nil, errNoCertificates
