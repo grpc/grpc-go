@@ -48,7 +48,7 @@ func newAuthInfo(result *altspb.HandshakerResult) *altsAuthInfo {
 			PeerServiceAccount:  result.GetPeerIdentity().GetServiceAccount(),
 			LocalServiceAccount: result.GetLocalIdentity().GetServiceAccount(),
 			PeerRpcVersions:     result.GetPeerRpcVersions(),
-			PeerAttributes:		 result.GetPeerIdentity().GetAttributes(),
+			PeerAttributes:      result.GetPeerIdentity().GetAttributes(),
 		},
 		CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity},
 	}

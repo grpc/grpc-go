@@ -35,17 +35,19 @@ func Test(t *testing.T) {
 }
 
 const (
-	testAppProtocol    = "my_app"
-	testRecordProtocol = "very_secure_protocol"
-	testPeerAccount    = "peer_service_account"
-	testLocalAccount   = "local_service_account"
-	testPeerHostname   = "peer_hostname"
-	testLocalHostname  = "local_hostname"
+	testAppProtocol             = "my_app"
+	testRecordProtocol          = "very_secure_protocol"
+	testPeerAccount             = "peer_service_account"
+	testLocalAccount            = "local_service_account"
+	testPeerHostname            = "peer_hostname"
+	testLocalHostname           = "local_hostname"
+	testLocalPeerAttributeKey   = "peer"
+	testLocalPeerAttributeValue = "attributes"
 )
 
 func (s) TestALTSAuthInfo(t *testing.T) {
 	testPeerAttributes := make(map[string]string)
-	testPeerAttributes["peer"] = "attributes"
+	testPeerAttributes[testLocalPeerAttributeKey] = testLocalPeerAttributeValue
 	for _, tc := range []struct {
 		result             *altspb.HandshakerResult
 		outAppProtocol     string
@@ -149,6 +151,6 @@ func (s) TestALTSAuthInfo(t *testing.T) {
 		if got, want := authInfo.PeerAttributes(), tc.outPeerAttributes; !reflect.DeepEqual(got, want) {
 			t.Errorf("authinfo.PeerAttributes()=%v, want %v", got, want)
 		}
-		
+
 	}
 }
