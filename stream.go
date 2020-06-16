@@ -364,6 +364,11 @@ func (a *csAttempt) newStream() error {
 	cs.callHdr.PreviousAttempts = cs.numRetries
 	s, err := a.t.NewStream(cs.ctx, cs.callHdr)
 	if err != nil {
+		if _, ok := err.(transport.PerformedIOError); ok {
+			// Return without converting to an RPC error so retry code can
+			// inspect.
+			return err
+		}
 		return toRPCErr(err)
 	}
 	cs.attempt.s = s
@@ -459,6 +464,22 @@ func (cs *clientStream) commitAttempt() {
 // shouldRetry returns nil if the RPC should be retried; otherwise it returns
 // the error that should be returned by the operation.
 func (cs *clientStream) shouldRetry(err error) error {
+	unprocessed := false
+	if cs.attempt.s == nil {
+		pioErr, ok := err.(transport.PerformedIOError)
+		if ok {
+			// Unwrap error.
+			err = toRPCErr(pioErr.Err)
+		} else {
+			unprocessed = true
+		}
+		if !ok && !cs.callInfo.failFast {
+			// In the event of a non-IO operation error from NewStream, we
+			// never attempted to write anything to the wire, so we can retry
+			// indefinitely for non-fail-fast RPCs.
+			return nil
+		}
+	}
 	if cs.finished || cs.committed {
 		// RPC is finished or committed; cannot retry.
 		return err
@@ -466,10 +487,11 @@ func (cs *clientStream) shouldRetry(err error) error {
 	// Wait for the trailers.
 	if cs.attempt.s != nil {
 		<-cs.attempt.s.Done()
-		if cs.firstAttempt && cs.attempt.s.Unprocessed() {
-			// First attempt, stream unprocessed: transparently retry.
-			return nil
-		}
+		unprocessed = cs.attempt.s.Unprocessed()
+	}
+	if cs.firstAttempt && unprocessed {
+		// First attempt, stream unprocessed: transparently retry.
+		return nil
 	}
 	if cs.cc.dopts.disableRetry {
 		return err
