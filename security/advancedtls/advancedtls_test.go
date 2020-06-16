@@ -628,7 +628,7 @@ func TestOptionsConfig(t *testing.T) {
 	serverPeerCert, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
 		testdata.Path("server_key_1.pem"))
 	if err != nil {
-		t.Fatalf("server is unable to parse peer certificates, error: %v", err)
+		t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
 	}
 	tests := []struct {
 		desc            string
@@ -655,26 +655,26 @@ func TestOptionsConfig(t *testing.T) {
 			}
 			serverConfig, err := serverOptions.config()
 			if err != nil {
-				t.Fatalf("unable to generate serverConfig, error: %v", err)
+				t.Fatalf("Unable to generate serverConfig. Error: %v", err)
 			}
 			// Verify that the system-provided certificates would be used
 			// when no verification method was set in serverOptions.
 			if serverOptions.VType < SkipVerification && serverOptions.RootCACerts == nil &&
 				serverOptions.GetRootCAs == nil && serverOptions.RequireClientCert && serverConfig.ClientCAs == nil {
-				t.Fatalf("failed to assign system-provided certificates on the server side.")
+				t.Fatalf("Failed to assign system-provided certificates on the server side.")
 			}
 			clientOptions := &ClientOptions{
 				VType: test.clientVType,
 			}
 			clientConfig, err := clientOptions.config()
 			if err != nil {
-				t.Fatalf("unable to generate clientConfig, error: %v", err)
+				t.Fatalf("Unable to generate clientConfig. Error: %v", err)
 			}
 			// Verify that the system-provided certificates would be used
 			// when no verification method was set in clientOptions.
 			if clientOptions.VType < SkipVerification && clientOptions.RootCACerts == nil &&
 				clientOptions.GetRootCAs == nil && clientConfig.RootCAs == nil {
-				t.Fatalf("failed to assign system-provided certificates on the client side.")
+				t.Fatalf("Failed to assign system-provided certificates on the client side.")
 			}
 		})
 	}
