@@ -230,6 +230,7 @@ type advancedTLSCreds struct {
 	getRootCAs func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 	isClient   bool
 	vType      VerificationType
+	doesSNI    bool
 }
 
 func (c advancedTLSCreds) Info() credentials.ProtocolInfo {
@@ -474,4 +475,26 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 		return &tls.Config{}
 	}
 	return cfg.Clone()
+}
+
+// GetCertificateWithSNI returns the certificate that matches the SNI field
+// based on the given ClientHelloInfo. It should only be called when the
+// client supplies SNI information.
+func (c *advancedTLSCreds) GetCertificateWithSNI(clientHello tls.ClientHelloInfo) ([]tls.Certificate, error) {
+	if len(c.config.Certificates) == 0 {
+		return nil, fmt.Errorf("No certificates")
+	}
+
+	if len(c.config.Certificates) == 1 || !c.doesSNI {
+		return c.config.Certificates, nil
+	}
+
+	for _, cert := range c.config.Certificates {
+		if err := clientHello.SupportsCertificate(&cert); err == nil {
+			return []tls.Certificate{cert}, nil
+		}
+	}
+
+	// If nothing matches, return the first certificate.
+	return c.config.Certificates[0:1], nil
 }
