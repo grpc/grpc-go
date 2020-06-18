@@ -212,8 +212,8 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		// buildVerifyFunc.
 		clientAuth = tls.RequireAnyClientCert
 	}
-	getCertificateWithSNI := func(clientHelloInfo *tls.ClientHelloInfo) (*tls.Certificate, error) {
-		return o.GetCertificateWithSNI(clientHelloInfo)
+	getCertificateWithSNI := func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		return o.GetCertificateWithSNI(clientHello)
 	}
 	config := &tls.Config{
 		ClientAuth:     clientAuth,
