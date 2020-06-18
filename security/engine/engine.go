@@ -129,11 +129,5 @@ func (engine CelEvaluationEngine) Evaluate(args EvaluateArgs) AuthorizationDecis
 		}
 	}
 	// if no conditions matched
-	var decision Decision
-	if engine.action == ACTION_ALLOW {
-		decision = DECISION_DENY
-	} else {
-		decision = DECISION_ALLOW
-	}
-	return AuthorizationDecision{decision, "No policies matched"}
+	return AuthorizationDecision{DECISION_UNKNOWN, "No policies matched"}
 }
