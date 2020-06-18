@@ -161,11 +161,11 @@ type ServerOptions struct {
 	// The server will use Certificates every time when asked for a certificate,
 	// without performing certificate reloading.
 	Certificates []tls.Certificate
-	// If GetClientCertificate is set and Certificates is nil, the server will
+	// If GetClientCertificate is set and Certificates is nil, the client will
 	// invoke this function every time asked to present certificates to the
-	// client when a new connection is established. This is known as peer
+	// server when a new connection is established. This is known as peer
 	// certificate reloading.
-	GetCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+	GetCertificate func(tls.ClientHelloInfo) ([]tls.Certificate, error)
 	// VerifyPeer is a custom verification check after certificate signature
 	// check.
 	// If this is set, we will perform this customized check after doing the
@@ -212,10 +212,13 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		// buildVerifyFunc.
 		clientAuth = tls.RequireAnyClientCert
 	}
+	getCertificateWithSNI := func(clientHelloInfo *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		return o.GetCertificateWithSNI(clientHelloInfo)
+	}
 	config := &tls.Config{
 		ClientAuth:     clientAuth,
 		Certificates:   o.Certificates,
-		GetCertificate: o.GetCertificate,
+		GetCertificate: getCertificateWithSNI,
 	}
 	if o.RootCACerts != nil {
 		config.ClientCAs = o.RootCACerts
@@ -231,7 +234,6 @@ type advancedTLSCreds struct {
 	getRootCAs func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 	isClient   bool
 	vType      VerificationType
-	doesSNI    bool
 }
 
 func (c advancedTLSCreds) Info() credentials.ProtocolInfo {
@@ -481,25 +483,25 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 var errNoCertificates = errors.New("No certificates configured")
 
 // GetCertificateWithSNI returns the certificate that matches the SNI field
-// based on the given ClientHelloInfo if doesSNI is set to True
-// Otherwise it returns the list of Certificates
-func (c *advancedTLSCreds) GetCertificateWithSNI(clientHello tls.ClientHelloInfo) ([]tls.Certificate, error) {
-	if len(c.config.Certificates) == 0 {
+// based on the given ClientHelloInfo if GetCertificate returns a list of
+// certificates
+func (o *ServerOptions) GetCertificateWithSNI(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	certificates, err := o.GetCertificate(*clientHello)
+	if err != nil {
+		return nil, err
+	}
+	if len(certificates) == 0 {
 		return nil, errNoCertificates
 	}
-
-	if len(c.config.Certificates) == 1 || !c.doesSNI {
-		// Return a list of certificates
-		return c.config.Certificates, nil
+	// If users pass in only one certificate, return that certificate
+	if len(certificates) == 1 {
+		return &certificates[0], nil
 	}
-
-	// Choose the best certificate if users set doesSNI
-	for _, cert := range c.config.Certificates {
+	for _, cert := range certificates {
 		if err := clientHello.SupportsCertificate(&cert); err == nil {
-			return []tls.Certificate{cert}, nil
+			return &cert, nil
 		}
 	}
-
 	// If nothing matches, return the first certificate.
-	return c.config.Certificates[0:1], nil
+	return &certificates[0], nil
 }
