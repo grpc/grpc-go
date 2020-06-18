@@ -19,6 +19,8 @@
 package client
 
 import (
+	"net"
+	"strconv"
 	"time"
 
 	"google.golang.org/grpc/xds/internal"
@@ -68,6 +70,48 @@ type Locality struct {
 type EndpointsUpdate struct {
 	Drops      []OverloadDropConfig
 	Localities []Locality
+}
+
+// AddLocality adds a locality to the EndpointsUpdate.
+func (eu *EndpointsUpdate) AddLocality(subzone string, weight uint32, priority uint32, addrsWithPort []string, opts *AddLocalityOptions) {
+	var lbEndPoints []Endpoint
+	for i, a := range addrsWithPort {
+		_, portStr, err := net.SplitHostPort(a)
+		if err != nil {
+			panic("failed to split " + a)
+		}
+		_, err = strconv.Atoi(portStr)
+		if err != nil {
+			panic("failed to atoi " + portStr)
+		}
+
+		ep := Endpoint{
+			Address: a,
+		}
+		if opts != nil {
+			if i < len(opts.Health) {
+				ep.HealthStatus = EndpointHealthStatus(opts.Health[i])
+			}
+			if i < len(opts.Weight) {
+				ep.Weight = opts.Weight[i]
+			}
+		}
+		lbEndPoints = append(lbEndPoints, ep)
+	}
+	var lid internal.LocalityID
+	if subzone != "" {
+		lid = internal.LocalityID{
+			Region:  "",
+			Zone:    "",
+			SubZone: subzone,
+		}
+	}
+	eu.Localities = append(eu.Localities, Locality{
+		ID:        lid,
+		Endpoints: lbEndPoints,
+		Weight:    weight,
+		Priority:  priority,
+	})
 }
 
 // WatchEndpoints uses EDS to discover endpoints in the provided clusterName.
