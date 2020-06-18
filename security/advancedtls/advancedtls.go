@@ -25,7 +25,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
+
 	"fmt"
 	"net"
 	"syscall"
@@ -161,9 +161,9 @@ type ServerOptions struct {
 	// The server will use Certificates every time when asked for a certificate,
 	// without performing certificate reloading.
 	Certificates []tls.Certificate
-	// If GetClientCertificate is set and Certificates is nil, the client will
+	// If GetClientCertificate is set and Certificates is nil, the server will
 	// invoke this function every time asked to present certificates to the
-	// server when a new connection is established. This is known as peer
+	// client when a new connection is established. This is known as peer
 	// certificate reloading.
 	GetCertificate func(tls.ClientHelloInfo) ([]tls.Certificate, error)
 	// VerifyPeer is a custom verification check after certificate signature
@@ -480,8 +480,6 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 	return cfg.Clone()
 }
 
-var errNoCertificates = errors.New("No certificates configured")
-
 // GetCertificateWithSNI returns the certificate that matches the SNI field
 // based on the given ClientHelloInfo if GetCertificate returns a list of
 // certificates
@@ -491,7 +489,7 @@ func (o *ServerOptions) GetCertificateWithSNI(clientHello *tls.ClientHelloInfo) 
 		return nil, err
 	}
 	if len(certificates) == 0 {
-		return nil, errNoCertificates
+		return nil, fmt.Errorf("No certificates configured")
 	}
 	// If users pass in only one certificate, return that certificate
 	if len(certificates) == 1 {
