@@ -19,8 +19,8 @@
 package engine
 
 import (
-	rbac "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
-	v1alpha1 "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
+	"github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
+	"google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
 // struct that holds attribute context
@@ -77,7 +77,7 @@ var Action_value = map[string]int32{
 
 // struct for CEL expressions
 type Condition struct {
-	expr	*v1alpha1.Expr
+	expr	*expr.Expr
 }
 
 func (condition Condition) Matches(args EvaluateArgs) bool {
@@ -92,16 +92,16 @@ type CelEvaluationEngine struct {
 }
 
 // Builds a CEL evaluation engine from Envoy RBAC.
-func RbacToCelEvaluationEngine(r rbac.RBAC) CelEvaluationEngine {
+func RbacToCelEvaluationEngine(rbac envoy_config_rbac_v2.RBAC) CelEvaluationEngine {
 	var action Action
-	if r.Action == rbac.RBAC_ALLOW {
+	if rbac.Action == envoy_config_rbac_v2.RBAC_ALLOW {
 		action = ACTION_ALLOW
 	} else {
 		action = ACTION_DENY
 	}
 	
 	conditions := make(map[string]Condition)
-	for policyName, policy := range r.Policies {
+	for policyName, policy := range rbac.Policies {
         conditions[policyName] = Condition{policy.Condition}
 	}
 	
