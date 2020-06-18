@@ -242,6 +242,11 @@ func KeepaliveEnforcementPolicy(kep keepalive.EnforcementPolicy) ServerOption {
 // CustomCodec returns a ServerOption that sets a codec for message marshaling and unmarshaling.
 //
 // This will override any lookups by content-subtype for Codecs registered with RegisterCodec.
+//
+// Deprecated: register codecs using encoding.RegisterCodec. The server will
+// automatically use registered codecs based on the incoming requests' headers.
+// See also
+// https://github.com/grpc/grpc-go/blob/master/Documentation/encoding.md#using-a-codec.
 func CustomCodec(codec Codec) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.codec = codec
