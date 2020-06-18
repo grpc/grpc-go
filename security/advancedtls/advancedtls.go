@@ -25,7 +25,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-
 	"fmt"
 	"net"
 	"syscall"
@@ -165,7 +164,7 @@ type ServerOptions struct {
 	// invoke this function every time asked to present certificates to the
 	// client when a new connection is established. This is known as peer
 	// certificate reloading.
-	GetCertificate func(tls.ClientHelloInfo) ([]tls.Certificate, error)
+	GetCertificate func(*tls.ClientHelloInfo) (*[]tls.Certificate, error)
 	// VerifyPeer is a custom verification check after certificate signature
 	// check.
 	// If this is set, we will perform this customized check after doing the
@@ -213,7 +212,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		clientAuth = tls.RequireAnyClientCert
 	}
 	getCertificateWithSNI := func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-		return o.GetCertificateWithSNI(clientHello)
+		return o.getCertificateWithSNI(clientHello)
 	}
 	config := &tls.Config{
 		ClientAuth:     clientAuth,
@@ -480,26 +479,27 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 	return cfg.Clone()
 }
 
-// GetCertificateWithSNI returns the certificate that matches the SNI field
-// based on the given ClientHelloInfo if GetCertificate returns a list of
-// certificates
-func (o *ServerOptions) GetCertificateWithSNI(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-	certificates, err := o.GetCertificate(*clientHello)
+// GetCertificateWithSNI is a helper function that returns the certificate
+// that matches the SNI field based on the given ClientHelloInfo
+// if GetCertificate returns a list of certificates
+func (o *ServerOptions) getCertificateWithSNI(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	certificates, err := o.GetCertificate(clientHello)
 	if err != nil {
 		return nil, err
 	}
-	if len(certificates) == 0 {
+	if len(*certificates) == 0 {
 		return nil, fmt.Errorf("No certificates configured")
 	}
 	// If users pass in only one certificate, return that certificate
-	if len(certificates) == 1 {
-		return &certificates[0], nil
+	if len(*certificates) == 1 {
+		return &(*certificates)[0], nil
 	}
-	for _, cert := range certificates {
+	// Choose the SNI certificate using SupportsCertificate
+	for _, cert := range *certificates {
 		if err := clientHello.SupportsCertificate(&cert); err == nil {
 			return &cert, nil
 		}
 	}
 	// If nothing matches, return the first certificate.
-	return &certificates[0], nil
+	return &(*certificates)[0], nil
 }
