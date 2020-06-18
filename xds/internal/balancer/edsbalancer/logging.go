@@ -20,9 +20,13 @@ package edsbalancer
 
 import (
 	"fmt"
+
+	"google.golang.org/grpc/grpclog"
 )
 
 const prefix = "[eds-lb %p] "
+
+var logger = grpclog.Component("xds")
 
 func loggingPrefix(p *edsBalancer) string {
 	return fmt.Sprintf(prefix, p)

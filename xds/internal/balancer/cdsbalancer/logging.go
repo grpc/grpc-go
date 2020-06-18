@@ -20,9 +20,13 @@ package cdsbalancer
 
 import (
 	"fmt"
+
+	"google.golang.org/grpc/grpclog"
 )
 
 const prefix = "[cds-lb %p] "
+
+var logger = grpclog.Component("xds")
 
 func loggingPrefix(p *cdsBalancer) string {
 	return fmt.Sprintf(prefix, p)

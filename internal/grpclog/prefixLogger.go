@@ -22,6 +22,7 @@ package grpclog
 //
 // Logging method on a nil logs without any prefix.
 type PrefixLogger struct {
+	logger LoggerV2
 	prefix string
 }
 
@@ -30,6 +31,8 @@ func (pl *PrefixLogger) Infof(format string, args ...interface{}) {
 	if pl != nil {
 		// Handle nil, so the tests can pass in a nil logger.
 		format = pl.prefix + format
+		pl.logger.Infof(format, args...)
+		return
 	}
 	Logger.Infof(format, args...)
 }
@@ -38,6 +41,8 @@ func (pl *PrefixLogger) Infof(format string, args ...interface{}) {
 func (pl *PrefixLogger) Warningf(format string, args ...interface{}) {
 	if pl != nil {
 		format = pl.prefix + format
+		pl.logger.Warningf(format, args...)
+		return
 	}
 	Logger.Warningf(format, args...)
 }
@@ -46,6 +51,8 @@ func (pl *PrefixLogger) Warningf(format string, args ...interface{}) {
 func (pl *PrefixLogger) Errorf(format string, args ...interface{}) {
 	if pl != nil {
 		format = pl.prefix + format
+		pl.logger.Errorf(format, args...)
+		return
 	}
 	Logger.Errorf(format, args...)
 }
@@ -58,6 +65,6 @@ func (pl *PrefixLogger) Debugf(format string, args ...interface{}) {
 }
 
 // NewPrefixLogger creates a prefix logger with the given prefix.
-func NewPrefixLogger(prefix string) *PrefixLogger {
-	return &PrefixLogger{prefix: prefix}
+func NewPrefixLogger(logger LoggerV2, prefix string) *PrefixLogger {
+	return &PrefixLogger{logger: logger, prefix: prefix}
 }

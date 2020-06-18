@@ -20,9 +20,13 @@ package weightedtarget
 
 import (
 	"fmt"
+
+	"google.golang.org/grpc/grpclog"
 )
 
 const prefix = "[weighted-target-lb %p] "
+
+var logger = grpclog.Component("xds")
 
 func loggingPrefix(p *weightedTargetBalancer) string {
 	return fmt.Sprintf(prefix, p)
