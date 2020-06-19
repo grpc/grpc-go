@@ -370,16 +370,16 @@ type RequestParameters struct {
 	GrantType string `json:"grant_type"`
 	// OPTIONAL. Indicates the location of the target service or resource where
 	// the client intends to use the requested security token.
-	Resource string `json:"resource"`
+	Resource string `json:"resource,omitempty"`
 	// OPTIONAL. The logical name of the target service where the client intends
 	// to use the requested security token.
-	Audience string `json:"audience"`
+	Audience string `json:"audience,omitempty"`
 	// OPTIONAL. A list of space-delimited, case-sensitive strings, that allow
 	// the client to specify the desired scope of the requested security token
 	// in the context of the service or Resource where the token will be used.
-	Scope string `json:"scope"`
+	Scope string `json:"scope,omitempty"`
 	// OPTIONAL. An identifier, for the type of the requested security token.
-	RequestedTokenType string `json:"requested_token_type"`
+	RequestedTokenType string `json:"requested_token_type,omitempty"`
 	// REQUIRED. A security token that represents the identity of the party on
 	// behalf of whom the request is being made.
 	SubjectToken string `json:"subject_token"`
@@ -388,10 +388,10 @@ type RequestParameters struct {
 	SubjectTokenType string `json:"subject_token_type"`
 	// OPTIONAL. A security token that represents the identity of the acting
 	// party.
-	ActorToken string `json:"actor_token"`
+	ActorToken string `json:"actor_token,omitempty"`
 	// An identifier, that indicates the type of the security token in the
 	// "actor_token" parameter.
-	ActorTokenType string `json:"actor_token_type"`
+	ActorTokenType string `json:"actor_token_type,omitempty"`
 }
 
 // ResponseParameters stores all attributes sent as JSON in a successful STS
