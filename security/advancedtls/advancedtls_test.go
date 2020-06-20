@@ -102,13 +102,20 @@ func TestClientServerHandshake(t *testing.T) {
 		clientExpectHandshakeError bool
 		serverMutualTLS            bool
 		serverCert                 []tls.Certificate
-		serverGetCert              func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+		serverGetCert              func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 		serverRoot                 *x509.CertPool
 		serverGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		serverVerifyFunc           CustomVerificationFunc
 		serverVType                VerificationType
 		serverExpectError          bool
 	}{
+		{
+			desc:             "Client has no trust cert with verifyFuncGood; server sends peer cert",
+			clientVerifyFunc: clientVerifyFuncGood,
+			clientVType:      SkipVerification,
+			serverCert:       []tls.Certificate{serverPeerCert},
+			serverVType:      CertAndHostVerification,
+		},
 		// Client: nil setting
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: server side failure
@@ -129,6 +136,7 @@ func TestClientServerHandshake(t *testing.T) {
 		// Expected Behavior: success
 		// Reason: we will use verifyFuncGood to verify the server,
 		// if either clientCert or clientGetCert is not set
+		// ERROR
 		{
 			desc:             "Client has no trust cert with verifyFuncGood; server sends peer cert",
 			clientVerifyFunc: clientVerifyFuncGood,
@@ -169,6 +177,7 @@ func TestClientServerHandshake(t *testing.T) {
 		// Client: set clientGetRoot and clientVerifyFunc
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: success
+		// ERROR
 		{
 			desc:             "Client sets reload root function with verifyFuncGood; server sends peer cert",
 			clientGetRoot:    getRootCAsForClient,
@@ -206,6 +215,7 @@ func TestClientServerHandshake(t *testing.T) {
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
 		// Server: set serverRoot and serverCert with mutual TLS on
 		// Expected Behavior: success
+		// ERROR
 		{
 			desc:             "Client sets peer cert, reload root function with verifyFuncGood; server sets peer cert and root cert; mutualTLS",
 			clientCert:       []tls.Certificate{clientPeerCert},
@@ -239,6 +249,7 @@ func TestClientServerHandshake(t *testing.T) {
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
 		// Server: set serverGetRoot and serverCert with mutual TLS on
 		// Expected Behavior: success
+		// ERROR
 		{
 			desc:             "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; mutualTLS",
 			clientCert:       []tls.Certificate{clientPeerCert},
@@ -279,8 +290,9 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVerifyFunc: clientVerifyFuncGood,
 			clientVType:      CertVerification,
 			serverMutualTLS:  true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &serverPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				// return &serverPeerCert, nil
+				return []*tls.Certificate{&serverPeerCert}, nil
 			},
 			serverGetRoot:    getRootCAsForServer,
 			serverVerifyFunc: serverVerifyFunc,
@@ -300,8 +312,9 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVerifyFunc: clientVerifyFuncGood,
 			clientVType:      CertVerification,
 			serverMutualTLS:  true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &serverPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				// return &serverPeerCert, nil
+				return []*tls.Certificate{&serverPeerCert}, nil
 			},
 			serverGetRoot:     getRootCAsForServer,
 			serverVerifyFunc:  serverVerifyFunc,
@@ -322,8 +335,9 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVType:                CertVerification,
 			clientExpectHandshakeError: true,
 			serverMutualTLS:            true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &serverPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				// return &serverPeerCert, nil
+				return []*tls.Certificate{&serverPeerCert}, nil
 			},
 			serverGetRoot:     getRootCAsForServer,
 			serverVerifyFunc:  serverVerifyFunc,
@@ -344,8 +358,9 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVerifyFunc: clientVerifyFuncGood,
 			clientVType:      CertVerification,
 			serverMutualTLS:  true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &clientPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				// return &clientPeerCert, nil
+				return []*tls.Certificate{&clientPeerCert}, nil
 			},
 			serverGetRoot:     getRootCAsForServer,
 			serverVerifyFunc:  serverVerifyFunc,
@@ -366,8 +381,9 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVType:                CertVerification,
 			clientExpectHandshakeError: true,
 			serverMutualTLS:            true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &serverPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				// return &serverPeerCert, nil
+				return []*tls.Certificate{&serverPeerCert}, nil
 			},
 			serverGetRoot:     getRootCAsForClient,
 			serverVerifyFunc:  serverVerifyFunc,

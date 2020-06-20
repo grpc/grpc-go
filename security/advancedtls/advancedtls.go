@@ -483,6 +483,9 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 // that matches the SNI field based on the given ClientHelloInfo
 // if GetCertificate returns a list of certificates
 func buildGetCertificateFunc(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
+	if o.GetCertificate == nil {
+		return nil, fmt.Errorf("function GetCertificate must be specified")
+	}
 	certificates, err := o.GetCertificate(clientHello)
 	if err != nil {
 		return nil, err
