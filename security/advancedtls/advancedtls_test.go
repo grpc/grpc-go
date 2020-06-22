@@ -367,7 +367,6 @@ func TestClientServerHandshake(t *testing.T) {
 			clientExpectHandshakeError: true,
 			serverMutualTLS:            true,
 			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
-				// return &serverPeerCert, nil
 				return []*tls.Certificate{&serverPeerCert}, nil
 			},
 			serverGetRoot:     getRootCAsForClient,
