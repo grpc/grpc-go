@@ -274,10 +274,8 @@ func TestEnd2End(t *testing.T) {
 			serverGetCert: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
-					// return &cs.serverPeer1, nil
 					return []*tls.Certificate{&cs.serverPeer1}, nil
 				default:
-					// return &cs.serverPeer2, nil
 					return []*tls.Certificate{&cs.serverPeer2}, nil
 				}
 			},
@@ -341,10 +339,8 @@ func TestEnd2End(t *testing.T) {
 			serverGetCert: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
-					// return &cs.serverPeer1, nil
 					return []*tls.Certificate{&cs.serverPeer1}, nil
 				default:
-					// return &cs.serverPeer2, nil
 					return []*tls.Certificate{&cs.serverPeer2}, nil
 				}
 			},
