@@ -21,14 +21,8 @@ package engine
 import (
 	"github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	"google.golang.org/genproto/googleapis/api/expr/v1alpha1"
+	"google.golang.org/grpc/peer"
 )
-
-// struct that holds attribute context
-type EvaluateArgs struct {
-	// md metadata.MD
-	// conn net.Conn
-	// auth credentials.AuthInfo
-}
 
 // Decision enum
 type Decision int32
@@ -80,7 +74,7 @@ type Condition struct {
 	expr	*expr.Expr
 }
 
-func (condition Condition) Matches(args EvaluateArgs) bool {
+func (condition Condition) Matches(peerInfo *peer.Peer) bool {
 	// TODO
 	return false
 }
@@ -116,9 +110,9 @@ func RbacToCelEvaluationEngine(rbac envoy_config_rbac_v2.RBAC) CelEvaluationEngi
 // }
 
 // The core function that evaluates whether an RPC is authorized
-func (engine CelEvaluationEngine) Evaluate(args EvaluateArgs) AuthorizationDecision {
+func (engine CelEvaluationEngine) Evaluate(peerInfo *peer.Peer) AuthorizationDecision {
 	for policyName, condition := range engine.conditions {
-		if condition.Matches(args) {
+		if condition.Matches(peerInfo) {
 			var decision Decision
 			if engine.action == ACTION_ALLOW {
 				decision = DECISION_ALLOW
@@ -130,4 +124,23 @@ func (engine CelEvaluationEngine) Evaluate(args EvaluateArgs) AuthorizationDecis
 	}
 	// if no conditions matched
 	return AuthorizationDecision{DECISION_UNKNOWN, "No policies matched"}
+}
+
+// list of engines to evaluate against
+var CelEngines = [0]CelEvaluationEngine{}
+
+// if any policy denies, DENY
+// else if any policy allows, ALLOW
+// else DENY
+func Evaluate(peerInfo *peer.Peer) bool {
+	allow := false
+	for _, engine := range CelEngines {
+		authDecision := engine.Evaluate(peerInfo)
+		if authDecision.decision == DECISION_DENY {
+			return false
+		} else if authDecision.decision == DECISION_ALLOW {
+			allow = true
+		}
+	}
+	return allow
 }
