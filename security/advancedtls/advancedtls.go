@@ -211,13 +211,15 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		// buildVerifyFunc.
 		clientAuth = tls.RequireAnyClientCert
 	}
-	getCertificateWithSNI := func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-		return buildGetCertificateFunc(clientHello, o)
-	}
 	config := &tls.Config{
-		ClientAuth:     clientAuth,
-		Certificates:   o.Certificates,
-		GetCertificate: getCertificateWithSNI,
+		ClientAuth:   clientAuth,
+		Certificates: o.Certificates,
+	}
+	if o.GetCertificate != nil {
+		getCertificateWithSNI := func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			return buildGetCertificateFunc(clientHello, o)
+		}
+		config.GetCertificate = getCertificateWithSNI
 	}
 	if o.RootCACerts != nil {
 		config.ClientCAs = o.RootCACerts
