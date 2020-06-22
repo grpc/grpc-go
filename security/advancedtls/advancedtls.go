@@ -211,13 +211,15 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		// buildVerifyFunc.
 		clientAuth = tls.RequireAnyClientCert
 	}
-	getCertificateWithSNI := func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-		return buildGetCertificateFunc(clientHello, o)
-	}
 	config := &tls.Config{
-		ClientAuth:     clientAuth,
-		Certificates:   o.Certificates,
-		GetCertificate: getCertificateWithSNI,
+		ClientAuth:   clientAuth,
+		Certificates: o.Certificates,
+	}
+	if o.GetCertificate != nil {
+		getCertificateWithSNI := func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			return buildGetCertificateFunc(clientHello, o)
+		}
+		config.GetCertificate = getCertificateWithSNI
 	}
 	if o.RootCACerts != nil {
 		config.ClientCAs = o.RootCACerts
@@ -483,6 +485,9 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 // that matches the SNI field based on the given ClientHelloInfo
 // if GetCertificate returns a list of certificates
 func buildGetCertificateFunc(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
+	if o.GetCertificate == nil {
+		return nil, fmt.Errorf("function GetCertificate must be specified")
+	}
 	certificates, err := o.GetCertificate(clientHello)
 	if err != nil {
 		return nil, err
