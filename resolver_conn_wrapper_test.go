@@ -77,14 +77,14 @@ func testResolverErrorPolling(t *testing.T, badUpdate func(*manual.Resolver), go
 		return 0
 	}
 
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 	rn := make(chan struct{})
 	defer func() { close(rn) }()
 	r.ResolveNowCallback = func(resolver.ResolveNowOptions) { rn <- struct{}{} }
 
 	defaultDialOptions := []DialOption{
 		WithInsecure(),
+		WithResolvers(r),
 		withResolveNowBackoff(resolverBackoff),
 	}
 	cc, err := Dial(r.Scheme()+":///test.server", append(defaultDialOptions, dopts...)...)
@@ -173,11 +173,10 @@ func (s) TestServiceConfigErrorPolling(t *testing.T) {
 // sure there is no data race in this code path, and also that there is no
 // deadlock.
 func (s) TestResolverErrorInBuild(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{ServiceConfig: &serviceconfig.ParseResult{Err: errors.New("resolver build err")}})
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure())
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
 	}
@@ -194,10 +193,9 @@ func (s) TestResolverErrorInBuild(t *testing.T) {
 }
 
 func (s) TestServiceConfigErrorRPC(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure())
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
 	}

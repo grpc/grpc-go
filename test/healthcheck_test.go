@@ -152,19 +152,19 @@ type clientConfig struct {
 }
 
 func setupClient(c *clientConfig) (cc *grpc.ClientConn, r *manual.Resolver, deferFunc func(), err error) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	r = manual.NewBuilderWithScheme("whatever")
 	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure(), grpc.WithBalancerName(c.balancerName))
+	opts = append(opts, grpc.WithInsecure(), grpc.WithResolvers(r), grpc.WithBalancerName(c.balancerName))
 	if c.testHealthCheckFuncWrapper != nil {
 		opts = append(opts, internal.WithHealthCheckFunc.(func(internal.HealthChecker) grpc.DialOption)(c.testHealthCheckFuncWrapper))
 	}
 	opts = append(opts, c.extraDialOption...)
 	cc, err = grpc.Dial(r.Scheme()+":///test.server", opts...)
 	if err != nil {
-		rcleanup()
+
 		return nil, nil, nil, fmt.Errorf("dial failed due to err: %v", err)
 	}
-	return cc, r, func() { cc.Close(); rcleanup() }, nil
+	return cc, r, func() { cc.Close() }, nil
 }
 
 func (s) TestHealthCheckWatchStateChange(t *testing.T) {
