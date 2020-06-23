@@ -66,10 +66,9 @@ func (s) TestDialWithTimeout(t *testing.T) {
 		<-dialDone // Close conn only after dial returns.
 	}()
 
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{lisAddr}})
-	client, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithTimeout(5*time.Second))
+	client, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithTimeout(5*time.Second))
 	close(dialDone)
 	if err != nil {
 		t.Fatalf("Dial failed. Err: %v", err)
@@ -119,10 +118,9 @@ func (s) TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
 		}
 	}()
 
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{lis1Addr, lis2Addr}})
-	client, err := Dial(r.Scheme()+":///test.server", WithInsecure())
+	client, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Dial failed. Err: %v", err)
 	}
@@ -642,10 +640,9 @@ func (s) TestConnectParamsWithMinConnectTimeout(t *testing.T) {
 }
 
 func (s) TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure())
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -660,10 +657,9 @@ func (s) TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
 
 func (s) TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
 	for i := 0; i < 10; i++ { // Run this multiple times to make sure it doesn't panic.
-		r, rcleanup := manual.GenerateAndRegisterManualResolver()
-		defer rcleanup()
+		r := manual.NewBuilderWithScheme(fmt.Sprintf("whatever-%d", i))
 
-		cc, err := Dial(r.Scheme()+":///test.server", WithInsecure())
+		cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
 		if err != nil {
 			t.Fatalf("failed to dial: %v", err)
 		}
@@ -674,10 +670,9 @@ func (s) TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
 }
 
 func (s) TestResolverEmptyUpdateNotPanic(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure())
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -754,10 +749,9 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 }
 
 func (s) TestDisableServiceConfigOption(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 	addr := r.Scheme() + ":///non.existent"
-	cc, err := Dial(addr, WithInsecure(), WithDisableServiceConfig())
+	cc, err := Dial(addr, WithInsecure(), WithResolvers(r), WithDisableServiceConfig())
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
@@ -1013,8 +1007,7 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 }
 
 func (s) TestDefaultServiceConfig(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 	addr := r.Scheme() + ":///non.existent"
 	js := `{
     "methodConfig": [
@@ -1055,7 +1048,7 @@ func testInvalidDefaultServiceConfig(t *testing.T) {
 }
 
 func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r *manual.Resolver, addr string, js string) {
-	cc, err := Dial(addr, WithInsecure(), WithDisableServiceConfig(), WithDefaultServiceConfig(js))
+	cc, err := Dial(addr, WithInsecure(), WithDisableServiceConfig(), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
@@ -1071,7 +1064,7 @@ func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r *
 }
 
 func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T, r *manual.Resolver, addr string, js string) {
-	cc, err := Dial(addr, WithInsecure(), WithDefaultServiceConfig(js))
+	cc, err := Dial(addr, WithInsecure(), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
@@ -1085,7 +1078,7 @@ func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T
 }
 
 func testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t *testing.T, r *manual.Resolver, addr string, js string) {
-	cc, err := Dial(addr, WithInsecure(), WithDefaultServiceConfig(js))
+	cc, err := Dial(addr, WithInsecure(), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
