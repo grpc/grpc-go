@@ -74,7 +74,7 @@ type Condition struct {
 	expr	*expr.Expr
 }
 
-func (condition Condition) Matches(peerInfo *peer.Peer) bool {
+func (condition Condition) matches(peerInfo *peer.Peer) bool {
 	// TODO
 	return false
 }
@@ -110,9 +110,9 @@ func RbacToCelEvaluationEngine(rbac envoy_config_rbac_v2.RBAC) CelEvaluationEngi
 // }
 
 // The core function that evaluates whether an RPC is authorized
-func (engine CelEvaluationEngine) Evaluate(peerInfo *peer.Peer) AuthorizationDecision {
+func (engine CelEvaluationEngine) evaluate(peerInfo *peer.Peer) AuthorizationDecision {
 	for policyName, condition := range engine.conditions {
-		if condition.Matches(peerInfo) {
+		if condition.matches(peerInfo) {
 			var decision Decision
 			if engine.action == ACTION_ALLOW {
 				decision = DECISION_ALLOW
@@ -127,15 +127,20 @@ func (engine CelEvaluationEngine) Evaluate(peerInfo *peer.Peer) AuthorizationDec
 }
 
 // list of engines to evaluate against
-var CelEngines = [0]CelEvaluationEngine{}
+var celEngines = []CelEvaluationEngine{}
+
+// set up list of engines
+func SetCelEngines(engines []CelEvaluationEngine) {
+	celEngines = engines
+}
 
 // if any policy denies, DENY
 // else if any policy allows, ALLOW
 // else DENY
-func Evaluate(peerInfo *peer.Peer) bool {
+func evaluate(peerInfo *peer.Peer) bool {
 	allow := false
-	for _, engine := range CelEngines {
-		authDecision := engine.Evaluate(peerInfo)
+	for _, engine := range celEngines {
+		authDecision := engine.evaluate(peerInfo)
 		if authDecision.decision == DECISION_DENY {
 			return false
 		} else if authDecision.decision == DECISION_ALLOW {

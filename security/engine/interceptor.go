@@ -38,7 +38,7 @@ func authorized(ctx context.Context) (bool, error) {
 	if !ok {
 		return false, errMissingPeerInformation
 	}
-	return Evaluate(peerInfo), nil
+	return evaluate(peerInfo), nil
 }
 
 // The unary interceptor that incorporates the CEL engine into the server

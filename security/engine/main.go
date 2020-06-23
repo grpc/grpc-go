@@ -27,8 +27,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/testdata"
-
-	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 var (
@@ -49,6 +47,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create credentials: %v", err)
 	}
+
+	// Create CEL engines. This example contains no engines.
+	celEngines := []CelEvaluationEngine{}
+	SetCelEngines(celEngines)
 
 	// Create the server.
 	s := grpc.NewServer(grpc.Creds(creds), grpc.UnaryInterceptor(unaryInterceptor), grpc.StreamInterceptor(streamInterceptor))
