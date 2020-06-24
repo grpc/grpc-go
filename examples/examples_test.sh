@@ -15,7 +15,7 @@
 #  limitations under the License.
 #
 
-set +e -x
+set +e
 
 export TMPDIR=$(mktemp -d)
 trap "rm -rf ${TMPDIR}" EXIT
@@ -154,6 +154,6 @@ for example in ${EXAMPLES[@]}; do
             pass "client log contains expected output: ${EXPECTED_CLIENT_OUTPUT[$example]}"
         fi
     fi
-
     clean
+    echo ""
 done
