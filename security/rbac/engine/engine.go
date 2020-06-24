@@ -33,13 +33,13 @@ type AuthorizationArgs struct {
 type Decision int32
 
 const (
-	// DECISION_ALLOW indicates allowing the RPC to go through.
-	DECISION_ALLOW Decision = iota
-	// DECISION_DENY indicates denying the RPC from going through.
-	DECISION_DENY
-	// DECISION_UNKNOWN indicates that there is insufficient information to
+	// DecisionAllow indicates allowing the RPC to go through.
+	DecisionAllow Decision = iota
+	// DecisionDeny indicates denying the RPC from going through.
+	DecisionDeny
+	// DecisionUnknown indicates that there is insufficient information to
 	// determine whether or not an RPC call is authorized.
-	DECISION_UNKNOWN
+	DecisionUnknown
 )
 
 // Output of CEL engine.
@@ -48,19 +48,6 @@ type AuthorizationDecision struct {
 	authorizationContext	string
 }
 
-// Action is the enum type that represents different actions that RBAC
-// policies can specify, in the case of a matching context.
-type Action int32
-
-const (
-	// ACTION_ALLOW indicates that if a policy is matched, authorization
-	// can be granted.
-	ACTION_ALLOW Action = iota
-	// ACTION_DENY indicates that if a policy is matched, authorization
-	// will be denied.
-	ACTION_DENY
-)
-
 // Returns whether or not a policy is matched.
 func matches(condition *expr.Expr, args AuthorizationArgs) bool {
 	// TODO
@@ -68,60 +55,41 @@ func matches(condition *expr.Expr, args AuthorizationArgs) bool {
 }
 
 // Struct for CEL engine.
-type CelEvaluationEngine struct {
-	action		Action
+type celEvaluationEngine struct {
+	action		envoy_config_rbac_v2.RBAC_Action
 	conditions	map[string]*expr.Expr
 }
 
 // Builds a CEL evaluation engine from Envoy RBAC.
-func RbacToCelEvaluationEngine(rbac envoy_config_rbac_v2.RBAC) CelEvaluationEngine {
-	var action Action
-	if rbac.Action == envoy_config_rbac_v2.RBAC_ALLOW {
-		action = ACTION_ALLOW
-	} else {
-		action = ACTION_DENY
-	}
-	
+func NewCelEvaluationEngine(rbac envoy_config_rbac_v2.RBAC) celEvaluationEngine {
+	action := rbac.Action
 	conditions := make(map[string]*expr.Expr)
 	for policyName, policy := range rbac.Policies {
         conditions[policyName] = policy.Condition
 	}
-	
-	return CelEvaluationEngine{action, conditions}
+	return celEvaluationEngine{action, conditions}
 }
 
 // Builds a CEL evaluation engine from runtime policy template.
 // Currently do not have access to RTPolicyTemplate/can't import
-// func RTPolicyTemplateToCelEvaluationEngine(rt_policy RTPolicyTemplate) CelEvaluationEngine {
+// func NewCelEvaluationEngine(rt_policy RTPolicyTemplate) celEvaluationEngine {
 // 	// TODO
 // 	return nil
 // }
 
 // The core function that evaluates whether an RPC is authorized.
-func (engine CelEvaluationEngine) evaluate(args AuthorizationArgs) AuthorizationDecision {
+func (engine celEvaluationEngine) evaluate(args AuthorizationArgs) AuthorizationDecision {
 	for policyName, condition := range engine.conditions {
 		if matches(condition, args) {
 			var decision Decision
-			if engine.action == ACTION_ALLOW {
-				decision = DECISION_ALLOW
+			if engine.action == envoy_config_rbac_v2.RBAC_ALLOW {
+				decision = DecisionAllow
 			} else {
-				decision = DECISION_DENY
+				decision = DecisionDeny
 			}
 			return AuthorizationDecision{decision, "Policy matched: " + policyName}
 		}
 	}
 	// if no conditions matched
-	return AuthorizationDecision{DECISION_UNKNOWN, "No policies matched"}
-}
-
-func evaluate(args AuthorizationArgs) bool {
-	engine := getEngine()
-	authDecision := engine.evaluate(args)
-	if authDecision.decision == DECISION_DENY {
-		return false
-	} else if authDecision.decision == DECISION_ALLOW {
-		return true
-	} else { // DECISION_UNKNOWN
-		return false
-	}
+	return AuthorizationDecision{DecisionUnknown, "No policies matched"}
 }
