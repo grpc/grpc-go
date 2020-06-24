@@ -35,9 +35,22 @@ echo "go install cmd/protoc-gen-go-grpc"
 echo "git clone https://github.com/grpc/grpc-proto"
 git clone --quiet https://github.com/grpc/grpc-proto ${WORKDIR}/grpc-proto
 
+echo "git clone https://github.com/envoyproxy/envoy"
+git clone --quiet https://github.com/envoyproxy/envoy ${WORKDIR}/envoy
+
+echo "git clone https://github.com/envoyproxy/protoc-gen-validate"
+git clone --quiet https://github.com/envoyproxy/protoc-gen-validate ${WORKDIR}/protoc-gen-validate
+
+echo "git clone https://github.com/cncf/udpa"
+git clone --quiet https://github.com/cncf/udpa ${WORKDIR}/udpa
+
 mkdir -p ${WORKDIR}/googleapis/google/rpc
 echo "curl https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto"
-curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto > ${WORKDIR}/googleapis/google/rpc/code.proto
+ curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto > ${WORKDIR}/googleapis/google/rpc/code.proto
+
+mkdir -p ${WORKDIR}/protobuf/google/protobuf
+echo "curl https://raw.githubusercontent.com/protocolbuffers/protobuf/master/src/google/protobuf/duration.proto"
+curl --silent https://raw.githubusercontent.com/protocolbuffers/protobuf/master/src/google/protobuf/duration.proto > ${WORKDIR}/protobuf/google/protobuf/duration.proto
 
 mkdir -p ${WORKDIR}/out
 
@@ -54,13 +67,17 @@ SOURCES=(
   ${WORKDIR}/grpc-proto/grpc/service_config/service_config.proto
   $(git ls-files --exclude-standard --cached --others "*.proto")
 )
-OPTS=Mgrpc/service_config/service_config.proto=/internal/proto/grpc_service_config
+OPTS=Mgrpc/service_config/service_config.proto=/internal/proto/grpc_service_config,Menvoy/config/core/v3/config_source.proto=github.com/envoyproxy/go-control-plane/envoy/config/core/v3
 for src in ${SOURCES[@]}; do
   echo "protoc ${src}"
   protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS},requireUnimplementedServers=false:${WORKDIR}/out \
     -I"." \
     -I${WORKDIR}/grpc-proto \
     -I${WORKDIR}/googleapis \
+    -I${WORKDIR}/envoy/api \
+    -I${WORKDIR}/protoc-gen-validate \
+    -I${WORKDIR}/udpa \
+    -I${WORKDIR}/protobuf \
     ${src}
 done
 
@@ -75,5 +92,10 @@ rm ${WORKDIR}/out/google.golang.org/grpc/reflection/grpc_testingv3/*.pb.go
 
 # grpc/service_config/service_config.proto does not have a go_package option.
 cp ${WORKDIR}/out/grpc/service_config/service_config.pb.go internal/proto/grpc_service_config
+
+# grpc/credentials/tls/certprovider/meshca/config.proto does not have a
+# go_package option.
+mkdir -p ${WORKDIR}/out/google.golang.org/grpc/credentials/tls/certprovider/meshca/proto
+mv ${WORKDIR}/out/credentials/tls/certprovider/meshca/proto/* ${WORKDIR}/out/google.golang.org/grpc/credentials/tls/certprovider/meshca/proto
 
 cp -R ${WORKDIR}/out/google.golang.org/grpc/* .
