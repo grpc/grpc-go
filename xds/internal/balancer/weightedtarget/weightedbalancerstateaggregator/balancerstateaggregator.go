@@ -139,9 +139,6 @@ func (wbsa *Aggregator) UpdateWeight(id internal.LocalityID, newWeight uint32) {
 	if !ok {
 		return
 	}
-	if pState.weight == newWeight {
-		return
-	}
 	pState.weight = newWeight
 }
 
@@ -149,23 +146,23 @@ func (wbsa *Aggregator) UpdateWeight(id internal.LocalityID, newWeight uint32) {
 // It's usually called by the balancer group.
 //
 // It calls parent ClientConn's UpdateState with the new aggregated state.
-func (wbsa *Aggregator) UpdateState(id internal.LocalityID, state balancer.State) {
+func (wbsa *Aggregator) UpdateState(id internal.LocalityID, newState balancer.State) {
 	wbsa.mu.Lock()
 	defer wbsa.mu.Unlock()
-	pickerSt, ok := wbsa.idToPickerState[id]
+	oldState, ok := wbsa.idToPickerState[id]
 	if !ok {
 		// All state starts with an entry in pickStateMap. If ID is not in map,
 		// it's either removed, or never existed.
 		return
 	}
-	if !(pickerSt.state.ConnectivityState == connectivity.TransientFailure && state.ConnectivityState == connectivity.Connecting) {
+	if !(oldState.state.ConnectivityState == connectivity.TransientFailure && newState.ConnectivityState == connectivity.Connecting) {
 		// If old state is TransientFailure, and new state is Connecting, don't
 		// update the state, to prevent the aggregated state from being always
 		// CONNECTING. Otherwise, stateToAggregate is the same as
 		// state.ConnectivityState.
-		pickerSt.stateToAggregate = state.ConnectivityState
+		oldState.stateToAggregate = newState.ConnectivityState
 	}
-	pickerSt.state = state
+	oldState.state = newState
 
 	if !wbsa.started {
 		return
@@ -239,8 +236,7 @@ func (wbsa *Aggregator) build() balancer.State {
 }
 
 type weightedPickerGroup struct {
-	length int
-	w      wrr.WRR
+	w wrr.WRR
 }
 
 // newWeightedPickerGroup takes pickers with weights, and group them into one picker.
@@ -254,15 +250,14 @@ func newWeightedPickerGroup(readyPickerWithWeights []weightedPickerState, newWRR
 	}
 
 	return &weightedPickerGroup{
-		length: len(readyPickerWithWeights),
-		w:      w,
+		w: w,
 	}
 }
 
 func (pg *weightedPickerGroup) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	if pg.length <= 0 {
+	p, ok := pg.w.Next().(balancer.Picker)
+	if !ok {
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
-	p := pg.w.Next().(balancer.Picker)
 	return p.Pick(info)
 }

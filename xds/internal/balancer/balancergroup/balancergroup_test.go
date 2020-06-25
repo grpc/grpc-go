@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedbalancerstateaggregator"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
@@ -68,13 +69,18 @@ func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	}
 }
 
-// 1 balancer, 1 backend -> 2 backends -> 1 backend.
-func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
+func newTestBalancerGroup(t *testing.T, loadStore lrs.Store) (*testutils.TestClientConn, *weightedbalancerstateaggregator.Aggregator, *BalancerGroup) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedbalancerstateaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, gator, nil, nil)
+	bg := New(cc, gator, loadStore, nil)
 	bg.Start()
+	return cc, gator, bg
+}
+
+// 1 balancer, 1 backend -> 2 backends -> 1 backend.
+func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add one balancer to group.
 	gator.Add(testBalancerIDs[0], 1)
@@ -130,12 +136,7 @@ func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 
 // 2 balancers, each with 1 backend.
 func (s) TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	gator := weightedbalancerstateaggregator.New(cc, nil, testutils.NewTestWRR)
-	gator.Start()
-	bg := New(cc, gator, nil, nil)
-
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
@@ -165,12 +166,7 @@ func (s) TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 
 // 2 balancers, each with more than 1 backends.
 func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	gator := weightedbalancerstateaggregator.New(cc, nil, testutils.NewTestWRR)
-	gator.Start()
-	bg := New(cc, gator, nil, nil)
-
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
@@ -255,12 +251,7 @@ func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 
 // 2 balancers with different weights.
 func (s) TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	gator := weightedbalancerstateaggregator.New(cc, nil, testutils.NewTestWRR)
-	gator.Start()
-	bg := New(cc, gator, nil, nil)
-
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -296,12 +287,7 @@ func (s) TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 
 // totally 3 balancers, add/remove balancer.
 func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	gator := weightedbalancerstateaggregator.New(cc, nil, testutils.NewTestWRR)
-	gator.Start()
-	bg := New(cc, gator, nil, nil)
-
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add three balancers to group and send one resolved address to both
 	// balancers.
@@ -368,12 +354,7 @@ func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 
 // 2 balancers, change balancer weight.
 func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	gator := weightedbalancerstateaggregator.New(cc, nil, testutils.NewTestWRR)
-	gator.Start()
-	bg := New(cc, gator, nil, nil)
-
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -419,12 +400,7 @@ func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 
 func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 	testLoadStore := testutils.NewTestLoadStore()
-
-	cc := testutils.NewTestClientConn(t)
-	gator := weightedbalancerstateaggregator.New(cc, nil, testutils.NewTestWRR)
-	gator.Start()
-	bg := New(cc, gator, testLoadStore, nil)
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, testLoadStore)
 
 	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityID)
 
@@ -617,12 +593,7 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 // transient_failure, the picks won't fail with transient_failure, and should
 // instead wait for the other sub-balancer.
 func (s) TestBalancerGroup_InitOneSubBalancerTransientFailure(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	gator := weightedbalancerstateaggregator.New(cc, nil, testutils.NewTestWRR)
-	gator.Start()
-	bg := New(cc, gator, nil, nil)
-
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
@@ -653,12 +624,7 @@ func (s) TestBalancerGroup_InitOneSubBalancerTransientFailure(t *testing.T) {
 // connecting, the overall state stays in transient_failure, and all picks
 // return transient failure error.
 func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	gator := weightedbalancerstateaggregator.New(cc, nil, testutils.NewTestWRR)
-	gator.Start()
-	bg := New(cc, gator, nil, nil)
-
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
