@@ -16,6 +16,9 @@
  *
  */
 
+// Package meshca implements a certificate provider which gets certificates signed by the MeshCa.
+//
+// TODO(easwars): Implement all required functionality. This is only skeleton code for now.
 package meshca
 
 import (
