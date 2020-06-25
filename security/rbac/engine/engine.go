@@ -17,16 +17,16 @@
 package engine
 
 import (
-	"github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
-	"google.golang.org/genproto/googleapis/api/expr/v1alpha1"
+	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
+	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 )
 
-// Input of CEL engine.
+// AuthorizationArgs is the input of CEL engine.
 type AuthorizationArgs struct {
-	md 			metadata.MD
-	peerInfo 	*peer.Peer
+	md       metadata.MD
+	peerInfo *peer.Peer
 }
 
 // Decision is the enum type that represents different authorization
@@ -43,10 +43,10 @@ const (
 	DecisionUnknown
 )
 
-// Output of CEL engine.
+// AuthorizationDecision is the output of CEL engine.
 type AuthorizationDecision struct {
-	decision 				Decision
-	authorizationContext	string
+	decision             Decision
+	authorizationContext string
 }
 
 // Returns whether or not a policy is matched.
@@ -55,35 +55,35 @@ func matches(condition *expr.Expr, args AuthorizationArgs) bool {
 	return false
 }
 
-// Struct for CEL engine.
-type celEvaluationEngine struct {
-	action		envoy_config_rbac_v2.RBAC_Action
-	conditions	map[string]*expr.Expr
+// CelEvaluationEngine is the struct for CEL engine.
+type CelEvaluationEngine struct {
+	action     pb.RBAC_Action
+	conditions map[string]*expr.Expr
 }
 
-// Builds a CEL evaluation engine from Envoy RBAC.
-func NewCelEvaluationEngine(rbac envoy_config_rbac_v2.RBAC) celEvaluationEngine {
+// NewCelEvaluationEngine builds a CEL evaluation engine from Envoy RBAC.
+func NewCelEvaluationEngine(rbac pb.RBAC) CelEvaluationEngine {
 	action := rbac.Action
 	conditions := make(map[string]*expr.Expr)
 	for policyName, policy := range rbac.Policies {
-        conditions[policyName] = policy.Condition
+		conditions[policyName] = policy.Condition
 	}
-	return celEvaluationEngine{action, conditions}
+	return CelEvaluationEngine{action, conditions}
 }
 
-// Builds a CEL evaluation engine from runtime policy template.
+// NewCelEvaluationEngine builds a CEL evaluation engine from runtime policy template.
 // Currently do not have access to RTPolicyTemplate/can't import
-// func NewCelEvaluationEngine(rt_policy RTPolicyTemplate) celEvaluationEngine {
+// func NewCelEvaluationEngine(rt_policy RTPolicyTemplate) CelEvaluationEngine {
 // 	// TODO
 // 	return nil
 // }
 
-// The core function that evaluates whether an RPC is authorized.
-func (engine celEvaluationEngine) Evaluate(args AuthorizationArgs) AuthorizationDecision {
+// Evaluate is the core function that evaluates whether an RPC is authorized.
+func (engine CelEvaluationEngine) Evaluate(args AuthorizationArgs) AuthorizationDecision {
 	for policyName, condition := range engine.conditions {
 		if matches(condition, args) {
 			var decision Decision
-			if engine.action == envoy_config_rbac_v2.RBAC_ALLOW {
+			if engine.action == pb.RBAC_ALLOW {
 				decision = DecisionAllow
 			} else {
 				decision = DecisionDeny

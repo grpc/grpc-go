@@ -37,13 +37,13 @@ var (
 	port = flag.Int("port", 50051, "the port to serve on")
 
 	// Error codes used in CEL engine interceptors.
-	errMissingMetadata 			= status.Errorf(codes.InvalidArgument, "missing metadata")
-	errMissingPeerInformation 	= status.Errorf(codes.InvalidArgument, "missing peer information")
-	errUnauthorized 			= status.Errorf(codes.PermissionDenied, "unauthorized")
+	errMissingMetadata        = status.Errorf(codes.InvalidArgument, "missing metadata")
+	errMissingPeerInformation = status.Errorf(codes.InvalidArgument, "missing peer information")
+	errUnauthorized           = status.Errorf(codes.PermissionDenied, "unauthorized")
 )
 
 // Returns whether or not a given context is authorized.
-func authorized(engine celEvaluationEngine, ctx context.Context) (bool, error) {
+func authorized(ctx context.Context, engine CelEvaluationEngine) (bool, error) {
 	// Extract authorization arguments.
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -86,8 +86,8 @@ func newWrappedStream(s grpc.ServerStream) grpc.ServerStream {
 
 // Example of how a gRPC user would create a server with interceptors.
 // In this example, interceptors are created as first-class functions,
-// and evaluation is currently done against an empty instance of 
-// celEvaluationEngine. In a real use case, users are expected to 
+// and evaluation is currently done against an empty instance of
+// CelEvaluationEngine. In a real use case, users are expected to
 // initialize engine to be created with an actual RBAC policy.
 func main() {
 	flag.Parse()
@@ -105,12 +105,12 @@ func main() {
 
 	// Create CEL engine.
 	// User TODO: initialize engine with RBAC policy
-	engine := celEvaluationEngine{}
+	engine := CelEvaluationEngine{}
 
 	// Create interceptors.
 	rbacUnaryInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		// authorization (CEL engine)
-		auth, err := authorized(engine, ctx)
+		auth, err := authorized(ctx, engine)
 		if err != nil {
 			return nil, err
 		} else if !auth {
@@ -123,7 +123,7 @@ func main() {
 
 	rbacStreamInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		// authorization (CEL engine)
-		auth, err := authorized(engine, ss.Context())
+		auth, err := authorized(ss.Context(), engine)
 		if err != nil {
 			return err
 		} else if !auth {
