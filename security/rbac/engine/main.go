@@ -42,27 +42,9 @@ var (
 	errUnauthorized 			= status.Errorf(codes.PermissionDenied, "unauthorized")
 )
 
-// Users need to fill in this function to return the celEvaluationEngine
-// they would like to use.
-func getEngine() celEvaluationEngine {
-	return celEvaluationEngine{};
-}
-
-// Returns whether an RPC with is authorized under given policies
-func evaluate(args AuthorizationArgs) bool {
-	engine := getEngine()
-	authDecision := engine.evaluate(args)
-	if authDecision.decision == DecisionDeny {
-		return false
-	} else if authDecision.decision == DecisionAllow {
-		return true
-	} else { // DecisionUnknown
-		return false
-	}
-}
-
 // Returns whether or not a given context is authorized.
-func authorized(ctx context.Context) (bool, error) {
+func authorized(engine celEvaluationEngine, ctx context.Context) (bool, error) {
+	// Extract authorization arguments.
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return false, errMissingMetadata
@@ -71,21 +53,17 @@ func authorized(ctx context.Context) (bool, error) {
 	if !ok {
 		return false, errMissingPeerInformation
 	}
-	return evaluate(AuthorizationArgs{md, peerInfo}), nil
-}
+	args := AuthorizationArgs{md, peerInfo}
 
-// The unary interceptor that incorporates the CEL engine into the server.
-func rbacUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	// authorization (CEL engine)
-	auth, err := authorized(ctx)
-	if err != nil {
-		return nil, err
-	} else if !auth {
-		return nil, errUnauthorized
+	// Evaluate against CEL engine.
+	authDecision := engine.Evaluate(args)
+	if authDecision.decision == DecisionDeny {
+		return false, nil
+	} else if authDecision.decision == DecisionAllow {
+		return true, nil
+	} else { // DecisionUnknown
+		return false, nil
 	}
-	// invoking handler
-	m, err := handler(ctx, req)
-	return m, err
 }
 
 // wrappedStream wraps around the embedded grpc.ServerStream, and intercepts the RecvMsg and
@@ -106,26 +84,11 @@ func newWrappedStream(s grpc.ServerStream) grpc.ServerStream {
 	return &wrappedStream{s}
 }
 
-// The stream interceptor that incorporates the CEL engine into the server.
-func rbacStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	// authorization (CEL engine)
-	auth, err := authorized(ss.Context())
-	if err != nil {
-		return err
-	} else if !auth {
-		return errUnauthorized
-	}
-	// invoking handler
-	err = handler(srv, newWrappedStream(ss))
-	return err
-}
-
 // Example of how a gRPC user would create a server with interceptors.
-// In this example, getEngine() is the core function that provides the
-// RBAC CEL engine for policy match evaluations. getEngine() currently
-// returns a new, empty instance of celEvaluationEngine, but in a real
-// use case, users are expected to fill it in such that it returns an
-// engine created with an actual RBAC policy.
+// In this example, interceptors are created as first-class functions,
+// and evaluation is currently done against an empty instance of 
+// celEvaluationEngine. In a real use case, users are expected to 
+// initialize engine to be created with an actual RBAC policy.
 func main() {
 	flag.Parse()
 
@@ -138,6 +101,37 @@ func main() {
 	creds, err := credentials.NewServerTLSFromFile(testdata.Path("server1.pem"), testdata.Path("server1.key"))
 	if err != nil {
 		log.Fatalf("failed to create credentials: %v", err)
+	}
+
+	// Create CEL engine.
+	// User TODO: initialize engine with RBAC policy
+	engine := celEvaluationEngine{}
+
+	// Create interceptors.
+	rbacUnaryInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		// authorization (CEL engine)
+		auth, err := authorized(engine, ctx)
+		if err != nil {
+			return nil, err
+		} else if !auth {
+			return nil, errUnauthorized
+		}
+		// invoking handler
+		m, err := handler(ctx, req)
+		return m, err
+	}
+
+	rbacStreamInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		// authorization (CEL engine)
+		auth, err := authorized(engine, ss.Context())
+		if err != nil {
+			return err
+		} else if !auth {
+			return errUnauthorized
+		}
+		// invoking handler
+		err = handler(srv, newWrappedStream(ss))
+		return err
 	}
 
 	// Create the server.

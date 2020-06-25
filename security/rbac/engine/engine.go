@@ -78,7 +78,7 @@ func NewCelEvaluationEngine(rbac envoy_config_rbac_v2.RBAC) celEvaluationEngine 
 // }
 
 // The core function that evaluates whether an RPC is authorized.
-func (engine celEvaluationEngine) evaluate(args AuthorizationArgs) AuthorizationDecision {
+func (engine celEvaluationEngine) Evaluate(args AuthorizationArgs) AuthorizationDecision {
 	for policyName, condition := range engine.conditions {
 		if matches(condition, args) {
 			var decision Decision

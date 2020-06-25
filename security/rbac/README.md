@@ -10,6 +10,6 @@ one. A decription of what interceptors are and how they are used can be found
 
 To set up an example server with both a unary and a stream interceptor, copy the
 code in `engine/main.go` and adjust any parameters as needed. Specifically, users
-will need to fill in the function `getEngine()` to return the CEL engine they 
-would like to use, which they can create using factory methods in `engine/engine.go`. 
-Users may also write their own interceptors from scratch.
+will need to initialize the variable `engine` in the `main` function with an RBAC
+policy, which they can create using factory methods in `engine/engine.go`. Users 
+may also write their own interceptors from scratch.
