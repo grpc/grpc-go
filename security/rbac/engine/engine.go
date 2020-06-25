@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
+// Input of CEL engine.
 type AuthorizationArgs struct {
 	md 			metadata.MD
 	peerInfo 	*peer.Peer
