@@ -135,6 +135,7 @@ balancer.Picker
 grpc.CallCustomCodec
 grpc.Code
 grpc.Compressor
+grpc.CustomCodec
 grpc.Decompressor
 grpc.MaxMsgSize
 grpc.MethodConfig
