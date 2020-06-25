@@ -659,8 +659,8 @@ func TestOptionsConfig(t *testing.T) {
 			}
 			// Verify that the system-provided certificates would be used
 			// when no verification method was set in serverOptions.
-			if serverOptions.VType < SkipVerification && serverOptions.RootCACerts == nil &&
-				serverOptions.GetRootCAs == nil && serverOptions.RequireClientCert && serverConfig.ClientCAs == nil {
+			if serverOptions.RootCACerts == nil && serverOptions.GetRootCAs == nil &&
+				serverOptions.RequireClientCert && serverConfig.ClientCAs == nil {
 				t.Fatalf("Failed to assign system-provided certificates on the server side.")
 			}
 			clientOptions := &ClientOptions{
@@ -672,8 +672,8 @@ func TestOptionsConfig(t *testing.T) {
 			}
 			// Verify that the system-provided certificates would be used
 			// when no verification method was set in clientOptions.
-			if clientOptions.VType < SkipVerification && clientOptions.RootCACerts == nil &&
-				clientOptions.GetRootCAs == nil && clientConfig.RootCAs == nil {
+			if clientOptions.RootCACerts == nil && clientOptions.GetRootCAs == nil &&
+				clientConfig.RootCAs == nil {
 				t.Fatalf("Failed to assign system-provided certificates on the client side.")
 			}
 		})

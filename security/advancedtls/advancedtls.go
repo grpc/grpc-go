@@ -187,7 +187,7 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 			"client needs to provide custom verification mechanism if choose to skip default verification")
 	}
 	rootCAs := o.RootCACerts
-	if o.VType < SkipVerification && o.RootCACerts == nil && o.GetRootCAs == nil {
+	if o.VType != SkipVerification && o.RootCACerts == nil && o.GetRootCAs == nil {
 		// Set rootCAs to system default.
 		systemRootCAs, err := x509.SystemCertPool()
 		if err != nil {
@@ -218,7 +218,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 			"server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
 	clientCAs := o.RootCACerts
-	if o.VType < SkipVerification && o.RootCACerts == nil && o.GetRootCAs == nil && o.RequireClientCert {
+	if o.VType != SkipVerification && o.RootCACerts == nil && o.GetRootCAs == nil && o.RequireClientCert {
 		// Set clientCAs to system default.
 		systemRootCAs, err := x509.SystemCertPool()
 		if err != nil {
