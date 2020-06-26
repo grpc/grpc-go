@@ -43,6 +43,11 @@ const (
 	DecisionUnknown
 )
 
+// String returns the string representation of a Decision object
+func (d Decision) String() string {
+	return [...]string{"DecisionAllow", "DecisionDeny", "DecisionUnknown"}[d]
+}
+
 // AuthorizationDecision is the output of CEL engine.
 type AuthorizationDecision struct {
 	decision             Decision
@@ -50,6 +55,7 @@ type AuthorizationDecision struct {
 }
 
 // Returns whether or not a policy is matched.
+// If args is empty, the match always fails.
 func matches(condition *expr.Expr, args AuthorizationArgs) bool {
 	// TODO
 	return false
