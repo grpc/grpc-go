@@ -100,6 +100,8 @@ var (
 	useBufconn          = flag.Bool("bufconn", false, "Use in-memory connection instead of system network I/O")
 	enableKeepalive     = flag.Bool("enable_keepalive", false, "Enable client keepalive. \n"+
 		"Keepalive.Time is set to 10s, Keepalive.Timeout is set to 1s, Keepalive.PermitWithoutStream is set to true.")
+
+	logger = grpclog.Component("benchmark")
 )
 
 const (
@@ -314,7 +316,7 @@ func makeClient(bf stats.Features) (testpb.BenchmarkServiceClient, func()) {
 		var err error
 		lis, err = net.Listen("tcp", "localhost:0")
 		if err != nil {
-			grpclog.Fatalf("Failed to listen: %v", err)
+			logger.Fatalf("Failed to listen: %v", err)
 		}
 		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, address string) (net.Conn, error) {
 			return nw.ContextDialer((&net.Dialer{}).DialContext)(ctx, "tcp", lis.Addr().String())
@@ -351,7 +353,7 @@ func makeFuncStream(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 	for i := 0; i < bf.MaxConcurrentCalls; i++ {
 		stream, err := tc.StreamingCall(context.Background())
 		if err != nil {
-			grpclog.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+			logger.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 		}
 		streams[i] = stream
 	}
@@ -377,7 +379,7 @@ func makeFuncUnconstrainedStreamPreloaded(bf stats.Features) (rpcSendFunc, rpcRe
 		preparedMsg[i] = &grpc.PreparedMsg{}
 		err := preparedMsg[i].Encode(stream, req)
 		if err != nil {
-			grpclog.Fatalf("%v.Encode(%v, %v) = %v", preparedMsg[i], req, stream, err)
+			logger.Fatalf("%v.Encode(%v, %v) = %v", preparedMsg[i], req, stream, err)
 		}
 	}
 
@@ -405,7 +407,7 @@ func setupUnconstrainedStream(bf stats.Features) ([]testpb.BenchmarkService_Stre
 	for i := 0; i < bf.MaxConcurrentCalls; i++ {
 		stream, err := tc.UnconstrainedStreamingCall(context.Background())
 		if err != nil {
-			grpclog.Fatalf("%v.UnconstrainedStreamingCall(_) = _, %v", tc, err)
+			logger.Fatalf("%v.UnconstrainedStreamingCall(_) = _, %v", tc, err)
 		}
 		streams[i] = stream
 	}
@@ -424,13 +426,13 @@ func setupUnconstrainedStream(bf stats.Features) ([]testpb.BenchmarkService_Stre
 // request and response sizes.
 func unaryCaller(client testpb.BenchmarkServiceClient, reqSize, respSize int) {
 	if err := bm.DoUnaryCall(client, reqSize, respSize); err != nil {
-		grpclog.Fatalf("DoUnaryCall failed: %v", err)
+		logger.Fatalf("DoUnaryCall failed: %v", err)
 	}
 }
 
 func streamCaller(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
 	if err := bm.DoStreamingRoundTrip(stream, reqSize, respSize); err != nil {
-		grpclog.Fatalf("DoStreamingRoundTrip failed: %v", err)
+		logger.Fatalf("DoStreamingRoundTrip failed: %v", err)
 	}
 }
 

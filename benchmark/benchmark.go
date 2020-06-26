@@ -35,18 +35,20 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var logger = grpclog.Component("benchmark")
+
 // Allows reuse of the same testpb.Payload object.
 func setPayload(p *testpb.Payload, t testpb.PayloadType, size int) {
 	if size < 0 {
-		grpclog.Fatalf("Requested a response with invalid length %d", size)
+		logger.Fatalf("Requested a response with invalid length %d", size)
 	}
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
 	case testpb.PayloadType_UNCOMPRESSABLE:
-		grpclog.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
+		logger.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
 	default:
-		grpclog.Fatalf("Unsupported payload type: %d", t)
+		logger.Fatalf("Unsupported payload type: %d", t)
 	}
 	p.Type = t
 	p.Body = body
@@ -213,11 +215,11 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) func() {
 	case "bytebuf":
 		respSize, ok := info.Metadata.(int32)
 		if !ok {
-			grpclog.Fatalf("failed to StartServer, invalid metadata: %v, for Type: %v", info.Metadata, info.Type)
+			logger.Fatalf("failed to StartServer, invalid metadata: %v, for Type: %v", info.Metadata, info.Type)
 		}
 		testpb.RegisterBenchmarkServiceServer(s, &byteBufServer{respSize: respSize})
 	default:
-		grpclog.Fatalf("failed to StartServer, unknown Type: %v", info.Type)
+		logger.Fatalf("failed to StartServer, unknown Type: %v", info.Type)
 	}
 	go s.Serve(info.Listener)
 	return func() {
@@ -288,7 +290,7 @@ func NewClientConnWithContext(ctx context.Context, addr string, opts ...grpc.Dia
 	opts = append(opts, grpc.WithReadBufferSize(128*1024))
 	conn, err := grpc.DialContext(ctx, addr, opts...)
 	if err != nil {
-		grpclog.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
+		logger.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
 	}
 	return conn
 }
