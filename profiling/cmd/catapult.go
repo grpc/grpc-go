@@ -26,7 +26,6 @@ import (
 	"sort"
 	"strings"
 
-	"google.golang.org/grpc/grpclog"
 	ppb "google.golang.org/grpc/profiling/proto"
 )
 
@@ -177,7 +176,7 @@ func streamStatsCatapultJSONSingle(stat *ppb.Stat, baseSec int64, baseNsec int32
 					flowEndPID = opid
 					flowEndTID = fmt.Sprintf("%d", stat.Timers[flowEndID].GoId)
 				} else {
-					grpclog.Infof("cannot find %s/grpc/stream/recv/header for %s/http2/recv/header", opid, opid)
+					logger.Infof("cannot find %s/grpc/stream/recv/header for %s/http2/recv/header", opid, opid)
 				}
 			case "/http2/recv/dataFrame/loopyReader":
 				flowEndID = filterCounter(stat, "/recvAndDecompress", lrc.GetAndInc("/http2/recv/dataFrame/loopyReader"))
@@ -185,7 +184,7 @@ func streamStatsCatapultJSONSingle(stat *ppb.Stat, baseSec int64, baseNsec int32
 					flowEndPID = opid
 					flowEndTID = fmt.Sprintf("%d", stat.Timers[flowEndID].GoId)
 				} else {
-					grpclog.Infof("cannot find %s/recvAndDecompress for %s/http2/recv/dataFrame/loopyReader", opid, opid)
+					logger.Infof("cannot find %s/recvAndDecompress for %s/http2/recv/dataFrame/loopyReader", opid, opid)
 				}
 			default:
 				flowEndID = -1
@@ -232,7 +231,7 @@ func streamStatsCatapultJSONSingle(stat *ppb.Stat, baseSec int64, baseNsec int32
 					flowBeginPID = opid
 					flowBeginTID = fmt.Sprintf("%d", stat.Timers[flowBeginID].GoId)
 				} else {
-					grpclog.Infof("cannot find /%d/transport/enqueue for /%d/http2/send/dataFrame/loopyWriter/preprocess", connectionCounter, connectionCounter)
+					logger.Infof("cannot find /%d/transport/enqueue for /%d/http2/send/dataFrame/loopyWriter/preprocess", connectionCounter, connectionCounter)
 				}
 			default:
 				flowBeginID = -1
@@ -305,14 +304,14 @@ func timerBeginIsBefore(ti *ppb.Timer, tj *ppb.Timer) bool {
 // write to. The grpc-go profiling snapshot is processed and converted to a
 // JSON format that can be understood by trace-viewer.
 func streamStatsCatapultJSON(s *snapshot, streamStatsCatapultJSONFileName string) (err error) {
-	grpclog.Infof("calculating stream stats filters")
+	logger.Infof("calculating stream stats filters")
 	filterArray := strings.Split(*flagStreamStatsFilter, ",")
 	filter := make(map[string]bool)
 	for _, f := range filterArray {
 		filter[f] = true
 	}
 
-	grpclog.Infof("filter stream stats for %s", *flagStreamStatsFilter)
+	logger.Infof("filter stream stats for %s", *flagStreamStatsFilter)
 	var streamStats []*ppb.Stat
 	for _, stat := range s.StreamStats {
 		if _, ok := filter[stat.Tags]; ok {
@@ -320,14 +319,14 @@ func streamStatsCatapultJSON(s *snapshot, streamStatsCatapultJSONFileName string
 		}
 	}
 
-	grpclog.Infof("sorting timers within all stats")
+	logger.Infof("sorting timers within all stats")
 	for id := range streamStats {
 		sort.Slice(streamStats[id].Timers, func(i, j int) bool {
 			return timerBeginIsBefore(streamStats[id].Timers[i], streamStats[id].Timers[j])
 		})
 	}
 
-	grpclog.Infof("sorting stream stats")
+	logger.Infof("sorting stream stats")
 	sort.Slice(streamStats, func(i, j int) bool {
 		if len(streamStats[j].Timers) == 0 {
 			return true
@@ -352,7 +351,7 @@ func streamStatsCatapultJSON(s *snapshot, streamStatsCatapultJSONFileName string
 	}
 
 	// All timestamps use the earliest timestamp available as the reference.
-	grpclog.Infof("calculating the earliest timestamp across all timers")
+	logger.Infof("calculating the earliest timestamp across all timers")
 	var base *ppb.Timer
 	for _, stat := range streamStats {
 		for _, timer := range stat.Timers {
@@ -362,34 +361,34 @@ func streamStatsCatapultJSON(s *snapshot, streamStatsCatapultJSONFileName string
 		}
 	}
 
-	grpclog.Infof("converting %d stats to catapult JSON format", len(streamStats))
+	logger.Infof("converting %d stats to catapult JSON format", len(streamStats))
 	var jsonNodes []jsonNode
 	for _, stat := range streamStats {
 		jsonNodes = append(jsonNodes, streamStatsCatapultJSONSingle(stat, base.BeginSec, base.BeginNsec)...)
 	}
 
-	grpclog.Infof("marshalling catapult JSON")
+	logger.Infof("marshalling catapult JSON")
 	b, err := json.Marshal(jsonNodes)
 	if err != nil {
-		grpclog.Errorf("cannot marshal JSON: %v", err)
+		logger.Errorf("cannot marshal JSON: %v", err)
 		return err
 	}
 
-	grpclog.Infof("creating catapult JSON file")
+	logger.Infof("creating catapult JSON file")
 	streamStatsCatapultJSONFile, err := os.Create(streamStatsCatapultJSONFileName)
 	if err != nil {
-		grpclog.Errorf("cannot create file %s: %v", streamStatsCatapultJSONFileName, err)
+		logger.Errorf("cannot create file %s: %v", streamStatsCatapultJSONFileName, err)
 		return err
 	}
 	defer streamStatsCatapultJSONFile.Close()
 
-	grpclog.Infof("writing catapult JSON to disk")
+	logger.Infof("writing catapult JSON to disk")
 	_, err = streamStatsCatapultJSONFile.Write(b)
 	if err != nil {
-		grpclog.Errorf("cannot write marshalled JSON: %v", err)
+		logger.Errorf("cannot write marshalled JSON: %v", err)
 		return err
 	}
 
-	grpclog.Infof("successfully wrote catapult JSON file %s", streamStatsCatapultJSONFileName)
+	logger.Infof("successfully wrote catapult JSON file %s", streamStatsCatapultJSONFileName)
 	return nil
 }

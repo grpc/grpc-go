@@ -62,6 +62,7 @@ var (
 	makeHTTPDoer         = makeHTTPClient
 	readSubjectTokenFrom = ioutil.ReadFile
 	readActorTokenFrom   = ioutil.ReadFile
+	logger               = grpclog.Component("sts")
 )
 
 // Options configures the parameters used for an STS based token exchange.
@@ -311,7 +312,7 @@ func sendRequest(client httpDoer, req *http.Request) ([]byte, error) {
 	if resp.StatusCode == http.StatusOK {
 		return body, nil
 	}
-	grpclog.Warningf("http status %d, body: %s", resp.StatusCode, string(body))
+	logger.Warningf("http status %d, body: %s", resp.StatusCode, string(body))
 	return nil, fmt.Errorf("http status %d, body: %s", resp.StatusCode, string(body))
 }
 

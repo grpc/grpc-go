@@ -40,6 +40,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var grpclogLogger = grpclog.Component("binarylog")
+
 type s struct {
 	grpctest.Tester
 }
@@ -539,7 +541,7 @@ func (ed *expectedData) newClientMessageEntry(client bool, rpcID, inRPCID uint64
 	}
 	data, err := proto.Marshal(msg)
 	if err != nil {
-		grpclog.Infof("binarylogging_testing: failed to marshal proto message: %v", err)
+		grpclogLogger.Infof("binarylogging_testing: failed to marshal proto message: %v", err)
 	}
 	return &pb.GrpcLogEntry{
 		Timestamp:            nil,
@@ -563,7 +565,7 @@ func (ed *expectedData) newServerMessageEntry(client bool, rpcID, inRPCID uint64
 	}
 	data, err := proto.Marshal(msg)
 	if err != nil {
-		grpclog.Infof("binarylogging_testing: failed to marshal proto message: %v", err)
+		grpclogLogger.Infof("binarylogging_testing: failed to marshal proto message: %v", err)
 	}
 	return &pb.GrpcLogEntry{
 		Timestamp:            nil,
@@ -612,7 +614,7 @@ func (ed *expectedData) newServerTrailerEntry(client bool, rpcID, inRPCID uint64
 	}
 	st, ok := status.FromError(stErr)
 	if !ok {
-		grpclog.Info("binarylogging: error in trailer is not a status error")
+		grpclogLogger.Info("binarylogging: error in trailer is not a status error")
 	}
 	stProto := st.Proto()
 	var (
@@ -622,7 +624,7 @@ func (ed *expectedData) newServerTrailerEntry(client bool, rpcID, inRPCID uint64
 	if stProto != nil && len(stProto.Details) != 0 {
 		detailsBytes, err = proto.Marshal(stProto)
 		if err != nil {
-			grpclog.Infof("binarylogging: failed to marshal status proto: %v", err)
+			grpclogLogger.Infof("binarylogging: failed to marshal status proto: %v", err)
 		}
 	}
 	return &pb.GrpcLogEntry{

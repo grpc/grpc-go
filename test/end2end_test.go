@@ -4919,15 +4919,14 @@ func logOutputHasContents(v []byte, wakeup chan<- bool) bool {
 	return false
 }
 
-var verboseLogs = flag.Bool("verbose_logs", false, "show all grpclog output, without filtering")
+var verboseLogs = flag.Bool("verbose_logs", false, "show all log output, without filtering")
 
 func noop() {}
 
-// declareLogNoise declares that t is expected to emit the following noisy phrases,
-// even on success. Those phrases will be filtered from grpclog output
-// and only be shown if *verbose_logs or t ends up failing.
-// The returned restore function should be called with defer to be run
-// before the test ends.
+// declareLogNoise declares that t is expected to emit the following noisy
+// phrases, even on success. Those phrases will be filtered from log output and
+// only be shown if *verbose_logs or t ends up failing. The returned restore
+// function should be called with defer to be run before the test ends.
 func declareLogNoise(t *testing.T, phrases ...string) (restore func()) {
 	if *verboseLogs {
 		return noop
