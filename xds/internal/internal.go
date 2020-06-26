@@ -21,8 +21,6 @@ package internal
 
 import (
 	"fmt"
-
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 type clientID string
@@ -48,13 +46,4 @@ type LocalityID struct {
 
 func (l LocalityID) String() string {
 	return fmt.Sprintf("%s-%s-%s", l.Region, l.Zone, l.SubZone)
-}
-
-// ToProto convert Locality to the proto representation.
-func (l LocalityID) ToProto() *corepb.Locality {
-	return &corepb.Locality{
-		Region:  l.Region,
-		Zone:    l.Zone,
-		SubZone: l.SubZone,
-	}
 }
