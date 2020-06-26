@@ -34,6 +34,7 @@ var (
 
 	// For overriding in tests.
 	newRLSClientFunc = newRLSClient
+	logger           = grpclog.Component("rls")
 )
 
 // rlsBalancer implements the RLS LB policy.
@@ -75,18 +76,18 @@ func (lb *rlsBalancer) run() {
 // channel accordingly.
 // TODO(easwars): Handle updates to other fields in the service config.
 func (lb *rlsBalancer) handleClientConnUpdate(ccs *balancer.ClientConnState) {
-	grpclog.Infof("rls: service config: %+v", ccs.BalancerConfig)
+	logger.Infof("rls: service config: %+v", ccs.BalancerConfig)
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
 
 	if lb.done.HasFired() {
-		grpclog.Warning("rls: received service config after balancer close")
+		logger.Warning("rls: received service config after balancer close")
 		return
 	}
 
 	newCfg := ccs.BalancerConfig.(*lbConfig)
 	if lb.lbCfg.Equal(newCfg) {
-		grpclog.Info("rls: new service config matches existing config")
+		logger.Info("rls: new service config matches existing config")
 		return
 	}
 
@@ -109,12 +110,12 @@ func (lb *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error
 func (lb *rlsBalancer) ResolverError(error) {
 	// ResolverError is called by gRPC when the name resolver reports an error.
 	// TODO(easwars): How do we handle this?
-	grpclog.Fatal("rls: ResolverError is not yet unimplemented")
+	logger.Fatal("rls: ResolverError is not yet unimplemented")
 }
 
 // UpdateSubConnState implements balancer.V2Balancer interface.
 func (lb *rlsBalancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConnState) {
-	grpclog.Fatal("rls: UpdateSubConnState is not yet implemented")
+	logger.Fatal("rls: UpdateSubConnState is not yet implemented")
 }
 
 // Cleans up the resources allocated by the LB policy including the clientConn
@@ -162,7 +163,7 @@ func (lb *rlsBalancer) updateControlChannel(newCfg *lbConfig) {
 
 	cc, err := grpc.Dial(newCfg.lookupService, dopts...)
 	if err != nil {
-		grpclog.Errorf("rls: dialRLS(%s, %v): %v", newCfg.lookupService, lb.opts, err)
+		logger.Errorf("rls: dialRLS(%s, %v): %v", newCfg.lookupService, lb.opts, err)
 		// An error from a non-blocking dial indicates something serious. We
 		// should continue to use the old control channel if one exists, and
 		// return so that the rest of the config updates can be processes.
@@ -185,14 +186,14 @@ func dialCreds(opts balancer.BuildOptions) grpc.DialOption {
 	switch {
 	case opts.DialCreds != nil:
 		if err := opts.DialCreds.OverrideServerName(server); err != nil {
-			grpclog.Warningf("rls: OverrideServerName(%s) = (%v), using Insecure", server, err)
+			logger.Warningf("rls: OverrideServerName(%s) = (%v), using Insecure", server, err)
 			return grpc.WithInsecure()
 		}
 		return grpc.WithTransportCredentials(opts.DialCreds)
 	case opts.CredsBundle != nil:
 		return grpc.WithTransportCredentials(opts.CredsBundle.TransportCredentials())
 	default:
-		grpclog.Warning("rls: no credentials available, using Insecure")
+		logger.Warning("rls: no credentials available, using Insecure")
 		return grpc.WithInsecure()
 	}
 }

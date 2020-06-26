@@ -30,6 +30,8 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 )
 
+var logger = grpclog.Component("rls")
+
 // Key represents the cache key used to uniquely identify a cache entry.
 type Key struct {
 	// Path is the full path of the incoming RPC request.
@@ -175,7 +177,7 @@ func (lru *LRU) removeToFit(newSize int64) {
 		if elem == nil {
 			// This is a corner case where the cache is empty, but the new entry
 			// to be added is bigger than maxSize.
-			grpclog.Info("rls: newly added cache entry exceeds cache maxSize")
+			logger.Info("rls: newly added cache entry exceeds cache maxSize")
 			return
 		}
 
@@ -184,7 +186,7 @@ func (lru *LRU) removeToFit(newSize int64) {
 			// When the oldest entry is too new (it hasn't even spent a default
 			// minimum amount of time in the cache), we abort and allow the
 			// cache to grow bigger than the configured maxSize.
-			grpclog.Info("rls: LRU eviction finds oldest entry to be too new. Allowing cache to exceed maxSize momentarily")
+			logger.Info("rls: LRU eviction finds oldest entry to be too new. Allowing cache to exceed maxSize momentarily")
 			return
 		}
 		lru.removeElement(elem)

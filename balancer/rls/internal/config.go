@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/rls/internal/keys"
 	rlspb "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -238,11 +237,11 @@ func (*rlsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig,
 		return nil, fmt.Errorf("rls: stale_age is set, but max_age is not in service config {%+v}", string(c))
 	}
 	if staleAge >= maxAge {
-		grpclog.Info("rls: stale_age {%v} is greater than max_age {%v}, ignoring it", staleAge, maxAge)
+		logger.Info("rls: stale_age {%v} is greater than max_age {%v}, ignoring it", staleAge, maxAge)
 		staleAge = 0
 	}
 	if maxAge == 0 || maxAge > maxMaxAge {
-		grpclog.Infof("rls: max_age in service config is %v, using %v", maxAge, maxMaxAge)
+		logger.Infof("rls: max_age in service config is %v, using %v", maxAge, maxMaxAge)
 		maxAge = maxMaxAge
 	}
 

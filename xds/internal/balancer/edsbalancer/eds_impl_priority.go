@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
+var logger = grpclog.Component("xds")
 var errAllPrioritiesRemoved = errors.New("eds: no locality is provided, all priorities are removed")
 
 // handlePriorityChange handles priority after EDS adds/removes a
@@ -134,13 +135,13 @@ func (edsImpl *edsBalancerImpl) handlePriorityWithNewState(priority priorityType
 	defer edsImpl.priorityMu.Unlock()
 
 	if !edsImpl.priorityInUse.isSet() {
-		grpclog.Infof("eds: received picker update when no priority is in use (EDS returned an empty list)")
+		logger.Infof("eds: received picker update when no priority is in use (EDS returned an empty list)")
 		return false
 	}
 
 	if edsImpl.priorityInUse.higherThan(priority) {
 		// Lower priorities should all be closed, this is an unexpected update.
-		grpclog.Infof("eds: received picker update from priority lower then priorityInUse")
+		logger.Infof("eds: received picker update from priority lower then priorityInUse")
 		return false
 	}
 

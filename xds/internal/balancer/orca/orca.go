@@ -27,6 +27,8 @@ import (
 
 const mdKey = "X-Endpoint-Load-Metrics-Bin"
 
+var logger = grpclog.Component("xds")
+
 // toBytes converts a orca load report into bytes.
 func toBytes(r *orcapb.OrcaLoadReport) []byte {
 	if r == nil {
@@ -35,7 +37,7 @@ func toBytes(r *orcapb.OrcaLoadReport) []byte {
 
 	b, err := proto.Marshal(r)
 	if err != nil {
-		grpclog.Warningf("orca: failed to marshal load report: %v", err)
+		logger.Warningf("orca: failed to marshal load report: %v", err)
 		return nil
 	}
 	return b
@@ -54,7 +56,7 @@ func ToMetadata(r *orcapb.OrcaLoadReport) metadata.MD {
 func fromBytes(b []byte) *orcapb.OrcaLoadReport {
 	ret := new(orcapb.OrcaLoadReport)
 	if err := proto.Unmarshal(b, ret); err != nil {
-		grpclog.Warningf("orca: failed to unmarshal load report: %v", err)
+		logger.Warningf("orca: failed to unmarshal load report: %v", err)
 		return nil
 	}
 	return ret
