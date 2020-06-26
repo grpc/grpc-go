@@ -64,7 +64,7 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 		cc:       cc,
 		updateCh: make(chan suWithError, 1),
 	}
-	r.logger = grpclog.NewPrefixLogger(loggingPrefix(r))
+	r.logger = grpclog.NewPrefixLogger(logger, loggingPrefix(r))
 	r.logger.Infof("Creating resolver for target: %+v", t)
 
 	if config.Creds == nil {

@@ -20,9 +20,13 @@ package resolver
 
 import (
 	"fmt"
+
+	"google.golang.org/grpc/grpclog"
 )
 
 const prefix = "[xds-resolver %p] "
+
+var logger = grpclog.Component("xds")
 
 func loggingPrefix(p *xdsResolver) string {
 	return fmt.Sprintf(prefix, p)
