@@ -30,6 +30,8 @@ import (
 
 const nodeMetadataHostnameKey = "PROXYLESS_CLIENT_HOSTNAME"
 
+var logger = grpclog.Component("xds")
+
 // ReportLoad sends the load of the given clusterName from loadStore to the
 // given server. If the server is not an empty string, and is different from the
 // xds server, a new ClientConn will be created.
@@ -53,7 +55,7 @@ func (c *Client) ReportLoad(server string, clusterName string, loadStore lrs.Sto
 		ccNew, err := grpc.Dial(server, dopts...)
 		if err != nil {
 			// An error from a non-blocking dial indicates something serious.
-			grpclog.Infof("xds: failed to dial load report server {%s}: %v", server, err)
+			logger.Infof("xds: failed to dial load report server {%s}: %v", server, err)
 			return func() {}
 		}
 		cc = ccNew
