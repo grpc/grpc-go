@@ -623,3 +623,59 @@ func TestWrapSyscallConn(t *testing.T) {
 			wrapConn)
 	}
 }
+
+func TestOptionsConfig(t *testing.T) {
+	serverPeerCert, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
+		testdata.Path("server_key_1.pem"))
+	if err != nil {
+		t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
+	}
+	tests := []struct {
+		desc            string
+		clientVType     VerificationType
+		serverMutualTLS bool
+		serverCert      []tls.Certificate
+		serverVType     VerificationType
+	}{
+		{
+			desc:            "Client uses system-provided RootCAs; server uses system-provided ClientCAs",
+			clientVType:     CertVerification,
+			serverMutualTLS: true,
+			serverCert:      []tls.Certificate{serverPeerCert},
+			serverVType:     CertAndHostVerification,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			serverOptions := &ServerOptions{
+				Certificates:      test.serverCert,
+				RequireClientCert: test.serverMutualTLS,
+				VType:             test.serverVType,
+			}
+			serverConfig, err := serverOptions.config()
+			if err != nil {
+				t.Fatalf("Unable to generate serverConfig. Error: %v", err)
+			}
+			// Verify that the system-provided certificates would be used
+			// when no verification method was set in serverOptions.
+			if serverOptions.RootCACerts == nil && serverOptions.GetRootCAs == nil &&
+				serverOptions.RequireClientCert && serverConfig.ClientCAs == nil {
+				t.Fatalf("Failed to assign system-provided certificates on the server side.")
+			}
+			clientOptions := &ClientOptions{
+				VType: test.clientVType,
+			}
+			clientConfig, err := clientOptions.config()
+			if err != nil {
+				t.Fatalf("Unable to generate clientConfig. Error: %v", err)
+			}
+			// Verify that the system-provided certificates would be used
+			// when no verification method was set in clientOptions.
+			if clientOptions.RootCACerts == nil && clientOptions.GetRootCAs == nil &&
+				clientConfig.RootCAs == nil {
+				t.Fatalf("Failed to assign system-provided certificates on the client side.")
+			}
+		})
+	}
+}
