@@ -32,6 +32,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
 
 	"google.golang.org/protobuf/compiler/protogen"
 )
@@ -39,6 +42,11 @@ import (
 var requireUnimplemented *bool
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), version())
+		os.Exit(0)
+	}
+
 	var flags flag.FlagSet
 	requireUnimplemented = flags.Bool("requireUnimplementedServers", true, "unset to match legacy behavior")
 
