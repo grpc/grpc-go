@@ -41,16 +41,13 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 	tests := []struct {
 		name string
 		urls []*url.URL
-		// If we expect SPIFFEIDFromState to return an error.
-		expectError bool
 		// If we expect a SPIFFE ID to be returned.
 		expectID bool
 	}{
 		{
-			name:        "empty URIs",
-			urls:        []*url.URL{},
-			expectError: false,
-			expectID:    false,
+			name:     "empty URIs",
+			urls:     []*url.URL{},
+			expectID: false,
 		},
 		{
 			name: "good SPIFFE ID",
@@ -61,15 +58,8 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 					Path:    "workload/wl1",
 					RawPath: "workload/wl1",
 				},
-				{
-					Scheme:  "https",
-					Host:    "foo.bar.com",
-					Path:    "workload/wl1",
-					RawPath: "workload/wl1",
-				},
 			},
-			expectError: false,
-			expectID:    true,
+			expectID: true,
 		},
 		{
 			name: "invalid host",
@@ -81,8 +71,7 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 					RawPath: "workload/wl1",
 				},
 			},
-			expectError: true,
-			expectID:    false,
+			expectID: false,
 		},
 		{
 			name: "invalid path",
@@ -94,8 +83,7 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 					RawPath: "",
 				},
 			},
-			expectError: true,
-			expectID:    false,
+			expectID: false,
 		},
 		{
 			name: "large path",
@@ -107,8 +95,7 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 					RawPath: string(make([]byte, 2050)),
 				},
 			},
-			expectError: true,
-			expectID:    false,
+			expectID: false,
 		},
 		{
 			name: "large host",
@@ -120,11 +107,10 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 					RawPath: "workload/wl1",
 				},
 			},
-			expectError: true,
-			expectID:    false,
+			expectID: false,
 		},
 		{
-			name: "multiple SPIFFE IDs",
+			name: "multiple URI SANs with SPIFFE ID",
 			urls: []*url.URL{
 				{
 					Scheme:  "spiffe",
@@ -138,18 +124,38 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 					Path:    "workload/wl2",
 					RawPath: "workload/wl2",
 				},
+				{
+					Scheme:  "https",
+					Host:    "foo.bar.com",
+					Path:    "workload/wl1",
+					RawPath: "workload/wl1",
+				},
 			},
-			expectError: false,
-			expectID:    false,
+			expectID: false,
+		},
+		{
+			name: "multiple URI SANs without SPIFFE ID",
+			urls: []*url.URL{
+				{
+					Scheme:  "https",
+					Host:    "foo.bar.com",
+					Path:    "workload/wl1",
+					RawPath: "workload/wl1",
+				},
+				{
+					Scheme:  "ssh",
+					Host:    "foo.bar.com",
+					Path:    "workload/wl1",
+					RawPath: "workload/wl1",
+				},
+			},
+			expectID: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			state := tls.ConnectionState{PeerCertificates: []*x509.Certificate{{URIs: tt.urls}}}
-			id, err := SPIFFEIDFromState(state)
-			if got, want := err != nil, tt.expectError; got != want {
-				t.Errorf("want expectError = %v, but got expectError = %v, with error %v", want, got, err)
-			}
+			id := SPIFFEIDFromState(state)
 			if got, want := id != nil, tt.expectID; got != want {
 				t.Errorf("want expectID = %v, but SPIFFE ID is %v", want, id)
 			}

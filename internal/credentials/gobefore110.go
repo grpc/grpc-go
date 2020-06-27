@@ -26,6 +26,6 @@ import (
 )
 
 //TODO(ZhenLian): delete this file when we remove Go 1.9 tests.
-func SPIFFEIDFromState(state tls.ConnectionState) (*url.URL, error) {
-	return nil, nil
+func SPIFFEIDFromState(state tls.ConnectionState) *url.URL {
+	return nil
 }

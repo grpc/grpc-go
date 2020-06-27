@@ -27,7 +27,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/url"
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/attributes"
@@ -88,7 +87,6 @@ func (s SecurityLevel) String() string {
 // This API is experimental.
 type CommonAuthInfo struct {
 	SecurityLevel SecurityLevel
-	SPIFFEID      *url.URL
 }
 
 // GetCommonAuthInfo returns the pointer to CommonAuthInfo struct.
