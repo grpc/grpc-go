@@ -33,17 +33,19 @@ package main
 import (
 	"flag"
 	"fmt"
+	"google.golang.org/grpc"
 	"os"
 	"path/filepath"
 
 	"google.golang.org/protobuf/compiler/protogen"
+
 )
 
 var requireUnimplemented *bool
 
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
-		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), version())
+		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), grpc.Version)
 		os.Exit(0)
 	}
 
