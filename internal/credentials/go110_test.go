@@ -110,7 +110,7 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 			expectID: false,
 		},
 		{
-			name: "multiple URI SANs with SPIFFE ID",
+			name: "multiple URI SANs",
 			urls: []*url.URL{
 				{
 					Scheme:  "spiffe",
@@ -144,6 +144,24 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 				},
 				{
 					Scheme:  "ssh",
+					Host:    "foo.bar.com",
+					Path:    "workload/wl1",
+					RawPath: "workload/wl1",
+				},
+			},
+			expectID: false,
+		},
+		{
+			name: "multiple URI SANs with one SPIFFE ID",
+			urls: []*url.URL{
+				{
+					Scheme:  "spiffe",
+					Host:    "foo.bar.com",
+					Path:    "workload/wl1",
+					RawPath: "workload/wl1",
+				},
+				{
+					Scheme:  "https",
 					Host:    "foo.bar.com",
 					Path:    "workload/wl1",
 					RawPath: "workload/wl1",

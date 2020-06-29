@@ -36,15 +36,13 @@ func SPIFFEIDFromState(state tls.ConnectionState) *url.URL {
 	if len(state.PeerCertificates) == 0 || len(state.PeerCertificates[0].URIs) == 0 {
 		return nil
 	}
-	spiffeIDFound := false
 	var spiffeID *url.URL
 	for _, uri := range state.PeerCertificates[0].URIs {
 		if uri == nil || uri.Scheme != "spiffe" || uri.Opaque != "" || (uri.User != nil && uri.User.Username() != "") {
 			continue
 		}
 		// From this point, we assume the uri is intended for a SPIFFE ID.
-		if len(uri.Host)+len(uri.Scheme)+len(uri.RawPath)+4 > 2048 ||
-			len(uri.Host)+len(uri.Scheme)+len(uri.Path)+4 > 2048 {
+		if len(uri.String()) > 2048 {
 			grpclog.Warning("invalid SPIFFE ID: total ID length larger than 2048 bytes")
 			return nil
 		}
@@ -57,12 +55,11 @@ func SPIFFEIDFromState(state tls.ConnectionState) *url.URL {
 			return nil
 		}
 		// A valid SPIFFE certificate can only have exactly one URI SAN field.
-		if spiffeIDFound && len(state.PeerCertificates[0].URIs) > 1 {
+		if len(state.PeerCertificates[0].URIs) > 1 {
 			grpclog.Warning("invalid SPIFFE ID: multiple URI SANs")
 			return nil
 		}
 		spiffeID = uri
-		spiffeIDFound = true
 	}
 	return spiffeID
 }
