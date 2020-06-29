@@ -76,7 +76,7 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 		bOpts:    opts,
 		updateCh: buffer.NewUnbounded(),
 	}
-	b.logger = grpclog.NewPrefixLogger(logger, loggingPrefix(b))
+	b.logger = prefixLogger((b))
 	b.logger.Infof("Created")
 	go b.run()
 	return b

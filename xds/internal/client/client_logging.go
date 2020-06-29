@@ -22,12 +22,13 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/grpclog"
+	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
 const prefix = "[xds-client %p] "
 
 var logger = grpclog.Component("xds")
 
-func loggingPrefix(p *Client) string {
-	return fmt.Sprintf(prefix, p)
+func prefixLogger(p *Client) *internalgrpclog.PrefixLogger {
+	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
 }

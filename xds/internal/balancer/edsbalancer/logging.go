@@ -22,12 +22,13 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/grpclog"
+	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
 const prefix = "[eds-lb %p] "
 
 var logger = grpclog.Component("xds")
 
-func loggingPrefix(p *edsBalancer) string {
-	return fmt.Sprintf(prefix, p)
+func prefixLogger(p *edsBalancer) *internalgrpclog.PrefixLogger {
+	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
 }

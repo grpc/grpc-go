@@ -64,7 +64,7 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		childPolicyUpdate: buffer.NewUnbounded(),
 	}
 	loadStore := lrs.NewStore()
-	x.logger = grpclog.NewPrefixLogger(logger, loggingPrefix(x))
+	x.logger = prefixLogger((x))
 	x.edsImpl = newEDSBalancer(x.cc, x.enqueueChildBalancerState, loadStore, x.logger)
 	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.buildOpts, loadStore, x.logger)
 	x.logger.Infof("Created")
