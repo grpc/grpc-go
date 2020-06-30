@@ -20,10 +20,15 @@ package client
 
 import (
 	"fmt"
+
+	"google.golang.org/grpc/grpclog"
+	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
 const prefix = "[xds-client %p] "
 
-func loggingPrefix(p *Client) string {
-	return fmt.Sprintf(prefix, p)
+var logger = grpclog.Component("xds")
+
+func prefixLogger(p *Client) *internalgrpclog.PrefixLogger {
+	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
 }

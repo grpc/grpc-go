@@ -128,7 +128,7 @@ func New(opts Options) (*Client, error) {
 		return nil, fmt.Errorf("xds: failed to dial balancer {%s}: %v", opts.Config.BalancerName, err)
 	}
 	c.cc = cc
-	c.logger = grpclog.NewPrefixLogger(loggingPrefix(c))
+	c.logger = prefixLogger((c))
 	c.logger.Infof("Created ClientConn to xDS server: %s", opts.Config.BalancerName)
 
 	c.v2c = newXDSV2Client(c, cc, opts.Config.NodeProto, backoff.DefaultExponential.Backoff, c.logger)

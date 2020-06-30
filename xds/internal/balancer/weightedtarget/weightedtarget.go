@@ -43,7 +43,7 @@ type weightedTargetBB struct{}
 
 func (wt *weightedTargetBB) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	b := &weightedTargetBalancer{}
-	b.logger = grpclog.NewPrefixLogger(loggingPrefix(b))
+	b.logger = prefixLogger((b))
 	b.bg = balancergroup.New(cc, nil, b.logger)
 	b.bg.Start()
 	b.logger.Infof("Created")
