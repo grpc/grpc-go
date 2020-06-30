@@ -19,6 +19,9 @@ proto:
 test: testdeps
 	go test -cpu 1,4 -timeout 7m google.golang.org/grpc/...
 
+testrbac: testdeps
+	cd security/rbac && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/rbac/...
+
 testsubmodule: testdeps
 	cd security/advancedtls && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/advancedtls/...
 

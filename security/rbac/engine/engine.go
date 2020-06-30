@@ -17,7 +17,12 @@
 package engine
 
 import (
+	"fmt"
+	"log"
+
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
+	cel "github.com/google/cel-go/cel"
+	"github.com/google/cel-go/checker/decls"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -50,29 +55,60 @@ func (d Decision) String() string {
 
 // AuthorizationDecision is the output of CEL engine.
 type AuthorizationDecision struct {
-	decision             Decision
-	authorizationContext string
+	decision   Decision
+	policyName string
+}
+
+// Converts and expression to a parsed expression, with SourceInfo nil
+func convertExprToParsedExpr(condition *expr.Expr) *expr.ParsedExpr {
+	return &expr.ParsedExpr{Expr: condition}
+}
+
+func exprToProgram(condition *expr.Expr) *cel.Program {
+	env, err := cel.NewEnv(
+		cel.Declarations(
+			decls.NewVar("source", decls.String),
+			decls.NewVar("origin", decls.String),
+			decls.NewVar("target", decls.String),
+		),
+	)
+	// Converts condition to ParsedExpr by setting SourceInfo empty.
+	pexpr := convertExprToParsedExpr(condition)
+	ast := cel.ParsedExprToAst(pexpr)
+	prg, err := env.Program(ast)
+	if err != nil {
+		log.Fatalf("program construction error: %s", err)
+	}
+	return &prg
 }
 
 // Returns whether or not a policy is matched.
 // If args is empty, the match always fails.
-func matches(condition *expr.Expr, args AuthorizationArgs) bool {
-	// TODO
-	return false
+func matches(program *cel.Program, args AuthorizationArgs) bool {
+	out, _, err := (*program).Eval(map[string]interface{}{
+		// "source": args.Source(),
+		// "origin": args.Origin(),
+		// "target": args.Target()
+	})
+	if err != nil {
+		log.Fatalf("evaluation error: %s", err)
+	}
+	fmt.Println(out) // 'true'
+	return out.Value().(bool)
 }
 
 // CelEvaluationEngine is the struct for CEL engine.
 type CelEvaluationEngine struct {
 	action     pb.RBAC_Action
-	conditions map[string]*expr.Expr
+	conditions map[string]*cel.Program
 }
 
 // NewCelEvaluationEngine builds a CEL evaluation engine from Envoy RBAC.
 func NewCelEvaluationEngine(rbac pb.RBAC) CelEvaluationEngine {
 	action := rbac.Action
-	conditions := make(map[string]*expr.Expr)
+	conditions := make(map[string]*cel.Program)
 	for policyName, policy := range rbac.Policies {
-		conditions[policyName] = policy.Condition
+		conditions[policyName] = exprToProgram(policy.Condition)
 	}
 	return CelEvaluationEngine{action, conditions}
 }
@@ -94,9 +130,9 @@ func (engine CelEvaluationEngine) Evaluate(args AuthorizationArgs) Authorization
 			} else {
 				decision = DecisionDeny
 			}
-			return AuthorizationDecision{decision, "Policy matched: " + policyName}
+			return AuthorizationDecision{decision, policyName}
 		}
 	}
 	// if no conditions matched
-	return AuthorizationDecision{DecisionUnknown, "No policies matched"}
+	return AuthorizationDecision{DecisionUnknown, ""}
 }
