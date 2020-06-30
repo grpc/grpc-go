@@ -396,8 +396,7 @@ func newLoadBalancer(numberOfBackends int, statsChan chan *lbpb.ClientStats) (ts
 var grpclbConfig = `{"loadBalancingConfig": [{"grpclb": {}}]}`
 
 func (s) TestGRPCLB(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	tss, cleanup, err := newLoadBalancer(1, nil)
 	if err != nil {
@@ -419,7 +418,7 @@ func (s) TestGRPCLB(t *testing.T) {
 	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -444,8 +443,7 @@ func (s) TestGRPCLB(t *testing.T) {
 
 // The remote balancer sends response with duplicates to grpclb client.
 func (s) TestGRPCLBWeighted(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	tss, cleanup, err := newLoadBalancer(2, nil)
 	if err != nil {
@@ -470,7 +468,7 @@ func (s) TestGRPCLBWeighted(t *testing.T) {
 	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -510,8 +508,7 @@ func (s) TestGRPCLBWeighted(t *testing.T) {
 }
 
 func (s) TestDropRequest(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	tss, cleanup, err := newLoadBalancer(2, nil)
 	if err != nil {
@@ -536,7 +533,7 @@ func (s) TestDropRequest(t *testing.T) {
 	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -661,8 +658,7 @@ func (s) TestDropRequest(t *testing.T) {
 
 // When the balancer in use disconnects, grpclb should connect to the next address from resolved balancer address list.
 func (s) TestBalancerDisconnects(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	var (
 		tests []*testServers
@@ -694,7 +690,7 @@ func (s) TestBalancerDisconnects(t *testing.T) {
 	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -739,8 +735,7 @@ func (s) TestFallback(t *testing.T) {
 	balancer.Register(newLBBuilderWithFallbackTimeout(100 * time.Millisecond))
 	defer balancer.Register(newLBBuilder())
 
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	tss, cleanup, err := newLoadBalancer(1, nil)
 	if err != nil {
@@ -771,7 +766,7 @@ func (s) TestFallback(t *testing.T) {
 	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -867,8 +862,7 @@ func (s) TestFallback(t *testing.T) {
 }
 
 func (s) TestExplicitFallback(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	tss, cleanup, err := newLoadBalancer(1, nil)
 	if err != nil {
@@ -899,7 +893,7 @@ func (s) TestExplicitFallback(t *testing.T) {
 	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -971,7 +965,7 @@ func (s) TestExplicitFallback(t *testing.T) {
 
 func (s) TestFallBackWithNoServerAddress(t *testing.T) {
 	resolveNowCh := make(chan struct{}, 1)
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	r := manual.NewBuilderWithScheme("whatever")
 	r.ResolveNowCallback = func(resolver.ResolveNowOptions) {
 		select {
 		case <-resolveNowCh:
@@ -979,7 +973,6 @@ func (s) TestFallBackWithNoServerAddress(t *testing.T) {
 		}
 		resolveNowCh <- struct{}{}
 	}
-	defer cleanup()
 
 	tss, cleanup, err := newLoadBalancer(1, nil)
 	if err != nil {
@@ -1009,7 +1002,7 @@ func (s) TestFallBackWithNoServerAddress(t *testing.T) {
 	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -1090,8 +1083,7 @@ func (s) TestFallBackWithNoServerAddress(t *testing.T) {
 }
 
 func (s) TestGRPCLBPickFirst(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	tss, cleanup, err := newLoadBalancer(3, nil)
 	if err != nil {
@@ -1120,7 +1112,7 @@ func (s) TestGRPCLBPickFirst(t *testing.T) {
 	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -1245,8 +1237,7 @@ func checkStats(stats, expected *rpcStats) error {
 }
 
 func runAndCheckStats(t *testing.T, drop bool, statsChan chan *lbpb.ClientStats, runRPCs func(*grpc.ClientConn), statsWant *rpcStats) error {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	tss, cleanup, err := newLoadBalancer(1, statsChan)
 	if err != nil {
@@ -1270,7 +1261,7 @@ func runAndCheckStats(t *testing.T, drop bool, statsChan chan *lbpb.ClientStats,
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&creds),
 		grpc.WithPerRPCCredentials(failPreRPCCred{}),
 		grpc.WithContextDialer(fakeNameDialer))

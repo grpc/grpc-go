@@ -1,3 +1,5 @@
+// +build go1.10
+
 /*
  *
  * Copyright 2019 gRPC authors.
@@ -624,8 +626,64 @@ func TestWrapSyscallConn(t *testing.T) {
 	}
 }
 
+func TestOptionsConfig(t *testing.T) {
+	serverPeerCert, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
+		testdata.Path("server_key_1.pem"))
+	if err != nil {
+		t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
+	}
+	tests := []struct {
+		desc            string
+		clientVType     VerificationType
+		serverMutualTLS bool
+		serverCert      []tls.Certificate
+		serverVType     VerificationType
+	}{
+		{
+			desc:            "Client uses system-provided RootCAs; server uses system-provided ClientCAs",
+			clientVType:     CertVerification,
+			serverMutualTLS: true,
+			serverCert:      []tls.Certificate{serverPeerCert},
+			serverVType:     CertAndHostVerification,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			serverOptions := &ServerOptions{
+				Certificates:      test.serverCert,
+				RequireClientCert: test.serverMutualTLS,
+				VType:             test.serverVType,
+			}
+			serverConfig, err := serverOptions.config()
+			if err != nil {
+				t.Fatalf("Unable to generate serverConfig. Error: %v", err)
+			}
+			// Verify that the system-provided certificates would be used
+			// when no verification method was set in serverOptions.
+			if serverOptions.RootCACerts == nil && serverOptions.GetRootCAs == nil &&
+				serverOptions.RequireClientCert && serverConfig.ClientCAs == nil {
+				t.Fatalf("Failed to assign system-provided certificates on the server side.")
+			}
+			clientOptions := &ClientOptions{
+				VType: test.clientVType,
+			}
+			clientConfig, err := clientOptions.config()
+			if err != nil {
+				t.Fatalf("Unable to generate clientConfig. Error: %v", err)
+			}
+			// Verify that the system-provided certificates would be used
+			// when no verification method was set in clientOptions.
+			if clientOptions.RootCACerts == nil && clientOptions.GetRootCAs == nil &&
+				clientConfig.RootCAs == nil {
+				t.Fatalf("Failed to assign system-provided certificates on the client side.")
+			}
+		})
+	}
+}
+
 const (
-	TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA uint16 = 0xc012
+	tlsEcdheRsaWith3desEdeCbcSha uint16 = 0xc012
 )
 
 const (
@@ -679,7 +737,7 @@ func TestGetCertificateSNI(t *testing.T) {
 			}
 			// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
 			clientHello1 := &tls.ClientHelloInfo{
-				CipherSuites:      []uint16{TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA},
+				CipherSuites:      []uint16{tlsEcdheRsaWith3desEdeCbcSha},
 				ServerName:        "foo.bar.com",
 				SupportedCurves:   []tls.CurveID{CurveP256},
 				SupportedPoints:   []uint8{pointFormatUncompressed},
@@ -694,7 +752,7 @@ func TestGetCertificateSNI(t *testing.T) {
 			}
 			// "foo.bar.server2.com" is the common name on server certificate server_cert_2.pem.
 			clientHello2 := &tls.ClientHelloInfo{
-				CipherSuites:      []uint16{TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA},
+				CipherSuites:      []uint16{tlsEcdheRsaWith3desEdeCbcSha},
 				ServerName:        "foo.bar.server2.com",
 				SupportedCurves:   []tls.CurveID{CurveP256},
 				SupportedPoints:   []uint8{pointFormatUncompressed},
@@ -709,7 +767,7 @@ func TestGetCertificateSNI(t *testing.T) {
 			}
 			// "localhost" is the common name on server certificate server_cert_3.pem.
 			clientHello3 := &tls.ClientHelloInfo{
-				CipherSuites:      []uint16{TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA},
+				CipherSuites:      []uint16{tlsEcdheRsaWith3desEdeCbcSha},
 				ServerName:        "localhost",
 				SupportedCurves:   []tls.CurveID{CurveP256},
 				SupportedPoints:   []uint8{pointFormatUncompressed},

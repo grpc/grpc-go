@@ -1,3 +1,5 @@
+// +build go1.10
+
 /*
  *
  * Copyright 2019 gRPC authors.
@@ -81,6 +83,8 @@ type GetRootCAsResults struct {
 // RootCertificateOptions contains a field and a function for obtaining root
 // trust certificates.
 // It is used by both ClientOptions and ServerOptions.
+// If users want to use default verification, but did not provide a valid
+// RootCertificateOptions, we use the system default trust certificates.
 type RootCertificateOptions struct {
 	// If field RootCACerts is set, field GetRootCAs will be ignored. RootCACerts
 	// will be used every time when verifying the peer certificates, without
@@ -184,14 +188,25 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 		return nil, fmt.Errorf(
 			"client needs to provide custom verification mechanism if choose to skip default verification")
 	}
+	rootCAs := o.RootCACerts
+	if o.VType != SkipVerification && o.RootCACerts == nil && o.GetRootCAs == nil {
+		// Set rootCAs to system default.
+		systemRootCAs, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, err
+		}
+		rootCAs = systemRootCAs
+	}
 	// We have to set InsecureSkipVerify to true to skip the default checks and
 	// use the verification function we built from buildVerifyFunc.
 	config := &tls.Config{
 		ServerName:           o.ServerNameOverride,
 		Certificates:         o.Certificates,
 		GetClientCertificate: o.GetClientCertificate,
-		RootCAs:              o.RootCACerts,
 		InsecureSkipVerify:   true,
+	}
+	if rootCAs != nil {
+		config.RootCAs = rootCAs
 	}
 	return config, nil
 }
@@ -203,6 +218,15 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 	if o.RequireClientCert && o.VType == SkipVerification && o.VerifyPeer == nil {
 		return nil, fmt.Errorf(
 			"server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
+	}
+	clientCAs := o.RootCACerts
+	if o.VType != SkipVerification && o.RootCACerts == nil && o.GetRootCAs == nil && o.RequireClientCert {
+		// Set clientCAs to system default.
+		systemRootCAs, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, err
+		}
+		clientCAs = systemRootCAs
 	}
 	clientAuth := tls.NoClientCert
 	if o.RequireClientCert {
@@ -221,8 +245,8 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		}
 		config.GetCertificate = getCertificateWithSNI
 	}
-	if o.RootCACerts != nil {
-		config.ClientCAs = o.RootCACerts
+	if clientCAs != nil {
+		config.ClientCAs = clientCAs
 	}
 	return config, nil
 }

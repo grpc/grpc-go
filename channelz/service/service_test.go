@@ -468,12 +468,12 @@ func (s) TestGetChannel(t *testing.T) {
 	refNames := []string{"top channel 1", "nested channel 1", "sub channel 2", "nested channel 3"}
 	ids := make([]int64, 4)
 	ids[0] = channelz.RegisterChannel(&dummyChannel{}, 0, refNames[0])
-	channelz.AddTraceEvent(ids[0], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, ids[0], 0, &channelz.TraceEventDesc{
 		Desc:     "Channel Created",
 		Severity: channelz.CtINFO,
 	})
 	ids[1] = channelz.RegisterChannel(&dummyChannel{}, ids[0], refNames[1])
-	channelz.AddTraceEvent(ids[1], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, ids[1], 0, &channelz.TraceEventDesc{
 		Desc:     "Channel Created",
 		Severity: channelz.CtINFO,
 		Parent: &channelz.TraceEventDesc{
@@ -483,7 +483,7 @@ func (s) TestGetChannel(t *testing.T) {
 	})
 
 	ids[2] = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[2])
-	channelz.AddTraceEvent(ids[2], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, ids[2], 0, &channelz.TraceEventDesc{
 		Desc:     "SubChannel Created",
 		Severity: channelz.CtINFO,
 		Parent: &channelz.TraceEventDesc{
@@ -492,7 +492,7 @@ func (s) TestGetChannel(t *testing.T) {
 		},
 	})
 	ids[3] = channelz.RegisterChannel(&dummyChannel{}, ids[1], refNames[3])
-	channelz.AddTraceEvent(ids[3], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, ids[3], 0, &channelz.TraceEventDesc{
 		Desc:     "Channel Created",
 		Severity: channelz.CtINFO,
 		Parent: &channelz.TraceEventDesc{
@@ -500,11 +500,11 @@ func (s) TestGetChannel(t *testing.T) {
 			Severity: channelz.CtINFO,
 		},
 	})
-	channelz.AddTraceEvent(ids[0], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, ids[0], 0, &channelz.TraceEventDesc{
 		Desc:     fmt.Sprintf("Channel Connectivity change to %v", connectivity.Ready),
 		Severity: channelz.CtINFO,
 	})
-	channelz.AddTraceEvent(ids[0], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, ids[0], 0, &channelz.TraceEventDesc{
 		Desc:     "Resolver returns an empty address list",
 		Severity: channelz.CtWarning,
 	})
@@ -571,12 +571,12 @@ func (s) TestGetSubChannel(t *testing.T) {
 	refNames := []string{"top channel 1", "sub channel 1", "socket 1", "socket 2"}
 	ids := make([]int64, 4)
 	ids[0] = channelz.RegisterChannel(&dummyChannel{}, 0, refNames[0])
-	channelz.AddTraceEvent(ids[0], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, ids[0], 0, &channelz.TraceEventDesc{
 		Desc:     "Channel Created",
 		Severity: channelz.CtINFO,
 	})
 	ids[1] = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[1])
-	channelz.AddTraceEvent(ids[1], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, ids[1], 0, &channelz.TraceEventDesc{
 		Desc:     subchanCreated,
 		Severity: channelz.CtINFO,
 		Parent: &channelz.TraceEventDesc{
@@ -586,11 +586,11 @@ func (s) TestGetSubChannel(t *testing.T) {
 	})
 	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[2])
 	ids[3] = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[3])
-	channelz.AddTraceEvent(ids[1], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, ids[1], 0, &channelz.TraceEventDesc{
 		Desc:     subchanConnectivityChange,
 		Severity: channelz.CtINFO,
 	})
-	channelz.AddTraceEvent(ids[1], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, ids[1], 0, &channelz.TraceEventDesc{
 		Desc:     subChanPickNewAddress,
 		Severity: channelz.CtINFO,
 	})

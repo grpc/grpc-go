@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/testutils"
 )
 
 const (
@@ -286,7 +287,7 @@ func Test_lrsStore_buildStats_rpcCounts(t *testing.T) {
 						)
 					}
 					upstreamLocalityStats = append(upstreamLocalityStats, &endpointpb.UpstreamLocalityStats{
-						Locality:                l.ToProto(),
+						Locality:                testutils.LocalityIDToProto(l),
 						TotalSuccessfulRequests: count.success,
 						TotalRequestsInProgress: tempInProgress,
 						TotalErrorRequests:      count.failure,
@@ -298,7 +299,7 @@ func Test_lrsStore_buildStats_rpcCounts(t *testing.T) {
 				for l, c := range inProgressCounts {
 					if _, ok := counts[l]; !ok {
 						upstreamLocalityStats = append(upstreamLocalityStats, &endpointpb.UpstreamLocalityStats{
-							Locality:                l.ToProto(),
+							Locality:                testutils.LocalityIDToProto(l),
 							TotalRequestsInProgress: c,
 						})
 					}
