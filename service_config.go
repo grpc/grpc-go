@@ -339,13 +339,13 @@ func parseServiceConfig(js string) *serviceconfig.ParseResult {
 		for i, n := range *m.Name {
 			path, err := n.generatePath()
 			if err != nil {
-				grpclog.Warningf("grpc: parseServiceConfig error unmarshaling %s due to methodConfig[%d]: %v", js, i, err)
+				logger.Warningf("grpc: parseServiceConfig error unmarshaling %s due to methodConfig[%d]: %v", js, i, err)
 				return &serviceconfig.ParseResult{Err: err}
 			}
 
 			if _, ok := paths[path]; ok {
 				err = errDuplicatedName
-				grpclog.Warningf("grpc: parseServiceConfig error unmarshaling %s due to methodConfig[%d]: %v", js, i, err)
+				logger.Warningf("grpc: parseServiceConfig error unmarshaling %s due to methodConfig[%d]: %v", js, i, err)
 				return &serviceconfig.ParseResult{Err: err}
 			}
 			paths[path] = struct{}{}
