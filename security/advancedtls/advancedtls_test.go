@@ -623,3 +623,105 @@ func TestWrapSyscallConn(t *testing.T) {
 			wrapConn)
 	}
 }
+
+const (
+	TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA uint16 = 0xc012
+)
+
+const (
+	CurveP256 tls.CurveID = 23
+)
+
+const (
+	pointFormatUncompressed uint8 = 0
+)
+
+const (
+	VersionTLS10 uint16 = 0x0301
+)
+
+func TestGetCertificateSNI(t *testing.T) {
+	serverPeerCert1, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
+		testdata.Path("server_key_1.pem"))
+	if err != nil {
+		t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
+	}
+	serverPeerCert2, err := tls.LoadX509KeyPair(testdata.Path("server_cert_2.pem"),
+		testdata.Path("server_key_2.pem"))
+	if err != nil {
+		t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
+	}
+	serverPeerCert3, err := tls.LoadX509KeyPair(testdata.Path("server_cert_3.pem"),
+		testdata.Path("server_key_3.pem"))
+	if err != nil {
+		t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
+	}
+	tests := []struct {
+		desc          string
+		serverGetCert func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
+	}{
+		{
+			desc: "Select the certificate that matches the server name provided in clientHello",
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				return []*tls.Certificate{&serverPeerCert1, &serverPeerCert2, &serverPeerCert3}, nil
+			},
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			serverOptions := &ServerOptions{
+				GetCertificate: test.serverGetCert,
+			}
+			serverConfig, err := serverOptions.config()
+			if err != nil {
+				t.Fatalf("Unable to generate serverConfig. Error: %v", err)
+			}
+			// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
+			clientHello1 := &tls.ClientHelloInfo{
+				CipherSuites:      []uint16{TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA},
+				ServerName:        "foo.bar.com",
+				SupportedCurves:   []tls.CurveID{CurveP256},
+				SupportedPoints:   []uint8{pointFormatUncompressed},
+				SupportedVersions: []uint16{VersionTLS10},
+			}
+			got1, err := serverConfig.GetCertificate(clientHello1)
+			if err != nil {
+				t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
+			}
+			if !reflect.DeepEqual(*got1, serverPeerCert1) {
+				t.Errorf("GetCertificate() = %v, want %v", got1, serverPeerCert1)
+			}
+			// "foo.bar.server2.com" is the common name on server certificate server_cert_2.pem.
+			clientHello2 := &tls.ClientHelloInfo{
+				CipherSuites:      []uint16{TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA},
+				ServerName:        "foo.bar.server2.com",
+				SupportedCurves:   []tls.CurveID{CurveP256},
+				SupportedPoints:   []uint8{pointFormatUncompressed},
+				SupportedVersions: []uint16{VersionTLS10},
+			}
+			got2, err := serverConfig.GetCertificate(clientHello2)
+			if err != nil {
+				t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
+			}
+			if !reflect.DeepEqual(*got2, serverPeerCert2) {
+				t.Errorf("GetCertificate() = %v, want %v", got2, serverPeerCert2)
+			}
+			// "localhost" is the common name on server certificate server_cert_3.pem.
+			clientHello3 := &tls.ClientHelloInfo{
+				CipherSuites:      []uint16{TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA},
+				ServerName:        "localhost",
+				SupportedCurves:   []tls.CurveID{CurveP256},
+				SupportedPoints:   []uint8{pointFormatUncompressed},
+				SupportedVersions: []uint16{VersionTLS10},
+			}
+			got3, err := serverConfig.GetCertificate(clientHello3)
+			if err != nil {
+				t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
+			}
+			if !reflect.DeepEqual(*got3, serverPeerCert3) {
+				t.Errorf("GetCertificate() = %v, want %v", got3, serverPeerCert3)
+			}
+		})
+	}
+}
