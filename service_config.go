@@ -229,16 +229,20 @@ type jsonName struct {
 	Method  *string
 }
 
-var errIgnoreName = errors.New("ignore name")
+var (
+	errMissingService             = errors.New("'service' is missing")
+	errDuplicatedName             = errors.New("duplicated name")
+	errEmptyServiceNonEmptyMethod = errors.New("cannot combine empty 'service' and non-empty 'method'")
+)
 
 func (j jsonName) generatePath() (string, error) {
 	if j.Service == nil {
-		return "", errIgnoreName
+		return "", errMissingService
 	}
 	if *j.Service == "" {
 		// when 'service' is empty 'method' must be empty as well
 		if j.Method != nil && *j.Method != "" {
-			return "", errors.New("cannot combine empty 'service' and non-empty 'method'")
+			return "", errEmptyServiceNonEmptyMethod
 		}
 		return "", nil
 	}
@@ -335,15 +339,12 @@ func parseServiceConfig(js string) *serviceconfig.ParseResult {
 		for i, n := range *m.Name {
 			path, err := n.generatePath()
 			if err != nil {
-				if err == errIgnoreName {
-					continue
-				}
 				grpclog.Warningf("grpc: parseServiceConfig error unmarshaling %s due to methodConfig[%d]: %v", js, i, err)
 				return &serviceconfig.ParseResult{Err: err}
 			}
 
 			if _, ok := paths[path]; ok {
-				err = errors.New("duplicated name")
+				err = errDuplicatedName
 				grpclog.Warningf("grpc: parseServiceConfig error unmarshaling %s due to methodConfig[%d]: %v", js, i, err)
 				return &serviceconfig.ParseResult{Err: err}
 			}

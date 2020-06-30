@@ -373,6 +373,22 @@ func (s) TestParseMsgSize(t *testing.T) {
 	runParseTests(t, testcases)
 }
 
+func (s) TestParseMethodConfigNullService(t *testing.T) {
+	runParseTests(t, []parseTestCase{{
+		`{
+  "methodConfig": [{
+    "name": [
+      {
+        "service": null,
+        "method": "Bar"
+      }
+    ],
+    "waitForReady": true
+  }]
+}`, nil, true,
+	}})
+}
+
 func (s) TestParseMethodConfigEmptyServiceAndNonEmptyMethod(t *testing.T) {
 	runParseTests(t, []parseTestCase{{
 		`{
