@@ -59,11 +59,12 @@ type AuthorizationDecision struct {
 	policyName string
 }
 
-// Converts and expression to a parsed expression, with SourceInfo nil
-func convertExprToParsedExpr(condition *expr.Expr) *expr.ParsedExpr {
+// Converts an expression to a parsed expression, with SourceInfo nil
+func exprToParsedExpr(condition *expr.Expr) *expr.ParsedExpr {
 	return &expr.ParsedExpr{Expr: condition}
 }
 
+// Converts an expression to a CEL program
 func exprToProgram(condition *expr.Expr) *cel.Program {
 	env, err := cel.NewEnv(
 		cel.Declarations(
@@ -73,7 +74,7 @@ func exprToProgram(condition *expr.Expr) *cel.Program {
 		),
 	)
 	// Converts condition to ParsedExpr by setting SourceInfo empty.
-	pexpr := convertExprToParsedExpr(condition)
+	pexpr := exprToParsedExpr(condition)
 	ast := cel.ParsedExprToAst(pexpr)
 	prg, err := env.Program(ast)
 	if err != nil {
