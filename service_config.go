@@ -225,30 +225,25 @@ func parseDuration(s *string) (*time.Duration, error) {
 }
 
 type jsonName struct {
-	Service *string
-	Method  *string
+	Service string
+	Method  string
 }
 
 var (
-	errMissingService             = errors.New("'service' is missing")
 	errDuplicatedName             = errors.New("duplicated name")
 	errEmptyServiceNonEmptyMethod = errors.New("cannot combine empty 'service' and non-empty 'method'")
 )
 
 func (j jsonName) generatePath() (string, error) {
-	if j.Service == nil {
-		return "", errMissingService
-	}
-	if *j.Service == "" {
-		// when 'service' is empty 'method' must be empty as well
-		if j.Method != nil && *j.Method != "" {
+	if j.Service == "" {
+		if j.Method != "" {
 			return "", errEmptyServiceNonEmptyMethod
 		}
 		return "", nil
 	}
-	res := "/" + *j.Service + "/"
-	if j.Method != nil {
-		res += *j.Method
+	res := "/" + j.Service + "/"
+	if j.Method != "" {
+		res += j.Method
 	}
 	return res, nil
 }

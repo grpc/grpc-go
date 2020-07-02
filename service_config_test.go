@@ -372,37 +372,65 @@ func (s) TestParseMsgSize(t *testing.T) {
 
 	runParseTests(t, testcases)
 }
+func (s) TestParseDefaultMethodConfig(t *testing.T) {
+	dc := &ServiceConfig{
+		Methods: map[string]MethodConfig{
+			"": {WaitForReady: newBool(true)},
+		},
+	}
 
-func (s) TestParseMethodConfigNullService(t *testing.T) {
-	runParseTests(t, []parseTestCase{{
-		`{
+	runParseTests(t, []parseTestCase{
+		{
+			`{
   "methodConfig": [{
-    "name": [
-      {
-        "service": null,
-        "method": "Bar"
-      }
-    ],
+    "name": [{}],
     "waitForReady": true
   }]
-}`, nil, true,
-	}})
-}
-
-func (s) TestParseMethodConfigEmptyServiceAndNonEmptyMethod(t *testing.T) {
-	runParseTests(t, []parseTestCase{{
-		`{
+}`,
+			dc,
+			false,
+		},
+		{
+			`{
   "methodConfig": [{
-    "name": [
-      {
-        "service": "",
-        "method": "Bar"
-      }
-    ],
+    "name": [{"service": null}],
     "waitForReady": true
   }]
-}`, nil, true,
-	}})
+}`,
+			dc,
+			false,
+		},
+		{
+			`{
+  "methodConfig": [{
+    "name": [{"service": ""}],
+    "waitForReady": true
+  }]
+}`,
+			dc,
+			false,
+		},
+		{
+			`{
+  "methodConfig": [{
+    "name": [{"method": "Bar"}],
+    "waitForReady": true
+  }]
+}`,
+			nil,
+			true,
+		},
+		{
+			`{
+  "methodConfig": [{
+    "name": [{"service": "", "method": "Bar"}],
+    "waitForReady": true
+  }]
+}`,
+			nil,
+			true,
+		},
+	})
 }
 
 func (s) TestParseMethodConfigDuplicatedName(t *testing.T) {
