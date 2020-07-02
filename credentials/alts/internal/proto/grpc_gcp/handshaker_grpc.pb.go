@@ -66,6 +66,8 @@ func (x *handshakerServiceDoHandshakeClient) Recv() (*HandshakerResp, error) {
 }
 
 // HandshakerServiceServer is the server API for HandshakerService service.
+// All implementations should embed UnimplementedHandshakerServiceServer
+// for forward compatibility
 type HandshakerServiceServer interface {
 	// Handshaker service accepts a stream of handshaker request, returning a
 	// stream of handshaker response. Client is expected to send exactly one
@@ -76,7 +78,7 @@ type HandshakerServiceServer interface {
 	DoHandshake(HandshakerService_DoHandshakeServer) error
 }
 
-// UnimplementedHandshakerServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedHandshakerServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedHandshakerServiceServer struct {
 }
 

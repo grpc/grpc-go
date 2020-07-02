@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
@@ -42,6 +44,7 @@ var (
 			Weight:    1,
 		},
 	}
+	endpointsCmpOpts = []cmp.Option{cmp.AllowUnexported(endpointsUpdateErr{}), cmpopts.EquateEmpty()}
 )
 
 type endpointsUpdateErr struct {
@@ -69,13 +72,16 @@ func (s) TestEndpointsWatch(t *testing.T) {
 	cancelWatch := c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[edsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
 	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
 		testCDSName: wantUpdate,
 	})
 
-	if u, err := endpointsUpdateCh.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+	if u, err := endpointsUpdateCh.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 		t.Errorf("unexpected endpointsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -124,6 +130,9 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 		cancelLastWatch = c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 			endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 		})
+		if _, err := v2Client.addWatches[edsURL].Receive(); i == 0 && err != nil {
+			t.Fatalf("want new watch to start, got error %v", err)
+		}
 	}
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
@@ -132,7 +141,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count; i++ {
-		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 			t.Errorf("i=%v, unexpected endpointsUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
@@ -144,7 +153,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count-1; i++ {
-		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 			t.Errorf("i=%v, unexpected endpointsUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
@@ -178,6 +187,9 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 		c.WatchEndpoints(testCDSName+"1", func(update EndpointsUpdate, err error) {
 			endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 		})
+		if _, err := v2Client.addWatches[edsURL].Receive(); i == 0 && err != nil {
+			t.Fatalf("want new watch to start, got error %v", err)
+		}
 	}
 
 	// Third watch for a different name.
@@ -185,6 +197,9 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 	c.WatchEndpoints(testCDSName+"2", func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh2.Send(endpointsUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[edsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate1 := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
 	wantUpdate2 := EndpointsUpdate{Localities: []Locality{testLocalities[1]}}
@@ -194,12 +209,12 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count; i++ {
-		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate1, nil}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate1, nil}, endpointsCmpOpts...) {
 			t.Errorf("i=%v, unexpected endpointsUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
 
-	if u, err := endpointsUpdateCh2.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate2, nil}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+	if u, err := endpointsUpdateCh2.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate2, nil}, endpointsCmpOpts...) {
 		t.Errorf("unexpected endpointsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 }
@@ -222,13 +237,16 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[edsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
 	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
 		testCDSName: wantUpdate,
 	})
 
-	if u, err := endpointsUpdateCh.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+	if u, err := endpointsUpdateCh.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 		t.Errorf("unexpected endpointsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -237,9 +255,12 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh2.Send(endpointsUpdateErr{u: update, err: err})
 	})
+	if n, err := v2Client.addWatches[edsURL].Receive(); err == nil {
+		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
+	}
 
 	// New watch should receives the update.
-	if u, err := endpointsUpdateCh2.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+	if u, err := endpointsUpdateCh2.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 		t.Errorf("unexpected endpointsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -268,19 +289,22 @@ func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 	}
 	defer c.Close()
 
-	<-v2ClientCh
+	v2Client := <-v2ClientCh
 
 	endpointsUpdateCh := testutils.NewChannel()
 	c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 	})
+	if _, err := v2Client.addWatches[edsURL].Receive(); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
 
 	u, err := endpointsUpdateCh.TimedReceive(defaultWatchExpiryTimeout * 2)
 	if err != nil {
 		t.Fatalf("failed to get endpointsUpdate: %v", err)
 	}
 	uu := u.(endpointsUpdateErr)
-	if !cmp.Equal(uu.u, EndpointsUpdate{}, cmp.AllowUnexported(endpointsUpdateErr{})) {
+	if !cmp.Equal(uu.u, EndpointsUpdate{}, endpointsCmpOpts...) {
 		t.Errorf("unexpected endpointsUpdate: %v, want %v", uu.u, EndpointsUpdate{})
 	}
 	if uu.err == nil {

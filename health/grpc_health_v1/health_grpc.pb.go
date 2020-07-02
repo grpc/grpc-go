@@ -88,6 +88,8 @@ func (x *healthWatchClient) Recv() (*HealthCheckResponse, error) {
 }
 
 // HealthServer is the server API for Health service.
+// All implementations should embed UnimplementedHealthServer
+// for forward compatibility
 type HealthServer interface {
 	// If the requested service is unknown, the call will fail with status
 	// NOT_FOUND.
@@ -110,7 +112,7 @@ type HealthServer interface {
 	Watch(*HealthCheckRequest, Health_WatchServer) error
 }
 
-// UnimplementedHealthServer can be embedded to have forward compatible implementations.
+// UnimplementedHealthServer should be embedded to have forward compatible implementations.
 type UnimplementedHealthServer struct {
 }
 

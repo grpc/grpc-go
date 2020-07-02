@@ -142,6 +142,8 @@ func (x *echoBidirectionalStreamingEchoClient) Recv() (*EchoResponse, error) {
 }
 
 // EchoServer is the server API for Echo service.
+// All implementations should embed UnimplementedEchoServer
+// for forward compatibility
 type EchoServer interface {
 	// UnaryEcho is unary echo.
 	UnaryEcho(context.Context, *EchoRequest) (*EchoResponse, error)
@@ -153,7 +155,7 @@ type EchoServer interface {
 	BidirectionalStreamingEcho(Echo_BidirectionalStreamingEchoServer) error
 }
 
-// UnimplementedEchoServer can be embedded to have forward compatible implementations.
+// UnimplementedEchoServer should be embedded to have forward compatible implementations.
 type UnimplementedEchoServer struct {
 }
 

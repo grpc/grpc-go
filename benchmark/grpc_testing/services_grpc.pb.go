@@ -108,6 +108,8 @@ func (x *benchmarkServiceUnconstrainedStreamingCallClient) Recv() (*SimpleRespon
 }
 
 // BenchmarkServiceServer is the server API for BenchmarkService service.
+// All implementations should embed UnimplementedBenchmarkServiceServer
+// for forward compatibility
 type BenchmarkServiceServer interface {
 	// One request followed by one response.
 	// The server returns the client payload as-is.
@@ -120,7 +122,7 @@ type BenchmarkServiceServer interface {
 	UnconstrainedStreamingCall(BenchmarkService_UnconstrainedStreamingCallServer) error
 }
 
-// UnimplementedBenchmarkServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedBenchmarkServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedBenchmarkServiceServer struct {
 }
 
@@ -347,6 +349,8 @@ func (c *workerServiceClient) QuitWorker(ctx context.Context, in *Void, opts ...
 }
 
 // WorkerServiceServer is the server API for WorkerService service.
+// All implementations should embed UnimplementedWorkerServiceServer
+// for forward compatibility
 type WorkerServiceServer interface {
 	// Start server with specified workload.
 	// First request sent specifies the ServerConfig followed by ServerStatus
@@ -368,7 +372,7 @@ type WorkerServiceServer interface {
 	QuitWorker(context.Context, *Void) (*Void, error)
 }
 
-// UnimplementedWorkerServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedWorkerServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedWorkerServiceServer struct {
 }
 

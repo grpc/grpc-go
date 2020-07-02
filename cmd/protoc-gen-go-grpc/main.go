@@ -31,11 +31,20 @@
 package main
 
 import (
+	"flag"
+
 	"google.golang.org/protobuf/compiler/protogen"
 )
 
+var requireUnimplemented *bool
+
 func main() {
-	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
+	var flags flag.FlagSet
+	requireUnimplemented = flags.Bool("requireUnimplementedServers", true, "unset to match legacy behavior")
+
+	protogen.Options{
+		ParamFunc: flags.Set,
+	}.Run(func(gen *protogen.Plugin) error {
 		for _, f := range gen.Files {
 			if !f.Generate {
 				continue

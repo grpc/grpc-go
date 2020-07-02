@@ -18,8 +18,11 @@
 
 package bootstrap
 
-import "google.golang.org/grpc/internal/grpclog"
+import (
+	"google.golang.org/grpc/grpclog"
+	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+)
 
 const prefix = "[xds-bootstrap] "
 
-var logger = grpclog.NewPrefixLogger(prefix)
+var logger = internalgrpclog.NewPrefixLogger(grpclog.Component("xds"), prefix)

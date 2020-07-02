@@ -60,6 +60,7 @@ func NewPayload(t testpb.PayloadType, size int) *testpb.Payload {
 }
 
 type testServer struct {
+	testpb.UnimplementedBenchmarkServiceServer
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -141,6 +142,7 @@ func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_U
 // byteBufServer is a gRPC server that sends and receives byte buffer.
 // The purpose is to benchmark the gRPC performance without protobuf serialization/deserialization overhead.
 type byteBufServer struct {
+	testpb.UnimplementedBenchmarkServiceServer
 	respSize int32
 }
 

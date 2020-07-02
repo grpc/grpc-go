@@ -24,7 +24,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 )
 
@@ -53,7 +52,7 @@ func (c *Client) ReportLoad(server string, clusterName string, loadStore lrs.Sto
 		ccNew, err := grpc.Dial(server, dopts...)
 		if err != nil {
 			// An error from a non-blocking dial indicates something serious.
-			grpclog.Infof("xds: failed to dial load report server {%s}: %v", server, err)
+			c.logger.Infof("xds: failed to dial load report server {%s}: %v", server, err)
 			return func() {}
 		}
 		cc = ccNew

@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/status"
 )
@@ -38,6 +39,8 @@ import (
 func init() {
 	channelz.TurnOn()
 }
+
+var logger = grpclog.Component("channelz")
 
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
 func RegisterChannelzServiceToServer(s *grpc.Server) {
@@ -48,7 +51,9 @@ func newCZServer() channelzgrpc.ChannelzServer {
 	return &serverImpl{}
 }
 
-type serverImpl struct{}
+type serverImpl struct {
+	channelzgrpc.UnimplementedChannelzServer
+}
 
 func connectivityStateToProto(s connectivity.State) *channelzpb.ChannelConnectivityState {
 	switch s {

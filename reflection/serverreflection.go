@@ -55,6 +55,7 @@ import (
 )
 
 type serverReflectionServer struct {
+	rpb.UnimplementedServerReflectionServer
 	s *grpc.Server
 
 	initSymbols  sync.Once

@@ -70,12 +70,14 @@ func (x *searchServiceStreamingSearchClient) Recv() (*SearchResponse, error) {
 }
 
 // SearchServiceServer is the server API for SearchService service.
+// All implementations should embed UnimplementedSearchServiceServer
+// for forward compatibility
 type SearchServiceServer interface {
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
 	StreamingSearch(SearchService_StreamingSearchServer) error
 }
 
-// UnimplementedSearchServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedSearchServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedSearchServiceServer struct {
 }
 

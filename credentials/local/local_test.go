@@ -163,17 +163,17 @@ func (s) TestServerAndClientHandshake(t *testing.T) {
 	}{
 		{
 			testNetwork: "tcp",
-			testAddr:    "127.0.0.1:10000",
+			testAddr:    "127.0.0.1:0",
 			want:        credentials.NoSecurity,
 		},
 		{
 			testNetwork: "tcp",
-			testAddr:    "[::1]:10000",
+			testAddr:    "[::1]:0",
 			want:        credentials.NoSecurity,
 		},
 		{
 			testNetwork: "tcp",
-			testAddr:    "localhost:10000",
+			testAddr:    "localhost:0",
 			want:        credentials.NoSecurity,
 		},
 		{

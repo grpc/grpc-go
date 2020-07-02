@@ -39,12 +39,14 @@ func (c *greeterClient) SayHello(ctx context.Context, in *HelloRequest, opts ...
 }
 
 // GreeterServer is the server API for Greeter service.
+// All implementations should embed UnimplementedGreeterServer
+// for forward compatibility
 type GreeterServer interface {
 	// Sends a greeting
 	SayHello(context.Context, *HelloRequest) (*HelloReply, error)
 }
 
-// UnimplementedGreeterServer can be embedded to have forward compatible implementations.
+// UnimplementedGreeterServer should be embedded to have forward compatible implementations.
 type UnimplementedGreeterServer struct {
 }
 

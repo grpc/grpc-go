@@ -321,13 +321,12 @@ func (testBalancerKeepAddresses) Close() {
 // Make sure that non-grpclb balancers don't get grpclb addresses even if name
 // resolver sends them
 func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	b := newTestBalancerKeepAddresses()
 	balancer.Register(b)
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(),
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithResolvers(r),
 		grpc.WithBalancerName(b.Name()))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
@@ -433,8 +432,7 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	stub.Register(attrBalancerName, bf)
 	t.Logf("Registered balancer %s...", attrBalancerName)
 
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 	t.Logf("Registered manual resolver with scheme %s...", r.Scheme())
 
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -451,6 +449,7 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	creds := &attrTransportCreds{}
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(creds),
+		grpc.WithResolvers(r),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, attrBalancerName)),
 	}
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
@@ -517,10 +516,9 @@ func (s) TestServersSwap(t *testing.T) {
 	defer cleanup()
 
 	// Initialize client
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: addr1}}})
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure())
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
@@ -570,15 +568,14 @@ func (s) TestEmptyAddrs(t *testing.T) {
 	go s.Serve(lis)
 
 	// Initialize pickfirst client
-	pfr, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	pfr := manual.NewBuilderWithScheme("whatever")
 	pfrnCalled := grpcsync.NewEvent()
 	pfr.ResolveNowCallback = func(resolver.ResolveNowOptions) {
 		pfrnCalled.Fire()
 	}
 	pfr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
-	pfcc, err := grpc.DialContext(ctx, pfr.Scheme()+":///", grpc.WithInsecure())
+	pfcc, err := grpc.DialContext(ctx, pfr.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(pfr))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
@@ -596,15 +593,15 @@ func (s) TestEmptyAddrs(t *testing.T) {
 	<-pfrnCalled.Done()
 
 	// Initialize roundrobin client
-	rrr, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	rrr := manual.NewBuilderWithScheme("whatever")
+
 	rrrnCalled := grpcsync.NewEvent()
 	rrr.ResolveNowCallback = func(resolver.ResolveNowOptions) {
 		rrrnCalled.Fire()
 	}
 	rrr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
-	rrcc, err := grpc.DialContext(ctx, rrr.Scheme()+":///", grpc.WithInsecure(),
+	rrcc, err := grpc.DialContext(ctx, rrr.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(rrr),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, roundrobin.Name)))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
@@ -660,10 +657,9 @@ func (s) TestWaitForReady(t *testing.T) {
 	go s.Serve(lis)
 
 	// Initialize client
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure())
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}

@@ -60,7 +60,9 @@ var (
 	watchers         = make(map[statsWatcherKey]*statsWatcher)
 )
 
-type statsService struct{}
+type statsService struct {
+	testpb.UnimplementedLoadBalancerStatsServiceServer
+}
 
 // Wait for the next LoadBalancerStatsRequest.GetNumRpcs to start and complete,
 // and return the distribution of remote peers. This is essentially a clientside

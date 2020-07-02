@@ -1435,11 +1435,10 @@ func newDuration(b time.Duration) (a *time.Duration) {
 func (s) TestGetMethodConfig(t *testing.T) {
 	te := testServiceConfigSetup(t, tcpClearRREnv)
 	defer te.tearDown()
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	te.resolverScheme = r.Scheme()
-	cc := te.clientConn()
+	cc := te.clientConn(grpc.WithResolvers(r))
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
@@ -1521,12 +1520,11 @@ func (s) TestGetMethodConfig(t *testing.T) {
 func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	te := testServiceConfigSetup(t, tcpClearRREnv)
 	defer te.tearDown()
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	// Case1: Client API set failfast to be false, and service config set wait_for_ready to be false, Client API should win, and the rpc will wait until deadline exceeds.
 	te.resolverScheme = r.Scheme()
-	cc := te.clientConn()
+	cc := te.clientConn(grpc.WithResolvers(r))
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
@@ -1610,12 +1608,11 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 func (s) TestServiceConfigTimeout(t *testing.T) {
 	te := testServiceConfigSetup(t, tcpClearRREnv)
 	defer te.tearDown()
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	// Case1: Client API sets timeout to be 1ns and ServiceConfig sets timeout to be 1hr. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
 	te.resolverScheme = r.Scheme()
-	cc := te.clientConn()
+	cc := te.clientConn(grpc.WithResolvers(r))
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
@@ -1708,8 +1705,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 
 func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	e := tcpClearRREnv
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	// Setting up values and objects shared across all test cases.
 	const smallSize = 1
@@ -1736,7 +1732,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	te1.resolverScheme = r.Scheme()
 	te1.nonBlockingDial = true
 	te1.startServer(&testServer{security: e.security})
-	cc1 := te1.clientConn()
+	cc1 := te1.clientConn(grpc.WithResolvers(r))
 
 	addrs := []resolver.Address{{Addr: te1.srvAddr}}
 	sc := parseCfg(r, `{
@@ -1827,7 +1823,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 
 	te2.startServer(&testServer{security: e.security})
 	defer te2.tearDown()
-	cc2 := te2.clientConn()
+	cc2 := te2.clientConn(grpc.WithResolvers(r))
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: te2.srvAddr}}, ServiceConfig: sc})
 	tc = testpb.NewTestServiceClient(cc2)
 
@@ -1888,7 +1884,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	te3.startServer(&testServer{security: e.security})
 	defer te3.tearDown()
 
-	cc3 := te3.clientConn()
+	cc3 := te3.clientConn(grpc.WithResolvers(r))
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: te3.srvAddr}}, ServiceConfig: sc})
 	tc = testpb.NewTestServiceClient(cc3)
 
@@ -1971,12 +1967,11 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 	te := testServiceConfigSetup(t, tcpClearRREnv)
 	te.startServer(&testServer{security: tcpClearRREnv.security})
 	defer te.tearDown()
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	te.resolverScheme = r.Scheme()
 	te.nonBlockingDial = true
-	cc := te.clientConn()
+	cc := te.clientConn(grpc.WithResolvers(r))
 	tc := testpb.NewTestServiceClient(cc)
 
 	r.UpdateState(resolver.State{
@@ -5017,9 +5012,8 @@ func (ss *stubServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallSer
 
 // Start starts the server and creates a client connected to it.
 func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption) error {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	r := manual.NewBuilderWithScheme("whatever")
 	ss.r = r
-	ss.cleanups = append(ss.cleanups, cleanup)
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -5036,7 +5030,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 
 	target := ss.r.Scheme() + ":///" + ss.addr
 
-	opts := append([]grpc.DialOption{grpc.WithInsecure()}, dopts...)
+	opts := append([]grpc.DialOption{grpc.WithInsecure(), grpc.WithResolvers(r)}, dopts...)
 	cc, err := grpc.Dial(target, opts...)
 	if err != nil {
 		return fmt.Errorf("grpc.Dial(%q) = %v", target, err)
@@ -6693,12 +6687,11 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	testpb.RegisterTestServiceServer(s2, ts)
 	go s2.Serve(lis2)
 
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{
 		{Addr: lis1.Addr().String()},
 	}})
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure())
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
@@ -6763,12 +6756,11 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 	te := testServiceConfigSetup(t, tcpClearRREnv)
 	te.startServer(&testServer{security: tcpClearRREnv.security})
 	defer te.tearDown()
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	te.resolverScheme = r.Scheme()
 	te.nonBlockingDial = true
-	cc := te.clientConn()
+	cc := te.clientConn(grpc.WithResolvers(r))
 	tc := testpb.NewTestServiceClient(cc)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
@@ -7127,4 +7119,63 @@ func (s) TestGzipBadChecksum(t *testing.T) {
 		!strings.Contains(status.Convert(err).Message(), gzip.ErrChecksum.Error()) {
 		t.Errorf("ss.client.UnaryCall(_) = _, %v\n\twant: _, status(codes.Internal, contains %q)", err, gzip.ErrChecksum)
 	}
+}
+
+// When an RPC is canceled, it's possible that the last Recv() returns before
+// all call options' after are executed.
+func (s) TestCanceledRPCCallOptionRace(t *testing.T) {
+	ss := &stubServer{
+		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+			err := stream.Send(&testpb.StreamingOutputCallResponse{})
+			if err != nil {
+				return err
+			}
+			<-stream.Context().Done()
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	const count = 1000
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	wg.Add(count)
+	for i := 0; i < count; i++ {
+		go func() {
+			defer wg.Done()
+			var p peer.Peer
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			stream, err := ss.client.FullDuplexCall(ctx, grpc.Peer(&p))
+			if err != nil {
+				t.Errorf("_.FullDuplexCall(_) = _, %v", err)
+				return
+			}
+			if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+				t.Errorf("_ has error %v while sending", err)
+				return
+			}
+			if _, err := stream.Recv(); err != nil {
+				t.Errorf("%v.Recv() = %v", stream, err)
+				return
+			}
+			cancel()
+			if _, err := stream.Recv(); status.Code(err) != codes.Canceled {
+				t.Errorf("%v compleled with error %v, want %s", stream, err, codes.Canceled)
+				return
+			}
+			// If recv returns before call options are executed, peer.Addr is not set,
+			// fail the test.
+			if p.Addr == nil {
+				t.Errorf("peer.Addr is nil, want non-nil")
+				return
+			}
+		}()
+	}
+	wg.Wait()
 }

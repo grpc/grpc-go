@@ -35,15 +35,19 @@ func Test(t *testing.T) {
 }
 
 const (
-	testAppProtocol    = "my_app"
-	testRecordProtocol = "very_secure_protocol"
-	testPeerAccount    = "peer_service_account"
-	testLocalAccount   = "local_service_account"
-	testPeerHostname   = "peer_hostname"
-	testLocalHostname  = "local_hostname"
+	testAppProtocol             = "my_app"
+	testRecordProtocol          = "very_secure_protocol"
+	testPeerAccount             = "peer_service_account"
+	testLocalAccount            = "local_service_account"
+	testPeerHostname            = "peer_hostname"
+	testLocalHostname           = "local_hostname"
+	testLocalPeerAttributeKey   = "peer"
+	testLocalPeerAttributeValue = "attributes"
 )
 
 func (s) TestALTSAuthInfo(t *testing.T) {
+	testPeerAttributes := make(map[string]string)
+	testPeerAttributes[testLocalPeerAttributeKey] = testLocalPeerAttributeValue
 	for _, tc := range []struct {
 		result             *altspb.HandshakerResult
 		outAppProtocol     string
@@ -52,6 +56,7 @@ func (s) TestALTSAuthInfo(t *testing.T) {
 		outPeerAccount     string
 		outLocalAccount    string
 		outPeerRPCVersions *altspb.RpcProtocolVersions
+		outPeerAttributes  map[string]string
 	}{
 		{
 			&altspb.HandshakerResult{
@@ -61,6 +66,7 @@ func (s) TestALTSAuthInfo(t *testing.T) {
 					IdentityOneof: &altspb.Identity_ServiceAccount{
 						ServiceAccount: testPeerAccount,
 					},
+					Attributes: testPeerAttributes,
 				},
 				LocalIdentity: &altspb.Identity{
 					IdentityOneof: &altspb.Identity_ServiceAccount{
@@ -74,6 +80,7 @@ func (s) TestALTSAuthInfo(t *testing.T) {
 			testPeerAccount,
 			testLocalAccount,
 			nil,
+			testPeerAttributes,
 		},
 		{
 			&altspb.HandshakerResult{
@@ -83,6 +90,7 @@ func (s) TestALTSAuthInfo(t *testing.T) {
 					IdentityOneof: &altspb.Identity_Hostname{
 						Hostname: testPeerHostname,
 					},
+					Attributes: testPeerAttributes,
 				},
 				LocalIdentity: &altspb.Identity{
 					IdentityOneof: &altspb.Identity_Hostname{
@@ -115,6 +123,7 @@ func (s) TestALTSAuthInfo(t *testing.T) {
 					Minor: 11,
 				},
 			},
+			testPeerAttributes,
 		},
 	} {
 		authInfo := newAuthInfo(tc.result)
@@ -139,5 +148,9 @@ func (s) TestALTSAuthInfo(t *testing.T) {
 		if got, want := authInfo.PeerRPCVersions(), tc.outPeerRPCVersions; !reflect.DeepEqual(got, want) {
 			t.Errorf("authinfo.PeerRpcVersions()=%v, want %v", got, want)
 		}
+		if got, want := authInfo.PeerAttributes(), tc.outPeerAttributes; !reflect.DeepEqual(got, want) {
+			t.Errorf("authinfo.PeerAttributes()=%v, want %v", got, want)
+		}
+
 	}
 }
