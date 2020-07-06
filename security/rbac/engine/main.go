@@ -1,3 +1,5 @@
+// +build go1.10
+
 /*
  * Copyright 2020 gRPC authors.
  *

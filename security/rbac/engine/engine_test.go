@@ -1,3 +1,5 @@
+// +build go1.10
+
 /*
  * Copyright 2020 gRPC authors.
  *
@@ -20,11 +22,24 @@ import (
 	"testing"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
+	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
 func TestEmptyArgs(t *testing.T) {
 	celEngine := NewCelEvaluationEngine(pb.RBAC{})
 	want := DecisionUnknown
+	got := celEngine.Evaluate(AuthorizationArgs{}).decision
+	if got != want {
+		t.Errorf("Evaluating empty RBAC policies against empty authorization arguments gives %v; want %v", got, want)
+	}
+}
+
+func TestCelEngine(t *testing.T) {
+	policy := pb.Policy{Condition: &expr.Expr{}}
+	rbac := pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{"policy1": &policy}}
+
+	celEngine := NewCelEvaluationEngine(rbac)
+	want := DecisionAllow
 	got := celEngine.Evaluate(AuthorizationArgs{}).decision
 	if got != want {
 		t.Errorf("Evaluating empty RBAC policies against empty authorization arguments gives %v; want %v", got, want)
