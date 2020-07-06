@@ -22,26 +22,28 @@ import (
 	"testing"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
-	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
-func TestEmptyArgs(t *testing.T) {
-	celEngine := NewCelEvaluationEngine(pb.RBAC{})
-	want := DecisionUnknown
-	got := celEngine.Evaluate(AuthorizationArgs{}).decision
+func TestTooFewRbacs(t *testing.T) {
+	want := errWrongNumberRbacs
+	_, got := NewCelEvaluationEngine([]pb.RBAC{})
 	if got != want {
-		t.Errorf("Evaluating empty RBAC policies against empty authorization arguments gives %v; want %v", got, want)
+		t.Errorf("Expected wrong number of RBACs error for 0 RBACs")
 	}
 }
 
-func TestCelEngine(t *testing.T) {
-	policy := pb.Policy{Condition: &expr.Expr{}}
-	rbac := pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{"policy1": &policy}}
-
-	celEngine := NewCelEvaluationEngine(rbac)
-	want := DecisionAllow
-	got := celEngine.Evaluate(AuthorizationArgs{}).decision
+func TestTooManyRbacs(t *testing.T) {
+	want := errWrongNumberRbacs
+	_, got := NewCelEvaluationEngine([]pb.RBAC{{}, {}, {}})
 	if got != want {
-		t.Errorf("Evaluating empty RBAC policies against empty authorization arguments gives %v; want %v", got, want)
+		t.Errorf("Expected wrong number of RBACs error for 3 RBACs")
+	}
+}
+
+func TestWrongRbacActions(t *testing.T) {
+	want := errWrongRbacActions
+	_, got := NewCelEvaluationEngine([]pb.RBAC{{Action: pb.RBAC_ALLOW}, {Action: pb.RBAC_DENY}})
+	if got != want {
+		t.Errorf("Expected wrong RBAC actions error for ALLOW followed by DENY")
 	}
 }
