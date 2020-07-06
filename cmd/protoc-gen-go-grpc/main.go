@@ -33,12 +33,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"google.golang.org/grpc"
 	"os"
 	"path/filepath"
 
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/compiler/protogen"
-
 )
 
 var requireUnimplemented *bool
