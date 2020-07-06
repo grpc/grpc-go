@@ -1,5 +1,3 @@
-// +build go1.10
-
 /*
  *
  * Copyright 2019 gRPC authors.
@@ -239,6 +237,8 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		ClientAuth:   clientAuth,
 		Certificates: o.Certificates,
 	}
+	// The function getCertificateWithSNI is only able to perform SNI logic for go1.10 and above.
+	// It will return the first certificate in o.GetCertificate for go1.9.
 	if o.GetCertificate != nil {
 		getCertificateWithSNI := func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return buildGetCertificateFunc(clientHello, o)
@@ -503,32 +503,4 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 		return &tls.Config{}
 	}
 	return cfg.Clone()
-}
-
-// buildGetCertificateFunc is a helper function that returns the certificate
-// that matches the SNI field based on the given ClientHelloInfo
-// if GetCertificate returns a list of certificates
-func buildGetCertificateFunc(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
-	if o.GetCertificate == nil {
-		return nil, fmt.Errorf("function GetCertificate must be specified")
-	}
-	certificates, err := o.GetCertificate(clientHello)
-	if err != nil {
-		return nil, err
-	}
-	if len(certificates) == 0 {
-		return nil, fmt.Errorf("no certificates configured")
-	}
-	// If users pass in only one certificate, return that certificate
-	if len(certificates) == 1 {
-		return certificates[0], nil
-	}
-	// Choose the SNI certificate using SupportsCertificate
-	for _, cert := range certificates {
-		if err := clientHello.SupportsCertificate(cert); err == nil {
-			return cert, nil
-		}
-	}
-	// If nothing matches, return the first certificate.
-	return certificates[0], nil
 }
