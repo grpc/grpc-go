@@ -43,6 +43,9 @@ func split2(s, sep string) (string, string, bool) {
 // target}.
 func ParseTarget(target string) (ret resolver.Target) {
 	var ok bool
+	if strings.HasPrefix(target, "unix:") {
+		return resolver.Target{Endpoint: target}
+	}
 	ret.Scheme, ret.Endpoint, ok = split2(target, "://")
 	if !ok {
 		return resolver.Target{Endpoint: target}
