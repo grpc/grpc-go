@@ -860,9 +860,10 @@ func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
 // GetMethodConfig gets the method config of the input method.
 // If there's an exact match for input method (i.e. /service/method), we return
 // the corresponding MethodConfig.
-// If there isn't an exact match for the input method, we look for the default config
-// under the service (i.e /service/). If there is a default MethodConfig for
-// the service, we return it.
+// If there isn't an exact match for the input method, we look for the service's default
+// config under the service (i.e /service/) and then for the default for all services (empty string).
+//
+// If there is a default MethodConfig for the service, we return it.
 // Otherwise, we return an empty MethodConfig.
 func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	// TODO: Avoid the locking here.
@@ -871,12 +872,14 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	if cc.sc == nil {
 		return MethodConfig{}
 	}
-	m, ok := cc.sc.Methods[method]
-	if !ok {
-		i := strings.LastIndex(method, "/")
-		m = cc.sc.Methods[method[:i+1]]
+	if m, ok := cc.sc.Methods[method]; ok {
+		return m
 	}
-	return m
+	i := strings.LastIndex(method, "/")
+	if m, ok := cc.sc.Methods[method[:i+1]]; ok {
+		return m
+	}
+	return cc.sc.Methods[""]
 }
 
 func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {

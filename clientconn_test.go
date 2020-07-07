@@ -776,6 +776,29 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
 	}
 }
 
+func (s) TestMethodConfigDefaultService(t *testing.T) {
+	addr := "nonexist:///non.existent"
+	cc, err := Dial(addr, WithInsecure(), WithDefaultServiceConfig(`{
+  "methodConfig": [{
+    "name": [
+      {
+        "service": ""
+      }
+    ],
+    "waitForReady": true
+  }]
+}`))
+	if err != nil {
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	defer cc.Close()
+
+	m := cc.GetMethodConfig("/foo/Bar")
+	if m.WaitForReady == nil {
+		t.Fatalf("want: method (%q) config to fallback to the default service", "/foo/Bar")
+	}
+}
+
 func (s) TestGetClientConnTarget(t *testing.T) {
 	addr := "nonexist:///non.existent"
 	cc, err := Dial(addr, WithInsecure())

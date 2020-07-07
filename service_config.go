@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -224,19 +225,27 @@ func parseDuration(s *string) (*time.Duration, error) {
 }
 
 type jsonName struct {
-	Service *string
-	Method  *string
+	Service string
+	Method  string
 }
 
-func (j jsonName) generatePath() (string, bool) {
-	if j.Service == nil {
-		return "", false
+var (
+	errDuplicatedName             = errors.New("duplicated name")
+	errEmptyServiceNonEmptyMethod = errors.New("cannot combine empty 'service' and non-empty 'method'")
+)
+
+func (j jsonName) generatePath() (string, error) {
+	if j.Service == "" {
+		if j.Method != "" {
+			return "", errEmptyServiceNonEmptyMethod
+		}
+		return "", nil
 	}
-	res := "/" + *j.Service + "/"
-	if j.Method != nil {
-		res += *j.Method
+	res := "/" + j.Service + "/"
+	if j.Method != "" {
+		res += j.Method
 	}
-	return res, true
+	return res, nil
 }
 
 // TODO(lyuxuan): delete this struct after cleaning up old service config implementation.
@@ -288,6 +297,8 @@ func parseServiceConfig(js string) *serviceconfig.ParseResult {
 	if rsc.MethodConfig == nil {
 		return &serviceconfig.ParseResult{Config: &sc}
 	}
+
+	paths := map[string]struct{}{}
 	for _, m := range *rsc.MethodConfig {
 		if m.Name == nil {
 			continue
@@ -320,10 +331,20 @@ func parseServiceConfig(js string) *serviceconfig.ParseResult {
 				mc.MaxRespSize = newInt(int(*m.MaxResponseMessageBytes))
 			}
 		}
-		for _, n := range *m.Name {
-			if path, valid := n.generatePath(); valid {
-				sc.Methods[path] = mc
+		for i, n := range *m.Name {
+			path, err := n.generatePath()
+			if err != nil {
+				logger.Warningf("grpc: parseServiceConfig error unmarshaling %s due to methodConfig[%d]: %v", js, i, err)
+				return &serviceconfig.ParseResult{Err: err}
 			}
+
+			if _, ok := paths[path]; ok {
+				err = errDuplicatedName
+				logger.Warningf("grpc: parseServiceConfig error unmarshaling %s due to methodConfig[%d]: %v", js, i, err)
+				return &serviceconfig.ParseResult{Err: err}
+			}
+			paths[path] = struct{}{}
+			sc.Methods[path] = mc
 		}
 	}
 
