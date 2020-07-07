@@ -43,7 +43,9 @@ import (
 var requireUnimplemented *bool
 
 func main() {
-	if len(os.Args) == 2 && os.Args[1] == "--version" {
+	isVer := flag.Bool("version", false, "shows version")
+	flag.Parse()
+	if len(os.Args) == 2 && *isVer {
 		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), grpc.Version)
 		os.Exit(0)
 	}
