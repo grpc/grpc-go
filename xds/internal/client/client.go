@@ -134,6 +134,9 @@ func New(opts Options) (*Client, error) {
 
 	if opts.Config.TransportAPI == version.TransportV2 {
 		c.v2c = newXDSV2Client(c, cc, opts.Config.NodeProto.(*corepb.Node), backoff.DefaultExponential.Backoff, c.logger)
+	} else {
+		// TODO(easwars): Remove this once v3Client is ready.
+		return nil, errors.New("xds v3 client is not yet supported")
 	}
 
 	c.logger.Infof("Created")

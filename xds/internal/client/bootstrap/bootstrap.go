@@ -139,10 +139,12 @@ func NewConfig() (*Config, error) {
 	for k, v := range jsonData {
 		switch k {
 		case "node":
-			// We unconditionally convert the JSON into a v3.Node proto which
-			// does not contain the deprecated field "build_version" from the
-			// v2.Node proto. We expect this to succeed because we do not expect
-			// the bootstrap file to contain the "build_version" field.
+			// We unconditionally convert the JSON into a v3.Node proto. The v3
+			// proto does not contain the deprecated field "build_version" from
+			// the v2 proto. We do not expect the bootstrap file to contain the
+			// "build_version" field. In any case, the unmarshal will succeed
+			// because we have set the `AllowUnknownFields` option on the
+			// unmarshaler.
 			n := &v3corepb.Node{}
 			if err := m.Unmarshal(bytes.NewReader(v), n); err != nil {
 				return nil, fmt.Errorf("xds: jsonpb.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
@@ -220,9 +222,9 @@ func NewConfig() (*Config, error) {
 // file are populated here.
 func (c *Config) updateNodeProto() error {
 	if c.TransportAPI == version.TransportV3 {
-		v3 := &v3corepb.Node{}
-		if c.NodeProto != nil {
-			v3 = c.NodeProto.(*v3corepb.Node)
+		v3, _ := c.NodeProto.(*v3corepb.Node)
+		if v3 == nil {
+			v3 = &v3corepb.Node{}
 		}
 		v3.UserAgentName = gRPCUserAgentName
 		v3.UserAgentVersionType = &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version}
@@ -246,8 +248,6 @@ func (c *Config) updateNodeProto() error {
 	// BuildVersion is deprecated, and is replaced by user_agent_name and
 	// user_agent_version. But the management servers are still using the old
 	// field, so we will keep both set.
-	// API version for xDS transport protocol. This describes the xDS gRPC/REST
-	// endpoint and version of [Delta]DiscoveryRequest/Response used on the wire.
 	v2.BuildVersion = gRPCVersion
 	v2.UserAgentName = gRPCUserAgentName
 	v2.UserAgentVersionType = &v2corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version}
