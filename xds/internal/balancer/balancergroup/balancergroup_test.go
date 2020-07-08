@@ -39,7 +39,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedbalancerstateaggregator"
+	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
 
@@ -69,9 +69,9 @@ func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	}
 }
 
-func newTestBalancerGroup(t *testing.T, loadStore lrs.Store) (*testutils.TestClientConn, *weightedbalancerstateaggregator.Aggregator, *BalancerGroup) {
+func newTestBalancerGroup(t *testing.T, loadStore lrs.Store) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
 	cc := testutils.NewTestClientConn(t)
-	gator := weightedbalancerstateaggregator.New(cc, nil, testutils.NewTestWRR)
+	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
 	bg := New(cc, gator, loadStore, nil)
 	bg.Start()
@@ -483,7 +483,7 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 // Start the balancer group again and check for behavior.
 func (s) TestBalancerGroup_start_close(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	gator := weightedbalancerstateaggregator.New(cc, nil, testutils.NewTestWRR)
+	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
 	bg := New(cc, gator, nil, nil)
 
@@ -518,7 +518,7 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
-	gator.Close()
+	gator.Stop()
 	bg.Close()
 	for i := 0; i < 4; i++ {
 		bg.UpdateSubConnState(<-cc.RemoveSubConnCh, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
@@ -575,7 +575,7 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 // because of deadlock.
 func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	gator := weightedbalancerstateaggregator.New(cc, nil, testutils.NewTestWRR)
+	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
 	bg := New(cc, gator, nil, nil)
 
@@ -675,9 +675,9 @@ func replaceDefaultSubBalancerCloseTimeout(n time.Duration) func() {
 // Two rr balancers are added to bg, each with 2 ready subConns. A sub-balancer
 // is removed later, so the balancer group returned has one sub-balancer in its
 // own map, and one sub-balancer in cache.
-func initBalancerGroupForCachingTest(t *testing.T) (*weightedbalancerstateaggregator.Aggregator, *BalancerGroup, *testutils.TestClientConn, map[resolver.Address]balancer.SubConn) {
+func initBalancerGroupForCachingTest(t *testing.T) (*weightedaggregator.Aggregator, *BalancerGroup, *testutils.TestClientConn, map[resolver.Address]balancer.SubConn) {
 	cc := testutils.NewTestClientConn(t)
-	gator := weightedbalancerstateaggregator.New(cc, nil, testutils.NewTestWRR)
+	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
 	bg := New(cc, gator, nil, nil)
 

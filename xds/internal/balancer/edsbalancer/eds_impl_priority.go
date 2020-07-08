@@ -193,7 +193,7 @@ func (edsImpl *edsBalancerImpl) handlePriorityWithNewStateReady(priority priorit
 		edsImpl.priorityInUse = priority
 		for i := priority.nextLower(); !i.lowerThan(edsImpl.priorityLowest); i = i.nextLower() {
 			bgwc := edsImpl.priorityToLocalities[i]
-			bgwc.stateAggregator.Close()
+			bgwc.stateAggregator.Stop()
 			bgwc.bg.Close()
 		}
 		return true

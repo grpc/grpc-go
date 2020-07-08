@@ -199,8 +199,8 @@ type BalancerGroup struct {
 	// Cache for sub-balancers when they are removed.
 	balancerCache *cache.TimeoutCache
 
-	// incomingMu are to make sure this balancer group doesn't send updates to
-	// cc after it's closed.
+	// incomingMu is to make sure this balancer group doesn't send updates to cc
+	// after it's closed.
 	//
 	// We don't share the mutex to avoid deadlocks (e.g. a call to sub-balancer
 	// may call back to balancer group inline. It causes deaclock if they
@@ -209,7 +209,7 @@ type BalancerGroup struct {
 	// We should never need to hold multiple locks at the same time in this
 	// struct. The case where two locks are held can only happen when the
 	// underlying balancer calls back into balancer group inline. So there's an
-	// implicit lock acquisition order that outgoingMu is locked before either
+	// implicit lock acquisition order that outgoingMu is locked before
 	// incomingMu.
 
 	// incomingMu guards all operations in the direction:

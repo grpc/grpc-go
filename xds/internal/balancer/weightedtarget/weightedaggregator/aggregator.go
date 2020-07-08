@@ -16,14 +16,14 @@
  *
  */
 
-// Package weightedbalancerstateaggregator implements state aggregator for
-// weighted_target balancer.
+// Package weightedaggregator implements state aggregator for weighted_target
+// balancer.
 //
 // This is a separate package so it can be shared by weighted_target and eds.
 // The eds balancer will be refactored to use weighted_target directly. After
 // that, all functions and structs in this package can be moved to package
 // weightedtarget and unexported.
-package weightedbalancerstateaggregator
+package weightedaggregator
 
 import (
 	"fmt"
@@ -89,9 +89,9 @@ func (wbsa *Aggregator) Start() {
 	wbsa.started = true
 }
 
-// Close closes the aggregator. When the aggregator is closed, it won't call
+// Stop stops the aggregator. When the aggregator is closed, it won't call
 // parent ClientConn to upate balancer state.
-func (wbsa *Aggregator) Close() {
+func (wbsa *Aggregator) Stop() {
 	wbsa.mu.Lock()
 	defer wbsa.mu.Unlock()
 	wbsa.started = false
@@ -239,13 +239,14 @@ type weightedPickerGroup struct {
 	w wrr.WRR
 }
 
-// newWeightedPickerGroup takes pickers with weights, and group them into one picker.
+// newWeightedPickerGroup takes pickers with weights, and groups them into one
+// picker.
 //
 // Note it only takes ready pickers. The map shouldn't contain non-ready
 // pickers.
-func newWeightedPickerGroup(readyPickerWithWeights []weightedPickerState, newWRR func() wrr.WRR) *weightedPickerGroup {
+func newWeightedPickerGroup(readyWeightedPickers []weightedPickerState, newWRR func() wrr.WRR) *weightedPickerGroup {
 	w := newWRR()
-	for _, ps := range readyPickerWithWeights {
+	for _, ps := range readyWeightedPickers {
 		w.Add(ps.state.Picker, int64(ps.weight))
 	}
 

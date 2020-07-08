@@ -35,7 +35,7 @@ import (
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedbalancerstateaggregator"
+	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
@@ -51,7 +51,7 @@ type localityConfig struct {
 // manages all localities using a balancerGroup.
 type balancerGroupWithConfig struct {
 	bg              *balancergroup.BalancerGroup
-	stateAggregator *weightedbalancerstateaggregator.Aggregator
+	stateAggregator *weightedaggregator.Aggregator
 	configs         map[internal.LocalityID]*localityConfig
 }
 
@@ -238,7 +238,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponse(edsResp xdsclient.EndpointsUpd
 			// be started when necessary (e.g. when higher is down, or if it's a
 			// new lowest priority).
 			ccPriorityWrapper := edsImpl.ccWrapperWithPriority(priority)
-			stateAggregator := weightedbalancerstateaggregator.New(ccPriorityWrapper, edsImpl.logger, newRandomWRR)
+			stateAggregator := weightedaggregator.New(ccPriorityWrapper, edsImpl.logger, newRandomWRR)
 			bgwc = &balancerGroupWithConfig{
 				bg:              balancergroup.New(ccPriorityWrapper, stateAggregator, edsImpl.loadStore, edsImpl.logger),
 				stateAggregator: stateAggregator,
@@ -445,7 +445,7 @@ func (edsImpl *edsBalancerImpl) newSubConn(priority priorityType, addrs []resolv
 func (edsImpl *edsBalancerImpl) close() {
 	for _, bgwc := range edsImpl.priorityToLocalities {
 		if bg := bgwc.bg; bg != nil {
-			bgwc.stateAggregator.Close()
+			bgwc.stateAggregator.Stop()
 			bg.Close()
 		}
 	}

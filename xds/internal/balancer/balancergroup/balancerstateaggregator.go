@@ -23,8 +23,12 @@ import (
 	"google.golang.org/grpc/xds/internal"
 )
 
-// BalancerStateAggregator aggregates {id, config, sub-state} into a state, with
-// picker and connectivity states.
+// BalancerStateAggregator aggregates sub-picker and connectivity states into a
+// state.
+//
+// It takes care of merging sub-picker into one picker. The picking config is
+// passed directly from the the parent to the aggregator implementation (instead
+// via balancer group).
 type BalancerStateAggregator interface {
 	// UpdateState updates the state of the id.
 	//

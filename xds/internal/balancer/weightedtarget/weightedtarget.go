@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
-	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedbalancerstateaggregator"
+	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 )
 
 const weightedTargetName = "weighted_target_experimental"
@@ -49,7 +49,7 @@ type weightedTargetBB struct{}
 func (wt *weightedTargetBB) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	b := &weightedTargetBalancer{}
 	b.logger = prefixLogger(b)
-	b.stateAggregator = weightedbalancerstateaggregator.New(cc, b.logger, newRandomWRR)
+	b.stateAggregator = weightedaggregator.New(cc, b.logger, newRandomWRR)
 	b.stateAggregator.Start()
 	b.bg = balancergroup.New(cc, b.stateAggregator, nil, b.logger)
 	b.bg.Start()
@@ -74,7 +74,7 @@ type weightedTargetBalancer struct {
 	// dependencies are removed from the balancerGroup, this package will not
 	// have any dependencies on xds code.
 	bg              *balancergroup.BalancerGroup
-	stateAggregator *weightedbalancerstateaggregator.Aggregator
+	stateAggregator *weightedaggregator.Aggregator
 
 	targets map[string]target
 }
@@ -165,6 +165,6 @@ func (w *weightedTargetBalancer) UpdateSubConnState(sc balancer.SubConn, state b
 }
 
 func (w *weightedTargetBalancer) Close() {
-	w.stateAggregator.Close()
+	w.stateAggregator.Stop()
 	w.bg.Close()
 }
