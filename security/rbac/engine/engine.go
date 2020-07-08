@@ -19,12 +19,8 @@
 package engine
 
 import (
-	"fmt"
-	"log"
-
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	cel "github.com/google/cel-go/cel"
-	"github.com/google/cel-go/checker/decls"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -75,36 +71,13 @@ func exprToParsedExpr(condition *expr.Expr) *expr.ParsedExpr {
 
 // Converts an expression to a CEL program
 func exprToProgram(condition *expr.Expr) *cel.Program {
-	env, err := cel.NewEnv(
-		cel.Declarations(
-			decls.NewVar("source", decls.String),
-			decls.NewVar("origin", decls.String),
-			decls.NewVar("target", decls.String),
-		),
-	)
-	// Converts condition to ParsedExpr by setting SourceInfo empty.
-	pexpr := exprToParsedExpr(condition)
-	ast := cel.ParsedExprToAst(pexpr)
-	prg, err := env.Program(ast)
-	if err != nil {
-		log.Fatalf("program construction error: %s", err)
-	}
-	return &prg
+	return nil // TODO
 }
 
 // Returns whether or not a policy is matched.
 // If args is empty, the match always fails.
 func matches(program *cel.Program, args AuthorizationArgs) bool {
-	out, _, err := (*program).Eval(map[string]interface{}{
-		// "source": args.Source(),
-		// "origin": args.Origin(),
-		// "target": args.Target()
-	})
-	if err != nil {
-		log.Fatalf("evaluation error: %s", err)
-	}
-	fmt.Println(out) // 'true'
-	return out.Value().(bool)
+	return false // TODO
 }
 
 // rbacEngine is the struct for an engine created from one RBAC proto.
