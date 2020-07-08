@@ -33,26 +33,43 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 )
 
 const (
-	subjectTokenContents = "subjectToken.jwt.contents"
+	requestedTokenType   = "urn:ietf:params:oauth:token-type:access-token"
+	actorTokenPath       = "/var/run/secrets/token.jwt"
+	actorTokenType       = "urn:ietf:params:oauth:token-type:refresh_token"
 	actorTokenContents   = "actorToken.jwt.contents"
 	accessTokenContents  = "access_token"
+	subjectTokenPath     = "/var/run/secrets/token.jwt"
+	subjectTokenType     = "urn:ietf:params:oauth:token-type:id_token"
+	subjectTokenContents = "subjectToken.jwt.contents"
+	serviceURI           = "http://localhost"
+	exampleResource      = "https://backend.example.com/api"
+	exampleAudience      = "example-backend-service"
+	testScope            = "https://www.googleapis.com/auth/monitoring"
 )
 
 var (
 	goodOptions = Options{
-		TokenExchangeServiceURI: "http://localhost",
-		SubjectTokenPath:        "/var/run/secrets/token.jwt",
-		SubjectTokenType:        "urn:ietf:params:oauth:token-type:id_token",
+		TokenExchangeServiceURI: serviceURI,
+		Audience:                exampleAudience,
+		RequestedTokenType:      requestedTokenType,
+		SubjectTokenPath:        subjectTokenPath,
+		SubjectTokenType:        subjectTokenType,
+	}
+	goodRequestParams = &RequestParameters{
+		GrantType:          tokenExchangeGrantType,
+		Audience:           exampleAudience,
+		Scope:              defaultCloudPlatformScope,
+		RequestedTokenType: requestedTokenType,
+		SubjectToken:       subjectTokenContents,
+		SubjectTokenType:   subjectTokenType,
 	}
 	goodMetadata = map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", accessTokenContents),
@@ -67,8 +84,8 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// A struct that implements AuthInfo interface and implements CommonAuthInfo()
-// method.
+// A struct that implements AuthInfo interface and added to the context passed
+// to GetRequestMetadata from tests.
 type testAuthInfo struct {
 	credentials.CommonAuthInfo
 }
@@ -84,41 +101,6 @@ func createTestContext(ctx context.Context, s credentials.SecurityLevel) context
 		AuthInfo: auth,
 	}
 	return internal.NewRequestInfoContext.(func(context.Context, credentials.RequestInfo) context.Context)(ctx, ri)
-}
-
-// fakeHTTPClient helps mock out the HTTP calls made by the credentials code
-// under test. It makes the http.Request made by the credentials available
-// through a channel, and makes it possible to inject various responses.
-type fakeHTTPClient struct {
-	reqCh *testutils.Channel
-	// When no retry is involve, only these two fields need to be populated.
-	firstResp *http.Response
-	firstErr  error
-	// To test retry scenarios with a different response upon retry.
-	subsequentResp *http.Response
-	subsequentErr  error
-
-	numCalls int
-}
-
-func (fc *fakeHTTPClient) Do(req *http.Request) (*http.Response, error) {
-	fc.numCalls++
-	fc.reqCh.Send(req)
-	if fc.numCalls > 1 {
-		return fc.subsequentResp, fc.subsequentErr
-	}
-	return fc.firstResp, fc.firstErr
-}
-
-// fakeBackoff implements backoff.Strategy and pushes on a channel to indicate
-// that a backoff was attempted.
-type fakeBackoff struct {
-	boCh *testutils.Channel
-}
-
-func (fb *fakeBackoff) Backoff(retries int) time.Duration {
-	fb.boCh.Send(retries)
-	return 0
 }
 
 // errReader implements the io.Reader interface and returns an error from the
@@ -147,15 +129,42 @@ func makeGoodResponse() *http.Response {
 	}
 }
 
-// Overrides the http.Client with a fakeClient which sends a good response.
-func overrideHTTPClientGood() (*fakeHTTPClient, func()) {
-	fc := &fakeHTTPClient{
-		reqCh:     testutils.NewChannel(),
-		firstResp: makeGoodResponse(),
+// fakeHTTPDoer helps mock out the http.Client.Do calls made by the credentials
+// code under test. It makes the http.Request made by the credentials available
+// through a channel, and makes it possible to inject various responses.
+type fakeHTTPDoer struct {
+	reqCh  *testutils.Channel
+	respCh *testutils.Channel
+	err    error
+}
+
+func (fc *fakeHTTPDoer) Do(req *http.Request) (*http.Response, error) {
+	fc.reqCh.Send(req)
+	val, err := fc.respCh.Receive()
+	if err != nil {
+		return nil, err
 	}
+	return val.(*http.Response), fc.err
+}
+
+// Overrides the http.Client with a fakeClient which sends a good response.
+func overrideHTTPClientGood() (*fakeHTTPDoer, func()) {
+	fc := &fakeHTTPDoer{
+		reqCh:  testutils.NewChannel(),
+		respCh: testutils.NewChannel(),
+	}
+	fc.respCh.Send(makeGoodResponse())
+
 	origMakeHTTPDoer := makeHTTPDoer
 	makeHTTPDoer = func(_ *x509.CertPool) httpDoer { return fc }
 	return fc, func() { makeHTTPDoer = origMakeHTTPDoer }
+}
+
+// Overrides the http.Client with the provided fakeClient.
+func overrideHTTPClient(fc *fakeHTTPDoer) func() {
+	origMakeHTTPDoer := makeHTTPDoer
+	makeHTTPDoer = func(_ *x509.CertPool) httpDoer { return fc }
+	return func() { makeHTTPDoer = origMakeHTTPDoer }
 }
 
 // Overrides the subject token read to return a const which we can compare in
@@ -168,58 +177,42 @@ func overrideSubjectTokenGood() func() {
 	return func() { readSubjectTokenFrom = origReadSubjectTokenFrom }
 }
 
-// compareRequestWithRetry is run in a separate goroutine by tests to perform
-// the following:
-// - wait for a http request to be made by the credentials type and compare it
-//   with an expected one.
-// - if the credentials is expected to retry, verify that a backoff was done
-//   before the retry.
-// If any of the above steps fail, an error is pushed on the errCh.
-func compareRequestWithRetry(errCh chan error, wantRetry bool, reqCh, boCh *testutils.Channel) {
-	val, err := reqCh.Receive()
-	if err != nil {
-		errCh <- err
-		return
+// Overrides the subject token read to always return an error.
+func overrideSubjectTokenError() func() {
+	origReadSubjectTokenFrom := readSubjectTokenFrom
+	readSubjectTokenFrom = func(path string) ([]byte, error) {
+		return nil, errors.New("error reading subject token")
 	}
-	req := val.(*http.Request)
-	if err := compareRequest(goodOptions, req); err != nil {
-		errCh <- err
-		return
-	}
-
-	if wantRetry {
-		_, err := boCh.Receive()
-		if err != nil {
-			errCh <- err
-			return
-		}
-	}
-	errCh <- nil
+	return func() { readSubjectTokenFrom = origReadSubjectTokenFrom }
 }
 
-func compareRequest(opts Options, gotRequest *http.Request) error {
-	reqScope := opts.Scope
-	if reqScope == "" {
-		reqScope = defaultCloudPlatformScope
+// Overrides the actor token read to return a const which we can compare in
+// our tests.
+func overrideActorTokenGood() func() {
+	origReadActorTokenFrom := readActorTokenFrom
+	readActorTokenFrom = func(path string) ([]byte, error) {
+		return []byte(actorTokenContents), nil
 	}
-	reqParams := &RequestParameters{
-		GrantType:          tokenExchangeGrantType,
-		Resource:           opts.Resource,
-		Audience:           opts.Audience,
-		Scope:              reqScope,
-		RequestedTokenType: opts.RequestedTokenType,
-		SubjectToken:       subjectTokenContents,
-		SubjectTokenType:   opts.SubjectTokenType,
+	return func() { readActorTokenFrom = origReadActorTokenFrom }
+}
+
+// Overrides the actor token read to always return an error.
+func overrideActorTokenError() func() {
+	origReadActorTokenFrom := readActorTokenFrom
+	readActorTokenFrom = func(path string) ([]byte, error) {
+		return nil, errors.New("error reading actor token")
 	}
-	if opts.ActorTokenPath != "" {
-		reqParams.ActorToken = actorTokenContents
-		reqParams.ActorTokenType = opts.ActorTokenType
-	}
-	jsonBody, err := json.Marshal(reqParams)
+	return func() { readActorTokenFrom = origReadActorTokenFrom }
+}
+
+// compareRequest compares the http.Request received in the test with the
+// expected RequestParameters specified in wantReqParams.
+func compareRequest(gotRequest *http.Request, wantReqParams *RequestParameters) error {
+	jsonBody, err := json.Marshal(wantReqParams)
 	if err != nil {
 		return err
 	}
-	wantReq, err := http.NewRequest("POST", opts.TokenExchangeServiceURI, bytes.NewBuffer(jsonBody))
+	wantReq, err := http.NewRequest("POST", serviceURI, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to create http request: %v", err)
 	}
@@ -239,6 +232,25 @@ func compareRequest(opts Options, gotRequest *http.Request) error {
 	return nil
 }
 
+// receiveAndCompareRequest waits for a request to be sent out by the
+// credentials implementation using the fakeHTTPClient and compares it to an
+// expected goodRequest. This is expected to be called in a separate goroutine
+// by the tests. So, any errors encountered are pushed to an error channel
+// which is monitored by the test.
+func receiveAndCompareRequest(reqCh *testutils.Channel, errCh chan error) {
+	val, err := reqCh.Receive()
+	if err != nil {
+		errCh <- err
+		return
+	}
+	req := val.(*http.Request)
+	if err := compareRequest(req, goodRequestParams); err != nil {
+		errCh <- err
+		return
+	}
+	errCh <- nil
+}
+
 // TestGetRequestMetadataSuccess verifies the successful case of sending an
 // token exchange request and processing the response.
 func (s) TestGetRequestMetadataSuccess(t *testing.T) {
@@ -252,7 +264,7 @@ func (s) TestGetRequestMetadataSuccess(t *testing.T) {
 	}
 
 	errCh := make(chan error, 1)
-	go compareRequestWithRetry(errCh, false, fc.reqCh, nil)
+	go receiveAndCompareRequest(fc.reqCh, errCh)
 
 	gotMetadata, err := creds.GetRequestMetadata(createTestContext(context.Background(), credentials.PrivacyAndIntegrity), "")
 	if err != nil {
@@ -283,16 +295,11 @@ func (s) TestGetRequestMetadataSuccess(t *testing.T) {
 // sufficient.
 func (s) TestGetRequestMetadataBadSecurityLevel(t *testing.T) {
 	defer overrideSubjectTokenGood()()
-	fc, cancel := overrideHTTPClientGood()
-	defer cancel()
 
 	creds, err := NewCredentials(goodOptions)
 	if err != nil {
 		t.Fatalf("NewCredentials(%v) = %v", goodOptions, err)
 	}
-
-	errCh := make(chan error, 1)
-	go compareRequestWithRetry(errCh, false, fc.reqCh, nil)
 
 	gotMetadata, err := creds.GetRequestMetadata(createTestContext(context.Background(), credentials.IntegrityOnly), "")
 	if err == nil {
@@ -306,26 +313,11 @@ func (s) TestGetRequestMetadataBadSecurityLevel(t *testing.T) {
 func (s) TestGetRequestMetadataCacheExpiry(t *testing.T) {
 	const expiresInSecs = 1
 	defer overrideSubjectTokenGood()()
-	respJSON, _ := json.Marshal(ResponseParameters{
-		AccessToken:     accessTokenContents,
-		IssuedTokenType: "urn:ietf:params:oauth:token-type:access_token",
-		TokenType:       "Bearer",
-		ExpiresIn:       expiresInSecs,
-	})
-	respBody := ioutil.NopCloser(bytes.NewReader(respJSON))
-	resp := &http.Response{
-		Status:     "200 OK",
-		StatusCode: http.StatusOK,
-		Body:       respBody,
+	fc := &fakeHTTPDoer{
+		reqCh:  testutils.NewChannel(),
+		respCh: testutils.NewChannel(),
 	}
-	fc := &fakeHTTPClient{
-		reqCh:          testutils.NewChannel(),
-		firstResp:      resp,
-		subsequentResp: makeGoodResponse(),
-	}
-	origMakeHTTPDoer := makeHTTPDoer
-	makeHTTPDoer = func(_ *x509.CertPool) httpDoer { return fc }
-	defer func() { makeHTTPDoer = origMakeHTTPDoer }()
+	defer overrideHTTPClient(fc)()
 
 	creds, err := NewCredentials(goodOptions)
 	if err != nil {
@@ -338,7 +330,21 @@ func (s) TestGetRequestMetadataCacheExpiry(t *testing.T) {
 	// out a fresh request.
 	for i := 0; i < 2; i++ {
 		errCh := make(chan error, 1)
-		go compareRequestWithRetry(errCh, false, fc.reqCh, nil)
+		go receiveAndCompareRequest(fc.reqCh, errCh)
+
+		respJSON, _ := json.Marshal(ResponseParameters{
+			AccessToken:     accessTokenContents,
+			IssuedTokenType: "urn:ietf:params:oauth:token-type:access_token",
+			TokenType:       "Bearer",
+			ExpiresIn:       expiresInSecs,
+		})
+		respBody := ioutil.NopCloser(bytes.NewReader(respJSON))
+		resp := &http.Response{
+			Status:     "200 OK",
+			StatusCode: http.StatusOK,
+			Body:       respBody,
+		}
+		fc.respCh.Send(resp)
 
 		gotMetadata, err := creds.GetRequestMetadata(createTestContext(context.Background(), credentials.PrivacyAndIntegrity), "")
 		if err != nil {
@@ -383,17 +389,11 @@ func (s) TestGetRequestMetadataBadResponses(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			defer overrideSubjectTokenGood()()
 
-			fc := &fakeHTTPClient{
-				reqCh: testutils.NewChannel(),
-				firstResp: &http.Response{
-					Status:     "200 OK",
-					StatusCode: http.StatusOK,
-					Body:       ioutil.NopCloser(strings.NewReader("not JSON")),
-				},
+			fc := &fakeHTTPDoer{
+				reqCh:  testutils.NewChannel(),
+				respCh: testutils.NewChannel(),
 			}
-			origMakeHTTPDoer := makeHTTPDoer
-			makeHTTPDoer = func(_ *x509.CertPool) httpDoer { return fc }
-			defer func() { makeHTTPDoer = origMakeHTTPDoer }()
+			defer overrideHTTPClient(fc)()
 
 			creds, err := NewCredentials(goodOptions)
 			if err != nil {
@@ -401,7 +401,9 @@ func (s) TestGetRequestMetadataBadResponses(t *testing.T) {
 			}
 
 			errCh := make(chan error, 1)
-			go compareRequestWithRetry(errCh, false, fc.reqCh, nil)
+			go receiveAndCompareRequest(fc.reqCh, errCh)
+
+			fc.respCh.Send(test.response)
 			if _, err := creds.GetRequestMetadata(createTestContext(context.Background(), credentials.PrivacyAndIntegrity), ""); err == nil {
 				t.Fatal("creds.GetRequestMetadata() succeeded when expected to fail")
 			}
@@ -415,12 +417,7 @@ func (s) TestGetRequestMetadataBadResponses(t *testing.T) {
 // TestGetRequestMetadataBadSubjectTokenRead verifies the scenario where the
 // attempt to read the subjectToken fails.
 func (s) TestGetRequestMetadataBadSubjectTokenRead(t *testing.T) {
-	origReadSubjectTokenFrom := readSubjectTokenFrom
-	readSubjectTokenFrom = func(path string) ([]byte, error) {
-		return nil, errors.New("failed to read subject token")
-	}
-	defer func() { readSubjectTokenFrom = origReadSubjectTokenFrom }()
-
+	defer overrideSubjectTokenError()()
 	fc, cancel := overrideHTTPClientGood()
 	defer cancel()
 
@@ -446,114 +443,6 @@ func (s) TestGetRequestMetadataBadSubjectTokenRead(t *testing.T) {
 	}
 }
 
-// TestGetRequestMetadataRetry verifies various retry scenarios.
-func (s) TestGetRequestMetadataRetry(t *testing.T) {
-	tests := []struct {
-		name           string
-		firstResp      *http.Response
-		firstErr       error
-		subsequentResp *http.Response
-		subsequentErr  error
-		wantRetry      bool
-		wantErr        bool
-		wantMetadata   map[string]string
-	}{
-		{
-			name:     "httpClient.Do error",
-			firstErr: errors.New("httpClient.Do() failed"),
-			wantErr:  true,
-		},
-		{
-			name: "bad response body first time",
-			firstResp: &http.Response{
-				Status:     "200 OK",
-				StatusCode: http.StatusOK,
-				Body:       ioutil.NopCloser(errReader{}),
-			},
-			subsequentResp: makeGoodResponse(),
-			wantRetry:      true,
-			wantMetadata:   goodMetadata,
-		},
-		{
-			name: "http client error status code",
-			firstResp: &http.Response{
-				Status:     "400 BadRequest",
-				StatusCode: http.StatusBadRequest,
-				Body:       ioutil.NopCloser(&bytes.Reader{}),
-			},
-			wantErr: true,
-		},
-		{
-			name: "server error first time",
-			firstResp: &http.Response{
-				Status:     "400 BadRequest",
-				StatusCode: http.StatusInternalServerError,
-				Body:       ioutil.NopCloser(&bytes.Reader{}),
-			},
-			subsequentResp: makeGoodResponse(),
-			wantRetry:      true,
-			wantMetadata:   goodMetadata,
-		},
-	}
-
-	// The test body performs the following steps:
-	// 1. Overrides the function to read subjectToken file and returns arbitrary
-	//    data and nil error.
-	// 2. Overrides the function to return a http.Client and returns a fake
-	//    client which is configured with response/error values to be returned.
-	// 3. Overrides the function to create the backoff strategy and returns a
-	//    fake implementation which notifies the test through a channel when
-	//    backoff is attempted.
-	// 4. Creates a new credentials type and invokes the GetRequestMetadata
-	//    method on it.
-	// 5. Spawn a goroutine which verifies that the credentials sent out the
-	//    expected http.Request, and performed a backoff when it encountered
-	//    certain errors.
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			defer overrideSubjectTokenGood()()
-
-			fc := &fakeHTTPClient{
-				reqCh:          testutils.NewChannel(),
-				firstResp:      test.firstResp,
-				firstErr:       test.firstErr,
-				subsequentResp: test.subsequentResp,
-				subsequentErr:  test.subsequentErr,
-			}
-			origMakeHTTPDoer := makeHTTPDoer
-			makeHTTPDoer = func(_ *x509.CertPool) httpDoer { return fc }
-
-			origBackoff := makeBackoffStrategy
-			fb := &fakeBackoff{boCh: testutils.NewChannel()}
-			makeBackoffStrategy = func() backoff.Strategy { return fb }
-
-			defer func() {
-				makeHTTPDoer = origMakeHTTPDoer
-				makeBackoffStrategy = origBackoff
-			}()
-
-			creds, err := NewCredentials(goodOptions)
-			if err != nil {
-				t.Fatalf("NewCredentials(%v) = %v", goodOptions, err)
-			}
-
-			errCh := make(chan error, 1)
-			go compareRequestWithRetry(errCh, test.wantRetry, fc.reqCh, fb.boCh)
-
-			gotMetadata, err := creds.GetRequestMetadata(createTestContext(context.Background(), credentials.PrivacyAndIntegrity), "")
-			if (err != nil) != test.wantErr {
-				t.Fatalf("creds.GetRequestMetadata() = %v, want %v", err, test.wantErr)
-			}
-			if !cmp.Equal(gotMetadata, test.wantMetadata, cmpopts.EquateEmpty()) {
-				t.Fatalf("creds.GetRequestMetadata() = %v, want %v", gotMetadata, test.wantMetadata)
-			}
-			if err := <-errCh; err != nil {
-				t.Fatal(err)
-			}
-		})
-	}
-}
-
 func (s) TestNewCredentials(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -564,7 +453,7 @@ func (s) TestNewCredentials(t *testing.T) {
 		{
 			name: "invalid options - empty subjectTokenPath",
 			opts: Options{
-				TokenExchangeServiceURI: "http://localhost",
+				TokenExchangeServiceURI: serviceURI,
 			},
 			wantErr: true,
 		},
@@ -633,25 +522,21 @@ func (s) TestValidateOptions(t *testing.T) {
 		{
 			name: "empty subjectTokenPath",
 			opts: Options{
-				TokenExchangeServiceURI: "http://localhost",
+				TokenExchangeServiceURI: serviceURI,
 			},
 			wantErrPrefix: "required field SubjectTokenPath is not specified",
 		},
 		{
 			name: "empty subjectTokenType",
 			opts: Options{
-				TokenExchangeServiceURI: "http://localhost",
-				SubjectTokenPath:        "/var/run/secrets/token.jwt",
+				TokenExchangeServiceURI: serviceURI,
+				SubjectTokenPath:        subjectTokenPath,
 			},
 			wantErrPrefix: "required field SubjectTokenType is not specified",
 		},
 		{
 			name: "good options",
-			opts: Options{
-				TokenExchangeServiceURI: "http://localhost",
-				SubjectTokenPath:        "/var/run/secrets/token.jwt",
-				SubjectTokenType:        "urn:ietf:params:oauth:token-type:id_token",
-			},
+			opts: goodOptions,
 		},
 	}
 
@@ -663,6 +548,214 @@ func (s) TestValidateOptions(t *testing.T) {
 			}
 			if err != nil && !strings.Contains(err.Error(), test.wantErrPrefix) {
 				t.Errorf("validateOptions(%v) = %v, want %v", test.opts, err, test.wantErrPrefix)
+			}
+		})
+	}
+}
+
+func (s) TestConstructRequest(t *testing.T) {
+	tests := []struct {
+		name                string
+		opts                Options
+		subjectTokenReadErr bool
+		actorTokenReadErr   bool
+		wantReqParams       *RequestParameters
+		wantErr             bool
+	}{
+		{
+			name:                "subject token read failure",
+			subjectTokenReadErr: true,
+			opts:                goodOptions,
+			wantErr:             true,
+		},
+		{
+			name:          "default cloud platform scope",
+			opts:          goodOptions,
+			wantReqParams: goodRequestParams,
+		},
+		{
+			name:              "actor token read failure",
+			actorTokenReadErr: true,
+			opts: Options{
+				TokenExchangeServiceURI: serviceURI,
+				Audience:                exampleAudience,
+				RequestedTokenType:      requestedTokenType,
+				SubjectTokenPath:        subjectTokenPath,
+				SubjectTokenType:        subjectTokenType,
+				ActorTokenPath:          actorTokenPath,
+				ActorTokenType:          actorTokenType,
+			},
+			wantReqParams: goodRequestParams,
+		},
+		{
+			name: "all good",
+			opts: Options{
+				TokenExchangeServiceURI: serviceURI,
+				Resource:                exampleResource,
+				Audience:                exampleAudience,
+				Scope:                   testScope,
+				RequestedTokenType:      requestedTokenType,
+				SubjectTokenPath:        subjectTokenPath,
+				SubjectTokenType:        subjectTokenType,
+				ActorTokenPath:          actorTokenPath,
+				ActorTokenType:          actorTokenType,
+			},
+			wantReqParams: &RequestParameters{
+				GrantType:          tokenExchangeGrantType,
+				Resource:           exampleResource,
+				Audience:           exampleAudience,
+				Scope:              testScope,
+				RequestedTokenType: requestedTokenType,
+				SubjectToken:       subjectTokenContents,
+				SubjectTokenType:   subjectTokenType,
+				ActorToken:         actorTokenContents,
+				ActorTokenType:     actorTokenType,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.subjectTokenReadErr {
+				defer overrideSubjectTokenError()()
+			} else {
+				defer overrideSubjectTokenGood()()
+			}
+
+			if test.actorTokenReadErr {
+				defer overrideActorTokenError()()
+			} else {
+				defer overrideActorTokenGood()()
+			}
+
+			gotRequest, err := constructRequest(context.Background(), test.opts)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("constructRequest(%v) = %v, wantErr: %v", test.opts, err, test.wantErr)
+			}
+			if test.wantErr {
+				return
+			}
+			if err := compareRequest(gotRequest, test.wantReqParams); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func (s) TestSendRequest(t *testing.T) {
+	defer overrideSubjectTokenGood()()
+	req, err := constructRequest(context.Background(), goodOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name    string
+		resp    *http.Response
+		respErr error
+		wantErr bool
+	}{
+		{
+			name:    "client error",
+			respErr: errors.New("http.Client.Do failed"),
+			wantErr: true,
+		},
+		{
+			name: "bad response body",
+			resp: &http.Response{
+				Status:     "200 OK",
+				StatusCode: http.StatusOK,
+				Body:       ioutil.NopCloser(errReader{}),
+			},
+			wantErr: true,
+		},
+		{
+			name: "nonOK status code",
+			resp: &http.Response{
+				Status:     "400 BadRequest",
+				StatusCode: http.StatusBadRequest,
+				Body:       ioutil.NopCloser(strings.NewReader("")),
+			},
+			wantErr: true,
+		},
+		{
+			name: "good case",
+			resp: makeGoodResponse(),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client := &fakeHTTPDoer{
+				reqCh:  testutils.NewChannel(),
+				respCh: testutils.NewChannel(),
+				err:    test.respErr,
+			}
+			client.respCh.Send(test.resp)
+			_, err := sendRequest(client, req)
+			if (err != nil) != test.wantErr {
+				t.Errorf("sendRequest(%v) = %v, wantErr: %v", req, err, test.wantErr)
+			}
+		})
+	}
+}
+
+func (s) TestTokenInfoFromResponse(t *testing.T) {
+	noAccessToken, _ := json.Marshal(ResponseParameters{
+		IssuedTokenType: "urn:ietf:params:oauth:token-type:access_token",
+		TokenType:       "Bearer",
+		ExpiresIn:       3600,
+	})
+	goodResponse, _ := json.Marshal(ResponseParameters{
+		IssuedTokenType: requestedTokenType,
+		AccessToken:     accessTokenContents,
+		TokenType:       "Bearer",
+		ExpiresIn:       3600,
+	})
+
+	tests := []struct {
+		name          string
+		respBody      []byte
+		wantTokenInfo *tokenInfo
+		wantErr       bool
+	}{
+		{
+			name:     "bad JSON",
+			respBody: []byte("not JSON"),
+			wantErr:  true,
+		},
+		{
+			name:     "empty response",
+			respBody: []byte(""),
+			wantErr:  true,
+		},
+		{
+			name:     "non-empty response with no access token",
+			respBody: noAccessToken,
+			wantErr:  true,
+		},
+		{
+			name:     "good response",
+			respBody: goodResponse,
+			wantTokenInfo: &tokenInfo{
+				tokenType: "Bearer",
+				token:     accessTokenContents,
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			gotTokenInfo, err := tokenInfoFromResponse(test.respBody)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("tokenInfoFromResponse(%+v) = %v, wantErr: %v", test.respBody, err, test.wantErr)
+			}
+			if test.wantErr {
+				return
+			}
+			// Can't do a cmp.Equal on the whole struct since the expiryField
+			// is populated based on time.Now().
+			if gotTokenInfo.tokenType != test.wantTokenInfo.tokenType || gotTokenInfo.token != test.wantTokenInfo.token {
+				t.Errorf("tokenInfoFromResponse(%+v) = %+v, want: %+v", test.respBody, gotTokenInfo, test.wantTokenInfo)
 			}
 		})
 	}
