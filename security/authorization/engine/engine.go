@@ -41,7 +41,6 @@ var (
 	errNoRequestHeaders        = status.Errorf(codes.InvalidArgument, "authorization args doesn't have valid request headers")
 	errNoDestinationAddress    = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid destination address")
 	errNoDestinationPort       = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid destination port")
-	errNoRequestedServerName   = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid requested server name")
 	errNoURISanPeerCertificate = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid URI in SAN field of the peer certificate")
 )
 
@@ -90,6 +89,7 @@ func (args AuthorizationArgs) getRequestMethod() (string, error) {
 }
 
 func (args AuthorizationArgs) getRequestHeaders() (map[string]string, error) {
+	// get this from metadata?
 	return nil, errNoRequestHeaders
 }
 
@@ -117,10 +117,6 @@ func (args AuthorizationArgs) getDestinationAddress() (string, error) {
 
 func (args AuthorizationArgs) getDestinationPort() (int, error) {
 	return 0, errNoDestinationPort
-}
-
-func (args AuthorizationArgs) getRequestedServerName() (string, error) {
-	return "", errNoRequestedServerName
 }
 
 func (args AuthorizationArgs) getURISanPeerCertificate() (string, error) {
@@ -174,7 +170,6 @@ func exprToProgram(condition *expr.Expr) *cel.Program {
 			decls.NewVar("source port", decls.Int),
 			decls.NewVar("destination address", decls.String),
 			decls.NewVar("destination port", decls.Int),
-			decls.NewVar("requested server name", decls.String),
 			decls.NewVar("URI SAN peer certificate", decls.String),
 		),
 	)
@@ -194,7 +189,6 @@ var stringAttributeMap = map[string]func(AuthorizationArgs) (string, error){
 	"request method":           AuthorizationArgs.getRequestMethod,
 	"source address":           AuthorizationArgs.getSourceAddress,
 	"destination address":      AuthorizationArgs.getDestinationAddress,
-	"requested server name":    AuthorizationArgs.getRequestedServerName,
 	"URI SAN peer certificate": AuthorizationArgs.getURISanPeerCertificate,
 }
 
