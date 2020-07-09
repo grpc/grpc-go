@@ -148,6 +148,12 @@ func (c *callCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[st
 	if err := credentials.CheckSecurityLevel(ctx, credentials.PrivacyAndIntegrity); err != nil {
 		return nil, fmt.Errorf("unable to transfer STS PerRPCCredentials: %v", err)
 	}
+
+	// Holding the lock for the whole duration of the STS request and response
+	// processing ensures that concurrent RPCs don't end up in multiple
+	// requests being made.
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if md := c.metadataFromCachedToken(); md != nil {
 		return md, nil
 	}
@@ -163,13 +169,8 @@ func (c *callCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[st
 	if err != nil {
 		return nil, err
 	}
-	c.mu.Lock()
 	c.cachedToken = ti
-	c.mu.Unlock()
-
-	return map[string]string{
-		"Authorization": fmt.Sprintf("%s %s", ti.tokenType, ti.token),
-	}, nil
+	return tokenInfoToMetadata(ti), nil
 }
 
 // RequireTransportSecurity indicates whether the credentials requires
@@ -222,10 +223,9 @@ func validateOptions(opts Options) error {
 
 // metadataFromCachedToken returns the cached accessToken as request metadata,
 // provided a cached accessToken exists and is not going to expire anytime soon.
+//
+// Caller must hold c.mu.
 func (c *callCreds) metadataFromCachedToken() map[string]string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if c.cachedToken == nil {
 		return nil
 	}
@@ -235,9 +235,7 @@ func (c *callCreds) metadataFromCachedToken() map[string]string {
 	// token is greater than the minimum value we are willing to accept, go
 	// ahead and use it.
 	if c.cachedToken.expiryTime.After(now) && c.cachedToken.expiryTime.Sub(now) > minCachedTokenLifetime {
-		return map[string]string{
-			"Authorization": fmt.Sprintf("%s %s", c.cachedToken.tokenType, c.cachedToken.token),
-		}
+		return tokenInfoToMetadata(c.cachedToken)
 	}
 	return nil
 }
@@ -263,7 +261,7 @@ func constructRequest(ctx context.Context, opts Options) (*http.Request, error) 
 	if reqScope == "" {
 		reqScope = defaultCloudPlatformScope
 	}
-	reqParams := &RequestParameters{
+	reqParams := &requestParameters{
 		GrantType:          tokenExchangeGrantType,
 		Resource:           opts.Resource,
 		Audience:           opts.Audience,
@@ -274,10 +272,11 @@ func constructRequest(ctx context.Context, opts Options) (*http.Request, error) 
 	}
 	if opts.ActorTokenPath != "" {
 		actorToken, err := readActorTokenFrom(opts.ActorTokenPath)
-		if err == nil {
-			reqParams.ActorToken = string(actorToken)
-			reqParams.ActorTokenType = opts.ActorTokenType
+		if err != nil {
+			return nil, err
 		}
+		reqParams.ActorToken = string(actorToken)
+		reqParams.ActorTokenType = opts.ActorTokenType
 	}
 	jsonBody, err := json.Marshal(reqParams)
 	if err != nil {
@@ -318,7 +317,7 @@ func sendRequest(client httpDoer, req *http.Request) ([]byte, error) {
 }
 
 func tokenInfoFromResponse(respBody []byte) (*tokenInfo, error) {
-	respData := &ResponseParameters{}
+	respData := &responseParameters{}
 	if err := json.Unmarshal(respBody, respData); err != nil {
 		return nil, fmt.Errorf("json.Unmarshal(%v): %v", respBody, err)
 	}
@@ -332,9 +331,15 @@ func tokenInfoFromResponse(respBody []byte) (*tokenInfo, error) {
 	}, nil
 }
 
-// RequestParameters stores all STS request attributes defined in
+func tokenInfoToMetadata(ti *tokenInfo) map[string]string {
+	return map[string]string{
+		"Authorization": fmt.Sprintf("%s %s", ti.tokenType, ti.token),
+	}
+}
+
+// requestParameters stores all STS request attributes defined in
 // https://tools.ietf.org/html/rfc8693#section-2.1.
-type RequestParameters struct {
+type requestParameters struct {
 	// REQUIRED. The value "urn:ietf:params:oauth:grant-type:token-exchange"
 	// indicates that a token exchange is being performed.
 	GrantType string `json:"grant_type"`
@@ -364,10 +369,10 @@ type RequestParameters struct {
 	ActorTokenType string `json:"actor_token_type,omitempty"`
 }
 
-// ResponseParameters stores all attributes sent as JSON in a successful STS
+// nesponseParameters stores all attributes sent as JSON in a successful STS
 // response. These attributes are defined in
 // https://tools.ietf.org/html/rfc8693#section-2.2.1.
-type ResponseParameters struct {
+type responseParameters struct {
 	// REQUIRED. The security token issued by the authorization server
 	// in response to the token exchange request.
 	AccessToken string `json:"access_token"`

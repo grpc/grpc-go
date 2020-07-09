@@ -65,7 +65,7 @@ var (
 		SubjectTokenPath:        subjectTokenPath,
 		SubjectTokenType:        subjectTokenType,
 	}
-	goodRequestParams = &RequestParameters{
+	goodRequestParams = &requestParameters{
 		GrantType:          tokenExchangeGrantType,
 		Audience:           exampleAudience,
 		Scope:              defaultCloudPlatformScope,
@@ -117,7 +117,7 @@ func (r errReader) Read(b []byte) (n int, err error) {
 // as a variable since the the response body will be consumed by the
 // credentials, and therefore we will need a new one everytime.
 func makeGoodResponse() *http.Response {
-	respJSON, _ := json.Marshal(ResponseParameters{
+	respJSON, _ := json.Marshal(responseParameters{
 		AccessToken:     accessTokenContents,
 		IssuedTokenType: "urn:ietf:params:oauth:token-type:access_token",
 		TokenType:       "Bearer",
@@ -208,8 +208,8 @@ func overrideActorTokenError() func() {
 }
 
 // compareRequest compares the http.Request received in the test with the
-// expected RequestParameters specified in wantReqParams.
-func compareRequest(gotRequest *http.Request, wantReqParams *RequestParameters) error {
+// expected requestParameters specified in wantReqParams.
+func compareRequest(gotRequest *http.Request, wantReqParams *requestParameters) error {
 	jsonBody, err := json.Marshal(wantReqParams)
 	if err != nil {
 		return err
@@ -334,7 +334,7 @@ func (s) TestGetRequestMetadataCacheExpiry(t *testing.T) {
 		errCh := make(chan error, 1)
 		go receiveAndCompareRequest(fc.reqCh, errCh)
 
-		respJSON, _ := json.Marshal(ResponseParameters{
+		respJSON, _ := json.Marshal(responseParameters{
 			AccessToken:     accessTokenContents,
 			IssuedTokenType: "urn:ietf:params:oauth:token-type:access_token",
 			TokenType:       "Bearer",
@@ -561,7 +561,7 @@ func (s) TestConstructRequest(t *testing.T) {
 		opts                Options
 		subjectTokenReadErr bool
 		actorTokenReadErr   bool
-		wantReqParams       *RequestParameters
+		wantReqParams       *requestParameters
 		wantErr             bool
 	}{
 		{
@@ -569,11 +569,6 @@ func (s) TestConstructRequest(t *testing.T) {
 			subjectTokenReadErr: true,
 			opts:                goodOptions,
 			wantErr:             true,
-		},
-		{
-			name:          "default cloud platform scope",
-			opts:          goodOptions,
-			wantReqParams: goodRequestParams,
 		},
 		{
 			name:              "actor token read failure",
@@ -587,6 +582,11 @@ func (s) TestConstructRequest(t *testing.T) {
 				ActorTokenPath:          actorTokenPath,
 				ActorTokenType:          actorTokenType,
 			},
+			wantErr: true,
+		},
+		{
+			name:          "default cloud platform scope",
+			opts:          goodOptions,
 			wantReqParams: goodRequestParams,
 		},
 		{
@@ -602,7 +602,7 @@ func (s) TestConstructRequest(t *testing.T) {
 				ActorTokenPath:          actorTokenPath,
 				ActorTokenType:          actorTokenType,
 			},
-			wantReqParams: &RequestParameters{
+			wantReqParams: &requestParameters{
 				GrantType:          tokenExchangeGrantType,
 				Resource:           exampleResource,
 				Audience:           exampleAudience,
@@ -702,12 +702,12 @@ func (s) TestSendRequest(t *testing.T) {
 }
 
 func (s) TestTokenInfoFromResponse(t *testing.T) {
-	noAccessToken, _ := json.Marshal(ResponseParameters{
+	noAccessToken, _ := json.Marshal(responseParameters{
 		IssuedTokenType: "urn:ietf:params:oauth:token-type:access_token",
 		TokenType:       "Bearer",
 		ExpiresIn:       3600,
 	})
-	goodResponse, _ := json.Marshal(ResponseParameters{
+	goodResponse, _ := json.Marshal(responseParameters{
 		IssuedTokenType: requestedTokenType,
 		AccessToken:     accessTokenContents,
 		TokenType:       "Bearer",
