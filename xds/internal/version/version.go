@@ -13,20 +13,20 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package testutils
+// Package version defines supported xDS API versions.
+package version
 
-import (
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	"google.golang.org/grpc/xds/internal"
+// TransportAPI refers to the API version for xDS transport protocol. This
+// describes the xDS gRPC endpoint and version of DiscoveryRequest/Response used
+// on the wire.
+type TransportAPI int
+
+const (
+	// TransportV2 refers to the v2 xDS transport protocol.
+	TransportV2 TransportAPI = iota
+	// TransportV3 refers to the v3 xDS transport protocol.
+	TransportV3
 )
-
-// LocalityIDToProto converts a LocalityID to its proto representation.
-func LocalityIDToProto(l internal.LocalityID) *corepb.Locality {
-	return &corepb.Locality{
-		Region:  l.Region,
-		Zone:    l.Zone,
-		SubZone: l.SubZone,
-	}
-}

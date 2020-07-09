@@ -37,8 +37,6 @@ import (
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
-
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 const (
@@ -51,7 +49,7 @@ var (
 	validConfig = bootstrap.Config{
 		BalancerName: balancerName,
 		Creds:        grpc.WithInsecure(),
-		NodeProto:    &corepb.Node{},
+		NodeProto:    testutils.EmptyNodeProtoV2,
 	}
 	target = resolver.Target{Endpoint: targetStr}
 )
@@ -138,7 +136,7 @@ func TestResolverBuilder(t *testing.T) {
 			rbo:  resolver.BuildOptions{},
 			config: bootstrap.Config{
 				Creds:     grpc.WithInsecure(),
-				NodeProto: &corepb.Node{},
+				NodeProto: testutils.EmptyNodeProtoV2,
 			},
 			wantErr: true,
 		},
@@ -147,7 +145,7 @@ func TestResolverBuilder(t *testing.T) {
 			rbo:  resolver.BuildOptions{},
 			config: bootstrap.Config{
 				BalancerName: balancerName,
-				NodeProto:    &corepb.Node{},
+				NodeProto:    testutils.EmptyNodeProtoV2,
 			},
 			xdsClientFunc: getXDSClientMakerFunc(xdsclient.Options{Config: validConfig}),
 			wantErr:       false,

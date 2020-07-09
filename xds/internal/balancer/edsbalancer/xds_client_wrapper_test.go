@@ -24,7 +24,6 @@ import (
 	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
@@ -101,7 +100,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 				return &bootstrap.Config{
 					BalancerName: fakeServer.Address,
 					Creds:        grpc.WithInsecure(),
-					NodeProto:    &corepb.Node{},
+					NodeProto:    testutils.EmptyNodeProtoV2,
 				}, nil
 			}
 			defer func() { bootstrapConfigNew = oldBootstrapConfigNew }()
@@ -138,7 +137,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 			wantReq := &xdspb.DiscoveryRequest{
 				TypeUrl:       edsType,
 				ResourceNames: []string{test.wantResourceName},
-				Node:          &corepb.Node{},
+				Node:          testutils.EmptyNodeProtoV2,
 			}
 			if !proto.Equal(edsReq.Req, wantReq) {
 				t.Fatalf("got EDS request %v, expected: %v, diff: %s", edsReq.Req, wantReq, cmp.Diff(edsReq.Req, wantReq, cmp.Comparer(proto.Equal)))
