@@ -18,6 +18,8 @@ package engine
 
 import (
 	"log"
+	"net"
+	"strconv"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	cel "github.com/google/cel-go/cel"
@@ -37,8 +39,6 @@ var (
 	errNoRequestHost           = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid request host")
 	errNoRequestMethod         = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid request method")
 	errNoRequestHeaders        = status.Errorf(codes.InvalidArgument, "authorization args doesn't have valid request headers")
-	errNoSourceAddress         = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid source address")
-	errNoSourcePort            = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid source port")
 	errNoDestinationAddress    = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid destination address")
 	errNoDestinationPort       = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid destination port")
 	errNoRequestedServerName   = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid requested server name")
@@ -93,11 +93,21 @@ func (args AuthorizationArgs) getRequestHeaders() (map[string]string, error) {
 }
 
 func (args AuthorizationArgs) getSourceAddress() (string, error) {
-	return "", errNoSourceAddress
+	addr := args.peerInfo.Addr.String()
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", err
+	}
+	return host, nil
 }
 
 func (args AuthorizationArgs) getSourcePort() (int, error) {
-	return 0, errNoSourcePort
+	addr := args.peerInfo.Addr.String()
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(port)
 }
 
 func (args AuthorizationArgs) getDestinationAddress() (string, error) {
