@@ -47,8 +47,9 @@ var (
 
 // AuthorizationArgs is the input of the CEL-based authorization engine.
 type AuthorizationArgs struct {
-	md       metadata.MD
-	peerInfo *peer.Peer
+	md         metadata.MD
+	peerInfo   *peer.Peer
+	fullMethod string
 }
 
 // ActivationImpl is an implementation of interpreter.Activation.
@@ -77,7 +78,7 @@ func (args *AuthorizationArgs) toActivation() interpreter.Activation {
 }
 
 func (args AuthorizationArgs) getRequestURLPath() (string, error) {
-	return "", errNoRequestURLPath
+	return args.fullMethod, nil
 }
 
 func (args AuthorizationArgs) getRequestHost() (string, error) {
