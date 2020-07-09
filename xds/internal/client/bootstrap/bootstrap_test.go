@@ -32,8 +32,17 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/version"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 var (
 	v2BootstrapFileMap = map[string]string{
@@ -273,12 +282,9 @@ func setupBootstrapOverride(bootstrapFileMap map[string]string) func() {
 	}
 }
 
-// TODO: enable leak check for this package when
-// https://github.com/googleapis/google-cloud-go/issues/2417 is fixed.
-
 // TestNewConfigV2ProtoFailure exercises the functionality in NewConfig with
 // different bootstrap file contents which are expected to fail.
-func TestNewConfigV2ProtoFailure(t *testing.T) {
+func (s) TestNewConfigV2ProtoFailure(t *testing.T) {
 	bootstrapFileMap := map[string]string{
 		"empty":          "",
 		"badJSON":        `["test": 123]`,
@@ -322,7 +328,7 @@ func TestNewConfigV2ProtoFailure(t *testing.T) {
 // TestNewConfigV2ProtoSuccess exercises the functionality in NewConfig with
 // different bootstrap file contents. It overrides the fileReadFunc by returning
 // bootstrap file contents defined in this test, instead of reading from a file.
-func TestNewConfigV2ProtoSuccess(t *testing.T) {
+func (s) TestNewConfigV2ProtoSuccess(t *testing.T) {
 	cancel := setupBootstrapOverride(v2BootstrapFileMap)
 	defer cancel()
 
@@ -371,7 +377,7 @@ func TestNewConfigV2ProtoSuccess(t *testing.T) {
 // when the GRPC_XDS_EXPERIMENTAL_V3_SUPPORT environment variable is not enabled
 // on the client. In this case, whether the server supports v3 or not, the
 // client will end up using v2.
-func TestNewConfigV3SupportNotEnabledOnClient(t *testing.T) {
+func (s) TestNewConfigV3SupportNotEnabledOnClient(t *testing.T) {
 	if err := os.Setenv(v3SupportEnv, "false"); err != nil {
 		t.Fatalf("os.Setenv(%s, %s) failed with error: %v", v3SupportEnv, "true", err)
 	}
@@ -408,7 +414,7 @@ func TestNewConfigV3SupportNotEnabledOnClient(t *testing.T) {
 // the GRPC_XDS_EXPERIMENTAL_V3_SUPPORT environment variable is enabled on the
 // client. Here the client ends up using v2 or v3 based on what the server
 // supports.
-func TestNewConfigV3SupportEnabledOnClient(t *testing.T) {
+func (s) TestNewConfigV3SupportEnabledOnClient(t *testing.T) {
 	if err := os.Setenv(v3SupportEnv, "true"); err != nil {
 		t.Fatalf("os.Setenv(%s, %s) failed with error: %v", v3SupportEnv, "true", err)
 	}
@@ -443,7 +449,7 @@ func TestNewConfigV3SupportEnabledOnClient(t *testing.T) {
 
 // TestNewConfigBootstrapFileEnvNotSet tests the case where the bootstrap file
 // environment variable is not set.
-func TestNewConfigBootstrapFileEnvNotSet(t *testing.T) {
+func (s) TestNewConfigBootstrapFileEnvNotSet(t *testing.T) {
 	os.Unsetenv(bootstrapFileEnv)
 	if _, err := NewConfig(); err == nil {
 		t.Errorf("NewConfig() returned nil error, expected to fail")
