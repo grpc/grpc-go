@@ -138,8 +138,9 @@ type callCreds struct {
 
 	// Cached accessToken to avoid an STS token exchange for every call to
 	// GetRequestMetadata.
-	mu          sync.Mutex
-	cachedToken *tokenInfo
+	mu            sync.Mutex
+	tokenMetadata map[string]string
+	tokenExpiry   time.Time
 }
 
 // GetRequestMetadata returns the cached accessToken, if available and valid, or
@@ -154,7 +155,8 @@ func (c *callCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[st
 	// requests being made.
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if md := c.metadataFromCachedToken(); md != nil {
+
+	if md := c.cachedMetadata(); md != nil {
 		return md, nil
 	}
 	req, err := constructRequest(ctx, c.opts)
@@ -169,8 +171,9 @@ func (c *callCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[st
 	if err != nil {
 		return nil, err
 	}
-	c.cachedToken = ti
-	return tokenInfoToMetadata(ti), nil
+	c.tokenMetadata = map[string]string{"Authorization": fmt.Sprintf("%s %s", ti.tokenType, ti.token)}
+	c.tokenExpiry = ti.expiryTime
+	return c.tokenMetadata, nil
 }
 
 // RequireTransportSecurity indicates whether the credentials requires
@@ -221,21 +224,17 @@ func validateOptions(opts Options) error {
 	return nil
 }
 
-// metadataFromCachedToken returns the cached accessToken as request metadata,
-// provided a cached accessToken exists and is not going to expire anytime soon.
+// cachedMetadata returns the cached metadata provided it is not going to
+// expire anytime soon.
 //
 // Caller must hold c.mu.
-func (c *callCreds) metadataFromCachedToken() map[string]string {
-	if c.cachedToken == nil {
-		return nil
-	}
-
+func (c *callCreds) cachedMetadata() map[string]string {
 	now := time.Now()
 	// If the cached token has not expired and the lifetime remaining on that
 	// token is greater than the minimum value we are willing to accept, go
 	// ahead and use it.
-	if c.cachedToken.expiryTime.After(now) && c.cachedToken.expiryTime.Sub(now) > minCachedTokenLifetime {
-		return tokenInfoToMetadata(c.cachedToken)
+	if c.tokenExpiry.After(now) && c.tokenExpiry.Sub(now) > minCachedTokenLifetime {
+		return c.tokenMetadata
 	}
 	return nil
 }
@@ -329,12 +328,6 @@ func tokenInfoFromResponse(respBody []byte) (*tokenInfo, error) {
 		token:      respData.AccessToken,
 		expiryTime: time.Now().Add(time.Duration(respData.ExpiresIn) * time.Second),
 	}, nil
-}
-
-func tokenInfoToMetadata(ti *tokenInfo) map[string]string {
-	return map[string]string{
-		"Authorization": fmt.Sprintf("%s %s", ti.tokenType, ti.token),
-	}
 }
 
 // requestParameters stores all STS request attributes defined in
