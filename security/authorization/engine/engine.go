@@ -17,8 +17,11 @@
 package engine
 
 import (
+	"log"
+
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	cel "github.com/google/cel-go/cel"
+	"github.com/google/cel-go/checker/decls"
 	types "github.com/google/cel-go/common/types"
 	interpreter "github.com/google/cel-go/interpreter"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
@@ -27,6 +30,19 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+)
+
+var (
+	errNoRequestURLPath        = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid request url path")
+	errNoRequestHost           = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid request host")
+	errNoRequestMethod         = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid request method")
+	errNoRequestHeaders        = status.Errorf(codes.InvalidArgument, "authorization args doesn't have valid request headers")
+	errNoSourceAddress         = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid source address")
+	errNoSourcePort            = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid source port")
+	errNoDestinationAddress    = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid destination address")
+	errNoDestinationPort       = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid destination port")
+	errNoRequestedServerName   = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid requested server name")
+	errNoURISanPeerCertificate = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid URI in SAN field of the peer certificate")
 )
 
 // AuthorizationArgs is the input of the CEL-based authorization engine.
@@ -58,6 +74,46 @@ func (activation ActivationImpl) Parent() interpreter.Activation {
 func (args *AuthorizationArgs) toActivation() interpreter.Activation {
 	// TODO(@ezou): implement the conversion logic.
 	return ActivationImpl{}
+}
+
+func (args AuthorizationArgs) getRequestURLPath() (string, error) {
+	return "", errNoRequestURLPath
+}
+
+func (args AuthorizationArgs) getRequestHost() (string, error) {
+	return "", errNoRequestHost
+}
+
+func (args AuthorizationArgs) getRequestMethod() (string, error) {
+	return "", errNoRequestMethod
+}
+
+func (args AuthorizationArgs) getRequestHeaders() (map[string]string, error) {
+	return nil, errNoRequestHeaders
+}
+
+func (args AuthorizationArgs) getSourceAddress() (string, error) {
+	return "", errNoSourceAddress
+}
+
+func (args AuthorizationArgs) getSourcePort() (int, error) {
+	return 0, errNoSourcePort
+}
+
+func (args AuthorizationArgs) getDestinationAddress() (string, error) {
+	return "", errNoDestinationAddress
+}
+
+func (args AuthorizationArgs) getDestinationPort() (int, error) {
+	return 0, errNoDestinationPort
+}
+
+func (args AuthorizationArgs) getRequestedServerName() (string, error) {
+	return "", errNoRequestedServerName
+}
+
+func (args AuthorizationArgs) getURISanPeerCertificate() (string, error) {
+	return "", errNoURISanPeerCertificate
 }
 
 // Decision is the enum type that represents different authorization
@@ -96,9 +152,44 @@ func exprToParsedExpr(condition *expr.Expr) *expr.ParsedExpr {
 }
 
 // Converts an expression to a CEL program.
-func exprToProgram(condition *expr.Expr) cel.Program {
-	// TODO(@ezou): implement the conversion from expr to CEL program.
-	return nil
+func exprToProgram(condition *expr.Expr) *cel.Program {
+	env, err := cel.NewEnv(
+		cel.Declarations(
+			decls.NewVar("request URL path", decls.String),
+			decls.NewVar("request host", decls.String),
+			decls.NewVar("request method", decls.String),
+			decls.NewVar("request headers", decls.NewMapType(&expr.Type{nil, struct{}{}, nil, 3}, &expr.Type{nil, struct{}{}, nil, 3})),
+			decls.NewVar("source address", decls.String),
+			decls.NewVar("source port", decls.Int),
+			decls.NewVar("destination address", decls.String),
+			decls.NewVar("destination port", decls.Int),
+			decls.NewVar("requested server name", decls.String),
+			decls.NewVar("URI SAN peer certificate", decls.String),
+		),
+	)
+	// Converts condition to ParsedExpr by setting SourceInfo empty.
+	pexpr := exprToParsedExpr(condition)
+	ast := cel.ParsedExprToAst(pexpr)
+	prg, err := env.Program(ast)
+	if err != nil {
+		log.Fatalf("program construction error: %s", err)
+	}
+	return &prg
+}
+
+var stringAttributeMap = map[string]func(AuthorizationArgs) (string, error){
+	"request URL path":         AuthorizationArgs.getRequestURLPath,
+	"request host":             AuthorizationArgs.getRequestHost,
+	"request method":           AuthorizationArgs.getRequestMethod,
+	"source address":           AuthorizationArgs.getSourceAddress,
+	"destination address":      AuthorizationArgs.getDestinationAddress,
+	"requested server name":    AuthorizationArgs.getRequestedServerName,
+	"URI SAN peer certificate": AuthorizationArgs.getURISanPeerCertificate,
+}
+
+var intAttributeMap = map[string]func(AuthorizationArgs) (int, error){
+	"source port":      AuthorizationArgs.getSourcePort,
+	"destination port": AuthorizationArgs.getDestinationPort,
 }
 
 // policyEngine is the struct for an engine created from one RBAC proto.
