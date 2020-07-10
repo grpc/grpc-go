@@ -2,29 +2,23 @@
 
 Follow these setup to run the [quick start][] example:
 
- 1. Update your path variable:
-
-    ```console
-    $ export PATH="$PATH:$(go env GOPATH)/bin"
-    ```
-
- 2. Get the code:
+ 1. Get the code:
 
     ```console
     $ go get -u google.golang.org/grpc/examples/helloworld/greeter_client
     $ go get -u google.golang.org/grpc/examples/helloworld/greeter_server
     ```
 
- 3. Run the server:
+ 2. Run the server:
 
     ```console
-    $ greeter_server &
+    $ $(go env GOPATH)/bin/greeter_server &
     ```
 
- 4. Run the client:
+ 3. Run the client:
 
     ```console
-    $ greeter_client
+    $ $(go env GOPATH)/bin/greeter_client
     Greeting: Hello world
     ```
 
