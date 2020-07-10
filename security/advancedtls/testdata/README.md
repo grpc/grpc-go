@@ -40,3 +40,18 @@ commands we run:
    $ openssl verify -verbose -CAfile ca_cert.pem  subject_cert.pem
 
    ```
+
+Appendix
+-------------
+Documents the attributes for generated certificates.
+1. `server_cert_1.pem`
+
+   Common name: `"foo.bar.com"`
+
+2. `server_cert_2.pem`
+
+   Common name: `"foo.bar.server2.com"`
+
+2. `server_cert_3.pem`
+
+   Common name: `"localhost"`
