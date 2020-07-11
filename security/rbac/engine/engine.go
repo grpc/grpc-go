@@ -66,13 +66,15 @@ func exprToParsedExpr(condition *expr.Expr) *expr.ParsedExpr {
 
 // Converts an expression to a CEL program
 func exprToProgram(condition *expr.Expr) *cel.Program {
-	return nil // TODO
+	// TODO(@ezou): implement the conversion from expr to CEL program.
+	return nil
 }
 
 // Returns whether or not a policy is matched.
 // If args is empty, the match always fails.
 func matchesCondition(condition *cel.Program, args AuthorizationArgs) (bool, error) {
-	return false, nil // TODO
+	// TODO(@ezou): implement the matching logic using CEL library.
+	return false, nil
 }
 
 // rbacEngine is the struct for an engine created from one RBAC proto.
