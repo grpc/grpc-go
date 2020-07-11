@@ -71,8 +71,8 @@ func exprToProgram(condition *expr.Expr) *cel.Program {
 
 // Returns whether or not a policy is matched.
 // If args is empty, the match always fails.
-func matches(program *cel.Program, args AuthorizationArgs) bool {
-	return false // TODO
+func matchesCondition(condition *cel.Program, args AuthorizationArgs) (bool, error) {
+	return false, nil // TODO
 }
 
 // rbacEngine is the struct for an engine created from one RBAC proto.
@@ -92,13 +92,24 @@ func newRbacEngine(rbac pb.RBAC) rbacEngine {
 }
 
 // Returns whether a set of authorization arguments match an rbacEngine's conditions.
-func (engine rbacEngine) matches(args AuthorizationArgs) (bool, string) {
-	for policyName, condition := range engine.conditions {
-		if matches(condition, args) {
-			return true, policyName
+// If any policy matches, the engine has been matched.
+// Else if any policy is missing attributes, the result is unknown.
+// Else, there is not a match.
+func (engine rbacEngine) matches(args AuthorizationArgs) (match, unknown bool, policyName string) {
+	unknown = false
+	var condition *cel.Program
+	var err error
+	for policyName, condition = range engine.conditions {
+		match, err = matchesCondition(condition, args)
+		if err != nil {
+			unknown = true
+		}
+		if match {
+			return
 		}
 	}
-	return false, ""
+	match = false
+	return
 }
 
 // CelEvaluationEngine is the struct for CEL engine.
@@ -122,9 +133,11 @@ func NewCelEvaluationEngine(rbacs []pb.RBAC) (CelEvaluationEngine, error) {
 }
 
 // Evaluate is the core function that evaluates whether an RPC is authorized.
+// Returns DecisionUnknown if the RPC is missing attributes
 func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) AuthorizationDecision {
+	allUnknown := true
 	for _, engine := range celEngine.engines {
-		match, policyName := engine.matches(args)
+		match, unknown, policyName := engine.matches(args)
 		if match {
 			var decision Decision
 			if engine.action == pb.RBAC_ALLOW {
@@ -134,8 +147,15 @@ func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) Authorizat
 			}
 			return AuthorizationDecision{decision, policyName}
 		}
+		if !unknown {
+			allUnknown = false
+		}
 	}
-	// if no RBACs matched
+	// If all engines evaluated to unknown
+	if allUnknown {
+		return AuthorizationDecision{DecisionUnknown, ""}
+	}
+	// If all engines explicitly did not match
 	var decision Decision
 	if len(celEngine.engines) == 2 {
 		decision = DecisionDeny
