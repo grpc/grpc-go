@@ -19,31 +19,29 @@
 package engine
 
 import (
+	"strings"
 	"testing"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 )
 
 func TestTooFewRbacs(t *testing.T) {
-	want := errWrongNumberRbacs
 	_, got := NewCelEvaluationEngine([]pb.RBAC{})
-	if got != want {
-		t.Errorf("Expected wrong number of RBACs error for 0 RBACs")
+	if got == nil || !strings.HasSuffix(got.Error(), "code = InvalidArgument desc = must provide 1 or 2 RBACs") {
+		t.Errorf("Expected wrong number of RBACs error for 0 RBACs %s", got.Error())
 	}
 }
 
 func TestTooManyRbacs(t *testing.T) {
-	want := errWrongNumberRbacs
 	_, got := NewCelEvaluationEngine([]pb.RBAC{{}, {}, {}})
-	if got != want {
+	if got == nil || !strings.HasSuffix(got.Error(), "code = InvalidArgument desc = must provide 1 or 2 RBACs") {
 		t.Errorf("Expected wrong number of RBACs error for 3 RBACs")
 	}
 }
 
 func TestWrongRbacActions(t *testing.T) {
-	want := errWrongRbacActions
 	_, got := NewCelEvaluationEngine([]pb.RBAC{{Action: pb.RBAC_ALLOW}, {Action: pb.RBAC_DENY}})
-	if got != want {
+	if got == nil || !strings.HasSuffix(got.Error(), "code = InvalidArgument desc = when providing 2 RBACs, must have 1 DENY and 1 ALLOW in that order") {
 		t.Errorf("Expected wrong RBAC actions error for ALLOW followed by DENY")
 	}
 }

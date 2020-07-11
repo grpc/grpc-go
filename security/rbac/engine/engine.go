@@ -28,11 +28,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var (
-	errWrongNumberRbacs = status.Errorf(codes.InvalidArgument, "must provide 1 or 2 RBACs")
-	errWrongRbacActions = status.Errorf(codes.InvalidArgument, "when providing 2 RBACs, must have 1 DENY and 1 ALLOW in that order")
-)
-
 // AuthorizationArgs is the input of CEL engine.
 type AuthorizationArgs struct {
 	md       metadata.MD
@@ -114,10 +109,10 @@ type CelEvaluationEngine struct {
 // NewCelEvaluationEngine builds a cel evaluation engine from a list of Envoy RBACs.
 func NewCelEvaluationEngine(rbacs []pb.RBAC) (CelEvaluationEngine, error) {
 	if len(rbacs) < 1 || len(rbacs) > 2 {
-		return CelEvaluationEngine{}, errWrongNumberRbacs
+		return CelEvaluationEngine{}, status.Errorf(codes.InvalidArgument, "must provide 1 or 2 RBACs")
 	}
 	if len(rbacs) == 2 && (rbacs[0].Action != pb.RBAC_DENY || rbacs[1].Action != pb.RBAC_ALLOW) {
-		return CelEvaluationEngine{}, errWrongRbacActions
+		return CelEvaluationEngine{}, status.Errorf(codes.InvalidArgument, "when providing 2 RBACs, must have 1 DENY and 1 ALLOW in that order")
 	}
 	var engines []rbacEngine
 	for _, rbac := range rbacs {
