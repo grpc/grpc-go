@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+	"google.golang.org/grpc/xds/internal/version/common"
 )
 
 func init() {
@@ -109,7 +110,7 @@ func (f *fakeEDSBalancer) handleChildPolicy(name string, config json.RawMessage)
 	f.childPolicy.Send(&loadBalancingConfig{Name: name, Config: config})
 }
 
-func (f *fakeEDSBalancer) handleEDSResponse(edsResp xdsclient.EndpointsUpdate) {
+func (f *fakeEDSBalancer) handleEDSResponse(edsResp common.EndpointsUpdate) {
 	f.edsUpdate.Send(edsResp)
 }
 
@@ -141,12 +142,12 @@ func (f *fakeEDSBalancer) waitForSubConnStateChange(wantState *scStateChange) er
 	return nil
 }
 
-func (f *fakeEDSBalancer) waitForEDSResponse(wantUpdate xdsclient.EndpointsUpdate) error {
+func (f *fakeEDSBalancer) waitForEDSResponse(wantUpdate common.EndpointsUpdate) error {
 	val, err := f.edsUpdate.Receive()
 	if err != nil {
 		return fmt.Errorf("error waiting for edsUpdate: %v", err)
 	}
-	gotUpdate := val.(xdsclient.EndpointsUpdate)
+	gotUpdate := val.(common.EndpointsUpdate)
 	if !reflect.DeepEqual(gotUpdate, wantUpdate) {
 		return fmt.Errorf("got edsUpdate %+v, want %+v", gotUpdate, wantUpdate)
 	}
@@ -272,7 +273,7 @@ func (s) TestXDSConfigBalancerNameUpdate(t *testing.T) {
 		})
 
 		xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, balancerName)
-		xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
+		xdsC.InvokeWatchEDSCallback(common.EndpointsUpdate{}, nil)
 	}
 }
 
@@ -357,7 +358,7 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 		},
 	})
 	xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, testBalancerNameFooBar)
-	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback(common.EndpointsUpdate{}, nil)
 	edsLB := waitForNewEDSLB(t, edsLBCh)
 	edsLB.waitForChildPolicy(&loadBalancingConfig{
 		Name:   string(fakeBalancerA),
@@ -406,7 +407,7 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	})
 
 	xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, testBalancerNameFooBar)
-	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback(common.EndpointsUpdate{}, nil)
 	edsLB := waitForNewEDSLB(t, edsLBCh)
 
 	fsc := &fakeSubConn{}
@@ -445,30 +446,30 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	})
 
 	xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, testBalancerNameFooBar)
-	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback(common.EndpointsUpdate{}, nil)
 	edsLB := waitForNewEDSLB(t, edsLBCh)
-	if err := edsLB.waitForEDSResponse(xdsclient.EndpointsUpdate{}); err != nil {
+	if err := edsLB.waitForEDSResponse(common.EndpointsUpdate{}); err != nil {
 		t.Fatalf("EDS impl got unexpected EDS response: %v", err)
 	}
 
 	connectionErr := xdsclient.NewErrorf(xdsclient.ErrorTypeConnection, "connection error")
-	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, connectionErr)
+	xdsC.InvokeWatchEDSCallback(common.EndpointsUpdate{}, connectionErr)
 	if err := xdsC.WaitForCancelEDSWatch(); err == nil {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
-	if err := edsLB.waitForEDSResponse(xdsclient.EndpointsUpdate{}); err == nil {
+	if err := edsLB.waitForEDSResponse(common.EndpointsUpdate{}); err == nil {
 		t.Fatal("eds impl got EDS resp, want timeout error")
 	}
 
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "edsBalancer resource not found error")
-	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, resourceErr)
+	xdsC.InvokeWatchEDSCallback(common.EndpointsUpdate{}, resourceErr)
 	// Even if error is resource not found, watch shouldn't be canceled, because
 	// this is an EDS resource removed (and xds client actually never sends this
 	// error, but we still handles it).
 	if err := xdsC.WaitForCancelEDSWatch(); err == nil {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
-	if err := edsLB.waitForEDSResponse(xdsclient.EndpointsUpdate{}); err != nil {
+	if err := edsLB.waitForEDSResponse(common.EndpointsUpdate{}); err != nil {
 		t.Fatalf("eds impl expecting empty update, got %v", err)
 	}
 }
@@ -502,9 +503,9 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	})
 
 	xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, testBalancerNameFooBar)
-	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback(common.EndpointsUpdate{}, nil)
 	edsLB := waitForNewEDSLB(t, edsLBCh)
-	if err := edsLB.waitForEDSResponse(xdsclient.EndpointsUpdate{}); err != nil {
+	if err := edsLB.waitForEDSResponse(common.EndpointsUpdate{}); err != nil {
 		t.Fatalf("EDS impl got unexpected EDS response: %v", err)
 	}
 
@@ -513,7 +514,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	if err := xdsC.WaitForCancelEDSWatch(); err == nil {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
-	if err := edsLB.waitForEDSResponse(xdsclient.EndpointsUpdate{}); err == nil {
+	if err := edsLB.waitForEDSResponse(common.EndpointsUpdate{}); err == nil {
 		t.Fatal("eds impl got EDS resp, want timeout error")
 	}
 
@@ -522,7 +523,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	if err := xdsC.WaitForCancelEDSWatch(); err != nil {
 		t.Fatalf("want watch to be canceled, waitForCancel failed: %v", err)
 	}
-	if err := edsLB.waitForEDSResponse(xdsclient.EndpointsUpdate{}); err != nil {
+	if err := edsLB.waitForEDSResponse(common.EndpointsUpdate{}); err != nil {
 		t.Fatalf("EDS impl got unexpected EDS response: %v", err)
 	}
 }

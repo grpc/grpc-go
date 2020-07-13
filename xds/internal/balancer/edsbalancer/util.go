@@ -18,17 +18,17 @@ package edsbalancer
 
 import (
 	"google.golang.org/grpc/internal/wrr"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/version/common"
 )
 
 var newRandomWRR = wrr.NewRandom
 
 type dropper struct {
-	c xdsclient.OverloadDropConfig
+	c common.OverloadDropConfig
 	w wrr.WRR
 }
 
-func newDropper(c xdsclient.OverloadDropConfig) *dropper {
+func newDropper(c common.OverloadDropConfig) *dropper {
 	w := newRandomWRR()
 	w.Add(true, int64(c.Numerator))
 	w.Add(false, int64(c.Denominator-c.Numerator))

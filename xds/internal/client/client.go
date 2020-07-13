@@ -26,7 +26,9 @@ import (
 	"sync"
 	"time"
 
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/buffer"
@@ -35,6 +37,9 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/grpc/xds/internal/version/common"
+
+	_ "google.golang.org/grpc/xds/internal/client/v2" // Register client for v2 xDS API.
 )
 
 // Options provides all parameters required for the creation of an xDS client.
@@ -49,16 +54,13 @@ type Options struct {
 	TargetName string
 }
 
-// Interface to be overridden in tests.
-type xdsv2Client interface {
-	addWatch(resourceType, resourceName string)
-	removeWatch(resourceType, resourceName string)
-	close()
-}
-
 // Function to be overridden in tests.
-var newXDSV2Client = func(parent *Client, cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration, logger *grpclog.PrefixLogger) xdsv2Client {
-	return newV2Client(parent, cc, nodeProto, backoff, logger)
+var newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, opts version.BuildOptions) (version.APIClient, error) {
+	cb := version.GetClientBuilder(apiVersion)
+	if cb == nil {
+		return nil, fmt.Errorf("no client builder for xDS API version: %v", apiVersion)
+	}
+	return cb.Build(cc, opts)
 }
 
 // Client is a full fledged gRPC client which queries a set of discovery APIs
@@ -68,24 +70,26 @@ var newXDSV2Client = func(parent *Client, cc *grpc.ClientConn, nodeProto *corepb
 // A single client object will be shared by the xds resolver and balancer
 // implementations. But the same client can only be shared by the same parent
 // ClientConn.
+//
+// Implements common.UpdateHandler interface.
 type Client struct {
-	done *grpcsync.Event
-	opts Options
-	cc   *grpc.ClientConn // Connection to the xDS server
-	v2c  xdsv2Client      // Actual xDS client implementation using the v2 API
+	done      *grpcsync.Event
+	opts      Options
+	cc        *grpc.ClientConn // Connection to the xDS server
+	apiClient version.APIClient
 
 	logger *grpclog.PrefixLogger
 
 	updateCh    *buffer.Unbounded // chan *watcherInfoWithUpdate
 	mu          sync.Mutex
 	ldsWatchers map[string]map[*watchInfo]bool
-	ldsCache    map[string]ldsUpdate
+	ldsCache    map[string]common.ListenerUpdate
 	rdsWatchers map[string]map[*watchInfo]bool
-	rdsCache    map[string]rdsUpdate
+	rdsCache    map[string]common.RouteConfigUpdate
 	cdsWatchers map[string]map[*watchInfo]bool
-	cdsCache    map[string]ClusterUpdate
+	cdsCache    map[string]common.ClusterUpdate
 	edsWatchers map[string]map[*watchInfo]bool
-	edsCache    map[string]EndpointsUpdate
+	edsCache    map[string]common.EndpointsUpdate
 }
 
 // New returns a new xdsClient configured with opts.
@@ -97,6 +101,17 @@ func New(opts Options) (*Client, error) {
 		return nil, errors.New("xds: no credentials provided in options")
 	case opts.Config.NodeProto == nil:
 		return nil, errors.New("xds: no node_proto provided in options")
+	}
+
+	switch opts.Config.TransportAPI {
+	case version.TransportV2:
+		if _, ok := opts.Config.NodeProto.(*v2corepb.Node); !ok {
+			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", opts.Config.NodeProto, opts.Config.TransportAPI)
+		}
+	case version.TransportV3:
+		if _, ok := opts.Config.NodeProto.(*v3corepb.Node); !ok {
+			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", opts.Config.NodeProto, opts.Config.TransportAPI)
+		}
 	}
 
 	dopts := []grpc.DialOption{
@@ -114,13 +129,13 @@ func New(opts Options) (*Client, error) {
 
 		updateCh:    buffer.NewUnbounded(),
 		ldsWatchers: make(map[string]map[*watchInfo]bool),
-		ldsCache:    make(map[string]ldsUpdate),
+		ldsCache:    make(map[string]common.ListenerUpdate),
 		rdsWatchers: make(map[string]map[*watchInfo]bool),
-		rdsCache:    make(map[string]rdsUpdate),
+		rdsCache:    make(map[string]common.RouteConfigUpdate),
 		cdsWatchers: make(map[string]map[*watchInfo]bool),
-		cdsCache:    make(map[string]ClusterUpdate),
+		cdsCache:    make(map[string]common.ClusterUpdate),
 		edsWatchers: make(map[string]map[*watchInfo]bool),
-		edsCache:    make(map[string]EndpointsUpdate),
+		edsCache:    make(map[string]common.EndpointsUpdate),
 	}
 
 	cc, err := grpc.Dial(opts.Config.BalancerName, dopts...)
@@ -132,13 +147,16 @@ func New(opts Options) (*Client, error) {
 	c.logger = prefixLogger((c))
 	c.logger.Infof("Created ClientConn to xDS server: %s", opts.Config.BalancerName)
 
-	if opts.Config.TransportAPI == version.TransportV2 {
-		c.v2c = newXDSV2Client(c, cc, opts.Config.NodeProto.(*corepb.Node), backoff.DefaultExponential.Backoff, c.logger)
-	} else {
-		// TODO(easwars): Remove this once v3Client is ready.
-		return nil, errors.New("xds v3 client is not yet supported")
+	apiClient, err := newAPIClient(opts.Config.TransportAPI, cc, version.BuildOptions{
+		Parent:    c,
+		NodeProto: opts.Config.NodeProto,
+		Backoff:   backoff.DefaultExponential.Backoff,
+		Logger:    c.logger,
+	})
+	if err != nil {
+		return nil, err
 	}
-
+	c.apiClient = apiClient
 	c.logger.Infof("Created")
 	go c.run()
 	return c, nil
@@ -173,7 +191,7 @@ func (c *Client) Close() {
 	c.done.Fire()
 	// TODO: Should we invoke the registered callbacks here with an error that
 	// the client is closed?
-	c.v2c.close()
+	c.apiClient.Close()
 	c.cc.Close()
 	c.logger.Infof("Shutdown")
 }

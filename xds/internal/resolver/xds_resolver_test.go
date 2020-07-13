@@ -32,11 +32,11 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
-	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+	"google.golang.org/grpc/xds/internal/version/common"
 )
 
 const (
@@ -273,7 +273,7 @@ func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	// Call the watchAPI callback after closing the resolver, and make sure no
 	// update is triggerred on the ClientConn.
 	xdsR.Close()
-	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{WeightedCluster: map[string]uint32{cluster: 1}}, nil)
+	xdsC.InvokeWatchServiceCallback(common.ServiceUpdate{WeightedCluster: map[string]uint32{cluster: 1}}, nil)
 	if gotVal, gotErr := tcc.stateCh.Receive(); gotErr != testutils.ErrRecvTimeout {
 		t.Fatalf("ClientConn.UpdateState called after xdsResolver is closed: %v", gotVal)
 	}
@@ -297,7 +297,7 @@ func TestXDSResolverBadServiceUpdate(t *testing.T) {
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr := errors.New("bad serviceupdate")
-	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{}, suErr)
+	xdsC.InvokeWatchServiceCallback(common.ServiceUpdate{}, suErr)
 	if gotErrVal, gotErr := tcc.errorCh.Receive(); gotErr != nil || gotErrVal != suErr {
 		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr)
 	}
@@ -319,15 +319,15 @@ func TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	waitForWatchService(t, xdsC, targetStr)
 
 	for _, tt := range []struct {
-		su       client.ServiceUpdate
+		su       common.ServiceUpdate
 		wantJSON string
 	}{
 		{
-			su:       client.ServiceUpdate{WeightedCluster: map[string]uint32{testCluster1: 1}},
+			su:       common.ServiceUpdate{WeightedCluster: map[string]uint32{testCluster1: 1}},
 			wantJSON: testClusterOnlyJSON,
 		},
 		{
-			su: client.ServiceUpdate{WeightedCluster: map[string]uint32{
+			su: common.ServiceUpdate{WeightedCluster: map[string]uint32{
 				"cluster_1": 75,
 				"cluster_2": 25,
 			}},
@@ -376,14 +376,14 @@ func TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr := errors.New("bad serviceupdate")
-	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{}, suErr)
+	xdsC.InvokeWatchServiceCallback(common.ServiceUpdate{}, suErr)
 	if gotErrVal, gotErr := tcc.errorCh.Receive(); gotErr != nil || gotErrVal != suErr {
 		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr)
 	}
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
-	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{WeightedCluster: map[string]uint32{cluster: 1}}, nil)
+	xdsC.InvokeWatchServiceCallback(common.ServiceUpdate{WeightedCluster: map[string]uint32{cluster: 1}}, nil)
 	gotState, err := tcc.stateCh.Receive()
 	if err != nil {
 		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
@@ -399,7 +399,7 @@ func TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr2 := errors.New("bad serviceupdate 2")
-	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{}, suErr2)
+	xdsC.InvokeWatchServiceCallback(common.ServiceUpdate{}, suErr2)
 	if gotErrVal, gotErr := tcc.errorCh.Receive(); gotErr != nil || gotErrVal != suErr2 {
 		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr2)
 	}
@@ -424,7 +424,7 @@ func TestXDSResolverResourceNotFoundError(t *testing.T) {
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "resource removed error")
-	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{}, suErr)
+	xdsC.InvokeWatchServiceCallback(common.ServiceUpdate{}, suErr)
 	if gotErrVal, gotErr := tcc.errorCh.Receive(); gotErr != testutils.ErrRecvTimeout {
 		t.Fatalf("ClientConn.ReportError() received %v, %v, want channel recv timeout", gotErrVal, gotErr)
 	}

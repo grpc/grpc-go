@@ -27,12 +27,13 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/version/common"
 )
 
 // xdsClientInterface contains only the xds_client methods needed by EDS
 // balancer. It's defined so we can override xdsclientNew function in tests.
 type xdsClientInterface interface {
-	WatchEndpoints(clusterName string, edsCb func(xdsclient.EndpointsUpdate, error)) (cancel func())
+	WatchEndpoints(clusterName string, edsCb func(common.EndpointsUpdate, error)) (cancel func())
 	ReportLoad(server string, clusterName string, loadStore lrs.Store) (cancel func())
 	Close()
 }
@@ -50,7 +51,7 @@ var (
 type xdsclientWrapper struct {
 	logger *grpclog.PrefixLogger
 
-	newEDSUpdate func(xdsclient.EndpointsUpdate, error)
+	newEDSUpdate func(common.EndpointsUpdate, error)
 	bbo          balancer.BuildOptions
 	loadStore    lrs.Store
 
@@ -77,7 +78,7 @@ type xdsclientWrapper struct {
 //
 // The given callbacks won't be called until the underlying xds_client is
 // working and sends updates.
-func newXDSClientWrapper(newEDSUpdate func(xdsclient.EndpointsUpdate, error), bbo balancer.BuildOptions, loadStore lrs.Store, logger *grpclog.PrefixLogger) *xdsclientWrapper {
+func newXDSClientWrapper(newEDSUpdate func(common.EndpointsUpdate, error), bbo balancer.BuildOptions, loadStore lrs.Store, logger *grpclog.PrefixLogger) *xdsclientWrapper {
 	return &xdsclientWrapper{
 		logger:       logger,
 		newEDSUpdate: newEDSUpdate,
@@ -185,7 +186,7 @@ func (c *xdsclientWrapper) startEndpointsWatch(nameToWatch string) {
 	if c.cancelEndpointsWatch != nil {
 		c.cancelEndpointsWatch()
 	}
-	cancelEDSWatch := c.xdsclient.WatchEndpoints(c.edsServiceName, func(update xdsclient.EndpointsUpdate, err error) {
+	cancelEDSWatch := c.xdsclient.WatchEndpoints(c.edsServiceName, func(update common.EndpointsUpdate, err error) {
 		c.logger.Infof("Watch update from xds-client %p, content: %+v", c.xdsclient, update)
 		c.newEDSUpdate(update, err)
 	})

@@ -23,8 +23,8 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/version/common"
 )
 
 // Client is a fake implementation of an xds client. It exposes a bunch of
@@ -41,13 +41,13 @@ type Client struct {
 	closeCh      *testutils.Channel
 
 	mu        sync.Mutex
-	serviceCb func(xdsclient.ServiceUpdate, error)
-	cdsCb     func(xdsclient.ClusterUpdate, error)
-	edsCb     func(xdsclient.EndpointsUpdate, error)
+	serviceCb func(common.ServiceUpdate, error)
+	cdsCb     func(common.ClusterUpdate, error)
+	edsCb     func(common.EndpointsUpdate, error)
 }
 
 // WatchService registers a LDS/RDS watch.
-func (xdsC *Client) WatchService(target string, callback func(xdsclient.ServiceUpdate, error)) func() {
+func (xdsC *Client) WatchService(target string, callback func(common.ServiceUpdate, error)) func() {
 	xdsC.mu.Lock()
 	defer xdsC.mu.Unlock()
 
@@ -69,7 +69,7 @@ func (xdsC *Client) WaitForWatchService() (string, error) {
 }
 
 // InvokeWatchServiceCallback invokes the registered service watch callback.
-func (xdsC *Client) InvokeWatchServiceCallback(u xdsclient.ServiceUpdate, err error) {
+func (xdsC *Client) InvokeWatchServiceCallback(u common.ServiceUpdate, err error) {
 	xdsC.mu.Lock()
 	defer xdsC.mu.Unlock()
 
@@ -77,7 +77,7 @@ func (xdsC *Client) InvokeWatchServiceCallback(u xdsclient.ServiceUpdate, err er
 }
 
 // WatchCluster registers a CDS watch.
-func (xdsC *Client) WatchCluster(clusterName string, callback func(xdsclient.ClusterUpdate, error)) func() {
+func (xdsC *Client) WatchCluster(clusterName string, callback func(common.ClusterUpdate, error)) func() {
 	xdsC.mu.Lock()
 	defer xdsC.mu.Unlock()
 
@@ -99,7 +99,7 @@ func (xdsC *Client) WaitForWatchCluster() (string, error) {
 }
 
 // InvokeWatchClusterCallback invokes the registered cdsWatch callback.
-func (xdsC *Client) InvokeWatchClusterCallback(update xdsclient.ClusterUpdate, err error) {
+func (xdsC *Client) InvokeWatchClusterCallback(update common.ClusterUpdate, err error) {
 	xdsC.mu.Lock()
 	defer xdsC.mu.Unlock()
 
@@ -114,7 +114,7 @@ func (xdsC *Client) WaitForCancelClusterWatch() error {
 }
 
 // WatchEndpoints registers an EDS watch for provided clusterName.
-func (xdsC *Client) WatchEndpoints(clusterName string, callback func(xdsclient.EndpointsUpdate, error)) (cancel func()) {
+func (xdsC *Client) WatchEndpoints(clusterName string, callback func(common.EndpointsUpdate, error)) (cancel func()) {
 	xdsC.mu.Lock()
 	defer xdsC.mu.Unlock()
 
@@ -136,7 +136,7 @@ func (xdsC *Client) WaitForWatchEDS() (string, error) {
 }
 
 // InvokeWatchEDSCallback invokes the registered edsWatch callback.
-func (xdsC *Client) InvokeWatchEDSCallback(update xdsclient.EndpointsUpdate, err error) {
+func (xdsC *Client) InvokeWatchEDSCallback(update common.EndpointsUpdate, err error) {
 	xdsC.mu.Lock()
 	defer xdsC.mu.Unlock()
 

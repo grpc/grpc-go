@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/version/common"
 )
 
 const (
@@ -90,7 +91,7 @@ func (b *edsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadB
 // It's implemented by the real eds balancer and a fake testing eds balancer.
 type edsBalancerImplInterface interface {
 	// handleEDSResponse passes the received EDS message from traffic director to eds balancer.
-	handleEDSResponse(edsResp xdsclient.EndpointsUpdate)
+	handleEDSResponse(edsResp common.EndpointsUpdate)
 	// handleChildPolicy updates the eds balancer the intra-cluster load balancing policy to use.
 	handleChildPolicy(name string, config json.RawMessage)
 	// handleSubConnStateChange handles state change for SubConn.
@@ -167,7 +168,7 @@ func (x *edsBalancer) handleErrorFromUpdate(err error, fromParent bool) {
 			// watch.
 			x.client.cancelWatch()
 		}
-		x.edsImpl.handleEDSResponse(xdsclient.EndpointsUpdate{})
+		x.edsImpl.handleEDSResponse(common.EndpointsUpdate{})
 	}
 }
 
@@ -249,11 +250,11 @@ func (x *edsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 }
 
 type edsUpdate struct {
-	resp xdsclient.EndpointsUpdate
+	resp common.EndpointsUpdate
 	err  error
 }
 
-func (x *edsBalancer) handleEDSUpdate(resp xdsclient.EndpointsUpdate, err error) {
+func (x *edsBalancer) handleEDSUpdate(resp common.EndpointsUpdate, err error) {
 	select {
 	case x.xdsClientUpdate <- &edsUpdate{resp: resp, err: err}:
 	case <-x.ctx.Done():

@@ -15,37 +15,38 @@
  * limitations under the License.
  */
 
-package client
+package common
 
 import (
 	"fmt"
 	"net"
 	"strconv"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
-	"github.com/golang/protobuf/ptypes"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/golang/protobuf/proto"
+	anypb "github.com/golang/protobuf/ptypes/any"
+	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/xds/internal"
 )
 
-func parseAddress(socketAddress *corepb.SocketAddress) string {
+func parseAddress(socketAddress *v3corepb.SocketAddress) string {
 	return net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue())))
 }
 
-func parseDropPolicy(dropPolicy *xdspb.ClusterLoadAssignment_Policy_DropOverload) OverloadDropConfig {
+func parseDropPolicy(dropPolicy *v3endpointpb.ClusterLoadAssignment_Policy_DropOverload) OverloadDropConfig {
 	percentage := dropPolicy.GetDropPercentage()
 	var (
 		numerator   = percentage.GetNumerator()
 		denominator uint32
 	)
 	switch percentage.GetDenominator() {
-	case typepb.FractionalPercent_HUNDRED:
+	case v3typepb.FractionalPercent_HUNDRED:
 		denominator = 100
-	case typepb.FractionalPercent_TEN_THOUSAND:
+	case v3typepb.FractionalPercent_TEN_THOUSAND:
 		denominator = 10000
-	case typepb.FractionalPercent_MILLION:
+	case v3typepb.FractionalPercent_MILLION:
 		denominator = 1000000
 	}
 	return OverloadDropConfig{
@@ -55,7 +56,7 @@ func parseDropPolicy(dropPolicy *xdspb.ClusterLoadAssignment_Policy_DropOverload
 	}
 }
 
-func parseEndpoints(lbEndpoints []*endpointpb.LbEndpoint) []Endpoint {
+func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint) []Endpoint {
 	endpoints := make([]Endpoint, 0, len(lbEndpoints))
 	for _, lbEndpoint := range lbEndpoints {
 		endpoints = append(endpoints, Endpoint{
@@ -67,11 +68,7 @@ func parseEndpoints(lbEndpoints []*endpointpb.LbEndpoint) []Endpoint {
 	return endpoints
 }
 
-// ParseEDSRespProto turns EDS response proto message to EndpointsUpdate.
-//
-// This is temporarily exported to be used in eds balancer, before it switches
-// to use xds client. TODO: unexport.
-func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (EndpointsUpdate, error) {
+func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, error) {
 	ret := EndpointsUpdate{}
 	for _, dropPolicy := range m.GetPolicy().GetDropOverloads() {
 		ret.Drops = append(ret.Drops, parseDropPolicy(dropPolicy))
@@ -104,40 +101,27 @@ func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (EndpointsUpdate, error) 
 	return ret, nil
 }
 
-// ParseEDSRespProtoForTesting parses EDS response, and panic if parsing fails.
-// This is used by EDS balancer tests.
-//
-// TODO: delete this. The EDS balancer tests should build an EndpointsUpdate directly,
-//  instead of building and parsing a proto message.
-func ParseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) EndpointsUpdate {
-	u, err := ParseEDSRespProto(m)
-	if err != nil {
-		panic(err.Error())
-	}
-	return u
-}
-
-func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
-	returnUpdate := make(map[string]EndpointsUpdate)
-	for _, r := range resp.GetResources() {
-		var resource ptypes.DynamicAny
-		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
-			return fmt.Errorf("xds: failed to unmarshal resource in EDS response: %v", err)
+// UnmarshalEndpoints processes resources received in an EDS response,
+// validates them, and transforms them into a native struct which contains only
+// fields we are interested in.
+func UnmarshalEndpoints(resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]EndpointsUpdate, error) {
+	update := make(map[string]EndpointsUpdate)
+	for _, r := range resources {
+		if t := r.GetTypeUrl(); t != V2EndpointsURL && t != V3EndpointsURL {
+			return nil, fmt.Errorf("xds: unexpected resource type: %s in EDS response", t)
 		}
-		cla, ok := resource.Message.(*xdspb.ClusterLoadAssignment)
-		if !ok {
-			return fmt.Errorf("xds: unexpected resource type: %T in EDS response", resource.Message)
-		}
-		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, cla)
 
-		u, err := ParseEDSRespProto(cla)
+		cla := &v3endpointpb.ClusterLoadAssignment{}
+		if err := proto.Unmarshal(r.GetValue(), cla); err != nil {
+			return nil, fmt.Errorf("xds: failed to unmarshal resource in EDS response: %v", err)
+		}
+		logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, cla)
+
+		u, err := parseEDSRespProto(cla)
 		if err != nil {
-			return err
+			return nil, err
 		}
-
-		returnUpdate[cla.GetClusterName()] = u
+		update[cla.GetClusterName()] = u
 	}
-
-	v2c.parent.newEDSUpdate(returnUpdate)
-	return nil
+	return update, nil
 }

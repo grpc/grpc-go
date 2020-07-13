@@ -13,16 +13,47 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package client
+// Package common defines types and functionality shared across xds API and
+// resource versions.
+package common
 
-import (
-	"time"
+import "google.golang.org/grpc/xds/internal"
 
-	"google.golang.org/grpc/xds/internal"
-)
+// ListenerUpdate contains information received in an LDS response, which is of
+// interest to the registered LDS watcher.
+type ListenerUpdate struct {
+	// RouteConfigName is the route configuration name corresponding to the
+	// target which is being watched through LDS.
+	RouteConfigName string
+}
+
+// RouteConfigUpdate contains information received in an RDS response, which is
+// of interest to the registered RDS watcher.
+type RouteConfigUpdate struct {
+	// WeightedCluster contains a map of cluster names and their weights,
+	// corresponding to the route configuration watched through RDS.
+	WeightedCluster map[string]uint32
+}
+
+// ServiceUpdate contains information received from LDS and RDS responses,
+// which is of interest to the registered service watcher.
+type ServiceUpdate struct {
+	// WeightedCluster contains a map of cluster names and their weights,
+	// corresponding to the route configuration watched through RDS.
+	WeightedCluster map[string]uint32
+}
+
+// ClusterUpdate contains information from a received CDS response, which is of
+// interest to the registered CDS watcher.
+type ClusterUpdate struct {
+	// ServiceName is the service name corresponding to the clusterName which
+	// is being watched for through CDS.
+	ServiceName string
+	// EnableLRS indicates whether or not load should be reported through LRS.
+	EnableLRS bool
+}
 
 // OverloadDropConfig contains the config to drop overloads.
 type OverloadDropConfig struct {
@@ -70,24 +101,12 @@ type EndpointsUpdate struct {
 	Localities []Locality
 }
 
-// WatchEndpoints uses EDS to discover endpoints in the provided clusterName.
-//
-// WatchEndpoints can be called multiple times, with same or different
-// clusterNames. Each call will start an independent watcher for the resource.
-//
-// Note that during race (e.g. an xDS response is received while the user is
-// calling cancel()), there's a small window where the callback can be called
-// after the watcher is canceled. The caller needs to handle this case.
-func (c *Client) WatchEndpoints(clusterName string, cb func(EndpointsUpdate, error)) (cancel func()) {
-	wi := &watchInfo{
-		c:           c,
-		typeURL:     edsURL,
-		target:      clusterName,
-		edsCallback: cb,
-	}
-
-	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
-		wi.timeout()
-	})
-	return c.watch(wi)
+// UpdateHandler receives and processes (by taking appropriate actions) xDS
+// resource updates from an APIClient for a specific version. This is
+// implemented by the top level Client.
+type UpdateHandler interface {
+	NewListeners(map[string]ListenerUpdate)
+	NewRouteConfigs(map[string]RouteConfigUpdate)
+	NewClusters(map[string]ClusterUpdate)
+	NewEndpoints(map[string]EndpointsUpdate)
 }

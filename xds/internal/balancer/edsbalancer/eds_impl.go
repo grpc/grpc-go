@@ -36,7 +36,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/version/common"
 )
 
 // TODO: make this a environment variable?
@@ -93,7 +93,7 @@ type edsBalancerImpl struct {
 	subConnToPriority map[balancer.SubConn]priorityType
 
 	pickerMu   sync.Mutex
-	dropConfig []xdsclient.OverloadDropConfig
+	dropConfig []common.OverloadDropConfig
 	drops      []*dropper
 	innerState balancer.State // The state of the picker without drop support.
 }
@@ -155,7 +155,7 @@ func (edsImpl *edsBalancerImpl) handleChildPolicy(name string, config json.RawMe
 
 // updateDrops compares new drop policies with the old. If they are different,
 // it updates the drop policies and send ClientConn an updated picker.
-func (edsImpl *edsBalancerImpl) updateDrops(dropConfig []xdsclient.OverloadDropConfig) {
+func (edsImpl *edsBalancerImpl) updateDrops(dropConfig []common.OverloadDropConfig) {
 	if cmp.Equal(dropConfig, edsImpl.dropConfig) {
 		return
 	}
@@ -180,7 +180,7 @@ func (edsImpl *edsBalancerImpl) updateDrops(dropConfig []xdsclient.OverloadDropC
 // SubConns. It also handles drops.
 //
 // HandleChildPolicy and HandleEDSResponse must be called by the same goroutine.
-func (edsImpl *edsBalancerImpl) handleEDSResponse(edsResp xdsclient.EndpointsUpdate) {
+func (edsImpl *edsBalancerImpl) handleEDSResponse(edsResp common.EndpointsUpdate) {
 	// TODO: Unhandled fields from EDS response:
 	//  - edsResp.GetPolicy().GetOverprovisioningFactor()
 	//  - locality.GetPriority()
@@ -196,7 +196,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponse(edsResp xdsclient.EndpointsUpd
 	//
 	// TODO: define Equal() on type EndpointUpdate to avoid DeepEqual. And do
 	// the same for the other types.
-	if !edsImpl.respReceived && reflect.DeepEqual(edsResp, xdsclient.EndpointsUpdate{}) {
+	if !edsImpl.respReceived && reflect.DeepEqual(edsResp, common.EndpointsUpdate{}) {
 		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(errAllPrioritiesRemoved)})
 	}
 	edsImpl.respReceived = true
@@ -212,7 +212,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponse(edsResp xdsclient.EndpointsUpd
 	//
 	// In the future, we should look at the config in CDS response and decide
 	// whether locality weight matters.
-	newLocalitiesWithPriority := make(map[priorityType][]xdsclient.Locality)
+	newLocalitiesWithPriority := make(map[priorityType][]common.Locality)
 	for _, locality := range edsResp.Localities {
 		if locality.Weight == 0 {
 			continue
@@ -272,7 +272,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponse(edsResp xdsclient.EndpointsUpd
 	}
 }
 
-func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroupWithConfig, newLocalities []xdsclient.Locality) {
+func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroupWithConfig, newLocalities []common.Locality) {
 	// newLocalitiesSet contains all names of localities in the new EDS response
 	// for the same priority. It's used to delete localities that are removed in
 	// the new EDS response.
@@ -290,8 +290,8 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 			// Filter out all "unhealthy" endpoints (unknown and
 			// healthy are both considered to be healthy:
 			// https://www.envoyproxy.io/docs/envoy/latest/api-v2/api/v2/core/health_check.proto#envoy-api-enum-core-healthstatus).
-			if lbEndpoint.HealthStatus != xdsclient.EndpointHealthStatusHealthy &&
-				lbEndpoint.HealthStatus != xdsclient.EndpointHealthStatusUnknown {
+			if lbEndpoint.HealthStatus != common.EndpointHealthStatusHealthy &&
+				lbEndpoint.HealthStatus != common.EndpointHealthStatusUnknown {
 				continue
 			}
 

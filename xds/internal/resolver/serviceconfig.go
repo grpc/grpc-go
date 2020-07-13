@@ -22,7 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/version/common"
 )
 
 const (
@@ -53,7 +53,7 @@ type cdsBalancerConfig struct {
 	Cluster string `json:"cluster"`
 }
 
-func serviceUpdateToJSON(su xdsclient.ServiceUpdate) (string, error) {
+func serviceUpdateToJSON(su common.ServiceUpdate) (string, error) {
 	// Even if WeightedCluster has only one entry, we still use weighted_target
 	// as top level balancer, to avoid switching top policy between CDS and
 	// weighted_target, causing TCP connection to be recreated.

@@ -31,6 +31,7 @@ import (
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/version/common"
 )
 
 const xdsScheme = "xds"
@@ -128,14 +129,14 @@ func (*xdsResolverBuilder) Scheme() string {
 // xdsClientInterface contains methods from xdsClient.Client which are used by
 // the resolver. This will be faked out in unittests.
 type xdsClientInterface interface {
-	WatchService(string, func(xdsclient.ServiceUpdate, error)) func()
+	WatchService(string, func(common.ServiceUpdate, error)) func()
 	Close()
 }
 
 // suWithError wraps the ServiceUpdate and error received through a watch API
 // callback, so that it can pushed onto the update channel as a single entity.
 type suWithError struct {
-	su  xdsclient.ServiceUpdate
+	su  common.ServiceUpdate
 	err error
 }
 
@@ -203,7 +204,7 @@ func (r *xdsResolver) run() {
 // handleServiceUpdate is the callback which handles service updates. It writes
 // the received update to the update channel, which is picked by the run
 // goroutine.
-func (r *xdsResolver) handleServiceUpdate(su xdsclient.ServiceUpdate, err error) {
+func (r *xdsResolver) handleServiceUpdate(su common.ServiceUpdate, err error) {
 	if r.ctx.Err() != nil {
 		// Do not pass updates to the ClientConn once the resolver is closed.
 		return

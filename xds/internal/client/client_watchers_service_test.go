@@ -29,10 +29,11 @@ import (
 
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
+	"google.golang.org/grpc/xds/internal/version/common"
 )
 
 type serviceUpdateErr struct {
-	u   ServiceUpdate
+	u   common.ServiceUpdate
 	err error
 }
 
@@ -43,7 +44,7 @@ var serviceCmpOpts = []cmp.Option{cmp.AllowUnexported(serviceUpdateErr{}), cmpop
 // - an update for another resource name (which doesn't trigger callback)
 // - an upate is received after cancel()
 func (s) TestServiceWatch(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -55,23 +56,23 @@ func (s) TestServiceWatch(t *testing.T) {
 	v2Client := <-v2ClientCh
 
 	serviceUpdateCh := testutils.NewChannel()
-	c.WatchService(testLDSName, func(update ServiceUpdate, err error) {
+	c.WatchService(testLDSName, func(update common.ServiceUpdate, err error) {
 		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
 	})
 
-	wantUpdate := ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
+	wantUpdate := common.ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
 
-	if _, err := v2Client.addWatches[ldsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[common.V2ListenerURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
-	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
-		testLDSName: {routeName: testRDSName},
+	v2Client.r.NewListeners(map[string]common.ListenerUpdate{
+		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if _, err := v2Client.addWatches[rdsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[common.V2RouteConfigURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
-	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {weightedCluster: map[string]uint32{testCDSName: 1}},
+	v2Client.r.NewRouteConfigs(map[string]common.RouteConfigUpdate{
+		testRDSName: {WeightedCluster: map[string]uint32{testCDSName: 1}},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, serviceCmpOpts...) {
@@ -83,7 +84,7 @@ func (s) TestServiceWatch(t *testing.T) {
 // response, the second LDS response trigger an new RDS watch, and an update of
 // the old RDS watch doesn't trigger update to service callback.
 func (s) TestServiceWatchLDSUpdate(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -95,23 +96,23 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 	v2Client := <-v2ClientCh
 
 	serviceUpdateCh := testutils.NewChannel()
-	c.WatchService(testLDSName, func(update ServiceUpdate, err error) {
+	c.WatchService(testLDSName, func(update common.ServiceUpdate, err error) {
 		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
 	})
 
-	wantUpdate := ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
+	wantUpdate := common.ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
 
-	if _, err := v2Client.addWatches[ldsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[common.V2ListenerURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
-	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
-		testLDSName: {routeName: testRDSName},
+	v2Client.r.NewListeners(map[string]common.ListenerUpdate{
+		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if _, err := v2Client.addWatches[rdsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[common.V2RouteConfigURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
-	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {weightedCluster: map[string]uint32{testCDSName: 1}},
+	v2Client.r.NewRouteConfigs(map[string]common.RouteConfigUpdate{
+		testRDSName: {WeightedCluster: map[string]uint32{testCDSName: 1}},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, serviceCmpOpts...) {
@@ -119,26 +120,26 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 	}
 
 	// Another LDS update with a different RDS_name.
-	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
-		testLDSName: {routeName: testRDSName + "2"},
+	v2Client.r.NewListeners(map[string]common.ListenerUpdate{
+		testLDSName: {RouteConfigName: testRDSName + "2"},
 	})
-	if _, err := v2Client.addWatches[rdsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[common.V2RouteConfigURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
 	// Another update for the old name.
-	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {weightedCluster: map[string]uint32{testCDSName: 1}},
+	v2Client.r.NewRouteConfigs(map[string]common.RouteConfigUpdate{
+		testRDSName: {WeightedCluster: map[string]uint32{testCDSName: 1}},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != testutils.ErrRecvTimeout {
 		t.Errorf("unexpected serviceUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 
-	wantUpdate2 := ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName + "2": 1}}
+	wantUpdate2 := common.ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName + "2": 1}}
 	// RDS update for the new name.
-	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName + "2": {weightedCluster: map[string]uint32{testCDSName + "2": 1}},
+	v2Client.r.NewRouteConfigs(map[string]common.RouteConfigUpdate{
+		testRDSName + "2": {WeightedCluster: map[string]uint32{testCDSName + "2": 1}},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate2, nil}, serviceCmpOpts...) {
@@ -150,7 +151,7 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 // error (because only one is allowed). But the first watch still receives
 // updates.
 func (s) TestServiceWatchSecond(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -162,23 +163,23 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 	v2Client := <-v2ClientCh
 
 	serviceUpdateCh := testutils.NewChannel()
-	c.WatchService(testLDSName, func(update ServiceUpdate, err error) {
+	c.WatchService(testLDSName, func(update common.ServiceUpdate, err error) {
 		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
 	})
 
-	wantUpdate := ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
+	wantUpdate := common.ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
 
-	if _, err := v2Client.addWatches[ldsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[common.V2ListenerURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
-	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
-		testLDSName: {routeName: testRDSName},
+	v2Client.r.NewListeners(map[string]common.ListenerUpdate{
+		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if _, err := v2Client.addWatches[rdsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[common.V2RouteConfigURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
-	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {weightedCluster: map[string]uint32{testCDSName: 1}},
+	v2Client.r.NewRouteConfigs(map[string]common.RouteConfigUpdate{
+		testRDSName: {WeightedCluster: map[string]uint32{testCDSName: 1}},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, serviceCmpOpts...) {
@@ -187,7 +188,7 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 
 	serviceUpdateCh2 := testutils.NewChannel()
 	// Call WatchService() again, with the same or different name.
-	c.WatchService(testLDSName, func(update ServiceUpdate, err error) {
+	c.WatchService(testLDSName, func(update common.ServiceUpdate, err error) {
 		serviceUpdateCh2.Send(serviceUpdateErr{u: update, err: err})
 	})
 
@@ -196,8 +197,8 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 		t.Fatalf("failed to get serviceUpdate: %v", err)
 	}
 	uu := u.(serviceUpdateErr)
-	if !cmp.Equal(uu.u, ServiceUpdate{}) {
-		t.Errorf("unexpected serviceUpdate: %v, want %v", uu.u, ServiceUpdate{})
+	if !cmp.Equal(uu.u, common.ServiceUpdate{}) {
+		t.Errorf("unexpected serviceUpdate: %v, want %v", uu.u, common.ServiceUpdate{})
 	}
 	if uu.err == nil {
 		t.Errorf("unexpected serviceError: <nil>, want error watcher timeout")
@@ -205,11 +206,11 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 
 	// Send update again, first callback should be called, second should
 	// timeout.
-	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
-		testLDSName: {routeName: testRDSName},
+	v2Client.r.NewListeners(map[string]common.ListenerUpdate{
+		testLDSName: {RouteConfigName: testRDSName},
 	})
-	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {weightedCluster: map[string]uint32{testCDSName: 1}},
+	v2Client.r.NewRouteConfigs(map[string]common.RouteConfigUpdate{
+		testRDSName: {WeightedCluster: map[string]uint32{testCDSName: 1}},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, serviceCmpOpts...) {
@@ -245,7 +246,7 @@ func (s) TestServiceWatchWithNoResponseFromServer(t *testing.T) {
 	}()
 
 	callbackCh := testutils.NewChannel()
-	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
+	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su common.ServiceUpdate, err error) {
 		if su.WeightedCluster != nil {
 			callbackCh.Send(fmt.Errorf("got WeightedCluster: %+v, want nil", su.WeightedCluster))
 			return
@@ -289,7 +290,7 @@ func (s) TestServiceWatchEmptyRDS(t *testing.T) {
 	}()
 
 	callbackCh := testutils.NewChannel()
-	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
+	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su common.ServiceUpdate, err error) {
 		if su.WeightedCluster != nil {
 			callbackCh.Send(fmt.Errorf("got WeightedCluster: %+v, want nil", su.WeightedCluster))
 			return
@@ -335,7 +336,7 @@ func (s) TestServiceWatchWithClientClose(t *testing.T) {
 	t.Log("Created an xdsClient...")
 
 	callbackCh := testutils.NewChannel()
-	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
+	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su common.ServiceUpdate, err error) {
 		callbackCh.Send(errors.New("watcher callback invoked after client close"))
 	})
 	defer cancelWatch()
@@ -361,7 +362,7 @@ func (s) TestServiceWatchWithClientClose(t *testing.T) {
 // update contains the same RDS name as the previous, the RDS watch isn't
 // canceled and restarted.
 func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -373,23 +374,23 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 	v2Client := <-v2ClientCh
 
 	serviceUpdateCh := testutils.NewChannel()
-	c.WatchService(testLDSName, func(update ServiceUpdate, err error) {
+	c.WatchService(testLDSName, func(update common.ServiceUpdate, err error) {
 		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
 	})
 
-	wantUpdate := ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
+	wantUpdate := common.ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
 
-	if _, err := v2Client.addWatches[ldsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[common.V2ListenerURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
-	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
-		testLDSName: {routeName: testRDSName},
+	v2Client.r.NewListeners(map[string]common.ListenerUpdate{
+		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if _, err := v2Client.addWatches[rdsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[common.V2RouteConfigURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
-	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {weightedCluster: map[string]uint32{testCDSName: 1}},
+	v2Client.r.NewRouteConfigs(map[string]common.RouteConfigUpdate{
+		testRDSName: {WeightedCluster: map[string]uint32{testCDSName: 1}},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, serviceCmpOpts...) {
@@ -397,10 +398,10 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 	}
 
 	// Another LDS update with a the same RDS_name.
-	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
-		testLDSName: {routeName: testRDSName},
+	v2Client.r.NewListeners(map[string]common.ListenerUpdate{
+		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if v, err := v2Client.removeWatches[rdsURL].Receive(); err == nil {
+	if v, err := v2Client.removeWatches[common.V2RouteConfigURL].Receive(); err == nil {
 		t.Fatalf("unexpected rds watch cancel: %v", v)
 	}
 }
@@ -412,7 +413,7 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 // - one more update without the removed resource
 //   - the callback (above) shouldn't receive any update
 func (s) TestServiceResourceRemoved(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -424,23 +425,23 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 	v2Client := <-v2ClientCh
 
 	serviceUpdateCh := testutils.NewChannel()
-	c.WatchService(testLDSName, func(update ServiceUpdate, err error) {
+	c.WatchService(testLDSName, func(update common.ServiceUpdate, err error) {
 		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
 	})
 
-	wantUpdate := ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
+	wantUpdate := common.ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName: 1}}
 
-	if _, err := v2Client.addWatches[ldsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[common.V2ListenerURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
-	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
-		testLDSName: {routeName: testRDSName},
+	v2Client.r.NewListeners(map[string]common.ListenerUpdate{
+		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if _, err := v2Client.addWatches[rdsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[common.V2RouteConfigURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
-	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {weightedCluster: map[string]uint32{testCDSName: 1}},
+	v2Client.r.NewRouteConfigs(map[string]common.RouteConfigUpdate{
+		testRDSName: {WeightedCluster: map[string]uint32{testCDSName: 1}},
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, serviceCmpOpts...) {
@@ -449,8 +450,8 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 
 	// Remove LDS resource, should cancel the RDS watch, and trigger resource
 	// removed error.
-	v2Client.r.newLDSUpdate(map[string]ldsUpdate{})
-	if _, err := v2Client.removeWatches[rdsURL].Receive(); err != nil {
+	v2Client.r.NewListeners(map[string]common.ListenerUpdate{})
+	if _, err := v2Client.removeWatches[common.V2RouteConfigURL].Receive(); err != nil {
 		t.Fatalf("want watch to be canceled, got error %v", err)
 	}
 	if u, err := serviceUpdateCh.Receive(); err != nil || ErrType(u.(serviceUpdateErr).err) != ErrorTypeResourceNotFound {
@@ -459,8 +460,8 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 
 	// Send RDS update for the removed LDS resource, expect no updates to
 	// callback, because RDS should be canceled.
-	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {weightedCluster: map[string]uint32{testCDSName + "new": 1}},
+	v2Client.r.NewRouteConfigs(map[string]common.RouteConfigUpdate{
+		testRDSName: {WeightedCluster: map[string]uint32{testCDSName + "new": 1}},
 	})
 	if u, err := serviceUpdateCh.Receive(); err != testutils.ErrRecvTimeout {
 		t.Errorf("unexpected serviceUpdate: %v, want receiving from channel timeout", u)
@@ -469,20 +470,20 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 	// Add LDS resource, but not RDS resource, should
 	//  - start a new RDS watch
 	//  - timeout on service channel, because RDS cache was cleared
-	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
-		testLDSName: {routeName: testRDSName},
+	v2Client.r.NewListeners(map[string]common.ListenerUpdate{
+		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if _, err := v2Client.addWatches[rdsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[common.V2RouteConfigURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	if u, err := serviceUpdateCh.Receive(); err != testutils.ErrRecvTimeout {
 		t.Errorf("unexpected serviceUpdate: %v, want receiving from channel timeout", u)
 	}
 
-	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
-		testRDSName: {weightedCluster: map[string]uint32{testCDSName + "new2": 1}},
+	v2Client.r.NewRouteConfigs(map[string]common.RouteConfigUpdate{
+		testRDSName: {WeightedCluster: map[string]uint32{testCDSName + "new2": 1}},
 	})
-	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName + "new2": 1}}, nil}, serviceCmpOpts...) {
+	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{common.ServiceUpdate{WeightedCluster: map[string]uint32{testCDSName + "new2": 1}}, nil}, serviceCmpOpts...) {
 		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
 	}
 }

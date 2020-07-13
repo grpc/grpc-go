@@ -36,10 +36,7 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
-)
-
-const (
-	edsType = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
+	"google.golang.org/grpc/xds/internal/version/common"
 )
 
 var (
@@ -135,7 +132,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 			}
 
 			wantReq := &xdspb.DiscoveryRequest{
-				TypeUrl:       edsType,
+				TypeUrl:       common.V2EndpointsURL,
 				ResourceNames: []string{test.wantResourceName},
 				Node:          testutils.EmptyNodeProtoV2,
 			}
@@ -158,7 +155,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 //   edsBalancer with the received error.
 func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	edsRespChan := testutils.NewChannel()
-	newEDS := func(update xdsclient.EndpointsUpdate, err error) {
+	newEDS := func(update common.EndpointsUpdate, err error) {
 		edsRespChan.Send(&edsUpdate{resp: update, err: err})
 	}
 
@@ -175,7 +172,7 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 		t.Fatalf("xdsClient.WatchEndpoints() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
 	}
 	watchErr := errors.New("EDS watch callback error")
-	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, watchErr)
+	xdsC.InvokeWatchEDSCallback(common.EndpointsUpdate{}, watchErr)
 
 	// The callback is called with an error, expect no update from edsRespChan.
 	//
@@ -186,7 +183,7 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 		t.Fatalf("edsBalancer failed to get edsUpdate %v", err)
 	}
 	update := gotUpdate.(*edsUpdate)
-	if !cmp.Equal(update.resp, (xdsclient.EndpointsUpdate{})) || update.err != watchErr {
+	if !cmp.Equal(update.resp, (common.EndpointsUpdate{})) || update.err != watchErr {
 		t.Fatalf("want update {nil, %v}, got %+v", watchErr, update)
 	}
 }

@@ -19,8 +19,8 @@ package edsbalancer
 import (
 	"testing"
 
-	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/version/common"
 )
 
 func init() {
@@ -62,7 +62,7 @@ func (s) TestDropper(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := newDropper(xdsclient.OverloadDropConfig{
+			d := newDropper(common.OverloadDropConfig{
 				Category:    "",
 				Numerator:   tt.args.numerator,
 				Denominator: tt.args.denominator,

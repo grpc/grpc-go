@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2019 gRPC authors.
+ * Copyright 2020 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,53 +16,47 @@
  *
  */
 
-package client
+package common
 
 import (
 	"fmt"
 	"strings"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
-	"github.com/golang/protobuf/ptypes"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	"github.com/golang/protobuf/proto"
+	anypb "github.com/golang/protobuf/ptypes/any"
+	"google.golang.org/grpc/internal/grpclog"
 )
 
-// handleRDSResponse processes an RDS response received from the xDS server. On
-// receipt of a good response, it caches validated resources and also invokes
-// the registered watcher callback.
-func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
-	v2c.mu.Lock()
-	hostname := v2c.hostname
-	v2c.mu.Unlock()
-
-	returnUpdate := make(map[string]rdsUpdate)
-	for _, r := range resp.GetResources() {
-		var resource ptypes.DynamicAny
-		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
-			return fmt.Errorf("xds: failed to unmarshal resource in RDS response: %v", err)
+// UnmarshalRouteConfig processes resources received in an RDS response,
+// validates them, and transforms them into a native struct which contains only
+// fields we are interested in. The provided hostname determines the route
+// configuration resources of interest.
+func UnmarshalRouteConfig(resources []*anypb.Any, hostname string, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdate, error) {
+	update := make(map[string]RouteConfigUpdate)
+	for _, r := range resources {
+		if t := r.GetTypeUrl(); t != V2RouteConfigURL && t != V3RouteConfigURL {
+			return nil, fmt.Errorf("xds: unexpected resource type: %s in RDS response", t)
 		}
-		rc, ok := resource.Message.(*xdspb.RouteConfiguration)
-		if !ok {
-			return fmt.Errorf("xds: unexpected resource type: %T in RDS response", resource.Message)
+		rc := &v3routepb.RouteConfiguration{}
+		if err := proto.Unmarshal(r.GetValue(), rc); err != nil {
+			return nil, fmt.Errorf("xds: failed to unmarshal resource in RDS response: %v", err)
 		}
-		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v. Picking routes for current watching hostname %v", rc.GetName(), rc, rc, v2c.hostname)
+		logger.Infof("Resource with name: %v, type: %T, contains: %v. Picking routes for current watching hostname %v", rc.GetName(), rc, rc, hostname)
 
 		// Use the hostname (resourceName for LDS) to find the routes.
 		u, err := generateRDSUpdateFromRouteConfiguration(rc, hostname)
 		if err != nil {
-			return fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v with err: %v", rc, err)
+			return nil, fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v with err: %v", rc, err)
 		}
-		// If we get here, it means that this resource was a good one.
-		returnUpdate[rc.GetName()] = u
+		update[rc.GetName()] = u
 	}
-
-	v2c.parent.newRDSUpdate(returnUpdate)
-	return nil
+	return update, nil
 }
 
 // generateRDSUpdateFromRouteConfiguration checks if the provided
-// RouteConfiguration meets the expected criteria. If so, it returns a rdsUpdate
-// with nil error.
+// RouteConfiguration meets the expected criteria. If so, it returns a
+// common.RouteConfigUpdate with nil error.
 //
 // A RouteConfiguration resource is considered valid when only if it contains a
 // VirtualHost whose domain field matches the server name from the URI passed
@@ -76,8 +70,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 // field must be empty and whose route field must be set.  Inside that route
 // message, the cluster field will contain the clusterName or weighted clusters
 // we are looking for.
-func generateRDSUpdateFromRouteConfiguration(rc *xdspb.RouteConfiguration, host string) (rdsUpdate, error) {
-	//
+func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, host string) (RouteConfigUpdate, error) {
 	// Currently this returns "" on error, and the caller will return an error.
 	// But the error doesn't contain details of why the response is invalid
 	// (mismatch domain or empty route).
@@ -87,38 +80,38 @@ func generateRDSUpdateFromRouteConfiguration(rc *xdspb.RouteConfiguration, host 
 	vh := findBestMatchingVirtualHost(host, rc.GetVirtualHosts())
 	if vh == nil {
 		// No matching virtual host found.
-		return rdsUpdate{}, fmt.Errorf("no matching virtual host found")
+		return RouteConfigUpdate{}, fmt.Errorf("no matching virtual host found")
 	}
 	if len(vh.Routes) == 0 {
 		// The matched virtual host has no routes, this is invalid because there
 		// should be at least one default route.
-		return rdsUpdate{}, fmt.Errorf("matched virtual host has no routes")
+		return RouteConfigUpdate{}, fmt.Errorf("matched virtual host has no routes")
 	}
 	dr := vh.Routes[len(vh.Routes)-1]
 	match := dr.GetMatch()
 	if match == nil {
-		return rdsUpdate{}, fmt.Errorf("matched virtual host's default route doesn't have a match")
+		return RouteConfigUpdate{}, fmt.Errorf("matched virtual host's default route doesn't have a match")
 	}
 	if prefix := match.GetPrefix(); prefix != "" && prefix != "/" {
 		// The matched virtual host is invalid. Match is not "" or "/".
-		return rdsUpdate{}, fmt.Errorf("matched virtual host's default route is %v, want Prefix empty string or /", match)
+		return RouteConfigUpdate{}, fmt.Errorf("matched virtual host's default route is %v, want Prefix empty string or /", match)
 	}
 	if caseSensitive := match.GetCaseSensitive(); caseSensitive != nil && !caseSensitive.Value {
 		// The case sensitive is set to false. Not set or set to true are both
 		// valid.
-		return rdsUpdate{}, fmt.Errorf("matched virtual host's default route set case-sensitive to false")
+		return RouteConfigUpdate{}, fmt.Errorf("matched virtual host's default route set case-sensitive to false")
 	}
 	route := dr.GetRoute()
 	if route == nil {
-		return rdsUpdate{}, fmt.Errorf("matched route is nil")
+		return RouteConfigUpdate{}, fmt.Errorf("matched route is nil")
 	}
 
 	if wc := route.GetWeightedClusters(); wc != nil {
 		m, err := weightedClustersProtoToMap(wc)
 		if err != nil {
-			return rdsUpdate{}, fmt.Errorf("matched weighted cluster is invalid: %v", err)
+			return RouteConfigUpdate{}, fmt.Errorf("matched weighted cluster is invalid: %v", err)
 		}
-		return rdsUpdate{weightedCluster: m}, nil
+		return RouteConfigUpdate{WeightedCluster: m}, nil
 	}
 
 	// When there's just one cluster, we set weightedCluster to map with one
@@ -129,10 +122,10 @@ func generateRDSUpdateFromRouteConfiguration(rc *xdspb.RouteConfiguration, host 
 	// and CDS. In case when the action changes between one cluster and multiple
 	// clusters, changing top level policy means recreating TCP connection every
 	// time.
-	return rdsUpdate{weightedCluster: map[string]uint32{route.GetCluster(): 1}}, nil
+	return RouteConfigUpdate{WeightedCluster: map[string]uint32{route.GetCluster(): 1}}, nil
 }
 
-func weightedClustersProtoToMap(wc *routepb.WeightedCluster) (map[string]uint32, error) {
+func weightedClustersProtoToMap(wc *v3routepb.WeightedCluster) (map[string]uint32, error) {
 	ret := make(map[string]uint32)
 	var totalWeight uint32 = 100
 	if t := wc.GetTotalWeight().GetValue(); t != 0 {
@@ -217,9 +210,9 @@ func match(domain, host string) (domainMatchType, bool) {
 //  - If two matches are of the same pattern type, the longer match is better
 //    - This is to compare the length of the matching pattern, e.g. “*ABCDE” >
 //    “*ABC”
-func findBestMatchingVirtualHost(host string, vHosts []*routepb.VirtualHost) *routepb.VirtualHost {
+func findBestMatchingVirtualHost(host string, vHosts []*v3routepb.VirtualHost) *v3routepb.VirtualHost {
 	var (
-		matchVh   *routepb.VirtualHost
+		matchVh   *v3routepb.VirtualHost
 		matchType = domainMatchTypeInvalid
 		matchLen  int
 	)

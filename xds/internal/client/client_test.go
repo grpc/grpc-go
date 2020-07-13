@@ -22,14 +22,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
+	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/grpc/xds/internal/version/common"
 
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+	httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
+	listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v2"
+	anypb "github.com/golang/protobuf/ptypes/any"
 )
 
 type s struct {
@@ -50,6 +56,106 @@ const (
 	testEDSName = "test-eds"
 )
 
+const (
+	defaultTestTimeout       = 1 * time.Second
+	goodLDSTarget1           = "lds.target.good:1111"
+	goodLDSTarget2           = "lds.target.good:2222"
+	goodRouteName1           = "GoodRouteConfig1"
+	goodRouteName2           = "GoodRouteConfig2"
+	goodEDSName              = "GoodClusterAssignment1"
+	uninterestingRouteName   = "UninterestingRouteName"
+	uninterestingDomain      = "uninteresting.domain"
+	goodClusterName1         = "GoodClusterName1"
+	goodClusterName2         = "GoodClusterName2"
+	uninterestingClusterName = "UninterestingClusterName"
+	httpConnManagerURL       = "type.googleapis.com/envoy.config.filter.network.http_connection_manager.v2.HttpConnectionManager"
+)
+
+var (
+	goodHTTPConnManager1 = &httppb.HttpConnectionManager{
+		RouteSpecifier: &httppb.HttpConnectionManager_Rds{
+			Rds: &httppb.Rds{
+				ConfigSource: &basepb.ConfigSource{
+					ConfigSourceSpecifier: &basepb.ConfigSource_Ads{Ads: &basepb.AggregatedConfigSource{}},
+				},
+				RouteConfigName: goodRouteName1,
+			},
+		},
+	}
+	marshaledConnMgr1, _ = proto.Marshal(goodHTTPConnManager1)
+	goodListener1        = &xdspb.Listener{
+		Name: goodLDSTarget1,
+		ApiListener: &listenerpb.ApiListener{
+			ApiListener: &anypb.Any{
+				TypeUrl: httpConnManagerURL,
+				Value:   marshaledConnMgr1,
+			},
+		},
+	}
+	marshaledListener1, _ = proto.Marshal(goodListener1)
+	goodLDSResponse1      = &xdspb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: common.V2ListenerURL,
+				Value:   marshaledListener1,
+			},
+		},
+		TypeUrl: common.V2ListenerURL,
+	}
+	emptyRouteConfig             = &xdspb.RouteConfiguration{}
+	marshaledEmptyRouteConfig, _ = proto.Marshal(emptyRouteConfig)
+	noVirtualHostsInRDSResponse  = &xdspb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: common.V2RouteConfigURL,
+				Value:   marshaledEmptyRouteConfig,
+			},
+		},
+		TypeUrl: common.V2RouteConfigURL,
+	}
+	goodRouteConfig1 = &xdspb.RouteConfiguration{
+		Name: goodRouteName1,
+		VirtualHosts: []*routepb.VirtualHost{
+			{
+				Domains: []string{uninterestingDomain},
+				Routes: []*routepb.Route{
+					{
+						Match: &routepb.RouteMatch{PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: ""}},
+						Action: &routepb.Route_Route{
+							Route: &routepb.RouteAction{
+								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: uninterestingClusterName},
+							},
+						},
+					},
+				},
+			},
+			{
+				Domains: []string{goodLDSTarget1},
+				Routes: []*routepb.Route{
+					{
+						Match: &routepb.RouteMatch{PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: ""}},
+						Action: &routepb.Route_Route{
+							Route: &routepb.RouteAction{
+								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: goodClusterName1},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	marshaledGoodRouteConfig1, _ = proto.Marshal(goodRouteConfig1)
+	goodRDSResponse1             = &xdspb.DiscoveryResponse{
+		Resources: []*anypb.Any{
+			{
+				TypeUrl: common.V2RouteConfigURL,
+				Value:   marshaledGoodRouteConfig1,
+			},
+		},
+		TypeUrl: common.V2RouteConfigURL,
+	}
+)
+
 func clientOpts(balancerName string) Options {
 	return Options{
 		Config: bootstrap.Config{
@@ -61,12 +167,6 @@ func clientOpts(balancerName string) Options {
 }
 
 func (s) TestNew(t *testing.T) {
-	fakeServer, cleanup, err := fakeserver.StartServer()
-	if err != nil {
-		t.Fatalf("Failed to start fake xDS server: %v", err)
-	}
-	defer cleanup()
-
 	tests := []struct {
 		name    string
 		opts    Options
@@ -87,7 +187,7 @@ func (s) TestNew(t *testing.T) {
 			name: "empty-dial-creds",
 			opts: Options{
 				Config: bootstrap.Config{
-					BalancerName: "dummy",
+					BalancerName: testXDSServer,
 					NodeProto:    testutils.EmptyNodeProtoV2,
 				},
 			},
@@ -97,82 +197,94 @@ func (s) TestNew(t *testing.T) {
 			name: "empty-node-proto",
 			opts: Options{
 				Config: bootstrap.Config{
-					BalancerName: "dummy",
+					BalancerName: testXDSServer,
 					Creds:        grpc.WithInsecure(),
 				},
 			},
 			wantErr: true,
 		},
 		{
-			name:    "happy-case",
-			opts:    clientOpts(fakeServer.Address),
-			wantErr: false,
+			name: "node-proto-version-mismatch",
+			opts: Options{
+				Config: bootstrap.Config{
+					BalancerName: testXDSServer,
+					Creds:        grpc.WithInsecure(),
+					NodeProto:    testutils.EmptyNodeProtoV3,
+					TransportAPI: version.TransportV2,
+				},
+			},
+			wantErr: true,
+		},
+		// TODO(easwars): Add cases for v3 API client.
+		{
+			name: "happy-case",
+			opts: clientOpts(testXDSServer),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			c, err := New(test.opts)
-			if err == nil {
-				defer c.Close()
-			}
 			if (err != nil) != test.wantErr {
 				t.Fatalf("New(%+v) = %v, wantErr: %v", test.opts, err, test.wantErr)
+			}
+			if c != nil {
+				c.Close()
 			}
 		})
 	}
 }
 
-type testXDSV2Client struct {
-	r updateHandler
+type testAPIClient struct {
+	r common.UpdateHandler
 
 	addWatches    map[string]*testutils.Channel
 	removeWatches map[string]*testutils.Channel
 }
 
-func overrideNewXDSV2Client() (<-chan *testXDSV2Client, func()) {
-	oldNewXDSV2Client := newXDSV2Client
-	ch := make(chan *testXDSV2Client, 1)
-	newXDSV2Client = func(parent *Client, cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration, logger *grpclog.PrefixLogger) xdsv2Client {
-		ret := newTestXDSV2Client(parent)
+func overrideNewAPIClient() (<-chan *testAPIClient, func()) {
+	origNewAPIClient := newAPIClient
+	ch := make(chan *testAPIClient, 1)
+	newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, opts version.BuildOptions) (version.APIClient, error) {
+		ret := newTestAPIClient(opts.Parent)
 		ch <- ret
-		return ret
+		return ret, nil
 	}
-	return ch, func() { newXDSV2Client = oldNewXDSV2Client }
+	return ch, func() { newAPIClient = origNewAPIClient }
 }
 
-func newTestXDSV2Client(r updateHandler) *testXDSV2Client {
+func newTestAPIClient(r common.UpdateHandler) *testAPIClient {
 	addWatches := make(map[string]*testutils.Channel)
-	addWatches[ldsURL] = testutils.NewChannel()
-	addWatches[rdsURL] = testutils.NewChannel()
-	addWatches[cdsURL] = testutils.NewChannel()
-	addWatches[edsURL] = testutils.NewChannel()
+	addWatches[common.V2ListenerURL] = testutils.NewChannel()
+	addWatches[common.V2RouteConfigURL] = testutils.NewChannel()
+	addWatches[common.V2ClusterURL] = testutils.NewChannel()
+	addWatches[common.V2EndpointsURL] = testutils.NewChannel()
 	removeWatches := make(map[string]*testutils.Channel)
-	removeWatches[ldsURL] = testutils.NewChannel()
-	removeWatches[rdsURL] = testutils.NewChannel()
-	removeWatches[cdsURL] = testutils.NewChannel()
-	removeWatches[edsURL] = testutils.NewChannel()
-	return &testXDSV2Client{
+	removeWatches[common.V2ListenerURL] = testutils.NewChannel()
+	removeWatches[common.V2RouteConfigURL] = testutils.NewChannel()
+	removeWatches[common.V2ClusterURL] = testutils.NewChannel()
+	removeWatches[common.V2EndpointsURL] = testutils.NewChannel()
+	return &testAPIClient{
 		r:             r,
 		addWatches:    addWatches,
 		removeWatches: removeWatches,
 	}
 }
 
-func (c *testXDSV2Client) addWatch(resourceType, resourceName string) {
+func (c *testAPIClient) AddWatch(resourceType, resourceName string) {
 	c.addWatches[resourceType].Send(resourceName)
 }
 
-func (c *testXDSV2Client) removeWatch(resourceType, resourceName string) {
+func (c *testAPIClient) RemoveWatch(resourceType, resourceName string) {
 	c.removeWatches[resourceType].Send(resourceName)
 }
 
-func (c *testXDSV2Client) close() {}
+func (c *testAPIClient) Close() {}
 
 // TestWatchCallAnotherWatch covers the case where watch() is called inline by a
 // callback. It makes sure it doesn't cause a deadlock.
 func (s) TestWatchCallAnotherWatch(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -185,21 +297,21 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 
 	clusterUpdateCh := testutils.NewChannel()
 	firstTime := true
-	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
+	c.WatchCluster(testCDSName, func(update common.ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 		// Calls another watch inline, to ensure there's deadlock.
-		c.WatchCluster("another-random-name", func(ClusterUpdate, error) {})
-		if _, err := v2Client.addWatches[cdsURL].Receive(); firstTime && err != nil {
+		c.WatchCluster("another-random-name", func(common.ClusterUpdate, error) {})
+		if _, err := v2Client.addWatches[common.V2ClusterURL].Receive(); firstTime && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 		firstTime = false
 	})
-	if _, err := v2Client.addWatches[cdsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[common.V2ClusterURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
-	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
+	wantUpdate := common.ClusterUpdate{ServiceName: testEDSName}
+	v2Client.r.NewClusters(map[string]common.ClusterUpdate{
 		testCDSName: wantUpdate,
 	})
 
@@ -207,12 +319,28 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
-	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}
-	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
+	wantUpdate2 := common.ClusterUpdate{ServiceName: testEDSName + "2"}
+	v2Client.r.NewClusters(map[string]common.ClusterUpdate{
 		testCDSName: wantUpdate2,
 	})
 
 	if u, err := clusterUpdateCh.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate2, nil}) {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
+	}
+}
+
+// waitForNilErr waits for a nil error value to be received on the
+// provided channel.
+func waitForNilErr(t *testing.T, ch *testutils.Channel) {
+	t.Helper()
+
+	val, err := ch.Receive()
+	if err == testutils.ErrRecvTimeout {
+		t.Fatalf("Timeout expired when expecting update")
+	}
+	if val != nil {
+		if cbErr := val.(error); cbErr != nil {
+			t.Fatal(cbErr)
+		}
 	}
 }
