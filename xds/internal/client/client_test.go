@@ -23,13 +23,10 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
-
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	"google.golang.org/grpc/xds/internal/version"
 )
 
 type s struct {
@@ -60,119 +57,56 @@ func clientOpts(balancerName string) Options {
 	}
 }
 
-func (s) TestNew(t *testing.T) {
-	fakeServer, cleanup, err := fakeserver.StartServer()
-	if err != nil {
-		t.Fatalf("Failed to start fake xDS server: %v", err)
-	}
-	defer cleanup()
-
-	tests := []struct {
-		name    string
-		opts    Options
-		wantErr bool
-	}{
-		{name: "empty-opts", opts: Options{}, wantErr: true},
-		{
-			name: "empty-balancer-name",
-			opts: Options{
-				Config: bootstrap.Config{
-					Creds:     grpc.WithInsecure(),
-					NodeProto: testutils.EmptyNodeProtoV2,
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "empty-dial-creds",
-			opts: Options{
-				Config: bootstrap.Config{
-					BalancerName: "dummy",
-					NodeProto:    testutils.EmptyNodeProtoV2,
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "empty-node-proto",
-			opts: Options{
-				Config: bootstrap.Config{
-					BalancerName: "dummy",
-					Creds:        grpc.WithInsecure(),
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name:    "happy-case",
-			opts:    clientOpts(fakeServer.Address),
-			wantErr: false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			c, err := New(test.opts)
-			if err == nil {
-				defer c.Close()
-			}
-			if (err != nil) != test.wantErr {
-				t.Fatalf("New(%+v) = %v, wantErr: %v", test.opts, err, test.wantErr)
-			}
-		})
-	}
-}
-
-type testXDSV2Client struct {
-	r updateHandler
+type testAPIClient struct {
+	r UpdateHandler
 
 	addWatches    map[string]*testutils.Channel
 	removeWatches map[string]*testutils.Channel
 }
 
-func overrideNewXDSV2Client() (<-chan *testXDSV2Client, func()) {
-	oldNewXDSV2Client := newXDSV2Client
-	ch := make(chan *testXDSV2Client, 1)
-	newXDSV2Client = func(parent *Client, cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration, logger *grpclog.PrefixLogger) xdsv2Client {
-		ret := newTestXDSV2Client(parent)
+func overrideNewAPIClient() (<-chan *testAPIClient, func()) {
+	origNewAPIClient := newAPIClient
+	ch := make(chan *testAPIClient, 1)
+	newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, opts BuildOptions) (APIClient, error) {
+		ret := newTestAPIClient(opts.Parent)
 		ch <- ret
-		return ret
+		return ret, nil
 	}
-	return ch, func() { newXDSV2Client = oldNewXDSV2Client }
+	return ch, func() { newAPIClient = origNewAPIClient }
 }
 
-func newTestXDSV2Client(r updateHandler) *testXDSV2Client {
+func newTestAPIClient(r UpdateHandler) *testAPIClient {
 	addWatches := make(map[string]*testutils.Channel)
-	addWatches[ldsURL] = testutils.NewChannel()
-	addWatches[rdsURL] = testutils.NewChannel()
-	addWatches[cdsURL] = testutils.NewChannel()
-	addWatches[edsURL] = testutils.NewChannel()
+	addWatches[version.V2ListenerURL] = testutils.NewChannel()
+	addWatches[version.V2RouteConfigURL] = testutils.NewChannel()
+	addWatches[version.V2ClusterURL] = testutils.NewChannel()
+	addWatches[version.V2EndpointsURL] = testutils.NewChannel()
 	removeWatches := make(map[string]*testutils.Channel)
-	removeWatches[ldsURL] = testutils.NewChannel()
-	removeWatches[rdsURL] = testutils.NewChannel()
-	removeWatches[cdsURL] = testutils.NewChannel()
-	removeWatches[edsURL] = testutils.NewChannel()
-	return &testXDSV2Client{
+	removeWatches[version.V2ListenerURL] = testutils.NewChannel()
+	removeWatches[version.V2RouteConfigURL] = testutils.NewChannel()
+	removeWatches[version.V2ClusterURL] = testutils.NewChannel()
+	removeWatches[version.V2EndpointsURL] = testutils.NewChannel()
+	return &testAPIClient{
 		r:             r,
 		addWatches:    addWatches,
 		removeWatches: removeWatches,
 	}
 }
 
-func (c *testXDSV2Client) addWatch(resourceType, resourceName string) {
+func (c *testAPIClient) AddWatch(resourceType, resourceName string) {
 	c.addWatches[resourceType].Send(resourceName)
 }
 
-func (c *testXDSV2Client) removeWatch(resourceType, resourceName string) {
+func (c *testAPIClient) RemoveWatch(resourceType, resourceName string) {
 	c.removeWatches[resourceType].Send(resourceName)
 }
 
-func (c *testXDSV2Client) close() {}
+func (c *testAPIClient) Close() {}
 
 // TestWatchCallAnotherWatch covers the case where watch() is called inline by a
 // callback. It makes sure it doesn't cause a deadlock.
 func (s) TestWatchCallAnotherWatch(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -189,17 +123,17 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 		// Calls another watch inline, to ensure there's deadlock.
 		c.WatchCluster("another-random-name", func(ClusterUpdate, error) {})
-		if _, err := v2Client.addWatches[cdsURL].Receive(); firstTime && err != nil {
+		if _, err := v2Client.addWatches[version.V2ClusterURL].Receive(); firstTime && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 		firstTime = false
 	})
-	if _, err := v2Client.addWatches[cdsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[version.V2ClusterURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
-	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
+	v2Client.r.NewClusters(map[string]ClusterUpdate{
 		testCDSName: wantUpdate,
 	})
 
@@ -208,7 +142,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	}
 
 	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}
-	v2Client.r.newCDSUpdate(map[string]ClusterUpdate{
+	v2Client.r.NewClusters(map[string]ClusterUpdate{
 		testCDSName: wantUpdate2,
 	})
 

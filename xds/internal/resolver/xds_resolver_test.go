@@ -319,11 +319,11 @@ func TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	defer replaceRandNumGenerator(0)()
 
 	for _, tt := range []struct {
-		su       client.ServiceUpdate
+		su       xdsclient.ServiceUpdate
 		wantJSON string
 	}{
 		{
-			su:       client.ServiceUpdate{Routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{testCluster1: 1}}}},
+			su:       xdsclient.ServiceUpdate{Routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{testCluster1: 1}}}},
 			wantJSON: testOneClusterOnlyJSON,
 		},
 		{

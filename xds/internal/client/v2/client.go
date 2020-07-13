@@ -16,38 +16,68 @@
  *
  */
 
-package client
+// Package v2 provides xDS v2 transport protocol specific functionality.
+package v2
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
+	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/version"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
+	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	v2adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 )
 
-type adsStream adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient
-
-var _ xdsv2Client = &v2Client{}
-
-// updateHandler handles the update (parsed from xds responses). It's
-// implemented by the upper level Client.
-//
-// It's an interface to be overridden in test.
-type updateHandler interface {
-	newLDSUpdate(d map[string]ldsUpdate)
-	newRDSUpdate(d map[string]rdsUpdate)
-	newCDSUpdate(d map[string]ClusterUpdate)
-	newEDSUpdate(d map[string]EndpointsUpdate)
+func init() {
+	xdsclient.RegisterAPIClientBuilder(clientBuilder{})
 }
 
-// v2Client performs the actual xDS RPCs using the xDS v2 API. It creates a
+type clientBuilder struct{}
+
+func (clientBuilder) Build(cc *grpc.ClientConn, opts xdsclient.BuildOptions) (xdsclient.APIClient, error) {
+	return newClient(cc, opts)
+}
+
+func (clientBuilder) Version() version.TransportAPI {
+	return version.TransportV2
+}
+
+func newClient(cc *grpc.ClientConn, opts xdsclient.BuildOptions) (xdsclient.APIClient, error) {
+	nodeProto, ok := opts.NodeProto.(*v2corepb.Node)
+	if !ok {
+		return nil, fmt.Errorf("xds: unsupported Node proto type: %T", opts.NodeProto)
+	}
+	v2c := &client{
+		cc:        cc,
+		parent:    opts.Parent,
+		nodeProto: nodeProto,
+		backoff:   opts.Backoff,
+		logger:    opts.Logger,
+
+		streamCh: make(chan adsStream, 1),
+		sendCh:   buffer.NewUnbounded(),
+
+		watchMap:   make(map[string]map[string]bool),
+		versionMap: make(map[string]string),
+		nonceMap:   make(map[string]string),
+	}
+	v2c.ctx, v2c.cancelCtx = context.WithCancel(context.Background())
+
+	go v2c.run()
+	return v2c, nil
+}
+
+type adsStream v2adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient
+
+// client performs the actual xDS RPCs using the xDS v2 API. It creates a
 // single ADS stream on which the different types of xDS requests and responses
 // are multiplexed.
 //
@@ -55,18 +85,14 @@ type updateHandler interface {
 // and do ACK/NACK. It's a naive implementation that sends whatever the upper
 // layer tells it to send. It will call the callback with everything in every
 // response. It doesn't keep a cache of responses, or check for duplicates.
-//
-// The reason for splitting this out from the top level xdsClient object is
-// because there is already an xDS v3Aplha API in development. If and when we
-// want to switch to that, this separation will ease that process.
-type v2Client struct {
+type client struct {
 	ctx       context.Context
 	cancelCtx context.CancelFunc
-	parent    updateHandler
+	parent    xdsclient.UpdateHandler
 
 	// ClientConn to the xDS gRPC server. Owned by the parent xdsClient.
 	cc        *grpc.ClientConn
-	nodeProto *corepb.Node
+	nodeProto *v2corepb.Node
 	backoff   func(int) time.Duration
 
 	logger *grpclog.PrefixLogger
@@ -102,38 +128,31 @@ type v2Client struct {
 	hostname string
 }
 
-// newV2Client creates a new v2Client initialized with the passed arguments.
-func newV2Client(parent updateHandler, cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration, logger *grpclog.PrefixLogger) *v2Client {
-	v2c := &v2Client{
-		cc:        cc,
-		parent:    parent,
-		nodeProto: nodeProto,
-		backoff:   backoff,
+func (v2c *client) AddWatch(resourceType, resourceName string) {
+	v2c.sendCh.Put(&watchAction{
+		typeURL:  resourceType,
+		remove:   false,
+		resource: resourceName,
+	})
+}
 
-		logger: logger,
-
-		streamCh: make(chan adsStream, 1),
-		sendCh:   buffer.NewUnbounded(),
-
-		watchMap:   make(map[string]map[string]bool),
-		versionMap: make(map[string]string),
-		nonceMap:   make(map[string]string),
-	}
-	v2c.ctx, v2c.cancelCtx = context.WithCancel(context.Background())
-
-	go v2c.run()
-	return v2c
+func (v2c *client) RemoveWatch(resourceType, resourceName string) {
+	v2c.sendCh.Put(&watchAction{
+		typeURL:  resourceType,
+		remove:   true,
+		resource: resourceName,
+	})
 }
 
 // close cleans up resources and goroutines allocated by this client.
-func (v2c *v2Client) close() {
+func (v2c *client) Close() {
 	v2c.cancelCtx()
 }
 
 // run starts an ADS stream (and backs off exponentially, if the previous
 // stream failed without receiving a single reply) and runs the sender and
 // receiver routines to send and receive data from the stream respectively.
-func (v2c *v2Client) run() {
+func (v2c *client) run() {
 	go v2c.send()
 	// TODO: start a goroutine monitoring ClientConn's connectivity state, and
 	// report error (and log) when stats is transient failure.
@@ -159,7 +178,7 @@ func (v2c *v2Client) run() {
 		}
 
 		retries++
-		cli := adsgrpc.NewAggregatedDiscoveryServiceClient(v2c.cc)
+		cli := v2adsgrpc.NewAggregatedDiscoveryServiceClient(v2c.cc)
 		stream, err := cli.StreamAggregatedResources(v2c.ctx, grpc.WaitForReady(true))
 		if err != nil {
 			v2c.logger.Warningf("xds: ADS stream creation failed: %v", err)
@@ -187,8 +206,8 @@ func (v2c *v2Client) run() {
 // - If this is an ack, version will be the version from the response
 // - If this is a nack, version will be the previous acked version (from
 // versionMap). If there was no ack before, it will be an empty string
-func (v2c *v2Client) sendRequest(stream adsStream, resourceNames []string, typeURL, version, nonce string) bool {
-	req := &xdspb.DiscoveryRequest{
+func (v2c *client) sendRequest(stream adsStream, resourceNames []string, typeURL, version, nonce string) bool {
+	req := &v2xdspb.DiscoveryRequest{
 		Node:          v2c.nodeProto,
 		TypeUrl:       typeURL,
 		ResourceNames: resourceNames,
@@ -210,7 +229,7 @@ func (v2c *v2Client) sendRequest(stream adsStream, resourceNames []string, typeU
 // that here because the stream has just started and Send() usually returns
 // quickly (once it pushes the message onto the transport layer) and is only
 // ever blocked if we don't have enough flow control quota.
-func (v2c *v2Client) sendExisting(stream adsStream) bool {
+func (v2c *client) sendExisting(stream adsStream) bool {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
@@ -236,7 +255,7 @@ type watchAction struct {
 // processWatchInfo pulls the fields needed by the request from a watchAction.
 //
 // It also updates the watch map in v2c.
-func (v2c *v2Client) processWatchInfo(t *watchAction) (target []string, typeURL, version, nonce string, send bool) {
+func (v2c *client) processWatchInfo(t *watchAction) (target []string, typeURL, ver, nonce string, send bool) {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
@@ -258,7 +277,7 @@ func (v2c *v2Client) processWatchInfo(t *watchAction) (target []string, typeURL,
 
 	// Special handling for LDS, because RDS needs the LDS resource_name for
 	// response host matching.
-	if t.typeURL == ldsURL {
+	if t.typeURL == version.V2ListenerURL {
 		// Set hostname to the first LDS resource_name, and reset it when the
 		// last LDS watch is removed. The upper level Client isn't expected to
 		// watchLDS more than once.
@@ -275,9 +294,9 @@ func (v2c *v2Client) processWatchInfo(t *watchAction) (target []string, typeURL,
 	// We don't reset version or nonce when a new watch is started. The version
 	// and nonce from previous response are carried by the request unless the
 	// stream is recreated.
-	version = v2c.versionMap[typeURL]
+	ver = v2c.versionMap[typeURL]
 	nonce = v2c.nonceMap[typeURL]
-	return target, typeURL, version, nonce, send
+	return target, typeURL, ver, nonce, send
 }
 
 type ackAction struct {
@@ -293,7 +312,7 @@ type ackAction struct {
 // processAckInfo pulls the fields needed by the ack request from a ackAction.
 //
 // If no active watch is found for this ack, it returns false for send.
-func (v2c *v2Client) processAckInfo(t *ackAction, stream adsStream) (target []string, typeURL, version, nonce string, send bool) {
+func (v2c *client) processAckInfo(t *ackAction, stream adsStream) (target []string, typeURL, version, nonce string, send bool) {
 	if t.stream != stream {
 		// If ACK's stream isn't the current sending stream, this means the ACK
 		// was pushed to queue before the old stream broke, and a new stream has
@@ -353,7 +372,7 @@ func (v2c *v2Client) processAckInfo(t *ackAction, stream adsStream) (target []st
 // Note that this goroutine doesn't do anything to the old stream when there's a
 // new one. In fact, there should be only one stream in progress, and new one
 // should only be created when the old one fails (recv returns an error).
-func (v2c *v2Client) send() {
+func (v2c *client) send() {
 	var stream adsStream
 	for {
 		select {
@@ -398,7 +417,7 @@ func (v2c *v2Client) send() {
 
 // recv receives xDS responses on the provided ADS stream and branches out to
 // message specific handlers.
-func (v2c *v2Client) recv(stream adsStream) bool {
+func (v2c *client) recv(stream adsStream) bool {
 	success := false
 	for {
 		resp, err := stream.Recv()
@@ -411,13 +430,13 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 		v2c.logger.Debugf("ADS response received: %v", resp)
 		var respHandleErr error
 		switch resp.GetTypeUrl() {
-		case ldsURL:
+		case version.V2ListenerURL, version.V3ListenerURL:
 			respHandleErr = v2c.handleLDSResponse(resp)
-		case rdsURL:
+		case version.V2RouteConfigURL, version.V3RouteConfigURL:
 			respHandleErr = v2c.handleRDSResponse(resp)
-		case cdsURL:
+		case version.V2ClusterURL, version.V3ClusterURL:
 			respHandleErr = v2c.handleCDSResponse(resp)
-		case edsURL:
+		case version.V2EndpointsURL, version.V3EndpointsURL:
 			respHandleErr = v2c.handleEDSResponse(resp)
 		default:
 			v2c.logger.Warningf("Resource type %v unknown in response from server", resp.GetTypeUrl())
@@ -446,25 +465,56 @@ func (v2c *v2Client) recv(stream adsStream) bool {
 	}
 }
 
-func (v2c *v2Client) addWatch(resourceType, resourceName string) {
-	v2c.sendCh.Put(&watchAction{
-		typeURL:  resourceType,
-		remove:   false,
-		resource: resourceName,
-	})
-}
-
-func (v2c *v2Client) removeWatch(resourceType, resourceName string) {
-	v2c.sendCh.Put(&watchAction{
-		typeURL:  resourceType,
-		remove:   true,
-		resource: resourceName,
-	})
-}
-
 func mapToSlice(m map[string]bool) (ret []string) {
 	for i := range m {
 		ret = append(ret, i)
 	}
 	return
+}
+
+// handleLDSResponse processes an LDS response received from the xDS server. On
+// receipt of a good response, it also invokes the registered watcher callback.
+func (v2c *client) handleLDSResponse(resp *v2xdspb.DiscoveryResponse) error {
+	update, err := xdsclient.UnmarshalListener(resp.GetResources(), v2c.logger)
+	if err != nil {
+		return err
+	}
+	v2c.parent.NewListeners(update)
+	return nil
+}
+
+// handleRDSResponse processes an RDS response received from the xDS server. On
+// receipt of a good response, it caches validated resources and also invokes
+// the registered watcher callback.
+func (v2c *client) handleRDSResponse(resp *v2xdspb.DiscoveryResponse) error {
+	v2c.mu.Lock()
+	hostname := v2c.hostname
+	v2c.mu.Unlock()
+
+	update, err := xdsclient.UnmarshalRouteConfig(resp.GetResources(), hostname, v2c.logger)
+	if err != nil {
+		return err
+	}
+	v2c.parent.NewRouteConfigs(update)
+	return nil
+}
+
+// handleCDSResponse processes an CDS response received from the xDS server. On
+// receipt of a good response, it also invokes the registered watcher callback.
+func (v2c *client) handleCDSResponse(resp *v2xdspb.DiscoveryResponse) error {
+	update, err := xdsclient.UnmarshalCluster(resp.GetResources(), v2c.logger)
+	if err != nil {
+		return err
+	}
+	v2c.parent.NewClusters(update)
+	return nil
+}
+
+func (v2c *client) handleEDSResponse(resp *v2xdspb.DiscoveryResponse) error {
+	update, err := xdsclient.UnmarshalEndpoints(resp.GetResources(), v2c.logger)
+	if err != nil {
+		return err
+	}
+	v2c.parent.NewEndpoints(update)
+	return nil
 }

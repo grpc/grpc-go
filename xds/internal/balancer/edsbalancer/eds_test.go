@@ -41,6 +41,8 @@ import (
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+
+	_ "google.golang.org/grpc/xds/internal/client/v2" // V2 client registration.
 )
 
 func init() {

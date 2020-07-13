@@ -16,7 +16,8 @@
  *
  */
 
-// Package version defines supported xDS API versions.
+// Package version defines constants to distinguish between supported xDS API
+// versions.
 package version
 
 // TransportAPI refers to the API version for xDS transport protocol. This
@@ -29,4 +30,20 @@ const (
 	TransportV2 TransportAPI = iota
 	// TransportV3 refers to the v3 xDS transport protocol.
 	TransportV3
+)
+
+// Resource URLs. We need to be able to accept either version of the resource
+// regardless of the version of the transport protocol in use.
+const (
+	V2ListenerURL        = "type.googleapis.com/envoy.api.v2.Listener"
+	V2RouteConfigURL     = "type.googleapis.com/envoy.api.v2.RouteConfiguration"
+	V2ClusterURL         = "type.googleapis.com/envoy.api.v2.Cluster"
+	V2EndpointsURL       = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
+	V2HTTPConnManagerURL = "type.googleapis.com/envoy.config.filter.network.http_connection_manager.v2.HttpConnectionManager"
+
+	V3ListenerURL        = "type.googleapis.com/envoy.config.listener.v3.Listener"
+	V3RouteConfigURL     = "type.googleapis.com/envoy.config.route.v3.RouteConfiguration"
+	V3ClusterURL         = "type.googleapis.com/envoy.config.cluster.v3.Cluster"
+	V3EndpointsURL       = "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment"
+	V3HTTPConnManagerURL = "type.googleapis.com/envoy.config.filter.network.http_connection_manager.v2.HttpConnectionManager"
 )
