@@ -19,6 +19,8 @@
 package engine
 
 import (
+	"strings"
+
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	cel "github.com/google/cel-go/cel"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
@@ -95,15 +97,16 @@ func newRbacEngine(rbac pb.RBAC) rbacEngine {
 
 // Returns whether a set of authorization arguments match an rbacEngine's conditions.
 // If any policy matches, the engine has been matched and policyName will be non-empty.
-// Else if any policy is missing attributes, the result is unknown.
+// Else if any policy is missing attributes, unknownPolicies is a concatenation of the
+//  policyNames that can't be evaluated due to missing attributes.
 // Else, there is not a match.
-func (engine rbacEngine) matches(args AuthorizationArgs) (policyName string, unknown bool) {
-	unknown = false
+func (engine rbacEngine) matches(args AuthorizationArgs) (policyName, unknownPolicies string) {
+	unknownPolicies = ""
 	var condition *cel.Program
 	for policyName, condition = range engine.conditions {
 		match, err := matchesCondition(condition, args)
 		if err != nil {
-			unknown = true
+			unknownPolicies += policyName + ", "
 		}
 		if match {
 			return
@@ -152,9 +155,9 @@ func NewCelEvaluationEngine(rbacs []pb.RBAC) (CelEvaluationEngine, error) {
 // deny. If some conditions are unknown whereas the other conditions are
 // false, it returns undecided.
 func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) AuthorizationDecision {
-	unknown := false
+	allUnknownPolicies := ""
 	for _, engine := range celEngine.engines {
-		policyName, policyUnknown := engine.matches(args)
+		policyName, unknownPolicies := engine.matches(args)
 		// If any engine matched, return that engine's action.
 		if policyName != "" {
 			var decision Decision
@@ -165,13 +168,11 @@ func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) Authorizat
 			}
 			return AuthorizationDecision{decision, policyName}
 		}
-		if policyUnknown {
-			unknown = true
-		}
+		allUnknownPolicies += unknownPolicies
 	}
 	// If any engine evaluated to unknown, return unknown.
-	if unknown {
-		return AuthorizationDecision{DecisionUnknown, ""}
+	if allUnknownPolicies != "" {
+		return AuthorizationDecision{DecisionUnknown, strings.TrimRight(allUnknownPolicies, ", ")}
 	}
 	// If all engines explicitly did not match.
 	var decision Decision
