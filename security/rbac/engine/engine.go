@@ -48,7 +48,7 @@ const (
 	DecisionUnknown
 )
 
-// String returns the string representation of a Decision object
+// String returns the string representation of a Decision object.
 func (d Decision) String() string {
 	return [...]string{"DecisionAllow", "DecisionDeny", "DecisionUnknown"}[d]
 }
@@ -59,12 +59,12 @@ type AuthorizationDecision struct {
 	policyName string
 }
 
-// Converts an expression to a parsed expression, with SourceInfo nil
+// Converts an expression to a parsed expression, with SourceInfo nil.
 func exprToParsedExpr(condition *expr.Expr) *expr.ParsedExpr {
 	return &expr.ParsedExpr{Expr: condition}
 }
 
-// Converts an expression to a CEL program
+// Converts an expression to a CEL program.
 func exprToProgram(condition *expr.Expr) *cel.Program {
 	// TODO(@ezou): implement the conversion from expr to CEL program.
 	return nil
@@ -94,15 +94,14 @@ func newRbacEngine(rbac pb.RBAC) rbacEngine {
 }
 
 // Returns whether a set of authorization arguments match an rbacEngine's conditions.
-// If any policy matches, the engine has been matched.
+// If any policy matches, the engine has been matched and policyName will be non-empty.
 // Else if any policy is missing attributes, the result is unknown.
 // Else, there is not a match.
-func (engine rbacEngine) matches(args AuthorizationArgs) (match, unknown bool, policyName string) {
+func (engine rbacEngine) matches(args AuthorizationArgs) (policyName string, unknown bool) {
 	unknown = false
 	var condition *cel.Program
-	var err error
 	for policyName, condition = range engine.conditions {
-		match, err = matchesCondition(condition, args)
+		match, err := matchesCondition(condition, args)
 		if err != nil {
 			unknown = true
 		}
@@ -110,7 +109,7 @@ func (engine rbacEngine) matches(args AuthorizationArgs) (match, unknown bool, p
 			return
 		}
 	}
-	match = false
+	policyName = ""
 	return
 }
 
@@ -135,12 +134,29 @@ func NewCelEvaluationEngine(rbacs []pb.RBAC) (CelEvaluationEngine, error) {
 }
 
 // Evaluate is the core function that evaluates whether an RPC is authorized.
-// Returns DecisionUnknown if the RPC is missing attributes
+//
+// ALLOW policy. If one of the RBAC conditions is evaluated as true, then the
+// CEL engine evaluation returns allow. If all of the RBAC conditions are
+// evaluated as false, then it returns deny. Otherwise, some conditions are
+// false and some are unknown, it returns undecided.
+//
+// DENY policy. If one of the RBAC conditions is evaluated as true, then the
+// CEL engine evaluation returns deny. If all of the RBAC conditions are
+// evaluated as false, then it returns allow. Otherwise, some conditions are
+// false and some are unknown, it returns undecided.
+//
+// DENY policy + ALLOW policy. If one of the conditions in the DENY policy is
+// evaluated as true, then the CEL engine evaluation returns deny. Otherwise,
+// if one of the conditions in the ALLOW policy is evaluated as true, it
+// returns allow. If all the conditions are evaluated as false, it returns
+// deny. If some conditions are unknown whereas the other conditions are
+// false, it returns undecided.
 func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) AuthorizationDecision {
-	allUnknown := true
+	unknown := false
 	for _, engine := range celEngine.engines {
-		match, unknown, policyName := engine.matches(args)
-		if match {
+		policyName, policyUnknown := engine.matches(args)
+		// If any engine matched, return that engine's action.
+		if policyName != "" {
 			var decision Decision
 			if engine.action == pb.RBAC_ALLOW {
 				decision = DecisionAllow
@@ -149,15 +165,15 @@ func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) Authorizat
 			}
 			return AuthorizationDecision{decision, policyName}
 		}
-		if !unknown {
-			allUnknown = false
+		if policyUnknown {
+			unknown = true
 		}
 	}
-	// If all engines evaluated to unknown
-	if allUnknown {
+	// If any engine evaluated to unknown, return unknown.
+	if unknown {
 		return AuthorizationDecision{DecisionUnknown, ""}
 	}
-	// If all engines explicitly did not match
+	// If all engines explicitly did not match.
 	var decision Decision
 	if len(celEngine.engines) == 2 {
 		decision = DecisionDeny
