@@ -25,7 +25,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/serviceconfig"
 	_ "google.golang.org/grpc/xds/internal/balancer/weightedtarget"
-	"google.golang.org/grpc/xds/internal/client"
+	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
 const (
@@ -59,22 +59,22 @@ const (
 func TestServiceUpdateToJSON(t *testing.T) {
 	tests := []struct {
 		name     string
-		su       client.ServiceUpdate
+		su       xdsclient.ServiceUpdate
 		wantJSON string // wantJSON is not to be compared verbatim.
 	}{
 		{
 			name:     "one cluster only",
-			su:       client.ServiceUpdate{WeightedCluster: map[string]uint32{testCluster1: 1}},
+			su:       xdsclient.ServiceUpdate{WeightedCluster: map[string]uint32{testCluster1: 1}},
 			wantJSON: testClusterOnlyJSON,
 		},
 		{
 			name:     "empty weighted clusters",
-			su:       client.ServiceUpdate{WeightedCluster: nil},
+			su:       xdsclient.ServiceUpdate{WeightedCluster: nil},
 			wantJSON: testWeightedCDSNoChildJSON,
 		},
 		{
 			name: "weighted clusters",
-			su: client.ServiceUpdate{WeightedCluster: map[string]uint32{
+			su: xdsclient.ServiceUpdate{WeightedCluster: map[string]uint32{
 				"cluster_1": 75,
 				"cluster_2": 25,
 			}},

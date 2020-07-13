@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package client
+package v2
 
 import (
 	"fmt"
@@ -30,42 +30,46 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
+	"google.golang.org/grpc/xds/internal/version"
 )
 
-func startXDSV2Client(t *testing.T, cc *grpc.ClientConn) (v2c *v2Client, cbLDS, cbRDS, cbCDS, cbEDS *testutils.Channel, cleanup func()) {
+func startXDSV2Client(t *testing.T, cc *grpc.ClientConn) (v2c *client, cbLDS, cbRDS, cbCDS, cbEDS *testutils.Channel, cleanup func()) {
 	cbLDS = testutils.NewChannel()
 	cbRDS = testutils.NewChannel()
 	cbCDS = testutils.NewChannel()
 	cbEDS = testutils.NewChannel()
-	v2c = newV2Client(&testUpdateReceiver{
+	v2c, err := newV2Client(&testUpdateReceiver{
 		f: func(typeURL string, d map[string]interface{}) {
 			t.Logf("Received %s callback with {%+v}", typeURL, d)
 			switch typeURL {
-			case ldsURL:
+			case version.V2ListenerURL:
 				if _, ok := d[goodLDSTarget1]; ok {
 					cbLDS.Send(struct{}{})
 				}
-			case rdsURL:
+			case version.V2RouteConfigURL:
 				if _, ok := d[goodRouteName1]; ok {
 					cbRDS.Send(struct{}{})
 				}
-			case cdsURL:
+			case version.V2ClusterURL:
 				if _, ok := d[goodClusterName1]; ok {
 					cbCDS.Send(struct{}{})
 				}
-			case edsURL:
+			case version.V2EndpointsURL:
 				if _, ok := d[goodEDSName]; ok {
 					cbEDS.Send(struct{}{})
 				}
 			}
 		},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	t.Log("Started xds v2Client...")
-	return v2c, cbLDS, cbRDS, cbCDS, cbEDS, v2c.close
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("Started xds client...")
+	return v2c, cbLDS, cbRDS, cbCDS, cbEDS, v2c.Close
 }
 
 // compareXDSRequest reads requests from channel, compare it with want.
-func compareXDSRequest(ch *testutils.Channel, want *xdspb.DiscoveryRequest, version, nonce string) error {
+func compareXDSRequest(ch *testutils.Channel, want *xdspb.DiscoveryRequest, ver, nonce string) error {
 	val, err := ch.Receive()
 	if err != nil {
 		return err
@@ -75,7 +79,7 @@ func compareXDSRequest(ch *testutils.Channel, want *xdspb.DiscoveryRequest, vers
 		return fmt.Errorf("unexpected error from request: %v", req.Err)
 	}
 	wantClone := proto.Clone(want).(*xdspb.DiscoveryRequest)
-	wantClone.VersionInfo = version
+	wantClone.VersionInfo = ver
 	wantClone.ResponseNonce = nonce
 	if !cmp.Equal(req.Req, wantClone, cmp.Comparer(proto.Equal)) {
 		return fmt.Errorf("received request different from want, diff: %s", cmp.Diff(req.Req, wantClone))
@@ -83,9 +87,9 @@ func compareXDSRequest(ch *testutils.Channel, want *xdspb.DiscoveryRequest, vers
 	return nil
 }
 
-func sendXDSRespWithVersion(ch chan<- *fakeserver.Response, respWithoutVersion *xdspb.DiscoveryResponse, version int) (nonce string) {
+func sendXDSRespWithVersion(ch chan<- *fakeserver.Response, respWithoutVersion *xdspb.DiscoveryResponse, ver int) (nonce string) {
 	respToSend := proto.Clone(respWithoutVersion).(*xdspb.DiscoveryResponse)
-	respToSend.VersionInfo = strconv.Itoa(version)
+	respToSend.VersionInfo = strconv.Itoa(ver)
 	nonce = strconv.Itoa(int(time.Now().UnixNano()))
 	respToSend.Nonce = nonce
 	ch <- &fakeserver.Response{Resp: respToSend}
@@ -94,25 +98,25 @@ func sendXDSRespWithVersion(ch chan<- *fakeserver.Response, respWithoutVersion *
 
 // startXDS calls watch to send the first request. It then sends a good response
 // and checks for ack.
-func startXDS(t *testing.T, xdsname string, v2c *v2Client, reqChan *testutils.Channel, req *xdspb.DiscoveryRequest, preVersion string, preNonce string) {
+func startXDS(t *testing.T, xdsname string, v2c *client, reqChan *testutils.Channel, req *xdspb.DiscoveryRequest, preVersion string, preNonce string) {
 	var (
 		nameToWatch, typeURLToWatch string
 	)
 	switch xdsname {
 	case "LDS":
-		typeURLToWatch = ldsURL
+		typeURLToWatch = version.V2ListenerURL
 		nameToWatch = goodLDSTarget1
 	case "RDS":
-		typeURLToWatch = rdsURL
+		typeURLToWatch = version.V2RouteConfigURL
 		nameToWatch = goodRouteName1
 	case "CDS":
-		typeURLToWatch = cdsURL
+		typeURLToWatch = version.V2ClusterURL
 		nameToWatch = goodClusterName1
 	case "EDS":
-		typeURLToWatch = edsURL
+		typeURLToWatch = version.V2EndpointsURL
 		nameToWatch = goodEDSName
 	}
-	v2c.addWatch(typeURLToWatch, nameToWatch)
+	v2c.AddWatch(typeURLToWatch, nameToWatch)
 
 	if err := compareXDSRequest(reqChan, req, preVersion, preNonce); err != nil {
 		t.Fatalf("Failed to receive %s request: %v", xdsname, err)
@@ -125,11 +129,11 @@ func startXDS(t *testing.T, xdsname string, v2c *v2Client, reqChan *testutils.Ch
 //
 // It also waits and checks that the ack request contains the given version, and
 // the generated nonce.
-func sendGoodResp(t *testing.T, xdsname string, fakeServer *fakeserver.Server, version int, goodResp *xdspb.DiscoveryResponse, wantReq *xdspb.DiscoveryRequest, callbackCh *testutils.Channel) (string, error) {
-	nonce := sendXDSRespWithVersion(fakeServer.XDSResponseChan, goodResp, version)
+func sendGoodResp(t *testing.T, xdsname string, fakeServer *fakeserver.Server, ver int, goodResp *xdspb.DiscoveryResponse, wantReq *xdspb.DiscoveryRequest, callbackCh *testutils.Channel) (string, error) {
+	nonce := sendXDSRespWithVersion(fakeServer.XDSResponseChan, goodResp, ver)
 	t.Logf("Good %s response pushed to fakeServer...", xdsname)
 
-	if err := compareXDSRequest(fakeServer.XDSRequestChan, wantReq, strconv.Itoa(version), nonce); err != nil {
+	if err := compareXDSRequest(fakeServer.XDSRequestChan, wantReq, strconv.Itoa(ver), nonce); err != nil {
 		return "", fmt.Errorf("failed to receive %s request: %v", xdsname, err)
 	}
 	t.Logf("Good %s response acked", xdsname)
@@ -145,24 +149,24 @@ func sendGoodResp(t *testing.T, xdsname string, fakeServer *fakeserver.Server, v
 // be nacked, so we expect a request with the previous version (version-1).
 //
 // But the nonce in request should be the new nonce.
-func sendBadResp(t *testing.T, xdsname string, fakeServer *fakeserver.Server, version int, wantReq *xdspb.DiscoveryRequest) error {
+func sendBadResp(t *testing.T, xdsname string, fakeServer *fakeserver.Server, ver int, wantReq *xdspb.DiscoveryRequest) error {
 	var typeURL string
 	switch xdsname {
 	case "LDS":
-		typeURL = ldsURL
+		typeURL = version.V2ListenerURL
 	case "RDS":
-		typeURL = rdsURL
+		typeURL = version.V2RouteConfigURL
 	case "CDS":
-		typeURL = cdsURL
+		typeURL = version.V2ClusterURL
 	case "EDS":
-		typeURL = edsURL
+		typeURL = version.V2EndpointsURL
 	}
 	nonce := sendXDSRespWithVersion(fakeServer.XDSResponseChan, &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{{}},
 		TypeUrl:   typeURL,
-	}, version)
+	}, ver)
 	t.Logf("Bad %s response pushed to fakeServer...", xdsname)
-	if err := compareXDSRequest(fakeServer.XDSRequestChan, wantReq, strconv.Itoa(version-1), nonce); err != nil {
+	if err := compareXDSRequest(fakeServer.XDSRequestChan, wantReq, strconv.Itoa(ver-1), nonce); err != nil {
 		return fmt.Errorf("failed to receive %s request: %v", xdsname, err)
 	}
 	t.Logf("Bad %s response nacked", xdsname)
@@ -262,7 +266,7 @@ func (s) TestV2ClientAckFirstIsNack(t *testing.T) {
 
 	nonce := sendXDSRespWithVersion(fakeServer.XDSResponseChan, &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{{}},
-		TypeUrl:   ldsURL,
+		TypeUrl:   version.V2ListenerURL,
 	}, versionLDS)
 	t.Logf("Bad response pushed to fakeServer...")
 
@@ -303,7 +307,7 @@ func (s) TestV2ClientAckNackAfterNewWatch(t *testing.T) {
 	// This is an invalid response after the new watch.
 	nonce = sendXDSRespWithVersion(fakeServer.XDSResponseChan, &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{{}},
-		TypeUrl:   ldsURL,
+		TypeUrl:   version.V2ListenerURL,
 	}, versionLDS)
 	t.Logf("Bad response pushed to fakeServer...")
 
@@ -332,7 +336,7 @@ func (s) TestV2ClientAckNewWatchAfterCancel(t *testing.T) {
 	defer v2cCleanup()
 
 	// Start a CDS watch.
-	v2c.addWatch(cdsURL, goodClusterName1)
+	v2c.AddWatch(version.V2ClusterURL, goodClusterName1)
 	if err := compareXDSRequest(fakeServer.XDSRequestChan, goodCDSRequest, "", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -346,14 +350,14 @@ func (s) TestV2ClientAckNewWatchAfterCancel(t *testing.T) {
 	}
 	// Cancel the CDS watch, and start a new one. The new watch should have the
 	// version from the response above.
-	v2c.removeWatch(cdsURL, goodClusterName1)
+	v2c.RemoveWatch(version.V2ClusterURL, goodClusterName1)
 	// Wait for a request with no resource names, because the only watch was
 	// removed.
-	emptyReq := &xdspb.DiscoveryRequest{Node: goodNodeProto, TypeUrl: cdsURL}
+	emptyReq := &xdspb.DiscoveryRequest{Node: goodNodeProto, TypeUrl: version.V2ClusterURL}
 	if err := compareXDSRequest(fakeServer.XDSRequestChan, emptyReq, strconv.Itoa(versionCDS), nonce); err != nil {
 		t.Fatalf("Failed to receive %s request: %v", "CDS", err)
 	}
-	v2c.addWatch(cdsURL, goodClusterName1)
+	v2c.AddWatch(version.V2ClusterURL, goodClusterName1)
 	// Wait for a request with correct resource names and version.
 	if err := compareXDSRequest(fakeServer.XDSRequestChan, goodCDSRequest, strconv.Itoa(versionCDS), nonce); err != nil {
 		t.Fatalf("Failed to receive %s request: %v", "CDS", err)
@@ -387,7 +391,7 @@ func (s) TestV2ClientAckCancelResponseRace(t *testing.T) {
 	defer v2cCleanup()
 
 	// Start a CDS watch.
-	v2c.addWatch(cdsURL, goodClusterName1)
+	v2c.AddWatch(version.V2ClusterURL, goodClusterName1)
 	if err := compareXDSRequest(fakeServer.XDSRequestChan, goodCDSRequest, "", ""); err != nil {
 		t.Fatalf("Failed to receive %s request: %v", "CDS", err)
 	}
@@ -400,10 +404,10 @@ func (s) TestV2ClientAckCancelResponseRace(t *testing.T) {
 	}
 	// Cancel the watch before the next response is sent. This mimics the case
 	// watch is canceled while response is on wire.
-	v2c.removeWatch(cdsURL, goodClusterName1)
+	v2c.RemoveWatch(version.V2ClusterURL, goodClusterName1)
 	// Wait for a request with no resource names, because the only watch was
 	// removed.
-	emptyReq := &xdspb.DiscoveryRequest{Node: goodNodeProto, TypeUrl: cdsURL}
+	emptyReq := &xdspb.DiscoveryRequest{Node: goodNodeProto, TypeUrl: version.V2ClusterURL}
 	if err := compareXDSRequest(fakeServer.XDSRequestChan, emptyReq, strconv.Itoa(versionCDS), nonce); err != nil {
 		t.Fatalf("Failed to receive %s request: %v", "CDS", err)
 	}
@@ -428,7 +432,7 @@ func (s) TestV2ClientAckCancelResponseRace(t *testing.T) {
 
 	// Start a new watch. The new watch should have the nonce from the response
 	// above, and version from the first good response.
-	v2c.addWatch(cdsURL, goodClusterName1)
+	v2c.AddWatch(version.V2ClusterURL, goodClusterName1)
 	if err := compareXDSRequest(fakeServer.XDSRequestChan, goodCDSRequest, strconv.Itoa(versionCDS-1), nonce); err != nil {
 		t.Fatalf("Failed to receive %s request: %v", "CDS", err)
 	}

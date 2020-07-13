@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
-	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
@@ -319,15 +318,15 @@ func TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	waitForWatchService(t, xdsC, targetStr)
 
 	for _, tt := range []struct {
-		su       client.ServiceUpdate
+		su       xdsclient.ServiceUpdate
 		wantJSON string
 	}{
 		{
-			su:       client.ServiceUpdate{WeightedCluster: map[string]uint32{testCluster1: 1}},
+			su:       xdsclient.ServiceUpdate{WeightedCluster: map[string]uint32{testCluster1: 1}},
 			wantJSON: testClusterOnlyJSON,
 		},
 		{
-			su: client.ServiceUpdate{WeightedCluster: map[string]uint32{
+			su: xdsclient.ServiceUpdate{WeightedCluster: map[string]uint32{
 				"cluster_1": 75,
 				"cluster_2": 25,
 			}},
