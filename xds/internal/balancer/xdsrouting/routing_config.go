@@ -70,8 +70,8 @@ type lbConfig struct {
 // The following structs with `JSON` in name are temporary structs to unmarshal
 // json into. The fields will be read into lbConfig, to be used by the balancer.
 
-// routeJSONC is temporary struct for json unmarshal.
-type routeJSONC struct {
+// routeJSON is temporary struct for json unmarshal.
+type routeJSON struct {
 	// Path, Prefix and Regex can have at most one non-nil.
 	Path, Prefix, Regex *string
 	// Zero or more header matchers.
@@ -83,7 +83,7 @@ type routeJSONC struct {
 
 // lbConfigJSON is temporary struct for json unmarshal.
 type lbConfigJSON struct {
-	Route  []routeJSONC
+	Route  []routeJSON
 	Action map[string]action
 }
 
