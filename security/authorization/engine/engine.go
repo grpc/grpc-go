@@ -162,15 +162,15 @@ func exprToParsedExpr(condition *expr.Expr) *expr.ParsedExpr {
 func exprToProgram(condition *expr.Expr) *cel.Program {
 	env, err := cel.NewEnv(
 		cel.Declarations(
-			decls.NewVar("request URL path", decls.String),
-			decls.NewVar("request host", decls.String),
-			decls.NewVar("request method", decls.String),
-			decls.NewVar("request headers", decls.NewMapType(&expr.Type{nil, struct{}{}, nil, 3}, &expr.Type{nil, struct{}{}, nil, 3})),
-			decls.NewVar("source address", decls.String),
-			decls.NewVar("source port", decls.Int),
-			decls.NewVar("destination address", decls.String),
-			decls.NewVar("destination port", decls.Int),
-			decls.NewVar("URI SAN peer certificate", decls.String),
+			decls.NewVar("request.url_path", decls.String),
+			decls.NewVar("request.host", decls.String),
+			decls.NewVar("request.method", decls.String),
+			decls.NewVar("request.headers", decls.NewMapType(&expr.Type{nil, struct{}{}, nil, 3}, &expr.Type{nil, struct{}{}, nil, 3})),
+			decls.NewVar("source.address", decls.String),
+			decls.NewVar("source.port", decls.Int),
+			decls.NewVar("destination.address", decls.String),
+			decls.NewVar("destination.port", decls.Int),
+			decls.NewVar("connection.uri_san_peer_certificate", decls.String),
 		),
 	)
 	// Converts condition to ParsedExpr by setting SourceInfo empty.
@@ -184,17 +184,17 @@ func exprToProgram(condition *expr.Expr) *cel.Program {
 }
 
 var stringAttributeMap = map[string]func(AuthorizationArgs) (string, error){
-	"request URL path":         AuthorizationArgs.getRequestURLPath,
-	"request host":             AuthorizationArgs.getRequestHost,
-	"request method":           AuthorizationArgs.getRequestMethod,
-	"source address":           AuthorizationArgs.getSourceAddress,
-	"destination address":      AuthorizationArgs.getDestinationAddress,
-	"URI SAN peer certificate": AuthorizationArgs.getURISanPeerCertificate,
+	"request.url_path":                    AuthorizationArgs.getRequestURLPath,
+	"request.host":                        AuthorizationArgs.getRequestHost,
+	"request.method":                      AuthorizationArgs.getRequestMethod,
+	"source.address":                      AuthorizationArgs.getSourceAddress,
+	"destination.address":                 AuthorizationArgs.getDestinationAddress,
+	"connection.uri_san_peer_certificate": AuthorizationArgs.getURISanPeerCertificate,
 }
 
 var intAttributeMap = map[string]func(AuthorizationArgs) (int, error){
-	"source port":      AuthorizationArgs.getSourcePort,
-	"destination port": AuthorizationArgs.getDestinationPort,
+	"source.port":      AuthorizationArgs.getSourcePort,
+	"destination.port": AuthorizationArgs.getDestinationPort,
 }
 
 // policyEngine is the struct for an engine created from one RBAC proto.
