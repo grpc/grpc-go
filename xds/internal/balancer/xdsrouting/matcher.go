@@ -26,24 +26,18 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-type matcherInterface interface {
-	match(info balancer.PickInfo) bool
-	equal(matcherInterface) bool
-	String() string
-}
-
-// andMatcher.match returns true if all matchers return true.
-type andMatcher struct {
+// compositeMatcher.match returns true if all matchers return true.
+type compositeMatcher struct {
 	pm  pathMatcherInterface
 	hms []headerMatcherInterface
 	fm  *fractionMatcher
 }
 
-func newAndMatcher(pm pathMatcherInterface, hms []headerMatcherInterface, fm *fractionMatcher) *andMatcher {
-	return &andMatcher{pm: pm, hms: hms, fm: fm}
+func newCompositeMatcher(pm pathMatcherInterface, hms []headerMatcherInterface, fm *fractionMatcher) *compositeMatcher {
+	return &compositeMatcher{pm: pm, hms: hms, fm: fm}
 }
 
-func (a *andMatcher) match(info balancer.PickInfo) bool {
+func (a *compositeMatcher) match(info balancer.PickInfo) bool {
 	if a.pm != nil && !a.pm.match(info.FullMethodName) {
 		return false
 	}
@@ -66,12 +60,7 @@ func (a *andMatcher) match(info balancer.PickInfo) bool {
 	return true
 }
 
-func (a *andMatcher) equal(m matcherInterface) bool {
-	mm, ok := m.(*andMatcher)
-	if !ok {
-		return false
-	}
-
+func (a *compositeMatcher) equal(mm *compositeMatcher) bool {
 	if (a.pm != nil || mm.pm != nil) && !a.pm.equal(mm.pm) {
 		return false
 	}
@@ -92,7 +81,7 @@ func (a *andMatcher) equal(m matcherInterface) bool {
 	return true
 }
 
-func (a *andMatcher) String() string {
+func (a *compositeMatcher) String() string {
 	var ret string
 	if a.pm != nil {
 		ret += a.pm.String()
