@@ -49,6 +49,16 @@ func TestHeaderExactMatcherMatch(t *testing.T) {
 			info: balancer.PickInfo{
 				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc", "th", "tv")),
 			},
+			// Doesn't match comma-concatenated string.
+			want: false,
+		},
+		{
+			name:  "two value match concatenated",
+			key:   "th",
+			exact: "abc,tv",
+			info: balancer.PickInfo{
+				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc", "th", "tv")),
+			},
 			want: true,
 		},
 		{
@@ -91,6 +101,15 @@ func TestHeaderRegexMatcherMatch(t *testing.T) {
 			name:     "two value one match",
 			key:      "th",
 			regexStr: "^t+v*$",
+			info: balancer.PickInfo{
+				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc", "th", "tttvv")),
+			},
+			want: false,
+		},
+		{
+			name:     "two value match concatenated",
+			key:      "th",
+			regexStr: "^[abc]*,t+v*$",
 			info: balancer.PickInfo{
 				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc", "th", "tttvv")),
 			},
@@ -249,6 +268,15 @@ func TestHeaderPrefixMatcherMatch(t *testing.T) {
 			info: balancer.PickInfo{
 				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc", "th", "tv123")),
 			},
+			want: false,
+		},
+		{
+			name:   "two value match concatenated",
+			key:    "th",
+			prefix: "tv",
+			info: balancer.PickInfo{
+				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv123", "th", "abc")),
+			},
 			want: true,
 		},
 		{
@@ -289,6 +317,15 @@ func TestHeaderSuffixMatcherMatch(t *testing.T) {
 		},
 		{
 			name:   "two value one match",
+			key:    "th",
+			suffix: "tv",
+			info: balancer.PickInfo{
+				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "123tv", "th", "abc")),
+			},
+			want: false,
+		},
+		{
+			name:   "two value match concatenated",
 			key:    "th",
 			suffix: "tv",
 			info: balancer.PickInfo{
