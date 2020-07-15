@@ -19,6 +19,8 @@
 package engine
 
 import (
+	"strconv"
+
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	cel "github.com/google/cel-go/cel"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
@@ -156,29 +158,30 @@ func NewCelEvaluationEngine(rbacs []pb.RBAC) (CelEvaluationEngine, error) {
 // returns allow. If all the conditions are evaluated as false, it returns
 // deny. If some conditions are unknown whereas the other conditions are
 // false, it returns undecided.
-func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) AuthorizationDecision {
+func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) (AuthorizationDecision, error) {
+	numEngines := len(celEngine.engines)
+	if numEngines < 1 || numEngines > 2 {
+		return AuthorizationDecision{}, status.Errorf(codes.Internal, "each CEL engine should have 1 or 2 RBAC engines; instead, there are "+strconv.Itoa(numEngines)+" in the CEL engine provided")
+	}
 	allUnknownPolicies := []string{}
 	for _, engine := range celEngine.engines {
 		policyName, unknownPolicies := engine.matches(args)
 		// If any engine matched, return that engine's action.
 		if policyName != "" {
-			var decision Decision
 			if engine.action == pb.RBAC_ALLOW {
-				decision = DecisionAllow
-			} else {
-				decision = DecisionDeny
+				return AuthorizationDecision{DecisionAllow, []string{policyName}}, nil
 			}
-			return AuthorizationDecision{decision, []string{policyName}}
+			return AuthorizationDecision{DecisionDeny, []string{policyName}}, nil
 		}
 		allUnknownPolicies = append(allUnknownPolicies, unknownPolicies...)
 	}
 	// If any engine evaluated to unknown, return unknown.
 	if len(allUnknownPolicies) > 0 {
-		return AuthorizationDecision{DecisionUnknown, allUnknownPolicies}
+		return AuthorizationDecision{DecisionUnknown, allUnknownPolicies}, nil
 	}
 	// If all engines explicitly did not match.
 	if len(celEngine.engines) == 1 && celEngine.engines[0].action == pb.RBAC_DENY {
-		return AuthorizationDecision{DecisionAllow, []string{}}
+		return AuthorizationDecision{DecisionAllow, []string{}}, nil
 	}
-	return AuthorizationDecision{DecisionDeny, []string{}}
+	return AuthorizationDecision{DecisionDeny, []string{}}, nil
 }
