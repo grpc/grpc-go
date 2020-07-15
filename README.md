@@ -4,28 +4,33 @@
 [![GoDoc](https://godoc.org/google.golang.org/grpc?status.svg)][API]
 [![GoReportCard](https://goreportcard.com/badge/grpc/grpc-go)](https://goreportcard.com/report/github.com/grpc/grpc-go)
 
-The Go implementation of [gRPC][]: A high performance, open source, general RPC
-framework that puts mobile and HTTP/2 first. For more information see the [Go
-gRPC docs][], or jump directly into the [quick start][].
+The [Go][] implementation of [gRPC][]: A high performance, open source, general
+RPC framework that puts mobile and HTTP/2 first. For more information see the
+[Go gRPC docs][], or jump directly into the [quick start][].
 
 ## Prerequisites
 
-- **[Go][]**, any one of the **three latest major** [releases of Go][].
+- **[Go][]**: any one of the **three latest major** [releases][go-releases].
 
 ## Installation
 
-The simplest way to install the grpc-go package is to run the following command:
+With [Go module][] support (Go 1.11+), simply add the following import
+
+```go
+import "google.golang.org/grpc"
+```
+
+to your code, and then `go [build|run|test]` will automatically fetch the
+necessary dependencies.
+
+Otherwise, to install the `grpc-go` package, run the following command:
 
 ```console
 $ go get -u google.golang.org/grpc
 ```
 
-With [Go module][] support (Go 1.11+), simply `import "google.golang.org/grpc"`
-in your source code and `go [build|run|test]` will automatically download the
-necessary dependencies.
-
-> **Note:** If you are trying to access grpc-go from within **China**, see the
-[FAQ](#FAQ) below.
+> **Note:** If you are trying to access `grpc-go` from **China**, see the
+> [FAQ](#FAQ) below.
 
 ## Learn more
 
@@ -132,4 +137,4 @@ errors.
 [Go gRPC docs]: https://grpc.io/docs/languages/go
 [Performance benchmark]: https://performance-dot-grpc-testing.appspot.com/explore?dashboard=5652536396611584&widget=490377658&container=1286539696
 [quick start]: https://grpc.io/docs/languages/go/quickstart
-[releases of Go]: https://golang.org/doc/devel/release.html
+[go-releases]: https://golang.org/doc/devel/release.html
