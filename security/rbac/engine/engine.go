@@ -19,8 +19,6 @@
 package engine
 
 import (
-	"strings"
-
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	cel "github.com/google/cel-go/cel"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
@@ -56,9 +54,13 @@ func (d Decision) String() string {
 }
 
 // AuthorizationDecision is the output of CEL engine.
+// If decision is allow or deny, policyNames will either contain the name of
+// the single policy that permitted the action, or be empty as the decision
+// was made after all conditions evaluated to false. If decision is unknown,
+// policyNames will contain the list of policies that evaluated to unknown.
 type AuthorizationDecision struct {
-	decision   Decision
-	policyName string
+	decision    Decision
+	policyNames []string
 }
 
 // Converts an expression to a parsed expression, with SourceInfo nil.
@@ -97,16 +99,16 @@ func newRbacEngine(rbac pb.RBAC) rbacEngine {
 
 // Returns whether a set of authorization arguments match an rbacEngine's conditions.
 // If any policy matches, the engine has been matched and policyName will be non-empty.
-// Else if any policy is missing attributes, unknownPolicies is a concatenation of the
-//  policyNames that can't be evaluated due to missing attributes.
+// Else if any policy is missing attributes, unknownPolicies is a list of the policyNames
+//  that can't be evaluated due to missing attributes.
 // Else, there is not a match.
-func (engine rbacEngine) matches(args AuthorizationArgs) (policyName, unknownPolicies string) {
-	unknownPolicies = ""
+func (engine rbacEngine) matches(args AuthorizationArgs) (policyName string, unknownPolicies []string) {
+	unknownPolicies = []string{}
 	var condition *cel.Program
 	for policyName, condition = range engine.conditions {
 		match, err := matchesCondition(condition, args)
 		if err != nil {
-			unknownPolicies += policyName + ", "
+			unknownPolicies = append(unknownPolicies, policyName)
 		}
 		if match {
 			return
@@ -155,7 +157,7 @@ func NewCelEvaluationEngine(rbacs []pb.RBAC) (CelEvaluationEngine, error) {
 // deny. If some conditions are unknown whereas the other conditions are
 // false, it returns undecided.
 func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) AuthorizationDecision {
-	allUnknownPolicies := ""
+	allUnknownPolicies := []string{}
 	for _, engine := range celEngine.engines {
 		policyName, unknownPolicies := engine.matches(args)
 		// If any engine matched, return that engine's action.
@@ -166,17 +168,17 @@ func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) Authorizat
 			} else {
 				decision = DecisionDeny
 			}
-			return AuthorizationDecision{decision, policyName}
+			return AuthorizationDecision{decision, []string{policyName}}
 		}
-		allUnknownPolicies += unknownPolicies
+		allUnknownPolicies = append(allUnknownPolicies, unknownPolicies...)
 	}
 	// If any engine evaluated to unknown, return unknown.
-	if allUnknownPolicies != "" {
-		return AuthorizationDecision{DecisionUnknown, strings.TrimRight(allUnknownPolicies, ", ")}
+	if len(allUnknownPolicies) > 0 {
+		return AuthorizationDecision{DecisionUnknown, allUnknownPolicies}
 	}
 	// If all engines explicitly did not match.
 	if len(celEngine.engines) == 1 && celEngine.engines[0].action == pb.RBAC_DENY {
-		return AuthorizationDecision{DecisionAllow, ""}
+		return AuthorizationDecision{DecisionAllow, []string{}}
 	}
-	return AuthorizationDecision{DecisionDeny, ""}
+	return AuthorizationDecision{DecisionDeny, []string{}}
 }
