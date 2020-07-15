@@ -29,16 +29,23 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-func mdValuesFromOutgoingCtx(ctx context.Context, key string) ([]string, bool) {
+// mdValuesFromOutgoingCtx retrieves metadata from context. If there are
+// multiple values, the values are concatenated with "," (comma and no space).
+//
+// All header matchers only match against the comma-concatenated string.
+func mdValuesFromOutgoingCtx(ctx context.Context, key string) (string, bool) {
 	if ctx == nil {
-		return nil, false
+		return "", false
 	}
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
-		return nil, false
+		return "", false
 	}
 	vs, ok := md[key]
-	return vs, ok
+	if !ok {
+		return "", false
+	}
+	return strings.Join(vs, ","), true
 }
 
 type headerExactMatcher struct {
@@ -51,16 +58,11 @@ func newHeaderExactMatcher(key, exact string) *headerExactMatcher {
 }
 
 func (hem *headerExactMatcher) match(info balancer.PickInfo) bool {
-	vs, ok := mdValuesFromOutgoingCtx(info.Ctx, hem.key)
+	v, ok := mdValuesFromOutgoingCtx(info.Ctx, hem.key)
 	if !ok {
 		return false
 	}
-	for _, v := range vs {
-		if v == hem.exact {
-			return true
-		}
-	}
-	return false
+	return v == hem.exact
 }
 
 func (hem *headerExactMatcher) Equal(m matcher) bool {
@@ -86,16 +88,11 @@ func newHeaderRegexMatcher(key, regexStr string) *headerRegexMatcher {
 }
 
 func (hrm *headerRegexMatcher) match(info balancer.PickInfo) bool {
-	vs, ok := mdValuesFromOutgoingCtx(info.Ctx, hrm.key)
+	v, ok := mdValuesFromOutgoingCtx(info.Ctx, hrm.key)
 	if !ok {
 		return false
 	}
-	for _, v := range vs {
-		if hrm.re.MatchString(v) {
-			return true
-		}
-	}
-	return false
+	return hrm.re.MatchString(v)
 }
 
 func (hrm *headerRegexMatcher) Equal(m matcher) bool {
@@ -120,14 +117,12 @@ func newHeaderRangeMatcher(key string, start, end int64) *headerRangeMatcher {
 }
 
 func (hrm *headerRangeMatcher) match(info balancer.PickInfo) bool {
-	vs, ok := mdValuesFromOutgoingCtx(info.Ctx, hrm.key)
+	v, ok := mdValuesFromOutgoingCtx(info.Ctx, hrm.key)
 	if !ok {
 		return false
 	}
-	for _, v := range vs {
-		if i, err := strconv.ParseInt(v, 10, 64); err == nil && i >= hrm.start && i < hrm.end {
-			return true
-		}
+	if i, err := strconv.ParseInt(v, 10, 64); err == nil && i >= hrm.start && i < hrm.end {
+		return true
 	}
 	return false
 }
@@ -181,16 +176,11 @@ func newHeaderPrefixMatcher(key string, prefix string) *headerPrefixMatcher {
 }
 
 func (hpm *headerPrefixMatcher) match(info balancer.PickInfo) bool {
-	vs, ok := mdValuesFromOutgoingCtx(info.Ctx, hpm.key)
+	v, ok := mdValuesFromOutgoingCtx(info.Ctx, hpm.key)
 	if !ok {
 		return false
 	}
-	for _, v := range vs {
-		if strings.HasPrefix(v, hpm.prefix) {
-			return true
-		}
-	}
-	return false
+	return strings.HasPrefix(v, hpm.prefix)
 }
 
 func (hpm *headerPrefixMatcher) Equal(m matcher) bool {
@@ -215,16 +205,11 @@ func newHeaderSuffixMatcher(key string, suffix string) *headerSuffixMatcher {
 }
 
 func (hsm *headerSuffixMatcher) match(info balancer.PickInfo) bool {
-	vs, ok := mdValuesFromOutgoingCtx(info.Ctx, hsm.key)
+	v, ok := mdValuesFromOutgoingCtx(info.Ctx, hsm.key)
 	if !ok {
 		return false
 	}
-	for _, v := range vs {
-		if strings.HasSuffix(v, hsm.suffix) {
-			return true
-		}
-	}
-	return false
+	return strings.HasSuffix(v, hsm.suffix)
 }
 
 func (hsm *headerSuffixMatcher) Equal(m matcher) bool {
