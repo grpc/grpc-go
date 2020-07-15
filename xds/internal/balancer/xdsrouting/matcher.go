@@ -61,7 +61,15 @@ func (a *compositeMatcher) match(info balancer.PickInfo) bool {
 }
 
 func (a *compositeMatcher) equal(mm *compositeMatcher) bool {
-	if (a.pm != nil || mm.pm != nil) && !a.pm.equal(mm.pm) {
+	if a == mm {
+		return true
+	}
+
+	if a == nil || mm == nil {
+		return false
+	}
+
+	if (a.pm != nil || mm.pm != nil) && (a.pm == nil || !a.pm.equal(mm.pm)) {
 		return false
 	}
 
@@ -74,7 +82,7 @@ func (a *compositeMatcher) equal(mm *compositeMatcher) bool {
 		}
 	}
 
-	if (a.fm != nil || mm.fm != nil) && !a.fm.equal(mm.fm) {
+	if (a.fm != nil || mm.fm != nil) && (a.fm == nil || !a.fm.equal(mm.fm)) {
 		return false
 	}
 
@@ -111,6 +119,13 @@ func (fm *fractionMatcher) match() bool {
 }
 
 func (fm *fractionMatcher) equal(m *fractionMatcher) bool {
+	if fm == m {
+		return true
+	}
+	if fm == nil || m == nil {
+		return false
+	}
+
 	return fm.fraction == m.fraction
 }
 

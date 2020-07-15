@@ -107,3 +107,42 @@ func TestFractionMatcherMatch(t *testing.T) {
 		t.Errorf("match() = %v, want match", matched)
 	}
 }
+
+func TestCompositeMatcherEqual(t *testing.T) {
+	tests := []struct {
+		name string
+		pm   pathMatcherInterface
+		hms  []headerMatcherInterface
+		fm   *fractionMatcher
+		mm   *compositeMatcher
+		want bool
+	}{
+		{
+			name: "equal",
+			pm:   newPathExactMatcher("/a/b"),
+			mm:   newCompositeMatcher(newPathExactMatcher("/a/b"), nil, nil),
+			want: true,
+		},
+		{
+			name: "no path matcher",
+			pm:   nil,
+			mm:   newCompositeMatcher(nil, nil, nil),
+			want: true,
+		},
+		{
+			name: "not equal",
+			pm:   newPathExactMatcher("/a/b"),
+			fm:   newFractionMatcher(123),
+			mm:   newCompositeMatcher(newPathExactMatcher("/a/b"), nil, nil),
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := newCompositeMatcher(tt.pm, tt.hms, tt.fm)
+			if got := a.equal(tt.mm); got != tt.want {
+				t.Errorf("equal() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
