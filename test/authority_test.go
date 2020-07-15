@@ -68,14 +68,35 @@ func runUnixTest(t *testing.T, address, target, expectedAuthority string) {
 	}
 }
 
-func (s) TestUnix1(t *testing.T) {
-	runUnixTest(t, "sock.sock", "unix:sock.sock", "localhost")
-}
-
-func (s) TestUnix2(t *testing.T) {
-	runUnixTest(t, "/tmp/sock.sock", "unix:/tmp/sock.sock", "localhost")
-}
-
-func (s) TestUnix3(t *testing.T) {
-	runUnixTest(t, "/tmp/sock.sock", "unix:///tmp/sock.sock", "localhost")
+func (s) TestUnix(t *testing.T) {
+	tests := []struct {
+		name      string
+		address   string
+		target    string
+		authority string
+	}{
+		{
+			name:      "Unix1",
+			address:   "sock.sock",
+			target:    "unix:sock.sock",
+			authority: "loclahost",
+		},
+		{
+			name:      "Unix2",
+			address:   "/tmp/sock.sock",
+			target:    "unix:/tmp/sock.sock",
+			authority: "loclahost",
+		},
+		{
+			name:      "Unix3",
+			address:   "/tmp/sock.sock",
+			target:    "unix:///tmp/sock.sock",
+			authority: "loclahost",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			runUnixTest(t, test.address, test.target, test.authority)
+		})
+	}
 }
