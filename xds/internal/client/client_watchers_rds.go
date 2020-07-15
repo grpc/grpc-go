@@ -30,7 +30,7 @@ type Int64Range struct {
 
 // HeaderMatcher represents header matchers.
 type HeaderMatcher struct {
-	Name         string      `json:"name,omitempty"`
+	Name         string      `json:"name"`
 	InvertMatch  *bool       `json:"invertMatch,omitempty"`
 	ExactMatch   *string     `json:"exactMatch,omitempty"`
 	RegexMatch   *string     `json:"regexMatch,omitempty"`
