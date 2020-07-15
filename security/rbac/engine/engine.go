@@ -175,13 +175,8 @@ func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) Authorizat
 		return AuthorizationDecision{DecisionUnknown, strings.TrimRight(allUnknownPolicies, ", ")}
 	}
 	// If all engines explicitly did not match.
-	var decision Decision
-	if len(celEngine.engines) == 2 {
-		decision = DecisionDeny
-	} else if celEngine.engines[0].action == pb.RBAC_ALLOW {
-		decision = DecisionDeny
-	} else {
-		decision = DecisionAllow
+	if len(celEngine.engines) == 1 && celEngine.engines[0].action == pb.RBAC_DENY {
+		return AuthorizationDecision{DecisionAllow, ""}
 	}
-	return AuthorizationDecision{decision, ""}
+	return AuthorizationDecision{DecisionDeny, ""}
 }
