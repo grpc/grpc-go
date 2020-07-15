@@ -19,28 +19,25 @@
 package xdsrouting
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/metadata"
 )
+
+type headerMatcherInterface interface {
+	match(metadata.MD) bool
+	equal(headerMatcherInterface) bool
+	String() string
+}
 
 // mdValuesFromOutgoingCtx retrieves metadata from context. If there are
 // multiple values, the values are concatenated with "," (comma and no space).
 //
 // All header matchers only match against the comma-concatenated string.
-func mdValuesFromOutgoingCtx(ctx context.Context, key string) (string, bool) {
-	if ctx == nil {
-		return "", false
-	}
-	md, ok := metadata.FromOutgoingContext(ctx)
-	if !ok {
-		return "", false
-	}
+func mdValuesFromOutgoingCtx(md metadata.MD, key string) (string, bool) {
 	vs, ok := md[key]
 	if !ok {
 		return "", false
@@ -57,15 +54,15 @@ func newHeaderExactMatcher(key, exact string) *headerExactMatcher {
 	return &headerExactMatcher{key: key, exact: exact}
 }
 
-func (hem *headerExactMatcher) match(info balancer.PickInfo) bool {
-	v, ok := mdValuesFromOutgoingCtx(info.Ctx, hem.key)
+func (hem *headerExactMatcher) match(md metadata.MD) bool {
+	v, ok := mdValuesFromOutgoingCtx(md, hem.key)
 	if !ok {
 		return false
 	}
 	return v == hem.exact
 }
 
-func (hem *headerExactMatcher) Equal(m matcher) bool {
+func (hem *headerExactMatcher) equal(m headerMatcherInterface) bool {
 	mm, ok := m.(*headerExactMatcher)
 	if !ok {
 		return false
@@ -79,28 +76,27 @@ func (hem *headerExactMatcher) String() string {
 
 type headerRegexMatcher struct {
 	key string
-	s   string
 	re  *regexp.Regexp
 }
 
-func newHeaderRegexMatcher(key, regexStr string) *headerRegexMatcher {
-	return &headerRegexMatcher{key: key, s: regexStr, re: regexp.MustCompile(regexStr)}
+func newHeaderRegexMatcher(key string, re *regexp.Regexp) *headerRegexMatcher {
+	return &headerRegexMatcher{key: key, re: re}
 }
 
-func (hrm *headerRegexMatcher) match(info balancer.PickInfo) bool {
-	v, ok := mdValuesFromOutgoingCtx(info.Ctx, hrm.key)
+func (hrm *headerRegexMatcher) match(md metadata.MD) bool {
+	v, ok := mdValuesFromOutgoingCtx(md, hrm.key)
 	if !ok {
 		return false
 	}
 	return hrm.re.MatchString(v)
 }
 
-func (hrm *headerRegexMatcher) Equal(m matcher) bool {
+func (hrm *headerRegexMatcher) equal(m headerMatcherInterface) bool {
 	mm, ok := m.(*headerRegexMatcher)
 	if !ok {
 		return false
 	}
-	return hrm.key == mm.key && hrm.s == mm.s
+	return hrm.key == mm.key && hrm.re.String() == mm.re.String()
 }
 
 func (hrm *headerRegexMatcher) String() string {
@@ -116,8 +112,8 @@ func newHeaderRangeMatcher(key string, start, end int64) *headerRangeMatcher {
 	return &headerRangeMatcher{key: key, start: start, end: end}
 }
 
-func (hrm *headerRangeMatcher) match(info balancer.PickInfo) bool {
-	v, ok := mdValuesFromOutgoingCtx(info.Ctx, hrm.key)
+func (hrm *headerRangeMatcher) match(md metadata.MD) bool {
+	v, ok := mdValuesFromOutgoingCtx(md, hrm.key)
 	if !ok {
 		return false
 	}
@@ -127,7 +123,7 @@ func (hrm *headerRangeMatcher) match(info balancer.PickInfo) bool {
 	return false
 }
 
-func (hrm *headerRangeMatcher) Equal(m matcher) bool {
+func (hrm *headerRangeMatcher) equal(m headerMatcherInterface) bool {
 	mm, ok := m.(*headerRangeMatcher)
 	if !ok {
 		return false
@@ -148,13 +144,13 @@ func newHeaderPresentMatcher(key string, present bool) *headerPresentMatcher {
 	return &headerPresentMatcher{key: key, present: present}
 }
 
-func (hpm *headerPresentMatcher) match(info balancer.PickInfo) bool {
-	vs, ok := mdValuesFromOutgoingCtx(info.Ctx, hpm.key)
+func (hpm *headerPresentMatcher) match(md metadata.MD) bool {
+	vs, ok := mdValuesFromOutgoingCtx(md, hpm.key)
 	present := ok && len(vs) > 0
 	return present == hpm.present
 }
 
-func (hpm *headerPresentMatcher) Equal(m matcher) bool {
+func (hpm *headerPresentMatcher) equal(m headerMatcherInterface) bool {
 	mm, ok := m.(*headerPresentMatcher)
 	if !ok {
 		return false
@@ -175,15 +171,15 @@ func newHeaderPrefixMatcher(key string, prefix string) *headerPrefixMatcher {
 	return &headerPrefixMatcher{key: key, prefix: prefix}
 }
 
-func (hpm *headerPrefixMatcher) match(info balancer.PickInfo) bool {
-	v, ok := mdValuesFromOutgoingCtx(info.Ctx, hpm.key)
+func (hpm *headerPrefixMatcher) match(md metadata.MD) bool {
+	v, ok := mdValuesFromOutgoingCtx(md, hpm.key)
 	if !ok {
 		return false
 	}
 	return strings.HasPrefix(v, hpm.prefix)
 }
 
-func (hpm *headerPrefixMatcher) Equal(m matcher) bool {
+func (hpm *headerPrefixMatcher) equal(m headerMatcherInterface) bool {
 	mm, ok := m.(*headerPrefixMatcher)
 	if !ok {
 		return false
@@ -204,15 +200,15 @@ func newHeaderSuffixMatcher(key string, suffix string) *headerSuffixMatcher {
 	return &headerSuffixMatcher{key: key, suffix: suffix}
 }
 
-func (hsm *headerSuffixMatcher) match(info balancer.PickInfo) bool {
-	v, ok := mdValuesFromOutgoingCtx(info.Ctx, hsm.key)
+func (hsm *headerSuffixMatcher) match(md metadata.MD) bool {
+	v, ok := mdValuesFromOutgoingCtx(md, hsm.key)
 	if !ok {
 		return false
 	}
 	return strings.HasSuffix(v, hsm.suffix)
 }
 
-func (hsm *headerSuffixMatcher) Equal(m matcher) bool {
+func (hsm *headerSuffixMatcher) equal(m headerMatcherInterface) bool {
 	mm, ok := m.(*headerSuffixMatcher)
 	if !ok {
 		return false
@@ -222,4 +218,28 @@ func (hsm *headerSuffixMatcher) Equal(m matcher) bool {
 
 func (hsm *headerSuffixMatcher) String() string {
 	return fmt.Sprintf("headerSuffix:%v:%v", hsm.key, hsm.suffix)
+}
+
+type invertMatcher struct {
+	m headerMatcherInterface
+}
+
+func newInvertMatcher(m headerMatcherInterface) *invertMatcher {
+	return &invertMatcher{m: m}
+}
+
+func (i *invertMatcher) match(md metadata.MD) bool {
+	return !i.m.match(md)
+}
+
+func (i *invertMatcher) equal(m headerMatcherInterface) bool {
+	mm, ok := m.(*invertMatcher)
+	if !ok {
+		return false
+	}
+	return i.m.equal(mm.m)
+}
+
+func (i *invertMatcher) String() string {
+	return fmt.Sprintf("invert{%s}", i.m)
 }
