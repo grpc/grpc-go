@@ -44,7 +44,7 @@ $ go get -u google.golang.org/grpc
 
 ### I/O Timeout Errors
 
-The `golang.org` domain may be blocked from some countries.  `go get` usually
+The `golang.org` domain may be blocked from some countries. `go get` usually
 produces an error like the following when this happens:
 
 ```console
@@ -58,8 +58,8 @@ To build Go code, there are several options:
 
 - Without Go module support: `git clone` the repo manually:
 
-  ```console
-  $ git clone https://github.com/grpc/grpc-go.git $GOPATH/src/google.golang.org/grpc
+  ```sh
+  git clone https://github.com/grpc/grpc-go.git $GOPATH/src/google.golang.org/grpc
   ```
 
   You will need to do the same for all of grpc's dependencies in `golang.org`,
@@ -68,23 +68,21 @@ To build Go code, there are several options:
 - With Go module support: it is possible to use the `replace` feature of `go
   mod` to create aliases for golang.org packages.  In your project's directory:
 
-  ```console
-  $ go mod edit -replace=google.golang.org/grpc=github.com/grpc/grpc-go@latest
-  $ go mod tidy
-  $ go mod vendor
-  $ go build -mod=vendor
+  ```sh
+  go mod edit -replace=google.golang.org/grpc=github.com/grpc/grpc-go@latest
+  go mod tidy
+  go mod vendor
+  go build -mod=vendor
   ```
 
   Again, this will need to be done for all transitive dependencies hosted on
-  golang.org as well.  Please refer to [this
-  issue](https://github.com/golang/go/issues/28652) in the golang repo regarding
-  this concern.
+  golang.org as well. For details, refer to [golang/go issue #28652](https://github.com/golang/go/issues/28652).
 
 ### Compiling error, undefined: grpc.SupportPackageIsVersion
 
 #### If you are using Go modules:
 
-Please ensure your gRPC-Go version is `require`d at the appropriate version in
+Ensure your gRPC-Go version is `require`d at the appropriate version in
 the same module containing the generated `.pb.go` files.  For example,
 `SupportPackageIsVersion6` needs `v1.27.0`, so in your `go.mod` file:
 
@@ -98,10 +96,13 @@ require (
 
 #### If you are *not* using Go modules:
 
-Please update proto package, gRPC package and rebuild the proto files:
- - `go get -u github.com/golang/protobuf/{proto,protoc-gen-go}`
- - `go get -u google.golang.org/grpc`
- - `protoc --go_out=plugins=grpc:. *.proto`
+Update the `proto` package, gRPC package, and rebuild the `.proto` files:
+
+```sh
+go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
+go get -u google.golang.org/grpc
+protoc --go_out=plugins=grpc:. *.proto
+```
 
 ### How to turn on logging
 
