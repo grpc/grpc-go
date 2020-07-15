@@ -245,7 +245,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	// Determine the resolver to use.
 	cc.parsedTarget = grpcutil.ParseTarget(cc.target)
-	unixScheme := strings.HasPrefix(cc.parsedTarget.Endpoint, "unix:")
+	unixScheme := strings.HasPrefix(cc.target, "unix:")
 	channelz.Infof(logger, cc.channelzID, "parsed scheme: %q", cc.parsedTarget.Scheme)
 	resolverBuilder := cc.getResolver(cc.parsedTarget.Scheme)
 	if resolverBuilder == nil {
