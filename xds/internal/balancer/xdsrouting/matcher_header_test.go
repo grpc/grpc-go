@@ -19,10 +19,9 @@
 package xdsrouting
 
 import (
-	"context"
+	"regexp"
 	"testing"
 
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -30,25 +29,21 @@ func TestHeaderExactMatcherMatch(t *testing.T) {
 	tests := []struct {
 		name       string
 		key, exact string
-		info       balancer.PickInfo
+		md         metadata.MD
 		want       bool
 	}{
 		{
 			name:  "one value one match",
 			key:   "th",
 			exact: "tv",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
-			},
-			want: true,
+			md:    metadata.Pairs("th", "tv"),
+			want:  true,
 		},
 		{
 			name:  "two value one match",
 			key:   "th",
 			exact: "tv",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc", "th", "tv")),
-			},
+			md:    metadata.Pairs("th", "abc", "th", "tv"),
 			// Doesn't match comma-concatenated string.
 			want: false,
 		},
@@ -56,25 +51,21 @@ func TestHeaderExactMatcherMatch(t *testing.T) {
 			name:  "two value match concatenated",
 			key:   "th",
 			exact: "abc,tv",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc", "th", "tv")),
-			},
-			want: true,
+			md:    metadata.Pairs("th", "abc", "th", "tv"),
+			want:  true,
 		},
 		{
 			name:  "not match",
 			key:   "th",
 			exact: "tv",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc")),
-			},
-			want: false,
+			md:    metadata.Pairs("th", "abc"),
+			want:  false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hem := newHeaderExactMatcher(tt.key, tt.exact)
-			if got := hem.match(tt.info); got != tt.want {
+			if got := hem.match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
 		})
@@ -85,50 +76,42 @@ func TestHeaderRegexMatcherMatch(t *testing.T) {
 	tests := []struct {
 		name          string
 		key, regexStr string
-		info          balancer.PickInfo
+		md            metadata.MD
 		want          bool
 	}{
 		{
 			name:     "one value one match",
 			key:      "th",
 			regexStr: "^t+v*$",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tttvv")),
-			},
-			want: true,
+			md:       metadata.Pairs("th", "tttvv"),
+			want:     true,
 		},
 		{
 			name:     "two value one match",
 			key:      "th",
 			regexStr: "^t+v*$",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc", "th", "tttvv")),
-			},
-			want: false,
+			md:       metadata.Pairs("th", "abc", "th", "tttvv"),
+			want:     false,
 		},
 		{
 			name:     "two value match concatenated",
 			key:      "th",
 			regexStr: "^[abc]*,t+v*$",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc", "th", "tttvv")),
-			},
-			want: true,
+			md:       metadata.Pairs("th", "abc", "th", "tttvv"),
+			want:     true,
 		},
 		{
 			name:     "no match",
 			key:      "th",
 			regexStr: "^t+v*$",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc")),
-			},
-			want: false,
+			md:       metadata.Pairs("th", "abc"),
+			want:     false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hrm := newHeaderRegexMatcher(tt.key, tt.regexStr)
-			if got := hrm.match(tt.info); got != tt.want {
+			hrm := newHeaderRegexMatcher(tt.key, regexp.MustCompile(tt.regexStr))
+			if got := hrm.match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
 		})
@@ -140,50 +123,42 @@ func TestHeaderRangeMatcherMatch(t *testing.T) {
 		name       string
 		key        string
 		start, end int64
-		info       balancer.PickInfo
+		md         metadata.MD
 		want       bool
 	}{
 		{
 			name:  "match",
 			key:   "th",
 			start: 1, end: 10,
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "5")),
-			},
+			md:   metadata.Pairs("th", "5"),
 			want: true,
 		},
 		{
 			name:  "equal to start",
 			key:   "th",
 			start: 1, end: 10,
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "1")),
-			},
+			md:   metadata.Pairs("th", "1"),
 			want: true,
 		},
 		{
 			name:  "equal to end",
 			key:   "th",
 			start: 1, end: 10,
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "10")),
-			},
+			md:   metadata.Pairs("th", "10"),
 			want: false,
 		},
 		{
 			name:  "negative",
 			key:   "th",
 			start: -10, end: 10,
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "-5")),
-			},
+			md:   metadata.Pairs("th", "-5"),
 			want: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hrm := newHeaderRangeMatcher(tt.key, tt.start, tt.end)
-			if got := hrm.match(tt.info); got != tt.want {
+			if got := hrm.match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
 		})
@@ -195,50 +170,42 @@ func TestHeaderPresentMatcherMatch(t *testing.T) {
 		name    string
 		key     string
 		present bool
-		info    balancer.PickInfo
+		md      metadata.MD
 		want    bool
 	}{
 		{
 			name:    "want present is present",
 			key:     "th",
 			present: true,
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
-			},
-			want: true,
+			md:      metadata.Pairs("th", "tv"),
+			want:    true,
 		},
 		{
 			name:    "want present not present",
 			key:     "th",
 			present: true,
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("abc", "tv")),
-			},
-			want: false,
+			md:      metadata.Pairs("abc", "tv"),
+			want:    false,
 		},
 		{
 			name:    "want not present is present",
 			key:     "th",
 			present: false,
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
-			},
-			want: false,
+			md:      metadata.Pairs("th", "tv"),
+			want:    false,
 		},
 		{
 			name:    "want not present is not present",
 			key:     "th",
 			present: false,
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("abc", "tv")),
-			},
-			want: true,
+			md:      metadata.Pairs("abc", "tv"),
+			want:    true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hpm := newHeaderPresentMatcher(tt.key, tt.present)
-			if got := hpm.match(tt.info); got != tt.want {
+			if got := hpm.match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
 		})
@@ -249,50 +216,42 @@ func TestHeaderPrefixMatcherMatch(t *testing.T) {
 	tests := []struct {
 		name        string
 		key, prefix string
-		info        balancer.PickInfo
+		md          metadata.MD
 		want        bool
 	}{
 		{
 			name:   "one value one match",
 			key:    "th",
 			prefix: "tv",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv123")),
-			},
-			want: true,
+			md:     metadata.Pairs("th", "tv123"),
+			want:   true,
 		},
 		{
 			name:   "two value one match",
 			key:    "th",
 			prefix: "tv",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc", "th", "tv123")),
-			},
-			want: false,
+			md:     metadata.Pairs("th", "abc", "th", "tv123"),
+			want:   false,
 		},
 		{
 			name:   "two value match concatenated",
 			key:    "th",
 			prefix: "tv",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv123", "th", "abc")),
-			},
-			want: true,
+			md:     metadata.Pairs("th", "tv123", "th", "abc"),
+			want:   true,
 		},
 		{
 			name:   "not match",
 			key:    "th",
 			prefix: "tv",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc")),
-			},
-			want: false,
+			md:     metadata.Pairs("th", "abc"),
+			want:   false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hpm := newHeaderPrefixMatcher(tt.key, tt.prefix)
-			if got := hpm.match(tt.info); got != tt.want {
+			if got := hpm.match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
 		})
@@ -303,51 +262,71 @@ func TestHeaderSuffixMatcherMatch(t *testing.T) {
 	tests := []struct {
 		name        string
 		key, suffix string
-		info        balancer.PickInfo
+		md          metadata.MD
 		want        bool
 	}{
 		{
 			name:   "one value one match",
 			key:    "th",
 			suffix: "tv",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "123tv")),
-			},
-			want: true,
+			md:     metadata.Pairs("th", "123tv"),
+			want:   true,
 		},
 		{
 			name:   "two value one match",
 			key:    "th",
 			suffix: "tv",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "123tv", "th", "abc")),
-			},
-			want: false,
+			md:     metadata.Pairs("th", "123tv", "th", "abc"),
+			want:   false,
 		},
 		{
 			name:   "two value match concatenated",
 			key:    "th",
 			suffix: "tv",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc", "th", "123tv")),
-			},
-			want: true,
+			md:     metadata.Pairs("th", "abc", "th", "123tv"),
+			want:   true,
 		},
 		{
 			name:   "not match",
 			key:    "th",
 			suffix: "tv",
-			info: balancer.PickInfo{
-				Ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "abc")),
-			},
-			want: false,
+			md:     metadata.Pairs("th", "abc"),
+			want:   false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hsm := newHeaderSuffixMatcher(tt.key, tt.suffix)
-			if got := hsm.match(tt.info); got != tt.want {
+			if got := hsm.match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestInvertMatcherMatch(t *testing.T) {
+	tests := []struct {
+		name string
+		m    headerMatcherInterface
+		md   metadata.MD
+	}{
+		{
+			name: "true->false",
+			m:    newHeaderExactMatcher("th", "tv"),
+			md:   metadata.Pairs("th", "tv"),
+		},
+		{
+			name: "false->true",
+			m:    newHeaderExactMatcher("th", "abc"),
+			md:   metadata.Pairs("th", "tv"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := newInvertMatcher(tt.m).match(tt.md)
+			want := !tt.m.match(tt.md)
+			if got != want {
+				t.Errorf("match() = %v, want %v", got, want)
 			}
 		})
 	}

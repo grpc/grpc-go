@@ -23,12 +23,87 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/metadata"
 )
 
-type matcher interface {
+type matcherInterface interface {
 	match(info balancer.PickInfo) bool
-	Equal(matcher) bool
+	equal(matcherInterface) bool
 	String() string
+}
+
+// andMatcher.match returns true if all matchers return true.
+type andMatcher struct {
+	pm  pathMatcherInterface
+	hms []headerMatcherInterface
+	fm  *fractionMatcher
+}
+
+func newAndMatcher(pm pathMatcherInterface, hms []headerMatcherInterface, fm *fractionMatcher) *andMatcher {
+	return &andMatcher{pm: pm, hms: hms, fm: fm}
+}
+
+func (a *andMatcher) match(info balancer.PickInfo) bool {
+	if a.pm != nil && !a.pm.match(info.FullMethodName) {
+		return false
+	}
+
+	// Call headerMatchers even if md is nil, because routes may match
+	// non-presence of some headers.
+	var md metadata.MD
+	if info.Ctx != nil {
+		md, _ = metadata.FromOutgoingContext(info.Ctx)
+	}
+	for _, m := range a.hms {
+		if !m.match(md) {
+			return false
+		}
+	}
+
+	if a.fm != nil && !a.fm.match() {
+		return false
+	}
+	return true
+}
+
+func (a *andMatcher) equal(m matcherInterface) bool {
+	mm, ok := m.(*andMatcher)
+	if !ok {
+		return false
+	}
+
+	if (a.pm != nil || mm.pm != nil) && !a.pm.equal(mm.pm) {
+		return false
+	}
+
+	if len(a.hms) != len(mm.hms) {
+		return false
+	}
+	for i := range a.hms {
+		if !a.hms[i].equal(mm.hms[i]) {
+			return false
+		}
+	}
+
+	if (a.fm != nil || mm.fm != nil) && !a.fm.equal(mm.fm) {
+		return false
+	}
+
+	return true
+}
+
+func (a *andMatcher) String() string {
+	var ret string
+	if a.pm != nil {
+		ret += a.pm.String()
+	}
+	for _, m := range a.hms {
+		ret += m.String()
+	}
+	if a.fm != nil {
+		ret += a.fm.String()
+	}
+	return ret
 }
 
 type fractionMatcher struct {
@@ -41,85 +116,15 @@ func newFractionMatcher(fraction uint32) *fractionMatcher {
 
 var grpcrandInt63n = grpcrand.Int63n
 
-func (fm *fractionMatcher) match(balancer.PickInfo) bool {
+func (fm *fractionMatcher) match() bool {
 	t := grpcrandInt63n(1000000)
 	return t <= fm.fraction
 }
 
-func (fm *fractionMatcher) Equal(m matcher) bool {
-	mm, ok := m.(*fractionMatcher)
-	if !ok {
-		return false
-	}
-	return fm.fraction == mm.fraction
+func (fm *fractionMatcher) equal(m *fractionMatcher) bool {
+	return fm.fraction == m.fraction
 }
 
 func (fm *fractionMatcher) String() string {
 	return fmt.Sprintf("fraction:%v", fm.fraction)
-}
-
-// andMatcher.match returns true if all matchers return true.
-type andMatcher struct {
-	matchers []matcher
-}
-
-func newAndMatcher(matchers []matcher) *andMatcher {
-	return &andMatcher{matchers: matchers}
-}
-
-func (a *andMatcher) match(info balancer.PickInfo) bool {
-	for _, m := range a.matchers {
-		if !m.match(info) {
-			return false
-		}
-	}
-	return true
-}
-
-func (a *andMatcher) Equal(m matcher) bool {
-	mm, ok := m.(*andMatcher)
-	if !ok {
-		return false
-	}
-	if len(a.matchers) != len(mm.matchers) {
-		return false
-	}
-	for i := range a.matchers {
-		if !a.matchers[i].Equal(mm.matchers[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-func (a *andMatcher) String() string {
-	var ret string
-	for _, m := range a.matchers {
-		ret += m.String()
-	}
-	return ret
-}
-
-type invertMatcher struct {
-	m matcher
-}
-
-func newInvertMatcher(m matcher) *invertMatcher {
-	return &invertMatcher{m: m}
-}
-
-func (i *invertMatcher) match(info balancer.PickInfo) bool {
-	return !i.m.match(info)
-}
-
-func (i *invertMatcher) Equal(m matcher) bool {
-	mm, ok := m.(*invertMatcher)
-	if !ok {
-		return false
-	}
-	return i.m.Equal(mm.m)
-}
-
-func (i *invertMatcher) String() string {
-	return fmt.Sprintf("invert{%s}", i.m)
 }

@@ -27,19 +27,18 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-func TestAndMatcher(t *testing.T) {
+func TestAndMatcherMatch(t *testing.T) {
 	tests := []struct {
-		name     string
-		matchers []matcher
-		info     balancer.PickInfo
-		want     bool
+		name string
+		pm   pathMatcherInterface
+		hm   headerMatcherInterface
+		info balancer.PickInfo
+		want bool
 	}{
 		{
 			name: "both match",
-			matchers: []matcher{
-				newPathExactMatcher("/a/b"),
-				newHeaderExactMatcher("th", "tv"),
-			},
+			pm:   newPathExactMatcher("/a/b"),
+			hm:   newHeaderExactMatcher("th", "tv"),
 			info: balancer.PickInfo{
 				FullMethodName: "/a/b",
 				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
@@ -48,10 +47,8 @@ func TestAndMatcher(t *testing.T) {
 		},
 		{
 			name: "only one match",
-			matchers: []matcher{
-				newPathExactMatcher("/a/b"),
-				newHeaderExactMatcher("th", "tv"),
-			},
+			pm:   newPathExactMatcher("/a/b"),
+			hm:   newHeaderExactMatcher("th", "tv"),
 			info: balancer.PickInfo{
 				FullMethodName: "/z/y",
 				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
@@ -60,10 +57,8 @@ func TestAndMatcher(t *testing.T) {
 		},
 		{
 			name: "both not match",
-			matchers: []matcher{
-				newPathExactMatcher("/z/y"),
-				newHeaderExactMatcher("th", "abc"),
-			},
+			pm:   newPathExactMatcher("/z/y"),
+			hm:   newHeaderExactMatcher("th", "abc"),
 			info: balancer.PickInfo{
 				FullMethodName: "/a/b",
 				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
@@ -73,7 +68,7 @@ func TestAndMatcher(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := newAndMatcher(tt.matchers)
+			a := newAndMatcher(tt.pm, []headerMatcherInterface{tt.hm}, nil)
 			if got := a.match(tt.info); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
@@ -81,35 +76,7 @@ func TestAndMatcher(t *testing.T) {
 	}
 }
 
-func TestInvertMatcher_match(t *testing.T) {
-	tests := []struct {
-		name string
-		m    matcher
-		info balancer.PickInfo
-	}{
-		{
-			name: "true->false",
-			m:    newPathExactMatcher("/a/b"),
-			info: balancer.PickInfo{FullMethodName: "/a/b"},
-		},
-		{
-			name: "false->true",
-			m:    newPathExactMatcher("/z/y"),
-			info: balancer.PickInfo{FullMethodName: "/a/b"},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := newInvertMatcher(tt.m).match(tt.info)
-			want := !tt.m.match(tt.info)
-			if got != want {
-				t.Errorf("match() = %v, want %v", got, want)
-			}
-		})
-	}
-}
-
-func TestFractionMatcher_match(t *testing.T) {
+func TestFractionMatcherMatch(t *testing.T) {
 	const fraction = 500000
 	fm := newFractionMatcher(fraction)
 	defer func() {
@@ -120,7 +87,7 @@ func TestFractionMatcher_match(t *testing.T) {
 	grpcrandInt63n = func(n int64) int64 {
 		return fraction + 1
 	}
-	if matched := fm.match(balancer.PickInfo{}); matched {
+	if matched := fm.match(); matched {
 		t.Errorf("match() = %v, want not match", matched)
 	}
 
@@ -128,7 +95,7 @@ func TestFractionMatcher_match(t *testing.T) {
 	grpcrandInt63n = func(n int64) int64 {
 		return fraction
 	}
-	if matched := fm.match(balancer.PickInfo{}); !matched {
+	if matched := fm.match(); !matched {
 		t.Errorf("match() = %v, want match", matched)
 	}
 
@@ -136,7 +103,7 @@ func TestFractionMatcher_match(t *testing.T) {
 	grpcrandInt63n = func(n int64) int64 {
 		return fraction - 1
 	}
-	if matched := fm.match(balancer.PickInfo{}); !matched {
+	if matched := fm.match(); !matched {
 		t.Errorf("match() = %v, want match", matched)
 	}
 }

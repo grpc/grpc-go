@@ -21,9 +21,13 @@ package xdsrouting
 import (
 	"regexp"
 	"strings"
-
-	"google.golang.org/grpc/balancer"
 )
+
+type pathMatcherInterface interface {
+	match(path string) bool
+	equal(pathMatcherInterface) bool
+	String() string
+}
 
 type pathExactMatcher struct {
 	fullPath string
@@ -33,11 +37,11 @@ func newPathExactMatcher(p string) *pathExactMatcher {
 	return &pathExactMatcher{fullPath: p}
 }
 
-func (pem *pathExactMatcher) match(info balancer.PickInfo) bool {
-	return pem.fullPath == info.FullMethodName
+func (pem *pathExactMatcher) match(path string) bool {
+	return pem.fullPath == path
 }
 
-func (pem *pathExactMatcher) Equal(m matcher) bool {
+func (pem *pathExactMatcher) equal(m pathMatcherInterface) bool {
 	mm, ok := m.(*pathExactMatcher)
 	if !ok {
 		return false
@@ -57,11 +61,11 @@ func newPathPrefixMatcher(p string) *pathPrefixMatcher {
 	return &pathPrefixMatcher{prefix: p}
 }
 
-func (ppm *pathPrefixMatcher) match(info balancer.PickInfo) bool {
-	return strings.HasPrefix(info.FullMethodName, ppm.prefix)
+func (ppm *pathPrefixMatcher) match(path string) bool {
+	return strings.HasPrefix(path, ppm.prefix)
 }
 
-func (ppm *pathPrefixMatcher) Equal(m matcher) bool {
+func (ppm *pathPrefixMatcher) equal(m pathMatcherInterface) bool {
 	mm, ok := m.(*pathPrefixMatcher)
 	if !ok {
 		return false
@@ -74,24 +78,23 @@ func (ppm *pathPrefixMatcher) String() string {
 }
 
 type pathRegexMatcher struct {
-	s  string
 	re *regexp.Regexp
 }
 
-func newPathRegexMatcher(p string) *pathRegexMatcher {
-	return &pathRegexMatcher{s: p, re: regexp.MustCompile(p)}
+func newPathRegexMatcher(re *regexp.Regexp) *pathRegexMatcher {
+	return &pathRegexMatcher{re: re}
 }
 
-func (prm *pathRegexMatcher) match(info balancer.PickInfo) bool {
-	return prm.re.MatchString(info.FullMethodName)
+func (prm *pathRegexMatcher) match(path string) bool {
+	return prm.re.MatchString(path)
 }
 
-func (prm *pathRegexMatcher) Equal(m matcher) bool {
+func (prm *pathRegexMatcher) equal(m pathMatcherInterface) bool {
 	mm, ok := m.(*pathRegexMatcher)
 	if !ok {
 		return false
 	}
-	return prm.s == mm.s
+	return prm.re.String() == mm.re.String()
 }
 
 func (prm *pathRegexMatcher) String() string {
