@@ -726,6 +726,15 @@ func TestGetCertificateSNI(t *testing.T) {
 			serverName:          "foo.bar.server2.com",
 			expectedCertificate: serverPeerCert2,
 		},
+		{
+			desc: "Selected certificate by SNI should be serverPeerCert3",
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				return []*tls.Certificate{&serverPeerCert1, &serverPeerCert2, &serverPeerCert3}, nil
+			},
+			// "google.com" is one of the DNS names on server certificate server_cert_3.pem.
+			serverName:          "google.com",
+			expectedCertificate: serverPeerCert3,
+		},
 	}
 	for _, test := range tests {
 		test := test
