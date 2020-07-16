@@ -683,18 +683,8 @@ func TestOptionsConfig(t *testing.T) {
 }
 
 func TestGetCertificateSNI(t *testing.T) {
-	// Define const variables needed to set up ClientHelloInfo for testing.
-	const (
-		tlsEcdheRsaWith3desEdeCbcSha uint16 = 0xc012
-	)
-	const (
-		CurveP256 tls.CurveID = 23
-	)
 	const (
 		pointFormatUncompressed uint8 = 0
-	)
-	const (
-		VersionTLS10 uint16 = 0x0301
 	)
 	// Load server certificates for setting the serverGetCert callback function.
 	serverPeerCert1, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
@@ -748,11 +738,11 @@ func TestGetCertificateSNI(t *testing.T) {
 				t.Fatalf("Unable to generate serverConfig. Error: %v", err)
 			}
 			clientHello := &tls.ClientHelloInfo{
-				CipherSuites:      []uint16{tlsEcdheRsaWith3desEdeCbcSha},
+				CipherSuites:      []uint16{tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA},
 				ServerName:        test.serverName,
-				SupportedCurves:   []tls.CurveID{CurveP256},
+				SupportedCurves:   []tls.CurveID{tls.CurveP256},
 				SupportedPoints:   []uint8{pointFormatUncompressed},
-				SupportedVersions: []uint16{VersionTLS10},
+				SupportedVersions: []uint16{tls.VersionTLS10},
 			}
 			gotCertificate, err := serverConfig.GetCertificate(clientHello)
 			if err != nil {
