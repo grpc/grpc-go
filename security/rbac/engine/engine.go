@@ -36,7 +36,7 @@ type AuthorizationArgs struct {
 	peerInfo *peer.Peer
 }
 
-// Converts AuthorizationArgs into the e
+// Converts AuthorizationArgs into the evaluation map for CEL.
 func (args AuthorizationArgs) toEvalMap() map[string]interface{} {
 	// TODO(@ezou): implement the conversion logic.
 	return nil
@@ -62,10 +62,11 @@ func (d Decision) String() string {
 }
 
 // AuthorizationDecision is the output of CEL engine.
-// If decision is allow or deny, policyNames will either contain the name of
-// the single policy that permitted the action, or be empty as the decision
-// was made after all conditions evaluated to false. If decision is unknown,
-// policyNames will contain the list of policies that evaluated to unknown.
+// If decision is allow or deny, policyNames will either contain the names of
+// all the policies matched in the engine that permitted the action, or be
+// empty as the decision was made after all conditions evaluated to false.
+// If decision is unknown, policyNames will contain the list of policies that
+// evaluated to unknown.
 type AuthorizationDecision struct {
 	decision    Decision
 	policyNames []string
@@ -106,24 +107,26 @@ func newRbacEngine(rbac pb.RBAC) rbacEngine {
 
 // Returns whether a set of authorization arguments, as contained in evalMap, match an
 //  rbacEngine's conditions.
-// If any policy matches, the engine has been matched and policyName will be non-empty.
-// Else if any policy is missing attributes, unknownPolicies is a list of the policyNames
-//  that can't be evaluated due to missing attributes.
+// If any policy matches, the engine has been matched, and the list of matching policy
+//  names will be returned.
+// Else if any policy is missing attributes, the engine is not matched, and the list of
+//  policy names that can't be evaluated due to missing attributes will be returned.
 // Else, there is not a match.
-func (engine rbacEngine) matches(evalMap map[string]interface{}) (policyName string, unknownPolicies []string) {
-	unknownPolicies = []string{}
-	var condition *cel.Program
-	for policyName, condition = range engine.conditions {
+func (engine rbacEngine) matches(evalMap map[string]interface{}) (bool, []string) {
+	matchingPolicyNames := []string{}
+	unknownPolicyNames := []string{}
+	for policyName, condition := range engine.conditions {
 		match, err := matchesCondition(condition, evalMap)
 		if err != nil {
-			unknownPolicies = append(unknownPolicies, policyName)
-		}
-		if match {
-			return
+			unknownPolicyNames = append(unknownPolicyNames, policyName)
+		} else if match {
+			matchingPolicyNames = append(matchingPolicyNames, policyName)
 		}
 	}
-	policyName = ""
-	return
+	if len(matchingPolicyNames) > 0 {
+		return true, matchingPolicyNames
+	}
+	return false, unknownPolicyNames
 }
 
 // CelEvaluationEngine is the struct for CEL engine.
@@ -172,15 +175,15 @@ func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) (Authoriza
 	}
 	allUnknownPolicies := []string{}
 	for _, engine := range celEngine.engines {
-		policyName, unknownPolicies := engine.matches(evalMap)
+		match, policyNames := engine.matches(evalMap)
 		// If any engine matched, return that engine's action.
-		if policyName != "" {
+		if match {
 			if engine.action == pb.RBAC_ALLOW {
-				return AuthorizationDecision{DecisionAllow, []string{policyName}}, nil
+				return AuthorizationDecision{DecisionAllow, policyNames}, nil
 			}
-			return AuthorizationDecision{DecisionDeny, []string{policyName}}, nil
+			return AuthorizationDecision{DecisionDeny, policyNames}, nil
 		}
-		allUnknownPolicies = append(allUnknownPolicies, unknownPolicies...)
+		allUnknownPolicies = append(allUnknownPolicies, policyNames...)
 	}
 	// If any engine evaluated to unknown, return unknown.
 	if len(allUnknownPolicies) > 0 {
