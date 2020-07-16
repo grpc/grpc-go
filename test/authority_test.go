@@ -21,41 +21,111 @@ package test
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
+// unixServer is used to test servers listening over a unix socket.
+type unixServer struct {
+	// Guarantees we satisfy this interface; panics if unimplemented methods are called.
+	testpb.TestServiceServer
+
+	// Customizable implementations of server handlers.
+	emptyCall func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error)
+
+	// A client connected to this service the test may use.  Created in Start().
+	client testpb.TestServiceClient
+	cc     *grpc.ClientConn
+	s      *grpc.Server
+
+	cleanups []func() // Lambdas executed in Stop(); populated by Start().
+}
+
+func (us *unixServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	return us.emptyCall(ctx, in)
+}
+
+func (us *unixServer) Start(address, target string) error {
+	lis, err := net.Listen("unix", address)
+	if err != nil {
+		return err
+	}
+	us.cleanups = append(us.cleanups, func() { lis.Close() })
+
+	s := grpc.NewServer()
+	testpb.RegisterTestServiceServer(s, us)
+	go s.Serve(lis)
+	us.cleanups = append(us.cleanups, s.Stop)
+	us.s = s
+
+	cc, err := grpc.Dial(target, grpc.WithInsecure())
+	if err != nil {
+		return fmt.Errorf("grpc.Dial(%q) = %v", target, err)
+	}
+	us.cc = cc
+	if err := us.waitForReady(cc); err != nil {
+		return err
+	}
+	us.cleanups = append(us.cleanups, func() { cc.Close() })
+
+	us.client = testpb.NewTestServiceClient(cc)
+
+	return nil
+}
+
+func (us *unixServer) waitForReady(cc *grpc.ClientConn) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for {
+		s := cc.GetState()
+		if s == connectivity.Ready {
+			return nil
+		}
+		if !cc.WaitForStateChange(ctx, s) {
+			return ctx.Err()
+		}
+	}
+}
+
+func (us *unixServer) Stop() {
+	for i := len(us.cleanups) - 1; i >= 0; i-- {
+		us.cleanups[i]()
+	}
+}
+
 func runUnixTest(t *testing.T, address, target, expectedAuthority string) {
 	if err := os.RemoveAll(address); err != nil {
 		t.Fatalf("Error removing socket file %v: %v\n", address, err)
 	}
-	us := &stubServer{
+	us := &unixServer{
 		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			if md, ok := metadata.FromIncomingContext(ctx); ok {
-				if auths, ok := md[":authority"]; ok {
-					if len(auths) < 1 {
-						return nil, status.Error(codes.InvalidArgument, "no authority header")
-					}
-					if auths[0] != expectedAuthority {
-						return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid authority header %v, expected %v", auths[0], expectedAuthority))
-					}
-					return &testpb.Empty{}, nil
-				}
+			md, ok := metadata.FromIncomingContext(ctx)
+			if !ok {
+				return nil, status.Error(codes.InvalidArgument, "failed to parse metadata")
+			}
+			auths, ok := md[":authority"]
+			if !ok {
 				return nil, status.Error(codes.InvalidArgument, "no authority header")
 			}
-			return nil, status.Error(codes.InvalidArgument, "failed to parse metadata")
+			if len(auths) < 1 {
+				return nil, status.Error(codes.InvalidArgument, "no authority header")
+			}
+			if auths[0] != expectedAuthority {
+				return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid authority header %v, expected %v", auths[0], expectedAuthority))
+			}
+			return &testpb.Empty{}, nil
 		},
-		network: "unix",
-		address: address,
-		target:  target,
 	}
-	if err := us.Start(nil); err != nil {
+	if err := us.Start(address, target); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 		return
 	}
@@ -79,19 +149,19 @@ func (s) TestUnix(t *testing.T) {
 			name:      "Unix1",
 			address:   "sock.sock",
 			target:    "unix:sock.sock",
-			authority: "loclahost",
+			authority: "localhost",
 		},
 		{
 			name:      "Unix2",
 			address:   "/tmp/sock.sock",
 			target:    "unix:/tmp/sock.sock",
-			authority: "loclahost",
+			authority: "localhost",
 		},
 		{
 			name:      "Unix3",
 			address:   "/tmp/sock.sock",
 			target:    "unix:///tmp/sock.sock",
-			authority: "loclahost",
+			authority: "localhost",
 		},
 	}
 	for _, test := range tests {
