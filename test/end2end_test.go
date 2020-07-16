@@ -4991,6 +4991,10 @@ type stubServer struct {
 	cc     *grpc.ClientConn
 	s      *grpc.Server
 
+	network string
+	address string
+	target  string
+
 	addr string // address of listener
 
 	cleanups []func() // Lambdas executed in Stop(); populated by Start().
@@ -5012,12 +5016,15 @@ func (ss *stubServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallSer
 
 // Start starts the server and creates a client connected to it.
 func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption) error {
-	r := manual.NewBuilderWithScheme("whatever")
-	ss.r = r
+	if ss.network == "" && ss.address == "" && ss.target == "" {
+		ss.r = manual.NewBuilderWithScheme("whatever")
+		ss.network = "tcp"
+		ss.address = "localhost:0"
+	}
 
-	lis, err := net.Listen("tcp", "localhost:0")
+	lis, err := net.Listen(ss.network, ss.address)
 	if err != nil {
-		return fmt.Errorf(`net.Listen("tcp", "localhost:0") = %v`, err)
+		return fmt.Errorf(`net.Listen("%v", "%v") = %v`, ss.network, ss.address, err)
 	}
 	ss.addr = lis.Addr().String()
 	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
@@ -5028,15 +5035,22 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	ss.cleanups = append(ss.cleanups, s.Stop)
 	ss.s = s
 
-	target := ss.r.Scheme() + ":///" + ss.addr
+	var opts []grpc.DialOption
+	if ss.r != nil {
+		ss.target = ss.r.Scheme() + ":///" + ss.addr
+		opts = append([]grpc.DialOption{grpc.WithInsecure(), grpc.WithResolvers(ss.r)}, dopts...)
+	} else {
+		opts = append([]grpc.DialOption{grpc.WithInsecure()}, dopts...)
+	}
 
-	opts := append([]grpc.DialOption{grpc.WithInsecure(), grpc.WithResolvers(r)}, dopts...)
-	cc, err := grpc.Dial(target, opts...)
+	cc, err := grpc.Dial(ss.target, opts...)
 	if err != nil {
-		return fmt.Errorf("grpc.Dial(%q) = %v", target, err)
+		return fmt.Errorf("grpc.Dial(%q) = %v", ss.target, err)
 	}
 	ss.cc = cc
-	ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}})
+	if ss.r != nil {
+		ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}})
+	}
 	if err := ss.waitForReady(cc); err != nil {
 		return err
 	}
@@ -5048,7 +5062,9 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 }
 
 func (ss *stubServer) newServiceConfig(sc string) {
-	ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}, ServiceConfig: parseCfg(ss.r, sc)})
+	if ss.r != nil {
+		ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}, ServiceConfig: parseCfg(ss.r, sc)})
+	}
 }
 
 func (ss *stubServer) waitForReady(cc *grpc.ClientConn) error {

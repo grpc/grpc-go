@@ -21,20 +21,17 @@ package test
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-// unixServer is used to test servers listening over a unix socket.
+/*// unixServer is used to test servers listening over a unix socket.
 type unixServer struct {
 	// Guarantees we satisfy this interface; panics if unimplemented methods are called.
 	testpb.TestServiceServer
@@ -100,13 +97,13 @@ func (us *unixServer) Stop() {
 	for i := len(us.cleanups) - 1; i >= 0; i-- {
 		us.cleanups[i]()
 	}
-}
+}*/
 
 func runUnixTest(t *testing.T, address, target, expectedAuthority string) {
 	if err := os.RemoveAll(address); err != nil {
 		t.Fatalf("Error removing socket file %v: %v\n", address, err)
 	}
-	us := &unixServer{
+	us := &stubServer{
 		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			md, ok := metadata.FromIncomingContext(ctx)
 			if !ok {
@@ -124,8 +121,11 @@ func runUnixTest(t *testing.T, address, target, expectedAuthority string) {
 			}
 			return &testpb.Empty{}, nil
 		},
+		network: "unix",
+		address: address,
+		target:  target,
 	}
-	if err := us.Start(address, target); err != nil {
+	if err := us.Start(nil); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 		return
 	}
