@@ -27,40 +27,48 @@ import (
 	"time"
 )
 
-// PeerCredFileReader contains
+// PeerCredFileReader is an interface that supports reading
+// peer credential files of different formats.
 type PeerCredFileReader interface {
 	ReadKeyAndCerts() (*tls.Certificate, error)
 }
 
-// TrustCredFileReader contains
+// TrustCredFileReader is an interface that supports reading
+// trust credential files of different formats.
 type TrustCredFileReader interface {
 	ReadTrustCerts() (*x509.CertPool, error)
 }
 
+// pemPeerCredFileReader is the default implementation of PeerCredFileReader.
+// pemPeerCredFileReader supports reading peer credential files of PEM format.
 type pemPeerCredFileReader struct {
 	certFilePath string
 	keyFilePath  string
 	interval     time.Duration
 }
 
-// PemPeerCredFileReaderOption contains
+// PemPeerCredFileReaderOption contains all information needed to be filled out
+// by users in order to use NewPemPeerCredFileReader.
 type PemPeerCredFileReaderOption struct {
 	CertFilePath string
 	KeyFilePath  string
 	Interval     time.Duration
 }
 
-// NewPemPeerCredFileReader is
-func NewPemPeerCredFileReader(o PemPeerCredFileReaderOption) (*pemPeerCredFileReader, error) {
+// newPemPeerCredFileReader uses PemPeerCredFileReaderOption
+// to contruct a pemPeerCredFileReader.
+func newPemPeerCredFileReader(o PemPeerCredFileReaderOption) (*pemPeerCredFileReader, error) {
 	if o.CertFilePath == "" {
-		return nil, fmt.Errorf("PemPeerCredFileReaderOption needs to specify certificate file path")
+		return nil, fmt.Errorf(
+			"users need to specify certificate file path in PemPeerCredFileReaderOption")
 	}
 	if o.KeyFilePath == "" {
-		return nil, fmt.Errorf("PemPeerCredFileReaderOption needs to specify key file path")
+		return nil, fmt.Errorf(
+			"users need to specify key file path in PemPeerCredFileReaderOption")
 	}
-	// If interval is invalid, set it to 1 hour by default.
+	// If interval is not set by users explicitly, set it to 1 hour by default.
 	interval := o.Interval
-	if interval == 0*time.Hour {
+	if interval == 0*time.Nanosecond {
 		interval = 1 * time.Hour
 	}
 	r := &pemPeerCredFileReader{
@@ -71,6 +79,8 @@ func NewPemPeerCredFileReader(o PemPeerCredFileReaderOption) (*pemPeerCredFileRe
 	return r, nil
 }
 
+// ReadKeyAndCerts reads and parses peer certificates from the certificate file path
+// and the key file path specified in pemPeerCredFileReader.
 func (r pemPeerCredFileReader) ReadKeyAndCerts() (*tls.Certificate, error) {
 	cert, err := tls.LoadX509KeyPair(r.certFilePath, r.keyFilePath)
 	if err != nil {
@@ -79,25 +89,30 @@ func (r pemPeerCredFileReader) ReadKeyAndCerts() (*tls.Certificate, error) {
 	return &cert, nil
 }
 
+// pemTrustCredFileReader is the default implementation of TrustCredFileReader.
+// pemTrustCredFileReader supports reading trust credential files of PEM format.
 type pemTrustCredFileReader struct {
 	trustCertPath string
 	interval      time.Duration
 }
 
-// PemTrustCredFileReaderOption contains
+// PemTrustCredFileReaderOption contains all information needed to be filled out
+// by users in order to use NewPemTrustCredFileReader.
 type PemTrustCredFileReaderOption struct {
 	TrustCertPath string
 	Interval      time.Duration
 }
 
-// NewPemTrustCredFileReader is
-func NewPemTrustCredFileReader(o PemTrustCredFileReaderOption) (*pemTrustCredFileReader, error) {
+// newPemTrustCredFileReader uses PemTrustCredFileReaderOption
+// to contruct a pemTrustCredFileReader.
+func newPemTrustCredFileReader(o PemTrustCredFileReaderOption) (*pemTrustCredFileReader, error) {
 	if o.TrustCertPath == "" {
-		return nil, fmt.Errorf("PemTrustCredFileReaderOption needs to specify certificate file path")
+		return nil, fmt.Errorf(
+			"users need to specify key file path in PemTrustCredFileReaderOption")
 	}
-	// If interval is invalid, set it to 1 hour by default.
+	// If interval is not set by users explicitly, set it to 1 hour by default.
 	interval := o.Interval
-	if interval == 0*time.Hour {
+	if interval == 0*time.Nanosecond {
 		interval = 1 * time.Hour
 	}
 	r := &pemTrustCredFileReader{
@@ -107,6 +122,8 @@ func NewPemTrustCredFileReader(o PemTrustCredFileReaderOption) (*pemTrustCredFil
 	return r, nil
 }
 
+// ReadTrustCerts reads and parses trust certificates from trust certificate path
+// specified in pemTrustCredFileReader.
 func (r pemTrustCredFileReader) ReadTrustCerts() (*x509.CertPool, error) {
 	trustData, err := ioutil.ReadFile(r.trustCertPath)
 	if err != nil {
