@@ -1307,7 +1307,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 //
 // LB channel health checking is enabled when all requirements below are met:
 // 1. it is not disabled by the user with the WithDisableHealthCheck DialOption
-// 2. internal.HealthCheckFunc is set by importing the grpc/healthcheck package
+// 2. internal.HealthCheckFunc is set by importing the grpc/health package
 // 3. a service config with non-empty healthCheckConfig field is provided
 // 4. the load balancer requests it
 //

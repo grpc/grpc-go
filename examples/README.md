@@ -1,64 +1,29 @@
-gRPC in 3 minutes (Go)
-======================
+# gRPC Hello World
 
-BACKGROUND
--------------
-For this sample, we've already generated the server and client stubs from [helloworld.proto](helloworld/helloworld/helloworld.proto).
+Follow these setup to run the [quick start][] example:
 
-PREREQUISITES
--------------
+ 1. Get the code:
 
-- This requires Go 1.9 or later
-- Requires that [GOPATH is set](https://golang.org/doc/code.html#GOPATH)
+    ```console
+    $ go get google.golang.org/grpc/examples/helloworld/greeter_client
+    $ go get google.golang.org/grpc/examples/helloworld/greeter_server
+    ```
 
-```
-$ go help gopath
-$ # ensure the PATH contains $GOPATH/bin
-$ export PATH=$PATH:$GOPATH/bin
-```
+ 2. Run the server:
 
-INSTALL
--------
+    ```console
+    $ $(go env GOPATH)/bin/greeter_server &
+    ```
 
-```
-$ go get -u google.golang.org/grpc/examples/helloworld/greeter_client
-$ go get -u google.golang.org/grpc/examples/helloworld/greeter_server
-```
+ 3. Run the client:
 
-TRY IT!
--------
+    ```console
+    $ $(go env GOPATH)/bin/greeter_client
+    Greeting: Hello world
+    ```
 
-- Run the server
+For more details (including instructions for making a small change to the
+example code) or if you're having trouble running this example, see [Quick
+Start][].
 
-  ```
-  $ greeter_server &
-  ```
-
-- Run the client
-
-  ```
-  $ greeter_client
-  ```
-
-OPTIONAL - Rebuilding the generated code
-----------------------------------------
-
-1. Install [protobuf compiler](https://github.com/google/protobuf/blob/master/README.md#protocol-compiler-installation)
-
-1. Install the protoc Go plugin
-
-   ```
-   $ go get -u github.com/golang/protobuf/protoc-gen-go
-   ```
-
-1. Rebuild the generated Go code
-
-   ```
-   $ go generate google.golang.org/grpc/examples/helloworld/...
-   ```
-
-   Or run `protoc` command (with the grpc plugin)
-
-   ```
-   $ protoc -I helloworld/ helloworld/helloworld.proto --go_out=plugins=grpc:helloworld
-   ```
+[quick start]: https://grpc.io/docs/languages/go/quickstart

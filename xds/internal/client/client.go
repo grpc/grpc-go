@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/version"
 )
 
 // Options provides all parameters required for the creation of an xDS client.
@@ -131,7 +132,13 @@ func New(opts Options) (*Client, error) {
 	c.logger = prefixLogger((c))
 	c.logger.Infof("Created ClientConn to xDS server: %s", opts.Config.BalancerName)
 
-	c.v2c = newXDSV2Client(c, cc, opts.Config.NodeProto, backoff.DefaultExponential.Backoff, c.logger)
+	if opts.Config.TransportAPI == version.TransportV2 {
+		c.v2c = newXDSV2Client(c, cc, opts.Config.NodeProto.(*corepb.Node), backoff.DefaultExponential.Backoff, c.logger)
+	} else {
+		// TODO(easwars): Remove this once v3Client is ready.
+		return nil, errors.New("xds v3 client is not yet supported")
+	}
+
 	c.logger.Infof("Created")
 	go c.run()
 	return c, nil

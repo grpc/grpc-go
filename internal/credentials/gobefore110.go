@@ -1,3 +1,5 @@
+// +build !go1.10
+
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -16,18 +18,14 @@
  *
  */
 
-package balancergroup
+package credentials
 
 import (
-	"testing"
-
-	"google.golang.org/grpc/internal/grpctest"
+	"crypto/tls"
+	"net/url"
 )
 
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
+//TODO(ZhenLian): delete this file when we remove Go 1.9 tests.
+func SPIFFEIDFromState(state tls.ConnectionState) *url.URL {
+	return nil
 }

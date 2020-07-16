@@ -55,7 +55,7 @@ func clientOpts(balancerName string) Options {
 		Config: bootstrap.Config{
 			BalancerName: balancerName,
 			Creds:        grpc.WithInsecure(),
-			NodeProto:    &corepb.Node{},
+			NodeProto:    testutils.EmptyNodeProtoV2,
 		},
 	}
 }
@@ -78,7 +78,7 @@ func (s) TestNew(t *testing.T) {
 			opts: Options{
 				Config: bootstrap.Config{
 					Creds:     grpc.WithInsecure(),
-					NodeProto: &corepb.Node{},
+					NodeProto: testutils.EmptyNodeProtoV2,
 				},
 			},
 			wantErr: true,
@@ -88,7 +88,7 @@ func (s) TestNew(t *testing.T) {
 			opts: Options{
 				Config: bootstrap.Config{
 					BalancerName: "dummy",
-					NodeProto:    &corepb.Node{},
+					NodeProto:    testutils.EmptyNodeProtoV2,
 				},
 			},
 			wantErr: true,

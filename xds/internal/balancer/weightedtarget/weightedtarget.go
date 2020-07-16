@@ -24,16 +24,21 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/hierarchy"
+	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
+	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 )
 
 const weightedTargetName = "weighted_target_experimental"
+
+// newRandomWRR is the WRR constructor used to pick sub-pickers from
+// sub-balancers. It's to be modified in tests.
+var newRandomWRR = wrr.NewRandom
 
 func init() {
 	balancer.Register(&weightedTargetBB{})
@@ -43,8 +48,10 @@ type weightedTargetBB struct{}
 
 func (wt *weightedTargetBB) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	b := &weightedTargetBalancer{}
-	b.logger = prefixLogger((b))
-	b.bg = balancergroup.New(cc, nil, b.logger)
+	b.logger = prefixLogger(b)
+	b.stateAggregator = weightedaggregator.New(cc, b.logger, newRandomWRR)
+	b.stateAggregator.Start()
+	b.bg = balancergroup.New(cc, b.stateAggregator, nil, b.logger)
 	b.bg.Start()
 	b.logger.Infof("Created")
 	return b
@@ -66,7 +73,8 @@ type weightedTargetBalancer struct {
 	// policies that it maintains and reports load using LRS. Once these two
 	// dependencies are removed from the balancerGroup, this package will not
 	// have any dependencies on xds code.
-	bg *balancergroup.BalancerGroup
+	bg              *balancergroup.BalancerGroup
+	stateAggregator *weightedaggregator.Aggregator
 
 	targets map[string]target
 }
@@ -86,10 +94,17 @@ func (w *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnStat
 	}
 	addressesSplit := hierarchy.Group(s.ResolverState.Addresses)
 
-	// Remove sub-balancers that are not in the new config.
+	var rebuildStateAndPicker bool
+
+	// Remove sub-pickers and sub-balancers that are not in the new config.
 	for name := range w.targets {
 		if _, ok := newConfig.Targets[name]; !ok {
-			w.bg.Remove(makeLocalityFromName(name))
+			l := makeLocalityFromName(name)
+			w.stateAggregator.Remove(l)
+			w.bg.Remove(l)
+			// Trigger a state/picker update, because we don't want `ClientConn`
+			// to pick this sub-balancer anymore.
+			rebuildStateAndPicker = true
 		}
 	}
 
@@ -103,11 +118,18 @@ func (w *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnStat
 
 		oldT, ok := w.targets[name]
 		if !ok {
-			// If this is a new sub-balancer, add it.
-			w.bg.Add(l, newT.Weight, balancer.Get(newT.ChildPolicy.Name))
+			// If this is a new sub-balancer, add weights to the picker map.
+			w.stateAggregator.Add(l, newT.Weight)
+			// Then add to the balancer group.
+			w.bg.Add(l, balancer.Get(newT.ChildPolicy.Name))
+			// Not trigger a state/picker update. Wait for the new sub-balancer
+			// to send its updates.
 		} else if newT.Weight != oldT.Weight {
 			// If this is an existing sub-balancer, update weight if necessary.
-			w.bg.ChangeWeight(l, newT.Weight)
+			w.stateAggregator.UpdateWeight(l, newT.Weight)
+			// Trigger a state/picker update, because we don't want `ClientConn`
+			// should do picks with the new weights now.
+			rebuildStateAndPicker = true
 		}
 
 		// Forwards all the update:
@@ -127,6 +149,10 @@ func (w *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnStat
 	}
 
 	w.targets = newConfig.Targets
+
+	if rebuildStateAndPicker {
+		w.stateAggregator.BuildAndUpdate()
+	}
 	return nil
 }
 
@@ -139,13 +165,6 @@ func (w *weightedTargetBalancer) UpdateSubConnState(sc balancer.SubConn, state b
 }
 
 func (w *weightedTargetBalancer) Close() {
+	w.stateAggregator.Stop()
 	w.bg.Close()
-}
-
-func (w *weightedTargetBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	w.logger.Errorf("UpdateSubConnState should be called instead of HandleSubConnStateChange")
-}
-
-func (w *weightedTargetBalancer) HandleResolvedAddrs([]resolver.Address, error) {
-	w.logger.Errorf("UpdateClientConnState should be called instead of HandleResolvedAddrs")
 }

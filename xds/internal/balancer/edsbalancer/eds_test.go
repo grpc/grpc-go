@@ -25,7 +25,6 @@ import (
 	"reflect"
 	"testing"
 
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/jsonpb"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
@@ -51,7 +50,7 @@ func init() {
 		return &bootstrap.Config{
 			BalancerName: testBalancerNameFooBar,
 			Creds:        grpc.WithInsecure(),
-			NodeProto:    &corepb.Node{},
+			NodeProto:    testutils.EmptyNodeProtoV2,
 		}, nil
 	}
 }

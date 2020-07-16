@@ -13,21 +13,23 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package balancergroup
+package testutils
 
 import (
-	"testing"
-
-	"google.golang.org/grpc/internal/grpctest"
+	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	"google.golang.org/grpc/xds/internal"
 )
 
-type s struct {
-	grpctest.Tester
-}
+// EmptyNodeProtoV2 is a node proto with no fields set.
+var EmptyNodeProtoV2 = &v2corepb.Node{}
 
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
+// LocalityIDToProto converts a LocalityID to its proto representation.
+func LocalityIDToProto(l internal.LocalityID) *v2corepb.Locality {
+	return &v2corepb.Locality{
+		Region:  l.Region,
+		Zone:    l.Zone,
+		SubZone: l.SubZone,
+	}
 }
