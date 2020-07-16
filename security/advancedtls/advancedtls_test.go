@@ -679,3 +679,101 @@ func TestOptionsConfig(t *testing.T) {
 		})
 	}
 }
+
+func testPeerCredFileReader(t *testing.T) {
+	clientPeerCert, err := tls.LoadX509KeyPair(testdata.Path("client_cert_1.pem"),
+		testdata.Path("client_key_1.pem"))
+	if err != nil {
+		t.Fatalf("Client is unable to parse peer certificates. Error: %v", err)
+	}
+	serverPeerCert, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
+		testdata.Path("server_key_1.pem"))
+	if err != nil {
+		t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
+	}
+	tests := []struct {
+		desc             string
+		certFilePath     string
+		keyFilePath      string
+		expectedPeerCert tls.Certificate
+	}{
+		{
+			desc:             "Selected certificate by SNI should be serverPeerCert1",
+			certFilePath:     testdata.Path("client_cert_1.pem"),
+			keyFilePath:      testdata.Path("client_key_1.pem"),
+			expectedPeerCert: clientPeerCert,
+		},
+		{
+			desc:             "Selected certificate by SNI should be serverPeerCert2",
+			certFilePath:     testdata.Path("server_cert_1.pem"),
+			keyFilePath:      testdata.Path("server_key_1.pem"),
+			expectedPeerCert: serverPeerCert,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			pemPeerCredFileReaderOption := &PemPeerCredFileReaderOption{
+				CertFilePath: test.certFilePath,
+				KeyFilePath:  test.keyFilePath,
+			}
+			pemPeerCredFileReader, err := NewPemPeerCredFileReader(*pemPeerCredFileReaderOption)
+			if err != nil {
+				t.Fatalf("Unable to generate pemPeerCredFileReader. Error: %v", err)
+			}
+			gotPeerCert, err := pemPeerCredFileReader.ReadKeyAndCerts()
+			if err != nil {
+				t.Fatalf("Unable to read key and certificates. Error: %v", err)
+			}
+			if !reflect.DeepEqual(*gotPeerCert, test.expectedPeerCert) {
+				t.Errorf("ReadKeyAndCerts() = %v, want %v", gotPeerCert, test.expectedPeerCert)
+			}
+		})
+	}
+}
+
+func testTrustCredFileReader(t *testing.T) {
+	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
+	if err != nil {
+		t.Fatalf("Client is unable to load trust certs. Error: %v", err)
+	}
+	serverTrustPool, err := readTrustCert(testdata.Path("server_trust_cert_1.pem"))
+	if err != nil {
+		t.Fatalf("Server is unable to load trust certs. Error: %v", err)
+	}
+	tests := []struct {
+		desc              string
+		trustCertPath     string
+		expectedTrustPool *x509.CertPool
+	}{
+		{
+			desc:              "Selected certificate by SNI should be serverPeerCert1",
+			trustCertPath:     testdata.Path("client_trust_cert_1.pem"),
+			expectedTrustPool: clientTrustPool,
+		},
+		{
+			desc:              "Selected certificate by SNI should be serverPeerCert2",
+			trustCertPath:     testdata.Path("server_trust_cert_1.pem"),
+			expectedTrustPool: serverTrustPool,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			pemTrustCredFileReaderOption := &PemTrustCredFileReaderOption{
+				TrustCertPath: test.trustCertPath,
+			}
+			pemTrustCredFileReader, err := NewPemTrustCredFileReader(*pemTrustCredFileReaderOption)
+			if err != nil {
+				t.Fatalf("Unable to generate pemTrustCredFileReader. Error: %v", err)
+			}
+			gotTrustPool, err := pemTrustCredFileReader.ReadTrustCerts()
+			if err != nil {
+				t.Fatalf("Unable to read key and certificates. Error: %v", err)
+			}
+			if !reflect.DeepEqual(*gotTrustPool, test.expectedTrustPool) {
+				t.Errorf("ReadTrustCerts() = %v, want %v", gotTrustPool, test.expectedTrustPool)
+			}
+		})
+	}
+}
