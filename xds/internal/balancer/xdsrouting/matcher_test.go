@@ -69,11 +69,11 @@ func TestAndMatcherMatch(t *testing.T) {
 		{
 			name: "fake header",
 			pm:   newPathPrefixMatcher("/"),
-			hm:   newHeaderExactMatcher("user-agent", "agent"),
+			hm:   newHeaderExactMatcher("content-type", "fake"),
 			info: balancer.PickInfo{
 				FullMethodName: "/a/b",
 				Ctx: grpcutil.WithExtraMetadata(context.Background(), metadata.Pairs(
-					"user-agent", "agent",
+					"content-type", "fake",
 				)),
 			},
 			want: true,

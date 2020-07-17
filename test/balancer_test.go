@@ -198,12 +198,10 @@ func testPickExtraMetadata(t *testing.T, e env) {
 		{
 			// First RPC doesn't have sub-content-type.
 			"content-type": []string{"application/grpc"},
-			"user-agent":   []string{testUserAgent + " grpc-go/" + grpc.Version},
 		},
 		{
 			// Second RPC has sub-content-type "proto".
 			"content-type": []string{"application/grpc+proto"},
-			"user-agent":   []string{testUserAgent + " grpc-go/" + grpc.Version},
 		},
 	}
 

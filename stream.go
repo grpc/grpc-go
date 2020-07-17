@@ -352,7 +352,6 @@ func (cs *clientStream) newAttemptLocked(sh stats.Handler, trInfo *traceInfo) (r
 	// so the balancer can see them.
 	ctx := grpcutil.WithExtraMetadata(cs.ctx, metadata.Pairs(
 		"content-type", grpcutil.ContentType(cs.callHdr.ContentSubtype),
-		"user-agent", cs.cc.dopts.copts.UserAgent,
 	))
 	t, done, err := cs.cc.getTransport(ctx, cs.callInfo.failFast, cs.callHdr.Method)
 	if err != nil {
