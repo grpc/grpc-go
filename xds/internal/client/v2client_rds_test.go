@@ -23,10 +23,13 @@ import (
 	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
 	"github.com/golang/protobuf/proto"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 )
 
@@ -240,10 +243,59 @@ func doLDS(t *testing.T, v2c *v2Client, fakeServer *fakeserver.Server) {
 	}
 }
 
-// TestRDSHandleResponse starts a fake xDS server, makes a ClientConn to it,
-// and creates a v2Client using it. Then, it registers an LDS and RDS watcher
-// and tests different RDS responses.
-func (s) TestRDSHandleResponse(t *testing.T) {
+// TestRDSHandleResponseWithRoutingEnabled starts a fake xDS server, makes a
+// ClientConn to it, and creates a v2Client using it. Then, it registers an LDS
+// and RDS watcher and tests different RDS responses.
+//
+// Routing is protected by an env variable. This test sets it to true, so the
+// new fields will be parsed.
+func (s) TestRDSHandleResponseWithRoutingEnabled(t *testing.T) {
+	routingEnabled = true
+	defer func() {
+		routingEnabled = false
+	}()
+	tests := []struct {
+		name          string
+		rdsResponse   *xdspb.DiscoveryResponse
+		wantErr       bool
+		wantUpdate    *rdsUpdate
+		wantUpdateErr bool
+	}{
+		// Response contains one good interesting RouteConfiguration.
+		{
+			name:        "one-good-route-config",
+			rdsResponse: goodRDSResponse1,
+			wantErr:     false,
+			wantUpdate: &rdsUpdate{
+				// Instead of just weighted targets when routing is disabled,
+				// this result contains a route with perfix "", and action as
+				// weighted targets.
+				routes: []*Route{{
+					Prefix: newStringP(""),
+					Action: map[string]uint32{goodClusterName1: 1},
+				}},
+			},
+			wantUpdateErr: false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testWatchHandle(t, &watchHandleTestcase{
+				typeURL:          rdsURL,
+				resourceName:     goodRouteName1,
+				responseToHandle: test.rdsResponse,
+				wantHandleErr:    test.wantErr,
+				wantUpdate:       test.wantUpdate,
+				wantUpdateErr:    test.wantUpdateErr,
+			})
+		})
+	}
+}
+
+// TestRDSHandleResponseWithRoutingDisabled starts a fake xDS server, makes a
+// ClientConn to it, and creates a v2Client using it. Then, it registers an LDS
+// and RDS watcher and tests different RDS responses.
+func (s) TestRDSHandleResponseWithRoutingDisabled(t *testing.T) {
 	tests := []struct {
 		name          string
 		rdsResponse   *xdspb.DiscoveryResponse
@@ -515,4 +567,106 @@ func (s) TestWeightedClustersProtoToMap(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRoutesProtoToSlice(t *testing.T) {
+	tests := []struct {
+		name       string
+		routes     []*routepb.Route
+		wantRoutes []*Route
+		wantErr    bool
+	}{
+		/*
+			no path
+			path is regex
+			header contains regex
+			case_sensitive is false
+
+			only path
+			path and header
+			path and invert header
+			path and fraction
+			path and query (query is ignored)
+
+		*/
+		{
+			name: "temp",
+			routes: []*routepb.Route{
+				{
+					Name: "",
+					Match: &routepb.RouteMatch{
+						PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: "/a/"},
+						Headers: []*routepb.HeaderMatcher{
+							{
+								Name: "th",
+								HeaderMatchSpecifier: &routepb.HeaderMatcher_PrefixMatch{
+									PrefixMatch: "tv",
+								},
+								InvertMatch: true,
+							},
+						},
+						RuntimeFraction: &corepb.RuntimeFractionalPercent{
+							DefaultValue: &typepb.FractionalPercent{
+								Numerator:   1,
+								Denominator: typepb.FractionalPercent_HUNDRED,
+							},
+						},
+					},
+					Action: &routepb.Route_Route{
+						Route: &routepb.RouteAction{
+							ClusterSpecifier: &routepb.RouteAction_WeightedClusters{
+								WeightedClusters: &routepb.WeightedCluster{
+									Clusters: []*routepb.WeightedCluster_ClusterWeight{
+										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}},
+										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
+									},
+									TotalWeight: &wrapperspb.UInt32Value{Value: 100},
+								}}}},
+				},
+			},
+			wantRoutes: []*Route{{
+				Prefix: newStringP("/a/"),
+				Headers: []*HeaderMatcher{
+					{
+						Name:        "th",
+						InvertMatch: newBoolP(true),
+						PrefixMatch: newStringP("tv"),
+					},
+				},
+				Fraction: newUInt32P(10000),
+				Action:   map[string]uint32{"A": 40, "B": 60},
+			}},
+			wantErr: false,
+		},
+	}
+
+	cmpOpts := []cmp.Option{
+		cmp.AllowUnexported(Route{}, HeaderMatcher{}, Int64Range{}),
+		cmpopts.EquateEmpty(),
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := routesProtoToSlice(tt.routes)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !cmp.Equal(got, tt.wantRoutes, cmpOpts...) {
+				t.Errorf("routesProtoToSlice() got = %v, want %v, diff: %v", got, tt.wantRoutes, cmp.Diff(got, tt.wantRoutes, cmpOpts...))
+			}
+		})
+	}
+}
+
+func newStringP(s string) *string {
+	return &s
+}
+
+func newUInt32P(i uint32) *uint32 {
+	return &i
+}
+
+func newBoolP(b bool) *bool {
+	return &b
 }

@@ -24,6 +24,7 @@ import (
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
 	"github.com/golang/protobuf/ptypes"
 )
 
@@ -94,42 +95,154 @@ func generateRDSUpdateFromRouteConfiguration(rc *xdspb.RouteConfiguration, host 
 		// should be at least one default route.
 		return rdsUpdate{}, fmt.Errorf("matched virtual host has no routes")
 	}
-	dr := vh.Routes[len(vh.Routes)-1]
-	match := dr.GetMatch()
-	if match == nil {
-		return rdsUpdate{}, fmt.Errorf("matched virtual host's default route doesn't have a match")
-	}
-	if prefix := match.GetPrefix(); prefix != "" && prefix != "/" {
-		// The matched virtual host is invalid. Match is not "" or "/".
-		return rdsUpdate{}, fmt.Errorf("matched virtual host's default route is %v, want Prefix empty string or /", match)
-	}
-	if caseSensitive := match.GetCaseSensitive(); caseSensitive != nil && !caseSensitive.Value {
-		// The case sensitive is set to false. Not set or set to true are both
-		// valid.
-		return rdsUpdate{}, fmt.Errorf("matched virtual host's default route set case-sensitive to false")
-	}
-	route := dr.GetRoute()
-	if route == nil {
-		return rdsUpdate{}, fmt.Errorf("matched route is nil")
-	}
 
-	if wc := route.GetWeightedClusters(); wc != nil {
-		m, err := weightedClustersProtoToMap(wc)
-		if err != nil {
-			return rdsUpdate{}, fmt.Errorf("matched weighted cluster is invalid: %v", err)
+	// Keep the old code path for routing disabled.
+	if !routingEnabled {
+		dr := vh.Routes[len(vh.Routes)-1]
+		match := dr.GetMatch()
+		if match == nil {
+			return rdsUpdate{}, fmt.Errorf("matched virtual host's default route doesn't have a match")
 		}
-		return rdsUpdate{weightedCluster: m}, nil
+		if prefix := match.GetPrefix(); prefix != "" && prefix != "/" {
+			// The matched virtual host is invalid. Match is not "" or "/".
+			return rdsUpdate{}, fmt.Errorf("matched virtual host's default route is %v, want Prefix empty string or /", match)
+		}
+		if caseSensitive := match.GetCaseSensitive(); caseSensitive != nil && !caseSensitive.Value {
+			// The case sensitive is set to false. Not set or set to true are both
+			// valid.
+			return rdsUpdate{}, fmt.Errorf("matched virtual host's default route set case-sensitive to false")
+		}
+		route := dr.GetRoute()
+		if route == nil {
+			return rdsUpdate{}, fmt.Errorf("matched route is nil")
+		}
+
+		if wc := route.GetWeightedClusters(); wc != nil {
+			m, err := weightedClustersProtoToMap(wc)
+			if err != nil {
+				return rdsUpdate{}, fmt.Errorf("matched weighted cluster is invalid: %v", err)
+			}
+			return rdsUpdate{weightedCluster: m}, nil
+		}
+
+		// When there's just one cluster, we set weightedCluster to map with one
+		// entry. This mean we will build a weighted_target balancer even if there's
+		// just one cluster.
+		//
+		// Otherwise, we will need to switch the top policy between weighted_target
+		// and CDS. In case when the action changes between one cluster and multiple
+		// clusters, changing top level policy means recreating TCP connection every
+		// time.
+		return rdsUpdate{weightedCluster: map[string]uint32{route.GetCluster(): 1}}, nil
 	}
 
-	// When there's just one cluster, we set weightedCluster to map with one
-	// entry. This mean we will build a weighted_target balancer even if there's
-	// just one cluster.
-	//
-	// Otherwise, we will need to switch the top policy between weighted_target
-	// and CDS. In case when the action changes between one cluster and multiple
-	// clusters, changing top level policy means recreating TCP connection every
-	// time.
-	return rdsUpdate{weightedCluster: map[string]uint32{route.GetCluster(): 1}}, nil
+	routes, err := routesProtoToSlice(vh.Routes)
+	if err != nil {
+		return rdsUpdate{}, fmt.Errorf("received route is invalid: %v", err)
+	}
+	return rdsUpdate{routes: routes}, nil
+}
+
+func routesProtoToSlice(routes []*routepb.Route) ([]*Route, error) {
+	var routesRet []*Route
+
+	for _, route := range routes {
+		match := route.GetMatch()
+		if match == nil {
+			return nil, fmt.Errorf("route %v doesn't have a match", route)
+		}
+
+		if len(match.GetQueryParameters()) != 0 {
+			// Ignore route with query parameters.
+			continue
+		}
+
+		if caseSensitive := match.GetCaseSensitive(); caseSensitive != nil && !caseSensitive.Value {
+			return nil, fmt.Errorf("route %v has case-sensitive false", route)
+		}
+
+		var routeTemp Route
+
+		pathSp := match.GetPathSpecifier()
+		if pathSp == nil {
+			return nil, fmt.Errorf("route %v doesn't have a path specifier", route)
+		}
+		switch pt := pathSp.(type) {
+		case *routepb.RouteMatch_Prefix:
+			routeTemp.Prefix = &pt.Prefix
+		case *routepb.RouteMatch_Path:
+			routeTemp.Path = &pt.Path
+		case *routepb.RouteMatch_SafeRegex:
+			routeTemp.Regex = &pt.SafeRegex.Regex
+		case *routepb.RouteMatch_Regex:
+			return nil, fmt.Errorf("route %v has Regex, expected SafeRegex instead", route)
+		}
+
+		for _, header := range match.GetHeaders() {
+			var headerTemp HeaderMatcher
+			switch ht := header.GetHeaderMatchSpecifier().(type) {
+			case *routepb.HeaderMatcher_ExactMatch:
+				headerTemp.ExactMatch = &ht.ExactMatch
+			case *routepb.HeaderMatcher_SafeRegexMatch:
+				headerTemp.RegexMatch = &ht.SafeRegexMatch.Regex
+			case *routepb.HeaderMatcher_RangeMatch:
+				headerTemp.RangeMatch = &Int64Range{
+					Start: ht.RangeMatch.Start,
+					End:   ht.RangeMatch.End,
+				}
+			case *routepb.HeaderMatcher_PresentMatch:
+				headerTemp.PresentMatch = &ht.PresentMatch
+			case *routepb.HeaderMatcher_PrefixMatch:
+				headerTemp.PrefixMatch = &ht.PrefixMatch
+			case *routepb.HeaderMatcher_SuffixMatch:
+				headerTemp.SuffixMatch = &ht.SuffixMatch
+			case *routepb.HeaderMatcher_RegexMatch:
+				return nil, fmt.Errorf("route %v has a header matcher with Regex, expected SafeRegex instead", route)
+			default:
+				continue
+			}
+			headerTemp.Name = header.GetName()
+			invert := header.GetInvertMatch()
+			headerTemp.InvertMatch = &invert
+			routeTemp.Headers = append(routeTemp.Headers, &headerTemp)
+		}
+
+		if fr := match.GetRuntimeFraction(); fr != nil {
+			d := fr.GetDefaultValue()
+			n := d.GetNumerator()
+			switch d.GetDenominator() {
+			case typepb.FractionalPercent_HUNDRED:
+				n *= 10000
+			case typepb.FractionalPercent_TEN_THOUSAND:
+				n *= 100
+			case typepb.FractionalPercent_MILLION:
+			}
+			routeTemp.Fraction = &n
+		}
+
+		clusters := make(map[string]uint32)
+		switch a := route.GetRoute().GetClusterSpecifier().(type) {
+		case *routepb.RouteAction_Cluster:
+			clusters[a.Cluster] = 1
+		case *routepb.RouteAction_WeightedClusters:
+			wcs := a.WeightedClusters
+			var totalWeight uint32
+			for _, c := range wcs.Clusters {
+				w := c.GetWeight().GetValue()
+				clusters[c.GetName()] = w
+				totalWeight += w
+			}
+			if totalWeight != wcs.GetTotalWeight().GetValue() {
+				return nil, fmt.Errorf("route %v, action %v, weights of clusters do not add up to total total weight, got: %v, want %v", route, a, wcs.GetTotalWeight().GetValue(), totalWeight)
+			}
+		case *routepb.RouteAction_ClusterHeader:
+			continue
+		}
+
+		routeTemp.Action = clusters
+		routesRet = append(routesRet, &routeTemp)
+	}
+	return routesRet, nil
 }
 
 func weightedClustersProtoToMap(wc *routepb.WeightedCluster) (map[string]uint32, error) {
