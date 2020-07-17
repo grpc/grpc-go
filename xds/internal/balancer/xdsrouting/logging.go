@@ -16,12 +16,19 @@
  *
  */
 
-// Package balancer installs all the xds balancers.
-package balancer
+package xdsrouting
 
 import (
-	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer"    // Register the CDS balancer
-	_ "google.golang.org/grpc/xds/internal/balancer/edsbalancer"    // Register the EDS balancer
-	_ "google.golang.org/grpc/xds/internal/balancer/weightedtarget" // Register the weighted_target balancer
-	_ "google.golang.org/grpc/xds/internal/balancer/xdsrouting"     // Register the xds_routing balancer
+	"fmt"
+
+	"google.golang.org/grpc/grpclog"
+	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
+
+const prefix = "[xds-routing-lb %p] "
+
+var logger = grpclog.Component("xds")
+
+func prefixLogger(p *routingBalancer) *internalgrpclog.PrefixLogger {
+	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
+}
