@@ -70,10 +70,42 @@ func (activation ActivationImpl) Parent() interpreter.Activation {
 	return ActivationImpl{}
 }
 
+var stringAttributeMap = map[string]func(AuthorizationArgs) (string, error){
+	"request.url_path":                    AuthorizationArgs.getRequestURLPath,
+	"request.host":                        AuthorizationArgs.getRequestHost,
+	"request.method":                      AuthorizationArgs.getRequestMethod,
+	"source.address":                      AuthorizationArgs.getSourceAddress,
+	"destination.address":                 AuthorizationArgs.getDestinationAddress,
+	"connection.uri_san_peer_certificate": AuthorizationArgs.getURISanPeerCertificate,
+}
+
+var intAttributeMap = map[string]func(AuthorizationArgs) (int, error){
+	"source.port":      AuthorizationArgs.getSourcePort,
+	"destination.port": AuthorizationArgs.getDestinationPort,
+}
+
 // Converts AuthorizationArgs into the activation for CEL.
-func (args *AuthorizationArgs) toActivation() interpreter.Activation {
-	// TODO(@ezou): implement the conversion logic.
-	return ActivationImpl{}
+func (args AuthorizationArgs) toActivation() interpreter.Activation {
+	// Fill out evaluation map, only adding the attributes that can be extracted.
+	evalMap := make(map[string]interface{})
+	for key, function := range stringAttributeMap {
+		val, err := function(args)
+		if err == nil {
+			evalMap[key] = val
+		}
+	}
+	for key, function := range intAttributeMap {
+		val, err := function(args)
+		if err == nil {
+			evalMap[key] = val
+		}
+	}
+	val, err := args.getRequestHeaders()
+	if err == nil {
+		evalMap["request.headers"] = val
+	}
+	// Convert evaluation map to activation.
+	return ActivationImpl{dict: evalMap}
 }
 
 func (args AuthorizationArgs) getRequestURLPath() (string, error) {
@@ -181,20 +213,6 @@ func exprToProgram(condition *expr.Expr) *cel.Program {
 		log.Fatalf("program construction error: %s", err)
 	}
 	return &prg
-}
-
-var stringAttributeMap = map[string]func(AuthorizationArgs) (string, error){
-	"request.url_path":                    AuthorizationArgs.getRequestURLPath,
-	"request.host":                        AuthorizationArgs.getRequestHost,
-	"request.method":                      AuthorizationArgs.getRequestMethod,
-	"source.address":                      AuthorizationArgs.getSourceAddress,
-	"destination.address":                 AuthorizationArgs.getDestinationAddress,
-	"connection.uri_san_peer_certificate": AuthorizationArgs.getURISanPeerCertificate,
-}
-
-var intAttributeMap = map[string]func(AuthorizationArgs) (int, error){
-	"source.port":      AuthorizationArgs.getSourcePort,
-	"destination.port": AuthorizationArgs.getDestinationPort,
 }
 
 // policyEngine is the struct for an engine created from one RBAC proto.
