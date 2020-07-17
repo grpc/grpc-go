@@ -78,6 +78,17 @@ func TestAndMatcherMatch(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			name: "binary header",
+			pm:   newPathPrefixMatcher("/"),
+			hm:   newHeaderPresentMatcher("t-bin", true),
+			info: balancer.PickInfo{
+				FullMethodName: "/a/b",
+				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("t-bin", "123")),
+			},
+			// Shouldn't match binary header, even though it's in metadata.
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
