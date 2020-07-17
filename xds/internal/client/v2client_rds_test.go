@@ -579,7 +579,6 @@ func TestRoutesProtoToSlice(t *testing.T) {
 		{
 			name: "no path",
 			routes: []*routepb.Route{{
-				Name:  "",
 				Match: &routepb.RouteMatch{},
 			}},
 			wantErr: true,
@@ -587,7 +586,6 @@ func TestRoutesProtoToSlice(t *testing.T) {
 		{
 			name: "path is regex instead of saferegex",
 			routes: []*routepb.Route{{
-				Name: "",
 				Match: &routepb.RouteMatch{
 					PathSpecifier: &routepb.RouteMatch_Regex{Regex: "*"},
 				},
@@ -597,7 +595,6 @@ func TestRoutesProtoToSlice(t *testing.T) {
 		{
 			name: "header contains regex",
 			routes: []*routepb.Route{{
-				Name: "",
 				Match: &routepb.RouteMatch{
 					PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: "/"},
 					Headers: []*routepb.HeaderMatcher{{
@@ -613,7 +610,6 @@ func TestRoutesProtoToSlice(t *testing.T) {
 		{
 			name: "case_sensitive is false",
 			routes: []*routepb.Route{{
-				Name: "",
 				Match: &routepb.RouteMatch{
 					PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: "/"},
 					CaseSensitive: &wrapperspb.BoolValue{Value: false},
@@ -625,7 +621,6 @@ func TestRoutesProtoToSlice(t *testing.T) {
 			name: "good",
 			routes: []*routepb.Route{
 				{
-					Name: "",
 					Match: &routepb.RouteMatch{
 						PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: "/a/"},
 						Headers: []*routepb.HeaderMatcher{
@@ -674,7 +669,6 @@ func TestRoutesProtoToSlice(t *testing.T) {
 			name: "query is ignored",
 			routes: []*routepb.Route{
 				{
-					Name: "",
 					Match: &routepb.RouteMatch{
 						PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: "/a/"},
 					},
