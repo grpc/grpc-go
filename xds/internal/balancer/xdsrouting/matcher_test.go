@@ -65,6 +65,17 @@ func TestAndMatcherMatch(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "fake header",
+			pm:   newPathPrefixMatcher("/"),
+			hm:   newHeaderExactMatcher("user-agent", "agent"),
+			info: balancer.PickInfo{
+				FullMethodName: "/a/b",
+				Ctx:            context.Background(),
+				UserAgent:      "agent",
+			},
+			want: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

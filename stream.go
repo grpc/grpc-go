@@ -346,7 +346,11 @@ func (cs *clientStream) newAttemptLocked(sh stats.Handler, trInfo *traceInfo) (r
 	if err := cs.ctx.Err(); err != nil {
 		return toRPCErr(err)
 	}
-	t, done, err := cs.cc.getTransport(cs.ctx, cs.callInfo.failFast, cs.callHdr.Method)
+	t, done, err := cs.cc.getTransport(cs.ctx, cs.callHdr.Method, &getTransportOpts{
+		failfast:       cs.callInfo.failFast,
+		subContentType: cs.callHdr.ContentSubtype,
+		userAgent:      cs.cc.dopts.copts.UserAgent,
+	})
 	if err != nil {
 		return err
 	}

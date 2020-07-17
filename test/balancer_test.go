@@ -157,6 +157,58 @@ func (s) TestCredsBundleFromBalancer(t *testing.T) {
 	}
 }
 
+func (s) TestPickInfo(t *testing.T) {
+	for _, e := range listTestEnv() {
+		testPickInfo(t, e)
+	}
+}
+
+func testPickInfo(t *testing.T, e env) {
+	te := newTest(t, e)
+	b := &testBalancer{}
+	balancer.Register(b)
+	const (
+		testUserAgent      = "test-user-agent"
+		testSubContentType = "proto"
+	)
+
+	te.customDialOptions = []grpc.DialOption{
+		grpc.WithBalancerName(testBalancerName),
+		grpc.WithUserAgent(testUserAgent),
+	}
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, nil)
+	}
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.CallContentSubtype(testSubContentType)); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, nil)
+	}
+	want := []balancer.PickInfo{
+		{
+			// First RPC doesn't have sub-content-type.
+			FullMethodName:       "/grpc.testing.TestService/EmptyCall",
+			CustomSubContentType: "",
+			UserAgent:            testUserAgent + " grpc-go/" + grpc.Version,
+		},
+		{
+			// Second RPC has sub-content-type "proto".
+			FullMethodName:       "/grpc.testing.TestService/EmptyCall",
+			CustomSubContentType: "proto",
+			UserAgent:            testUserAgent + " grpc-go/" + grpc.Version,
+		},
+	}
+	if !cmp.Equal(b.pickInfos, want) {
+		t.Fatalf("%s", cmp.Diff(b.pickInfos, want))
+	}
+}
+
 func (s) TestDoneInfo(t *testing.T) {
 	for _, e := range listTestEnv() {
 		testDoneInfo(t, e)

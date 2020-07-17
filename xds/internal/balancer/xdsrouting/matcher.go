@@ -20,9 +20,11 @@ package xdsrouting
 
 import (
 	"fmt"
+	"time"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -37,6 +39,13 @@ func newCompositeMatcher(pm pathMatcherInterface, hms []headerMatcherInterface, 
 	return &compositeMatcher{pm: pm, hms: hms, fm: fm}
 }
 
+func fakeContentType(subContentType string) string {
+	if subContentType == "" {
+		return "application/grpc"
+	}
+	return "application/grpc+" + subContentType
+}
+
 func (a *compositeMatcher) match(info balancer.PickInfo) bool {
 	if a.pm != nil && !a.pm.match(info.FullMethodName) {
 		return false
@@ -47,6 +56,17 @@ func (a *compositeMatcher) match(info balancer.PickInfo) bool {
 	var md metadata.MD
 	if info.Ctx != nil {
 		md, _ = metadata.FromOutgoingContext(info.Ctx)
+	}
+	if md == nil {
+		md = metadata.Pairs()
+	}
+	md.Append("content-type", fakeContentType(info.CustomSubContentType))
+	md.Append("user-agent", info.UserAgent)
+	if info.Ctx != nil {
+		if d, ok := info.Ctx.Deadline(); ok {
+			timeout := time.Until(d)
+			md.Append("grpc-timeout", grpcutil.EncodeDuration(timeout))
+		}
 	}
 	for _, m := range a.hms {
 		if !m.match(md) {
