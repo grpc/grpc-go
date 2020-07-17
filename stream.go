@@ -348,6 +348,8 @@ func (cs *clientStream) newAttemptLocked(sh stats.Handler, trInfo *traceInfo) (r
 		return toRPCErr(err)
 	}
 
+	// Add extra metadata (metadata that will be added by transport) to context
+	// so the balancer can see them.
 	ctx := grpcutil.WithExtraMetadata(cs.ctx, metadata.Pairs(
 		"content-type", grpcutil.ContentType(cs.callHdr.ContentSubtype),
 		"user-agent", cs.cc.dopts.copts.UserAgent,
