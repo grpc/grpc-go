@@ -28,8 +28,8 @@ type ServiceUpdate struct {
 	// WeightedCluster is a map from cluster names (CDS resource to watch) to
 	// their weights.
 	//
-	// This field is only set when routing is disabled (not enabled) by env
-	// variable.
+	// This field is only set when routing is disabled (env variable
+	// GRPC_XDS_EXPERIMENTAL_ROUTING is not true).
 	WeightedCluster map[string]uint32
 
 	// Routes

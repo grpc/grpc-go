@@ -23,6 +23,9 @@ import (
 	"strings"
 )
 
+// TODO: there are multiple env variables, GRPC_XDS_BOOTSTRAP and
+// GRPC_XDS_EXPERIMENTAL_V3_SUPPORT, and this. Move all env variables into a
+// separate package.
 const routingEnabledConfigStr = "GRPC_XDS_EXPERIMENTAL_ROUTING"
 
 // routing is enabled only if env variable is set to true. The default is false.

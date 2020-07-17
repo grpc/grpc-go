@@ -223,7 +223,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, goodLDSTarget1)
+			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, goodLDSTarget1, nil)
 			if !cmp.Equal(gotUpdate, test.wantUpdate, cmp.AllowUnexported(rdsUpdate{})) || (gotError != nil) != test.wantError {
 				t.Errorf("generateRDSUpdateFromRouteConfiguration(%+v, %v) = %v, want %v", test.rc, goodLDSTarget1, gotUpdate, test.wantUpdate)
 			}
@@ -714,7 +714,7 @@ func TestRoutesProtoToSlice(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := routesProtoToSlice(tt.routes)
+			got, err := routesProtoToSlice(tt.routes, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 				return
