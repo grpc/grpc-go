@@ -53,7 +53,7 @@ func (clientBuilder) Version() version.TransportAPI {
 func newClient(cc *grpc.ClientConn, opts xdsclient.BuildOptions) (xdsclient.APIClient, error) {
 	nodeProto, ok := opts.NodeProto.(*v2corepb.Node)
 	if !ok {
-		return nil, fmt.Errorf("xds: unsupported Node proto type: %T", opts.NodeProto)
+		return nil, fmt.Errorf("xds: unsupported Node proto type: %T, want %T", opts.NodeProto, v2corepb.Node{})
 	}
 	v2c := &client{
 		cc:        cc,
@@ -428,6 +428,11 @@ func (v2c *client) recv(stream adsStream) bool {
 		}
 		v2c.logger.Infof("ADS response received, type: %v", resp.GetTypeUrl())
 		v2c.logger.Debugf("ADS response received: %v", resp)
+
+		// Note that the xDS transport protocol is versioned independently of
+		// the resource types, and it is supported to transfer older versions
+		// of resource types using new versions of the transport protocol, or
+		// vice-versa. Hence we need to handle v3 type_urls as well here.
 		var respHandleErr error
 		switch resp.GetTypeUrl() {
 		case version.V2ListenerURL, version.V3ListenerURL:

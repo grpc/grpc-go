@@ -496,12 +496,7 @@ func startServerAndGetCC(t *testing.T) (*fakeserver.Server, *grpc.ClientConn, fu
 }
 
 func newV2Client(p xdsclient.UpdateHandler, cc *grpc.ClientConn, n *basepb.Node, b func(int) time.Duration, l *grpclog.PrefixLogger) (*client, error) {
-	cb := xdsclient.GetAPIClientBuilder(version.TransportV2)
-	if cb == nil {
-		return nil, errors.New("no client builder for xDS v2 API")
-	}
-
-	c, err := cb.Build(cc, xdsclient.BuildOptions{
+	c, err := newClient(cc, xdsclient.BuildOptions{
 		Parent:    p,
 		NodeProto: n,
 		Backoff:   b,
