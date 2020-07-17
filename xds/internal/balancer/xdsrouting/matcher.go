@@ -39,13 +39,6 @@ func newCompositeMatcher(pm pathMatcherInterface, hms []headerMatcherInterface, 
 	return &compositeMatcher{pm: pm, hms: hms, fm: fm}
 }
 
-func fakeContentType(subContentType string) string {
-	if subContentType == "" {
-		return "application/grpc"
-	}
-	return "application/grpc+" + subContentType
-}
-
 func (a *compositeMatcher) match(info balancer.PickInfo) bool {
 	if a.pm != nil && !a.pm.match(info.FullMethodName) {
 		return false
@@ -60,7 +53,7 @@ func (a *compositeMatcher) match(info balancer.PickInfo) bool {
 	if md == nil {
 		md = metadata.Pairs()
 	}
-	md.Append("content-type", fakeContentType(info.CustomSubContentType))
+	md.Append("content-type", info.ContentType)
 	md.Append("user-agent", info.UserAgent)
 	if info.Ctx != nil {
 		if d, ok := info.Ctx.Deadline(); ok {

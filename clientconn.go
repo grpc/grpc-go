@@ -892,17 +892,17 @@ func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {
 }
 
 type getTransportOpts struct {
-	failfast       bool
-	subContentType string
-	userAgent      string
+	failfast    bool
+	contentType string
+	userAgent   string
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context, method string, opts *getTransportOpts) (transport.ClientTransport, func(balancer.DoneInfo), error) {
 	t, done, err := cc.blockingpicker.pick(ctx, opts.failfast, balancer.PickInfo{
-		Ctx:                  ctx,
-		FullMethodName:       method,
-		CustomSubContentType: opts.subContentType,
-		UserAgent:            opts.userAgent,
+		Ctx:            ctx,
+		FullMethodName: method,
+		ContentType:    opts.contentType,
+		UserAgent:      opts.userAgent,
 	})
 	if err != nil {
 		return nil, nil, toRPCErr(err)

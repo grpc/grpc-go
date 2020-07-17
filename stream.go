@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -347,9 +348,9 @@ func (cs *clientStream) newAttemptLocked(sh stats.Handler, trInfo *traceInfo) (r
 		return toRPCErr(err)
 	}
 	t, done, err := cs.cc.getTransport(cs.ctx, cs.callHdr.Method, &getTransportOpts{
-		failfast:       cs.callInfo.failFast,
-		subContentType: cs.callHdr.ContentSubtype,
-		userAgent:      cs.cc.dopts.copts.UserAgent,
+		failfast:    cs.callInfo.failFast,
+		contentType: grpcutil.ContentType(cs.callHdr.ContentSubtype),
+		userAgent:   cs.cc.dopts.copts.UserAgent,
 	})
 	if err != nil {
 		return err

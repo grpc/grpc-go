@@ -38,6 +38,7 @@ import (
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/status"
 )
 
@@ -51,7 +52,7 @@ const (
 	// "proto" as a suffix after "+" or ";".  See
 	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests
 	// for more details.
-	baseContentType = "application/grpc"
+
 )
 
 var (
@@ -184,46 +185,6 @@ func isWhitelistedHeader(hdr string) bool {
 	}
 }
 
-// contentSubtype returns the content-subtype for the given content-type.  The
-// given content-type must be a valid content-type that starts with
-// "application/grpc". A content-subtype will follow "application/grpc" after a
-// "+" or ";". See
-// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests for
-// more details.
-//
-// If contentType is not a valid content-type for gRPC, the boolean
-// will be false, otherwise true. If content-type == "application/grpc",
-// "application/grpc+", or "application/grpc;", the boolean will be true,
-// but no content-subtype will be returned.
-//
-// contentType is assumed to be lowercase already.
-func contentSubtype(contentType string) (string, bool) {
-	if contentType == baseContentType {
-		return "", true
-	}
-	if !strings.HasPrefix(contentType, baseContentType) {
-		return "", false
-	}
-	// guaranteed since != baseContentType and has baseContentType prefix
-	switch contentType[len(baseContentType)] {
-	case '+', ';':
-		// this will return true for "application/grpc+" or "application/grpc;"
-		// which the previous validContentType function tested to be valid, so we
-		// just say that no content-subtype is specified in this case
-		return contentType[len(baseContentType)+1:], true
-	default:
-		return "", false
-	}
-}
-
-// contentSubtype is assumed to be lowercase
-func contentType(contentSubtype string) string {
-	if contentSubtype == "" {
-		return baseContentType
-	}
-	return baseContentType + "+" + contentSubtype
-}
-
 func (d *decodeState) status() *status.Status {
 	if d.data.statusGen == nil {
 		// No status-details were provided; generate status using code/msg.
@@ -342,7 +303,7 @@ func (d *decodeState) addMetadata(k, v string) {
 func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 	switch f.Name {
 	case "content-type":
-		contentSubtype, validContentType := contentSubtype(f.Value)
+		contentSubtype, validContentType := grpcutil.ContentSubtype(f.Value)
 		if !validContentType {
 			d.data.contentTypeErr = fmt.Sprintf("transport: received the unexpected content-type %q", f.Value)
 			return

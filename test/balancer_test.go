@@ -193,15 +193,15 @@ func testPickInfo(t *testing.T, e env) {
 	want := []balancer.PickInfo{
 		{
 			// First RPC doesn't have sub-content-type.
-			FullMethodName:       "/grpc.testing.TestService/EmptyCall",
-			CustomSubContentType: "",
-			UserAgent:            testUserAgent + " grpc-go/" + grpc.Version,
+			FullMethodName: "/grpc.testing.TestService/EmptyCall",
+			ContentType:    "application/grpc",
+			UserAgent:      testUserAgent + " grpc-go/" + grpc.Version,
 		},
 		{
 			// Second RPC has sub-content-type "proto".
-			FullMethodName:       "/grpc.testing.TestService/EmptyCall",
-			CustomSubContentType: "proto",
-			UserAgent:            testUserAgent + " grpc-go/" + grpc.Version,
+			FullMethodName: "/grpc.testing.TestService/EmptyCall",
+			ContentType:    "application/grpc+proto",
+			UserAgent:      testUserAgent + " grpc-go/" + grpc.Version,
 		},
 	}
 	if !cmp.Equal(b.pickInfos, want) {
@@ -314,9 +314,11 @@ func testDoneLoads(t *testing.T, e env) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, nil)
 	}
 
-	piWant := []balancer.PickInfo{
-		{FullMethodName: "/grpc.testing.TestService/EmptyCall"},
-	}
+	piWant := []balancer.PickInfo{{
+		FullMethodName: "/grpc.testing.TestService/EmptyCall",
+		ContentType:    "application/grpc",
+		UserAgent:      "grpc-go/" + grpc.Version,
+	}}
 	if !reflect.DeepEqual(b.pickInfos, piWant) {
 		t.Fatalf("b.pickInfos = %v; want %v", b.pickInfos, piWant)
 	}

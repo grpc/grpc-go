@@ -44,3 +44,26 @@ func TestParseMethod(t *testing.T) {
 		}
 	}
 }
+
+func TestContentSubtype(t *testing.T) {
+	tests := []struct {
+		contentType string
+		want        string
+		wantValid   bool
+	}{
+		{"application/grpc", "", true},
+		{"application/grpc+", "", true},
+		{"application/grpc+blah", "blah", true},
+		{"application/grpc;", "", true},
+		{"application/grpc;blah", "blah", true},
+		{"application/grpcd", "", false},
+		{"application/grpd", "", false},
+		{"application/grp", "", false},
+	}
+	for _, tt := range tests {
+		got, gotValid := ContentSubtype(tt.contentType)
+		if got != tt.want || gotValid != tt.wantValid {
+			t.Errorf("contentSubtype(%q) = (%v, %v); want (%v, %v)", tt.contentType, got, gotValid, tt.want, tt.wantValid)
+		}
+	}
+}

@@ -206,9 +206,9 @@ type PickInfo struct {
 	// like the outgoing header metadata.
 	Ctx context.Context
 
-	// The RPC content-type is "application/grpc+CustomSubContentType".
-	CustomSubContentType string
-	// The full user-agent string, can be "custom-user-agent grpc-go/<Version>".
+	// The RPC content-type, e.g. "application/grpc+CustomSubContentType".
+	ContentType string
+	// The full user-agent string, e.g. "custom-user-agent grpc-go/<Version>".
 	UserAgent string
 }
 
