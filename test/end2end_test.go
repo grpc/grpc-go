@@ -4997,8 +4997,6 @@ type stubServer struct {
 	address string
 	target  string
 
-	addr string // address of listener
-
 	cleanups []func() // Lambdas executed in Stop(); populated by Start().
 
 	r *manual.Resolver
@@ -5032,7 +5030,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	if err != nil {
 		return fmt.Errorf("net.Listen(%q, %q) = %v", ss.network, ss.address, err)
 	}
-	ss.addr = lis.Addr().String()
+	ss.address = lis.Addr().String()
 	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
 
 	s := grpc.NewServer(sopts...)
@@ -5043,7 +5041,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 
 	opts := append([]grpc.DialOption{grpc.WithInsecure()}, dopts...)
 	if ss.r != nil {
-		ss.target = ss.r.Scheme() + ":///" + ss.addr
+		ss.target = ss.r.Scheme() + ":///" + ss.address
 		opts = append(opts, grpc.WithResolvers(ss.r))
 	}
 
@@ -5053,7 +5051,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	}
 	ss.cc = cc
 	if ss.r != nil {
-		ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}})
+		ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.address}}})
 	}
 	if err := ss.waitForReady(cc); err != nil {
 		return err
@@ -5067,7 +5065,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 
 func (ss *stubServer) newServiceConfig(sc string) {
 	if ss.r != nil {
-		ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}, ServiceConfig: parseCfg(ss.r, sc)})
+		ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.address}}, ServiceConfig: parseCfg(ss.r, sc)})
 	}
 }
 
