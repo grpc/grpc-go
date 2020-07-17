@@ -576,21 +576,53 @@ func TestRoutesProtoToSlice(t *testing.T) {
 		wantRoutes []*Route
 		wantErr    bool
 	}{
-		/*
-			no path
-			path is regex
-			header contains regex
-			case_sensitive is false
-
-			only path
-			path and header
-			path and invert header
-			path and fraction
-			path and query (query is ignored)
-
-		*/
 		{
-			name: "temp",
+			name: "no path",
+			routes: []*routepb.Route{{
+				Name:  "",
+				Match: &routepb.RouteMatch{},
+			}},
+			wantErr: true,
+		},
+		{
+			name: "path is regex instead of saferegex",
+			routes: []*routepb.Route{{
+				Name: "",
+				Match: &routepb.RouteMatch{
+					PathSpecifier: &routepb.RouteMatch_Regex{Regex: "*"},
+				},
+			}},
+			wantErr: true,
+		},
+		{
+			name: "header contains regex",
+			routes: []*routepb.Route{{
+				Name: "",
+				Match: &routepb.RouteMatch{
+					PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: "/"},
+					Headers: []*routepb.HeaderMatcher{{
+						Name: "th",
+						HeaderMatchSpecifier: &routepb.HeaderMatcher_RegexMatch{
+							RegexMatch: "*",
+						},
+					}},
+				},
+			}},
+			wantErr: true,
+		},
+		{
+			name: "case_sensitive is false",
+			routes: []*routepb.Route{{
+				Name: "",
+				Match: &routepb.RouteMatch{
+					PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: "/"},
+					CaseSensitive: &wrapperspb.BoolValue{Value: false},
+				},
+			}},
+			wantErr: true,
+		},
+		{
+			name: "good",
 			routes: []*routepb.Route{
 				{
 					Name: "",
@@ -635,6 +667,41 @@ func TestRoutesProtoToSlice(t *testing.T) {
 				},
 				Fraction: newUInt32P(10000),
 				Action:   map[string]uint32{"A": 40, "B": 60},
+			}},
+			wantErr: false,
+		},
+		{
+			name: "query is ignored",
+			routes: []*routepb.Route{
+				{
+					Name: "",
+					Match: &routepb.RouteMatch{
+						PathSpecifier: &routepb.RouteMatch_Prefix{Prefix: "/a/"},
+					},
+					Action: &routepb.Route_Route{
+						Route: &routepb.RouteAction{
+							ClusterSpecifier: &routepb.RouteAction_WeightedClusters{
+								WeightedClusters: &routepb.WeightedCluster{
+									Clusters: []*routepb.WeightedCluster_ClusterWeight{
+										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}},
+										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
+									},
+									TotalWeight: &wrapperspb.UInt32Value{Value: 100},
+								}}}},
+				},
+				{
+					Name: "with_query",
+					Match: &routepb.RouteMatch{
+						PathSpecifier:   &routepb.RouteMatch_Prefix{Prefix: "/b/"},
+						QueryParameters: []*routepb.QueryParameterMatcher{{Name: "route_will_be_ignored"}},
+					},
+				},
+			},
+			// Only one route in the result, because the second one with query
+			// parameters is ignored.
+			wantRoutes: []*Route{{
+				Prefix: newStringP("/a/"),
+				Action: map[string]uint32{"A": 40, "B": 60},
 			}},
 			wantErr: false,
 		},
