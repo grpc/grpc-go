@@ -10,7 +10,7 @@ const maxTimeoutValue int64 = 100000000 - 1
 // div does integer division and round-up the result. Note that this is
 // equivalent to (d+r-1)/r but has less chance to overflow.
 func div(d, r time.Duration) int64 {
-	if m := d % r; m > 0 {
+	if d%r > 0 {
 		return int64(d/r + 1)
 	}
 	return int64(d / r)
@@ -21,7 +21,7 @@ func div(d, r time.Duration) int64 {
 //
 // https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests
 func EncodeDuration(t time.Duration) string {
-	// TODO: It is the simplistic and not bandwidth efficient. Improve it.
+	// TODO: This is simplistic and not bandwidth efficient. Improve it.
 	if t <= 0 {
 		return "0n"
 	}
