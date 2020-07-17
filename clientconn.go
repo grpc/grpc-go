@@ -891,18 +891,10 @@ func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {
 	return cc.sc.healthCheckConfig
 }
 
-type getTransportOpts struct {
-	failfast    bool
-	contentType string
-	userAgent   string
-}
-
-func (cc *ClientConn) getTransport(ctx context.Context, method string, opts *getTransportOpts) (transport.ClientTransport, func(balancer.DoneInfo), error) {
-	t, done, err := cc.blockingpicker.pick(ctx, opts.failfast, balancer.PickInfo{
+func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method string) (transport.ClientTransport, func(balancer.DoneInfo), error) {
+	t, done, err := cc.blockingpicker.pick(ctx, failfast, balancer.PickInfo{
 		Ctx:            ctx,
 		FullMethodName: method,
-		ContentType:    opts.contentType,
-		UserAgent:      opts.userAgent,
 	})
 	if err != nil {
 		return nil, nil, toRPCErr(err)

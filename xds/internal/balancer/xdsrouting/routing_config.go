@@ -100,9 +100,6 @@ func (jc lbConfigJSON) toLBConfig() *lbConfig {
 			tempR.regex = *r.Regex
 		}
 		for _, h := range r.Headers {
-			if h.RangeMatch != nil {
-				fmt.Println("range not nil", *h.RangeMatch)
-			}
 			var tempHeader headerMatcher
 			switch {
 			case h.ExactMatch != nil:

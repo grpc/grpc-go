@@ -347,11 +347,12 @@ func (cs *clientStream) newAttemptLocked(sh stats.Handler, trInfo *traceInfo) (r
 	if err := cs.ctx.Err(); err != nil {
 		return toRPCErr(err)
 	}
-	t, done, err := cs.cc.getTransport(cs.ctx, cs.callHdr.Method, &getTransportOpts{
-		failfast:    cs.callInfo.failFast,
-		contentType: grpcutil.ContentType(cs.callHdr.ContentSubtype),
-		userAgent:   cs.cc.dopts.copts.UserAgent,
-	})
+
+	ctx := grpcutil.WithExtraMetadata(cs.ctx, metadata.Pairs(
+		"content-type", grpcutil.ContentType(cs.callHdr.ContentSubtype),
+		"user-agent", cs.cc.dopts.copts.UserAgent,
+	))
+	t, done, err := cs.cc.getTransport(ctx, cs.callInfo.failFast, cs.callHdr.Method)
 	if err != nil {
 		return err
 	}

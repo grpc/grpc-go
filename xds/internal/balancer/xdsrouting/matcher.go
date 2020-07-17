@@ -20,7 +20,6 @@ package xdsrouting
 
 import (
 	"fmt"
-	"time"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpcrand"
@@ -49,16 +48,8 @@ func (a *compositeMatcher) match(info balancer.PickInfo) bool {
 	var md metadata.MD
 	if info.Ctx != nil {
 		md, _ = metadata.FromOutgoingContext(info.Ctx)
-	}
-	if md == nil {
-		md = metadata.Pairs()
-	}
-	md.Append("content-type", info.ContentType)
-	md.Append("user-agent", info.UserAgent)
-	if info.Ctx != nil {
-		if d, ok := info.Ctx.Deadline(); ok {
-			timeout := time.Until(d)
-			md.Append("grpc-timeout", grpcutil.EncodeDuration(timeout))
+		if extraMD, ok := grpcutil.ExtraMetadata(info.Ctx); ok {
+			md = metadata.Join(md, extraMD)
 		}
 	}
 	for _, m := range a.hms {

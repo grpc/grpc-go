@@ -205,11 +205,6 @@ type PickInfo struct {
 	// Ctx is the RPC's context, and may contain relevant RPC-level information
 	// like the outgoing header metadata.
 	Ctx context.Context
-
-	// The RPC content-type, e.g. "application/grpc+CustomSubContentType".
-	ContentType string
-	// The full user-agent string, e.g. "custom-user-agent grpc-go/<Version>".
-	UserAgent string
 }
 
 // DoneInfo contains additional information for done.

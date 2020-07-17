@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/balancerload"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -60,6 +61,7 @@ type testBalancer struct {
 
 	newSubConnOptions balancer.NewSubConnOptions
 	pickInfos         []balancer.PickInfo
+	pickExtraMDs      []metadata.MD
 	doneInfo          []balancer.DoneInfo
 }
 
@@ -124,8 +126,10 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	if p.err != nil {
 		return balancer.PickResult{}, p.err
 	}
+	extraMD, _ := grpcutil.ExtraMetadata(info.Ctx)
 	info.Ctx = nil // Do not validate context.
 	p.bal.pickInfos = append(p.bal.pickInfos, info)
+	p.bal.pickExtraMDs = append(p.bal.pickExtraMDs, extraMD)
 	return balancer.PickResult{SubConn: p.sc, Done: func(d balancer.DoneInfo) { p.bal.doneInfo = append(p.bal.doneInfo, d) }}, nil
 }
 
@@ -157,13 +161,13 @@ func (s) TestCredsBundleFromBalancer(t *testing.T) {
 	}
 }
 
-func (s) TestPickInfo(t *testing.T) {
+func (s) TestPickExtraMetadata(t *testing.T) {
 	for _, e := range listTestEnv() {
-		testPickInfo(t, e)
+		testPickExtraMetadata(t, e)
 	}
 }
 
-func testPickInfo(t *testing.T, e env) {
+func testPickExtraMetadata(t *testing.T, e env) {
 	te := newTest(t, e)
 	b := &testBalancer{}
 	balancer.Register(b)
@@ -190,21 +194,20 @@ func testPickInfo(t *testing.T, e env) {
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.CallContentSubtype(testSubContentType)); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, nil)
 	}
-	want := []balancer.PickInfo{
+	want := []metadata.MD{
 		{
 			// First RPC doesn't have sub-content-type.
-			FullMethodName: "/grpc.testing.TestService/EmptyCall",
-			ContentType:    "application/grpc",
-			UserAgent:      testUserAgent + " grpc-go/" + grpc.Version,
+			"content-type": []string{"application/grpc"},
+			"user-agent":   []string{testUserAgent + " grpc-go/" + grpc.Version},
 		},
 		{
 			// Second RPC has sub-content-type "proto".
-			FullMethodName: "/grpc.testing.TestService/EmptyCall",
-			ContentType:    "application/grpc+proto",
-			UserAgent:      testUserAgent + " grpc-go/" + grpc.Version,
+			"content-type": []string{"application/grpc+proto"},
+			"user-agent":   []string{testUserAgent + " grpc-go/" + grpc.Version},
 		},
 	}
-	if !cmp.Equal(b.pickInfos, want) {
+
+	if !cmp.Equal(b.pickExtraMDs, want) {
 		t.Fatalf("%s", cmp.Diff(b.pickInfos, want))
 	}
 }
@@ -314,11 +317,9 @@ func testDoneLoads(t *testing.T, e env) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, nil)
 	}
 
-	piWant := []balancer.PickInfo{{
-		FullMethodName: "/grpc.testing.TestService/EmptyCall",
-		ContentType:    "application/grpc",
-		UserAgent:      "grpc-go/" + grpc.Version,
-	}}
+	piWant := []balancer.PickInfo{
+		{FullMethodName: "/grpc.testing.TestService/EmptyCall"},
+	}
 	if !reflect.DeepEqual(b.pickInfos, piWant) {
 		t.Fatalf("b.pickInfos = %v; want %v", b.pickInfos, piWant)
 	}

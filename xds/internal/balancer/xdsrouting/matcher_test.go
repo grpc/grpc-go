@@ -24,6 +24,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -71,8 +72,9 @@ func TestAndMatcherMatch(t *testing.T) {
 			hm:   newHeaderExactMatcher("user-agent", "agent"),
 			info: balancer.PickInfo{
 				FullMethodName: "/a/b",
-				Ctx:            context.Background(),
-				UserAgent:      "agent",
+				Ctx: grpcutil.WithExtraMetadata(context.Background(), metadata.Pairs(
+					"user-agent", "agent",
+				)),
 			},
 			want: true,
 		},
