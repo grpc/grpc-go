@@ -4991,6 +4991,8 @@ type stubServer struct {
 	cc     *grpc.ClientConn
 	s      *grpc.Server
 
+	// Parameters for Listen and Dial. Defaults will be used if these are empty
+	// before Start.
 	network string
 	address string
 	target  string
@@ -5016,15 +5018,19 @@ func (ss *stubServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallSer
 
 // Start starts the server and creates a client connected to it.
 func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption) error {
-	if ss.network == "" && ss.address == "" && ss.target == "" {
-		ss.r = manual.NewBuilderWithScheme("whatever")
+	if ss.network == "" {
 		ss.network = "tcp"
+	}
+	if ss.address == "" {
 		ss.address = "localhost:0"
+	}
+	if ss.target == "" {
+		ss.r = manual.NewBuilderWithScheme("whatever")
 	}
 
 	lis, err := net.Listen(ss.network, ss.address)
 	if err != nil {
-		return fmt.Errorf(`net.Listen("%v", "%v") = %v`, ss.network, ss.address, err)
+		return fmt.Errorf("net.Listen(%q, %q) = %v", ss.network, ss.address, err)
 	}
 	ss.addr = lis.Addr().String()
 	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
@@ -5035,12 +5041,10 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	ss.cleanups = append(ss.cleanups, s.Stop)
 	ss.s = s
 
-	var opts []grpc.DialOption
+	opts := append([]grpc.DialOption{grpc.WithInsecure()}, dopts...)
 	if ss.r != nil {
 		ss.target = ss.r.Scheme() + ":///" + ss.addr
-		opts = append([]grpc.DialOption{grpc.WithInsecure(), grpc.WithResolvers(ss.r)}, dopts...)
-	} else {
-		opts = append([]grpc.DialOption{grpc.WithInsecure()}, dopts...)
+		opts = append(opts, grpc.WithResolvers(ss.r))
 	}
 
 	cc, err := grpc.Dial(ss.target, opts...)
