@@ -183,30 +183,35 @@ func testPickExtraMetadata(t *testing.T, e env) {
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
+	// Set resolver to xds to trigger the extra metadata code path.
+	r := manual.NewBuilderWithScheme("xds")
+	resolver.Register(r)
+	defer func() {
+		resolver.UnregisterForTesting("xds")
+	}()
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
+	te.resolverScheme = "xds"
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, nil)
-	}
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.CallContentSubtype(testSubContentType)); err != nil {
-		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, nil)
-	}
+	// The RPCs will fail, but we don't care. We just need the pick to happen.
+	ctx1, cancel1 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel1()
+	tc.EmptyCall(ctx1, &testpb.Empty{})
+
+	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel2()
+	tc.EmptyCall(ctx2, &testpb.Empty{}, grpc.CallContentSubtype(testSubContentType))
+
 	want := []metadata.MD{
-		{
-			// First RPC doesn't have sub-content-type.
-			"content-type": []string{"application/grpc"},
-		},
-		{
-			// Second RPC has sub-content-type "proto".
-			"content-type": []string{"application/grpc+proto"},
-		},
+		// First RPC doesn't have sub-content-type.
+		{"content-type": []string{"application/grpc"}},
+		// Second RPC has sub-content-type "proto".
+		{"content-type": []string{"application/grpc+proto"}},
 	}
 
 	if !cmp.Equal(b.pickExtraMDs, want) {
-		t.Fatalf("%s", cmp.Diff(b.pickInfos, want))
+		t.Fatalf("%s", cmp.Diff(b.pickExtraMDs, want))
 	}
 }
 
