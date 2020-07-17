@@ -55,9 +55,9 @@ func RegisterAPIClientBuilder(b APIClientBuilder) {
 	m[b.Version()] = b
 }
 
-// GetAPIClientBuilder returns the client builder registered for the provided
+// getAPIClientBuilder returns the client builder registered for the provided
 // xDS transport API version.
-func GetAPIClientBuilder(version version.TransportAPI) APIClientBuilder {
+func getAPIClientBuilder(version version.TransportAPI) APIClientBuilder {
 	if b, ok := m[version]; ok {
 		return b
 	}
@@ -212,7 +212,7 @@ type Options struct {
 
 // Function to be overridden in tests.
 var newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, opts BuildOptions) (APIClient, error) {
-	cb := GetAPIClientBuilder(apiVersion)
+	cb := getAPIClientBuilder(apiVersion)
 	if cb == nil {
 		return nil, fmt.Errorf("no client builder for xDS API version: %v", apiVersion)
 	}
@@ -228,6 +228,9 @@ var newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, op
 // ClientConn.
 //
 // Implements UpdateHandler interface.
+// TODO(easwars): Make a wrapper struct which implements this interface in the
+// style of ccBalancerWrapper so that the Client type does not implement these
+// exported methods.
 type Client struct {
 	done      *grpcsync.Event
 	opts      Options
