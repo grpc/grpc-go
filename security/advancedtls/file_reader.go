@@ -39,9 +39,9 @@ type TrustCredFileReader interface {
 	ReadTrustCerts() (*x509.CertPool, error)
 }
 
-// pemPeerCredFileReader is the default implementation of PeerCredFileReader.
-// pemPeerCredFileReader supports reading peer credential files of PEM format.
-type pemPeerCredFileReader struct {
+// PemPeerCredFileReader is the default implementation of PeerCredFileReader.
+// PemPeerCredFileReader supports reading peer credential files of PEM format.
+type PemPeerCredFileReader struct {
 	certFilePath string
 	keyFilePath  string
 	interval     time.Duration
@@ -55,9 +55,9 @@ type PemPeerCredFileReaderOption struct {
 	Interval     time.Duration
 }
 
-// newPemPeerCredFileReader uses PemPeerCredFileReaderOption
-// to contruct a pemPeerCredFileReader.
-func newPemPeerCredFileReader(o PemPeerCredFileReaderOption) (*pemPeerCredFileReader, error) {
+// NewPemPeerCredFileReader uses PemPeerCredFileReaderOption
+// to contruct a PemPeerCredFileReader.
+func NewPemPeerCredFileReader(o PemPeerCredFileReaderOption) (*PemPeerCredFileReader, error) {
 	if o.CertFilePath == "" {
 		return nil, fmt.Errorf(
 			"users need to specify certificate file path in PemPeerCredFileReaderOption")
@@ -71,7 +71,7 @@ func newPemPeerCredFileReader(o PemPeerCredFileReaderOption) (*pemPeerCredFileRe
 	if interval == 0*time.Nanosecond {
 		interval = 1 * time.Hour
 	}
-	r := &pemPeerCredFileReader{
+	r := &PemPeerCredFileReader{
 		certFilePath: o.CertFilePath,
 		keyFilePath:  o.KeyFilePath,
 		interval:     interval,
@@ -80,8 +80,8 @@ func newPemPeerCredFileReader(o PemPeerCredFileReaderOption) (*pemPeerCredFileRe
 }
 
 // ReadKeyAndCerts reads and parses peer certificates from the certificate file path
-// and the key file path specified in pemPeerCredFileReader.
-func (r pemPeerCredFileReader) ReadKeyAndCerts() (*tls.Certificate, error) {
+// and the key file path specified in PemPeerCredFileReader.
+func (r PemPeerCredFileReader) ReadKeyAndCerts() (*tls.Certificate, error) {
 	cert, err := tls.LoadX509KeyPair(r.certFilePath, r.keyFilePath)
 	if err != nil {
 		return nil, err
@@ -89,9 +89,9 @@ func (r pemPeerCredFileReader) ReadKeyAndCerts() (*tls.Certificate, error) {
 	return &cert, nil
 }
 
-// pemTrustCredFileReader is the default implementation of TrustCredFileReader.
-// pemTrustCredFileReader supports reading trust credential files of PEM format.
-type pemTrustCredFileReader struct {
+// PemTrustCredFileReader is the default implementation of TrustCredFileReader.
+// PemTrustCredFileReader supports reading trust credential files of PEM format.
+type PemTrustCredFileReader struct {
 	trustCertPath string
 	interval      time.Duration
 }
@@ -103,9 +103,9 @@ type PemTrustCredFileReaderOption struct {
 	Interval      time.Duration
 }
 
-// newPemTrustCredFileReader uses PemTrustCredFileReaderOption
-// to contruct a pemTrustCredFileReader.
-func newPemTrustCredFileReader(o PemTrustCredFileReaderOption) (*pemTrustCredFileReader, error) {
+// NewPemTrustCredFileReader uses PemTrustCredFileReaderOption
+// to contruct a PemTrustCredFileReader.
+func NewPemTrustCredFileReader(o PemTrustCredFileReaderOption) (*PemTrustCredFileReader, error) {
 	if o.TrustCertPath == "" {
 		return nil, fmt.Errorf(
 			"users need to specify key file path in PemTrustCredFileReaderOption")
@@ -115,7 +115,7 @@ func newPemTrustCredFileReader(o PemTrustCredFileReaderOption) (*pemTrustCredFil
 	if interval == 0*time.Nanosecond {
 		interval = 1 * time.Hour
 	}
-	r := &pemTrustCredFileReader{
+	r := &PemTrustCredFileReader{
 		trustCertPath: o.TrustCertPath,
 		interval:      interval,
 	}
@@ -123,8 +123,8 @@ func newPemTrustCredFileReader(o PemTrustCredFileReaderOption) (*pemTrustCredFil
 }
 
 // ReadTrustCerts reads and parses trust certificates from trust certificate path
-// specified in pemTrustCredFileReader.
-func (r pemTrustCredFileReader) ReadTrustCerts() (*x509.CertPool, error) {
+// specified in PemTrustCredFileReader.
+func (r PemTrustCredFileReader) ReadTrustCerts() (*x509.CertPool, error) {
 	trustData, err := ioutil.ReadFile(r.trustCertPath)
 	if err != nil {
 		return nil, err

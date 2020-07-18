@@ -717,7 +717,7 @@ func testPeerCredFileReader(t *testing.T) {
 				CertFilePath: test.certFilePath,
 				KeyFilePath:  test.keyFilePath,
 			}
-			pemPeerCredFileReader, err := newPemPeerCredFileReader(*pemPeerCredFileReaderOption)
+			pemPeerCredFileReader, err := NewPemPeerCredFileReader(*pemPeerCredFileReaderOption)
 			if err != nil {
 				t.Fatalf("Unable to generate NewPemPeerCredFileReader. Error: %v", err)
 			}
@@ -763,7 +763,7 @@ func testTrustCredFileReader(t *testing.T) {
 			pemTrustCredFileReaderOption := &PemTrustCredFileReaderOption{
 				TrustCertPath: test.trustCertPath,
 			}
-			pemTrustCredFileReader, err := newPemTrustCredFileReader(*pemTrustCredFileReaderOption)
+			pemTrustCredFileReader, err := NewPemTrustCredFileReader(*pemTrustCredFileReaderOption)
 			if err != nil {
 				t.Fatalf("Unable to generate NewPemTrustCredFileReader. Error: %v", err)
 			}
