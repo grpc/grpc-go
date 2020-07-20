@@ -19,8 +19,6 @@
 package engine
 
 import (
-	"strconv"
-
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	cel "github.com/google/cel-go/cel"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
@@ -161,33 +159,30 @@ func NewCelEvaluationEngine(rbacs []pb.RBAC) (CelEvaluationEngine, error) {
 // evaluated as false, then it returns allow. Otherwise, some conditions are
 // false and some are unknown, it returns undecided.
 //
-// DENY policy + ALLOW policy. If one of the conditions in the DENY policy is
-// evaluated as true, then the CEL engine evaluation returns deny. Otherwise,
-// if one of the conditions in the ALLOW policy is evaluated as true, it
-// returns allow. If all the conditions are evaluated as false, it returns
-// deny. If some conditions are unknown whereas the other conditions are
-// false, it returns undecided.
+// DENY policy + ALLOW policy. Evaluation is in the following order: If one
+// of the expressions in the DENY policy is true, the authorization engine
+// returns deny. If one of the expressions in the DENY policy is unknown, it
+// returns undecided. Now all the expressions in the DENY policy are false,
+// it returns the evaluation of the ALLOW policy.
 func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) (AuthorizationDecision, error) {
 	evalMap := args.toEvalMap()
 	numEngines := len(celEngine.engines)
 	if numEngines < 1 || numEngines > 2 {
-		return AuthorizationDecision{}, status.Errorf(codes.Internal, "each CEL engine should have 1 or 2 RBAC engines; instead, there are "+strconv.Itoa(numEngines)+" in the CEL engine provided")
+		return AuthorizationDecision{}, status.Errorf(codes.Internal, "each CEL engine should have 1 or 2 RBAC engines; instead, there are %d in the CEL engine provided", numEngines)
 	}
-	allUnknownPolicies := []string{}
 	for _, engine := range celEngine.engines {
 		match, policyNames := engine.matches(evalMap)
-		// If any engine matched, return that engine's action.
+		// If the engine matched, return that engine's action.
 		if match {
 			if engine.action == pb.RBAC_ALLOW {
 				return AuthorizationDecision{DecisionAllow, policyNames}, nil
 			}
 			return AuthorizationDecision{DecisionDeny, policyNames}, nil
 		}
-		allUnknownPolicies = append(allUnknownPolicies, policyNames...)
-	}
-	// If any engine evaluated to unknown, return unknown.
-	if len(allUnknownPolicies) > 0 {
-		return AuthorizationDecision{DecisionUnknown, allUnknownPolicies}, nil
+		// If the engine evaluated to unknown, return unknown.
+		if len(policyNames) > 0 {
+			return AuthorizationDecision{DecisionUnknown, policyNames}, nil
+		}
 	}
 	// If all engines explicitly did not match.
 	if len(celEngine.engines) == 1 && celEngine.engines[0].action == pb.RBAC_DENY {
