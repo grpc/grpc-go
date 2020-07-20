@@ -31,7 +31,6 @@ type action struct {
 	clustersWithWeights map[string]uint32
 	// clusterNames, without weights, sorted and hashed, "A_B_"
 	clusterNames string
-
 	// The assigned name, clusters plus index number, "A_B_1"
 	assignedName string
 }

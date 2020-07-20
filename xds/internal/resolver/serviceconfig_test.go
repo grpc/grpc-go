@@ -87,69 +87,90 @@ const (
 	testRoutingAllMatchersJSON = `{"loadBalancingConfig":[{
     "xds_routing_experimental": {
       "action":{
-        "cds:cluster_1":{
+        "cluster_1_0":{
           "childPolicy":[{
-            "cds_experimental":{"cluster":"cluster_1"}
+			"weighted_target_experimental": {
+			  "targets": {
+				"cluster_1" : {
+				  "weight":1,
+				  "childPolicy":[{"cds_experimental":{"cluster":"cluster_1"}}]
+				}
+			  }
+			}
           }]
         },
-        "cds:cluster_2":{
+        "cluster_2_0":{
           "childPolicy":[{
-            "cds_experimental":{"cluster":"cluster_2"}
+			"weighted_target_experimental": {
+			  "targets": {
+				"cluster_2" : {
+				  "weight":1,
+				  "childPolicy":[{"cds_experimental":{"cluster":"cluster_2"}}]
+				}
+			  }
+			}
           }]
         },
-        "cds:cluster_3":{
+        "cluster_3_0":{
           "childPolicy":[{
-            "cds_experimental":{"cluster":"cluster_3"}
+			"weighted_target_experimental": {
+			  "targets": {
+				"cluster_3" : {
+				  "weight":1,
+				  "childPolicy":[{"cds_experimental":{"cluster":"cluster_3"}}]
+				}
+			  }
+			}
           }]
         }
       },
 
       "route":[{
         "path":"/service_1/method_1",
-        "action":"cds:cluster_1"
+        "action":"cluster_1_0"
       },
       {
         "prefix":"/service_2/method_1",
-        "action":"cds:cluster_1"
+        "action":"cluster_1_0"
       },
       {
         "regex":"^/service_2/method_3$",
-        "action":"cds:cluster_1"
+        "action":"cluster_1_0"
       },
       {
         "prefix":"",
         "headers":[{"name":"header-1", "exactMatch":"value-1", "invertMatch":true}],
-        "action":"cds:cluster_2"
+        "action":"cluster_2_0"
       },
       {
         "prefix":"",
         "headers":[{"name":"header-1", "regexMatch":"^value-1$"}],
-        "action":"cds:cluster_2"
+        "action":"cluster_2_0"
       },
       {
         "prefix":"",
         "headers":[{"name":"header-1", "rangeMatch":{"start":-1, "end":7}}],
-        "action":"cds:cluster_3"
+        "action":"cluster_3_0"
       },
       {
         "prefix":"",
         "headers":[{"name":"header-1", "presentMatch":true}],
-        "action":"cds:cluster_3"
+        "action":"cluster_3_0"
       },
       {
         "prefix":"",
         "headers":[{"name":"header-1", "prefixMatch":"value-1"}],
-        "action":"cds:cluster_2"
+        "action":"cluster_2_0"
       },
       {
         "prefix":"",
         "headers":[{"name":"header-1", "suffixMatch":"value-1"}],
-        "action":"cds:cluster_2"
+        "action":"cluster_2_0"
       },
       {
         "prefix":"",
         "matchFraction":{"value": 31415},
-        "action":"cds:cluster_3"
+        "action":"cluster_3_0"
       }]
     }
     }]}
@@ -215,6 +236,79 @@ func TestRoutesToJSON(t *testing.T) {
 				Action: map[string]uint32{"cluster_1": 75, "cluster_2": 25},
 			}},
 			wantJSON: testRoutingJSON,
+			wantErr:  false,
+		},
+		{
+			name: "all matchers",
+			routes: []*xdsclient.Route{
+				{
+					Path:   newStringP("/service_1/method_1"),
+					Action: map[string]uint32{"cluster_1": 1},
+				},
+				{
+					Prefix: newStringP("/service_2/method_1"),
+					Action: map[string]uint32{"cluster_1": 1},
+				},
+				{
+					Regex:  newStringP("^/service_2/method_3$"),
+					Action: map[string]uint32{"cluster_1": 1},
+				},
+				{
+					Prefix: newStringP(""),
+					Headers: []*xdsclient.HeaderMatcher{{
+						Name:        "header-1",
+						InvertMatch: newBoolP(true),
+						ExactMatch:  newStringP("value-1"),
+					}},
+					Action: map[string]uint32{"cluster_2": 1},
+				},
+				{
+					Prefix: newStringP(""),
+					Headers: []*xdsclient.HeaderMatcher{{
+						Name:       "header-1",
+						RegexMatch: newStringP("^value-1$"),
+					}},
+					Action: map[string]uint32{"cluster_2": 1},
+				},
+				{
+					Prefix: newStringP(""),
+					Headers: []*xdsclient.HeaderMatcher{{
+						Name:       "header-1",
+						RangeMatch: &xdsclient.Int64Range{Start: -1, End: 7},
+					}},
+					Action: map[string]uint32{"cluster_3": 1},
+				},
+				{
+					Prefix: newStringP(""),
+					Headers: []*xdsclient.HeaderMatcher{{
+						Name:         "header-1",
+						PresentMatch: newBoolP(true),
+					}},
+					Action: map[string]uint32{"cluster_3": 1},
+				},
+				{
+					Prefix: newStringP(""),
+					Headers: []*xdsclient.HeaderMatcher{{
+						Name:        "header-1",
+						PrefixMatch: newStringP("value-1"),
+					}},
+					Action: map[string]uint32{"cluster_2": 1},
+				},
+				{
+					Prefix: newStringP(""),
+					Headers: []*xdsclient.HeaderMatcher{{
+						Name:        "header-1",
+						SuffixMatch: newStringP("value-1"),
+					}},
+					Action: map[string]uint32{"cluster_2": 1},
+				},
+				{
+					Prefix:   newStringP(""),
+					Fraction: newUint32P(31415),
+					Action:   map[string]uint32{"cluster_3": 1},
+				},
+			},
+			wantJSON: testRoutingAllMatchersJSON,
 			wantErr:  false,
 		},
 	}
@@ -292,4 +386,12 @@ func TestServiceUpdateToJSON_TwoConfig_UpdateActions(t *testing.T) {
 
 func newStringP(s string) *string {
 	return &s
+}
+
+func newBoolP(b bool) *bool {
+	return &b
+}
+
+func newUint32P(i uint32) *uint32 {
+	return &i
 }

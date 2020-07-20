@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strconv"
 
+	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
@@ -61,7 +62,7 @@ type route struct {
 	Prefix   *string                    `json:"prefix,omitempty"`
 	Regex    *string                    `json:"regex,omitempty"`
 	Headers  []*xdsclient.HeaderMatcher `json:"headers,omitempty"`
-	Fraction *uint32                    `json:"fraction,omitempty"`
+	Fraction *wrapperspb.UInt32Value    `json:"matchFraction,omitempty"`
 	Action   string                     `json:"action"`
 }
 
@@ -81,11 +82,14 @@ func (r *xdsResolver) routesToJSON(routes []*xdsclient.Route) (string, error) {
 	var rts []*route
 	for _, rt := range routes {
 		t := &route{
-			Path:     rt.Path,
-			Prefix:   rt.Prefix,
-			Regex:    rt.Regex,
-			Headers:  rt.Headers,
-			Fraction: rt.Fraction,
+			Path:    rt.Path,
+			Prefix:  rt.Prefix,
+			Regex:   rt.Regex,
+			Headers: rt.Headers,
+		}
+
+		if f := rt.Fraction; f != nil {
+			t.Fraction = &wrapperspb.UInt32Value{Value: *f}
 		}
 
 		// Hash the clusters from the action, and find the assigned action

@@ -68,6 +68,112 @@ func TestRemoveOrReuseName(t *testing.T) {
 		wantNextIndex map[string]int
 	}{
 		{
+			name: "add same cluster",
+			oldActions: map[string]action{
+				"a20_b30_c50_": {
+					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
+					clusterNames:        "a_b_c_",
+					assignedName:        "a_b_c_0",
+				},
+			},
+			oldNextIndex: map[string]int{
+				"a_b_c_": 1,
+			},
+			newActions: map[string]action{
+				"a20_b30_c50_": {
+					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
+					clusterNames:        "a_b_c_",
+				},
+				"a10_b50_c40_": {
+					clustersWithWeights: map[string]uint32{"a": 10, "b": 50, "c": 40},
+					clusterNames:        "a_b_c_",
+				},
+			},
+			wantActions: map[string]action{
+				"a20_b30_c50_": {
+					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
+					clusterNames:        "a_b_c_",
+					assignedName:        "a_b_c_0",
+				},
+				"a10_b50_c40_": {
+					clustersWithWeights: map[string]uint32{"a": 10, "b": 50, "c": 40},
+					clusterNames:        "a_b_c_",
+					assignedName:        "a_b_c_1",
+				},
+			},
+			wantNextIndex: map[string]int{
+				"a_b_c_": 2,
+			},
+		},
+		{
+			name: "add new clusters",
+			oldActions: map[string]action{
+				"a20_b30_c50_": {
+					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
+					clusterNames:        "a_b_c_",
+					assignedName:        "a_b_c_0",
+				},
+			},
+			oldNextIndex: map[string]int{
+				"a_b_c_": 1,
+			},
+			newActions: map[string]action{
+				"a20_b30_c50_": {
+					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
+					clusterNames:        "a_b_c_",
+				},
+				"a50_b50_": {
+					clustersWithWeights: map[string]uint32{"a": 50, "b": 50},
+					clusterNames:        "a_b_",
+				},
+			},
+			wantActions: map[string]action{
+				"a20_b30_c50_": {
+					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
+					clusterNames:        "a_b_c_",
+					assignedName:        "a_b_c_0",
+				},
+				"a50_b50_": {
+					clustersWithWeights: map[string]uint32{"a": 50, "b": 50},
+					clusterNames:        "a_b_",
+					assignedName:        "a_b_0",
+				},
+			},
+			wantNextIndex: map[string]int{
+				"a_b_c_": 1,
+				"a_b_":   1,
+			},
+		},
+		{
+			name: "reuse",
+			oldActions: map[string]action{
+				"a20_b30_c50_": {
+					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
+					clusterNames:        "a_b_c_",
+					assignedName:        "a_b_c_0",
+				},
+			},
+			oldNextIndex: map[string]int{
+				"a_b_c_": 1,
+			},
+			newActions: map[string]action{
+				"a10_b50_c40_": {
+					clustersWithWeights: map[string]uint32{"a": 10, "b": 50, "c": 40},
+					clusterNames:        "a_b_c_",
+				},
+			},
+			wantActions: map[string]action{
+				"a10_b50_c40_": {
+					clustersWithWeights: map[string]uint32{"a": 10, "b": 50, "c": 40},
+					clusterNames:        "a_b_c_",
+					assignedName:        "a_b_c_0",
+				},
+			},
+			wantNextIndex: map[string]int{
+				"a_b_c_": 1,
+			},
+		},
+		{
 			name: "add and reuse",
 			oldActions: map[string]action{
 				"a20_b30_c50_": {
