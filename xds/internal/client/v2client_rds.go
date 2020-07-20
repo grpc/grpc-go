@@ -24,7 +24,9 @@ import (
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
 	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/grpc/internal/grpclog"
 )
 
 // handleRDSResponse processes an RDS response received from the xDS server. On
@@ -48,7 +50,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v. Picking routes for current watching hostname %v", rc.GetName(), rc, rc, v2c.hostname)
 
 		// Use the hostname (resourceName for LDS) to find the routes.
-		u, err := generateRDSUpdateFromRouteConfiguration(rc, hostname)
+		u, err := generateRDSUpdateFromRouteConfiguration(rc, hostname, v2c.logger)
 		if err != nil {
 			return fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v with err: %v", rc, err)
 		}
@@ -76,7 +78,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 // field must be empty and whose route field must be set.  Inside that route
 // message, the cluster field will contain the clusterName or weighted clusters
 // we are looking for.
-func generateRDSUpdateFromRouteConfiguration(rc *xdspb.RouteConfiguration, host string) (rdsUpdate, error) {
+func generateRDSUpdateFromRouteConfiguration(rc *xdspb.RouteConfiguration, host string, logger *grpclog.PrefixLogger) (rdsUpdate, error) {
 	//
 	// Currently this returns "" on error, and the caller will return an error.
 	// But the error doesn't contain details of why the response is invalid
@@ -94,6 +96,16 @@ func generateRDSUpdateFromRouteConfiguration(rc *xdspb.RouteConfiguration, host 
 		// should be at least one default route.
 		return rdsUpdate{}, fmt.Errorf("matched virtual host has no routes")
 	}
+
+	// Keep the old code path for routing disabled.
+	if routingEnabled {
+		routes, err := routesProtoToSlice(vh.Routes, logger)
+		if err != nil {
+			return rdsUpdate{}, fmt.Errorf("received route is invalid: %v", err)
+		}
+		return rdsUpdate{routes: routes}, nil
+	}
+
 	dr := vh.Routes[len(vh.Routes)-1]
 	match := dr.GetMatch()
 	if match == nil {
@@ -108,12 +120,12 @@ func generateRDSUpdateFromRouteConfiguration(rc *xdspb.RouteConfiguration, host 
 		// valid.
 		return rdsUpdate{}, fmt.Errorf("matched virtual host's default route set case-sensitive to false")
 	}
-	route := dr.GetRoute()
-	if route == nil {
+	routeAction := dr.GetRoute()
+	if routeAction == nil {
 		return rdsUpdate{}, fmt.Errorf("matched route is nil")
 	}
 
-	if wc := route.GetWeightedClusters(); wc != nil {
+	if wc := routeAction.GetWeightedClusters(); wc != nil {
 		m, err := weightedClustersProtoToMap(wc)
 		if err != nil {
 			return rdsUpdate{}, fmt.Errorf("matched weighted cluster is invalid: %v", err)
@@ -129,7 +141,114 @@ func generateRDSUpdateFromRouteConfiguration(rc *xdspb.RouteConfiguration, host 
 	// and CDS. In case when the action changes between one cluster and multiple
 	// clusters, changing top level policy means recreating TCP connection every
 	// time.
-	return rdsUpdate{weightedCluster: map[string]uint32{route.GetCluster(): 1}}, nil
+	return rdsUpdate{weightedCluster: map[string]uint32{routeAction.GetCluster(): 1}}, nil
+}
+
+func routesProtoToSlice(routes []*routepb.Route, logger *grpclog.PrefixLogger) ([]*Route, error) {
+	var routesRet []*Route
+
+	for _, r := range routes {
+		match := r.GetMatch()
+		if match == nil {
+			return nil, fmt.Errorf("route %+v doesn't have a match", r)
+		}
+
+		if len(match.GetQueryParameters()) != 0 {
+			// Ignore route with query parameters.
+			logger.Warningf("route %+v has query parameter matchers, the route will be ignored", r)
+			continue
+		}
+
+		if caseSensitive := match.GetCaseSensitive(); caseSensitive != nil && !caseSensitive.Value {
+			return nil, fmt.Errorf("route %+v has case-sensitive false", r)
+		}
+
+		pathSp := match.GetPathSpecifier()
+		if pathSp == nil {
+			return nil, fmt.Errorf("route %+v doesn't have a path specifier", r)
+		}
+
+		var route Route
+		switch pt := pathSp.(type) {
+		case *routepb.RouteMatch_Prefix:
+			route.Prefix = &pt.Prefix
+		case *routepb.RouteMatch_Path:
+			route.Path = &pt.Path
+		case *routepb.RouteMatch_SafeRegex:
+			route.Regex = &pt.SafeRegex.Regex
+		case *routepb.RouteMatch_Regex:
+			return nil, fmt.Errorf("route %+v has Regex, expected SafeRegex instead", r)
+		default:
+			logger.Warningf("route %+v has an unrecognized path specifier: %+v", r, pt)
+			continue
+		}
+
+		for _, h := range match.GetHeaders() {
+			var header HeaderMatcher
+			switch ht := h.GetHeaderMatchSpecifier().(type) {
+			case *routepb.HeaderMatcher_ExactMatch:
+				header.ExactMatch = &ht.ExactMatch
+			case *routepb.HeaderMatcher_SafeRegexMatch:
+				header.RegexMatch = &ht.SafeRegexMatch.Regex
+			case *routepb.HeaderMatcher_RangeMatch:
+				header.RangeMatch = &Int64Range{
+					Start: ht.RangeMatch.Start,
+					End:   ht.RangeMatch.End,
+				}
+			case *routepb.HeaderMatcher_PresentMatch:
+				header.PresentMatch = &ht.PresentMatch
+			case *routepb.HeaderMatcher_PrefixMatch:
+				header.PrefixMatch = &ht.PrefixMatch
+			case *routepb.HeaderMatcher_SuffixMatch:
+				header.SuffixMatch = &ht.SuffixMatch
+			case *routepb.HeaderMatcher_RegexMatch:
+				return nil, fmt.Errorf("route %+v has a header matcher with Regex, expected SafeRegex instead", r)
+			default:
+				logger.Warningf("route %+v has an unrecognized header matcher: %+v", r, ht)
+				continue
+			}
+			header.Name = h.GetName()
+			invert := h.GetInvertMatch()
+			header.InvertMatch = &invert
+			route.Headers = append(route.Headers, &header)
+		}
+
+		if fr := match.GetRuntimeFraction(); fr != nil {
+			d := fr.GetDefaultValue()
+			n := d.GetNumerator()
+			switch d.GetDenominator() {
+			case typepb.FractionalPercent_HUNDRED:
+				n *= 10000
+			case typepb.FractionalPercent_TEN_THOUSAND:
+				n *= 100
+			case typepb.FractionalPercent_MILLION:
+			}
+			route.Fraction = &n
+		}
+
+		clusters := make(map[string]uint32)
+		switch a := r.GetRoute().GetClusterSpecifier().(type) {
+		case *routepb.RouteAction_Cluster:
+			clusters[a.Cluster] = 1
+		case *routepb.RouteAction_WeightedClusters:
+			wcs := a.WeightedClusters
+			var totalWeight uint32
+			for _, c := range wcs.Clusters {
+				w := c.GetWeight().GetValue()
+				clusters[c.GetName()] = w
+				totalWeight += w
+			}
+			if totalWeight != wcs.GetTotalWeight().GetValue() {
+				return nil, fmt.Errorf("route %+v, action %+v, weights of clusters do not add up to total total weight, got: %v, want %v", r, a, wcs.GetTotalWeight().GetValue(), totalWeight)
+			}
+		case *routepb.RouteAction_ClusterHeader:
+			continue
+		}
+
+		route.Action = clusters
+		routesRet = append(routesRet, &route)
+	}
+	return routesRet, nil
 }
 
 func weightedClustersProtoToMap(wc *routepb.WeightedCluster) (map[string]uint32, error) {

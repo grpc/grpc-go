@@ -40,8 +40,20 @@ type HeaderMatcher struct {
 	PresentMatch *bool       `json:"presentMatch,omitempty"`
 }
 
+// Route represents route with matchers and action.
+type Route struct {
+	Path, Prefix, Regex *string
+	Headers             []*HeaderMatcher
+	Fraction            *uint32
+	Action              map[string]uint32 // action is weighted clusters.
+}
+
 type rdsUpdate struct {
+	// weightedCluster is only set when routing is disabled (env variable
+	// GRPC_XDS_EXPERIMENTAL_ROUTING is not true).
 	weightedCluster map[string]uint32
+
+	routes []*Route
 }
 type rdsCallbackFunc func(rdsUpdate, error)
 
