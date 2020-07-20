@@ -20,9 +20,11 @@ package xdsrouting
 
 import (
 	"fmt"
+	"strings"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -47,6 +49,16 @@ func (a *compositeMatcher) match(info balancer.PickInfo) bool {
 	var md metadata.MD
 	if info.Ctx != nil {
 		md, _ = metadata.FromOutgoingContext(info.Ctx)
+		if extraMD, ok := grpcutil.ExtraMetadata(info.Ctx); ok {
+			md = metadata.Join(md, extraMD)
+			// Remove all binary headers. They are hard to match with. May need
+			// to add back if asked by users.
+			for k := range md {
+				if strings.HasSuffix(k, "-bin") {
+					delete(md, k)
+				}
+			}
+		}
 	}
 	for _, m := range a.hms {
 		if !m.match(md) {

@@ -24,6 +24,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -63,6 +64,32 @@ func TestAndMatcherMatch(t *testing.T) {
 				FullMethodName: "/a/b",
 				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
 			},
+			want: false,
+		},
+		{
+			name: "fake header",
+			pm:   newPathPrefixMatcher("/"),
+			hm:   newHeaderExactMatcher("content-type", "fake"),
+			info: balancer.PickInfo{
+				FullMethodName: "/a/b",
+				Ctx: grpcutil.WithExtraMetadata(context.Background(), metadata.Pairs(
+					"content-type", "fake",
+				)),
+			},
+			want: true,
+		},
+		{
+			name: "binary header",
+			pm:   newPathPrefixMatcher("/"),
+			hm:   newHeaderPresentMatcher("t-bin", true),
+			info: balancer.PickInfo{
+				FullMethodName: "/a/b",
+				Ctx: grpcutil.WithExtraMetadata(
+					metadata.NewOutgoingContext(context.Background(), metadata.Pairs("t-bin", "123")), metadata.Pairs(
+						"content-type", "fake",
+					)),
+			},
+			// Shouldn't match binary header, even though it's in metadata.
 			want: false,
 		},
 	}
