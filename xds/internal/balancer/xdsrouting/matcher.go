@@ -51,13 +51,13 @@ func (a *compositeMatcher) match(info balancer.PickInfo) bool {
 		md, _ = metadata.FromOutgoingContext(info.Ctx)
 		if extraMD, ok := grpcutil.ExtraMetadata(info.Ctx); ok {
 			md = metadata.Join(md, extraMD)
-		}
-	}
-	// Remove all binary headers. They are hard to match with. May need to add
-	// back if asked by users.
-	for k := range md {
-		if strings.HasSuffix(k, "-bin") {
-			delete(md, k)
+			// Remove all binary headers. They are hard to match with. May need
+			// to add back if asked by users.
+			for k := range md {
+				if strings.HasSuffix(k, "-bin") {
+					delete(md, k)
+				}
+			}
 		}
 	}
 	for _, m := range a.hms {

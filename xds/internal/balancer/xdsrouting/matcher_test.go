@@ -84,7 +84,10 @@ func TestAndMatcherMatch(t *testing.T) {
 			hm:   newHeaderPresentMatcher("t-bin", true),
 			info: balancer.PickInfo{
 				FullMethodName: "/a/b",
-				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("t-bin", "123")),
+				Ctx: grpcutil.WithExtraMetadata(
+					metadata.NewOutgoingContext(context.Background(), metadata.Pairs("t-bin", "123")), metadata.Pairs(
+						"content-type", "fake",
+					)),
 			},
 			// Shouldn't match binary header, even though it's in metadata.
 			want: false,
