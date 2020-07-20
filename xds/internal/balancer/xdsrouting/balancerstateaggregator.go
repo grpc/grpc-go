@@ -187,6 +187,14 @@ func (rbsa *balancerStateAggregator) buildAndUpdate() {
 //
 // Caller must hold rbsa.mu.
 func (rbsa *balancerStateAggregator) build() balancer.State {
+	// TODO: the majority of this function (and UpdateState) is exactly the same
+	// as weighted_target's state aggregator. Try to make a general utility
+	// function/struct to handle the logic.
+	//
+	// One option: make a SubBalancerState that handles Update(State), including
+	// handling the special connecting after ready, as in UpdateState(). Then a
+	// function to calculate the aggregated connectivity state as in this
+	// function.
 	var readyN, connectingN int
 	for _, ps := range rbsa.idToPickerState {
 		switch ps.stateToAggregate {
