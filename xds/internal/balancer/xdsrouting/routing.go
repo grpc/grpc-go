@@ -43,7 +43,7 @@ type routingBB struct{}
 func (rbb *routingBB) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	b := &routingBalancer{}
 	b.logger = prefixLogger(b)
-	b.stateAggregator = newRoutingBalancerStateAggregator(cc, b.logger)
+	b.stateAggregator = newBalancerStateAggregator(cc, b.logger)
 	b.stateAggregator.start()
 	b.bg = balancergroup.New(cc, b.stateAggregator, nil, b.logger)
 	b.bg.Start()
@@ -59,7 +59,7 @@ func (rbb *routingBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancin
 	return parseConfig(c)
 }
 
-type actionAndMatcher struct {
+type route struct {
 	action string
 	m      *compositeMatcher
 }
@@ -70,10 +70,10 @@ type routingBalancer struct {
 	// TODO: make this package not dependent on xds specific code. Same as for
 	// weighted target balancer.
 	bg              *balancergroup.BalancerGroup
-	stateAggregator *routingBalancerStateAggregator
+	stateAggregator *balancerStateAggregator
 
-	actions map[string]action
-	routes  []actionAndMatcher
+	actions map[string]actionConfig
+	routes  []route
 	// key in matchers is hash of the matcher. So that matchers can be reused by
 	// routes if the action is updated.
 	matchers map[string]*compositeMatcher
@@ -142,7 +142,7 @@ func (rb *routingBalancer) updateActions(s balancer.ClientConnState, newConfig *
 	return rebuildStateAndPicker
 }
 
-func routeToMatcher(r route) *compositeMatcher {
+func routeToMatcher(r routeConfig) *compositeMatcher {
 	var pathMatcher pathMatcherInterface
 	switch {
 	case r.regex != "":
@@ -193,7 +193,7 @@ func routeToMatcher(r route) *compositeMatcher {
 	return newCompositeMatcher(pathMatcher, headerMatchers, fractionMatcher)
 }
 
-func routesEqual(a, b []actionAndMatcher) bool {
+func routesEqual(a, b []route) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -211,20 +211,20 @@ func routesEqual(a, b []actionAndMatcher) bool {
 }
 
 func (rb *routingBalancer) updateRoutes(newConfig *lbConfig) (needRebuild bool) {
-	var newRoutes []actionAndMatcher
+	var newRoutes []route
 	newMatchers := make(map[string]*compositeMatcher)
 	for _, rt := range newConfig.routes {
 		matcherTemp := routeToMatcher(rt)
 		matcherStr := matcherTemp.String()
 		if m, ok := rb.matchers[matcherStr]; ok {
 			newMatchers[matcherStr] = m
-			newRoutes = append(newRoutes, actionAndMatcher{action: rt.action, m: m})
+			newRoutes = append(newRoutes, route{action: rt.action, m: m})
 			continue
 		}
 		// Build a new matcher if the matcher doesn't already exist.
 		newM := routeToMatcher(rt)
 		newMatchers[matcherStr] = newM
-		newRoutes = append(newRoutes, actionAndMatcher{action: rt.action, m: newM})
+		newRoutes = append(newRoutes, route{action: rt.action, m: newM})
 	}
 
 	rebuildStateAndPicker := !routesEqual(newRoutes, rb.routes)
@@ -233,11 +233,11 @@ func (rb *routingBalancer) updateRoutes(newConfig *lbConfig) (needRebuild bool) 
 	rb.matchers = newMatchers
 
 	if rebuildStateAndPicker {
-		var rpr []routingPickerRoute
+		var rpr []pickerRoute
 		for _, rtAndM := range rb.routes {
-			rpr = append(rpr, routingPickerRoute{
-				m:  rtAndM.m,
-				id: rtAndM.action,
+			rpr = append(rpr, pickerRoute{
+				m:             rtAndM.m,
+				subBalancerID: rtAndM.action,
 			})
 		}
 		rb.stateAggregator.updateRoutes(rpr)

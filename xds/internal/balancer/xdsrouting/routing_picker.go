@@ -25,29 +25,31 @@ import (
 	"google.golang.org/grpc/xds/internal"
 )
 
-type routingPickerRoute struct {
-	m  *compositeMatcher
-	id string
+type pickerRoute struct {
+	m *compositeMatcher
+	// subBalanceID is the id of the sub-balancer. It comes from field `action`
+	// in the route.
+	subBalancerID string
 }
 
-func (rpr routingPickerRoute) String() string {
-	return rpr.m.String() + "->" + rpr.id
+func (rpr pickerRoute) String() string {
+	return rpr.m.String() + "->" + rpr.subBalancerID
 }
 
-// routingPickerGroup contains a list of route matchers and their corresponding
+// pickerGroup contains a list of route matchers and their corresponding
 // pickers. For each pick, the first matched picker is used. If the picker isn't
 // ready, the pick will be queued.
-type routingPickerGroup struct {
-	routes  []routingPickerRoute
+type pickerGroup struct {
+	routes  []pickerRoute
 	pickers map[string]balancer.Picker
 }
 
-func newRoutingPickerGroup(routes []routingPickerRoute, idToPickerState map[internal.LocalityID]*routingSubBalancerState) *routingPickerGroup {
+func newPickerGroup(routes []pickerRoute, idToPickerState map[internal.LocalityID]*subBalancerState) *pickerGroup {
 	pickers := make(map[string]balancer.Picker)
 	for id, st := range idToPickerState {
 		pickers[getNameFromLocality(id)] = st.state.Picker
 	}
-	return &routingPickerGroup{
+	return &pickerGroup{
 		routes:  routes,
 		pickers: pickers,
 	}
@@ -55,10 +57,10 @@ func newRoutingPickerGroup(routes []routingPickerRoute, idToPickerState map[inte
 
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
 
-func (pg *routingPickerGroup) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (pg *pickerGroup) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	for _, rt := range pg.routes {
 		if rt.m.match(info) {
-			p, ok := pg.pickers[rt.id]
+			p, ok := pg.pickers[rt.subBalancerID]
 			if !ok {
 				return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 			}
