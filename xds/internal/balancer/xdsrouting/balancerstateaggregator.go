@@ -220,9 +220,8 @@ func (rbsa *balancerStateAggregator) build() balancer.State {
 	// state is Ready, pick for certain RPCs can behave like Connecting or
 	// TransientFailure.
 	rbsa.logger.Infof("Child pickers with routes: %s, actions: %+v", rbsa.routes, rbsa.idToPickerState)
-	picker := newPickerGroup(rbsa.routes, rbsa.idToPickerState)
 	return balancer.State{
 		ConnectivityState: aggregatedState,
-		Picker:            picker,
+		Picker:            newPickerGroup(rbsa.routes, rbsa.idToPickerState),
 	}
 }

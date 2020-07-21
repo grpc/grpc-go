@@ -111,9 +111,7 @@ func (rb *routingBalancer) updateActions(s balancer.ClientConnState, newConfig *
 	// - forward the address/balancer config update.
 	for name, newT := range newConfig.actions {
 		l := makeLocalityFromName(name)
-
-		_, ok := rb.actions[name]
-		if !ok {
+		if _, ok := rb.actions[name]; !ok {
 			// If this is a new sub-balancer, add weights to the picker map.
 			rb.stateAggregator.add(l)
 			// Then add to the balancer group.
@@ -121,7 +119,6 @@ func (rb *routingBalancer) updateActions(s balancer.ClientConnState, newConfig *
 			// Not trigger a state/picker update. Wait for the new sub-balancer
 			// to send its updates.
 		}
-
 		// Forwards all the update:
 		// - Addresses are from the map after splitting with hierarchy path,
 		// - Top level service config and attributes are the same,
@@ -139,7 +136,6 @@ func (rb *routingBalancer) updateActions(s balancer.ClientConnState, newConfig *
 	}
 
 	rb.actions = newConfig.actions
-
 	return rebuildStateAndPicker
 }
 
@@ -212,7 +208,6 @@ func routesEqual(a, b []route) bool {
 func (rb *routingBalancer) updateRoutes(newConfig *lbConfig) (needRebuild bool, _ error) {
 	var newRoutes []route
 	for _, rt := range newConfig.routes {
-		// Build a new matcher if the matcher doesn't already exist.
 		newMatcher, err := routeToMatcher(rt)
 		if err != nil {
 			return false, err

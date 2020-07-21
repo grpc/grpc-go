@@ -19,9 +19,9 @@
 package xdsrouting
 
 import (
-	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/xds/internal"
@@ -35,7 +35,7 @@ var (
 	}
 )
 
-func TestRoutingPickerGroupPick(t *testing.T) {
+func (s) TestRoutingPickerGroupPick(t *testing.T) {
 	tests := []struct {
 		name string
 
@@ -44,11 +44,11 @@ func TestRoutingPickerGroupPick(t *testing.T) {
 		info    balancer.PickInfo
 
 		want    balancer.PickResult
-		wantErr bool
+		wantErr error
 	}{
 		{
 			name:    "empty",
-			wantErr: true,
+			wantErr: errNoMatchedRouteFound,
 		},
 		{
 			name: "one route no match",
@@ -62,7 +62,7 @@ func TestRoutingPickerGroupPick(t *testing.T) {
 				}},
 			},
 			info:    balancer.PickInfo{FullMethodName: "/z/y"},
-			wantErr: true,
+			wantErr: errNoMatchedRouteFound,
 		},
 		{
 			name: "one route one match",
@@ -158,17 +158,18 @@ func TestRoutingPickerGroupPick(t *testing.T) {
 			want: balancer.PickResult{SubConn: testutils.TestSubConns[0]},
 		},
 	}
+	cmpOpts := []cmp.Option{cmp.AllowUnexported(testutils.TestSubConn{})}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pg := newPickerGroup(tt.routes, tt.pickers)
 			got, err := pg.Pick(tt.info)
-			t.Logf("result: %+v, err: %v", got, err)
-			if (err != nil) != tt.wantErr {
+			t.Logf("Pick(%+v) = {%+v, %+v}", tt.info, got, err)
+			if err != tt.wantErr {
 				t.Errorf("Pick() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Pick() got = %v, want %v", got, tt.want)
+			if !cmp.Equal(got, tt.want, cmpOpts...) {
+				t.Errorf("Pick() got = %v, want %v, diff %s", got, tt.want, cmp.Diff(got, tt.want, cmpOpts...))
 			}
 		})
 	}
