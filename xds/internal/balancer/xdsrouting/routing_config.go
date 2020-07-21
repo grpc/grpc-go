@@ -28,7 +28,7 @@ import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
-type action struct {
+type actionConfig struct {
 	// ChildPolicy is the child policy and it's config.
 	ChildPolicy *internalserviceconfig.BalancerConfig
 }
@@ -48,7 +48,7 @@ type headerMatcher struct {
 	presentMatch                                     bool
 }
 
-type route struct {
+type routeConfig struct {
 	// Path, Prefix and Regex can have at most one set. This is guaranteed by
 	// config parsing.
 	path, prefix, regex string
@@ -63,8 +63,8 @@ type route struct {
 // lbConfig is the balancer config for xds routing policy.
 type lbConfig struct {
 	serviceconfig.LoadBalancingConfig
-	routes  []route
-	actions map[string]action
+	routes  []routeConfig
+	actions map[string]actionConfig
 }
 
 // The following structs with `JSON` in name are temporary structs to unmarshal
@@ -84,13 +84,13 @@ type routeJSON struct {
 // lbConfigJSON is temporary struct for json unmarshal.
 type lbConfigJSON struct {
 	Route  []routeJSON
-	Action map[string]action
+	Action map[string]actionConfig
 }
 
 func (jc lbConfigJSON) toLBConfig() *lbConfig {
 	var ret lbConfig
 	for _, r := range jc.Route {
-		var tempR route
+		var tempR routeConfig
 		switch {
 		case r.Path != nil:
 			tempR.path = *r.Path
