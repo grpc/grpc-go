@@ -27,7 +27,13 @@ import (
 type ServiceUpdate struct {
 	// WeightedCluster is a map from cluster names (CDS resource to watch) to
 	// their weights.
+	//
+	// This field is only set when routing is disabled (env variable
+	// GRPC_XDS_EXPERIMENTAL_ROUTING is not true).
 	WeightedCluster map[string]uint32
+
+	// Routes
+	Routes []*Route
 }
 
 // WatchService uses LDS and RDS to discover information about the provided
@@ -121,6 +127,7 @@ func (w *serviceUpdateWatcher) handleRDSResp(update rdsUpdate, err error) {
 	}
 	w.serviceCb(ServiceUpdate{
 		WeightedCluster: update.weightedCluster,
+		Routes:          update.routes,
 	}, nil)
 }
 

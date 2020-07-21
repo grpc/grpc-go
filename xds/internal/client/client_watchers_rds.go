@@ -22,8 +22,38 @@ import (
 	"time"
 )
 
+// Int64Range is a range for header range match.
+type Int64Range struct {
+	Start int64 `json:"start"`
+	End   int64 `json:"end"`
+}
+
+// HeaderMatcher represents header matchers.
+type HeaderMatcher struct {
+	Name         string      `json:"name"`
+	InvertMatch  *bool       `json:"invertMatch,omitempty"`
+	ExactMatch   *string     `json:"exactMatch,omitempty"`
+	RegexMatch   *string     `json:"regexMatch,omitempty"`
+	PrefixMatch  *string     `json:"prefixMatch,omitempty"`
+	SuffixMatch  *string     `json:"suffixMatch,omitempty"`
+	RangeMatch   *Int64Range `json:"rangeMatch,omitempty"`
+	PresentMatch *bool       `json:"presentMatch,omitempty"`
+}
+
+// Route represents route with matchers and action.
+type Route struct {
+	Path, Prefix, Regex *string
+	Headers             []*HeaderMatcher
+	Fraction            *uint32
+	Action              map[string]uint32 // action is weighted clusters.
+}
+
 type rdsUpdate struct {
+	// weightedCluster is only set when routing is disabled (env variable
+	// GRPC_XDS_EXPERIMENTAL_ROUTING is not true).
 	weightedCluster map[string]uint32
+
+	routes []*Route
 }
 type rdsCallbackFunc func(rdsUpdate, error)
 

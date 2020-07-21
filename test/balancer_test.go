@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/balancerload"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -60,6 +61,7 @@ type testBalancer struct {
 
 	newSubConnOptions balancer.NewSubConnOptions
 	pickInfos         []balancer.PickInfo
+	pickExtraMDs      []metadata.MD
 	doneInfo          []balancer.DoneInfo
 }
 
@@ -124,8 +126,10 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	if p.err != nil {
 		return balancer.PickResult{}, p.err
 	}
+	extraMD, _ := grpcutil.ExtraMetadata(info.Ctx)
 	info.Ctx = nil // Do not validate context.
 	p.bal.pickInfos = append(p.bal.pickInfos, info)
+	p.bal.pickExtraMDs = append(p.bal.pickExtraMDs, extraMD)
 	return balancer.PickResult{SubConn: p.sc, Done: func(d balancer.DoneInfo) { p.bal.doneInfo = append(p.bal.doneInfo, d) }}, nil
 }
 
@@ -154,6 +158,60 @@ func (s) TestCredsBundleFromBalancer(t *testing.T) {
 	tc := testpb.NewTestServiceClient(cc)
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 		t.Fatalf("Test failed. Reason: %v", err)
+	}
+}
+
+func (s) TestPickExtraMetadata(t *testing.T) {
+	for _, e := range listTestEnv() {
+		testPickExtraMetadata(t, e)
+	}
+}
+
+func testPickExtraMetadata(t *testing.T, e env) {
+	te := newTest(t, e)
+	b := &testBalancer{}
+	balancer.Register(b)
+	const (
+		testUserAgent      = "test-user-agent"
+		testSubContentType = "proto"
+	)
+
+	te.customDialOptions = []grpc.DialOption{
+		grpc.WithBalancerName(testBalancerName),
+		grpc.WithUserAgent(testUserAgent),
+	}
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	// Set resolver to xds to trigger the extra metadata code path.
+	r := manual.NewBuilderWithScheme("xds")
+	resolver.Register(r)
+	defer func() {
+		resolver.UnregisterForTesting("xds")
+	}()
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
+	te.resolverScheme = "xds"
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+
+	// The RPCs will fail, but we don't care. We just need the pick to happen.
+	ctx1, cancel1 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel1()
+	tc.EmptyCall(ctx1, &testpb.Empty{})
+
+	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel2()
+	tc.EmptyCall(ctx2, &testpb.Empty{}, grpc.CallContentSubtype(testSubContentType))
+
+	want := []metadata.MD{
+		// First RPC doesn't have sub-content-type.
+		{"content-type": []string{"application/grpc"}},
+		// Second RPC has sub-content-type "proto".
+		{"content-type": []string{"application/grpc+proto"}},
+	}
+
+	if !cmp.Equal(b.pickExtraMDs, want) {
+		t.Fatalf("%s", cmp.Diff(b.pickExtraMDs, want))
 	}
 }
 

@@ -40,8 +40,7 @@ var serviceCmpOpts = []cmp.Option{cmp.AllowUnexported(serviceUpdateErr{}), cmpop
 
 // TestServiceWatch covers the cases:
 // - an update is received after a watch()
-// - an update for another resource name (which doesn't trigger callback)
-// - an upate is received after cancel()
+// - an update with routes received
 func (s) TestServiceWatch(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
@@ -75,6 +74,24 @@ func (s) TestServiceWatch(t *testing.T) {
 	})
 
 	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate, nil}, serviceCmpOpts...) {
+		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
+	}
+
+	wantUpdate2 := ServiceUpdate{
+		Routes: []*Route{{
+			Prefix: newStringP(""),
+			Action: map[string]uint32{testCDSName: 1},
+		}},
+	}
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
+		testRDSName: {
+			routes: []*Route{{
+				Prefix: newStringP(""),
+				Action: map[string]uint32{testCDSName: 1},
+			}},
+		},
+	})
+	if u, err := serviceUpdateCh.Receive(); err != nil || !cmp.Equal(u, serviceUpdateErr{wantUpdate2, nil}, serviceCmpOpts...) {
 		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
 	}
 }

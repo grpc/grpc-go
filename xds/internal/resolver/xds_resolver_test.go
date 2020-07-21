@@ -55,11 +55,9 @@ var (
 )
 
 func TestRegister(t *testing.T) {
-	for _, s := range []string{"xds", "xds-experimental"} {
-		b := resolver.Get(s)
-		if b == nil {
-			t.Errorf("scheme %v is not registered", s)
-		}
+	b := resolver.Get(xdsScheme)
+	if b == nil {
+		t.Errorf("scheme %v is not registered", xdsScheme)
 	}
 }
 
