@@ -97,51 +97,11 @@ func generateRDSUpdateFromRouteConfiguration(rc *xdspb.RouteConfiguration, host 
 		return rdsUpdate{}, fmt.Errorf("matched virtual host has no routes")
 	}
 
-	// Keep the old code path for routing disabled.
-	if routingEnabled {
-		routes, err := routesProtoToSlice(vh.Routes, logger)
-		if err != nil {
-			return rdsUpdate{}, fmt.Errorf("received route is invalid: %v", err)
-		}
-		return rdsUpdate{routes: routes}, nil
+	routes, err := routesProtoToSlice(vh.Routes, logger)
+	if err != nil {
+		return rdsUpdate{}, fmt.Errorf("received route is invalid: %v", err)
 	}
-
-	dr := vh.Routes[len(vh.Routes)-1]
-	match := dr.GetMatch()
-	if match == nil {
-		return rdsUpdate{}, fmt.Errorf("matched virtual host's default route doesn't have a match")
-	}
-	if prefix := match.GetPrefix(); prefix != "" && prefix != "/" {
-		// The matched virtual host is invalid. Match is not "" or "/".
-		return rdsUpdate{}, fmt.Errorf("matched virtual host's default route is %v, want Prefix empty string or /", match)
-	}
-	if caseSensitive := match.GetCaseSensitive(); caseSensitive != nil && !caseSensitive.Value {
-		// The case sensitive is set to false. Not set or set to true are both
-		// valid.
-		return rdsUpdate{}, fmt.Errorf("matched virtual host's default route set case-sensitive to false")
-	}
-	routeAction := dr.GetRoute()
-	if routeAction == nil {
-		return rdsUpdate{}, fmt.Errorf("matched route is nil")
-	}
-
-	if wc := routeAction.GetWeightedClusters(); wc != nil {
-		m, err := weightedClustersProtoToMap(wc)
-		if err != nil {
-			return rdsUpdate{}, fmt.Errorf("matched weighted cluster is invalid: %v", err)
-		}
-		return rdsUpdate{weightedCluster: m}, nil
-	}
-
-	// When there's just one cluster, we set weightedCluster to map with one
-	// entry. This mean we will build a weighted_target balancer even if there's
-	// just one cluster.
-	//
-	// Otherwise, we will need to switch the top policy between weighted_target
-	// and CDS. In case when the action changes between one cluster and multiple
-	// clusters, changing top level policy means recreating TCP connection every
-	// time.
-	return rdsUpdate{weightedCluster: map[string]uint32{routeAction.GetCluster(): 1}}, nil
+	return rdsUpdate{routes: routes}, nil
 }
 
 func routesProtoToSlice(routes []*routepb.Route, logger *grpclog.PrefixLogger) ([]*Route, error) {

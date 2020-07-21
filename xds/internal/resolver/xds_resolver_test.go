@@ -272,7 +272,7 @@ func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	// Call the watchAPI callback after closing the resolver, and make sure no
 	// update is triggerred on the ClientConn.
 	xdsR.Close()
-	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{WeightedCluster: map[string]uint32{cluster: 1}}, nil)
+	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{Routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}, nil)
 	if gotVal, gotErr := tcc.stateCh.Receive(); gotErr != testutils.ErrRecvTimeout {
 		t.Fatalf("ClientConn.UpdateState called after xdsResolver is closed: %v", gotVal)
 	}
@@ -317,19 +317,26 @@ func TestXDSResolverGoodServiceUpdate(t *testing.T) {
 
 	waitForWatchService(t, xdsC, targetStr)
 
+	// // Replace random number function to only generate 0. This is necessary so
+	// // the output is deterministic.
+	// grpcrandInt63n = func(int64) int64 { return 1 }
+	// defer func() { grpcrandInt63n = grpcrand.Int63n }()
+
+	defer replaceRandNumGenerator(0)()
+
 	for _, tt := range []struct {
 		su       client.ServiceUpdate
 		wantJSON string
 	}{
 		{
-			su:       client.ServiceUpdate{WeightedCluster: map[string]uint32{testCluster1: 1}},
-			wantJSON: testClusterOnlyJSON,
+			su:       client.ServiceUpdate{Routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{testCluster1: 1}}}},
+			wantJSON: testOneClusterOnlyJSON,
 		},
 		{
-			su: client.ServiceUpdate{WeightedCluster: map[string]uint32{
+			su: client.ServiceUpdate{Routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{
 				"cluster_1": 75,
 				"cluster_2": 25,
-			}},
+			}}}},
 			wantJSON: testWeightedCDSJSON,
 		},
 	} {
@@ -382,7 +389,7 @@ func TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
-	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{WeightedCluster: map[string]uint32{cluster: 1}}, nil)
+	xdsC.InvokeWatchServiceCallback(xdsclient.ServiceUpdate{Routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}, nil)
 	gotState, err := tcc.stateCh.Receive()
 	if err != nil {
 		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
