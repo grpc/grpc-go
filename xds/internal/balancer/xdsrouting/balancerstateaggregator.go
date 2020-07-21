@@ -49,7 +49,7 @@ type balancerStateAggregator struct {
 
 	mu sync.Mutex
 	// routes, one for each matcher.
-	routes []pickerRoute
+	routes []route
 	// If started is false, no updates should be sent to the parent cc. A closed
 	// sub-balancer could still send pickers to this aggregator. This makes sure
 	// that no updates will be forwarded to parent when the whole balancer group
@@ -124,7 +124,7 @@ func (rbsa *balancerStateAggregator) remove(id internal.LocalityID) {
 // updateRoutes updates the routes. Note that it doesn't trigger an update to
 // the parent ClientConn. The caller should decide when it's necessary, and call
 // buildAndUpdate.
-func (rbsa *balancerStateAggregator) updateRoutes(newRoutes []pickerRoute) {
+func (rbsa *balancerStateAggregator) updateRoutes(newRoutes []route) {
 	rbsa.mu.Lock()
 	defer rbsa.mu.Unlock()
 	rbsa.routes = newRoutes

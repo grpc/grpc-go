@@ -64,6 +64,10 @@ type route struct {
 	m      *compositeMatcher
 }
 
+func (r route) String() string {
+	return r.m.String() + "->" + r.action
+}
+
 type routingBalancer struct {
 	logger *grpclog.PrefixLogger
 
@@ -74,9 +78,6 @@ type routingBalancer struct {
 
 	actions map[string]actionConfig
 	routes  []route
-	// key in matchers is hash of the matcher. So that matchers can be reused by
-	// routes if the action is updated.
-	matchers map[string]*compositeMatcher
 }
 
 // TODO: remove this and use strings directly as keys for balancer group.
@@ -142,14 +143,13 @@ func (rb *routingBalancer) updateActions(s balancer.ClientConnState, newConfig *
 	return rebuildStateAndPicker
 }
 
-func routeToMatcher(r routeConfig) *compositeMatcher {
+func routeToMatcher(r routeConfig) (*compositeMatcher, error) {
 	var pathMatcher pathMatcherInterface
 	switch {
 	case r.regex != "":
 		re, err := regexp.Compile(r.regex)
 		if err != nil {
-			logger.Warningf("failed to compile regex %q, skipping this matcher", r.regex)
-			break
+			return nil, fmt.Errorf("failed to compile regex %q", r.regex)
 		}
 		pathMatcher = newPathRegexMatcher(re)
 	case r.path != "":
@@ -167,8 +167,7 @@ func routeToMatcher(r routeConfig) *compositeMatcher {
 		case h.regexMatch != "":
 			re, err := regexp.Compile(h.regexMatch)
 			if err != nil {
-				logger.Warningf("failed to compile regex %q, skipping this matcher", h.regexMatch)
-				break
+				return nil, fmt.Errorf("failed to compile regex %q, skipping this matcher", h.regexMatch)
 			}
 			matcherT = newHeaderRegexMatcher(h.name, re)
 		case h.prefixMatch != "":
@@ -190,7 +189,7 @@ func routeToMatcher(r routeConfig) *compositeMatcher {
 	if r.fraction != nil {
 		fractionMatcher = newFractionMatcher(*r.fraction)
 	}
-	return newCompositeMatcher(pathMatcher, headerMatchers, fractionMatcher)
+	return newCompositeMatcher(pathMatcher, headerMatchers, fractionMatcher), nil
 }
 
 func routesEqual(a, b []route) bool {
@@ -210,39 +209,23 @@ func routesEqual(a, b []route) bool {
 	return true
 }
 
-func (rb *routingBalancer) updateRoutes(newConfig *lbConfig) (needRebuild bool) {
+func (rb *routingBalancer) updateRoutes(newConfig *lbConfig) (needRebuild bool, _ error) {
 	var newRoutes []route
-	newMatchers := make(map[string]*compositeMatcher)
 	for _, rt := range newConfig.routes {
-		matcherTemp := routeToMatcher(rt)
-		matcherStr := matcherTemp.String()
-		if m, ok := rb.matchers[matcherStr]; ok {
-			newMatchers[matcherStr] = m
-			newRoutes = append(newRoutes, route{action: rt.action, m: m})
-			continue
-		}
 		// Build a new matcher if the matcher doesn't already exist.
-		newM := routeToMatcher(rt)
-		newMatchers[matcherStr] = newM
-		newRoutes = append(newRoutes, route{action: rt.action, m: newM})
+		newMatcher, err := routeToMatcher(rt)
+		if err != nil {
+			return false, err
+		}
+		newRoutes = append(newRoutes, route{action: rt.action, m: newMatcher})
 	}
-
 	rebuildStateAndPicker := !routesEqual(newRoutes, rb.routes)
-
 	rb.routes = newRoutes
-	rb.matchers = newMatchers
 
 	if rebuildStateAndPicker {
-		var rpr []pickerRoute
-		for _, rtAndM := range rb.routes {
-			rpr = append(rpr, pickerRoute{
-				m:             rtAndM.m,
-				subBalancerID: rtAndM.action,
-			})
-		}
-		rb.stateAggregator.updateRoutes(rpr)
+		rb.stateAggregator.updateRoutes(rb.routes)
 	}
-	return rebuildStateAndPicker
+	return rebuildStateAndPicker, nil
 }
 
 func (rb *routingBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
@@ -251,14 +234,14 @@ func (rb *routingBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
 	}
 	rb.logger.Infof("update with config %+v, resolver state %+v", s.BalancerConfig, s.ResolverState)
-	var rebuildStateAndPicker bool
-	if rb.updateActions(s, newConfig) {
-		rebuildStateAndPicker = true
+
+	rebuildForActions := rb.updateActions(s, newConfig)
+	rebuildForRoutes, err := rb.updateRoutes(newConfig)
+	if err != nil {
+		return fmt.Errorf("xds_routing balancer: failed to update routes: %v", err)
 	}
-	if rb.updateRoutes(newConfig) {
-		rebuildStateAndPicker = true
-	}
-	if rebuildStateAndPicker {
+
+	if rebuildForActions || rebuildForRoutes {
 		rb.stateAggregator.buildAndUpdate()
 	}
 	return nil

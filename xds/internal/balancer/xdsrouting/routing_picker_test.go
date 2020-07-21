@@ -39,7 +39,7 @@ func TestRoutingPickerGroupPick(t *testing.T) {
 	tests := []struct {
 		name string
 
-		routes  []pickerRoute
+		routes  []route
 		pickers map[internal.LocalityID]*subBalancerState
 		info    balancer.PickInfo
 
@@ -52,8 +52,8 @@ func TestRoutingPickerGroupPick(t *testing.T) {
 		},
 		{
 			name: "one route no match",
-			routes: []pickerRoute{
-				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), subBalancerID: "action-0"},
+			routes: []route{
+				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), action: "action-0"},
 			},
 			pickers: map[internal.LocalityID]*subBalancerState{
 				makeLocalityFromName("action-0"): {state: balancer.State{
@@ -66,8 +66,8 @@ func TestRoutingPickerGroupPick(t *testing.T) {
 		},
 		{
 			name: "one route one match",
-			routes: []pickerRoute{
-				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), subBalancerID: "action-0"},
+			routes: []route{
+				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), action: "action-0"},
 			},
 			pickers: map[internal.LocalityID]*subBalancerState{
 				makeLocalityFromName("action-0"): {state: balancer.State{
@@ -80,9 +80,9 @@ func TestRoutingPickerGroupPick(t *testing.T) {
 		},
 		{
 			name: "two routes first match",
-			routes: []pickerRoute{
-				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), subBalancerID: "action-0"},
-				{m: newCompositeMatcher(newPathPrefixMatcher("/z/"), nil, nil), subBalancerID: "action-1"},
+			routes: []route{
+				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), action: "action-0"},
+				{m: newCompositeMatcher(newPathPrefixMatcher("/z/"), nil, nil), action: "action-1"},
 			},
 			pickers: map[internal.LocalityID]*subBalancerState{
 				makeLocalityFromName("action-0"): {state: balancer.State{
@@ -99,9 +99,9 @@ func TestRoutingPickerGroupPick(t *testing.T) {
 		},
 		{
 			name: "two routes second match",
-			routes: []pickerRoute{
-				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), subBalancerID: "action-0"},
-				{m: newCompositeMatcher(newPathPrefixMatcher("/z/"), nil, nil), subBalancerID: "action-1"},
+			routes: []route{
+				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), action: "action-0"},
+				{m: newCompositeMatcher(newPathPrefixMatcher("/z/"), nil, nil), action: "action-1"},
 			},
 			pickers: map[internal.LocalityID]*subBalancerState{
 				makeLocalityFromName("action-0"): {state: balancer.State{
@@ -118,9 +118,9 @@ func TestRoutingPickerGroupPick(t *testing.T) {
 		},
 		{
 			name: "two routes both match former more specific",
-			routes: []pickerRoute{
-				{m: newCompositeMatcher(newPathExactMatcher("/a/b"), nil, nil), subBalancerID: "action-0"},
-				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), subBalancerID: "action-1"},
+			routes: []route{
+				{m: newCompositeMatcher(newPathExactMatcher("/a/b"), nil, nil), action: "action-0"},
+				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), action: "action-1"},
 			},
 			pickers: map[internal.LocalityID]*subBalancerState{
 				makeLocalityFromName("action-0"): {state: balancer.State{
@@ -138,9 +138,9 @@ func TestRoutingPickerGroupPick(t *testing.T) {
 		},
 		{
 			name: "tow routes both match latter more specific",
-			routes: []pickerRoute{
-				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), subBalancerID: "action-0"},
-				{m: newCompositeMatcher(newPathExactMatcher("/a/b"), nil, nil), subBalancerID: "action-1"},
+			routes: []route{
+				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), action: "action-0"},
+				{m: newCompositeMatcher(newPathExactMatcher("/a/b"), nil, nil), action: "action-1"},
 			},
 			pickers: map[internal.LocalityID]*subBalancerState{
 				makeLocalityFromName("action-0"): {state: balancer.State{
