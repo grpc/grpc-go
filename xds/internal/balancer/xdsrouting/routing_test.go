@@ -102,15 +102,15 @@ func init() {
 	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond
 }
 
-func testPick(t *testing.T, p balancer.Picker, info balancer.PickInfo, wantSC balancer.SubConn) {
+func testPick(t *testing.T, p balancer.Picker, info balancer.PickInfo, wantSC balancer.SubConn, wantErr error) {
 	t.Helper()
 	for i := 0; i < 5; i++ {
 		gotSCSt, err := p.Pick(info)
-		if err != nil {
-			t.Fatalf("picker.Pick, got error %v, want nil", err)
+		if err != wantErr {
+			t.Fatalf("picker.Pick(%+v), got error %v, want %v", info, err, wantErr)
 		}
 		if !cmp.Equal(gotSCSt.SubConn, wantSC, cmp.AllowUnexported(testutils.TestSubConn{})) {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, wantSC)
+			t.Fatalf("picker.Pick(%+v), got %v, want SubConn=%v", info, gotSCSt, wantSC)
 		}
 	}
 }
@@ -167,12 +167,40 @@ func TestRouting(t *testing.T) {
 	}
 
 	p1 := <-cc.NewPickerCh
-	testPick(t, p1, balancer.PickInfo{FullMethodName: "/a/0"}, m1[wantAddrs[0]])
-	testPick(t, p1, balancer.PickInfo{FullMethodName: "/a/1"}, m1[wantAddrs[0]])
-	testPick(t, p1, balancer.PickInfo{
-		FullMethodName: "/z/y",
-		Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("header-1", "value-1")),
-	}, m1[wantAddrs[1]])
+	for _, tt := range []struct {
+		pickInfo balancer.PickInfo
+		wantSC   balancer.SubConn
+		wantErr  error
+	}{
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/a/0"},
+			wantSC:   m1[wantAddrs[0]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/a/1"},
+			wantSC:   m1[wantAddrs[0]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{
+				FullMethodName: "/z/y",
+				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("header-1", "value-1")),
+			},
+			wantSC:  m1[wantAddrs[1]],
+			wantErr: nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{
+				FullMethodName: "/z/y",
+				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("h", "v")),
+			},
+			wantSC:  nil,
+			wantErr: errNoMatchedRouteFound,
+		},
+	} {
+		testPick(t, p1, tt.pickInfo, tt.wantSC, tt.wantErr)
+	}
 }
 
 // TestRoutingConfigUpdateAddRoute covers the cases the routing balancer
@@ -229,9 +257,34 @@ func TestRoutingConfigUpdateAddRoute(t *testing.T) {
 	}
 
 	p1 := <-cc.NewPickerCh
-	testPick(t, p1, balancer.PickInfo{FullMethodName: "/a/0"}, m1[wantAddrs[0]])
-	testPick(t, p1, balancer.PickInfo{FullMethodName: "/a/1"}, m1[wantAddrs[0]])
-	testPick(t, p1, balancer.PickInfo{FullMethodName: "/z/y"}, m1[wantAddrs[1]])
+	for _, tt := range []struct {
+		pickInfo balancer.PickInfo
+		wantSC   balancer.SubConn
+		wantErr  error
+	}{
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/a/0"},
+			wantSC:   m1[wantAddrs[0]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/a/1"},
+			wantSC:   m1[wantAddrs[0]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/z/y"},
+			wantSC:   m1[wantAddrs[1]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/c/d"},
+			wantSC:   nil,
+			wantErr:  errNoMatchedRouteFound,
+		},
+	} {
+		testPick(t, p1, tt.pickInfo, tt.wantSC, tt.wantErr)
+	}
 
 	// A config update with different routes, but the same actions. Expect a
 	// picker update, but no subconn changes.
@@ -270,13 +323,45 @@ func TestRoutingConfigUpdateAddRoute(t *testing.T) {
 	}
 
 	p2 := <-cc.NewPickerCh
-	testPick(t, p2, balancer.PickInfo{FullMethodName: "/a/0"}, m1[wantAddrs[0]])
-	testPick(t, p2, balancer.PickInfo{FullMethodName: "/a/1"}, m1[wantAddrs[0]])
-	testPick(t, p2, balancer.PickInfo{FullMethodName: "/z/y"}, m1[wantAddrs[1]])
-	testPick(t, p2, balancer.PickInfo{
-		FullMethodName: "/a/z",
-		Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("header-1", "any value")),
-	}, m1[wantAddrs[1]])
+	for _, tt := range []struct {
+		pickInfo balancer.PickInfo
+		wantSC   balancer.SubConn
+		wantErr  error
+	}{
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/a/0"},
+			wantSC:   m1[wantAddrs[0]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/a/1"},
+			wantSC:   m1[wantAddrs[0]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/z/y"},
+			wantSC:   m1[wantAddrs[1]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{
+				FullMethodName: "/a/z",
+				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("header-1", "value-1")),
+			},
+			wantSC:  m1[wantAddrs[1]],
+			wantErr: nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{
+				FullMethodName: "/c/d",
+				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("h", "v")),
+			},
+			wantSC:  nil,
+			wantErr: errNoMatchedRouteFound,
+		},
+	} {
+		testPick(t, p2, tt.pickInfo, tt.wantSC, tt.wantErr)
+	}
 }
 
 // TestRoutingConfigUpdateAddRouteAndAction covers the cases the routing
@@ -333,9 +418,34 @@ func TestRoutingConfigUpdateAddRouteAndAction(t *testing.T) {
 	}
 
 	p1 := <-cc.NewPickerCh
-	testPick(t, p1, balancer.PickInfo{FullMethodName: "/a/0"}, m1[wantAddrs[0]])
-	testPick(t, p1, balancer.PickInfo{FullMethodName: "/a/1"}, m1[wantAddrs[0]])
-	testPick(t, p1, balancer.PickInfo{FullMethodName: "/z/y"}, m1[wantAddrs[1]])
+	for _, tt := range []struct {
+		pickInfo balancer.PickInfo
+		wantSC   balancer.SubConn
+		wantErr  error
+	}{
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/a/0"},
+			wantSC:   m1[wantAddrs[0]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/a/1"},
+			wantSC:   m1[wantAddrs[0]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/z/y"},
+			wantSC:   m1[wantAddrs[1]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/c/d"},
+			wantSC:   nil,
+			wantErr:  errNoMatchedRouteFound,
+		},
+	} {
+		testPick(t, p1, tt.pickInfo, tt.wantSC, tt.wantErr)
+	}
 
 	// A config update with different routes, and different actions. Expect a
 	// new subconn and a picker update.
@@ -388,13 +498,45 @@ func TestRoutingConfigUpdateAddRouteAndAction(t *testing.T) {
 	}
 
 	p2 := <-cc.NewPickerCh
-	testPick(t, p2, balancer.PickInfo{FullMethodName: "/a/0"}, m1[wantAddrs[0]])
-	testPick(t, p2, balancer.PickInfo{FullMethodName: "/a/1"}, m1[wantAddrs[0]])
-	testPick(t, p2, balancer.PickInfo{FullMethodName: "/z/y"}, m1[wantAddrs[1]])
-	testPick(t, p2, balancer.PickInfo{
-		FullMethodName: "/a/z",
-		Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("header-1", "any value")),
-	}, m1[wantAddrs[2]])
+	for _, tt := range []struct {
+		pickInfo balancer.PickInfo
+		wantSC   balancer.SubConn
+		wantErr  error
+	}{
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/a/0"},
+			wantSC:   m1[wantAddrs[0]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/a/1"},
+			wantSC:   m1[wantAddrs[0]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/z/y"},
+			wantSC:   m1[wantAddrs[1]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{
+				FullMethodName: "/a/z",
+				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("header-1", "value-1")),
+			},
+			wantSC:  m1[wantAddrs[2]],
+			wantErr: nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{
+				FullMethodName: "/c/d",
+				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("h", "v")),
+			},
+			wantSC:  nil,
+			wantErr: errNoMatchedRouteFound,
+		},
+	} {
+		testPick(t, p2, tt.pickInfo, tt.wantSC, tt.wantErr)
+	}
 }
 
 // TestRoutingConfigUpdateDeleteAll covers the cases the routing balancer receives config
@@ -451,9 +593,34 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	}
 
 	p1 := <-cc.NewPickerCh
-	testPick(t, p1, balancer.PickInfo{FullMethodName: "/a/0"}, m1[wantAddrs[0]])
-	testPick(t, p1, balancer.PickInfo{FullMethodName: "/a/1"}, m1[wantAddrs[0]])
-	testPick(t, p1, balancer.PickInfo{FullMethodName: "/z/y"}, m1[wantAddrs[1]])
+	for _, tt := range []struct {
+		pickInfo balancer.PickInfo
+		wantSC   balancer.SubConn
+		wantErr  error
+	}{
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/a/0"},
+			wantSC:   m1[wantAddrs[0]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/a/1"},
+			wantSC:   m1[wantAddrs[0]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/z/y"},
+			wantSC:   m1[wantAddrs[1]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/c/d"},
+			wantSC:   nil,
+			wantErr:  errNoMatchedRouteFound,
+		},
+	} {
+		testPick(t, p1, tt.pickInfo, tt.wantSC, tt.wantErr)
+	}
 
 	// A config update with no routes.
 	configJSON2 := `{}`
@@ -512,7 +679,32 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	}
 
 	p3 := <-cc.NewPickerCh
-	testPick(t, p3, balancer.PickInfo{FullMethodName: "/a/0"}, m2[wantAddrs[0]])
-	testPick(t, p3, balancer.PickInfo{FullMethodName: "/a/1"}, m2[wantAddrs[0]])
-	testPick(t, p3, balancer.PickInfo{FullMethodName: "/z/y"}, m2[wantAddrs[1]])
+	for _, tt := range []struct {
+		pickInfo balancer.PickInfo
+		wantSC   balancer.SubConn
+		wantErr  error
+	}{
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/a/0"},
+			wantSC:   m2[wantAddrs[0]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/a/1"},
+			wantSC:   m2[wantAddrs[0]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/z/y"},
+			wantSC:   m2[wantAddrs[1]],
+			wantErr:  nil,
+		},
+		{
+			pickInfo: balancer.PickInfo{FullMethodName: "/c/d"},
+			wantSC:   nil,
+			wantErr:  errNoMatchedRouteFound,
+		},
+	} {
+		testPick(t, p3, tt.pickInfo, tt.wantSC, tt.wantErr)
+	}
 }
