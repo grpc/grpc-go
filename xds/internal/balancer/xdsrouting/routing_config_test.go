@@ -294,14 +294,14 @@ func Test_parseConfig(t *testing.T) {
 			name: "OK with path matchers only",
 			js:   testJSONConfig,
 			want: &lbConfig{
-				routes: []route{
+				routes: []routeConfig{
 					{path: "/service_1/method_1", action: "cds:cluster_1"},
 					{path: "/service_1/method_2", action: "cds:cluster_1"},
 					{prefix: "/service_2/method_1", action: "weighted:cluster_1_cluster_2_1"},
 					{prefix: "/service_2", action: "weighted:cluster_1_cluster_2_1"},
 					{regex: "^/service_2/method_3$", action: "weighted:cluster_1_cluster_3_1"},
 				},
-				actions: map[string]action{
+				actions: map[string]actionConfig{
 					"cds:cluster_1": {ChildPolicy: &internalserviceconfig.BalancerConfig{
 						Name: cdsName, Config: cdsConfig1},
 					},
@@ -319,7 +319,7 @@ func Test_parseConfig(t *testing.T) {
 			name: "OK with all matchers",
 			js:   testJSONConfigWithAllMatchers,
 			want: &lbConfig{
-				routes: []route{
+				routes: []routeConfig{
 					{path: "/service_1/method_1", action: "cds:cluster_1"},
 					{prefix: "/service_2/method_1", action: "cds:cluster_1"},
 					{regex: "^/service_2/method_3$", action: "cds:cluster_1"},
@@ -332,7 +332,7 @@ func Test_parseConfig(t *testing.T) {
 					{prefix: "", headers: []headerMatcher{{name: "header-1", suffixMatch: "value-1"}}, action: "cds:cluster_2"},
 					{prefix: "", fraction: newUInt32P(31415), action: "cds:cluster_3"},
 				},
-				actions: map[string]action{
+				actions: map[string]actionConfig{
 					"cds:cluster_1": {ChildPolicy: &internalserviceconfig.BalancerConfig{
 						Name: cdsName, Config: cdsConfig1},
 					},
@@ -348,7 +348,7 @@ func Test_parseConfig(t *testing.T) {
 		},
 	}
 
-	cmpOptions := []cmp.Option{cmp.AllowUnexported(lbConfig{}, route{}, headerMatcher{}, int64Range{})}
+	cmpOptions := []cmp.Option{cmp.AllowUnexported(lbConfig{}, routeConfig{}, headerMatcher{}, int64Range{})}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

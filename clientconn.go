@@ -245,6 +245,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	// Determine the resolver to use.
 	cc.parsedTarget = grpcutil.ParseTarget(cc.target)
+	unixScheme := strings.HasPrefix(cc.target, "unix:")
 	channelz.Infof(logger, cc.channelzID, "parsed scheme: %q", cc.parsedTarget.Scheme)
 	resolverBuilder := cc.getResolver(cc.parsedTarget.Scheme)
 	if resolverBuilder == nil {
@@ -267,6 +268,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.authority = creds.Info().ServerName
 	} else if cc.dopts.insecure && cc.dopts.authority != "" {
 		cc.authority = cc.dopts.authority
+	} else if unixScheme {
+		cc.authority = "localhost"
 	} else {
 		// Use endpoint from "scheme://authority/endpoint" as the default
 		// authority for ClientConn.
