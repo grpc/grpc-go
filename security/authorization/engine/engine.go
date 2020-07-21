@@ -197,7 +197,7 @@ func exprToProgram(condition *expr.Expr) *cel.Program {
 			decls.NewVar("request.url_path", decls.String),
 			decls.NewVar("request.host", decls.String),
 			decls.NewVar("request.method", decls.String),
-			decls.NewVar("request.headers", decls.NewMapType(&expr.Type{nil, struct{}{}, nil, 3}, &expr.Type{nil, struct{}{}, nil, 3})),
+			decls.NewVar("request.headers", decls.NewMapType(decls.String, decls.String)),
 			decls.NewVar("source.address", decls.String),
 			decls.NewVar("source.port", decls.Int),
 			decls.NewVar("destination.address", decls.String),
