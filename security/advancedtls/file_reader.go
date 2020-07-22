@@ -21,7 +21,6 @@ package advancedtls
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"time"
@@ -129,15 +128,7 @@ func (r PemTrustCredFileReader) ReadTrustCerts() (*x509.CertPool, error) {
 	if err != nil {
 		return nil, err
 	}
-	trustBlock, _ := pem.Decode(trustData)
-	if trustBlock == nil {
-		return nil, err
-	}
-	trustCert, err := x509.ParseCertificate(trustBlock.Bytes)
-	if err != nil {
-		return nil, err
-	}
 	trustPool := x509.NewCertPool()
-	trustPool.AddCert(trustCert)
+	trustPool.AppendCertsFromPEM(trustData)
 	return trustPool, nil
 }
