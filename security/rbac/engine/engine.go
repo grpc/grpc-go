@@ -120,7 +120,8 @@ func getDecision(engine celEngine, match bool) Decision {
 //  matching policy names will be returned.
 // Else if any policy is missing attributes, the decision is unknown, and the list of
 //  policy names that can't be evaluated due to missing attributes will be returned.
-// Else, the decision is the opposite of the engine's action.
+// Else, the decision is the opposite of the engine's action, i.e. an ALLOW engine
+//  will return DecisionDeny, and vice versa.
 func (engine celEngine) evaluate(evalMap map[string]interface{}) (Decision, []string) {
 	matchingPolicyNames := []string{}
 	unknownPolicyNames := []string{}
