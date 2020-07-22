@@ -683,9 +683,6 @@ func TestOptionsConfig(t *testing.T) {
 }
 
 func TestGetCertificateSNI(t *testing.T) {
-	const (
-		pointFormatUncompressed uint8 = 0
-	)
 	// Load server certificates for setting the serverGetCert callback function.
 	serverPeerCert1, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
 		testdata.Path("server_key_1.pem"))
@@ -746,6 +743,7 @@ func TestGetCertificateSNI(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Unable to generate serverConfig. Error: %v", err)
 			}
+			pointFormatUncompressed := uint8(0)
 			clientHello := &tls.ClientHelloInfo{
 				CipherSuites:      []uint16{tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA},
 				ServerName:        test.serverName,
