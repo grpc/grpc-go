@@ -165,12 +165,12 @@ type xdsResolver struct {
 	//   "A40_B60_": {{A:40, B:60}, "A_B_", "A_B_0"}
 	//   "A30_B70_": {{A:30, B:70}, "A_B_", "A_B_1"}
 	//   "B90_C10_": {{B:90, C:10}, "B_C_", "B_C_0"}
-	actions map[string]action
+	actions map[string]actionWithAssignedName
 	// NextIndex is used to generate assigned names. Key is cluster names
 	// without weights. With the example above, it will have
 	//   "A_B_": 2
 	//   "B_C_": 1
-	nextIndex map[string]int
+	nextIndex map[string]uint64
 }
 
 // run is a long running goroutine which blocks on receiving service updates

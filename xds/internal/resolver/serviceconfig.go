@@ -21,8 +21,6 @@ package resolver
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
-	"strconv"
 
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -92,29 +90,7 @@ func (r *xdsResolver) routesToJSON(routes []*xdsclient.Route) (string, error) {
 			t.Fraction = &wrapperspb.UInt32Value{Value: *f}
 		}
 
-		// Hash the clusters from the action, and find the assigned action
-		// names. The assigned action names are kept in r.actions, with the
-		// clusters name hash as map key.
-		//
-		// The action name is not simply the hash. For example, the hash can be
-		// "A40_B60_", but the assigned name can be "A_B_0". It's this way so
-		// the action can be reused if only weights are changing.
-		var clusterNames []string
-		clusters := rt.Action
-		for n := range clusters {
-			clusterNames = append(clusterNames, n)
-		}
-		// Hash cluster names. Sort names to be consistent.
-		sort.Strings(clusterNames)
-		clustersWithWeight := ""
-		for _, c := range clusterNames {
-			// Generates hash "A40_B60_".
-			clustersWithWeight = clustersWithWeight + c + strconv.FormatUint(uint64(clusters[c]), 10) + "_"
-		}
-		// Look in r.actions for the assigned action name.
-		if act, ok := r.actions[clustersWithWeight]; ok {
-			t.Action = act.assignedName
-		}
+		t.Action = r.getActionAssignedName(rt.Action)
 		rts = append(rts, t)
 	}
 
