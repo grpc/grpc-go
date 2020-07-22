@@ -82,7 +82,7 @@ func exprToProgram(condition *expr.Expr) *cel.Program {
 }
 
 // Returns whether or not a policy is matched.
-func matchesCondition(condition *cel.Program, evalMap map[string]interface{}) (bool, error) {
+func evaluateCondition(condition *cel.Program, evalMap map[string]interface{}) (bool, error) {
 	// TODO(@ezou): implement the matching logic using CEL library.
 	return false, nil
 }
@@ -114,7 +114,7 @@ func (engine rbacEngine) matches(evalMap map[string]interface{}) (bool, []string
 	matchingPolicyNames := []string{}
 	unknownPolicyNames := []string{}
 	for policyName, condition := range engine.conditions {
-		match, err := matchesCondition(condition, evalMap)
+		match, err := evaluateCondition(condition, evalMap)
 		if err != nil {
 			unknownPolicyNames = append(unknownPolicyNames, policyName)
 		} else if match {
