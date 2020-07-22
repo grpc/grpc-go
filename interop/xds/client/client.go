@@ -243,11 +243,18 @@ func makeOneRPC(c testpb.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcInf
 	if len(cfg.md) != 0 {
 		ctx = metadata.NewOutgoingContext(ctx, cfg.md)
 	}
+	info := rpcInfo{typ: cfg.typ}
 
 	var err error
 	switch cfg.typ {
 	case unaryCall:
-		_, err = c.UnaryCall(ctx, &testpb.SimpleRequest{FillServerId: true}, grpc.Peer(&p), grpc.Header(&header))
+		var resp *testpb.SimpleResponse
+		resp, err = c.UnaryCall(ctx, &testpb.SimpleRequest{FillServerId: true}, grpc.Peer(&p), grpc.Header(&header))
+		// For UnaryCall, also read hostname from response, in case the server
+		// isn't updated to send headers.
+		if resp != nil {
+			info.hostname = resp.Hostname
+		}
 	case emptyCall:
 		_, err = c.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p), grpc.Header(&header))
 	}
@@ -255,7 +262,6 @@ func makeOneRPC(c testpb.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcInf
 		return nil, nil, err
 	}
 
-	info := rpcInfo{typ: cfg.typ}
 	hosts := header["hostname"]
 	if len(hosts) > 0 {
 		info.hostname = hosts[0]
