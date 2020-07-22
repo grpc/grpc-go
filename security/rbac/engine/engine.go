@@ -81,36 +81,38 @@ func exprToProgram(condition *expr.Expr) *cel.Program {
 	return nil
 }
 
-// Returns whether or not a policy is matched.
+// Evaluates a CEL expression. Returns true if CEL evaluation returns true. Returns false if
+// CEL evaluation returns false. Returns an error if CEL evaluation returns unknown or an
+// unsuccessful evaluation.
 func evaluateCondition(condition *cel.Program, evalMap map[string]interface{}) (bool, error) {
 	// TODO(@ezou): implement the matching logic using CEL library.
 	return false, nil
 }
 
-// rbacEngine is the struct for an engine created from one RBAC proto.
-type rbacEngine struct {
+// celEngine is the struct for an engine created from one RBAC proto.
+type celEngine struct {
 	action     pb.RBAC_Action
 	conditions map[string]*cel.Program
 }
 
-// Creates a new rbacEngine from an RBAC.
-func newRbacEngine(rbac pb.RBAC) rbacEngine {
+// Creates a new celEngine from an RBAC policy proto.
+func newCelEngine(rbac pb.RBAC) celEngine {
 	action := rbac.Action
 	conditions := make(map[string]*cel.Program)
 	for policyName, policy := range rbac.Policies {
 		conditions[policyName] = exprToProgram(policy.Condition)
 	}
-	return rbacEngine{action, conditions}
+	return celEngine{action, conditions}
 }
 
-// Returns whether a set of authorization arguments, as contained in evalMap, match an
-//  rbacEngine's conditions.
+// Returns whether a set of authorization arguments, as contained in evalMap, match
+//  celEngine's conditions.
 // If any policy matches, the engine has been matched, and the list of matching policy
 //  names will be returned.
 // Else if any policy is missing attributes, the engine is not matched, and the list of
 //  policy names that can't be evaluated due to missing attributes will be returned.
 // Else, there is not a match.
-func (engine rbacEngine) matches(evalMap map[string]interface{}) (bool, []string) {
+func (engine celEngine) evaluate(evalMap map[string]interface{}) (bool, []string) {
 	matchingPolicyNames := []string{}
 	unknownPolicyNames := []string{}
 	for policyName, condition := range engine.conditions {
@@ -127,24 +129,24 @@ func (engine rbacEngine) matches(evalMap map[string]interface{}) (bool, []string
 	return false, unknownPolicyNames
 }
 
-// CelEvaluationEngine is the struct for the CEL-based authorization engine.
-type CelEvaluationEngine struct {
-	engines []rbacEngine
+// AuthorizationEngine is the struct for the CEL-based authorization engine.
+type AuthorizationEngine struct {
+	engines []celEngine
 }
 
-// NewCelEvaluationEngine builds a CEL evaluation engine from a list of Envoy RBACs.
-func NewCelEvaluationEngine(rbacs []pb.RBAC) (CelEvaluationEngine, error) {
+// NewAuthorizationEngine builds a CEL evaluation engine from a list of Envoy RBACs.
+func NewAuthorizationEngine(rbacs []pb.RBAC) (AuthorizationEngine, error) {
 	if len(rbacs) < 1 || len(rbacs) > 2 {
-		return CelEvaluationEngine{}, status.Errorf(codes.InvalidArgument, "must provide 1 or 2 RBACs")
+		return AuthorizationEngine{}, status.Errorf(codes.InvalidArgument, "must provide 1 or 2 RBACs")
 	}
 	if len(rbacs) == 2 && (rbacs[0].Action != pb.RBAC_DENY || rbacs[1].Action != pb.RBAC_ALLOW) {
-		return CelEvaluationEngine{}, status.Errorf(codes.InvalidArgument, "when providing 2 RBACs, must have 1 DENY and 1 ALLOW in that order")
+		return AuthorizationEngine{}, status.Errorf(codes.InvalidArgument, "when providing 2 RBACs, must have 1 DENY and 1 ALLOW in that order")
 	}
-	var engines []rbacEngine
+	var engines []celEngine
 	for _, rbac := range rbacs {
-		engines = append(engines, newRbacEngine(rbac))
+		engines = append(engines, newCelEngine(rbac))
 	}
-	return CelEvaluationEngine{engines}, nil
+	return AuthorizationEngine{engines}, nil
 }
 
 // Evaluate is the core function that evaluates whether an RPC is authorized.
@@ -164,14 +166,14 @@ func NewCelEvaluationEngine(rbacs []pb.RBAC) (CelEvaluationEngine, error) {
 // returns deny. If one of the expressions in the DENY policy is unknown, it
 // returns undecided. Now all the expressions in the DENY policy are false,
 // it returns the evaluation of the ALLOW policy.
-func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) (AuthorizationDecision, error) {
+func (authorizationEngine AuthorizationEngine) Evaluate(args AuthorizationArgs) (AuthorizationDecision, error) {
 	evalMap := args.toEvalMap()
-	numEngines := len(celEngine.engines)
+	numEngines := len(authorizationEngine.engines)
 	if numEngines < 1 || numEngines > 2 {
 		return AuthorizationDecision{}, status.Errorf(codes.Internal, "each CEL-based authorization engine should have 1 or 2 RBAC engines; instead, there are %d in the CEL-based authorization engine provided", numEngines)
 	}
-	for _, engine := range celEngine.engines {
-		match, policyNames := engine.matches(evalMap)
+	for _, engine := range authorizationEngine.engines {
+		match, policyNames := engine.evaluate(evalMap)
 		// If the engine matched, return that engine's action.
 		if match {
 			if engine.action == pb.RBAC_ALLOW {
@@ -185,7 +187,7 @@ func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) (Authoriza
 		}
 	}
 	// If all engines explicitly did not match.
-	if len(celEngine.engines) == 1 && celEngine.engines[0].action == pb.RBAC_DENY {
+	if len(authorizationEngine.engines) == 1 && authorizationEngine.engines[0].action == pb.RBAC_DENY {
 		return AuthorizationDecision{DecisionAllow, []string{}}, nil
 	}
 	return AuthorizationDecision{DecisionDeny, []string{}}, nil
