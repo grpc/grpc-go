@@ -115,13 +115,12 @@ func getDecision(engine celEngine, match bool) Decision {
 	return DecisionDeny
 }
 
-// Returns whether a set of authorization arguments, as contained in evalMap, match
-//  celEngine's conditions.
-// If any policy matches, the engine has been matched, and the list of matching policy
-//  names will be returned.
-// Else if any policy is missing attributes, the engine is not matched, and the list of
+// Returns the authorization decision of a single engine based on evalMap.
+// If any policy matches, the decision matches the engine's action, and the list of
+//  matching policy names will be returned.
+// Else if any policy is missing attributes, the decision is unknown, and the list of
 //  policy names that can't be evaluated due to missing attributes will be returned.
-// Else, there is not a match.
+// Else, the decision is the opposite of the engine's action.
 func (engine celEngine) evaluate(evalMap map[string]interface{}) (Decision, []string) {
 	matchingPolicyNames := []string{}
 	unknownPolicyNames := []string{}
@@ -185,16 +184,11 @@ func (authorizationEngine AuthorizationEngine) Evaluate(args AuthorizationArgs) 
 	if numEngines < 1 || numEngines > 2 {
 		return AuthorizationDecision{}, status.Errorf(codes.Internal, "each CEL-based authorization engine should have 1 or 2 RBAC engines; instead, there are %d in the CEL-based authorization engine provided", numEngines)
 	}
-	for _, engine := range authorizationEngine.engines {
-		decision, policyNames := engine.evaluate(evalMap)
-		// If the decision is either from a match or unknown.
-		if decision != getDecision(engine, false) {
-			return AuthorizationDecision{decision, policyNames}, nil
-		}
+	// Evaluate the first engine.
+	decision, policyNames := authorizationEngine.engines[0].evaluate(evalMap)
+	// Evaluate the second engine, if there is one and if the first engine is unmatched.
+	if len(authorizationEngine.engines) == 2 && decision == DecisionAllow {
+		decision, policyNames = authorizationEngine.engines[1].evaluate(evalMap)
 	}
-	// If all engines explicitly did not match.
-	if len(authorizationEngine.engines) == 1 && authorizationEngine.engines[0].action == pb.RBAC_DENY {
-		return AuthorizationDecision{DecisionAllow, []string{}}, nil
-	}
-	return AuthorizationDecision{DecisionDeny, []string{}}, nil
+	return AuthorizationDecision{decision, policyNames}, nil
 }
