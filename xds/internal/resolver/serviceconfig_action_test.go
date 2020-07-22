@@ -39,9 +39,9 @@ func TestNewActionsFromRoutes(t *testing.T) {
 				{Action: map[string]uint32{"B": 90, "C": 10}},
 			},
 			want: map[string]actionWithAssignedName{
-				"A40_B60_": {map[string]uint32{"A": 40, "B": 60}, "A_B_", ""},
-				"A30_B70_": {map[string]uint32{"A": 30, "B": 70}, "A_B_", ""},
-				"B90_C10_": {map[string]uint32{"B": 90, "C": 10}, "B_C_", ""},
+				"A40_B60_": {map[string]uint32{"A": 40, "B": 60}, "A_B_", "", 0},
+				"A30_B70_": {map[string]uint32{"A": 30, "B": 70}, "A_B_", "", 0},
+				"B90_C10_": {map[string]uint32{"B": 90, "C": 10}, "B_C_", "", 0},
 			},
 		},
 	}
@@ -59,12 +59,12 @@ func TestNewActionsFromRoutes(t *testing.T) {
 
 func TestRemoveOrReuseName(t *testing.T) {
 	tests := []struct {
-		name          string
-		oldActions    map[string]actionWithAssignedName
-		oldNextIndex  map[string]uint64
-		newActions    map[string]actionWithAssignedName
-		wantActions   map[string]actionWithAssignedName
-		wantNextIndex map[string]uint64
+		name         string
+		oldActions   map[string]actionWithAssignedName
+		oldRandNums  map[int64]bool
+		newActions   map[string]actionWithAssignedName
+		wantActions  map[string]actionWithAssignedName
+		wantRandNums map[int64]bool
 	}{
 		{
 			name: "add same cluster",
@@ -73,10 +73,11 @@ func TestRemoveOrReuseName(t *testing.T) {
 					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
 					clusterNames:        "a_b_c_",
 					assignedName:        "a_b_c_0",
+					randomNumber:        0,
 				},
 			},
-			oldNextIndex: map[string]uint64{
-				"a_b_c_": 1,
+			oldRandNums: map[int64]bool{
+				0: true,
 			},
 			newActions: map[string]actionWithAssignedName{
 				"a20_b30_c50_": {
@@ -93,15 +94,18 @@ func TestRemoveOrReuseName(t *testing.T) {
 					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
 					clusterNames:        "a_b_c_",
 					assignedName:        "a_b_c_0",
+					randomNumber:        0,
 				},
 				"a10_b50_c40_": {
 					clustersWithWeights: map[string]uint32{"a": 10, "b": 50, "c": 40},
 					clusterNames:        "a_b_c_",
-					assignedName:        "a_b_c_1",
+					assignedName:        "a_b_c_1000",
+					randomNumber:        1000,
 				},
 			},
-			wantNextIndex: map[string]uint64{
-				"a_b_c_": 2,
+			wantRandNums: map[int64]bool{
+				0:    true,
+				1000: true,
 			},
 		},
 		{
@@ -111,15 +115,18 @@ func TestRemoveOrReuseName(t *testing.T) {
 					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
 					clusterNames:        "a_b_c_",
 					assignedName:        "a_b_c_0",
+					randomNumber:        0,
 				},
 				"a10_b50_c40_": {
 					clustersWithWeights: map[string]uint32{"a": 10, "b": 50, "c": 40},
 					clusterNames:        "a_b_c_",
 					assignedName:        "a_b_c_1",
+					randomNumber:        1,
 				},
 			},
-			oldNextIndex: map[string]uint64{
-				"a_b_c_": 2,
+			oldRandNums: map[int64]bool{
+				0: true,
+				1: true,
 			},
 			newActions: map[string]actionWithAssignedName{
 				"a20_b30_c50_": {
@@ -132,12 +139,11 @@ func TestRemoveOrReuseName(t *testing.T) {
 					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
 					clusterNames:        "a_b_c_",
 					assignedName:        "a_b_c_0",
+					randomNumber:        0,
 				},
 			},
-			wantNextIndex: map[string]uint64{
-				// Even though a_b_c_1 was removed, keep index as 2. Because
-				// there are cases a_b_c_1 is in use, but a_b_c_0 is removed.
-				"a_b_c_": 2,
+			wantRandNums: map[int64]bool{
+				0: true,
 			},
 		},
 		{
@@ -147,10 +153,11 @@ func TestRemoveOrReuseName(t *testing.T) {
 					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
 					clusterNames:        "a_b_c_",
 					assignedName:        "a_b_c_0",
+					randomNumber:        0,
 				},
 			},
-			oldNextIndex: map[string]uint64{
-				"a_b_c_": 1,
+			oldRandNums: map[int64]bool{
+				0: true,
 			},
 			newActions: map[string]actionWithAssignedName{
 				"a20_b30_c50_": {
@@ -167,16 +174,18 @@ func TestRemoveOrReuseName(t *testing.T) {
 					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
 					clusterNames:        "a_b_c_",
 					assignedName:        "a_b_c_0",
+					randomNumber:        0,
 				},
 				"a50_b50_": {
 					clustersWithWeights: map[string]uint32{"a": 50, "b": 50},
 					clusterNames:        "a_b_",
-					assignedName:        "a_b_0",
+					assignedName:        "a_b_1000",
+					randomNumber:        1000,
 				},
 			},
-			wantNextIndex: map[string]uint64{
-				"a_b_c_": 1,
-				"a_b_":   1,
+			wantRandNums: map[int64]bool{
+				0:    true,
+				1000: true,
 			},
 		},
 		{
@@ -186,10 +195,11 @@ func TestRemoveOrReuseName(t *testing.T) {
 					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
 					clusterNames:        "a_b_c_",
 					assignedName:        "a_b_c_0",
+					randomNumber:        0,
 				},
 			},
-			oldNextIndex: map[string]uint64{
-				"a_b_c_": 1,
+			oldRandNums: map[int64]bool{
+				0: true,
 			},
 			newActions: map[string]actionWithAssignedName{
 				"a10_b50_c40_": {
@@ -202,10 +212,11 @@ func TestRemoveOrReuseName(t *testing.T) {
 					clustersWithWeights: map[string]uint32{"a": 10, "b": 50, "c": 40},
 					clusterNames:        "a_b_c_",
 					assignedName:        "a_b_c_0",
+					randomNumber:        0,
 				},
 			},
-			wantNextIndex: map[string]uint64{
-				"a_b_c_": 1,
+			wantRandNums: map[int64]bool{
+				0: true,
 			},
 		},
 		{
@@ -215,21 +226,25 @@ func TestRemoveOrReuseName(t *testing.T) {
 					clustersWithWeights: map[string]uint32{"a": 20, "b": 30, "c": 50},
 					clusterNames:        "a_b_c_",
 					assignedName:        "a_b_c_0",
+					randomNumber:        0,
 				},
 				"a10_b50_c40_": {
 					clustersWithWeights: map[string]uint32{"a": 10, "b": 50, "c": 40},
 					clusterNames:        "a_b_c_",
 					assignedName:        "a_b_c_1",
+					randomNumber:        1,
 				},
 				"a50_b50_": {
 					clustersWithWeights: map[string]uint32{"a": 50, "b": 50},
 					clusterNames:        "a_b_",
-					assignedName:        "a_b_0",
+					assignedName:        "a_b_2",
+					randomNumber:        2,
 				},
 			},
-			oldNextIndex: map[string]uint64{
-				"a_b_c_": 2,
-				"a_b_":   1,
+			oldRandNums: map[int64]bool{
+				0: true,
+				1: true,
+				2: true,
 			},
 			newActions: map[string]actionWithAssignedName{
 				"a10_b50_c40_": {
@@ -250,37 +265,42 @@ func TestRemoveOrReuseName(t *testing.T) {
 					clustersWithWeights: map[string]uint32{"a": 10, "b": 50, "c": 40},
 					clusterNames:        "a_b_c_",
 					assignedName:        "a_b_c_1",
+					randomNumber:        1,
 				},
 				"a30_b30_c40_": {
 					clustersWithWeights: map[string]uint32{"a": 30, "b": 30, "c": 40},
 					clusterNames:        "a_b_c_",
 					assignedName:        "a_b_c_0",
+					randomNumber:        0,
 				},
 				"c50_d50_": {
 					clustersWithWeights: map[string]uint32{"c": 50, "d": 50},
 					clusterNames:        "c_d_",
-					assignedName:        "c_d_0",
+					assignedName:        "c_d_1000",
+					randomNumber:        1000,
 				},
 			},
-			wantNextIndex: map[string]uint64{
-				"a_b_c_": 2,
-				"c_d_":   1,
+			wantRandNums: map[int64]bool{
+				0:    true,
+				1:    true,
+				1000: true,
 			},
 		},
 	}
 	cmpOpts := []cmp.Option{cmp.AllowUnexported(actionWithAssignedName{})}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			defer replaceRandNumGenerator(1000)()
 			r := &xdsResolver{
-				actions:   tt.oldActions,
-				nextIndex: tt.oldNextIndex,
+				actions:                    tt.oldActions,
+				usedActionNameRandomNumber: tt.oldRandNums,
 			}
 			r.updateActions(tt.newActions)
 			if !cmp.Equal(r.actions, tt.wantActions, cmpOpts...) {
 				t.Errorf("removeOrReuseName() got unexpected actions, diff %v", cmp.Diff(r.actions, tt.wantActions, cmpOpts...))
 			}
-			if !cmp.Equal(r.nextIndex, tt.wantNextIndex) {
-				t.Errorf("removeOrReuseName() got unexpected nextIndex, diff %v", cmp.Diff(r.nextIndex, tt.wantNextIndex))
+			if !cmp.Equal(r.usedActionNameRandomNumber, tt.wantRandNums) {
+				t.Errorf("removeOrReuseName() got unexpected nextIndex, diff %v", cmp.Diff(r.usedActionNameRandomNumber, tt.wantRandNums))
 			}
 		})
 	}

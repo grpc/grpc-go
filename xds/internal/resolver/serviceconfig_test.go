@@ -23,6 +23,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/serviceconfig"
 	_ "google.golang.org/grpc/xds/internal/balancer/weightedtarget"
 	_ "google.golang.org/grpc/xds/internal/balancer/xdsrouting"
@@ -314,6 +315,14 @@ func TestRoutesToJSON(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Note this random number function only generates 0. This is
+			// because the test doesn't handle action update, and there's only
+			// one action for each cluster bundle.
+			//
+			// This is necessary so the output is deterministic.
+			grpcrandInt63n = func(int64) int64 { return 0 }
+			defer func() { grpcrandInt63n = grpcrand.Int63n }()
+
 			gotJSON, err := (&xdsResolver{}).routesToJSON(tt.routes)
 			if err != nil {
 				t.Errorf("routesToJSON returned error: %v", err)
@@ -362,6 +371,7 @@ func TestServiceUpdateToJSON(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			defer replaceRandNumGenerator(0)()
 			gotJSON, err := (&xdsResolver{}).serviceUpdateToJSON(tt.su)
 			if err != nil {
 				t.Errorf("serviceUpdateToJSON returned error: %v", err)

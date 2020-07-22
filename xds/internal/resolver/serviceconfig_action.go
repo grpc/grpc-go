@@ -20,9 +20,11 @@ package resolver
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 
+	"google.golang.org/grpc/internal/grpcrand"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
@@ -31,8 +33,10 @@ type actionWithAssignedName struct {
 	clustersWithWeights map[string]uint32
 	// clusterNames, without weights, sorted and hashed, "A_B_"
 	clusterNames string
-	// The assigned name, clusters plus index number, "A_B_1"
+	// The assigned name, clusters plus a random number, "A_B_1"
 	assignedName string
+	// randomNumber is the number appended to assignedName.
+	randomNumber int64
 }
 
 // newActionsFromRoutes gets actions from the routes, and turns them into a map
@@ -110,10 +114,9 @@ func (r *xdsResolver) updateActions(newActions map[string]actionWithAssignedName
 
 	// Find actions in newActions but not in oldActions. Add them, and try to
 	// reuse assigned names from actionsRemoved.
-	if r.nextIndex == nil {
-		r.nextIndex = make(map[string]uint64)
+	if r.usedActionNameRandomNumber == nil {
+		r.usedActionNameRandomNumber = make(map[int64]bool)
 	}
-	nextIndex := r.nextIndex
 	for actionHash, act := range newActions {
 		if _, ok := existingActions[actionHash]; !ok {
 			if assignedNamed, ok := actionsRemoved[act.clusterNames]; ok {
@@ -130,25 +133,29 @@ func (r *xdsResolver) updateActions(newActions map[string]actionWithAssignedName
 				continue
 			}
 			// Generate a new name.
-			idx := nextIndex[act.clusterNames]
-			nextIndex[act.clusterNames]++
-			act.assignedName = fmt.Sprintf("%s%d", act.clusterNames, idx)
+			act.randomNumber = r.nextAssignedNameRandomNumber()
+			act.assignedName = fmt.Sprintf("%s%d", act.clusterNames, act.randomNumber)
 			existingActions[actionHash] = act
 		}
 	}
 
 	// Delete entry from nextIndex if all actions with the clusters are removed.
-	remainingClusterNames := make(map[string]bool)
+	remainingRandomNumbers := make(map[int64]bool)
 	for _, act := range existingActions {
-		remainingClusterNames[act.clusterNames] = true
+		remainingRandomNumbers[act.randomNumber] = true
 	}
-	for clusterNames := range nextIndex {
-		if !remainingClusterNames[clusterNames] {
-			delete(nextIndex, clusterNames)
+	r.usedActionNameRandomNumber = remainingRandomNumbers
+}
+
+var grpcrandInt63n = grpcrand.Int63n
+
+func (r *xdsResolver) nextAssignedNameRandomNumber() int64 {
+	for {
+		t := grpcrandInt63n(math.MaxInt32)
+		if !r.usedActionNameRandomNumber[t] {
+			return t
 		}
 	}
-	// For all other entries, don't try to decrement the index number. Because
-	// there are cases that a_b_c_1 is in use, but a_b_c_0 is removed.
 }
 
 // getActionAssignedName hashes the clusters from the action, and find the

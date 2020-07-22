@@ -28,6 +28,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	xdsinternal "google.golang.org/grpc/xds/internal"
@@ -444,5 +445,17 @@ func TestXDSResolverResourceNotFoundError(t *testing.T) {
 	}
 	if err := rState.ServiceConfig.Err; err != nil {
 		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+}
+
+func replaceRandNumGenerator(start int64) func() {
+	nextInt := start
+	grpcrandInt63n = func(int64) (ret int64) {
+		ret = nextInt
+		nextInt++
+		return
+	}
+	return func() {
+		grpcrandInt63n = grpcrand.Int63n
 	}
 }
