@@ -38,7 +38,7 @@ import (
 var (
 	port = flag.Int("port", 50051, "the port to serve on")
 
-	// Error codes used in CEL engine interceptors.
+	// Error codes used in CEL-based authorization engine interceptors.
 	errMissingMetadata        = status.Errorf(codes.InvalidArgument, "missing metadata")
 	errMissingPeerInformation = status.Errorf(codes.InvalidArgument, "missing peer information")
 	errUnauthorized           = status.Errorf(codes.PermissionDenied, "unauthorized")
@@ -57,7 +57,7 @@ func authorized(ctx context.Context, engine CelEvaluationEngine) (bool, error) {
 	}
 	args := AuthorizationArgs{md, peerInfo}
 
-	// Evaluate against CEL engine.
+	// Evaluate against CEL-based authorization engine.
 	authDecision, err := engine.Evaluate(args)
 	if err != nil {
 		return false, err
@@ -107,33 +107,33 @@ func main() {
 		log.Fatalf("failed to create credentials: %v", err)
 	}
 
-	// Create CEL engine.
+	// Create CEL-based authorization engine.
 	// User TODO: initialize engine with RBAC policy
 	engine := CelEvaluationEngine{}
 
 	// Create interceptors.
 	rbacUnaryInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		// authorization (CEL engine)
+		// Authorization with CEL-based authorization engine.
 		auth, err := authorized(ctx, engine)
 		if err != nil {
 			return nil, err
 		} else if !auth {
 			return nil, errUnauthorized
 		}
-		// invoking handler
+		// Invoking handler.
 		m, err := handler(ctx, req)
 		return m, err
 	}
 
 	rbacStreamInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		// authorization (CEL engine)
+		// Authorization with CEL-based authorization engine.
 		auth, err := authorized(ss.Context(), engine)
 		if err != nil {
 			return err
 		} else if !auth {
 			return errUnauthorized
 		}
-		// invoking handler
+		// Invoking handler.
 		err = handler(srv, newWrappedStream(ss))
 		return err
 	}

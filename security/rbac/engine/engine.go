@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// AuthorizationArgs is the input of CEL engine.
+// AuthorizationArgs is the input of the CEL-based authorization engine.
 type AuthorizationArgs struct {
 	md       metadata.MD
 	peerInfo *peer.Peer
@@ -41,7 +41,7 @@ func (args AuthorizationArgs) toEvalMap() map[string]interface{} {
 }
 
 // Decision is the enum type that represents different authorization
-// decisions a CEL engine can return.
+// decisions a CEL-based authorization engine can return.
 type Decision int32
 
 const (
@@ -59,7 +59,7 @@ func (d Decision) String() string {
 	return [...]string{"DecisionAllow", "DecisionDeny", "DecisionUnknown"}[d]
 }
 
-// AuthorizationDecision is the output of CEL engine.
+// AuthorizationDecision is the output of CEL-based authorization engines.
 // If decision is allow or deny, policyNames will either contain the names of
 // all the policies matched in the engine that permitted the action, or be
 // empty as the decision was made after all conditions evaluated to false.
@@ -127,12 +127,12 @@ func (engine rbacEngine) matches(evalMap map[string]interface{}) (bool, []string
 	return false, unknownPolicyNames
 }
 
-// CelEvaluationEngine is the struct for CEL engine.
+// CelEvaluationEngine is the struct for the CEL-based authorization engine.
 type CelEvaluationEngine struct {
 	engines []rbacEngine
 }
 
-// NewCelEvaluationEngine builds a cel evaluation engine from a list of Envoy RBACs.
+// NewCelEvaluationEngine builds a CEL evaluation engine from a list of Envoy RBACs.
 func NewCelEvaluationEngine(rbacs []pb.RBAC) (CelEvaluationEngine, error) {
 	if len(rbacs) < 1 || len(rbacs) > 2 {
 		return CelEvaluationEngine{}, status.Errorf(codes.InvalidArgument, "must provide 1 or 2 RBACs")
@@ -150,14 +150,14 @@ func NewCelEvaluationEngine(rbacs []pb.RBAC) (CelEvaluationEngine, error) {
 // Evaluate is the core function that evaluates whether an RPC is authorized.
 //
 // ALLOW policy. If one of the RBAC conditions is evaluated as true, then the
-// CEL engine evaluation returns allow. If all of the RBAC conditions are
-// evaluated as false, then it returns deny. Otherwise, some conditions are
-// false and some are unknown, it returns undecided.
+// CEL-based authorization engine evaluation returns allow. If all of the RBAC
+// conditions are evaluated as false, then it returns deny. Otherwise, some
+// conditions are false and some are unknown, it returns undecided.
 //
 // DENY policy. If one of the RBAC conditions is evaluated as true, then the
-// CEL engine evaluation returns deny. If all of the RBAC conditions are
-// evaluated as false, then it returns allow. Otherwise, some conditions are
-// false and some are unknown, it returns undecided.
+// CEL-based authorization engine evaluation returns deny. If all of the RBAC
+// conditions are evaluated as false, then it returns allow. Otherwise, some
+// conditions are false and some are unknown, it returns undecided.
 //
 // DENY policy + ALLOW policy. Evaluation is in the following order: If one
 // of the expressions in the DENY policy is true, the authorization engine
@@ -168,7 +168,7 @@ func (celEngine CelEvaluationEngine) Evaluate(args AuthorizationArgs) (Authoriza
 	evalMap := args.toEvalMap()
 	numEngines := len(celEngine.engines)
 	if numEngines < 1 || numEngines > 2 {
-		return AuthorizationDecision{}, status.Errorf(codes.Internal, "each CEL engine should have 1 or 2 RBAC engines; instead, there are %d in the CEL engine provided", numEngines)
+		return AuthorizationDecision{}, status.Errorf(codes.Internal, "each CEL-based authorization engine should have 1 or 2 RBAC engines; instead, there are %d in the CEL-based authorization engine provided", numEngines)
 	}
 	for _, engine := range celEngine.engines {
 		match, policyNames := engine.matches(evalMap)
