@@ -123,6 +123,7 @@ func getDecision(engine policyEngine, match bool) Decision {
 //  policy names that can't be evaluated due to missing attributes will be returned.
 // Else, the decision is the opposite of the engine's action, i.e. an ALLOW engine
 //  will return DecisionDeny, and vice versa.
+// TODO: Revisit the implementation if we plan to stop evaluation after a successful match.
 func (engine policyEngine) evaluate(activation interpreter.Activation) (Decision, []string) {
 	matchingPolicyNames := []string{}
 	unknownPolicyNames := []string{}
