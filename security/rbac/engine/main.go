@@ -58,7 +58,7 @@ func authorized(ctx context.Context, engine AuthorizationEngine) (bool, error) {
 	args := AuthorizationArgs{md, peerInfo}
 
 	// Evaluate against CEL-based authorization engine.
-	authDecision, err := engine.Evaluate(args)
+	authDecision, err := engine.Evaluate(&args)
 	if err != nil {
 		return false, err
 	} else if authDecision.decision == DecisionDeny {

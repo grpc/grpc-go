@@ -26,21 +26,21 @@ import (
 )
 
 func TestTooFewRbacs(t *testing.T) {
-	_, got := NewAuthorizationEngine([]pb.RBAC{})
+	_, got := NewAuthorizationEngine([]*pb.RBAC{})
 	if got == nil || !strings.HasSuffix(got.Error(), "code = InvalidArgument desc = must provide 1 or 2 RBACs") {
 		t.Errorf("Expected wrong number of RBACs error for 0 RBACs %s", got.Error())
 	}
 }
 
 func TestTooManyRbacs(t *testing.T) {
-	_, got := NewAuthorizationEngine([]pb.RBAC{{}, {}, {}})
+	_, got := NewAuthorizationEngine([]*pb.RBAC{{}, {}, {}})
 	if got == nil || !strings.HasSuffix(got.Error(), "code = InvalidArgument desc = must provide 1 or 2 RBACs") {
 		t.Errorf("Expected wrong number of RBACs error for 3 RBACs")
 	}
 }
 
 func TestWrongRbacActions(t *testing.T) {
-	_, got := NewAuthorizationEngine([]pb.RBAC{{Action: pb.RBAC_ALLOW}, {Action: pb.RBAC_DENY}})
+	_, got := NewAuthorizationEngine([]*pb.RBAC{{Action: pb.RBAC_ALLOW}, {Action: pb.RBAC_DENY}})
 	if got == nil || !strings.HasSuffix(got.Error(), "code = InvalidArgument desc = when providing 2 RBACs, must have 1 DENY and 1 ALLOW in that order") {
 		t.Errorf("Expected wrong RBAC actions error for ALLOW followed by DENY")
 	}

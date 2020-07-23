@@ -36,7 +36,7 @@ type AuthorizationArgs struct {
 }
 
 // Converts AuthorizationArgs into the activation for CEL.
-func (args AuthorizationArgs) toActivation() interpreter.Activation {
+func (args *AuthorizationArgs) toActivation() *interpreter.Activation {
 	// TODO(@ezou): implement the conversion logic.
 	return nil
 }
@@ -85,7 +85,7 @@ func exprToProgram(condition *expr.Expr) *cel.Program {
 // Evaluates a CEL expression. Returns true if CEL evaluation returns true. Returns false if
 // CEL evaluation returns false. Returns an error if CEL evaluation returns unknown or an
 // unsuccessful evaluation.
-func evaluateCondition(condition *cel.Program, activation interpreter.Activation) (bool, error) {
+func evaluateCondition(condition *cel.Program, activation *interpreter.Activation) (bool, error) {
 	// TODO(@ezou): implement the matching logic using CEL library.
 	return false, nil
 }
@@ -97,19 +97,19 @@ type policyEngine struct {
 }
 
 // Creates a new policyEngine from an RBAC policy proto.
-func newPolicyEngine(rbac pb.RBAC) policyEngine {
+func newPolicyEngine(rbac *pb.RBAC) *policyEngine {
 	action := rbac.Action
 	conditions := make(map[string]*cel.Program)
 	for policyName, policy := range rbac.Policies {
 		conditions[policyName] = exprToProgram(policy.Condition)
 	}
-	return policyEngine{action, conditions}
+	return &policyEngine{action, conditions}
 }
 
 // Returns the decision of an engine based on whether or not AuthorizationArgs is a match,
 // i.e. if engine's action is ALLOW and match is true, we will return DecisionAllow;
 // if engine's action is ALLOW and match is false, we will return DecisionDeny.
-func getDecision(engine policyEngine, match bool) Decision {
+func getDecision(engine *policyEngine, match bool) Decision {
 	if engine.action == pb.RBAC_ALLOW && match || engine.action == pb.RBAC_DENY && !match {
 		return DecisionAllow
 	}
@@ -124,7 +124,7 @@ func getDecision(engine policyEngine, match bool) Decision {
 // Else, the decision is the opposite of the engine's action, i.e. an ALLOW engine
 //  will return DecisionDeny, and vice versa.
 // TODO: Revisit the implementation if we plan to stop evaluation after a successful match.
-func (engine policyEngine) evaluate(activation interpreter.Activation) (Decision, []string) {
+func (engine *policyEngine) evaluate(activation *interpreter.Activation) (Decision, []string) {
 	matchingPolicyNames := []string{}
 	unknownPolicyNames := []string{}
 	for policyName, condition := range engine.conditions {
@@ -146,22 +146,22 @@ func (engine policyEngine) evaluate(activation interpreter.Activation) (Decision
 
 // AuthorizationEngine is the struct for the CEL-based authorization engine.
 type AuthorizationEngine struct {
-	engines []policyEngine
+	engines []*policyEngine
 }
 
 // NewAuthorizationEngine builds a CEL evaluation engine from a list of Envoy RBACs.
-func NewAuthorizationEngine(rbacs []pb.RBAC) (AuthorizationEngine, error) {
+func NewAuthorizationEngine(rbacs []*pb.RBAC) (*AuthorizationEngine, error) {
 	if len(rbacs) < 1 || len(rbacs) > 2 {
-		return AuthorizationEngine{}, status.Errorf(codes.InvalidArgument, "must provide 1 or 2 RBACs")
+		return &AuthorizationEngine{}, status.Errorf(codes.InvalidArgument, "must provide 1 or 2 RBACs")
 	}
 	if len(rbacs) == 2 && (rbacs[0].Action != pb.RBAC_DENY || rbacs[1].Action != pb.RBAC_ALLOW) {
-		return AuthorizationEngine{}, status.Errorf(codes.InvalidArgument, "when providing 2 RBACs, must have 1 DENY and 1 ALLOW in that order")
+		return &AuthorizationEngine{}, status.Errorf(codes.InvalidArgument, "when providing 2 RBACs, must have 1 DENY and 1 ALLOW in that order")
 	}
-	var engines []policyEngine
+	var engines []*policyEngine
 	for _, rbac := range rbacs {
 		engines = append(engines, newPolicyEngine(rbac))
 	}
-	return AuthorizationEngine{engines}, nil
+	return &AuthorizationEngine{engines}, nil
 }
 
 // Evaluate is the core function that evaluates whether an RPC is authorized.
@@ -181,7 +181,7 @@ func NewAuthorizationEngine(rbacs []pb.RBAC) (AuthorizationEngine, error) {
 // returns deny. If one of the expressions in the DENY policy is unknown, it
 // returns undecided. Now all the expressions in the DENY policy are false,
 // it returns the evaluation of the ALLOW policy.
-func (authorizationEngine AuthorizationEngine) Evaluate(args AuthorizationArgs) (AuthorizationDecision, error) {
+func (authorizationEngine *AuthorizationEngine) Evaluate(args *AuthorizationArgs) (AuthorizationDecision, error) {
 	activation := args.toActivation()
 	numEngines := len(authorizationEngine.engines)
 	if numEngines < 1 || numEngines > 2 {
