@@ -185,7 +185,10 @@ func (authorizationEngine *AuthorizationEngine) Evaluate(args *AuthorizationArgs
 	activation := args.toActivation()
 	numEngines := len(authorizationEngine.engines)
 	if numEngines < 1 || numEngines > 2 {
-		return AuthorizationDecision{}, status.Errorf(codes.Internal, "each CEL-based authorization engine should have 1 or 2 RBAC engines; instead, there are %d in the CEL-based authorization engine provided", numEngines)
+		return AuthorizationDecision{}, status.Errorf(codes.Internal, "each CEL-based authorization engine should have 1 or 2 policy engines; instead, there are %d in the CEL-based authorization engine provided", numEngines)
+	}
+	if len(authorizationEngine.engines) == 2 && (authorizationEngine.engines[0].action != pb.RBAC_DENY || authorizationEngine.engines[1].action != pb.RBAC_ALLOW) {
+		return AuthorizationDecision{}, status.Errorf(codes.Internal, "if the CEL-based authorization engine has 2 policy engines, should be 1 DENY and 1 ALLOW in that order; instead, have %v, %v", authorizationEngine.engines[0].action, authorizationEngine.engines[1].action)
 	}
 	// Evaluate the first engine.
 	decision, policyNames := authorizationEngine.engines[0].evaluate(activation)
