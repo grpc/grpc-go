@@ -31,6 +31,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
@@ -681,33 +682,31 @@ func TestOptionsConfig(t *testing.T) {
 }
 
 func testPeerCredFileReader(t *testing.T) {
-	clientPeerCert, err := tls.LoadX509KeyPair(testdata.Path("client_cert_1.pem"),
-		testdata.Path("client_key_1.pem"))
+	clientCert, err := tls.LoadX509KeyPair(testdata.Path("client_cert_1.pem"), testdata.Path("client_key_1.pem"))
 	if err != nil {
-		t.Fatalf("Client is unable to parse peer certificates. Error: %v", err)
+		t.Fatalf("tls.LoadX509KeyPair(client_cert_1.pem, client_key_1.pem) failed: %v", err)
 	}
-	serverPeerCert, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
-		testdata.Path("server_key_1.pem"))
+	serverCert, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"), testdata.Path("server_key_1.pem"))
 	if err != nil {
-		t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
+		t.Fatalf("tls.LoadX509KeyPair(server_cert_1.pem, server_key_1.pem) failed: %v", err)
 	}
 	tests := []struct {
-		desc             string
-		certFilePath     string
-		keyFilePath      string
-		expectedPeerCert tls.Certificate
+		desc         string
+		certFilePath string
+		keyFilePath  string
+		wantCert     tls.Certificate
 	}{
 		{
-			desc:             "Read peer credential files on the client side",
-			certFilePath:     testdata.Path("client_cert_1.pem"),
-			keyFilePath:      testdata.Path("client_key_1.pem"),
-			expectedPeerCert: clientPeerCert,
+			desc:         "Load client_cert_1.pem",
+			certFilePath: testdata.Path("client_cert_1.pem"),
+			keyFilePath:  testdata.Path("client_key_1.pem"),
+			wantCert:     clientCert,
 		},
 		{
-			desc:             "Read peer credential files on the server side",
-			certFilePath:     testdata.Path("server_cert_1.pem"),
-			keyFilePath:      testdata.Path("server_key_1.pem"),
-			expectedPeerCert: serverPeerCert,
+			desc:         "Load server_cert_1.pem",
+			certFilePath: testdata.Path("server_cert_1.pem"),
+			keyFilePath:  testdata.Path("server_key_1.pem"),
+			wantCert:     serverCert,
 		},
 	}
 	for _, test := range tests {
@@ -719,14 +718,14 @@ func testPeerCredFileReader(t *testing.T) {
 			}
 			pemPeerCredFileReader, err := NewPemPeerCredFileReader(*pemPeerCredFileReaderOption)
 			if err != nil {
-				t.Fatalf("Unable to generate NewPemPeerCredFileReader. Error: %v", err)
+				t.Fatalf("NewPemPeerCredFileReader(*pemPeerCredFileReaderOption) failed: %v", err)
 			}
 			gotPeerCert, err := pemPeerCredFileReader.ReadKeyAndCerts()
 			if err != nil {
-				t.Fatalf("NewPemPeerCredFileReader is unable to parse peer certificates. Error: %v", err)
+				t.Fatalf("pemPeerCredFileReader.ReadKeyAndCerts() failed: %v", err)
 			}
-			if !reflect.DeepEqual(*gotPeerCert, test.expectedPeerCert) {
-				t.Errorf("ReadKeyAndCerts() = %v, want %v", gotPeerCert, test.expectedPeerCert)
+			if !cmp.Equal(gotPeerCert, test.wantCert, cmp.AllowUnexported(tls.Certificate{})) {
+				t.Errorf("ReadKeyAndCerts() = %v, want %v", gotPeerCert, test.wantCert)
 			}
 		})
 	}
@@ -735,26 +734,26 @@ func testPeerCredFileReader(t *testing.T) {
 func testTrustCredFileReader(t *testing.T) {
 	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
 	if err != nil {
-		t.Fatalf("Client is unable to load trust certs. Error: %v", err)
+		t.Fatalf("readTrustCert(client_trust_cert_1.pem) failed: %v", err)
 	}
 	serverTrustPool, err := readTrustCert(testdata.Path("server_trust_cert_1.pem"))
 	if err != nil {
-		t.Fatalf("Server is unable to load trust certs. Error: %v", err)
+		t.Fatalf("readTrustCert(server_trust_cert_1.pem) failed: %v", err)
 	}
 	tests := []struct {
-		desc              string
-		trustCertPath     string
-		expectedTrustPool *x509.CertPool
+		desc          string
+		trustCertPath string
+		wantCert      *x509.CertPool
 	}{
 		{
-			desc:              "Read trust credential files on the client side",
-			trustCertPath:     testdata.Path("client_trust_cert_1.pem"),
-			expectedTrustPool: clientTrustPool,
+			desc:          "Load client_trust_cert_1.pem",
+			trustCertPath: testdata.Path("client_trust_cert_1.pem"),
+			wantCert:      clientTrustPool,
 		},
 		{
-			desc:              "Read trust credential files on the server side",
-			trustCertPath:     testdata.Path("server_trust_cert_1.pem"),
-			expectedTrustPool: serverTrustPool,
+			desc:          "Load server_trust_cert_1.pem",
+			trustCertPath: testdata.Path("server_trust_cert_1.pem"),
+			wantCert:      serverTrustPool,
 		},
 	}
 	for _, test := range tests {
@@ -765,14 +764,14 @@ func testTrustCredFileReader(t *testing.T) {
 			}
 			pemTrustCredFileReader, err := NewPemTrustCredFileReader(*pemTrustCredFileReaderOption)
 			if err != nil {
-				t.Fatalf("Unable to generate NewPemTrustCredFileReader. Error: %v", err)
+				t.Fatalf("NewPemTrustCredFileReader(*pemTrustCredFileReaderOption) failed: %v", err)
 			}
 			gotTrustPool, err := pemTrustCredFileReader.ReadTrustCerts()
 			if err != nil {
-				t.Fatalf("NewPemTrustCredFileReader is unable to load trust certs. Error: %v", err)
+				t.Fatalf("pemTrustCredFileReader.ReadTrustCerts() failed: %v", err)
 			}
-			if !reflect.DeepEqual(*gotTrustPool, test.expectedTrustPool) {
-				t.Errorf("ReadTrustCerts() = %v, want %v", gotTrustPool, test.expectedTrustPool)
+			if !cmp.Equal(gotTrustPool, test.wantCert, cmp.AllowUnexported(x509.CertPool{})) {
+				t.Errorf("ReadTrustCerts() = %v, want %v", gotTrustPool, test.wantCert)
 			}
 		})
 	}
