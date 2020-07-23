@@ -21,6 +21,7 @@ package engine
 import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	cel "github.com/google/cel-go/cel"
+	interpreter "github.com/google/cel-go/interpreter"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -34,8 +35,8 @@ type AuthorizationArgs struct {
 	peerInfo *peer.Peer
 }
 
-// Converts AuthorizationArgs into the evaluation map for CEL.
-func (args AuthorizationArgs) toEvalMap() map[string]interface{} {
+// Converts AuthorizationArgs into the activation for CEL.
+func (args AuthorizationArgs) toActivation() interpreter.Activation {
 	// TODO(@ezou): implement the conversion logic.
 	return nil
 }
@@ -84,7 +85,7 @@ func exprToProgram(condition *expr.Expr) *cel.Program {
 // Evaluates a CEL expression. Returns true if CEL evaluation returns true. Returns false if
 // CEL evaluation returns false. Returns an error if CEL evaluation returns unknown or an
 // unsuccessful evaluation.
-func evaluateCondition(condition *cel.Program, evalMap map[string]interface{}) (bool, error) {
+func evaluateCondition(condition *cel.Program, activation interpreter.Activation) (bool, error) {
 	// TODO(@ezou): implement the matching logic using CEL library.
 	return false, nil
 }
@@ -115,18 +116,18 @@ func getDecision(engine policyEngine, match bool) Decision {
 	return DecisionDeny
 }
 
-// Returns the authorization decision of a single policy engine based on evalMap.
+// Returns the authorization decision of a single policy engine based on activation.
 // If any policy matches, the decision matches the engine's action, and the list of
 //  matching policy names will be returned.
 // Else if any policy is missing attributes, the decision is unknown, and the list of
 //  policy names that can't be evaluated due to missing attributes will be returned.
 // Else, the decision is the opposite of the engine's action, i.e. an ALLOW engine
 //  will return DecisionDeny, and vice versa.
-func (engine policyEngine) evaluate(evalMap map[string]interface{}) (Decision, []string) {
+func (engine policyEngine) evaluate(activation interpreter.Activation) (Decision, []string) {
 	matchingPolicyNames := []string{}
 	unknownPolicyNames := []string{}
 	for policyName, condition := range engine.conditions {
-		match, err := evaluateCondition(condition, evalMap)
+		match, err := evaluateCondition(condition, activation)
 		if err != nil {
 			unknownPolicyNames = append(unknownPolicyNames, policyName)
 		} else if match {
@@ -180,16 +181,16 @@ func NewAuthorizationEngine(rbacs []pb.RBAC) (AuthorizationEngine, error) {
 // returns undecided. Now all the expressions in the DENY policy are false,
 // it returns the evaluation of the ALLOW policy.
 func (authorizationEngine AuthorizationEngine) Evaluate(args AuthorizationArgs) (AuthorizationDecision, error) {
-	evalMap := args.toEvalMap()
+	activation := args.toActivation()
 	numEngines := len(authorizationEngine.engines)
 	if numEngines < 1 || numEngines > 2 {
 		return AuthorizationDecision{}, status.Errorf(codes.Internal, "each CEL-based authorization engine should have 1 or 2 RBAC engines; instead, there are %d in the CEL-based authorization engine provided", numEngines)
 	}
 	// Evaluate the first engine.
-	decision, policyNames := authorizationEngine.engines[0].evaluate(evalMap)
+	decision, policyNames := authorizationEngine.engines[0].evaluate(activation)
 	// Evaluate the second engine, if there is one and if the first engine is unmatched.
 	if len(authorizationEngine.engines) == 2 && decision == DecisionAllow {
-		decision, policyNames = authorizationEngine.engines[1].evaluate(evalMap)
+		decision, policyNames = authorizationEngine.engines[1].evaluate(activation)
 	}
 	return AuthorizationDecision{decision, policyNames}, nil
 }
