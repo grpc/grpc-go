@@ -25,23 +25,35 @@ import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 )
 
-func TestTooFewRbacs(t *testing.T) {
-	_, got := NewAuthorizationEngine([]*pb.RBAC{})
-	if got == nil || !strings.HasSuffix(got.Error(), "code = InvalidArgument desc = must provide 1 or 2 RBACs") {
-		t.Errorf("Expected wrong number of RBACs error for 0 RBACs %s", got.Error())
+func TestNewAuthorizationEngine(t *testing.T) {
+	tests := map[string]struct {
+		input   []*pb.RBAC
+		wantErr string
+		errStr  string
+	}{
+		"too few rbacs": {
+			input:   []*pb.RBAC{},
+			wantErr: "code = InvalidArgument desc = must provide 1 or 2 RBACs",
+			errStr:  "Expected wrong number of RBACs error for 0 RBACs",
+		},
+		"too many rbacs": {
+			input:   []*pb.RBAC{{}, {}, {}},
+			wantErr: "code = InvalidArgument desc = must provide 1 or 2 RBACs",
+			errStr:  "Expected wrong number of RBACs error for 3 RBACs",
+		},
+		"wrong rbac actions": {
+			input:   []*pb.RBAC{{Action: pb.RBAC_ALLOW}, {Action: pb.RBAC_DENY}},
+			wantErr: "code = InvalidArgument desc = when providing 2 RBACs, must have 1 DENY and 1 ALLOW in that order",
+			errStr:  "Expected wrong RBAC actions error for ALLOW followed by DENY",
+		},
 	}
-}
 
-func TestTooManyRbacs(t *testing.T) {
-	_, got := NewAuthorizationEngine([]*pb.RBAC{{}, {}, {}})
-	if got == nil || !strings.HasSuffix(got.Error(), "code = InvalidArgument desc = must provide 1 or 2 RBACs") {
-		t.Errorf("Expected wrong number of RBACs error for 3 RBACs")
-	}
-}
-
-func TestWrongRbacActions(t *testing.T) {
-	_, got := NewAuthorizationEngine([]*pb.RBAC{{Action: pb.RBAC_ALLOW}, {Action: pb.RBAC_DENY}})
-	if got == nil || !strings.HasSuffix(got.Error(), "code = InvalidArgument desc = when providing 2 RBACs, must have 1 DENY and 1 ALLOW in that order") {
-		t.Errorf("Expected wrong RBAC actions error for ALLOW followed by DENY")
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, gotErr := NewAuthorizationEngine(tc.input)
+			if gotErr == nil || !strings.HasSuffix(gotErr.Error(), tc.wantErr) {
+				t.Errorf(tc.errStr)
+			}
+		})
 	}
 }
