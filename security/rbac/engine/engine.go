@@ -85,25 +85,25 @@ func exprToProgram(condition *expr.Expr) *cel.Program {
 // Evaluates a CEL expression. Returns true if CEL evaluation returns true. Returns false if
 // CEL evaluation returns false. Returns an error if CEL evaluation returns unknown or an
 // unsuccessful evaluation.
-func evaluateCondition(condition *cel.Program, activation *interpreter.Activation) (bool, error) {
+func evaluateProgram(program *cel.Program, activation *interpreter.Activation) (bool, error) {
 	// TODO(@ezou): implement the matching logic using CEL library.
 	return false, nil
 }
 
 // policyEngine is the struct for an engine created from one RBAC proto.
 type policyEngine struct {
-	action     pb.RBAC_Action
-	conditions map[string]*cel.Program
+	action   pb.RBAC_Action
+	programs map[string]*cel.Program
 }
 
 // Creates a new policyEngine from an RBAC policy proto.
 func newPolicyEngine(rbac *pb.RBAC) *policyEngine {
 	action := rbac.Action
-	conditions := make(map[string]*cel.Program)
+	programs := make(map[string]*cel.Program)
 	for policyName, policy := range rbac.Policies {
-		conditions[policyName] = exprToProgram(policy.Condition)
+		programs[policyName] = exprToProgram(policy.Condition)
 	}
-	return &policyEngine{action, conditions}
+	return &policyEngine{action, programs}
 }
 
 // Returns the decision of an engine based on whether or not AuthorizationArgs is a match,
@@ -127,8 +127,8 @@ func getDecision(engine *policyEngine, match bool) Decision {
 func (engine *policyEngine) evaluate(activation *interpreter.Activation) (Decision, []string) {
 	matchingPolicyNames := []string{}
 	unknownPolicyNames := []string{}
-	for policyName, condition := range engine.conditions {
-		match, err := evaluateCondition(condition, activation)
+	for policyName, program := range engine.programs {
+		match, err := evaluateProgram(program, activation)
 		if err != nil {
 			unknownPolicyNames = append(unknownPolicyNames, policyName)
 		} else if match {
