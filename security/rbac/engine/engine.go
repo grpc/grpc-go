@@ -117,26 +117,21 @@ func getDecision(engine *policyEngine, match bool) Decision {
 }
 
 // Returns the authorization decision of a single policy engine based on activation.
-// If any policy matches, the decision matches the engine's action, and the list of
-//  matching policy names will be returned.
+// If any policy matches, the decision matches the engine's action, and the first
+//  matching policy name will be returned.
 // Else if any policy is missing attributes, the decision is unknown, and the list of
 //  policy names that can't be evaluated due to missing attributes will be returned.
 // Else, the decision is the opposite of the engine's action, i.e. an ALLOW engine
 //  will return DecisionDeny, and vice versa.
-// TODO: Revisit the implementation if we plan to stop evaluation after a successful match.
 func (engine *policyEngine) evaluate(activation *interpreter.Activation) (Decision, []string) {
-	matchingPolicyNames := []string{}
 	unknownPolicyNames := []string{}
 	for policyName, program := range engine.programs {
 		match, err := evaluateProgram(program, activation)
 		if err != nil {
 			unknownPolicyNames = append(unknownPolicyNames, policyName)
 		} else if match {
-			matchingPolicyNames = append(matchingPolicyNames, policyName)
+			return getDecision(engine, true), []string{policyName}
 		}
-	}
-	if len(matchingPolicyNames) > 0 {
-		return getDecision(engine, true), matchingPolicyNames
 	}
 	if len(unknownPolicyNames) > 0 {
 		return DecisionUnknown, unknownPolicyNames
@@ -184,6 +179,8 @@ func NewAuthorizationEngine(rbacs []*pb.RBAC) (*AuthorizationEngine, error) {
 func (authorizationEngine *AuthorizationEngine) Evaluate(args *AuthorizationArgs) (AuthorizationDecision, error) {
 	activation := args.toActivation()
 	numEngines := len(authorizationEngine.engines)
+	// If CelEvaluationEngine is used correctly, the below 2 errors should theoretically never occur.
+	// However, to ease potential debugging, they are checked anyway.
 	if numEngines < 1 || numEngines > 2 {
 		return AuthorizationDecision{}, status.Errorf(codes.Internal, "each CEL-based authorization engine should have 1 or 2 policy engines; instead, there are %d in the CEL-based authorization engine provided", numEngines)
 	}
