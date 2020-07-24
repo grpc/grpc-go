@@ -1,3 +1,5 @@
+// +build go1.13
+
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -20,12 +22,15 @@ package certprovider
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
-	"fmt"
-	"reflect"
+	"math/big"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 var errProviderTestInternal = errors.New("provider internal error")
@@ -36,10 +41,8 @@ func (s) TestDistributor(t *testing.T) {
 	dist := NewDistributor()
 
 	// Read cert/key files from testdata.
-	km, err := loadKeyMaterials()
-	if err != nil {
-		t.Fatal(err)
-	}
+	km := loadKeyMaterials(t, "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
+
 	// wantKM1 has both local and root certs.
 	wantKM1 := *km
 	// wantKM2 has only local certs. Roots are nil-ed out.
@@ -58,9 +61,7 @@ func (s) TestDistributor(t *testing.T) {
 
 		// The first call to KeyMaterial() should timeout because no key
 		// material has been set on the distributor as yet.
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout/2)
-		defer cancel()
-		if _, err := dist.KeyMaterial(ctx); err != context.DeadlineExceeded {
+		if err := readAndVerifyKeyMaterial(dist, nil); !errors.Is(err, context.DeadlineExceeded) {
 			errCh <- err
 			return
 		}
@@ -68,21 +69,15 @@ func (s) TestDistributor(t *testing.T) {
 
 		// This call to KeyMaterial() should return the key material with both
 		// the local certs and the root certs.
-		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-		gotKM, err := dist.KeyMaterial(ctx)
-		if err != nil {
+		if err := readAndVerifyKeyMaterial(dist, &wantKM1); err != nil {
 			errCh <- err
 			return
-		}
-		if !reflect.DeepEqual(gotKM, &wantKM1) {
-			errCh <- fmt.Errorf("provider.KeyMaterial() = %+v, want %+v", gotKM, wantKM1)
 		}
 		proceedCh <- struct{}{}
 
 		// This call to KeyMaterial() should eventually return key material with
 		// only the local certs.
-		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
 		for {
 			gotKM, err := dist.KeyMaterial(ctx)
@@ -90,7 +85,7 @@ func (s) TestDistributor(t *testing.T) {
 				errCh <- err
 				return
 			}
-			if reflect.DeepEqual(gotKM, &wantKM2) {
+			if cmp.Equal(gotKM, &wantKM2, cmpopts.IgnoreUnexported(big.Int{}), cmpopts.IgnoreUnexported(x509.CertPool{}), cmpopts.EquateEmpty()) {
 				break
 			}
 		}
@@ -139,15 +134,14 @@ func (s) TestDistributor(t *testing.T) {
 	})
 
 	waitAndDo(t, proceedCh, errCh, func() {
-		dist.Stop()
+		dist.Close()
 	})
-
 }
 
 func waitAndDo(t *testing.T, proceedCh chan struct{}, errCh chan error, do func()) {
 	t.Helper()
 
-	timer := time.NewTimer(defaultTestTimeout)
+	timer := time.NewTimer(2 * defaultTestTimeout)
 	select {
 	case <-timer.C:
 		t.Fatalf("test timed out when waiting for event from distributor")

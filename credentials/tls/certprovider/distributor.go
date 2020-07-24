@@ -25,24 +25,27 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 )
 
-// Distributor makes it easy for provider implementations to furnish new key
-// materials by handling synchronization between the producer and consumers of
-// the key material.
+// Distributor is a simple, single key material cache which makes it easy for
+// provider implementations to furnish new key materials by handling
+// synchronization between the producer and consumers of the key material.
 //
-// Provider implementations which choose to use a Distributor should do the
-// following:
-// - create a new Distributor using the NewDistributor() function.
-// - invoke the Set() method whenever they have new key material or errors to
-//   report.
-// - delegate to the distributor when handing calls to KeyMaterial().
-// - invoke the Stop() method when they are done using the distributor.
+// Distributor implements the KeyMaterialReader interface. Provider
+// implementations may choose to do the following:
+//  - return a distributor as part of their KeyMaterialReader() method.
+//  - invoke the distributor's Set() method whenever they have new key material.
+//  - watch the channel returned by the distributor's Done() method to get
+//    notified when the distributor is closed.
 type Distributor struct {
 	// mu protects the underlying key material.
 	mu   sync.Mutex
 	km   *KeyMaterial
 	pErr error
 
-	ready  *grpcsync.Event
+	// ready channel to unblock KeyMaterial() invocations blocked on
+	// availability of key material.
+	ready *grpcsync.Event
+	// done channel to notify provider implementations and unblock any
+	// KeyMaterial() calls, once the distributor is closed.
 	closed *grpcsync.Event
 }
 
@@ -103,8 +106,13 @@ func (d *Distributor) keyMaterial() (*KeyMaterial, error) {
 	return d.km, d.pErr
 }
 
-// Stop turns down the distributor, releases allocated resources and fails any
+// Close turns down the distributor, releases allocated resources and fails any
 // active KeyMaterial() call waiting for new key material.
-func (d *Distributor) Stop() {
+func (d *Distributor) Close() {
 	d.closed.Fire()
+}
+
+// Done returns a channel which will be closed when the distributor is closed.
+func (d *Distributor) Done() <-chan struct{} {
+	return d.closed.Done()
 }

@@ -87,11 +87,24 @@ type StableConfig interface {
 // the latest secrets, and free to share any state between different
 // instantiations as they deem fit.
 type Provider interface {
-	// KeyMaterial returns the key material sourced by the provider.
-	// Callers are expected to use the returned value as read-only.
-	KeyMaterial(ctx context.Context) (*KeyMaterial, error)
+	// KeyMaterialReader returns a reader to read key material sourced by the
+	// provider. Users should call the Close() method on the returned reader
+	// when they are no longer interested in the underlying key material.
+	KeyMaterialReader(opts KeyMaterialOptions) (KeyMaterialReader, error)
 
 	// Close cleans up resources allocated by the provider.
+	Close()
+}
+
+// KeyMaterialReader is used to read key material at handshake time.
+// Implementations must be thread-safe.
+type KeyMaterialReader interface {
+	// Returns the key material when they are ready.
+	// Implementations must honor any deadline set in the context.
+	KeyMaterial(ctx context.Context) (*KeyMaterial, error)
+
+	// Close provides a way for callers to indicate that they are no longer
+	// interested in the underlying key material.
 	Close()
 }
 
@@ -101,4 +114,16 @@ type KeyMaterial struct {
 	Certs []tls.Certificate
 	// Roots contains the set of trusted roots to validate the peer's identity.
 	Roots *x509.CertPool
+}
+
+// KeyMaterialOptions wraps options passed to the KeyMaterialReader() method.
+type KeyMaterialOptions struct {
+	// CertName holds the certificate name, whose key material is of interest to
+	// the caller.
+	CertName string
+	// WantRoot indicates if the caller is interested in the root certificate.
+	WantRoot bool
+	// WantIdentity indicates if the caller is interested in the identity
+	// certificate.
+	WantIdentity bool
 }
