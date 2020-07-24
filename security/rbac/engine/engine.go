@@ -24,6 +24,7 @@ import (
 	interpreter "github.com/google/cel-go/interpreter"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -82,14 +83,6 @@ func exprToProgram(condition *expr.Expr) *cel.Program {
 	return nil
 }
 
-// Evaluates a CEL expression. Returns true if CEL evaluation returns true. Returns false if
-// CEL evaluation returns false. Returns an error if CEL evaluation returns unknown or an
-// unsuccessful evaluation.
-func evaluateProgram(program *cel.Program, activation *interpreter.Activation) (bool, error) {
-	// TODO(@ezou): implement the matching logic using CEL library.
-	return false, nil
-}
-
 // policyEngine is the struct for an engine created from one RBAC proto.
 type policyEngine struct {
 	action   pb.RBAC_Action
@@ -126,7 +119,24 @@ func getDecision(engine *policyEngine, match bool) Decision {
 func (engine *policyEngine) evaluate(activation *interpreter.Activation) (Decision, []string) {
 	unknownPolicyNames := []string{}
 	for policyName, program := range engine.programs {
-		match, err := evaluateProgram(program, activation)
+		// Evaluate program against activation.
+		var match bool
+		out, _, err := (*program).Eval(activation)
+		if out == nil {
+			// Unsuccessful evaluation, typically the result of a series of incompatible
+			// `EnvOption` or `ProgramOption` values used in the creation of the evaluation
+			// environment or executable program.
+			grpclog.Warning("Unsuccessful evaluation encountered during AuthorizationEngine.Evaluate: %s", err.Error())
+			match = false
+		} else if err != nil {
+			// Successful evaluation to an error result, i.e. missing attributes.
+			match = false
+		} else {
+			// Successful evaluation to a non-error result.
+			match = out.Value().(bool)
+		}
+
+		// Process evaluation results.
 		if err != nil {
 			unknownPolicyNames = append(unknownPolicyNames, policyName)
 		} else if match {
