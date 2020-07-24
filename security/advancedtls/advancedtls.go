@@ -156,7 +156,7 @@ type ClientOptions struct {
 // Certificates or GetClientCertificate indicates the certificates sent from
 // the server to the client to prove server's identities. The rules for setting
 // these two fields are:
-// Either Certificates or GetCertificate must be set; the other will be ignored.
+// Either Certificates or GetCertificates must be set; the other will be ignored.
 type ServerOptions struct {
 	// If field Certificates is set, field GetClientCertificate will be ignored.
 	// The server will use Certificates every time when asked for a certificate,
@@ -166,7 +166,7 @@ type ServerOptions struct {
 	// invoke this function every time asked to present certificates to the
 	// client when a new connection is established. This is known as peer
 	// certificate reloading.
-	GetCertificate func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
+	GetCertificates func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 	// VerifyPeer is a custom verification check after certificate signature
 	// check.
 	// If this is set, we will perform this customized check after doing the
@@ -210,8 +210,8 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 }
 
 func (o *ServerOptions) config() (*tls.Config, error) {
-	if o.Certificates == nil && o.GetCertificate == nil {
-		return nil, fmt.Errorf("either Certificates or GetCertificate must be specified")
+	if o.Certificates == nil && o.GetCertificates == nil {
+		return nil, fmt.Errorf("either Certificates or GetCertificates must be specified")
 	}
 	if o.RequireClientCert && o.VType == SkipVerification && o.VerifyPeer == nil {
 		return nil, fmt.Errorf(
@@ -238,10 +238,10 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		Certificates: o.Certificates,
 	}
 	// The function getCertificateWithSNI is only able to perform SNI logic for go1.10 and above.
-	// It will return the first certificate in o.GetCertificate for go1.9.
-	if o.GetCertificate != nil {
+	// It will return the first certificate in o.GetCertificates for go1.9.
+	if o.GetCertificates != nil {
 		getCertificateWithSNI := func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			return buildGetCertificateFunc(clientHello, o)
+			return buildGetCertificates(clientHello, o)
 		}
 		config.GetCertificate = getCertificateWithSNI
 	}

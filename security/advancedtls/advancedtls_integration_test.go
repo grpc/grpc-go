@@ -390,8 +390,8 @@ func TestEnd2End(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			// Start a server using ServerOptions in another goroutine.
 			serverOptions := &ServerOptions{
-				Certificates:   test.serverCert,
-				GetCertificate: test.serverGetCert,
+				Certificates:    test.serverCert,
+				GetCertificates: test.serverGetCert,
 				RootCertificateOptions: RootCertificateOptions{
 					RootCACerts: test.serverRoot,
 					GetRootCAs:  test.serverGetRoot,

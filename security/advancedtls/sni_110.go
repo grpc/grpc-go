@@ -25,13 +25,13 @@ import (
 	"fmt"
 )
 
-// The function buildGetCertificateFunc returns the certificate that matches the SNI field
-// for the given ClientHelloInfo, defaulting to the first element of o.GetCertificate.
-func buildGetCertificateFunc(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
-	if o.GetCertificate == nil {
-		return nil, fmt.Errorf("function GetCertificate must be specified")
+// The function buildGetCertificates returns the certificate that matches the SNI field
+// for the given ClientHelloInfo, defaulting to the first element of o.GetCertificates.
+func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
+	if o.GetCertificates == nil {
+		return nil, fmt.Errorf("function GetCertificates must be specified")
 	}
-	certificates, err := o.GetCertificate(clientHello)
+	certificates, err := o.GetCertificates(clientHello)
 	if err != nil {
 		return nil, err
 	}

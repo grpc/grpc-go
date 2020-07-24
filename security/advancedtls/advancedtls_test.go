@@ -404,8 +404,8 @@ func TestClientServerHandshake(t *testing.T) {
 			}
 			// Start a server using ServerOptions in another goroutine.
 			serverOptions := &ServerOptions{
-				Certificates:   test.serverCert,
-				GetCertificate: test.serverGetCert,
+				Certificates:    test.serverCert,
+				GetCertificates: test.serverGetCert,
 				RootCertificateOptions: RootCertificateOptions{
 					RootCACerts: test.serverRoot,
 					GetRootCAs:  test.serverGetRoot,
@@ -682,7 +682,7 @@ func TestOptionsConfig(t *testing.T) {
 	}
 }
 
-func TestGetCertificateSNI(t *testing.T) {
+func TestGetCertificatesSNI(t *testing.T) {
 	// Load server certificates for setting the serverGetCert callback function.
 	serverPeerCert1, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
 		testdata.Path("server_key_1.pem"))
@@ -737,7 +737,7 @@ func TestGetCertificateSNI(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			serverOptions := &ServerOptions{
-				GetCertificate: test.serverGetCert,
+				GetCertificates: test.serverGetCert,
 			}
 			serverConfig, err := serverOptions.config()
 			if err != nil {
@@ -756,7 +756,7 @@ func TestGetCertificateSNI(t *testing.T) {
 				t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
 			}
 			if !reflect.DeepEqual(*gotCertificate, test.expectedCertificate) {
-				t.Errorf("GetCertificate() = %v, want %v", gotCertificate, test.expectedCertificate)
+				t.Errorf("GetCertificates() = %v, want %v", gotCertificate, test.expectedCertificate)
 			}
 		})
 	}
