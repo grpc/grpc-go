@@ -1,0 +1,60 @@
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            7a:83:5d:12:2a:a1:5d:59:29:71:8b:26:1d:a2:a2:55:2e:56:fe:d4
+        Signature Algorithm: sha256WithRSAEncryption
+        Issuer: C = US, ST = CA, L = San Jose, O = Google
+        Validity
+            Not Before: Jul 16 16:53:19 2020 GMT
+            Not After : Jul 11 16:53:19 2040 GMT
+        Subject: C = US, ST = CA, L = San Jose, O = End Point, OU = Infra, emailAddress = cindyxue@google.com, CN = foo.bar.server3.com
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                RSA Public-Key: (2048 bit)
+                Modulus:
+                    00:dc:23:22:44:b7:76:40:c4:f9:fb:1f:97:ff:23:
+                    05:d2:f0:d7:28:01:75:8f:f0:be:ab:5a:77:5c:83:
+                    e1:16:6b:2c:7b:5b:ec:26:52:c1:4a:19:21:46:ce:
+                    b1:4f:3c:21:66:28:ef:0c:ad:0a:a9:f0:b4:80:c4:
+                    70:15:b4:e0:ba:53:0f:88:35:62:49:c3:d0:51:97:
+                    1d:a7:bd:5e:e1:7d:ba:ae:dc:e9:cf:90:f5:64:37:
+                    fb:22:51:00:aa:9c:42:89:40:79:62:35:3f:57:0e:
+                    5e:3f:31:ab:fb:e6:e4:12:59:bd:d5:7e:2d:ca:b4:
+                    6e:e6:cc:f1:4d:35:b6:de:e3:27:c7:c8:66:c2:e1:
+                    ef:51:b4:a9:06:8a:60:d2:27:8d:77:b3:79:b8:fa:
+                    c7:03:be:da:42:70:25:e3:f5:75:d9:35:d0:b0:0f:
+                    50:8b:de:43:5d:98:e7:61:81:f9:03:04:ff:80:30:
+                    b0:45:29:92:aa:a4:2a:3a:9b:4b:38:24:94:e2:7a:
+                    3d:77:75:cd:bb:c1:3a:e7:90:59:b5:08:fe:fb:49:
+                    5f:a4:42:55:a0:e4:30:1c:55:76:09:90:df:45:a8:
+                    da:84:c6:a2:0f:4b:f4:b1:32:4e:c7:fb:7a:92:40:
+                    00:9b:b6:d4:0a:f5:49:82:9f:7a:91:de:91:9b:c2:
+                    ac:cd
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Authority Key Identifier: 
+                keyid:6E:1B:8B:C9:34:74:E7:7B:8D:2A:4F:41:0E:98:50:30:14:01:16:B1
+
+            X509v3 Basic Constraints: 
+                CA:FALSE
+            X509v3 Key Usage: 
+                Digital Signature, Non Repudiation, Key Encipherment, Data Encipherment
+            X509v3 Subject Alternative Name: 
+                DNS:google.com, DNS:apple.com, DNS:amazon.com
+    Signature Algorithm: sha256WithRSAEncryption
+         9f:96:96:1c:41:cd:4c:39:9c:80:2d:b9:a0:4b:42:8f:e2:24:
+         a0:0b:25:80:5c:de:e1:9a:a4:4b:3d:07:0b:3c:7b:ea:f8:f7:
+         01:f3:26:20:4b:ea:07:45:bb:e3:02:aa:79:98:26:57:40:fb:
+         23:4c:47:90:cd:c8:2c:7e:11:8e:80:a8:b6:9a:25:de:72:e8:
+         a0:83:c5:7e:50:3a:67:52:0b:4d:16:65:f2:61:39:91:f0:52:
+         1f:32:9d:3d:2d:1e:80:e7:fa:92:0a:cd:62:02:63:04:4b:46:
+         36:c9:aa:f1:12:b1:00:75:55:00:f8:07:f3:c7:62:d0:99:d0:
+         0c:de:4b:71:5f:59:04:a4:d0:33:64:7b:10:ce:9a:f1:e5:83:
+         fc:9b:22:ba:e8:db:36:d7:4d:11:1b:2c:48:15:7e:3a:29:7d:
+         dc:c6:ec:11:c3:93:d5:14:8a:2b:10:22:56:f9:07:91:1f:b8:
+         e4:64:41:f3:cf:71:06:7a:9e:95:c0:d5:a9:c3:0a:55:c7:69:
+         e9:7e:da:0f:9f:c1:bb:fe:1f:ab:d0:19:95:c1:d2:11:00:e2:
+         c4:db:63:a7:fa:50:47:40:79:16:c0:86:ad:be:4e:03:3d:01:
+         da:df:63:ca:40:e2:23:28:f8:e2:5c:61:43:3f:32:91:77:fb:
+         b9:ed:3f:6a
