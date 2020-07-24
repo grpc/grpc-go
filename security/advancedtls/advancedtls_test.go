@@ -683,16 +683,16 @@ func TestOptionsConfig(t *testing.T) {
 }
 
 func TestGetCertificatesSNI(t *testing.T) {
-	// Load server peer certificates for setting the serverGetCert callback function.
-	serverPeerCert1, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"), testdata.Path("server_key_1.pem"))
+	// Load server certificates for setting the serverGetCert callback function.
+	serverCert1, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"), testdata.Path("server_key_1.pem"))
 	if err != nil {
 		t.Fatalf("tls.LoadX509KeyPair(server_cert_1.pem, server_key_1.pem) failed: %v", err)
 	}
-	serverPeerCert2, err := tls.LoadX509KeyPair(testdata.Path("server_cert_2.pem"), testdata.Path("server_key_2.pem"))
+	serverCert2, err := tls.LoadX509KeyPair(testdata.Path("server_cert_2.pem"), testdata.Path("server_key_2.pem"))
 	if err != nil {
 		t.Fatalf("tls.LoadX509KeyPair(server_cert_2.pem, server_key_2.pem) failed: %v", err)
 	}
-	serverPeerCert3, err := tls.LoadX509KeyPair(testdata.Path("server_cert_3.pem"), testdata.Path("server_key_3.pem"))
+	serverCert3, err := tls.LoadX509KeyPair(testdata.Path("server_cert_3.pem"), testdata.Path("server_key_3.pem"))
 	if err != nil {
 		t.Fatalf("tls.LoadX509KeyPair(server_cert_3.pem, server_key_3.pem) failed: %v", err)
 	}
@@ -704,31 +704,31 @@ func TestGetCertificatesSNI(t *testing.T) {
 		wantCert      tls.Certificate
 	}{
 		{
-			desc: "Select serverPeerCert1",
+			desc: "Select serverCert1",
 			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
-				return []*tls.Certificate{&serverPeerCert1, &serverPeerCert2, &serverPeerCert3}, nil
+				return []*tls.Certificate{&serverCert1, &serverCert2, &serverCert3}, nil
 			},
 			// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
 			serverName: "foo.bar.com",
-			wantCert:   serverPeerCert1,
+			wantCert:   serverCert1,
 		},
 		{
-			desc: "Select serverPeerCert2",
+			desc: "Select serverCert2",
 			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
-				return []*tls.Certificate{&serverPeerCert1, &serverPeerCert2, &serverPeerCert3}, nil
+				return []*tls.Certificate{&serverCert1, &serverCert2, &serverCert3}, nil
 			},
 			// "foo.bar.server2.com" is the common name on server certificate server_cert_2.pem.
 			serverName: "foo.bar.server2.com",
-			wantCert:   serverPeerCert2,
+			wantCert:   serverCert2,
 		},
 		{
-			desc: "Select serverPeerCert3",
+			desc: "Select serverCert3",
 			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
-				return []*tls.Certificate{&serverPeerCert1, &serverPeerCert2, &serverPeerCert3}, nil
+				return []*tls.Certificate{&serverCert1, &serverCert2, &serverCert3}, nil
 			},
 			// "google.com" is one of the DNS names on server certificate server_cert_3.pem.
 			serverName: "google.com",
-			wantCert:   serverPeerCert3,
+			wantCert:   serverCert3,
 		},
 	}
 	for _, test := range tests {
