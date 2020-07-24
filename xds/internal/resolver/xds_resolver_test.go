@@ -316,12 +316,6 @@ func TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	}()
 
 	waitForWatchService(t, xdsC, targetStr)
-
-	// // Replace random number function to only generate 0. This is necessary so
-	// // the output is deterministic.
-	// grpcrandInt63n = func(int64) int64 { return 1 }
-	// defer func() { grpcrandInt63n = grpcrand.Int63n }()
-
 	defer replaceRandNumGenerator(0)()
 
 	for _, tt := range []struct {
