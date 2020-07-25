@@ -22,9 +22,9 @@ package advancedtls
 
 import (
 	"crypto/tls"
-	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
@@ -100,7 +100,7 @@ func TestGetCertificatesSNI(t *testing.T) {
 			if err != nil {
 				t.Fatalf("serverConfig.GetCertificate(clientHello) failed: %v", err)
 			}
-			if !reflect.DeepEqual(*gotCertificate, test.wantCert) {
+			if !cmp.Equal(gotCertificate, test.wantCert, cmp.AllowUnexported(tls.Certificate{}, tls.Certificate{})) {
 				t.Errorf("GetCertificates() = %v, want %v", gotCertificate, test.wantCert)
 			}
 		})
