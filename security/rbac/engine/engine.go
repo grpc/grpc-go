@@ -37,7 +37,7 @@ type AuthorizationArgs struct {
 }
 
 // Converts AuthorizationArgs into the activation for CEL.
-func (args *AuthorizationArgs) toActivation() *interpreter.Activation {
+func (args *AuthorizationArgs) toActivation() interpreter.Activation {
 	// TODO(@ezou): implement the conversion logic.
 	return nil
 }
@@ -78,7 +78,7 @@ func exprToParsedExpr(condition *expr.Expr) *expr.ParsedExpr {
 }
 
 // Converts an expression to a CEL program.
-func exprToProgram(condition *expr.Expr) *cel.Program {
+func exprToProgram(condition *expr.Expr) cel.Program {
 	// TODO(@ezou): implement the conversion from expr to CEL program.
 	return nil
 }
@@ -86,13 +86,13 @@ func exprToProgram(condition *expr.Expr) *cel.Program {
 // policyEngine is the struct for an engine created from one RBAC proto.
 type policyEngine struct {
 	action   pb.RBAC_Action
-	programs map[string]*cel.Program
+	programs map[string]cel.Program
 }
 
 // Creates a new policyEngine from an RBAC policy proto.
 func newPolicyEngine(rbac *pb.RBAC) *policyEngine {
 	action := rbac.Action
-	programs := make(map[string]*cel.Program)
+	programs := make(map[string]cel.Program)
 	for policyName, policy := range rbac.Policies {
 		programs[policyName] = exprToProgram(policy.Condition)
 	}
@@ -116,12 +116,12 @@ func getDecision(engine *policyEngine, match bool) Decision {
 //  policy names that can't be evaluated due to missing attributes will be returned.
 // Else, the decision is the opposite of the engine's action, i.e. an ALLOW engine
 //  will return DecisionDeny, and vice versa.
-func (engine *policyEngine) evaluate(activation *interpreter.Activation) (Decision, []string) {
+func (engine *policyEngine) evaluate(activation interpreter.Activation) (Decision, []string) {
 	unknownPolicyNames := []string{}
 	for policyName, program := range engine.programs {
 		// Evaluate program against activation.
 		var match bool
-		out, _, err := (*program).Eval(activation)
+		out, _, err := program.Eval(activation)
 		if out == nil {
 			// Unsuccessful evaluation, typically the result of a series of incompatible
 			// `EnvOption` or `ProgramOption` values used in the creation of the evaluation
