@@ -155,13 +155,13 @@ const (
 
 func parseRPCTypes(rpcStr string) (ret []string) {
 	if len(rpcStr) == 0 {
-		return []string{"UnaryCall"}
+		return []string{unaryCall}
 	}
 
 	rpcs := strings.Split(rpcStr, ",")
 	for _, r := range rpcs {
 		switch r {
-		case "UnaryCall", "EmptyCall":
+		case unaryCall, emptyCall:
 			ret = append(ret, r)
 		default:
 			flag.PrintDefaults()
