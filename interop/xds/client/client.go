@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -58,11 +59,22 @@ var (
 	mu               sync.Mutex
 	currentRequestID int32
 	watchers         = make(map[statsWatcherKey]*statsWatcher)
-	rpcSucceeded     bool
+
+	// 0 or 1 representing an RPC has succeeded. Use HasRpcSucceeded and
+	// RpcSucceeded to access in a safe manner.
+	rpcSucceeded uint32
 )
 
 type statsService struct {
 	testpb.UnimplementedLoadBalancerStatsServiceServer
+}
+
+func HasRpcSucceeded() bool {
+	return atomic.LoadUint32(&rpcSucceeded) > 0
+}
+
+func RpcSucceeded() {
+	atomic.StoreUint32(&rpcSucceeded, 1)
 }
 
 // Wait for the next LoadBalancerStatsRequest.GetNumRpcs to start and complete,
@@ -147,7 +159,6 @@ func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 			ctx, cancel := context.WithTimeout(context.Background(), *rpcTimeout)
 			p := new(peer.Peer)
 			mu.Lock()
-			savedRpcSucceeded := rpcSucceeded
 			savedRequestID := currentRequestID
 			currentRequestID++
 			savedWatchers := []*statsWatcher{}
@@ -166,16 +177,14 @@ func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 				watcher.c <- r
 			}
 
-			if err != nil && *failOnFailedRPC && savedRpcSucceeded {
+			if err != nil && *failOnFailedRPC && HasRpcSucceeded() {
 				grpclog.Fatalf("RPC failed: %v", err)
 			}
 			if success {
 				if *printResponse {
 					fmt.Printf("Greeting: Hello world, this is %s, from %v\n", r.GetHostname(), p.Addr)
 				}
-				mu.Lock()
-				rpcSucceeded = true
-				mu.Unlock()
+				RpcSucceeded()
 			}
 		}(i)
 		i = (i + 1) % len(clients)
