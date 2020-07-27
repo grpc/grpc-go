@@ -60,8 +60,8 @@ var (
 	currentRequestID int32
 	watchers         = make(map[statsWatcherKey]*statsWatcher)
 
-	// 0 or 1 representing an RPC has succeeded. Use HasRpcSucceeded and
-	// RpcSucceeded to access in a safe manner.
+	// 0 or 1 representing an RPC has succeeded. Use hasRPCSucceeded and
+	// setRPCSucceeded to access in a safe manner.
 	rpcSucceeded uint32
 )
 
@@ -69,11 +69,11 @@ type statsService struct {
 	testpb.UnimplementedLoadBalancerStatsServiceServer
 }
 
-func HasRpcSucceeded() bool {
+func hasRPCSucceeded() bool {
 	return atomic.LoadUint32(&rpcSucceeded) > 0
 }
 
-func RpcSucceeded() {
+func setRPCSucceeded() {
 	atomic.StoreUint32(&rpcSucceeded, 1)
 }
 
@@ -177,14 +177,14 @@ func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 				watcher.c <- r
 			}
 
-			if err != nil && *failOnFailedRPC && HasRpcSucceeded() {
+			if err != nil && *failOnFailedRPC && hasRPCSucceeded() {
 				grpclog.Fatalf("RPC failed: %v", err)
 			}
 			if success {
 				if *printResponse {
 					fmt.Printf("Greeting: Hello world, this is %s, from %v\n", r.GetHostname(), p.Addr)
 				}
-				RpcSucceeded()
+				setRPCSucceeded()
 			}
 		}(i)
 		i = (i + 1) % len(clients)
