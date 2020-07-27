@@ -45,22 +45,22 @@ type statsWatcherKey struct {
 // rpcInfo contains the rpc type and the hostname where the response is received
 // from.
 type rpcInfo struct {
-	typ      rpcType
+	typ      string
 	hostname string
 }
 
 type statsWatcher struct {
 	rpcsByPeer    map[string]int32
-	rpcsByType    map[rpcType]map[string]int32
+	rpcsByType    map[string]map[string]int32
 	numFailures   int32
 	remainingRpcs int32
 	chanHosts     chan *rpcInfo
 }
 
 func (watcher *statsWatcher) buildResp() *testpb.LoadBalancerStatsResponse {
-	rpcsByType := make(map[string]*testpb.LoadBalancerStatsResponse_RpcsByPeer)
+	rpcsByType := make(map[string]*testpb.LoadBalancerStatsResponse_RpcsByPeer, len(watcher.rpcsByType))
 	for t, rpcsByPeer := range watcher.rpcsByType {
-		rpcsByType[string(t)] = &testpb.LoadBalancerStatsResponse_RpcsByPeer{
+		rpcsByType[t] = &testpb.LoadBalancerStatsResponse_RpcsByPeer{
 			RpcsByPeer: rpcsByPeer,
 		}
 	}
@@ -103,7 +103,7 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 	if !ok {
 		watcher = &statsWatcher{
 			rpcsByPeer:    make(map[string]int32),
-			rpcsByType:    make(map[rpcType]map[string]int32),
+			rpcsByType:    make(map[string]map[string]int32),
 			numFailures:   0,
 			remainingRpcs: in.GetNumRpcs(),
 			chanHosts:     make(chan *rpcInfo),
@@ -148,25 +148,21 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 	}
 }
 
-type rpcType string
-
 const (
-	unaryCall rpcType = "UnaryCall"
-	emptyCall rpcType = "EmptyCall"
+	unaryCall string = "UnaryCall"
+	emptyCall string = "EmptyCall"
 )
 
-func parseRPCTypes(rpcStr string) (ret []rpcType) {
-	rpcs := strings.Split(rpcStr, ",")
-	if len(rpcs) == 0 {
-		return []rpcType{"UnaryCall"}
+func parseRPCTypes(rpcStr string) (ret []string) {
+	if len(rpcStr) == 0 {
+		return []string{"UnaryCall"}
 	}
 
+	rpcs := strings.Split(rpcStr, ",")
 	for _, r := range rpcs {
 		switch r {
-		case "UnaryCall":
-			ret = append(ret, unaryCall)
-		case "EmptyCall":
-			ret = append(ret, emptyCall)
+		case "UnaryCall", "EmptyCall":
+			ret = append(ret, r)
 		default:
 			flag.PrintDefaults()
 			log.Fatalf("unsupported RPC type: %v", r)
@@ -176,13 +172,13 @@ func parseRPCTypes(rpcStr string) (ret []rpcType) {
 }
 
 type rpcConfig struct {
-	typ rpcType
+	typ string
 	md  metadata.MD
 }
 
 // parseRPCMetadata turns EmptyCall:key1:value1 into
 //   {typ: emptyCall, md: {key1:value1}}.
-func parseRPCMetadata(rpcMetadataStr string, rpcs []rpcType) []*rpcConfig {
+func parseRPCMetadata(rpcMetadataStr string, rpcs []string) []*rpcConfig {
 	rpcMetadataSplit := strings.Split(rpcMetadataStr, ",")
 	rpcsToMD := make(map[string][]string)
 	for _, rm := range rpcMetadataSplit {
@@ -192,7 +188,7 @@ func parseRPCMetadata(rpcMetadataStr string, rpcs []rpcType) []*rpcConfig {
 		}
 		rpcsToMD[rmSplit[0]] = append(rpcsToMD[rmSplit[0]], rmSplit[1:]...)
 	}
-	var ret []*rpcConfig
+	ret := make([]*rpcConfig, 0, len(rpcs))
 	for _, rpcT := range rpcs {
 		rpcC := &rpcConfig{
 			typ: rpcT,
@@ -235,17 +231,17 @@ func main() {
 func makeOneRPC(c testpb.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), *rpcTimeout)
 	defer cancel()
-	var (
-		p      peer.Peer
-		header metadata.MD
-	)
 
 	if len(cfg.md) != 0 {
 		ctx = metadata.NewOutgoingContext(ctx, cfg.md)
 	}
 	info := rpcInfo{typ: cfg.typ}
 
-	var err error
+	var (
+		p      peer.Peer
+		header metadata.MD
+		err    error
+	)
 	switch cfg.typ {
 	case unaryCall:
 		var resp *testpb.SimpleResponse
