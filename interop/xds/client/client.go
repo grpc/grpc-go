@@ -47,7 +47,7 @@ type statsWatcher struct {
 }
 
 var (
-	failOnFailedRPC = flag.Bool("fail_on_failed_rpc", false, "Fail client if any RPCs fail")
+	failOnFailedRPC = flag.Bool("fail_on_failed_rpc", false, "Fail client if any RPCs fail after first success")
 	numChannels     = flag.Int("num_channels", 1, "Num of channels")
 	printResponse   = flag.Bool("print_response", false, "Write RPC response to stdout")
 	qps             = flag.Int("qps", 1, "QPS per channel")
@@ -58,6 +58,7 @@ var (
 	mu               sync.Mutex
 	currentRequestID int32
 	watchers         = make(map[statsWatcherKey]*statsWatcher)
+	rpcSucceeded     bool
 )
 
 type statsService struct {
@@ -146,6 +147,7 @@ func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 			ctx, cancel := context.WithTimeout(context.Background(), *rpcTimeout)
 			p := new(peer.Peer)
 			mu.Lock()
+			savedRpcSucceeded := rpcSucceeded
 			savedRequestID := currentRequestID
 			currentRequestID++
 			savedWatchers := []*statsWatcher{}
@@ -164,11 +166,16 @@ func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 				watcher.c <- r
 			}
 
-			if err != nil && *failOnFailedRPC {
+			if err != nil && *failOnFailedRPC && savedRpcSucceeded {
 				grpclog.Fatalf("RPC failed: %v", err)
 			}
-			if success && *printResponse {
-				fmt.Printf("Greeting: Hello world, this is %s, from %v\n", r.GetHostname(), p.Addr)
+			if success {
+				if *printResponse {
+					fmt.Printf("Greeting: Hello world, this is %s, from %v\n", r.GetHostname(), p.Addr)
+				}
+				mu.Lock()
+				rpcSucceeded = true
+				mu.Unlock()
 			}
 		}(i)
 		i = (i + 1) % len(clients)
