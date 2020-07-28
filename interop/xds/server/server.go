@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/metadata"
 )
 
 var (
@@ -50,7 +51,13 @@ type server struct {
 	testpb.UnimplementedTestServiceServer
 }
 
+func (s *server) EmptyCall(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+	grpc.SetHeader(ctx, metadata.Pairs("hostname", hostname))
+	return &testpb.Empty{}, nil
+}
+
 func (s *server) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	grpc.SetHeader(ctx, metadata.Pairs("hostname", hostname))
 	return &testpb.SimpleResponse{ServerId: *serverID, Hostname: hostname}, nil
 }
 
