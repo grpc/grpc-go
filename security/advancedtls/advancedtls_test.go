@@ -102,7 +102,7 @@ func TestClientServerHandshake(t *testing.T) {
 		clientExpectHandshakeError bool
 		serverMutualTLS            bool
 		serverCert                 []tls.Certificate
-		serverGetCert              func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+		serverGetCert              func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 		serverRoot                 *x509.CertPool
 		serverGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		serverVerifyFunc           CustomVerificationFunc
@@ -279,8 +279,8 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVerifyFunc: clientVerifyFuncGood,
 			clientVType:      CertVerification,
 			serverMutualTLS:  true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &serverPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				return []*tls.Certificate{&serverPeerCert}, nil
 			},
 			serverGetRoot:    getRootCAsForServer,
 			serverVerifyFunc: serverVerifyFunc,
@@ -300,8 +300,8 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVerifyFunc: clientVerifyFuncGood,
 			clientVType:      CertVerification,
 			serverMutualTLS:  true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &serverPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				return []*tls.Certificate{&serverPeerCert}, nil
 			},
 			serverGetRoot:     getRootCAsForServer,
 			serverVerifyFunc:  serverVerifyFunc,
@@ -322,8 +322,8 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVType:                CertVerification,
 			clientExpectHandshakeError: true,
 			serverMutualTLS:            true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &serverPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				return []*tls.Certificate{&serverPeerCert}, nil
 			},
 			serverGetRoot:     getRootCAsForServer,
 			serverVerifyFunc:  serverVerifyFunc,
@@ -344,8 +344,8 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVerifyFunc: clientVerifyFuncGood,
 			clientVType:      CertVerification,
 			serverMutualTLS:  true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &clientPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				return []*tls.Certificate{&clientPeerCert}, nil
 			},
 			serverGetRoot:     getRootCAsForServer,
 			serverVerifyFunc:  serverVerifyFunc,
@@ -366,8 +366,8 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVType:                CertVerification,
 			clientExpectHandshakeError: true,
 			serverMutualTLS:            true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &serverPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				return []*tls.Certificate{&serverPeerCert}, nil
 			},
 			serverGetRoot:     getRootCAsForClient,
 			serverVerifyFunc:  serverVerifyFunc,
@@ -402,8 +402,8 @@ func TestClientServerHandshake(t *testing.T) {
 			}
 			// Start a server using ServerOptions in another goroutine.
 			serverOptions := &ServerOptions{
-				Certificates:   test.serverCert,
-				GetCertificate: test.serverGetCert,
+				Certificates:    test.serverCert,
+				GetCertificates: test.serverGetCert,
 				RootCertificateOptions: RootCertificateOptions{
 					RootCACerts: test.serverRoot,
 					GetRootCAs:  test.serverGetRoot,
