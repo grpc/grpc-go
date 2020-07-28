@@ -149,7 +149,7 @@ func main() {
 	}
 
 	// Create tls based credential.
-	creds, err := credentials.NewServerTLSFromFile(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+	creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		log.Fatalf("failed to create credentials: %v", err)
 	}

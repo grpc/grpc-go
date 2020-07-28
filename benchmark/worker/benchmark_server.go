@@ -95,10 +95,10 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	// Set security options.
 	if config.SecurityParams != nil {
 		if *certFile == "" {
-			*certFile = testdata.Path("server1.pem")
+			*certFile = testdata.Path("x509/server1_cert.pem")
 		}
 		if *keyFile == "" {
-			*keyFile = testdata.Path("server1.key")
+			*keyFile = testdata.Path("x509/server1_key.pem")
 		}
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {

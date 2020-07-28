@@ -55,7 +55,7 @@ func (c *testCredsBundle) TransportCredentials() credentials.TransportCredential
 		return nil
 	}
 
-	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
+	creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
 	if err != nil {
 		c.t.Logf("Failed to load credentials: %v", err)
 		return nil
@@ -80,7 +80,7 @@ func (s) TestCredsBundleBoth(t *testing.T) {
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithCredentialsBundle(&testCredsBundle{t: t}),
 	}
-	creds, err := credentials.NewServerTLSFromFile(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+	creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		t.Fatalf("Failed to generate credentials %v", err)
 	}
@@ -102,7 +102,7 @@ func (s) TestCredsBundleTransportCredentials(t *testing.T) {
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithCredentialsBundle(&testCredsBundle{t: t, mode: bundleTLSOnly}),
 	}
-	creds, err := credentials.NewServerTLSFromFile(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+	creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		t.Fatalf("Failed to generate credentials %v", err)
 	}

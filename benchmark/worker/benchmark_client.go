@@ -124,7 +124,7 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 	// Check and set security options.
 	if config.SecurityParams != nil {
 		if *caFile == "" {
-			*caFile = testdata.Path("ca.pem")
+			*caFile = testdata.Path("x509/server_ca.pem")
 		}
 		creds, err := credentials.NewClientTLSFromFile(*caFile, config.SecurityParams.ServerHostOverride)
 		if err != nil {

@@ -135,7 +135,7 @@ func main() {
 		if *testCA {
 			var err error
 			if *caFile == "" {
-				*caFile = testdata.Path("ca.pem")
+				*caFile = testdata.Path("x509/server_ca_cert.pem")
 			}
 			creds, err = credentials.NewClientTLSFromFile(*caFile, sn)
 			if err != nil {

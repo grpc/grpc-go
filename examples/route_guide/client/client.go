@@ -155,7 +155,7 @@ func main() {
 	var opts []grpc.DialOption
 	if *tls {
 		if *caFile == "" {
-			*caFile = testdata.Path("ca.pem")
+			*caFile = testdata.Path("x509/server_ca_cert.pem")
 		}
 		creds, err := credentials.NewClientTLSFromFile(*caFile, *serverHostOverride)
 		if err != nil {

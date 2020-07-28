@@ -283,7 +283,7 @@ func clientHandle(t *testing.T, hs func(net.Conn, string) (AuthInfo, error), lis
 
 // Server handshake implementation in gRPC.
 func gRPCServerHandshake(conn net.Conn) (AuthInfo, error) {
-	serverTLS, err := NewServerTLSFromFile(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+	serverTLS, err := NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +305,7 @@ func gRPCClientHandshake(conn net.Conn, lisAddr string) (AuthInfo, error) {
 }
 
 func tlsServerHandshake(conn net.Conn) (AuthInfo, error) {
-	cert, err := tls.LoadX509KeyPair(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		return nil, err
 	}

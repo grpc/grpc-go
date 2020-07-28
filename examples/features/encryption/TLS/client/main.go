@@ -48,7 +48,7 @@ func main() {
 	flag.Parse()
 
 	// Create tls based credential.
-	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
+	creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
 	if err != nil {
 		log.Fatalf("failed to load credentials: %v", err)
 	}

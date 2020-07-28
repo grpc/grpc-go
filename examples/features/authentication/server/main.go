@@ -50,7 +50,7 @@ func main() {
 	flag.Parse()
 	fmt.Printf("server starting on port %d...\n", *port)
 
-	cert, err := tls.LoadX509KeyPair(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		log.Fatalf("failed to load key pair: %s", err)
 	}
