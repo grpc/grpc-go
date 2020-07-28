@@ -197,7 +197,7 @@ func TestEnd2End(t *testing.T) {
 		clientVerifyFunc CustomVerificationFunc
 		clientVType      VerificationType
 		serverCert       []tls.Certificate
-		serverGetCert    func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+		serverGetCert    func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 		serverRoot       *x509.CertPool
 		serverGetRoot    func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		serverVerifyFunc CustomVerificationFunc
@@ -271,12 +271,12 @@ func TestEnd2End(t *testing.T) {
 				return &VerificationResults{}, nil
 			},
 			clientVType: CertVerification,
-			serverGetCert: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+			serverGetCert: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
-					return &cs.serverPeer1, nil
+					return []*tls.Certificate{&cs.serverPeer1}, nil
 				default:
-					return &cs.serverPeer2, nil
+					return []*tls.Certificate{&cs.serverPeer2}, nil
 				}
 			},
 			serverRoot: cs.serverTrust1,
@@ -336,12 +336,12 @@ func TestEnd2End(t *testing.T) {
 				return nil, fmt.Errorf("custom authz check fails")
 			},
 			clientVType: CertVerification,
-			serverGetCert: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+			serverGetCert: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
-					return &cs.serverPeer1, nil
+					return []*tls.Certificate{&cs.serverPeer1}, nil
 				default:
-					return &cs.serverPeer2, nil
+					return []*tls.Certificate{&cs.serverPeer2}, nil
 				}
 			},
 			serverRoot: cs.serverTrust1,
@@ -388,8 +388,8 @@ func TestEnd2End(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			// Start a server using ServerOptions in another goroutine.
 			serverOptions := &ServerOptions{
-				Certificates:   test.serverCert,
-				GetCertificate: test.serverGetCert,
+				Certificates:    test.serverCert,
+				GetCertificates: test.serverGetCert,
 				RootCertificateOptions: RootCertificateOptions{
 					RootCACerts: test.serverRoot,
 					GetRootCAs:  test.serverGetRoot,

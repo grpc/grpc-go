@@ -158,7 +158,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		{
 			name:       "good-route-config-with-empty-string-route",
 			rc:         goodRouteConfig1,
-			wantUpdate: rdsUpdate{weightedCluster: map[string]uint32{goodClusterName1: 1}},
+			wantUpdate: rdsUpdate{routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{goodClusterName1: 1}}}},
 		},
 		{
 			// default route's match is not empty string, but "/".
@@ -173,7 +173,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 							Route: &routepb.RouteAction{
 								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: goodClusterName1},
 							}}}}}}},
-			wantUpdate: rdsUpdate{weightedCluster: map[string]uint32{goodClusterName1: 1}},
+			wantUpdate: rdsUpdate{routes: []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{goodClusterName1: 1}}}},
 		},
 
 		{
@@ -217,7 +217,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 										},
 										TotalWeight: &wrapperspb.UInt32Value{Value: 10},
 									}}}}}}}}},
-			wantUpdate: rdsUpdate{weightedCluster: map[string]uint32{"a": 2, "b": 3, "c": 5}},
+			wantUpdate: rdsUpdate{routes: []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{"a": 2, "b": 3, "c": 5}}}},
 		},
 	}
 
@@ -243,59 +243,10 @@ func doLDS(t *testing.T, v2c *v2Client, fakeServer *fakeserver.Server) {
 	}
 }
 
-// TestRDSHandleResponseWithRoutingEnabled starts a fake xDS server, makes a
-// ClientConn to it, and creates a v2Client using it. Then, it registers an LDS
-// and RDS watcher and tests different RDS responses.
-//
-// Routing is protected by an env variable. This test sets it to true, so the
-// new fields will be parsed.
-func (s) TestRDSHandleResponseWithRoutingEnabled(t *testing.T) {
-	routingEnabled = true
-	defer func() {
-		routingEnabled = false
-	}()
-	tests := []struct {
-		name          string
-		rdsResponse   *xdspb.DiscoveryResponse
-		wantErr       bool
-		wantUpdate    *rdsUpdate
-		wantUpdateErr bool
-	}{
-		// Response contains one good interesting RouteConfiguration.
-		{
-			name:        "one-good-route-config",
-			rdsResponse: goodRDSResponse1,
-			wantErr:     false,
-			wantUpdate: &rdsUpdate{
-				// Instead of just weighted targets when routing is disabled,
-				// this result contains a route with perfix "", and action as
-				// weighted targets.
-				routes: []*Route{{
-					Prefix: newStringP(""),
-					Action: map[string]uint32{goodClusterName1: 1},
-				}},
-			},
-			wantUpdateErr: false,
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			testWatchHandle(t, &watchHandleTestcase{
-				typeURL:          rdsURL,
-				resourceName:     goodRouteName1,
-				responseToHandle: test.rdsResponse,
-				wantHandleErr:    test.wantErr,
-				wantUpdate:       test.wantUpdate,
-				wantUpdateErr:    test.wantUpdateErr,
-			})
-		})
-	}
-}
-
-// TestRDSHandleResponseWithRoutingDisabled starts a fake xDS server, makes a
-// ClientConn to it, and creates a v2Client using it. Then, it registers an LDS
-// and RDS watcher and tests different RDS responses.
-func (s) TestRDSHandleResponseWithRoutingDisabled(t *testing.T) {
+// TestRDSHandleResponseWithRouting starts a fake xDS server, makes a ClientConn
+// to it, and creates a v2Client using it. Then, it registers an LDS and RDS
+// watcher and tests different RDS responses.
+func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 	tests := []struct {
 		name          string
 		rdsResponse   *xdspb.DiscoveryResponse
@@ -342,7 +293,22 @@ func (s) TestRDSHandleResponseWithRoutingDisabled(t *testing.T) {
 			name:          "one-good-route-config",
 			rdsResponse:   goodRDSResponse1,
 			wantErr:       false,
-			wantUpdate:    &rdsUpdate{weightedCluster: map[string]uint32{goodClusterName1: 1}},
+			wantUpdate:    &rdsUpdate{routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{goodClusterName1: 1}}}},
+			wantUpdateErr: false,
+		},
+		{
+			name:        "one-good-route-config with routes",
+			rdsResponse: goodRDSResponse1,
+			wantErr:     false,
+			wantUpdate: &rdsUpdate{
+				// Instead of just weighted targets when routing is disabled,
+				// this result contains a route with perfix "", and action as
+				// weighted targets.
+				routes: []*Route{{
+					Prefix: newStringP(""),
+					Action: map[string]uint32{goodClusterName1: 1},
+				}},
+			},
 			wantUpdateErr: false,
 		},
 	}

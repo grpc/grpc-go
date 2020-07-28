@@ -1,3 +1,5 @@
+// +build !go1.10
+
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -16,18 +18,24 @@
  *
  */
 
-package client
+package advancedtls
 
 import (
-	"os"
-	"strings"
+	"crypto/tls"
+	"fmt"
 )
 
-// TODO: there are multiple env variables, GRPC_XDS_BOOTSTRAP and
-// GRPC_XDS_EXPERIMENTAL_V3_SUPPORT, and this. Move all env variables into a
-// separate package.
-const routingEnabledConfigStr = "GRPC_XDS_EXPERIMENTAL_ROUTING"
-
-// routing is enabled only if env variable is set to true. The default is false.
-// We may flip the default later.
-var routingEnabled = strings.EqualFold(os.Getenv(routingEnabledConfigStr), "true")
+// buildGetCertificates returns the first element of o.GetCertificates.
+func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
+	if o.GetCertificates == nil {
+		return nil, fmt.Errorf("function GetCertificates must be specified")
+	}
+	certificates, err := o.GetCertificates(clientHello)
+	if err != nil {
+		return nil, err
+	}
+	if len(certificates) == 0 {
+		return nil, fmt.Errorf("no certificates configured")
+	}
+	return certificates[0], nil
+}
