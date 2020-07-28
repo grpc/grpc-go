@@ -137,19 +137,24 @@ type altsTC struct {
 }
 
 // NewClientCreds constructs a client-side ALTS TransportCredentials object.
-func NewClientCreds(opts *ClientOptions) credentials.TransportCredentials {
+func NewClientCreds(opts *ClientOptions) (credentials.TransportCredentials, error) {
 	return newALTS(core.ClientSide, opts.TargetServiceAccounts, opts.HandshakerServiceAddress)
 }
 
 // NewServerCreds constructs a server-side ALTS TransportCredentials object.
-func NewServerCreds(opts *ServerOptions) credentials.TransportCredentials {
+func NewServerCreds(opts *ServerOptions) (credentials.TransportCredentials, error) {
 	return newALTS(core.ServerSide, nil, opts.HandshakerServiceAddress)
 }
 
-func newALTS(side core.Side, accounts []string, hsAddress string) credentials.TransportCredentials {
+func newALTS(side core.Side, accounts []string, hsAddress string) (credentials.TransportCredentials, error) {
+	var err error
+	err = nil
 	once.Do(func() {
-		vmOnGCP = isRunningOnGCP()
+		vmOnGCP, err = isRunningOnGCP()
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	if hsAddress == "" {
 		hsAddress = hypervisorHandshakerServiceAddress
@@ -162,7 +167,7 @@ func newALTS(side core.Side, accounts []string, hsAddress string) credentials.Tr
 		side:      side,
 		accounts:  accounts,
 		hsAddress: hsAddress,
-	}
+	}, nil
 }
 
 // ClientHandshake implements the client side handshake protocol.
