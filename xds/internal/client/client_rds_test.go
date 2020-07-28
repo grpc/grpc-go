@@ -583,22 +583,22 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 			name:      "v2 routeConfig resource",
 			resources: []*anypb.Any{v2RouteConfig},
 			wantUpdate: map[string]RouteConfigUpdate{
-				v2RouteConfigName: RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}}},
+				v2RouteConfigName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}}},
 			},
 		},
 		{
 			name:      "v3 routeConfig resource",
 			resources: []*anypb.Any{v3RouteConfig},
 			wantUpdate: map[string]RouteConfigUpdate{
-				v3RouteConfigName: RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}}},
+				v3RouteConfigName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}}},
 			},
 		},
 		{
 			name:      "multiple routeConfig resources",
 			resources: []*anypb.Any{v2RouteConfig, v3RouteConfig},
 			wantUpdate: map[string]RouteConfigUpdate{
-				v3RouteConfigName: RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}}},
-				v2RouteConfigName: RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}}},
+				v3RouteConfigName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}}},
+				v2RouteConfigName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}}},
 			},
 		},
 	}
