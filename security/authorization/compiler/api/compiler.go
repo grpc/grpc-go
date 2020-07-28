@@ -81,7 +81,9 @@ func astToCheckedExpr(checked *cel.Ast) *expr.CheckedExpr {
 }
 
 // CompileYamltoRbac compiles yaml to rbac
-func CompileYamltoRbac(filename string) pb.RBAC {
+// Must return a pointer to the RBAC proto as to avoid
+// copying the object hence the mutex is not copied
+func CompileYamltoRbac(filename string) *pb.RBAC {
 	yamlFile := ReadYaml(filename)
 	var userPolicy UserPolicy
 	parseYaml(yamlFile, &userPolicy)
@@ -103,7 +105,7 @@ func CompileYamltoRbac(filename string) pb.RBAC {
 		policy.Condition = checkedExpr // v2
 		rbac.Policies[name] = &policy
 	}
-	return rbac
+	return &rbac
 }
 
 // Converts an expression to a parsed expression, with SourceInfo nil.
@@ -123,7 +125,7 @@ func exprToProgram(env *cel.Env, condition *expr.Expr) *cel.Program {
 // Compile takes in input file name and returns serialized output rbac proto
 func Compile(inputFilename string, outputFilename string) {
 	rbac := CompileYamltoRbac(inputFilename)
-	serialized, err := proto.Marshal(&rbac)
+	serialized, err := proto.Marshal(rbac)
 	if err != nil {
 		log.Fatalf("Failed to Serialize RBAC Proto %v", err)
 	}
