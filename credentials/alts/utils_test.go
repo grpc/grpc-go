@@ -85,7 +85,8 @@ func (s) TestIsRunningOnGCP(t *testing.T) {
 		{"windows: GCP platform (Google) with extra spaces", "windows", strings.NewReader("  Google     "), true},
 	} {
 		reverseFunc := setup(tc.testOS, tc.testReader)
-		if got, want := isRunningOnGCP(), tc.out; got != want {
+		got, _ := isRunningOnGCP()
+		if want := tc.out; got != want {
 			t.Errorf("%v: isRunningOnGCP()=%v, want %v", tc.description, got, want)
 		}
 		reverseFunc()
@@ -94,7 +95,7 @@ func (s) TestIsRunningOnGCP(t *testing.T) {
 
 func (s) TestIsRunningOnGCPNoProductNameFile(t *testing.T) {
 	reverseFunc := setupError("linux", os.ErrNotExist)
-	if isRunningOnGCP() {
+	if result, _ := isRunningOnGCP(); result {
 		t.Errorf("ErrNotExist: isRunningOnGCP()=true, want false")
 	}
 	reverseFunc()

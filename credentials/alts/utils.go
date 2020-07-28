@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"regexp"
@@ -83,28 +82,28 @@ var (
 
 // isRunningOnGCP checks whether the local system, without doing a network request is
 // running on GCP.
-func isRunningOnGCP() bool {
+func isRunningOnGCP() (bool, error) {
 	manufacturer, err := readManufacturer()
 	if os.IsNotExist(err) {
-		return false
+		return false, nil
 	}
 	if err != nil {
-		log.Fatalf("failure to read manufacturer information: %v", err)
+		return false, status.Errorf(codes.Internal, "failure to read manufacturer information: %v", err)
 	}
 	name := string(manufacturer)
 	switch runningOS {
 	case "linux":
 		name = strings.TrimSpace(name)
-		return name == "Google" || name == "Google Compute Engine"
+		return name == "Google" || name == "Google Compute Engine", nil
 	case "windows":
 		name = strings.Replace(name, " ", "", -1)
 		name = strings.Replace(name, "\n", "", -1)
 		name = strings.Replace(name, "\r", "", -1)
-		return name == "Google"
+		return name == "Google", nil
 	default:
-		log.Fatal(platformError(runningOS))
+		return false, platformError(runningOS)
 	}
-	return false
+	return false, nil
 }
 
 func readManufacturer() ([]byte, error) {

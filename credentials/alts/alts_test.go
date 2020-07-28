@@ -40,7 +40,10 @@ func Test(t *testing.T) {
 func (s) TestInfoServerName(t *testing.T) {
 	// This is not testing any handshaker functionality, so it's fine to only
 	// use NewServerCreds and not NewClientCreds.
-	alts := NewServerCreds(DefaultServerOptions())
+	alts, err := NewServerCreds(DefaultServerOptions())
+	if err != nil {
+		t.Fatalf("failed to create new server creds: %v", err)
+	}
 	if got, want := alts.Info().ServerName, ""; got != want {
 		t.Fatalf("%v.Info().ServerName = %v, want %v", alts, got, want)
 	}
@@ -50,7 +53,10 @@ func (s) TestOverrideServerName(t *testing.T) {
 	wantServerName := "server.name"
 	// This is not testing any handshaker functionality, so it's fine to only
 	// use NewServerCreds and not NewClientCreds.
-	c := NewServerCreds(DefaultServerOptions())
+	c, err := NewServerCreds(DefaultServerOptions())
+	if err != nil {
+		t.Fatalf("failed to create new server creds: %v", err)
+	}
 	c.OverrideServerName(wantServerName)
 	if got, want := c.Info().ServerName, wantServerName; got != want {
 		t.Fatalf("c.Info().ServerName = %v, want %v", got, want)
@@ -61,7 +67,10 @@ func (s) TestCloneClient(t *testing.T) {
 	wantServerName := "server.name"
 	opt := DefaultClientOptions()
 	opt.TargetServiceAccounts = []string{"not", "empty"}
-	c := NewClientCreds(opt)
+	c, err := NewClientCreds(opt)
+	if err != nil {
+		t.Fatalf("failed to create new client creds: %v", err)
+	}
 	c.OverrideServerName(wantServerName)
 	cc := c.Clone()
 	if got, want := cc.Info().ServerName, wantServerName; got != want {
@@ -91,7 +100,10 @@ func (s) TestCloneClient(t *testing.T) {
 
 func (s) TestCloneServer(t *testing.T) {
 	wantServerName := "server.name"
-	c := NewServerCreds(DefaultServerOptions())
+	c, err := NewServerCreds(DefaultServerOptions())
+	if err != nil {
+		t.Fatalf("failed to create new server creds: %v", err)
+	}
 	c.OverrideServerName(wantServerName)
 	cc := c.Clone()
 	if got, want := cc.Info().ServerName, wantServerName; got != want {
@@ -122,7 +134,10 @@ func (s) TestCloneServer(t *testing.T) {
 func (s) TestInfo(t *testing.T) {
 	// This is not testing any handshaker functionality, so it's fine to only
 	// use NewServerCreds and not NewClientCreds.
-	c := NewServerCreds(DefaultServerOptions())
+	c, err := NewServerCreds(DefaultServerOptions())
+	if err != nil {
+		t.Fatalf("failed to create new server creds: %v", err)
+	}
 	info := c.Info()
 	if got, want := info.ProtocolVersion, ""; got != want {
 		t.Errorf("info.ProtocolVersion=%v, want %v", got, want)
