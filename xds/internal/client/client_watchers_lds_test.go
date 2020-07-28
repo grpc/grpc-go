@@ -32,7 +32,7 @@ type ldsUpdateErr struct {
 // TestLDSWatch covers the cases:
 // - an update is received after a watch()
 // - an update for another resource name
-// - an upate is received after cancel()
+// - an update is received after cancel()
 func (s) TestLDSWatch(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()

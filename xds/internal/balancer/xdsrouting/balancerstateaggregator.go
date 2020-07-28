@@ -79,7 +79,7 @@ func (rbsa *balancerStateAggregator) start() {
 }
 
 // Close closes the aggregator. When the aggregator is closed, it won't call
-// parent ClientConn to upate balancer state.
+// parent ClientConn to update balancer state.
 func (rbsa *balancerStateAggregator) close() {
 	rbsa.mu.Lock()
 	defer rbsa.mu.Unlock()
