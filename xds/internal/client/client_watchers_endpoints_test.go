@@ -55,7 +55,7 @@ type endpointsUpdateErr struct {
 // TestEndpointsWatch covers the cases:
 // - an update is received after a watch()
 // - an update for another resource name (which doesn't trigger callback)
-// - an upate is received after cancel()
+// - an update is received after cancel()
 func (s) TestEndpointsWatch(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()

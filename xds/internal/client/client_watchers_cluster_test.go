@@ -33,7 +33,7 @@ type clusterUpdateErr struct {
 // TestClusterWatch covers the cases:
 // - an update is received after a watch()
 // - an update for another resource name
-// - an upate is received after cancel()
+// - an update is received after cancel()
 func (s) TestClusterWatch(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()

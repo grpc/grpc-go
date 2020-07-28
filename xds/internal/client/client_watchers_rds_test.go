@@ -33,7 +33,7 @@ type rdsUpdateErr struct {
 // TestRDSWatch covers the cases:
 // - an update is received after a watch()
 // - an update for another resource name (which doesn't trigger callback)
-// - an upate is received after cancel()
+// - an update is received after cancel()
 func (s) TestRDSWatch(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()

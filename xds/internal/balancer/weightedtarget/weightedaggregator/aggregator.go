@@ -90,7 +90,7 @@ func (wbsa *Aggregator) Start() {
 }
 
 // Stop stops the aggregator. When the aggregator is closed, it won't call
-// parent ClientConn to upate balancer state.
+// parent ClientConn to update balancer state.
 func (wbsa *Aggregator) Stop() {
 	wbsa.mu.Lock()
 	defer wbsa.mu.Unlock()
