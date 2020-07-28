@@ -681,11 +681,3 @@ func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 func newStringP(s string) *string {
 	return &s
 }
-
-func newUInt32P(i uint32) *uint32 {
-	return &i
-}
-
-func newBoolP(b bool) *bool {
-	return &b
-}

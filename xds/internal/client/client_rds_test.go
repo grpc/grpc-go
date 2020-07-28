@@ -583,22 +583,22 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 			name:      "v2 routeConfig resource",
 			resources: []*anypb.Any{v2RouteConfig},
 			wantUpdate: map[string]RouteConfigUpdate{
-				v2RouteConfigName: RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}}},
+				v2RouteConfigName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}}},
 			},
 		},
 		{
 			name:      "v3 routeConfig resource",
 			resources: []*anypb.Any{v3RouteConfig},
 			wantUpdate: map[string]RouteConfigUpdate{
-				v3RouteConfigName: RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}}},
+				v3RouteConfigName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}}},
 			},
 		},
 		{
 			name:      "multiple routeConfig resources",
 			resources: []*anypb.Any{v2RouteConfig, v3RouteConfig},
 			wantUpdate: map[string]RouteConfigUpdate{
-				v3RouteConfigName: RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}}},
-				v2RouteConfigName: RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}}},
+				v3RouteConfigName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}}},
+				v2RouteConfigName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}}},
 			},
 		},
 	}
@@ -714,77 +714,7 @@ func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
 	}
 }
 
-func (s) TestWeightedClustersProtoToMap(t *testing.T) {
-	tests := []struct {
-		name    string
-		wc      *v3routepb.WeightedCluster
-		want    map[string]uint32
-		wantErr bool
-	}{
-		{
-			name: "weight not add up to non default total",
-			wc: &v3routepb.WeightedCluster{
-				Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-					{Name: "a", Weight: &wrapperspb.UInt32Value{Value: 1}},
-					{Name: "b", Weight: &wrapperspb.UInt32Value{Value: 1}},
-					{Name: "c", Weight: &wrapperspb.UInt32Value{Value: 1}},
-				},
-				TotalWeight: &wrapperspb.UInt32Value{Value: 10},
-			},
-			wantErr: true,
-		},
-		{
-			name: "weight not add up to default total",
-			wc: &v3routepb.WeightedCluster{
-				Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-					{Name: "a", Weight: &wrapperspb.UInt32Value{Value: 2}},
-					{Name: "b", Weight: &wrapperspb.UInt32Value{Value: 3}},
-					{Name: "c", Weight: &wrapperspb.UInt32Value{Value: 5}},
-				},
-				TotalWeight: nil,
-			},
-			wantErr: true,
-		},
-		{
-			name: "ok non default total weight",
-			wc: &v3routepb.WeightedCluster{
-				Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-					{Name: "a", Weight: &wrapperspb.UInt32Value{Value: 2}},
-					{Name: "b", Weight: &wrapperspb.UInt32Value{Value: 3}},
-					{Name: "c", Weight: &wrapperspb.UInt32Value{Value: 5}},
-				},
-				TotalWeight: &wrapperspb.UInt32Value{Value: 10},
-			},
-			want: map[string]uint32{"a": 2, "b": 3, "c": 5},
-		},
-		{
-			name: "ok default total weight is 100",
-			wc: &v3routepb.WeightedCluster{
-				Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-					{Name: "a", Weight: &wrapperspb.UInt32Value{Value: 20}},
-					{Name: "b", Weight: &wrapperspb.UInt32Value{Value: 30}},
-					{Name: "c", Weight: &wrapperspb.UInt32Value{Value: 50}},
-				},
-				TotalWeight: nil,
-			},
-			want: map[string]uint32{"a": 20, "b": 30, "c": 50},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := weightedClustersProtoToMap(tt.wc)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("weightedClustersProtoToMap() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !cmp.Equal(got, tt.want) {
-				t.Errorf("weightedClustersProtoToMap() got = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestRoutesProtoToSlice(t *testing.T) {
+func (s) TestRoutesProtoToSlice(t *testing.T) {
 	tests := []struct {
 		name       string
 		routes     []*v3routepb.Route

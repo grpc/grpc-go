@@ -269,23 +269,6 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 	return routesRet, nil
 }
 
-func weightedClustersProtoToMap(wc *v3routepb.WeightedCluster) (map[string]uint32, error) {
-	ret := make(map[string]uint32)
-	var totalWeight uint32 = 100
-	if t := wc.GetTotalWeight().GetValue(); t != 0 {
-		totalWeight = t
-	}
-	for _, cw := range wc.Clusters {
-		w := cw.Weight.GetValue()
-		ret[cw.Name] = w
-		totalWeight -= w
-	}
-	if totalWeight != 0 {
-		return nil, fmt.Errorf("weights of clusters do not add up to total total weight, difference: %v", totalWeight)
-	}
-	return ret, nil
-}
-
 type domainMatchType int
 
 const (
