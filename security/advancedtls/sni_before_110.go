@@ -25,7 +25,7 @@ import (
 	"fmt"
 )
 
-// The function buildGetCertificates returns the first element of o.GetCertificates.
+// buildGetCertificates returns the first element of o.GetCertificates.
 func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
 	if o.GetCertificates == nil {
 		return nil, fmt.Errorf("function GetCertificates must be specified")

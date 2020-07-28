@@ -100,7 +100,7 @@ func TestGetCertificatesSNI(t *testing.T) {
 			if err != nil {
 				t.Fatalf("serverConfig.GetCertificate(clientHello) failed: %v", err)
 			}
-			if !cmp.Equal(gotCertificate, test.wantCert, cmp.AllowUnexported(tls.Certificate{}, tls.Certificate{})) {
+			if !cmp.Equal(gotCertificate, test.wantCert, cmp.AllowUnexported(tls.Certificate{})) {
 				t.Errorf("GetCertificates() = %v, want %v", gotCertificate, test.wantCert)
 			}
 		})

@@ -25,7 +25,7 @@ import (
 	"fmt"
 )
 
-// The function buildGetCertificates returns the certificate that matches the SNI field
+// buildGetCertificates returns the certificate that matches the SNI field
 // for the given ClientHelloInfo, defaulting to the first element of o.GetCertificates.
 func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
 	if o.GetCertificates == nil {

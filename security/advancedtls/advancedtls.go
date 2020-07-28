@@ -238,12 +238,11 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		Certificates: o.Certificates,
 	}
 	if o.GetCertificates != nil {
-		getCertificateWithSNI := func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			return buildGetCertificates(clientHello, o)
-		}
 		// GetCertificate is only able to perform SNI logic for go1.10 and above.
 		// It will return the first certificate in o.GetCertificates for go1.9.
-		config.GetCertificate = getCertificateWithSNI
+		config.GetCertificate = func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			return buildGetCertificates(clientHello, o)
+		}
 	}
 	if clientCAs != nil {
 		config.ClientCAs = clientCAs
