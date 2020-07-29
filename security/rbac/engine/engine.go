@@ -21,6 +21,7 @@ package engine
 import (
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	cel "github.com/google/cel-go/cel"
+	types "github.com/google/cel-go/common/types"
 	interpreter "github.com/google/cel-go/interpreter"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/grpc/codes"
@@ -122,18 +123,23 @@ func (engine *policyEngine) evaluate(activation interpreter.Activation) (Decisio
 		// Evaluate program against activation.
 		var match bool
 		out, _, err := program.Eval(activation)
-		if out == nil {
-			// Unsuccessful evaluation, typically the result of a series of incompatible
-			// `EnvOption` or `ProgramOption` values used in the creation of the evaluation
-			// environment or executable program.
-			grpclog.Warning("Unsuccessful evaluation encountered during AuthorizationEngine.Evaluate: %s", err.Error())
-			match = false
-		} else if err != nil {
-			// Successful evaluation to an error result, i.e. missing attributes.
+		if err != nil {
+			if out == nil {
+				// Unsuccessful evaluation, typically the result of a series of incompatible
+				// `EnvOption` or `ProgramOption` values used in the creation of the evaluation
+				// environment or executable program.
+				grpclog.Warning("Unsuccessful evaluation encountered during AuthorizationEngine.Evaluate: %s", err.Error())
+			}
+			// Unsuccessful evaluation or successful evaluation to an error result, i.e. missing attributes.
 			match = false
 		} else {
 			// Successful evaluation to a non-error result.
-			match = out.Value().(bool)
+			if !types.IsBool(out) {
+				grpclog.Warning("'Successful evaluation', but output isn't a boolean: %v", out)
+				match = false
+			} else {
+				match = out.Value().(bool)
+			}
 		}
 
 		// Process evaluation results.
