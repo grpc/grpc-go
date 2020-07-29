@@ -34,14 +34,10 @@ const XDSClientID = clientID("xdsClientID")
 // keys.
 //
 // xds.Locality cannot be map keys because one of the XXX fields is a slice.
-//
-// This struct should only be used as map keys. Use the proto message directly
-// in all other places.
-//
 type LocalityID struct {
-	Region  string
-	Zone    string
-	SubZone string
+	Region  string `json:"region,omitempty"`
+	Zone    string `json:"zone,omitempty"`
+	SubZone string `json:"subZone,omitempty"`
 }
 
 func (l LocalityID) String() string {
