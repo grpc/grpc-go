@@ -123,7 +123,10 @@ func main() {
 		opts = append(opts, grpc.Creds(creds))
 	} else if *useALTS {
 		altsOpts := alts.DefaultServerOptions()
-		altsTC := alts.NewServerCreds(altsOpts)
+		altsTC, err := alts.NewServerCreds(altsOpts)
+		if err != nil {
+			grpclog.Fatalf("Failed to create new server credentials: %v", err)
+		}
 		opts = append(opts, grpc.Creds(altsTC))
 	}
 	var serverList []*lbpb.Server

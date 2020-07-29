@@ -105,7 +105,10 @@ func createTestConn() *grpc.ClientConn {
 		creds := credentials.NewClientTLSFromCert(nil, "")
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	case "alts":
-		creds := alts.NewClientCreds(alts.DefaultClientOptions())
+		creds, err := alts.NewClientCreds(alts.DefaultClientOptions())
+		if err != nil {
+			errorLog.Fatalf("Failed to create new client credentials: %v", err)
+		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	case "google_default_credentials":
 		opts = append(opts, grpc.WithCredentialsBundle(google.NewDefaultCredentials()))

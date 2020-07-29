@@ -47,7 +47,10 @@ func main() {
 	flag.Parse()
 
 	// Create alts based credential.
-	altsTC := alts.NewClientCreds(alts.DefaultClientOptions())
+	altsTC, err := alts.NewClientCreds(alts.DefaultClientOptions())
+	if err != nil {
+		log.Fatalf("failed to create new client credentials: %v", err)
+	}
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(altsTC), grpc.WithBlock())

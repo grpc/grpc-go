@@ -44,7 +44,10 @@ func main() {
 	if *hsAddr != "" {
 		opts.HandshakerServiceAddress = *hsAddr
 	}
-	altsTC := alts.NewClientCreds(opts)
+	altsTC, err := alts.NewClientCreds(opts)
+	if err != nil {
+		grpclog.Fatalf("Failed to create new client credentials: %v", err)
+	}
 	// Block until the server is ready.
 	conn, err := grpc.Dial(*serverAddr, grpc.WithTransportCredentials(altsTC), grpc.WithBlock())
 	if err != nil {

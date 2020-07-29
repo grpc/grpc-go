@@ -72,7 +72,10 @@ func main() {
 		if *altsHSAddr != "" {
 			altsOpts.HandshakerServiceAddress = *altsHSAddr
 		}
-		altsTC := alts.NewServerCreds(altsOpts)
+		altsTC, err := alts.NewServerCreds(altsOpts)
+		if err != nil {
+			grpclog.Fatalf("Failed to create new server credentials: %v", err)
+		}
 		opts = append(opts, grpc.Creds(altsTC))
 	}
 	server := grpc.NewServer(opts...)
