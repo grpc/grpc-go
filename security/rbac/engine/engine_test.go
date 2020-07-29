@@ -26,6 +26,7 @@ import (
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	cel "github.com/google/cel-go/cel"
+	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	interpreter "github.com/google/cel-go/interpreter"
 	"google.golang.org/grpc/codes"
@@ -58,6 +59,9 @@ func (mock valMock) Equal(other ref.Val) ref.Val {
 }
 
 func (mock valMock) Type() ref.Type {
+	if mock.val == true || mock.val == false {
+		return types.BoolType
+	}
 	return nil
 }
 
@@ -102,6 +106,16 @@ func TestNewAuthorizationEngine(t *testing.T) {
 			wantErr: "code = InvalidArgument desc = must provide 1 or 2 RBACs",
 			errStr:  "Expected wrong number of RBACs error for 0 RBACs",
 		},
+		"one rbac": {
+			input:   []*pb.RBAC{{}},
+			wantErr: "",
+			errStr:  "",
+		},
+		"two rbacs": {
+			input:   []*pb.RBAC{{}, {}},
+			wantErr: "",
+			errStr:  "",
+		},
 		"too many rbacs": {
 			input:   []*pb.RBAC{{}, {}, {}},
 			wantErr: "code = InvalidArgument desc = must provide 1 or 2 RBACs",
@@ -117,6 +131,9 @@ func TestNewAuthorizationEngine(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			_, gotErr := NewAuthorizationEngine(tc.input)
+			if tc.wantErr == "" && gotErr == nil {
+				return
+			}
 			if gotErr == nil || !strings.HasSuffix(gotErr.Error(), tc.wantErr) {
 				t.Errorf(tc.errStr)
 			}
