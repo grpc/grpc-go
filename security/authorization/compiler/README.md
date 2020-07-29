@@ -50,6 +50,8 @@ See the Language Definition for specific instruction in how to format expression
 Start with accessing the directory of the grpc_authz_compiler.go which is within grpc-go/security/rbac/compiler/main
 
 From there use:
- go run grpc_authz_compiler.go PATH_TO_INPUT_YAML OUTPUT_FILENAME
+```
+ go run grpc_authz_compiler.go PATH_TO_INPUT_YAML OUTPUT_FILE_PATH
+```
 
-The output file will be produced in the ~/compiler/main directory
+The output file will be produced in the ~/compiler/main directory if given just a filename or be placed at the given path if given a complete path.
