@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"os"
 
-	compiler "google.golang.org/grpc/security/compiler/api"
+	compiler "google.golang.org/grpc/security/authorization/compiler/api"
 )
 
 func main() {
