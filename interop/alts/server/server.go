@@ -60,7 +60,10 @@ func main() {
 	if *hsAddr != "" {
 		opts.HandshakerServiceAddress = *hsAddr
 	}
-	altsTC := alts.NewServerCreds(opts)
+	altsTC, err := alts.NewServerCreds(opts)
+	if err != nil {
+		grpclog.Fatalf("Failed to create new server credentials: %v", err)
+	}
 	grpcServer := grpc.NewServer(grpc.Creds(altsTC), grpc.InTapHandle(authz))
 	testpb.RegisterTestServiceServer(grpcServer, interop.NewTestServer())
 	grpcServer.Serve(lis)

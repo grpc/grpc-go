@@ -150,7 +150,10 @@ func main() {
 		if *altsHSAddr != "" {
 			altsOpts.HandshakerServiceAddress = *altsHSAddr
 		}
-		altsTC := alts.NewClientCreds(altsOpts)
+		altsTC, err := alts.NewClientCreds(altsOpts)
+		if err != nil {
+			grpclog.Fatalf("Failed to create new client credentials: %v", err)
+		}
 		opts = append(opts, grpc.WithTransportCredentials(altsTC))
 	case credsGoogleDefaultCreds:
 		opts = append(opts, grpc.WithCredentialsBundle(google.NewDefaultCredentials()))

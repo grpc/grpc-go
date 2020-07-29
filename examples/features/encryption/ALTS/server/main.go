@@ -50,14 +50,17 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	// Create alts based credential.
-	altsTC := alts.NewServerCreds(alts.DefaultServerOptions())
+	altsTC, err := alts.NewServerCreds(alts.DefaultServerOptions())
+	if err != nil {
+		log.Fatalf("failed to create new server credentials: %v", err)
+	}
 
 	s := grpc.NewServer(grpc.Creds(altsTC))
 
 	// Register EchoServer on the server.
 	pb.RegisterEchoServer(s, &ecServer{})
 
-	if err := s.Serve(lis); err != nil {
+	if err = s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
 }

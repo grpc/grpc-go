@@ -112,7 +112,11 @@ func (c *creds) NewWithMode(mode string) (credentials.Bundle, error) {
 	case internal.CredsBundleModeBackendFromBalancer, internal.CredsBundleModeBalancer:
 		// Only the clients can use google default credentials, so we only need
 		// to create new ALTS client creds here.
-		newCreds.transportCreds = alts.NewClientCreds(alts.DefaultClientOptions())
+		creds, err := alts.NewClientCreds(alts.DefaultClientOptions())
+		newCreds.transportCreds = creds
+		if err != nil {
+			return nil, fmt.Errorf("failed to create new client credentials: %v", err)
+		}
 	default:
 		return nil, fmt.Errorf("unsupported mode: %v", mode)
 	}
