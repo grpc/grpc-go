@@ -2,22 +2,17 @@
 
 The User Defined Policy is written in a specific yaml format. An example Yaml File is listed below.
 
-'''
-
+```
 action: ALLOW
 rules:
 - name: test access
-
   condition: request.url_path.startsWith('/pkg.service/test')
 - name: admin access
-
   condition: connection.uri_san_peer_certificate == 'clustes/ns/default/sa/admin'
 - name: dev access
-
   condition: request.url_path == '/pkg.service/dev' &&
     connection.uri_san_peer_certificate == 'cluster/ns/default/sa/dev'
-    
-'''
+```
 
 The first line starts by specifying the action purpose of the policy. 
 action: ALLOW or DENY
@@ -33,27 +28,18 @@ The second line specifies that you will now begin listing the rules for your pol
 
 # What are the allowed fields one can create a policy using?
 
+   ```
     request.url_path | string | The path portion of the URL in the form of "/packageName.serviceName/methodName".
-
     request.host | string | The host portion of the URL, e.g., "foo.example.com".
-
     request.method  | string | HTTP method, e.g., "GET", "POST".
-
     request.headers | string | map All request headers. 
-
     source.address | string | Connection remote address.
-
     source.port | int | Connection remote port.
-
     destination.address | string | Connection local address.
-
     destination.port | int | Connection local port.
-
     connection.uri_san_peer_certificate | string | First URI in SAN field of the peer certificate. In the Istio context, this is the SPIFFE ID.
-
-
-
-
+  ```
+  
 # How to write an Expression 
 
 For every condition you want to construct a statement involving the above approved fields that results in an outcome of True or False.
