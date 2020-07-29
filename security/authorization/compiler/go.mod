@@ -1,4 +1,4 @@
-module google.golang.org/grpc/security/compiler
+module google.golang.org/grpc/security/authorization/compiler
 
 go 1.14
 
