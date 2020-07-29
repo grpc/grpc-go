@@ -103,7 +103,6 @@ func isRunningOnGCP() (bool, error) {
 	default:
 		return false, platformError(runningOS)
 	}
-	return false, nil
 }
 
 func readManufacturer() ([]byte, error) {
