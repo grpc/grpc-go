@@ -1,3 +1,5 @@
+// +build go1.10
+
 /*
  *
  * Copyright 2019 gRPC authors.
@@ -143,11 +145,12 @@ func exprToProgram(env *cel.Env, condition *expr.Expr) *cel.Program {
 }
 
 // Compile takes in input file name and returns serialized output rbac proto
-func Compile(inputFilename string, outputFilename string) {
+func Compile(inputFilename string, outputFilename string) error {
 	rbac := CompileYamltoRbac(inputFilename)
 	serialized, err := proto.Marshal(rbac)
 	if err != nil {
-		log.Fatalf("Failed to Serialize RBAC Proto %v", err)
+		return err
 	}
 	ioutil.WriteFile(outputFilename, serialized, 0644)
+	return nil
 }

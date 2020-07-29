@@ -2,6 +2,7 @@
 
 The User Defined Policy is written in a specific yaml format. An example Yaml File is listed below.
 
+'''
 action: ALLOW
 rules:
 - name: test access
@@ -14,6 +15,7 @@ rules:
 
   condition: request.url_path == '/pkg.service/dev' &&
     connection.uri_san_peer_certificate == 'cluster/ns/default/sa/dev'
+'''
     
 The first line starts by specifying the action purpose of the policy. 
 action: ALLOW or DENY

@@ -1,3 +1,5 @@
+// +build go1.10
+
 /*
  *
  * Copyright 2019 gRPC authors.
@@ -20,14 +22,37 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	compiler "google.golang.org/grpc/security/authorization/compiler/api"
 )
 
 func main() {
-	inputFile := os.Args[1]
-	outputFile := os.Args[2]
-	compiler.Compile(inputFile, outputFile)
-	fmt.Printf("Compiled %s into %s \n", inputFile, outputFile)
+	var inputFile string
+	var outputFile string
+	if len(os.Args) == 1 {
+		fmt.Println("Please Enter your security policy file path")
+		_, err := fmt.Scanln(&inputFile)
+		if err != nil {
+			log.Fatalf("Incorrect File Path:  %v", err)
+		}
+		fmt.Println("Please Enter your serialized RBAC proto output file path")
+		_, err = fmt.Scanln(&outputFile)
+		if err != nil {
+			log.Fatalf("Incorrect File Path:  %v", err)
+		}
+	} else if len(os.Args) == 3 {
+		inputFile = os.Args[1]
+		outputFile = os.Args[2]
+	} else {
+		log.Fatalf("Incorrect Number of files. Please Enter the input file path and the output file path")
+	}
+
+	err := compiler.Compile(inputFile, outputFile)
+	if err != nil {
+		log.Fatalf("Failed to serialize RBAC proto %v", err)
+	} else {
+		fmt.Printf("Compiled %s into %s \n", inputFile, outputFile)
+	}
 }
