@@ -37,10 +37,29 @@ type AuthorizationArgs struct {
 	peerInfo *peer.Peer
 }
 
+// ActivationImpl is an implementation of interpreter.Activation.
+// An Activation is the primary mechanism by which a caller supplies input into a CEL program.
+type ActivationImpl struct {
+	dict map[string]interface{}
+}
+
+// ResolveName returns a value from the activation by qualified name, or false if the name
+// could not be found.
+func (activation ActivationImpl) ResolveName(name string) (interface{}, bool) {
+	result, ok := activation.dict[name]
+	return result, ok
+}
+
+// Parent returns the parent of the current activation, may be nil.
+// If non-nil, the parent will be searched during resolve calls.
+func (activation ActivationImpl) Parent() interpreter.Activation {
+	return ActivationImpl{}
+}
+
 // Converts AuthorizationArgs into the activation for CEL.
 func (args *AuthorizationArgs) toActivation() interpreter.Activation {
 	// TODO(@ezou): implement the conversion logic.
-	return nil
+	return ActivationImpl{}
 }
 
 // Decision is the enum type that represents different authorization
