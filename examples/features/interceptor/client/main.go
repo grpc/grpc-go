@@ -93,6 +93,7 @@ func streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.Clie
 		_, ok := o.(*grpc.PerRPCCredsCallOption)
 		if ok {
 			credsConfigured = true
+			break
 		}
 	}
 	if !credsConfigured {
