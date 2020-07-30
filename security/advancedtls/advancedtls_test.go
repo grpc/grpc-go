@@ -32,10 +32,19 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
-func TestClientServerHandshake(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestClientServerHandshake(t *testing.T) {
 	// ------------------Load Client Trust Cert and Peer Cert-------------------
 	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
 	if err != nil {
@@ -523,7 +532,7 @@ func compare(a1, a2 credentials.AuthInfo) bool {
 	}
 }
 
-func TestAdvancedTLSOverrideServerName(t *testing.T) {
+func (s) TestAdvancedTLSOverrideServerName(t *testing.T) {
 	expectedServerName := "server.name"
 	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
 	if err != nil {
@@ -545,7 +554,7 @@ func TestAdvancedTLSOverrideServerName(t *testing.T) {
 	}
 }
 
-func TestTLSClone(t *testing.T) {
+func (s) TestTLSClone(t *testing.T) {
 	expectedServerName := "server.name"
 	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
 	if err != nil {
@@ -573,7 +582,7 @@ func TestTLSClone(t *testing.T) {
 
 }
 
-func TestAppendH2ToNextProtos(t *testing.T) {
+func (s) TestAppendH2ToNextProtos(t *testing.T) {
 	tests := []struct {
 		name string
 		ps   []string
@@ -613,7 +622,7 @@ type nonSyscallConn struct {
 	net.Conn
 }
 
-func TestWrapSyscallConn(t *testing.T) {
+func (s) TestWrapSyscallConn(t *testing.T) {
 	sc := &syscallConn{}
 	nsc := &nonSyscallConn{}
 
@@ -624,7 +633,7 @@ func TestWrapSyscallConn(t *testing.T) {
 	}
 }
 
-func TestOptionsConfig(t *testing.T) {
+func (s) TestOptionsConfig(t *testing.T) {
 	serverPeerCert, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
 		testdata.Path("server_key_1.pem"))
 	if err != nil {
