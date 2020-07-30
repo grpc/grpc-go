@@ -49,6 +49,9 @@ func main() {
 		log.Fatalf("Incorrect Number of files. Please Enter the input file path and the output file path")
 	}
 
-	compiler.Compile(inputFile, outputFile)
+	err := compiler.Compile(inputFile, outputFile)
+	if err != nil {
+		log.Panicf("Failed to serialize RBAC proto %v", err)
+	}
 	fmt.Printf("Compiled %s into %s \n", inputFile, outputFile)
 }

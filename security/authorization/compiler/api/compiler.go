@@ -100,13 +100,10 @@ func CompileYamltoRbac(filename string) *pb.RBAC {
 	if err != nil {
 		log.Panicf("Failed in parsing of yaml: %v", err)
 	}
-
 	env := createUserPolicyCelEnv()
-
 	var rbac pb.RBAC
 	rbac.Action = pb.RBAC_Action(pb.RBAC_Action_value[userPolicy.Action])
 	rbac.Policies = make(map[string]*pb.Policy)
-
 	for index := range userPolicy.Rules {
 		rule := userPolicy.Rules[index]
 		name := rule.Name
@@ -131,23 +128,18 @@ func exprToParsedExpr(condition *expr.Expr) *expr.ParsedExpr {
 }
 
 // Converts an expression to a CEL program.
-func exprToProgram(env *cel.Env, condition *expr.Expr) *cel.Program {
+func exprToProgram(env *cel.Env, condition *expr.Expr) (*cel.Program, error) {
 	// ONLY NEEDED FOR V2
 	// v3: can replace line with ast := cel.CheckedExprToAst(checkedExpr)
 	ast := cel.ParsedExprToAst(exprToParsedExpr(condition))
 	program, err := env.Program(ast)
-	if err != nil {
-		log.Panicf("Failed to convert AST to Program %v", err)
-	}
-	return &program
+	return &program, err
 }
 
 // Compile takes in input file name and returns serialized output rbac proto
-func Compile(inputFilename string, outputFilename string) {
+func Compile(inputFilename string, outputFilename string) error {
 	rbac := CompileYamltoRbac(inputFilename)
 	serialized, err := proto.Marshal(rbac)
-	if err != nil {
-		log.Panicf("Failed to serialize RBAC proto %v", err)
-	}
 	ioutil.WriteFile(outputFilename, serialized, 0644)
+	return err
 }
