@@ -32,31 +32,44 @@ import (
 )
 
 const (
-	testCluster1        = "test-cluster-1"
-	testClusterOnlyJSON = `{"loadBalancingConfig":[{
-    "weighted_target_experimental": {
-	  "targets": { "test-cluster-1" : { "weight":1, "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}] } }
-	}
-    }]}`
+	testCluster1           = "test-cluster-1"
+	testOneClusterOnlyJSON = `{"loadBalancingConfig":[{
+    "xds_routing_experimental":{
+      "action":{
+        "test-cluster-1_0":{
+          "childPolicy":[{
+            "weighted_target_experimental":{
+              "targets":{
+                "test-cluster-1":{
+                  "weight":1,
+                  "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+                }
+              }}}]
+        }
+      },
+      "route":[{"prefix":"","action":"test-cluster-1_0"}]
+    }}]}`
 	testWeightedCDSJSON = `{"loadBalancingConfig":[{
-    "weighted_target_experimental": {
-	  "targets": {
-		"cluster_1" : {
-		  "weight":75,
-		  "childPolicy":[{"cds_experimental":{"cluster":"cluster_1"}}]
-		},
-		"cluster_2" : {
-		  "weight":25,
-		  "childPolicy":[{"cds_experimental":{"cluster":"cluster_2"}}]
-		}
-	  }
-	}
-    }]}`
-	testWeightedCDSNoChildJSON = `{"loadBalancingConfig":[{
-    "weighted_target_experimental": {
-	  "targets": {}
-	}
-    }]}`
+    "xds_routing_experimental":{
+      "action":{
+        "cluster_1_cluster_2_1":{
+          "childPolicy":[{
+            "weighted_target_experimental":{
+              "targets":{
+                "cluster_1":{
+                  "weight":75,
+                  "childPolicy":[{"cds_experimental":{"cluster":"cluster_1"}}]
+                },
+                "cluster_2":{
+                  "weight":25,
+                  "childPolicy":[{"cds_experimental":{"cluster":"cluster_2"}}]
+                }
+              }}}]
+        }
+      },
+      "route":[{"prefix":"","action":"cluster_1_cluster_2_1"}]
+    }}]}`
+
 	testRoutingJSON = `{"loadBalancingConfig":[{
     "xds_routing_experimental": {
       "action":{
@@ -177,51 +190,6 @@ const (
     }]}
 `
 )
-
-func TestWeightedClusterToJSON(t *testing.T) {
-	tests := []struct {
-		name     string
-		wc       map[string]uint32
-		wantJSON string // wantJSON is not to be compared verbatim.
-	}{
-		{
-			name:     "one cluster only",
-			wc:       map[string]uint32{testCluster1: 1},
-			wantJSON: testClusterOnlyJSON,
-		},
-		{
-			name:     "empty weighted clusters",
-			wc:       nil,
-			wantJSON: testWeightedCDSNoChildJSON,
-		},
-		{
-			name: "weighted clusters",
-			wc: map[string]uint32{
-				"cluster_1": 75,
-				"cluster_2": 25,
-			},
-			wantJSON: testWeightedCDSJSON,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotJSON, err := weightedClusterToJSON(tt.wc)
-			if err != nil {
-				t.Errorf("serviceUpdateToJSON returned error: %v", err)
-				return
-			}
-
-			gotParsed := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(gotJSON)
-			wantParsed := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(tt.wantJSON)
-
-			if !internal.EqualServiceConfigForTesting(gotParsed.Config, wantParsed.Config) {
-				t.Errorf("serviceUpdateToJSON() = %v, want %v", gotJSON, tt.wantJSON)
-				t.Error("gotParsed: ", cmp.Diff(nil, gotParsed))
-				t.Error("wantParsed: ", cmp.Diff(nil, wantParsed))
-			}
-		})
-	}
-}
 
 func TestRoutesToJSON(t *testing.T) {
 	tests := []struct {
@@ -348,15 +316,6 @@ func TestServiceUpdateToJSON(t *testing.T) {
 		wantJSON string
 		wantErr  bool
 	}{
-		{
-			name: "weighted clusters",
-			su: client.ServiceUpdate{WeightedCluster: map[string]uint32{
-				"cluster_1": 75,
-				"cluster_2": 25,
-			}},
-			wantJSON: testWeightedCDSJSON,
-			wantErr:  false,
-		},
 		{
 			name: "routing",
 			su: client.ServiceUpdate{

@@ -23,13 +23,17 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"net"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	_ "google.golang.org/grpc/xds"
 )
@@ -39,18 +43,43 @@ type statsWatcherKey struct {
 	endID   int32
 }
 
+// rpcInfo contains the rpc type and the hostname where the response is received
+// from.
+type rpcInfo struct {
+	typ      string
+	hostname string
+}
+
 type statsWatcher struct {
 	rpcsByPeer    map[string]int32
+	rpcsByType    map[string]map[string]int32
 	numFailures   int32
 	remainingRpcs int32
-	c             chan *testpb.SimpleResponse
+	chanHosts     chan *rpcInfo
+}
+
+func (watcher *statsWatcher) buildResp() *testpb.LoadBalancerStatsResponse {
+	rpcsByType := make(map[string]*testpb.LoadBalancerStatsResponse_RpcsByPeer, len(watcher.rpcsByType))
+	for t, rpcsByPeer := range watcher.rpcsByType {
+		rpcsByType[t] = &testpb.LoadBalancerStatsResponse_RpcsByPeer{
+			RpcsByPeer: rpcsByPeer,
+		}
+	}
+
+	return &testpb.LoadBalancerStatsResponse{
+		NumFailures:  watcher.numFailures + watcher.remainingRpcs,
+		RpcsByPeer:   watcher.rpcsByPeer,
+		RpcsByMethod: rpcsByType,
+	}
 }
 
 var (
-	failOnFailedRPC = flag.Bool("fail_on_failed_rpc", false, "Fail client if any RPCs fail")
+	failOnFailedRPC = flag.Bool("fail_on_failed_rpc", false, "Fail client if any RPCs fail after first success")
 	numChannels     = flag.Int("num_channels", 1, "Num of channels")
 	printResponse   = flag.Bool("print_response", false, "Write RPC response to stdout")
-	qps             = flag.Int("qps", 1, "QPS per channel")
+	qps             = flag.Int("qps", 1, "QPS per channel, for each type of RPC")
+	rpc             = flag.String("rpc", "UnaryCall", "Types of RPCs to make, ',' separated string. RPCs can be EmptyCall or UnaryCall")
+	rpcMetadata     = flag.String("metadata", "", "The metadata to send with RPC, in format EmptyCall:key1:value1,UnaryCall:key2:value2")
 	rpcTimeout      = flag.Duration("rpc_timeout", 20*time.Second, "Per RPC timeout")
 	server          = flag.String("server", "localhost:8080", "Address of server to connect to")
 	statsPort       = flag.Int("stats_port", 8081, "Port to expose peer distribution stats service")
@@ -58,10 +87,22 @@ var (
 	mu               sync.Mutex
 	currentRequestID int32
 	watchers         = make(map[statsWatcherKey]*statsWatcher)
+
+	// 0 or 1 representing an RPC has succeeded. Use hasRPCSucceeded and
+	// setRPCSucceeded to access in a safe manner.
+	rpcSucceeded uint32
 )
 
 type statsService struct {
 	testpb.UnimplementedLoadBalancerStatsServiceServer
+}
+
+func hasRPCSucceeded() bool {
+	return atomic.LoadUint32(&rpcSucceeded) > 0
+}
+
+func setRPCSucceeded() {
+	atomic.StoreUint32(&rpcSucceeded, 1)
 }
 
 // Wait for the next LoadBalancerStatsRequest.GetNumRpcs to start and complete,
@@ -75,9 +116,10 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 	if !ok {
 		watcher = &statsWatcher{
 			rpcsByPeer:    make(map[string]int32),
+			rpcsByType:    make(map[string]map[string]int32),
 			numFailures:   0,
 			remainingRpcs: in.GetNumRpcs(),
-			c:             make(chan *testpb.SimpleResponse),
+			chanHosts:     make(chan *rpcInfo),
 		}
 		watchers[watcherKey] = watcher
 	}
@@ -95,25 +137,86 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 	// Wait until the requested RPCs have all been recorded or timeout occurs.
 	for {
 		select {
-		case r := <-watcher.c:
-			if r != nil {
-				watcher.rpcsByPeer[(*r).GetHostname()]++
+		case info := <-watcher.chanHosts:
+			if info != nil {
+				watcher.rpcsByPeer[info.hostname]++
+
+				rpcsByPeerForType := watcher.rpcsByType[info.typ]
+				if rpcsByPeerForType == nil {
+					rpcsByPeerForType = make(map[string]int32)
+					watcher.rpcsByType[info.typ] = rpcsByPeerForType
+				}
+				rpcsByPeerForType[info.hostname]++
 			} else {
 				watcher.numFailures++
 			}
 			watcher.remainingRpcs--
 			if watcher.remainingRpcs == 0 {
-				return &testpb.LoadBalancerStatsResponse{NumFailures: watcher.numFailures + watcher.remainingRpcs, RpcsByPeer: watcher.rpcsByPeer}, nil
+				return watcher.buildResp(), nil
 			}
 		case <-ctx.Done():
 			grpclog.Info("Timed out, returning partial stats")
-			return &testpb.LoadBalancerStatsResponse{NumFailures: watcher.numFailures + watcher.remainingRpcs, RpcsByPeer: watcher.rpcsByPeer}, nil
+			return watcher.buildResp(), nil
 		}
 	}
 }
 
+const (
+	unaryCall string = "UnaryCall"
+	emptyCall string = "EmptyCall"
+)
+
+func parseRPCTypes(rpcStr string) (ret []string) {
+	if len(rpcStr) == 0 {
+		return []string{unaryCall}
+	}
+
+	rpcs := strings.Split(rpcStr, ",")
+	for _, r := range rpcs {
+		switch r {
+		case unaryCall, emptyCall:
+			ret = append(ret, r)
+		default:
+			flag.PrintDefaults()
+			log.Fatalf("unsupported RPC type: %v", r)
+		}
+	}
+	return
+}
+
+type rpcConfig struct {
+	typ string
+	md  metadata.MD
+}
+
+// parseRPCMetadata turns EmptyCall:key1:value1 into
+//   {typ: emptyCall, md: {key1:value1}}.
+func parseRPCMetadata(rpcMetadataStr string, rpcs []string) []*rpcConfig {
+	rpcMetadataSplit := strings.Split(rpcMetadataStr, ",")
+	rpcsToMD := make(map[string][]string)
+	for _, rm := range rpcMetadataSplit {
+		rmSplit := strings.Split(rm, ":")
+		if len(rmSplit)%2 != 1 {
+			log.Fatalf("invalid metadata config %v, want EmptyCall:key1:value1", rm)
+		}
+		rpcsToMD[rmSplit[0]] = append(rpcsToMD[rmSplit[0]], rmSplit[1:]...)
+	}
+	ret := make([]*rpcConfig, 0, len(rpcs))
+	for _, rpcT := range rpcs {
+		rpcC := &rpcConfig{
+			typ: rpcT,
+		}
+		if md := rpcsToMD[string(rpcT)]; len(md) > 0 {
+			rpcC.md = metadata.Pairs(md...)
+		}
+		ret = append(ret, rpcC)
+	}
+	return ret
+}
+
 func main() {
 	flag.Parse()
+	rpcCfgs := parseRPCMetadata(*rpcMetadata, parseRPCTypes(*rpc))
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *statsPort))
 	if err != nil {
@@ -135,16 +238,52 @@ func main() {
 	}
 	ticker := time.NewTicker(time.Second / time.Duration(*qps**numChannels))
 	defer ticker.Stop()
-	sendRPCs(clients, ticker)
+	sendRPCs(clients, rpcCfgs, ticker)
 }
 
-func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
+func makeOneRPC(c testpb.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), *rpcTimeout)
+	defer cancel()
+
+	if len(cfg.md) != 0 {
+		ctx = metadata.NewOutgoingContext(ctx, cfg.md)
+	}
+	info := rpcInfo{typ: cfg.typ}
+
+	var (
+		p      peer.Peer
+		header metadata.MD
+		err    error
+	)
+	switch cfg.typ {
+	case unaryCall:
+		var resp *testpb.SimpleResponse
+		resp, err = c.UnaryCall(ctx, &testpb.SimpleRequest{FillServerId: true}, grpc.Peer(&p), grpc.Header(&header))
+		// For UnaryCall, also read hostname from response, in case the server
+		// isn't updated to send headers.
+		if resp != nil {
+			info.hostname = resp.Hostname
+		}
+	case emptyCall:
+		_, err = c.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p), grpc.Header(&header))
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	hosts := header["hostname"]
+	if len(hosts) > 0 {
+		info.hostname = hosts[0]
+	}
+	return &p, &info, err
+}
+
+func sendRPCs(clients []testpb.TestServiceClient, cfgs []*rpcConfig, ticker *time.Ticker) {
 	var i int
 	for range ticker.C {
 		go func(i int) {
-			c := clients[i]
-			ctx, cancel := context.WithTimeout(context.Background(), *rpcTimeout)
-			p := new(peer.Peer)
+			// Get and increment request ID, and save a list of watchers that
+			// are interested in this RPC.
 			mu.Lock()
 			savedRequestID := currentRequestID
 			currentRequestID++
@@ -155,20 +294,35 @@ func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 				}
 			}
 			mu.Unlock()
-			r, err := c.UnaryCall(ctx, &testpb.SimpleRequest{FillServerId: true}, grpc.Peer(p))
 
-			success := err == nil
-			cancel()
+			c := clients[i]
 
-			for _, watcher := range savedWatchers {
-				watcher.c <- r
-			}
+			for _, cfg := range cfgs {
+				p, info, err := makeOneRPC(c, cfg)
 
-			if err != nil && *failOnFailedRPC {
-				grpclog.Fatalf("RPC failed: %v", err)
-			}
-			if success && *printResponse {
-				fmt.Printf("Greeting: Hello world, this is %s, from %v\n", r.GetHostname(), p.Addr)
+				for _, watcher := range savedWatchers {
+					// This sends an empty string if the RPC failed.
+					watcher.chanHosts <- info
+				}
+				if err != nil && *failOnFailedRPC && hasRPCSucceeded() {
+					grpclog.Fatalf("RPC failed: %v", err)
+				}
+				if err == nil {
+					setRPCSucceeded()
+				}
+				if *printResponse {
+					if err == nil {
+						if cfg.typ == unaryCall {
+							// Need to keep this format, because some tests are
+							// relying on stdout.
+							fmt.Printf("Greeting: Hello world, this is %s, from %v\n", info.hostname, p.Addr)
+						} else {
+							fmt.Printf("RPC %q, from host %s, addr %v\n", cfg.typ, info.hostname, p.Addr)
+						}
+					} else {
+						fmt.Printf("RPC %q, failed with %v\n", cfg.typ, err)
+					}
+				}
 			}
 		}(i)
 		i = (i + 1) % len(clients)

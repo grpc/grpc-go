@@ -49,10 +49,6 @@ type Route struct {
 }
 
 type rdsUpdate struct {
-	// weightedCluster is only set when routing is disabled (env variable
-	// GRPC_XDS_EXPERIMENTAL_ROUTING is not true).
-	weightedCluster map[string]uint32
-
 	routes []*Route
 }
 type rdsCallbackFunc func(rdsUpdate, error)

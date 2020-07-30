@@ -195,6 +195,10 @@ func NewConfig() (*Config, error) {
 	// 2. Environment variable "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT" is set to
 	//    true.
 	// The default value of the enum type "version.TransportAPI" is v2.
+	//
+	// TODO: there are multiple env variables, GRPC_XDS_BOOTSTRAP and
+	// GRPC_XDS_EXPERIMENTAL_V3_SUPPORT. Move all env variables into a separate
+	// package.
 	if v3Env := os.Getenv(v3SupportEnv); v3Env == "true" {
 		if serverSupportsV3 {
 			config.TransportAPI = version.TransportV3

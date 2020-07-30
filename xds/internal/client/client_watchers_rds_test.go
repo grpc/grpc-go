@@ -54,7 +54,7 @@ func (s) TestRDSWatch(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate := rdsUpdate{weightedCluster: map[string]uint32{testCDSName: 1}}
+	wantUpdate := rdsUpdate{routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}}
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName: wantUpdate,
 	})
@@ -113,7 +113,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 		}
 	}
 
-	wantUpdate := rdsUpdate{weightedCluster: map[string]uint32{testCDSName: 1}}
+	wantUpdate := rdsUpdate{routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}}
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName: wantUpdate,
 	})
@@ -179,8 +179,8 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate1 := rdsUpdate{weightedCluster: map[string]uint32{testCDSName + "1": 1}}
-	wantUpdate2 := rdsUpdate{weightedCluster: map[string]uint32{testCDSName + "2": 1}}
+	wantUpdate1 := rdsUpdate{routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "1": 1}}}}
+	wantUpdate2 := rdsUpdate{routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "2": 1}}}}
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName + "1": wantUpdate1,
 		testRDSName + "2": wantUpdate2,
@@ -219,7 +219,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate := rdsUpdate{weightedCluster: map[string]uint32{testCDSName: 1}}
+	wantUpdate := rdsUpdate{routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}}
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName: wantUpdate,
 	})

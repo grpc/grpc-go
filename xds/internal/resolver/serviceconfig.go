@@ -137,23 +137,6 @@ func weightedClusterToBalancerConfig(wc map[string]uint32) balancerConfig {
 	return bc
 }
 
-func weightedClusterToJSON(wc map[string]uint32) (string, error) {
-	sc := serviceConfig{
-		LoadBalancingConfig: weightedClusterToBalancerConfig(wc),
-	}
-	bs, err := json.Marshal(sc)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal json: %v", err)
-	}
-	return string(bs), nil
-}
-
 func (r *xdsResolver) serviceUpdateToJSON(su xdsclient.ServiceUpdate) (string, error) {
-	// If WeightedClusters is set, routing is disabled (by env variable). Use
-	// weighted target only.
-	if su.WeightedCluster != nil {
-		return weightedClusterToJSON(su.WeightedCluster)
-	}
-
 	return r.routesToJSON(su.Routes)
 }
