@@ -181,7 +181,7 @@ func callAndVerifyWithClientConn(connCtx context.Context, msg string, creds cred
 // the factor we modified in stage 1.
 // (could be change the client's trust certificate, or change custom
 // verification function, etc)
-func TestEnd2End(t *testing.T) {
+func (s) TestEnd2End(t *testing.T) {
 	cs := &certStore{}
 	err := cs.loadCerts()
 	if err != nil {
