@@ -4,7 +4,7 @@ mergeable:
     validate:
       - do: label
         must_include:
-          regex: '^Type:'
+          regex: '^Type:no release notes'
     fail:
       - do: checks
         status: 'failure'
