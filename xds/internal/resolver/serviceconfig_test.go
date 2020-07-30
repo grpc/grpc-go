@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	_ "google.golang.org/grpc/xds/internal/balancer/weightedtarget"
 	_ "google.golang.org/grpc/xds/internal/balancer/xdsrouting"
-	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
@@ -312,13 +311,13 @@ func TestRoutesToJSON(t *testing.T) {
 func TestServiceUpdateToJSON(t *testing.T) {
 	tests := []struct {
 		name     string
-		su       client.ServiceUpdate
+		su       xdsclient.ServiceUpdate
 		wantJSON string
 		wantErr  bool
 	}{
 		{
 			name: "routing",
-			su: client.ServiceUpdate{
+			su: xdsclient.ServiceUpdate{
 				Routes: []*xdsclient.Route{{
 					Path:   newStringP("/service_1/method_1"),
 					Action: map[string]uint32{"cluster_1": 75, "cluster_2": 25},

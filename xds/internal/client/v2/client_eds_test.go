@@ -13,157 +13,75 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package client
+package v2
 
 import (
 	"testing"
 	"time"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/golang/protobuf/ptypes"
 	anypb "github.com/golang/protobuf/ptypes/any"
-	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/xds/internal"
+	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/version"
 )
 
-func (s) TestEDSParseRespProto(t *testing.T) {
-	tests := []struct {
-		name    string
-		m       *xdspb.ClusterLoadAssignment
-		want    EndpointsUpdate
-		wantErr bool
-	}{
-		{
-			name: "missing-priority",
-			m: func() *xdspb.ClusterLoadAssignment {
-				clab0 := NewClusterLoadAssignmentBuilder("test", nil)
-				clab0.AddLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
-				clab0.AddLocality("locality-2", 1, 2, []string{"addr2:159"}, nil)
-				return clab0.Build()
-			}(),
-			want:    EndpointsUpdate{},
-			wantErr: true,
-		},
-		{
-			name: "missing-locality-ID",
-			m: func() *xdspb.ClusterLoadAssignment {
-				clab0 := NewClusterLoadAssignmentBuilder("test", nil)
-				clab0.AddLocality("", 1, 0, []string{"addr1:314"}, nil)
-				return clab0.Build()
-			}(),
-			want:    EndpointsUpdate{},
-			wantErr: true,
-		},
-		{
-			name: "good",
-			m: func() *xdspb.ClusterLoadAssignment {
-				clab0 := NewClusterLoadAssignmentBuilder("test", nil)
-				clab0.AddLocality("locality-1", 1, 1, []string{"addr1:314"}, &AddLocalityOptions{
-					Health: []corepb.HealthStatus{corepb.HealthStatus_UNHEALTHY},
-					Weight: []uint32{271},
-				})
-				clab0.AddLocality("locality-2", 1, 0, []string{"addr2:159"}, &AddLocalityOptions{
-					Health: []corepb.HealthStatus{corepb.HealthStatus_DRAINING},
-					Weight: []uint32{828},
-				})
-				return clab0.Build()
-			}(),
-			want: EndpointsUpdate{
-				Drops: nil,
-				Localities: []Locality{
-					{
-						Endpoints: []Endpoint{{
-							Address:      "addr1:314",
-							HealthStatus: EndpointHealthStatusUnhealthy,
-							Weight:       271,
-						}},
-						ID:       internal.LocalityID{SubZone: "locality-1"},
-						Priority: 1,
-						Weight:   1,
-					},
-					{
-						Endpoints: []Endpoint{{
-							Address:      "addr2:159",
-							HealthStatus: EndpointHealthStatusDraining,
-							Weight:       828,
-						}},
-						ID:       internal.LocalityID{SubZone: "locality-2"},
-						Priority: 0,
-						Weight:   1,
-					},
-				},
-			},
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseEDSRespProto(tt.m)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseEDSRespProto() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if d := cmp.Diff(got, tt.want); d != "" {
-				t.Errorf("ParseEDSRespProto() got = %v, want %v, diff: %v", got, tt.want, d)
-			}
-		})
-	}
-}
-
 var (
-	badlyMarshaledEDSResponse = &xdspb.DiscoveryResponse{
+	badlyMarshaledEDSResponse = &v2xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: edsURL,
+				TypeUrl: version.V2EndpointsURL,
 				Value:   []byte{1, 2, 3, 4},
 			},
 		},
-		TypeUrl: edsURL,
+		TypeUrl: version.V2EndpointsURL,
 	}
-	badResourceTypeInEDSResponse = &xdspb.DiscoveryResponse{
+	badResourceTypeInEDSResponse = &v2xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: httpConnManagerURL,
 				Value:   marshaledConnMgr1,
 			},
 		},
-		TypeUrl: edsURL,
+		TypeUrl: version.V2EndpointsURL,
 	}
-	goodEDSResponse1 = &xdspb.DiscoveryResponse{
+	goodEDSResponse1 = &v2xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			func() *anypb.Any {
-				clab0 := NewClusterLoadAssignmentBuilder(goodEDSName, nil)
+				clab0 := testutils.NewClusterLoadAssignmentBuilder(goodEDSName, nil)
 				clab0.AddLocality("locality-1", 1, 1, []string{"addr1:314"}, nil)
 				clab0.AddLocality("locality-2", 1, 0, []string{"addr2:159"}, nil)
 				a, _ := ptypes.MarshalAny(clab0.Build())
 				return a
 			}(),
 		},
-		TypeUrl: edsURL,
+		TypeUrl: version.V2EndpointsURL,
 	}
-	goodEDSResponse2 = &xdspb.DiscoveryResponse{
+	goodEDSResponse2 = &v2xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			func() *anypb.Any {
-				clab0 := NewClusterLoadAssignmentBuilder("not-goodEDSName", nil)
+				clab0 := testutils.NewClusterLoadAssignmentBuilder("not-goodEDSName", nil)
 				clab0.AddLocality("locality-1", 1, 1, []string{"addr1:314"}, nil)
 				clab0.AddLocality("locality-2", 1, 0, []string{"addr2:159"}, nil)
 				a, _ := ptypes.MarshalAny(clab0.Build())
 				return a
 			}(),
 		},
-		TypeUrl: edsURL,
+		TypeUrl: version.V2EndpointsURL,
 	}
 )
 
 func (s) TestEDSHandleResponse(t *testing.T) {
 	tests := []struct {
 		name          string
-		edsResponse   *xdspb.DiscoveryResponse
+		edsResponse   *v2xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    *EndpointsUpdate
+		wantUpdate    *xdsclient.EndpointsUpdate
 		wantUpdateErr bool
 	}{
 		// Any in resource is badly marshaled.
@@ -195,16 +113,16 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			name:        "one-good-assignment",
 			edsResponse: goodEDSResponse1,
 			wantErr:     false,
-			wantUpdate: &EndpointsUpdate{
-				Localities: []Locality{
+			wantUpdate: &xdsclient.EndpointsUpdate{
+				Localities: []xdsclient.Locality{
 					{
-						Endpoints: []Endpoint{{Address: "addr1:314"}},
+						Endpoints: []xdsclient.Endpoint{{Address: "addr1:314"}},
 						ID:        internal.LocalityID{SubZone: "locality-1"},
 						Priority:  1,
 						Weight:    1,
 					},
 					{
-						Endpoints: []Endpoint{{Address: "addr2:159"}},
+						Endpoints: []xdsclient.Endpoint{{Address: "addr2:159"}},
 						ID:        internal.LocalityID{SubZone: "locality-2"},
 						Priority:  0,
 						Weight:    1,
@@ -217,7 +135,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
-				typeURL:          edsURL,
+				typeURL:          version.V2EndpointsURL,
 				resourceName:     goodEDSName,
 				responseToHandle: test.edsResponse,
 				wantHandleErr:    test.wantErr,
@@ -234,10 +152,13 @@ func (s) TestEDSHandleResponseWithoutWatch(t *testing.T) {
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(&testUpdateReceiver{
+	v2c, err := newV2Client(&testUpdateReceiver{
 		f: func(string, map[string]interface{}) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	defer v2c.close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v2c.Close()
 
 	if v2c.handleEDSResponse(badResourceTypeInEDSResponse) == nil {
 		t.Fatal("v2c.handleEDSResponse() succeeded, should have failed")

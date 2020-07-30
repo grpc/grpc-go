@@ -26,16 +26,203 @@ import (
 	"sync"
 	"time"
 
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	"github.com/golang/protobuf/proto"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/version"
 )
+
+var (
+	m = make(map[version.TransportAPI]APIClientBuilder)
+)
+
+// RegisterAPIClientBuilder registers a client builder for xDS transport protocol
+// version specified by b.Version().
+//
+// NOTE: this function must only be called during initialization time (i.e. in
+// an init() function), and is not thread-safe. If multiple builders are
+// registered for the same version, the one registered last will take effect.
+func RegisterAPIClientBuilder(b APIClientBuilder) {
+	m[b.Version()] = b
+}
+
+// getAPIClientBuilder returns the client builder registered for the provided
+// xDS transport API version.
+func getAPIClientBuilder(version version.TransportAPI) APIClientBuilder {
+	if b, ok := m[version]; ok {
+		return b
+	}
+	return nil
+}
+
+// BuildOptions contains options to be passed to client builders.
+type BuildOptions struct {
+	// Parent is a top-level xDS client or server which has the intelligence to
+	// take appropriate action based on xDS responses received from the
+	// management server.
+	Parent UpdateHandler
+	// NodeProto contains the Node proto to be used in xDS requests. The actual
+	// type depends on the transport protocol version used.
+	NodeProto proto.Message
+	// Backoff returns the amount of time to backoff before retrying broken
+	// streams.
+	Backoff func(int) time.Duration
+	// Logger provides enhanced logging capabilities.
+	Logger *grpclog.PrefixLogger
+}
+
+// APIClientBuilder creates an xDS client for a specific xDS transport protocol
+// version.
+type APIClientBuilder interface {
+	// Build builds a transport protocol specific implementation of the xDS
+	// client based on the provided clientConn to the management server and the
+	// provided options.
+	Build(*grpc.ClientConn, BuildOptions) (APIClient, error)
+	// Version returns the xDS transport protocol version used by clients build
+	// using this builder.
+	Version() version.TransportAPI
+}
+
+// APIClient represents the functionality provided by transport protocol
+// version specific implementations of the xDS client.
+type APIClient interface {
+	// AddWatch adds a watch for an xDS resource given its type and name.
+	AddWatch(resourceType, resourceName string)
+	// RemoveWatch cancels an already registered watch for an xDS resource
+	// given its type and name.
+	RemoveWatch(resourceType, resourceName string)
+	// Close cleans up resources allocated by the API client.
+	Close()
+}
+
+// UpdateHandler receives and processes (by taking appropriate actions) xDS
+// resource updates from an APIClient for a specific version.
+type UpdateHandler interface {
+	// NewListeners handles updates to xDS listener resources.
+	NewListeners(map[string]ListenerUpdate)
+	// NewRouteConfigs handles updates to xDS RouteConfiguration resources.
+	NewRouteConfigs(map[string]RouteConfigUpdate)
+	// NewClusters handles updates to xDS Cluster resources.
+	NewClusters(map[string]ClusterUpdate)
+	// NewEndpoints handles updates to xDS ClusterLoadAssignment (or tersely
+	// referred to as Endpoints) resources.
+	NewEndpoints(map[string]EndpointsUpdate)
+}
+
+// ListenerUpdate contains information received in an LDS response, which is of
+// interest to the registered LDS watcher.
+type ListenerUpdate struct {
+	// RouteConfigName is the route configuration name corresponding to the
+	// target which is being watched through LDS.
+	RouteConfigName string
+}
+
+// RouteConfigUpdate contains information received in an RDS response, which is
+// of interest to the registered RDS watcher.
+type RouteConfigUpdate struct {
+	// Routes contains a list of routes, each containing matchers and
+	// corresponding action.
+	Routes []*Route
+}
+
+// Route is both a specification of how to match a request as well as an
+// indication of the action to take upon match.
+type Route struct {
+	Path, Prefix, Regex *string
+	Headers             []*HeaderMatcher
+	Fraction            *uint32
+	Action              map[string]uint32 // action is weighted clusters.
+}
+
+// HeaderMatcher represents header matchers.
+type HeaderMatcher struct {
+	Name         string      `json:"name"`
+	InvertMatch  *bool       `json:"invertMatch,omitempty"`
+	ExactMatch   *string     `json:"exactMatch,omitempty"`
+	RegexMatch   *string     `json:"regexMatch,omitempty"`
+	PrefixMatch  *string     `json:"prefixMatch,omitempty"`
+	SuffixMatch  *string     `json:"suffixMatch,omitempty"`
+	RangeMatch   *Int64Range `json:"rangeMatch,omitempty"`
+	PresentMatch *bool       `json:"presentMatch,omitempty"`
+}
+
+// Int64Range is a range for header range match.
+type Int64Range struct {
+	Start int64 `json:"start"`
+	End   int64 `json:"end"`
+}
+
+// ServiceUpdate contains information received from LDS and RDS responses,
+// which is of interest to the registered service watcher.
+type ServiceUpdate struct {
+	// Routes contain matchers+actions to route RPCs.
+	Routes []*Route
+}
+
+// ClusterUpdate contains information from a received CDS response, which is of
+// interest to the registered CDS watcher.
+type ClusterUpdate struct {
+	// ServiceName is the service name corresponding to the clusterName which
+	// is being watched for through CDS.
+	ServiceName string
+	// EnableLRS indicates whether or not load should be reported through LRS.
+	EnableLRS bool
+}
+
+// OverloadDropConfig contains the config to drop overloads.
+type OverloadDropConfig struct {
+	Category    string
+	Numerator   uint32
+	Denominator uint32
+}
+
+// EndpointHealthStatus represents the health status of an endpoint.
+type EndpointHealthStatus int32
+
+const (
+	// EndpointHealthStatusUnknown represents HealthStatus UNKNOWN.
+	EndpointHealthStatusUnknown EndpointHealthStatus = iota
+	// EndpointHealthStatusHealthy represents HealthStatus HEALTHY.
+	EndpointHealthStatusHealthy
+	// EndpointHealthStatusUnhealthy represents HealthStatus UNHEALTHY.
+	EndpointHealthStatusUnhealthy
+	// EndpointHealthStatusDraining represents HealthStatus DRAINING.
+	EndpointHealthStatusDraining
+	// EndpointHealthStatusTimeout represents HealthStatus TIMEOUT.
+	EndpointHealthStatusTimeout
+	// EndpointHealthStatusDegraded represents HealthStatus DEGRADED.
+	EndpointHealthStatusDegraded
+)
+
+// Endpoint contains information of an endpoint.
+type Endpoint struct {
+	Address      string
+	HealthStatus EndpointHealthStatus
+	Weight       uint32
+}
+
+// Locality contains information of a locality.
+type Locality struct {
+	Endpoints []Endpoint
+	ID        internal.LocalityID
+	Priority  uint32
+	Weight    uint32
+}
+
+// EndpointsUpdate contains an EDS update.
+type EndpointsUpdate struct {
+	Drops      []OverloadDropConfig
+	Localities []Locality
+}
 
 // Options provides all parameters required for the creation of an xDS client.
 type Options struct {
@@ -49,16 +236,13 @@ type Options struct {
 	TargetName string
 }
 
-// Interface to be overridden in tests.
-type xdsv2Client interface {
-	addWatch(resourceType, resourceName string)
-	removeWatch(resourceType, resourceName string)
-	close()
-}
-
 // Function to be overridden in tests.
-var newXDSV2Client = func(parent *Client, cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration, logger *grpclog.PrefixLogger) xdsv2Client {
-	return newV2Client(parent, cc, nodeProto, backoff, logger)
+var newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, opts BuildOptions) (APIClient, error) {
+	cb := getAPIClientBuilder(apiVersion)
+	if cb == nil {
+		return nil, fmt.Errorf("no client builder for xDS API version: %v", apiVersion)
+	}
+	return cb.Build(cc, opts)
 }
 
 // Client is a full fledged gRPC client which queries a set of discovery APIs
@@ -68,20 +252,25 @@ var newXDSV2Client = func(parent *Client, cc *grpc.ClientConn, nodeProto *corepb
 // A single client object will be shared by the xds resolver and balancer
 // implementations. But the same client can only be shared by the same parent
 // ClientConn.
+//
+// Implements UpdateHandler interface.
+// TODO(easwars): Make a wrapper struct which implements this interface in the
+// style of ccBalancerWrapper so that the Client type does not implement these
+// exported methods.
 type Client struct {
-	done *grpcsync.Event
-	opts Options
-	cc   *grpc.ClientConn // Connection to the xDS server
-	v2c  xdsv2Client      // Actual xDS client implementation using the v2 API
+	done      *grpcsync.Event
+	opts      Options
+	cc        *grpc.ClientConn // Connection to the xDS server
+	apiClient APIClient
 
 	logger *grpclog.PrefixLogger
 
 	updateCh    *buffer.Unbounded // chan *watcherInfoWithUpdate
 	mu          sync.Mutex
 	ldsWatchers map[string]map[*watchInfo]bool
-	ldsCache    map[string]ldsUpdate
+	ldsCache    map[string]ListenerUpdate
 	rdsWatchers map[string]map[*watchInfo]bool
-	rdsCache    map[string]rdsUpdate
+	rdsCache    map[string]RouteConfigUpdate
 	cdsWatchers map[string]map[*watchInfo]bool
 	cdsCache    map[string]ClusterUpdate
 	edsWatchers map[string]map[*watchInfo]bool
@@ -99,6 +288,17 @@ func New(opts Options) (*Client, error) {
 		return nil, errors.New("xds: no node_proto provided in options")
 	}
 
+	switch opts.Config.TransportAPI {
+	case version.TransportV2:
+		if _, ok := opts.Config.NodeProto.(*v2corepb.Node); !ok {
+			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", opts.Config.NodeProto, opts.Config.TransportAPI)
+		}
+	case version.TransportV3:
+		if _, ok := opts.Config.NodeProto.(*v3corepb.Node); !ok {
+			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", opts.Config.NodeProto, opts.Config.TransportAPI)
+		}
+	}
+
 	dopts := []grpc.DialOption{
 		opts.Config.Creds,
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
@@ -114,9 +314,9 @@ func New(opts Options) (*Client, error) {
 
 		updateCh:    buffer.NewUnbounded(),
 		ldsWatchers: make(map[string]map[*watchInfo]bool),
-		ldsCache:    make(map[string]ldsUpdate),
+		ldsCache:    make(map[string]ListenerUpdate),
 		rdsWatchers: make(map[string]map[*watchInfo]bool),
-		rdsCache:    make(map[string]rdsUpdate),
+		rdsCache:    make(map[string]RouteConfigUpdate),
 		cdsWatchers: make(map[string]map[*watchInfo]bool),
 		cdsCache:    make(map[string]ClusterUpdate),
 		edsWatchers: make(map[string]map[*watchInfo]bool),
@@ -132,13 +332,16 @@ func New(opts Options) (*Client, error) {
 	c.logger = prefixLogger((c))
 	c.logger.Infof("Created ClientConn to xDS server: %s", opts.Config.BalancerName)
 
-	if opts.Config.TransportAPI == version.TransportV2 {
-		c.v2c = newXDSV2Client(c, cc, opts.Config.NodeProto.(*corepb.Node), backoff.DefaultExponential.Backoff, c.logger)
-	} else {
-		// TODO(easwars): Remove this once v3Client is ready.
-		return nil, errors.New("xds v3 client is not yet supported")
+	apiClient, err := newAPIClient(opts.Config.TransportAPI, cc, BuildOptions{
+		Parent:    c,
+		NodeProto: opts.Config.NodeProto,
+		Backoff:   backoff.DefaultExponential.Backoff,
+		Logger:    c.logger,
+	})
+	if err != nil {
+		return nil, err
 	}
-
+	c.apiClient = apiClient
 	c.logger.Infof("Created")
 	go c.run()
 	return c, nil
@@ -173,7 +376,7 @@ func (c *Client) Close() {
 	c.done.Fire()
 	// TODO: Should we invoke the registered callbacks here with an error that
 	// the client is closed?
-	c.v2c.close()
+	c.apiClient.Close()
 	c.cc.Close()
 	c.logger.Infof("Shutdown")
 }

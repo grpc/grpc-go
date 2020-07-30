@@ -36,10 +36,7 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
-)
-
-const (
-	edsType = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
+	"google.golang.org/grpc/xds/internal/version"
 )
 
 var (
@@ -135,7 +132,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 			}
 
 			wantReq := &xdspb.DiscoveryRequest{
-				TypeUrl:       edsType,
+				TypeUrl:       version.V2EndpointsURL,
 				ResourceNames: []string{test.wantResourceName},
 				Node:          testutils.EmptyNodeProtoV2,
 			}

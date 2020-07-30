@@ -18,6 +18,8 @@
 
 package client
 
+import "google.golang.org/grpc/xds/internal/version"
+
 type watcherInfoWithUpdate struct {
 	wi     *watchInfo
 	update interface{}
@@ -45,19 +47,19 @@ func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	// canceled, and the user needs to take care of it.
 	var ccb func()
 	switch wiu.wi.typeURL {
-	case ldsURL:
+	case version.V2ListenerURL:
 		if s, ok := c.ldsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
-			ccb = func() { wiu.wi.ldsCallback(wiu.update.(ldsUpdate), wiu.err) }
+			ccb = func() { wiu.wi.ldsCallback(wiu.update.(ListenerUpdate), wiu.err) }
 		}
-	case rdsURL:
+	case version.V2RouteConfigURL:
 		if s, ok := c.rdsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
-			ccb = func() { wiu.wi.rdsCallback(wiu.update.(rdsUpdate), wiu.err) }
+			ccb = func() { wiu.wi.rdsCallback(wiu.update.(RouteConfigUpdate), wiu.err) }
 		}
-	case cdsURL:
+	case version.V2ClusterURL:
 		if s, ok := c.cdsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
 			ccb = func() { wiu.wi.cdsCallback(wiu.update.(ClusterUpdate), wiu.err) }
 		}
-	case edsURL:
+	case version.V2EndpointsURL:
 		if s, ok := c.edsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
 			ccb = func() { wiu.wi.edsCallback(wiu.update.(EndpointsUpdate), wiu.err) }
 		}
@@ -69,12 +71,12 @@ func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	}
 }
 
-// newLDSUpdate is called by the underlying xdsv2Client when it receives an xDS
-// response.
+// NewListeners is called by the underlying xdsAPIClient when it receives an
+// xDS response.
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *Client) newLDSUpdate(updates map[string]ldsUpdate) {
+func (c *Client) NewListeners(updates map[string]ListenerUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -104,12 +106,12 @@ func (c *Client) newLDSUpdate(updates map[string]ldsUpdate) {
 	// last watch is canceled.
 }
 
-// newRDSUpdate is called by the underlying xdsv2Client when it receives an xDS
-// response.
+// NewRouteConfigs is called by the underlying xdsAPIClient when it receives an
+// xDS response.
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *Client) newRDSUpdate(updates map[string]rdsUpdate) {
+func (c *Client) NewRouteConfigs(updates map[string]RouteConfigUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -125,12 +127,12 @@ func (c *Client) newRDSUpdate(updates map[string]rdsUpdate) {
 	}
 }
 
-// newCDSUpdate is called by the underlying xdsv2Client when it receives an xDS
+// NewClusters is called by the underlying xdsAPIClient when it receives an xDS
 // response.
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *Client) newCDSUpdate(updates map[string]ClusterUpdate) {
+func (c *Client) NewClusters(updates map[string]ClusterUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -160,12 +162,12 @@ func (c *Client) newCDSUpdate(updates map[string]ClusterUpdate) {
 	// last watch is canceled.
 }
 
-// newEDSUpdate is called by the underlying xdsv2Client when it receives an xDS
-// response.
+// NewEndpoints is called by the underlying xdsAPIClient when it receives an
+// xDS response.
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *Client) newEDSUpdate(updates map[string]EndpointsUpdate) {
+func (c *Client) NewEndpoints(updates map[string]EndpointsUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
