@@ -30,13 +30,29 @@ import (
 
 var testAction = "ALLOW"
 var testPolicies = make(map[string]string)
+var badTestPolicies = make(map[string]string)
+
+func TestCompileCEL(t *testing.T) {
+	// Invlaid Attributes Expected to Fail.
+	badTestPolicies["test access"] = "request.url_path.StartsWith('/pkg.service/test')"
+	badTestPolicies["admin access"] = "connection.peer_certificate == 'cluster/ns/default/sa/admin'"
+	badTestPolicies["dev access"] = "response.size == 5"
+	env := createUserPolicyCelEnv()
+	for name, policy := range badTestPolicies {
+		_, err := compileCel(env, policy)
+		if err == nil {
+			t.Errorf("Failed to compile %v %v", name, err)
+		}
+	}
+	fmt.Println("CEL Environment only allowing valid RBAC Attributes")
+}
 
 func TestParseEval(t *testing.T) {
 	testPolicies["test access"] = "request.url_path.startsWith('/pkg.service/test')"
 	testPolicies["admin access"] = "connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'"
 	testPolicies["dev access"] = "request.url_path == '/pkg.service/dev' && connection.uri_san_peer_certificate == 'cluster/ns/default/sa/dev'"
 	env := createUserPolicyCelEnv()
-	rbac, err := CompileYamltoRbac("../user_policy.yaml")
+	rbac, err := CompileYamltoRbac("../example_policy.yaml")
 	if err != nil {
 		t.Errorf("Failed to compile %v", err)
 	}
@@ -79,7 +95,7 @@ func TestParseEval(t *testing.T) {
 }
 
 func TestSerialize(t *testing.T) {
-	input := "../user_policy.yaml"
+	input := "../example_policy.yaml"
 	output := "test_rbac.pb"
 	err := Compile(input, output)
 	if err != nil {
@@ -102,7 +118,6 @@ func TestSerialize(t *testing.T) {
 	policies := rbac.Policies
 	for name, rbacPolicy := range policies {
 		testPolicy := testPolicies[name]
-		fmt.Println(testPolicy)
 		testAst, err := compileCel(env, testPolicy)
 		if err != nil {
 			t.Errorf("Failed to compile %v", err)

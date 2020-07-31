@@ -35,8 +35,8 @@ import (
 type UserPolicy struct {
 	Action string `yaml:"action"`
 	Rules  []struct {
-		Name      string `yaml:"name"`
-		Condition string `yaml:"condition"`
+		Name string `yaml:"name"`
+		Expr string `yaml:"expr"`
 	} `yaml:"rules"`
 }
 
@@ -58,14 +58,15 @@ func createUserPolicyCelEnv() *cel.Env {
 			decls.NewIdent("request.headers", decls.NewMapType(decls.String, decls.String), nil),
 			decls.NewIdent("source.address", decls.String, nil),
 			decls.NewIdent("source.port", decls.Int, nil),
+			decls.NewIdent("source.principal", decls.String, nil),
 			decls.NewIdent("destination.address", decls.String, nil),
 			decls.NewIdent("destination.port", decls.Int, nil),
 			decls.NewIdent("connection.uri_san_peer_certificate", decls.String, nil)))
 	return env
 }
 
-func compileCel(env *cel.Env, condition string) (*cel.Ast, error) {
-	ast, iss := env.Parse(condition)
+func compileCel(env *cel.Env, expr string) (*cel.Ast, error) {
+	ast, iss := env.Parse(expr)
 	// Report syntactic errors, if present.
 	if iss.Err() != nil {
 		return nil, iss.Err()
@@ -77,9 +78,6 @@ func compileCel(env *cel.Env, condition string) (*cel.Ast, error) {
 	}
 	// Check the result type is a Boolean.
 	if !proto.Equal(checked.ResultType(), decls.Bool) {
-		// log.Panicf(
-		// 	"Got %v, wanted %v result type",
-		// 	checked.ResultType(), decls.Bool)
 		return nil, iss.Err()
 	}
 	return checked, nil
@@ -103,9 +101,9 @@ func CompileYamltoRbac(filename string) (*pb.RBAC, error) {
 	for index := range userPolicy.Rules {
 		rule := userPolicy.Rules[index]
 		name := rule.Name
-		condition := rule.Condition
+		expr := rule.Expr
 		var policy pb.Policy
-		checked, err := compileCel(env, condition)
+		checked, err := compileCel(env, expr)
 		if err != nil {
 			return nil, err
 		}
@@ -122,15 +120,15 @@ func CompileYamltoRbac(filename string) (*pb.RBAC, error) {
 }
 
 // Converts an expression to a parsed expression, with SourceInfo nil.
-func exprToParsedExpr(condition *expr.Expr) *expr.ParsedExpr {
-	return &expr.ParsedExpr{Expr: condition}
+func exprToParsedExpr(expression *expr.Expr) *expr.ParsedExpr {
+	return &expr.ParsedExpr{Expr: expression}
 }
 
 // Converts an expression to a CEL program.
-func exprToProgram(env *cel.Env, condition *expr.Expr) (*cel.Program, error) {
+func exprToProgram(env *cel.Env, expr *expr.Expr) (*cel.Program, error) {
 	// ONLY NEEDED FOR V2
 	// v3: can replace line with ast := cel.CheckedExprToAst(checkedExpr)
-	ast := cel.ParsedExprToAst(exprToParsedExpr(condition))
+	ast := cel.ParsedExprToAst(exprToParsedExpr(expr))
 	program, err := env.Program(ast)
 	return &program, err
 }

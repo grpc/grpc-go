@@ -1,9 +1,0 @@
-action: ALLOW
-rules:
-- name: test access
-  condition: request.url_path.startsWith('/pkg.service/test')
-- name: admin access
-  condition: connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'
-- name: dev access
-  condition: request.url_path == '/pkg.service/dev' &&
-    connection.uri_san_peer_certificate == 'cluster/ns/default/sa/dev'

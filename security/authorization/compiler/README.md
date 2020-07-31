@@ -20,8 +20,8 @@ action: ALLOW or DENY
 The second line specifies that you will now begin listing the rules for your policy. 
   rules:
   Each rule follows the same format.
-    A “- name:” to signify the role/access users abiding by this rule are given
-    A tab then “condition:” to write out the CEL expressions you want evaluated
+    A “- name:” to specify the policy name
+    then “condition:” to write out the CEL expressions you want evaluated
     More on how to write CEL expressions below
     If the CEL expression is too long it can be broken up onto the next line so long as the continuation of the statement is indented once like in the above example.
     
@@ -35,6 +35,7 @@ The second line specifies that you will now begin listing the rules for your pol
     request.headers | string | map All request headers. 
     source.address | string | Connection remote address.
     source.port | int | Connection remote port.
+    source.principal | string | Peer principal. It varies on credential types.
     destination.address | string | Connection local address.
     destination.port | int | Connection local port.
     connection.uri_san_peer_certificate | string | First URI in SAN field of the peer certificate. In the Istio context, this is the SPIFFE ID.
@@ -45,6 +46,7 @@ The second line specifies that you will now begin listing the rules for your pol
 For every condition you want to construct a statement involving the above approved fields that results in an outcome of True or False.
 Use common logical operators such as and, or, less than, in, equals to construct statements involving the above attribute that your security policy depends on.
 See the Language Definition for specific instruction in how to format expressions specifically to CEL.
+See the CEL Specification at https://github.com/google/cel-spec
 
 # How to use the Compiler?
 Start with accessing the directory of the grpc_authz_compiler.go which is within grpc-go/security/rbac/compiler/main
