@@ -17,7 +17,7 @@
  */
 
 // Package compiler is a utility library containing functions to compile
-// a User policy yaml into a serialized RBAC proto object
+// a User policy yaml into a serialized RBAC proto object.
 package compiler
 
 import (
