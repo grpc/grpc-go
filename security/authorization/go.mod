@@ -1,4 +1,4 @@
-module google.golang.org/grpc/security/rbac
+module google.golang.org/grpc/security/authorization
 
 go 1.14
 
