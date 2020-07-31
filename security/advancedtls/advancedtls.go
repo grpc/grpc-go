@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/credentials"
+	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
 // VerificationFuncParams contains parameters available to users when
@@ -299,6 +300,10 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 			SecurityLevel: credentials.PrivacyAndIntegrity,
 		},
 	}
+	id := credinternal.SPIFFEIDFromState(conn.ConnectionState())
+	if id != nil {
+		info.SPIFFEID = id
+	}
 	return WrapSyscallConn(rawConn, conn), info, nil
 }
 
@@ -315,6 +320,10 @@ func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credenti
 		CommonAuthInfo: credentials.CommonAuthInfo{
 			SecurityLevel: credentials.PrivacyAndIntegrity,
 		},
+	}
+	id := credinternal.SPIFFEIDFromState(conn.ConnectionState())
+	if id != nil {
+		info.SPIFFEID = id
 	}
 	return WrapSyscallConn(rawConn, conn), info, nil
 }
