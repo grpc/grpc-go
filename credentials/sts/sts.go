@@ -62,7 +62,7 @@ var (
 	makeHTTPDoer         = makeHTTPClient
 	readSubjectTokenFrom = ioutil.ReadFile
 	readActorTokenFrom   = ioutil.ReadFile
-	logger               = grpclog.Component("sts")
+	logger               = grpclog.Component("credentials")
 )
 
 // Options configures the parameters used for an STS based token exchange.
