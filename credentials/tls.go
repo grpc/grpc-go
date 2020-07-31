@@ -141,6 +141,7 @@ func (c *tlsCreds) OverrideServerName(serverNameOverride string) error {
 
 const alpnProtoStrH2 = "h2"
 
+// AppendH2ToNextProtos appends h2 to next protos.
 func AppendH2ToNextProtos(ps []string) []string {
 	for _, p := range ps {
 		if p == alpnProtoStrH2 {
