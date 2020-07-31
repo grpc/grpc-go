@@ -356,8 +356,8 @@ func (s) TestAppendH2ToNextProtos(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := appendH2ToNextProtos(tt.ps); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("appendH2ToNextProtos() = %v, want %v", got, tt.want)
+			if got := AppendH2ToNextProtos(tt.ps); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("AppendH2ToNextProtos() = %v, want %v", got, tt.want)
 			}
 		})
 	}
