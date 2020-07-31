@@ -1,8 +1,6 @@
-// +build go1.10
-
 /*
  *
- * Copyright 2019 gRPC authors.
+ * Copyright 2020 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,12 +36,18 @@ func TestParseEval(t *testing.T) {
 	testPolicies["admin access"] = "connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'"
 	testPolicies["dev access"] = "request.url_path == '/pkg.service/dev' && connection.uri_san_peer_certificate == 'cluster/ns/default/sa/dev'"
 	env := createUserPolicyCelEnv()
-	rbac := CompileYamltoRbac("../user_policy.yaml")
+	rbac, err := CompileYamltoRbac("../user_policy.yaml")
+	if err != nil {
+		t.Errorf("Failed to compile %v", err)
+	}
 	policies := rbac.Policies
 	for name, rbacPolicy := range policies {
 		testPolicy := testPolicies[name]
 		fmt.Println(testPolicy)
-		testAst := compileCel(env, testPolicy)
+		testAst, err := compileCel(env, testPolicy)
+		if err != nil {
+			t.Errorf("Failed to compile %v", err)
+		}
 		testProgram, proErr := env.Program(testAst)
 		if proErr != nil {
 			t.Errorf("Failed to convert AST to Program %v", proErr)
@@ -99,7 +103,10 @@ func TestSerialize(t *testing.T) {
 	for name, rbacPolicy := range policies {
 		testPolicy := testPolicies[name]
 		fmt.Println(testPolicy)
-		testAst := compileCel(env, testPolicy)
+		testAst, err := compileCel(env, testPolicy)
+		if err != nil {
+			t.Errorf("Failed to compile %v", err)
+		}
 		testProgram, proErr := env.Program(testAst)
 		if proErr != nil {
 			t.Errorf("Failed to convert AST to Program %v", proErr)

@@ -1,8 +1,6 @@
-// +build go1.10
-
 /*
  *
- * Copyright 2019 gRPC authors.
+ * Copyright 2020 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +22,6 @@ package compiler
 
 import (
 	"io/ioutil"
-	"log"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2" // v3
 	cel "github.com/google/cel-go/cel"
@@ -34,7 +31,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// UserPolicy is the user policy
+// UserPolicy is the user policy.
 type UserPolicy struct {
 	Action string `yaml:"action"`
 	Rules  []struct {
@@ -43,7 +40,7 @@ type UserPolicy struct {
 	} `yaml:"rules"`
 }
 
-// ReadYaml reads in yaml file
+// ReadYaml reads in yaml file.
 func ReadYaml(filePath string) ([]byte, error) {
 	return ioutil.ReadFile(filePath)
 }
@@ -67,38 +64,37 @@ func createUserPolicyCelEnv() *cel.Env {
 	return env
 }
 
-func compileCel(env *cel.Env, condition string) *cel.Ast {
+func compileCel(env *cel.Env, condition string) (*cel.Ast, error) {
 	ast, iss := env.Parse(condition)
 	// Report syntactic errors, if present.
 	if iss.Err() != nil {
-		log.Panic(iss.Err())
+		return nil, iss.Err()
 	}
 	// Type-check the expression for correctness.
 	checked, iss := env.Check(ast)
 	if iss.Err() != nil {
-		log.Panic(iss.Err())
+		return nil, iss.Err()
 	}
 	// Check the result type is a Boolean.
 	if !proto.Equal(checked.ResultType(), decls.Bool) {
-		log.Panicf(
-			"Got %v, wanted %v result type",
-			checked.ResultType(), decls.String)
+		// log.Panicf(
+		// 	"Got %v, wanted %v result type",
+		// 	checked.ResultType(), decls.Bool)
+		return nil, iss.Err()
 	}
-	return checked
+	return checked, nil
 }
 
-// CompileYamltoRbac compiles yaml to rbac
-// Must return a pointer to the RBAC proto as to avoid
-// copying the object hence the mutex is not copied
-func CompileYamltoRbac(filename string) *pb.RBAC {
+// CompileYamltoRbac compiles yaml to rbac.
+func CompileYamltoRbac(filename string) (*pb.RBAC, error) {
 	yamlFile, err := ReadYaml(filename)
 	if err != nil {
-		log.Panicf("Error in reading yaml: %v", err)
+		return nil, err
 	}
 	var userPolicy UserPolicy
 	err = parseYaml(yamlFile, &userPolicy)
 	if err != nil {
-		log.Panicf("Failed in parsing of yaml: %v", err)
+		return nil, err
 	}
 	env := createUserPolicyCelEnv()
 	var rbac pb.RBAC
@@ -109,7 +105,10 @@ func CompileYamltoRbac(filename string) *pb.RBAC {
 		name := rule.Name
 		condition := rule.Condition
 		var policy pb.Policy
-		checked := compileCel(env, condition)
+		checked, err := compileCel(env, condition)
+		if err != nil {
+			return nil, err
+		}
 		// checkedExpr, err := cel.AstToCheckedExpr(checked) // v3
 		// if err != nil {
 		// 	log.Panicf("Failed Converting AST to Checked Express %v", err)
@@ -119,7 +118,7 @@ func CompileYamltoRbac(filename string) *pb.RBAC {
 		policy.Condition = checkedExpr // v2
 		rbac.Policies[name] = &policy
 	}
-	return &rbac
+	return &rbac, nil
 }
 
 // Converts an expression to a parsed expression, with SourceInfo nil.
@@ -136,9 +135,12 @@ func exprToProgram(env *cel.Env, condition *expr.Expr) (*cel.Program, error) {
 	return &program, err
 }
 
-// Compile takes in input file name and returns serialized output rbac proto
+// Compile takes in input file name and returns serialized output rbac proto.
 func Compile(inputFilename string, outputFilename string) error {
-	rbac := CompileYamltoRbac(inputFilename)
+	rbac, rErr := CompileYamltoRbac(inputFilename)
+	if rErr != nil {
+		return rErr
+	}
 	serialized, err := proto.Marshal(rbac)
 	ioutil.WriteFile(outputFilename, serialized, 0644)
 	return err
