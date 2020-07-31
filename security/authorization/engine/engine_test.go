@@ -267,6 +267,7 @@ func TestAuthorizationEngineEvaluate(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
+			// t.Errorf(tc.authArgs.fullMethod)
 			gotAuthDecision, gotErr := tc.engine.Evaluate(tc.authArgs)
 			sort.Strings(gotAuthDecision.policyNames)
 			if tc.wantErr != nil && (gotErr == nil || gotErr.Error() != tc.wantErr.Error()) {

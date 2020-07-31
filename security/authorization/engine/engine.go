@@ -35,7 +35,6 @@ import (
 )
 
 var (
-	errNoRequestURLPath        = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid request url path")
 	errNoRequestHost           = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid request host")
 	errNoRequestMethod         = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid request method")
 	errNoRequestHeaders        = status.Errorf(codes.InvalidArgument, "authorization args doesn't have valid request headers")
@@ -109,6 +108,9 @@ func (args AuthorizationArgs) toActivation() interpreter.Activation {
 }
 
 func (args AuthorizationArgs) getRequestURLPath() (string, error) {
+	if args.fullMethod == "" {
+		return "", status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid request url path")
+	}
 	return args.fullMethod, nil
 }
 
@@ -126,6 +128,9 @@ func (args AuthorizationArgs) getRequestHeaders() (map[string]string, error) {
 }
 
 func (args AuthorizationArgs) getSourceAddress() (string, error) {
+	if args.peerInfo == nil {
+		return "", status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid source address")
+	}
 	addr := args.peerInfo.Addr.String()
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -135,6 +140,9 @@ func (args AuthorizationArgs) getSourceAddress() (string, error) {
 }
 
 func (args AuthorizationArgs) getSourcePort() (int, error) {
+	if args.peerInfo == nil {
+		return 0, status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid source port")
+	}
 	addr := args.peerInfo.Addr.String()
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -191,7 +199,7 @@ func exprToParsedExpr(condition *expr.Expr) *expr.ParsedExpr {
 }
 
 // Converts an expression to a CEL program.
-func exprToProgram(condition *expr.Expr) *cel.Program {
+func exprToProgram(condition *expr.Expr) cel.Program {
 	env, err := cel.NewEnv(
 		cel.Declarations(
 			decls.NewVar("request.url_path", decls.String),
@@ -212,7 +220,7 @@ func exprToProgram(condition *expr.Expr) *cel.Program {
 	if err != nil {
 		log.Fatalf("program construction error: %s", err)
 	}
-	return &prg
+	return prg
 }
 
 // policyEngine is the struct for an engine created from one RBAC proto.
