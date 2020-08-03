@@ -73,7 +73,7 @@ func (c tlsCreds) Info() ProtocolInfo {
 
 func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (_ net.Conn, _ AuthInfo, err error) {
 	// use local cfg to avoid clobbering ServerName if using multiple endpoints
-	cfg := cloneTLSConfig(c.config)
+	cfg := CloneTLSConfig(c.config)
 	if cfg.ServerName == "" {
 		serverName, _, err := net.SplitHostPort(authority)
 		if err != nil {
@@ -141,7 +141,8 @@ func (c *tlsCreds) OverrideServerName(serverNameOverride string) error {
 
 const alpnProtoStrH2 = "h2"
 
-func appendH2ToNextProtos(ps []string) []string {
+// AppendH2ToNextProtos appends h2 to next protos.
+func AppendH2ToNextProtos(ps []string) []string {
 	for _, p := range ps {
 		if p == alpnProtoStrH2 {
 			return ps
@@ -154,8 +155,8 @@ func appendH2ToNextProtos(ps []string) []string {
 
 // NewTLS uses c to construct a TransportCredentials based on TLS.
 func NewTLS(c *tls.Config) TransportCredentials {
-	tc := &tlsCreds{cloneTLSConfig(c)}
-	tc.config.NextProtos = appendH2ToNextProtos(tc.config.NextProtos)
+	tc := &tlsCreds{CloneTLSConfig(c)}
+	tc.config.NextProtos = AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc
 }
 
@@ -243,14 +244,14 @@ var cipherSuiteLookup = map[uint16]string{
 	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305:  "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
 }
 
-// cloneTLSConfig returns a shallow clone of the exported
+// CloneTLSConfig returns a shallow clone of the exported
 // fields of cfg, ignoring the unexported sync.Once, which
 // contains a mutex and must not be copied.
 //
 // If cfg is nil, a new zero tls.Config is returned.
 //
 // TODO: inline this function if possible.
-func cloneTLSConfig(cfg *tls.Config) *tls.Config {
+func CloneTLSConfig(cfg *tls.Config) *tls.Config {
 	if cfg == nil {
 		return &tls.Config{}
 	}
