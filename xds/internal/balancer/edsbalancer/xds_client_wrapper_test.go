@@ -20,12 +20,14 @@ package edsbalancer
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
@@ -44,6 +46,32 @@ var (
 	testEDSClusterName = "test/service/eds"
 )
 
+// Given a list of resource names, verifies that EDS requests for the same are
+// received at the fake server.
+func verifyExpectedRequests(fs *fakeserver.Server, resourceNames ...string) error {
+	wantReq := &xdspb.DiscoveryRequest{
+		TypeUrl: version.V2EndpointsURL,
+		Node:    testutils.EmptyNodeProtoV2,
+	}
+	for _, name := range resourceNames {
+		if name != "" {
+			wantReq.ResourceNames = []string{name}
+		}
+		req, err := fs.XDSRequestChan.TimedReceive(time.Millisecond * 100)
+		if err != nil {
+			return fmt.Errorf("timed out when expecting request {%+v} at fake server", wantReq)
+		}
+		edsReq := req.(*fakeserver.Request)
+		if edsReq.Err != nil {
+			return fmt.Errorf("eds RPC failed with err: %v", edsReq.Err)
+		}
+		if !proto.Equal(edsReq.Req, wantReq) {
+			return fmt.Errorf("got EDS request %v, expected: %v, diff: %s", edsReq.Req, wantReq, cmp.Diff(edsReq.Req, wantReq, cmp.Comparer(proto.Equal)))
+		}
+	}
+	return nil
+}
+
 // TestClientWrapperWatchEDS verifies that the clientWrapper registers an
 // EDS watch for expected resource upon receiving an update from the top-level
 // edsBalancer.
@@ -59,87 +87,63 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 		t.Fatalf("Failed to start fake xDS server: %v", err)
 	}
 	defer cleanup()
+	t.Logf("Started fake xDS server at %s...", fakeServer.Address)
 
 	cw := newXDSClientWrapper(nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, nil)
 	defer cw.close()
+	t.Logf("Started xDS client wrapper for endpoint %s...", testServiceName)
 
-	for _, test := range []struct {
-		name             string
-		edsServiceName   string
-		wantResourceName string
-	}{
-		{
-			// Update with an empty edsServiceName should trigger an EDS watch
-			// for the user's dial target.
-			name:             "empty-edsServiceName",
-			edsServiceName:   "",
-			wantResourceName: testServiceName,
-		},
-		{
-			// Update with an non-empty edsServiceName should trigger an EDS
-			// watch for the same.
-			name:             "first-non-empty-edsServiceName",
-			edsServiceName:   "foobar-1",
-			wantResourceName: "foobar-1",
-		},
-		{
-			// Also test the case where the edsServerName changes from one
-			// non-empty name to another, and make sure a new watch is
-			// registered.
-			name:             "second-non-empty-edsServiceName",
-			edsServiceName:   "foobar-2",
-			wantResourceName: "foobar-2",
-		},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			oldBootstrapConfigNew := bootstrapConfigNew
-			bootstrapConfigNew = func() (*bootstrap.Config, error) {
-				return &bootstrap.Config{
-					BalancerName: fakeServer.Address,
-					Creds:        grpc.WithInsecure(),
-					NodeProto:    testutils.EmptyNodeProtoV2,
-				}, nil
-			}
-			defer func() { bootstrapConfigNew = oldBootstrapConfigNew }()
-			cw.handleUpdate(&EDSConfig{
-				BalancerName:   fakeServer.Address,
-				EDSServiceName: test.edsServiceName,
-			}, nil)
+	oldBootstrapConfigNew := bootstrapConfigNew
+	bootstrapConfigNew = func() (*bootstrap.Config, error) {
+		return &bootstrap.Config{
+			BalancerName: fakeServer.Address,
+			Creds:        grpc.WithInsecure(),
+			NodeProto:    testutils.EmptyNodeProtoV2,
+		}, nil
+	}
+	defer func() { bootstrapConfigNew = oldBootstrapConfigNew }()
 
-			var req interface{}
-			for i := 0; i < 2; i++ {
-				// Each new watch will first cancel the previous watch, and then
-				// start a new watch. The cancel will trigger a request as well.
-				// This loop receives the two requests and keeps the last.
-				r, err := fakeServer.XDSRequestChan.TimedReceive(time.Millisecond * 100)
-				if err != nil {
-					t.Fatalf("i: %v, expected xDS request, but got error: %v", i, err)
-				}
-				req = r
-				// If edsServiceName is empty string, the client doesn't cancel
-				// and resend request. The request from channel was from client
-				// init, and we don't expect a second request.
-				if test.edsServiceName == "" {
-					break
-				}
-			}
-			if r, err := fakeServer.XDSRequestChan.TimedReceive(time.Millisecond * 100); err == nil {
-				t.Fatalf("Expected req channel recv timeout, but got request: %v", r)
-			}
-			edsReq := req.(*fakeserver.Request)
-			if edsReq.Err != nil {
-				t.Fatalf("EDS RPC failed with err: %v", edsReq.Err)
-			}
+	// Send empty update. Wait for connection at fake server.
+	// Wait for request at fake server.
+	// Send first non empty update.
+	// Wait for requests at fake server.
+	// Send second non empty update.
+	// Wait for requests at fake server.
 
-			wantReq := &xdspb.DiscoveryRequest{
-				TypeUrl:       version.V2EndpointsURL,
-				ResourceNames: []string{test.wantResourceName},
-				Node:          testutils.EmptyNodeProtoV2,
-			}
-			if !proto.Equal(edsReq.Req, wantReq) {
-				t.Fatalf("got EDS request %v, expected: %v, diff: %s", edsReq.Req, wantReq, cmp.Diff(edsReq.Req, wantReq, cmp.Comparer(proto.Equal)))
-			}
-		})
+	// Update with an empty edsServiceName should trigger an EDS watch
+	// for the user's dial target.
+	cw.handleUpdate(&EDSConfig{
+		BalancerName:   fakeServer.Address,
+		EDSServiceName: "",
+	}, nil)
+	if _, err := fakeServer.NewConnChan.TimedReceive(1 * time.Second); err != nil {
+		t.Fatal("Failed to connect to fake server")
+	}
+	t.Log("Client connection established to fake server...")
+	if err := verifyExpectedRequests(fakeServer, testServiceName); err != nil {
+		t.Fatal(err)
+	}
+
+	// Update with an non-empty edsServiceName should trigger an EDS watch for
+	// the same. The previously registered watch will be cancelled, which will
+	// result in an EDS request with no resource names being sent to the server.
+	cw.handleUpdate(&EDSConfig{
+		BalancerName:   fakeServer.Address,
+		EDSServiceName: "foobar-1",
+	}, nil)
+	if err := verifyExpectedRequests(fakeServer, "", "foobar-1"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Also test the case where the edsServerName changes from one
+	// non-empty name to another, and make sure a new watch is
+	// registered.
+	cw.handleUpdate(&EDSConfig{
+		BalancerName:   fakeServer.Address,
+		EDSServiceName: "foobar-2",
+	}, nil)
+	if err := verifyExpectedRequests(fakeServer, "", "foobar-2"); err != nil {
+		t.Fatal(err)
 	}
 }
 
