@@ -86,7 +86,7 @@ func isRunningOnGCP() (bool, error) {
 	manufacturer, err := readManufacturer()
 	if os.IsNotExist(err) {
 		return false, nil
-	},
+	}
 	if err != nil {
 		return false, status.Errorf(codes.Internal, "failed to read manufacturer information: %v", err)
 	}

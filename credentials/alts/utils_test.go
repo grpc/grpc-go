@@ -83,10 +83,14 @@ func (s) TestIsRunningOnGCP(t *testing.T) {
 		{"windows: not a GCP platform", "windows", strings.NewReader("not GCP"), false},
 		{"windows: GCP platform (Google)", "windows", strings.NewReader("Google"), true},
 		{"windows: GCP platform (Google) with extra spaces", "windows", strings.NewReader("  Google     "), true},
+		// MacOS tests.
+		{"MacOS: not a GCP platform", "macos", strings.NewReader("not GCP"), false},
+		{"MacOS: GCP platform (Google)", "macos", strings.NewReader("Google"), false},
+		{"MacOS: GCP platform (Google) with extra spaces", "macos", strings.NewReader("  Google     "), false},
 	} {
 		reverseFunc := setup(tc.testOS, tc.testReader)
-		got, _ := isRunningOnGCP()
-		if want := tc.out; got != want {
+		got, err := isRunningOnGCP()
+		if want := tc.out; err != nil || got != want {
 			t.Errorf("%v: isRunningOnGCP()=%v, want %v", tc.description, got, want)
 		}
 		reverseFunc()
