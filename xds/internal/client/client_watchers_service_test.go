@@ -20,7 +20,6 @@ package client
 
 import (
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -42,7 +41,7 @@ func (s) TestServiceWatch(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false /* overrideWatchExpiryTimeout */))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -100,7 +99,7 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false /* overrideWatchExpiryTimeout */))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -167,7 +166,7 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false /* overrideWatchExpiryTimeout */))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -239,16 +238,10 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 // does not respond to the requests being sent out as part of registering a
 // service update watcher. The callback will get an error.
 func (s) TestServiceWatchWithNoResponseFromServer(t *testing.T) {
-	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 500 * time.Millisecond
-	defer func() {
-		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
-	}()
-
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, true /* overrideWatchExpiryTimeout */))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -263,7 +256,7 @@ func (s) TestServiceWatchWithNoResponseFromServer(t *testing.T) {
 	if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
-	u, err := serviceUpdateCh.TimedReceive(defaultWatchExpiryTimeout * 2)
+	u, err := serviceUpdateCh.TimedReceive(defaultTestWatchExpiryTimeout * 2)
 	if err != nil {
 		t.Fatalf("failed to get serviceUpdate: %v", err)
 	}
@@ -279,16 +272,10 @@ func (s) TestServiceWatchWithNoResponseFromServer(t *testing.T) {
 // TestServiceWatchEmptyRDS tests the case where the underlying v2Client
 // receives an empty RDS response. The callback will get an error.
 func (s) TestServiceWatchEmptyRDS(t *testing.T) {
-	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 500 * time.Millisecond
-	defer func() {
-		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
-	}()
-
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, true /* overrideWatchExpiryTimeout */))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -311,7 +298,7 @@ func (s) TestServiceWatchEmptyRDS(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	v2Client.r.NewRouteConfigs(map[string]RouteConfigUpdate{})
-	u, err := serviceUpdateCh.TimedReceive(defaultWatchExpiryTimeout * 2)
+	u, err := serviceUpdateCh.TimedReceive(defaultTestWatchExpiryTimeout * 2)
 	if err != nil {
 		t.Fatalf("failed to get serviceUpdate: %v", err)
 	}
@@ -328,16 +315,10 @@ func (s) TestServiceWatchEmptyRDS(t *testing.T) {
 // received after the client is closed, and we make sure that the registered
 // watcher callback is not invoked.
 func (s) TestServiceWatchWithClientClose(t *testing.T) {
-	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 500 * time.Millisecond
-	defer func() {
-		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
-	}()
-
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, true /* overrideWatchExpiryTimeout */))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -361,7 +342,7 @@ func (s) TestServiceWatchWithClientClose(t *testing.T) {
 	}
 	// Client is closed before it receives the RDS response.
 	c.Close()
-	if u, err := serviceUpdateCh.TimedReceive(defaultWatchExpiryTimeout * 2); err != testutils.ErrRecvTimeout {
+	if u, err := serviceUpdateCh.TimedReceive(defaultTestWatchExpiryTimeout * 2); err != testutils.ErrRecvTimeout {
 		t.Errorf("unexpected serviceUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -373,7 +354,7 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false /* overrideWatchExpiryTimeout */))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -424,7 +405,7 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false /* overrideWatchExpiryTimeout */))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
