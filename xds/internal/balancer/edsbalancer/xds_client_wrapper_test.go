@@ -103,13 +103,6 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 	}
 	defer func() { bootstrapConfigNew = oldBootstrapConfigNew }()
 
-	// Send empty update. Wait for connection at fake server.
-	// Wait for request at fake server.
-	// Send first non empty update.
-	// Wait for requests at fake server.
-	// Send second non empty update.
-	// Wait for requests at fake server.
-
 	// Update with an empty edsServiceName should trigger an EDS watch
 	// for the user's dial target.
 	cw.handleUpdate(&EDSConfig{
