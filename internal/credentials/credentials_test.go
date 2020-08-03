@@ -27,17 +27,8 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/testdata"
 )
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
 
 // A struct that implements AuthInfo interface but does not implement GetCommonAuthInfo() method.
 type testAuthInfoNoGetCommonAuthInfoMethod struct{}
