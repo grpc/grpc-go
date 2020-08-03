@@ -80,7 +80,6 @@ type VersionedClient interface {
 // client implementations to embed this type, and thereby satisfy the interface
 // requirements.
 type TransportHelper struct {
-	ctx       context.Context
 	cancelCtx context.CancelFunc
 
 	vClient  VersionedClient
@@ -111,7 +110,6 @@ type TransportHelper struct {
 func NewTransportHelper(vc VersionedClient, logger *grpclog.PrefixLogger, backoff func(int) time.Duration) *TransportHelper {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	t := &TransportHelper{
-		ctx:       ctx,
 		cancelCtx: cancelCtx,
 		vClient:   vc,
 		logger:    logger,
@@ -124,7 +122,7 @@ func NewTransportHelper(vc VersionedClient, logger *grpclog.PrefixLogger, backof
 		nonceMap:   make(map[string]string),
 	}
 
-	go t.run()
+	go t.run(ctx)
 	return t
 }
 
@@ -155,15 +153,15 @@ func (t *TransportHelper) Close() {
 // run starts an ADS stream (and backs off exponentially, if the previous
 // stream failed without receiving a single reply) and runs the sender and
 // receiver routines to send and receive data from the stream respectively.
-func (t *TransportHelper) run() {
-	go t.send()
+func (t *TransportHelper) run(ctx context.Context) {
+	go t.send(ctx)
 	// TODO: start a goroutine monitoring ClientConn's connectivity state, and
 	// report error (and log) when stats is transient failure.
 
 	retries := 0
 	for {
 		select {
-		case <-t.ctx.Done():
+		case <-ctx.Done():
 			return
 		default:
 		}
@@ -172,7 +170,7 @@ func (t *TransportHelper) run() {
 			timer := time.NewTimer(t.backoff(retries))
 			select {
 			case <-timer.C:
-			case <-t.ctx.Done():
+			case <-ctx.Done():
 				if !timer.Stop() {
 					<-timer.C
 				}
@@ -181,7 +179,7 @@ func (t *TransportHelper) run() {
 		}
 
 		retries++
-		stream, err := t.vClient.NewStream(t.ctx)
+		stream, err := t.vClient.NewStream(ctx)
 		if err != nil {
 			t.logger.Warningf("xds: ADS stream creation failed: %v", err)
 			continue
@@ -215,11 +213,11 @@ func (t *TransportHelper) run() {
 // Note that this goroutine doesn't do anything to the old stream when there's a
 // new one. In fact, there should be only one stream in progress, and new one
 // should only be created when the old one fails (recv returns an error).
-func (t *TransportHelper) send() {
+func (t *TransportHelper) send(ctx context.Context) {
 	var stream grpc.ClientStream
 	for {
 		select {
-		case <-t.ctx.Done():
+		case <-ctx.Done():
 			return
 		case stream = <-t.streamCh:
 			if !t.sendExisting(stream) {
@@ -251,7 +249,7 @@ func (t *TransportHelper) send() {
 				continue
 			}
 			if err := t.vClient.SendRequest(stream, target, typeURL, version, nonce); err != nil {
-				t.logger.Errorf("ADS request failed: %v", err)
+				t.logger.Warningf("ADS request for {target: %q, type: %q, version: %q, nonce: %q} failed: %v", target, typeURL, version, nonce, err)
 				// send failed, clear the current stream.
 				stream = nil
 			}
