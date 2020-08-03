@@ -18,14 +18,13 @@
 
 // Package resolver defines APIs for name resolution in gRPC.
 // All APIs in this package are experimental.
-package resolver
+package credentials
 
 import (
 	"context"
 	"net"
 
 	"google.golang.org/grpc/attributes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -138,13 +137,13 @@ type BuildOptions struct {
 	// WithTransportCredentials). In cases where a name resolution service
 	// requires the same credentials, the resolver may use this field. In most
 	// cases though, it is not appropriate, and this field may be ignored.
-	DialCreds credentials.TransportCredentials
+	DialCreds TransportCredentials
 	// CredsBundle is the credentials bundle used by the ClientConn for
 	// communicating with the target gRPC service (set via
 	// WithCredentialsBundle). In cases where a name resolution service
 	// requires the same credentials, the resolver may use this field. In most
 	// cases though, it is not appropriate, and this field may be ignored.
-	CredsBundle credentials.Bundle
+	CredsBundle Bundle
 	// Dialer is the custom dialer used by the ClientConn for dialling the
 	// target gRPC service (set via WithDialer). In cases where a name
 	// resolution service requires the same dialer, the resolver may use this

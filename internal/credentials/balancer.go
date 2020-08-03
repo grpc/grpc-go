@@ -18,7 +18,7 @@
 
 // Package balancer defines APIs for load balancing in gRPC.
 // All APIs in this package are experimental.
-package balancer
+package credentials
 
 import (
 	"context"
@@ -28,7 +28,6 @@ import (
 	"strings"
 
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -114,7 +113,7 @@ type NewSubConnOptions struct {
 	//
 	// Deprecated: Use the Attributes field in resolver.Address to pass
 	// arbitrary data to the credential handshaker.
-	CredsBundle credentials.Bundle
+	CredsBundle Bundle
 	// HealthCheckEnabled indicates whether health check service should be
 	// enabled on this SubConn
 	HealthCheckEnabled bool
@@ -165,9 +164,9 @@ type BuildOptions struct {
 	// DialCreds is the transport credential the Balancer implementation can
 	// use to dial to a remote load balancer server. The Balancer implementations
 	// can ignore this if it does not need to talk to another party securely.
-	DialCreds credentials.TransportCredentials
+	DialCreds TransportCredentials
 	// CredsBundle is the credentials bundle that the Balancer can use.
-	CredsBundle credentials.Bundle
+	CredsBundle Bundle
 	// Dialer is the custom dialer the Balancer implementation can use to dial
 	// to a remote load balancer server. The Balancer implementations
 	// can ignore this if it doesn't need to talk to remote balancer.
