@@ -62,7 +62,7 @@ func main() {
 	}
 	altsTC, err := alts.NewServerCreds(opts)
 	if err != nil {
-		grpclog.Fatalf("Failed to create new server credentials: %v", err)
+		grpclog.Fatalf("failed to create new server credentials: %v", err)
 	}
 	grpcServer := grpc.NewServer(grpc.Creds(altsTC), grpc.InTapHandle(authz))
 	testpb.RegisterTestServiceServer(grpcServer, interop.NewTestServer())

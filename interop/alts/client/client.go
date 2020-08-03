@@ -44,7 +44,7 @@ func main() {
 	}
 	altsTC, err := alts.NewClientCreds(opts)
 	if err != nil {
-		grpclog.Fatalf("Failed to create new client credentials: %v", err)
+		grpclog.Fatalf("failed to create new client credentials: %v", err)
 	}
 	// Block until the server is ready.
 	conn, err := grpc.Dial(*serverAddr, grpc.WithTransportCredentials(altsTC), grpc.WithBlock())

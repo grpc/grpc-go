@@ -86,9 +86,9 @@ func isRunningOnGCP() (bool, error) {
 	manufacturer, err := readManufacturer()
 	if os.IsNotExist(err) {
 		return false, nil
-	}
+	},
 	if err != nil {
-		return false, status.Errorf(codes.Internal, "failure to read manufacturer information: %v", err)
+		return false, status.Errorf(codes.Internal, "failed to read manufacturer information: %v", err)
 	}
 	name := string(manufacturer)
 	switch runningOS {
@@ -101,7 +101,7 @@ func isRunningOnGCP() (bool, error) {
 		name = strings.Replace(name, "\r", "", -1)
 		return name == "Google", nil
 	default:
-		return false, platformError(runningOS)
+		return false, nil
 	}
 }
 
