@@ -76,6 +76,7 @@ var stringAttributeMap = map[string]func(AuthorizationArgs) (string, error){
 	"source.address":                      AuthorizationArgs.getSourceAddress,
 	"destination.address":                 AuthorizationArgs.getDestinationAddress,
 	"connection.uri_san_peer_certificate": AuthorizationArgs.getURISanPeerCertificate,
+	"source.principal":                    AuthorizationArgs.getSourcePrincipal,
 }
 
 var intAttributeMap = map[string]func(AuthorizationArgs) (int, error){
@@ -161,6 +162,10 @@ func (args AuthorizationArgs) getDestinationPort() (int, error) {
 
 func (args AuthorizationArgs) getURISanPeerCertificate() (string, error) {
 	return "", errNoURISanPeerCertificate
+}
+
+func (args AuthorizationArgs) getSourcePrincipal() (string, error) {
+	return "", status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid source principal")
 }
 
 // Decision is the enum type that represents different authorization
