@@ -26,12 +26,16 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"net"
 	"reflect"
 	"syscall"
 	"testing"
+	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
@@ -684,6 +688,110 @@ func (s) TestOptionsConfig(t *testing.T) {
 			if clientOptions.RootCACerts == nil && clientOptions.GetRootCAs == nil &&
 				clientConfig.RootCAs == nil {
 				t.Fatalf("Failed to assign system-provided certificates on the client side.")
+			}
+		})
+	}
+}
+
+func (s) TestIdentityPemFileProvider(t *testing.T) {
+	defaultTestTimeout := 1 * time.Second
+	clientCert, err := tls.LoadX509KeyPair(testdata.Path("client_cert_1.pem"), testdata.Path("client_key_1.pem"))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(client_cert_1.pem, client_key_1.pem) failed: %v", err)
+	}
+	clientKM := certprovider.KeyMaterial{Certs: []tls.Certificate{clientCert}}
+	serverCert, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"), testdata.Path("server_key_1.pem"))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(server_cert_1.pem, server_key_1.pem) failed: %v", err)
+	}
+	serverKM := certprovider.KeyMaterial{Certs: []tls.Certificate{serverCert}}
+	tests := []struct {
+		desc     string
+		certFile string
+		keyFile  string
+		wantKM   certprovider.KeyMaterial
+	}{
+		{
+			desc:     "Load client_cert_1.pem",
+			certFile: testdata.Path("client_cert_1.pem"),
+			keyFile:  testdata.Path("client_key_1.pem"),
+			wantKM:   clientKM,
+		},
+		{
+			desc:     "Load server_cert_1.pem",
+			certFile: testdata.Path("server_cert_1.pem"),
+			keyFile:  testdata.Path("server_key_1.pem"),
+			wantKM:   serverKM,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			identityPemFileProviderOptions := &IdentityPemFileProviderOptions{
+				CertFile: test.certFile,
+				KeyFile:  test.keyFile,
+				Interval: 10 * time.Second,
+			}
+			identityPemFileProvider, err := NewIdentityPemFileProvider(identityPemFileProviderOptions)
+			if err != nil {
+				t.Fatalf("NewIdentityPemFileProvider(identityPemFileProviderOptions) failed: %v", err)
+			}
+			gotDistributor := identityPemFileProvider.distributor
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			gotKM, err := gotDistributor.KeyMaterial(ctx)
+			if !cmp.Equal(*gotKM, test.wantKM, cmp.AllowUnexported(big.Int{})) {
+				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKM)
+			}
+		})
+	}
+}
+
+func (s) TestRootPemFileProvider(t *testing.T) {
+	defaultTestTimeout := 1 * time.Second
+	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
+	if err != nil {
+		t.Fatalf("readTrustCert(client_trust_cert_1.pem) failed: %v", err)
+	}
+	clientKM := certprovider.KeyMaterial{Roots: clientTrustPool}
+	serverTrustPool, err := readTrustCert(testdata.Path("server_trust_cert_1.pem"))
+	if err != nil {
+		t.Fatalf("readTrustCert(server_trust_cert_1.pem) failed: %v", err)
+	}
+	serverKM := certprovider.KeyMaterial{Roots: serverTrustPool}
+	tests := []struct {
+		desc      string
+		trustCert string
+		wantKM    certprovider.KeyMaterial
+	}{
+		{
+			desc:      "Load client_trust_cert_1.pem",
+			trustCert: testdata.Path("client_trust_cert_1.pem"),
+			wantKM:    clientKM,
+		},
+		{
+			desc:      "Load server_trust_cert_1.pem",
+			trustCert: testdata.Path("server_trust_cert_1.pem"),
+			wantKM:    serverKM,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			rootPemFileProviderOptions := &RootPemFileProviderOptions{
+				TrustFile: test.trustCert,
+				Interval:  10 * time.Second,
+			}
+			rootPemFileProvider, err := NewRootPemFileProvider(rootPemFileProviderOptions)
+			if err != nil {
+				t.Fatalf("NewRootPemFileProvider(rootPemFileProviderOptions) failed: %v", err)
+			}
+			gotDistributor := rootPemFileProvider.distributor
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			gotKM, err := gotDistributor.KeyMaterial(ctx)
+			if !cmp.Equal(*gotKM, test.wantKM, cmp.AllowUnexported(x509.CertPool{})) {
+				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKM)
 			}
 		})
 	}

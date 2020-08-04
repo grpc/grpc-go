@@ -98,6 +98,7 @@ func NewIdentityPemFileProvider(o *IdentityPemFileProviderOptions) (*IdentityPem
 	provider.closeFunc = func() {
 		close(quit)
 	}
+	quit <- true
 	return provider, nil
 }
 
@@ -144,6 +145,7 @@ func NewRootPemFileProvider(o *RootPemFileProviderOptions) (*RootPemFileProvider
 	provider.closeFunc = func() {
 		close(quit)
 	}
+	quit <- true
 	return provider, nil
 }
 
