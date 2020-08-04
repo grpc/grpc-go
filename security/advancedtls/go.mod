@@ -8,5 +8,5 @@ require (
 	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980 // indirect
 	golang.org/x/text v0.3.3 // indirect
 	google.golang.org/grpc v1.31.0
-	google.golang.org/grpc/examples v0.0.0-20200730231535-bc714cd8aeaa
+	google.golang.org/grpc/examples v0.0.0-20200731180010-8bec2f5d898f
 )
