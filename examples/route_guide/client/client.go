@@ -33,7 +33,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/route_guide/routeguide"
-	"google.golang.org/grpc/testdata"
+	"google.golang.org/grpc/examples/testdata"
 )
 
 var (
@@ -155,7 +155,7 @@ func main() {
 	var opts []grpc.DialOption
 	if *tls {
 		if *caFile == "" {
-			*caFile = testdata.Path("x509/server_ca_cert.pem")
+			*caFile = testdata.Path("x509/ca_cert.pem")
 		}
 		creds, err := credentials.NewClientTLSFromFile(*caFile, *serverHostOverride)
 		if err != nil {

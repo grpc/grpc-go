@@ -32,9 +32,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/examples/testdata"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/testdata"
 
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
@@ -50,7 +50,7 @@ func main() {
 	flag.Parse()
 	fmt.Printf("server starting on port %d...\n", *port)
 
-	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
+	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server_cert.pem"), testdata.Path("x509/server_key.pem"))
 	if err != nil {
 		log.Fatalf("failed to load key pair: %s", err)
 	}
