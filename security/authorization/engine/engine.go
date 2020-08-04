@@ -17,7 +17,7 @@
 package engine
 
 import (
-	"log"
+	"fmt"
 	"net"
 	"strconv"
 
@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 var stringAttributeMap = map[string]func(AuthorizationArgs) (string, error){
@@ -202,28 +203,22 @@ func exprToParsedExpr(condition *expr.Expr) *expr.ParsedExpr {
 }
 
 // Converts an expression to a CEL program.
-func exprToProgram(condition *expr.Expr) cel.Program {
-	env, err := cel.NewEnv(
-		cel.Declarations(
-			decls.NewVar("request.url_path", decls.String),
-			decls.NewVar("request.host", decls.String),
-			decls.NewVar("request.method", decls.String),
-			decls.NewVar("request.headers", decls.NewMapType(decls.String, decls.String)),
-			decls.NewVar("source.address", decls.String),
-			decls.NewVar("source.port", decls.Int),
-			decls.NewVar("destination.address", decls.String),
-			decls.NewVar("destination.port", decls.Int),
-			decls.NewVar("connection.uri_san_peer_certificate", decls.String),
-		),
-	)
+func exprToProgram(condition *expr.Expr, env *cel.Env) (cel.Program, error) {
 	// Converts condition to ParsedExpr by setting SourceInfo empty.
 	pexpr := exprToParsedExpr(condition)
-	ast := cel.ParsedExprToAst(pexpr)
-	prg, err := env.Program(ast)
-	if err != nil {
-		log.Fatalf("program construction error: %s", err)
+	// pretend cel.ExprToAst exists
+	ast, iss := env.Check(cel.ParsedExprToAst(pexpr))
+	if iss.Err() != nil {
+		return nil, iss.Err()
 	}
-	return prg
+	// Check that the expression will evaluate to a boolean.
+	if !proto.Equal(ast.ResultType(), decls.Bool) {
+		return nil, fmt.Errorf("expected boolean condition")
+	}
+	// Build the program plan.
+	return env.Program(ast,
+		cel.EvalOptions(cel.OptOptimize),
+	)
 }
 
 // policyEngine is the struct for an engine created from one RBAC proto.
@@ -233,13 +228,17 @@ type policyEngine struct {
 }
 
 // Creates a new policyEngine from an RBAC policy proto.
-func newPolicyEngine(rbac *pb.RBAC) *policyEngine {
+func newPolicyEngine(rbac *pb.RBAC, env *cel.Env) (*policyEngine, error) {
 	action := rbac.Action
 	programs := make(map[string]cel.Program)
 	for policyName, policy := range rbac.Policies {
-		programs[policyName] = exprToProgram(policy.Condition)
+		prg, err := exprToProgram(policy.Condition, env)
+		if err != nil {
+			return &policyEngine{}, fmt.Errorf("failed to create CEL program from condition: %v", err)
+		}
+		programs[policyName] = prg
 	}
-	return &policyEngine{action, programs}
+	return &policyEngine{action, programs}, nil
 }
 
 // Returns the decision of an engine based on whether or not AuthorizationArgs is a match,
@@ -310,9 +309,30 @@ func NewAuthorizationEngine(rbacs []*pb.RBAC) (*AuthorizationEngine, error) {
 	if len(rbacs) == 2 && (rbacs[0].Action != pb.RBAC_DENY || rbacs[1].Action != pb.RBAC_ALLOW) {
 		return &AuthorizationEngine{}, status.Errorf(codes.InvalidArgument, "when providing 2 RBACs, must have 1 DENY and 1 ALLOW in that order")
 	}
+	// Note: env can be shared across multiple Checks / Program constructions.
+	env, err := cel.NewEnv(
+		cel.Declarations(
+			decls.NewVar("request.url_path", decls.String),
+			decls.NewVar("request.host", decls.String),
+			decls.NewVar("request.method", decls.String),
+			decls.NewVar("request.headers", decls.NewMapType(decls.String, decls.String)),
+			decls.NewVar("source.address", decls.String),
+			decls.NewVar("source.port", decls.Int),
+			decls.NewVar("destination.address", decls.String),
+			decls.NewVar("destination.port", decls.Int),
+			decls.NewVar("connection.uri_san_peer_certificate", decls.String),
+		),
+	)
+	if err != nil {
+		return &AuthorizationEngine{}, status.Errorf(codes.Internal, "failed to create CEL Env: %v", err)
+	}
 	var engines []*policyEngine
 	for _, rbac := range rbacs {
-		engines = append(engines, newPolicyEngine(rbac))
+		newEngine, err := newPolicyEngine(rbac, env)
+		if err != nil {
+			return &AuthorizationEngine{}, err
+		}
+		engines = append(engines, newEngine)
 	}
 	return &AuthorizationEngine{engines}, nil
 }
