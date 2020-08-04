@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/tls/certprovider"
 )
 
 // VerificationFuncParams contains parameters available to users when
@@ -148,6 +149,12 @@ type ClientOptions struct {
 	RootCertificateOptions
 	// VType is the verification type on the client side.
 	VType VerificationType
+	// IdentityProvider is the Provider that will fetch identity certificate
+	// updates
+	IdentityProvider certprovider.Provider
+	// RootProvider is the Provider that will fetch root certificate
+	// updates
+	RootProvider certprovider.Provider
 }
 
 // ServerOptions contains all the fields and functions needed to be filled by
@@ -417,6 +424,7 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 	if err != nil {
 		return nil, err
 	}
+	// delegate to aTLS
 	tc := &advancedTLSCreds{
 		config:     conf,
 		isClient:   true,
@@ -424,7 +432,19 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 		verifyFunc: o.VerifyPeer,
 		vType:      o.VType,
 	}
-	tc.config.NextProtos = appendH2ToNextProtos(tc.config.NextProtos)
+	if o.IdentityProvider != nil {
+		// Where do we get the context?
+		tc.config.GetCertificate = func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+			km, _ := o.IdentityProvider.KeyMaterial(ctx)
+			return &km.Certs[0], nil
+		}
+	}
+	if o.RootProvider != nil {
+		tc.getRootCAs = func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
+			km, _ := o.RootProvider.KeyMaterial(ctx)
+			return &GetRootCAsResults{TrustCerts: km.Roots}, nil
+		}
+	}
 	return tc, nil
 }
 
