@@ -102,13 +102,13 @@ func NewIdentityPemFileProvider(o *IdentityPemFileProviderOptions) (*IdentityPem
 	return provider, nil
 }
 
-// KeyMaterial returns the key material sourced by the provider.
+// KeyMaterial returns the key material sourced by the IdentityPemFileProvider.
 // Callers are expected to use the returned value as read-only.
 func (p *IdentityPemFileProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
 	return p.distributor.KeyMaterial(ctx)
 }
 
-// Close cleans up resources allocated by the provider.
+// Close cleans up resources allocated by the IdentityPemFileProvider.
 func (p *IdentityPemFileProvider) Close() {
 	p.closeFunc()
 	p.distributor.Stop()
@@ -127,10 +127,10 @@ func NewRootPemFileProvider(o *RootPemFileProviderOptions) (*RootPemFileProvider
 	provider := &RootPemFileProvider{}
 	quit := make(chan bool)
 	provider.distributor = certprovider.NewDistributor()
-	// go routine to pull file changes
+	// A goroutine to pull file changes.
 	go func() {
 		for {
-			// reading identity certs from PEM files
+			// Read root certs from PEM files.
 			rootCert, err := o.ReadTrustCerts()
 			km := certprovider.KeyMaterial{Roots: rootCert}
 			provider.distributor.Set(&km, err)
@@ -149,19 +149,19 @@ func NewRootPemFileProvider(o *RootPemFileProviderOptions) (*RootPemFileProvider
 	return provider, nil
 }
 
-// KeyMaterial returns the key material sourced by the provider.
+// KeyMaterial returns the key material sourced by the RootPemFileProvider.
 // Callers are expected to use the returned value as read-only.
 func (p *RootPemFileProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
 	return p.distributor.KeyMaterial(ctx)
 }
 
-// Close cleans up resources allocated by the provider.
+// Close cleans up resources allocated by the RootPemFileProvider.
 func (p *RootPemFileProvider) Close() {
 	p.closeFunc()
 	p.distributor.Stop()
 }
 
-// ReadKeyAndCerts reads and parses peer certificates from the certificate file path
+// ReadKeyAndCerts reads and parses identity credential files from the cert file path
 // and the key file path specified in IdentityPemFileProviderOptions.
 func (r IdentityPemFileProviderOptions) ReadKeyAndCerts() (*tls.Certificate, error) {
 	cert, err := tls.LoadX509KeyPair(r.CertFile, r.KeyFile)
@@ -171,7 +171,7 @@ func (r IdentityPemFileProviderOptions) ReadKeyAndCerts() (*tls.Certificate, err
 	return &cert, nil
 }
 
-// ReadTrustCerts reads and parses trust certificates from trust certificate path
+// ReadTrustCerts reads and parses root credential files from trust cert path
 // specified in RootPemFileProviderOptions.
 func (r RootPemFileProviderOptions) ReadTrustCerts() (*x509.CertPool, error) {
 	trustData, err := ioutil.ReadFile(r.TrustFile)
