@@ -34,11 +34,19 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// AuthorizationArgs is the input of the CEL-based authorization engine.
-type AuthorizationArgs struct {
-	md         metadata.MD
-	peerInfo   *peer.Peer
-	fullMethod string
+var stringAttributeMap = map[string]func(AuthorizationArgs) (string, error){
+	"request.url_path":                    AuthorizationArgs.getRequestURLPath,
+	"request.host":                        AuthorizationArgs.getRequestHost,
+	"request.method":                      AuthorizationArgs.getRequestMethod,
+	"source.address":                      AuthorizationArgs.getSourceAddress,
+	"destination.address":                 AuthorizationArgs.getDestinationAddress,
+	"connection.uri_san_peer_certificate": AuthorizationArgs.getURISanPeerCertificate,
+	"source.principal":                    AuthorizationArgs.getSourcePrincipal,
+}
+
+var intAttributeMap = map[string]func(AuthorizationArgs) (int, error){
+	"source.port":      AuthorizationArgs.getSourcePort,
+	"destination.port": AuthorizationArgs.getDestinationPort,
 }
 
 // ActivationImpl is an implementation of interpreter.Activation.
@@ -60,19 +68,11 @@ func (activation ActivationImpl) Parent() interpreter.Activation {
 	return ActivationImpl{}
 }
 
-var stringAttributeMap = map[string]func(AuthorizationArgs) (string, error){
-	"request.url_path":                    AuthorizationArgs.getRequestURLPath,
-	"request.host":                        AuthorizationArgs.getRequestHost,
-	"request.method":                      AuthorizationArgs.getRequestMethod,
-	"source.address":                      AuthorizationArgs.getSourceAddress,
-	"destination.address":                 AuthorizationArgs.getDestinationAddress,
-	"connection.uri_san_peer_certificate": AuthorizationArgs.getURISanPeerCertificate,
-	"source.principal":                    AuthorizationArgs.getSourcePrincipal,
-}
-
-var intAttributeMap = map[string]func(AuthorizationArgs) (int, error){
-	"source.port":      AuthorizationArgs.getSourcePort,
-	"destination.port": AuthorizationArgs.getDestinationPort,
+// AuthorizationArgs is the input of the CEL-based authorization engine.
+type AuthorizationArgs struct {
+	md         metadata.MD
+	peerInfo   *peer.Peer
+	fullMethod string
 }
 
 // Converts AuthorizationArgs into the activation for CEL.
