@@ -53,7 +53,7 @@ func (clientBuilder) Version() version.TransportAPI {
 func newClient(cc *grpc.ClientConn, opts xdsclient.BuildOptions) (xdsclient.APIClient, error) {
 	nodeProto, ok := opts.NodeProto.(*v2corepb.Node)
 	if !ok {
-		return nil, fmt.Errorf("xds: unsupported Node proto type: %T, want %T", opts.NodeProto, v2corepb.Node{})
+		return nil, fmt.Errorf("xds: unsupported Node proto type: %T, want %T", opts.NodeProto, (*v2corepb.Node)(nil))
 	}
 	v2c := &client{
 		cc:        cc,
