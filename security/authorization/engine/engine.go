@@ -34,15 +34,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var (
-	errNoRequestHost           = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid request host")
-	errNoRequestMethod         = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid request method")
-	errNoRequestHeaders        = status.Errorf(codes.InvalidArgument, "authorization args doesn't have valid request headers")
-	errNoDestinationAddress    = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid destination address")
-	errNoDestinationPort       = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid destination port")
-	errNoURISanPeerCertificate = status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid URI in SAN field of the peer certificate")
-)
-
 // AuthorizationArgs is the input of the CEL-based authorization engine.
 type AuthorizationArgs struct {
 	md         metadata.MD
@@ -116,16 +107,19 @@ func (args AuthorizationArgs) getRequestURLPath() (string, error) {
 }
 
 func (args AuthorizationArgs) getRequestHost() (string, error) {
-	return "", errNoRequestHost
+	// TODO(@zhenlian): fill out attribute extraction for request.host
+	return "", status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid request host")
 }
 
 func (args AuthorizationArgs) getRequestMethod() (string, error) {
-	return "", errNoRequestMethod
+	// TODO(@zhenlian): fill out attribute extraction for request.method
+	return "", status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid request method")
 }
 
 func (args AuthorizationArgs) getRequestHeaders() (map[string]string, error) {
-	// get this from metadata?
-	return nil, errNoRequestHeaders
+	// TODO(@zhenlian): fill out attribute extraction for request.headers
+	// possibly get this from metadata?
+	return nil, status.Errorf(codes.InvalidArgument, "authorization args doesn't have valid request headers")
 }
 
 func (args AuthorizationArgs) getSourceAddress() (string, error) {
@@ -153,18 +147,22 @@ func (args AuthorizationArgs) getSourcePort() (int, error) {
 }
 
 func (args AuthorizationArgs) getDestinationAddress() (string, error) {
-	return "", errNoDestinationAddress
+	// TODO(@zhenlian): fill out attribute extraction for destination.address
+	return "", status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid destination address")
 }
 
 func (args AuthorizationArgs) getDestinationPort() (int, error) {
-	return 0, errNoDestinationPort
+	// TODO(@zhenlian): fill out attribute extraction for destination.port
+	return 0, status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid destination port")
 }
 
 func (args AuthorizationArgs) getURISanPeerCertificate() (string, error) {
-	return "", errNoURISanPeerCertificate
+	// TODO(@zhenlian): fill out attribute extraction for connection.uri_san_peer_certificate
+	return "", status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid URI in SAN field of the peer certificate")
 }
 
 func (args AuthorizationArgs) getSourcePrincipal() (string, error) {
+	// TODO(@zhenlian): fill out attribute extraction for source.principal
 	return "", status.Errorf(codes.InvalidArgument, "authorization args doesn't have a valid source principal")
 }
 
