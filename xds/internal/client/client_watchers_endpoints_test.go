@@ -59,7 +59,7 @@ func (s) TestEndpointsWatch(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer, false /* overrideWatchExpiryTimeout */))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -110,7 +110,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer, false /* overrideWatchExpiryTimeout */))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -168,7 +168,7 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer, false /* overrideWatchExpiryTimeout */))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -224,7 +224,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer, false /* overrideWatchExpiryTimeout */))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -276,7 +276,7 @@ func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer, true /* overrideWatchExpiryTimeout */))
+	c, err := New(clientOpts(testXDSServer, true))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
