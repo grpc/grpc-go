@@ -31,12 +31,6 @@ import (
 
 var logger = grpclog.Component("channelz")
 
-// AuthorizationArgs is the input of the CEL-based authorization engine.
-type AuthorizationArgs struct {
-	md       metadata.MD
-	peerInfo *peer.Peer
-}
-
 // activationImpl is an implementation of interpreter.Activation.
 // An Activation is the primary mechanism by which a caller supplies input into a CEL program.
 type activationImpl struct {
@@ -56,10 +50,67 @@ func (activation activationImpl) Parent() interpreter.Activation {
 	return activationImpl{}
 }
 
+// AuthorizationArgs is the input of the CEL-based authorization engine.
+type AuthorizationArgs struct {
+	md       metadata.MD
+	peerInfo *peer.Peer
+}
+
 // NewActivation converts AuthorizationArgs into the activation for CEL.
 func NewActivation(args *AuthorizationArgs) interpreter.Activation {
 	// TODO(@ezou): implement the conversion logic.
 	return activationImpl{}
+}
+
+func (args AuthorizationArgs) getRequestURLPath() (string, error) {
+	// TODO(@zhenlian): fill out attribute extraction for request.url_path
+	return "", fmt.Errorf("authorization args doesn't have a valid request url path")
+}
+
+func (args AuthorizationArgs) getRequestHost() (string, error) {
+	// TODO(@zhenlian): fill out attribute extraction for request.host
+	return "", fmt.Errorf("authorization args doesn't have a valid request host")
+}
+
+func (args AuthorizationArgs) getRequestMethod() (string, error) {
+	// TODO(@zhenlian): fill out attribute extraction for request.method
+	return "", fmt.Errorf("authorization args doesn't have a valid request method")
+}
+
+func (args AuthorizationArgs) getRequestHeaders() (map[string]string, error) {
+	// TODO(@zhenlian): fill out attribute extraction for request.headers
+	// possibly get this from metadata?
+	return nil, fmt.Errorf("authorization args doesn't have valid request headers")
+}
+
+func (args AuthorizationArgs) getSourceAddress() (string, error) {
+	// TODO(@zhenlian): fill out attribute extraction for source.address
+	return "", fmt.Errorf("authorization args doesn't have a valid source address")
+}
+
+func (args AuthorizationArgs) getSourcePort() (int, error) {
+	// TODO(@zhenlian): fill out attribute extraction for source.port
+	return 0, fmt.Errorf("authorization args doesn't have a valid source port")
+}
+
+func (args AuthorizationArgs) getDestinationAddress() (string, error) {
+	// TODO(@zhenlian): fill out attribute extraction for destination.address
+	return "", fmt.Errorf("authorization args doesn't have a valid destination address")
+}
+
+func (args AuthorizationArgs) getDestinationPort() (int, error) {
+	// TODO(@zhenlian): fill out attribute extraction for destination.port
+	return 0, fmt.Errorf("authorization args doesn't have a valid destination port")
+}
+
+func (args AuthorizationArgs) getURISanPeerCertificate() (string, error) {
+	// TODO(@zhenlian): fill out attribute extraction for connection.uri_san_peer_certificate
+	return "", fmt.Errorf("authorization args doesn't have a valid URI in SAN field of the peer certificate")
+}
+
+func (args AuthorizationArgs) getSourcePrincipal() (string, error) {
+	// TODO(@zhenlian): fill out attribute extraction for source.principal
+	return "", fmt.Errorf("authorization args doesn't have a valid source principal")
 }
 
 // Decision represents different authorization decisions a CEL-based
