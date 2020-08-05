@@ -24,8 +24,9 @@ import (
 
 // edfWrr is a struct for EDF weighted round robin implementation.
 type edfWrr struct {
-	lock  sync.Mutex
-	items edfPriorityQueue
+	lock               sync.Mutex
+	items              edfPriorityQueue
+	currentOrderOffset uint64
 }
 
 // NewEDF creates Earliest Deadline First (EDF)
@@ -38,17 +39,20 @@ func NewEDF() WRR {
 
 // edfEntry is an internal wrapper for item that also stores weight and relative position in the queue.
 type edfEntry struct {
-	deadline float64
-	weight   int64
-	item     interface{}
+	deadline    float64
+	weight      int64
+	orderOffset uint64
+	item        interface{}
 }
 
 // edfPriorityQueue is a heap.Interface implementation for edfEntry elements.
 type edfPriorityQueue []*edfEntry
 
-func (pq edfPriorityQueue) Len() int           { return len(pq) }
-func (pq edfPriorityQueue) Less(i, j int) bool { return pq[i].deadline < pq[j].deadline }
-func (pq edfPriorityQueue) Swap(i, j int)      { pq[i], pq[j] = pq[j], pq[i] }
+func (pq edfPriorityQueue) Len() int { return len(pq) }
+func (pq edfPriorityQueue) Less(i, j int) bool {
+	return pq[i].deadline < pq[j].deadline || pq[i].deadline == pq[j].deadline && pq[i].orderOffset < pq[j].orderOffset
+}
+func (pq edfPriorityQueue) Swap(i, j int) { pq[i], pq[j] = pq[j], pq[i] }
 
 func (pq *edfPriorityQueue) Push(x interface{}) {
 	*pq = append(*pq, x.(*edfEntry))
@@ -72,10 +76,12 @@ func (edf *edfWrr) Add(item interface{}, weight int64) {
 	edf.lock.Lock()
 	defer edf.lock.Unlock()
 	entry := edfEntry{
-		deadline: edf.currentTime() + 1.0/float64(weight),
-		weight:   weight,
-		item:     item,
+		deadline:    edf.currentTime() + 1.0/float64(weight),
+		weight:      weight,
+		item:        item,
+		orderOffset: edf.currentOrderOffset,
 	}
+	edf.currentOrderOffset++
 	heap.Push(&edf.items, &entry)
 }
 
@@ -87,6 +93,8 @@ func (edf *edfWrr) Next() interface{} {
 	}
 	item := edf.items[0]
 	item.deadline = edf.currentTime() + 1.0/float64(item.weight)
+	item.orderOffset = edf.currentOrderOffset
+	edf.currentOrderOffset++
 	heap.Fix(&edf.items, 0)
 	return item.item
 }
