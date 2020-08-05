@@ -23,12 +23,14 @@ import (
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	cel "github.com/google/cel-go/cel"
+	"github.com/google/cel-go/checker/decls"
 	types "github.com/google/cel-go/common/types"
 	interpreter "github.com/google/cel-go/interpreter"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/protobuf/proto"
 )
 
 var logger = grpclog.Component("channelz")
@@ -201,9 +203,22 @@ func exprToParsedExpr(condition *expr.Expr) *expr.ParsedExpr {
 }
 
 // Converts an expression to a CEL program.
-func exprToProgram(condition *expr.Expr) cel.Program {
-	// TODO(@ezou): implement the conversion from expr to CEL program.
-	return nil
+func exprToProgram(condition *expr.Expr, env *cel.Env) (cel.Program, error) {
+	// Converts condition to ParsedExpr by setting SourceInfo empty.
+	pexpr := exprToParsedExpr(condition)
+	// pretend cel.ExprToAst exists
+	ast, iss := env.Check(cel.ParsedExprToAst(pexpr))
+	if iss.Err() != nil {
+		return nil, iss.Err()
+	}
+	// Check that the expression will evaluate to a boolean.
+	if !proto.Equal(ast.ResultType(), decls.Bool) {
+		return nil, fmt.Errorf("expected boolean condition")
+	}
+	// Build the program plan.
+	return env.Program(ast,
+		cel.EvalOptions(cel.OptOptimize),
+	)
 }
 
 // policyEngine is the struct for an engine created from one RBAC proto.
@@ -213,16 +228,20 @@ type policyEngine struct {
 }
 
 // Creates a new policyEngine from an RBAC policy proto.
-func newPolicyEngine(rbac *pb.RBAC) *policyEngine {
+func newPolicyEngine(rbac *pb.RBAC, env *cel.Env) (*policyEngine, error) {
 	if rbac == nil {
-		return nil
+		return nil, nil
 	}
 	action := rbac.Action
 	programs := make(map[string]cel.Program)
 	for policyName, policy := range rbac.Policies {
-		programs[policyName] = exprToProgram(policy.Condition)
+		prg, err := exprToProgram(policy.Condition, env)
+		if err != nil {
+			return &policyEngine{}, fmt.Errorf("failed to create CEL program from condition: %v", err)
+		}
+		programs[policyName] = prg
 	}
-	return &policyEngine{action, programs}
+	return &policyEngine{action, programs}, nil
 }
 
 // Returns the decision of an engine based on whether or not AuthorizationArgs is a match,
@@ -294,7 +313,33 @@ func NewAuthorizationEngine(allow, deny *pb.RBAC) (*AuthorizationEngine, error) 
 	if allow != nil && allow.Action != pb.RBAC_ALLOW || deny != nil && deny.Action != pb.RBAC_DENY {
 		return nil, fmt.Errorf("allow must have action ALLOW, deny must have action DENY")
 	}
-	return &AuthorizationEngine{allow: newPolicyEngine(allow), deny: newPolicyEngine(deny)}, nil
+	// Note: env can be shared across multiple Checks / Program constructions.
+	env, err := cel.NewEnv(
+		cel.Declarations(
+			decls.NewVar("request.url_path", decls.String),
+			decls.NewVar("request.host", decls.String),
+			decls.NewVar("request.method", decls.String),
+			decls.NewVar("request.headers", decls.NewMapType(decls.String, decls.String)),
+			decls.NewVar("source.address", decls.String),
+			decls.NewVar("source.port", decls.Int),
+			decls.NewVar("destination.address", decls.String),
+			decls.NewVar("destination.port", decls.Int),
+			decls.NewVar("connection.uri_san_peer_certificate", decls.String),
+		),
+	)
+	if err != nil {
+		return &AuthorizationEngine{}, fmt.Errorf("failed to create CEL Env: %v", err)
+	}
+	// create policy engines
+	allowEngine, err := newPolicyEngine(allow, env)
+	if err != nil {
+		return &AuthorizationEngine{}, err
+	}
+	denyEngine, err := newPolicyEngine(deny, env)
+	if err != nil {
+		return &AuthorizationEngine{}, err
+	}
+	return &AuthorizationEngine{allow: allowEngine, deny: denyEngine}, nil
 }
 
 // Evaluate is the core function that evaluates whether an RPC is authorized.
