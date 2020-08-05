@@ -694,7 +694,6 @@ func (s) TestOptionsConfig(t *testing.T) {
 }
 
 func (s) TestIdentityPemFileProvider(t *testing.T) {
-	defaultTestTimeout := 1 * time.Second
 	clientCert, err := tls.LoadX509KeyPair(testdata.Path("client_cert_1.pem"), testdata.Path("client_key_1.pem"))
 	if err != nil {
 		t.Fatalf("tls.LoadX509KeyPair(client_cert_1.pem, client_key_1.pem) failed: %v", err)
@@ -737,8 +736,7 @@ func (s) TestIdentityPemFileProvider(t *testing.T) {
 				t.Fatalf("NewIdentityPemFileProvider(identityPemFileProviderOptions) failed: %v", err)
 			}
 			gotDistributor := identityPemFileProvider.distributor
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
+			ctx := context.Background()
 			gotKM, err := gotDistributor.KeyMaterial(ctx)
 			if !cmp.Equal(*gotKM, test.wantKM, cmp.AllowUnexported(big.Int{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKM)
@@ -748,7 +746,6 @@ func (s) TestIdentityPemFileProvider(t *testing.T) {
 }
 
 func (s) TestRootPemFileProvider(t *testing.T) {
-	defaultTestTimeout := 1 * time.Second
 	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
 	if err != nil {
 		t.Fatalf("readTrustCert(client_trust_cert_1.pem) failed: %v", err)
@@ -787,8 +784,7 @@ func (s) TestRootPemFileProvider(t *testing.T) {
 				t.Fatalf("NewRootPemFileProvider(rootPemFileProviderOptions) failed: %v", err)
 			}
 			gotDistributor := rootPemFileProvider.distributor
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
+			ctx := context.Background()
 			gotKM, err := gotDistributor.KeyMaterial(ctx)
 			if !cmp.Equal(*gotKM, test.wantKM, cmp.AllowUnexported(x509.CertPool{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKM)
