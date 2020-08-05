@@ -16,17 +16,15 @@
  *
  */
 
-package grpc
+package credentials
 
 import (
 	"fmt"
 	"net"
 	"testing"
 
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 )
 
@@ -37,9 +35,9 @@ func (s) TestBalancerErrorResolverPolling(t *testing.T) {
 	// The test balancer will return ErrBadResolverState iff the
 	// ClientConnState contains no addresses.
 	bf := stub.BalancerFuncs{
-		UpdateClientConnState: func(_ *stub.BalancerData, s balancer.ClientConnState) error {
+		UpdateClientConnState: func(_ *stub.BalancerData, s ClientConnState) error {
 			if len(s.ResolverState.Addresses) == 0 {
-				return balancer.ErrBadResolverState
+				return ErrBadResolverState
 			}
 			return nil
 		},
@@ -50,12 +48,12 @@ func (s) TestBalancerErrorResolverPolling(t *testing.T) {
 	testResolverErrorPolling(t,
 		func(r *manual.Resolver) {
 			// No addresses so the balancer will fail.
-			r.CC.UpdateState(resolver.State{})
+			r.CC.UpdateState(State{})
 		}, func(r *manual.Resolver) {
 			// UpdateState will block if ResolveNow is being called (which blocks on
 			// rn), so call it in a goroutine.  Include some address so the balancer
 			// will be happy.
-			go r.CC.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "x"}}})
+			go r.CC.UpdateState(State{Addresses: []Address{{Addr: "x"}}})
 		},
 		WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, balName)))
 }
@@ -79,12 +77,12 @@ func (s) TestRoundRobinZeroAddressesResolverPolling(t *testing.T) {
 	testResolverErrorPolling(t,
 		func(r *manual.Resolver) {
 			// No addresses so the balancer will fail.
-			r.CC.UpdateState(resolver.State{})
+			r.CC.UpdateState(State{})
 		}, func(r *manual.Resolver) {
 			// UpdateState will block if ResolveNow is being called (which
 			// blocks on rn), so call it in a goroutine.  Include a valid
 			// address so the balancer will be happy.
-			go r.CC.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
+			go r.CC.UpdateState(State{Addresses: []Address{{Addr: lis.Addr().String()}}})
 		},
 		WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, roundrobin.Name)))
 }

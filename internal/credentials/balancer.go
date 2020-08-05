@@ -16,8 +16,6 @@
  *
  */
 
-// Package balancer defines APIs for load balancing in gRPC.
-// All APIs in this package are experimental.
 package credentials
 
 import (

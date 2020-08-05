@@ -16,7 +16,7 @@
  *
  */
 
-package grpc
+package credentials
 
 import (
 	"context"
@@ -30,18 +30,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 
@@ -253,8 +250,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		// not registered. Fallback to default resolver and set Endpoint to
 		// the original target.
 		channelz.Infof(logger, cc.channelzID, "scheme %q not registered, fallback to default scheme", cc.parsedTarget.Scheme)
-		cc.parsedTarget = resolver.Target{
-			Scheme:   resolver.GetDefaultScheme(),
+		cc.parsedTarget = Target{
+			Scheme:   GetDefaultScheme(),
 			Endpoint: target,
 		}
 		resolverBuilder = cc.getResolver(cc.parsedTarget.Scheme)
@@ -291,11 +288,11 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		go cc.scWatcher()
 	}
 
-	var credsClone credentials.TransportCredentials
+	var credsClone TransportCredentials
 	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
 		credsClone = creds.Clone()
 	}
-	cc.balancerBuildOpts = balancer.BuildOptions{
+	cc.balancerBuildOpts = BuildOptions{
 		DialCreds:        credsClone,
 		CredsBundle:      cc.dopts.copts.CredsBundle,
 		Dialer:           cc.dopts.copts.Dialer,
@@ -479,12 +476,12 @@ type ClientConn struct {
 	cancel context.CancelFunc
 
 	target       string
-	parsedTarget resolver.Target
+	parsedTarget Target
 	authority    string
 	dopts        dialOptions
 	csMgr        *connectivityStateManager
 
-	balancerBuildOpts balancer.BuildOptions
+	balancerBuildOpts BuildOptions
 	blockingpicker    *pickerWrapper
 
 	mu              sync.RWMutex
@@ -575,7 +572,7 @@ func init() {
 	emptyServiceConfig = cfg.Config.(*ServiceConfig)
 }
 
-func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
+func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []Address) {
 	if cc.sc != nil {
 		cc.applyServiceConfigAndBalancer(cc.sc, addrs)
 		return
@@ -587,7 +584,7 @@ func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
 	}
 }
 
-func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
+func (cc *ClientConn) updateResolverState(s State, err error) error {
 	defer cc.firstResolveEvent.Fire()
 	cc.mu.Lock()
 	// Check if the ClientConn is already closed. Some fields (e.g.
@@ -610,7 +607,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 
 		// No addresses are valid with err set; return early.
 		cc.mu.Unlock()
-		return balancer.ErrBadResolverState
+		return ErrBadResolverState
 	}
 
 	var ret error
@@ -622,7 +619,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 		if sc, ok := s.ServiceConfig.Config.(*ServiceConfig); s.ServiceConfig.Err == nil && ok {
 			cc.applyServiceConfigAndBalancer(sc, s.Addresses)
 		} else {
-			ret = balancer.ErrBadResolverState
+			ret = ErrBadResolverState
 			if cc.balancerWrapper == nil {
 				var err error
 				if s.ServiceConfig.Err != nil {
@@ -649,7 +646,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	if cbn != grpclbName {
 		// Filter any grpclb addresses since we don't have the grpclb balancer.
 		for i := 0; i < len(s.Addresses); {
-			if s.Addresses[i].Type == resolver.GRPCLB {
+			if s.Addresses[i].Type == GRPCLB {
 				copy(s.Addresses[i:], s.Addresses[i+1:])
 				s.Addresses = s.Addresses[:len(s.Addresses)-1]
 				continue
@@ -657,7 +654,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 			i++
 		}
 	}
-	uccsErr := bw.updateClientConnState(&balancer.ClientConnState{ResolverState: s, BalancerConfig: balCfg})
+	uccsErr := bw.updateClientConnState(&ClientConnState{ResolverState: s, BalancerConfig: balCfg})
 	if ret == nil {
 		ret = uccsErr // prefer ErrBadResolver state since any other error is
 		// currently meaningless to the caller.
@@ -687,7 +684,7 @@ func (cc *ClientConn) switchBalancer(name string) {
 		cc.balancerWrapper.close()
 	}
 
-	builder := balancer.Get(name)
+	builder := Get(name)
 	if builder == nil {
 		channelz.Warningf(logger, cc.channelzID, "Channel switches to new LB policy %q due to fallback from invalid balancer name", PickFirstBalancerName)
 		channelz.Infof(logger, cc.channelzID, "failed to get balancer builder for: %v, using pick_first instead", name)
@@ -700,7 +697,7 @@ func (cc *ClientConn) switchBalancer(name string) {
 	cc.balancerWrapper = newCCBalancerWrapper(cc, builder, cc.balancerBuildOpts)
 }
 
-func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State, err error) {
+func (cc *ClientConn) handleSubConnStateChange(sc SubConn, s connectivity.State, err error) {
 	cc.mu.Lock()
 	if cc.conns == nil {
 		cc.mu.Unlock()
@@ -715,7 +712,7 @@ func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivi
 // newAddrConn creates an addrConn for addrs and adds it to cc.conns.
 //
 // Caller needs to make sure len(addrs) > 0.
-func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (*addrConn, error) {
+func (cc *ClientConn) newAddrConn(addrs []Address, opts NewSubConnOptions) (*addrConn, error) {
 	ac := &addrConn{
 		state:        connectivity.Idle,
 		cc:           cc,
@@ -829,7 +826,7 @@ func (ac *addrConn) connect() error {
 //  - If true, it updates ac.addrs and returns true. The ac will keep using
 //    the existing connection.
 //  - If false, it does nothing and returns false.
-func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
+func (ac *addrConn) tryUpdateAddrs(addrs []Address) bool {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
 	channelz.Infof(logger, ac.channelzID, "addrConn: tryUpdateAddrs curAddr: %v, addrs: %v", ac.curAddr, addrs)
@@ -894,8 +891,8 @@ func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {
 	return cc.sc.healthCheckConfig
 }
 
-func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method string) (transport.ClientTransport, func(balancer.DoneInfo), error) {
-	t, done, err := cc.blockingpicker.pick(ctx, failfast, balancer.PickInfo{
+func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method string) (transport.ClientTransport, func(DoneInfo), error) {
+	t, done, err := cc.blockingpicker.pick(ctx, failfast, PickInfo{
 		Ctx:            ctx,
 		FullMethodName: method,
 	})
@@ -905,7 +902,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method st
 	return t, done, nil
 }
 
-func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, addrs []resolver.Address) {
+func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, addrs []Address) {
 	if sc == nil {
 		// should never reach here.
 		return
@@ -933,7 +930,7 @@ func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, addrs []r
 		} else {
 			var isGRPCLB bool
 			for _, a := range addrs {
-				if a.Type == resolver.GRPCLB {
+				if a.Type == GRPCLB {
 					isGRPCLB = true
 					break
 				}
@@ -955,7 +952,7 @@ func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, addrs []r
 	}
 }
 
-func (cc *ClientConn) resolveNow(o resolver.ResolveNowOptions) {
+func (cc *ClientConn) resolveNow(o ResolveNowOptions) {
 	cc.mu.RLock()
 	r := cc.resolverWrapper
 	cc.mu.RUnlock()
@@ -1041,8 +1038,8 @@ type addrConn struct {
 
 	cc     *ClientConn
 	dopts  dialOptions
-	acbw   balancer.SubConn
-	scopts balancer.NewSubConnOptions
+	acbw   SubConn
+	scopts NewSubConnOptions
 
 	// transport is set when there's a viable transport (note: ac state may not be READY as LB channel
 	// health checking may require server to report healthy to set ac to READY), and is reset
@@ -1051,8 +1048,8 @@ type addrConn struct {
 	transport transport.ClientTransport // The current transport.
 
 	mu      sync.Mutex
-	curAddr resolver.Address   // The current address.
-	addrs   []resolver.Address // All addresses that the resolver resolved to.
+	curAddr Address   // The current address.
+	addrs   []Address // All addresses that the resolver resolved to.
 
 	// Use updateConnectivityState for updating addrConn's connectivity state.
 	state connectivity.State
@@ -1091,7 +1088,7 @@ func (ac *addrConn) adjustParams(r transport.GoAwayReason) {
 func (ac *addrConn) resetTransport() {
 	for i := 0; ; i++ {
 		if i > 0 {
-			ac.cc.resolveNow(resolver.ResolveNowOptions{})
+			ac.cc.resolveNow(ResolveNowOptions{})
 		}
 
 		ac.mu.Lock()
@@ -1188,13 +1185,13 @@ func (ac *addrConn) resetTransport() {
 // tryAllAddrs tries to creates a connection to the addresses, and stop when at the
 // first successful one. It returns the transport, the address and a Event in
 // the successful case. The Event fires when the returned transport disconnects.
-func (ac *addrConn) tryAllAddrs(addrs []resolver.Address, connectDeadline time.Time) (transport.ClientTransport, resolver.Address, *grpcsync.Event, error) {
+func (ac *addrConn) tryAllAddrs(addrs []Address, connectDeadline time.Time) (transport.ClientTransport, Address, *grpcsync.Event, error) {
 	var firstConnErr error
 	for _, addr := range addrs {
 		ac.mu.Lock()
 		if ac.state == connectivity.Shutdown {
 			ac.mu.Unlock()
-			return nil, resolver.Address{}, nil, errConnClosing
+			return nil, Address{}, nil, errConnClosing
 		}
 
 		ac.cc.mu.RLock()
@@ -1220,13 +1217,13 @@ func (ac *addrConn) tryAllAddrs(addrs []resolver.Address, connectDeadline time.T
 	}
 
 	// Couldn't connect to any address.
-	return nil, resolver.Address{}, nil, firstConnErr
+	return nil, Address{}, nil, firstConnErr
 }
 
 // createTransport creates a connection to addr. It returns the transport and a
 // Event in the successful case. The Event fires when the returned transport
 // disconnects.
-func (ac *addrConn) createTransport(addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) (transport.ClientTransport, *grpcsync.Event, error) {
+func (ac *addrConn) createTransport(addr Address, copts transport.ConnectOptions, connectDeadline time.Time) (transport.ClientTransport, *grpcsync.Event, error) {
 	prefaceReceived := make(chan struct{})
 	onCloseCalled := make(chan struct{})
 	reconnect := grpcsync.NewEvent()
@@ -1422,7 +1419,7 @@ func (ac *addrConn) tearDown(err error) {
 	// between setting the state and logic that waits on context cancellation / etc.
 	ac.updateConnectivityState(connectivity.Shutdown, nil)
 	ac.cancel()
-	ac.curAddr = resolver.Address{}
+	ac.curAddr = Address{}
 	if err == errConnDrain && curTr != nil {
 		// GracefulClose(...) may be executed multiple times when
 		// i) receiving multiple GoAway frames from the server; or
@@ -1534,13 +1531,13 @@ func (c *channelzChannel) ChannelzMetric() *channelz.ChannelInternalMetric {
 // referenced by users.
 var ErrClientConnTimeout = errors.New("grpc: timed out when dialing")
 
-func (cc *ClientConn) getResolver(scheme string) resolver.Builder {
+func (cc *ClientConn) getResolver(scheme string) Builder {
 	for _, rb := range cc.dopts.resolvers {
 		if scheme == rb.Scheme() {
 			return rb
 		}
 	}
-	return resolver.Get(scheme)
+	return Get(scheme)
 }
 
 func (cc *ClientConn) updateConnectionError(err error) {

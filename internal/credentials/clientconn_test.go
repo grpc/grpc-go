@@ -16,7 +16,7 @@
  *
  */
 
-package grpc
+package credentials
 
 import (
 	"context"
@@ -32,11 +32,9 @@ import (
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/testdata"
 )
@@ -47,7 +45,7 @@ func (s) TestDialWithTimeout(t *testing.T) {
 		t.Fatalf("Error while listening. Err: %v", err)
 	}
 	defer lis.Close()
-	lisAddr := resolver.Address{Addr: lis.Addr().String()}
+	lisAddr := Address{Addr: lis.Addr().String()}
 	lisDone := make(chan struct{})
 	dialDone := make(chan struct{})
 	// 1st listener accepts the connection and then does nothing
@@ -67,7 +65,7 @@ func (s) TestDialWithTimeout(t *testing.T) {
 	}()
 
 	r := manual.NewBuilderWithScheme("whatever")
-	r.InitialState(resolver.State{Addresses: []resolver.Address{lisAddr}})
+	r.InitialState(State{Addresses: []Address{lisAddr}})
 	client, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithTimeout(5*time.Second))
 	close(dialDone)
 	if err != nil {
@@ -88,7 +86,7 @@ func (s) TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
 		t.Fatalf("Error while listening. Err: %v", err)
 	}
 	defer lis1.Close()
-	lis1Addr := resolver.Address{Addr: lis1.Addr().String()}
+	lis1Addr := Address{Addr: lis1.Addr().String()}
 	lis1Done := make(chan struct{})
 	// 1st listener accepts the connection and immediately closes it.
 	go func() {
@@ -107,7 +105,7 @@ func (s) TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
 	}
 	defer lis2.Close()
 	lis2Done := make(chan struct{})
-	lis2Addr := resolver.Address{Addr: lis2.Addr().String()}
+	lis2Addr := Address{Addr: lis2.Addr().String()}
 	// 2nd listener should get a connection attempt since the first one failed.
 	go func() {
 		defer close(lis2Done)
@@ -119,7 +117,7 @@ func (s) TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
 	}()
 
 	r := manual.NewBuilderWithScheme("whatever")
-	r.InitialState(resolver.State{Addresses: []resolver.Address{lis1Addr, lis2Addr}})
+	r.InitialState(State{Addresses: []Address{lis1Addr, lis2Addr}})
 	client, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Dial failed. Err: %v", err)
@@ -362,7 +360,7 @@ func (s) TestWithTimeout(t *testing.T) {
 func (s) TestWithTransportCredentialsTLS(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
-	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
+	creds, err := NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
@@ -389,7 +387,7 @@ func (s) TestDefaultAuthority(t *testing.T) {
 
 func (s) TestTLSServerNameOverwrite(t *testing.T) {
 	overwriteServerName := "over.write.server.name"
-	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), overwriteServerName)
+	creds, err := NewClientTLSFromFile(testdata.Path("ca.pem"), overwriteServerName)
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
@@ -417,7 +415,7 @@ func (s) TestWithAuthority(t *testing.T) {
 
 func (s) TestWithAuthorityAndTLS(t *testing.T) {
 	overwriteServerName := "over.write.server.name"
-	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), overwriteServerName)
+	creds, err := NewClientTLSFromFile(testdata.Path("ca.pem"), overwriteServerName)
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
@@ -488,7 +486,7 @@ func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
 	}()
 
 	rb := manual.NewBuilderWithScheme("whatever")
-	rb.InitialState(resolver.State{Addresses: []resolver.Address{
+	rb.InitialState(State{Addresses: []Address{
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	}})
@@ -556,7 +554,7 @@ func (c securePerRPCCredentials) RequireTransportSecurity() bool {
 }
 
 func (s) TestCredentialsMisuse(t *testing.T) {
-	tlsCreds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
+	tlsCreds, err := NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
 	if err != nil {
 		t.Fatalf("Failed to create authenticator %v", err)
 	}
@@ -650,7 +648,7 @@ func (s) TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
 
 	// SwitchBalancer before NewAddress. There was no balancer created, this
 	// makes sure we don't call close on nil balancerWrapper.
-	r.UpdateState(resolver.State{ServiceConfig: parseCfg(r, `{"loadBalancingPolicy": "round_robin"}`)}) // This should not panic.
+	r.UpdateState(State{ServiceConfig: parseCfg(r, `{"loadBalancingPolicy": "round_robin"}`)}) // This should not panic.
 
 	time.Sleep(time.Second) // Sleep to make sure the service config is handled by ClientConn.
 }
@@ -665,7 +663,7 @@ func (s) TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
 		}
 		// Send a new service config while closing the ClientConn.
 		go cc.Close()
-		go r.UpdateState(resolver.State{ServiceConfig: parseCfg(r, `{"loadBalancingPolicy": "round_robin"}`)}) // This should not panic.
+		go r.UpdateState(State{ServiceConfig: parseCfg(r, `{"loadBalancingPolicy": "round_robin"}`)}) // This should not panic.
 	}
 }
 
@@ -679,7 +677,7 @@ func (s) TestResolverEmptyUpdateNotPanic(t *testing.T) {
 	defer cc.Close()
 
 	// This make sure we don't create addrConn with empty address list.
-	r.UpdateState(resolver.State{}) // This should not panic.
+	r.UpdateState(State{}) // This should not panic.
 
 	time.Sleep(time.Second) // Sleep to make sure the service config is handled by ClientConn.
 }
@@ -756,7 +754,7 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
 	defer cc.Close()
-	r.UpdateState(resolver.State{ServiceConfig: parseCfg(r, `{
+	r.UpdateState(State{ServiceConfig: parseCfg(r, `{
     "methodConfig": [
         {
             "name": [
@@ -968,13 +966,13 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 		close(server3Contacted)
 	}()
 
-	addrsList := []resolver.Address{
+	addrsList := []Address{
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 		{Addr: lis3.Addr().String()},
 	}
 	rb := manual.NewBuilderWithScheme("whatever")
-	rb.InitialState(resolver.State{Addresses: addrsList})
+	rb.InitialState(State{Addresses: addrsList})
 
 	client, err := Dial("whatever:///this-gets-overwritten",
 		WithInsecure(),
@@ -1077,8 +1075,8 @@ func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r *
 	}
 	defer cc.Close()
 	// Resolver service config gets ignored since resolver service config is disabled.
-	r.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: addr}},
+	r.UpdateState(State{
+		Addresses:     []Address{{Addr: addr}},
 		ServiceConfig: parseCfg(r, "{}"),
 	})
 	if !verifyWaitForReadyEqualsTrue(cc) {
@@ -1092,8 +1090,8 @@ func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
 	defer cc.Close()
-	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: addr}},
+	r.UpdateState(State{
+		Addresses: []Address{{Addr: addr}},
 	})
 	if !verifyWaitForReadyEqualsTrue(cc) {
 		t.Fatal("default service config failed to be applied after 1s")
@@ -1106,8 +1104,8 @@ func testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t *testing.T
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
 	defer cc.Close()
-	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: addr}},
+	r.UpdateState(State{
+		Addresses: []Address{{Addr: addr}},
 	})
 	if !verifyWaitForReadyEqualsTrue(cc) {
 		t.Fatal("default service config failed to be applied after 1s")

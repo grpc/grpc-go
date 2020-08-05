@@ -16,7 +16,7 @@
  *
  */
 
-package grpc
+package credentials
 
 import (
 	"context"
@@ -26,10 +26,8 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 )
 
@@ -38,7 +36,7 @@ const stateRecordingBalancerName = "state_recoding_balancer"
 var testBalancerBuilder = newStateRecordingBalancerBuilder()
 
 func init() {
-	balancer.Register(testBalancerBuilder)
+	Register(testBalancerBuilder)
 }
 
 // These tests use a pipeListener. This listener is similar to net.Listener
@@ -316,7 +314,7 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 	}()
 
 	rb := manual.NewBuilderWithScheme("whatever")
-	rb.InitialState(resolver.State{Addresses: []resolver.Address{
+	rb.InitialState(State{Addresses: []Address{
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	}})
@@ -410,7 +408,7 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	}()
 
 	rb := manual.NewBuilderWithScheme("whatever")
-	rb.InitialState(resolver.State{Addresses: []resolver.Address{
+	rb.InitialState(State{Addresses: []Address{
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	}})
@@ -446,12 +444,12 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 
 type stateRecordingBalancer struct {
 	notifier chan<- connectivity.State
-	balancer.Balancer
+	Balancer
 }
 
-func (b *stateRecordingBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
+func (b *stateRecordingBalancer) UpdateSubConnState(sc SubConn, s SubConnState) {
 	b.notifier <- s.ConnectivityState
-	b.Balancer.UpdateSubConnState(sc, s)
+	b.UpdateSubConnState(sc, s)
 }
 
 func (b *stateRecordingBalancer) ResetNotifier(r chan<- connectivity.State) {
@@ -459,7 +457,7 @@ func (b *stateRecordingBalancer) ResetNotifier(r chan<- connectivity.State) {
 }
 
 func (b *stateRecordingBalancer) Close() {
-	b.Balancer.Close()
+	b.Close()
 }
 
 type stateRecordingBalancerBuilder struct {
@@ -475,14 +473,14 @@ func (b *stateRecordingBalancerBuilder) Name() string {
 	return stateRecordingBalancerName
 }
 
-func (b *stateRecordingBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (b *stateRecordingBalancerBuilder) Build(cc ClientConn, opts BuildOptions) Balancer {
 	stateNotifications := make(chan connectivity.State, 10)
 	b.mu.Lock()
 	b.notifier = stateNotifications
 	b.mu.Unlock()
 	return &stateRecordingBalancer{
 		notifier: stateNotifications,
-		Balancer: balancer.Get(PickFirstBalancerName).Build(cc, opts),
+		Balancer: Get(PickFirstBalancerName).Build(cc, opts),
 	}
 }
 

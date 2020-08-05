@@ -16,8 +16,6 @@
  *
  */
 
-// Package resolver defines APIs for name resolution in gRPC.
-// All APIs in this package are experimental.
 package credentials
 
 import (

@@ -16,7 +16,7 @@
  *
  */
 
-package base
+package credentials
 
 import (
 	"errors"

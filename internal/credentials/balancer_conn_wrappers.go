@@ -16,23 +16,21 @@
  *
  */
 
-package grpc
+package credentials
 
 import (
 	"fmt"
 	"sync"
 
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/resolver"
 )
 
 // scStateUpdate contains the subConn and the new state it changed to.
 type scStateUpdate struct {
-	sc    balancer.SubConn
+	sc    SubConn
 	state connectivity.State
 	err   error
 }
@@ -42,7 +40,7 @@ type scStateUpdate struct {
 type ccBalancerWrapper struct {
 	cc         *ClientConn
 	balancerMu sync.Mutex // synchronizes calls to the balancer
-	balancer   balancer.Balancer
+	balancer   Balancer
 	scBuffer   *buffer.Unbounded
 	done       *grpcsync.Event
 
@@ -50,7 +48,7 @@ type ccBalancerWrapper struct {
 	subConns map[*acBalancerWrapper]struct{}
 }
 
-func newCCBalancerWrapper(cc *ClientConn, b balancer.Builder, bopts balancer.BuildOptions) *ccBalancerWrapper {
+func newCCBalancerWrapper(cc *ClientConn, b Builder, bopts BuildOptions) *ccBalancerWrapper {
 	ccb := &ccBalancerWrapper{
 		cc:       cc,
 		scBuffer: buffer.NewUnbounded(),
@@ -74,13 +72,13 @@ func (ccb *ccBalancerWrapper) watcher() {
 			}
 			ccb.balancerMu.Lock()
 			su := t.(*scStateUpdate)
-			ccb.balancer.UpdateSubConnState(su.sc, balancer.SubConnState{ConnectivityState: su.state, ConnectionError: su.err})
+			ccb.UpdateSubConnState(su.sc, SubConnState{ConnectivityState: su.state, ConnectionError: su.err})
 			ccb.balancerMu.Unlock()
 		case <-ccb.done.Done():
 		}
 
 		if ccb.done.HasFired() {
-			ccb.balancer.Close()
+			ccb.Close()
 			ccb.mu.Lock()
 			scs := ccb.subConns
 			ccb.subConns = nil
@@ -88,7 +86,7 @@ func (ccb *ccBalancerWrapper) watcher() {
 			for acbw := range scs {
 				ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 			}
-			ccb.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: nil})
+			ccb.UpdateState(State{ConnectivityState: connectivity.Connecting, Picker: nil})
 			return
 		}
 	}
@@ -98,7 +96,7 @@ func (ccb *ccBalancerWrapper) close() {
 	ccb.done.Fire()
 }
 
-func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State, err error) {
+func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc SubConn, s connectivity.State, err error) {
 	// When updating addresses for a SubConn, if the address in use is not in
 	// the new addresses, the old ac will be tearDown() and a new ac will be
 	// created. tearDown() generates a state change with Shutdown state, we
@@ -116,19 +114,19 @@ func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s co
 	})
 }
 
-func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnState) error {
+func (ccb *ccBalancerWrapper) updateClientConnState(ccs *ClientConnState) error {
 	ccb.balancerMu.Lock()
 	defer ccb.balancerMu.Unlock()
-	return ccb.balancer.UpdateClientConnState(*ccs)
+	return ccb.UpdateClientConnState(*ccs)
 }
 
 func (ccb *ccBalancerWrapper) resolverError(err error) {
 	ccb.balancerMu.Lock()
-	ccb.balancer.ResolverError(err)
+	ccb.ResolverError(err)
 	ccb.balancerMu.Unlock()
 }
 
-func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+func (ccb *ccBalancerWrapper) NewSubConn(addrs []Address, opts NewSubConnOptions) (SubConn, error) {
 	if len(addrs) <= 0 {
 		return nil, fmt.Errorf("grpc: cannot create SubConn with empty address list")
 	}
@@ -149,7 +147,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 	return acbw, nil
 }
 
-func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
+func (ccb *ccBalancerWrapper) RemoveSubConn(sc SubConn) {
 	acbw, ok := sc.(*acBalancerWrapper)
 	if !ok {
 		return
@@ -163,7 +161,7 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 	ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 }
 
-func (ccb *ccBalancerWrapper) UpdateState(s balancer.State) {
+func (ccb *ccBalancerWrapper) UpdateState(s State) {
 	ccb.mu.Lock()
 	defer ccb.mu.Unlock()
 	if ccb.subConns == nil {
@@ -178,7 +176,7 @@ func (ccb *ccBalancerWrapper) UpdateState(s balancer.State) {
 	ccb.cc.csMgr.updateState(s.ConnectivityState)
 }
 
-func (ccb *ccBalancerWrapper) ResolveNow(o resolver.ResolveNowOptions) {
+func (ccb *ccBalancerWrapper) ResolveNow(o ResolveNowOptions) {
 	ccb.cc.resolveNow(o)
 }
 
@@ -193,7 +191,7 @@ type acBalancerWrapper struct {
 	ac *addrConn
 }
 
-func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
+func (acbw *acBalancerWrapper) UpdateAddresses(addrs []Address) {
 	acbw.mu.Lock()
 	defer acbw.mu.Unlock()
 	if len(addrs) <= 0 {
