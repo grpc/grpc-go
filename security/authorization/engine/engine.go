@@ -17,17 +17,19 @@
 package engine
 
 import (
+	"fmt"
+
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	cel "github.com/google/cel-go/cel"
 	types "github.com/google/cel-go/common/types"
 	interpreter "github.com/google/cel-go/interpreter"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/status"
 )
+
+var logger = grpclog.Component("channelz")
 
 // AuthorizationArgs is the input of the CEL-based authorization engine.
 type AuthorizationArgs struct {
@@ -35,33 +37,33 @@ type AuthorizationArgs struct {
 	peerInfo *peer.Peer
 }
 
-// ActivationImpl is an implementation of interpreter.Activation.
+// activationImpl is an implementation of interpreter.Activation.
 // An Activation is the primary mechanism by which a caller supplies input into a CEL program.
-type ActivationImpl struct {
+type activationImpl struct {
 	dict map[string]interface{}
 }
 
 // ResolveName returns a value from the activation by qualified name, or false if the name
 // could not be found.
-func (activation ActivationImpl) ResolveName(name string) (interface{}, bool) {
+func (activation activationImpl) ResolveName(name string) (interface{}, bool) {
 	result, ok := activation.dict[name]
 	return result, ok
 }
 
 // Parent returns the parent of the current activation, may be nil.
 // If non-nil, the parent will be searched during resolve calls.
-func (activation ActivationImpl) Parent() interpreter.Activation {
-	return ActivationImpl{}
+func (activation activationImpl) Parent() interpreter.Activation {
+	return activationImpl{}
 }
 
-// Converts AuthorizationArgs into the activation for CEL.
-func (args *AuthorizationArgs) toActivation() interpreter.Activation {
+// NewActivation converts AuthorizationArgs into the activation for CEL.
+func NewActivation(args *AuthorizationArgs) interpreter.Activation {
 	// TODO(@ezou): implement the conversion logic.
-	return ActivationImpl{}
+	return activationImpl{}
 }
 
-// Decision is the enum type that represents different authorization
-// decisions a CEL-based authorization engine can return.
+// Decision represents different authorization decisions a CEL-based
+// authorization engine can return.
 type Decision int32
 
 const (
@@ -109,6 +111,9 @@ type policyEngine struct {
 
 // Creates a new policyEngine from an RBAC policy proto.
 func newPolicyEngine(rbac *pb.RBAC) *policyEngine {
+	if rbac == nil {
+		return nil
+	}
 	action := rbac.Action
 	programs := make(map[string]cel.Program)
 	for policyName, policy := range rbac.Policies {
@@ -145,14 +150,14 @@ func (engine *policyEngine) evaluate(activation interpreter.Activation) (Decisio
 				// Unsuccessful evaluation, typically the result of a series of incompatible
 				// `EnvOption` or `ProgramOption` values used in the creation of the evaluation
 				// environment or executable program.
-				grpclog.Warning("Unsuccessful evaluation encountered during AuthorizationEngine.Evaluate: %s", err.Error())
+				logger.Warning("Unsuccessful evaluation encountered during AuthorizationEngine.Evaluate: %s", err.Error())
 			}
 			// Unsuccessful evaluation or successful evaluation to an error result, i.e. missing attributes.
 			match = false
 		} else {
 			// Successful evaluation to a non-error result.
 			if !types.IsBool(out) {
-				grpclog.Warning("'Successful evaluation', but output isn't a boolean: %v", out)
+				logger.Warning("'Successful evaluation', but output isn't a boolean: %v", out)
 				match = false
 			} else {
 				match = out.Value().(bool)
@@ -174,22 +179,19 @@ func (engine *policyEngine) evaluate(activation interpreter.Activation) (Decisio
 
 // AuthorizationEngine is the struct for the CEL-based authorization engine.
 type AuthorizationEngine struct {
-	engines []*policyEngine
+	allow *policyEngine
+	deny  *policyEngine
 }
 
-// NewAuthorizationEngine builds a CEL evaluation engine from a list of Envoy RBACs.
-func NewAuthorizationEngine(rbacs []*pb.RBAC) (*AuthorizationEngine, error) {
-	if len(rbacs) < 1 || len(rbacs) > 2 {
-		return &AuthorizationEngine{}, status.Errorf(codes.InvalidArgument, "must provide 1 or 2 RBACs")
+// NewAuthorizationEngine builds a CEL evaluation engine from at most one allow and one deny Envoy RBAC.
+func NewAuthorizationEngine(allow, deny *pb.RBAC) (*AuthorizationEngine, error) {
+	if allow == nil && deny == nil {
+		return &AuthorizationEngine{}, fmt.Errorf("at least one of allow, deny must be non-nil")
 	}
-	if len(rbacs) == 2 && (rbacs[0].Action != pb.RBAC_DENY || rbacs[1].Action != pb.RBAC_ALLOW) {
-		return &AuthorizationEngine{}, status.Errorf(codes.InvalidArgument, "when providing 2 RBACs, must have 1 DENY and 1 ALLOW in that order")
+	if allow != nil && allow.Action != pb.RBAC_ALLOW || deny != nil && deny.Action != pb.RBAC_DENY {
+		return nil, fmt.Errorf("allow must have action ALLOW, deny must have action DENY")
 	}
-	var engines []*policyEngine
-	for _, rbac := range rbacs {
-		engines = append(engines, newPolicyEngine(rbac))
-	}
-	return &AuthorizationEngine{engines}, nil
+	return &AuthorizationEngine{allow: newPolicyEngine(allow), deny: newPolicyEngine(deny)}, nil
 }
 
 // Evaluate is the core function that evaluates whether an RPC is authorized.
@@ -210,21 +212,16 @@ func NewAuthorizationEngine(rbacs []*pb.RBAC) (*AuthorizationEngine, error) {
 // returns undecided. Now all the expressions in the DENY policy are false,
 // it returns the evaluation of the ALLOW policy.
 func (authorizationEngine *AuthorizationEngine) Evaluate(args *AuthorizationArgs) (AuthorizationDecision, error) {
-	activation := args.toActivation()
-	numEngines := len(authorizationEngine.engines)
-	// If CelEvaluationEngine is used correctly, the below 2 errors should theoretically never occur.
-	// However, to ease potential debugging, they are checked anyway.
-	if numEngines < 1 || numEngines > 2 {
-		return AuthorizationDecision{}, status.Errorf(codes.Internal, "each CEL-based authorization engine should have 1 or 2 policy engines; instead, there are %d in the CEL-based authorization engine provided", numEngines)
+	activation := NewActivation(args)
+	decision := DecisionAllow
+	var policyNames []string
+	// Evaluate the deny engine, if it exists.
+	if authorizationEngine.deny != nil {
+		decision, policyNames = authorizationEngine.deny.evaluate(activation)
 	}
-	if len(authorizationEngine.engines) == 2 && (authorizationEngine.engines[0].action != pb.RBAC_DENY || authorizationEngine.engines[1].action != pb.RBAC_ALLOW) {
-		return AuthorizationDecision{}, status.Errorf(codes.Internal, "if the CEL-based authorization engine has 2 policy engines, should be 1 DENY and 1 ALLOW in that order; instead, have %v, %v", authorizationEngine.engines[0].action, authorizationEngine.engines[1].action)
-	}
-	// Evaluate the first engine.
-	decision, policyNames := authorizationEngine.engines[0].evaluate(activation)
-	// Evaluate the second engine, if there is one and if the first engine is unmatched.
-	if len(authorizationEngine.engines) == 2 && decision == DecisionAllow {
-		decision, policyNames = authorizationEngine.engines[1].evaluate(activation)
+	// Evaluate the allow engine, if it exists and if the deny engine doesn't exist or is unmatched.
+	if authorizationEngine.allow != nil && decision == DecisionAllow {
+		decision, policyNames = authorizationEngine.allow.evaluate(activation)
 	}
 	return AuthorizationDecision{decision, policyNames}, nil
 }

@@ -19,7 +19,6 @@ package engine
 import (
 	"reflect"
 	"sort"
-	"strings"
 	"testing"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
@@ -95,44 +94,50 @@ var (
 
 func TestNewAuthorizationEngine(t *testing.T) {
 	tests := map[string]struct {
-		input   []*pb.RBAC
+		allow   *pb.RBAC
+		deny    *pb.RBAC
 		wantErr string
 		errStr  string
 	}{
 		"too few rbacs": {
-			input:   []*pb.RBAC{},
-			wantErr: "code = InvalidArgument desc = must provide 1 or 2 RBACs",
-			errStr:  "Expected wrong number of RBACs error for 0 RBACs",
+			allow:   nil,
+			deny:    nil,
+			wantErr: "at least one of allow, deny must be non-nil",
+			errStr:  "Expected error: at least one of allow, deny must be non-nil",
 		},
-		"one rbac": {
-			input:   []*pb.RBAC{{}},
+		"one rbac allow": {
+			allow:   &pb.RBAC{Action: pb.RBAC_ALLOW},
+			deny:    nil,
 			wantErr: "",
-			errStr:  "",
+			errStr:  "Expected 1 ALLOW RBAC to be successful",
+		},
+		"one rbac deny": {
+			allow:   nil,
+			deny:    &pb.RBAC{Action: pb.RBAC_DENY},
+			wantErr: "",
+			errStr:  "Expected 1 DENY RBAC to be successful",
 		},
 		"two rbacs": {
-			input:   []*pb.RBAC{{}, {}},
+			allow:   &pb.RBAC{Action: pb.RBAC_ALLOW},
+			deny:    &pb.RBAC{Action: pb.RBAC_DENY},
 			wantErr: "",
-			errStr:  "",
-		},
-		"too many rbacs": {
-			input:   []*pb.RBAC{{}, {}, {}},
-			wantErr: "code = InvalidArgument desc = must provide 1 or 2 RBACs",
-			errStr:  "Expected wrong number of RBACs error for 3 RBACs",
+			errStr:  "Expected 2 RBACs (DENY + ALLOW) to be successful",
 		},
 		"wrong rbac actions": {
-			input:   []*pb.RBAC{{Action: pb.RBAC_ALLOW}, {Action: pb.RBAC_DENY}},
-			wantErr: "code = InvalidArgument desc = when providing 2 RBACs, must have 1 DENY and 1 ALLOW in that order",
-			errStr:  "Expected wrong RBAC actions error for ALLOW followed by DENY",
+			allow:   &pb.RBAC{Action: pb.RBAC_DENY},
+			deny:    nil,
+			wantErr: "allow must have action ALLOW, deny must have action DENY",
+			errStr:  "Expected error: allow must have action ALLOW, deny must have action DENY",
 		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, gotErr := NewAuthorizationEngine(tc.input)
+			_, gotErr := NewAuthorizationEngine(tc.allow, tc.deny)
 			if tc.wantErr == "" && gotErr == nil {
 				return
 			}
-			if gotErr == nil || !strings.HasSuffix(gotErr.Error(), tc.wantErr) {
+			if gotErr == nil || gotErr.Error() != tc.wantErr {
 				t.Errorf(tc.errStr)
 			}
 		})
@@ -227,38 +232,26 @@ func TestAuthorizationEngineEvaluate(t *testing.T) {
 		wantAuthDecision *AuthorizationDecision
 		wantErr          error
 	}{
-		"no engines": {
-			engine:           &AuthorizationEngine{engines: []*policyEngine{}},
-			authArgs:         &AuthorizationArgs{},
-			wantAuthDecision: &AuthorizationDecision{},
-			wantErr:          status.Errorf(codes.Internal, "each CEL-based authorization engine should have 1 or 2 policy engines; instead, there are %d in the CEL-based authorization engine provided", 0),
-		},
-		"wrong engine order": {
-			engine:           &AuthorizationEngine{engines: []*policyEngine{allowMatchEngine, denyFailEngine}},
-			authArgs:         &AuthorizationArgs{},
-			wantAuthDecision: &AuthorizationDecision{},
-			wantErr:          status.Errorf(codes.Internal, "if the CEL-based authorization engine has 2 policy engines, should be 1 DENY and 1 ALLOW in that order; instead, have %v, %v", pb.RBAC_ALLOW, pb.RBAC_DENY),
-		},
 		"allow match": {
-			engine:           &AuthorizationEngine{engines: []*policyEngine{allowMatchEngine}},
+			engine:           &AuthorizationEngine{allow: allowMatchEngine},
 			authArgs:         &AuthorizationArgs{},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionAllow, policyNames: []string{"allow match policy2"}},
 			wantErr:          nil,
 		},
 		"deny fail": {
-			engine:           &AuthorizationEngine{engines: []*policyEngine{denyFailEngine}},
+			engine:           &AuthorizationEngine{deny: denyFailEngine},
 			authArgs:         &AuthorizationArgs{},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionAllow, policyNames: []string{}},
 			wantErr:          nil,
 		},
 		"first engine unknown": {
-			engine:           &AuthorizationEngine{engines: []*policyEngine{denyUnknownEngine, allowMatchEngine}},
+			engine:           &AuthorizationEngine{allow: allowMatchEngine, deny: denyUnknownEngine},
 			authArgs:         &AuthorizationArgs{},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionUnknown, policyNames: []string{"deny unknown policy2", "deny unknown policy3"}},
 			wantErr:          nil,
 		},
 		"second engine match": {
-			engine:           &AuthorizationEngine{engines: []*policyEngine{denyFailEngine, allowMatchEngine}},
+			engine:           &AuthorizationEngine{allow: allowMatchEngine, deny: denyFailEngine},
 			authArgs:         &AuthorizationArgs{},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionAllow, policyNames: []string{"allow match policy2"}},
 			wantErr:          nil,
