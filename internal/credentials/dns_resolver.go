@@ -16,21 +16,20 @@
  *
  */
 
-// Package dns implements a dns resolver to be installed as the default resolver
+// Package credentials implements a dns resolver to be installed as the default resolver
 // in grpc.
 //
 // Deprecated: this package is imported by grpc and should not need to be
 // imported directly by users.
-package dns
+package credentials
 
 import (
 	"google.golang.org/grpc/internal/resolver/dns"
-	"google.golang.org/grpc/resolver"
 )
 
 // NewBuilder creates a dnsBuilder which is used to factory DNS resolvers.
 //
-// Deprecated: import grpc and use resolver.Get("dns") instead.
-func NewBuilder() resolver.Builder {
+// Deprecated: import grpc and use Get("dns") instead.
+func NewBuilder() Builder {
 	return dns.NewBuilder()
 }

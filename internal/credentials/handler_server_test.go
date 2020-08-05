@@ -16,7 +16,7 @@
  *
  */
 
-package transport
+package credentials
 
 import (
 	"context"

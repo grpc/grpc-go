@@ -24,7 +24,6 @@ import (
 
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/resolver"
 )
 
 var logger = grpclog.Component("balancer")
@@ -40,7 +39,7 @@ func (bb *baseBuilder) Build(cc ClientConn, opt BuildOptions) Balancer {
 		cc:            cc,
 		pickerBuilder: bb.pickerBuilder,
 
-		subConns: make(map[resolver.Address]SubConn),
+		subConns: make(map[Address]SubConn),
 		scStates: make(map[SubConn]connectivity.State),
 		csEvltr:  &ConnectivityStateEvaluator{},
 		config:   bb.config,
@@ -63,7 +62,7 @@ type baseBalancer struct {
 	csEvltr *ConnectivityStateEvaluator
 	state   connectivity.State
 
-	subConns map[resolver.Address]SubConn
+	subConns map[Address]SubConn
 	scStates map[SubConn]connectivity.State
 	picker   Picker
 	config   Config
@@ -98,12 +97,12 @@ func (b *baseBalancer) UpdateClientConnState(s ClientConnState) error {
 	// Successful resolution; clear resolver error and ensure we return nil.
 	b.resolverErr = nil
 	// addrsSet is the set converted from addrs, it's used for quick lookup of an address.
-	addrsSet := make(map[resolver.Address]struct{})
+	addrsSet := make(map[Address]struct{})
 	for _, a := range s.ResolverState.Addresses {
 		addrsSet[a] = struct{}{}
 		if _, ok := b.subConns[a]; !ok {
 			// a is a new address (not existing in b.subConns).
-			sc, err := b.cc.NewSubConn([]resolver.Address{a}, NewSubConnOptions{HealthCheckEnabled: b.config.HealthCheck})
+			sc, err := b.cc.NewSubConn([]Address{a}, NewSubConnOptions{HealthCheckEnabled: b.config.HealthCheck})
 			if err != nil {
 				logger.Warningf("base.baseBalancer: failed to create new SubConn: %v", err)
 				continue
@@ -114,7 +113,7 @@ func (b *baseBalancer) UpdateClientConnState(s ClientConnState) error {
 		}
 	}
 	for a, sc := range b.subConns {
-		// a was removed by resolver.
+		// a was removed by
 		if _, ok := addrsSet[a]; !ok {
 			b.cc.RemoveSubConn(sc)
 			delete(b.subConns, a)

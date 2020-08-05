@@ -16,7 +16,7 @@
  *
  */
 
-package transport
+package credentials
 
 import (
 	"bytes"
@@ -37,12 +37,10 @@ import (
 	"google.golang.org/grpc/internal/grpcutil"
 
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
@@ -53,7 +51,7 @@ var (
 	// the stream's state.
 	ErrIllegalHeaderWrite = errors.New("transport: the stream is done or WriteHeader was already called")
 	// ErrHeaderListSizeLimitViolation indicates that the header list size is larger
-	// than the limit set by peer.
+	// than the limit set by
 	ErrHeaderListSizeLimitViolation = errors.New("transport: trying to send header list size larger than the limit set by peer")
 )
 
@@ -72,8 +70,8 @@ type http2Server struct {
 	writerDone  chan struct{} // sync point to enable testing.
 	remoteAddr  net.Addr
 	localAddr   net.Addr
-	maxStreamID uint32               // max stream ID ever seen
-	authInfo    credentials.AuthInfo // auth info about the connection
+	maxStreamID uint32   // max stream ID ever seen
+	authInfo    AuthInfo // auth info about the connection
 	inTapHandle tap.ServerInHandle
 	framer      *framer
 	// The max number of concurrent streams.
@@ -337,14 +335,14 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	} else {
 		s.ctx, s.cancel = context.WithCancel(t.ctx)
 	}
-	pr := &peer.Peer{
+	pr := &Peer{
 		Addr: t.remoteAddr,
 	}
 	// Attach Auth info if there is any.
 	if t.authInfo != nil {
 		pr.AuthInfo = t.authInfo
 	}
-	s.ctx = peer.NewContext(s.ctx, pr)
+	s.ctx = NewContext(s.ctx, pr)
 	// Attach the received metadata to the context.
 	if len(state.data.mdata) > 0 {
 		s.ctx = metadata.NewIncomingContext(s.ctx, state.data.mdata)
@@ -1221,7 +1219,7 @@ func (t *http2Server) ChannelzMetric() *channelz.SocketInternalMetric {
 		RemoteAddr:                       t.remoteAddr,
 		// RemoteName :
 	}
-	if au, ok := t.authInfo.(credentials.ChannelzSecurityInfo); ok {
+	if au, ok := t.authInfo.(ChannelzSecurityInfo); ok {
 		s.Security = au.GetSecurityValue()
 	}
 	s.RemoteFlowControlWindow = t.getOutFlowWindow()

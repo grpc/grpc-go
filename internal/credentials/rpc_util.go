@@ -37,7 +37,6 @@ import (
 	"google.golang.org/grpc/encoding/proto"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
@@ -227,20 +226,20 @@ func (o TrailerCallOption) after(c *callInfo, attempt *csAttempt) {
 
 // Peer returns a CallOption that retrieves peer information for a unary RPC.
 // The peer field will be populated *after* the RPC completes.
-func Peer(p *peer.Peer) CallOption {
+func Peer(p *Peer) CallOption {
 	return PeerCallOption{PeerAddr: p}
 }
 
 // PeerCallOption is a CallOption for collecting the identity of the remote
-// peer. The peer field will be populated *after* the RPC completes.
+//  The peer field will be populated *after* the RPC completes.
 // This is an EXPERIMENTAL API.
 type PeerCallOption struct {
-	PeerAddr *peer.Peer
+	PeerAddr *Peer
 }
 
 func (o PeerCallOption) before(c *callInfo) error { return nil }
 func (o PeerCallOption) after(c *callInfo, attempt *csAttempt) {
-	if x, ok := peer.FromContext(attempt.s.Context()); ok {
+	if x, ok := FromContext(attempt.s.Context()); ok {
 		*o.PeerAddr = *x
 	}
 }

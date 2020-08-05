@@ -16,17 +16,15 @@
  *
  */
 
-// Package passthrough implements a pass-through resolver. It sends the target
+// Package credentials implements a pass-through  It sends the target
 // name without scheme back to gRPC as resolved address.
-package passthrough
-
-import "google.golang.org/grpc/resolver"
+package credentials
 
 const scheme = "passthrough"
 
 type passthroughBuilder struct{}
 
-func (*passthroughBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+func (*passthroughBuilder) Build(target Target, cc ClientConn, opts BuildOptions) (Resolver, error) {
 	r := &passthroughResolver{
 		target: target,
 		cc:     cc,
@@ -40,18 +38,18 @@ func (*passthroughBuilder) Scheme() string {
 }
 
 type passthroughResolver struct {
-	target resolver.Target
-	cc     resolver.ClientConn
+	target Target
+	cc     ClientConn
 }
 
 func (r *passthroughResolver) start() {
-	r.cc.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: r.target.Endpoint}}})
+	r.cc.UpdateState(State{Addresses: []Address{{Addr: r.target.Endpoint}}})
 }
 
-func (*passthroughResolver) ResolveNow(o resolver.ResolveNowOptions) {}
+func (*passthroughResolver) ResolveNow(o ResolveNowOptions) {}
 
 func (*passthroughResolver) Close() {}
 
 func init() {
-	resolver.Register(&passthroughBuilder{})
+	Register(&passthroughBuilder{})
 }

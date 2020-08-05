@@ -40,7 +40,6 @@ import (
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
@@ -403,8 +402,8 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	return s
 }
 
-func (t *http2Client) getPeer() *peer.Peer {
-	return &peer.Peer{
+func (t *http2Client) getPeer() *Peer {
+	return &Peer{
 		Addr:     t.remoteAddr,
 		AuthInfo: t.authInfo,
 	}
@@ -578,7 +577,7 @@ func (p PerformedIOError) Error() string {
 // NewStream creates a stream and registers it into the transport as "active"
 // streams.
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Stream, err error) {
-	ctx = peer.NewContext(ctx, t.getPeer())
+	ctx = NewContext(ctx, t.getPeer())
 	headerFields, err := t.createHeaderFields(ctx, callHdr)
 	if err != nil {
 		// We may have performed I/O in the per-RPC creds callback, so do not

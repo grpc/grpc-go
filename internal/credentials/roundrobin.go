@@ -19,13 +19,11 @@
 // Package roundrobin defines a roundrobin balancer. Roundrobin balancer is
 // installed as one of the default balancers in gRPC, users don't need to
 // explicitly install this balancer.
-package roundrobin
+package credentials
 
 import (
 	"sync"
 
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
 )
@@ -36,22 +34,22 @@ const Name = "round_robin"
 var logger = grpclog.Component("roundrobin")
 
 // newBuilder creates a new roundrobin balancer builder.
-func newBuilder() balancer.Builder {
-	return base.NewBalancerBuilder(Name, &rrPickerBuilder{}, base.Config{HealthCheck: true})
+func newBuilder() Builder {
+	return NewBalancerBuilder(Name, &rrPickerBuilder{}, Config{HealthCheck: true})
 }
 
 func init() {
-	balancer.Register(newBuilder())
+	Register(newBuilder())
 }
 
 type rrPickerBuilder struct{}
 
-func (*rrPickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
+func (*rrPickerBuilder) Build(info PickerBuildInfo) Picker {
 	logger.Infof("roundrobinPicker: newPicker called with info: %v", info)
 	if len(info.ReadySCs) == 0 {
-		return base.NewErrPicker(balancer.ErrNoSubConnAvailable)
+		return NewErrPicker(ErrNoSubConnAvailable)
 	}
-	var scs []balancer.SubConn
+	var scs []SubConn
 	for sc := range info.ReadySCs {
 		scs = append(scs, sc)
 	}
@@ -68,16 +66,16 @@ type rrPicker struct {
 	// subConns is the snapshot of the roundrobin balancer when this picker was
 	// created. The slice is immutable. Each Get() will do a round robin
 	// selection from it and return the selected SubConn.
-	subConns []balancer.SubConn
+	subConns []SubConn
 
 	mu   sync.Mutex
 	next int
 }
 
-func (p *rrPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
+func (p *rrPicker) Pick(PickInfo) (PickResult, error) {
 	p.mu.Lock()
 	sc := p.subConns[p.next]
 	p.next = (p.next + 1) % len(p.subConns)
 	p.mu.Unlock()
-	return balancer.PickResult{SubConn: sc}, nil
+	return PickResult{SubConn: sc}, nil
 }

@@ -16,36 +16,32 @@
  *
  */
 
-// Package state declares grpclb types to be set by resolvers wishing to pass
-// information to grpclb via resolver.State Attributes.
-package state
-
-import (
-	"google.golang.org/grpc/resolver"
-)
+// Package credentials declares grpclb types to be set by resolvers wishing to pass
+// information to grpclb via State Attributes.
+package credentials
 
 // keyType is the key to use for storing State in Attributes.
 type keyType string
 
 const key = keyType("grpc.grpclb.state")
 
-// State contains gRPCLB-relevant data passed from the name resolver.
+// State contains gRPCLB-relevant data passed from the name
 type State struct {
 	// BalancerAddresses contains the remote load balancer address(es).  If
 	// set, overrides any resolver-provided addresses with Type of GRPCLB.
-	BalancerAddresses []resolver.Address
+	BalancerAddresses []Address
 }
 
 // Set returns a copy of the provided state with attributes containing s.  s's
 // data should not be mutated after calling Set.
-func Set(state resolver.State, s *State) resolver.State {
+func Set(state State, s *State) State {
 	state.Attributes = state.Attributes.WithValues(key, s)
 	return state
 }
 
-// Get returns the grpclb State in the resolver.State, or nil if not present.
+// Get returns the grpclb State in the State, or nil if not present.
 // The returned data should not be mutated.
-func Get(state resolver.State) *State {
+func Get(state State) *State {
 	s, _ := state.Attributes.Value(key).(*State)
 	return s
 }

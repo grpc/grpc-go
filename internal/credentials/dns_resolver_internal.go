@@ -18,7 +18,7 @@
 
 // Package dns implements a dns resolver to be installed as the default resolver
 // in grpc.
-package dns
+package credentials
 
 import (
 	"context"
@@ -32,11 +32,9 @@ import (
 	"sync"
 	"time"
 
-	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcrand"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -47,7 +45,7 @@ var EnableSRVLookups = false
 var logger = grpclog.Component("dns")
 
 func init() {
-	resolver.Register(NewBuilder())
+	Register(NewBuilder())
 }
 
 const (
@@ -100,14 +98,14 @@ var customAuthorityResolver = func(authority string) (netResolver, error) {
 }
 
 // NewBuilder creates a dnsBuilder which is used to factory DNS resolvers.
-func NewBuilder() resolver.Builder {
+func NewBuilder() Builder {
 	return &dnsBuilder{}
 }
 
 type dnsBuilder struct{}
 
 // Build creates and starts a DNS resolver that watches the name resolution of the target.
-func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+func (b *dnsBuilder) Build(target Target, cc ClientConn, opts BuildOptions) (Resolver, error) {
 	host, port, err := parseTarget(target.Endpoint, defaultPort)
 	if err != nil {
 		return nil, err
@@ -115,8 +113,8 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 
 	// IP address.
 	if ipAddr, ok := formatIP(host); ok {
-		addr := []resolver.Address{{Addr: ipAddr + ":" + port}}
-		cc.UpdateState(resolver.State{Addresses: addr})
+		addr := []Address{{Addr: ipAddr + ":" + port}}
+		cc.UpdateState(State{Addresses: addr})
 		return deadResolver{}, nil
 	}
 
@@ -143,7 +141,7 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 
 	d.wg.Add(1)
 	go d.watcher()
-	d.ResolveNow(resolver.ResolveNowOptions{})
+	d.ResolveNow(ResolveNowOptions{})
 	return d, nil
 }
 
@@ -161,7 +159,7 @@ type netResolver interface {
 // deadResolver is a resolver that does nothing.
 type deadResolver struct{}
 
-func (deadResolver) ResolveNow(resolver.ResolveNowOptions) {}
+func (deadResolver) ResolveNow(ResolveNowOptions) {}
 
 func (deadResolver) Close() {}
 
@@ -172,7 +170,7 @@ type dnsResolver struct {
 	resolver netResolver
 	ctx      context.Context
 	cancel   context.CancelFunc
-	cc       resolver.ClientConn
+	cc       ClientConn
 	// rn channel is used by ResolveNow() to force an immediate resolution of the target.
 	rn chan struct{}
 	// wg is used to enforce Close() to return after the watcher() goroutine has finished.
@@ -186,14 +184,14 @@ type dnsResolver struct {
 }
 
 // ResolveNow invoke an immediate resolution of the target that this dnsResolver watches.
-func (d *dnsResolver) ResolveNow(resolver.ResolveNowOptions) {
+func (d *dnsResolver) ResolveNow(ResolveNowOptions) {
 	select {
 	case d.rn <- struct{}{}:
 	default:
 	}
 }
 
-// Close closes the dnsResolver.
+// Close closes the dns
 func (d *dnsResolver) Close() {
 	d.cancel()
 	d.wg.Wait()
@@ -227,18 +225,18 @@ func (d *dnsResolver) watcher() {
 	}
 }
 
-func (d *dnsResolver) lookupSRV() ([]resolver.Address, error) {
+func (d *dnsResolver) lookupSRV() ([]Address, error) {
 	if !EnableSRVLookups {
 		return nil, nil
 	}
-	var newAddrs []resolver.Address
-	_, srvs, err := d.resolver.LookupSRV(d.ctx, "grpclb", "tcp", d.host)
+	var newAddrs []Address
+	_, srvs, err := d.LookupSRV(d.ctx, "grpclb", "tcp", d.host)
 	if err != nil {
 		err = handleDNSError(err, "SRV") // may become nil
 		return nil, err
 	}
 	for _, s := range srvs {
-		lbAddrs, err := d.resolver.LookupHost(d.ctx, s.Target)
+		lbAddrs, err := d.LookupHost(d.ctx, s.Target)
 		if err != nil {
 			err = handleDNSError(err, "A") // may become nil
 			if err == nil {
@@ -254,7 +252,7 @@ func (d *dnsResolver) lookupSRV() ([]resolver.Address, error) {
 				return nil, fmt.Errorf("dns: error parsing A record IP address %v", a)
 			}
 			addr := ip + ":" + strconv.Itoa(int(s.Port))
-			newAddrs = append(newAddrs, resolver.Address{Addr: addr, ServerName: s.Target})
+			newAddrs = append(newAddrs, Address{Addr: addr, ServerName: s.Target})
 		}
 	}
 	return newAddrs, nil
@@ -280,7 +278,7 @@ func handleDNSError(err error, lookupType string) error {
 }
 
 func (d *dnsResolver) lookupTXT() *serviceconfig.ParseResult {
-	ss, err := d.resolver.LookupTXT(d.ctx, txtPrefix+d.host)
+	ss, err := d.LookupTXT(d.ctx, txtPrefix+d.host)
 	if err != nil {
 		if envconfig.TXTErrIgnore {
 			return nil
@@ -305,9 +303,9 @@ func (d *dnsResolver) lookupTXT() *serviceconfig.ParseResult {
 	return d.cc.ParseServiceConfig(sc)
 }
 
-func (d *dnsResolver) lookupHost() ([]resolver.Address, error) {
-	var newAddrs []resolver.Address
-	addrs, err := d.resolver.LookupHost(d.ctx, d.host)
+func (d *dnsResolver) lookupHost() ([]Address, error) {
+	var newAddrs []Address
+	addrs, err := d.LookupHost(d.ctx, d.host)
 	if err != nil {
 		err = handleDNSError(err, "A")
 		return nil, err
@@ -318,21 +316,21 @@ func (d *dnsResolver) lookupHost() ([]resolver.Address, error) {
 			return nil, fmt.Errorf("dns: error parsing A record IP address %v", a)
 		}
 		addr := ip + ":" + d.port
-		newAddrs = append(newAddrs, resolver.Address{Addr: addr})
+		newAddrs = append(newAddrs, Address{Addr: addr})
 	}
 	return newAddrs, nil
 }
 
-func (d *dnsResolver) lookup() (*resolver.State, error) {
+func (d *dnsResolver) lookup() (*State, error) {
 	srv, srvErr := d.lookupSRV()
 	addrs, hostErr := d.lookupHost()
 	if hostErr != nil && (srvErr != nil || len(srv) == 0) {
 		return nil, hostErr
 	}
 
-	state := resolver.State{Addresses: addrs}
+	state := State{Addresses: addrs}
 	if len(srv) > 0 {
-		state = grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: srv})
+		state = Set(state, &State{BalancerAddresses: srv})
 	}
 	if !d.disableServiceConfig {
 		state.ServiceConfig = d.lookupTXT()

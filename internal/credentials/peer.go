@@ -16,15 +16,13 @@
  *
  */
 
-// Package peer defines various peer information associated with RPCs and
+// Package credentials defines various peer information associated with RPCs and
 // corresponding utils.
-package peer
+package credentials
 
 import (
 	"context"
 	"net"
-
-	"google.golang.org/grpc/credentials"
 )
 
 // Peer contains the information of the peer for an RPC, such as the address
@@ -34,7 +32,7 @@ type Peer struct {
 	Addr net.Addr
 	// AuthInfo is the authentication information of the transport.
 	// It is nil if there is no transport security being used.
-	AuthInfo credentials.AuthInfo
+	AuthInfo AuthInfo
 }
 
 type peerKey struct{}

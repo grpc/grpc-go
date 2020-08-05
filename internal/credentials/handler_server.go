@@ -21,7 +21,7 @@
 // http.Handler interface), rather than speaking low-level HTTP/2
 // frames itself. It is the implementation of *grpc.Server.ServeHTTP.
 
-package transport
+package credentials
 
 import (
 	"bytes"
@@ -38,10 +38,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
@@ -362,14 +360,14 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		recvCompress:   req.Header.Get("grpc-encoding"),
 		contentSubtype: ht.contentSubtype,
 	}
-	pr := &peer.Peer{
+	pr := &Peer{
 		Addr: ht.RemoteAddr(),
 	}
 	if req.TLS != nil {
-		pr.AuthInfo = credentials.TLSInfo{State: *req.TLS, CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}
+		pr.AuthInfo = TLSInfo{State: *req.TLS, CommonAuthInfo: CommonAuthInfo{SecurityLevel: PrivacyAndIntegrity}}
 	}
 	ctx = metadata.NewIncomingContext(ctx, ht.headerMD)
-	s.ctx = peer.NewContext(ctx, pr)
+	s.ctx = NewContext(ctx, pr)
 	if ht.stats != nil {
 		s.ctx = ht.stats.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
 		inHeader := &stats.InHeader{

@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -98,7 +97,7 @@ type SubConn interface {
 	// a new connection will be created.
 	//
 	// This will trigger a state transition for the SubConn.
-	UpdateAddresses([]resolver.Address)
+	UpdateAddresses([]Address)
 	// Connect starts the connecting for this SubConn.
 	Connect()
 }
@@ -109,7 +108,7 @@ type NewSubConnOptions struct {
 	// SubConn. If it's nil, the original creds from grpc DialOptions will be
 	// used.
 	//
-	// Deprecated: Use the Attributes field in resolver.Address to pass
+	// Deprecated: Use the Attributes field in Address to pass
 	// arbitrary data to the credential handshaker.
 	CredsBundle Bundle
 	// HealthCheckEnabled indicates whether health check service should be
@@ -136,7 +135,7 @@ type ClientConn interface {
 	// NewSubConn is called by balancer to create a new SubConn.
 	// It doesn't block and wait for the connections to be established.
 	// Behaviors of the SubConn can be controlled by options.
-	NewSubConn([]resolver.Address, NewSubConnOptions) (SubConn, error)
+	NewSubConn([]Address, NewSubConnOptions) (SubConn, error)
 	// RemoveSubConn removes the SubConn from ClientConn.
 	// The SubConn will be shutdown.
 	RemoveSubConn(SubConn)
@@ -149,7 +148,7 @@ type ClientConn interface {
 	UpdateState(State)
 
 	// ResolveNow is called by balancer to notify gRPC to do a name resolving.
-	ResolveNow(resolver.ResolveNowOptions)
+	ResolveNow(ResolveNowOptions)
 
 	// Target returns the dial target for this ClientConn.
 	//
@@ -171,10 +170,10 @@ type BuildOptions struct {
 	Dialer func(context.Context, string) (net.Conn, error)
 	// ChannelzParentID is the entity parent's channelz unique identification number.
 	ChannelzParentID int64
-	// Target contains the parsed address info of the dial target. It is the same resolver.Target as
-	// passed to the resolver.
-	// See the documentation for the resolver.Target type for details about what it contains.
-	Target resolver.Target
+	// Target contains the parsed address info of the dial target. It is the same Target as
+	// passed to the
+	// See the documentation for the Target type for details about what it contains.
+	Target Target
 }
 
 // Builder creates a balancer.
@@ -321,7 +320,7 @@ type SubConnState struct {
 // ClientConnState describes the state of a ClientConn relevant to the
 // balancer.
 type ClientConnState struct {
-	ResolverState resolver.State
+	ResolverState State
 	// The parsed load balancing configuration returned by the builder's
 	// ParseConfig method, if implemented.
 	BalancerConfig serviceconfig.LoadBalancingConfig
