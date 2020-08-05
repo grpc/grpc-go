@@ -18,6 +18,8 @@ package engine
 
 import (
 	"fmt"
+	"net"
+	"strconv"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	cel "github.com/google/cel-go/cel"
@@ -52,8 +54,9 @@ func (activation activationImpl) Parent() interpreter.Activation {
 
 // AuthorizationArgs is the input of the CEL-based authorization engine.
 type AuthorizationArgs struct {
-	md       metadata.MD
-	peerInfo *peer.Peer
+	md         metadata.MD
+	peerInfo   *peer.Peer
+	fullMethod string
 }
 
 // NewActivation converts AuthorizationArgs into the activation for CEL.
@@ -63,8 +66,10 @@ func NewActivation(args *AuthorizationArgs) interpreter.Activation {
 }
 
 func (args AuthorizationArgs) getRequestURLPath() (string, error) {
-	// TODO(@zhenlian): fill out attribute extraction for request.url_path
-	return "", fmt.Errorf("authorization args doesn't have a valid request url path")
+	if args.fullMethod == "" {
+		return "", fmt.Errorf("authorization args doesn't have a valid request url path")
+	}
+	return args.fullMethod, nil
 }
 
 func (args AuthorizationArgs) getRequestHost() (string, error) {
@@ -84,13 +89,27 @@ func (args AuthorizationArgs) getRequestHeaders() (map[string]string, error) {
 }
 
 func (args AuthorizationArgs) getSourceAddress() (string, error) {
-	// TODO(@zhenlian): fill out attribute extraction for source.address
-	return "", fmt.Errorf("authorization args doesn't have a valid source address")
+	if args.peerInfo == nil {
+		return "", fmt.Errorf("authorization args doesn't have a valid source address")
+	}
+	addr := args.peerInfo.Addr.String()
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", err
+	}
+	return host, nil
 }
 
 func (args AuthorizationArgs) getSourcePort() (int, error) {
-	// TODO(@zhenlian): fill out attribute extraction for source.port
-	return 0, fmt.Errorf("authorization args doesn't have a valid source port")
+	if args.peerInfo == nil {
+		return 0, fmt.Errorf("authorization args doesn't have a valid source port")
+	}
+	addr := args.peerInfo.Addr.String()
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(port)
 }
 
 func (args AuthorizationArgs) getDestinationAddress() (string, error) {
