@@ -16,14 +16,10 @@
  *
  */
 
-// Package grpcutil provides a bunch of utility functions to be used across the
-// gRPC codebase.
-package grpcutil
+package credentials
 
 import (
 	"strings"
-
-	"google.golang.org/grpc/resolver"
 )
 
 // split2 returns the values from strings.SplitN(s, sep, 2).
@@ -36,20 +32,20 @@ func split2(s, sep string) (string, string, bool) {
 	return spl[0], spl[1], true
 }
 
-// ParseTarget splits target into a resolver.Target struct containing scheme,
+// ParseTarget splits target into a Target struct containing scheme,
 // authority and endpoint.
 //
 // If target is not a valid scheme://authority/endpoint, it returns {Endpoint:
 // target}.
-func ParseTarget(target string) (ret resolver.Target) {
+func ParseTarget(target string) (ret Target) {
 	var ok bool
 	ret.Scheme, ret.Endpoint, ok = split2(target, "://")
 	if !ok {
-		return resolver.Target{Endpoint: target}
+		return Target{Endpoint: target}
 	}
 	ret.Authority, ret.Endpoint, ok = split2(ret.Endpoint, "/")
 	if !ok {
-		return resolver.Target{Endpoint: target}
+		return Target{Endpoint: target}
 	}
 	return ret
 }

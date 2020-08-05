@@ -16,7 +16,7 @@
  *
  */
 
-package grpc
+package credentials
 
 import (
 	"context"
@@ -25,14 +25,11 @@ import (
 	"time"
 
 	"google.golang.org/grpc/backoff"
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/stats"
 )
 
@@ -57,7 +54,7 @@ type dialOptions struct {
 	copts           transport.ConnectOptions
 	callOptions     []CallOption
 	// This is used by WithBalancerName dial option.
-	balancerBuilder             balancer.Builder
+	balancerBuilder             Builder
 	channelzParentID            int64
 	disableServiceConfig        bool
 	disableRetry                bool
@@ -70,7 +67,7 @@ type dialOptions struct {
 	// resolver.ResolveNow(). The user will have no need to configure this, but
 	// we need to be able to configure this in tests.
 	resolveNowBackoff func(int) time.Duration
-	resolvers         []resolver.Builder
+	resolvers         []Builder
 	withProxy         bool
 }
 
@@ -208,7 +205,7 @@ func WithDecompressor(dc Decompressor) DialOption {
 // Deprecated: use WithDefaultServiceConfig and WithDisableServiceConfig
 // instead.  Will be removed in a future 1.x release.
 func WithBalancerName(balancerName string) DialOption {
-	builder := balancer.Get(balancerName)
+	builder := Get(balancerName)
 	if builder == nil {
 		panic(fmt.Sprintf("grpc.WithBalancerName: no balancer is registered for name %v", balancerName))
 	}
@@ -320,7 +317,7 @@ func WithNoProxy() DialOption {
 // WithTransportCredentials returns a DialOption which configures a connection
 // level security credentials (e.g., TLS/SSL). This should not be used together
 // with WithCredentialsBundle.
-func WithTransportCredentials(creds credentials.TransportCredentials) DialOption {
+func WithTransportCredentials(creds TransportCredentials) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.TransportCredentials = creds
 	})
@@ -328,7 +325,7 @@ func WithTransportCredentials(creds credentials.TransportCredentials) DialOption
 
 // WithPerRPCCredentials returns a DialOption which sets credentials and places
 // auth state on each outbound RPC.
-func WithPerRPCCredentials(creds credentials.PerRPCCredentials) DialOption {
+func WithPerRPCCredentials(creds PerRPCCredentials) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.PerRPCCredentials = append(o.copts.PerRPCCredentials, creds)
 	})
@@ -339,7 +336,7 @@ func WithPerRPCCredentials(creds credentials.PerRPCCredentials) DialOption {
 // WithTransportCredentials.
 //
 // This API is experimental.
-func WithCredentialsBundle(b credentials.Bundle) DialOption {
+func WithCredentialsBundle(b Bundle) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.CredsBundle = b
 	})
@@ -598,7 +595,7 @@ func withResolveNowBackoff(f func(int) time.Duration) DialOption {
 // current Dial only, and will take precedence over the global registry.
 //
 // This API is EXPERIMENTAL.
-func WithResolvers(rs ...resolver.Builder) DialOption {
+func WithResolvers(rs ...Builder) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.resolvers = append(o.resolvers, rs...)
 	})
