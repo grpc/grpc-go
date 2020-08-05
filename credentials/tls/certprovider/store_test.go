@@ -126,12 +126,12 @@ func (p *fakeProvider) Close() {
 // loadKeyMaterials is a helper to read cert/key files from testdata and convert
 // them into a KeyMaterial struct.
 func loadKeyMaterials() (*KeyMaterial, error) {
-	certs, err := tls.LoadX509KeyPair(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+	certs, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		return nil, err
 	}
 
-	pemData, err := ioutil.ReadFile(testdata.Path("ca.pem"))
+	pemData, err := ioutil.ReadFile(testdata.Path("x509/client_ca_cert.pem"))
 	if err != nil {
 		return nil, err
 	}

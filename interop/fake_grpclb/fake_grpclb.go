@@ -112,8 +112,8 @@ func main() {
 	flag.Parse()
 	var opts []grpc.ServerOption
 	if *useTLS {
-		certFile := testdata.Path("server1.pem")
-		keyFile := testdata.Path("server1.key")
+		certFile := testdata.Path("x509/server1_cert.pem")
+		keyFile := testdata.Path("x509/server1_key.pem")
 		creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
 		if err != nil {
 			grpclog.Fatalf("Failed to generate credentials %v", err)

@@ -224,7 +224,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 		if authType != s.security {
 			return nil, status.Errorf(codes.Unauthenticated, "Wrong auth type: got %q, want %q", authType, s.security)
 		}
-		if serverName != "x.test.youtube.com" {
+		if serverName != "x.test.example.com" {
 			return nil, status.Errorf(codes.Unauthenticated, "Unknown server name %q", serverName)
 		}
 	}
@@ -617,7 +617,7 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		te.t.Fatalf("Failed to listen: %v", err)
 	}
 	if te.e.security == "tls" {
-		creds, err := credentials.NewServerTLSFromFile(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+		creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 		if err != nil {
 			te.t.Fatalf("Failed to generate credentials %v", err)
 		}
@@ -658,7 +658,7 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		if te.e.security != "tls" {
 			te.t.Fatalf("unsupported environment settings")
 		}
-		cert, err := tls.LoadX509KeyPair(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+		cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 		if err != nil {
 			te.t.Fatal("tls.LoadX509KeyPair(server1.pem, server1.key) failed: ", err)
 		}
@@ -793,7 +793,7 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	}
 	switch te.e.security {
 	case "tls":
-		creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
+		creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
 		if err != nil {
 			te.t.Fatalf("Failed to load credentials: %v", err)
 		}

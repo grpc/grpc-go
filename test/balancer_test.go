@@ -144,7 +144,7 @@ func (s) TestCredsBundleFromBalancer(t *testing.T) {
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithBalancerName(testBalancerName),
 	}
-	creds, err := credentials.NewServerTLSFromFile(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+	creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		t.Fatalf("Failed to generate credentials %v", err)
 	}
