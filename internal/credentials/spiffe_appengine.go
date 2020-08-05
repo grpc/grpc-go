@@ -1,8 +1,8 @@
-// +build !linux appengine
+// +build appengine
 
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2020 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,14 @@
  *
  */
 
-package channelz
+package credentials
 
-// GetSocketOption gets the socket option info of the conn.
-func GetSocketOption(c interface{}) *SocketOptionData {
+import (
+	"crypto/tls"
+	"net/url"
+)
+
+// SPIFFEIDFromState is a no-op for appengine builds.
+func SPIFFEIDFromState(state tls.ConnectionState) *url.URL {
 	return nil
 }

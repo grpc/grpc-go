@@ -1,8 +1,8 @@
-// +build !linux appengine
+// +build appengine
 
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2020 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,13 @@
  *
  */
 
-package channelz
+package advancedtls
 
-// GetSocketOption gets the socket option info of the conn.
-func GetSocketOption(c interface{}) *SocketOptionData {
-	return nil
+import (
+	"crypto/tls"
+)
+
+// buildGetCertificates is a no-op for appengine builds.
+func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
+	return nil, nil
 }
