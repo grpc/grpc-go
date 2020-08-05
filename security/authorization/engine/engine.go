@@ -33,6 +33,21 @@ import (
 
 var logger = grpclog.Component("channelz")
 
+var stringAttributeMap = map[string]func(*AuthorizationArgs) (string, error){
+	"request.url_path":                    (*AuthorizationArgs).getRequestURLPath,
+	"request.host":                        (*AuthorizationArgs).getRequestHost,
+	"request.method":                      (*AuthorizationArgs).getRequestMethod,
+	"source.address":                      (*AuthorizationArgs).getSourceAddress,
+	"destination.address":                 (*AuthorizationArgs).getDestinationAddress,
+	"connection.uri_san_peer_certificate": (*AuthorizationArgs).getURISanPeerCertificate,
+	"source.principal":                    (*AuthorizationArgs).getSourcePrincipal,
+}
+
+var intAttributeMap = map[string]func(*AuthorizationArgs) (int, error){
+	"source.port":      (*AuthorizationArgs).getSourcePort,
+	"destination.port": (*AuthorizationArgs).getDestinationPort,
+}
+
 // activationImpl is an implementation of interpreter.Activation.
 // An Activation is the primary mechanism by which a caller supplies input into a CEL program.
 type activationImpl struct {
@@ -59,36 +74,54 @@ type AuthorizationArgs struct {
 	fullMethod string
 }
 
-// NewActivation converts AuthorizationArgs into the activation for CEL.
-func NewActivation(args *AuthorizationArgs) interpreter.Activation {
-	// TODO(@ezou): implement the conversion logic.
-	return activationImpl{}
+// newActivation converts AuthorizationArgs into the activation for CEL.
+func newActivation(args *AuthorizationArgs) interpreter.Activation {
+	// Fill out evaluation map, only adding the attributes that can be extracted.
+	evalMap := make(map[string]interface{})
+	for key, function := range stringAttributeMap {
+		val, err := function(args)
+		if err == nil {
+			evalMap[key] = val
+		}
+	}
+	for key, function := range intAttributeMap {
+		val, err := function(args)
+		if err == nil {
+			evalMap[key] = val
+		}
+	}
+	val, err := args.getRequestHeaders()
+	if err == nil {
+		evalMap["request.headers"] = val
+	}
+	// Convert evaluation map to activation.
+	return activationImpl{dict: evalMap}
 }
 
-func (args AuthorizationArgs) getRequestURLPath() (string, error) {
+func (args *AuthorizationArgs) getRequestURLPath() (string, error) {
 	if args.fullMethod == "" {
 		return "", fmt.Errorf("authorization args doesn't have a valid request url path")
 	}
 	return args.fullMethod, nil
 }
 
-func (args AuthorizationArgs) getRequestHost() (string, error) {
+func (args *AuthorizationArgs) getRequestHost() (string, error) {
 	// TODO(@zhenlian): fill out attribute extraction for request.host
 	return "", fmt.Errorf("authorization args doesn't have a valid request host")
 }
 
-func (args AuthorizationArgs) getRequestMethod() (string, error) {
+func (args *AuthorizationArgs) getRequestMethod() (string, error) {
 	// TODO(@zhenlian): fill out attribute extraction for request.method
 	return "", fmt.Errorf("authorization args doesn't have a valid request method")
 }
 
-func (args AuthorizationArgs) getRequestHeaders() (map[string]string, error) {
+func (args *AuthorizationArgs) getRequestHeaders() (map[string]string, error) {
 	// TODO(@zhenlian): fill out attribute extraction for request.headers
 	// possibly get this from metadata?
 	return nil, fmt.Errorf("authorization args doesn't have valid request headers")
 }
 
-func (args AuthorizationArgs) getSourceAddress() (string, error) {
+func (args *AuthorizationArgs) getSourceAddress() (string, error) {
 	if args.peerInfo == nil {
 		return "", fmt.Errorf("authorization args doesn't have a valid source address")
 	}
@@ -100,7 +133,7 @@ func (args AuthorizationArgs) getSourceAddress() (string, error) {
 	return host, nil
 }
 
-func (args AuthorizationArgs) getSourcePort() (int, error) {
+func (args *AuthorizationArgs) getSourcePort() (int, error) {
 	if args.peerInfo == nil {
 		return 0, fmt.Errorf("authorization args doesn't have a valid source port")
 	}
@@ -112,22 +145,22 @@ func (args AuthorizationArgs) getSourcePort() (int, error) {
 	return strconv.Atoi(port)
 }
 
-func (args AuthorizationArgs) getDestinationAddress() (string, error) {
+func (args *AuthorizationArgs) getDestinationAddress() (string, error) {
 	// TODO(@zhenlian): fill out attribute extraction for destination.address
 	return "", fmt.Errorf("authorization args doesn't have a valid destination address")
 }
 
-func (args AuthorizationArgs) getDestinationPort() (int, error) {
+func (args *AuthorizationArgs) getDestinationPort() (int, error) {
 	// TODO(@zhenlian): fill out attribute extraction for destination.port
 	return 0, fmt.Errorf("authorization args doesn't have a valid destination port")
 }
 
-func (args AuthorizationArgs) getURISanPeerCertificate() (string, error) {
+func (args *AuthorizationArgs) getURISanPeerCertificate() (string, error) {
 	// TODO(@zhenlian): fill out attribute extraction for connection.uri_san_peer_certificate
 	return "", fmt.Errorf("authorization args doesn't have a valid URI in SAN field of the peer certificate")
 }
 
-func (args AuthorizationArgs) getSourcePrincipal() (string, error) {
+func (args *AuthorizationArgs) getSourcePrincipal() (string, error) {
 	// TODO(@zhenlian): fill out attribute extraction for source.principal
 	return "", fmt.Errorf("authorization args doesn't have a valid source principal")
 }
@@ -282,7 +315,7 @@ func NewAuthorizationEngine(allow, deny *pb.RBAC) (*AuthorizationEngine, error) 
 // returns undecided. Now all the expressions in the DENY policy are false,
 // it returns the evaluation of the ALLOW policy.
 func (authorizationEngine *AuthorizationEngine) Evaluate(args *AuthorizationArgs) (AuthorizationDecision, error) {
-	activation := NewActivation(args)
+	activation := newActivation(args)
 	decision := DecisionAllow
 	var policyNames []string
 	// Evaluate the deny engine, if it exists.
