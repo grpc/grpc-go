@@ -26,10 +26,6 @@ import (
 	"google.golang.org/grpc/xds/internal/version"
 )
 
-// The value chosen here is based on the default value of the
-// initial_fetch_timeout field in corepb.ConfigSource proto.
-var defaultWatchExpiryTimeout = 15 * time.Second
-
 type watchInfoState int
 
 const (
@@ -222,7 +218,7 @@ func (c *Client) watchLDS(serviceName string, cb func(ListenerUpdate, error)) (c
 		ldsCallback: cb,
 	}
 
-	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
+	wi.expiryTimer = time.AfterFunc(c.opts.WatchExpiryTimeout, func() {
 		wi.timeout()
 	})
 	return c.watch(wi)
@@ -241,7 +237,7 @@ func (c *Client) watchRDS(routeName string, cb func(RouteConfigUpdate, error)) (
 		rdsCallback: cb,
 	}
 
-	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
+	wi.expiryTimer = time.AfterFunc(c.opts.WatchExpiryTimeout, func() {
 		wi.timeout()
 	})
 	return c.watch(wi)
@@ -367,7 +363,7 @@ func (c *Client) WatchCluster(clusterName string, cb func(ClusterUpdate, error))
 		cdsCallback: cb,
 	}
 
-	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
+	wi.expiryTimer = time.AfterFunc(c.opts.WatchExpiryTimeout, func() {
 		wi.timeout()
 	})
 	return c.watch(wi)
@@ -389,7 +385,7 @@ func (c *Client) WatchEndpoints(clusterName string, cb func(EndpointsUpdate, err
 		edsCallback: cb,
 	}
 
-	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
+	wi.expiryTimer = time.AfterFunc(c.opts.WatchExpiryTimeout, func() {
 		wi.timeout()
 	})
 	return c.watch(wi)

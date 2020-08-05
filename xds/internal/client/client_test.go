@@ -45,15 +45,22 @@ const (
 	testRDSName = "test-rds"
 	testCDSName = "test-cds"
 	testEDSName = "test-eds"
+
+	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
 )
 
-func clientOpts(balancerName string) Options {
+func clientOpts(balancerName string, overrideWatchExpiryTImeout bool) Options {
+	watchExpiryTimeout := time.Duration(0)
+	if overrideWatchExpiryTImeout {
+		watchExpiryTimeout = defaultTestWatchExpiryTimeout
+	}
 	return Options{
 		Config: bootstrap.Config{
 			BalancerName: balancerName,
 			Creds:        grpc.WithInsecure(),
 			NodeProto:    testutils.EmptyNodeProtoV2,
 		},
+		WatchExpiryTimeout: watchExpiryTimeout,
 	}
 }
 
@@ -109,7 +116,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
