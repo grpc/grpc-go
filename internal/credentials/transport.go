@@ -16,10 +16,7 @@
  *
  */
 
-// Package transport defines and implements message oriented communication
-// channel to complete various transactions (e.g., an RPC).  It is meant for
-// grpc-internal usage and is not intended to be imported directly by users.
-package transport
+package credentials
 
 import (
 	"bytes"
@@ -32,10 +29,8 @@ import (
 	"sync/atomic"
 
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
@@ -517,7 +512,7 @@ const (
 // ServerConfig consists of all the configurations to establish a server transport.
 type ServerConfig struct {
 	MaxStreams            uint32
-	AuthInfo              credentials.AuthInfo
+	AuthInfo              AuthInfo
 	InTapHandle           tap.ServerInHandle
 	StatsHandler          stats.Handler
 	KeepaliveParams       keepalive.ServerParameters
@@ -546,13 +541,13 @@ type ConnectOptions struct {
 	// FailOnNonTempDialError specifies if gRPC fails on non-temporary dial errors.
 	FailOnNonTempDialError bool
 	// PerRPCCredentials stores the PerRPCCredentials required to issue RPCs.
-	PerRPCCredentials []credentials.PerRPCCredentials
+	PerRPCCredentials []PerRPCCredentials
 	// TransportCredentials stores the Authenticator required to setup a client
 	// connection. Only one of TransportCredentials and CredsBundle is non-nil.
-	TransportCredentials credentials.TransportCredentials
+	TransportCredentials TransportCredentials
 	// CredsBundle is the credentials bundle to be used. Only one of
 	// TransportCredentials and CredsBundle is non-nil.
-	CredsBundle credentials.Bundle
+	CredsBundle Bundle
 	// KeepaliveParams stores the keepalive parameters.
 	KeepaliveParams keepalive.ClientParameters
 	// StatsHandler stores the handler for stats.
@@ -573,7 +568,7 @@ type ConnectOptions struct {
 
 // NewClientTransport establishes the transport with the required ConnectOptions
 // and returns it to the caller.
-func NewClientTransport(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onPrefaceReceipt func(), onGoAway func(GoAwayReason), onClose func()) (ClientTransport, error) {
+func NewClientTransport(connectCtx, ctx context.Context, addr Address, opts ConnectOptions, onPrefaceReceipt func(), onGoAway func(GoAwayReason), onClose func()) (ClientTransport, error) {
 	return newHTTP2Client(connectCtx, ctx, addr, opts, onPrefaceReceipt, onGoAway, onClose)
 }
 
@@ -597,8 +592,8 @@ type CallHdr struct {
 	// outbound message.
 	SendCompress string
 
-	// Creds specifies credentials.PerRPCCredentials for a call.
-	Creds credentials.PerRPCCredentials
+	// Creds specifies PerRPCCredentials for a call.
+	Creds PerRPCCredentials
 
 	// ContentSubtype specifies the content-subtype for a request. For example, a
 	// content-subtype of "proto" will result in a content-type of

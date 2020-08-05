@@ -16,7 +16,7 @@
  *
  */
 
-package grpc
+package credentials
 
 import (
 	"context"
@@ -27,10 +27,8 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
@@ -80,7 +78,7 @@ func testResolverErrorPolling(t *testing.T, badUpdate func(*manual.Resolver), go
 	r := manual.NewBuilderWithScheme("whatever")
 	rn := make(chan struct{})
 	defer func() { close(rn) }()
-	r.ResolveNowCallback = func(resolver.ResolveNowOptions) { rn <- struct{}{} }
+	r.ResolveNowCallback = func(ResolveNowOptions) { rn <- struct{}{} }
 
 	defaultDialOptions := []DialOption{
 		WithInsecure(),
@@ -132,7 +130,7 @@ func init() {
 	// Register a balancer that never returns an error from
 	// UpdateClientConnState, and doesn't do anything else either.
 	bf := stub.BalancerFuncs{
-		UpdateClientConnState: func(*stub.BalancerData, balancer.ClientConnState) error {
+		UpdateClientConnState: func(*stub.BalancerData, ClientConnState) error {
 			return nil
 		},
 	}
@@ -148,7 +146,7 @@ func (s) TestResolverErrorPolling(t *testing.T) {
 	}, func(r *manual.Resolver) {
 		// UpdateState will block if ResolveNow is being called (which blocks on
 		// rn), so call it in a goroutine.
-		go r.CC.UpdateState(resolver.State{})
+		go r.CC.UpdateState(State{})
 	},
 		WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, happyBalancerName)))
 }
@@ -159,22 +157,22 @@ func (s) TestResolverErrorPolling(t *testing.T) {
 func (s) TestServiceConfigErrorPolling(t *testing.T) {
 	testResolverErrorPolling(t, func(r *manual.Resolver) {
 		badsc := r.CC.ParseServiceConfig("bad config")
-		r.UpdateState(resolver.State{ServiceConfig: badsc})
+		r.UpdateState(State{ServiceConfig: badsc})
 	}, func(r *manual.Resolver) {
 		// UpdateState will block if ResolveNow is being called (which blocks on
 		// rn), so call it in a goroutine.
-		go r.CC.UpdateState(resolver.State{})
+		go r.CC.UpdateState(State{})
 	},
 		WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, happyBalancerName)))
 }
 
-// TestResolverErrorInBuild makes the resolver.Builder call into the ClientConn
+// TestResolverErrorInBuild makes the Builder call into the ClientConn
 // during the Build call. We use two separate mutexes in the code which make
 // sure there is no data race in this code path, and also that there is no
 // deadlock.
 func (s) TestResolverErrorInBuild(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
-	r.InitialState(resolver.State{ServiceConfig: &serviceconfig.ParseResult{Err: errors.New("resolver build err")}})
+	r.InitialState(State{ServiceConfig: &serviceconfig.ParseResult{Err: errors.New("resolver build err")}})
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
 	if err != nil {
@@ -201,7 +199,7 @@ func (s) TestServiceConfigErrorRPC(t *testing.T) {
 	}
 	defer cc.Close()
 	badsc := r.CC.ParseServiceConfig("bad config")
-	r.UpdateState(resolver.State{ServiceConfig: badsc})
+	r.UpdateState(State{ServiceConfig: badsc})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

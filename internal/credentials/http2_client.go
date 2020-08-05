@@ -16,7 +16,7 @@
  *
  */
 
-package transport
+package credentials
 
 import (
 	"context"
@@ -35,14 +35,12 @@ import (
 	"google.golang.org/grpc/internal/grpcutil"
 
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
@@ -64,7 +62,7 @@ type http2Client struct {
 	loopy      *loopyWriter
 	remoteAddr net.Addr
 	localAddr  net.Addr
-	authInfo   credentials.AuthInfo // auth info about the connection
+	authInfo   AuthInfo // auth info about the connection
 
 	readerDone chan struct{} // sync point to enable testing.
 	writerDone chan struct{} // sync point to enable testing.
@@ -82,7 +80,7 @@ type http2Client struct {
 
 	isSecure bool
 
-	perRPCCreds []credentials.PerRPCCredentials
+	perRPCCreds []PerRPCCredentials
 
 	kp               keepalive.ClientParameters
 	keepaliveEnabled bool
@@ -163,7 +161,7 @@ func isTemporary(err error) bool {
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onPrefaceReceipt func(), onGoAway func(GoAwayReason), onClose func()) (_ *http2Client, err error) {
+func newHTTP2Client(connectCtx, ctx context.Context, addr Address, opts ConnectOptions, onPrefaceReceipt func(), onGoAway func(GoAwayReason), onClose func()) (_ *http2Client, err error) {
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -202,7 +200,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	}
 	var (
 		isSecure bool
-		authInfo credentials.AuthInfo
+		authInfo AuthInfo
 	)
 	transportCreds := opts.TransportCredentials
 	perRPCCreds := opts.PerRPCCredentials
@@ -217,11 +215,11 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	}
 	if transportCreds != nil {
 		// gRPC, resolver, balancer etc. can specify arbitrary data in the
-		// Attributes field of resolver.Address, which is shoved into connectCtx
+		// Attributes field of Address, which is shoved into connectCtx
 		// and passed to the credential handshaker. This makes it possible for
 		// address specific arbitrary data to reach the credential handshaker.
-		contextWithHandshakeInfo := internal.NewClientHandshakeInfoContext.(func(context.Context, credentials.ClientHandshakeInfo) context.Context)
-		connectCtx = contextWithHandshakeInfo(connectCtx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
+		contextWithHandshakeInfo := internal.NewClientHandshakeInfoContext.(func(context.Context, ClientHandshakeInfo) context.Context)
+		connectCtx = contextWithHandshakeInfo(connectCtx, ClientHandshakeInfo{Attributes: addr.Attributes})
 		conn, authInfo, err = transportCreds.ClientHandshake(connectCtx, addr.ServerName, conn)
 		if err != nil {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: authentication handshake failed: %v", err)
@@ -414,11 +412,11 @@ func (t *http2Client) getPeer() *peer.Peer {
 
 func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) ([]hpack.HeaderField, error) {
 	aud := t.createAudience(callHdr)
-	ri := credentials.RequestInfo{
+	ri := RequestInfo{
 		Method:   callHdr.Method,
 		AuthInfo: t.authInfo,
 	}
-	ctxWithRequestInfo := internal.NewRequestInfoContext.(func(context.Context, credentials.RequestInfo) context.Context)(ctx, ri)
+	ctxWithRequestInfo := internal.NewRequestInfoContext.(func(context.Context, RequestInfo) context.Context)(ctx, ri)
 	authData, err := t.getTrAuthData(ctxWithRequestInfo, aud)
 	if err != nil {
 		return nil, err
@@ -545,7 +543,7 @@ func (t *http2Client) getTrAuthData(ctx context.Context, audience string) (map[s
 
 func (t *http2Client) getCallAuthData(ctx context.Context, audience string, callHdr *CallHdr) (map[string]string, error) {
 	var callAuthData map[string]string
-	// Check if credentials.PerRPCCredentials were provided via call options.
+	// Check if PerRPCCredentials were provided via call options.
 	// Note: if these credentials are provided both via dial options and call
 	// options, then both sets of credentials will be applied.
 	if callCreds := callHdr.Creds; callCreds != nil {
@@ -1450,7 +1448,7 @@ func (t *http2Client) ChannelzMetric() *channelz.SocketInternalMetric {
 		RemoteAddr:                      t.remoteAddr,
 		// RemoteName :
 	}
-	if au, ok := t.authInfo.(credentials.ChannelzSecurityInfo); ok {
+	if au, ok := t.authInfo.(ChannelzSecurityInfo); ok {
 		s.Security = au.GetSecurityValue()
 	}
 	s.RemoteFlowControlWindow = t.getOutFlowWindow()

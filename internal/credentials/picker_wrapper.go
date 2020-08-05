@@ -16,27 +16,26 @@
  *
  */
 
-package grpc
+package credentials
 
 import (
 	"context"
 	"io"
 	"sync"
 
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/status"
 )
 
-// pickerWrapper is a wrapper of balancer.Picker. It blocks on certain pick
+// pickerWrapper is a wrapper of Picker. It blocks on certain pick
 // actions and unblock when there's a picker update.
 type pickerWrapper struct {
 	mu         sync.Mutex
 	done       bool
 	blockingCh chan struct{}
-	picker     balancer.Picker
+	picker     Picker
 }
 
 func newPickerWrapper() *pickerWrapper {
@@ -44,7 +43,7 @@ func newPickerWrapper() *pickerWrapper {
 }
 
 // updatePicker is called by UpdateBalancerState. It unblocks all blocked pick.
-func (pw *pickerWrapper) updatePicker(p balancer.Picker) {
+func (pw *pickerWrapper) updatePicker(p Picker) {
 	pw.mu.Lock()
 	if pw.done {
 		pw.mu.Unlock()
@@ -57,12 +56,12 @@ func (pw *pickerWrapper) updatePicker(p balancer.Picker) {
 	pw.mu.Unlock()
 }
 
-func doneChannelzWrapper(acw *acBalancerWrapper, done func(balancer.DoneInfo)) func(balancer.DoneInfo) {
+func doneChannelzWrapper(acw *acBalancerWrapper, done func(DoneInfo)) func(DoneInfo) {
 	acw.mu.Lock()
 	ac := acw.ac
 	acw.mu.Unlock()
 	ac.incrCallsStarted()
-	return func(b balancer.DoneInfo) {
+	return func(b DoneInfo) {
 		if b.Err != nil && b.Err != io.EOF {
 			ac.incrCallsFailed()
 		} else {
@@ -81,7 +80,7 @@ func doneChannelzWrapper(acw *acBalancerWrapper, done func(balancer.DoneInfo)) f
 // - the current picker returns other errors and failfast is false.
 // - the subConn returned by the current picker is not READY
 // When one of these situations happens, pick blocks until the picker gets updated.
-func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.PickInfo) (transport.ClientTransport, func(balancer.DoneInfo), error) {
+func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info PickInfo) (transport.ClientTransport, func(DoneInfo), error) {
 	var ch chan struct{}
 
 	var lastPickErr error
@@ -126,7 +125,7 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 		pickResult, err := p.Pick(info)
 
 		if err != nil {
-			if err == balancer.ErrNoSubConnAvailable {
+			if err == ErrNoSubConnAvailable {
 				continue
 			}
 			if _, ok := status.FromError(err); ok {
@@ -156,7 +155,7 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 		if pickResult.Done != nil {
 			// Calling done with nil error, no bytes sent and no bytes received.
 			// DoneInfo with default value works.
-			pickResult.Done(balancer.DoneInfo{})
+			pickResult.Done(DoneInfo{})
 		}
 		logger.Infof("blockingPicker: the picked transport is not ready, loop back to repick")
 		// If ok == false, ac.state is not READY.

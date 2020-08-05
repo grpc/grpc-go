@@ -16,7 +16,7 @@
  *
  */
 
-package grpc
+package credentials
 
 import (
 	"bytes"
@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/encoding/proto"
 	"google.golang.org/grpc/internal/transport"
@@ -157,7 +156,7 @@ type callInfo struct {
 	failFast              bool
 	maxReceiveMessageSize *int
 	maxSendMessageSize    *int
-	creds                 credentials.PerRPCCredentials
+	creds                 PerRPCCredentials
 	contentSubtype        string
 	codec                 baseCodec
 	maxRetryRPCBufferSize int
@@ -318,9 +317,9 @@ func (o MaxSendMsgSizeCallOption) before(c *callInfo) error {
 }
 func (o MaxSendMsgSizeCallOption) after(c *callInfo, attempt *csAttempt) {}
 
-// PerRPCCredentials returns a CallOption that sets credentials.PerRPCCredentials
+// PerRPCCredentials returns a CallOption that sets PerRPCCredentials
 // for a call.
-func PerRPCCredentials(creds credentials.PerRPCCredentials) CallOption {
+func PerRPCCredentials(creds PerRPCCredentials) CallOption {
 	return PerRPCCredsCallOption{Creds: creds}
 }
 
@@ -328,7 +327,7 @@ func PerRPCCredentials(creds credentials.PerRPCCredentials) CallOption {
 // credentials to use for the call.
 // This is an EXPERIMENTAL API.
 type PerRPCCredsCallOption struct {
-	Creds credentials.PerRPCCredentials
+	Creds PerRPCCredentials
 }
 
 func (o PerRPCCredsCallOption) before(c *callInfo) error {

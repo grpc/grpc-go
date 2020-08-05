@@ -16,26 +16,25 @@
  *
  */
 
-package grpc
+package credentials
 
 import (
 	"errors"
 	"fmt"
 
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 )
 
-// PickFirstBalancerName is the name of the pick_first balancer.
+// PickFirstBalancerName is the name of the pick_first
 const PickFirstBalancerName = "pick_first"
 
-func newPickfirstBuilder() balancer.Builder {
+func newPickfirstBuilder() Builder {
 	return &pickfirstBuilder{}
 }
 
 type pickfirstBuilder struct{}
 
-func (*pickfirstBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
+func (*pickfirstBuilder) Build(cc ClientConn, opt BuildOptions) Balancer {
 	return &pickfirstBalancer{cc: cc}
 }
 
@@ -45,15 +44,15 @@ func (*pickfirstBuilder) Name() string {
 
 type pickfirstBalancer struct {
 	state connectivity.State
-	cc    balancer.ClientConn
-	sc    balancer.SubConn
+	cc    ClientConn
+	sc    SubConn
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
 	switch b.state {
 	case connectivity.TransientFailure, connectivity.Idle, connectivity.Connecting:
 		// Set a failing picker if we don't have a good picker.
-		b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure,
+		b.cc.UpdateState(State{ConnectivityState: connectivity.TransientFailure,
 			Picker: &picker{err: fmt.Errorf("name resolver error: %v", err)},
 		})
 	}
@@ -62,26 +61,26 @@ func (b *pickfirstBalancer) ResolverError(err error) {
 	}
 }
 
-func (b *pickfirstBalancer) UpdateClientConnState(cs balancer.ClientConnState) error {
+func (b *pickfirstBalancer) UpdateClientConnState(cs ClientConnState) error {
 	if len(cs.ResolverState.Addresses) == 0 {
 		b.ResolverError(errors.New("produced zero addresses"))
-		return balancer.ErrBadResolverState
+		return ErrBadResolverState
 	}
 	if b.sc == nil {
 		var err error
-		b.sc, err = b.cc.NewSubConn(cs.ResolverState.Addresses, balancer.NewSubConnOptions{})
+		b.sc, err = b.cc.NewSubConn(cs.ResolverState.Addresses, NewSubConnOptions{})
 		if err != nil {
 			if logger.V(2) {
 				logger.Errorf("pickfirstBalancer: failed to NewSubConn: %v", err)
 			}
 			b.state = connectivity.TransientFailure
-			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure,
+			b.cc.UpdateState(State{ConnectivityState: connectivity.TransientFailure,
 				Picker: &picker{err: fmt.Errorf("error creating connection: %v", err)},
 			})
-			return balancer.ErrBadResolverState
+			return ErrBadResolverState
 		}
 		b.state = connectivity.Idle
-		b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: &picker{result: balancer.PickResult{SubConn: b.sc}}})
+		b.cc.UpdateState(State{ConnectivityState: connectivity.Idle, Picker: &picker{result: PickResult{SubConn: b.sc}}})
 		b.sc.Connect()
 	} else {
 		b.sc.UpdateAddresses(cs.ResolverState.Addresses)
@@ -90,7 +89,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(cs balancer.ClientConnState) e
 	return nil
 }
 
-func (b *pickfirstBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
+func (b *pickfirstBalancer) UpdateSubConnState(sc SubConn, s SubConnState) {
 	if logger.V(2) {
 		logger.Infof("pickfirstBalancer: UpdateSubConnState: %p, %v", sc, s)
 	}
@@ -108,11 +107,11 @@ func (b *pickfirstBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.S
 
 	switch s.ConnectivityState {
 	case connectivity.Ready, connectivity.Idle:
-		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{result: balancer.PickResult{SubConn: sc}}})
+		b.cc.UpdateState(State{ConnectivityState: s.ConnectivityState, Picker: &picker{result: PickResult{SubConn: sc}}})
 	case connectivity.Connecting:
-		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{err: balancer.ErrNoSubConnAvailable}})
+		b.cc.UpdateState(State{ConnectivityState: s.ConnectivityState, Picker: &picker{err: ErrNoSubConnAvailable}})
 	case connectivity.TransientFailure:
-		b.cc.UpdateState(balancer.State{
+		b.cc.UpdateState(State{
 			ConnectivityState: s.ConnectivityState,
 			Picker:            &picker{err: s.ConnectionError},
 		})
@@ -123,14 +122,14 @@ func (b *pickfirstBalancer) Close() {
 }
 
 type picker struct {
-	result balancer.PickResult
+	result PickResult
 	err    error
 }
 
-func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (p *picker) Pick(info PickInfo) (PickResult, error) {
 	return p.result, p.err
 }
 
 func init() {
-	balancer.Register(newPickfirstBuilder())
+	Register(newPickfirstBuilder())
 }

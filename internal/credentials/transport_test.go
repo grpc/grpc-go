@@ -16,7 +16,7 @@
  *
  */
 
-package transport
+package credentials
 
 import (
 	"bytes"
@@ -39,11 +39,9 @@ import (
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 )
 
@@ -434,7 +432,7 @@ func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, *http2
 
 func setUpWithOptions(t *testing.T, port int, serverConfig *ServerConfig, ht hType, copts ConnectOptions) (*server, *http2Client, func()) {
 	server := setUpServerOnly(t, port, serverConfig, ht)
-	addr := resolver.Address{Addr: "localhost:" + server.port}
+	addr := Address{Addr: "localhost:" + server.port}
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	ct, connErr := NewClientTransport(connectCtx, context.Background(), addr, copts, func() {}, func(GoAwayReason) {}, func() {})
 	if connErr != nil {
@@ -461,7 +459,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 		connCh <- conn
 	}()
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	tr, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func() {}, func(GoAwayReason) {}, func() {})
+	tr, err := NewClientTransport(connectCtx, context.Background(), Address{Addr: lis.Addr().String()}, copts, func() {}, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		cancel() // Do not cancel in success path.
 		// Server clean-up.
@@ -1282,7 +1280,7 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 	}()
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	defer cancel()
-	ct, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{}, func() {}, func(GoAwayReason) {}, func() {})
+	ct, err := NewClientTransport(connectCtx, context.Background(), Address{Addr: lis.Addr().String()}, ConnectOptions{}, func() {}, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
@@ -1824,23 +1822,23 @@ func (s) TestHeaderTblSize(t *testing.T) {
 // Attributes from the ClientHandshakeInfo struct passed in the context locally
 // for the test to inspect.
 type attrTransportCreds struct {
-	credentials.TransportCredentials
+	TransportCredentials
 	attr *attributes.Attributes
 }
 
-func (ac *attrTransportCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	ai := credentials.ClientHandshakeInfoFromContext(ctx)
+func (ac *attrTransportCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, AuthInfo, error) {
+	ai := ClientHandshakeInfoFromContext(ctx)
 	ac.attr = ai.Attributes
 	return rawConn, nil, nil
 }
-func (ac *attrTransportCreds) Info() credentials.ProtocolInfo {
-	return credentials.ProtocolInfo{}
+func (ac *attrTransportCreds) Info() ProtocolInfo {
+	return ProtocolInfo{}
 }
-func (ac *attrTransportCreds) Clone() credentials.TransportCredentials {
+func (ac *attrTransportCreds) Clone() TransportCredentials {
 	return nil
 }
 
-// TestClientHandshakeInfo adds attributes to the resolver.Address passes to
+// TestClientHandshakeInfo adds attributes to the Address passes to
 // NewClientTransport and verifies that these attributes are received by the
 // transport credential handshaker.
 func (s) TestClientHandshakeInfo(t *testing.T) {
@@ -1851,7 +1849,7 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 		testAttrKey = "foo"
 		testAttrVal = "bar"
 	)
-	addr := resolver.Address{
+	addr := Address{
 		Addr:       "localhost:" + server.port,
 		Attributes: attributes.New(testAttrKey, testAttrVal),
 	}

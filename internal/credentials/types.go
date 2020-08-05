@@ -16,7 +16,7 @@
  *
  */
 
-package channelz
+package credentials
 
 import (
 	"net"
@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials"
 )
 
 // entry represents a node in the channelz database.
@@ -474,7 +473,7 @@ type SocketInternalMetric struct {
 	// the original target name.
 	RemoteName    string
 	SocketOptions *SocketOptionData
-	Security      credentials.ChannelzSecurityValue
+	Security      ChannelzSecurityValue
 }
 
 // Socket is the interface that should be satisfied in order to be tracked by

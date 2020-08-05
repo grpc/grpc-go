@@ -30,7 +30,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/backoff"
@@ -627,7 +626,7 @@ func (cc *ClientConn) updateResolverState(s State, err error) error {
 				} else {
 					err = status.Errorf(codes.Unavailable, "illegal service config type: %T", s.ServiceConfig.Config)
 				}
-				cc.blockingpicker.updatePicker(base.NewErrPicker(err))
+				cc.blockingpicker.updatePicker(NewErrPicker(err))
 				cc.csMgr.updateState(connectivity.TransientFailure)
 				cc.mu.Unlock()
 				return ret

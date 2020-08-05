@@ -16,7 +16,7 @@
  *
  */
 
-package grpc
+package credentials
 
 import (
 	"bytes"
