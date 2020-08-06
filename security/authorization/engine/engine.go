@@ -119,7 +119,6 @@ func (args *AuthorizationArgs) getRequestMethod() (string, error) {
 
 func (args *AuthorizationArgs) getRequestHeaders() (map[string]string, error) {
 	// TODO(@zhenlian): fill out attribute extraction for request.headers
-	// possibly get this from metadata?
 	return nil, fmt.Errorf("authorization args doesn't have valid request headers")
 }
 
