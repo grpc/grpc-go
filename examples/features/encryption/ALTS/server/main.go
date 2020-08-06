@@ -56,7 +56,7 @@ func main() {
 	// Register EchoService on the server.
 	pb.RegisterEchoService(s, &pb.EchoService{UnaryEcho: unaryEcho})
 
-	if err = s.Serve(lis); err != nil {
+	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
 }
