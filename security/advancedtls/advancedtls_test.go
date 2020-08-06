@@ -707,34 +707,24 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 	}
 
 	tests := []struct {
-		desc          string
-		serverGetCert func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
-		serverName    string
-		wantCert      tls.Certificate
+		desc       string
+		serverName string
+		wantCert   tls.Certificate
 	}{
 		{
 			desc: "Select serverCert1",
-			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
-				return []*tls.Certificate{&serverCert1, &serverCert2, &serverCert3}, nil
-			},
 			// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
 			serverName: "foo.bar.com",
 			wantCert:   serverCert1,
 		},
 		{
 			desc: "Select serverCert2",
-			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
-				return []*tls.Certificate{&serverCert1, &serverCert2, &serverCert3}, nil
-			},
 			// "foo.bar.server2.com" is the common name on server certificate server_cert_2.pem.
 			serverName: "foo.bar.server2.com",
 			wantCert:   serverCert2,
 		},
 		{
 			desc: "Select serverCert3",
-			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
-				return []*tls.Certificate{&serverCert1, &serverCert2, &serverCert3}, nil
-			},
 			// "google.com" is one of the DNS names on server certificate server_cert_3.pem.
 			serverName: "google.com",
 			wantCert:   serverCert3,
@@ -744,7 +734,9 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			serverOptions := &ServerOptions{
-				GetCertificates: test.serverGetCert,
+				GetCertificates: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+					return []*tls.Certificate{&serverCert1, &serverCert2, &serverCert3}, nil
+				},
 			}
 			serverConfig, err := serverOptions.config()
 			if err != nil {
