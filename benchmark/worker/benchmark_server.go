@@ -33,7 +33,6 @@ import (
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
@@ -59,15 +58,15 @@ func printServerConfig(config *testpb.ServerConfig) {
 	//     will always start sync server
 	// - async server threads
 	// - core list
-	grpclog.Infof(" * server type: %v (ignored, always starts sync server)", config.ServerType)
-	grpclog.Infof(" * async server threads: %v (ignored)", config.AsyncServerThreads)
+	logger.Infof(" * server type: %v (ignored, always starts sync server)", config.ServerType)
+	logger.Infof(" * async server threads: %v (ignored)", config.AsyncServerThreads)
 	// TODO: use cores specified by CoreList when setting list of cores is supported in go.
-	grpclog.Infof(" * core list: %v (ignored)", config.CoreList)
+	logger.Infof(" * core list: %v (ignored)", config.CoreList)
 
-	grpclog.Infof(" - security params: %v", config.SecurityParams)
-	grpclog.Infof(" - core limit: %v", config.CoreLimit)
-	grpclog.Infof(" - port: %v", config.Port)
-	grpclog.Infof(" - payload config: %v", config.PayloadConfig)
+	logger.Infof(" - security params: %v", config.SecurityParams)
+	logger.Infof(" - core limit: %v", config.CoreLimit)
+	logger.Infof(" - port: %v", config.Port)
+	logger.Infof(" - payload config: %v", config.PayloadConfig)
 }
 
 func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchmarkServer, error) {
@@ -102,7 +101,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 		}
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			grpclog.Fatalf("failed to generate credentials %v", err)
+			logger.Fatalf("failed to generate credentials %v", err)
 		}
 		opts = append(opts, grpc.Creds(creds))
 	}
@@ -114,7 +113,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	}
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		grpclog.Fatalf("Failed to listen: %v", err)
+		logger.Fatalf("Failed to listen: %v", err)
 	}
 	addr := lis.Addr().String()
 
@@ -147,11 +146,11 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 		}, opts...)
 	}
 
-	grpclog.Infof("benchmark server listening at %v", addr)
+	logger.Infof("benchmark server listening at %v", addr)
 	addrSplitted := strings.Split(addr, ":")
 	p, err := strconv.Atoi(addrSplitted[len(addrSplitted)-1])
 	if err != nil {
-		grpclog.Fatalf("failed to get port number from server address: %v", err)
+		logger.Fatalf("failed to get port number from server address: %v", err)
 	}
 
 	return &benchmarkServer{

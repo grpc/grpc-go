@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
@@ -81,20 +80,20 @@ func printClientConfig(config *testpb.ClientConfig) {
 	//     will always create sync client
 	// - async client threads.
 	// - core list
-	grpclog.Infof(" * client type: %v (ignored, always creates sync client)", config.ClientType)
-	grpclog.Infof(" * async client threads: %v (ignored)", config.AsyncClientThreads)
+	logger.Infof(" * client type: %v (ignored, always creates sync client)", config.ClientType)
+	logger.Infof(" * async client threads: %v (ignored)", config.AsyncClientThreads)
 	// TODO: use cores specified by CoreList when setting list of cores is supported in go.
-	grpclog.Infof(" * core list: %v (ignored)", config.CoreList)
+	logger.Infof(" * core list: %v (ignored)", config.CoreList)
 
-	grpclog.Infof(" - security params: %v", config.SecurityParams)
-	grpclog.Infof(" - core limit: %v", config.CoreLimit)
-	grpclog.Infof(" - payload config: %v", config.PayloadConfig)
-	grpclog.Infof(" - rpcs per chann: %v", config.OutstandingRpcsPerChannel)
-	grpclog.Infof(" - channel number: %v", config.ClientChannels)
-	grpclog.Infof(" - load params: %v", config.LoadParams)
-	grpclog.Infof(" - rpc type: %v", config.RpcType)
-	grpclog.Infof(" - histogram params: %v", config.HistogramParams)
-	grpclog.Infof(" - server targets: %v", config.ServerTargets)
+	logger.Infof(" - security params: %v", config.SecurityParams)
+	logger.Infof(" - core limit: %v", config.CoreLimit)
+	logger.Infof(" - payload config: %v", config.PayloadConfig)
+	logger.Infof(" - rpcs per chann: %v", config.OutstandingRpcsPerChannel)
+	logger.Infof(" - channel number: %v", config.ClientChannels)
+	logger.Infof(" - load params: %v", config.LoadParams)
+	logger.Infof(" - rpc type: %v", config.RpcType)
+	logger.Infof(" - histogram params: %v", config.HistogramParams)
+	logger.Infof(" - server targets: %v", config.ServerTargets)
 }
 
 func setupClientEnv(config *testpb.ClientConfig) {
@@ -298,7 +297,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 			c := testpb.NewBenchmarkServiceClient(conn)
 			stream, err := c.StreamingCall(context.Background())
 			if err != nil {
-				grpclog.Fatalf("%v.StreamingCall(_) = _, %v", c, err)
+				logger.Fatalf("%v.StreamingCall(_) = _, %v", c, err)
 			}
 			// Create histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j

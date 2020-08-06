@@ -28,6 +28,8 @@ import (
 	externalserviceconfig "google.golang.org/grpc/serviceconfig"
 )
 
+var logger = grpclog.Component("core")
+
 // BalancerConfig is the balancer config part that service config's
 // loadBalancingConfig fields can be unmarshalled to. It's a json unmarshaller.
 //
@@ -69,7 +71,7 @@ func (bc *BalancerConfig) UnmarshalJSON(b []byte) error {
 		parser, ok := builder.(balancer.ConfigParser)
 		if !ok {
 			if string(jsonCfg) != "{}" {
-				grpclog.Warningf("non-empty balancer configuration %q, but balancer does not implement ParseConfig", string(jsonCfg))
+				logger.Warningf("non-empty balancer configuration %q, but balancer does not implement ParseConfig", string(jsonCfg))
 			}
 			// Stop at this, though the builder doesn't support parsing config.
 			return nil

@@ -91,6 +91,8 @@ var (
 	// 0 or 1 representing an RPC has succeeded. Use hasRPCSucceeded and
 	// setRPCSucceeded to access in a safe manner.
 	rpcSucceeded uint32
+
+	logger = grpclog.Component("interop")
 )
 
 type statsService struct {
@@ -155,7 +157,7 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 				return watcher.buildResp(), nil
 			}
 		case <-ctx.Done():
-			grpclog.Info("Timed out, returning partial stats")
+			logger.Info("Timed out, returning partial stats")
 			return watcher.buildResp(), nil
 		}
 	}
@@ -220,7 +222,7 @@ func main() {
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *statsPort))
 	if err != nil {
-		grpclog.Fatalf("failed to listen: %v", err)
+		logger.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
 	defer s.Stop()
@@ -231,7 +233,7 @@ func main() {
 	for i := 0; i < *numChannels; i++ {
 		conn, err := grpc.DialContext(context.Background(), *server, grpc.WithInsecure())
 		if err != nil {
-			grpclog.Fatalf("Fail to dial: %v", err)
+			logger.Fatalf("Fail to dial: %v", err)
 		}
 		defer conn.Close()
 		clients[i] = testpb.NewTestServiceClient(conn)
@@ -305,7 +307,7 @@ func sendRPCs(clients []testpb.TestServiceClient, cfgs []*rpcConfig, ticker *tim
 					watcher.chanHosts <- info
 				}
 				if err != nil && *failOnFailedRPC && hasRPCSucceeded() {
-					grpclog.Fatalf("RPC failed: %v", err)
+					logger.Fatalf("RPC failed: %v", err)
 				}
 				if err == nil {
 					setRPCSucceeded()
