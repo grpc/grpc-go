@@ -97,8 +97,8 @@ func (s) TestIsRunningOnGCP(t *testing.T) {
 
 func (s) TestIsRunningOnGCPNoProductNameFile(t *testing.T) {
 	reverseFunc := setupError("linux", os.ErrNotExist)
-	if result, _ := isRunningOnGCP(); result {
-		t.Errorf("ErrNotExist: isRunningOnGCP()=true, want false")
+	if result, err := isRunningOnGCP(); err != nil || result {
+		t.Errorf("ErrNotExist: isRunningOnGCP()=true or returned error, want false")
 	}
 	reverseFunc()
 }
