@@ -300,10 +300,7 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 			SecurityLevel: credentials.PrivacyAndIntegrity,
 		},
 	}
-	id := credinternal.SPIFFEIDFromState(conn.ConnectionState())
-	if id != nil {
-		info.SPIFFEID = id
-	}
+	info.SPIFFEID = credinternal.SPIFFEIDFromState(conn.ConnectionState())
 	return WrapSyscallConn(rawConn, conn), info, nil
 }
 
@@ -321,10 +318,7 @@ func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credenti
 			SecurityLevel: credentials.PrivacyAndIntegrity,
 		},
 	}
-	id := credinternal.SPIFFEIDFromState(conn.ConnectionState())
-	if id != nil {
-		info.SPIFFEID = id
-	}
+	info.SPIFFEID = credinternal.SPIFFEIDFromState(conn.ConnectionState())
 	return WrapSyscallConn(rawConn, conn), info, nil
 }
 
