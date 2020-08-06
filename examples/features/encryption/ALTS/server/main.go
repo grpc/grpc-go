@@ -60,7 +60,7 @@ func main() {
 	// Register EchoServer on the server.
 	pb.RegisterEchoServer(s, &ecServer{})
 
-	if err = s.Serve(lis); err != nil {
+	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
 }
