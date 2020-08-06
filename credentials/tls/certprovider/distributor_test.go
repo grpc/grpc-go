@@ -22,15 +22,10 @@ package certprovider
 
 import (
 	"context"
-	"crypto/x509"
 	"errors"
-	"math/big"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 var errProviderTestInternal = errors.New("provider internal error")
@@ -85,7 +80,7 @@ func (s) TestDistributor(t *testing.T) {
 				errCh <- err
 				return
 			}
-			if cmp.Equal(gotKM, &wantKM2, cmpopts.IgnoreUnexported(big.Int{}), cmpopts.IgnoreUnexported(x509.CertPool{}), cmpopts.EquateEmpty()) {
+			if err := compareKeyMaterial(gotKM, &wantKM2); err == nil {
 				break
 			}
 		}

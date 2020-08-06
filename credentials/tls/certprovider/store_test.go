@@ -27,13 +27,10 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math/big"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
@@ -175,8 +172,19 @@ func readAndVerifyKeyMaterial(kmr KeyMaterialReader, wantKM *KeyMaterial) error 
 	if err != nil {
 		return fmt.Errorf("KeyMaterial(ctx) failed: %w", err)
 	}
-	if !cmp.Equal(gotKM, wantKM, cmpopts.IgnoreUnexported(big.Int{}), cmpopts.IgnoreUnexported(x509.CertPool{}), cmpopts.EquateEmpty()) {
-		return fmt.Errorf("KeyMaterial(ctx) returned %+v, want %+v", gotKM, wantKM)
+	return compareKeyMaterial(gotKM, wantKM)
+}
+
+func compareKeyMaterial(got, want *KeyMaterial) error {
+	// TODO(easwars): Remove all references to reflect.DeepEqual and use
+	// cmp.Equal instead. Currently, the later panics because x509.Certificate
+	// type defines an Equal method, but does not check for nil. This has been
+	// fixed in
+	// https://github.com/golang/go/commit/89865f8ba64ccb27f439cce6daaa37c9aa38f351,
+	// but this is only available starting go1.14. So, once we remove support
+	// for go1.13, we can make the switch.
+	if !reflect.DeepEqual(got, want) {
+		return fmt.Errorf("provider.KeyMaterial() = %+v, want %+v", got, want)
 	}
 	return nil
 }
