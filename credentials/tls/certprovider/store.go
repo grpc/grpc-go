@@ -41,7 +41,7 @@ type providerKey struct {
 	config string
 }
 
-// distributorKey acts as the key to map of distributors maintained by the
+// distributorKey acts as the key to a map of distributors maintained by the
 // store. These distributor instances are returned by the provider
 // implementation's GetKeyMaterial() method.
 type distributorKey struct {
@@ -83,12 +83,26 @@ func GetKeyMaterialReader(name string, config interface{}, opts KeyMaterialOptio
 	if err != nil {
 		return nil, err
 	}
+
+	// Look for an existing distributor for the (name+config+opts) combo.
+	dk := distributorKey{
+		name:    name,
+		config:  string(stableConfig.Canonical()),
+		options: opts,
+	}
+	if wd, ok := provStore.distributors[dk]; ok {
+		wd.refCount++
+		return wd, nil
+	}
+
+	// We didn't find an existing distributor. So we need to look up the
+	// provider for the (name+config) combo, and if don't find one, we need to
+	// create a new one. Once we have the provider, we need to create a
+	// distributor on it.
 	pk := providerKey{
 		name:   name,
 		config: string(stableConfig.Canonical()),
 	}
-
-	// Create a new provider for the (name+config) combo or use an existing one.
 	var wp *wrappedProvider
 	wp, ok := provStore.providers[pk]
 	if !ok {
@@ -103,31 +117,20 @@ func GetKeyMaterialReader(name string, config interface{}, opts KeyMaterialOptio
 		}
 		provStore.providers[pk] = wp
 	}
-
-	// Create a new distributor for the (name+config+opts) combo or use an
-	// existing one. The reference count for the provider is incremented only
-	// when creating a new distributor.
-	dk := distributorKey{
-		name:    name,
-		config:  string(stableConfig.Canonical()),
-		options: opts,
-	}
-	if wd, ok := provStore.distributors[dk]; ok {
-		wd.refCount++
-		return wd, nil
-	}
-	distributor, err := wp.prov.KeyMaterialReader(opts)
+	dist, err := wp.prov.KeyMaterialReader(opts)
 	if err != nil {
 		return nil, err
 	}
 	wd := &wrappedDistributor{
-		KeyMaterialReader: distributor,
+		KeyMaterialReader: dist,
 		refCount:          1,
 		wp:                wp,
 		storeKey:          dk,
 		store:             provStore,
 	}
 	provStore.distributors[dk] = wd
+	// The reference count for the wrappedProvider is incremented only when
+	// creating a new distributor.
 	wp.refCount++
 	return wd, nil
 }

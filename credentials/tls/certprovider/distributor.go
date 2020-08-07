@@ -31,10 +31,10 @@ import (
 //
 // Distributor implements the KeyMaterialReader interface. Provider
 // implementations may choose to do the following:
-//  - return a distributor as part of their KeyMaterialReader() method.
-//  - invoke the distributor's Set() method whenever they have new key material.
-//  - watch the channel returned by the distributor's Done() method to get
-//    notified when the distributor is closed.
+//  - return a Distributor as part of their KeyMaterialReader() method.
+//  - invoke the Distributor's Set() method whenever they have new key material.
+//  - watch the channel returned by the Distributor.Done() method to get
+//    notified when the Distributor is closed.
 type Distributor struct {
 	// mu protects the underlying key material.
 	mu   sync.Mutex
@@ -45,7 +45,7 @@ type Distributor struct {
 	// availability of key material.
 	ready *grpcsync.Event
 	// done channel to notify provider implementations and unblock any
-	// KeyMaterial() calls, once the distributor is closed.
+	// KeyMaterial() calls, once the Distributor is closed.
 	closed *grpcsync.Event
 }
 
@@ -57,15 +57,15 @@ func NewDistributor() *Distributor {
 	}
 }
 
-// Set updates the key material in the distributor with km.
+// Set updates the key material in the Distributor with km.
 //
-// Provider implementations which use the distributor must not modify the
+// Provider implementations which use the Distributor must not modify the
 // contents of the KeyMaterial struct pointed to by km.
 //
 // A non-nil err value indicates the error that the provider implementation ran
 // into when trying to fetch key material, and makes it possible to surface the
-// error to the user. A non-nil error value passed here causes distributor's
-// KeyMaterial() method to return nil key material.
+// error to the user. A non-nil error value passed here causes the
+// Distributor.KeyMaterial() method to return nil key material.
 func (d *Distributor) Set(km *KeyMaterial, err error) {
 	d.mu.Lock()
 	d.km = km
@@ -78,7 +78,7 @@ func (d *Distributor) Set(km *KeyMaterial, err error) {
 	d.mu.Unlock()
 }
 
-// KeyMaterial returns the most recent key material provided to the distributor.
+// KeyMaterial returns the most recent key material provided to the Distributor.
 // If no key material was provided at the time of this call, it will block until
 // the deadline on the context expires or fresh key material arrives.
 func (d *Distributor) KeyMaterial(ctx context.Context) (*KeyMaterial, error) {
@@ -106,13 +106,13 @@ func (d *Distributor) keyMaterial() (*KeyMaterial, error) {
 	return d.km, d.pErr
 }
 
-// Close turns down the distributor, releases allocated resources and fails any
+// Close turns down the Distributor, releases allocated resources and fails any
 // active KeyMaterial() call waiting for new key material.
 func (d *Distributor) Close() {
 	d.closed.Fire()
 }
 
-// Done returns a channel which will be closed when the distributor is closed.
+// Done returns a channel which will be closed when the Distributor is closed.
 func (d *Distributor) Done() <-chan struct{} {
 	return d.closed.Done()
 }

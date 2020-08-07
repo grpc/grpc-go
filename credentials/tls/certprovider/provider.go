@@ -90,7 +90,7 @@ type Provider interface {
 	// KeyMaterialReader returns a reader to read key material sourced by the
 	// provider. Users should call the Close() method on the returned reader
 	// when they are no longer interested in the underlying key material.
-	KeyMaterialReader(opts KeyMaterialOptions) (KeyMaterialReader, error)
+	KeyMaterialReader(KeyMaterialOptions) (KeyMaterialReader, error)
 
 	// Close cleans up resources allocated by the provider.
 	Close()
@@ -100,8 +100,7 @@ type Provider interface {
 // Implementations must be thread-safe.
 type KeyMaterialReader interface {
 	// Returns the key material when they are ready.
-	// Implementations must honor any deadline set in the context.
-	KeyMaterial(ctx context.Context) (*KeyMaterial, error)
+	KeyMaterial(context.Context) (*KeyMaterial, error)
 
 	// Close provides a way for callers to indicate that they are no longer
 	// interested in the underlying key material.
