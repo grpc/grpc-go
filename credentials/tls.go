@@ -27,7 +27,6 @@ import (
 	"net"
 	"net/url"
 
-	"google.golang.org/grpc/credentials/internal"
 	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
@@ -108,7 +107,7 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 	if id != nil {
 		tlsInfo.SPIFFEID = id
 	}
-	return internal.WrapSyscallConn(rawConn, conn), tlsInfo, nil
+	return credinternal.WrapSyscallConn(rawConn, conn), tlsInfo, nil
 }
 
 func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error) {
@@ -127,7 +126,7 @@ func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error)
 	if id != nil {
 		tlsInfo.SPIFFEID = id
 	}
-	return internal.WrapSyscallConn(rawConn, conn), tlsInfo, nil
+	return credinternal.WrapSyscallConn(rawConn, conn), tlsInfo, nil
 }
 
 func (c *tlsCreds) Clone() TransportCredentials {
