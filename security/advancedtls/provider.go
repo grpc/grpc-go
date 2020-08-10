@@ -66,7 +66,7 @@ type RootPemFileProvider struct {
 
 // NewIdentityPemFileProvider uses IdentityPemFileProviderOptions to
 // construct a IdentityPemFileProvider.
-func NewIdentityPemFileProvider(o *IdentityPemFileProviderOptions) (*IdentityPemFileProvider, error) {
+func NewIdentityPemFileProvider(o *IdentityPemFileProviderOptions, quit chan bool) (*IdentityPemFileProvider, error) {
 	if o.CertFile == "" {
 		return nil, fmt.Errorf("users need to specify certificate file path in NewIdentityPemFileProvider")
 	}
@@ -78,10 +78,10 @@ func NewIdentityPemFileProvider(o *IdentityPemFileProviderOptions) (*IdentityPem
 		o.Interval = 1 * time.Hour
 	}
 	provider := &IdentityPemFileProvider{}
-	quit := make(chan bool)
+	// quit := make(chan bool)
 	provider.distributor = certprovider.NewDistributor()
 	// A goroutine to pull file changes.
-	go func() {
+	go func(quit chan bool) {
 		for {
 			// Read identity certs from PEM files.
 			identityCert, err := o.ReadKeyAndCerts()
@@ -94,11 +94,11 @@ func NewIdentityPemFileProvider(o *IdentityPemFileProviderOptions) (*IdentityPem
 			default:
 			}
 		}
-	}()
+	}(quit)
 	provider.closeFunc = func() {
 		close(quit)
 	}
-	quit <- true
+	// quit <- true
 	return provider, nil
 }
 
@@ -116,7 +116,7 @@ func (p *IdentityPemFileProvider) Close() {
 
 // NewRootPemFileProvider uses RootPemFileProviderOptions to
 // construct a RootPemFileProvider.
-func NewRootPemFileProvider(o *RootPemFileProviderOptions) (*RootPemFileProvider, error) {
+func NewRootPemFileProvider(o *RootPemFileProviderOptions, quit chan bool) (*RootPemFileProvider, error) {
 	if o.TrustFile == "" {
 		return nil, fmt.Errorf("users need to specify key file path in RootPemFileProviderOptions")
 	}
@@ -125,10 +125,10 @@ func NewRootPemFileProvider(o *RootPemFileProviderOptions) (*RootPemFileProvider
 		o.Interval = 1 * time.Hour
 	}
 	provider := &RootPemFileProvider{}
-	quit := make(chan bool)
+	// quit := make(chan bool)
 	provider.distributor = certprovider.NewDistributor()
 	// A goroutine to pull file changes.
-	go func() {
+	go func(quit chan bool) {
 		for {
 			// Read root certs from PEM files.
 			rootCert, err := o.ReadTrustCerts()
@@ -141,11 +141,11 @@ func NewRootPemFileProvider(o *RootPemFileProviderOptions) (*RootPemFileProvider
 			default:
 			}
 		}
-	}()
+	}(quit)
 	provider.closeFunc = func() {
 		close(quit)
 	}
-	quit <- true
+	// quit <- true
 	return provider, nil
 }
 
