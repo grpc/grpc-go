@@ -1,5 +1,3 @@
-// +build !go1.10
-
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -18,24 +16,8 @@
  *
  */
 
-package advancedtls
+package test
 
-import (
-	"crypto/tls"
-	"fmt"
-)
+import "google.golang.org/grpc/grpclog"
 
-// buildGetCertificates returns the first element of o.GetCertificates.
-func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
-	if o.GetCertificates == nil {
-		return nil, fmt.Errorf("function GetCertificates must be specified")
-	}
-	certificates, err := o.GetCertificates(clientHello)
-	if err != nil {
-		return nil, err
-	}
-	if len(certificates) == 0 {
-		return nil, fmt.Errorf("no certificates configured")
-	}
-	return certificates[0], nil
-}
+var logger = grpclog.Component("testing")

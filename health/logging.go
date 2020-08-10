@@ -1,5 +1,3 @@
-// +build !go1.10
-
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -18,14 +16,8 @@
  *
  */
 
-package credentials
+package health
 
-import (
-	"crypto/tls"
-	"net/url"
-)
+import "google.golang.org/grpc/grpclog"
 
-//TODO(ZhenLian): delete this file when we remove Go 1.9 tests.
-func SPIFFEIDFromState(state tls.ConnectionState) *url.URL {
-	return nil
-}
+var logger = grpclog.Component("health_service")

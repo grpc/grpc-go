@@ -234,6 +234,16 @@ type Options struct {
 	DialOpts []grpc.DialOption
 	// TargetName is the target of the parent ClientConn.
 	TargetName string
+	// WatchExpiryTimeout is the amount of time the client is willing to wait
+	// for the first response from the server for any resource being watched.
+	// Expiry will not cause cancellation of the watch. It will only trigger the
+	// invocation of the registered callback and it is left up to the caller to
+	// decide whether or not they want to cancel the watch.
+	//
+	// If this field is left unspecified, a default value of 15 seconds will be
+	// used. This is based on the default value of the initial_fetch_timeout
+	// field in corepb.ConfigSource proto.
+	WatchExpiryTimeout time.Duration
 }
 
 // Function to be overridden in tests.
@@ -307,6 +317,12 @@ func New(opts Options) (*Client, error) {
 		}),
 	}
 	dopts = append(dopts, opts.DialOpts...)
+
+	if opts.WatchExpiryTimeout == 0 {
+		// This is based on the default value of the initial_fetch_timeout field
+		// in corepb.ConfigSource proto.
+		opts.WatchExpiryTimeout = 15 * time.Second
+	}
 
 	c := &Client{
 		done: grpcsync.NewEvent(),

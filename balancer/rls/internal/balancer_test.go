@@ -1,5 +1,3 @@
-// +build go1.10
-
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -191,11 +189,11 @@ func (s) TestUpdateControlChannelTimeout(t *testing.T) {
 // TestUpdateControlChannelWithCreds tests the scenario where the control
 // channel is to established with credentials from the parent channel.
 func (s) TestUpdateControlChannelWithCreds(t *testing.T) {
-	sCreds, err := credentials.NewServerTLSFromFile(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+	sCreds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		t.Fatalf("credentials.NewServerTLSFromFile(server1.pem, server1.key) = %v", err)
 	}
-	cCreds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "")
+	cCreds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "")
 	if err != nil {
 		t.Fatalf("credentials.NewClientTLSFromFile(ca.pem) = %v", err)
 	}

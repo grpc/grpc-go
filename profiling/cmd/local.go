@@ -22,24 +22,22 @@ import (
 	"encoding/gob"
 	"fmt"
 	"os"
-
-	"google.golang.org/grpc/grpclog"
 )
 
 func loadSnapshot(snapshotFileName string) (*snapshot, error) {
-	grpclog.Infof("opening snapshot file %s", snapshotFileName)
+	logger.Infof("opening snapshot file %s", snapshotFileName)
 	snapshotFile, err := os.Open(snapshotFileName)
 	if err != nil {
-		grpclog.Errorf("cannot open %s: %v", snapshotFileName, err)
+		logger.Errorf("cannot open %s: %v", snapshotFileName, err)
 		return nil, err
 	}
 	defer snapshotFile.Close()
 
-	grpclog.Infof("decoding snapshot file %s", snapshotFileName)
+	logger.Infof("decoding snapshot file %s", snapshotFileName)
 	s := &snapshot{}
 	decoder := gob.NewDecoder(snapshotFile)
 	if err = decoder.Decode(s); err != nil {
-		grpclog.Errorf("cannot decode %s: %v", snapshotFileName, err)
+		logger.Errorf("cannot decode %s: %v", snapshotFileName, err)
 		return nil, err
 	}
 

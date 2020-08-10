@@ -37,6 +37,8 @@ var (
 	port     = flag.Int("port", 8080, "The server port")
 	serverID = flag.String("server_id", "go_server", "Server ID included in response")
 	hostname = getHostname()
+
+	logger = grpclog.Component("interop")
 )
 
 func getHostname() string {
@@ -66,7 +68,7 @@ func main() {
 	p := strconv.Itoa(*port)
 	lis, err := net.Listen("tcp", ":"+p)
 	if err != nil {
-		grpclog.Fatalf("failed to listen: %v", err)
+		logger.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
 	testpb.RegisterTestServiceServer(s, &server{})

@@ -38,7 +38,7 @@ import (
 	"google.golang.org/grpc"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/testdata"
+	"google.golang.org/grpc/examples/data"
 
 	"github.com/golang/protobuf/proto"
 
@@ -226,10 +226,10 @@ func main() {
 	var opts []grpc.ServerOption
 	if *tls {
 		if *certFile == "" {
-			*certFile = testdata.Path("server1.pem")
+			*certFile = data.Path("x509/server_cert.pem")
 		}
 		if *keyFile == "" {
-			*keyFile = testdata.Path("server1.key")
+			*keyFile = data.Path("x509/server_key.pem")
 		}
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {

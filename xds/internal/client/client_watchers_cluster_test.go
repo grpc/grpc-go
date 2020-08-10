@@ -20,7 +20,6 @@ package client
 
 import (
 	"testing"
-	"time"
 
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/version"
@@ -39,7 +38,7 @@ func (s) TestClusterWatch(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -100,7 +99,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -109,10 +108,9 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 	v2Client := <-v2ClientCh
 
 	var clusterUpdateChs []*testutils.Channel
-	const count = 2
-
 	var cancelLastWatch func()
 
+	const count = 2
 	for i := 0; i < count; i++ {
 		clusterUpdateCh := testutils.NewChannel()
 		clusterUpdateChs = append(clusterUpdateChs, clusterUpdateCh)
@@ -158,7 +156,7 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -214,7 +212,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -263,16 +261,10 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 // an CDS response for the request that it sends out. We want the watch callback
 // to be invoked with an error once the watchExpiryTimer fires.
 func (s) TestClusterWatchExpiryTimer(t *testing.T) {
-	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 500 * time.Millisecond
-	defer func() {
-		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
-	}()
-
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, true))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -288,7 +280,7 @@ func (s) TestClusterWatchExpiryTimer(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	u, err := clusterUpdateCh.TimedReceive(defaultWatchExpiryTimeout * 2)
+	u, err := clusterUpdateCh.TimedReceive(defaultTestWatchExpiryTimeout * 2)
 	if err != nil {
 		t.Fatalf("failed to get clusterUpdate: %v", err)
 	}
@@ -305,16 +297,10 @@ func (s) TestClusterWatchExpiryTimer(t *testing.T) {
 // an CDS response for the request that it sends out. We want no error even
 // after expiry timeout.
 func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
-	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 500 * time.Millisecond
-	defer func() {
-		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
-	}()
-
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, true))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -340,7 +326,7 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 	}
 
 	// Wait for an error, the error should never happen.
-	u, err := clusterUpdateCh.TimedReceive(defaultWatchExpiryTimeout * 2)
+	u, err := clusterUpdateCh.TimedReceive(defaultTestWatchExpiryTimeout * 2)
 	if err != testutils.ErrRecvTimeout {
 		t.Fatalf("got unexpected: %v, %v, want recv timeout", u.(clusterUpdateErr).u, u.(clusterUpdateErr).err)
 	}
@@ -356,7 +342,7 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
