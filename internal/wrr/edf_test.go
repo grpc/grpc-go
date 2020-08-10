@@ -25,7 +25,7 @@ func (s) TestEDFOnEndpointsWithSameWeight(t *testing.T) {
 	wrr.Add("1", 1)
 	wrr.Add("2", 1)
 	expected := []string{"1", "2", "1", "2", "1", "2", "1", "2", "1", "2"}
-	for i := 0; i < 10; i++ {
+	for i := 0; i < len(expected); i++ {
 		item := wrr.Next().(string)
 		if item != expected[i] {
 			t.Errorf("wrr Next=%s, want=%s", item, expected[i])
