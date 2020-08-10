@@ -445,6 +445,9 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		streamID: s.id,
 		wq:       s.wq,
 	})
+	if s.state == streamReadDone || s.state == streamDone {
+		return false
+	}
 	handle(s)
 	return false
 }
@@ -609,6 +612,15 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
 	if !ok {
+		return
+	}
+	if s.getState() == streamReadDone {
+		t.controlBuf.put(&cleanupStream{
+			streamID: s.id,
+			rst:      true,
+			rstCode:  http2.ErrCodeStreamClosed,
+			onWrite:  func() {},
+		})
 		return
 	}
 	if size > 0 {

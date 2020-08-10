@@ -138,6 +138,18 @@ func (st *serverTester) writeSettingsAck() {
 	}
 }
 
+func (st *serverTester) wantRSTStream() *http2.RSTStreamFrame {
+	f, err := st.readFrame()
+	if err != nil {
+		st.t.Fatalf("Error while expecting an RST frame: %v", err)
+	}
+	sf, ok := f.(*http2.RSTStreamFrame)
+	if !ok {
+		st.t.Fatalf("got a %T; want *RSTStreamFrame", f)
+	}
+	return sf
+}
+
 func (st *serverTester) wantSettings() *http2.SettingsFrame {
 	f, err := st.readFrame()
 	if err != nil {
@@ -227,7 +239,7 @@ func (st *serverTester) encodeHeader(headers ...string) []byte {
 	return st.headerBuf.Bytes()
 }
 
-func (st *serverTester) writeHeadersGRPC(streamID uint32, path string) {
+func (st *serverTester) writeHeadersGRPC(streamID uint32, path string, endStream bool) {
 	st.writeHeaders(http2.HeadersFrameParam{
 		StreamID: streamID,
 		BlockFragment: st.encodeHeader(
@@ -236,7 +248,7 @@ func (st *serverTester) writeHeadersGRPC(streamID uint32, path string) {
 			"content-type", "application/grpc",
 			"te", "trailers",
 		),
-		EndStream:  false,
+		EndStream:  endStream,
 		EndHeaders: true,
 	})
 }

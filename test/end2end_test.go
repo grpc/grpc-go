@@ -4535,7 +4535,7 @@ func testClientRequestBodyErrorUnexpectedEOF(t *testing.T, e env) {
 	te.startServer(ts)
 	defer te.tearDown()
 	te.withServerTester(func(st *serverTester) {
-		st.writeHeadersGRPC(1, "/grpc.testing.TestService/UnaryCall")
+		st.writeHeadersGRPC(1, "/grpc.testing.TestService/UnaryCall", false)
 		// Say we have 5 bytes coming, but set END_STREAM flag:
 		st.writeData(1, true, []byte{0, 0, 0, 0, 5})
 		st.wantAnyFrame() // wait for server to crash (it used to crash)
@@ -4559,7 +4559,7 @@ func testClientRequestBodyErrorCloseAfterLength(t *testing.T, e env) {
 	te.startServer(ts)
 	defer te.tearDown()
 	te.withServerTester(func(st *serverTester) {
-		st.writeHeadersGRPC(1, "/grpc.testing.TestService/UnaryCall")
+		st.writeHeadersGRPC(1, "/grpc.testing.TestService/UnaryCall", false)
 		// say we're sending 5 bytes, but then close the connection instead.
 		st.writeData(1, false, []byte{0, 0, 0, 0, 5})
 		st.cc.Close()
@@ -4582,7 +4582,7 @@ func testClientRequestBodyErrorCancel(t *testing.T, e env) {
 	te.startServer(ts)
 	defer te.tearDown()
 	te.withServerTester(func(st *serverTester) {
-		st.writeHeadersGRPC(1, "/grpc.testing.TestService/UnaryCall")
+		st.writeHeadersGRPC(1, "/grpc.testing.TestService/UnaryCall", false)
 		// Say we have 5 bytes coming, but cancel it instead.
 		st.writeRSTStream(1, http2.ErrCodeCancel)
 		st.writeData(1, false, []byte{0, 0, 0, 0, 5})
@@ -4595,7 +4595,7 @@ func testClientRequestBodyErrorCancel(t *testing.T, e env) {
 		}
 
 		// And now send an uncanceled (but still invalid), just to get a response.
-		st.writeHeadersGRPC(3, "/grpc.testing.TestService/UnaryCall")
+		st.writeHeadersGRPC(3, "/grpc.testing.TestService/UnaryCall", false)
 		st.writeData(3, true, []byte{0, 0, 0, 0, 0})
 		<-gotCall
 		st.wantAnyFrame()
@@ -4619,7 +4619,7 @@ func testClientRequestBodyErrorCancelStreamingInput(t *testing.T, e env) {
 	te.startServer(ts)
 	defer te.tearDown()
 	te.withServerTester(func(st *serverTester) {
-		st.writeHeadersGRPC(1, "/grpc.testing.TestService/StreamingInputCall")
+		st.writeHeadersGRPC(1, "/grpc.testing.TestService/StreamingInputCall", false)
 		// Say we have 5 bytes coming, but cancel it instead.
 		st.writeData(1, false, []byte{0, 0, 0, 0, 5})
 		st.writeRSTStream(1, http2.ErrCodeCancel)
@@ -4633,6 +4633,33 @@ func testClientRequestBodyErrorCancelStreamingInput(t *testing.T, e env) {
 		if grpc.Code(got) != codes.Canceled {
 			t.Errorf("error = %#v; want error code %s", got, codes.Canceled)
 		}
+	})
+}
+
+func (s) TestClientInitialHeaderEndStream(t *testing.T) {
+	for _, e := range listTestEnv() {
+		if e.httpHandler {
+			continue
+		}
+		testClientInitialHeaderEndStream(t, e)
+	}
+}
+
+func testClientInitialHeaderEndStream(t *testing.T, e env) {
+	te := newTest(t, e)
+	ts := &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
+		errUnexpectedCall := errors.New("unexpected call func server method")
+		t.Error(errUnexpectedCall)
+		return errUnexpectedCall
+	}}
+	te.startServer(ts)
+	defer te.tearDown()
+	te.withServerTester(func(st *serverTester) {
+		st.writeHeadersGRPC(1, "/grpc.testing.TestService/StreamingInputCall", true)
+		st.writeData(1, false, []byte{0, 0, 0, 0, 5})
+		st.wantAnyFrame()
+		st.wantAnyFrame()
+		st.wantRSTStream()
 	})
 }
 
