@@ -93,7 +93,7 @@ type client struct {
 }
 
 // AddWatch overrides the transport helper's AddWatch to save the LDS
-// resource_name. This is required when handling an RDS response to perform hot
+// resource_name. This is required when handling an RDS response to perform host
 // matching.
 func (v2c *client) AddWatch(resourceType, resourceName string) {
 	v2c.mu.Lock()
@@ -112,6 +112,8 @@ func (v2c *client) AddWatch(resourceType, resourceName string) {
 	v2c.TransportHelper.AddWatch(resourceType, resourceName)
 }
 
+// RemoveWatch overrides the transport helper's RemoveWatch to clear the LDS
+// resource_name when the last watch is removed.
 func (v2c *client) RemoveWatch(resourceType, resourceName string) {
 	v2c.mu.Lock()
 	// Special handling for LDS, because RDS needs the LDS resource_name for

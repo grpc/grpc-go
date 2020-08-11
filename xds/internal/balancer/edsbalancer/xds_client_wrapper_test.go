@@ -58,10 +58,10 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start fake xDS server: %v", err)
 	}
+	defer cleanup()
 
 	cw := newXDSClientWrapper(nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, nil)
 	defer cw.close()
-	defer cleanup()
 
 	for _, test := range []struct {
 		name             string
