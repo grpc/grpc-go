@@ -16,28 +16,13 @@
  *
  */
 
-package internal_test
+package credentials
 
 import (
 	"net"
 	"syscall"
 	"testing"
-
-	"google.golang.org/grpc/credentials/internal"
-	"google.golang.org/grpc/internal/grpctest"
 )
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
-
-type syscallConn struct {
-	net.Conn
-}
 
 func (*syscallConn) SyscallConn() (syscall.RawConn, error) {
 	return nil, nil
@@ -51,7 +36,7 @@ func (s) TestWrapSyscallConn(t *testing.T) {
 	sc := &syscallConn{}
 	nsc := &nonSyscallConn{}
 
-	wrapConn := internal.WrapSyscallConn(sc, nsc)
+	wrapConn := WrapSyscallConn(sc, nsc)
 	if _, ok := wrapConn.(syscall.Conn); !ok {
 		t.Errorf("returned conn (type %T) doesn't implement syscall.Conn, want implement", wrapConn)
 	}
@@ -61,7 +46,7 @@ func (s) TestWrapSyscallConnNoWrap(t *testing.T) {
 	nscRaw := &nonSyscallConn{}
 	nsc := &nonSyscallConn{}
 
-	wrapConn := internal.WrapSyscallConn(nscRaw, nsc)
+	wrapConn := WrapSyscallConn(nscRaw, nsc)
 	if _, ok := wrapConn.(syscall.Conn); ok {
 		t.Errorf("returned conn (type %T) implements syscall.Conn, want not implement", wrapConn)
 	}
