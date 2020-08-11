@@ -27,49 +27,51 @@ import (
 )
 
 type policyTest struct {
-	expected  bool
-	expr      string
-	authzArgs map[string]interface{}
+	expectedEvaluationOutcome bool
+	expr                      string
+	authzArgs                 map[string]interface{}
+	expectedParsingError      bool
+	expectedEvaluationError   bool
 }
 
 func TestStringConvert(t *testing.T) {
 	var policyTests = []policyTest{
 		{
 			// use a policy with startsWith primative and returns a match.
-			expected:  true,
-			expr:      "request.url_path.startsWith('/pkg.service/test')",
-			authzArgs: map[string]interface{}{"request.url_path": "/pkg.service/test"},
+			expectedEvaluationOutcome: true,
+			expr:                      "request.url_path.startsWith('/pkg.service/test')",
+			authzArgs:                 map[string]interface{}{"request.url_path": "/pkg.service/test"},
 		},
 		{
 			// use a policy with == primative and returns a match.
-			expected:  true,
-			expr:      "connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'",
-			authzArgs: map[string]interface{}{"connection.uri_san_peer_certificate": "cluster/ns/default/sa/admin"},
+			expectedEvaluationOutcome: true,
+			expr:                      "connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'",
+			authzArgs:                 map[string]interface{}{"connection.uri_san_peer_certificate": "cluster/ns/default/sa/admin"},
 		},
 		{
 			// use a policy with startsWith primative and returns no match.
-			expected:  false,
-			expr:      "request.url_path.startsWith('/pkg.service/test')",
-			authzArgs: map[string]interface{}{"request.url_path": "/source/pkg.service/test"},
+			expectedEvaluationOutcome: false,
+			expr:                      "request.url_path.startsWith('/pkg.service/test')",
+			authzArgs:                 map[string]interface{}{"request.url_path": "/source/pkg.service/test"},
 		},
 		{
 			// use a policy with startsWith and == primatives and returns a match.
-			expected: true,
-			expr:     "request.url_path == '/pkg.service/test' && connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'",
+			expectedEvaluationOutcome: true,
+			expr:                      "request.url_path == '/pkg.service/test' && connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'",
 			authzArgs: map[string]interface{}{"request.url_path": "/pkg.service/test",
 				"connection.uri_san_peer_certificate": "cluster/ns/default/sa/admin"},
 		},
 		{
 			// use a policy that has a field not present in the environment.
-			expected:  false,
-			expr:      "request.source_path.startsWith('/pkg.service/test')",
-			authzArgs: map[string]interface{}{"request.url_path": "/pkg.service/test"},
+			expectedParsingError: true,
+			expr:                 "request.source_path.startsWith('/pkg.service/test')",
+			authzArgs:            map[string]interface{}{"request.url_path": "/pkg.service/test"},
 		},
 		{
 			// use an argument that has a filed not included in the environment.
-			expected:  false,
-			expr:      "request.url_path.startsWith('/pkg.service/test')",
-			authzArgs: map[string]interface{}{"request.source_path": "/pkg.service/test"},
+			expectedEvaluationError: true,
+			expr:                    "request.url_path.startsWith('/pkg.service/test')",
+			authzArgs:               map[string]interface{}{"request.source_path": "/pkg.service/test"},
 		},
 	}
 	declarations := []*expr.Decl{decls.NewIdent("request.url_path", decls.String, nil),
@@ -85,11 +87,11 @@ func TestStringConvert(t *testing.T) {
 
 	env, _ := cel.NewEnv(cel.Declarations(declarations...))
 
-	for i, testInfo := range policyTests {
-		expected, expr, authzArgs := testInfo.expected, testInfo.expr, testInfo.authzArgs
+	for _, testInfo := range policyTests {
+		expected, expr, authzArgs := testInfo.expectedEvaluationOutcome, testInfo.expr, testInfo.authzArgs
 		checked, err := convertStringToCheckedExpr(expr, declarations)
 		if err != nil {
-			if i == 4 { // the 4th test should error since not in environment
+			if testInfo.expectedParsingError == true {
 				continue
 			}
 			t.Errorf("Error in conversion %v", err)
@@ -97,8 +99,8 @@ func TestStringConvert(t *testing.T) {
 		ast := cel.CheckedExprToAst(checked)
 		program, err := env.Program(ast)
 		got, _, gotErr := program.Eval(authzArgs)
-		if gotErr != nil {
-			if i == 5 {
+		if gotErr != nil && testInfo.expectedEvaluationError == true {
+			if testInfo.expectedEvaluationError == true {
 				continue
 			}
 			t.Errorf("Error in evaluating CEL program %s", gotErr.Error())
