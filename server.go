@@ -554,12 +554,15 @@ type ServiceRegistrar interface {
 
 // RegisterService registers a service and its implementation to the gRPC
 // server. It is called from the IDL generated code. This must be called before
-// invoking Serve.
+// invoking Serve. If ss is non-nil, its type is checked to ensure it
+// implements sd.HandlerType.
 func (s *Server) RegisterService(sd *ServiceDesc, ss interface{}) {
-	ht := reflect.TypeOf(sd.HandlerType).Elem()
-	st := reflect.TypeOf(ss)
-	if !st.Implements(ht) {
-		logger.Fatalf("grpc: Server.RegisterService found the handler of type %v that does not satisfy %v", st, ht)
+	if ss != nil {
+		ht := reflect.TypeOf(sd.HandlerType).Elem()
+		st := reflect.TypeOf(ss)
+		if !st.Implements(ht) {
+			logger.Fatalf("grpc: Server.RegisterService found the handler of type %v that does not satisfy %v", st, ht)
+		}
 	}
 	s.register(sd, ss)
 }

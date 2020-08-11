@@ -33,11 +33,7 @@ import (
 
 var port = flag.Int("port", 50051, "the port to serve on")
 
-type server struct {
-	pb.UnimplementedEchoServer
-}
-
-func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
+func bidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
 	for {
 		in, err := stream.Recv()
 		if err != nil {
@@ -61,6 +57,6 @@ func main() {
 	}
 	fmt.Printf("server listening at port %v\n", lis.Addr())
 	s := grpc.NewServer()
-	pb.RegisterEchoServer(s, &server{})
+	pb.RegisterEchoService(s, &pb.EchoService{BidirectionalStreamingEcho: bidirectionalStreamingEcho})
 	s.Serve(lis)
 }
