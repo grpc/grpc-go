@@ -59,7 +59,7 @@ curl --silent https://raw.githubusercontent.com/istio/istio/master/security/prot
 
 mkdir -p ${WORKDIR}/out
 
-SOURCES=(
+LEGACY_SOURCES=(
   ${WORKDIR}/googleapis/google/rpc/code.proto
   ${WORKDIR}/grpc-proto/grpc/binlog/v1/binarylog.proto
   ${WORKDIR}/grpc-proto/grpc/channelz/v1/channelz.proto
@@ -72,16 +72,27 @@ SOURCES=(
   ${WORKDIR}/grpc-proto/grpc/service_config/service_config.proto
   ${WORKDIR}/grpc-proto/grpc/tls/provider/meshca/experimental/config.proto
   ${WORKDIR}/istio/istio/google/security/meshca/v1/meshca.proto
-  $(git ls-files --exclude-standard --cached --others "*.proto")
+  $(git ls-files --exclude-standard --cached --others "*.proto" | grep -v '^examples/' )
 )
+
+SOURCES=(
+  $(git ls-files --exclude-standard --cached --others "*.proto" | grep '^examples/')
+)
+
 # These options of the form 'Mfoo.proto=bar' instruct the codegen to use an
 # import path of 'bar' in the generated code when 'foo.proto' is imported in
 # one of the sources.
 OPTS=Mgrpc/service_config/service_config.proto=/internal/proto/grpc_service_config,\
 Menvoy/config/core/v3/config_source.proto=github.com/envoyproxy/go-control-plane/envoy/config/core/v3
+
 for src in ${SOURCES[@]}; do
   echo "protoc ${src}"
-  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS},requireUnimplementedServers=false:${WORKDIR}/out \
+  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS}:${WORKDIR}/out ${src}
+done
+
+for src in ${LEGACY_SOURCES[@]}; do
+  echo "protoc ${src}"
+  protoc --go_out=${OPTS},plugins=grpc:${WORKDIR}/out \
     -I"." \
     -I${WORKDIR}/grpc-proto \
     -I${WORKDIR}/googleapis \

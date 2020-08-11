@@ -37,11 +37,8 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
-var requireUnimplemented *bool
-
 func main() {
 	var flags flag.FlagSet
-	requireUnimplemented = flags.Bool("requireUnimplementedServers", true, "unset to match legacy behavior")
 
 	protogen.Options{
 		ParamFunc: flags.Set,

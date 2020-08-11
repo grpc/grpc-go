@@ -28,7 +28,7 @@ make the following changes:
 @@ -61,6 +62,8 @@ func main() {
         }
         s := grpc.NewServer()
-        pb.RegisterGreeterServer(s, &server{})
+        pb.RegisterGreeterService(s, &pb.GreeterService{SayHello: sayHello})
 +       // Register reflection service on gRPC server.
 +       reflection.Register(s)
         if err := s.Serve(lis); err != nil {

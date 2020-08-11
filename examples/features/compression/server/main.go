@@ -34,11 +34,7 @@ import (
 
 var port = flag.Int("port", 50051, "the port to serve on")
 
-type server struct {
-	pb.UnimplementedEchoServer
-}
-
-func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
+func unaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	fmt.Printf("UnaryEcho called with message %q\n", in.GetMessage())
 	return &pb.EchoResponse{Message: in.Message}, nil
 }
@@ -53,6 +49,6 @@ func main() {
 	fmt.Printf("server listening at %v\n", lis.Addr())
 
 	s := grpc.NewServer()
-	pb.RegisterEchoServer(s, &server{})
+	pb.RegisterEchoService(s, &pb.EchoService{UnaryEcho: unaryEcho})
 	s.Serve(lis)
 }
