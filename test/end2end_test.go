@@ -4678,25 +4678,23 @@ func (s) TestClientSendDataAfterCloseSend(t *testing.T) {
 }
 
 func testClientSendDataAfterCloseSend(t *testing.T, e env) {
+	sentMessage := make(chan bool, 1)
 	te := newTest(t, e)
 	ts := &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
-		receives := 0
 		for {
 			_, err := stream.Recv()
 			if err == io.EOF {
 				break
 			}
 			if err != nil {
-				return err
+				break
 			}
-			receives++
 		}
-		if receives != 1 {
-			errUnexpectedReceives := fmt.Errorf("unexpected number of receives in func server method: %d", receives)
-			t.Error(errUnexpectedReceives)
-			return errUnexpectedReceives
+		if err := stream.SendMsg(nil); err == nil {
+			t.Error("expected error sending message on stream after stream closed on illegal data")
 		}
-		return stream.SendAndClose(&testpb.StreamingInputCallResponse{})
+		sentMessage <- true
+		return nil
 	}}
 	te.startServer(ts)
 	defer te.tearDown()
@@ -4708,6 +4706,7 @@ func testClientSendDataAfterCloseSend(t *testing.T, e env) {
 		st.wantAnyFrame()
 		st.wantAnyFrame()
 		st.wantRSTStream()
+		<-sentMessage
 	})
 }
 

@@ -612,12 +612,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		return
 	}
 	if s.getState() == streamReadDone {
-		t.controlBuf.put(&cleanupStream{
-			streamID: s.id,
-			rst:      true,
-			rstCode:  http2.ErrCodeStreamClosed,
-			onWrite:  func() {},
-		})
+		t.closeStream(s, true, http2.ErrCodeStreamClosed, false)
 		return
 	}
 	if size > 0 {
