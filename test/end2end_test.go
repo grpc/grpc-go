@@ -4648,15 +4648,63 @@ func (s) TestClientInitialHeaderEndStream(t *testing.T) {
 func testClientInitialHeaderEndStream(t *testing.T, e env) {
 	te := newTest(t, e)
 	ts := &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
-		errUnexpectedCall := errors.New("unexpected call func server method")
-		t.Error(errUnexpectedCall)
-		return errUnexpectedCall
+		_, err := stream.Recv()
+		if err == nil {
+			errUnexpectedData := errors.New("unexpected data received in func server method")
+			t.Error(errUnexpectedData)
+			return errUnexpectedData
+		}
+		return nil
 	}}
 	te.startServer(ts)
 	defer te.tearDown()
 	te.withServerTester(func(st *serverTester) {
+		// Send a headers with END_STREAM flag, but then write data.
 		st.writeHeadersGRPC(1, "/grpc.testing.TestService/StreamingInputCall", true)
-		st.writeData(1, false, []byte{0, 0, 0, 0, 5})
+		st.writeData(1, false, []byte{0, 0, 0, 0, 0})
+		st.wantAnyFrame()
+		st.wantAnyFrame()
+		st.wantRSTStream()
+	})
+}
+
+func (s) TestClientInitialHeaderEndStreamCloseSend(t *testing.T) {
+	for _, e := range listTestEnv() {
+		if e.httpHandler {
+			continue
+		}
+		testClientInitialHeaderEndStreamCloseSend(t, e)
+	}
+}
+
+func testClientInitialHeaderEndStreamCloseSend(t *testing.T, e env) {
+	te := newTest(t, e)
+	ts := &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
+		receives := 0
+		for {
+			_, err := stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return err
+			}
+			receives++
+		}
+		if receives != 1 {
+			errUnexpectedReceives := fmt.Errorf("unexpected number of receives in func server method: %d", receives)
+			t.Error(errUnexpectedReceives)
+			return errUnexpectedReceives
+		}
+		return stream.SendAndClose(&testpb.StreamingInputCallResponse{})
+	}}
+	te.startServer(ts)
+	defer te.tearDown()
+	te.withServerTester(func(st *serverTester) {
+		st.writeHeadersGRPC(1, "/grpc.testing.TestService/StreamingInputCall", false)
+		// Send data with END_STREAM flag, but then write more data.
+		st.writeData(1, true, []byte{0, 0, 0, 0, 0})
+		st.writeData(1, false, []byte{0, 0, 0, 0, 0})
 		st.wantAnyFrame()
 		st.wantAnyFrame()
 		st.wantRSTStream()

@@ -445,9 +445,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		streamID: s.id,
 		wq:       s.wq,
 	})
-	if s.state == streamReadDone || s.state == streamDone {
-		return false
-	}
 	handle(s)
 	return false
 }
