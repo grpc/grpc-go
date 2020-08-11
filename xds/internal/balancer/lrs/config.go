@@ -20,6 +20,7 @@ package lrs
 
 import (
 	"encoding/json"
+	"fmt"
 
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
@@ -39,6 +40,15 @@ func parseConfig(c json.RawMessage) (*lbConfig, error) {
 	var cfg lbConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
 		return nil, err
+	}
+	if cfg.ClusterName == "" {
+		return nil, fmt.Errorf("required ClusterName is not set in %+v", cfg)
+	}
+	if cfg.LrsLoadReportingServerName == "" {
+		return nil, fmt.Errorf("required LrsLoadReportingServerName is not set in %+v", cfg)
+	}
+	if cfg.Locality == nil {
+		return nil, fmt.Errorf("required Locality is not set in %+v", cfg)
 	}
 	return &cfg, nil
 }

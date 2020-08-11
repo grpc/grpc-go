@@ -41,7 +41,48 @@ func TestParseConfig(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "temp",
+			name: "no cluster name",
+			js: `{
+  "edsServiceName": "test-eds-service",
+  "lrsLoadReportingServerName": "test-lrs-name",
+  "locality": {
+    "region": "test-region",
+    "zone": "test-zone",
+    "subZone": "test-sub-zone"
+  },
+  "childPolicy":[{"round_robin":{}}]
+}
+			`,
+			wantErr: true,
+		},
+		{
+			name: "no LRS server name",
+			js: `{
+  "clusterName": "test-cluster",
+  "edsServiceName": "test-eds-service",
+  "locality": {
+    "region": "test-region",
+    "zone": "test-zone",
+    "subZone": "test-sub-zone"
+  },
+  "childPolicy":[{"round_robin":{}}]
+}
+			`,
+			wantErr: true,
+		},
+		{
+			name: "no locality",
+			js: `{
+  "clusterName": "test-cluster",
+  "edsServiceName": "test-eds-service",
+  "lrsLoadReportingServerName": "test-lrs-name",
+  "childPolicy":[{"round_robin":{}}]
+}
+			`,
+			wantErr: true,
+		},
+		{
+			name: "good",
 			js: `{
   "clusterName": "test-cluster",
   "edsServiceName": "test-eds-service",
@@ -78,8 +119,8 @@ func TestParseConfig(t *testing.T) {
 				t.Errorf("parseConfig() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !cmp.Equal(got, tt.want) {
-				t.Errorf("parseConfig() got = %v, want %v, diff: %s", got, tt.want, cmp.Diff(got, tt.want))
+			if diff := cmp.Diff(got, tt.want); diff != "" {
+				t.Errorf("parseConfig() got = %v, want %v, diff: %s", got, tt.want, diff)
 			}
 		})
 	}
