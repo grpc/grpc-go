@@ -4668,16 +4668,16 @@ func testClientInitialHeaderEndStream(t *testing.T, e env) {
 	})
 }
 
-func (s) TestClientInitialHeaderEndStreamCloseSend(t *testing.T) {
+func (s) TestClientSendDataAfterCloseSend(t *testing.T) {
 	for _, e := range listTestEnv() {
 		if e.httpHandler {
 			continue
 		}
-		testClientInitialHeaderEndStreamCloseSend(t, e)
+		testClientSendDataAfterCloseSend(t, e)
 	}
 }
 
-func testClientInitialHeaderEndStreamCloseSend(t *testing.T, e env) {
+func testClientSendDataAfterCloseSend(t *testing.T, e env) {
 	te := newTest(t, e)
 	ts := &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
 		receives := 0
