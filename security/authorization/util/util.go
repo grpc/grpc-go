@@ -16,12 +16,10 @@
  *
  */
 
-// Package util is a utility package
-package util
+// Package engine is for the RBAC CEL engine.
+package engine
 
 import (
-
-	// v3
 	cel "github.com/google/cel-go/cel"
 	decls "github.com/google/cel-go/checker/decls"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
@@ -46,20 +44,8 @@ func compileCel(env *cel.Env, expr string) (*cel.Ast, error) {
 	return checked, nil
 }
 
-func convertStringToCheckedExpr(expr string) (*expr.CheckedExpr, error) {
-	env, _ := cel.NewEnv(
-		cel.Declarations(
-			decls.NewIdent("request.url_path", decls.String, nil),
-			decls.NewIdent("request.host", decls.String, nil),
-			decls.NewIdent("request.method", decls.String, nil),
-			decls.NewIdent("request.headers", decls.NewMapType(decls.String, decls.String), nil),
-			decls.NewIdent("source.address", decls.String, nil),
-			decls.NewIdent("source.port", decls.Int, nil),
-			decls.NewIdent("source.principal", decls.String, nil),
-			decls.NewIdent("destination.address", decls.String, nil),
-			decls.NewIdent("destination.port", decls.Int, nil),
-			decls.NewIdent("connection.uri_san_peer_certificate", decls.String, nil)))
-
+func convertStringToCheckedExpr(expr string, declarations []*expr.Decl) (*expr.CheckedExpr, error) {
+	env, _ := cel.NewEnv(cel.Declarations(declarations...))
 	checked, err := compileCel(env, expr)
 	if err != nil {
 		return nil, err
@@ -68,7 +54,5 @@ func convertStringToCheckedExpr(expr string) (*expr.CheckedExpr, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return checkedExpr, nil
-
 }
