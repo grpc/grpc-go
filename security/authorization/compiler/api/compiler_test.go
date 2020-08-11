@@ -25,6 +25,8 @@ import (
 	"testing"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
+	cel "github.com/google/cel-go/cel"
+	decls "github.com/google/cel-go/checker/decls"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -150,4 +152,43 @@ func TestSerialize(t *testing.T) {
 		}
 		fmt.Printf("Compiled rbac evaluation result: %v, Direct Evaluation result: %v \n", got, want)
 	}
+}
+
+func TestStringConvert(t *testing.T) {
+	testPolicies["test access"] = "request.url_path.startsWith('/pkg.service/test')"
+	testPolicies["admin access"] = "connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'"
+	testPolicies["dev access"] = "request.url_path == '/pkg.service/test' && connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'"
+	vars := map[string]interface{}{
+		"request.url_path":                    "/pkg.service/test",
+		"connection.uri_san_peer_certificate": "cluster/ns/default/sa/admin",
+	}
+	env, _ := cel.NewEnv(
+		cel.Declarations(
+			decls.NewIdent("request.url_path", decls.String, nil),
+			decls.NewIdent("request.host", decls.String, nil),
+			decls.NewIdent("request.method", decls.String, nil),
+			decls.NewIdent("request.headers", decls.NewMapType(decls.String, decls.String), nil),
+			decls.NewIdent("source.address", decls.String, nil),
+			decls.NewIdent("source.port", decls.Int, nil),
+			decls.NewIdent("source.principal", decls.String, nil),
+			decls.NewIdent("destination.address", decls.String, nil),
+			decls.NewIdent("destination.port", decls.Int, nil),
+			decls.NewIdent("connection.uri_san_peer_certificate", decls.String, nil)))
+
+	for _, expr := range testPolicies {
+		checked, err := convertStringToCheckedExpr(expr)
+		if err != nil {
+			t.Errorf("Error in conversion %v", err)
+		}
+		ast := cel.CheckedExprToAst(checked)
+		program, err := env.Program(ast)
+		got, _, gotErr := program.Eval(vars) //(*program).Eval(vars)
+		if gotErr != nil {
+			t.Errorf("Error in evaluating CEL program %s", gotErr.Error())
+		}
+		if got.Value() == false {
+			t.Errorf("Error in evaluating converted CheckedExpr")
+		}
+	}
+	fmt.Println("Conversion Success")
 }
