@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-// Package lrs implements load reporting service for xds balancer.
 package lrs
 
 import (

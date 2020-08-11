@@ -16,6 +16,7 @@
  *
  */
 
+// Package lrs implements load reporting balancer for xds.
 package lrs
 
 import (
@@ -44,7 +45,7 @@ func (l *lrsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balanc
 		buildOpts: opts,
 	}
 	b.loadStore = NewStore()
-	b.c = newXDSClientWrapper(b.loadStore)
+	b.client = newXDSClientWrapper(b.loadStore)
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
 	return b
@@ -64,10 +65,10 @@ type lrsBalancer struct {
 
 	logger    *grpclog.PrefixLogger
 	loadStore Store
-	c         *xdsClientWrapper
+	client    *xdsClientWrapper
 
 	config *lbConfig
-	b      balancer.Balancer // The sub balancer.
+	lb     balancer.Balancer // The sub balancer.
 }
 
 func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
@@ -82,40 +83,40 @@ func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		if bb == nil {
 			return fmt.Errorf("balancer %q not registered", newConfig.ChildPolicy.Name)
 		}
-		if b.b != nil {
-			b.b.Close()
+		if b.lb != nil {
+			b.lb.Close()
 		}
-		b.b = bb.Build(newCCWrapper(b.cc, b.loadStore, newConfig.Locality), b.buildOpts)
+		b.lb = bb.Build(newCCWrapper(b.cc, b.loadStore, newConfig.Locality), b.buildOpts)
 	}
 	// Update load reporting config or xds client.
-	b.c.update(newConfig, s.ResolverState.Attributes)
+	b.client.update(newConfig, s.ResolverState.Attributes)
 	b.config = newConfig
 
 	// Addresses and sub-balancer config are sent to sub-balancer.
-	return b.b.UpdateClientConnState(balancer.ClientConnState{
+	return b.lb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  s.ResolverState,
 		BalancerConfig: b.config.ChildPolicy.Config,
 	})
 }
 
 func (b *lrsBalancer) ResolverError(err error) {
-	if b.b != nil {
-		b.b.ResolverError(err)
+	if b.lb != nil {
+		b.lb.ResolverError(err)
 	}
 }
 
 func (b *lrsBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
-	if b.b != nil {
-		b.b.UpdateSubConnState(sc, s)
+	if b.lb != nil {
+		b.lb.UpdateSubConnState(sc, s)
 	}
 }
 
 func (b *lrsBalancer) Close() {
-	if b.b != nil {
-		b.b.Close()
-		b.b = nil
+	if b.lb != nil {
+		b.lb.Close()
+		b.lb = nil
 	}
-	b.c.close()
+	b.client.close()
 }
 
 type ccWrapper struct {
@@ -159,7 +160,7 @@ func newXDSClientWrapper(loadStore Store) *xdsClientWrapper {
 	}
 }
 
-// update checks the config and xdsclient, and decide whether it needs to
+// update checks the config and xdsclient, and decides whether it needs to
 // restart the load reporting stream.
 //
 // TODO: refactor lrs to share one stream instead of one per EDS.

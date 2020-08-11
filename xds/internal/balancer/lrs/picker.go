@@ -46,24 +46,29 @@ func newLoadReportPicker(p balancer.Picker, id internal.LocalityID, loadStore St
 
 func (lrp *loadReportPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	res, err := lrp.p.Pick(info)
-	if lrp.loadStore != nil && err == nil {
-		lrp.loadStore.CallStarted(lrp.id)
-		td := res.Done
-		res.Done = func(info balancer.DoneInfo) {
-			lrp.loadStore.CallFinished(lrp.id, info.Err)
-			if load, ok := info.ServerLoad.(*orcapb.OrcaLoadReport); ok {
-				lrp.loadStore.CallServerLoad(lrp.id, serverLoadCPUName, load.CpuUtilization)
-				lrp.loadStore.CallServerLoad(lrp.id, serverLoadMemoryName, load.MemUtilization)
-				for n, d := range load.RequestCost {
-					lrp.loadStore.CallServerLoad(lrp.id, n, d)
-				}
-				for n, d := range load.Utilization {
-					lrp.loadStore.CallServerLoad(lrp.id, n, d)
-				}
-			}
-			if td != nil {
-				td(info)
-			}
+	if err != nil {
+		return res, err
+	}
+
+	lrp.loadStore.CallStarted(lrp.id)
+	oldDone := res.Done
+	res.Done = func(info balancer.DoneInfo) {
+		if oldDone != nil {
+			oldDone(info)
+		}
+		lrp.loadStore.CallFinished(lrp.id, info.Err)
+
+		load, ok := info.ServerLoad.(*orcapb.OrcaLoadReport)
+		if !ok {
+			return
+		}
+		lrp.loadStore.CallServerLoad(lrp.id, serverLoadCPUName, load.CpuUtilization)
+		lrp.loadStore.CallServerLoad(lrp.id, serverLoadMemoryName, load.MemUtilization)
+		for n, d := range load.RequestCost {
+			lrp.loadStore.CallServerLoad(lrp.id, n, d)
+		}
+		for n, d := range load.Utilization {
+			lrp.loadStore.CallServerLoad(lrp.id, n, d)
 		}
 	}
 	return res, err
