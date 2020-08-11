@@ -138,7 +138,7 @@ func (st *serverTester) writeSettingsAck() {
 	}
 }
 
-func (st *serverTester) wantRSTStream() *http2.RSTStreamFrame {
+func (st *serverTester) wantRSTStream(errCode http2.ErrCode) *http2.RSTStreamFrame {
 	f, err := st.readFrame()
 	if err != nil {
 		st.t.Fatalf("Error while expecting an RST frame: %v", err)
@@ -146,6 +146,9 @@ func (st *serverTester) wantRSTStream() *http2.RSTStreamFrame {
 	sf, ok := f.(*http2.RSTStreamFrame)
 	if !ok {
 		st.t.Fatalf("got a %T; want *RSTStreamFrame", f)
+	}
+	if sf.ErrCode != errCode {
+		st.t.Fatalf("expected RST error code '%v', got '%v'", errCode.String(), sf.ErrCode.String())
 	}
 	return sf
 }

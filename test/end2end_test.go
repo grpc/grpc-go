@@ -4664,7 +4664,7 @@ func testClientInitialHeaderEndStream(t *testing.T, e env) {
 		st.writeData(1, false, []byte{0, 0, 0, 0, 0})
 		st.wantAnyFrame()
 		st.wantAnyFrame()
-		st.wantRSTStream()
+		st.wantRSTStream(http2.ErrCodeStreamClosed)
 	})
 }
 
@@ -4705,7 +4705,7 @@ func testClientSendDataAfterCloseSend(t *testing.T, e env) {
 		st.writeData(1, false, []byte{0, 0, 0, 0, 0})
 		st.wantAnyFrame()
 		st.wantAnyFrame()
-		st.wantRSTStream()
+		st.wantRSTStream(http2.ErrCodeStreamClosed)
 		<-sentMessage
 	})
 }
