@@ -16,7 +16,7 @@
  *
  */
 
-// Package engine is for the RBAC CEL engine.
+// Package engine is for the RBAC authorization engine.
 package engine
 
 import (
@@ -45,7 +45,10 @@ func compileCel(env *cel.Env, expr string) (*cel.Ast, error) {
 }
 
 func convertStringToCheckedExpr(expr string, declarations []*expr.Decl) (*expr.CheckedExpr, error) {
-	env, _ := cel.NewEnv(cel.Declarations(declarations...))
+	env, err := cel.NewEnv(cel.Declarations(declarations...))
+	if err != nil {
+		return nil, err
+	}
 	checked, err := compileCel(env, expr)
 	if err != nil {
 		return nil, err
