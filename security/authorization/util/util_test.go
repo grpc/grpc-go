@@ -58,25 +58,25 @@ func TestStringConvert(t *testing.T) {
 		authzArgs                 map[string]interface{}
 	}{
 		{
-			desc:                      "1: use a policy with startsWith primative and returns a match.",
+			desc:                      "1: use a policy with startsWith primitive and returns a match.",
 			expectedEvaluationOutcome: true,
 			expr:                      "request.url_path.startsWith('/pkg.service/test')",
 			authzArgs:                 map[string]interface{}{"request.url_path": "/pkg.service/test"},
 		},
 		{
-			desc:                      "2: use a policy with == primative and returns a match.",
+			desc:                      "2: use a policy with == primitive and returns a match.",
 			expectedEvaluationOutcome: true,
 			expr:                      "connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'",
 			authzArgs:                 map[string]interface{}{"connection.uri_san_peer_certificate": "cluster/ns/default/sa/admin"},
 		},
 		{
-			desc:                      "3: use a policy with startsWith primative and returns no match.",
+			desc:                      "3: use a policy with startsWith primitive and returns no match.",
 			expectedEvaluationOutcome: false,
 			expr:                      "request.url_path.startsWith('/pkg.service/test')",
 			authzArgs:                 map[string]interface{}{"request.url_path": "/source/pkg.service/test"},
 		},
 		{
-			desc:                      "4: use a policy with startsWith and == primatives and returns a match.",
+			desc:                      "4: use a policy with startsWith and == primitive and returns a match.",
 			expectedEvaluationOutcome: true,
 			expr:                      "request.url_path == '/pkg.service/test' && connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'",
 			authzArgs: map[string]interface{}{"request.url_path": "/pkg.service/test",
