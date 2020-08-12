@@ -23,11 +23,15 @@ import (
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
 	cel "github.com/google/cel-go/cel"
+	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	interpreter "github.com/google/cel-go/interpreter"
+	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 type programMock struct {
@@ -66,6 +70,18 @@ func (mock valMock) Value() interface{} {
 	return mock.val
 }
 
+type addrMock struct {
+	addr string
+}
+
+func (mock addrMock) Network() string {
+	return "tcp"
+}
+
+func (mock addrMock) String() string {
+	return mock.addr
+}
+
 var (
 	emptyActivation     = interpreter.EmptyActivation()
 	unsuccessfulProgram = programMock{out: nil, err: status.Errorf(codes.InvalidArgument, "Unsuccessful program evaluation")}
@@ -90,7 +106,57 @@ var (
 		"deny unknown policy3": errProgram,
 		"deny unknown policy4": falseProgram,
 	}}
+
+	env, _ = cel.NewEnv(
+		cel.Declarations(
+			decls.NewVar("request.url_path", decls.String),
+			decls.NewVar("request.host", decls.String),
+			decls.NewVar("request.method", decls.String),
+			decls.NewVar("request.headers", decls.NewMapType(decls.String, decls.String)),
+			decls.NewVar("source.address", decls.String),
+			decls.NewVar("source.port", decls.Int),
+			decls.NewVar("destination.address", decls.String),
+			decls.NewVar("destination.port", decls.Int),
+			decls.NewVar("connection.uri_san_peer_certificate", decls.String),
+			decls.NewVar("source.principal", decls.String),
+		),
+	)
 )
+
+func compileCel(env *cel.Env, expr string) (*cel.Ast, error) {
+	ast, iss := env.Parse(expr)
+	// Report syntactic errors, if present.
+	if iss.Err() != nil {
+		return nil, iss.Err()
+	}
+	// Type-check the expression for correctness.
+	checked, iss := env.Check(ast)
+	if iss.Err() != nil {
+		return nil, iss.Err()
+	}
+	// Check the result type is a Boolean.
+	if !proto.Equal(checked.ResultType(), decls.Bool) {
+		return nil, iss.Err()
+	}
+	return checked, nil
+}
+
+func convertStringToCheckedExpr(env *cel.Env, expr string) (*expr.CheckedExpr, error) {
+	checked, err := compileCel(env, expr)
+	if err != nil {
+		return nil, err
+	}
+	checkedExpr, err := cel.AstToCheckedExpr(checked)
+	if err != nil {
+		return nil, err
+	}
+	return checkedExpr, nil
+}
+
+func convertStringToExpr(env *cel.Env, expr string) *expr.Expr {
+	checkedExpr, _ := convertStringToCheckedExpr(env, expr)
+	return checkedExpr.Expr
+}
 
 func TestNewAuthorizationEngine(t *testing.T) {
 	tests := map[string]struct {
@@ -261,6 +327,150 @@ func TestAuthorizationEngineEvaluate(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			gotAuthDecision, gotErr := tc.engine.Evaluate(tc.authArgs)
+			sort.Strings(gotAuthDecision.policyNames)
+			if tc.wantErr != nil && (gotErr == nil || gotErr.Error() != tc.wantErr.Error()) {
+				t.Errorf("Expected error to be %v, instead got %v", tc.wantErr, gotErr)
+			} else if tc.wantErr == nil && (gotErr != nil || gotAuthDecision.decision != tc.wantAuthDecision.decision || !reflect.DeepEqual(gotAuthDecision.policyNames, tc.wantAuthDecision.policyNames)) {
+				t.Errorf("Expected authorization decision to be (%v, %v), instead got (%v, %v)", tc.wantAuthDecision.decision, tc.wantAuthDecision.policyNames, gotAuthDecision.decision, gotAuthDecision.policyNames)
+			}
+		})
+	}
+}
+
+func TestIntegration(t *testing.T) {
+	tests := map[string]struct {
+		allow            *pb.RBAC
+		deny             *pb.RBAC
+		authArgs         *AuthorizationArgs
+		wantAuthDecision *AuthorizationDecision
+		wantErr          error
+	}{
+		"ALLOW engine: DecisionAllow": {
+			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
+				"url_path starts with": {Condition: convertStringToExpr(env, "request.url_path.startsWith('/pkg.service/test')")},
+			}},
+			deny:             nil,
+			authArgs:         &AuthorizationArgs{fullMethod: "/pkg.service/test/method"},
+			wantAuthDecision: &AuthorizationDecision{decision: DecisionAllow, policyNames: []string{"url_path starts with"}},
+			wantErr:          nil,
+		},
+		"ALLOW engine: DecisionUnknown": {
+			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
+				"url_path and uri_san_peer_certificate": {Condition: convertStringToExpr(env, "request.url_path == '/pkg.service/test' && connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'")},
+				"source port":                           {Condition: convertStringToExpr(env, "source.port == 8080")},
+			}},
+			deny:             nil,
+			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:25"}}, fullMethod: "/pkg.service/test"},
+			wantAuthDecision: &AuthorizationDecision{decision: DecisionUnknown, policyNames: []string{"url_path and uri_san_peer_certificate"}},
+			wantErr:          nil,
+		},
+		"ALLOW engine: DecisionDeny": {
+			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
+				"url_path": {Condition: convertStringToExpr(env, "request.url_path == '/pkg.service/test'")},
+			}},
+			deny:             nil,
+			authArgs:         &AuthorizationArgs{fullMethod: "/pkg.service/test/method"},
+			wantAuthDecision: &AuthorizationDecision{decision: DecisionDeny, policyNames: []string{}},
+			wantErr:          nil,
+		},
+		"DENY engine: DecisionAllow": {
+			allow: nil,
+			deny: &pb.RBAC{Action: pb.RBAC_DENY, Policies: map[string]*pb.Policy{
+				"url_path and uri_san_peer_certificate": {Condition: convertStringToExpr(env, "request.url_path == '/pkg.service/test' && connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'")},
+			}},
+			authArgs:         &AuthorizationArgs{fullMethod: "/pkg.service/test/method"},
+			wantAuthDecision: &AuthorizationDecision{decision: DecisionAllow, policyNames: []string{}},
+			wantErr:          nil,
+		},
+		"DENY engine: DecisionUnknown": {
+			allow: nil,
+			deny: &pb.RBAC{Action: pb.RBAC_DENY, Policies: map[string]*pb.Policy{
+				"destination address": {Condition: convertStringToExpr(env, "destination.address == '192.0.3.1'")},
+				"source port":         {Condition: convertStringToExpr(env, "source.port == 8080")},
+			}},
+			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:25"}}, fullMethod: "/pkg.service/test"},
+			wantAuthDecision: &AuthorizationDecision{decision: DecisionUnknown, policyNames: []string{"destination address"}},
+			wantErr:          nil,
+		},
+		"DENY engine: DecisionDeny": {
+			allow: nil,
+			deny: &pb.RBAC{Action: pb.RBAC_DENY, Policies: map[string]*pb.Policy{
+				"destination address":           {Condition: convertStringToExpr(env, "destination.address == '192.0.3.1'")},
+				"source address or source port": {Condition: convertStringToExpr(env, "source.address == '192.0.4.1' || source.port == 8080")},
+			}},
+			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:8080"}}, fullMethod: "/pkg.service/test"},
+			wantAuthDecision: &AuthorizationDecision{decision: DecisionDeny, policyNames: []string{"source address or source port"}},
+			wantErr:          nil,
+		},
+		"DENY ALLOW engine: DecisionDeny from DENY policy": {
+			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
+				"url_path starts with": {Condition: convertStringToExpr(env, "request.url_path.startsWith('/pkg.service/test')")},
+			}},
+			deny: &pb.RBAC{Action: pb.RBAC_DENY, Policies: map[string]*pb.Policy{
+				"destination address":           {Condition: convertStringToExpr(env, "destination.address == '192.0.3.1'")},
+				"source address or source port": {Condition: convertStringToExpr(env, "source.address == '192.0.4.1' || source.port == 8080")},
+			}},
+			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:8080"}}, fullMethod: "/pkg.service/test"},
+			wantAuthDecision: &AuthorizationDecision{decision: DecisionDeny, policyNames: []string{"source address or source port"}},
+			wantErr:          nil,
+		},
+		"DENY ALLOW engine: DecisionUnknown from DENY policy": {
+			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
+				"url_path starts with": {Condition: convertStringToExpr(env, "request.url_path.startsWith('/pkg.service/test')")},
+			}},
+			deny: &pb.RBAC{Action: pb.RBAC_DENY, Policies: map[string]*pb.Policy{
+				"destination address":              {Condition: convertStringToExpr(env, "destination.address == '192.0.3.1'")},
+				"source port and destination port": {Condition: convertStringToExpr(env, "source.port == 8080 && destination.port == 1234")},
+			}},
+			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:8080"}}, fullMethod: "/pkg.service/test/method"},
+			wantAuthDecision: &AuthorizationDecision{decision: DecisionUnknown, policyNames: []string{"destination address", "source port and destination port"}},
+			wantErr:          nil,
+		},
+		"DENY ALLOW engine: DecisionAllow from ALLOW policy": {
+			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
+				"method or url_path starts with": {Condition: convertStringToExpr(env, "request.method == 'POST' || request.url_path.startsWith('/pkg.service/test')")},
+			}},
+			deny: &pb.RBAC{Action: pb.RBAC_DENY, Policies: map[string]*pb.Policy{
+				"source address":           {Condition: convertStringToExpr(env, "source.address == '192.0.3.1'")},
+				"source port and url_path": {Condition: convertStringToExpr(env, "source.port == 8080 && request.url_path == 'pkg.service/test'")},
+			}},
+			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:8080"}}, fullMethod: "/pkg.service/test/method"},
+			wantAuthDecision: &AuthorizationDecision{decision: DecisionAllow, policyNames: []string{"method or url_path starts with"}},
+			wantErr:          nil,
+		},
+		"DENY ALLOW engine: DecisionUnknown from ALLOW policy": {
+			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
+				"url_path starts with and method": {Condition: convertStringToExpr(env, "request.url_path.startsWith('/pkg.service/test') && request.method == 'POST'")},
+			}},
+			deny: &pb.RBAC{Action: pb.RBAC_DENY, Policies: map[string]*pb.Policy{
+				"source address":           {Condition: convertStringToExpr(env, "source.address == '192.0.3.1'")},
+				"source port and url_path": {Condition: convertStringToExpr(env, "source.port == 8080 && request.url_path == 'pkg.service/test'")},
+			}},
+			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:8080"}}, fullMethod: "/pkg.service/test/method"},
+			wantAuthDecision: &AuthorizationDecision{decision: DecisionUnknown, policyNames: []string{"url_path starts with and method"}},
+			wantErr:          nil,
+		},
+		"DENY ALLOW engine: DecisionDeny from ALLOW policy": {
+			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
+				"url_path starts with and source port": {Condition: convertStringToExpr(env, "request.url_path.startsWith('/pkg.service/test') && source.port == 1234")},
+			}},
+			deny: &pb.RBAC{Action: pb.RBAC_DENY, Policies: map[string]*pb.Policy{
+				"source address":           {Condition: convertStringToExpr(env, "source.address == '192.0.3.1'")},
+				"source port and url_path": {Condition: convertStringToExpr(env, "source.port == 8080 && request.url_path == 'pkg.service/test'")},
+			}},
+			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:8080"}}, fullMethod: "/pkg.service/test/method"},
+			wantAuthDecision: &AuthorizationDecision{decision: DecisionDeny, policyNames: []string{}},
+			wantErr:          nil,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			engine, err := NewAuthorizationEngine(tc.allow, tc.deny)
+			if err != nil {
+				t.Errorf("Error constructing authorization engine: %v", err)
+			}
+			gotAuthDecision, gotErr := engine.Evaluate(tc.authArgs)
 			sort.Strings(gotAuthDecision.policyNames)
 			if tc.wantErr != nil && (gotErr == nil || gotErr.Error() != tc.wantErr.Error()) {
 				t.Errorf("Expected error to be %v, instead got %v", tc.wantErr, gotErr)
