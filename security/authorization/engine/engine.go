@@ -324,6 +324,7 @@ func NewAuthorizationEngine(allow, deny *pb.RBAC) (*AuthorizationEngine, error) 
 			decls.NewVar("destination.address", decls.String),
 			decls.NewVar("destination.port", decls.Int),
 			decls.NewVar("connection.uri_san_peer_certificate", decls.String),
+			decls.NewVar("source.principal", decls.String),
 		),
 	)
 	if err != nil {
