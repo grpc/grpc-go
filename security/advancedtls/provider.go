@@ -30,42 +30,40 @@ import (
 )
 
 const (
-	defaultTestTimeout = 1 * time.Second
+	defaultInterval = 1 * time.Hour
 )
 
 // IdentityPemFileProviderOptions contains fields to be filled out by users
-// for obtaining identity credential files.
+// for obtaining identity private key and certificates from PEM files.
 type IdentityPemFileProviderOptions struct {
 	CertFile string
 	KeyFile  string
 	Interval time.Duration
 }
 
-// IdentityPemFileProvider keeps identity credential implementations up to
-// date with secrets that they rely on to secure communications on the
-// underlying channel.
+// IdentityPemFileProvider implements certprovider.Provider.
+// It provides the most up-to-date identity private key
+// and certificates based on the input PEM files.
 type IdentityPemFileProvider struct {
 	distributor *certprovider.Distributor
 	closeFunc   func()
 }
 
 // RootPemFileProviderOptions contains fields to be filled out by users
-// for obtaining root credential files.
+// for obtaining root certificates from PEM files.
 type RootPemFileProviderOptions struct {
 	TrustFile string
 	Interval  time.Duration
 }
 
-// RootPemFileProvider keeps root credential implementations up to
-// date with secrets that they rely on to secure communications on the
-// underlying channel.
+// RootPemFileProvider implements certprovider.Provider.
+// It provides the most up-to-date root certificates based on the input PEM files.
 type RootPemFileProvider struct {
 	distributor *certprovider.Distributor
 	closeFunc   func()
 }
 
-// NewIdentityPemFileProvider uses IdentityPemFileProviderOptions to
-// construct a IdentityPemFileProvider.
+// NewIdentityPemFileProvider uses IdentityPemFileProviderOptions to construct a IdentityPemFileProvider.
 func NewIdentityPemFileProvider(o *IdentityPemFileProviderOptions, quit chan bool) (*IdentityPemFileProvider, error) {
 	if o.CertFile == "" {
 		return nil, fmt.Errorf("users need to specify certificate file path in NewIdentityPemFileProvider")
@@ -73,19 +71,18 @@ func NewIdentityPemFileProvider(o *IdentityPemFileProviderOptions, quit chan boo
 	if o.KeyFile == "" {
 		return nil, fmt.Errorf("users need to specify key file path in NewIdentityPemFileProvider")
 	}
-	// If interval is not set by users explicitly, set it to 1 hour by default.
+	// If interval is not set by users explicitly, set it to default interval.
 	if o.Interval == 0*time.Nanosecond {
-		o.Interval = 1 * time.Hour
+		o.Interval = defaultInterval
 	}
 	provider := &IdentityPemFileProvider{}
-	// quit := make(chan bool)
 	provider.distributor = certprovider.NewDistributor()
 	// A goroutine to pull file changes.
 	go func(quit chan bool) {
 		for {
 			// Read identity certs from PEM files.
-			identityCert, err := o.ReadKeyAndCerts()
-			km := certprovider.KeyMaterial{Certs: []tls.Certificate{*identityCert}}
+			identityCert, err := tls.LoadX509KeyPair(o.CertFile, o.KeyFile)
+			km := certprovider.KeyMaterial{Certs: []tls.Certificate{identityCert}}
 			provider.distributor.Set(&km, err)
 			time.Sleep(o.Interval)
 			select {
@@ -98,7 +95,6 @@ func NewIdentityPemFileProvider(o *IdentityPemFileProviderOptions, quit chan boo
 	provider.closeFunc = func() {
 		close(quit)
 	}
-	// quit <- true
 	return provider, nil
 }
 
@@ -114,25 +110,25 @@ func (p *IdentityPemFileProvider) Close() {
 	p.distributor.Stop()
 }
 
-// NewRootPemFileProvider uses RootPemFileProviderOptions to
-// construct a RootPemFileProvider.
+// NewRootPemFileProvider uses RootPemFileProviderOptions to construct a RootPemFileProvider.
 func NewRootPemFileProvider(o *RootPemFileProviderOptions, quit chan bool) (*RootPemFileProvider, error) {
 	if o.TrustFile == "" {
 		return nil, fmt.Errorf("users need to specify key file path in RootPemFileProviderOptions")
 	}
-	// If interval is not set by users explicitly, set it to 1 hour by default.
+	// If interval is not set by users explicitly, set it to default interval.
 	if o.Interval == 0*time.Nanosecond {
-		o.Interval = 1 * time.Hour
+		o.Interval = defaultInterval
 	}
 	provider := &RootPemFileProvider{}
-	// quit := make(chan bool)
 	provider.distributor = certprovider.NewDistributor()
 	// A goroutine to pull file changes.
 	go func(quit chan bool) {
 		for {
 			// Read root certs from PEM files.
-			rootCert, err := o.ReadTrustCerts()
-			km := certprovider.KeyMaterial{Roots: rootCert}
+			trustData, err := ioutil.ReadFile(o.TrustFile)
+			trustPool := x509.NewCertPool()
+			trustPool.AppendCertsFromPEM(trustData)
+			km := certprovider.KeyMaterial{Roots: trustPool}
 			provider.distributor.Set(&km, err)
 			time.Sleep(o.Interval)
 			select {
@@ -145,7 +141,6 @@ func NewRootPemFileProvider(o *RootPemFileProviderOptions, quit chan bool) (*Roo
 	provider.closeFunc = func() {
 		close(quit)
 	}
-	// quit <- true
 	return provider, nil
 }
 
@@ -159,26 +154,4 @@ func (p *RootPemFileProvider) KeyMaterial(ctx context.Context) (*certprovider.Ke
 func (p *RootPemFileProvider) Close() {
 	p.closeFunc()
 	p.distributor.Stop()
-}
-
-// ReadKeyAndCerts reads and parses identity credential files from the cert file path
-// and the key file path specified in IdentityPemFileProviderOptions.
-func (r IdentityPemFileProviderOptions) ReadKeyAndCerts() (*tls.Certificate, error) {
-	cert, err := tls.LoadX509KeyPair(r.CertFile, r.KeyFile)
-	if err != nil {
-		return nil, err
-	}
-	return &cert, nil
-}
-
-// ReadTrustCerts reads and parses root credential files from trust cert path
-// specified in RootPemFileProviderOptions.
-func (r RootPemFileProviderOptions) ReadTrustCerts() (*x509.CertPool, error) {
-	trustData, err := ioutil.ReadFile(r.TrustFile)
-	if err != nil {
-		return nil, err
-	}
-	trustPool := x509.NewCertPool()
-	trustPool.AppendCertsFromPEM(trustData)
-	return trustPool, nil
 }
