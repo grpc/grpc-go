@@ -46,7 +46,7 @@ ENVOY_API_REPOS=(
   "https://github.com/envoyproxy/protoc-gen-validate"
 )
 for repo in ${ENVOY_API_REPOS[@]}; do
-  dirname=`basename ${repo}`
+  dirname=$(basename ${repo})
   mkdir -p ${WORKDIR}/${dirname}
   echo "git clone ${repo}"
   git clone --quiet ${repo} ${WORKDIR}/${dirname}
@@ -71,15 +71,8 @@ SOURCES=(
 # These options of the form 'Mfoo.proto=bar' instruct the codegen to use an
 # import path of 'bar' in the generated code when 'foo.proto' is imported in
 # one of the sources.
-MAPPINGS=(
-  "grpc/service_config/service_config.proto=/internal/proto/grpc_service_config"
-  "envoy/config/core/v3/config_source.proto=github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-)
-OPTS=""
-for i in "${MAPPINGS[@]}"
-do
-  OPTS+="M$i,"
-done
+OPTS=Mgrpc/service_config/service_config.proto=/internal/proto/grpc_service_config,\
+Menvoy/config/core/v3/config_source.proto=github.com/envoyproxy/go-control-plane/envoy/config/core/v3
 for src in ${SOURCES[@]}; do
   echo "protoc ${src}"
   protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS},requireUnimplementedServers=false:${WORKDIR}/out \
