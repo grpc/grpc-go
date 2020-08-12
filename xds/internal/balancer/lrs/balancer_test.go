@@ -47,6 +47,10 @@ var (
 
 // This is a subset of testutils.fakeclient. Cannot use testutils.fakeclient
 // because testutils imports package lrs.
+//
+// TODO: after refactoring xdsclient to support load reporting, the testutils
+// package won't need to depend on lrs package for the store. And we can use the
+// testutils for this.
 type fakeXDSClient struct {
 	loadReportCh chan *reportLoadArgs
 }
