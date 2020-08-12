@@ -36,7 +36,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func TestStringConvert(t *testing.T) {
+func (s) TestStringConvert(t *testing.T) {
 	declarations := []*expr.Decl{
 		decls.NewIdent("request.url_path", decls.String, nil),
 		decls.NewIdent("request.host", decls.String, nil),
@@ -101,27 +101,27 @@ func TestStringConvert(t *testing.T) {
 			checked, err := convertStringToCheckedExpr(expr, declarations)
 			if test.expectedParsingError {
 				if err == nil {
-					t.Errorf("lack of error in conversion %v", err)
+					t.Fatalf("lack of error in conversion %v", err)
 				}
 				return
 			}
 			if err != nil {
-				t.Errorf("error in conversion %v", err)
+				t.Fatalf("error in conversion %v", err)
 			}
 			ast := cel.CheckedExprToAst(checked)
 			program, err := env.Program(ast)
 			if err != nil {
-				t.Errorf("error in formatting Program %v", err)
+				t.Fatalf("error in formatting Program %v", err)
 			}
 			got, _, gotErr := program.Eval(authzArgs)
 			if test.expectedEvaluationError {
 				if gotErr == nil {
-					t.Errorf("lack of error in evaluation %v", err)
+					t.Fatalf("lack of error in evaluation %v", err)
 				}
 				return
 			}
 			if gotErr != nil {
-				t.Errorf("error in evaluating CEL program %s", gotErr.Error())
+				t.Fatalf("error in evaluating CEL program %s", gotErr.Error())
 			}
 			if got.Value() != expected {
 				t.Errorf("error in evaluating converted CheckedExpr %v", got.Value())
