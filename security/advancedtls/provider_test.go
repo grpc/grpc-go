@@ -39,11 +39,23 @@ import (
 // At stage 1, we copy the second set of certFile and keyFile to the temp files
 // and verify the credential files are updated.
 func (s) TestIdentityPemFileProvider(t *testing.T) {
+	// Load certificates.
 	cs := &certStore{}
 	err := cs.loadCerts()
 	if err != nil {
-		t.Fatalf("cs.loadCerts() failed: %v", err)
+		t.Errorf("cs.loadCerts() failed: %v", err)
 	}
+	// Create temp files that are used to hold identity credentials.
+	certTmpPath, err := ioutil.TempFile(os.TempDir(), "pre-")
+	if err != nil {
+		t.Errorf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
+	}
+	defer os.Remove(certTmpPath.Name())
+	keyTmpPath, err := ioutil.TempFile(os.TempDir(), "pre-")
+	if err != nil {
+		t.Errorf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
+	}
+	defer os.Remove(keyTmpPath.Name())
 	tests := []struct {
 		desc           string
 		certFileBefore string
@@ -72,50 +84,39 @@ func (s) TestIdentityPemFileProvider(t *testing.T) {
 			wantKmAfter:    certprovider.KeyMaterial{Certs: []tls.Certificate{cs.serverPeer2}},
 		},
 	}
-	// Create temp files that are used to hold identity credentials.
-	certTmpPath := testdata.Path("cert_tmp.pem")
-	keyTmpPath := testdata.Path("key_tmp.pem")
-	_, err = os.Create(certTmpPath)
-	if err != nil {
-		t.Fatalf("os.Create(certTmpPath) failed: %v", err)
-	}
-	_, err = os.Create(keyTmpPath)
-	if err != nil {
-		t.Fatalf("os.Create(keyTmpPath) failed: %v", err)
-	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			identityPemFileProviderOptions := &IdentityPemFileProviderOptions{
-				CertFile: certTmpPath,
-				KeyFile:  keyTmpPath,
+				CertFile: certTmpPath.Name(),
+				KeyFile:  keyTmpPath.Name(),
 				Interval: 3 * time.Second,
 			}
 			// ------------------------Stage 0------------------------------------
-			err = copyFileContents(test.certFileBefore, certTmpPath)
+			err = copyFileContents(test.certFileBefore, certTmpPath.Name())
 			if err != nil {
-				t.Fatalf("copyFileContents(test.certFileBefore, certTmpPath): %v", err)
+				t.Errorf("copyFileContents(test.certFileBefore, certTmpPath): %v", err)
 			}
-			err = copyFileContents(test.keyFileBefore, keyTmpPath)
+			err = copyFileContents(test.keyFileBefore, keyTmpPath.Name())
 			if err != nil {
-				t.Fatalf("copyFileContents(test.keyFileBefore, keyTmpPath): %v", err)
+				t.Errorf("copyFileContents(test.keyFileBefore, keyTmpPath): %v", err)
 			}
 			identityPemFileProvider, err := NewIdentityPemFileProvider(identityPemFileProviderOptions)
 			if err != nil {
-				t.Fatalf("NewIdentityPemFileProvider(identityPemFileProviderOptions) failed: %v", err)
+				t.Errorf("NewIdentityPemFileProvider(identityPemFileProviderOptions) failed: %v", err)
 			}
 			gotKM, err := identityPemFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmBefore, cmp.AllowUnexported(big.Int{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmBefore)
 			}
 			// ------------------------Stage 1------------------------------------
-			err = copyFileContents(test.certFileAfter, certTmpPath)
+			err = copyFileContents(test.certFileAfter, certTmpPath.Name())
 			if err != nil {
-				t.Fatalf("copyFileContents(test.certFileAfter, certTmpPath): %v", err)
+				t.Errorf("copyFileContents(test.certFileAfter, certTmpPath): %v", err)
 			}
-			err = copyFileContents(test.keyFileAfter, keyTmpPath)
+			err = copyFileContents(test.keyFileAfter, keyTmpPath.Name())
 			if err != nil {
-				t.Fatalf("copyFileContents(test.keyFileAfter, keyTmpPath): %v", err)
+				t.Errorf("copyFileContents(test.keyFileAfter, keyTmpPath): %v", err)
 			}
 			time.Sleep(5 * time.Second)
 			gotKM, err = identityPemFileProvider.KeyMaterial(context.Background())
@@ -124,19 +125,6 @@ func (s) TestIdentityPemFileProvider(t *testing.T) {
 			}
 			identityPemFileProvider.Close()
 		})
-	}
-	// Remove temp files.
-	if _, err := os.Stat(certTmpPath); err == nil {
-		err := os.Remove(certTmpPath)
-		if err != nil {
-			t.Fatalf("os.Remove(certTmpPath) failed: %v", err)
-		}
-	}
-	if _, err := os.Stat(keyTmpPath); err == nil {
-		err := os.Remove(keyTmpPath)
-		if err != nil {
-			t.Fatalf("os.Remove(keyTmpPath) failed: %v", err)
-		}
 	}
 }
 
@@ -147,8 +135,14 @@ func (s) TestRootPemFileProvider(t *testing.T) {
 	cs := &certStore{}
 	err := cs.loadCerts()
 	if err != nil {
-		t.Fatalf("cs.loadCerts() failed: %v", err)
+		t.Errorf("cs.loadCerts() failed: %v", err)
 	}
+	// Create temp files that are used to hold root credentials.
+	trustTmpPath, err := ioutil.TempFile(os.TempDir(), "pre-")
+	if err != nil {
+		t.Errorf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
+	}
+	defer os.Remove(trustTmpPath.Name())
 	tests := []struct {
 		desc            string
 		trustFileBefore string
@@ -171,36 +165,30 @@ func (s) TestRootPemFileProvider(t *testing.T) {
 			wantKmAfter:     certprovider.KeyMaterial{Roots: cs.serverTrust2},
 		},
 	}
-	// Create temp files that are used to hold identity credentials.
-	trustTmpPath := testdata.Path("trust_tmp.pem")
-	_, err = os.Create(trustTmpPath)
-	if err != nil {
-		t.Fatalf("os.Create(trustTmpPath) failed: %v", err)
-	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			rootPemFileProviderOptions := &RootPemFileProviderOptions{
-				TrustFile: trustTmpPath,
+				TrustFile: trustTmpPath.Name(),
 				Interval:  3 * time.Second,
 			}
 			// ------------------------Stage 0------------------------------------
-			err = copyFileContents(test.trustFileBefore, trustTmpPath)
+			err = copyFileContents(test.trustFileBefore, trustTmpPath.Name())
 			if err != nil {
-				t.Fatalf("copyFileContents(test.trustFileBefore, trustTmpPath): %v", err)
+				t.Errorf("copyFileContents(test.trustFileBefore, trustTmpPath): %v", err)
 			}
 			rootPemFileProvider, err := NewRootPemFileProvider(rootPemFileProviderOptions)
 			if err != nil {
-				t.Fatalf("NewRootPemFileProvider(rootPemFileProviderOptions) failed: %v", err)
+				t.Errorf("NewRootPemFileProvider(rootPemFileProviderOptions) failed: %v", err)
 			}
 			gotKM, err := rootPemFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmBefore, cmp.AllowUnexported(x509.CertPool{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmBefore)
 			}
 			// ------------------------Stage 1------------------------------------
-			err = copyFileContents(test.trustFileAfter, trustTmpPath)
+			err = copyFileContents(test.trustFileAfter, trustTmpPath.Name())
 			if err != nil {
-				t.Fatalf("copyFileContents(test.trustFileAfter, trustTmpPath): %v", err)
+				t.Errorf("copyFileContents(test.trustFileAfter, trustTmpPath): %v", err)
 			}
 			time.Sleep(5 * time.Second)
 			gotKM, err = rootPemFileProvider.KeyMaterial(context.Background())
@@ -209,13 +197,6 @@ func (s) TestRootPemFileProvider(t *testing.T) {
 			}
 			rootPemFileProvider.Close()
 		})
-	}
-	// Remove temp files.
-	if _, err := os.Stat(trustTmpPath); err == nil {
-		err := os.Remove(trustTmpPath)
-		if err != nil {
-			t.Fatalf("os.Remove(trustTmpPath) failed: %v", err)
-		}
 	}
 }
 
