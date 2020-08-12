@@ -100,8 +100,7 @@ func (s) TestIdentityPemFileProvider(t *testing.T) {
 			if err != nil {
 				t.Fatalf("copyFileContents(test.keyFileBefore, keyTmpPath): %v", err)
 			}
-			quit := make(chan bool)
-			identityPemFileProvider, err := NewIdentityPemFileProvider(identityPemFileProviderOptions, quit)
+			identityPemFileProvider, err := NewIdentityPemFileProvider(identityPemFileProviderOptions)
 			if err != nil {
 				t.Fatalf("NewIdentityPemFileProvider(identityPemFileProviderOptions) failed: %v", err)
 			}
@@ -123,7 +122,7 @@ func (s) TestIdentityPemFileProvider(t *testing.T) {
 			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(big.Int{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
 			}
-			quit <- true
+			identityPemFileProvider.Close()
 		})
 	}
 	// Remove temp files.
@@ -190,8 +189,7 @@ func (s) TestRootPemFileProvider(t *testing.T) {
 			if err != nil {
 				t.Fatalf("copyFileContents(test.trustFileBefore, trustTmpPath): %v", err)
 			}
-			quit := make(chan bool)
-			rootPemFileProvider, err := NewRootPemFileProvider(rootPemFileProviderOptions, quit)
+			rootPemFileProvider, err := NewRootPemFileProvider(rootPemFileProviderOptions)
 			if err != nil {
 				t.Fatalf("NewRootPemFileProvider(rootPemFileProviderOptions) failed: %v", err)
 			}
@@ -209,7 +207,7 @@ func (s) TestRootPemFileProvider(t *testing.T) {
 			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(x509.CertPool{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
 			}
-			quit <- true
+			rootPemFileProvider.Close()
 		})
 	}
 	// Remove temp files.
