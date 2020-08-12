@@ -27,6 +27,7 @@ type edfWrr struct {
 	lock               sync.Mutex
 	items              edfPriorityQueue
 	currentOrderOffset uint64
+	currentTime        float64
 }
 
 // NewEDF creates Earliest Deadline First (EDF)
@@ -64,19 +65,11 @@ func (pq *edfPriorityQueue) Pop() interface{} {
 	return old[len(old)-1]
 }
 
-// Current time in EDF scheduler.
-func (edf *edfWrr) currentTime() float64 {
-	if len(edf.items) == 0 {
-		return 0.0
-	}
-	return edf.items[0].deadline
-}
-
 func (edf *edfWrr) Add(item interface{}, weight int64) {
 	edf.lock.Lock()
 	defer edf.lock.Unlock()
 	entry := edfEntry{
-		deadline:    edf.currentTime() + 1.0/float64(weight),
+		deadline:    edf.currentTime + 1.0/float64(weight),
 		weight:      weight,
 		item:        item,
 		orderOffset: edf.currentOrderOffset,
@@ -92,9 +85,8 @@ func (edf *edfWrr) Next() interface{} {
 		return nil
 	}
 	item := edf.items[0]
-	item.deadline = edf.currentTime() + 1.0/float64(item.weight)
-	item.orderOffset = edf.currentOrderOffset
-	edf.currentOrderOffset++
+	edf.currentTime = item.deadline
+	item.deadline = edf.currentTime + 1.0/float64(item.weight)
 	heap.Fix(&edf.items, 0)
 	return item.item
 }
