@@ -102,10 +102,10 @@ mv ${WORKDIR}/out/google.golang.org/grpc/lookup/grpc_lookup_v1/* ${WORKDIR}/out/
 rm ${WORKDIR}/out/google.golang.org/grpc/reflection/grpc_testingv3/*.pb.go
 
 # grpc/service_config/service_config.proto does not have a go_package option.
-cp ${WORKDIR}/out/grpc/service_config/service_config.pb.go internal/proto/grpc_service_config
+mv ${WORKDIR}/out/grpc/service_config/service_config.pb.go internal/proto/grpc_service_config
 
 # istio/google/security/meshca/v1/meshca.proto does not have a go_package option.
 mkdir -p ${WORKDIR}/out/google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/v1/
-cp ${WORKDIR}/out/istio/google/security/meshca/v1/* ${WORKDIR}/out/google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/v1/
+mv ${WORKDIR}/out/istio/google/security/meshca/v1/* ${WORKDIR}/out/google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/v1/
 
 cp -R ${WORKDIR}/out/google.golang.org/grpc/* .
