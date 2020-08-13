@@ -4646,13 +4646,19 @@ func (s) TestClientInitialHeaderEndStream(t *testing.T) {
 }
 
 func testClientInitialHeaderEndStream(t *testing.T, e env) {
+	// To ensure RST_STREAM is sent for illegal data write and not normal stream close.
+	frameCheckingDone := make(chan bool, 1)
 	te := newTest(t, e)
 	ts := &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
+		defer func() {
+			<-frameCheckingDone
+		}()
 		_, err := stream.Recv()
 		if err == nil {
-			errUnexpectedData := errors.New("unexpected data received in func server method")
-			t.Error(errUnexpectedData)
-			return errUnexpectedData
+			t.Error("unexpected data received in func server method")
+			return nil
+		} else if status.Code(err) != codes.Canceled {
+			t.Errorf("expected status canceled error, instead received '%v'", err)
 		}
 		return nil
 	}}
@@ -4665,6 +4671,7 @@ func testClientInitialHeaderEndStream(t *testing.T, e env) {
 		st.wantAnyFrame()
 		st.wantAnyFrame()
 		st.wantRSTStream(http2.ErrCodeStreamClosed)
+		frameCheckingDone <- true
 	})
 }
 
@@ -4678,20 +4685,31 @@ func (s) TestClientSendDataAfterCloseSend(t *testing.T) {
 }
 
 func testClientSendDataAfterCloseSend(t *testing.T, e env) {
+	// To ensure RST_STREAM is sent for illegal data write and not normal stream close.
+	frameCheckingDone := make(chan bool, 1)
+	// To ensure goroutine for test does not end before RPC handler checks the SendMsg return value.
 	sentMessage := make(chan bool, 1)
 	te := newTest(t, e)
 	ts := &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
+		defer func() {
+			<-frameCheckingDone
+		}()
 		for {
 			_, err := stream.Recv()
 			if err == io.EOF {
 				break
 			}
 			if err != nil {
+				if status.Code(err) != codes.Canceled {
+					t.Errorf("expected status canceled error, instead received '%v'", err)
+				}
 				break
 			}
 		}
 		if err := stream.SendMsg(nil); err == nil {
 			t.Error("expected error sending message on stream after stream closed on illegal data")
+		} else if status.Code(err) != codes.Internal {
+			t.Errorf("expected status internal error, instead received '%v'", err)
 		}
 		sentMessage <- true
 		return nil
@@ -4706,6 +4724,7 @@ func testClientSendDataAfterCloseSend(t *testing.T, e env) {
 		st.wantAnyFrame()
 		st.wantAnyFrame()
 		st.wantRSTStream(http2.ErrCodeStreamClosed)
+		frameCheckingDone <- true
 		<-sentMessage
 	})
 }
