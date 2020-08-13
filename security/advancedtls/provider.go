@@ -82,12 +82,8 @@ func NewIdentityPemFileProvider(o *IdentityPemFileProviderOptions) (*IdentityPem
 	quit := make(chan bool)
 	provider := &IdentityPemFileProvider{}
 	provider.distributor = certprovider.NewDistributor()
-	// If the initial files are empty, we will set an empty KeyMaterial.
-	certFileSize, _ := getFileSize(o.CertFile)
-	keyFileSize, _ := getFileSize(o.KeyFile)
-	if certFileSize == 0 || keyFileSize == 0 {
-		provider.distributor.Set(&certprovider.KeyMaterial{}, nil)
-	}
+	// Initialize the distributor with an empty KeyMaterial.
+	provider.distributor.Set(&certprovider.KeyMaterial{}, nil)
 	// A goroutine to pull file changes.
 	go func() {
 		for {
@@ -97,7 +93,7 @@ func NewIdentityPemFileProvider(o *IdentityPemFileProviderOptions) (*IdentityPem
 			// Note that LoadX509KeyPair will return error if file is empty,
 			// so there is no separate check for empty file contents.
 			if err != nil {
-				logger.Warning("tls.LoadX509KeyPair(o.CertFile, o.KeyFile) failed: %v", err)
+				logger.Warning("tls.LoadX509KeyPair(%v, %v) failed: %v", o.CertFile, o.KeyFile, err)
 			} else {
 				km := certprovider.KeyMaterial{Certs: []tls.Certificate{identityCert}}
 				provider.distributor.Set(&km, nil)
@@ -140,10 +136,8 @@ func NewRootPemFileProvider(o *RootPemFileProviderOptions) (*RootPemFileProvider
 	quit := make(chan bool)
 	provider := &RootPemFileProvider{}
 	provider.distributor = certprovider.NewDistributor()
-	// If the initial file is empty, we will set an empty KeyMaterial.
-	if trustFileSize, _ := getFileSize(o.TrustFile); trustFileSize == 0 {
-		provider.distributor.Set(&certprovider.KeyMaterial{}, nil)
-	}
+	// Initialize the distributor with an empty KeyMaterial.
+	provider.distributor.Set(&certprovider.KeyMaterial{}, nil)
 	// A goroutine to pull file changes.
 	go func() {
 		for {
@@ -155,7 +149,7 @@ func NewRootPemFileProvider(o *RootPemFileProviderOptions) (*RootPemFileProvider
 				trustPool.AppendCertsFromPEM(trustData)
 				// If the reading produces an error, we will skip the update for this round and log the error.
 				if err != nil {
-					logger.Warning("ioutil.ReadFile(o.TrustFile) failed: %v", err)
+					logger.Warning("ioutil.ReadFile(%v) failed: %v", o.TrustFile, err)
 				} else {
 					km := certprovider.KeyMaterial{Roots: trustPool}
 					provider.distributor.Set(&km, nil)

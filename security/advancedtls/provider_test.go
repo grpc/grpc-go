@@ -105,7 +105,7 @@ func (s) TestIdentityPemFileProvider(t *testing.T) {
 			identityPemFileProviderOptions := &IdentityPemFileProviderOptions{
 				CertFile: certTmp.Name(),
 				KeyFile:  keyTmp.Name(),
-				Interval: 500 * time.Millisecond,
+				Interval: 1 * time.Second,
 			}
 			// ------------------------Stage 0------------------------------------
 			identityPemFileProvider, err := NewIdentityPemFileProvider(identityPemFileProviderOptions)
@@ -125,7 +125,7 @@ func (s) TestIdentityPemFileProvider(t *testing.T) {
 			if err != nil {
 				t.Errorf("copyFileContents(test.keyFileBefore, keyTmp): %v", err)
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(2 * time.Second)
 			gotKM, err = identityPemFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmBefore, cmp.AllowUnexported(big.Int{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmBefore)
@@ -139,7 +139,7 @@ func (s) TestIdentityPemFileProvider(t *testing.T) {
 			if err != nil {
 				t.Errorf("copyFileContents(test.keyFileAfter, keyTmp): %v", err)
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(2 * time.Second)
 			gotKM, err = identityPemFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(big.Int{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
@@ -147,7 +147,7 @@ func (s) TestIdentityPemFileProvider(t *testing.T) {
 			// ------------------------Stage 3------------------------------------
 			certTmp.Truncate(0)
 			keyTmp.Truncate(0)
-			time.Sleep(1 * time.Second)
+			time.Sleep(2 * time.Second)
 			gotKM, err = identityPemFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(big.Int{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
@@ -221,7 +221,7 @@ func (s) TestRootPemFileProvider(t *testing.T) {
 			if err != nil {
 				t.Errorf("copyFileContents(test.trustFileBefore, trustTmp): %v", err)
 			}
-			time.Sleep(1500 * time.Millisecond)
+			time.Sleep(2 * time.Second)
 			gotKM, err = rootPemFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmBefore, cmp.AllowUnexported(x509.CertPool{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmBefore)
@@ -231,14 +231,14 @@ func (s) TestRootPemFileProvider(t *testing.T) {
 			if err != nil {
 				t.Errorf("copyFileContents(test.trustFileAfter, trustTmp): %v", err)
 			}
-			time.Sleep(1500 * time.Millisecond)
+			time.Sleep(2 * time.Second)
 			gotKM, err = rootPemFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(x509.CertPool{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
 			}
 			// ------------------------Stage 3------------------------------------
 			trustTmp.Truncate(0)
-			time.Sleep(1500 * time.Millisecond)
+			time.Sleep(2 * time.Second)
 			gotKM, err = rootPemFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(x509.CertPool{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
