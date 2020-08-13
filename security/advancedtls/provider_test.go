@@ -34,10 +34,16 @@ import (
 )
 
 // The IdentityPemFileProvider is tested in different stages.
-// At stage 0, we copy the first set of certFile and keyFile to the temp files
+// At stage 0, we create an IdentityPemFileProvider with empty initial files.
+// The KeyMaterial will be empty since the initial file contents are empty.
+// At stage 1, we copy the first set of certFile and keyFile to the temp files
 // that are watched by the goroutine.
-// At stage 1, we copy the second set of certFile and keyFile to the temp files
+// The KeyMaterial is expected to be updated if there is a matching key-cert pair.
+// At stage 2, we copy the second set of certFile and keyFile to the temp files
 // and verify the credential files are updated.
+// The KeyMaterial is expected to be updated if there is a matching key-cert pair.
+// At stage 3, we clear the file contents of temp files.
+// The KeyMaterial is expected to skip the update because the file contents are empty.
 func (s) TestIdentityPemFileProvider(t *testing.T) {
 	// Load certificates.
 	cs := &certStore{}
@@ -46,16 +52,16 @@ func (s) TestIdentityPemFileProvider(t *testing.T) {
 		t.Errorf("cs.loadCerts() failed: %v", err)
 	}
 	// Create temp files that are used to hold identity credentials.
-	certTmpPath, err := ioutil.TempFile(os.TempDir(), "pre-")
+	certTmp, err := ioutil.TempFile(os.TempDir(), "pre-")
 	if err != nil {
 		t.Errorf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
 	}
-	defer os.Remove(certTmpPath.Name())
-	keyTmpPath, err := ioutil.TempFile(os.TempDir(), "pre-")
+	defer os.Remove(certTmp.Name())
+	keyTmp, err := ioutil.TempFile(os.TempDir(), "pre-")
 	if err != nil {
 		t.Errorf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
 	}
-	defer os.Remove(keyTmpPath.Name())
+	defer os.Remove(keyTmp.Name())
 	tests := []struct {
 		desc           string
 		certFileBefore string
@@ -83,42 +89,65 @@ func (s) TestIdentityPemFileProvider(t *testing.T) {
 			keyFileAfter:   testdata.Path("server_key_2.pem"),
 			wantKmAfter:    certprovider.KeyMaterial{Certs: []tls.Certificate{cs.serverPeer2}},
 		},
+		{
+			desc:           "Update failed due to key-cert mismatch",
+			certFileBefore: testdata.Path("server_cert_1.pem"),
+			keyFileBefore:  testdata.Path("server_key_1.pem"),
+			wantKmBefore:   certprovider.KeyMaterial{Certs: []tls.Certificate{cs.serverPeer1}},
+			certFileAfter:  testdata.Path("server_cert_1.pem"),
+			keyFileAfter:   testdata.Path("server_key_2.pem"),
+			wantKmAfter:    certprovider.KeyMaterial{Certs: []tls.Certificate{cs.serverPeer1}},
+		},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			identityPemFileProviderOptions := &IdentityPemFileProviderOptions{
-				CertFile: certTmpPath.Name(),
-				KeyFile:  keyTmpPath.Name(),
-				Interval: 3 * time.Second,
+				CertFile: certTmp.Name(),
+				KeyFile:  keyTmp.Name(),
+				Interval: 500 * time.Millisecond,
 			}
 			// ------------------------Stage 0------------------------------------
-			err = copyFileContents(test.certFileBefore, certTmpPath.Name())
-			if err != nil {
-				t.Errorf("copyFileContents(test.certFileBefore, certTmpPath): %v", err)
-			}
-			err = copyFileContents(test.keyFileBefore, keyTmpPath.Name())
-			if err != nil {
-				t.Errorf("copyFileContents(test.keyFileBefore, keyTmpPath): %v", err)
-			}
 			identityPemFileProvider, err := NewIdentityPemFileProvider(identityPemFileProviderOptions)
 			if err != nil {
 				t.Errorf("NewIdentityPemFileProvider(identityPemFileProviderOptions) failed: %v", err)
 			}
 			gotKM, err := identityPemFileProvider.KeyMaterial(context.Background())
+			if !cmp.Equal(*gotKM, certprovider.KeyMaterial{}, cmp.AllowUnexported(big.Int{})) {
+				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, certprovider.KeyMaterial{})
+			}
+			// ------------------------Stage 1------------------------------------
+			err = copyFileContents(test.certFileBefore, certTmp.Name())
+			if err != nil {
+				t.Errorf("copyFileContents(test.certFileBefore, certTmp): %v", err)
+			}
+			err = copyFileContents(test.keyFileBefore, keyTmp.Name())
+			if err != nil {
+				t.Errorf("copyFileContents(test.keyFileBefore, keyTmp): %v", err)
+			}
+			time.Sleep(1 * time.Second)
+			gotKM, err = identityPemFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmBefore, cmp.AllowUnexported(big.Int{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmBefore)
 			}
-			// ------------------------Stage 1------------------------------------
-			err = copyFileContents(test.certFileAfter, certTmpPath.Name())
+			// ------------------------Stage 2------------------------------------
+			err = copyFileContents(test.certFileAfter, certTmp.Name())
 			if err != nil {
-				t.Errorf("copyFileContents(test.certFileAfter, certTmpPath): %v", err)
+				t.Errorf("copyFileContents(test.certFileAfter, certTmp): %v", err)
 			}
-			err = copyFileContents(test.keyFileAfter, keyTmpPath.Name())
+			err = copyFileContents(test.keyFileAfter, keyTmp.Name())
 			if err != nil {
-				t.Errorf("copyFileContents(test.keyFileAfter, keyTmpPath): %v", err)
+				t.Errorf("copyFileContents(test.keyFileAfter, keyTmp): %v", err)
 			}
-			time.Sleep(5 * time.Second)
+			time.Sleep(1 * time.Second)
+			gotKM, err = identityPemFileProvider.KeyMaterial(context.Background())
+			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(big.Int{})) {
+				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
+			}
+			// ------------------------Stage 3------------------------------------
+			certTmp.Truncate(0)
+			keyTmp.Truncate(0)
+			time.Sleep(1 * time.Second)
 			gotKM, err = identityPemFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(big.Int{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
@@ -129,8 +158,14 @@ func (s) TestIdentityPemFileProvider(t *testing.T) {
 }
 
 // The RootPemFileProvider is tested in different stages.
-// At stage 0, we copy the first trustFile to the temp file that are watched by the goroutine.
-// At stage 1, we copy the second trustFile to the temp file and verify the credential files are updated.
+// At stage 0, we create an RootPemFileProvider with empty initial file.
+// The KeyMaterial will be empty since the initial file content is empty.
+// At stage 1, we copy the first set of certFile and keyFile to the temp files
+// that are watched by the goroutine. The KeyMaterial is expected to be updated.
+// At stage 2, we copy the second set of certFile and keyFile to the temp files
+// and verify the credential files are updated. The KeyMaterial is expected to be updated.
+// At stage 3, we clear the file contents of temp files.
+// The KeyMaterial is expected to skip the update because the file contents are empty.
 func (s) TestRootPemFileProvider(t *testing.T) {
 	cs := &certStore{}
 	err := cs.loadCerts()
@@ -138,11 +173,11 @@ func (s) TestRootPemFileProvider(t *testing.T) {
 		t.Errorf("cs.loadCerts() failed: %v", err)
 	}
 	// Create temp files that are used to hold root credentials.
-	trustTmpPath, err := ioutil.TempFile(os.TempDir(), "pre-")
+	trustTmp, err := ioutil.TempFile(os.TempDir(), "pre-")
 	if err != nil {
 		t.Errorf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
 	}
-	defer os.Remove(trustTmpPath.Name())
+	defer os.Remove(trustTmp.Name())
 	tests := []struct {
 		desc            string
 		trustFileBefore string
@@ -169,28 +204,41 @@ func (s) TestRootPemFileProvider(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			rootPemFileProviderOptions := &RootPemFileProviderOptions{
-				TrustFile: trustTmpPath.Name(),
-				Interval:  3 * time.Second,
+				TrustFile: trustTmp.Name(),
+				Interval:  1 * time.Second,
 			}
 			// ------------------------Stage 0------------------------------------
-			err = copyFileContents(test.trustFileBefore, trustTmpPath.Name())
-			if err != nil {
-				t.Errorf("copyFileContents(test.trustFileBefore, trustTmpPath): %v", err)
-			}
 			rootPemFileProvider, err := NewRootPemFileProvider(rootPemFileProviderOptions)
 			if err != nil {
 				t.Errorf("NewRootPemFileProvider(rootPemFileProviderOptions) failed: %v", err)
 			}
 			gotKM, err := rootPemFileProvider.KeyMaterial(context.Background())
+			if !cmp.Equal(*gotKM, certprovider.KeyMaterial{}, cmp.AllowUnexported(x509.CertPool{})) {
+				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, certprovider.KeyMaterial{})
+			}
+			// ------------------------Stage 1------------------------------------
+			err = copyFileContents(test.trustFileBefore, trustTmp.Name())
+			if err != nil {
+				t.Errorf("copyFileContents(test.trustFileBefore, trustTmp): %v", err)
+			}
+			time.Sleep(1500 * time.Millisecond)
+			gotKM, err = rootPemFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmBefore, cmp.AllowUnexported(x509.CertPool{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmBefore)
 			}
-			// ------------------------Stage 1------------------------------------
-			err = copyFileContents(test.trustFileAfter, trustTmpPath.Name())
+			// ------------------------Stage 2------------------------------------
+			err = copyFileContents(test.trustFileAfter, trustTmp.Name())
 			if err != nil {
-				t.Errorf("copyFileContents(test.trustFileAfter, trustTmpPath): %v", err)
+				t.Errorf("copyFileContents(test.trustFileAfter, trustTmp): %v", err)
 			}
-			time.Sleep(5 * time.Second)
+			time.Sleep(1500 * time.Millisecond)
+			gotKM, err = rootPemFileProvider.KeyMaterial(context.Background())
+			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(x509.CertPool{})) {
+				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
+			}
+			// ------------------------Stage 3------------------------------------
+			trustTmp.Truncate(0)
+			time.Sleep(1500 * time.Millisecond)
 			gotKM, err = rootPemFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(x509.CertPool{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)

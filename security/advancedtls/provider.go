@@ -24,14 +24,18 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"time"
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/grpclog"
 )
 
 const (
 	defaultInterval = 1 * time.Hour
 )
+
+var logger = grpclog.Component("channelz")
 
 // IdentityPemFileProviderOptions contains fields to be filled out by users
 // for obtaining identity private key and certificates from PEM files.
@@ -71,20 +75,33 @@ func NewIdentityPemFileProvider(o *IdentityPemFileProviderOptions) (*IdentityPem
 	if o.KeyFile == "" {
 		return nil, fmt.Errorf("users need to specify key file path in NewIdentityPemFileProvider")
 	}
-	// If interval is not set by users explicitly, set it to default interval.
+	// If interval is not set by users explicitly, we will set it to default interval.
 	if o.Interval == 0*time.Nanosecond {
 		o.Interval = defaultInterval
 	}
 	quit := make(chan bool)
 	provider := &IdentityPemFileProvider{}
 	provider.distributor = certprovider.NewDistributor()
+	// If the initial files are empty, we will set an empty KeyMaterial.
+	certFileSize, _ := getFileSize(o.CertFile)
+	keyFileSize, _ := getFileSize(o.KeyFile)
+	if certFileSize == 0 || keyFileSize == 0 {
+		provider.distributor.Set(&certprovider.KeyMaterial{}, nil)
+	}
 	// A goroutine to pull file changes.
 	go func() {
 		for {
 			// Read identity certs from PEM files.
 			identityCert, err := tls.LoadX509KeyPair(o.CertFile, o.KeyFile)
-			km := certprovider.KeyMaterial{Certs: []tls.Certificate{identityCert}}
-			provider.distributor.Set(&km, err)
+			// If the reading produces an error, we will skip the update for this round and log the error.
+			// Note that LoadX509KeyPair will return error if file is empty,
+			// so there is no separate check for empty file contents.
+			if err != nil {
+				logger.Warning("tls.LoadX509KeyPair(o.CertFile, o.KeyFile) failed: %v", err)
+			} else {
+				km := certprovider.KeyMaterial{Certs: []tls.Certificate{identityCert}}
+				provider.distributor.Set(&km, nil)
+			}
 			time.Sleep(o.Interval)
 			select {
 			case <-quit:
@@ -116,22 +133,34 @@ func NewRootPemFileProvider(o *RootPemFileProviderOptions) (*RootPemFileProvider
 	if o.TrustFile == "" {
 		return nil, fmt.Errorf("users need to specify key file path in RootPemFileProviderOptions")
 	}
-	// If interval is not set by users explicitly, set it to default interval.
+	// If interval is not set by users explicitly, we will set it to default interval.
 	if o.Interval == 0*time.Nanosecond {
 		o.Interval = defaultInterval
 	}
 	quit := make(chan bool)
 	provider := &RootPemFileProvider{}
 	provider.distributor = certprovider.NewDistributor()
+	// If the initial file is empty, we will set an empty KeyMaterial.
+	if trustFileSize, _ := getFileSize(o.TrustFile); trustFileSize == 0 {
+		provider.distributor.Set(&certprovider.KeyMaterial{}, nil)
+	}
 	// A goroutine to pull file changes.
 	go func() {
 		for {
-			// Read root certs from PEM files.
-			trustData, err := ioutil.ReadFile(o.TrustFile)
-			trustPool := x509.NewCertPool()
-			trustPool.AppendCertsFromPEM(trustData)
-			km := certprovider.KeyMaterial{Roots: trustPool}
-			provider.distributor.Set(&km, err)
+			// If the current file is empty, skip the update for this round.
+			if trustFileSize, _ := getFileSize(o.TrustFile); trustFileSize != 0 {
+				// Read root certs from PEM files.
+				trustData, err := ioutil.ReadFile(o.TrustFile)
+				trustPool := x509.NewCertPool()
+				trustPool.AppendCertsFromPEM(trustData)
+				// If the reading produces an error, we will skip the update for this round and log the error.
+				if err != nil {
+					logger.Warning("ioutil.ReadFile(o.TrustFile) failed: %v", err)
+				} else {
+					km := certprovider.KeyMaterial{Roots: trustPool}
+					provider.distributor.Set(&km, nil)
+				}
+			}
 			time.Sleep(o.Interval)
 			select {
 			case <-quit:
@@ -156,4 +185,12 @@ func (p *RootPemFileProvider) KeyMaterial(ctx context.Context) (*certprovider.Ke
 func (p *RootPemFileProvider) Close() {
 	p.closeFunc()
 	p.distributor.Stop()
+}
+
+func getFileSize(filepath string) (int64, error) {
+	f, err := os.Stat(filepath)
+	if err != nil {
+		return 0, err
+	}
+	return f.Size(), nil
 }
