@@ -39,6 +39,19 @@ mkdir -p ${WORKDIR}/googleapis/google/rpc
 echo "curl https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto"
 curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto > ${WORKDIR}/googleapis/google/rpc/code.proto
 
+# Pull in the following repos to build the MeshCA config proto.
+ENVOY_API_REPOS=(
+  "https://github.com/envoyproxy/data-plane-api"
+  "https://github.com/cncf/udpa"
+  "https://github.com/envoyproxy/protoc-gen-validate"
+)
+for repo in ${ENVOY_API_REPOS[@]}; do
+  dirname=$(basename ${repo})
+  mkdir -p ${WORKDIR}/${dirname}
+  echo "git clone ${repo}"
+  git clone --quiet ${repo} ${WORKDIR}/${dirname}
+done
+
 mkdir -p ${WORKDIR}/out
 
 SOURCES=(
@@ -52,15 +65,23 @@ SOURCES=(
   ${WORKDIR}/grpc-proto/grpc/lb/v1/load_balancer.proto
   ${WORKDIR}/grpc-proto/grpc/lookup/v1/rls.proto
   ${WORKDIR}/grpc-proto/grpc/service_config/service_config.proto
+  ${WORKDIR}/grpc-proto/grpc/tls/provider/meshca/experimental/config.proto
   $(git ls-files --exclude-standard --cached --others "*.proto")
 )
-OPTS=Mgrpc/service_config/service_config.proto=/internal/proto/grpc_service_config
+# These options of the form 'Mfoo.proto=bar' instruct the codegen to use an
+# import path of 'bar' in the generated code when 'foo.proto' is imported in
+# one of the sources.
+OPTS=Mgrpc/service_config/service_config.proto=/internal/proto/grpc_service_config,\
+Menvoy/config/core/v3/config_source.proto=github.com/envoyproxy/go-control-plane/envoy/config/core/v3
 for src in ${SOURCES[@]}; do
   echo "protoc ${src}"
   protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS},requireUnimplementedServers=false:${WORKDIR}/out \
     -I"." \
     -I${WORKDIR}/grpc-proto \
     -I${WORKDIR}/googleapis \
+    -I${WORKDIR}/data-plane-api \
+    -I${WORKDIR}/udpa \
+    -I${WORKDIR}/protoc-gen-validate \
     ${src}
 done
 

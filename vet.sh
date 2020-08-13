@@ -90,7 +90,7 @@ git grep -l 'grpclog.I\|grpclog.W\|grpclog.E\|grpclog.F\|grpclog.V' -- "*.go" | 
 not git grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/" -- "*.go"
 
 # - Ensure all xds proto imports are renamed to *pb or *grpc.
-git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' | not grep -v 'pb "\|grpc "'
+git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.pb.go' | not grep -v 'pb "\|grpc "'
 
 # - gofmt, goimports, golint (with exceptions for generated code), go vet.
 gofmt -s -d -l . 2>&1 | fail_on_output
