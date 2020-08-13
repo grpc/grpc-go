@@ -99,32 +99,28 @@ func (s) TestStringConvert(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			expected, expr, authzArgs := test.expectedEvaluationOutcome, test.expr, test.authzArgs
 			checked, err := convertStringToCheckedExpr(expr, declarations)
-			if test.expectedParsingError {
-				if err == nil {
-					t.Fatalf("lack of error in conversion %v", err)
-				}
-				return
+			wanted, gotten := test.expectedParsingError, err != nil
+			if gotten != wanted {
+				t.Fatalf("Lack of error in conversion %v", err)
 			}
-			if err != nil {
-				t.Fatalf("error in conversion %v", err)
+			if gotten && wanted { // early exit for valid error
+				return
 			}
 			ast := cel.CheckedExprToAst(checked)
 			program, err := env.Program(ast)
 			if err != nil {
-				t.Fatalf("error in formatting Program %v", err)
+				t.Fatalf("Error in formatting Program %v", err)
 			}
 			got, _, gotErr := program.Eval(authzArgs)
-			if test.expectedEvaluationError {
-				if gotErr == nil {
-					t.Fatalf("lack of error in evaluation %v", err)
-				}
+			wanted, gotten = test.expectedEvaluationError, gotErr != nil
+			if gotten != wanted {
+				t.Fatalf("Lack of error in conversion %v", err)
+			}
+			if gotten && wanted { // early exit for valid error
 				return
 			}
-			if gotErr != nil {
-				t.Fatalf("error in evaluating CEL program %s", gotErr.Error())
-			}
 			if got.Value() != expected {
-				t.Errorf("error in evaluating converted CheckedExpr %v", got.Value())
+				t.Fatalf("Error in evaluating converted CheckedExpr %v", got.Value())
 			}
 		})
 	}
