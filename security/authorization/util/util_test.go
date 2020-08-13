@@ -101,7 +101,7 @@ func (s) TestStringConvert(t *testing.T) {
 			checked, err := convertStringToCheckedExpr(expr, declarations)
 			wanted, gotten := test.expectedParsingError, err != nil
 			if gotten != wanted {
-				t.Fatalf("Lack of error in conversion %v", err)
+				t.Fatalf("Error in conversion, test.expectedParsingError =%v, got %v", wanted, gotten)
 			}
 			if gotten && wanted { // early exit for valid error
 				return
@@ -114,7 +114,7 @@ func (s) TestStringConvert(t *testing.T) {
 			got, _, gotErr := program.Eval(authzArgs)
 			wanted, gotten = test.expectedEvaluationError, gotErr != nil
 			if gotten != wanted {
-				t.Fatalf("Lack of error in conversion %v", err)
+				t.Fatalf("Error in evaluation, test.expectedEvaluationError =%v, got %v", wanted, gotten)
 			}
 			if gotten && wanted { // early exit for valid error
 				return
