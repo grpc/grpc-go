@@ -53,7 +53,7 @@ func main() {
 	/***** Initialize manual resolver and Dial *****/
 	r := manual.NewBuilderWithScheme("whatever")
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithResolvers(r), grpc.WithBalancerName("round_robin"))
+	conn, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithResolvers(r), grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

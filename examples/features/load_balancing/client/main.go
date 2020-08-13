@@ -55,9 +55,9 @@ func makeRPCs(cc *grpc.ClientConn, n int) {
 }
 
 func main() {
+	// "pick_first" is the default, so there's no need to set the load balancer.
 	pickfirstConn, err := grpc.Dial(
 		fmt.Sprintf("%s:///%s", exampleScheme, exampleServiceName),
-		// grpc.WithBalancerName("pick_first"), // "pick_first" is the default, so this DialOption is not necessary.
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
 	)
@@ -74,7 +74,7 @@ func main() {
 	// Make another ClientConn with round_robin policy.
 	roundrobinConn, err := grpc.Dial(
 		fmt.Sprintf("%s:///%s", exampleScheme, exampleServiceName),
-		grpc.WithBalancerName("round_robin"), // This sets the initial balancing policy.
+		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`), // This sets the initial balancing policy.
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
 	)
