@@ -52,6 +52,11 @@ for repo in ${ENVOY_API_REPOS[@]}; do
   git clone --quiet ${repo} ${WORKDIR}/${dirname}
 done
 
+# Pull in the MeshCA service proto.
+mkdir -p ${WORKDIR}/istio/istio/google/security/meshca/v1
+echo "curl https://raw.githubusercontent.com/istio/istio/master/security/proto/providers/google/meshca.proto"
+curl --silent https://raw.githubusercontent.com/istio/istio/master/security/proto/providers/google/meshca.proto > ${WORKDIR}/istio/istio/google/security/meshca/v1/meshca.proto
+
 mkdir -p ${WORKDIR}/out
 
 SOURCES=(
@@ -66,6 +71,7 @@ SOURCES=(
   ${WORKDIR}/grpc-proto/grpc/lookup/v1/rls.proto
   ${WORKDIR}/grpc-proto/grpc/service_config/service_config.proto
   ${WORKDIR}/grpc-proto/grpc/tls/provider/meshca/experimental/config.proto
+  ${WORKDIR}/istio/istio/google/security/meshca/v1/meshca.proto
   $(git ls-files --exclude-standard --cached --others "*.proto")
 )
 # These options of the form 'Mfoo.proto=bar' instruct the codegen to use an
@@ -82,6 +88,7 @@ for src in ${SOURCES[@]}; do
     -I${WORKDIR}/data-plane-api \
     -I${WORKDIR}/udpa \
     -I${WORKDIR}/protoc-gen-validate \
+    -I${WORKDIR}/istio \
     ${src}
 done
 
@@ -96,5 +103,9 @@ rm ${WORKDIR}/out/google.golang.org/grpc/reflection/grpc_testingv3/*.pb.go
 
 # grpc/service_config/service_config.proto does not have a go_package option.
 cp ${WORKDIR}/out/grpc/service_config/service_config.pb.go internal/proto/grpc_service_config
+
+# istio/google/security/meshca/v1/meshca.proto does not have a go_package option.
+mkdir -p ${WORKDIR}/out/google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/v1/
+cp ${WORKDIR}/out/istio/google/security/meshca/v1/* ${WORKDIR}/out/google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/v1/
 
 cp -R ${WORKDIR}/out/google.golang.org/grpc/* .
