@@ -129,7 +129,7 @@ func (s) TestDistributor(t *testing.T) {
 	})
 
 	waitAndDo(t, proceedCh, errCh, func() {
-		dist.Close()
+		dist.Stop()
 	})
 }
 

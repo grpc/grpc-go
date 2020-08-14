@@ -25,16 +25,17 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 )
 
-// Distributor is a simple, single key material cache which makes it easy for
-// provider implementations to furnish new key materials by handling
-// synchronization between the producer and consumers of the key material.
+// Distributor makes it easy for provider implementations to furnish new key
+// materials by handling synchronization between the producer and consumers of
+// the key material.
 //
-// Distributor implements the KeyMaterialReader interface. Provider
-// implementations may choose to do the following:
-//  - return a Distributor as part of their KeyMaterialReader() method.
-//  - invoke the Distributor's Set() method whenever they have new key material.
-//  - watch the channel returned by the Distributor.Done() method to get
-//    notified when the Distributor is closed.
+// Provider implementations which choose to use a Distributor should do the
+// following:
+// - create a new Distributor using the NewDistributor() function.
+// - invoke the Set() method whenever they have new key material or errors to
+//   report.
+// - delegate to the distributor when handing calls to KeyMaterial().
+// - invoke the Stop() method when they are done using the distributor.
 type Distributor struct {
 	// mu protects the underlying key material.
 	mu   sync.Mutex
@@ -57,15 +58,15 @@ func NewDistributor() *Distributor {
 	}
 }
 
-// Set updates the key material in the Distributor with km.
+// Set updates the key material in the distributor with km.
 //
-// Provider implementations which use the Distributor must not modify the
+// Provider implementations which use the distributor must not modify the
 // contents of the KeyMaterial struct pointed to by km.
 //
 // A non-nil err value indicates the error that the provider implementation ran
 // into when trying to fetch key material, and makes it possible to surface the
-// error to the user. A non-nil error value passed here causes the
-// Distributor.KeyMaterial() method to return nil key material.
+// error to the user. A non-nil error value passed here causes distributor's
+// KeyMaterial() method to return nil key material.
 func (d *Distributor) Set(km *KeyMaterial, err error) {
 	d.mu.Lock()
 	d.km = km
@@ -106,13 +107,8 @@ func (d *Distributor) keyMaterial() (*KeyMaterial, error) {
 	return d.km, d.pErr
 }
 
-// Close turns down the Distributor, releases allocated resources and fails any
+// Stop turns down the distributor, releases allocated resources and fails any
 // active KeyMaterial() call waiting for new key material.
-func (d *Distributor) Close() {
+func (d *Distributor) Stop() {
 	d.closed.Fire()
-}
-
-// Done returns a channel which will be closed when the Distributor is closed.
-func (d *Distributor) Done() <-chan struct{} {
-	return d.closed.Done()
 }
