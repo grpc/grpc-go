@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/credentials"
+	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
 // VerificationFuncParams contains parameters available to users when
@@ -299,6 +300,7 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 			SecurityLevel: credentials.PrivacyAndIntegrity,
 		},
 	}
+	info.SPIFFEID = credinternal.SPIFFEIDFromState(conn.ConnectionState())
 	return WrapSyscallConn(rawConn, conn), info, nil
 }
 
@@ -316,6 +318,7 @@ func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credenti
 			SecurityLevel: credentials.PrivacyAndIntegrity,
 		},
 	}
+	info.SPIFFEID = credinternal.SPIFFEIDFromState(conn.ConnectionState())
 	return WrapSyscallConn(rawConn, conn), info, nil
 }
 
@@ -502,4 +505,31 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 		return &tls.Config{}
 	}
 	return cfg.Clone()
+}
+
+// buildGetCertificates returns the certificate that matches the SNI field
+// for the given ClientHelloInfo, defaulting to the first element of o.GetCertificates.
+func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
+	if o.GetCertificates == nil {
+		return nil, fmt.Errorf("function GetCertificates must be specified")
+	}
+	certificates, err := o.GetCertificates(clientHello)
+	if err != nil {
+		return nil, err
+	}
+	if len(certificates) == 0 {
+		return nil, fmt.Errorf("no certificates configured")
+	}
+	// If users pass in only one certificate, return that certificate.
+	if len(certificates) == 1 {
+		return certificates[0], nil
+	}
+	// Choose the SNI certificate using SupportsCertificate.
+	for _, cert := range certificates {
+		if err := clientHello.SupportsCertificate(cert); err == nil {
+			return cert, nil
+		}
+	}
+	// If nothing matches, return the first certificate.
+	return certificates[0], nil
 }

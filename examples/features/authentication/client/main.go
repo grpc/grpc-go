@@ -30,8 +30,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
+	"google.golang.org/grpc/examples/data"
 	ecpb "google.golang.org/grpc/examples/features/proto/echo"
-	"google.golang.org/grpc/testdata"
 )
 
 var addr = flag.String("addr", "localhost:50051", "the address to connect to")
@@ -51,7 +51,7 @@ func main() {
 
 	// Set up the credentials for the connection.
 	perRPC := oauth.NewOauthAccess(fetchToken())
-	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
+	creds, err := credentials.NewClientTLSFromFile(data.Path("x509/ca_cert.pem"), "x.test.example.com")
 	if err != nil {
 		log.Fatalf("failed to load credentials: %v", err)
 	}

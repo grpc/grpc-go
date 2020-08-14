@@ -76,12 +76,14 @@ var (
 	}
 	mu    sync.Mutex
 	hists []*stats.Histogram
+
+	logger = grpclog.Component("benchmark")
 )
 
 func main() {
 	flag.Parse()
 	if *testName == "" {
-		grpclog.Fatalf("test_name not set")
+		logger.Fatalf("test_name not set")
 	}
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE,
@@ -98,7 +100,7 @@ func main() {
 	endDeadline := warmDeadline.Add(time.Duration(*duration) * time.Second)
 	cf, err := os.Create("/tmp/" + *testName + ".cpu")
 	if err != nil {
-		grpclog.Fatalf("Error creating file: %v", err)
+		logger.Fatalf("Error creating file: %v", err)
 	}
 	defer cf.Close()
 	pprof.StartCPUProfile(cf)
@@ -111,12 +113,12 @@ func main() {
 	pprof.StopCPUProfile()
 	mf, err := os.Create("/tmp/" + *testName + ".mem")
 	if err != nil {
-		grpclog.Fatalf("Error creating file: %v", err)
+		logger.Fatalf("Error creating file: %v", err)
 	}
 	defer mf.Close()
 	runtime.GC() // materialize all statistics
 	if err := pprof.WriteHeapProfile(mf); err != nil {
-		grpclog.Fatalf("Error writing memory profile: %v", err)
+		logger.Fatalf("Error writing memory profile: %v", err)
 	}
 	hist := stats.NewHistogram(hopts)
 	for _, h := range hists {
@@ -166,20 +168,20 @@ func makeCaller(cc *grpc.ClientConn, req *testpb.SimpleRequest) func() {
 	if *rpcType == "unary" {
 		return func() {
 			if _, err := client.UnaryCall(context.Background(), req); err != nil {
-				grpclog.Fatalf("RPC failed: %v", err)
+				logger.Fatalf("RPC failed: %v", err)
 			}
 		}
 	}
 	stream, err := client.StreamingCall(context.Background())
 	if err != nil {
-		grpclog.Fatalf("RPC failed: %v", err)
+		logger.Fatalf("RPC failed: %v", err)
 	}
 	return func() {
 		if err := stream.Send(req); err != nil {
-			grpclog.Fatalf("Streaming RPC failed to send: %v", err)
+			logger.Fatalf("Streaming RPC failed to send: %v", err)
 		}
 		if _, err := stream.Recv(); err != nil {
-			grpclog.Fatalf("Streaming RPC failed to read: %v", err)
+			logger.Fatalf("Streaming RPC failed to read: %v", err)
 		}
 	}
 }

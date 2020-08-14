@@ -79,6 +79,8 @@ var (
         unimplemented_method: client attempts to call unimplemented method;
         unimplemented_service: client attempts to call unimplemented service;
         pick_first_unary: all requests are sent to one server despite multiple servers are resolved.`)
+
+	logger = grpclog.Component("interop")
 )
 
 type credsMode uint8
@@ -102,12 +104,12 @@ func main() {
 		case computeEngineCredsName:
 			useCEC = true
 		default:
-			grpclog.Fatalf("If set, custom_credentials_type can only be set to one of %v or %v",
+			logger.Fatalf("If set, custom_credentials_type can only be set to one of %v or %v",
 				googleDefaultCredsName, computeEngineCredsName)
 		}
 	}
 	if (*useTLS && *useALTS) || (*useTLS && useGDC) || (*useALTS && useGDC) || (*useTLS && useCEC) || (*useALTS && useCEC) {
-		grpclog.Fatalf("only one of TLS, ALTS, google default creds, or compute engine creds can be used")
+		logger.Fatalf("only one of TLS, ALTS, google default creds, or compute engine creds can be used")
 	}
 
 	var credsChosen credsMode
@@ -139,7 +141,7 @@ func main() {
 			}
 			creds, err = credentials.NewClientTLSFromFile(*caFile, sn)
 			if err != nil {
-				grpclog.Fatalf("Failed to create TLS credentials %v", err)
+				logger.Fatalf("Failed to create TLS credentials %v", err)
 			}
 		} else {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
@@ -159,7 +161,7 @@ func main() {
 	case credsNone:
 		opts = append(opts, grpc.WithInsecure())
 	default:
-		grpclog.Fatal("Invalid creds")
+		logger.Fatal("Invalid creds")
 	}
 	if credsChosen == credsTLS {
 		if *testCase == "compute_engine_creds" {
@@ -167,13 +169,13 @@ func main() {
 		} else if *testCase == "service_account_creds" {
 			jwtCreds, err := oauth.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
 			if err != nil {
-				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
+				logger.Fatalf("Failed to create JWT credentials: %v", err)
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
 		} else if *testCase == "jwt_token_creds" {
 			jwtCreds, err := oauth.NewJWTAccessFromFile(*serviceAccountKeyFile)
 			if err != nil {
-				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
+				logger.Fatalf("Failed to create JWT credentials: %v", err)
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
 		} else if *testCase == "oauth2_auth_token" {
@@ -183,99 +185,99 @@ func main() {
 	opts = append(opts, grpc.WithBlock())
 	conn, err := grpc.Dial(serverAddr, opts...)
 	if err != nil {
-		grpclog.Fatalf("Fail to dial: %v", err)
+		logger.Fatalf("Fail to dial: %v", err)
 	}
 	defer conn.Close()
 	tc := testpb.NewTestServiceClient(conn)
 	switch *testCase {
 	case "empty_unary":
 		interop.DoEmptyUnaryCall(tc)
-		grpclog.Infoln("EmptyUnaryCall done")
+		logger.Infoln("EmptyUnaryCall done")
 	case "large_unary":
 		interop.DoLargeUnaryCall(tc)
-		grpclog.Infoln("LargeUnaryCall done")
+		logger.Infoln("LargeUnaryCall done")
 	case "client_streaming":
 		interop.DoClientStreaming(tc)
-		grpclog.Infoln("ClientStreaming done")
+		logger.Infoln("ClientStreaming done")
 	case "server_streaming":
 		interop.DoServerStreaming(tc)
-		grpclog.Infoln("ServerStreaming done")
+		logger.Infoln("ServerStreaming done")
 	case "ping_pong":
 		interop.DoPingPong(tc)
-		grpclog.Infoln("Pingpong done")
+		logger.Infoln("Pingpong done")
 	case "empty_stream":
 		interop.DoEmptyStream(tc)
-		grpclog.Infoln("Emptystream done")
+		logger.Infoln("Emptystream done")
 	case "timeout_on_sleeping_server":
 		interop.DoTimeoutOnSleepingServer(tc)
-		grpclog.Infoln("TimeoutOnSleepingServer done")
+		logger.Infoln("TimeoutOnSleepingServer done")
 	case "compute_engine_creds":
 		if credsChosen != credsTLS {
-			grpclog.Fatalf("TLS credentials need to be set for compute_engine_creds test case.")
+			logger.Fatalf("TLS credentials need to be set for compute_engine_creds test case.")
 		}
 		interop.DoComputeEngineCreds(tc, *defaultServiceAccount, *oauthScope)
-		grpclog.Infoln("ComputeEngineCreds done")
+		logger.Infoln("ComputeEngineCreds done")
 	case "service_account_creds":
 		if credsChosen != credsTLS {
-			grpclog.Fatalf("TLS credentials need to be set for service_account_creds test case.")
+			logger.Fatalf("TLS credentials need to be set for service_account_creds test case.")
 		}
 		interop.DoServiceAccountCreds(tc, *serviceAccountKeyFile, *oauthScope)
-		grpclog.Infoln("ServiceAccountCreds done")
+		logger.Infoln("ServiceAccountCreds done")
 	case "jwt_token_creds":
 		if credsChosen != credsTLS {
-			grpclog.Fatalf("TLS credentials need to be set for jwt_token_creds test case.")
+			logger.Fatalf("TLS credentials need to be set for jwt_token_creds test case.")
 		}
 		interop.DoJWTTokenCreds(tc, *serviceAccountKeyFile)
-		grpclog.Infoln("JWTtokenCreds done")
+		logger.Infoln("JWTtokenCreds done")
 	case "per_rpc_creds":
 		if credsChosen != credsTLS {
-			grpclog.Fatalf("TLS credentials need to be set for per_rpc_creds test case.")
+			logger.Fatalf("TLS credentials need to be set for per_rpc_creds test case.")
 		}
 		interop.DoPerRPCCreds(tc, *serviceAccountKeyFile, *oauthScope)
-		grpclog.Infoln("PerRPCCreds done")
+		logger.Infoln("PerRPCCreds done")
 	case "oauth2_auth_token":
 		if credsChosen != credsTLS {
-			grpclog.Fatalf("TLS credentials need to be set for oauth2_auth_token test case.")
+			logger.Fatalf("TLS credentials need to be set for oauth2_auth_token test case.")
 		}
 		interop.DoOauth2TokenCreds(tc, *serviceAccountKeyFile, *oauthScope)
-		grpclog.Infoln("Oauth2TokenCreds done")
+		logger.Infoln("Oauth2TokenCreds done")
 	case "google_default_credentials":
 		if credsChosen != credsGoogleDefaultCreds {
-			grpclog.Fatalf("GoogleDefaultCredentials need to be set for google_default_credentials test case.")
+			logger.Fatalf("GoogleDefaultCredentials need to be set for google_default_credentials test case.")
 		}
 		interop.DoGoogleDefaultCredentials(tc, *defaultServiceAccount)
-		grpclog.Infoln("GoogleDefaultCredentials done")
+		logger.Infoln("GoogleDefaultCredentials done")
 	case "compute_engine_channel_credentials":
 		if credsChosen != credsComputeEngineCreds {
-			grpclog.Fatalf("ComputeEngineCreds need to be set for compute_engine_channel_credentials test case.")
+			logger.Fatalf("ComputeEngineCreds need to be set for compute_engine_channel_credentials test case.")
 		}
 		interop.DoComputeEngineChannelCredentials(tc, *defaultServiceAccount)
-		grpclog.Infoln("ComputeEngineChannelCredentials done")
+		logger.Infoln("ComputeEngineChannelCredentials done")
 	case "cancel_after_begin":
 		interop.DoCancelAfterBegin(tc)
-		grpclog.Infoln("CancelAfterBegin done")
+		logger.Infoln("CancelAfterBegin done")
 	case "cancel_after_first_response":
 		interop.DoCancelAfterFirstResponse(tc)
-		grpclog.Infoln("CancelAfterFirstResponse done")
+		logger.Infoln("CancelAfterFirstResponse done")
 	case "status_code_and_message":
 		interop.DoStatusCodeAndMessage(tc)
-		grpclog.Infoln("StatusCodeAndMessage done")
+		logger.Infoln("StatusCodeAndMessage done")
 	case "special_status_message":
 		interop.DoSpecialStatusMessage(tc)
-		grpclog.Infoln("SpecialStatusMessage done")
+		logger.Infoln("SpecialStatusMessage done")
 	case "custom_metadata":
 		interop.DoCustomMetadata(tc)
-		grpclog.Infoln("CustomMetadata done")
+		logger.Infoln("CustomMetadata done")
 	case "unimplemented_method":
 		interop.DoUnimplementedMethod(conn)
-		grpclog.Infoln("UnimplementedMethod done")
+		logger.Infoln("UnimplementedMethod done")
 	case "unimplemented_service":
 		interop.DoUnimplementedService(testpb.NewUnimplementedServiceClient(conn))
-		grpclog.Infoln("UnimplementedService done")
+		logger.Infoln("UnimplementedService done")
 	case "pick_first_unary":
 		interop.DoPickFirstUnary(tc)
-		grpclog.Infoln("PickFirstUnary done")
+		logger.Infoln("PickFirstUnary done")
 	default:
-		grpclog.Fatal("Unsupported test case: ", *testCase)
+		logger.Fatal("Unsupported test case: ", *testCase)
 	}
 }

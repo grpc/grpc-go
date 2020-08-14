@@ -20,7 +20,6 @@ package client
 
 import (
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -60,7 +59,7 @@ func (s) TestEndpointsWatch(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -111,7 +110,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -169,7 +168,7 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -225,7 +224,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -274,16 +273,10 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 // an CDS response for the request that it sends out. We want the watch callback
 // to be invoked with an error once the watchExpiryTimer fires.
 func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
-	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 500 * time.Millisecond
-	defer func() {
-		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
-	}()
-
 	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, true))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -299,7 +292,7 @@ func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	u, err := endpointsUpdateCh.TimedReceive(defaultWatchExpiryTimeout * 2)
+	u, err := endpointsUpdateCh.TimedReceive(defaultTestWatchExpiryTimeout * 2)
 	if err != nil {
 		t.Fatalf("failed to get endpointsUpdate: %v", err)
 	}

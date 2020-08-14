@@ -22,7 +22,6 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -283,7 +282,7 @@ func clientHandle(t *testing.T, hs func(net.Conn, string) (AuthInfo, error), lis
 
 // Server handshake implementation in gRPC.
 func gRPCServerHandshake(conn net.Conn) (AuthInfo, error) {
-	serverTLS, err := NewServerTLSFromFile(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+	serverTLS, err := NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +304,7 @@ func gRPCClientHandshake(conn net.Conn, lisAddr string) (AuthInfo, error) {
 }
 
 func tlsServerHandshake(conn net.Conn) (AuthInfo, error) {
-	cert, err := tls.LoadX509KeyPair(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		return nil, err
 	}
@@ -325,40 +324,4 @@ func tlsClientHandshake(conn net.Conn, _ string) (AuthInfo, error) {
 		return nil, err
 	}
 	return TLSInfo{State: clientConn.ConnectionState(), CommonAuthInfo: CommonAuthInfo{SecurityLevel: PrivacyAndIntegrity}}, nil
-}
-
-func (s) TestAppendH2ToNextProtos(t *testing.T) {
-	tests := []struct {
-		name string
-		ps   []string
-		want []string
-	}{
-		{
-			name: "empty",
-			ps:   nil,
-			want: []string{"h2"},
-		},
-		{
-			name: "only h2",
-			ps:   []string{"h2"},
-			want: []string{"h2"},
-		},
-		{
-			name: "with h2",
-			ps:   []string{"alpn", "h2"},
-			want: []string{"alpn", "h2"},
-		},
-		{
-			name: "no h2",
-			ps:   []string{"alpn"},
-			want: []string{"alpn", "h2"},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := appendH2ToNextProtos(tt.ps); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("appendH2ToNextProtos() = %v, want %v", got, tt.want)
-			}
-		})
-	}
 }

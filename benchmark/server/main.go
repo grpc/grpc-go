@@ -46,22 +46,24 @@ import (
 var (
 	port     = flag.String("port", "50051", "Localhost port to listen on.")
 	testName = flag.String("test_name", "", "Name of the test used for creating profiles.")
+
+	logger = grpclog.Component("benchmark")
 )
 
 func main() {
 	flag.Parse()
 	if *testName == "" {
-		grpclog.Fatalf("test name not set")
+		logger.Fatalf("test name not set")
 	}
 	lis, err := net.Listen("tcp", ":"+*port)
 	if err != nil {
-		grpclog.Fatalf("Failed to listen: %v", err)
+		logger.Fatalf("Failed to listen: %v", err)
 	}
 	defer lis.Close()
 
 	cf, err := os.Create("/tmp/" + *testName + ".cpu")
 	if err != nil {
-		grpclog.Fatalf("Failed to create file: %v", err)
+		logger.Fatalf("Failed to create file: %v", err)
 	}
 	defer cf.Close()
 	pprof.StartCPUProfile(cf)
@@ -77,12 +79,12 @@ func main() {
 	pprof.StopCPUProfile()
 	mf, err := os.Create("/tmp/" + *testName + ".mem")
 	if err != nil {
-		grpclog.Fatalf("Failed to create file: %v", err)
+		logger.Fatalf("Failed to create file: %v", err)
 	}
 	defer mf.Close()
 	runtime.GC() // materialize all statistics
 	if err := pprof.WriteHeapProfile(mf); err != nil {
-		grpclog.Fatalf("Failed to write memory profile: %v", err)
+		logger.Fatalf("Failed to write memory profile: %v", err)
 	}
 	fmt.Println("Server CPU utilization:", cpu)
 	fmt.Println("Server CPU profile:", cf.Name())

@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/balancerload"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -84,7 +83,7 @@ func (b *testBalancer) UpdateClientConnState(state balancer.ClientConnState) err
 		var err error
 		b.sc, err = b.cc.NewSubConn(state.ResolverState.Addresses, b.newSubConnOptions)
 		if err != nil {
-			grpclog.Errorf("testBalancer: failed to NewSubConn: %v", err)
+			logger.Errorf("testBalancer: failed to NewSubConn: %v", err)
 			return nil
 		}
 		b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: &picker{sc: b.sc, bal: b}})
@@ -94,9 +93,9 @@ func (b *testBalancer) UpdateClientConnState(state balancer.ClientConnState) err
 }
 
 func (b *testBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
-	grpclog.Infof("testBalancer: UpdateSubConnState: %p, %v", sc, s)
+	logger.Infof("testBalancer: UpdateSubConnState: %p, %v", sc, s)
 	if b.sc != sc {
-		grpclog.Infof("testBalancer: ignored state change because sc is not recognized")
+		logger.Infof("testBalancer: ignored state change because sc is not recognized")
 		return
 	}
 	if s.ConnectivityState == connectivity.Shutdown {
@@ -144,7 +143,7 @@ func (s) TestCredsBundleFromBalancer(t *testing.T) {
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithBalancerName(testBalancerName),
 	}
-	creds, err := credentials.NewServerTLSFromFile(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+	creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		t.Fatalf("Failed to generate credentials %v", err)
 	}

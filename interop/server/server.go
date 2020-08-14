@@ -40,17 +40,19 @@ var (
 	certFile   = flag.String("tls_cert_file", "", "The TLS cert file")
 	keyFile    = flag.String("tls_key_file", "", "The TLS key file")
 	port       = flag.Int("port", 10000, "The server port")
+
+	logger = grpclog.Component("interop")
 )
 
 func main() {
 	flag.Parse()
 	if *useTLS && *useALTS {
-		grpclog.Fatalf("use_tls and use_alts cannot be both set to true")
+		logger.Fatalf("use_tls and use_alts cannot be both set to true")
 	}
 	p := strconv.Itoa(*port)
 	lis, err := net.Listen("tcp", ":"+p)
 	if err != nil {
-		grpclog.Fatalf("failed to listen: %v", err)
+		logger.Fatalf("failed to listen: %v", err)
 	}
 	var opts []grpc.ServerOption
 	if *useTLS {
@@ -62,7 +64,7 @@ func main() {
 		}
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			grpclog.Fatalf("Failed to generate credentials %v", err)
+			logger.Fatalf("Failed to generate credentials %v", err)
 		}
 		opts = append(opts, grpc.Creds(creds))
 	} else if *useALTS {

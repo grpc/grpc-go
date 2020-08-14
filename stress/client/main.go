@@ -52,6 +52,8 @@ var (
 	testCA               = flag.Bool("use_test_ca", false, "Whether to replace platform root CAs with test CA as the CA root")
 	tlsServerName        = flag.String("server_host_override", "foo.test.google.fr", "The server name use to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
 	caFile               = flag.String("ca_file", "", "The file containing the CA root cert file")
+
+	logger = grpclog.Component("stress")
 )
 
 // testCaseWithWeight contains the test case type and its weight.
@@ -196,7 +198,7 @@ func (s *server) createGauge(name string) *gauge {
 func startServer(server *server, port int) {
 	lis, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
-		grpclog.Fatalf("failed to listen: %v", err)
+		logger.Fatalf("failed to listen: %v", err)
 	}
 
 	s := grpc.NewServer()
@@ -248,23 +250,23 @@ func performRPCs(gauge *gauge, conn *grpc.ClientConn, selector *weightedRandomTe
 }
 
 func logParameterInfo(addresses []string, tests []testCaseWithWeight) {
-	grpclog.Infof("server_addresses: %s", *serverAddresses)
-	grpclog.Infof("test_cases: %s", *testCases)
-	grpclog.Infof("test_duration_secs: %d", *testDurationSecs)
-	grpclog.Infof("num_channels_per_server: %d", *numChannelsPerServer)
-	grpclog.Infof("num_stubs_per_channel: %d", *numStubsPerChannel)
-	grpclog.Infof("metrics_port: %d", *metricsPort)
-	grpclog.Infof("use_tls: %t", *useTLS)
-	grpclog.Infof("use_test_ca: %t", *testCA)
-	grpclog.Infof("server_host_override: %s", *tlsServerName)
+	logger.Infof("server_addresses: %s", *serverAddresses)
+	logger.Infof("test_cases: %s", *testCases)
+	logger.Infof("test_duration_secs: %d", *testDurationSecs)
+	logger.Infof("num_channels_per_server: %d", *numChannelsPerServer)
+	logger.Infof("num_stubs_per_channel: %d", *numStubsPerChannel)
+	logger.Infof("metrics_port: %d", *metricsPort)
+	logger.Infof("use_tls: %t", *useTLS)
+	logger.Infof("use_test_ca: %t", *testCA)
+	logger.Infof("server_host_override: %s", *tlsServerName)
 
-	grpclog.Infoln("addresses:")
+	logger.Infoln("addresses:")
 	for i, addr := range addresses {
-		grpclog.Infof("%d. %s\n", i+1, addr)
+		logger.Infof("%d. %s\n", i+1, addr)
 	}
-	grpclog.Infoln("tests:")
+	logger.Infoln("tests:")
 	for i, test := range tests {
-		grpclog.Infof("%d. %v\n", i+1, test)
+		logger.Infof("%d. %v\n", i+1, test)
 	}
 }
 
@@ -279,11 +281,11 @@ func newConn(address string, useTLS, testCA bool, tlsServerName string) (*grpc.C
 		if testCA {
 			var err error
 			if *caFile == "" {
-				*caFile = testdata.Path("ca.pem")
+				*caFile = testdata.Path("x509/server_ca_cert.pem")
 			}
 			creds, err = credentials.NewClientTLSFromFile(*caFile, sn)
 			if err != nil {
-				grpclog.Fatalf("Failed to create TLS credentials %v", err)
+				logger.Fatalf("Failed to create TLS credentials %v", err)
 			}
 		} else {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
@@ -311,7 +313,7 @@ func main() {
 		for connIndex := 0; connIndex < *numChannelsPerServer; connIndex++ {
 			conn, err := newConn(address, *useTLS, *testCA, *tlsServerName)
 			if err != nil {
-				grpclog.Fatalf("Fail to dial: %v", err)
+				logger.Fatalf("Fail to dial: %v", err)
 			}
 			defer conn.Close()
 			for clientIndex := 0; clientIndex < *numStubsPerChannel; clientIndex++ {
@@ -331,6 +333,6 @@ func main() {
 		close(stop)
 	}
 	wg.Wait()
-	grpclog.Infof(" ===== ALL DONE ===== ")
+	logger.Infof(" ===== ALL DONE ===== ")
 
 }
