@@ -56,7 +56,7 @@ type IdentityPEMFileProviderOptions struct {
 // and certificates based on the input PEM files.
 type IdentityPEMFileProvider struct {
 	distributor *certprovider.Distributor
-	closeFunc   func()
+	cancel      context.CancelFunc
 }
 
 // RootPEMFileProviderOptions contains fields to be filled out by users
@@ -74,7 +74,7 @@ type RootPEMFileProviderOptions struct {
 // It provides the most up-to-date root certificates based on the input PEM files.
 type RootPEMFileProvider struct {
 	distributor *certprovider.Distributor
-	closeFunc   func()
+	cancel      context.CancelFunc
 }
 
 // NewIdentityPEMFileProvider uses IdentityPEMFileProviderOptions to construct a IdentityPEMFileProvider.
@@ -90,15 +90,16 @@ func NewIdentityPEMFileProvider(o *IdentityPEMFileProviderOptions) (*IdentityPEM
 		o.Interval = defaultInterval
 	}
 	ticker := time.NewTicker(o.Interval)
-	quit := make(chan bool)
+	ctx, cancel := context.WithCancel(context.Background())
+	// Initialize the distributor of provider with an empty KeyMaterial.
 	provider := &IdentityPEMFileProvider{distributor: certprovider.NewDistributor()}
-	// Initialize the distributor with an empty KeyMaterial.
 	provider.distributor.Set(&certprovider.KeyMaterial{}, nil)
 	// A goroutine to pull file changes.
-	go func() {
+	go func(ctx context.Context) {
 		for {
 			select {
-			case <-quit:
+			case <-ctx.Done():
+				ticker.Stop()
 				return
 			case <-ticker.C:
 				{
@@ -116,11 +117,8 @@ func NewIdentityPEMFileProvider(o *IdentityPEMFileProviderOptions) (*IdentityPEM
 			default:
 			}
 		}
-	}()
-	provider.closeFunc = func() {
-		ticker.Stop()
-		close(quit)
-	}
+	}(ctx)
+	provider.cancel = cancel
 	return provider, nil
 }
 
@@ -132,7 +130,7 @@ func (p *IdentityPEMFileProvider) KeyMaterial(ctx context.Context) (*certprovide
 
 // Close cleans up resources allocated by the IdentityPEMFileProvider.
 func (p *IdentityPEMFileProvider) Close() {
-	p.closeFunc()
+	p.cancel()
 	p.distributor.Stop()
 }
 
@@ -146,15 +144,16 @@ func NewRootPEMFileProvider(o *RootPEMFileProviderOptions) (*RootPEMFileProvider
 		o.Interval = defaultInterval
 	}
 	ticker := time.NewTicker(o.Interval)
-	quit := make(chan bool)
+	ctx, cancel := context.WithCancel(context.Background())
+	// Initialize the distributor of provider with an empty KeyMaterial.
 	provider := &RootPEMFileProvider{distributor: certprovider.NewDistributor()}
-	// Initialize the distributor with an empty KeyMaterial.
 	provider.distributor.Set(&certprovider.KeyMaterial{}, nil)
 	// A goroutine to pull file changes.
-	go func() {
+	go func(ctx context.Context) {
 		for {
 			select {
-			case <-quit:
+			case <-ctx.Done():
+				ticker.Stop()
 				return
 			case <-ticker.C:
 				{
@@ -176,11 +175,8 @@ func NewRootPEMFileProvider(o *RootPEMFileProviderOptions) (*RootPEMFileProvider
 			default:
 			}
 		}
-	}()
-	provider.closeFunc = func() {
-		ticker.Stop()
-		close(quit)
-	}
+	}(ctx)
+	provider.cancel = cancel
 	return provider, nil
 }
 
@@ -192,7 +188,7 @@ func (p *RootPEMFileProvider) KeyMaterial(ctx context.Context) (*certprovider.Ke
 
 // Close cleans up resources allocated by the RootPEMFileProvider.
 func (p *RootPEMFileProvider) Close() {
-	p.closeFunc()
+	p.cancel()
 	p.distributor.Stop()
 }
 
