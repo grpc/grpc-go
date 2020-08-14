@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
-	"google.golang.org/grpc/xds/internal/version"
 )
 
 type watchInfoState int
@@ -37,9 +35,9 @@ const (
 
 // watchInfo holds all the information from a watch() call.
 type watchInfo struct {
-	c       *Client
-	typeURL string
-	target  string
+	c      *Client
+	rType  ResourceType
+	target string
 
 	ldsCallback func(ListenerUpdate, error)
 	rdsCallback func(RouteConfigUpdate, error)
@@ -74,7 +72,7 @@ func (wi *watchInfo) resourceNotFound() {
 	}
 	wi.state = watchInfoStateRespReceived
 	wi.expiryTimer.Stop()
-	wi.sendErrorLocked(NewErrorf(ErrorTypeResourceNotFound, "xds: %s target %s not found in received response", wi.typeURL, wi.target))
+	wi.sendErrorLocked(NewErrorf(ErrorTypeResourceNotFound, "xds: %v target %s not found in received response", wi.rType, wi.target))
 }
 
 func (wi *watchInfo) timeout() {
@@ -84,7 +82,7 @@ func (wi *watchInfo) timeout() {
 		return
 	}
 	wi.state = watchInfoStateTimeout
-	wi.sendErrorLocked(fmt.Errorf("xds: %s target %s not found, watcher timeout", wi.typeURL, wi.target))
+	wi.sendErrorLocked(fmt.Errorf("xds: %v target %s not found, watcher timeout", wi.rType, wi.target))
 }
 
 // Caller must hold wi.mu.
@@ -92,14 +90,14 @@ func (wi *watchInfo) sendErrorLocked(err error) {
 	var (
 		u interface{}
 	)
-	switch wi.typeURL {
-	case version.V2ListenerURL, version.V3ListenerURL:
+	switch wi.rType {
+	case ListenerResource:
 		u = ListenerUpdate{}
-	case version.V2RouteConfigURL, version.V3RouteConfigURL:
+	case RouteConfigResource:
 		u = RouteConfigUpdate{}
-	case version.V2ClusterURL, version.V3ClusterURL:
+	case ClusterResource:
 		u = ClusterUpdate{}
-	case version.V2EndpointsURL, version.V3EndpointsURL:
+	case EndpointsResource:
 		u = EndpointsUpdate{}
 	}
 	wi.c.scheduleCallback(wi, u, err)
@@ -118,16 +116,16 @@ func (wi *watchInfo) cancel() {
 func (c *Client) watch(wi *watchInfo) (cancel func()) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.logger.Debugf("new watch for type %v, resource name %v", wi.typeURL, wi.target)
+	c.logger.Debugf("new watch for type %v, resource name %v", wi.rType, wi.target)
 	var watchers map[string]map[*watchInfo]bool
-	switch wi.typeURL {
-	case version.V2ListenerURL, version.V3ListenerURL:
+	switch wi.rType {
+	case ListenerResource:
 		watchers = c.ldsWatchers
-	case version.V2RouteConfigURL, version.V3RouteConfigURL:
+	case RouteConfigResource:
 		watchers = c.rdsWatchers
-	case version.V2ClusterURL, version.V3ClusterURL:
+	case ClusterResource:
 		watchers = c.cdsWatchers
-	case version.V2EndpointsURL, version.V3EndpointsURL:
+	case EndpointsResource:
 		watchers = c.edsWatchers
 	}
 
@@ -139,33 +137,33 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 		//
 		// If this (type+name) is already being watched, will not notify the
 		// underlying versioned apiClient.
-		c.logger.Debugf("first watch for type %v, resource name %v, will send a new xDS request", wi.typeURL, wi.target)
+		c.logger.Debugf("first watch for type %v, resource name %v, will send a new xDS request", wi.rType, wi.target)
 		s = make(map[*watchInfo]bool)
 		watchers[resourceName] = s
-		c.apiClient.AddWatch(wi.typeURL, resourceName)
+		c.apiClient.AddWatch(wi.rType, resourceName)
 	}
 	// No matter what, add the new watcher to the set, so it's callback will be
 	// call for new responses.
 	s[wi] = true
 
 	// If the resource is in cache, call the callback with the value.
-	switch wi.typeURL {
-	case version.V2ListenerURL, version.V3ListenerURL:
+	switch wi.rType {
+	case ListenerResource:
 		if v, ok := c.ldsCache[resourceName]; ok {
 			c.logger.Debugf("LDS resource with name %v found in cache: %+v", wi.target, v)
 			wi.newUpdate(v)
 		}
-	case version.V2RouteConfigURL, version.V3RouteConfigURL:
+	case RouteConfigResource:
 		if v, ok := c.rdsCache[resourceName]; ok {
 			c.logger.Debugf("RDS resource with name %v found in cache: %+v", wi.target, v)
 			wi.newUpdate(v)
 		}
-	case version.V2ClusterURL, version.V3ClusterURL:
+	case ClusterResource:
 		if v, ok := c.cdsCache[resourceName]; ok {
 			c.logger.Debugf("CDS resource with name %v found in cache: %+v", wi.target, v)
 			wi.newUpdate(v)
 		}
-	case version.V2EndpointsURL, version.V3EndpointsURL:
+	case EndpointsResource:
 		if v, ok := c.edsCache[resourceName]; ok {
 			c.logger.Debugf("EDS resource with name %v found in cache: %+v", wi.target, v)
 			wi.newUpdate(v)
@@ -173,7 +171,7 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 	}
 
 	return func() {
-		c.logger.Debugf("watch for type %v, resource name %v canceled", wi.typeURL, wi.target)
+		c.logger.Debugf("watch for type %v, resource name %v canceled", wi.rType, wi.target)
 		wi.cancel()
 		c.mu.Lock()
 		defer c.mu.Unlock()
@@ -182,69 +180,26 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 			// future.
 			delete(s, wi)
 			if len(s) == 0 {
-				c.logger.Debugf("last watch for type %v, resource name %v canceled, will send a new xDS request", wi.typeURL, wi.target)
+				c.logger.Debugf("last watch for type %v, resource name %v canceled, will send a new xDS request", wi.rType, wi.target)
 				// If this was the last watcher, also tell xdsv2Client to stop
 				// watching this resource.
 				delete(watchers, resourceName)
-				c.apiClient.RemoveWatch(wi.typeURL, resourceName)
+				c.apiClient.RemoveWatch(wi.rType, resourceName)
 				// Remove the resource from cache. When a watch for this
 				// resource is added later, it will trigger a xDS request with
 				// resource names, and client will receive new xDS responses.
-				switch wi.typeURL {
-				case version.V2ListenerURL, version.V3ListenerURL:
+				switch wi.rType {
+				case ListenerResource:
 					delete(c.ldsCache, resourceName)
-				case version.V2RouteConfigURL, version.V3RouteConfigURL:
+				case RouteConfigResource:
 					delete(c.rdsCache, resourceName)
-				case version.V2ClusterURL, version.V3ClusterURL:
+				case ClusterResource:
 					delete(c.cdsCache, resourceName)
-				case version.V2EndpointsURL, version.V3EndpointsURL:
+				case EndpointsResource:
 					delete(c.edsCache, resourceName)
 				}
 			}
 		}
-	}
-}
-
-func (c *Client) listenerURL() string {
-	switch c.apiClient.Version() {
-	case version.TransportV2:
-		return version.V2ListenerURL
-	case version.TransportV3:
-		return version.V3ListenerURL
-	default:
-		return ""
-	}
-}
-
-func (c *Client) routeConfigURL() string {
-	switch c.apiClient.Version() {
-	case version.TransportV2:
-		return version.V2RouteConfigURL
-	case version.TransportV3:
-		return version.V3RouteConfigURL
-	default:
-		return ""
-	}
-}
-func (c *Client) clusterURL() string {
-	switch c.apiClient.Version() {
-	case version.TransportV2:
-		return version.V2ClusterURL
-	case version.TransportV3:
-		return version.V3ClusterURL
-	default:
-		return ""
-	}
-}
-
-func (c *Client) endpointsURL() string {
-	switch c.apiClient.Version() {
-	case version.TransportV2:
-		return version.V2EndpointsURL
-	case version.TransportV3:
-		return version.V3EndpointsURL
-	default:
-		return ""
 	}
 }
 
@@ -268,7 +223,7 @@ func (c *Client) WatchListener(listener string, cb func(ListenerUpdate, error)) 
 func (c *Client) watchLDS(serviceName string, cb func(ListenerUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
 		c:           c,
-		typeURL:     c.listenerURL(),
+		rType:       ListenerResource,
 		target:      serviceName,
 		ldsCallback: cb,
 	}
@@ -287,7 +242,7 @@ func (c *Client) watchLDS(serviceName string, cb func(ListenerUpdate, error)) (c
 func (c *Client) watchRDS(routeName string, cb func(RouteConfigUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
 		c:           c,
-		typeURL:     c.routeConfigURL(),
+		rType:       RouteConfigResource,
 		target:      routeName,
 		rdsCallback: cb,
 	}
@@ -413,7 +368,7 @@ func (w *serviceUpdateWatcher) close() {
 func (c *Client) WatchCluster(clusterName string, cb func(ClusterUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
 		c:           c,
-		typeURL:     c.clusterURL(),
+		rType:       ClusterResource,
 		target:      clusterName,
 		cdsCallback: cb,
 	}
@@ -435,7 +390,7 @@ func (c *Client) WatchCluster(clusterName string, cb func(ClusterUpdate, error))
 func (c *Client) WatchEndpoints(clusterName string, cb func(EndpointsUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
 		c:           c,
-		typeURL:     c.endpointsURL(),
+		rType:       EndpointsResource,
 		target:      clusterName,
 		edsCallback: cb,
 	}

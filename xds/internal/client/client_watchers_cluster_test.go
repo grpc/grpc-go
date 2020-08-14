@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/version"
 )
 
 type clusterUpdateErr struct {
@@ -53,7 +52,7 @@ func (s) TestClusterWatch(t *testing.T) {
 	cancelWatch := c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2ClusterURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -117,7 +116,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 		cancelLastWatch = c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 			clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 		})
-		if _, err := v2Client.addWatches[version.V2ClusterURL].Receive(); i == 0 && err != nil {
+		if _, err := v2Client.addWatches[ClusterResource].Receive(); i == 0 && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 	}
@@ -174,7 +173,7 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 		c.WatchCluster(testCDSName+"1", func(update ClusterUpdate, err error) {
 			clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 		})
-		if _, err := v2Client.addWatches[version.V2ClusterURL].Receive(); i == 0 && err != nil {
+		if _, err := v2Client.addWatches[ClusterResource].Receive(); i == 0 && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 	}
@@ -184,7 +183,7 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 	c.WatchCluster(testCDSName+"2", func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(clusterUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2ClusterURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -224,7 +223,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2ClusterURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -242,7 +241,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(clusterUpdateErr{u: update, err: err})
 	})
-	if n, err := v2Client.addWatches[version.V2ClusterURL].Receive(); err == nil {
+	if n, err := v2Client.addWatches[ClusterResource].Receive(); err == nil {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
@@ -276,7 +275,7 @@ func (s) TestClusterWatchExpiryTimer(t *testing.T) {
 	c.WatchCluster(testCDSName, func(u ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: u, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2ClusterURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -312,7 +311,7 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 	c.WatchCluster(testCDSName, func(u ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: u, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2ClusterURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -354,7 +353,7 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	c.WatchCluster(testCDSName+"1", func(update ClusterUpdate, err error) {
 		clusterUpdateCh1.Send(clusterUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2ClusterURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	// Another watch for a different name.
@@ -362,7 +361,7 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	c.WatchCluster(testCDSName+"2", func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(clusterUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2ClusterURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 

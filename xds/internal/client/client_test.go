@@ -67,8 +67,8 @@ func clientOpts(balancerName string, overrideWatchExpiryTImeout bool) Options {
 type testAPIClient struct {
 	r UpdateHandler
 
-	addWatches    map[string]*testutils.Channel
-	removeWatches map[string]*testutils.Channel
+	addWatches    map[ResourceType]*testutils.Channel
+	removeWatches map[ResourceType]*testutils.Channel
 }
 
 func overrideNewAPIClient() (<-chan *testAPIClient, func()) {
@@ -83,16 +83,18 @@ func overrideNewAPIClient() (<-chan *testAPIClient, func()) {
 }
 
 func newTestAPIClient(r UpdateHandler) *testAPIClient {
-	addWatches := make(map[string]*testutils.Channel)
-	addWatches[version.V2ListenerURL] = testutils.NewChannel()
-	addWatches[version.V2RouteConfigURL] = testutils.NewChannel()
-	addWatches[version.V2ClusterURL] = testutils.NewChannel()
-	addWatches[version.V2EndpointsURL] = testutils.NewChannel()
-	removeWatches := make(map[string]*testutils.Channel)
-	removeWatches[version.V2ListenerURL] = testutils.NewChannel()
-	removeWatches[version.V2RouteConfigURL] = testutils.NewChannel()
-	removeWatches[version.V2ClusterURL] = testutils.NewChannel()
-	removeWatches[version.V2EndpointsURL] = testutils.NewChannel()
+	addWatches := map[ResourceType]*testutils.Channel{
+		ListenerResource:    testutils.NewChannel(),
+		RouteConfigResource: testutils.NewChannel(),
+		ClusterResource:     testutils.NewChannel(),
+		EndpointsResource:   testutils.NewChannel(),
+	}
+	removeWatches := map[ResourceType]*testutils.Channel{
+		ListenerResource:    testutils.NewChannel(),
+		RouteConfigResource: testutils.NewChannel(),
+		ClusterResource:     testutils.NewChannel(),
+		EndpointsResource:   testutils.NewChannel(),
+	}
 	return &testAPIClient{
 		r:             r,
 		addWatches:    addWatches,
@@ -100,16 +102,12 @@ func newTestAPIClient(r UpdateHandler) *testAPIClient {
 	}
 }
 
-func (c *testAPIClient) AddWatch(resourceType, resourceName string) {
+func (c *testAPIClient) AddWatch(resourceType ResourceType, resourceName string) {
 	c.addWatches[resourceType].Send(resourceName)
 }
 
-func (c *testAPIClient) RemoveWatch(resourceType, resourceName string) {
+func (c *testAPIClient) RemoveWatch(resourceType ResourceType, resourceName string) {
 	c.removeWatches[resourceType].Send(resourceName)
-}
-
-func (c *testAPIClient) Version() version.TransportAPI {
-	return version.TransportV2
 }
 
 func (c *testAPIClient) Close() {}
@@ -134,12 +132,12 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 		// Calls another watch inline, to ensure there's deadlock.
 		c.WatchCluster("another-random-name", func(ClusterUpdate, error) {})
-		if _, err := v2Client.addWatches[version.V2ClusterURL].Receive(); firstTime && err != nil {
+		if _, err := v2Client.addWatches[ClusterResource].Receive(); firstTime && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 		firstTime = false
 	})
-	if _, err := v2Client.addWatches[version.V2ClusterURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 

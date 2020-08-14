@@ -23,9 +23,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/version"
 )
 
 var (
@@ -71,7 +71,7 @@ func (s) TestEndpointsWatch(t *testing.T) {
 	cancelWatch := c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2EndpointsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[EndpointsResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -129,7 +129,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 		cancelLastWatch = c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 			endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 		})
-		if _, err := v2Client.addWatches[version.V2EndpointsURL].Receive(); i == 0 && err != nil {
+		if _, err := v2Client.addWatches[EndpointsResource].Receive(); i == 0 && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 	}
@@ -186,7 +186,7 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 		c.WatchEndpoints(testCDSName+"1", func(update EndpointsUpdate, err error) {
 			endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 		})
-		if _, err := v2Client.addWatches[version.V2EndpointsURL].Receive(); i == 0 && err != nil {
+		if _, err := v2Client.addWatches[EndpointsResource].Receive(); i == 0 && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 	}
@@ -196,7 +196,7 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 	c.WatchEndpoints(testCDSName+"2", func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh2.Send(endpointsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2EndpointsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[EndpointsResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -236,7 +236,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2EndpointsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[EndpointsResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -254,7 +254,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh2.Send(endpointsUpdateErr{u: update, err: err})
 	})
-	if n, err := v2Client.addWatches[version.V2EndpointsURL].Receive(); err == nil {
+	if n, err := v2Client.addWatches[EndpointsResource].Receive(); err == nil {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
@@ -288,7 +288,7 @@ func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 	c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2EndpointsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[EndpointsResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
