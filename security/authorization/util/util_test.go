@@ -36,92 +36,138 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+var declarations = []*expr.Decl{
+				decls.NewIdent("request.url_path", decls.String, nil),
+				decls.NewIdent("request.host", decls.String, nil),
+				decls.NewIdent("request.method", decls.String, nil),
+				decls.NewIdent("request.headers", decls.NewMapType(decls.String, decls.String), nil),
+				decls.NewIdent("source.address", decls.String, nil),
+				decls.NewIdent("source.port", decls.Int, nil),
+				decls.NewIdent("source.principal", decls.String, nil),
+				decls.NewIdent("destination.address", decls.String, nil),
+				decls.NewIdent("destination.port", decls.Int, nil),
+				decls.NewIdent("connection.uri_san_peer_certificate", decls.String, nil)}
+var env, _ = cel.NewEnv() // External Evaluation env does not have to be built the same.
+
 func (s) TestStringConvert(t *testing.T) {
-	declarations := []*expr.Decl{
-		decls.NewIdent("request.url_path", decls.String, nil),
-		decls.NewIdent("request.host", decls.String, nil),
-		decls.NewIdent("request.method", decls.String, nil),
-		decls.NewIdent("request.headers", decls.NewMapType(decls.String, decls.String), nil),
-		decls.NewIdent("source.address", decls.String, nil),
-		decls.NewIdent("source.port", decls.Int, nil),
-		decls.NewIdent("source.principal", decls.String, nil),
-		decls.NewIdent("destination.address", decls.String, nil),
-		decls.NewIdent("destination.port", decls.Int, nil),
-		decls.NewIdent("connection.uri_san_peer_certificate", decls.String, nil)}
-	env, _ := cel.NewEnv() // External Evaluation env does not have to be built the same
 	for _, test := range []struct {
-		desc                      string
-		expectedEvaluationOutcome bool
-		expectedParsingError      bool
-		expectedEvaluationError   bool
-		expr                      string
-		authzArgs                 map[string]interface{}
+		desc             string
+		wantEvalOutcome  bool
+		wantParsingError bool
+		wantEvalError    bool
+		expr             string
+		authzArgs        map[string]interface{}
 	}{
 		{
-			desc:                      "1: use a policy with startsWith primitive and returns a match.",
-			expectedEvaluationOutcome: true,
-			expr:                      "request.url_path.startsWith('/pkg.service/test')",
-			authzArgs:                 map[string]interface{}{"request.url_path": "/pkg.service/test"},
+			desc:            "Test 1 single primative match",
+			wantEvalOutcome: true,
+			expr:            "request.url_path.startsWith('/pkg.service/test')",
+			authzArgs:       map[string]interface{}{"request.url_path": "/pkg.service/test"},
 		},
 		{
-			desc:                      "2: use a policy with == primitive and returns a match.",
-			expectedEvaluationOutcome: true,
-			expr:                      "connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'",
-			authzArgs:                 map[string]interface{}{"connection.uri_san_peer_certificate": "cluster/ns/default/sa/admin"},
+			desc:            "Test 2 single compare match",
+			wantEvalOutcome: true,
+			expr:            "connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'",
+			authzArgs:       map[string]interface{}{"connection.uri_san_peer_certificate": "cluster/ns/default/sa/admin"},
 		},
 		{
-			desc:                      "3: use a policy with startsWith primitive and returns no match.",
-			expectedEvaluationOutcome: false,
-			expr:                      "request.url_path.startsWith('/pkg.service/test')",
-			authzArgs:                 map[string]interface{}{"request.url_path": "/source/pkg.service/test"},
+			desc:            "Test 3 single primative no match",
+			wantEvalOutcome: false,
+			expr:            "request.url_path.startsWith('/pkg.service/test')",
+			authzArgs:       map[string]interface{}{"request.url_path": "/source/pkg.service/test"},
 		},
 		{
-			desc:                      "4: use a policy with startsWith and == primitive and returns a match.",
-			expectedEvaluationOutcome: true,
-			expr:                      "request.url_path == '/pkg.service/test' && connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'",
+			desc:            "Test 4 primative and compare match",
+			wantEvalOutcome: true,
+			expr:            "request.url_path == '/pkg.service/test' && connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'",
 			authzArgs: map[string]interface{}{"request.url_path": "/pkg.service/test",
 				"connection.uri_san_peer_certificate": "cluster/ns/default/sa/admin"},
-		},
-		{
-			desc:                 "5: use a policy that has a field not present in the environment.",
-			expectedParsingError: true,
-			expr:                 "request.source_path.startsWith('/pkg.service/test')",
-			authzArgs:            map[string]interface{}{"request.url_path": "/pkg.service/test"},
-		},
-		{
-			desc:                    "6: use an argument that has a filed not included in the environment.",
-			expectedEvaluationError: true,
-			expr:                    "request.url_path.startsWith('/pkg.service/test')",
-			authzArgs:               map[string]interface{}{"request.source_path": "/pkg.service/test"},
 		},
 	} {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			expected, expr, authzArgs := test.expectedEvaluationOutcome, test.expr, test.authzArgs
+			expected, expr, authzArgs := test.wantEvalOutcome, test.expr, test.authzArgs
 			checked, err := convertStringToCheckedExpr(expr, declarations)
-			wanted, gotten := test.expectedParsingError, err != nil
-			if gotten != wanted {
-				t.Fatalf("Error in conversion, test.expectedParsingError =%v, got %v", wanted, gotten)
-			}
-			if gotten && wanted { // early exit for valid error
-				return
+			want, got := test.wantParsingError, err != nil
+			if got != want {
+				t.Fatalf("Error in conversion, test.wantParsingError =%v, got %v", want, got)
 			}
 			ast := cel.CheckedExprToAst(checked)
 			program, err := env.Program(ast)
 			if err != nil {
 				t.Fatalf("Error in formatting Program %v", err)
 			}
-			got, _, gotErr := program.Eval(authzArgs)
-			wanted, gotten = test.expectedEvaluationError, gotErr != nil
-			if gotten != wanted {
-				t.Fatalf("Error in evaluation, test.expectedEvaluationError =%v, got %v", wanted, gotten)
+			recieved, _, gotErr := program.Eval(authzArgs)
+			want, got = test.wantEvalError, gotErr != nil
+			if got != want {
+				t.Fatalf("Error in evaluation, test.wantEvalError =%v, got %v", want, got)
 			}
-			if gotten && wanted { // early exit for valid error
+			if recieved.Value() != expected {
+				t.Fatalf("Error in evaluating converted CheckedExpr %v", recieved.Value())
+			}
+		})
+	}
+}
+
+func (s) TestFailStringParse(t *testing.T) {
+	for _, test := range []struct {
+		desc             string
+		wantParsingError bool
+		expr             string
+		authzArgs        map[string]interface{}
+	}{
+		{
+			desc:             "Test 5 parse error field not present in environment",
+			wantParsingError: true,
+			expr:             "request.source_path.startsWith('/pkg.service/test')",
+			authzArgs:        map[string]interface{}{"request.url_path": "/pkg.service/test"},
+		},
+	} {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			expr := test.expr
+			_, err := convertStringToCheckedExpr(expr, declarations)
+			want, got := test.wantParsingError, err != nil
+			if got && want { // early exit for valid error
 				return
 			}
-			if got.Value() != expected {
-				t.Fatalf("Error in evaluating converted CheckedExpr %v", got.Value())
+			t.Fatalf("Error in conversion, test.wantParsingError =%v, got %v", want, got)
+		})
+	}
+}
+
+func (s) TestFailStringEval(t *testing.T) {
+	for _, test := range []struct {
+		desc          string
+		wantEvalError bool
+		expr          string
+		authzArgs     map[string]interface{}
+	}{
+		{
+			desc:          "Test 6 eval error argument not included in environment",
+			wantEvalError: true,
+			expr:          "request.url_path.startsWith('/pkg.service/test')",
+			authzArgs:     map[string]interface{}{"request.source_path": "/pkg.service/test"},
+		},
+	} {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			expr, authzArgs := test.expr, test.authzArgs
+			checked, err := convertStringToCheckedExpr(expr, declarations)
+			if err != nil {
+				t.Fatalf("Error in conversion got %v", err)
 			}
+			ast := cel.CheckedExprToAst(checked)
+			program, err := env.Program(ast)
+			if err != nil {
+				t.Fatalf("Error in formatting Program %v", err)
+			}
+			_, _, gotErr := program.Eval(authzArgs)
+			want, got := test.wantEvalError, gotErr != nil
+			if got && want { // early exit for valid error
+				return
+			}
+			t.Fatalf("Error in evaluation, test.wantEvalError =%v, got %v", want, got)
 		})
 	}
 }
