@@ -33,8 +33,8 @@ import (
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
-// The IdentityPEMFileProvider is tested in different stages.
-// At stage 0, we create an IdentityPEMFileProvider with empty initial files.
+// The PEMFileProvider for identity credentials updates is tested in different stages.
+// At stage 0, we create an PEMFileProvider with empty initial files.
 // At stage 1, we copy the first set of certFile and keyFile to the temp files
 // that are watched by the goroutine.
 // The KeyMaterial is expected to be updated if there is a matching key-cert pair.
@@ -50,7 +50,7 @@ func (s) TestIdentityPEMFileProvider(t *testing.T) {
 	if err != nil {
 		t.Errorf("cs.loadCerts() failed: %v", err)
 	}
-	// Create temp files that are used to hold identity credentials.
+	// Create temp files that are used to hold credentials.
 	certTmp, err := ioutil.TempFile(os.TempDir(), "pre-")
 	if err != nil {
 		t.Errorf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
@@ -101,15 +101,15 @@ func (s) TestIdentityPEMFileProvider(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			identityPEMFileProviderOptions := &IdentityPEMFileProviderOptions{
-				CertFile: certTmp.Name(),
-				KeyFile:  keyTmp.Name(),
-				Interval: 1 * time.Second,
+			PEMFileProviderOptions := &PEMFileProviderOptions{
+				CertFile:         certTmp.Name(),
+				KeyFile:          keyTmp.Name(),
+				IdentityInterval: 1 * time.Second,
 			}
 			// ------------------------Stage 0------------------------------------
-			identityPEMFileProvider, err := NewIdentityPEMFileProvider(identityPEMFileProviderOptions)
+			PEMFileProvider, err := NewPEMFileProvider(PEMFileProviderOptions)
 			if err != nil {
-				t.Errorf("NewIdentityPEMFileProvider(identityPEMFileProviderOptions) failed: %v", err)
+				t.Errorf("NewPEMFileProvider(PEMFileProviderOptions) failed: %v", err)
 			}
 			// ------------------------Stage 1------------------------------------
 			err = copyFileContents(test.certFileBefore, certTmp.Name())
@@ -121,7 +121,7 @@ func (s) TestIdentityPEMFileProvider(t *testing.T) {
 				t.Errorf("copyFileContents(test.keyFileBefore, keyTmp): %v", err)
 			}
 			time.Sleep(2 * time.Second)
-			gotKM, err := identityPEMFileProvider.KeyMaterial(context.Background())
+			gotKM, err := PEMFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmBefore, cmp.AllowUnexported(big.Int{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmBefore)
 			}
@@ -135,7 +135,7 @@ func (s) TestIdentityPEMFileProvider(t *testing.T) {
 				t.Errorf("copyFileContents(test.keyFileAfter, keyTmp): %v", err)
 			}
 			time.Sleep(2 * time.Second)
-			gotKM, err = identityPEMFileProvider.KeyMaterial(context.Background())
+			gotKM, err = PEMFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(big.Int{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
 			}
@@ -143,16 +143,16 @@ func (s) TestIdentityPEMFileProvider(t *testing.T) {
 			certTmp.Truncate(0)
 			keyTmp.Truncate(0)
 			time.Sleep(2 * time.Second)
-			gotKM, err = identityPEMFileProvider.KeyMaterial(context.Background())
+			gotKM, err = PEMFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(big.Int{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
 			}
-			identityPEMFileProvider.Close()
+			PEMFileProvider.Close()
 		})
 	}
 }
 
-// The RootPEMFileProvider is tested in different stages.
+// The PEMFileProvider for root credentials updates is tested in different stages.
 // At stage 0, we create an RootPEMFileProvider with empty initial file.
 // At stage 1, we copy the first set of certFile and keyFile to the temp files
 // that are watched by the goroutine. The KeyMaterial is expected to be updated.
@@ -197,14 +197,14 @@ func (s) TestRootPEMFileProvider(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			rootPEMFileProviderOptions := &RootPEMFileProviderOptions{
-				TrustFile: trustTmp.Name(),
-				Interval:  1 * time.Second,
+			PEMFileProviderOptions := &PEMFileProviderOptions{
+				TrustFile:    trustTmp.Name(),
+				RootInterval: 1 * time.Second,
 			}
 			// ------------------------Stage 0------------------------------------
-			rootPEMFileProvider, err := NewRootPEMFileProvider(rootPEMFileProviderOptions)
+			PEMFileProvider, err := NewPEMFileProvider(PEMFileProviderOptions)
 			if err != nil {
-				t.Errorf("NewRootPEMFileProvider(rootPEMFileProviderOptions) failed: %v", err)
+				t.Errorf("NewPEMFileProvider(PEMFileProviderOptions) failed: %v", err)
 			}
 			// ------------------------Stage 1------------------------------------
 			err = copyFileContents(test.trustFileBefore, trustTmp.Name())
@@ -212,7 +212,7 @@ func (s) TestRootPEMFileProvider(t *testing.T) {
 				t.Errorf("copyFileContents(test.trustFileBefore, trustTmp): %v", err)
 			}
 			time.Sleep(2 * time.Second)
-			gotKM, err := rootPEMFileProvider.KeyMaterial(context.Background())
+			gotKM, err := PEMFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmBefore, cmp.AllowUnexported(x509.CertPool{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmBefore)
 			}
@@ -222,18 +222,18 @@ func (s) TestRootPEMFileProvider(t *testing.T) {
 				t.Errorf("copyFileContents(test.trustFileAfter, trustTmp): %v", err)
 			}
 			time.Sleep(2 * time.Second)
-			gotKM, err = rootPEMFileProvider.KeyMaterial(context.Background())
+			gotKM, err = PEMFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(x509.CertPool{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
 			}
 			// ------------------------Stage 3------------------------------------
 			trustTmp.Truncate(0)
 			time.Sleep(2 * time.Second)
-			gotKM, err = rootPEMFileProvider.KeyMaterial(context.Background())
+			gotKM, err = PEMFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(x509.CertPool{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
 			}
-			rootPEMFileProvider.Close()
+			PEMFileProvider.Close()
 		})
 	}
 }
