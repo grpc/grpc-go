@@ -23,7 +23,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io/ioutil"
-	"os"
 	"time"
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
@@ -60,8 +59,9 @@ type PEMFileProviderOptions struct {
 // It provides the most up-to-date identity private key, peer certificates
 // and root certificates based on the input PEM files.
 type PEMFileProvider struct {
-	*certprovider.Distributor
-	cancel context.CancelFunc
+	identityDistributor *certprovider.Distributor
+	rootDistributor     *certprovider.Distributor
+	cancel              context.CancelFunc
 }
 
 // NewPEMFileProvider uses PEMFileProviderOptions to construct a PEMFileProvider.
@@ -87,7 +87,10 @@ func NewPEMFileProvider(o *PEMFileProviderOptions) (*PEMFileProvider, error) {
 	identityTicker := time.NewTicker(o.IdentityInterval)
 	rootTicker := time.NewTicker(o.RootInterval)
 	ctx, cancel := context.WithCancel(context.Background())
-	provider := &PEMFileProvider{Distributor: certprovider.NewDistributor()}
+	provider := &PEMFileProvider{
+		identityDistributor: certprovider.NewDistributor(),
+		rootDistributor:     certprovider.NewDistributor(),
+	}
 	// A goroutine to pull file changes.
 	go func(ctx context.Context) {
 		for {
@@ -109,7 +112,7 @@ func NewPEMFileProvider(o *PEMFileProviderOptions) (*PEMFileProvider, error) {
 					logger.Warning("tls.LoadX509KeyPair(%v, %v) failed: %v", o.CertFile, o.KeyFile, err)
 					continue
 				}
-				provider.Set(&certprovider.KeyMaterial{Certs: []tls.Certificate{identityCert}}, nil)
+				provider.identityDistributor.Set(&certprovider.KeyMaterial{Certs: []tls.Certificate{identityCert}}, nil)
 			case <-rootTicker.C:
 				if !rootUpdate {
 					continue
@@ -127,7 +130,7 @@ func NewPEMFileProvider(o *PEMFileProviderOptions) (*PEMFileProvider, error) {
 				}
 				trustPool := x509.NewCertPool()
 				trustPool.AppendCertsFromPEM(trustData)
-				provider.Set(&certprovider.KeyMaterial{Roots: trustPool}, nil)
+				provider.rootDistributor.Set(&certprovider.KeyMaterial{Roots: trustPool}, nil)
 			default:
 			}
 		}
@@ -136,16 +139,23 @@ func NewPEMFileProvider(o *PEMFileProviderOptions) (*PEMFileProvider, error) {
 	return provider, nil
 }
 
+// KeyMaterial returns the key material sourced by the PEMFileProvider.
+// Callers are expected to use the returned value as read-only.
+func (p *PEMFileProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
+	identityKM, err := p.identityDistributor.KeyMaterial(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rootKM, err := p.rootDistributor.KeyMaterial(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &certprovider.KeyMaterial{Certs: identityKM.Certs, Roots: rootKM.Roots}, nil
+}
+
 // Close cleans up resources allocated by the PEMFileProvider.
 func (p *PEMFileProvider) Close() {
 	p.cancel()
-	p.Stop()
-}
-
-func getFileSize(filepath string) (int64, error) {
-	f, err := os.Stat(filepath)
-	if err != nil {
-		return 0, err
-	}
-	return f.Size(), nil
+	p.identityDistributor.Stop()
+	p.rootDistributor.Stop()
 }
