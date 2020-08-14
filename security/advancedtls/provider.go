@@ -55,8 +55,8 @@ type IdentityPEMFileProviderOptions struct {
 // It provides the most up-to-date identity private key
 // and certificates based on the input PEM files.
 type IdentityPEMFileProvider struct {
-	distributor *certprovider.Distributor
-	cancel      context.CancelFunc
+	*certprovider.Distributor
+	cancel context.CancelFunc
 }
 
 // RootPEMFileProviderOptions contains fields to be filled out by users
@@ -73,8 +73,8 @@ type RootPEMFileProviderOptions struct {
 // RootPEMFileProvider implements certprovider.Provider.
 // It provides the most up-to-date root certificates based on the input PEM files.
 type RootPEMFileProvider struct {
-	distributor *certprovider.Distributor
-	cancel      context.CancelFunc
+	*certprovider.Distributor
+	cancel context.CancelFunc
 }
 
 // NewIdentityPEMFileProvider uses IdentityPEMFileProviderOptions to construct a IdentityPEMFileProvider.
@@ -91,9 +91,7 @@ func NewIdentityPEMFileProvider(o *IdentityPEMFileProviderOptions) (*IdentityPEM
 	}
 	ticker := time.NewTicker(o.Interval)
 	ctx, cancel := context.WithCancel(context.Background())
-	// Initialize the distributor of provider with an empty KeyMaterial.
-	provider := &IdentityPEMFileProvider{distributor: certprovider.NewDistributor()}
-	provider.distributor.Set(&certprovider.KeyMaterial{}, nil)
+	provider := &IdentityPEMFileProvider{Distributor: certprovider.NewDistributor()}
 	// A goroutine to pull file changes.
 	go func(ctx context.Context) {
 		for {
@@ -112,7 +110,7 @@ func NewIdentityPEMFileProvider(o *IdentityPEMFileProviderOptions) (*IdentityPEM
 						logger.Warning("tls.LoadX509KeyPair(%v, %v) failed: %v", o.CertFile, o.KeyFile, err)
 						continue
 					}
-					provider.distributor.Set(&certprovider.KeyMaterial{Certs: []tls.Certificate{identityCert}}, nil)
+					provider.Set(&certprovider.KeyMaterial{Certs: []tls.Certificate{identityCert}}, nil)
 				}
 			default:
 			}
@@ -122,16 +120,10 @@ func NewIdentityPEMFileProvider(o *IdentityPEMFileProviderOptions) (*IdentityPEM
 	return provider, nil
 }
 
-// KeyMaterial returns the key material sourced by the IdentityPEMFileProvider.
-// Callers are expected to use the returned value as read-only.
-func (p *IdentityPEMFileProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
-	return p.distributor.KeyMaterial(ctx)
-}
-
 // Close cleans up resources allocated by the IdentityPEMFileProvider.
 func (p *IdentityPEMFileProvider) Close() {
 	p.cancel()
-	p.distributor.Stop()
+	p.Stop()
 }
 
 // NewRootPEMFileProvider uses RootPEMFileProviderOptions to construct a RootPEMFileProvider.
@@ -145,9 +137,7 @@ func NewRootPEMFileProvider(o *RootPEMFileProviderOptions) (*RootPEMFileProvider
 	}
 	ticker := time.NewTicker(o.Interval)
 	ctx, cancel := context.WithCancel(context.Background())
-	// Initialize the distributor of provider with an empty KeyMaterial.
-	provider := &RootPEMFileProvider{distributor: certprovider.NewDistributor()}
-	provider.distributor.Set(&certprovider.KeyMaterial{}, nil)
+	provider := &RootPEMFileProvider{Distributor: certprovider.NewDistributor()}
 	// A goroutine to pull file changes.
 	go func(ctx context.Context) {
 		for {
@@ -157,20 +147,20 @@ func NewRootPEMFileProvider(o *RootPEMFileProviderOptions) (*RootPEMFileProvider
 				return
 			case <-ticker.C:
 				{
-					if trustFileSize, _ := getFileSize(o.TrustFile); trustFileSize == 0 {
-						// If the current file is empty, skip the update for this round.
-						continue
-					}
 					// Read root certs from PEM files.
 					trustData, err := ioutil.ReadFile(o.TrustFile)
-					trustPool := x509.NewCertPool()
-					trustPool.AppendCertsFromPEM(trustData)
 					if err != nil {
 						// If the reading produces an error, we will skip the update for this round and log the error.
 						logger.Warning("ioutil.ReadFile(%v) failed: %v", o.TrustFile, err)
 						continue
 					}
-					provider.distributor.Set(&certprovider.KeyMaterial{Roots: trustPool}, nil)
+					if len(trustData) == 0 {
+						// If the current file is empty, skip the update for this round.
+						continue
+					}
+					trustPool := x509.NewCertPool()
+					trustPool.AppendCertsFromPEM(trustData)
+					provider.Set(&certprovider.KeyMaterial{Roots: trustPool}, nil)
 				}
 			default:
 			}
@@ -180,16 +170,10 @@ func NewRootPEMFileProvider(o *RootPEMFileProviderOptions) (*RootPEMFileProvider
 	return provider, nil
 }
 
-// KeyMaterial returns the key material sourced by the RootPEMFileProvider.
-// Callers are expected to use the returned value as read-only.
-func (p *RootPEMFileProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
-	return p.distributor.KeyMaterial(ctx)
-}
-
 // Close cleans up resources allocated by the RootPEMFileProvider.
 func (p *RootPEMFileProvider) Close() {
 	p.cancel()
-	p.distributor.Stop()
+	p.Stop()
 }
 
 func getFileSize(filepath string) (int64, error) {

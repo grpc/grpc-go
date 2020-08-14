@@ -35,7 +35,6 @@ import (
 
 // The IdentityPEMFileProvider is tested in different stages.
 // At stage 0, we create an IdentityPEMFileProvider with empty initial files.
-// The KeyMaterial will be empty since the initial file contents are empty.
 // At stage 1, we copy the first set of certFile and keyFile to the temp files
 // that are watched by the goroutine.
 // The KeyMaterial is expected to be updated if there is a matching key-cert pair.
@@ -112,10 +111,6 @@ func (s) TestIdentityPEMFileProvider(t *testing.T) {
 			if err != nil {
 				t.Errorf("NewIdentityPEMFileProvider(identityPEMFileProviderOptions) failed: %v", err)
 			}
-			gotKM, err := identityPEMFileProvider.KeyMaterial(context.Background())
-			if !cmp.Equal(*gotKM, certprovider.KeyMaterial{}, cmp.AllowUnexported(big.Int{})) {
-				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, certprovider.KeyMaterial{})
-			}
 			// ------------------------Stage 1------------------------------------
 			err = copyFileContents(test.certFileBefore, certTmp.Name())
 			if err != nil {
@@ -126,7 +121,7 @@ func (s) TestIdentityPEMFileProvider(t *testing.T) {
 				t.Errorf("copyFileContents(test.keyFileBefore, keyTmp): %v", err)
 			}
 			time.Sleep(2 * time.Second)
-			gotKM, err = identityPEMFileProvider.KeyMaterial(context.Background())
+			gotKM, err := identityPEMFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmBefore, cmp.AllowUnexported(big.Int{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmBefore)
 			}
@@ -159,7 +154,6 @@ func (s) TestIdentityPEMFileProvider(t *testing.T) {
 
 // The RootPEMFileProvider is tested in different stages.
 // At stage 0, we create an RootPEMFileProvider with empty initial file.
-// The KeyMaterial will be empty since the initial file content is empty.
 // At stage 1, we copy the first set of certFile and keyFile to the temp files
 // that are watched by the goroutine. The KeyMaterial is expected to be updated.
 // At stage 2, we copy the second set of certFile and keyFile to the temp files
@@ -212,17 +206,13 @@ func (s) TestRootPEMFileProvider(t *testing.T) {
 			if err != nil {
 				t.Errorf("NewRootPEMFileProvider(rootPEMFileProviderOptions) failed: %v", err)
 			}
-			gotKM, err := rootPEMFileProvider.KeyMaterial(context.Background())
-			if !cmp.Equal(*gotKM, certprovider.KeyMaterial{}, cmp.AllowUnexported(x509.CertPool{})) {
-				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, certprovider.KeyMaterial{})
-			}
 			// ------------------------Stage 1------------------------------------
 			err = copyFileContents(test.trustFileBefore, trustTmp.Name())
 			if err != nil {
 				t.Errorf("copyFileContents(test.trustFileBefore, trustTmp): %v", err)
 			}
 			time.Sleep(2 * time.Second)
-			gotKM, err = rootPEMFileProvider.KeyMaterial(context.Background())
+			gotKM, err := rootPEMFileProvider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmBefore, cmp.AllowUnexported(x509.CertPool{})) {
 				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmBefore)
 			}
