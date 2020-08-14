@@ -136,6 +136,9 @@ func (s) TestDistributor(t *testing.T) {
 func waitAndDo(t *testing.T, proceedCh chan struct{}, errCh chan error, do func()) {
 	t.Helper()
 
+	// Events that we block here for usually have a deadline of
+	// `defaultTestTimeout`. Waiting a little extra here makes sure that the
+	// test is not flaky.
 	timer := time.NewTimer(2 * defaultTestTimeout)
 	select {
 	case <-timer.C:

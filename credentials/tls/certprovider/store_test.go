@@ -74,7 +74,7 @@ type fakeProviderBuilder struct {
 	providerChan *testutils.Channel
 }
 
-func (b *fakeProviderBuilder) Build(StableConfig, KeyMaterialOptions) Provider {
+func (b *fakeProviderBuilder) Build(StableConfig, Options) Provider {
 	p := &fakeProvider{Distributor: NewDistributor()}
 	b.providerChan.Send(p)
 	return p
@@ -174,7 +174,7 @@ func compareKeyMaterial(got, want *KeyMaterial) error {
 // methods on them.
 func (s) TestStoreSingleProvider(t *testing.T) {
 	// Create a Provider through the store.
-	kmOpts := KeyMaterialOptions{CertName: "default"}
+	kmOpts := Options{CertName: "default"}
 	prov, err := GetProvider(fakeProvider1Name, fakeConfig, kmOpts)
 	if err != nil {
 		t.Fatalf("GetProvider(%s, %s, %v) failed: %v", fakeProvider1Name, fakeConfig, kmOpts, err)
@@ -220,8 +220,8 @@ func (s) TestStoreSingleProvider(t *testing.T) {
 func (s) TestStoreSingleProviderSameConfigDifferentOpts(t *testing.T) {
 	// Create three readers on the same fake provider. Two of these readers use
 	// certName `foo`, while the third one uses certName `bar`.
-	optsFoo := KeyMaterialOptions{CertName: "foo"}
-	optsBar := KeyMaterialOptions{CertName: "bar"}
+	optsFoo := Options{CertName: "foo"}
+	optsBar := Options{CertName: "bar"}
 	provFoo1, err := GetProvider(fakeProvider1Name, fakeConfig, optsFoo)
 	if err != nil {
 		t.Fatalf("GetProvider(%s, %s, %v) failed: %v", fakeProvider1Name, fakeConfig, optsFoo, err)
@@ -287,7 +287,7 @@ func (s) TestStoreSingleProviderSameConfigDifferentOpts(t *testing.T) {
 // would take place.
 func (s) TestStoreSingleProviderDifferentConfigs(t *testing.T) {
 	// Create two providers of the same type, but with different configs.
-	opts := KeyMaterialOptions{CertName: "foo"}
+	opts := Options{CertName: "foo"}
 	cfg1 := fakeConfig + "1111"
 	cfg2 := fakeConfig + "2222"
 	prov1, err := GetProvider(fakeProvider1Name, cfg1, opts)
@@ -349,7 +349,7 @@ func (s) TestStoreSingleProviderDifferentConfigs(t *testing.T) {
 // TestStoreMultipleProviders creates providers of different types and makes
 // sure closing of one does not affect the other.
 func (s) TestStoreMultipleProviders(t *testing.T) {
-	opts := KeyMaterialOptions{CertName: "foo"}
+	opts := Options{CertName: "foo"}
 	prov1, err := GetProvider(fakeProvider1Name, fakeConfig, opts)
 	if err != nil {
 		t.Fatalf("GetProvider(%s, %s, %v) failed: %v", fakeProvider1Name, fakeConfig, opts, err)

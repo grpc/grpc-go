@@ -39,7 +39,7 @@ type storeKey struct {
 	// configuration of the certificate provider in string form.
 	config string
 	// opts contains the certificate name and other keyMaterial options.
-	opts KeyMaterialOptions
+	opts Options
 }
 
 // wrappedProvider wraps a provider instance with a reference count.
@@ -72,7 +72,7 @@ type store struct {
 // before returning. If no provider exists for the passed arguments, a new one
 // is created using the registered builder. If no registered builder is found,
 // or the provider configuration is rejected by it, a non-nil error is returned.
-func GetProvider(name string, config interface{}, opts KeyMaterialOptions) (Provider, error) {
+func GetProvider(name string, config interface{}, opts Options) (Provider, error) {
 	provStore.mu.Lock()
 	defer provStore.mu.Unlock()
 

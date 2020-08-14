@@ -60,7 +60,7 @@ func getBuilder(name string) Builder {
 type Builder interface {
 	// Build creates a new Provider and initializes it with the given config and
 	// options combination.
-	Build(StableConfig, KeyMaterialOptions) Provider
+	Build(StableConfig, Options) Provider
 
 	// ParseConfig converts config input in a format specific to individual
 	// implementations and returns an implementation of the StableConfig
@@ -104,8 +104,8 @@ type KeyMaterial struct {
 	Roots *x509.CertPool
 }
 
-// KeyMaterialOptions wraps options passed to the KeyMaterialReader() method.
-type KeyMaterialOptions struct {
+// Options contains configuration knobs passed to a Provider at creation time.
+type Options struct {
 	// CertName holds the certificate name, whose key material is of interest to
 	// the caller.
 	CertName string
