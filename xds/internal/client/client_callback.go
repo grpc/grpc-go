@@ -47,19 +47,19 @@ func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	// canceled, and the user needs to take care of it.
 	var ccb func()
 	switch wiu.wi.typeURL {
-	case version.V2ListenerURL:
+	case version.V2ListenerURL, version.V3ListenerURL:
 		if s, ok := c.ldsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
 			ccb = func() { wiu.wi.ldsCallback(wiu.update.(ListenerUpdate), wiu.err) }
 		}
-	case version.V2RouteConfigURL:
+	case version.V2RouteConfigURL, version.V3RouteConfigURL:
 		if s, ok := c.rdsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
 			ccb = func() { wiu.wi.rdsCallback(wiu.update.(RouteConfigUpdate), wiu.err) }
 		}
-	case version.V2ClusterURL:
+	case version.V2ClusterURL, version.V3ClusterURL:
 		if s, ok := c.cdsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
 			ccb = func() { wiu.wi.cdsCallback(wiu.update.(ClusterUpdate), wiu.err) }
 		}
-	case version.V2EndpointsURL:
+	case version.V2EndpointsURL, version.V3EndpointsURL:
 		if s, ok := c.edsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
 			ccb = func() { wiu.wi.edsCallback(wiu.update.(EndpointsUpdate), wiu.err) }
 		}

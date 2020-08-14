@@ -333,7 +333,7 @@ type watchAction struct {
 
 // processWatchInfo pulls the fields needed by the request from a watchAction.
 //
-// It also updates the watch map in v2c.
+// It also updates the watch map.
 func (t *TransportHelper) processWatchInfo(w *watchAction) (target []string, typeURL, ver, nonce string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

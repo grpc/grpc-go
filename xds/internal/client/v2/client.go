@@ -131,6 +131,10 @@ func (v2c *client) RemoveWatch(resourceType, resourceName string) {
 	v2c.TransportHelper.RemoveWatch(resourceType, resourceName)
 }
 
+func (v2c *client) Version() version.TransportAPI {
+	return version.TransportV2
+}
+
 func (v2c *client) NewStream(ctx context.Context) (grpc.ClientStream, error) {
 	return v2adsgrpc.NewAggregatedDiscoveryServiceClient(v2c.cc).StreamAggregatedResources(v2c.ctx, grpc.WaitForReady(true))
 }

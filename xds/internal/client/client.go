@@ -100,6 +100,8 @@ type APIClient interface {
 	// RemoveWatch cancels an already registered watch for an xDS resource
 	// given its type and name.
 	RemoveWatch(resourceType, resourceName string)
+	// Version returns the xDS transport protocol version used by this client.
+	Version() version.TransportAPI
 	// Close cleans up resources allocated by the API client.
 	Close()
 }

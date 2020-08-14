@@ -93,7 +93,7 @@ type client struct {
 }
 
 // AddWatch overrides the transport helper's AddWatch to save the LDS
-// resource_name. This is required when handling an RDS response to perform hot
+// resource_name. This is required when handling an RDS response to perform host
 // matching.
 func (v3c *client) AddWatch(resourceType, resourceName string) {
 	v3c.mu.Lock()
@@ -127,6 +127,10 @@ func (v3c *client) RemoveWatch(resourceType, resourceName string) {
 	}
 	v3c.mu.Unlock()
 	v3c.TransportHelper.RemoveWatch(resourceType, resourceName)
+}
+
+func (v3c *client) Version() version.TransportAPI {
+	return version.TransportV3
 }
 
 func (v3c *client) NewStream(ctx context.Context) (grpc.ClientStream, error) {

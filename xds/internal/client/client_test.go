@@ -108,6 +108,10 @@ func (c *testAPIClient) RemoveWatch(resourceType, resourceName string) {
 	c.removeWatches[resourceType].Send(resourceName)
 }
 
+func (c *testAPIClient) Version() version.TransportAPI {
+	return version.TransportV2
+}
+
 func (c *testAPIClient) Close() {}
 
 // TestWatchCallAnotherWatch covers the case where watch() is called inline by a
