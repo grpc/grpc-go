@@ -540,6 +540,20 @@ func (s *Server) errorf(format string, a ...interface{}) {
 	}
 }
 
+// ServiceRegistrar wraps a single method that supports service registration. It
+// enables users to pass concrete types other than grpc.Server to the service
+// registration methods exported by the IDL generated code.
+//
+// This API is EXPERIMENTAL.
+type ServiceRegistrar interface {
+	// RegisterService registers a service and its implementation to the
+	// concrete type implementing this interface. It is called from the IDL
+	// generated code.
+	//
+	// This API is EXPERIMENTAL.
+	RegisterService(*ServiceDesc, interface{})
+}
+
 // RegisterService registers a service and its implementation to the gRPC
 // server. It is called from the IDL generated code. This must be called before
 // invoking Serve.
