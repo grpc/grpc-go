@@ -29,14 +29,11 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-const (
-	defaultInterval = 1 * time.Hour
-)
+const defaultInterval = 1 * time.Hour
 
 var logger = grpclog.Component("advancedtls")
 
-// PEMFileProviderOptions contains fields to be filled out by users
-// for obtaining identity private key, peer certificates and root certificates from PEM files.
+// PEMFileProviderOptions contains options to configure a PEMFileProvider.
 type PEMFileProviderOptions struct {
 	// CertFile is the file path that holds certificate file specified by users
 	// whose updates will be captured by a watching goroutine.
@@ -47,16 +44,16 @@ type PEMFileProviderOptions struct {
 	// TrustFile is the file path that holds trust file specified by users
 	// whose updates will be captured by a watching goroutine.
 	TrustFile string
-	// The identity files will be periodically updated for the duration of Interval.
+	// The identity files will be periodically reloaded for the duration of IdentityInterval.
 	// The default Interval is set to 1 hour if users did not specify this field.
 	IdentityInterval time.Duration
-	// The trust files will be periodically updated for the duration of Interval.
+	// The trust files will be periodically reloaded for the duration of RootInterval.
 	// The default Interval is set to 1 hour if users did not specify this field.
 	RootInterval time.Duration
 }
 
 // PEMFileProvider implements certprovider.Provider.
-// It provides the most up-to-date identity private key, peer certificates
+// It provides the most up-to-date identity private key/cert pair
 // and root certificates based on the input PEM files.
 type PEMFileProvider struct {
 	identityDistributor *certprovider.Distributor
@@ -66,8 +63,7 @@ type PEMFileProvider struct {
 
 // NewPEMFileProvider uses PEMFileProviderOptions to construct a PEMFileProvider.
 func NewPEMFileProvider(o *PEMFileProviderOptions) (*PEMFileProvider, error) {
-	var identityUpdate = false
-	var rootUpdate = false
+	var identityUpdate, rootUpdate bool
 	if o.CertFile != "" && o.KeyFile != "" {
 		identityUpdate = true
 	} else if o.CertFile != "" || o.KeyFile != "" {
@@ -77,11 +73,9 @@ func NewPEMFileProvider(o *PEMFileProviderOptions) (*PEMFileProvider, error) {
 		rootUpdate = true
 	}
 	if o.IdentityInterval == 0 {
-		// If IdentityInterval is not set by users explicitly, we will set it to default interval.
 		o.IdentityInterval = defaultInterval
 	}
 	if o.RootInterval == 0 {
-		// If RootInterval is not set by users explicitly, we will set it to default interval.
 		o.RootInterval = defaultInterval
 	}
 	identityTicker := time.NewTicker(o.IdentityInterval)
@@ -126,10 +120,15 @@ func NewPEMFileProvider(o *PEMFileProviderOptions) (*PEMFileProvider, error) {
 				}
 				if len(trustData) == 0 {
 					// If the current file is empty, skip the update for this round.
+					logger.Warning("ioutil.ReadFile(%v) reads an empty file: %v", o.TrustFile, err)
 					continue
 				}
 				trustPool := x509.NewCertPool()
-				trustPool.AppendCertsFromPEM(trustData)
+				ok := trustPool.AppendCertsFromPEM(trustData)
+				if !ok {
+					logger.Warning("trustPool.AppendCertsFromPEM(trustData) failed")
+					continue
+				}
 				provider.rootDistributor.Set(&certprovider.KeyMaterial{Roots: trustPool}, nil)
 			default:
 			}
