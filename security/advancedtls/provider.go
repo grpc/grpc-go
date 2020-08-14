@@ -79,6 +79,7 @@ func NewIdentityPemFileProvider(o *IdentityPemFileProviderOptions) (*IdentityPem
 	if o.Interval == 0*time.Nanosecond {
 		o.Interval = defaultInterval
 	}
+	ticker := time.NewTicker(o.Interval)
 	quit := make(chan bool)
 	provider := &IdentityPemFileProvider{}
 	provider.distributor = certprovider.NewDistributor()
@@ -87,26 +88,29 @@ func NewIdentityPemFileProvider(o *IdentityPemFileProviderOptions) (*IdentityPem
 	// A goroutine to pull file changes.
 	go func() {
 		for {
-			// Read identity certs from PEM files.
-			identityCert, err := tls.LoadX509KeyPair(o.CertFile, o.KeyFile)
-			// If the reading produces an error, we will skip the update for this round and log the error.
-			// Note that LoadX509KeyPair will return error if file is empty,
-			// so there is no separate check for empty file contents.
-			if err != nil {
-				logger.Warning("tls.LoadX509KeyPair(%v, %v) failed: %v", o.CertFile, o.KeyFile, err)
-			} else {
-				km := certprovider.KeyMaterial{Certs: []tls.Certificate{identityCert}}
-				provider.distributor.Set(&km, nil)
-			}
-			time.Sleep(o.Interval)
 			select {
 			case <-quit:
 				return
+			case <-ticker.C:
+				{
+					// Read identity certs from PEM files.
+					identityCert, err := tls.LoadX509KeyPair(o.CertFile, o.KeyFile)
+					// If the reading produces an error, we will skip the update for this round and log the error.
+					// Note that LoadX509KeyPair will return error if file is empty,
+					// so there is no separate check for empty file contents.
+					if err != nil {
+						logger.Warning("tls.LoadX509KeyPair(%v, %v) failed: %v", o.CertFile, o.KeyFile, err)
+						continue
+					}
+					km := certprovider.KeyMaterial{Certs: []tls.Certificate{identityCert}}
+					provider.distributor.Set(&km, nil)
+				}
 			default:
 			}
 		}
 	}()
 	provider.closeFunc = func() {
+		ticker.Stop()
 		close(quit)
 	}
 	return provider, nil
@@ -133,6 +137,7 @@ func NewRootPemFileProvider(o *RootPemFileProviderOptions) (*RootPemFileProvider
 	if o.Interval == 0*time.Nanosecond {
 		o.Interval = defaultInterval
 	}
+	ticker := time.NewTicker(o.Interval)
 	quit := make(chan bool)
 	provider := &RootPemFileProvider{}
 	provider.distributor = certprovider.NewDistributor()
@@ -141,29 +146,33 @@ func NewRootPemFileProvider(o *RootPemFileProviderOptions) (*RootPemFileProvider
 	// A goroutine to pull file changes.
 	go func() {
 		for {
-			// If the current file is empty, skip the update for this round.
-			if trustFileSize, _ := getFileSize(o.TrustFile); trustFileSize != 0 {
-				// Read root certs from PEM files.
-				trustData, err := ioutil.ReadFile(o.TrustFile)
-				trustPool := x509.NewCertPool()
-				trustPool.AppendCertsFromPEM(trustData)
-				// If the reading produces an error, we will skip the update for this round and log the error.
-				if err != nil {
-					logger.Warning("ioutil.ReadFile(%v) failed: %v", o.TrustFile, err)
-				} else {
-					km := certprovider.KeyMaterial{Roots: trustPool}
-					provider.distributor.Set(&km, nil)
-				}
-			}
-			time.Sleep(o.Interval)
 			select {
 			case <-quit:
 				return
+			case <-ticker.C:
+				{
+					// If the current file is empty, skip the update for this round.
+					if trustFileSize, _ := getFileSize(o.TrustFile); trustFileSize == 0 {
+						continue
+					}
+					// Read root certs from PEM files.
+					trustData, err := ioutil.ReadFile(o.TrustFile)
+					trustPool := x509.NewCertPool()
+					trustPool.AppendCertsFromPEM(trustData)
+					// If the reading produces an error, we will skip the update for this round and log the error.
+					if err != nil {
+						logger.Warning("ioutil.ReadFile(%v) failed: %v", o.TrustFile, err)
+					} else {
+						km := certprovider.KeyMaterial{Roots: trustPool}
+						provider.distributor.Set(&km, nil)
+					}
+				}
 			default:
 			}
 		}
 	}()
 	provider.closeFunc = func() {
+		ticker.Stop()
 		close(quit)
 	}
 	return provider, nil
