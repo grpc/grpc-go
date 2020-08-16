@@ -33,7 +33,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var logger = grpclog.Component("channelz")
+var logger = grpclog.Component("authorization")
 
 var stringAttributeMap = map[string]func(*AuthorizationArgs) (string, error){
 	"request.url_path":                    (*AuthorizationArgs).getRequestURLPath,
