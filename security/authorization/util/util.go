@@ -16,10 +16,11 @@
  *
  */
 
-// Package engine is for the RBAC authorization engine.
 package engine
 
 import (
+	"errors"
+
 	cel "github.com/google/cel-go/cel"
 	decls "github.com/google/cel-go/checker/decls"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
@@ -39,7 +40,7 @@ func compileCel(env *cel.Env, expr string) (*cel.Ast, error) {
 	}
 	// Check the result type is a Boolean.
 	if !proto.Equal(checked.ResultType(), decls.Bool) {
-		return nil, iss.Err()
+		return nil, errors.New("failed to compile CEL string: get non-bool value")
 	}
 	return checked, nil
 }
