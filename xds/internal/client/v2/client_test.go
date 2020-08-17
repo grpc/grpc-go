@@ -508,14 +508,14 @@ func newV2Client(p xdsclient.UpdateHandler, cc *grpc.ClientConn, n *basepb.Node,
 	return c.(*client), nil
 }
 
-// TestV2ClientBackoffAfterRecvError verifies if the v2Client backoffs when it
+// TestV2ClientBackoffAfterRecvError verifies if the v2Client backs off when it
 // encounters a Recv error while receiving an LDS response.
 func (s) TestV2ClientBackoffAfterRecvError(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
 	// Override the v2Client backoff function with this, so that we can verify
-	// that a backoff actually was triggerred.
+	// that a backoff actually was triggered.
 	boCh := make(chan int, 1)
 	clientBackoff := func(v int) time.Duration {
 		boCh <- v
@@ -532,7 +532,6 @@ func (s) TestV2ClientBackoffAfterRecvError(t *testing.T) {
 	defer v2c.Close()
 	t.Log("Started xds v2Client...")
 
-	// v2c.watchLDS(goodLDSTarget1, func(u ldsUpdate, err error) {})
 	v2c.AddWatch(version.V2ListenerURL, goodLDSTarget1)
 	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
 		t.Fatalf("Timeout expired when expecting an LDS request")
@@ -552,6 +551,11 @@ func (s) TestV2ClientBackoffAfterRecvError(t *testing.T) {
 	case <-callbackCh:
 		t.Fatal("Received unexpected LDS callback")
 	}
+
+	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+		t.Fatalf("Timeout expired when expecting an LDS request")
+	}
+	t.Log("FakeServer received request after backoff...")
 }
 
 // TestV2ClientRetriesAfterBrokenStream verifies the case where a stream
