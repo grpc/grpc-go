@@ -24,12 +24,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 )
 
 var errProviderTestInternal = errors.New("provider internal error")
+
+// TestDistributorEmpty tries to read key material from an empty distributor and
+// expects the call to timeout.
+func (s) TestDistributorEmpty(t *testing.T) {
+	dist := NewDistributor()
+
+	// This call to KeyMaterial() should timeout because no key material has
+	// been set on the distributor as yet.
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if err := readAndVerifyKeyMaterial(ctx, dist, nil); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+}
 
 // TestDistributor invokes the different methods on the Distributor type and
 // verifies the results.
@@ -37,52 +50,35 @@ func (s) TestDistributor(t *testing.T) {
 	dist := NewDistributor()
 
 	// Read cert/key files from testdata.
-	km := loadKeyMaterials(t, "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
-
-	// wantKM1 has both local and root certs.
-	wantKM1 := *km
-	// wantKM2 has only local certs. Roots are nil-ed out.
-	wantKM2 := *km
-	wantKM2.Roots = nil
-
-	// The first call to KeyMaterial() should timeout because no key
-	// material has been set on the distributor as yet.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if err := readAndVerifyKeyMaterial(ctx, dist, nil); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatal(err)
-	}
+	km1 := loadKeyMaterials(t, "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
+	km2 := loadKeyMaterials(t, "x509/server2_cert.pem", "x509/server2_key.pem", "x509/client_ca_cert.pem")
 
 	// Push key material into the distributor and make sure that a call to
 	// KeyMaterial() returns the expected key material, with both the local
 	// certs and root certs.
-	dist.Set(&wantKM1, nil)
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	dist.Set(km1, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := readAndVerifyKeyMaterial(ctx, dist, &wantKM1); err != nil {
+	if err := readAndVerifyKeyMaterial(ctx, dist, km1); err != nil {
 		t.Fatal(err)
 	}
 
 	// Push new key material into the distributor and make sure that a call to
 	// KeyMaterial() returns the expected key material, with only root certs.
-	dist.Set(&wantKM2, nil)
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if err := readAndVerifyKeyMaterial(ctx, dist, &wantKM2); err != nil {
+	dist.Set(km2, nil)
+	if err := readAndVerifyKeyMaterial(ctx, dist, km2); err != nil {
 		t.Fatal(err)
 	}
 
 	// Push an error into the distributor and make sure that a call to
 	// KeyMaterial() returns that error and nil keyMaterial.
-	dist.Set(&wantKM2, errProviderTestInternal)
+	dist.Set(km2, errProviderTestInternal)
 	if gotKM, err := dist.KeyMaterial(ctx); gotKM != nil || !errors.Is(err, errProviderTestInternal) {
 		t.Fatalf("KeyMaterial() = {%v, %v}, want {nil, %v}", gotKM, err, errProviderTestInternal)
 	}
 
-	// Stop the distributor and  KeyMaterial() should return errProviderClosed.
+	// Stop the distributor and KeyMaterial() should return errProviderClosed.
 	dist.Stop()
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if km, err := dist.KeyMaterial(ctx); !errors.Is(err, errProviderClosed) {
 		t.Fatalf("KeyMaterial() = {%v, %v}, want {nil, %v}", km, err, errProviderClosed)
 	}
@@ -96,20 +92,13 @@ func (s) TestDistributorConcurrency(t *testing.T) {
 	km1 := loadKeyMaterials(t, "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
 	km2 := loadKeyMaterials(t, "x509/server2_cert.pem", "x509/server2_key.pem", "x509/client_ca_cert.pem")
 
-	var wg sync.WaitGroup
 	errCh := make(chan error, 1)
-
 	// Push key material into the distributor from here and spawn a goroutine to
 	// verify that the distributor returns the expected keyMaterial.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	wg.Add(1)
-	go func() {
-		waitForKeyMaterial(ctx, dist, km1, nil, errCh)
-		wg.Done()
-	}()
+	go waitForKeyMaterial(ctx, dist, km1, nil, errCh)
 	dist.Set(km1, nil)
-	wg.Wait()
 	if err := <-errCh; err != nil {
 		t.Fatal(err)
 	}
@@ -117,15 +106,16 @@ func (s) TestDistributorConcurrency(t *testing.T) {
 	// Push new key material into the distributor from here and spawn a
 	// goroutine to verify that the distributor returns the expected keyMaterial
 	// eventually.
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	wg.Add(1)
-	go func() {
-		waitForKeyMaterial(ctx, dist, km2, nil, errCh)
-		wg.Done()
-	}()
+	go waitForKeyMaterial(ctx, dist, km2, nil, errCh)
 	dist.Set(km2, nil)
-	wg.Wait()
+	if err := <-errCh; err != nil {
+		t.Fatal(err)
+	}
+
+	// Push an error into the distributor from here and spawn a goroutine to
+	// verify that the distributor returns the expected result eventually.
+	go waitForKeyMaterial(ctx, dist, nil, errProviderTestInternal, errCh)
+	dist.Set(nil, errProviderTestInternal)
 	if err := <-errCh; err != nil {
 		t.Fatal(err)
 	}
@@ -136,19 +126,15 @@ func (s) TestDistributorConcurrency(t *testing.T) {
 // 1. Returned keyMaterial and error matches wantKM and wantErr.
 // 2. Provider ctx deadline expires.
 func waitForKeyMaterial(ctx context.Context, dist *Distributor, wantKM *KeyMaterial, wantErr error, errCh chan error) {
-	var (
-		gotKM *KeyMaterial
-		err   error
-	)
-
 	for {
-		if gotErr := readAndVerifyKeyMaterial(ctx, dist, wantKM); gotErr == wantErr {
+		err := readAndVerifyKeyMaterial(ctx, dist, wantKM)
+		if errors.Is(err, wantErr) {
 			errCh <- nil
 			return
 
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			errCh <- fmt.Errorf("KeyMaterial() = {%v, %v}, want {%v, %v}", gotKM, err, wantKM, wantErr)
+			errCh <- fmt.Errorf("KeyMaterial() failed with error: %v, wantErr: %v", err, wantErr)
 			return
 		}
 		// Don't busy loop.
