@@ -145,7 +145,7 @@ func (st *serverTester) wantRSTStream(errCode http2.ErrCode) *http2.RSTStreamFra
 	}
 	sf, ok := f.(*http2.RSTStreamFrame)
 	if !ok {
-		st.t.Fatalf("got a %T; want *RSTStreamFrame", f)
+		st.t.Fatalf("got a %T; want *http2.RSTStreamFrame", f)
 	}
 	if sf.ErrCode != errCode {
 		st.t.Fatalf("expected RST error code '%v', got '%v'", errCode.String(), sf.ErrCode.String())
