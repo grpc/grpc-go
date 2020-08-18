@@ -33,9 +33,9 @@ import (
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
+
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/version"
 )
 
 // UnmarshalListener processes resources received in an LDS response, validates
@@ -44,8 +44,8 @@ import (
 func UnmarshalListener(resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ListenerUpdate, error) {
 	update := make(map[string]ListenerUpdate)
 	for _, r := range resources {
-		if t := r.GetTypeUrl(); t != version.V2ListenerURL && t != version.V3ListenerURL {
-			return nil, fmt.Errorf("xds: unexpected resource type: %s in LDS response", t)
+		if !IsListenerResource(r.GetTypeUrl()) {
+			return nil, fmt.Errorf("xds: unexpected resource type: %s in LDS response", r.GetTypeUrl())
 		}
 		lis := &v3listenerpb.Listener{}
 		if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
@@ -68,8 +68,8 @@ func getRouteConfigNameFromListener(lis *v3listenerpb.Listener, logger *grpclog.
 		return "", fmt.Errorf("xds: no api_listener field in LDS response %+v", lis)
 	}
 	apiLisAny := lis.GetApiListener().GetApiListener()
-	if t := apiLisAny.GetTypeUrl(); t != version.V3HTTPConnManagerURL && t != version.V2HTTPConnManagerURL {
-		return "", fmt.Errorf("xds: unexpected resource type: %s in LDS response", t)
+	if !IsHTTPConnManagerResource(apiLisAny.GetTypeUrl()) {
+		return "", fmt.Errorf("xds: unexpected resource type: %s in LDS response", apiLisAny.GetTypeUrl())
 	}
 	apiLis := &v3httppb.HttpConnectionManager{}
 	if err := proto.Unmarshal(apiLisAny.GetValue(), apiLis); err != nil {
@@ -105,8 +105,8 @@ func getRouteConfigNameFromListener(lis *v3listenerpb.Listener, logger *grpclog.
 func UnmarshalRouteConfig(resources []*anypb.Any, hostname string, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdate, error) {
 	update := make(map[string]RouteConfigUpdate)
 	for _, r := range resources {
-		if t := r.GetTypeUrl(); t != version.V2RouteConfigURL && t != version.V3RouteConfigURL {
-			return nil, fmt.Errorf("xds: unexpected resource type: %s in RDS response", t)
+		if !IsRouteConfigResource(r.GetTypeUrl()) {
+			return nil, fmt.Errorf("xds: unexpected resource type: %s in RDS response", r.GetTypeUrl())
 		}
 		rc := &v3routepb.RouteConfiguration{}
 		if err := proto.Unmarshal(r.GetValue(), rc); err != nil {
@@ -369,8 +369,8 @@ func findBestMatchingVirtualHost(host string, vHosts []*v3routepb.VirtualHost) *
 func UnmarshalCluster(resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ClusterUpdate, error) {
 	update := make(map[string]ClusterUpdate)
 	for _, r := range resources {
-		if t := r.GetTypeUrl(); t != version.V2ClusterURL && t != version.V3ClusterURL {
-			return nil, fmt.Errorf("xds: unexpected resource type: %s in CDS response", t)
+		if !IsClusterResource(r.GetTypeUrl()) {
+			return nil, fmt.Errorf("xds: unexpected resource type: %s in CDS response", r.GetTypeUrl())
 		}
 
 		cluster := &v3clusterpb.Cluster{}
@@ -417,8 +417,8 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 func UnmarshalEndpoints(resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]EndpointsUpdate, error) {
 	update := make(map[string]EndpointsUpdate)
 	for _, r := range resources {
-		if t := r.GetTypeUrl(); t != version.V2EndpointsURL && t != version.V3EndpointsURL {
-			return nil, fmt.Errorf("xds: unexpected resource type: %s in EDS response", t)
+		if !IsEndpointsResource(r.GetTypeUrl()) {
+			return nil, fmt.Errorf("xds: unexpected resource type: %s in EDS response", r.GetTypeUrl())
 		}
 
 		cla := &v3endpointpb.ClusterLoadAssignment{}

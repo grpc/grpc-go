@@ -23,8 +23,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/version"
 )
 
 type serviceUpdateErr struct {
@@ -56,13 +56,13 @@ func (s) TestServiceWatch(t *testing.T) {
 
 	wantUpdate := ServiceUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}}
 
-	if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	v2Client.r.NewListeners(map[string]ListenerUpdate{
 		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if _, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[RouteConfigResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	v2Client.r.NewRouteConfigs(map[string]RouteConfigUpdate{
@@ -114,13 +114,13 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 
 	wantUpdate := ServiceUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}}
 
-	if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	v2Client.r.NewListeners(map[string]ListenerUpdate{
 		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if _, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[RouteConfigResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	v2Client.r.NewRouteConfigs(map[string]RouteConfigUpdate{
@@ -135,7 +135,7 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 	v2Client.r.NewListeners(map[string]ListenerUpdate{
 		testLDSName: {RouteConfigName: testRDSName + "2"},
 	})
-	if _, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[RouteConfigResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -181,13 +181,13 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 
 	wantUpdate := ServiceUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}}
 
-	if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	v2Client.r.NewListeners(map[string]ListenerUpdate{
 		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if _, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[RouteConfigResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	v2Client.r.NewRouteConfigs(map[string]RouteConfigUpdate{
@@ -253,7 +253,7 @@ func (s) TestServiceWatchWithNoResponseFromServer(t *testing.T) {
 	c.WatchService(testLDSName, func(update ServiceUpdate, err error) {
 		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	u, err := serviceUpdateCh.TimedReceive(defaultTestWatchExpiryTimeout * 2)
@@ -288,13 +288,13 @@ func (s) TestServiceWatchEmptyRDS(t *testing.T) {
 		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
 	})
 
-	if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	v2Client.r.NewListeners(map[string]ListenerUpdate{
 		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if _, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[RouteConfigResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	v2Client.r.NewRouteConfigs(map[string]RouteConfigUpdate{})
@@ -331,13 +331,13 @@ func (s) TestServiceWatchWithClientClose(t *testing.T) {
 		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
 	})
 
-	if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	v2Client.r.NewListeners(map[string]ListenerUpdate{
 		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if _, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[RouteConfigResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	// Client is closed before it receives the RDS response.
@@ -369,13 +369,13 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 
 	wantUpdate := ServiceUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}}
 
-	if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	v2Client.r.NewListeners(map[string]ListenerUpdate{
 		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if _, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[RouteConfigResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	v2Client.r.NewRouteConfigs(map[string]RouteConfigUpdate{
@@ -390,7 +390,7 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 	v2Client.r.NewListeners(map[string]ListenerUpdate{
 		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if v, err := v2Client.removeWatches[version.V2RouteConfigURL].Receive(); err == nil {
+	if v, err := v2Client.removeWatches[RouteConfigResource].Receive(); err == nil {
 		t.Fatalf("unexpected rds watch cancel: %v", v)
 	}
 }
@@ -420,13 +420,13 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 
 	wantUpdate := ServiceUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}}
 
-	if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	v2Client.r.NewListeners(map[string]ListenerUpdate{
 		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if _, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[RouteConfigResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	v2Client.r.NewRouteConfigs(map[string]RouteConfigUpdate{
@@ -440,7 +440,7 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 	// Remove LDS resource, should cancel the RDS watch, and trigger resource
 	// removed error.
 	v2Client.r.NewListeners(map[string]ListenerUpdate{})
-	if _, err := v2Client.removeWatches[version.V2RouteConfigURL].Receive(); err != nil {
+	if _, err := v2Client.removeWatches[RouteConfigResource].Receive(); err != nil {
 		t.Fatalf("want watch to be canceled, got error %v", err)
 	}
 	if u, err := serviceUpdateCh.Receive(); err != nil || ErrType(u.(serviceUpdateErr).err) != ErrorTypeResourceNotFound {
@@ -462,7 +462,7 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 	v2Client.r.NewListeners(map[string]ListenerUpdate{
 		testLDSName: {RouteConfigName: testRDSName},
 	})
-	if _, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[RouteConfigResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	if u, err := serviceUpdateCh.Receive(); err != testutils.ErrRecvTimeout {
