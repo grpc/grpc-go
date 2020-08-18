@@ -40,7 +40,8 @@ func (s) TestStringConvert(t *testing.T) {
 	declarations := []*expr.Decl{
 		decls.NewIdent("request.url_path", decls.String, nil),
 		decls.NewIdent("request.host", decls.String, nil),
-		decls.NewIdent("connection.uri_san_peer_certificate", decls.String, nil)}
+		decls.NewIdent("connection.uri_san_peer_certificate", decls.String, nil),
+	}
 	env, err := cel.NewEnv()
 	if err != nil {
 		t.Fatalf("Failed to create the CEL environment")
@@ -54,38 +55,38 @@ func (s) TestStringConvert(t *testing.T) {
 		authzArgs        map[string]interface{}
 	}{
 		{
-			desc:            "Test 1 single primitive match",
+			desc:            "single primitive match",
 			wantEvalOutcome: true,
 			expr:            "request.url_path.startsWith('/pkg.service/test')",
 			authzArgs:       map[string]interface{}{"request.url_path": "/pkg.service/test"},
 		},
 		{
-			desc:            "Test 2 single compare match",
+			desc:            "single compare match",
 			wantEvalOutcome: true,
 			expr:            "connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'",
 			authzArgs:       map[string]interface{}{"connection.uri_san_peer_certificate": "cluster/ns/default/sa/admin"},
 		},
 		{
-			desc:            "Test 3 single primitive no match",
+			desc:            "single primitive no match",
 			wantEvalOutcome: false,
 			expr:            "request.url_path.startsWith('/pkg.service/test')",
 			authzArgs:       map[string]interface{}{"request.url_path": "/source/pkg.service/test"},
 		},
 		{
-			desc:            "Test 4 primitive and compare match",
+			desc:            "primitive and compare match",
 			wantEvalOutcome: true,
 			expr:            "request.url_path == '/pkg.service/test' && connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'",
 			authzArgs: map[string]interface{}{"request.url_path": "/pkg.service/test",
 				"connection.uri_san_peer_certificate": "cluster/ns/default/sa/admin"},
 		},
 		{
-			desc:             "Test 5 parse error field not present in environment",
+			desc:             "parse error field not present in environment",
 			wantParsingError: true,
 			expr:             "request.source_path.startsWith('/pkg.service/test')",
 			authzArgs:        map[string]interface{}{"request.url_path": "/pkg.service/test"},
 		},
 		{
-			desc:          "Test 6 eval error argument not included in environment",
+			desc:          "eval error argument not included in environment",
 			wantEvalError: true,
 			expr:          "request.url_path.startsWith('/pkg.service/test')",
 			authzArgs:     map[string]interface{}{"request.source_path": "/pkg.service/test"},
@@ -93,11 +94,9 @@ func (s) TestStringConvert(t *testing.T) {
 	} {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			t.Parallel()
 			checked, err := compileStringToCheckedExpr(test.expr, declarations)
-			want, got := test.wantParsingError, err != nil
-			if got != want {
-				t.Fatalf("Error mismatch in conversion, test.wantParsingError =%v, got %v", want, got)
+			if (err != nil) != test.wantParsingError {
+				t.Fatalf("Error mismatch in conversion, wantParsingError =%v, got %v", test.wantParsingError, err != nil)
 			}
 			if test.wantParsingError {
 				return
@@ -108,9 +107,8 @@ func (s) TestStringConvert(t *testing.T) {
 				t.Fatalf("Failed to create CEL Program: %v", err)
 			}
 			eval, _, err := program.Eval(test.authzArgs)
-			want, got = test.wantEvalError, err != nil
-			if got != want {
-				t.Fatalf("Error mismatch in evaluation, test.wantEvalError =%v, got %v", want, got)
+			if (err != nil) != test.wantEvalError {
+				t.Fatalf("Error mismatch in evaluation, wantEvalError =%v, got %v", test.wantEvalError, err != nil)
 			}
 			if test.wantEvalError {
 				return
