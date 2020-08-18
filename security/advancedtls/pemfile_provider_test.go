@@ -22,9 +22,9 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io/ioutil"
 	"math/big"
-	"os"
 	"testing"
 	"time"
 
@@ -33,219 +33,189 @@ import (
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
-// The PEMFileProvider for identity credentials updates is tested in different stages.
-// At stage 0, we create an PEMFileProvider with empty initial files.
-// At stage 1, we copy the first set of certFile and keyFile to the temp files
-// that are watched by the goroutine.
-// The KeyMaterial is expected to be updated if there is a matching key-cert pair.
-// At stage 2, we copy the second set of certFile and keyFile to the temp files
-// and verify the credential files are updated.
-// The KeyMaterial is expected to be updated if there is a matching key-cert pair.
-// At stage 3, we clear the file contents of temp files.
-// The KeyMaterial is expected to skip the update because the file contents are empty.
-func (s) TestIdentityPEMFileProvider(t *testing.T) {
+func restoreMockFunctionsBack() {
+	readKeyCertPairFunc = tls.LoadX509KeyPair
+	readTrustCertFunc = func(trustFile string) (*x509.CertPool, error) {
+		trustData, err := ioutil.ReadFile(trustFile)
+		if err != nil {
+			return nil, err
+		}
+		trustPool := x509.NewCertPool()
+		ok := trustPool.AppendCertsFromPEM(trustData)
+		if !ok {
+			return nil, fmt.Errorf("failed to call AppendCertsFromPEM")
+		}
+		return trustPool, nil
+	}
+}
+
+func (s) TestNewPEMFileProvider(t *testing.T) {
+	// We deliberately use an empty watching function for watching goroutine, since we are not testing watching behaviors.
+	tests := []struct {
+		desc          string
+		certFile      string
+		keyFile       string
+		trustFile     string
+		expectedError bool
+	}{
+		{
+			desc:          "Expect error if no credential files specified",
+			certFile:      "",
+			keyFile:       "",
+			trustFile:     "",
+			expectedError: true,
+		},
+		{
+			desc:          "Expect error if only certFile is specified",
+			certFile:      testdata.Path("client_cert_1.pem"),
+			keyFile:       "",
+			trustFile:     "",
+			expectedError: true,
+		},
+		{
+			desc:          "Should be good if only identity key cert pairs are specified",
+			certFile:      testdata.Path("client_cert_1.pem"),
+			keyFile:       testdata.Path("client_key_1.pem"),
+			trustFile:     "",
+			expectedError: false,
+		},
+		{
+			desc:          "Should be good if only root certs are specified",
+			certFile:      "",
+			keyFile:       "",
+			trustFile:     testdata.Path("client_trust_cert_1.pem"),
+			expectedError: false,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+			options := &PEMFileProviderOptions{
+				KeyFile:   test.keyFile,
+				CertFile:  test.certFile,
+				TrustFile: test.trustFile,
+			}
+			provider, err := NewPEMFileProvider(options)
+			if got, want := err != nil, test.expectedError; got != want {
+				t.Fatalf("got and want mismatch, want expectedError = %v, got %v", want, got)
+			}
+			if err != nil {
+				return
+			}
+			provider.Close()
+		})
+	}
+
+}
+
+// This test overwrites the credential reading function used by the watching goroutine. It is tested under different stages:
+// At stage 0, we force reading function to load clientPeer1 and serverTrust1, and see if the credentials are picked up by the watching go routine.
+// At stage 1, we force reading function to cause an error. The watching go routine should log the error while leaving the credentials unchanged.
+// At stage 2, we force reading function to load clientPeer2 and serverTrust2, and see if the new credentials are picked up.
+func (s) TestWatchingRoutineUpdates(t *testing.T) {
 	// Load certificates.
 	cs := &certStore{}
 	err := cs.loadCerts()
 	if err != nil {
-		t.Errorf("cs.loadCerts() failed: %v", err)
+		t.Fatalf("cs.loadCerts() failed: %v", err)
 	}
-	// Create temp files that are used to hold credentials.
-	certTmp, err := ioutil.TempFile(os.TempDir(), "pre-")
-	if err != nil {
-		t.Errorf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
-	}
-	defer os.Remove(certTmp.Name())
-	keyTmp, err := ioutil.TempFile(os.TempDir(), "pre-")
-	if err != nil {
-		t.Errorf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
-	}
-	defer os.Remove(keyTmp.Name())
 	tests := []struct {
-		desc           string
-		certFileBefore string
-		keyFileBefore  string
-		wantKmBefore   certprovider.KeyMaterial
-		certFileAfter  string
-		keyFileAfter   string
-		wantKmAfter    certprovider.KeyMaterial
+		desc         string
+		options      *PEMFileProviderOptions
+		wantKmStage0 certprovider.KeyMaterial
+		wantKmStage1 certprovider.KeyMaterial
+		wantKmStage2 certprovider.KeyMaterial
 	}{
 		{
-			desc:           "Test identity provider on the client side",
-			certFileBefore: testdata.Path("client_cert_1.pem"),
-			keyFileBefore:  testdata.Path("client_key_1.pem"),
-			wantKmBefore:   certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer1}},
-			certFileAfter:  testdata.Path("client_cert_2.pem"),
-			keyFileAfter:   testdata.Path("client_key_2.pem"),
-			wantKmAfter:    certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer2}},
+			desc: "using identity certs and root certs together should work",
+			options: &PEMFileProviderOptions{
+				CertFile:  "not_empty_cert_file",
+				KeyFile:   "not_empty_key_file",
+				TrustFile: "not_empty_trust_file",
+			},
+			wantKmStage0: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer1}, Roots: cs.serverTrust1},
+			wantKmStage1: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer1}, Roots: cs.serverTrust1},
+			wantKmStage2: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer2}, Roots: cs.serverTrust2},
 		},
 		{
-			desc:           "Test identity provider on the server side",
-			certFileBefore: testdata.Path("server_cert_1.pem"),
-			keyFileBefore:  testdata.Path("server_key_1.pem"),
-			wantKmBefore:   certprovider.KeyMaterial{Certs: []tls.Certificate{cs.serverPeer1}},
-			certFileAfter:  testdata.Path("server_cert_2.pem"),
-			keyFileAfter:   testdata.Path("server_key_2.pem"),
-			wantKmAfter:    certprovider.KeyMaterial{Certs: []tls.Certificate{cs.serverPeer2}},
+			desc: "using identity certs only should not interfere with trust certs",
+			options: &PEMFileProviderOptions{
+				CertFile: "not_empty_cert_file",
+				KeyFile:  "not_empty_key_file",
+			},
+			wantKmStage0: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer1}},
+			wantKmStage1: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer1}},
+			wantKmStage2: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer2}},
 		},
 		{
-			desc:           "Update failed due to key-cert mismatch",
-			certFileBefore: testdata.Path("server_cert_1.pem"),
-			keyFileBefore:  testdata.Path("server_key_1.pem"),
-			wantKmBefore:   certprovider.KeyMaterial{Certs: []tls.Certificate{cs.serverPeer1}},
-			certFileAfter:  testdata.Path("server_cert_1.pem"),
-			keyFileAfter:   testdata.Path("server_key_2.pem"),
-			wantKmAfter:    certprovider.KeyMaterial{Certs: []tls.Certificate{cs.serverPeer1}},
+			desc: "using trust certs only should not interfere with identity certs",
+			options: &PEMFileProviderOptions{
+				TrustFile: "not_empty_trust_file",
+			},
+			wantKmStage0: certprovider.KeyMaterial{Roots: cs.serverTrust1},
+			wantKmStage1: certprovider.KeyMaterial{Roots: cs.serverTrust1},
+			wantKmStage2: certprovider.KeyMaterial{Roots: cs.serverTrust2},
 		},
 	}
 	for _, test := range tests {
 		test := test
+		testInterval := 1 * time.Second
+		test.options.IdentityInterval = &testInterval
+		test.options.RootInterval = &testInterval
 		t.Run(test.desc, func(t *testing.T) {
-			PEMFileProviderOptions := &PEMFileProviderOptions{
-				CertFile:         certTmp.Name(),
-				KeyFile:          keyTmp.Name(),
-				IdentityInterval: 1 * time.Second,
+			stage := &stageInfo{}
+			readKeyCertPairFunc = func(certFile, keyFile string) (tls.Certificate, error) {
+				switch stage.read() {
+				case 0:
+					return cs.clientPeer1, nil
+				case 1:
+					return tls.Certificate{}, fmt.Errorf("error occurred while reloading")
+				case 2:
+					return cs.clientPeer2, nil
+				default:
+					return tls.Certificate{}, fmt.Errorf("test stage not supported")
+				}
 			}
-			// ------------------------Stage 0------------------------------------
-			PEMFileProvider, err := NewPEMFileProvider(PEMFileProviderOptions)
+			readTrustCertFunc = func(trustFile string) (*x509.CertPool, error) {
+				switch stage.read() {
+				case 0:
+					return cs.serverTrust1, nil
+				case 1:
+					return nil, fmt.Errorf("error occurred while reloading")
+				case 2:
+					return cs.serverTrust2, nil
+				default:
+					return nil, fmt.Errorf("test stage not supported")
+				}
+			}
+			defer restoreMockFunctionsBack()
+			provider, err := NewPEMFileProvider(test.options)
 			if err != nil {
-				t.Errorf("NewPEMFileProvider(PEMFileProviderOptions) failed: %v", err)
+				t.Fatalf("NewPEMFileProvider failed: %v", err)
+			}
+			defer provider.Close()
+			//// ------------------------Stage 0------------------------------------
+			time.Sleep(5 * time.Second)
+			gotKM, err := provider.KeyMaterial(context.Background())
+			if !cmp.Equal(*gotKM, test.wantKmStage0, cmp.AllowUnexported(big.Int{}, x509.CertPool{})) {
+				t.Fatalf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmStage0)
 			}
 			// ------------------------Stage 1------------------------------------
-			err = copyFileContents(test.certFileBefore, certTmp.Name())
-			if err != nil {
-				t.Errorf("copyFileContents(test.certFileBefore, certTmp): %v", err)
+			stage.increase()
+			time.Sleep(5 * time.Second)
+			gotKM, err = provider.KeyMaterial(context.Background())
+			if !cmp.Equal(*gotKM, test.wantKmStage1, cmp.AllowUnexported(big.Int{}, x509.CertPool{})) {
+				t.Fatalf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmStage1)
 			}
-			err = copyFileContents(test.keyFileBefore, keyTmp.Name())
-			if err != nil {
-				t.Errorf("copyFileContents(test.keyFileBefore, keyTmp): %v", err)
+			//// ------------------------Stage 2------------------------------------
+			stage.increase()
+			time.Sleep(5 * time.Second)
+			gotKM, err = provider.KeyMaterial(context.Background())
+			if !cmp.Equal(*gotKM, test.wantKmStage2, cmp.AllowUnexported(big.Int{}, x509.CertPool{})) {
+				t.Fatalf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmStage2)
 			}
-			time.Sleep(2 * time.Second)
-			gotKM, err := PEMFileProvider.identityDistributor.KeyMaterial(context.Background())
-			if !cmp.Equal(*gotKM, test.wantKmBefore, cmp.AllowUnexported(big.Int{})) {
-				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmBefore)
-			}
-			// ------------------------Stage 2------------------------------------
-			err = copyFileContents(test.certFileAfter, certTmp.Name())
-			if err != nil {
-				t.Errorf("copyFileContents(test.certFileAfter, certTmp): %v", err)
-			}
-			err = copyFileContents(test.keyFileAfter, keyTmp.Name())
-			if err != nil {
-				t.Errorf("copyFileContents(test.keyFileAfter, keyTmp): %v", err)
-			}
-			time.Sleep(2 * time.Second)
-			gotKM, err = PEMFileProvider.identityDistributor.KeyMaterial(context.Background())
-			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(big.Int{})) {
-				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
-			}
-			// ------------------------Stage 3------------------------------------
-			certTmp.Truncate(0)
-			keyTmp.Truncate(0)
-			time.Sleep(2 * time.Second)
-			gotKM, err = PEMFileProvider.identityDistributor.KeyMaterial(context.Background())
-			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(big.Int{})) {
-				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
-			}
-			PEMFileProvider.Close()
+			stage.reset()
 		})
 	}
-}
-
-// The PEMFileProvider for root credentials updates is tested in different stages.
-// At stage 0, we create an RootPEMFileProvider with empty initial file.
-// At stage 1, we copy the first set of certFile and keyFile to the temp files
-// that are watched by the goroutine. The KeyMaterial is expected to be updated.
-// At stage 2, we copy the second set of certFile and keyFile to the temp files
-// and verify the credential files are updated. The KeyMaterial is expected to be updated.
-// At stage 3, we clear the file contents of temp files.
-// The KeyMaterial is expected to skip the update because the file contents are empty.
-func (s) TestRootPEMFileProvider(t *testing.T) {
-	cs := &certStore{}
-	err := cs.loadCerts()
-	if err != nil {
-		t.Errorf("cs.loadCerts() failed: %v", err)
-	}
-	// Create temp files that are used to hold root credentials.
-	trustTmp, err := ioutil.TempFile(os.TempDir(), "pre-")
-	if err != nil {
-		t.Errorf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
-	}
-	defer os.Remove(trustTmp.Name())
-	tests := []struct {
-		desc            string
-		trustFileBefore string
-		wantKmBefore    certprovider.KeyMaterial
-		trustFileAfter  string
-		wantKmAfter     certprovider.KeyMaterial
-	}{
-		{
-			desc:            "Test root provider on the client side",
-			trustFileBefore: testdata.Path("client_trust_cert_1.pem"),
-			wantKmBefore:    certprovider.KeyMaterial{Roots: cs.clientTrust1},
-			trustFileAfter:  testdata.Path("client_trust_cert_2.pem"),
-			wantKmAfter:     certprovider.KeyMaterial{Roots: cs.clientTrust2},
-		},
-		{
-			desc:            "Test root provider on the server side",
-			trustFileBefore: testdata.Path("server_trust_cert_1.pem"),
-			wantKmBefore:    certprovider.KeyMaterial{Roots: cs.serverTrust1},
-			trustFileAfter:  testdata.Path("server_trust_cert_2.pem"),
-			wantKmAfter:     certprovider.KeyMaterial{Roots: cs.serverTrust2},
-		},
-	}
-	for _, test := range tests {
-		test := test
-		t.Run(test.desc, func(t *testing.T) {
-			PEMFileProviderOptions := &PEMFileProviderOptions{
-				TrustFile:    trustTmp.Name(),
-				RootInterval: 1 * time.Second,
-			}
-			// ------------------------Stage 0------------------------------------
-			PEMFileProvider, err := NewPEMFileProvider(PEMFileProviderOptions)
-			if err != nil {
-				t.Errorf("NewPEMFileProvider(PEMFileProviderOptions) failed: %v", err)
-			}
-			// ------------------------Stage 1------------------------------------
-			err = copyFileContents(test.trustFileBefore, trustTmp.Name())
-			if err != nil {
-				t.Errorf("copyFileContents(test.trustFileBefore, trustTmp): %v", err)
-			}
-			time.Sleep(2 * time.Second)
-			gotKM, err := PEMFileProvider.rootDistributor.KeyMaterial(context.Background())
-			if !cmp.Equal(*gotKM, test.wantKmBefore, cmp.AllowUnexported(x509.CertPool{})) {
-				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmBefore)
-			}
-			// ------------------------Stage 2------------------------------------
-			err = copyFileContents(test.trustFileAfter, trustTmp.Name())
-			if err != nil {
-				t.Errorf("copyFileContents(test.trustFileAfter, trustTmp): %v", err)
-			}
-			time.Sleep(2 * time.Second)
-			gotKM, err = PEMFileProvider.rootDistributor.KeyMaterial(context.Background())
-			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(x509.CertPool{})) {
-				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
-			}
-			// ------------------------Stage 3------------------------------------
-			trustTmp.Truncate(0)
-			time.Sleep(2 * time.Second)
-			gotKM, err = PEMFileProvider.rootDistributor.KeyMaterial(context.Background())
-			if !cmp.Equal(*gotKM, test.wantKmAfter, cmp.AllowUnexported(x509.CertPool{})) {
-				t.Errorf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmAfter)
-			}
-			PEMFileProvider.Close()
-		})
-	}
-}
-
-func copyFileContents(sourceFile, destinationFile string) error {
-	input, err := ioutil.ReadFile(sourceFile)
-	if err != nil {
-		return err
-	}
-	err = ioutil.WriteFile(destinationFile, input, 0644)
-	if err != nil {
-		return err
-	}
-	return nil
 }
