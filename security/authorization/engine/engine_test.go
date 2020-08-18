@@ -106,21 +106,6 @@ var (
 		"deny unknown policy3": errProgram,
 		"deny unknown policy4": falseProgram,
 	}}
-
-	env, _ = cel.NewEnv(
-		cel.Declarations(
-			decls.NewVar("request.url_path", decls.String),
-			decls.NewVar("request.host", decls.String),
-			decls.NewVar("request.method", decls.String),
-			decls.NewVar("request.headers", decls.NewMapType(decls.String, decls.String)),
-			decls.NewVar("source.address", decls.String),
-			decls.NewVar("source.port", decls.Int),
-			decls.NewVar("destination.address", decls.String),
-			decls.NewVar("destination.port", decls.Int),
-			decls.NewVar("connection.uri_san_peer_certificate", decls.String),
-			decls.NewVar("source.principal", decls.String),
-		),
-	)
 )
 
 func compileCel(env *cel.Env, expr string) (*cel.Ast, error) {
@@ -338,12 +323,26 @@ func TestAuthorizationEngineEvaluate(t *testing.T) {
 }
 
 func TestIntegration(t *testing.T) {
+	env, _ := cel.NewEnv(
+		cel.Declarations(
+			decls.NewVar("request.url_path", decls.String),
+			decls.NewVar("request.host", decls.String),
+			decls.NewVar("request.method", decls.String),
+			decls.NewVar("request.headers", decls.NewMapType(decls.String, decls.String)),
+			decls.NewVar("source.address", decls.String),
+			decls.NewVar("source.port", decls.Int),
+			decls.NewVar("destination.address", decls.String),
+			decls.NewVar("destination.port", decls.Int),
+			decls.NewVar("connection.uri_san_peer_certificate", decls.String),
+			decls.NewVar("source.principal", decls.String),
+		),
+	)
+
 	tests := map[string]struct {
 		allow            *pb.RBAC
 		deny             *pb.RBAC
 		authArgs         *AuthorizationArgs
 		wantAuthDecision *AuthorizationDecision
-		wantErr          error
 	}{
 		"ALLOW engine: DecisionAllow": {
 			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
@@ -352,7 +351,6 @@ func TestIntegration(t *testing.T) {
 			deny:             nil,
 			authArgs:         &AuthorizationArgs{fullMethod: "/pkg.service/test/method"},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionAllow, policyNames: []string{"url_path starts with"}},
-			wantErr:          nil,
 		},
 		"ALLOW engine: DecisionUnknown": {
 			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
@@ -362,7 +360,6 @@ func TestIntegration(t *testing.T) {
 			deny:             nil,
 			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:25"}}, fullMethod: "/pkg.service/test"},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionUnknown, policyNames: []string{"url_path and uri_san_peer_certificate"}},
-			wantErr:          nil,
 		},
 		"ALLOW engine: DecisionDeny": {
 			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
@@ -371,7 +368,6 @@ func TestIntegration(t *testing.T) {
 			deny:             nil,
 			authArgs:         &AuthorizationArgs{fullMethod: "/pkg.service/test/method"},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionDeny, policyNames: []string{}},
-			wantErr:          nil,
 		},
 		"DENY engine: DecisionAllow": {
 			allow: nil,
@@ -380,7 +376,6 @@ func TestIntegration(t *testing.T) {
 			}},
 			authArgs:         &AuthorizationArgs{fullMethod: "/pkg.service/test/method"},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionAllow, policyNames: []string{}},
-			wantErr:          nil,
 		},
 		"DENY engine: DecisionUnknown": {
 			allow: nil,
@@ -390,7 +385,6 @@ func TestIntegration(t *testing.T) {
 			}},
 			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:25"}}, fullMethod: "/pkg.service/test"},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionUnknown, policyNames: []string{"destination address"}},
-			wantErr:          nil,
 		},
 		"DENY engine: DecisionDeny": {
 			allow: nil,
@@ -400,7 +394,6 @@ func TestIntegration(t *testing.T) {
 			}},
 			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:8080"}}, fullMethod: "/pkg.service/test"},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionDeny, policyNames: []string{"source address or source port"}},
-			wantErr:          nil,
 		},
 		"DENY ALLOW engine: DecisionDeny from DENY policy": {
 			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
@@ -412,7 +405,6 @@ func TestIntegration(t *testing.T) {
 			}},
 			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:8080"}}, fullMethod: "/pkg.service/test"},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionDeny, policyNames: []string{"source address or source port"}},
-			wantErr:          nil,
 		},
 		"DENY ALLOW engine: DecisionUnknown from DENY policy": {
 			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
@@ -424,7 +416,6 @@ func TestIntegration(t *testing.T) {
 			}},
 			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:8080"}}, fullMethod: "/pkg.service/test/method"},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionUnknown, policyNames: []string{"destination address", "source port and destination port"}},
-			wantErr:          nil,
 		},
 		"DENY ALLOW engine: DecisionAllow from ALLOW policy": {
 			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
@@ -436,7 +427,6 @@ func TestIntegration(t *testing.T) {
 			}},
 			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:8080"}}, fullMethod: "/pkg.service/test/method"},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionAllow, policyNames: []string{"method or url_path starts with"}},
-			wantErr:          nil,
 		},
 		"DENY ALLOW engine: DecisionUnknown from ALLOW policy": {
 			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
@@ -448,7 +438,6 @@ func TestIntegration(t *testing.T) {
 			}},
 			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:8080"}}, fullMethod: "/pkg.service/test/method"},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionUnknown, policyNames: []string{"url_path starts with and method"}},
-			wantErr:          nil,
 		},
 		"DENY ALLOW engine: DecisionDeny from ALLOW policy": {
 			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
@@ -460,7 +449,6 @@ func TestIntegration(t *testing.T) {
 			}},
 			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:8080"}}, fullMethod: "/pkg.service/test/method"},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionDeny, policyNames: []string{}},
-			wantErr:          nil,
 		},
 	}
 
@@ -468,13 +456,11 @@ func TestIntegration(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			engine, err := NewAuthorizationEngine(tc.allow, tc.deny)
 			if err != nil {
-				t.Errorf("Error constructing authorization engine: %v", err)
+				t.Fatalf("Error constructing authorization engine: %v", err)
 			}
 			gotAuthDecision, gotErr := engine.Evaluate(tc.authArgs)
 			sort.Strings(gotAuthDecision.policyNames)
-			if tc.wantErr != nil && (gotErr == nil || gotErr.Error() != tc.wantErr.Error()) {
-				t.Errorf("Expected error to be %v, instead got %v", tc.wantErr, gotErr)
-			} else if tc.wantErr == nil && (gotErr != nil || gotAuthDecision.decision != tc.wantAuthDecision.decision || !reflect.DeepEqual(gotAuthDecision.policyNames, tc.wantAuthDecision.policyNames)) {
+			if gotErr != nil || gotAuthDecision.decision != tc.wantAuthDecision.decision || !reflect.DeepEqual(gotAuthDecision.policyNames, tc.wantAuthDecision.policyNames) {
 				t.Errorf("Expected authorization decision to be (%v, %v), instead got (%v, %v)", tc.wantAuthDecision.decision, tc.wantAuthDecision.policyNames, gotAuthDecision.decision, gotAuthDecision.policyNames)
 			}
 		})
