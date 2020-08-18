@@ -90,15 +90,14 @@ func (s) TestNewPEMFileProvider(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			t.Parallel()
 			options := &PEMFileProviderOptions{
 				KeyFile:   test.keyFile,
 				CertFile:  test.certFile,
 				TrustFile: test.trustFile,
 			}
 			provider, err := NewPEMFileProvider(options)
-			if got, want := err != nil, test.expectedError; got != want {
-				t.Fatalf("got and want mismatch, want expectedError = %v, got %v", want, got)
+			if (err != nil) != test.expectedError {
+				t.Fatalf("got and want mismatch, want expectedError = %v, got %v", test.expectedError, err != nil)
 			}
 			if err != nil {
 				return
@@ -128,7 +127,7 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 		wantKmStage2 certprovider.KeyMaterial
 	}{
 		{
-			desc: "using identity certs and root certs together should work",
+			desc: "use identity certs and root certs",
 			options: &PEMFileProviderOptions{
 				CertFile:  "not_empty_cert_file",
 				KeyFile:   "not_empty_key_file",
@@ -139,7 +138,7 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 			wantKmStage2: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer2}, Roots: cs.serverTrust2},
 		},
 		{
-			desc: "using identity certs only should not interfere with trust certs",
+			desc: "use identity certs only",
 			options: &PEMFileProviderOptions{
 				CertFile: "not_empty_cert_file",
 				KeyFile:  "not_empty_key_file",
@@ -149,7 +148,7 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 			wantKmStage2: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer2}},
 		},
 		{
-			desc: "using trust certs only should not interfere with identity certs",
+			desc: "use trust certs only",
 			options: &PEMFileProviderOptions{
 				TrustFile: "not_empty_trust_file",
 			},
@@ -160,7 +159,7 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 	}
 	for _, test := range tests {
 		test := test
-		testInterval := 1 * time.Second
+		testInterval := 200 * time.Millisecond
 		test.options.IdentityInterval = &testInterval
 		test.options.RootInterval = &testInterval
 		t.Run(test.desc, func(t *testing.T) {
@@ -196,21 +195,21 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 			}
 			defer provider.Close()
 			//// ------------------------Stage 0------------------------------------
-			time.Sleep(5 * time.Second)
+			time.Sleep(1 * time.Second)
 			gotKM, err := provider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmStage0, cmp.AllowUnexported(big.Int{}, x509.CertPool{})) {
 				t.Fatalf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmStage0)
 			}
 			// ------------------------Stage 1------------------------------------
 			stage.increase()
-			time.Sleep(5 * time.Second)
+			time.Sleep(1 * time.Second)
 			gotKM, err = provider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmStage1, cmp.AllowUnexported(big.Int{}, x509.CertPool{})) {
 				t.Fatalf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmStage1)
 			}
 			//// ------------------------Stage 2------------------------------------
 			stage.increase()
-			time.Sleep(5 * time.Second)
+			time.Sleep(1 * time.Second)
 			gotKM, err = provider.KeyMaterial(context.Background())
 			if !cmp.Equal(*gotKM, test.wantKmStage2, cmp.AllowUnexported(big.Int{}, x509.CertPool{})) {
 				t.Fatalf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmStage2)

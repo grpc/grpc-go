@@ -65,14 +65,13 @@ type PEMFileProviderOptions struct {
 	// IdentityInterval is the time duration between two credential update checks for identity certs.
 	// Optional. If not set, we will use the default interval.
 	IdentityInterval *time.Duration
-	// RootInterval is the time duration between two credential update checks for root certs. The default is set to 1 hour.
+	// RootInterval is the time duration between two credential update checks for root certs.
 	// Optional. If not set, we will use the default interval.
 	RootInterval *time.Duration
 }
 
 // PEMFileProvider implements certprovider.Provider.
-// It provides the most up-to-date identity private key/cert pair
-// and root certificates based on the input PEM files.
+// It provides the most up-to-date identity private key-cert pairs and/or root certificates.
 type PEMFileProvider struct {
 	identityDistributor *certprovider.Distributor
 	rootDistributor     *certprovider.Distributor
