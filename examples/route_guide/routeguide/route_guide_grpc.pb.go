@@ -51,6 +51,10 @@ func NewRouteGuideClient(cc grpc.ClientConnInterface) RouteGuideClient {
 	return &routeGuideClient{cc}
 }
 
+var routeGuideGetFeatureStreamDesc = &grpc.StreamDesc{
+	StreamName: "GetFeature",
+}
+
 func (c *routeGuideClient) GetFeature(ctx context.Context, in *Point, opts ...grpc.CallOption) (*Feature, error) {
 	out := new(Feature)
 	err := c.cc.Invoke(ctx, "/routeguide.RouteGuide/GetFeature", in, out, opts...)
@@ -60,12 +64,13 @@ func (c *routeGuideClient) GetFeature(ctx context.Context, in *Point, opts ...gr
 	return out, nil
 }
 
+var routeGuideListFeaturesStreamDesc = &grpc.StreamDesc{
+	StreamName:    "ListFeatures",
+	ServerStreams: true,
+}
+
 func (c *routeGuideClient) ListFeatures(ctx context.Context, in *Rectangle, opts ...grpc.CallOption) (RouteGuide_ListFeaturesClient, error) {
-	streamDesc := &grpc.StreamDesc{
-		StreamName:    "ListFeatures",
-		ServerStreams: true,
-	}
-	stream, err := c.cc.NewStream(ctx, streamDesc, "/routeguide.RouteGuide/ListFeatures", opts...)
+	stream, err := c.cc.NewStream(ctx, routeGuideListFeaturesStreamDesc, "/routeguide.RouteGuide/ListFeatures", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,12 +101,13 @@ func (x *routeGuideListFeaturesClient) Recv() (*Feature, error) {
 	return m, nil
 }
 
+var routeGuideRecordRouteStreamDesc = &grpc.StreamDesc{
+	StreamName:    "RecordRoute",
+	ClientStreams: true,
+}
+
 func (c *routeGuideClient) RecordRoute(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RecordRouteClient, error) {
-	streamDesc := &grpc.StreamDesc{
-		StreamName:    "RecordRoute",
-		ClientStreams: true,
-	}
-	stream, err := c.cc.NewStream(ctx, streamDesc, "/routeguide.RouteGuide/RecordRoute", opts...)
+	stream, err := c.cc.NewStream(ctx, routeGuideRecordRouteStreamDesc, "/routeguide.RouteGuide/RecordRoute", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -134,13 +140,14 @@ func (x *routeGuideRecordRouteClient) CloseAndRecv() (*RouteSummary, error) {
 	return m, nil
 }
 
+var routeGuideRouteChatStreamDesc = &grpc.StreamDesc{
+	StreamName:    "RouteChat",
+	ServerStreams: true,
+	ClientStreams: true,
+}
+
 func (c *routeGuideClient) RouteChat(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RouteChatClient, error) {
-	streamDesc := &grpc.StreamDesc{
-		StreamName:    "RouteChat",
-		ServerStreams: true,
-		ClientStreams: true,
-	}
-	stream, err := c.cc.NewStream(ctx, streamDesc, "/routeguide.RouteGuide/RouteChat", opts...)
+	stream, err := c.cc.NewStream(ctx, routeGuideRouteChatStreamDesc, "/routeguide.RouteGuide/RouteChat", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +208,7 @@ type RouteGuideService struct {
 	RouteChat func(RouteGuide_RouteChatServer) error
 }
 
-func (s *RouteGuideService) getFeature(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func (s *RouteGuideService) getFeature(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	if s.GetFeature == nil {
 		return nil, status.Errorf(codes.Unimplemented, "method GetFeature not implemented")
 	}
@@ -221,7 +228,7 @@ func (s *RouteGuideService) getFeature(srv interface{}, ctx context.Context, dec
 	}
 	return interceptor(ctx, in, info, handler)
 }
-func (s *RouteGuideService) listFeatures(srv interface{}, stream grpc.ServerStream) error {
+func (s *RouteGuideService) listFeatures(_ interface{}, stream grpc.ServerStream) error {
 	if s.ListFeatures == nil {
 		return status.Errorf(codes.Unimplemented, "method ListFeatures not implemented")
 	}
@@ -231,13 +238,13 @@ func (s *RouteGuideService) listFeatures(srv interface{}, stream grpc.ServerStre
 	}
 	return s.ListFeatures(m, &routeGuideListFeaturesServer{stream})
 }
-func (s *RouteGuideService) recordRoute(srv interface{}, stream grpc.ServerStream) error {
+func (s *RouteGuideService) recordRoute(_ interface{}, stream grpc.ServerStream) error {
 	if s.RecordRoute == nil {
 		return status.Errorf(codes.Unimplemented, "method RecordRoute not implemented")
 	}
 	return s.RecordRoute(&routeGuideRecordRouteServer{stream})
 }
-func (s *RouteGuideService) routeChat(srv interface{}, stream grpc.ServerStream) error {
+func (s *RouteGuideService) routeChat(_ interface{}, stream grpc.ServerStream) error {
 	if s.RouteChat == nil {
 		return status.Errorf(codes.Unimplemented, "method RouteChat not implemented")
 	}
@@ -339,7 +346,8 @@ func RegisterRouteGuideService(s grpc.ServiceRegistrar, srv *RouteGuideService) 
 // implemented methods of the RouteGuide service in s.  Any unimplemented
 // methods will result in the gRPC server returning an UNIMPLEMENTED status to the client.
 // This includes situations where the method handler is misspelled or has the wrong
-// signature.  For this reason, this function should be used with great care.
+// signature.  For this reason, this function should be used with great care and
+// is not recommended to be used by most users.
 func NewRouteGuideService(s interface{}) *RouteGuideService {
 	ns := &RouteGuideService{}
 	if h, ok := s.(interface {

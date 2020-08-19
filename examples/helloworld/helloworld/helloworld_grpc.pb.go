@@ -29,6 +29,10 @@ func NewGreeterClient(cc grpc.ClientConnInterface) GreeterClient {
 	return &greeterClient{cc}
 }
 
+var greeterSayHelloStreamDesc = &grpc.StreamDesc{
+	StreamName: "SayHello",
+}
+
 func (c *greeterClient) SayHello(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (*HelloReply, error) {
 	out := new(HelloReply)
 	err := c.cc.Invoke(ctx, "/helloworld.Greeter/SayHello", in, out, opts...)
@@ -47,7 +51,7 @@ type GreeterService struct {
 	SayHello func(context.Context, *HelloRequest) (*HelloReply, error)
 }
 
-func (s *GreeterService) sayHello(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func (s *GreeterService) sayHello(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	if s.SayHello == nil {
 		return nil, status.Errorf(codes.Unimplemented, "method SayHello not implemented")
 	}
@@ -89,7 +93,8 @@ func RegisterGreeterService(s grpc.ServiceRegistrar, srv *GreeterService) {
 // implemented methods of the Greeter service in s.  Any unimplemented
 // methods will result in the gRPC server returning an UNIMPLEMENTED status to the client.
 // This includes situations where the method handler is misspelled or has the wrong
-// signature.  For this reason, this function should be used with great care.
+// signature.  For this reason, this function should be used with great care and
+// is not recommended to be used by most users.
 func NewGreeterService(s interface{}) *GreeterService {
 	ns := &GreeterService{}
 	if h, ok := s.(interface {

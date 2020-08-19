@@ -29,7 +29,6 @@ import (
 )
 
 const (
-	errorsPackage  = protogen.GoImportPath("errors")
 	contextPackage = protogen.GoImportPath("context")
 	grpcPackage    = protogen.GoImportPath("google.golang.org/grpc")
 	codesPackage   = protogen.GoImportPath("google.golang.org/grpc/codes")
@@ -136,6 +135,18 @@ func genClientMethod(gen *protogen.Plugin, g *protogen.GeneratedFile, method *pr
 	if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 		g.P(deprecationComment)
 	}
+
+	streamDescName := unexport(service.GoName) + method.GoName + "StreamDesc"
+	g.P("var ", streamDescName, " = &", grpcPackage.Ident("StreamDesc"), "{")
+	g.P("StreamName: ", strconv.Quote(string(method.Desc.Name())), ",")
+	if method.Desc.IsStreamingServer() {
+		g.P("ServerStreams: true,")
+	}
+	if method.Desc.IsStreamingClient() {
+		g.P("ClientStreams: true,")
+	}
+	g.P("}")
+
 	g.P("func (c *", unexport(service.GoName), "Client) ", clientSignature(g, method), "{")
 	if !method.Desc.IsStreamingServer() && !method.Desc.IsStreamingClient() {
 		g.P("out := new(", method.Output.GoIdent, ")")
@@ -148,17 +159,7 @@ func genClientMethod(gen *protogen.Plugin, g *protogen.GeneratedFile, method *pr
 	}
 	streamType := unexport(service.GoName) + method.GoName + "Client"
 
-	g.P("streamDesc := &", grpcPackage.Ident("StreamDesc"), "{")
-	g.P("StreamName: ", strconv.Quote(string(method.Desc.Name())), ",")
-	if method.Desc.IsStreamingServer() {
-		g.P("ServerStreams: true,")
-	}
-	if method.Desc.IsStreamingClient() {
-		g.P("ClientStreams: true,")
-	}
-	g.P("}")
-
-	g.P(`stream, err := c.cc.NewStream(ctx, streamDesc, "`, sname, `", opts...)`)
+	g.P(`stream, err := c.cc.NewStream(ctx, `, streamDescName, `, "`, sname, `", opts...)`)
 	g.P("if err != nil { return nil, err }")
 	g.P("x := &", streamType, "{stream}")
 	if !method.Desc.IsStreamingClient() {
@@ -384,12 +385,12 @@ func handlerSignature(g *protogen.GeneratedFile, method *protogen.Method) string
 }
 
 func unaryHandlerSignature(g *protogen.GeneratedFile) string {
-	return "(srv interface{}, ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context")) +
+	return "(_ interface{}, ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context")) +
 		", dec func(interface{}) error, interceptor " + g.QualifiedGoIdent(grpcPackage.Ident("UnaryServerInterceptor")) + ") (interface{}, error)"
 }
 
 func streamHandlerSignature(g *protogen.GeneratedFile) string {
-	return "(srv interface{}, stream " + g.QualifiedGoIdent(grpcPackage.Ident("ServerStream")) + ") error"
+	return "(_ interface{}, stream " + g.QualifiedGoIdent(grpcPackage.Ident("ServerStream")) + ") error"
 }
 
 func genMethodHandler(gen *protogen.Plugin, g *protogen.GeneratedFile, method *protogen.Method) {
