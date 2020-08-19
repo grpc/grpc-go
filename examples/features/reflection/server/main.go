@@ -40,7 +40,7 @@ func sayHello(ctx context.Context, in *hwpb.HelloRequest) (*hwpb.HelloReply, err
 	return &hwpb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
-// unaryEcho implementes echo.Echo.UnaryEcho
+// unaryEcho implements echo.Echo.UnaryEcho
 func unaryEcho(ctx context.Context, req *ecpb.EchoRequest) (*ecpb.EchoResponse, error) {
 	return &ecpb.EchoResponse{Message: req.Message}, nil
 }

@@ -35,6 +35,10 @@ func NewEchoClient(cc grpc.ClientConnInterface) EchoClient {
 	return &echoClient{cc}
 }
 
+var echoUnaryEchoStreamDesc = &grpc.StreamDesc{
+	StreamName: "UnaryEcho",
+}
+
 func (c *echoClient) UnaryEcho(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (*EchoResponse, error) {
 	out := new(EchoResponse)
 	err := c.cc.Invoke(ctx, "/grpc.examples.echo.Echo/UnaryEcho", in, out, opts...)
@@ -44,12 +48,13 @@ func (c *echoClient) UnaryEcho(ctx context.Context, in *EchoRequest, opts ...grp
 	return out, nil
 }
 
+var echoServerStreamingEchoStreamDesc = &grpc.StreamDesc{
+	StreamName:    "ServerStreamingEcho",
+	ServerStreams: true,
+}
+
 func (c *echoClient) ServerStreamingEcho(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (Echo_ServerStreamingEchoClient, error) {
-	streamDesc := &grpc.StreamDesc{
-		StreamName:    "ServerStreamingEcho",
-		ServerStreams: true,
-	}
-	stream, err := c.cc.NewStream(ctx, streamDesc, "/grpc.examples.echo.Echo/ServerStreamingEcho", opts...)
+	stream, err := c.cc.NewStream(ctx, echoServerStreamingEchoStreamDesc, "/grpc.examples.echo.Echo/ServerStreamingEcho", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -80,12 +85,13 @@ func (x *echoServerStreamingEchoClient) Recv() (*EchoResponse, error) {
 	return m, nil
 }
 
+var echoClientStreamingEchoStreamDesc = &grpc.StreamDesc{
+	StreamName:    "ClientStreamingEcho",
+	ClientStreams: true,
+}
+
 func (c *echoClient) ClientStreamingEcho(ctx context.Context, opts ...grpc.CallOption) (Echo_ClientStreamingEchoClient, error) {
-	streamDesc := &grpc.StreamDesc{
-		StreamName:    "ClientStreamingEcho",
-		ClientStreams: true,
-	}
-	stream, err := c.cc.NewStream(ctx, streamDesc, "/grpc.examples.echo.Echo/ClientStreamingEcho", opts...)
+	stream, err := c.cc.NewStream(ctx, echoClientStreamingEchoStreamDesc, "/grpc.examples.echo.Echo/ClientStreamingEcho", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -118,13 +124,14 @@ func (x *echoClientStreamingEchoClient) CloseAndRecv() (*EchoResponse, error) {
 	return m, nil
 }
 
+var echoBidirectionalStreamingEchoStreamDesc = &grpc.StreamDesc{
+	StreamName:    "BidirectionalStreamingEcho",
+	ServerStreams: true,
+	ClientStreams: true,
+}
+
 func (c *echoClient) BidirectionalStreamingEcho(ctx context.Context, opts ...grpc.CallOption) (Echo_BidirectionalStreamingEchoClient, error) {
-	streamDesc := &grpc.StreamDesc{
-		StreamName:    "BidirectionalStreamingEcho",
-		ServerStreams: true,
-		ClientStreams: true,
-	}
-	stream, err := c.cc.NewStream(ctx, streamDesc, "/grpc.examples.echo.Echo/BidirectionalStreamingEcho", opts...)
+	stream, err := c.cc.NewStream(ctx, echoBidirectionalStreamingEchoStreamDesc, "/grpc.examples.echo.Echo/BidirectionalStreamingEcho", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +176,7 @@ type EchoService struct {
 	BidirectionalStreamingEcho func(Echo_BidirectionalStreamingEchoServer) error
 }
 
-func (s *EchoService) unaryEcho(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func (s *EchoService) unaryEcho(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	if s.UnaryEcho == nil {
 		return nil, status.Errorf(codes.Unimplemented, "method UnaryEcho not implemented")
 	}
@@ -189,7 +196,7 @@ func (s *EchoService) unaryEcho(srv interface{}, ctx context.Context, dec func(i
 	}
 	return interceptor(ctx, in, info, handler)
 }
-func (s *EchoService) serverStreamingEcho(srv interface{}, stream grpc.ServerStream) error {
+func (s *EchoService) serverStreamingEcho(_ interface{}, stream grpc.ServerStream) error {
 	if s.ServerStreamingEcho == nil {
 		return status.Errorf(codes.Unimplemented, "method ServerStreamingEcho not implemented")
 	}
@@ -199,13 +206,13 @@ func (s *EchoService) serverStreamingEcho(srv interface{}, stream grpc.ServerStr
 	}
 	return s.ServerStreamingEcho(m, &echoServerStreamingEchoServer{stream})
 }
-func (s *EchoService) clientStreamingEcho(srv interface{}, stream grpc.ServerStream) error {
+func (s *EchoService) clientStreamingEcho(_ interface{}, stream grpc.ServerStream) error {
 	if s.ClientStreamingEcho == nil {
 		return status.Errorf(codes.Unimplemented, "method ClientStreamingEcho not implemented")
 	}
 	return s.ClientStreamingEcho(&echoClientStreamingEchoServer{stream})
 }
-func (s *EchoService) bidirectionalStreamingEcho(srv interface{}, stream grpc.ServerStream) error {
+func (s *EchoService) bidirectionalStreamingEcho(_ interface{}, stream grpc.ServerStream) error {
 	if s.BidirectionalStreamingEcho == nil {
 		return status.Errorf(codes.Unimplemented, "method BidirectionalStreamingEcho not implemented")
 	}
@@ -307,7 +314,8 @@ func RegisterEchoService(s grpc.ServiceRegistrar, srv *EchoService) {
 // implemented methods of the Echo service in s.  Any unimplemented
 // methods will result in the gRPC server returning an UNIMPLEMENTED status to the client.
 // This includes situations where the method handler is misspelled or has the wrong
-// signature.  For this reason, this function should be used with great care.
+// signature.  For this reason, this function should be used with great care and
+// is not recommended to be used by most users.
 func NewEchoService(s interface{}) *EchoService {
 	ns := &EchoService{}
 	if h, ok := s.(interface {
