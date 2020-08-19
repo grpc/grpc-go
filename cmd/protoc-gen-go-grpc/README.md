@@ -74,6 +74,7 @@ it easier to migrate from the previous version, two new symbols are generated:
 an instance of the new generated `Service` struct type.  *This has drawbacks,
 however: `New<Service>Service` accepts any parameter, and does not panic or
 error if any methods are missing, are misspelled, or have the wrong signature.*
+These methods will return an UNIMPLEMENTED status if called by a client.
 
 `Unstable<Service>Service` allows for asserting that a type properly implements
 all methods of a service.  It is generated with the name `Unstable` to denote
