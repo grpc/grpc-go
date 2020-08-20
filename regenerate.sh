@@ -69,6 +69,7 @@ SOURCES=(
   ${WORKDIR}/grpc-proto/grpc/health/v1/health.proto
   ${WORKDIR}/grpc-proto/grpc/lb/v1/load_balancer.proto
   ${WORKDIR}/grpc-proto/grpc/lookup/v1/rls.proto
+  ${WORKDIR}/grpc-proto/grpc/lookup/v1/rls_config.proto
   ${WORKDIR}/grpc-proto/grpc/service_config/service_config.proto
   ${WORKDIR}/grpc-proto/grpc/tls/provider/meshca/experimental/config.proto
   ${WORKDIR}/istio/istio/google/security/meshca/v1/meshca.proto
