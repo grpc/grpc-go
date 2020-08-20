@@ -68,6 +68,9 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 }
 
 func genClient(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
+	if *migrationMode {
+		return
+	}
 	clientName := service.GoName + "Client"
 
 	g.P("// ", clientName, " is the client API for ", service.GoName, " service.")
@@ -441,6 +444,9 @@ func genHandlerBody(gen *protogen.Plugin, g *protogen.GeneratedFile, method *pro
 }
 
 func genServerStreamTypes(gen *protogen.Plugin, g *protogen.GeneratedFile, method *protogen.Method) {
+	if *migrationMode {
+		return
+	}
 	if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
 		// Unary method
 		return

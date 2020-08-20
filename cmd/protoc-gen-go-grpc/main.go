@@ -37,8 +37,11 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
+var migrationMode *bool
+
 func main() {
 	var flags flag.FlagSet
+	migrationMode = flags.Bool("migrationMode", false, "set to generate new symbols only; requires symbols produced by legacy protoc-gen-go")
 
 	protogen.Options{
 		ParamFunc: flags.Set,
