@@ -92,32 +92,29 @@ func (s) TestDistributorConcurrency(t *testing.T) {
 	km1 := loadKeyMaterials(t, "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
 	km2 := loadKeyMaterials(t, "x509/server2_cert.pem", "x509/server2_key.pem", "x509/client_ca_cert.pem")
 
-	errCh := make(chan error, 1)
-	// Push key material into the distributor from here and spawn a goroutine to
-	// verify that the distributor returns the expected keyMaterial.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	go waitForKeyMaterial(ctx, dist, km1, nil, errCh)
-	dist.Set(km1, nil)
-	if err := <-errCh; err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		km  *KeyMaterial
+		err error
+	}{
+		{km: km1, err: nil},
+		{km: km2, err: nil},
+		{km: nil, err: errProviderTestInternal},
 	}
-
-	// Push new key material into the distributor from here and spawn a
-	// goroutine to verify that the distributor returns the expected keyMaterial
-	// eventually.
-	go waitForKeyMaterial(ctx, dist, km2, nil, errCh)
-	dist.Set(km2, nil)
-	if err := <-errCh; err != nil {
-		t.Fatal(err)
-	}
-
-	// Push an error into the distributor from here and spawn a goroutine to
-	// verify that the distributor returns the expected result eventually.
-	go waitForKeyMaterial(ctx, dist, nil, errProviderTestInternal, errCh)
-	dist.Set(nil, errProviderTestInternal)
-	if err := <-errCh; err != nil {
-		t.Fatal(err)
+	for _, tc := range tests {
+		// Push key material into the distributor from a goroutine and read from
+		// here to verify that the distributor returns the expected keyMaterial.
+		go func() {
+			// Add a small sleep here to make sure that the call to KeyMaterial()
+			// happens before the call to Set(), thereby the former is blocked till
+			// the latter happens.
+			time.Sleep(50 * time.Microsecond)
+			dist.Set(tc.km, tc.err)
+		}()
+		if err := waitForKeyMaterial(ctx, dist, tc.km, tc.err); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -125,19 +122,17 @@ func (s) TestDistributorConcurrency(t *testing.T) {
 // the following conditions are met:
 // 1. Returned keyMaterial and error matches wantKM and wantErr.
 // 2. Provider ctx deadline expires.
-func waitForKeyMaterial(ctx context.Context, dist *Distributor, wantKM *KeyMaterial, wantErr error, errCh chan error) {
+func waitForKeyMaterial(ctx context.Context, dist *Distributor, wantKM *KeyMaterial, wantErr error) error {
 	for {
 		err := readAndVerifyKeyMaterial(ctx, dist, wantKM)
 		if errors.Is(err, wantErr) {
-			errCh <- nil
-			return
+			return nil
 
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			errCh <- fmt.Errorf("KeyMaterial() failed with error: %v, wantErr: %v", err, wantErr)
-			return
+			return fmt.Errorf("KeyMaterial() failed with error: %v, wantErr: %v", err, wantErr)
 		}
 		// Don't busy loop.
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(50 * time.Microsecond)
 	}
 }
