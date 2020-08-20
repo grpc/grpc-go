@@ -29,6 +29,7 @@ import (
 	interpreter "github.com/google/cel-go/interpreter"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
@@ -107,12 +108,15 @@ var (
 	}}
 )
 
-func compileStringToExpr(expr string, declarations []*expr.Decl) *expr.Expr {
-	checkedExpr, _ := compileStringToCheckedExpr(expr, declarations)
-	return checkedExpr.Expr
+type s struct {
+	grpctest.Tester
 }
 
-func TestNewAuthorizationEngine(t *testing.T) {
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestNewAuthorizationEngine(t *testing.T) {
 	tests := map[string]struct {
 		allow   *pb.RBAC
 		deny    *pb.RBAC
@@ -158,13 +162,13 @@ func TestNewAuthorizationEngine(t *testing.T) {
 				return
 			}
 			if gotErr == nil || gotErr.Error() != tc.wantErr {
-				t.Errorf(tc.errStr)
+				t.Fatalf(tc.errStr)
 			}
 		})
 	}
 }
 
-func TestGetDecision(t *testing.T) {
+func (s) TestGetDecision(t *testing.T) {
 	tests := map[string]struct {
 		engine *policyEngine
 		match  bool
@@ -195,13 +199,13 @@ func TestGetDecision(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			if got := getDecision(tc.engine, tc.match); got != tc.want {
-				t.Errorf("Expected %v, instead got %v", tc.want, got)
+				t.Fatalf("Expected %v, instead got %v", tc.want, got)
 			}
 		})
 	}
 }
 
-func TestPolicyEngineEvaluate(t *testing.T) {
+func (s) TestPolicyEngineEvaluate(t *testing.T) {
 	tests := map[string]struct {
 		engine          *policyEngine
 		activation      interpreter.Activation
@@ -239,13 +243,13 @@ func TestPolicyEngineEvaluate(t *testing.T) {
 			gotDecision, gotPolicyNames := tc.engine.evaluate(tc.activation)
 			sort.Strings(gotPolicyNames)
 			if gotDecision != tc.wantDecision || !reflect.DeepEqual(gotPolicyNames, tc.wantPolicyNames) {
-				t.Errorf("Expected (%v, %v), instead got (%v, %v)", tc.wantDecision, tc.wantPolicyNames, gotDecision, gotPolicyNames)
+				t.Fatalf("Expected (%v, %v), instead got (%v, %v)", tc.wantDecision, tc.wantPolicyNames, gotDecision, gotPolicyNames)
 			}
 		})
 	}
 }
 
-func TestAuthorizationEngineEvaluate(t *testing.T) {
+func (s) TestAuthorizationEngineEvaluate(t *testing.T) {
 	tests := map[string]struct {
 		engine           *AuthorizationEngine
 		authArgs         *AuthorizationArgs
@@ -283,15 +287,15 @@ func TestAuthorizationEngineEvaluate(t *testing.T) {
 			gotAuthDecision, gotErr := tc.engine.Evaluate(tc.authArgs)
 			sort.Strings(gotAuthDecision.policyNames)
 			if tc.wantErr != nil && (gotErr == nil || gotErr.Error() != tc.wantErr.Error()) {
-				t.Errorf("Expected error to be %v, instead got %v", tc.wantErr, gotErr)
+				t.Fatalf("Expected error to be %v, instead got %v", tc.wantErr, gotErr)
 			} else if tc.wantErr == nil && (gotErr != nil || gotAuthDecision.decision != tc.wantAuthDecision.decision || !reflect.DeepEqual(gotAuthDecision.policyNames, tc.wantAuthDecision.policyNames)) {
-				t.Errorf("Expected authorization decision to be (%v, %v), instead got (%v, %v)", tc.wantAuthDecision.decision, tc.wantAuthDecision.policyNames, gotAuthDecision.decision, gotAuthDecision.policyNames)
+				t.Fatalf("Expected authorization decision to be (%v, %v), instead got (%v, %v)", tc.wantAuthDecision.decision, tc.wantAuthDecision.policyNames, gotAuthDecision.decision, gotAuthDecision.policyNames)
 			}
 		})
 	}
 }
 
-func TestIntegration(t *testing.T) {
+func (s) TestIntegration(t *testing.T) {
 	declarations := []*expr.Decl{
 		decls.NewVar("request.url_path", decls.String),
 		decls.NewVar("request.host", decls.String),
@@ -428,7 +432,7 @@ func TestIntegration(t *testing.T) {
 			gotAuthDecision, gotErr := engine.Evaluate(tc.authArgs)
 			sort.Strings(gotAuthDecision.policyNames)
 			if gotErr != nil || gotAuthDecision.decision != tc.wantAuthDecision.decision || !reflect.DeepEqual(gotAuthDecision.policyNames, tc.wantAuthDecision.policyNames) {
-				t.Errorf("Expected authorization decision to be (%v, %v), instead got (%v, %v)", tc.wantAuthDecision.decision, tc.wantAuthDecision.policyNames, gotAuthDecision.decision, gotAuthDecision.policyNames)
+				t.Fatalf("Expected authorization decision to be (%v, %v), instead got (%v, %v)", tc.wantAuthDecision.decision, tc.wantAuthDecision.policyNames, gotAuthDecision.decision, gotAuthDecision.policyNames)
 			}
 		})
 	}

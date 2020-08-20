@@ -22,19 +22,10 @@ import (
 	"testing"
 
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
-	"google.golang.org/grpc/internal/grpctest"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 )
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
 
 func (s) TestStringConvert(t *testing.T) {
 	declarations := []*expr.Decl{

@@ -61,3 +61,8 @@ func compileStringToCheckedExpr(expr string, declarations []*expr.Decl) (*expr.C
 	}
 	return checkedExpr, nil
 }
+
+func compileStringToExpr(expr string, declarations []*expr.Decl) *expr.Expr {
+	checkedExpr, _ := compileStringToCheckedExpr(expr, declarations)
+	return checkedExpr.Expr
+}
