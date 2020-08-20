@@ -13,6 +13,157 @@ import (
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion7
 
+// TestServiceClient is the client API for TestService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type TestServiceClient interface {
+	// One request followed by one response.
+	// The server returns the client id as-is.
+	UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error)
+	// A sequence of requests with each request served by the server immediately.
+	// As one request could lead to multiple responses, this interface
+	// demonstrates the idea of full duplexing.
+	FullDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_FullDuplexCallClient, error)
+	// Client stream
+	ClientStreamCall(ctx context.Context, opts ...grpc.CallOption) (TestService_ClientStreamCallClient, error)
+	// Server stream
+	ServerStreamCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (TestService_ServerStreamCallClient, error)
+}
+
+type testServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewTestServiceClient(cc grpc.ClientConnInterface) TestServiceClient {
+	return &testServiceClient{cc}
+}
+
+var testServiceUnaryCallStreamDesc = &grpc.StreamDesc{
+	StreamName: "UnaryCall",
+}
+
+func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
+	out := new(SimpleResponse)
+	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/UnaryCall", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+var testServiceFullDuplexCallStreamDesc = &grpc.StreamDesc{
+	StreamName:    "FullDuplexCall",
+	ServerStreams: true,
+	ClientStreams: true,
+}
+
+func (c *testServiceClient) FullDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_FullDuplexCallClient, error) {
+	stream, err := c.cc.NewStream(ctx, testServiceFullDuplexCallStreamDesc, "/grpc.testing.TestService/FullDuplexCall", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &testServiceFullDuplexCallClient{stream}
+	return x, nil
+}
+
+type TestService_FullDuplexCallClient interface {
+	Send(*SimpleRequest) error
+	Recv() (*SimpleResponse, error)
+	grpc.ClientStream
+}
+
+type testServiceFullDuplexCallClient struct {
+	grpc.ClientStream
+}
+
+func (x *testServiceFullDuplexCallClient) Send(m *SimpleRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *testServiceFullDuplexCallClient) Recv() (*SimpleResponse, error) {
+	m := new(SimpleResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+var testServiceClientStreamCallStreamDesc = &grpc.StreamDesc{
+	StreamName:    "ClientStreamCall",
+	ClientStreams: true,
+}
+
+func (c *testServiceClient) ClientStreamCall(ctx context.Context, opts ...grpc.CallOption) (TestService_ClientStreamCallClient, error) {
+	stream, err := c.cc.NewStream(ctx, testServiceClientStreamCallStreamDesc, "/grpc.testing.TestService/ClientStreamCall", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &testServiceClientStreamCallClient{stream}
+	return x, nil
+}
+
+type TestService_ClientStreamCallClient interface {
+	Send(*SimpleRequest) error
+	CloseAndRecv() (*SimpleResponse, error)
+	grpc.ClientStream
+}
+
+type testServiceClientStreamCallClient struct {
+	grpc.ClientStream
+}
+
+func (x *testServiceClientStreamCallClient) Send(m *SimpleRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *testServiceClientStreamCallClient) CloseAndRecv() (*SimpleResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(SimpleResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+var testServiceServerStreamCallStreamDesc = &grpc.StreamDesc{
+	StreamName:    "ServerStreamCall",
+	ServerStreams: true,
+}
+
+func (c *testServiceClient) ServerStreamCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (TestService_ServerStreamCallClient, error) {
+	stream, err := c.cc.NewStream(ctx, testServiceServerStreamCallStreamDesc, "/grpc.testing.TestService/ServerStreamCall", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &testServiceServerStreamCallClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type TestService_ServerStreamCallClient interface {
+	Recv() (*SimpleResponse, error)
+	grpc.ClientStream
+}
+
+type testServiceServerStreamCallClient struct {
+	grpc.ClientStream
+}
+
+func (x *testServiceServerStreamCallClient) Recv() (*SimpleResponse, error) {
+	m := new(SimpleResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // TestServiceService is the service API for TestService service.
 // Fields should be assigned to their respective handler implementations only before
 // RegisterTestServiceService is called.  Any unassigned fields will result in the
@@ -72,6 +223,63 @@ func (s *TestServiceService) serverStreamCall(_ interface{}, stream grpc.ServerS
 		return err
 	}
 	return s.ServerStreamCall(m, &testServiceServerStreamCallServer{stream})
+}
+
+type TestService_FullDuplexCallServer interface {
+	Send(*SimpleResponse) error
+	Recv() (*SimpleRequest, error)
+	grpc.ServerStream
+}
+
+type testServiceFullDuplexCallServer struct {
+	grpc.ServerStream
+}
+
+func (x *testServiceFullDuplexCallServer) Send(m *SimpleResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *testServiceFullDuplexCallServer) Recv() (*SimpleRequest, error) {
+	m := new(SimpleRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+type TestService_ClientStreamCallServer interface {
+	SendAndClose(*SimpleResponse) error
+	Recv() (*SimpleRequest, error)
+	grpc.ServerStream
+}
+
+type testServiceClientStreamCallServer struct {
+	grpc.ServerStream
+}
+
+func (x *testServiceClientStreamCallServer) SendAndClose(m *SimpleResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *testServiceClientStreamCallServer) Recv() (*SimpleRequest, error) {
+	m := new(SimpleRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+type TestService_ServerStreamCallServer interface {
+	Send(*SimpleResponse) error
+	grpc.ServerStream
+}
+
+type testServiceServerStreamCallServer struct {
+	grpc.ServerStream
+}
+
+func (x *testServiceServerStreamCallServer) Send(m *SimpleResponse) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 // RegisterTestServiceService registers a service implementation with a gRPC server.

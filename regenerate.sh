@@ -72,11 +72,12 @@ LEGACY_SOURCES=(
   ${WORKDIR}/grpc-proto/grpc/service_config/service_config.proto
   ${WORKDIR}/grpc-proto/grpc/tls/provider/meshca/experimental/config.proto
   ${WORKDIR}/istio/istio/google/security/meshca/v1/meshca.proto
-  $(git ls-files --exclude-standard --cached --others "*.proto" | grep -v '^examples/' )
+  profiling/proto/service.proto
+  reflection/grpc_reflection_v1alpha/reflection.proto
 )
 
 SOURCES=(
-  $(git ls-files --exclude-standard --cached --others "*.proto" | grep '^examples/')
+  $(git ls-files --exclude-standard --cached --others "*.proto" | grep -v '^\(profiling/proto/service.proto\|reflection/grpc_reflection_v1alpha/reflection.proto\)$')
 )
 
 # These options of the form 'Mfoo.proto=bar' instruct the codegen to use an

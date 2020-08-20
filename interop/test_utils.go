@@ -673,13 +673,11 @@ func DoPickFirstUnary(tc testpb.TestServiceClient) {
 	}
 }
 
-type testServer struct {
-	testpb.UnimplementedTestServiceServer
-}
+type testServer struct{}
 
 // NewTestServer creates a test server for test service.
-func NewTestServer() testpb.TestServiceServer {
-	return &testServer{}
+func NewTestServer() *testpb.TestServiceService {
+	return testpb.NewTestServiceService(testpb.UnstableTestServiceService(&testServer{}))
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {

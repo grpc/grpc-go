@@ -13,6 +13,75 @@ import (
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion7
 
+// MetricsServiceClient is the client API for MetricsService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type MetricsServiceClient interface {
+	// Returns the values of all the gauges that are currently being maintained by
+	// the service
+	GetAllGauges(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (MetricsService_GetAllGaugesClient, error)
+	// Returns the value of one gauge
+	GetGauge(ctx context.Context, in *GaugeRequest, opts ...grpc.CallOption) (*GaugeResponse, error)
+}
+
+type metricsServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewMetricsServiceClient(cc grpc.ClientConnInterface) MetricsServiceClient {
+	return &metricsServiceClient{cc}
+}
+
+var metricsServiceGetAllGaugesStreamDesc = &grpc.StreamDesc{
+	StreamName:    "GetAllGauges",
+	ServerStreams: true,
+}
+
+func (c *metricsServiceClient) GetAllGauges(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (MetricsService_GetAllGaugesClient, error) {
+	stream, err := c.cc.NewStream(ctx, metricsServiceGetAllGaugesStreamDesc, "/grpc.testing.MetricsService/GetAllGauges", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &metricsServiceGetAllGaugesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type MetricsService_GetAllGaugesClient interface {
+	Recv() (*GaugeResponse, error)
+	grpc.ClientStream
+}
+
+type metricsServiceGetAllGaugesClient struct {
+	grpc.ClientStream
+}
+
+func (x *metricsServiceGetAllGaugesClient) Recv() (*GaugeResponse, error) {
+	m := new(GaugeResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+var metricsServiceGetGaugeStreamDesc = &grpc.StreamDesc{
+	StreamName: "GetGauge",
+}
+
+func (c *metricsServiceClient) GetGauge(ctx context.Context, in *GaugeRequest, opts ...grpc.CallOption) (*GaugeResponse, error) {
+	out := new(GaugeResponse)
+	err := c.cc.Invoke(ctx, "/grpc.testing.MetricsService/GetGauge", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MetricsServiceService is the service API for MetricsService service.
 // Fields should be assigned to their respective handler implementations only before
 // RegisterMetricsServiceService is called.  Any unassigned fields will result in the
@@ -54,6 +123,19 @@ func (s *MetricsServiceService) getGauge(_ interface{}, ctx context.Context, dec
 		return s.GetGauge(ctx, req.(*GaugeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+type MetricsService_GetAllGaugesServer interface {
+	Send(*GaugeResponse) error
+	grpc.ServerStream
+}
+
+type metricsServiceGetAllGaugesServer struct {
+	grpc.ServerStream
+}
+
+func (x *metricsServiceGetAllGaugesServer) Send(m *GaugeResponse) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 // RegisterMetricsServiceService registers a service implementation with a gRPC server.

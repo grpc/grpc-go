@@ -13,6 +13,116 @@ import (
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion7
 
+// BenchmarkServiceClient is the client API for BenchmarkService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type BenchmarkServiceClient interface {
+	// One request followed by one response.
+	// The server returns the client payload as-is.
+	UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error)
+	// One request followed by one response.
+	// The server returns the client payload as-is.
+	StreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingCallClient, error)
+	// Unconstrainted streaming.
+	// Both server and client keep sending & receiving simultaneously.
+	UnconstrainedStreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_UnconstrainedStreamingCallClient, error)
+}
+
+type benchmarkServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewBenchmarkServiceClient(cc grpc.ClientConnInterface) BenchmarkServiceClient {
+	return &benchmarkServiceClient{cc}
+}
+
+var benchmarkServiceUnaryCallStreamDesc = &grpc.StreamDesc{
+	StreamName: "UnaryCall",
+}
+
+func (c *benchmarkServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
+	out := new(SimpleResponse)
+	err := c.cc.Invoke(ctx, "/grpc.testing.BenchmarkService/UnaryCall", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+var benchmarkServiceStreamingCallStreamDesc = &grpc.StreamDesc{
+	StreamName:    "StreamingCall",
+	ServerStreams: true,
+	ClientStreams: true,
+}
+
+func (c *benchmarkServiceClient) StreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingCallClient, error) {
+	stream, err := c.cc.NewStream(ctx, benchmarkServiceStreamingCallStreamDesc, "/grpc.testing.BenchmarkService/StreamingCall", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &benchmarkServiceStreamingCallClient{stream}
+	return x, nil
+}
+
+type BenchmarkService_StreamingCallClient interface {
+	Send(*SimpleRequest) error
+	Recv() (*SimpleResponse, error)
+	grpc.ClientStream
+}
+
+type benchmarkServiceStreamingCallClient struct {
+	grpc.ClientStream
+}
+
+func (x *benchmarkServiceStreamingCallClient) Send(m *SimpleRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *benchmarkServiceStreamingCallClient) Recv() (*SimpleResponse, error) {
+	m := new(SimpleResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+var benchmarkServiceUnconstrainedStreamingCallStreamDesc = &grpc.StreamDesc{
+	StreamName:    "UnconstrainedStreamingCall",
+	ServerStreams: true,
+	ClientStreams: true,
+}
+
+func (c *benchmarkServiceClient) UnconstrainedStreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_UnconstrainedStreamingCallClient, error) {
+	stream, err := c.cc.NewStream(ctx, benchmarkServiceUnconstrainedStreamingCallStreamDesc, "/grpc.testing.BenchmarkService/UnconstrainedStreamingCall", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &benchmarkServiceUnconstrainedStreamingCallClient{stream}
+	return x, nil
+}
+
+type BenchmarkService_UnconstrainedStreamingCallClient interface {
+	Send(*SimpleRequest) error
+	Recv() (*SimpleResponse, error)
+	grpc.ClientStream
+}
+
+type benchmarkServiceUnconstrainedStreamingCallClient struct {
+	grpc.ClientStream
+}
+
+func (x *benchmarkServiceUnconstrainedStreamingCallClient) Send(m *SimpleRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *benchmarkServiceUnconstrainedStreamingCallClient) Recv() (*SimpleResponse, error) {
+	m := new(SimpleResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // BenchmarkServiceService is the service API for BenchmarkService service.
 // Fields should be assigned to their respective handler implementations only before
 // RegisterBenchmarkServiceService is called.  Any unassigned fields will result in the
@@ -60,6 +170,50 @@ func (s *BenchmarkServiceService) unconstrainedStreamingCall(_ interface{}, stre
 		return status.Errorf(codes.Unimplemented, "method UnconstrainedStreamingCall not implemented")
 	}
 	return s.UnconstrainedStreamingCall(&benchmarkServiceUnconstrainedStreamingCallServer{stream})
+}
+
+type BenchmarkService_StreamingCallServer interface {
+	Send(*SimpleResponse) error
+	Recv() (*SimpleRequest, error)
+	grpc.ServerStream
+}
+
+type benchmarkServiceStreamingCallServer struct {
+	grpc.ServerStream
+}
+
+func (x *benchmarkServiceStreamingCallServer) Send(m *SimpleResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *benchmarkServiceStreamingCallServer) Recv() (*SimpleRequest, error) {
+	m := new(SimpleRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+type BenchmarkService_UnconstrainedStreamingCallServer interface {
+	Send(*SimpleResponse) error
+	Recv() (*SimpleRequest, error)
+	grpc.ServerStream
+}
+
+type benchmarkServiceUnconstrainedStreamingCallServer struct {
+	grpc.ServerStream
+}
+
+func (x *benchmarkServiceUnconstrainedStreamingCallServer) Send(m *SimpleResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *benchmarkServiceUnconstrainedStreamingCallServer) Recv() (*SimpleRequest, error) {
+	m := new(SimpleRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // RegisterBenchmarkServiceService registers a service implementation with a gRPC server.
@@ -132,6 +286,138 @@ type UnstableBenchmarkServiceService interface {
 	// Unconstrainted streaming.
 	// Both server and client keep sending & receiving simultaneously.
 	UnconstrainedStreamingCall(BenchmarkService_UnconstrainedStreamingCallServer) error
+}
+
+// WorkerServiceClient is the client API for WorkerService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type WorkerServiceClient interface {
+	// Start server with specified workload.
+	// First request sent specifies the ServerConfig followed by ServerStatus
+	// response. After that, a "Mark" can be sent anytime to request the latest
+	// stats. Closing the stream will initiate shutdown of the test server
+	// and once the shutdown has finished, the OK status is sent to terminate
+	// this RPC.
+	RunServer(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunServerClient, error)
+	// Start client with specified workload.
+	// First request sent specifies the ClientConfig followed by ClientStatus
+	// response. After that, a "Mark" can be sent anytime to request the latest
+	// stats. Closing the stream will initiate shutdown of the test client
+	// and once the shutdown has finished, the OK status is sent to terminate
+	// this RPC.
+	RunClient(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunClientClient, error)
+	// Just return the core count - unary call
+	CoreCount(ctx context.Context, in *CoreRequest, opts ...grpc.CallOption) (*CoreResponse, error)
+	// Quit this worker
+	QuitWorker(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error)
+}
+
+type workerServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewWorkerServiceClient(cc grpc.ClientConnInterface) WorkerServiceClient {
+	return &workerServiceClient{cc}
+}
+
+var workerServiceRunServerStreamDesc = &grpc.StreamDesc{
+	StreamName:    "RunServer",
+	ServerStreams: true,
+	ClientStreams: true,
+}
+
+func (c *workerServiceClient) RunServer(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunServerClient, error) {
+	stream, err := c.cc.NewStream(ctx, workerServiceRunServerStreamDesc, "/grpc.testing.WorkerService/RunServer", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &workerServiceRunServerClient{stream}
+	return x, nil
+}
+
+type WorkerService_RunServerClient interface {
+	Send(*ServerArgs) error
+	Recv() (*ServerStatus, error)
+	grpc.ClientStream
+}
+
+type workerServiceRunServerClient struct {
+	grpc.ClientStream
+}
+
+func (x *workerServiceRunServerClient) Send(m *ServerArgs) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *workerServiceRunServerClient) Recv() (*ServerStatus, error) {
+	m := new(ServerStatus)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+var workerServiceRunClientStreamDesc = &grpc.StreamDesc{
+	StreamName:    "RunClient",
+	ServerStreams: true,
+	ClientStreams: true,
+}
+
+func (c *workerServiceClient) RunClient(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunClientClient, error) {
+	stream, err := c.cc.NewStream(ctx, workerServiceRunClientStreamDesc, "/grpc.testing.WorkerService/RunClient", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &workerServiceRunClientClient{stream}
+	return x, nil
+}
+
+type WorkerService_RunClientClient interface {
+	Send(*ClientArgs) error
+	Recv() (*ClientStatus, error)
+	grpc.ClientStream
+}
+
+type workerServiceRunClientClient struct {
+	grpc.ClientStream
+}
+
+func (x *workerServiceRunClientClient) Send(m *ClientArgs) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *workerServiceRunClientClient) Recv() (*ClientStatus, error) {
+	m := new(ClientStatus)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+var workerServiceCoreCountStreamDesc = &grpc.StreamDesc{
+	StreamName: "CoreCount",
+}
+
+func (c *workerServiceClient) CoreCount(ctx context.Context, in *CoreRequest, opts ...grpc.CallOption) (*CoreResponse, error) {
+	out := new(CoreResponse)
+	err := c.cc.Invoke(ctx, "/grpc.testing.WorkerService/CoreCount", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+var workerServiceQuitWorkerStreamDesc = &grpc.StreamDesc{
+	StreamName: "QuitWorker",
+}
+
+func (c *workerServiceClient) QuitWorker(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error) {
+	out := new(Void)
+	err := c.cc.Invoke(ctx, "/grpc.testing.WorkerService/QuitWorker", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // WorkerServiceService is the service API for WorkerService service.
@@ -210,6 +496,50 @@ func (s *WorkerServiceService) quitWorker(_ interface{}, ctx context.Context, de
 		return s.QuitWorker(ctx, req.(*Void))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+type WorkerService_RunServerServer interface {
+	Send(*ServerStatus) error
+	Recv() (*ServerArgs, error)
+	grpc.ServerStream
+}
+
+type workerServiceRunServerServer struct {
+	grpc.ServerStream
+}
+
+func (x *workerServiceRunServerServer) Send(m *ServerStatus) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *workerServiceRunServerServer) Recv() (*ServerArgs, error) {
+	m := new(ServerArgs)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+type WorkerService_RunClientServer interface {
+	Send(*ClientStatus) error
+	Recv() (*ClientArgs, error)
+	grpc.ServerStream
+}
+
+type workerServiceRunClientServer struct {
+	grpc.ServerStream
+}
+
+func (x *workerServiceRunClientServer) Send(m *ClientStatus) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *workerServiceRunClientServer) Recv() (*ClientArgs, error) {
+	m := new(ClientArgs)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // RegisterWorkerServiceService registers a service implementation with a gRPC server.
