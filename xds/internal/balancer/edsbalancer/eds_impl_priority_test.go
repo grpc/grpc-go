@@ -774,3 +774,31 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
+
+// Test the case where the first and only priority is removed.
+func (s) TestEDSPriority_FirstPriorityUnavailable(t *testing.T) {
+	const testPriorityInitTimeout = time.Second
+	defer func() func() {
+		old := defaultPriorityInitTimeout
+		defaultPriorityInitTimeout = testPriorityInitTimeout
+		return func() {
+			defaultPriorityInitTimeout = old
+		}
+	}()()
+
+	cc := testutils.NewTestClientConn(t)
+	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+
+	// One localities, with priorities [0], each with one backend.
+	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
+	edsb.handleEDSResponse(parseEDSRespProtoForTesting(clab1.Build()))
+
+	// Remove the only localities.
+	clab2 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	edsb.handleEDSResponse(parseEDSRespProtoForTesting(clab2.Build()))
+
+	// Wait after the init timer timeout, to ensure it doesn't fail.
+	time.Sleep(time.Second)
+}
