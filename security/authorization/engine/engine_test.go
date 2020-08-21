@@ -157,7 +157,6 @@ func (s) TestNewAuthorizationEngine(t *testing.T) {
 	}
 
 	for name, tc := range tests {
-		tc := tc
 		t.Run(name, func(t *testing.T) {
 			_, gotErr := NewAuthorizationEngine(tc.allow, tc.deny)
 			if (gotErr != nil) != tc.wantErr {
@@ -196,7 +195,6 @@ func (s) TestGetDecision(t *testing.T) {
 	}
 
 	for name, tc := range tests {
-		tc := tc
 		t.Run(name, func(t *testing.T) {
 			if got := getDecision(tc.engine, tc.match); got != tc.want {
 				t.Fatalf("Expected %v, instead got %v", tc.want, got)
@@ -239,7 +237,6 @@ func (s) TestPolicyEngineEvaluate(t *testing.T) {
 	}
 
 	for name, tc := range tests {
-		tc := tc
 		t.Run(name, func(t *testing.T) {
 			gotDecision, gotPolicyNames := tc.engine.evaluate(tc.activation)
 			sort.Strings(gotPolicyNames)
@@ -279,7 +276,6 @@ func (s) TestAuthorizationEngineEvaluate(t *testing.T) {
 	}
 
 	for name, tc := range tests {
-		tc := tc
 		t.Run(name, func(t *testing.T) {
 			gotAuthDecision, gotErr := tc.engine.Evaluate(tc.authArgs)
 			sort.Strings(gotAuthDecision.policyNames)
@@ -419,7 +415,6 @@ func (s) TestIntegration(t *testing.T) {
 	}
 
 	for name, tc := range tests {
-		tc := tc
 		t.Run(name, func(t *testing.T) {
 			engine, err := NewAuthorizationEngine(tc.allow, tc.deny)
 			if err != nil {
