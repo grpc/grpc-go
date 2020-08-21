@@ -247,9 +247,7 @@ func TestPick_DataCacheMiss_PendingCacheMiss(t *testing.T) {
 				},
 			}
 			if test.defaultPickExists {
-				p.defaultPick = func(info balancer.PickInfo) (balancer.PickResult, error) {
-					return defaultPicker.Pick(info)
-				}
+				p.defaultPick = defaultPicker.Pick
 			}
 
 			gotResult, err := p.Pick(balancer.PickInfo{
@@ -472,9 +470,7 @@ func TestPick_DataCacheHit_PendingCacheMiss(t *testing.T) {
 				},
 			}
 			if test.defaultPickExists {
-				p.defaultPick = func(info balancer.PickInfo) (balancer.PickResult, error) {
-					return defaultPicker.Pick(info)
-				}
+				p.defaultPick = defaultPicker.Pick
 			}
 
 			gotResult, err := p.Pick(balancer.PickInfo{
@@ -542,6 +538,11 @@ func TestPick_DataCacheHit_PendingCacheHit(t *testing.T) {
 			cacheEntry: &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
 		},
 		{
+			desc:              "stale entry with default picker",
+			cacheEntry:        &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
+			defaultPickExists: true,
+		},
+		{
 			desc:              "entryExpired_defaultPickExists",
 			cacheEntry:        &cache.Entry{},
 			defaultPickExists: true,
@@ -576,9 +577,8 @@ func TestPick_DataCacheHit_PendingCacheHit(t *testing.T) {
 			if test.defaultPickExists {
 				p.defaultPick = func(info balancer.PickInfo) (balancer.PickResult, error) {
 					// We do not expect the default picker to be invoked at all.
-					// So, if we get here, the test will fail, because it
-					// expects the pick to be queued.
-					return balancer.PickResult{}, nil
+					// So, if we get here, we return an error.
+					return balancer.PickResult{}, errors.New("default picker invoked when expecting a child pick")
 				}
 			}
 
