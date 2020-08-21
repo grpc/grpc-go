@@ -122,7 +122,7 @@ func main() {
 
 #### Updating generated code to support both legacy and new code
 
-`protoc-gen-go-grpc` supports a flag, `migrationMode`, which enables it to be
+`protoc-gen-go-grpc` supports a flag, `migration_mode`, which enables it to be
 run in tandem with the previous tool (`protoc-gen-go` with the grpc plugin).
 It can be used as follows:
 
@@ -131,10 +131,10 @@ go install github.com/golang/protobuf/protoc-gen-go
 
 # Example 1: with OPTS set to common options for protoc-gen-go and
 # protoc-gen-go-grpc
-protoc --go_out=${OPTS},plugins=grpc:. --go-grpc_out=${OPTS},migrationMode=true:. *.proto
+protoc --go_out=${OPTS},plugins=grpc:. --go-grpc_out=${OPTS},migration_mode=true:. *.proto
 
 # Example 2: if no special options are needed
-protoc --go_out=plugins=grpc:. --go-grpc_out=migrationMode=true:. *.proto
+protoc --go_out=plugins=grpc:. --go-grpc_out=migration_mode=true:. *.proto
 ```
 
 This is recommended for temporary use only to ease migration from the legacy
