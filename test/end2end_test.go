@@ -4646,16 +4646,17 @@ func (s) TestClientInitialHeaderEndStream(t *testing.T) {
 }
 
 func testClientInitialHeaderEndStream(t *testing.T, e env) {
-	// To ensure RST_STREAM is sent for illegal data write and not normal stream close.
+	// To ensure RST_STREAM is sent for illegal data write and not normal stream
+	// close.
 	frameCheckingDone := make(chan struct{})
-	// To ensure goroutine for test does not end before RPC handler performs error checking.
+	// To ensure goroutine for test does not end before RPC handler performs error
+	// checking.
 	handlerDone := make(chan struct{})
 	te := newTest(t, e)
 	ts := &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
-		defer func() {
-			close(handlerDone)
-		}()
-		// Block on serverTester receiving RST_STREAM. This ensures server has closed stream before stream.Recv().
+		defer close(handlerDone)
+		// Block on serverTester receiving RST_STREAM. This ensures server has closed
+		// stream before stream.Recv().
 		<-frameCheckingDone
 		data, err := stream.Recv()
 		if err == nil {
@@ -4689,16 +4690,17 @@ func (s) TestClientSendDataAfterCloseSend(t *testing.T) {
 }
 
 func testClientSendDataAfterCloseSend(t *testing.T, e env) {
-	// To ensure RST_STREAM is sent for illegal data write prior to execution of RPC handler.
+	// To ensure RST_STREAM is sent for illegal data write prior to execution of RPC
+	// handler.
 	frameCheckingDone := make(chan struct{})
-	// To ensure goroutine for test does not end before RPC handler performs error checking.
+	// To ensure goroutine for test does not end before RPC handler performs error
+	// checking.
 	handlerDone := make(chan struct{})
 	te := newTest(t, e)
 	ts := &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
-		defer func() {
-			close(handlerDone)
-		}()
-		// Block on serverTester receiving RST_STREAM. This ensures server has closed stream before stream.Recv().
+		defer close(handlerDone)
+		// Block on serverTester receiving RST_STREAM. This ensures server has closed
+		// stream before stream.Recv().
 		<-frameCheckingDone
 		for {
 			_, err := stream.Recv()
