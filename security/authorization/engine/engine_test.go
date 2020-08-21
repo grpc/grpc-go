@@ -22,17 +22,21 @@ import (
 	"testing"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
-	cel "github.com/google/cel-go/cel"
+	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
-	interpreter "github.com/google/cel-go/interpreter"
+	"github.com/google/cel-go/interpreter"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
+
+type s struct {
+	grpctest.Tester
+}
 
 type programMock struct {
 	out ref.Val
@@ -108,10 +112,6 @@ var (
 	}}
 )
 
-type s struct {
-	grpctest.Tester
-}
-
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
@@ -156,6 +156,7 @@ func (s) TestNewAuthorizationEngine(t *testing.T) {
 	}
 
 	for name, tc := range tests {
+		tc := tc
 		t.Run(name, func(t *testing.T) {
 			_, gotErr := NewAuthorizationEngine(tc.allow, tc.deny)
 			if tc.wantErr == "" && gotErr == nil {
@@ -197,6 +198,7 @@ func (s) TestGetDecision(t *testing.T) {
 	}
 
 	for name, tc := range tests {
+		tc := tc
 		t.Run(name, func(t *testing.T) {
 			if got := getDecision(tc.engine, tc.match); got != tc.want {
 				t.Fatalf("Expected %v, instead got %v", tc.want, got)
@@ -239,6 +241,7 @@ func (s) TestPolicyEngineEvaluate(t *testing.T) {
 	}
 
 	for name, tc := range tests {
+		tc := tc
 		t.Run(name, func(t *testing.T) {
 			gotDecision, gotPolicyNames := tc.engine.evaluate(tc.activation)
 			sort.Strings(gotPolicyNames)
@@ -283,6 +286,7 @@ func (s) TestAuthorizationEngineEvaluate(t *testing.T) {
 	}
 
 	for name, tc := range tests {
+		tc := tc
 		t.Run(name, func(t *testing.T) {
 			gotAuthDecision, gotErr := tc.engine.Evaluate(tc.authArgs)
 			sort.Strings(gotAuthDecision.policyNames)
@@ -424,6 +428,7 @@ func (s) TestIntegration(t *testing.T) {
 	}
 
 	for name, tc := range tests {
+		tc := tc
 		t.Run(name, func(t *testing.T) {
 			engine, err := NewAuthorizationEngine(tc.allow, tc.deny)
 			if err != nil {

@@ -22,10 +22,10 @@ import (
 	"strconv"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
-	cel "github.com/google/cel-go/cel"
+	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
-	types "github.com/google/cel-go/common/types"
-	interpreter "github.com/google/cel-go/interpreter"
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/interpreter"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"

@@ -63,6 +63,9 @@ func compileStringToCheckedExpr(expr string, declarations []*expr.Decl) (*expr.C
 }
 
 func compileStringToExpr(expr string, declarations []*expr.Decl) *expr.Expr {
-	checkedExpr, _ := compileStringToCheckedExpr(expr, declarations)
+	checkedExpr, err := compileStringToCheckedExpr(expr, declarations)
+	if err != nil {
+		logger.Fatalf("error encountered when compiling string to expression: %v", err)
+	}
 	return checkedExpr.Expr
 }
