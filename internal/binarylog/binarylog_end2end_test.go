@@ -115,9 +115,10 @@ var (
 )
 
 type testServer struct {
-	testpb.UnimplementedTestServiceServer
 	te *test
 }
+
+var _ testpb.UnstableTestServiceService = (*testServer)(nil)
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -216,7 +217,7 @@ func (s *testServer) ServerStreamCall(in *testpb.SimpleRequest, stream testpb.Te
 type test struct {
 	t *testing.T
 
-	testServer testpb.TestServiceServer // nil means none
+	testService *testpb.TestServiceService // nil means none
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
 	srvAddr string // Server IP without port.
@@ -271,8 +272,8 @@ func (lw *listenerWrapper) Accept() (net.Conn, error) {
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
-func (te *test) startServer(ts testpb.TestServiceServer) {
-	te.testServer = ts
+func (te *test) startServer(ts *testpb.TestServiceService) {
+	te.testService = ts
 	lis, err := net.Listen("tcp", "localhost:0")
 
 	lis = &listenerWrapper{
@@ -286,8 +287,8 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	var opts []grpc.ServerOption
 	s := grpc.NewServer(opts...)
 	te.srv = s
-	if te.testServer != nil {
-		testpb.RegisterTestServiceServer(s, te.testServer)
+	if te.testService != nil {
+		testpb.RegisterTestServiceService(s, te.testService)
 	}
 
 	go s.Serve(lis)
@@ -783,7 +784,7 @@ func (ed *expectedData) toServerLogEntries() []*pb.GrpcLogEntry {
 
 func runRPCs(t *testing.T, tc *testConfig, cc *rpcConfig) *expectedData {
 	te := newTest(t, tc)
-	te.startServer(&testServer{te: te})
+	te.startServer(testpb.NewTestServiceService(&testServer{te: te}))
 	defer te.tearDown()
 
 	expect := &expectedData{

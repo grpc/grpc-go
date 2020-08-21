@@ -498,7 +498,7 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	}
 
 	s := grpc.NewServer()
-	testpb.RegisterTestServiceServer(s, &testServer{})
+	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(&testServer{}))
 	go s.Serve(lis)
 	defer s.Stop()
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
@@ -561,7 +561,7 @@ func (s) TestServersSwap(t *testing.T) {
 				return &testpb.SimpleResponse{Username: username}, nil
 			},
 		}
-		testpb.RegisterTestServiceServer(s, ts)
+		testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(ts))
 		go s.Serve(lis)
 		return lis.Addr().String(), s.Stop
 	}
@@ -621,7 +621,7 @@ func (s) TestEmptyAddrs(t *testing.T) {
 			return &testpb.SimpleResponse{Username: one}, nil
 		},
 	}
-	testpb.RegisterTestServiceServer(s, ts)
+	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(ts))
 	go s.Serve(lis)
 
 	// Initialize pickfirst client
@@ -710,7 +710,7 @@ func (s) TestWaitForReady(t *testing.T) {
 			return &testpb.SimpleResponse{Username: one}, nil
 		},
 	}
-	testpb.RegisterTestServiceServer(s, ts)
+	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(ts))
 	go s.Serve(lis)
 
 	// Initialize client
