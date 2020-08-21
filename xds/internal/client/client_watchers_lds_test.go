@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/version"
 )
 
 type ldsUpdateErr struct {
@@ -50,7 +49,7 @@ func (s) TestLDSWatch(t *testing.T) {
 	cancelWatch := c.watchLDS(testLDSName, func(update ListenerUpdate, err error) {
 		ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -109,7 +108,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 		cancelLastWatch = c.watchLDS(testLDSName, func(update ListenerUpdate, err error) {
 			ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 		})
-		if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); i == 0 && err != nil {
+		if _, err := v2Client.addWatches[ListenerResource].Receive(); i == 0 && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 	}
@@ -166,7 +165,7 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 		c.watchLDS(testLDSName+"1", func(update ListenerUpdate, err error) {
 			ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 		})
-		if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); i == 0 && err != nil {
+		if _, err := v2Client.addWatches[ListenerResource].Receive(); i == 0 && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 	}
@@ -176,7 +175,7 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 	c.watchLDS(testLDSName+"2", func(update ListenerUpdate, err error) {
 		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -216,7 +215,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	c.watchLDS(testLDSName, func(update ListenerUpdate, err error) {
 		ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -234,7 +233,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	c.watchLDS(testLDSName, func(update ListenerUpdate, err error) {
 		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
 	})
-	if n, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err == nil {
+	if n, err := v2Client.addWatches[ListenerResource].Receive(); err == nil {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
@@ -271,7 +270,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	c.watchLDS(testLDSName+"1", func(update ListenerUpdate, err error) {
 		ldsUpdateCh1.Send(ldsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	// Another watch for a different name.
@@ -279,7 +278,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	c.watchLDS(testLDSName+"2", func(update ListenerUpdate, err error) {
 		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2ListenerURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 

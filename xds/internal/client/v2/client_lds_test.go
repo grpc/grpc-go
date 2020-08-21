@@ -23,8 +23,8 @@ import (
 	"time"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/version"
 )
 
 // TestLDSHandleResponse starts a fake xDS server, makes a ClientConn to it,
@@ -113,7 +113,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
-				typeURL:          version.V2ListenerURL,
+				rType:            xdsclient.ListenerResource,
 				resourceName:     goodLDSTarget1,
 				responseToHandle: test.ldsResponse,
 				wantHandleErr:    test.wantErr,
@@ -131,7 +131,7 @@ func (s) TestLDSHandleResponseWithoutWatch(t *testing.T) {
 	defer cleanup()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(string, map[string]interface{}) {},
+		f: func(xdsclient.ResourceType, map[string]interface{}) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)

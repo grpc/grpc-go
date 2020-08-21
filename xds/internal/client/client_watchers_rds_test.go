@@ -23,7 +23,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/version"
 )
 
 type rdsUpdateErr struct {
@@ -51,7 +50,7 @@ func (s) TestRDSWatch(t *testing.T) {
 	cancelWatch := c.watchRDS(testRDSName, func(update RouteConfigUpdate, err error) {
 		rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[RouteConfigResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -109,7 +108,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 		cancelLastWatch = c.watchRDS(testRDSName, func(update RouteConfigUpdate, err error) {
 			rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
 		})
-		if _, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); i == 0 && err != nil {
+		if _, err := v2Client.addWatches[RouteConfigResource].Receive(); i == 0 && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 	}
@@ -166,7 +165,7 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 		c.watchRDS(testRDSName+"1", func(update RouteConfigUpdate, err error) {
 			rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
 		})
-		if _, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); i == 0 && err != nil {
+		if _, err := v2Client.addWatches[RouteConfigResource].Receive(); i == 0 && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 	}
@@ -176,7 +175,7 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 	c.watchRDS(testRDSName+"2", func(update RouteConfigUpdate, err error) {
 		rdsUpdateCh2.Send(rdsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[RouteConfigResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -216,7 +215,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 	c.watchRDS(testRDSName, func(update RouteConfigUpdate, err error) {
 		rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[RouteConfigResource].Receive(); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -234,7 +233,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 	c.watchRDS(testRDSName, func(update RouteConfigUpdate, err error) {
 		rdsUpdateCh2.Send(rdsUpdateErr{u: update, err: err})
 	})
-	if n, err := v2Client.addWatches[version.V2RouteConfigURL].Receive(); err == nil {
+	if n, err := v2Client.addWatches[RouteConfigResource].Receive(); err == nil {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 

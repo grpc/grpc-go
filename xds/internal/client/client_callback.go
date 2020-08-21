@@ -18,8 +18,6 @@
 
 package client
 
-import "google.golang.org/grpc/xds/internal/version"
-
 type watcherInfoWithUpdate struct {
 	wi     *watchInfo
 	update interface{}
@@ -46,20 +44,20 @@ func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	// window that a watcher's callback could be called after the watcher is
 	// canceled, and the user needs to take care of it.
 	var ccb func()
-	switch wiu.wi.typeURL {
-	case version.V2ListenerURL:
+	switch wiu.wi.rType {
+	case ListenerResource:
 		if s, ok := c.ldsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
 			ccb = func() { wiu.wi.ldsCallback(wiu.update.(ListenerUpdate), wiu.err) }
 		}
-	case version.V2RouteConfigURL:
+	case RouteConfigResource:
 		if s, ok := c.rdsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
 			ccb = func() { wiu.wi.rdsCallback(wiu.update.(RouteConfigUpdate), wiu.err) }
 		}
-	case version.V2ClusterURL:
+	case ClusterResource:
 		if s, ok := c.cdsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
 			ccb = func() { wiu.wi.cdsCallback(wiu.update.(ClusterUpdate), wiu.err) }
 		}
-	case version.V2EndpointsURL:
+	case EndpointsResource:
 		if s, ok := c.edsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
 			ccb = func() { wiu.wi.edsCallback(wiu.update.(EndpointsUpdate), wiu.err) }
 		}

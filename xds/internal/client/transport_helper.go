@@ -48,11 +48,9 @@ type VersionedClient interface {
 	// transport protocol version.
 	NewStream(ctx context.Context) (grpc.ClientStream, error)
 
-	// params: resources, typeURL, version, nonce
-
 	// SendRequest constructs and sends out a DiscoveryRequest message specific
 	// to the underlying transport protocol version.
-	SendRequest(s grpc.ClientStream, resourceNames []string, typeURL string, version string, nonce string) error
+	SendRequest(s grpc.ClientStream, resourceNames []string, rType ResourceType, version string, nonce string) error
 
 	// RecvResponse uses the provided stream to receive a response specific to
 	// the underlying transport protocol version.
@@ -61,11 +59,11 @@ type VersionedClient interface {
 	// HandleResponse parses and validates the received response and notifies
 	// the top-level client which in turn notifies the registered watchers.
 	//
-	// Return values are: typeURL, version, nonce, error.
+	// Return values are: resourceType, version, nonce, error.
 	// If the provided protobuf message contains a resource type which is not
 	// supported, implementations must return an error of type
 	// ErrResourceTypeUnsupported.
-	HandleResponse(proto.Message) (string, string, string, error)
+	HandleResponse(proto.Message) (ResourceType, string, string, error)
 }
 
 // TransportHelper contains all xDS transport protocol related functionality
@@ -95,14 +93,14 @@ type TransportHelper struct {
 	// messages. When the user of this client object cancels a watch call,
 	// these are set to nil. All accesses to the map protected and any value
 	// inside the map should be protected with the above mutex.
-	watchMap map[string]map[string]bool
+	watchMap map[ResourceType]map[string]bool
 	// versionMap contains the version that was acked (the version in the ack
-	// request that was sent on wire). The key is typeURL, the value is the
+	// request that was sent on wire). The key is rType, the value is the
 	// version string, becaues the versions for different resource types should
 	// be independent.
-	versionMap map[string]string
+	versionMap map[ResourceType]string
 	// nonceMap contains the nonce from the most recent received response.
-	nonceMap map[string]string
+	nonceMap map[ResourceType]string
 }
 
 // NewTransportHelper creates a new transport helper to be used by versioned
@@ -117,9 +115,9 @@ func NewTransportHelper(vc VersionedClient, logger *grpclog.PrefixLogger, backof
 
 		streamCh:   make(chan grpc.ClientStream, 1),
 		sendCh:     buffer.NewUnbounded(),
-		watchMap:   make(map[string]map[string]bool),
-		versionMap: make(map[string]string),
-		nonceMap:   make(map[string]string),
+		watchMap:   make(map[ResourceType]map[string]bool),
+		versionMap: make(map[ResourceType]string),
+		nonceMap:   make(map[ResourceType]string),
 	}
 
 	go t.run(ctx)
@@ -127,9 +125,9 @@ func NewTransportHelper(vc VersionedClient, logger *grpclog.PrefixLogger, backof
 }
 
 // AddWatch adds a watch for an xDS resource given its type and name.
-func (t *TransportHelper) AddWatch(resourceType, resourceName string) {
+func (t *TransportHelper) AddWatch(rType ResourceType, resourceName string) {
 	t.sendCh.Put(&watchAction{
-		typeURL:  resourceType,
+		rType:    rType,
 		remove:   false,
 		resource: resourceName,
 	})
@@ -137,9 +135,9 @@ func (t *TransportHelper) AddWatch(resourceType, resourceName string) {
 
 // RemoveWatch cancels an already registered watch for an xDS resource
 // given its type and name.
-func (t *TransportHelper) RemoveWatch(resourceType, resourceName string) {
+func (t *TransportHelper) RemoveWatch(rType ResourceType, resourceName string) {
 	t.sendCh.Put(&watchAction{
-		typeURL:  resourceType,
+		rType:    rType,
 		remove:   true,
 		resource: resourceName,
 	})
@@ -228,15 +226,16 @@ func (t *TransportHelper) send(ctx context.Context) {
 			t.sendCh.Load()
 
 			var (
-				target                  []string
-				typeURL, version, nonce string
-				send                    bool
+				target         []string
+				rType          ResourceType
+				version, nonce string
+				send           bool
 			)
 			switch update := u.(type) {
 			case *watchAction:
-				target, typeURL, version, nonce = t.processWatchInfo(update)
+				target, rType, version, nonce = t.processWatchInfo(update)
 			case *ackAction:
-				target, typeURL, version, nonce, send = t.processAckInfo(update, stream)
+				target, rType, version, nonce, send = t.processAckInfo(update, stream)
 				if !send {
 					continue
 				}
@@ -248,8 +247,8 @@ func (t *TransportHelper) send(ctx context.Context) {
 				// sending response back).
 				continue
 			}
-			if err := t.vClient.SendRequest(stream, target, typeURL, version, nonce); err != nil {
-				t.logger.Warningf("ADS request for {target: %q, type: %q, version: %q, nonce: %q} failed: %v", target, typeURL, version, nonce, err)
+			if err := t.vClient.SendRequest(stream, target, rType, version, nonce); err != nil {
+				t.logger.Warningf("ADS request for {target: %q, type: %v, version: %q, nonce: %q} failed: %v", target, rType, version, nonce, err)
 				// send failed, clear the current stream.
 				stream = nil
 			}
@@ -269,11 +268,11 @@ func (t *TransportHelper) sendExisting(stream grpc.ClientStream) bool {
 	defer t.mu.Unlock()
 
 	// Reset the ack versions when the stream restarts.
-	t.versionMap = make(map[string]string)
-	t.nonceMap = make(map[string]string)
+	t.versionMap = make(map[ResourceType]string)
+	t.nonceMap = make(map[ResourceType]string)
 
-	for typeURL, s := range t.watchMap {
-		if err := t.vClient.SendRequest(stream, mapToSlice(s), typeURL, "", ""); err != nil {
+	for rType, s := range t.watchMap {
+		if err := t.vClient.SendRequest(stream, mapToSlice(s), rType, "", ""); err != nil {
 			t.logger.Errorf("ADS request failed: %v", err)
 			return false
 		}
@@ -292,28 +291,28 @@ func (t *TransportHelper) recv(stream grpc.ClientStream) bool {
 			t.logger.Warningf("ADS stream is closed with error: %v", err)
 			return success
 		}
-		typeURL, version, nonce, err := t.vClient.HandleResponse(resp)
+		rType, version, nonce, err := t.vClient.HandleResponse(resp)
 		if e, ok := err.(ErrResourceTypeUnsupported); ok {
 			t.logger.Warningf("%s", e.ErrStr)
 			continue
 		}
 		if err != nil {
 			t.sendCh.Put(&ackAction{
-				typeURL: typeURL,
+				rType:   rType,
 				version: "",
 				nonce:   nonce,
 				stream:  stream,
 			})
-			t.logger.Warningf("Sending NACK for response type: %v, version: %v, nonce: %v, reason: %v", typeURL, version, nonce, err)
+			t.logger.Warningf("Sending NACK for response type: %v, version: %v, nonce: %v, reason: %v", rType, version, nonce, err)
 			continue
 		}
 		t.sendCh.Put(&ackAction{
-			typeURL: typeURL,
+			rType:   rType,
 			version: version,
 			nonce:   nonce,
 			stream:  stream,
 		})
-		t.logger.Infof("Sending ACK for response type: %v, version: %v, nonce: %v", typeURL, version, nonce)
+		t.logger.Infof("Sending ACK for response type: %v, version: %v, nonce: %v", rType, version, nonce)
 		success = true
 	}
 }
@@ -326,46 +325,46 @@ func mapToSlice(m map[string]bool) (ret []string) {
 }
 
 type watchAction struct {
-	typeURL  string
+	rType    ResourceType
 	remove   bool // Whether this is to remove watch for the resource.
 	resource string
 }
 
 // processWatchInfo pulls the fields needed by the request from a watchAction.
 //
-// It also updates the watch map in v2c.
-func (t *TransportHelper) processWatchInfo(w *watchAction) (target []string, typeURL, ver, nonce string) {
+// It also updates the watch map.
+func (t *TransportHelper) processWatchInfo(w *watchAction) (target []string, rType ResourceType, ver, nonce string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	var current map[string]bool
-	current, ok := t.watchMap[w.typeURL]
+	current, ok := t.watchMap[w.rType]
 	if !ok {
 		current = make(map[string]bool)
-		t.watchMap[w.typeURL] = current
+		t.watchMap[w.rType] = current
 	}
 
 	if w.remove {
 		delete(current, w.resource)
 		if len(current) == 0 {
-			delete(t.watchMap, w.typeURL)
+			delete(t.watchMap, w.rType)
 		}
 	} else {
 		current[w.resource] = true
 	}
 
-	typeURL = w.typeURL
+	rType = w.rType
 	target = mapToSlice(current)
 	// We don't reset version or nonce when a new watch is started. The version
 	// and nonce from previous response are carried by the request unless the
 	// stream is recreated.
-	ver = t.versionMap[typeURL]
-	nonce = t.nonceMap[typeURL]
-	return target, typeURL, ver, nonce
+	ver = t.versionMap[rType]
+	nonce = t.nonceMap[rType]
+	return target, rType, ver, nonce
 }
 
 type ackAction struct {
-	typeURL string
+	rType   ResourceType
 	version string // NACK if version is an empty string.
 	nonce   string
 	// ACK/NACK are tagged with the stream it's for. When the stream is down,
@@ -377,15 +376,15 @@ type ackAction struct {
 // processAckInfo pulls the fields needed by the ack request from a ackAction.
 //
 // If no active watch is found for this ack, it returns false for send.
-func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStream) (target []string, typeURL, version, nonce string, send bool) {
+func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStream) (target []string, rType ResourceType, version, nonce string, send bool) {
 	if ack.stream != stream {
 		// If ACK's stream isn't the current sending stream, this means the ACK
 		// was pushed to queue before the old stream broke, and a new stream has
 		// been started since. Return immediately here so we don't update the
 		// nonce for the new stream.
-		return nil, "", "", "", false
+		return nil, UnknownResource, "", "", false
 	}
-	typeURL = ack.typeURL
+	rType = ack.rType
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -394,16 +393,16 @@ func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStrea
 	// wire. We may not send the request if the watch is canceled. But the nonce
 	// needs to be updated so the next request will have the right nonce.
 	nonce = ack.nonce
-	t.nonceMap[typeURL] = nonce
+	t.nonceMap[rType] = nonce
 
-	s, ok := t.watchMap[typeURL]
+	s, ok := t.watchMap[rType]
 	if !ok || len(s) == 0 {
 		// We don't send the request ack if there's no active watch (this can be
 		// either the server sends responses before any request, or the watch is
 		// canceled while the ackAction is in queue), because there's no resource
 		// name. And if we send a request with empty resource name list, the
 		// server may treat it as a wild card and send us everything.
-		return nil, "", "", "", false
+		return nil, UnknownResource, "", "", false
 	}
 	send = true
 	target = mapToSlice(s)
@@ -411,12 +410,12 @@ func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStrea
 	version = ack.version
 	if version == "" {
 		// This is a nack, get the previous acked version.
-		version = t.versionMap[typeURL]
-		// version will still be an empty string if typeURL isn't
+		version = t.versionMap[rType]
+		// version will still be an empty string if rType isn't
 		// found in versionMap, this can happen if there wasn't any ack
 		// before.
 	} else {
-		t.versionMap[typeURL] = version
+		t.versionMap[rType] = version
 	}
-	return target, typeURL, version, nonce, send
+	return target, rType, version, nonce, send
 }
