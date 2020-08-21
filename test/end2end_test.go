@@ -4647,21 +4647,21 @@ func (s) TestClientInitialHeaderEndStream(t *testing.T) {
 
 func testClientInitialHeaderEndStream(t *testing.T, e env) {
 	// To ensure RST_STREAM is sent for illegal data write and not normal stream close.
-	frameCheckingDone := make(chan bool, 1)
+	frameCheckingDone := make(chan struct{})
 	// To ensure goroutine for test does not end before RPC handler performs error checking.
-	handlerDone := make(chan bool, 1)
+	handlerDone := make(chan struct{})
 	te := newTest(t, e)
 	ts := &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
 		defer func() {
-			handlerDone <- true
+			close(handlerDone)
 		}()
+		// Block on serverTester receiving RST_STREAM. This ensures server has closed stream before stream.Recv().
 		<-frameCheckingDone
-		_, err := stream.Recv()
+		data, err := stream.Recv()
 		if err == nil {
-			t.Error("unexpected data received in func server method")
-			return nil
+			t.Errorf("unexpected data received in func server method: '%v'", data)
 		} else if status.Code(err) != codes.Canceled {
-			t.Errorf("expected status canceled error, instead received '%v'", err)
+			t.Errorf("expected canceled error, instead received '%v'", err)
 		}
 		return nil
 	}}
@@ -4674,7 +4674,7 @@ func testClientInitialHeaderEndStream(t *testing.T, e env) {
 		st.wantAnyFrame()
 		st.wantAnyFrame()
 		st.wantRSTStream(http2.ErrCodeStreamClosed)
-		frameCheckingDone <- true
+		close(frameCheckingDone)
 		<-handlerDone
 	})
 }
@@ -4690,14 +4690,15 @@ func (s) TestClientSendDataAfterCloseSend(t *testing.T) {
 
 func testClientSendDataAfterCloseSend(t *testing.T, e env) {
 	// To ensure RST_STREAM is sent for illegal data write prior to execution of RPC handler.
-	frameCheckingDone := make(chan bool, 1)
+	frameCheckingDone := make(chan struct{})
 	// To ensure goroutine for test does not end before RPC handler performs error checking.
-	handlerDone := make(chan bool, 1)
+	handlerDone := make(chan struct{})
 	te := newTest(t, e)
 	ts := &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
 		defer func() {
-			handlerDone <- true
+			close(handlerDone)
 		}()
+		// Block on serverTester receiving RST_STREAM. This ensures server has closed stream before stream.Recv().
 		<-frameCheckingDone
 		for {
 			_, err := stream.Recv()
@@ -4706,7 +4707,7 @@ func testClientSendDataAfterCloseSend(t *testing.T, e env) {
 			}
 			if err != nil {
 				if status.Code(err) != codes.Canceled {
-					t.Errorf("expected status canceled error, instead received '%v'", err)
+					t.Errorf("expected canceled error, instead received '%v'", err)
 				}
 				break
 			}
@@ -4728,7 +4729,7 @@ func testClientSendDataAfterCloseSend(t *testing.T, e env) {
 		st.wantAnyFrame()
 		st.wantAnyFrame()
 		st.wantRSTStream(http2.ErrCodeStreamClosed)
-		frameCheckingDone <- true
+		close(frameCheckingDone)
 		<-handlerDone
 	})
 }
