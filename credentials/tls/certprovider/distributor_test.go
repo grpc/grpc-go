@@ -23,7 +23,6 @@ package certprovider
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 )
@@ -84,55 +83,30 @@ func (s) TestDistributor(t *testing.T) {
 	}
 }
 
-// TestDistributorConcurrency invokes methods on the distributor in parallel.
+// TestDistributorConcurrency invokes methods on the distributor in parallel. It
+// exercises that the scenario where a distributor's KeyMaterial() method is
+// blocked waiting for keyMaterial, while the Set() method is called from
+// another goroutine. It verifies that the KeyMaterial() method eventually
+// returns with expected keyMaterial.
 func (s) TestDistributorConcurrency(t *testing.T) {
 	dist := NewDistributor()
 
 	// Read cert/key files from testdata.
-	km1 := loadKeyMaterials(t, "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
-	km2 := loadKeyMaterials(t, "x509/server2_cert.pem", "x509/server2_key.pem", "x509/client_ca_cert.pem")
+	km := loadKeyMaterials(t, "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	tests := []struct {
-		km  *KeyMaterial
-		err error
-	}{
-		{km: km1, err: nil},
-		{km: km2, err: nil},
-		{km: nil, err: errProviderTestInternal},
-	}
-	for _, tc := range tests {
-		// Push key material into the distributor from a goroutine and read from
-		// here to verify that the distributor returns the expected keyMaterial.
-		go func() {
-			// Add a small sleep here to make sure that the call to KeyMaterial()
-			// happens before the call to Set(), thereby the former is blocked till
-			// the latter happens.
-			time.Sleep(50 * time.Microsecond)
-			dist.Set(tc.km, tc.err)
-		}()
-		if err := waitForKeyMaterial(ctx, dist, tc.km, tc.err); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
 
-// waitForKeyMaterial reads key material from the given distributor until one of
-// the following conditions are met:
-// 1. Returned keyMaterial and error matches wantKM and wantErr.
-// 2. Provider ctx deadline expires.
-func waitForKeyMaterial(ctx context.Context, dist *Distributor, wantKM *KeyMaterial, wantErr error) error {
-	for {
-		err := readAndVerifyKeyMaterial(ctx, dist, wantKM)
-		if errors.Is(err, wantErr) {
-			return nil
-
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			return fmt.Errorf("KeyMaterial() failed with error: %v, wantErr: %v", err, wantErr)
-		}
-		// Don't busy loop.
-		time.Sleep(50 * time.Microsecond)
+	// Push key material into the distributor from a goroutine and read from
+	// here to verify that the distributor returns the expected keyMaterial.
+	go func() {
+		// Add a small sleep here to make sure that the call to KeyMaterial()
+		// happens before the call to Set(), thereby the former is blocked till
+		// the latter happens.
+		time.Sleep(100 * time.Microsecond)
+		dist.Set(km, nil)
+	}()
+	if err := readAndVerifyKeyMaterial(ctx, dist, km); err != nil {
+		t.Fatal(err)
 	}
 }
