@@ -197,7 +197,7 @@ func (s) TestGetDecision(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			if got := getDecision(tc.engine, tc.match); got != tc.want {
-				t.Fatalf("Expected %v, instead got %v", tc.want, got)
+				t.Fatalf("getDecision(%v, %v) = (%v), want (%v)", tc.engine, tc.match, got, tc.want)
 			}
 		})
 	}
@@ -241,7 +241,7 @@ func (s) TestPolicyEngineEvaluate(t *testing.T) {
 			gotDecision, gotPolicyNames := tc.engine.evaluate(tc.activation)
 			sort.Strings(gotPolicyNames)
 			if gotDecision != tc.wantDecision || !cmp.Equal(gotPolicyNames, tc.wantPolicyNames) {
-				t.Fatalf("Expected (%v, %v), instead got (%v, %v)", tc.wantDecision, tc.wantPolicyNames, gotDecision, gotPolicyNames)
+				t.Fatalf("policyEngine.evaluate(%v, %v) = (%v, %v), want (%v, %v)", tc.engine, tc.activation, gotDecision, gotPolicyNames, tc.wantDecision, tc.wantPolicyNames)
 			}
 		})
 	}
@@ -280,7 +280,7 @@ func (s) TestAuthorizationEngineEvaluate(t *testing.T) {
 			gotAuthDecision, gotErr := tc.engine.Evaluate(tc.authArgs)
 			sort.Strings(gotAuthDecision.policyNames)
 			if gotErr != nil || gotAuthDecision.decision != tc.wantAuthDecision.decision || !cmp.Equal(gotAuthDecision.policyNames, tc.wantAuthDecision.policyNames) {
-				t.Fatalf("Expected authorization decision to be (%v, %v), instead got (%v, %v)", tc.wantAuthDecision.decision, tc.wantAuthDecision.policyNames, gotAuthDecision.decision, gotAuthDecision.policyNames)
+				t.Fatalf("AuthorizationEngine.Evaluate(%v, %v) = (%v, %v), want (%v, %v)", tc.engine, tc.authArgs, gotAuthDecision, gotErr, tc.wantAuthDecision, nil)
 			}
 		})
 	}
@@ -423,7 +423,7 @@ func (s) TestIntegration(t *testing.T) {
 			gotAuthDecision, gotErr := engine.Evaluate(tc.authArgs)
 			sort.Strings(gotAuthDecision.policyNames)
 			if gotErr != nil || gotAuthDecision.decision != tc.wantAuthDecision.decision || !cmp.Equal(gotAuthDecision.policyNames, tc.wantAuthDecision.policyNames) {
-				t.Fatalf("Expected authorization decision to be (%v, %v), instead got (%v, %v)", tc.wantAuthDecision.decision, tc.wantAuthDecision.policyNames, gotAuthDecision.decision, gotAuthDecision.policyNames)
+				t.Fatalf("NewAuthorizationEngine(%v, %v).Evaluate(%v) = (%v, %v), want (%v, %v)", tc.allow, tc.deny, tc.authArgs, gotAuthDecision, gotErr, tc.wantAuthDecision, nil)
 			}
 		})
 	}
