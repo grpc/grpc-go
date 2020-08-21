@@ -42,7 +42,11 @@ type Distributor struct {
 	km   *KeyMaterial
 	pErr error
 
-	ready  *grpcsync.Event
+	// ready channel to unblock KeyMaterial() invocations blocked on
+	// availability of key material.
+	ready *grpcsync.Event
+	// done channel to notify provider implementations and unblock any
+	// KeyMaterial() calls, once the Distributor is closed.
 	closed *grpcsync.Event
 }
 
@@ -75,7 +79,7 @@ func (d *Distributor) Set(km *KeyMaterial, err error) {
 	d.mu.Unlock()
 }
 
-// KeyMaterial returns the most recent key material provided to the distributor.
+// KeyMaterial returns the most recent key material provided to the Distributor.
 // If no key material was provided at the time of this call, it will block until
 // the deadline on the context expires or fresh key material arrives.
 func (d *Distributor) KeyMaterial(ctx context.Context) (*KeyMaterial, error) {
