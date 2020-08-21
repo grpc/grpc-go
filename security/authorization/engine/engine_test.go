@@ -27,6 +27,7 @@ import (
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/interpreter"
+	"github.com/google/go-cmp/cmp"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
@@ -120,37 +121,37 @@ func (s) TestNewAuthorizationEngine(t *testing.T) {
 	tests := map[string]struct {
 		allow   *pb.RBAC
 		deny    *pb.RBAC
-		wantErr string
+		wantErr bool
 		errStr  string
 	}{
 		"too few rbacs": {
 			allow:   nil,
 			deny:    nil,
-			wantErr: "at least one of allow, deny must be non-nil",
+			wantErr: true,
 			errStr:  "Expected error: at least one of allow, deny must be non-nil",
 		},
 		"one rbac allow": {
 			allow:   &pb.RBAC{Action: pb.RBAC_ALLOW},
 			deny:    nil,
-			wantErr: "",
+			wantErr: false,
 			errStr:  "Expected 1 ALLOW RBAC to be successful",
 		},
 		"one rbac deny": {
 			allow:   nil,
 			deny:    &pb.RBAC{Action: pb.RBAC_DENY},
-			wantErr: "",
+			wantErr: false,
 			errStr:  "Expected 1 DENY RBAC to be successful",
 		},
 		"two rbacs": {
 			allow:   &pb.RBAC{Action: pb.RBAC_ALLOW},
 			deny:    &pb.RBAC{Action: pb.RBAC_DENY},
-			wantErr: "",
+			wantErr: false,
 			errStr:  "Expected 2 RBACs (DENY + ALLOW) to be successful",
 		},
 		"wrong rbac actions": {
 			allow:   &pb.RBAC{Action: pb.RBAC_DENY},
 			deny:    nil,
-			wantErr: "allow must have action ALLOW, deny must have action DENY",
+			wantErr: true,
 			errStr:  "Expected error: allow must have action ALLOW, deny must have action DENY",
 		},
 	}
@@ -159,11 +160,8 @@ func (s) TestNewAuthorizationEngine(t *testing.T) {
 		tc := tc
 		t.Run(name, func(t *testing.T) {
 			_, gotErr := NewAuthorizationEngine(tc.allow, tc.deny)
-			if tc.wantErr == "" && gotErr == nil {
-				return
-			}
-			if gotErr == nil || gotErr.Error() != tc.wantErr {
-				t.Fatalf(tc.errStr)
+			if (gotErr != nil) != tc.wantErr {
+				t.Fatal(tc.errStr)
 			}
 		})
 	}
@@ -245,7 +243,7 @@ func (s) TestPolicyEngineEvaluate(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			gotDecision, gotPolicyNames := tc.engine.evaluate(tc.activation)
 			sort.Strings(gotPolicyNames)
-			if gotDecision != tc.wantDecision || !reflect.DeepEqual(gotPolicyNames, tc.wantPolicyNames) {
+			if gotDecision != tc.wantDecision || !cmp.Equal(gotPolicyNames, tc.wantPolicyNames) {
 				t.Fatalf("Expected (%v, %v), instead got (%v, %v)", tc.wantDecision, tc.wantPolicyNames, gotDecision, gotPolicyNames)
 			}
 		})
@@ -257,31 +255,26 @@ func (s) TestAuthorizationEngineEvaluate(t *testing.T) {
 		engine           *AuthorizationEngine
 		authArgs         *AuthorizationArgs
 		wantAuthDecision *AuthorizationDecision
-		wantErr          error
 	}{
 		"allow match": {
 			engine:           &AuthorizationEngine{allow: allowMatchEngine},
 			authArgs:         &AuthorizationArgs{},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionAllow, policyNames: []string{"allow match policy2"}},
-			wantErr:          nil,
 		},
 		"deny fail": {
 			engine:           &AuthorizationEngine{deny: denyFailEngine},
 			authArgs:         &AuthorizationArgs{},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionAllow, policyNames: []string{}},
-			wantErr:          nil,
 		},
 		"first engine unknown": {
 			engine:           &AuthorizationEngine{allow: allowMatchEngine, deny: denyUnknownEngine},
 			authArgs:         &AuthorizationArgs{},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionUnknown, policyNames: []string{"deny unknown policy2", "deny unknown policy3"}},
-			wantErr:          nil,
 		},
 		"second engine match": {
 			engine:           &AuthorizationEngine{allow: allowMatchEngine, deny: denyFailEngine},
 			authArgs:         &AuthorizationArgs{},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionAllow, policyNames: []string{"allow match policy2"}},
-			wantErr:          nil,
 		},
 	}
 
@@ -290,9 +283,7 @@ func (s) TestAuthorizationEngineEvaluate(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			gotAuthDecision, gotErr := tc.engine.Evaluate(tc.authArgs)
 			sort.Strings(gotAuthDecision.policyNames)
-			if tc.wantErr != nil && (gotErr == nil || gotErr.Error() != tc.wantErr.Error()) {
-				t.Fatalf("Expected error to be %v, instead got %v", tc.wantErr, gotErr)
-			} else if tc.wantErr == nil && (gotErr != nil || gotAuthDecision.decision != tc.wantAuthDecision.decision || !reflect.DeepEqual(gotAuthDecision.policyNames, tc.wantAuthDecision.policyNames)) {
+			if gotErr != nil || gotAuthDecision.decision != tc.wantAuthDecision.decision || !cmp.Equal(gotAuthDecision.policyNames, tc.wantAuthDecision.policyNames) {
 				t.Fatalf("Expected authorization decision to be (%v, %v), instead got (%v, %v)", tc.wantAuthDecision.decision, tc.wantAuthDecision.policyNames, gotAuthDecision.decision, gotAuthDecision.policyNames)
 			}
 		})
@@ -436,7 +427,7 @@ func (s) TestIntegration(t *testing.T) {
 			}
 			gotAuthDecision, gotErr := engine.Evaluate(tc.authArgs)
 			sort.Strings(gotAuthDecision.policyNames)
-			if gotErr != nil || gotAuthDecision.decision != tc.wantAuthDecision.decision || !reflect.DeepEqual(gotAuthDecision.policyNames, tc.wantAuthDecision.policyNames) {
+			if gotErr != nil || gotAuthDecision.decision != tc.wantAuthDecision.decision || !cmp.Equal(gotAuthDecision.policyNames, tc.wantAuthDecision.policyNames) {
 				t.Fatalf("Expected authorization decision to be (%v, %v), instead got (%v, %v)", tc.wantAuthDecision.decision, tc.wantAuthDecision.policyNames, gotAuthDecision.decision, gotAuthDecision.policyNames)
 			}
 		})
