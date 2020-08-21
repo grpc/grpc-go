@@ -60,7 +60,9 @@ Finally, pass this `Service` instance to the generated `Register` function:
      pb.RegisterEchoService(grpcServer, echoService)
 ```
 
-### Migration from older version
+### Migration from legacy version
+
+#### Updating existing code
 
 The previous version of protoc-gen-go-grpc used a different method to register
 services.  In that version, it was only possible to register a service
@@ -117,3 +119,25 @@ func main() {
      // ...
 }
 ```
+
+#### Updating generated code to support both legacy and new code
+
+`protoc-gen-go-grpc` supports a flag, `migrationMode`, which enables it to be
+run in tandem with the previous tool (`protoc-gen-go` with the grpc plugin).
+It can be used as follows:
+
+```sh
+go install github.com/golang/protobuf/protoc-gen-go
+
+# Example 1: with OPTS set to common options for protoc-gen-go and
+# protoc-gen-go-grpc
+protoc --go_out=${OPTS},plugins=grpc:. --go-grpc_out=${OPTS},migrationMode=true:. *.proto
+
+# Example 2: if no special options are needed
+protoc --go_out=plugins=grpc:. --go-grpc_out=migrationMode=true:. *.proto
+```
+
+This is recommended for temporary use only to ease migration from the legacy
+version.  The `Register<Service>Server` and `<Service>Server` symbols it
+produced are not backward compatible in the presence of newly added methods to
+a service.

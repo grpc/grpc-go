@@ -59,6 +59,7 @@ curl --silent https://raw.githubusercontent.com/istio/istio/master/security/prot
 
 mkdir -p ${WORKDIR}/out
 
+# Generates legacy gRPC Server symbols in addition to the newer Service symbols
 LEGACY_SOURCES=(
   ${WORKDIR}/googleapis/google/rpc/code.proto
   ${WORKDIR}/grpc-proto/grpc/binlog/v1/binarylog.proto
@@ -76,6 +77,7 @@ LEGACY_SOURCES=(
   reflection/grpc_reflection_v1alpha/reflection.proto
 )
 
+# Generates only the new gRPC Service symbols
 SOURCES=(
   $(git ls-files --exclude-standard --cached --others "*.proto" | grep -v '^\(profiling/proto/service.proto\|reflection/grpc_reflection_v1alpha/reflection.proto\)$')
 )
