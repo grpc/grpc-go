@@ -125,32 +125,24 @@ func (s) TestNewAuthorizationEngine(t *testing.T) {
 		errStr  string
 	}{
 		"too few rbacs": {
-			allow:   nil,
-			deny:    nil,
 			wantErr: true,
 			errStr:  "Expected error: at least one of allow, deny must be non-nil",
 		},
 		"one rbac allow": {
-			allow:   &pb.RBAC{Action: pb.RBAC_ALLOW},
-			deny:    nil,
-			wantErr: false,
-			errStr:  "Expected 1 ALLOW RBAC to be successful",
+			allow:  &pb.RBAC{Action: pb.RBAC_ALLOW},
+			errStr: "Expected 1 ALLOW RBAC to be successful",
 		},
 		"one rbac deny": {
-			allow:   nil,
-			deny:    &pb.RBAC{Action: pb.RBAC_DENY},
-			wantErr: false,
-			errStr:  "Expected 1 DENY RBAC to be successful",
+			deny:   &pb.RBAC{Action: pb.RBAC_DENY},
+			errStr: "Expected 1 DENY RBAC to be successful",
 		},
 		"two rbacs": {
-			allow:   &pb.RBAC{Action: pb.RBAC_ALLOW},
-			deny:    &pb.RBAC{Action: pb.RBAC_DENY},
-			wantErr: false,
-			errStr:  "Expected 2 RBACs (DENY + ALLOW) to be successful",
+			allow:  &pb.RBAC{Action: pb.RBAC_ALLOW},
+			deny:   &pb.RBAC{Action: pb.RBAC_DENY},
+			errStr: "Expected 2 RBACs (DENY + ALLOW) to be successful",
 		},
 		"wrong rbac actions": {
 			allow:   &pb.RBAC{Action: pb.RBAC_DENY},
-			deny:    nil,
 			wantErr: true,
 			errStr:  "Expected error: allow must have action ALLOW, deny must have action DENY",
 		},
@@ -179,7 +171,6 @@ func (s) TestGetDecision(t *testing.T) {
 		},
 		"ALLOW engine fail": {
 			engine: &policyEngine{action: pb.RBAC_ALLOW, programs: map[string]cel.Program{}},
-			match:  false,
 			want:   DecisionDeny,
 		},
 		"DENY engine match": {
@@ -189,7 +180,6 @@ func (s) TestGetDecision(t *testing.T) {
 		},
 		"DENY engine fail": {
 			engine: &policyEngine{action: pb.RBAC_DENY, programs: map[string]cel.Program{}},
-			match:  false,
 			want:   DecisionAllow,
 		},
 	}
@@ -310,7 +300,6 @@ func (s) TestIntegration(t *testing.T) {
 			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
 				"url_path starts with": {Condition: compileStringToExpr("request.url_path.startsWith('/pkg.service/test')", declarations)},
 			}},
-			deny:             nil,
 			authArgs:         &AuthorizationArgs{fullMethod: "/pkg.service/test/method"},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionAllow, policyNames: []string{"url_path starts with"}},
 		},
@@ -319,7 +308,6 @@ func (s) TestIntegration(t *testing.T) {
 				"url_path and uri_san_peer_certificate": {Condition: compileStringToExpr("request.url_path == '/pkg.service/test' && connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'", declarations)},
 				"source port":                           {Condition: compileStringToExpr("source.port == 8080", declarations)},
 			}},
-			deny:             nil,
 			authArgs:         &AuthorizationArgs{peerInfo: &peer.Peer{Addr: addrMock{addr: "192.0.2.1:25"}}, fullMethod: "/pkg.service/test"},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionUnknown, policyNames: []string{"url_path and uri_san_peer_certificate"}},
 		},
@@ -327,12 +315,10 @@ func (s) TestIntegration(t *testing.T) {
 			allow: &pb.RBAC{Action: pb.RBAC_ALLOW, Policies: map[string]*pb.Policy{
 				"url_path": {Condition: compileStringToExpr("request.url_path == '/pkg.service/test'", declarations)},
 			}},
-			deny:             nil,
 			authArgs:         &AuthorizationArgs{fullMethod: "/pkg.service/test/method"},
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionDeny, policyNames: []string{}},
 		},
 		"DENY engine: DecisionAllow": {
-			allow: nil,
 			deny: &pb.RBAC{Action: pb.RBAC_DENY, Policies: map[string]*pb.Policy{
 				"url_path and uri_san_peer_certificate": {Condition: compileStringToExpr("request.url_path == '/pkg.service/test' && connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'", declarations)},
 			}},
@@ -340,7 +326,6 @@ func (s) TestIntegration(t *testing.T) {
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionAllow, policyNames: []string{}},
 		},
 		"DENY engine: DecisionUnknown": {
-			allow: nil,
 			deny: &pb.RBAC{Action: pb.RBAC_DENY, Policies: map[string]*pb.Policy{
 				"destination address": {Condition: compileStringToExpr("destination.address == '192.0.3.1'", declarations)},
 				"source port":         {Condition: compileStringToExpr("source.port == 8080", declarations)},
@@ -349,7 +334,6 @@ func (s) TestIntegration(t *testing.T) {
 			wantAuthDecision: &AuthorizationDecision{decision: DecisionUnknown, policyNames: []string{"destination address"}},
 		},
 		"DENY engine: DecisionDeny": {
-			allow: nil,
 			deny: &pb.RBAC{Action: pb.RBAC_DENY, Policies: map[string]*pb.Policy{
 				"destination address":           {Condition: compileStringToExpr("destination.address == '192.0.3.1'", declarations)},
 				"source address or source port": {Condition: compileStringToExpr("source.address == '192.0.4.1' || source.port == 8080", declarations)},
