@@ -39,13 +39,13 @@ type s struct {
 	grpctest.Tester
 }
 
-type programMock struct {
+type fakeProgram struct {
 	out ref.Val
 	err error
 }
 
-func (mock programMock) Eval(vars interface{}) (ref.Val, *cel.EvalDetails, error) {
-	return mock.out, nil, mock.err
+func (fake fakeProgram) Eval(vars interface{}) (ref.Val, *cel.EvalDetails, error) {
+	return fake.out, nil, fake.err
 }
 
 type valMock struct {
@@ -89,10 +89,10 @@ func (mock addrMock) String() string {
 
 var (
 	emptyActivation     = interpreter.EmptyActivation()
-	unsuccessfulProgram = programMock{out: nil, err: status.Errorf(codes.InvalidArgument, "Unsuccessful program evaluation")}
-	errProgram          = programMock{out: valMock{"missing attributes"}, err: status.Errorf(codes.InvalidArgument, "Successful program evaluation to an error result -- missing attributes")}
-	trueProgram         = programMock{out: valMock{true}, err: nil}
-	falseProgram        = programMock{out: valMock{false}, err: nil}
+	unsuccessfulProgram = fakeProgram{out: nil, err: status.Errorf(codes.InvalidArgument, "Unsuccessful program evaluation")}
+	errProgram          = fakeProgram{out: valMock{"missing attributes"}, err: status.Errorf(codes.InvalidArgument, "Successful program evaluation to an error result -- missing attributes")}
+	trueProgram         = fakeProgram{out: valMock{true}, err: nil}
+	falseProgram        = fakeProgram{out: valMock{false}, err: nil}
 
 	allowMatchEngine = &policyEngine{action: pb.RBAC_ALLOW, programs: map[string]cel.Program{
 		"allow match policy1": unsuccessfulProgram,
