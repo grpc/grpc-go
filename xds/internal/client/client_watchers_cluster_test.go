@@ -19,9 +19,10 @@
 package client
 
 import (
+	"context"
 	"testing"
 
-	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/internal/testutils"
 )
 
 type clusterUpdateErr struct {
@@ -52,7 +53,10 @@ func (s) TestClusterWatch(t *testing.T) {
 	cancelWatch := c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := v2Client.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -67,7 +71,7 @@ func (s) TestClusterWatch(t *testing.T) {
 		testCDSName: wantUpdate,
 	})
 
-	if u, err := clusterUpdateCh.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
+	if u, err := clusterUpdateCh.Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -77,7 +81,7 @@ func (s) TestClusterWatch(t *testing.T) {
 		"randomName": {},
 	})
 
-	if u, err := clusterUpdateCh.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
+	if u, err := clusterUpdateCh.Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
 		t.Errorf("unexpected clusterUpdate: %+v, %v, want channel recv timeout", u, err)
 	}
 
@@ -87,7 +91,7 @@ func (s) TestClusterWatch(t *testing.T) {
 		testCDSName: wantUpdate,
 	})
 
-	if u, err := clusterUpdateCh.TimedReceive(chanRecvTimeout); err != testutils.ErrRecvTimeout {
+	if u, err := clusterUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -109,6 +113,9 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 	var clusterUpdateChs []*testutils.Channel
 	var cancelLastWatch func()
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	const count = 2
 	for i := 0; i < count; i++ {
 		clusterUpdateCh := testutils.NewChannel()
@@ -116,8 +123,13 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 		cancelLastWatch = c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 			clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 		})
-		if _, err := v2Client.addWatches[ClusterResource].Receive(); i == 0 && err != nil {
-			t.Fatalf("want new watch to start, got error %v", err)
+
+		if i == 0 {
+			// A new watch is registered on the underlying API client only for
+			// the first iteration because we are using the same resource name.
+			if _, err := v2Client.addWatches[ClusterResource].Receive(ctx); err != nil {
+				t.Fatalf("want new watch to start, got error %v", err)
+			}
 		}
 	}
 
@@ -127,7 +139,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count; i++ {
-		if u, err := clusterUpdateChs[i].Receive(); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
+		if u, err := clusterUpdateChs[i].Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
 			t.Errorf("i=%v, unexpected clusterUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
@@ -139,12 +151,12 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count-1; i++ {
-		if u, err := clusterUpdateChs[i].Receive(); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
+		if u, err := clusterUpdateChs[i].Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
 			t.Errorf("i=%v, unexpected clusterUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
 
-	if u, err := clusterUpdateChs[count-1].TimedReceive(chanRecvTimeout); err != testutils.ErrRecvTimeout {
+	if u, err := clusterUpdateChs[count-1].Receive(ctx); err != testutils.ErrRecvTimeout {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -167,14 +179,21 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 	const count = 2
 
 	// Two watches for the same name.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for i := 0; i < count; i++ {
 		clusterUpdateCh := testutils.NewChannel()
 		clusterUpdateChs = append(clusterUpdateChs, clusterUpdateCh)
 		c.WatchCluster(testCDSName+"1", func(update ClusterUpdate, err error) {
 			clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 		})
-		if _, err := v2Client.addWatches[ClusterResource].Receive(); i == 0 && err != nil {
-			t.Fatalf("want new watch to start, got error %v", err)
+
+		if i == 0 {
+			// A new watch is registered on the underlying API client only for
+			// the first iteration because we are using the same resource name.
+			if _, err := v2Client.addWatches[ClusterResource].Receive(ctx); err != nil {
+				t.Fatalf("want new watch to start, got error %v", err)
+			}
 		}
 	}
 
@@ -183,7 +202,7 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 	c.WatchCluster(testCDSName+"2", func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(clusterUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -195,12 +214,12 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count; i++ {
-		if u, err := clusterUpdateChs[i].Receive(); err != nil || u != (clusterUpdateErr{wantUpdate1, nil}) {
+		if u, err := clusterUpdateChs[i].Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate1, nil}) {
 			t.Errorf("i=%v, unexpected clusterUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
 
-	if u, err := clusterUpdateCh2.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate2, nil}) {
+	if u, err := clusterUpdateCh2.Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate2, nil}) {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
 	}
 }
@@ -223,7 +242,10 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := v2Client.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -232,7 +254,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 		testCDSName: wantUpdate,
 	})
 
-	if u, err := clusterUpdateCh.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
+	if u, err := clusterUpdateCh.Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -241,17 +263,19 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(clusterUpdateErr{u: update, err: err})
 	})
-	if n, err := v2Client.addWatches[ClusterResource].Receive(); err == nil {
+	if n, err := v2Client.addWatches[ClusterResource].Receive(ctx); err != testutils.ErrRecvTimeout {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
 	// New watch should receives the update.
-	if u, err := clusterUpdateCh2.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if u, err := clusterUpdateCh2.Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
 	// Old watch should see nothing.
-	if u, err := clusterUpdateCh.TimedReceive(chanRecvTimeout); err != testutils.ErrRecvTimeout {
+	if u, err := clusterUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -275,11 +299,14 @@ func (s) TestClusterWatchExpiryTimer(t *testing.T) {
 	c.WatchCluster(testCDSName, func(u ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: u, err: err})
 	})
-	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := v2Client.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	u, err := clusterUpdateCh.TimedReceive(defaultTestWatchExpiryTimeout * 2)
+	u, err := clusterUpdateCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("failed to get clusterUpdate: %v", err)
 	}
@@ -311,7 +338,10 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 	c.WatchCluster(testCDSName, func(u ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: u, err: err})
 	})
-	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := v2Client.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -320,12 +350,12 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 		testCDSName: wantUpdate,
 	})
 
-	if u, err := clusterUpdateCh.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
+	if u, err := clusterUpdateCh.Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
 	// Wait for an error, the error should never happen.
-	u, err := clusterUpdateCh.TimedReceive(defaultTestWatchExpiryTimeout * 2)
+	u, err := clusterUpdateCh.Receive(ctx)
 	if err != testutils.ErrRecvTimeout {
 		t.Fatalf("got unexpected: %v, %v, want recv timeout", u.(clusterUpdateErr).u, u.(clusterUpdateErr).err)
 	}
@@ -353,7 +383,10 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	c.WatchCluster(testCDSName+"1", func(update ClusterUpdate, err error) {
 		clusterUpdateCh1.Send(clusterUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := v2Client.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	// Another watch for a different name.
@@ -361,7 +394,7 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	c.WatchCluster(testCDSName+"2", func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(clusterUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -372,11 +405,11 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 		testCDSName + "2": wantUpdate2,
 	})
 
-	if u, err := clusterUpdateCh1.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate1, nil}) {
+	if u, err := clusterUpdateCh1.Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate1, nil}) {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
-	if u, err := clusterUpdateCh2.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate2, nil}) {
+	if u, err := clusterUpdateCh2.Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate2, nil}) {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -386,12 +419,12 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	})
 
 	// watcher 1 should get an error.
-	if u, err := clusterUpdateCh1.Receive(); err != nil || ErrType(u.(clusterUpdateErr).err) != ErrorTypeResourceNotFound {
+	if u, err := clusterUpdateCh1.Receive(ctx); err != nil || ErrType(u.(clusterUpdateErr).err) != ErrorTypeResourceNotFound {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v, want update with error resource not found", u, err)
 	}
 
 	// watcher 2 should get the same update again.
-	if u, err := clusterUpdateCh2.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate2, nil}) {
+	if u, err := clusterUpdateCh2.Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate2, nil}) {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -401,12 +434,14 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	})
 
 	// watcher 1 should get an error.
-	if u, err := clusterUpdateCh1.Receive(); err != testutils.ErrRecvTimeout {
+	if u, err := clusterUpdateCh1.Receive(ctx); err != testutils.ErrRecvTimeout {
 		t.Errorf("unexpected clusterUpdate: %v, want receiving from channel timeout", u)
 	}
 
 	// watcher 2 should get the same update again.
-	if u, err := clusterUpdateCh2.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate2, nil}) {
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if u, err := clusterUpdateCh2.Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate2, nil}) {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
 	}
 }

@@ -19,6 +19,7 @@
 package v2
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -29,10 +30,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/version"
 
@@ -421,7 +422,9 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 
 	// Wait till the request makes it to the fakeServer. This ensures that
 	// the watch request has been processed by the v2Client.
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout waiting for an xDS request: %v", err)
 	}
 
@@ -452,7 +455,7 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	// Cannot directly compare test.wantUpdate with nil (typed vs non-typed nil:
 	// https://golang.org/doc/faq#nil_error).
 	if c := test.wantUpdate; c == nil || (reflect.ValueOf(c).Kind() == reflect.Ptr && reflect.ValueOf(c).IsNil()) {
-		update, err := gotUpdateCh.Receive()
+		update, err := gotUpdateCh.Receive(ctx)
 		if err == testutils.ErrRecvTimeout {
 			return
 		}
@@ -460,7 +463,7 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	}
 
 	wantUpdate := reflect.ValueOf(test.wantUpdate).Elem().Interface()
-	uErr, err := gotUpdateCh.Receive()
+	uErr, err := gotUpdateCh.Receive(ctx)
 	if err == testutils.ErrRecvTimeout {
 		t.Fatal("Timeout expecting xDS update")
 	}
@@ -533,7 +536,9 @@ func (s) TestV2ClientBackoffAfterRecvError(t *testing.T) {
 	t.Log("Started xds v2Client...")
 
 	v2c.AddWatch(xdsclient.ListenerResource, goodLDSTarget1)
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout expired when expecting an LDS request")
 	}
 	t.Log("FakeServer received request...")
@@ -552,7 +557,7 @@ func (s) TestV2ClientBackoffAfterRecvError(t *testing.T) {
 		t.Fatal("Received unexpected LDS callback")
 	}
 
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout expired when expecting an LDS request")
 	}
 	t.Log("FakeServer received request after backoff...")
@@ -583,7 +588,9 @@ func (s) TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	t.Log("Started xds v2Client...")
 
 	v2c.AddWatch(xdsclient.ListenerResource, goodLDSTarget1)
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout expired when expecting an LDS request")
 	}
 	t.Log("FakeServer received request...")
@@ -591,19 +598,19 @@ func (s) TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
 	t.Log("Good LDS response pushed to fakeServer...")
 
-	if _, err := callbackCh.Receive(); err != nil {
+	if _, err := callbackCh.Receive(ctx); err != nil {
 		t.Fatal("Timeout when expecting LDS update")
 	}
 
 	// Read the ack, so the next request is sent after stream re-creation.
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout expired when expecting an LDS ACK")
 	}
 
 	fakeServer.XDSResponseChan <- &fakeserver.Response{Err: errors.New("RPC error")}
 	t.Log("Bad LDS response pushed to fakeServer...")
 
-	val, err := fakeServer.XDSRequestChan.Receive()
+	val, err := fakeServer.XDSRequestChan.Receive(ctx)
 	if err == testutils.ErrRecvTimeout {
 		t.Fatalf("Timeout expired when expecting LDS update")
 	}
@@ -657,7 +664,9 @@ func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 	v2c.AddWatch(xdsclient.ListenerResource, goodLDSTarget1)
 
 	// The watcher should receive an update, with a timeout error in it.
-	if v, err := callbackCh.TimedReceive(100 * time.Millisecond); err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if v, err := callbackCh.Receive(ctx); err == nil {
 		t.Fatalf("Expect an timeout error from watcher, got %v", v)
 	}
 
@@ -667,7 +676,9 @@ func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 		Addresses: []resolver.Address{{Addr: fakeServer.Address}},
 	})
 
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout expired when expecting an LDS request")
 	}
 	t.Log("FakeServer received request...")
@@ -675,7 +686,7 @@ func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
 	t.Log("Good LDS response pushed to fakeServer...")
 
-	if v, err := callbackCh.Receive(); err != nil {
+	if v, err := callbackCh.Receive(ctx); err != nil {
 		t.Fatal("Timeout when expecting LDS update")
 	} else if _, ok := v.(xdsclient.ListenerUpdate); !ok {
 		t.Fatalf("Expect an LDS update from watcher, got %v", v)

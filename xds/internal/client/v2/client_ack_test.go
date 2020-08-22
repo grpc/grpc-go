@@ -18,6 +18,7 @@
 package v2
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"testing"
@@ -28,11 +29,13 @@ import (
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal/testutils"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/version"
 )
+
+const defaultTestTimeout = 1 * time.Second
 
 func startXDSV2Client(t *testing.T, cc *grpc.ClientConn) (v2c *client, cbLDS, cbRDS, cbCDS, cbEDS *testutils.Channel, cleanup func()) {
 	cbLDS = testutils.NewChannel()
@@ -71,7 +74,9 @@ func startXDSV2Client(t *testing.T, cc *grpc.ClientConn) (v2c *client, cbLDS, cb
 
 // compareXDSRequest reads requests from channel, compare it with want.
 func compareXDSRequest(ch *testutils.Channel, want *xdspb.DiscoveryRequest, ver, nonce string) error {
-	val, err := ch.Receive()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	val, err := ch.Receive(ctx)
 	if err != nil {
 		return err
 	}
@@ -133,7 +138,9 @@ func sendGoodResp(t *testing.T, rType xdsclient.ResourceType, fakeServer *fakese
 	}
 	t.Logf("Good %v response acked", rType)
 
-	if _, err := callbackCh.Receive(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := callbackCh.Receive(ctx); err != nil {
 		return "", fmt.Errorf("timeout when expecting %v update", rType)
 	}
 	t.Logf("Good %v response callback executed", rType)
@@ -408,7 +415,9 @@ func (s) TestV2ClientAckCancelResponseRace(t *testing.T) {
 	}
 	versionCDS++
 
-	if req, err := fakeServer.XDSRequestChan.Receive(); err != testutils.ErrRecvTimeout {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if req, err := fakeServer.XDSRequestChan.Receive(ctx); err != testutils.ErrRecvTimeout {
 		t.Fatalf("Got unexpected xds request after watch is canceled: %v", req)
 	}
 
@@ -417,11 +426,14 @@ func (s) TestV2ClientAckCancelResponseRace(t *testing.T) {
 	t.Logf("Good %v response pushed to fakeServer...", xdsclient.ClusterResource)
 
 	// Expect no ACK because watch was canceled.
-	if req, err := fakeServer.XDSRequestChan.Receive(); err != testutils.ErrRecvTimeout {
+	if req, err := fakeServer.XDSRequestChan.Receive(ctx); err != testutils.ErrRecvTimeout {
 		t.Fatalf("Got unexpected xds request after watch is canceled: %v", req)
 	}
+
 	// Still expected an callback update, because response was good.
-	if _, err := cbCDS.Receive(); err != nil {
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := cbCDS.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when expecting %v update", xdsclient.ClusterResource)
 	}
 

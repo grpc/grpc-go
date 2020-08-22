@@ -19,13 +19,15 @@
 package client
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
-	"google.golang.org/grpc/xds/internal/testutils"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -47,6 +49,7 @@ const (
 	testEDSName = "test-eds"
 
 	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
+	defaultTestTimeout            = 1 * time.Second
 )
 
 func clientOpts(balancerName string, overrideWatchExpiryTImeout bool) Options {
@@ -58,7 +61,7 @@ func clientOpts(balancerName string, overrideWatchExpiryTImeout bool) Options {
 		Config: bootstrap.Config{
 			BalancerName: balancerName,
 			Creds:        grpc.WithInsecure(),
-			NodeProto:    testutils.EmptyNodeProtoV2,
+			NodeProto:    xdstestutils.EmptyNodeProtoV2,
 		},
 		WatchExpiryTimeout: watchExpiryTimeout,
 	}
@@ -132,12 +135,18 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 		// Calls another watch inline, to ensure there's deadlock.
 		c.WatchCluster("another-random-name", func(ClusterUpdate, error) {})
-		if _, err := v2Client.addWatches[ClusterResource].Receive(); firstTime && err != nil {
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		if _, err := v2Client.addWatches[ClusterResource].Receive(ctx); firstTime && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 		firstTime = false
 	})
-	if _, err := v2Client.addWatches[ClusterResource].Receive(); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := v2Client.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -146,7 +155,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		testCDSName: wantUpdate,
 	})
 
-	if u, err := clusterUpdateCh.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
+	if u, err := clusterUpdateCh.Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -155,7 +164,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		testCDSName: wantUpdate2,
 	})
 
-	if u, err := clusterUpdateCh.Receive(); err != nil || u != (clusterUpdateErr{wantUpdate2, nil}) {
+	if u, err := clusterUpdateCh.Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate2, nil}) {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
 	}
 }

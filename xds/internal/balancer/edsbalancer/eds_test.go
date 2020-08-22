@@ -20,10 +20,12 @@ package edsbalancer
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/jsonpb"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
@@ -34,16 +36,19 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpctest"
 	scpb "google.golang.org/grpc/internal/proto/grpc_service_config"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
-	"google.golang.org/grpc/xds/internal/testutils"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 
 	_ "google.golang.org/grpc/xds/internal/client/v2" // V2 client registration.
 )
+
+const defaultTestTimeout = 1 * time.Second
 
 func init() {
 	balancer.Register(&edsBalancerBuilder{})
@@ -52,7 +57,7 @@ func init() {
 		return &bootstrap.Config{
 			BalancerName: testBalancerNameFooBar,
 			Creds:        grpc.WithInsecure(),
-			NodeProto:    testutils.EmptyNodeProtoV2,
+			NodeProto:    xdstestutils.EmptyNodeProtoV2,
 		}, nil
 	}
 }
@@ -120,7 +125,10 @@ func (f *fakeEDSBalancer) updateState(priority priorityType, s balancer.State) {
 func (f *fakeEDSBalancer) close() {}
 
 func (f *fakeEDSBalancer) waitForChildPolicy(wantPolicy *loadBalancingConfig) error {
-	val, err := f.childPolicy.Receive()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	val, err := f.childPolicy.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("error waiting for childPolicy: %v", err)
 	}
@@ -132,7 +140,10 @@ func (f *fakeEDSBalancer) waitForChildPolicy(wantPolicy *loadBalancingConfig) er
 }
 
 func (f *fakeEDSBalancer) waitForSubConnStateChange(wantState *scStateChange) error {
-	val, err := f.subconnStateChange.Receive()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	val, err := f.subconnStateChange.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("error waiting for subconnStateChange: %v", err)
 	}
@@ -144,7 +155,10 @@ func (f *fakeEDSBalancer) waitForSubConnStateChange(wantState *scStateChange) er
 }
 
 func (f *fakeEDSBalancer) waitForEDSResponse(wantUpdate xdsclient.EndpointsUpdate) error {
-	val, err := f.edsUpdate.Receive()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	val, err := f.edsUpdate.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("error waiting for edsUpdate: %v", err)
 	}
@@ -176,7 +190,9 @@ func (*fakeSubConn) Connect()                           { panic("implement me") 
 func waitForNewXDSClientWithEDSWatch(t *testing.T, ch *testutils.Channel, wantName string) *fakeclient.Client {
 	t.Helper()
 
-	val, err := ch.Receive()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	val, err := ch.Receive(ctx)
 	if err != nil {
 		t.Fatalf("error when waiting for a new xds client: %v", err)
 		return nil
@@ -199,7 +215,9 @@ func waitForNewXDSClientWithEDSWatch(t *testing.T, ch *testutils.Channel, wantNa
 func waitForNewEDSLB(t *testing.T, ch *testutils.Channel) *fakeEDSBalancer {
 	t.Helper()
 
-	val, err := ch.Receive()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	val, err := ch.Receive(ctx)
 	if err != nil {
 		t.Fatalf("error when waiting for a new edsLB: %v", err)
 		return nil

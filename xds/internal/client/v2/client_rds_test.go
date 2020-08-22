@@ -19,6 +19,7 @@
 package v2
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -35,7 +36,9 @@ import (
 // watch.
 func doLDS(t *testing.T, v2c xdsclient.APIClient, fakeServer *fakeserver.Server) {
 	v2c.AddWatch(xdsclient.ListenerResource, goodLDSTarget1)
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout waiting for LDS request: %v", err)
 	}
 }
