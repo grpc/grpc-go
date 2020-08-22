@@ -799,6 +799,6 @@ func (s) TestEDSPriority_FirstPriorityUnavailable(t *testing.T) {
 	clab2 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	edsb.handleEDSResponse(parseEDSRespProtoForTesting(clab2.Build()))
 
-	// Wait after the init timer timeout, to ensure it doesn't fail.
-	time.Sleep(time.Second)
+	// Wait after double the init timer timeout, to ensure it doesn't fail.
+	time.Sleep(testPriorityInitTimeout * 2)
 }
