@@ -48,6 +48,12 @@ func (edsImpl *edsBalancerImpl) handlePriorityChange() {
 	// Everything was removed by EDS.
 	if !edsImpl.priorityLowest.isSet() {
 		edsImpl.priorityInUse = newPriorityTypeUnset()
+		// Stop the init timer. This can happen if the only priority is removed
+		// shortly after it's added.
+		if timer := edsImpl.priorityInitTimer; timer != nil {
+			timer.Stop()
+			edsImpl.priorityInitTimer = nil
+		}
 		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(errAllPrioritiesRemoved)})
 		return
 	}
@@ -116,7 +122,7 @@ func (edsImpl *edsBalancerImpl) startPriority(priority priorityType) {
 	edsImpl.priorityInitTimer = time.AfterFunc(defaultPriorityInitTimeout, func() {
 		edsImpl.priorityMu.Lock()
 		defer edsImpl.priorityMu.Unlock()
-		if !edsImpl.priorityInUse.equal(priority) {
+		if !edsImpl.priorityInUse.isSet() || !edsImpl.priorityInUse.equal(priority) {
 			return
 		}
 		edsImpl.priorityInitTimer = nil
@@ -309,14 +315,18 @@ func (p priorityType) isSet() bool {
 }
 
 func (p priorityType) equal(p2 priorityType) bool {
+	if !p.isSet() && !p2.isSet() {
+		return true
+	}
 	if !p.isSet() || !p2.isSet() {
-		panic("priority unset")
+		return false
 	}
 	return p == p2
 }
 
 func (p priorityType) higherThan(p2 priorityType) bool {
 	if !p.isSet() || !p2.isSet() {
+		// TODO(menghanl): return an appropriate value instead of panic.
 		panic("priority unset")
 	}
 	return p.p < p2.p
@@ -324,6 +334,7 @@ func (p priorityType) higherThan(p2 priorityType) bool {
 
 func (p priorityType) lowerThan(p2 priorityType) bool {
 	if !p.isSet() || !p2.isSet() {
+		// TODO(menghanl): return an appropriate value instead of panic.
 		panic("priority unset")
 	}
 	return p.p > p2.p
