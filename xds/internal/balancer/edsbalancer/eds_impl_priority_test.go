@@ -656,6 +656,46 @@ func (s) TestPriorityType(t *testing.T) {
 	}
 }
 
+func (s) TestPriorityTypeEqual(t *testing.T) {
+	tests := []struct {
+		name   string
+		p1, p2 priorityType
+		want   bool
+	}{
+		{
+			name: "equal",
+			p1:   newPriorityType(12),
+			p2:   newPriorityType(12),
+			want: true,
+		},
+		{
+			name: "not equal",
+			p1:   newPriorityType(12),
+			p2:   newPriorityType(34),
+			want: false,
+		},
+		{
+			name: "one not set",
+			p1:   newPriorityType(1),
+			p2:   newPriorityTypeUnset(),
+			want: false,
+		},
+		{
+			name: "both not set",
+			p1:   newPriorityTypeUnset(),
+			p2:   newPriorityTypeUnset(),
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.p1.equal(tt.p2); got != tt.want {
+				t.Errorf("equal() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // Test the case where the high priority contains no backends. The low priority
 // will be used.
 func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
@@ -774,4 +814,29 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	if err := testutils.IsRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
+}
+
+// Test the case where the first and only priority is removed.
+func (s) TestEDSPriority_FirstPriorityUnavailable(t *testing.T) {
+	const testPriorityInitTimeout = time.Second
+	defer func(t time.Duration) {
+		defaultPriorityInitTimeout = t
+	}(defaultPriorityInitTimeout)
+	defaultPriorityInitTimeout = testPriorityInitTimeout
+
+	cc := testutils.NewTestClientConn(t)
+	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+
+	// One localities, with priorities [0], each with one backend.
+	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+
+	// Remove the only localities.
+	clab2 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	edsb.handleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab2.Build()))
+
+	// Wait after double the init timer timeout, to ensure it doesn't fail.
+	time.Sleep(testPriorityInitTimeout * 2)
 }
