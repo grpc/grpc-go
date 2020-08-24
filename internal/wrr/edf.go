@@ -25,9 +25,10 @@ import (
 // edfWrr is a struct for EDF weighted round robin implementation.
 type edfWrr struct {
 	lock               sync.Mutex
-	items              edfPriorityQueue
+	queue              edfPriorityQueue
 	currentOrderOffset uint64
 	currentTime        float64
+	items              map[interface{}]*edfEntry
 }
 
 // NewEDF creates Earliest Deadline First (EDF)
@@ -35,11 +36,14 @@ type edfWrr struct {
 // Each pick from the schedule has the earliest deadline entry selected. Entries have deadlines set
 // at current time + 1 / weight, providing weighted round robin behavior with O(log n) pick time.
 func NewEDF() WRR {
-	return &edfWrr{}
+	return &edfWrr{
+		items: make(map[interface{}]*edfEntry),
+	}
 }
 
 // edfEntry is an internal wrapper for item that also stores weight and relative position in the queue.
 type edfEntry struct {
+	index       int
 	deadline    float64
 	weight      int64
 	orderOffset uint64
@@ -53,7 +57,11 @@ func (pq edfPriorityQueue) Len() int { return len(pq) }
 func (pq edfPriorityQueue) Less(i, j int) bool {
 	return pq[i].deadline < pq[j].deadline || pq[i].deadline == pq[j].deadline && pq[i].orderOffset < pq[j].orderOffset
 }
-func (pq edfPriorityQueue) Swap(i, j int) { pq[i], pq[j] = pq[j], pq[i] }
+func (pq edfPriorityQueue) Swap(i, j int) {
+	pq[i], pq[j] = pq[j], pq[i]
+	pq[i].index = i
+	pq[j].index = j
+}
 
 func (pq *edfPriorityQueue) Push(x interface{}) {
 	*pq = append(*pq, x.(*edfEntry))
@@ -65,28 +73,56 @@ func (pq *edfPriorityQueue) Pop() interface{} {
 	return old[len(old)-1]
 }
 
-func (edf *edfWrr) Add(item interface{}, weight int64) {
+func (edf *edfWrr) Next() interface{} {
 	edf.lock.Lock()
 	defer edf.lock.Unlock()
-	entry := edfEntry{
+	if edf.queue.Len() == 0 {
+		return nil
+	}
+	item := edf.queue[0]
+	edf.currentTime = item.deadline
+	item.deadline = edf.currentTime + 1.0/float64(item.weight)
+	heap.Fix(&edf.queue, 0)
+	return item.item
+}
+
+func (edf *edfWrr) Remove(item interface{}) {
+	edf.lock.Lock()
+	defer edf.lock.Unlock()
+	edf.removeLocked(item)
+}
+
+func (edf *edfWrr) removeLocked(item interface{}) {
+	entry, ok := edf.items[item]
+	if !ok {
+		return
+	}
+	heap.Remove(&edf.queue, entry.index)
+	delete(edf.items, item)
+}
+
+func (edf *edfWrr) UpdateOrAdd(item interface{}, weight int64) {
+	edf.lock.Lock()
+	defer edf.lock.Unlock()
+
+	if weight == 0 {
+		edf.removeLocked(item)
+		return
+	}
+
+	if entry, ok := edf.items[item]; ok {
+		entry.weight = weight
+		return
+	}
+
+	entry := &edfEntry{
 		deadline:    edf.currentTime + 1.0/float64(weight),
 		weight:      weight,
 		item:        item,
 		orderOffset: edf.currentOrderOffset,
+		index:       edf.queue.Len(),
 	}
+	edf.items[item] = entry
 	edf.currentOrderOffset++
-	heap.Push(&edf.items, &entry)
-}
-
-func (edf *edfWrr) Next() interface{} {
-	edf.lock.Lock()
-	defer edf.lock.Unlock()
-	if len(edf.items) == 0 {
-		return nil
-	}
-	item := edf.items[0]
-	edf.currentTime = item.deadline
-	item.deadline = edf.currentTime + 1.0/float64(item.weight)
-	heap.Fix(&edf.items, 0)
-	return item.item
+	heap.Push(&edf.queue, entry)
 }

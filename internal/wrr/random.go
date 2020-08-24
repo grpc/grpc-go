@@ -33,12 +33,15 @@ type weightedItem struct {
 type randomWRR struct {
 	mu           sync.RWMutex
 	items        []*weightedItem
+	itemIndex    map[interface{}]int
 	sumOfWeights int64
 }
 
 // NewRandom creates a new WRR with random.
 func NewRandom() WRR {
-	return &randomWRR{}
+	return &randomWRR{
+		itemIndex: make(map[interface{}]int),
+	}
 }
 
 var grpcrandInt63n = grpcrand.Int63n
@@ -61,10 +64,26 @@ func (rw *randomWRR) Next() (item interface{}) {
 	return rw.items[len(rw.items)-1].Item
 }
 
-func (rw *randomWRR) Add(item interface{}, weight int64) {
+func (rw *randomWRR) UpdateOrAdd(item interface{}, weight int64) {
 	rw.mu.Lock()
 	defer rw.mu.Unlock()
+	if idx, ok := rw.itemIndex[item]; ok {
+		rw.sumOfWeights += weight - rw.items[idx].Weight
+		rw.items[idx].Weight = weight
+		return
+	}
 	rItem := &weightedItem{Item: item, Weight: weight}
 	rw.items = append(rw.items, rItem)
+	rw.itemIndex[item] = len(rw.items) - 1
 	rw.sumOfWeights += weight
+}
+
+func (rw *randomWRR) Remove(item interface{}) {
+	rw.mu.Lock()
+	defer rw.mu.Unlock()
+	if idx, ok := rw.itemIndex[item]; ok {
+		rw.sumOfWeights -= rw.items[idx].Weight
+		rw.items = append(rw.items[:idx], rw.items[idx+1:]...)
+		delete(rw.itemIndex, item)
+	}
 }

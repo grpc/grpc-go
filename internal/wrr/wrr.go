@@ -21,12 +21,16 @@ package wrr
 
 // WRR defines an interface that implements weighted round robin.
 type WRR interface {
-	// Add adds an item with weight to the WRR set.
+	// UpdateOrAdd update the item with new `weight` or add the
+	// item to the WRR set if item is not existed.
 	//
-	// Add and Next need to be thread safe.
-	Add(item interface{}, weight int64)
+	// UpdateOrAdd, Remove and Next need to be thread safe.
+	UpdateOrAdd(item interface{}, weight int64)
 	// Next returns the next picked item.
 	//
-	// Add and Next need to be thread safe.
+	// UpdateOrAdd, Remove and Next need to be thread safe.
 	Next() interface{}
+
+	// UpdateOrAdd, Remove and Next need to be thread safe.
+	Remove(item interface{})
 }

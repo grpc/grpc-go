@@ -22,9 +22,9 @@ import (
 
 func (s) TestEDFOnEndpointsWithSameWeight(t *testing.T) {
 	wrr := NewEDF()
-	wrr.Add("1", 1)
-	wrr.Add("2", 1)
-	wrr.Add("3", 1)
+	wrr.UpdateOrAdd("1", 1)
+	wrr.UpdateOrAdd("2", 1)
+	wrr.UpdateOrAdd("3", 1)
 	expected := []string{"1", "2", "3", "1", "2", "3", "1", "2", "3", "1", "2", "3"}
 	for i := 0; i < len(expected); i++ {
 		item := wrr.Next().(string)
