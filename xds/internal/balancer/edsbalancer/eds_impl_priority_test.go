@@ -818,13 +818,10 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 // Test the case where the first and only priority is removed.
 func (s) TestEDSPriority_FirstPriorityUnavailable(t *testing.T) {
 	const testPriorityInitTimeout = time.Second
-	defer func() func() {
-		old := defaultPriorityInitTimeout
-		defaultPriorityInitTimeout = testPriorityInitTimeout
-		return func() {
-			defaultPriorityInitTimeout = old
-		}
-	}()()
+	defer func(t time.Duration) {
+		defaultPriorityInitTimeout = t
+	}(defaultPriorityInitTimeout)
+	defaultPriorityInitTimeout = testPriorityInitTimeout
 
 	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
