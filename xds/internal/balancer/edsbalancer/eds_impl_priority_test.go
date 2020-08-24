@@ -655,6 +655,46 @@ func (s) TestPriorityType(t *testing.T) {
 	}
 }
 
+func (s) TestPriorityTypeEqual(t *testing.T) {
+	tests := []struct {
+		name   string
+		p1, p2 priorityType
+		want   bool
+	}{
+		{
+			name: "equal",
+			p1:   newPriorityType(12),
+			p2:   newPriorityType(12),
+			want: true,
+		},
+		{
+			name: "not equal",
+			p1:   newPriorityType(12),
+			p2:   newPriorityType(34),
+			want: false,
+		},
+		{
+			name: "one not set",
+			p1:   newPriorityType(1),
+			p2:   newPriorityTypeUnset(),
+			want: false,
+		},
+		{
+			name: "both not set",
+			p1:   newPriorityTypeUnset(),
+			p2:   newPriorityTypeUnset(),
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.p1.equal(tt.p2); got != tt.want {
+				t.Errorf("equal() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // Test the case where the high priority contains no backends. The low priority
 // will be used.
 func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {

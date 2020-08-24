@@ -315,14 +315,18 @@ func (p priorityType) isSet() bool {
 }
 
 func (p priorityType) equal(p2 priorityType) bool {
+	if !p.isSet() && !p2.isSet() {
+		return true
+	}
 	if !p.isSet() || !p2.isSet() {
-		panic("priority unset")
+		return false
 	}
 	return p == p2
 }
 
 func (p priorityType) higherThan(p2 priorityType) bool {
 	if !p.isSet() || !p2.isSet() {
+		// TODO(menghanl): return an appropriate value instead of panic.
 		panic("priority unset")
 	}
 	return p.p < p2.p
@@ -330,6 +334,7 @@ func (p priorityType) higherThan(p2 priorityType) bool {
 
 func (p priorityType) lowerThan(p2 priorityType) bool {
 	if !p.isSet() || !p2.isSet() {
+		// TODO(menghanl): return an appropriate value instead of panic.
 		panic("priority unset")
 	}
 	return p.p > p2.p
