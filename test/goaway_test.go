@@ -48,7 +48,7 @@ func (s) TestGracefulClientOnGoAway(t *testing.T) {
 
 	s := grpc.NewServer(grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionAge: maxConnAge}))
 	defer s.Stop()
-	testpb.RegisterTestServiceServer(s, ss)
+	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(ss))
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {

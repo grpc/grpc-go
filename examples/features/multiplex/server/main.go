@@ -34,21 +34,13 @@ import (
 
 var port = flag.Int("port", 50051, "the port to serve on")
 
-// hwServer is used to implement helloworld.GreeterServer.
-type hwServer struct {
-	hwpb.UnimplementedGreeterServer
-}
-
-// SayHello implements helloworld.GreeterServer
-func (s *hwServer) SayHello(ctx context.Context, in *hwpb.HelloRequest) (*hwpb.HelloReply, error) {
+// sayHello implements helloworld.GreeterServer.SayHello
+func sayHello(ctx context.Context, in *hwpb.HelloRequest) (*hwpb.HelloReply, error) {
 	return &hwpb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
-type ecServer struct {
-	ecpb.UnimplementedEchoServer
-}
-
-func (s *ecServer) UnaryEcho(ctx context.Context, req *ecpb.EchoRequest) (*ecpb.EchoResponse, error) {
+// unaryEcho implements echo.Echo.UnaryEcho
+func unaryEcho(ctx context.Context, req *ecpb.EchoRequest) (*ecpb.EchoResponse, error) {
 	return &ecpb.EchoResponse{Message: req.Message}, nil
 }
 
@@ -63,10 +55,10 @@ func main() {
 	s := grpc.NewServer()
 
 	// Register Greeter on the server.
-	hwpb.RegisterGreeterServer(s, &hwServer{})
+	hwpb.RegisterGreeterService(s, &hwpb.GreeterService{SayHello: sayHello})
 
-	// Register RouteGuide on the same server.
-	ecpb.RegisterEchoServer(s, &ecServer{})
+	// Register Echo on the same server.
+	ecpb.RegisterEchoService(s, &ecpb.EchoService{UnaryEcho: unaryEcho})
 
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)

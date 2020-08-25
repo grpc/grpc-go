@@ -4,10 +4,14 @@
 package grpc_lb_v1
 
 import (
+	context "context"
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
 	duration "github.com/golang/protobuf/ptypes/duration"
 	timestamp "github.com/golang/protobuf/ptypes/timestamp"
+	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 	math "math"
 )
 
@@ -637,4 +641,118 @@ var fileDescriptor_7cd3f6d792743fdf = []byte{
 	0xb4, 0x7f, 0xa0, 0xfa, 0xb7, 0x63, 0x6f, 0x22, 0xb5, 0x1f, 0x22, 0x52, 0xb2, 0xb8, 0x48, 0x77,
 	0x6d, 0xe1, 0xbe, 0xfb, 0x2f, 0x00, 0x00, 0xff, 0xff, 0x3f, 0x47, 0x55, 0xac, 0xab, 0x06, 0x00,
 	0x00,
+}
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ context.Context
+var _ grpc.ClientConnInterface
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the grpc package it is being compiled against.
+const _ = grpc.SupportPackageIsVersion6
+
+// LoadBalancerClient is the client API for LoadBalancer service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+type LoadBalancerClient interface {
+	// Bidirectional rpc to get a list of servers.
+	BalanceLoad(ctx context.Context, opts ...grpc.CallOption) (LoadBalancer_BalanceLoadClient, error)
+}
+
+type loadBalancerClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewLoadBalancerClient(cc grpc.ClientConnInterface) LoadBalancerClient {
+	return &loadBalancerClient{cc}
+}
+
+func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...grpc.CallOption) (LoadBalancer_BalanceLoadClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_LoadBalancer_serviceDesc.Streams[0], "/grpc.lb.v1.LoadBalancer/BalanceLoad", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &loadBalancerBalanceLoadClient{stream}
+	return x, nil
+}
+
+type LoadBalancer_BalanceLoadClient interface {
+	Send(*LoadBalanceRequest) error
+	Recv() (*LoadBalanceResponse, error)
+	grpc.ClientStream
+}
+
+type loadBalancerBalanceLoadClient struct {
+	grpc.ClientStream
+}
+
+func (x *loadBalancerBalanceLoadClient) Send(m *LoadBalanceRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *loadBalancerBalanceLoadClient) Recv() (*LoadBalanceResponse, error) {
+	m := new(LoadBalanceResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// LoadBalancerServer is the server API for LoadBalancer service.
+type LoadBalancerServer interface {
+	// Bidirectional rpc to get a list of servers.
+	BalanceLoad(LoadBalancer_BalanceLoadServer) error
+}
+
+// UnimplementedLoadBalancerServer can be embedded to have forward compatible implementations.
+type UnimplementedLoadBalancerServer struct {
+}
+
+func (*UnimplementedLoadBalancerServer) BalanceLoad(srv LoadBalancer_BalanceLoadServer) error {
+	return status.Errorf(codes.Unimplemented, "method BalanceLoad not implemented")
+}
+
+func RegisterLoadBalancerServer(s *grpc.Server, srv LoadBalancerServer) {
+	s.RegisterService(&_LoadBalancer_serviceDesc, srv)
+}
+
+func _LoadBalancer_BalanceLoad_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(LoadBalancerServer).BalanceLoad(&loadBalancerBalanceLoadServer{stream})
+}
+
+type LoadBalancer_BalanceLoadServer interface {
+	Send(*LoadBalanceResponse) error
+	Recv() (*LoadBalanceRequest, error)
+	grpc.ServerStream
+}
+
+type loadBalancerBalanceLoadServer struct {
+	grpc.ServerStream
+}
+
+func (x *loadBalancerBalanceLoadServer) Send(m *LoadBalanceResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *loadBalancerBalanceLoadServer) Recv() (*LoadBalanceRequest, error) {
+	m := new(LoadBalanceRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+var _LoadBalancer_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "grpc.lb.v1.LoadBalancer",
+	HandlerType: (*LoadBalancerServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "BalanceLoad",
+			Handler:       _LoadBalancer_BalanceLoad_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
+	Metadata: "grpc/lb/v1/load_balancer.proto",
 }

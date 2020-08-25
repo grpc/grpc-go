@@ -35,11 +35,7 @@ import (
 
 var port = flag.Int("port", 50051, "the port to serve on")
 
-type ecServer struct {
-	pb.UnimplementedEchoServer
-}
-
-func (s *ecServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+func unaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: req.Message}, nil
 }
 
@@ -60,7 +56,7 @@ func main() {
 	s := grpc.NewServer(grpc.Creds(creds))
 
 	// Register EchoServer on the server.
-	pb.RegisterEchoServer(s, &ecServer{})
+	pb.RegisterEchoService(s, &pb.EchoService{UnaryEcho: unaryEcho})
 
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)

@@ -51,16 +51,12 @@ func logger(format string, a ...interface{}) {
 	fmt.Printf("LOG:\t"+format+"\n", a...)
 }
 
-type server struct {
-	pb.UnimplementedEchoServer
-}
-
-func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
+func unaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	fmt.Printf("unary echoing message %q\n", in.Message)
 	return &pb.EchoResponse{Message: in.Message}, nil
 }
 
-func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
+func bidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
 	for {
 		in, err := stream.Recv()
 		if err != nil {
@@ -156,8 +152,11 @@ func main() {
 
 	s := grpc.NewServer(grpc.Creds(creds), grpc.UnaryInterceptor(unaryInterceptor), grpc.StreamInterceptor(streamInterceptor))
 
-	// Register EchoServer on the server.
-	pb.RegisterEchoServer(s, &server{})
+	// Register EchoService on the server.
+	pb.RegisterEchoService(s, &pb.EchoService{
+		UnaryEcho:                  unaryEcho,
+		BidirectionalStreamingEcho: bidirectionalStreamingEcho,
+	})
 
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
