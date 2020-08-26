@@ -24,9 +24,6 @@ type MeshCertificateServiceService struct {
 }
 
 func (s *MeshCertificateServiceService) createCertificate(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	if s.CreateCertificate == nil {
-		return nil, status.Errorf(codes.Unimplemented, "method CreateCertificate not implemented")
-	}
 	in := new(MeshCertificateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -46,12 +43,18 @@ func (s *MeshCertificateServiceService) createCertificate(_ interface{}, ctx con
 
 // RegisterMeshCertificateServiceService registers a service implementation with a gRPC server.
 func RegisterMeshCertificateServiceService(s grpc.ServiceRegistrar, srv *MeshCertificateServiceService) {
+	srvCopy := *srv
+	if srvCopy.CreateCertificate == nil {
+		srvCopy.CreateCertificate = func(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method CreateCertificate not implemented")
+		}
+	}
 	sd := grpc.ServiceDesc{
 		ServiceName: "google.security.meshca.v1.MeshCertificateService",
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "CreateCertificate",
-				Handler:    srv.createCertificate,
+				Handler:    srvCopy.createCertificate,
 			},
 		},
 		Streams:  []grpc.StreamDesc{},

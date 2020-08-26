@@ -23,9 +23,6 @@ type RouteLookupServiceService struct {
 }
 
 func (s *RouteLookupServiceService) routeLookup(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	if s.RouteLookup == nil {
-		return nil, status.Errorf(codes.Unimplemented, "method RouteLookup not implemented")
-	}
 	in := new(RouteLookupRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -45,12 +42,18 @@ func (s *RouteLookupServiceService) routeLookup(_ interface{}, ctx context.Conte
 
 // RegisterRouteLookupServiceService registers a service implementation with a gRPC server.
 func RegisterRouteLookupServiceService(s grpc.ServiceRegistrar, srv *RouteLookupServiceService) {
+	srvCopy := *srv
+	if srvCopy.RouteLookup == nil {
+		srvCopy.RouteLookup = func(context.Context, *RouteLookupRequest) (*RouteLookupResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method RouteLookup not implemented")
+		}
+	}
 	sd := grpc.ServiceDesc{
 		ServiceName: "grpc.lookup.v1.RouteLookupService",
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "RouteLookup",
-				Handler:    srv.routeLookup,
+				Handler:    srvCopy.routeLookup,
 			},
 		},
 		Streams:  []grpc.StreamDesc{},

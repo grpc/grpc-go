@@ -241,7 +241,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 		}
 		g.Annotate(serviceType+"."+method.GoName, method.Location)
 		g.P(method.Comments.Leading,
-			handlerSignature(g, method))
+			method.GoName, " func", handlerSignature(g, method))
 	}
 	g.P("}")
 	g.P()
@@ -270,6 +270,19 @@ func genRegisterFunction(gen *protogen.Plugin, file *protogen.File, g *protogen.
 		g.P(deprecationComment)
 	}
 	g.P("func Register", service.GoName, "Service(s ", grpcPackage.Ident("ServiceRegistrar"), ", srv *", service.GoName, "Service) {")
+	g.P("srvCopy := *srv")
+	// Add Unimplemented defaults for unset handlers
+	for _, method := range service.Methods {
+		g.P("if srvCopy.", method.GoName, " == nil {")
+		g.P("srvCopy.", method.GoName, " = func", handlerSignature(g, method), "{")
+		nilArg := ""
+		if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
+			nilArg = "nil, "
+		}
+		g.P("return ", nilArg, statusPackage.Ident("Errorf"), "(", codesPackage.Ident("Unimplemented"), `, "method `, method.GoName, ` not implemented")`)
+		g.P("}")
+		g.P("}")
+	}
 
 	// Service descriptor.
 	g.P("sd := ", grpcPackage.Ident("ServiceDesc"), " {")
@@ -281,7 +294,7 @@ func genRegisterFunction(gen *protogen.Plugin, file *protogen.File, g *protogen.
 		}
 		g.P("{")
 		g.P("MethodName: ", strconv.Quote(string(method.Desc.Name())), ",")
-		g.P("Handler: srv.", unexport(method.GoName), ",")
+		g.P("Handler: srvCopy.", unexport(method.GoName), ",")
 		g.P("},")
 	}
 	g.P("},")
@@ -292,7 +305,7 @@ func genRegisterFunction(gen *protogen.Plugin, file *protogen.File, g *protogen.
 		}
 		g.P("{")
 		g.P("StreamName: ", strconv.Quote(string(method.Desc.Name())), ",")
-		g.P("Handler: srv.", unexport(method.GoName), ",")
+		g.P("Handler: srvCopy.", unexport(method.GoName), ",")
 		if method.Desc.IsStreamingServer() {
 			g.P("ServerStreams: true,")
 		}
@@ -384,43 +397,34 @@ func handlerSignature(g *protogen.GeneratedFile, method *protogen.Method) string
 	if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
 		reqArgs = append(reqArgs, method.Parent.GoName+"_"+method.GoName+"Server")
 	}
-	return method.GoName + " func(" + strings.Join(reqArgs, ", ") + ") " + ret
+	return "(" + strings.Join(reqArgs, ", ") + ") " + ret
 }
 
-func unaryHandlerSignature(g *protogen.GeneratedFile) string {
-	return "(_ interface{}, ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context")) +
-		", dec func(interface{}) error, interceptor " + g.QualifiedGoIdent(grpcPackage.Ident("UnaryServerInterceptor")) + ") (interface{}, error)"
-}
-
-func streamHandlerSignature(g *protogen.GeneratedFile) string {
+func genericHandlerSignature(g *protogen.GeneratedFile, method *protogen.Method) string {
+	if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
+		// Unary
+		return "(_ interface{}, ctx " + g.QualifiedGoIdent(contextPackage.Ident("Context")) +
+			", dec func(interface{}) error, interceptor " +
+			g.QualifiedGoIdent(grpcPackage.Ident("UnaryServerInterceptor")) + ") (interface{}, error)"
+	}
+	// Streaming
 	return "(_ interface{}, stream " + g.QualifiedGoIdent(grpcPackage.Ident("ServerStream")) + ") error"
 }
 
 func genMethodHandler(gen *protogen.Plugin, g *protogen.GeneratedFile, method *protogen.Method) {
 	service := method.Parent
 
-	nilArg := ""
-	signature := streamHandlerSignature(g)
-	if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
-		nilArg = "nil,"
-		signature = unaryHandlerSignature(g)
-	}
-	g.P("func (s *", service.GoName, "Service) ", unexport(method.GoName), signature, " {")
+	g.P("func (s *", service.GoName, "Service) ", unexport(method.GoName), genericHandlerSignature(g, method), " {")
 
-	g.P("if s.", method.GoName, " == nil {")
-	g.P("return ", nilArg, statusPackage.Ident("Errorf"), "(", codesPackage.Ident("Unimplemented"), `, "method `, method.GoName, ` not implemented")`)
-	g.P("}")
-	genHandlerBody(gen, g, method)
-
-	g.P("}")
-}
-
-func genHandlerBody(gen *protogen.Plugin, g *protogen.GeneratedFile, method *protogen.Method) {
-	service := method.Parent
+	// Unary
 	if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
 		g.P("in := new(", method.Input.GoIdent, ")")
 		g.P("if err := dec(in); err != nil { return nil, err }")
-		g.P("if interceptor == nil { return s.", method.GoName, "(ctx, in) }")
+
+		g.P("if interceptor == nil {")
+		g.P("return s.", method.GoName, "(ctx, in)")
+		g.P("}")
+
 		g.P("info := &", grpcPackage.Ident("UnaryServerInfo"), "{")
 		g.P("Server: s,")
 		g.P("FullMethod: ", strconv.Quote(fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.GoName)), ",")
@@ -429,8 +433,11 @@ func genHandlerBody(gen *protogen.Plugin, g *protogen.GeneratedFile, method *pro
 		g.P("return s.", method.GoName, "(ctx, req.(*", method.Input.GoIdent, "))")
 		g.P("}")
 		g.P("return interceptor(ctx, in, info, handler)")
+		g.P("}")
 		return
 	}
+
+	// Streaming
 	streamType := unexport(service.GoName) + method.GoName + "Server"
 	if !method.Desc.IsStreamingClient() {
 		// Server-streaming
@@ -441,6 +448,7 @@ func genHandlerBody(gen *protogen.Plugin, g *protogen.GeneratedFile, method *pro
 		// Bidi-streaming
 		g.P("return s.", method.GoName, "(&", streamType, "{stream})")
 	}
+	g.P("}")
 }
 
 func genServerStreamTypes(gen *protogen.Plugin, g *protogen.GeneratedFile, method *protogen.Method) {

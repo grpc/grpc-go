@@ -26,9 +26,6 @@ type ProfilingService struct {
 }
 
 func (s *ProfilingService) enable(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	if s.Enable == nil {
-		return nil, status.Errorf(codes.Unimplemented, "method Enable not implemented")
-	}
 	in := new(EnableRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -46,9 +43,6 @@ func (s *ProfilingService) enable(_ interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 func (s *ProfilingService) getStreamStats(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	if s.GetStreamStats == nil {
-		return nil, status.Errorf(codes.Unimplemented, "method GetStreamStats not implemented")
-	}
 	in := new(GetStreamStatsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -68,16 +62,27 @@ func (s *ProfilingService) getStreamStats(_ interface{}, ctx context.Context, de
 
 // RegisterProfilingService registers a service implementation with a gRPC server.
 func RegisterProfilingService(s grpc.ServiceRegistrar, srv *ProfilingService) {
+	srvCopy := *srv
+	if srvCopy.Enable == nil {
+		srvCopy.Enable = func(context.Context, *EnableRequest) (*EnableResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method Enable not implemented")
+		}
+	}
+	if srvCopy.GetStreamStats == nil {
+		srvCopy.GetStreamStats = func(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method GetStreamStats not implemented")
+		}
+	}
 	sd := grpc.ServiceDesc{
 		ServiceName: "grpc.go.profiling.v1alpha.Profiling",
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "Enable",
-				Handler:    srv.enable,
+				Handler:    srvCopy.enable,
 			},
 			{
 				MethodName: "GetStreamStats",
-				Handler:    srv.getStreamStats,
+				Handler:    srvCopy.getStreamStats,
 			},
 		},
 		Streams:  []grpc.StreamDesc{},

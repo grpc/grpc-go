@@ -52,9 +52,6 @@ type GreeterService struct {
 }
 
 func (s *GreeterService) sayHello(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	if s.SayHello == nil {
-		return nil, status.Errorf(codes.Unimplemented, "method SayHello not implemented")
-	}
 	in := new(HelloRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -74,12 +71,18 @@ func (s *GreeterService) sayHello(_ interface{}, ctx context.Context, dec func(i
 
 // RegisterGreeterService registers a service implementation with a gRPC server.
 func RegisterGreeterService(s grpc.ServiceRegistrar, srv *GreeterService) {
+	srvCopy := *srv
+	if srvCopy.SayHello == nil {
+		srvCopy.SayHello = func(context.Context, *HelloRequest) (*HelloReply, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method SayHello not implemented")
+		}
+	}
 	sd := grpc.ServiceDesc{
 		ServiceName: "helloworld.Greeter",
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "SayHello",
-				Handler:    srv.sayHello,
+				Handler:    srvCopy.sayHello,
 			},
 		},
 		Streams:  []grpc.StreamDesc{},

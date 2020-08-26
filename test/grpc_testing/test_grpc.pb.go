@@ -251,9 +251,6 @@ type TestServiceService struct {
 }
 
 func (s *TestServiceService) emptyCall(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	if s.EmptyCall == nil {
-		return nil, status.Errorf(codes.Unimplemented, "method EmptyCall not implemented")
-	}
 	in := new(Empty)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -271,9 +268,6 @@ func (s *TestServiceService) emptyCall(_ interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 func (s *TestServiceService) unaryCall(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	if s.UnaryCall == nil {
-		return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
-	}
 	in := new(SimpleRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -291,9 +285,6 @@ func (s *TestServiceService) unaryCall(_ interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 func (s *TestServiceService) streamingOutputCall(_ interface{}, stream grpc.ServerStream) error {
-	if s.StreamingOutputCall == nil {
-		return status.Errorf(codes.Unimplemented, "method StreamingOutputCall not implemented")
-	}
 	m := new(StreamingOutputCallRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -301,21 +292,12 @@ func (s *TestServiceService) streamingOutputCall(_ interface{}, stream grpc.Serv
 	return s.StreamingOutputCall(m, &testServiceStreamingOutputCallServer{stream})
 }
 func (s *TestServiceService) streamingInputCall(_ interface{}, stream grpc.ServerStream) error {
-	if s.StreamingInputCall == nil {
-		return status.Errorf(codes.Unimplemented, "method StreamingInputCall not implemented")
-	}
 	return s.StreamingInputCall(&testServiceStreamingInputCallServer{stream})
 }
 func (s *TestServiceService) fullDuplexCall(_ interface{}, stream grpc.ServerStream) error {
-	if s.FullDuplexCall == nil {
-		return status.Errorf(codes.Unimplemented, "method FullDuplexCall not implemented")
-	}
 	return s.FullDuplexCall(&testServiceFullDuplexCallServer{stream})
 }
 func (s *TestServiceService) halfDuplexCall(_ interface{}, stream grpc.ServerStream) error {
-	if s.HalfDuplexCall == nil {
-		return status.Errorf(codes.Unimplemented, "method HalfDuplexCall not implemented")
-	}
 	return s.HalfDuplexCall(&testServiceHalfDuplexCallServer{stream})
 }
 
@@ -400,38 +382,69 @@ func (x *testServiceHalfDuplexCallServer) Recv() (*StreamingOutputCallRequest, e
 
 // RegisterTestServiceService registers a service implementation with a gRPC server.
 func RegisterTestServiceService(s grpc.ServiceRegistrar, srv *TestServiceService) {
+	srvCopy := *srv
+	if srvCopy.EmptyCall == nil {
+		srvCopy.EmptyCall = func(context.Context, *Empty) (*Empty, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method EmptyCall not implemented")
+		}
+	}
+	if srvCopy.UnaryCall == nil {
+		srvCopy.UnaryCall = func(context.Context, *SimpleRequest) (*SimpleResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
+		}
+	}
+	if srvCopy.StreamingOutputCall == nil {
+		srvCopy.StreamingOutputCall = func(*StreamingOutputCallRequest, TestService_StreamingOutputCallServer) error {
+			return status.Errorf(codes.Unimplemented, "method StreamingOutputCall not implemented")
+		}
+	}
+	if srvCopy.StreamingInputCall == nil {
+		srvCopy.StreamingInputCall = func(TestService_StreamingInputCallServer) error {
+			return status.Errorf(codes.Unimplemented, "method StreamingInputCall not implemented")
+		}
+	}
+	if srvCopy.FullDuplexCall == nil {
+		srvCopy.FullDuplexCall = func(TestService_FullDuplexCallServer) error {
+			return status.Errorf(codes.Unimplemented, "method FullDuplexCall not implemented")
+		}
+	}
+	if srvCopy.HalfDuplexCall == nil {
+		srvCopy.HalfDuplexCall = func(TestService_HalfDuplexCallServer) error {
+			return status.Errorf(codes.Unimplemented, "method HalfDuplexCall not implemented")
+		}
+	}
 	sd := grpc.ServiceDesc{
 		ServiceName: "grpc.testing.TestService",
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "EmptyCall",
-				Handler:    srv.emptyCall,
+				Handler:    srvCopy.emptyCall,
 			},
 			{
 				MethodName: "UnaryCall",
-				Handler:    srv.unaryCall,
+				Handler:    srvCopy.unaryCall,
 			},
 		},
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName:    "StreamingOutputCall",
-				Handler:       srv.streamingOutputCall,
+				Handler:       srvCopy.streamingOutputCall,
 				ServerStreams: true,
 			},
 			{
 				StreamName:    "StreamingInputCall",
-				Handler:       srv.streamingInputCall,
+				Handler:       srvCopy.streamingInputCall,
 				ClientStreams: true,
 			},
 			{
 				StreamName:    "FullDuplexCall",
-				Handler:       srv.fullDuplexCall,
+				Handler:       srvCopy.fullDuplexCall,
 				ServerStreams: true,
 				ClientStreams: true,
 			},
 			{
 				StreamName:    "HalfDuplexCall",
-				Handler:       srv.halfDuplexCall,
+				Handler:       srvCopy.halfDuplexCall,
 				ServerStreams: true,
 				ClientStreams: true,
 			},

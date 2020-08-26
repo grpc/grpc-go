@@ -22,21 +22,24 @@ type LoadBalancerService struct {
 }
 
 func (s *LoadBalancerService) balanceLoad(_ interface{}, stream grpc.ServerStream) error {
-	if s.BalanceLoad == nil {
-		return status.Errorf(codes.Unimplemented, "method BalanceLoad not implemented")
-	}
 	return s.BalanceLoad(&loadBalancerBalanceLoadServer{stream})
 }
 
 // RegisterLoadBalancerService registers a service implementation with a gRPC server.
 func RegisterLoadBalancerService(s grpc.ServiceRegistrar, srv *LoadBalancerService) {
+	srvCopy := *srv
+	if srvCopy.BalanceLoad == nil {
+		srvCopy.BalanceLoad = func(LoadBalancer_BalanceLoadServer) error {
+			return status.Errorf(codes.Unimplemented, "method BalanceLoad not implemented")
+		}
+	}
 	sd := grpc.ServiceDesc{
 		ServiceName: "grpc.lb.v1.LoadBalancer",
 		Methods:     []grpc.MethodDesc{},
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName:    "BalanceLoad",
-				Handler:       srv.balanceLoad,
+				Handler:       srvCopy.balanceLoad,
 				ServerStreams: true,
 				ClientStreams: true,
 			},

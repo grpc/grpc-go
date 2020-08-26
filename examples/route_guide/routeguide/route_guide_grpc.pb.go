@@ -209,9 +209,6 @@ type RouteGuideService struct {
 }
 
 func (s *RouteGuideService) getFeature(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	if s.GetFeature == nil {
-		return nil, status.Errorf(codes.Unimplemented, "method GetFeature not implemented")
-	}
 	in := new(Point)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -229,9 +226,6 @@ func (s *RouteGuideService) getFeature(_ interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 func (s *RouteGuideService) listFeatures(_ interface{}, stream grpc.ServerStream) error {
-	if s.ListFeatures == nil {
-		return status.Errorf(codes.Unimplemented, "method ListFeatures not implemented")
-	}
 	m := new(Rectangle)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -239,15 +233,9 @@ func (s *RouteGuideService) listFeatures(_ interface{}, stream grpc.ServerStream
 	return s.ListFeatures(m, &routeGuideListFeaturesServer{stream})
 }
 func (s *RouteGuideService) recordRoute(_ interface{}, stream grpc.ServerStream) error {
-	if s.RecordRoute == nil {
-		return status.Errorf(codes.Unimplemented, "method RecordRoute not implemented")
-	}
 	return s.RecordRoute(&routeGuideRecordRouteServer{stream})
 }
 func (s *RouteGuideService) routeChat(_ interface{}, stream grpc.ServerStream) error {
-	if s.RouteChat == nil {
-		return status.Errorf(codes.Unimplemented, "method RouteChat not implemented")
-	}
 	return s.RouteChat(&routeGuideRouteChatServer{stream})
 }
 
@@ -310,28 +298,49 @@ func (x *routeGuideRouteChatServer) Recv() (*RouteNote, error) {
 
 // RegisterRouteGuideService registers a service implementation with a gRPC server.
 func RegisterRouteGuideService(s grpc.ServiceRegistrar, srv *RouteGuideService) {
+	srvCopy := *srv
+	if srvCopy.GetFeature == nil {
+		srvCopy.GetFeature = func(context.Context, *Point) (*Feature, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method GetFeature not implemented")
+		}
+	}
+	if srvCopy.ListFeatures == nil {
+		srvCopy.ListFeatures = func(*Rectangle, RouteGuide_ListFeaturesServer) error {
+			return status.Errorf(codes.Unimplemented, "method ListFeatures not implemented")
+		}
+	}
+	if srvCopy.RecordRoute == nil {
+		srvCopy.RecordRoute = func(RouteGuide_RecordRouteServer) error {
+			return status.Errorf(codes.Unimplemented, "method RecordRoute not implemented")
+		}
+	}
+	if srvCopy.RouteChat == nil {
+		srvCopy.RouteChat = func(RouteGuide_RouteChatServer) error {
+			return status.Errorf(codes.Unimplemented, "method RouteChat not implemented")
+		}
+	}
 	sd := grpc.ServiceDesc{
 		ServiceName: "routeguide.RouteGuide",
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "GetFeature",
-				Handler:    srv.getFeature,
+				Handler:    srvCopy.getFeature,
 			},
 		},
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName:    "ListFeatures",
-				Handler:       srv.listFeatures,
+				Handler:       srvCopy.listFeatures,
 				ServerStreams: true,
 			},
 			{
 				StreamName:    "RecordRoute",
-				Handler:       srv.recordRoute,
+				Handler:       srvCopy.recordRoute,
 				ClientStreams: true,
 			},
 			{
 				StreamName:    "RouteChat",
-				Handler:       srv.routeChat,
+				Handler:       srvCopy.routeChat,
 				ServerStreams: true,
 				ClientStreams: true,
 			},
