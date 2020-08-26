@@ -27,14 +27,17 @@ type HandshakerServiceService struct {
 }
 
 func (s *HandshakerServiceService) doHandshake(_ interface{}, stream grpc.ServerStream) error {
-	if s.DoHandshake == nil {
-		return status.Errorf(codes.Unimplemented, "method DoHandshake not implemented")
-	}
 	return s.DoHandshake(&handshakerServiceDoHandshakeServer{stream})
 }
 
 // RegisterHandshakerServiceService registers a service implementation with a gRPC server.
+// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterHandshakerServiceService(s grpc.ServiceRegistrar, srv *HandshakerServiceService) {
+	if srv.DoHandshake == nil {
+		srv.DoHandshake = func(HandshakerService_DoHandshakeServer) error {
+			return status.Errorf(codes.Unimplemented, "method DoHandshake not implemented")
+		}
+	}
 	sd := grpc.ServiceDesc{
 		ServiceName: "grpc.gcp.HandshakerService",
 		Methods:     []grpc.MethodDesc{},

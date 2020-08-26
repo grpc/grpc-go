@@ -183,9 +183,6 @@ type TestServiceService struct {
 }
 
 func (s *TestServiceService) unaryCall(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	if s.UnaryCall == nil {
-		return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
-	}
 	in := new(SimpleRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -203,21 +200,12 @@ func (s *TestServiceService) unaryCall(_ interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 func (s *TestServiceService) fullDuplexCall(_ interface{}, stream grpc.ServerStream) error {
-	if s.FullDuplexCall == nil {
-		return status.Errorf(codes.Unimplemented, "method FullDuplexCall not implemented")
-	}
 	return s.FullDuplexCall(&testServiceFullDuplexCallServer{stream})
 }
 func (s *TestServiceService) clientStreamCall(_ interface{}, stream grpc.ServerStream) error {
-	if s.ClientStreamCall == nil {
-		return status.Errorf(codes.Unimplemented, "method ClientStreamCall not implemented")
-	}
 	return s.ClientStreamCall(&testServiceClientStreamCallServer{stream})
 }
 func (s *TestServiceService) serverStreamCall(_ interface{}, stream grpc.ServerStream) error {
-	if s.ServerStreamCall == nil {
-		return status.Errorf(codes.Unimplemented, "method ServerStreamCall not implemented")
-	}
 	m := new(SimpleRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -283,7 +271,28 @@ func (x *testServiceServerStreamCallServer) Send(m *SimpleResponse) error {
 }
 
 // RegisterTestServiceService registers a service implementation with a gRPC server.
+// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterTestServiceService(s grpc.ServiceRegistrar, srv *TestServiceService) {
+	if srv.UnaryCall == nil {
+		srv.UnaryCall = func(context.Context, *SimpleRequest) (*SimpleResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
+		}
+	}
+	if srv.FullDuplexCall == nil {
+		srv.FullDuplexCall = func(TestService_FullDuplexCallServer) error {
+			return status.Errorf(codes.Unimplemented, "method FullDuplexCall not implemented")
+		}
+	}
+	if srv.ClientStreamCall == nil {
+		srv.ClientStreamCall = func(TestService_ClientStreamCallServer) error {
+			return status.Errorf(codes.Unimplemented, "method ClientStreamCall not implemented")
+		}
+	}
+	if srv.ServerStreamCall == nil {
+		srv.ServerStreamCall = func(*SimpleRequest, TestService_ServerStreamCallServer) error {
+			return status.Errorf(codes.Unimplemented, "method ServerStreamCall not implemented")
+		}
+	}
 	sd := grpc.ServiceDesc{
 		ServiceName: "grpc.testing.TestService",
 		Methods: []grpc.MethodDesc{

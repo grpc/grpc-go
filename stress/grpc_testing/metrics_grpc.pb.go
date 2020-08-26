@@ -95,9 +95,6 @@ type MetricsServiceService struct {
 }
 
 func (s *MetricsServiceService) getAllGauges(_ interface{}, stream grpc.ServerStream) error {
-	if s.GetAllGauges == nil {
-		return status.Errorf(codes.Unimplemented, "method GetAllGauges not implemented")
-	}
 	m := new(EmptyMessage)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -105,9 +102,6 @@ func (s *MetricsServiceService) getAllGauges(_ interface{}, stream grpc.ServerSt
 	return s.GetAllGauges(m, &metricsServiceGetAllGaugesServer{stream})
 }
 func (s *MetricsServiceService) getGauge(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	if s.GetGauge == nil {
-		return nil, status.Errorf(codes.Unimplemented, "method GetGauge not implemented")
-	}
 	in := new(GaugeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -139,7 +133,18 @@ func (x *metricsServiceGetAllGaugesServer) Send(m *GaugeResponse) error {
 }
 
 // RegisterMetricsServiceService registers a service implementation with a gRPC server.
+// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterMetricsServiceService(s grpc.ServiceRegistrar, srv *MetricsServiceService) {
+	if srv.GetAllGauges == nil {
+		srv.GetAllGauges = func(*EmptyMessage, MetricsService_GetAllGaugesServer) error {
+			return status.Errorf(codes.Unimplemented, "method GetAllGauges not implemented")
+		}
+	}
+	if srv.GetGauge == nil {
+		srv.GetGauge = func(context.Context, *GaugeRequest) (*GaugeResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method GetGauge not implemented")
+		}
+	}
 	sd := grpc.ServiceDesc{
 		ServiceName: "grpc.testing.MetricsService",
 		Methods: []grpc.MethodDesc{

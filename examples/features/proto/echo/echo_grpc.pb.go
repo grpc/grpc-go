@@ -177,9 +177,6 @@ type EchoService struct {
 }
 
 func (s *EchoService) unaryEcho(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	if s.UnaryEcho == nil {
-		return nil, status.Errorf(codes.Unimplemented, "method UnaryEcho not implemented")
-	}
 	in := new(EchoRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -197,9 +194,6 @@ func (s *EchoService) unaryEcho(_ interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 func (s *EchoService) serverStreamingEcho(_ interface{}, stream grpc.ServerStream) error {
-	if s.ServerStreamingEcho == nil {
-		return status.Errorf(codes.Unimplemented, "method ServerStreamingEcho not implemented")
-	}
 	m := new(EchoRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -207,15 +201,9 @@ func (s *EchoService) serverStreamingEcho(_ interface{}, stream grpc.ServerStrea
 	return s.ServerStreamingEcho(m, &echoServerStreamingEchoServer{stream})
 }
 func (s *EchoService) clientStreamingEcho(_ interface{}, stream grpc.ServerStream) error {
-	if s.ClientStreamingEcho == nil {
-		return status.Errorf(codes.Unimplemented, "method ClientStreamingEcho not implemented")
-	}
 	return s.ClientStreamingEcho(&echoClientStreamingEchoServer{stream})
 }
 func (s *EchoService) bidirectionalStreamingEcho(_ interface{}, stream grpc.ServerStream) error {
-	if s.BidirectionalStreamingEcho == nil {
-		return status.Errorf(codes.Unimplemented, "method BidirectionalStreamingEcho not implemented")
-	}
 	return s.BidirectionalStreamingEcho(&echoBidirectionalStreamingEchoServer{stream})
 }
 
@@ -277,7 +265,28 @@ func (x *echoBidirectionalStreamingEchoServer) Recv() (*EchoRequest, error) {
 }
 
 // RegisterEchoService registers a service implementation with a gRPC server.
+// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterEchoService(s grpc.ServiceRegistrar, srv *EchoService) {
+	if srv.UnaryEcho == nil {
+		srv.UnaryEcho = func(context.Context, *EchoRequest) (*EchoResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method UnaryEcho not implemented")
+		}
+	}
+	if srv.ServerStreamingEcho == nil {
+		srv.ServerStreamingEcho = func(*EchoRequest, Echo_ServerStreamingEchoServer) error {
+			return status.Errorf(codes.Unimplemented, "method ServerStreamingEcho not implemented")
+		}
+	}
+	if srv.ClientStreamingEcho == nil {
+		srv.ClientStreamingEcho = func(Echo_ClientStreamingEchoServer) error {
+			return status.Errorf(codes.Unimplemented, "method ClientStreamingEcho not implemented")
+		}
+	}
+	if srv.BidirectionalStreamingEcho == nil {
+		srv.BidirectionalStreamingEcho = func(Echo_BidirectionalStreamingEchoServer) error {
+			return status.Errorf(codes.Unimplemented, "method BidirectionalStreamingEcho not implemented")
+		}
+	}
 	sd := grpc.ServiceDesc{
 		ServiceName: "grpc.examples.echo.Echo",
 		Methods: []grpc.MethodDesc{

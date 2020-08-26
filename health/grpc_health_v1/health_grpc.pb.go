@@ -40,9 +40,6 @@ type HealthService struct {
 }
 
 func (s *HealthService) check(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	if s.Check == nil {
-		return nil, status.Errorf(codes.Unimplemented, "method Check not implemented")
-	}
 	in := new(HealthCheckRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -60,9 +57,6 @@ func (s *HealthService) check(_ interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 func (s *HealthService) watch(_ interface{}, stream grpc.ServerStream) error {
-	if s.Watch == nil {
-		return status.Errorf(codes.Unimplemented, "method Watch not implemented")
-	}
 	m := new(HealthCheckRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -71,7 +65,18 @@ func (s *HealthService) watch(_ interface{}, stream grpc.ServerStream) error {
 }
 
 // RegisterHealthService registers a service implementation with a gRPC server.
+// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterHealthService(s grpc.ServiceRegistrar, srv *HealthService) {
+	if srv.Check == nil {
+		srv.Check = func(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method Check not implemented")
+		}
+	}
+	if srv.Watch == nil {
+		srv.Watch = func(*HealthCheckRequest, Health_WatchServer) error {
+			return status.Errorf(codes.Unimplemented, "method Watch not implemented")
+		}
+	}
 	sd := grpc.ServiceDesc{
 		ServiceName: "grpc.health.v1.Health",
 		Methods: []grpc.MethodDesc{

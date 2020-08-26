@@ -89,9 +89,6 @@ type SearchServiceService struct {
 }
 
 func (s *SearchServiceService) search(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	if s.Search == nil {
-		return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
-	}
 	in := new(SearchRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -109,9 +106,6 @@ func (s *SearchServiceService) search(_ interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 func (s *SearchServiceService) streamingSearch(_ interface{}, stream grpc.ServerStream) error {
-	if s.StreamingSearch == nil {
-		return status.Errorf(codes.Unimplemented, "method StreamingSearch not implemented")
-	}
 	return s.StreamingSearch(&searchServiceStreamingSearchServer{stream})
 }
 
@@ -138,7 +132,18 @@ func (x *searchServiceStreamingSearchServer) Recv() (*SearchRequest, error) {
 }
 
 // RegisterSearchServiceService registers a service implementation with a gRPC server.
+// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterSearchServiceService(s grpc.ServiceRegistrar, srv *SearchServiceService) {
+	if srv.Search == nil {
+		srv.Search = func(context.Context, *SearchRequest) (*SearchResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
+		}
+	}
+	if srv.StreamingSearch == nil {
+		srv.StreamingSearch = func(SearchService_StreamingSearchServer) error {
+			return status.Errorf(codes.Unimplemented, "method StreamingSearch not implemented")
+		}
+	}
 	sd := grpc.ServiceDesc{
 		ServiceName: "grpc.testing.SearchService",
 		Methods: []grpc.MethodDesc{

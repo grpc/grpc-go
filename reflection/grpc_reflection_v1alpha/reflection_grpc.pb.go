@@ -23,14 +23,17 @@ type ServerReflectionService struct {
 }
 
 func (s *ServerReflectionService) serverReflectionInfo(_ interface{}, stream grpc.ServerStream) error {
-	if s.ServerReflectionInfo == nil {
-		return status.Errorf(codes.Unimplemented, "method ServerReflectionInfo not implemented")
-	}
 	return s.ServerReflectionInfo(&serverReflectionServerReflectionInfoServer{stream})
 }
 
 // RegisterServerReflectionService registers a service implementation with a gRPC server.
+// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterServerReflectionService(s grpc.ServiceRegistrar, srv *ServerReflectionService) {
+	if srv.ServerReflectionInfo == nil {
+		srv.ServerReflectionInfo = func(ServerReflection_ServerReflectionInfoServer) error {
+			return status.Errorf(codes.Unimplemented, "method ServerReflectionInfo not implemented")
+		}
+	}
 	sd := grpc.ServiceDesc{
 		ServiceName: "grpc.reflection.v1alpha.ServerReflection",
 		Methods:     []grpc.MethodDesc{},
