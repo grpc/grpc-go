@@ -41,10 +41,10 @@ func (s *RouteLookupServiceService) routeLookup(_ interface{}, ctx context.Conte
 }
 
 // RegisterRouteLookupServiceService registers a service implementation with a gRPC server.
-// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterRouteLookupServiceService(s grpc.ServiceRegistrar, srv *RouteLookupServiceService) {
-	if srv.RouteLookup == nil {
-		srv.RouteLookup = func(context.Context, *RouteLookupRequest) (*RouteLookupResponse, error) {
+	srvCopy := *srv
+	if srvCopy.RouteLookup == nil {
+		srvCopy.RouteLookup = func(context.Context, *RouteLookupRequest) (*RouteLookupResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method RouteLookup not implemented")
 		}
 	}
@@ -53,7 +53,7 @@ func RegisterRouteLookupServiceService(s grpc.ServiceRegistrar, srv *RouteLookup
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "RouteLookup",
-				Handler:    srv.routeLookup,
+				Handler:    srvCopy.routeLookup,
 			},
 		},
 		Streams:  []grpc.StreamDesc{},

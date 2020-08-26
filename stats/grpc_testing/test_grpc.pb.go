@@ -271,25 +271,25 @@ func (x *testServiceServerStreamCallServer) Send(m *SimpleResponse) error {
 }
 
 // RegisterTestServiceService registers a service implementation with a gRPC server.
-// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterTestServiceService(s grpc.ServiceRegistrar, srv *TestServiceService) {
-	if srv.UnaryCall == nil {
-		srv.UnaryCall = func(context.Context, *SimpleRequest) (*SimpleResponse, error) {
+	srvCopy := *srv
+	if srvCopy.UnaryCall == nil {
+		srvCopy.UnaryCall = func(context.Context, *SimpleRequest) (*SimpleResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
 		}
 	}
-	if srv.FullDuplexCall == nil {
-		srv.FullDuplexCall = func(TestService_FullDuplexCallServer) error {
+	if srvCopy.FullDuplexCall == nil {
+		srvCopy.FullDuplexCall = func(TestService_FullDuplexCallServer) error {
 			return status.Errorf(codes.Unimplemented, "method FullDuplexCall not implemented")
 		}
 	}
-	if srv.ClientStreamCall == nil {
-		srv.ClientStreamCall = func(TestService_ClientStreamCallServer) error {
+	if srvCopy.ClientStreamCall == nil {
+		srvCopy.ClientStreamCall = func(TestService_ClientStreamCallServer) error {
 			return status.Errorf(codes.Unimplemented, "method ClientStreamCall not implemented")
 		}
 	}
-	if srv.ServerStreamCall == nil {
-		srv.ServerStreamCall = func(*SimpleRequest, TestService_ServerStreamCallServer) error {
+	if srvCopy.ServerStreamCall == nil {
+		srvCopy.ServerStreamCall = func(*SimpleRequest, TestService_ServerStreamCallServer) error {
 			return status.Errorf(codes.Unimplemented, "method ServerStreamCall not implemented")
 		}
 	}
@@ -298,24 +298,24 @@ func RegisterTestServiceService(s grpc.ServiceRegistrar, srv *TestServiceService
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "UnaryCall",
-				Handler:    srv.unaryCall,
+				Handler:    srvCopy.unaryCall,
 			},
 		},
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName:    "FullDuplexCall",
-				Handler:       srv.fullDuplexCall,
+				Handler:       srvCopy.fullDuplexCall,
 				ServerStreams: true,
 				ClientStreams: true,
 			},
 			{
 				StreamName:    "ClientStreamCall",
-				Handler:       srv.clientStreamCall,
+				Handler:       srvCopy.clientStreamCall,
 				ClientStreams: true,
 			},
 			{
 				StreamName:    "ServerStreamCall",
-				Handler:       srv.serverStreamCall,
+				Handler:       srvCopy.serverStreamCall,
 				ServerStreams: true,
 			},
 		},

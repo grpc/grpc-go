@@ -27,10 +27,10 @@ func (s *ServerReflectionService) serverReflectionInfo(_ interface{}, stream grp
 }
 
 // RegisterServerReflectionService registers a service implementation with a gRPC server.
-// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterServerReflectionService(s grpc.ServiceRegistrar, srv *ServerReflectionService) {
-	if srv.ServerReflectionInfo == nil {
-		srv.ServerReflectionInfo = func(ServerReflection_ServerReflectionInfoServer) error {
+	srvCopy := *srv
+	if srvCopy.ServerReflectionInfo == nil {
+		srvCopy.ServerReflectionInfo = func(ServerReflection_ServerReflectionInfoServer) error {
 			return status.Errorf(codes.Unimplemented, "method ServerReflectionInfo not implemented")
 		}
 	}
@@ -40,7 +40,7 @@ func RegisterServerReflectionService(s grpc.ServiceRegistrar, srv *ServerReflect
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName:    "ServerReflectionInfo",
-				Handler:       srv.serverReflectionInfo,
+				Handler:       srvCopy.serverReflectionInfo,
 				ServerStreams: true,
 				ClientStreams: true,
 			},

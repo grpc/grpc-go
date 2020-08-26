@@ -70,10 +70,10 @@ func (s *GreeterService) sayHello(_ interface{}, ctx context.Context, dec func(i
 }
 
 // RegisterGreeterService registers a service implementation with a gRPC server.
-// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterGreeterService(s grpc.ServiceRegistrar, srv *GreeterService) {
-	if srv.SayHello == nil {
-		srv.SayHello = func(context.Context, *HelloRequest) (*HelloReply, error) {
+	srvCopy := *srv
+	if srvCopy.SayHello == nil {
+		srvCopy.SayHello = func(context.Context, *HelloRequest) (*HelloReply, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method SayHello not implemented")
 		}
 	}
@@ -82,7 +82,7 @@ func RegisterGreeterService(s grpc.ServiceRegistrar, srv *GreeterService) {
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "SayHello",
-				Handler:    srv.sayHello,
+				Handler:    srvCopy.sayHello,
 			},
 		},
 		Streams:  []grpc.StreamDesc{},

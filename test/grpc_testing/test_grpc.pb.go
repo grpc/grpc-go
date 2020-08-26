@@ -381,35 +381,35 @@ func (x *testServiceHalfDuplexCallServer) Recv() (*StreamingOutputCallRequest, e
 }
 
 // RegisterTestServiceService registers a service implementation with a gRPC server.
-// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterTestServiceService(s grpc.ServiceRegistrar, srv *TestServiceService) {
-	if srv.EmptyCall == nil {
-		srv.EmptyCall = func(context.Context, *Empty) (*Empty, error) {
+	srvCopy := *srv
+	if srvCopy.EmptyCall == nil {
+		srvCopy.EmptyCall = func(context.Context, *Empty) (*Empty, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method EmptyCall not implemented")
 		}
 	}
-	if srv.UnaryCall == nil {
-		srv.UnaryCall = func(context.Context, *SimpleRequest) (*SimpleResponse, error) {
+	if srvCopy.UnaryCall == nil {
+		srvCopy.UnaryCall = func(context.Context, *SimpleRequest) (*SimpleResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
 		}
 	}
-	if srv.StreamingOutputCall == nil {
-		srv.StreamingOutputCall = func(*StreamingOutputCallRequest, TestService_StreamingOutputCallServer) error {
+	if srvCopy.StreamingOutputCall == nil {
+		srvCopy.StreamingOutputCall = func(*StreamingOutputCallRequest, TestService_StreamingOutputCallServer) error {
 			return status.Errorf(codes.Unimplemented, "method StreamingOutputCall not implemented")
 		}
 	}
-	if srv.StreamingInputCall == nil {
-		srv.StreamingInputCall = func(TestService_StreamingInputCallServer) error {
+	if srvCopy.StreamingInputCall == nil {
+		srvCopy.StreamingInputCall = func(TestService_StreamingInputCallServer) error {
 			return status.Errorf(codes.Unimplemented, "method StreamingInputCall not implemented")
 		}
 	}
-	if srv.FullDuplexCall == nil {
-		srv.FullDuplexCall = func(TestService_FullDuplexCallServer) error {
+	if srvCopy.FullDuplexCall == nil {
+		srvCopy.FullDuplexCall = func(TestService_FullDuplexCallServer) error {
 			return status.Errorf(codes.Unimplemented, "method FullDuplexCall not implemented")
 		}
 	}
-	if srv.HalfDuplexCall == nil {
-		srv.HalfDuplexCall = func(TestService_HalfDuplexCallServer) error {
+	if srvCopy.HalfDuplexCall == nil {
+		srvCopy.HalfDuplexCall = func(TestService_HalfDuplexCallServer) error {
 			return status.Errorf(codes.Unimplemented, "method HalfDuplexCall not implemented")
 		}
 	}
@@ -418,33 +418,33 @@ func RegisterTestServiceService(s grpc.ServiceRegistrar, srv *TestServiceService
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "EmptyCall",
-				Handler:    srv.emptyCall,
+				Handler:    srvCopy.emptyCall,
 			},
 			{
 				MethodName: "UnaryCall",
-				Handler:    srv.unaryCall,
+				Handler:    srvCopy.unaryCall,
 			},
 		},
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName:    "StreamingOutputCall",
-				Handler:       srv.streamingOutputCall,
+				Handler:       srvCopy.streamingOutputCall,
 				ServerStreams: true,
 			},
 			{
 				StreamName:    "StreamingInputCall",
-				Handler:       srv.streamingInputCall,
+				Handler:       srvCopy.streamingInputCall,
 				ClientStreams: true,
 			},
 			{
 				StreamName:    "FullDuplexCall",
-				Handler:       srv.fullDuplexCall,
+				Handler:       srvCopy.fullDuplexCall,
 				ServerStreams: true,
 				ClientStreams: true,
 			},
 			{
 				StreamName:    "HalfDuplexCall",
-				Handler:       srv.halfDuplexCall,
+				Handler:       srvCopy.halfDuplexCall,
 				ServerStreams: true,
 				ClientStreams: true,
 			},

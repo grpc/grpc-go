@@ -61,15 +61,15 @@ func (s *ProfilingService) getStreamStats(_ interface{}, ctx context.Context, de
 }
 
 // RegisterProfilingService registers a service implementation with a gRPC server.
-// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterProfilingService(s grpc.ServiceRegistrar, srv *ProfilingService) {
-	if srv.Enable == nil {
-		srv.Enable = func(context.Context, *EnableRequest) (*EnableResponse, error) {
+	srvCopy := *srv
+	if srvCopy.Enable == nil {
+		srvCopy.Enable = func(context.Context, *EnableRequest) (*EnableResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method Enable not implemented")
 		}
 	}
-	if srv.GetStreamStats == nil {
-		srv.GetStreamStats = func(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error) {
+	if srvCopy.GetStreamStats == nil {
+		srvCopy.GetStreamStats = func(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method GetStreamStats not implemented")
 		}
 	}
@@ -78,11 +78,11 @@ func RegisterProfilingService(s grpc.ServiceRegistrar, srv *ProfilingService) {
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "Enable",
-				Handler:    srv.enable,
+				Handler:    srvCopy.enable,
 			},
 			{
 				MethodName: "GetStreamStats",
-				Handler:    srv.getStreamStats,
+				Handler:    srvCopy.getStreamStats,
 			},
 		},
 		Streams:  []grpc.StreamDesc{},

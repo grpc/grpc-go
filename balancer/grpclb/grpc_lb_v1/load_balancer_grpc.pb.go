@@ -26,10 +26,10 @@ func (s *LoadBalancerService) balanceLoad(_ interface{}, stream grpc.ServerStrea
 }
 
 // RegisterLoadBalancerService registers a service implementation with a gRPC server.
-// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterLoadBalancerService(s grpc.ServiceRegistrar, srv *LoadBalancerService) {
-	if srv.BalanceLoad == nil {
-		srv.BalanceLoad = func(LoadBalancer_BalanceLoadServer) error {
+	srvCopy := *srv
+	if srvCopy.BalanceLoad == nil {
+		srvCopy.BalanceLoad = func(LoadBalancer_BalanceLoadServer) error {
 			return status.Errorf(codes.Unimplemented, "method BalanceLoad not implemented")
 		}
 	}
@@ -39,7 +39,7 @@ func RegisterLoadBalancerService(s grpc.ServiceRegistrar, srv *LoadBalancerServi
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName:    "BalanceLoad",
-				Handler:       srv.balanceLoad,
+				Handler:       srvCopy.balanceLoad,
 				ServerStreams: true,
 				ClientStreams: true,
 			},

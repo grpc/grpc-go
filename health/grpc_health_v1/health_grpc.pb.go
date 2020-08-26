@@ -65,15 +65,15 @@ func (s *HealthService) watch(_ interface{}, stream grpc.ServerStream) error {
 }
 
 // RegisterHealthService registers a service implementation with a gRPC server.
-// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterHealthService(s grpc.ServiceRegistrar, srv *HealthService) {
-	if srv.Check == nil {
-		srv.Check = func(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
+	srvCopy := *srv
+	if srvCopy.Check == nil {
+		srvCopy.Check = func(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method Check not implemented")
 		}
 	}
-	if srv.Watch == nil {
-		srv.Watch = func(*HealthCheckRequest, Health_WatchServer) error {
+	if srvCopy.Watch == nil {
+		srvCopy.Watch = func(*HealthCheckRequest, Health_WatchServer) error {
 			return status.Errorf(codes.Unimplemented, "method Watch not implemented")
 		}
 	}
@@ -82,13 +82,13 @@ func RegisterHealthService(s grpc.ServiceRegistrar, srv *HealthService) {
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "Check",
-				Handler:    srv.check,
+				Handler:    srvCopy.check,
 			},
 		},
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName:    "Watch",
-				Handler:       srv.watch,
+				Handler:       srvCopy.watch,
 				ServerStreams: true,
 			},
 		},

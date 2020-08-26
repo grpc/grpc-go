@@ -42,10 +42,10 @@ func (s *MeshCertificateServiceService) createCertificate(_ interface{}, ctx con
 }
 
 // RegisterMeshCertificateServiceService registers a service implementation with a gRPC server.
-// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterMeshCertificateServiceService(s grpc.ServiceRegistrar, srv *MeshCertificateServiceService) {
-	if srv.CreateCertificate == nil {
-		srv.CreateCertificate = func(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error) {
+	srvCopy := *srv
+	if srvCopy.CreateCertificate == nil {
+		srvCopy.CreateCertificate = func(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method CreateCertificate not implemented")
 		}
 	}
@@ -54,7 +54,7 @@ func RegisterMeshCertificateServiceService(s grpc.ServiceRegistrar, srv *MeshCer
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "CreateCertificate",
-				Handler:    srv.createCertificate,
+				Handler:    srvCopy.createCertificate,
 			},
 		},
 		Streams:  []grpc.StreamDesc{},

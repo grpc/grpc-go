@@ -297,25 +297,25 @@ func (x *routeGuideRouteChatServer) Recv() (*RouteNote, error) {
 }
 
 // RegisterRouteGuideService registers a service implementation with a gRPC server.
-// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterRouteGuideService(s grpc.ServiceRegistrar, srv *RouteGuideService) {
-	if srv.GetFeature == nil {
-		srv.GetFeature = func(context.Context, *Point) (*Feature, error) {
+	srvCopy := *srv
+	if srvCopy.GetFeature == nil {
+		srvCopy.GetFeature = func(context.Context, *Point) (*Feature, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method GetFeature not implemented")
 		}
 	}
-	if srv.ListFeatures == nil {
-		srv.ListFeatures = func(*Rectangle, RouteGuide_ListFeaturesServer) error {
+	if srvCopy.ListFeatures == nil {
+		srvCopy.ListFeatures = func(*Rectangle, RouteGuide_ListFeaturesServer) error {
 			return status.Errorf(codes.Unimplemented, "method ListFeatures not implemented")
 		}
 	}
-	if srv.RecordRoute == nil {
-		srv.RecordRoute = func(RouteGuide_RecordRouteServer) error {
+	if srvCopy.RecordRoute == nil {
+		srvCopy.RecordRoute = func(RouteGuide_RecordRouteServer) error {
 			return status.Errorf(codes.Unimplemented, "method RecordRoute not implemented")
 		}
 	}
-	if srv.RouteChat == nil {
-		srv.RouteChat = func(RouteGuide_RouteChatServer) error {
+	if srvCopy.RouteChat == nil {
+		srvCopy.RouteChat = func(RouteGuide_RouteChatServer) error {
 			return status.Errorf(codes.Unimplemented, "method RouteChat not implemented")
 		}
 	}
@@ -324,23 +324,23 @@ func RegisterRouteGuideService(s grpc.ServiceRegistrar, srv *RouteGuideService) 
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "GetFeature",
-				Handler:    srv.getFeature,
+				Handler:    srvCopy.getFeature,
 			},
 		},
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName:    "ListFeatures",
-				Handler:       srv.listFeatures,
+				Handler:       srvCopy.listFeatures,
 				ServerStreams: true,
 			},
 			{
 				StreamName:    "RecordRoute",
-				Handler:       srv.recordRoute,
+				Handler:       srvCopy.recordRoute,
 				ClientStreams: true,
 			},
 			{
 				StreamName:    "RouteChat",
-				Handler:       srv.routeChat,
+				Handler:       srvCopy.routeChat,
 				ServerStreams: true,
 				ClientStreams: true,
 			},

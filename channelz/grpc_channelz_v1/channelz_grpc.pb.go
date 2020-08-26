@@ -156,40 +156,40 @@ func (s *ChannelzService) getSocket(_ interface{}, ctx context.Context, dec func
 }
 
 // RegisterChannelzService registers a service implementation with a gRPC server.
-// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterChannelzService(s grpc.ServiceRegistrar, srv *ChannelzService) {
-	if srv.GetTopChannels == nil {
-		srv.GetTopChannels = func(context.Context, *GetTopChannelsRequest) (*GetTopChannelsResponse, error) {
+	srvCopy := *srv
+	if srvCopy.GetTopChannels == nil {
+		srvCopy.GetTopChannels = func(context.Context, *GetTopChannelsRequest) (*GetTopChannelsResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method GetTopChannels not implemented")
 		}
 	}
-	if srv.GetServers == nil {
-		srv.GetServers = func(context.Context, *GetServersRequest) (*GetServersResponse, error) {
+	if srvCopy.GetServers == nil {
+		srvCopy.GetServers = func(context.Context, *GetServersRequest) (*GetServersResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method GetServers not implemented")
 		}
 	}
-	if srv.GetServer == nil {
-		srv.GetServer = func(context.Context, *GetServerRequest) (*GetServerResponse, error) {
+	if srvCopy.GetServer == nil {
+		srvCopy.GetServer = func(context.Context, *GetServerRequest) (*GetServerResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method GetServer not implemented")
 		}
 	}
-	if srv.GetServerSockets == nil {
-		srv.GetServerSockets = func(context.Context, *GetServerSocketsRequest) (*GetServerSocketsResponse, error) {
+	if srvCopy.GetServerSockets == nil {
+		srvCopy.GetServerSockets = func(context.Context, *GetServerSocketsRequest) (*GetServerSocketsResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method GetServerSockets not implemented")
 		}
 	}
-	if srv.GetChannel == nil {
-		srv.GetChannel = func(context.Context, *GetChannelRequest) (*GetChannelResponse, error) {
+	if srvCopy.GetChannel == nil {
+		srvCopy.GetChannel = func(context.Context, *GetChannelRequest) (*GetChannelResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method GetChannel not implemented")
 		}
 	}
-	if srv.GetSubchannel == nil {
-		srv.GetSubchannel = func(context.Context, *GetSubchannelRequest) (*GetSubchannelResponse, error) {
+	if srvCopy.GetSubchannel == nil {
+		srvCopy.GetSubchannel = func(context.Context, *GetSubchannelRequest) (*GetSubchannelResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method GetSubchannel not implemented")
 		}
 	}
-	if srv.GetSocket == nil {
-		srv.GetSocket = func(context.Context, *GetSocketRequest) (*GetSocketResponse, error) {
+	if srvCopy.GetSocket == nil {
+		srvCopy.GetSocket = func(context.Context, *GetSocketRequest) (*GetSocketResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method GetSocket not implemented")
 		}
 	}
@@ -198,31 +198,31 @@ func RegisterChannelzService(s grpc.ServiceRegistrar, srv *ChannelzService) {
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "GetTopChannels",
-				Handler:    srv.getTopChannels,
+				Handler:    srvCopy.getTopChannels,
 			},
 			{
 				MethodName: "GetServers",
-				Handler:    srv.getServers,
+				Handler:    srvCopy.getServers,
 			},
 			{
 				MethodName: "GetServer",
-				Handler:    srv.getServer,
+				Handler:    srvCopy.getServer,
 			},
 			{
 				MethodName: "GetServerSockets",
-				Handler:    srv.getServerSockets,
+				Handler:    srvCopy.getServerSockets,
 			},
 			{
 				MethodName: "GetChannel",
-				Handler:    srv.getChannel,
+				Handler:    srvCopy.getChannel,
 			},
 			{
 				MethodName: "GetSubchannel",
-				Handler:    srv.getSubchannel,
+				Handler:    srvCopy.getSubchannel,
 			},
 			{
 				MethodName: "GetSocket",
-				Handler:    srv.getSocket,
+				Handler:    srvCopy.getSocket,
 			},
 		},
 		Streams:  []grpc.StreamDesc{},

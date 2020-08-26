@@ -265,25 +265,25 @@ func (x *echoBidirectionalStreamingEchoServer) Recv() (*EchoRequest, error) {
 }
 
 // RegisterEchoService registers a service implementation with a gRPC server.
-// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterEchoService(s grpc.ServiceRegistrar, srv *EchoService) {
-	if srv.UnaryEcho == nil {
-		srv.UnaryEcho = func(context.Context, *EchoRequest) (*EchoResponse, error) {
+	srvCopy := *srv
+	if srvCopy.UnaryEcho == nil {
+		srvCopy.UnaryEcho = func(context.Context, *EchoRequest) (*EchoResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method UnaryEcho not implemented")
 		}
 	}
-	if srv.ServerStreamingEcho == nil {
-		srv.ServerStreamingEcho = func(*EchoRequest, Echo_ServerStreamingEchoServer) error {
+	if srvCopy.ServerStreamingEcho == nil {
+		srvCopy.ServerStreamingEcho = func(*EchoRequest, Echo_ServerStreamingEchoServer) error {
 			return status.Errorf(codes.Unimplemented, "method ServerStreamingEcho not implemented")
 		}
 	}
-	if srv.ClientStreamingEcho == nil {
-		srv.ClientStreamingEcho = func(Echo_ClientStreamingEchoServer) error {
+	if srvCopy.ClientStreamingEcho == nil {
+		srvCopy.ClientStreamingEcho = func(Echo_ClientStreamingEchoServer) error {
 			return status.Errorf(codes.Unimplemented, "method ClientStreamingEcho not implemented")
 		}
 	}
-	if srv.BidirectionalStreamingEcho == nil {
-		srv.BidirectionalStreamingEcho = func(Echo_BidirectionalStreamingEchoServer) error {
+	if srvCopy.BidirectionalStreamingEcho == nil {
+		srvCopy.BidirectionalStreamingEcho = func(Echo_BidirectionalStreamingEchoServer) error {
 			return status.Errorf(codes.Unimplemented, "method BidirectionalStreamingEcho not implemented")
 		}
 	}
@@ -292,23 +292,23 @@ func RegisterEchoService(s grpc.ServiceRegistrar, srv *EchoService) {
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "UnaryEcho",
-				Handler:    srv.unaryEcho,
+				Handler:    srvCopy.unaryEcho,
 			},
 		},
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName:    "ServerStreamingEcho",
-				Handler:       srv.serverStreamingEcho,
+				Handler:       srvCopy.serverStreamingEcho,
 				ServerStreams: true,
 			},
 			{
 				StreamName:    "ClientStreamingEcho",
-				Handler:       srv.clientStreamingEcho,
+				Handler:       srvCopy.clientStreamingEcho,
 				ClientStreams: true,
 			},
 			{
 				StreamName:    "BidirectionalStreamingEcho",
-				Handler:       srv.bidirectionalStreamingEcho,
+				Handler:       srvCopy.bidirectionalStreamingEcho,
 				ServerStreams: true,
 				ClientStreams: true,
 			},

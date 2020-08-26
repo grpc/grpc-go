@@ -208,20 +208,20 @@ func (x *benchmarkServiceUnconstrainedStreamingCallServer) Recv() (*SimpleReques
 }
 
 // RegisterBenchmarkServiceService registers a service implementation with a gRPC server.
-// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterBenchmarkServiceService(s grpc.ServiceRegistrar, srv *BenchmarkServiceService) {
-	if srv.UnaryCall == nil {
-		srv.UnaryCall = func(context.Context, *SimpleRequest) (*SimpleResponse, error) {
+	srvCopy := *srv
+	if srvCopy.UnaryCall == nil {
+		srvCopy.UnaryCall = func(context.Context, *SimpleRequest) (*SimpleResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
 		}
 	}
-	if srv.StreamingCall == nil {
-		srv.StreamingCall = func(BenchmarkService_StreamingCallServer) error {
+	if srvCopy.StreamingCall == nil {
+		srvCopy.StreamingCall = func(BenchmarkService_StreamingCallServer) error {
 			return status.Errorf(codes.Unimplemented, "method StreamingCall not implemented")
 		}
 	}
-	if srv.UnconstrainedStreamingCall == nil {
-		srv.UnconstrainedStreamingCall = func(BenchmarkService_UnconstrainedStreamingCallServer) error {
+	if srvCopy.UnconstrainedStreamingCall == nil {
+		srvCopy.UnconstrainedStreamingCall = func(BenchmarkService_UnconstrainedStreamingCallServer) error {
 			return status.Errorf(codes.Unimplemented, "method UnconstrainedStreamingCall not implemented")
 		}
 	}
@@ -230,19 +230,19 @@ func RegisterBenchmarkServiceService(s grpc.ServiceRegistrar, srv *BenchmarkServ
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "UnaryCall",
-				Handler:    srv.unaryCall,
+				Handler:    srvCopy.unaryCall,
 			},
 		},
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName:    "StreamingCall",
-				Handler:       srv.streamingCall,
+				Handler:       srvCopy.streamingCall,
 				ServerStreams: true,
 				ClientStreams: true,
 			},
 			{
 				StreamName:    "UnconstrainedStreamingCall",
-				Handler:       srv.unconstrainedStreamingCall,
+				Handler:       srvCopy.unconstrainedStreamingCall,
 				ServerStreams: true,
 				ClientStreams: true,
 			},
@@ -538,25 +538,25 @@ func (x *workerServiceRunClientServer) Recv() (*ClientArgs, error) {
 }
 
 // RegisterWorkerServiceService registers a service implementation with a gRPC server.
-// srv must not be modified after this function is called, and it may be modified by this function.
 func RegisterWorkerServiceService(s grpc.ServiceRegistrar, srv *WorkerServiceService) {
-	if srv.RunServer == nil {
-		srv.RunServer = func(WorkerService_RunServerServer) error {
+	srvCopy := *srv
+	if srvCopy.RunServer == nil {
+		srvCopy.RunServer = func(WorkerService_RunServerServer) error {
 			return status.Errorf(codes.Unimplemented, "method RunServer not implemented")
 		}
 	}
-	if srv.RunClient == nil {
-		srv.RunClient = func(WorkerService_RunClientServer) error {
+	if srvCopy.RunClient == nil {
+		srvCopy.RunClient = func(WorkerService_RunClientServer) error {
 			return status.Errorf(codes.Unimplemented, "method RunClient not implemented")
 		}
 	}
-	if srv.CoreCount == nil {
-		srv.CoreCount = func(context.Context, *CoreRequest) (*CoreResponse, error) {
+	if srvCopy.CoreCount == nil {
+		srvCopy.CoreCount = func(context.Context, *CoreRequest) (*CoreResponse, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method CoreCount not implemented")
 		}
 	}
-	if srv.QuitWorker == nil {
-		srv.QuitWorker = func(context.Context, *Void) (*Void, error) {
+	if srvCopy.QuitWorker == nil {
+		srvCopy.QuitWorker = func(context.Context, *Void) (*Void, error) {
 			return nil, status.Errorf(codes.Unimplemented, "method QuitWorker not implemented")
 		}
 	}
@@ -565,23 +565,23 @@ func RegisterWorkerServiceService(s grpc.ServiceRegistrar, srv *WorkerServiceSer
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "CoreCount",
-				Handler:    srv.coreCount,
+				Handler:    srvCopy.coreCount,
 			},
 			{
 				MethodName: "QuitWorker",
-				Handler:    srv.quitWorker,
+				Handler:    srvCopy.quitWorker,
 			},
 		},
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName:    "RunServer",
-				Handler:       srv.runServer,
+				Handler:       srvCopy.runServer,
 				ServerStreams: true,
 				ClientStreams: true,
 			},
 			{
 				StreamName:    "RunClient",
-				Handler:       srv.runClient,
+				Handler:       srvCopy.runClient,
 				ServerStreams: true,
 				ClientStreams: true,
 			},

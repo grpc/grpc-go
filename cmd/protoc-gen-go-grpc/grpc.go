@@ -265,16 +265,16 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 
 func genRegisterFunction(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
 	g.P("// Register", service.GoName, "Service registers a service implementation with a gRPC server.")
-	g.P("// srv must not be modified after this function is called, and it may be modified by this function.")
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 		g.P("//")
 		g.P(deprecationComment)
 	}
 	g.P("func Register", service.GoName, "Service(s ", grpcPackage.Ident("ServiceRegistrar"), ", srv *", service.GoName, "Service) {")
+	g.P("srvCopy := *srv")
 	// Add Unimplemented defaults for unset handlers
 	for _, method := range service.Methods {
-		g.P("if srv.", method.GoName, " == nil {")
-		g.P("srv.", method.GoName, " = func", handlerSignature(g, method), "{")
+		g.P("if srvCopy.", method.GoName, " == nil {")
+		g.P("srvCopy.", method.GoName, " = func", handlerSignature(g, method), "{")
 		nilArg := ""
 		if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
 			nilArg = "nil, "
@@ -294,7 +294,7 @@ func genRegisterFunction(gen *protogen.Plugin, file *protogen.File, g *protogen.
 		}
 		g.P("{")
 		g.P("MethodName: ", strconv.Quote(string(method.Desc.Name())), ",")
-		g.P("Handler: srv.", unexport(method.GoName), ",")
+		g.P("Handler: srvCopy.", unexport(method.GoName), ",")
 		g.P("},")
 	}
 	g.P("},")
@@ -305,7 +305,7 @@ func genRegisterFunction(gen *protogen.Plugin, file *protogen.File, g *protogen.
 		}
 		g.P("{")
 		g.P("StreamName: ", strconv.Quote(string(method.Desc.Name())), ",")
-		g.P("Handler: srv.", unexport(method.GoName), ",")
+		g.P("Handler: srvCopy.", unexport(method.GoName), ",")
 		if method.Desc.IsStreamingServer() {
 			g.P("ServerStreams: true,")
 		}
