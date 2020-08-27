@@ -91,7 +91,7 @@ func (s) TestClusterWatch(t *testing.T) {
 		testCDSName: wantUpdate,
 	})
 
-	if u, err := clusterUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := clusterUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -156,7 +156,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 		}
 	}
 
-	if u, err := clusterUpdateChs[count-1].Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := clusterUpdateChs[count-1].Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -263,7 +263,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(clusterUpdateErr{u: update, err: err})
 	})
-	if n, err := v2Client.addWatches[ClusterResource].Receive(ctx); err != testutils.ErrRecvTimeout {
+	if n, err := v2Client.addWatches[ClusterResource].Receive(ctx); err != context.DeadlineExceeded {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
@@ -275,7 +275,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	}
 
 	// Old watch should see nothing.
-	if u, err := clusterUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := clusterUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -356,7 +356,7 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 
 	// Wait for an error, the error should never happen.
 	u, err := clusterUpdateCh.Receive(ctx)
-	if err != testutils.ErrRecvTimeout {
+	if err != context.DeadlineExceeded {
 		t.Fatalf("got unexpected: %v, %v, want recv timeout", u.(clusterUpdateErr).u, u.(clusterUpdateErr).err)
 	}
 }
@@ -434,7 +434,7 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	})
 
 	// watcher 1 should get an error.
-	if u, err := clusterUpdateCh1.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := clusterUpdateCh1.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, want receiving from channel timeout", u)
 	}
 

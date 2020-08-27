@@ -417,7 +417,7 @@ func (s) TestV2ClientAckCancelResponseRace(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if req, err := fakeServer.XDSRequestChan.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if req, err := fakeServer.XDSRequestChan.Receive(ctx); err != context.DeadlineExceeded {
 		t.Fatalf("Got unexpected xds request after watch is canceled: %v", req)
 	}
 
@@ -426,7 +426,7 @@ func (s) TestV2ClientAckCancelResponseRace(t *testing.T) {
 	t.Logf("Good %v response pushed to fakeServer...", xdsclient.ClusterResource)
 
 	// Expect no ACK because watch was canceled.
-	if req, err := fakeServer.XDSRequestChan.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if req, err := fakeServer.XDSRequestChan.Receive(ctx); err != context.DeadlineExceeded {
 		t.Fatalf("Got unexpected xds request after watch is canceled: %v", req)
 	}
 

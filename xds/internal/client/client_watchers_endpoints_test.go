@@ -93,7 +93,7 @@ func (s) TestEndpointsWatch(t *testing.T) {
 		"randomName": {},
 	})
 
-	if u, err := endpointsUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := endpointsUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 
@@ -105,7 +105,7 @@ func (s) TestEndpointsWatch(t *testing.T) {
 
 	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if u, err := endpointsUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := endpointsUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -170,7 +170,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 		}
 	}
 
-	if u, err := endpointsUpdateChs[count-1].Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := endpointsUpdateChs[count-1].Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -277,7 +277,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh2.Send(endpointsUpdateErr{u: update, err: err})
 	})
-	if n, err := v2Client.addWatches[EndpointsResource].Receive(ctx); err != testutils.ErrRecvTimeout {
+	if n, err := v2Client.addWatches[EndpointsResource].Receive(ctx); err != context.DeadlineExceeded {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
@@ -289,7 +289,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	}
 
 	// Old watch should see nothing.
-	if u, err := endpointsUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := endpointsUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }

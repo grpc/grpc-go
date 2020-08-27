@@ -202,7 +202,7 @@ func waitForNewXDSClientWithEDSWatch(t *testing.T, ch *testutils.Channel, wantNa
 		t.Fatalf("xdsClient created to balancer: %v, want %v", xdsC.Name(), wantName)
 		return nil
 	}
-	_, err = xdsC.WaitForWatchEDS()
+	_, err = xdsC.WaitForWatchEDS(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 		return nil
@@ -457,12 +457,14 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	}
 	defer edsB.Close()
 
-	edsB.UpdateClientConnState(balancer.ClientConnState{
+	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
 			BalancerName:   testBalancerNameFooBar,
 			EDSServiceName: testEDSClusterName,
 		},
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, testBalancerNameFooBar)
 	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
@@ -473,7 +475,10 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 
 	connectionErr := xdsclient.NewErrorf(xdsclient.ErrorTypeConnection, "connection error")
 	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, connectionErr)
-	if err := xdsC.WaitForCancelEDSWatch(); err == nil {
+
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelEDSWatch(ctx); err == nil {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
 	if err := edsLB.waitForEDSResponse(xdsclient.EndpointsUpdate{}); err == nil {
@@ -485,7 +490,9 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	// Even if error is resource not found, watch shouldn't be canceled, because
 	// this is an EDS resource removed (and xds client actually never sends this
 	// error, but we still handles it).
-	if err := xdsC.WaitForCancelEDSWatch(); err == nil {
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelEDSWatch(ctx); err == nil {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
 	if err := edsLB.waitForEDSResponse(xdsclient.EndpointsUpdate{}); err != nil {
@@ -514,12 +521,14 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	}
 	defer edsB.Close()
 
-	edsB.UpdateClientConnState(balancer.ClientConnState{
+	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
 			BalancerName:   testBalancerNameFooBar,
 			EDSServiceName: testEDSClusterName,
 		},
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, testBalancerNameFooBar)
 	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
@@ -530,7 +539,10 @@ func (s) TestErrorFromResolver(t *testing.T) {
 
 	connectionErr := xdsclient.NewErrorf(xdsclient.ErrorTypeConnection, "connection error")
 	edsB.ResolverError(connectionErr)
-	if err := xdsC.WaitForCancelEDSWatch(); err == nil {
+
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelEDSWatch(ctx); err == nil {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
 	if err := edsLB.waitForEDSResponse(xdsclient.EndpointsUpdate{}); err == nil {
@@ -539,7 +551,9 @@ func (s) TestErrorFromResolver(t *testing.T) {
 
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "edsBalancer resource not found error")
 	edsB.ResolverError(resourceErr)
-	if err := xdsC.WaitForCancelEDSWatch(); err != nil {
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelEDSWatch(ctx); err != nil {
 		t.Fatalf("want watch to be canceled, waitForCancel failed: %v", err)
 	}
 	if err := edsLB.waitForEDSResponse(xdsclient.EndpointsUpdate{}); err != nil {

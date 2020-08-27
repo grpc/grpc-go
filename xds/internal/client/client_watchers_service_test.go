@@ -149,7 +149,7 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 		testRDSName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}},
 	})
 
-	if u, err := serviceUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := serviceUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected serviceUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 
@@ -238,7 +238,7 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
-	if u, err := serviceUpdateCh2.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := serviceUpdateCh2.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected serviceUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -358,7 +358,7 @@ func (s) TestServiceWatchWithClientClose(t *testing.T) {
 	}
 	// Client is closed before it receives the RDS response.
 	c.Close()
-	if u, err := serviceUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := serviceUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected serviceUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -472,7 +472,7 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 	v2Client.r.NewRouteConfigs(map[string]RouteConfigUpdate{
 		testRDSName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "new": 1}}}},
 	})
-	if u, err := serviceUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := serviceUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected serviceUpdate: %v, want receiving from channel timeout", u)
 	}
 
@@ -487,7 +487,7 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 	if _, err := v2Client.addWatches[RouteConfigResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
-	if u, err := serviceUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := serviceUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected serviceUpdate: %v, want receiving from channel timeout", u)
 	}
 

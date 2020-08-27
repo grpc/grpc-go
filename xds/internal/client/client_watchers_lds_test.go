@@ -82,7 +82,7 @@ func (s) TestLDSWatch(t *testing.T) {
 		testLDSName: wantUpdate,
 	})
 
-	if u, err := ldsUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := ldsUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected ListenerUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -147,7 +147,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 		}
 	}
 
-	if u, err := ldsUpdateChs[count-1].Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := ldsUpdateChs[count-1].Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected ListenerUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -254,7 +254,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	c.watchLDS(testLDSName, func(update ListenerUpdate, err error) {
 		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
 	})
-	if n, err := v2Client.addWatches[ListenerResource].Receive(ctx); err != testutils.ErrRecvTimeout {
+	if n, err := v2Client.addWatches[ListenerResource].Receive(ctx); err != context.DeadlineExceeded {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
@@ -266,7 +266,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	}
 
 	// Old watch should see nothing.
-	if u, err := ldsUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := ldsUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected ListenerUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -344,7 +344,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	})
 
 	// watcher 1 should get an error.
-	if u, err := ldsUpdateCh1.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := ldsUpdateCh1.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected ListenerUpdate: %v, want receiving from channel timeout", u)
 	}
 

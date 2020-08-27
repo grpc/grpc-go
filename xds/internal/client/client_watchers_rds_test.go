@@ -71,7 +71,7 @@ func (s) TestRDSWatch(t *testing.T) {
 		"randomName": {},
 	})
 
-	if u, err := rdsUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := rdsUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected RouteConfigUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 
@@ -83,7 +83,7 @@ func (s) TestRDSWatch(t *testing.T) {
 
 	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if u, err := rdsUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := rdsUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected RouteConfigUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -148,7 +148,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 		}
 	}
 
-	if u, err := rdsUpdateChs[count-1].Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := rdsUpdateChs[count-1].Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected RouteConfigUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -254,7 +254,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 	c.watchRDS(testRDSName, func(update RouteConfigUpdate, err error) {
 		rdsUpdateCh2.Send(rdsUpdateErr{u: update, err: err})
 	})
-	if n, err := v2Client.addWatches[RouteConfigResource].Receive(ctx); err != testutils.ErrRecvTimeout {
+	if n, err := v2Client.addWatches[RouteConfigResource].Receive(ctx); err != context.DeadlineExceeded {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
@@ -266,7 +266,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 	}
 
 	// Old watch should see nothing.
-	if u, err := rdsUpdateCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if u, err := rdsUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected RouteConfigUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }

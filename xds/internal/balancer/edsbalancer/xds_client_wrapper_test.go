@@ -167,7 +167,7 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 
 	xdsC := fakeclient.NewClient()
 	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC))
-	gotCluster, err := xdsC.WaitForWatchEDS()
+	gotCluster, err := xdsC.WaitForWatchEDS(context.Background())
 	if err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
@@ -207,10 +207,13 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 	cw := newXDSClientWrapper(nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, nil)
 	defer cw.close()
 
-	// Verify that the eds watch is registered for the expected resource name.
 	xdsC1 := fakeclient.NewClient()
 	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC1))
-	gotCluster, err := xdsC1.WaitForWatchEDS()
+
+	// Verify that the eds watch is registered for the expected resource name.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	gotCluster, err := xdsC1.WaitForWatchEDS(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
@@ -224,7 +227,7 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 	// close client that are passed through attributes).
 	xdsC2 := fakeclient.NewClient()
 	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC2))
-	gotCluster, err = xdsC2.WaitForWatchEDS()
+	gotCluster, err = xdsC2.WaitForWatchEDS(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
@@ -232,7 +235,7 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 		t.Fatalf("xdsClient.WatchEndpoints() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
 	}
 
-	if err := xdsC1.WaitForClose(); err != testutils.ErrRecvTimeout {
+	if err := xdsC1.WaitForClose(ctx); err != context.DeadlineExceeded {
 		t.Fatalf("clientWrapper closed xdsClient received in attributes")
 	}
 }

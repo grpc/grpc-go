@@ -19,6 +19,7 @@
 package edsbalancer
 
 import (
+	context2 "context"
 	"testing"
 
 	"google.golang.org/grpc/attributes"
@@ -46,7 +47,7 @@ func (s) TestXDSLoadReporting(t *testing.T) {
 		BalancerConfig: &EDSConfig{LrsLoadReportingServerName: new(string)},
 	})
 
-	gotCluster, err := xdsC.WaitForWatchEDS()
+	gotCluster, err := xdsC.WaitForWatchEDS(context2.Background())
 	if err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
@@ -54,7 +55,7 @@ func (s) TestXDSLoadReporting(t *testing.T) {
 		t.Fatalf("xdsClient.WatchEndpoints() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
 	}
 
-	got, err := xdsC.WaitForReportLoad()
+	got, err := xdsC.WaitForReportLoad(context2.Background())
 	if err != nil {
 		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err)
 	}

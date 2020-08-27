@@ -251,7 +251,7 @@ func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *testClientConn, fun
 func waitForWatchService(t *testing.T, xdsC *fakeclient.Client, wantTarget string) {
 	t.Helper()
 
-	gotTarget, err := xdsC.WaitForWatchService()
+	gotTarget, err := xdsC.WaitForWatchService(context.Background())
 	if err != nil {
 		t.Fatalf("xdsClient.WatchService failed with error: %v", err)
 	}
@@ -279,7 +279,7 @@ func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if gotVal, gotErr := tcc.stateCh.Receive(ctx); gotErr != testutils.ErrRecvTimeout {
+	if gotVal, gotErr := tcc.stateCh.Receive(ctx); gotErr != context.DeadlineExceeded {
 		t.Fatalf("ClientConn.UpdateState called after xdsResolver is closed: %v", gotVal)
 	}
 }
@@ -443,7 +443,7 @@ func TestXDSResolverResourceNotFoundError(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if gotErrVal, gotErr := tcc.errorCh.Receive(ctx); gotErr != testutils.ErrRecvTimeout {
+	if gotErrVal, gotErr := tcc.errorCh.Receive(ctx); gotErr != context.DeadlineExceeded {
 		t.Fatalf("ClientConn.ReportError() received %v, %v, want channel recv timeout", gotErrVal, gotErr)
 	}
 

@@ -186,7 +186,7 @@ func (s) TestUpdateControlChannelTimeout(t *testing.T) {
 	lbCfg = &lbConfig{lookupService: server.Address, lookupServiceTimeout: 2 * time.Second}
 	t.Logf("Sending service config %+v to RLS LB policy ...", lbCfg)
 	rlsB.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: lbCfg})
-	if _, err := lis.connCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+	if _, err := lis.connCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Fatal("LB policy created new control channel when only lookupServiceTimeout changed")
 	}
 

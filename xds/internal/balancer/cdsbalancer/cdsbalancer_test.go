@@ -252,7 +252,10 @@ func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBal
 	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != nil {
 		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
 	}
-	gotCluster, err := xdsC.WaitForWatchCluster()
+
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	gotCluster, err := xdsC.WaitForWatchCluster(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 	}
@@ -326,7 +329,9 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 				// When we wanted an error and got it, we should return early.
 				return
 			}
-			gotCluster, err := xdsC.WaitForWatchCluster()
+			ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer ctxCancel()
+			gotCluster, err := xdsC.WaitForWatchCluster(ctx)
 			if err != nil {
 				t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 			}
@@ -362,7 +367,9 @@ func (s) TestUpdateClientConnStateWithSameState(t *testing.T) {
 	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != nil {
 		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
 	}
-	if _, err := xdsC.WaitForWatchCluster(); err != testutils.ErrRecvTimeout {
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if _, err := xdsC.WaitForWatchCluster(ctx); err != context.DeadlineExceeded {
 		t.Fatalf("waiting for WatchCluster() should have timed out, but returned error: %v", err)
 	}
 }
@@ -420,13 +427,15 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// And this is not a resource not found error, watch shouldn't be canceled.
 	err1 := errors.New("cdsBalancer resolver error 1")
 	xdsC.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{}, err1)
-	if err := xdsC.WaitForCancelClusterWatch(); err == nil {
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelClusterWatch(ctx); err == nil {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
 	if err := edsB.waitForResolverError(err1); err == nil {
 		t.Fatal("eds balancer shouldn't get error (shouldn't be built yet)")
 	}
-	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	state, err := tcc.newPickerCh.Receive(ctx)
 	if err != nil {
@@ -447,7 +456,9 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// is not a resource not found error, watch shouldn't be canceled
 	err2 := errors.New("cdsBalancer resolver error 2")
 	xdsC.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{}, err2)
-	if err := xdsC.WaitForCancelClusterWatch(); err == nil {
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelClusterWatch(ctx); err == nil {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
 	if err := edsB.waitForResolverError(err2); err != nil {
@@ -458,7 +469,9 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// means CDS resource is removed, and eds should receive the error.
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
 	xdsC.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{}, resourceErr)
-	if err := xdsC.WaitForCancelClusterWatch(); err == nil {
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelClusterWatch(ctx); err == nil {
 		t.Fatalf("want watch to be not canceled, watchForCancel should timeout")
 	}
 	if err := edsB.waitForResolverError(resourceErr); err != nil {
@@ -479,13 +492,15 @@ func (s) TestResolverError(t *testing.T) {
 	// Not a resource not found error, watch shouldn't be canceled.
 	err1 := errors.New("cdsBalancer resolver error 1")
 	cdsB.ResolverError(err1)
-	if err := xdsC.WaitForCancelClusterWatch(); err == nil {
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelClusterWatch(ctx); err == nil {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
 	if err := edsB.waitForResolverError(err1); err == nil {
 		t.Fatal("eds balancer shouldn't get error (shouldn't be built yet)")
 	}
-	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	state, err := tcc.newPickerCh.Receive(ctx)
 	if err != nil {
@@ -506,7 +521,9 @@ func (s) TestResolverError(t *testing.T) {
 	// should receive the error.
 	err2 := errors.New("cdsBalancer resolver error 2")
 	cdsB.ResolverError(err2)
-	if err := xdsC.WaitForCancelClusterWatch(); err == nil {
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelClusterWatch(ctx); err == nil {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
 	if err := edsB.waitForResolverError(err2); err != nil {
@@ -517,7 +534,9 @@ func (s) TestResolverError(t *testing.T) {
 	// receive the error.
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
 	cdsB.ResolverError(resourceErr)
-	if err := xdsC.WaitForCancelClusterWatch(); err != nil {
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelClusterWatch(ctx); err != nil {
 		t.Fatalf("want watch to be canceled, watchForCancel failed: %v", err)
 	}
 	if err := edsB.waitForResolverError(resourceErr); err != nil {
@@ -561,7 +580,9 @@ func (s) TestClose(t *testing.T) {
 	}
 
 	cdsB.Close()
-	if err := xdsC.WaitForCancelClusterWatch(); err != nil {
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelClusterWatch(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if err := edsB.waitForClose(); err != nil {

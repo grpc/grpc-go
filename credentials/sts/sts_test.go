@@ -441,7 +441,7 @@ func (s) TestGetRequestMetadataBadSubjectTokenRead(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
 
-		if _, err := fc.reqCh.Receive(ctx); err != testutils.ErrRecvTimeout {
+		if _, err := fc.reqCh.Receive(ctx); err != context.DeadlineExceeded {
 			errCh <- err
 			return
 		}

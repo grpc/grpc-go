@@ -456,7 +456,7 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	// https://golang.org/doc/faq#nil_error).
 	if c := test.wantUpdate; c == nil || (reflect.ValueOf(c).Kind() == reflect.Ptr && reflect.ValueOf(c).IsNil()) {
 		update, err := gotUpdateCh.Receive(ctx)
-		if err == testutils.ErrRecvTimeout {
+		if err == context.DeadlineExceeded {
 			return
 		}
 		t.Fatalf("Unexpected update: +%v", update)
@@ -464,7 +464,7 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 
 	wantUpdate := reflect.ValueOf(test.wantUpdate).Elem().Interface()
 	uErr, err := gotUpdateCh.Receive(ctx)
-	if err == testutils.ErrRecvTimeout {
+	if err == context.DeadlineExceeded {
 		t.Fatal("Timeout expecting xDS update")
 	}
 	gotUpdate := uErr.(updateErr).u
@@ -611,7 +611,7 @@ func (s) TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	t.Log("Bad LDS response pushed to fakeServer...")
 
 	val, err := fakeServer.XDSRequestChan.Receive(ctx)
-	if err == testutils.ErrRecvTimeout {
+	if err == context.DeadlineExceeded {
 		t.Fatalf("Timeout expired when expecting LDS update")
 	}
 	gotRequest := val.(*fakeserver.Request)
