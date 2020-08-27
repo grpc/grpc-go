@@ -167,7 +167,10 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 
 	xdsC := fakeclient.NewClient()
 	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC))
-	gotCluster, err := xdsC.WaitForWatchEDS(context.Background())
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	gotCluster, err := xdsC.WaitForWatchEDS(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
@@ -181,7 +184,7 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	//
 	// TODO: check for loseContact() when errors indicating "lose contact" are
 	// handled correctly.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	gotUpdate, err := edsRespChan.Receive(ctx)
 	if err != nil {

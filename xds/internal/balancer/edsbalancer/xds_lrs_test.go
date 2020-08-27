@@ -19,7 +19,7 @@
 package edsbalancer
 
 import (
-	context2 "context"
+	"context"
 	"testing"
 
 	"google.golang.org/grpc/attributes"
@@ -42,12 +42,16 @@ func (s) TestXDSLoadReporting(t *testing.T) {
 	defer edsB.Close()
 
 	xdsC := fakeclient.NewClient()
-	edsB.UpdateClientConnState(balancer.ClientConnState{
+	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, xdsC)},
 		BalancerConfig: &EDSConfig{LrsLoadReportingServerName: new(string)},
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
-	gotCluster, err := xdsC.WaitForWatchEDS(context2.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	gotCluster, err := xdsC.WaitForWatchEDS(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
@@ -55,7 +59,7 @@ func (s) TestXDSLoadReporting(t *testing.T) {
 		t.Fatalf("xdsClient.WatchEndpoints() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
 	}
 
-	got, err := xdsC.WaitForReportLoad(context2.Background())
+	got, err := xdsC.WaitForReportLoad(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err)
 	}
