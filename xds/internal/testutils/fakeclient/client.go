@@ -20,11 +20,12 @@
 package fakeclient
 
 import (
+	"context"
 	"sync"
 
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/testutils"
 )
 
 // Client is a fake implementation of an xds client. It exposes a bunch of
@@ -58,10 +59,10 @@ func (xdsC *Client) WatchService(target string, callback func(xdsclient.ServiceU
 	}
 }
 
-// WaitForWatchService waits for WatchService to be invoked on this client
-// within a reasonable timeout, and returns the serviceName being watched.
-func (xdsC *Client) WaitForWatchService() (string, error) {
-	val, err := xdsC.suWatchCh.Receive()
+// WaitForWatchService waits for WatchService to be invoked on this client and
+// returns the serviceName being watched.
+func (xdsC *Client) WaitForWatchService(ctx context.Context) (string, error) {
+	val, err := xdsC.suWatchCh.Receive(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -88,10 +89,10 @@ func (xdsC *Client) WatchCluster(clusterName string, callback func(xdsclient.Clu
 	}
 }
 
-// WaitForWatchCluster waits for WatchCluster to be invoked on this client
-// within a reasonable timeout, and returns the clusterName being watched.
-func (xdsC *Client) WaitForWatchCluster() (string, error) {
-	val, err := xdsC.cdsWatchCh.Receive()
+// WaitForWatchCluster waits for WatchCluster to be invoked on this client and
+// returns the clusterName being watched.
+func (xdsC *Client) WaitForWatchCluster(ctx context.Context) (string, error) {
+	val, err := xdsC.cdsWatchCh.Receive(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -106,10 +107,10 @@ func (xdsC *Client) InvokeWatchClusterCallback(update xdsclient.ClusterUpdate, e
 	xdsC.cdsCb(update, err)
 }
 
-// WaitForCancelClusterWatch waits for a CDS watch to be cancelled within a
-// reasonable timeout, and returns testutils.ErrRecvTimeout otherwise.
-func (xdsC *Client) WaitForCancelClusterWatch() error {
-	_, err := xdsC.cdsCancelCh.Receive()
+// WaitForCancelClusterWatch waits for a CDS watch to be cancelled  and returns
+// context.DeadlineExceeded otherwise.
+func (xdsC *Client) WaitForCancelClusterWatch(ctx context.Context) error {
+	_, err := xdsC.cdsCancelCh.Receive(ctx)
 	return err
 }
 
@@ -125,10 +126,10 @@ func (xdsC *Client) WatchEndpoints(clusterName string, callback func(xdsclient.E
 	}
 }
 
-// WaitForWatchEDS waits for WatchEndpoints to be invoked on this client within a
-// reasonable timeout, and returns the clusterName being watched.
-func (xdsC *Client) WaitForWatchEDS() (string, error) {
-	val, err := xdsC.edsWatchCh.Receive()
+// WaitForWatchEDS waits for WatchEndpoints to be invoked on this client and
+// returns the clusterName being watched.
+func (xdsC *Client) WaitForWatchEDS(ctx context.Context) (string, error) {
+	val, err := xdsC.edsWatchCh.Receive(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -143,10 +144,10 @@ func (xdsC *Client) InvokeWatchEDSCallback(update xdsclient.EndpointsUpdate, err
 	xdsC.edsCb(update, err)
 }
 
-// WaitForCancelEDSWatch waits for a EDS watch to be cancelled within a
-// reasonable timeout, and returns testutils.ErrRecvTimeout otherwise.
-func (xdsC *Client) WaitForCancelEDSWatch() error {
-	_, err := xdsC.edsCancelCh.Receive()
+// WaitForCancelEDSWatch waits for a EDS watch to be cancelled and returns
+// context.DeadlineExceeded otherwise.
+func (xdsC *Client) WaitForCancelEDSWatch(ctx context.Context) error {
+	_, err := xdsC.edsCancelCh.Receive(ctx)
 	return err
 }
 
@@ -164,10 +165,10 @@ func (xdsC *Client) ReportLoad(server string, clusterName string, loadStore lrs.
 	return func() {}
 }
 
-// WaitForReportLoad waits for ReportLoad to be invoked on this client within a
-// reasonable timeout, and returns the arguments passed to it.
-func (xdsC *Client) WaitForReportLoad() (ReportLoadArgs, error) {
-	val, err := xdsC.loadReportCh.Receive()
+// WaitForReportLoad waits for ReportLoad to be invoked on this client and
+// returns the arguments passed to it.
+func (xdsC *Client) WaitForReportLoad(ctx context.Context) (ReportLoadArgs, error) {
+	val, err := xdsC.loadReportCh.Receive(ctx)
 	return val.(ReportLoadArgs), err
 }
 
@@ -176,10 +177,10 @@ func (xdsC *Client) Close() {
 	xdsC.closeCh.Send(nil)
 }
 
-// WaitForClose waits for Close to be invoked on this client within a
-// reasonable timeout, and returns testutils.ErrRecvTimeout otherwise.
-func (xdsC *Client) WaitForClose() error {
-	_, err := xdsC.closeCh.Receive()
+// WaitForClose waits for Close to be invoked on this client and returns
+// context.DeadlineExceeded otherwise.
+func (xdsC *Client) WaitForClose(ctx context.Context) error {
+	_, err := xdsC.closeCh.Receive(ctx)
 	return err
 }
 

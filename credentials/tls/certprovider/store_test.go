@@ -179,7 +179,9 @@ func (s) TestStoreSingleProvider(t *testing.T) {
 
 	// Our fakeProviderBuilder pushes newly created providers on a channel. Grab
 	// the fake provider from that channel.
-	p, err := fpb1.providerChan.Receive()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	p, err := fpb1.providerChan.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timeout when expecting certProvider %q to be created", fakeProvider1Name)
 	}
@@ -188,8 +190,6 @@ func (s) TestStoreSingleProvider(t *testing.T) {
 	// Attempt to read from key material from the Provider returned by the
 	// store. This will fail because we have not pushed any key material into
 	// our fake provider.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := readAndVerifyKeyMaterial(ctx, prov, nil); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal(err)
 	}
@@ -208,8 +208,6 @@ func (s) TestStoreSingleProvider(t *testing.T) {
 	// updated key material.
 	testKM2 := loadKeyMaterials(t, "x509/server2_cert.pem", "x509/server2_key.pem", "x509/client_ca_cert.pem")
 	fakeProv.newKeyMaterial(testKM2, nil)
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := readAndVerifyKeyMaterial(ctx, prov, testKM2); err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +234,9 @@ func (s) TestStoreSingleProviderSameConfigDifferentOpts(t *testing.T) {
 	defer provFoo2.Close()
 	// Our fakeProviderBuilder pushes newly created providers on a channel.
 	// Grab the fake provider for optsFoo.
-	p, err := fpb1.providerChan.Receive()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	p, err := fpb1.providerChan.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timeout when expecting certProvider %q to be created", fakeProvider1Name)
 	}
@@ -248,7 +248,7 @@ func (s) TestStoreSingleProviderSameConfigDifferentOpts(t *testing.T) {
 	}
 	defer provBar1.Close()
 	// Grab the fake provider for optsBar.
-	p, err = fpb1.providerChan.Receive()
+	p, err = fpb1.providerChan.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timeout when expecting certProvider %q to be created", fakeProvider1Name)
 	}
@@ -258,8 +258,6 @@ func (s) TestStoreSingleProviderSameConfigDifferentOpts(t *testing.T) {
 	// appropriate key material and the bar provider times out.
 	fooKM := loadKeyMaterials(t, "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
 	fakeProvFoo.newKeyMaterial(fooKM, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := readAndVerifyKeyMaterial(ctx, provFoo1, fooKM); err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +300,9 @@ func (s) TestStoreSingleProviderDifferentConfigs(t *testing.T) {
 	defer prov1.Close()
 	// Our fakeProviderBuilder pushes newly created providers on a channel. Grab
 	// the fake provider from that channel.
-	p1, err := fpb1.providerChan.Receive()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	p1, err := fpb1.providerChan.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timeout when expecting certProvider %q to be created", fakeProvider1Name)
 	}
@@ -314,7 +314,7 @@ func (s) TestStoreSingleProviderDifferentConfigs(t *testing.T) {
 	}
 	defer prov2.Close()
 	// Grab the second provider from the channel.
-	p2, err := fpb1.providerChan.Receive()
+	p2, err := fpb1.providerChan.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timeout when expecting certProvider %q to be created", fakeProvider1Name)
 	}
@@ -325,8 +325,6 @@ func (s) TestStoreSingleProviderDifferentConfigs(t *testing.T) {
 	km1 := loadKeyMaterials(t, "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
 	fakeProv1.newKeyMaterial(km1, nil)
 	fakeProv2.newKeyMaterial(km1, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := readAndVerifyKeyMaterial(ctx, prov1, km1); err != nil {
 		t.Fatal(err)
 	}
@@ -339,8 +337,6 @@ func (s) TestStoreSingleProviderDifferentConfigs(t *testing.T) {
 	// material.
 	km2 := loadKeyMaterials(t, "x509/server2_cert.pem", "x509/server2_key.pem", "x509/client_ca_cert.pem")
 	fakeProv2.newKeyMaterial(km2, nil)
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := readAndVerifyKeyMaterial(ctx, prov1, km1); err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +362,9 @@ func (s) TestStoreMultipleProviders(t *testing.T) {
 	defer prov1.Close()
 	// Our fakeProviderBuilder pushes newly created providers on a channel. Grab
 	// the fake provider from that channel.
-	p1, err := fpb1.providerChan.Receive()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	p1, err := fpb1.providerChan.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timeout when expecting certProvider %q to be created", fakeProvider1Name)
 	}
@@ -378,7 +376,7 @@ func (s) TestStoreMultipleProviders(t *testing.T) {
 	}
 	defer prov2.Close()
 	// Grab the second provider from the channel.
-	p2, err := fpb2.providerChan.Receive()
+	p2, err := fpb2.providerChan.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timeout when expecting certProvider %q to be created", fakeProvider2Name)
 	}
@@ -390,8 +388,6 @@ func (s) TestStoreMultipleProviders(t *testing.T) {
 	fakeProv1.newKeyMaterial(km1, nil)
 	km2 := loadKeyMaterials(t, "x509/server2_cert.pem", "x509/server2_key.pem", "x509/client_ca_cert.pem")
 	fakeProv2.newKeyMaterial(km2, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := readAndVerifyKeyMaterial(ctx, prov1, km1); err != nil {
 		t.Fatal(err)
 	}

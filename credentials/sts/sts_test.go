@@ -55,6 +55,7 @@ const (
 	exampleResource      = "https://backend.example.com/api"
 	exampleAudience      = "example-backend-service"
 	testScope            = "https://www.googleapis.com/auth/monitoring"
+	defaultTestTimeout   = 1 * time.Second
 )
 
 var (
@@ -142,7 +143,11 @@ type fakeHTTPDoer struct {
 
 func (fc *fakeHTTPDoer) Do(req *http.Request) (*http.Response, error) {
 	fc.reqCh.Send(req)
-	val, err := fc.respCh.Receive()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	val, err := fc.respCh.Receive(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +245,10 @@ func compareRequest(gotRequest *http.Request, wantReqParams *requestParameters) 
 // by the tests. So, any errors encountered are pushed to an error channel
 // which is monitored by the test.
 func receiveAndCompareRequest(reqCh *testutils.Channel, errCh chan error) {
-	val, err := reqCh.Receive()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	val, err := reqCh.Receive(ctx)
 	if err != nil {
 		errCh <- err
 		return
@@ -430,7 +438,10 @@ func (s) TestGetRequestMetadataBadSubjectTokenRead(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		if _, err := fc.reqCh.Receive(); err != testutils.ErrRecvTimeout {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+
+		if _, err := fc.reqCh.Receive(ctx); err != context.DeadlineExceeded {
 			errCh <- err
 			return
 		}

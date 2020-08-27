@@ -19,9 +19,10 @@
 package client
 
 import (
+	"context"
 	"testing"
 
-	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/internal/testutils"
 )
 
 type ldsUpdateErr struct {
@@ -49,7 +50,10 @@ func (s) TestLDSWatch(t *testing.T) {
 	cancelWatch := c.watchLDS(testLDSName, func(update ListenerUpdate, err error) {
 		ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := v2Client.addWatches[ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -58,7 +62,7 @@ func (s) TestLDSWatch(t *testing.T) {
 		testLDSName: wantUpdate,
 	})
 
-	if u, err := ldsUpdateCh.Receive(); err != nil || u != (ldsUpdateErr{wantUpdate, nil}) {
+	if u, err := ldsUpdateCh.Receive(ctx); err != nil || u != (ldsUpdateErr{wantUpdate, nil}) {
 		t.Errorf("unexpected ListenerUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -68,7 +72,7 @@ func (s) TestLDSWatch(t *testing.T) {
 		"randomName": {},
 	})
 
-	if u, err := ldsUpdateCh.Receive(); err != nil || u != (ldsUpdateErr{wantUpdate, nil}) {
+	if u, err := ldsUpdateCh.Receive(ctx); err != nil || u != (ldsUpdateErr{wantUpdate, nil}) {
 		t.Errorf("unexpected ListenerUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 
@@ -78,7 +82,7 @@ func (s) TestLDSWatch(t *testing.T) {
 		testLDSName: wantUpdate,
 	})
 
-	if u, err := ldsUpdateCh.TimedReceive(chanRecvTimeout); err != testutils.ErrRecvTimeout {
+	if u, err := ldsUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected ListenerUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -102,14 +106,21 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 
 	var cancelLastWatch func()
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for i := 0; i < count; i++ {
 		ldsUpdateCh := testutils.NewChannel()
 		ldsUpdateChs = append(ldsUpdateChs, ldsUpdateCh)
 		cancelLastWatch = c.watchLDS(testLDSName, func(update ListenerUpdate, err error) {
 			ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 		})
-		if _, err := v2Client.addWatches[ListenerResource].Receive(); i == 0 && err != nil {
-			t.Fatalf("want new watch to start, got error %v", err)
+
+		if i == 0 {
+			// A new watch is registered on the underlying API client only for
+			// the first iteration because we are using the same resource name.
+			if _, err := v2Client.addWatches[ListenerResource].Receive(ctx); err != nil {
+				t.Fatalf("want new watch to start, got error %v", err)
+			}
 		}
 	}
 
@@ -119,7 +130,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count; i++ {
-		if u, err := ldsUpdateChs[i].Receive(); err != nil || u != (ldsUpdateErr{wantUpdate, nil}) {
+		if u, err := ldsUpdateChs[i].Receive(ctx); err != nil || u != (ldsUpdateErr{wantUpdate, nil}) {
 			t.Errorf("i=%v, unexpected ListenerUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
@@ -131,12 +142,12 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count-1; i++ {
-		if u, err := ldsUpdateChs[i].Receive(); err != nil || u != (ldsUpdateErr{wantUpdate, nil}) {
+		if u, err := ldsUpdateChs[i].Receive(ctx); err != nil || u != (ldsUpdateErr{wantUpdate, nil}) {
 			t.Errorf("i=%v, unexpected ListenerUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
 
-	if u, err := ldsUpdateChs[count-1].TimedReceive(chanRecvTimeout); err != testutils.ErrRecvTimeout {
+	if u, err := ldsUpdateChs[count-1].Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected ListenerUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -159,14 +170,21 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 	const count = 2
 
 	// Two watches for the same name.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for i := 0; i < count; i++ {
 		ldsUpdateCh := testutils.NewChannel()
 		ldsUpdateChs = append(ldsUpdateChs, ldsUpdateCh)
 		c.watchLDS(testLDSName+"1", func(update ListenerUpdate, err error) {
 			ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 		})
-		if _, err := v2Client.addWatches[ListenerResource].Receive(); i == 0 && err != nil {
-			t.Fatalf("want new watch to start, got error %v", err)
+
+		if i == 0 {
+			// A new watch is registered on the underlying API client only for
+			// the first iteration because we are using the same resource name.
+			if _, err := v2Client.addWatches[ListenerResource].Receive(ctx); err != nil {
+				t.Fatalf("want new watch to start, got error %v", err)
+			}
 		}
 	}
 
@@ -175,7 +193,7 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 	c.watchLDS(testLDSName+"2", func(update ListenerUpdate, err error) {
 		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -187,12 +205,12 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count; i++ {
-		if u, err := ldsUpdateChs[i].Receive(); err != nil || u != (ldsUpdateErr{wantUpdate1, nil}) {
+		if u, err := ldsUpdateChs[i].Receive(ctx); err != nil || u != (ldsUpdateErr{wantUpdate1, nil}) {
 			t.Errorf("i=%v, unexpected ListenerUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
 
-	if u, err := ldsUpdateCh2.Receive(); err != nil || u != (ldsUpdateErr{wantUpdate2, nil}) {
+	if u, err := ldsUpdateCh2.Receive(ctx); err != nil || u != (ldsUpdateErr{wantUpdate2, nil}) {
 		t.Errorf("unexpected ListenerUpdate: %v, error receiving from channel: %v", u, err)
 	}
 }
@@ -215,7 +233,10 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	c.watchLDS(testLDSName, func(update ListenerUpdate, err error) {
 		ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := v2Client.addWatches[ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -224,7 +245,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 		testLDSName: wantUpdate,
 	})
 
-	if u, err := ldsUpdateCh.Receive(); err != nil || u != (ldsUpdateErr{wantUpdate, nil}) {
+	if u, err := ldsUpdateCh.Receive(ctx); err != nil || u != (ldsUpdateErr{wantUpdate, nil}) {
 		t.Errorf("unexpected ListenerUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -233,17 +254,19 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	c.watchLDS(testLDSName, func(update ListenerUpdate, err error) {
 		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
 	})
-	if n, err := v2Client.addWatches[ListenerResource].Receive(); err == nil {
+	if n, err := v2Client.addWatches[ListenerResource].Receive(ctx); err != context.DeadlineExceeded {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
 	// New watch should receives the update.
-	if u, err := ldsUpdateCh2.Receive(); err != nil || u != (ldsUpdateErr{wantUpdate, nil}) {
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if u, err := ldsUpdateCh2.Receive(ctx); err != nil || u != (ldsUpdateErr{wantUpdate, nil}) {
 		t.Errorf("unexpected ListenerUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
 	// Old watch should see nothing.
-	if u, err := ldsUpdateCh.TimedReceive(chanRecvTimeout); err != testutils.ErrRecvTimeout {
+	if u, err := ldsUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected ListenerUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -270,7 +293,10 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	c.watchLDS(testLDSName+"1", func(update ListenerUpdate, err error) {
 		ldsUpdateCh1.Send(ldsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := v2Client.addWatches[ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	// Another watch for a different name.
@@ -278,7 +304,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	c.watchLDS(testLDSName+"2", func(update ListenerUpdate, err error) {
 		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[ListenerResource].Receive(); err != nil {
+	if _, err := v2Client.addWatches[ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -289,11 +315,11 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 		testLDSName + "2": wantUpdate2,
 	})
 
-	if u, err := ldsUpdateCh1.Receive(); err != nil || u != (ldsUpdateErr{wantUpdate1, nil}) {
+	if u, err := ldsUpdateCh1.Receive(ctx); err != nil || u != (ldsUpdateErr{wantUpdate1, nil}) {
 		t.Errorf("unexpected ListenerUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
-	if u, err := ldsUpdateCh2.Receive(); err != nil || u != (ldsUpdateErr{wantUpdate2, nil}) {
+	if u, err := ldsUpdateCh2.Receive(ctx); err != nil || u != (ldsUpdateErr{wantUpdate2, nil}) {
 		t.Errorf("unexpected ListenerUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -303,12 +329,12 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	})
 
 	// watcher 1 should get an error.
-	if u, err := ldsUpdateCh1.Receive(); err != nil || ErrType(u.(ldsUpdateErr).err) != ErrorTypeResourceNotFound {
+	if u, err := ldsUpdateCh1.Receive(ctx); err != nil || ErrType(u.(ldsUpdateErr).err) != ErrorTypeResourceNotFound {
 		t.Errorf("unexpected ListenerUpdate: %v, error receiving from channel: %v, want update with error resource not found", u, err)
 	}
 
 	// watcher 2 should get the same update again.
-	if u, err := ldsUpdateCh2.Receive(); err != nil || u != (ldsUpdateErr{wantUpdate2, nil}) {
+	if u, err := ldsUpdateCh2.Receive(ctx); err != nil || u != (ldsUpdateErr{wantUpdate2, nil}) {
 		t.Errorf("unexpected ListenerUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -318,12 +344,14 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	})
 
 	// watcher 1 should get an error.
-	if u, err := ldsUpdateCh1.Receive(); err != testutils.ErrRecvTimeout {
+	if u, err := ldsUpdateCh1.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected ListenerUpdate: %v, want receiving from channel timeout", u)
 	}
 
 	// watcher 2 should get the same update again.
-	if u, err := ldsUpdateCh2.Receive(); err != nil || u != (ldsUpdateErr{wantUpdate2, nil}) {
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if u, err := ldsUpdateCh2.Receive(ctx); err != nil || u != (ldsUpdateErr{wantUpdate2, nil}) {
 		t.Errorf("unexpected ListenerUpdate: %v, error receiving from channel: %v", u, err)
 	}
 }

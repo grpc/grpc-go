@@ -19,6 +19,7 @@
 package rls
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -82,7 +83,9 @@ func (s) TestLookupFailure(t *testing.T) {
 		errCh.Send(nil)
 	})
 
-	if e, err := errCh.Receive(); err != nil || e != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if e, err := errCh.Receive(ctx); err != nil || e != nil {
 		t.Fatalf("lookup error: %v, error receiving from channel: %v", e, err)
 	}
 }
@@ -106,7 +109,9 @@ func (s) TestLookupDeadlineExceeded(t *testing.T) {
 		errCh.Send(nil)
 	})
 
-	if e, err := errCh.Receive(); err != nil || e != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if e, err := errCh.Receive(ctx); err != nil || e != nil {
 		t.Fatalf("lookup error: %v, error receiving from channel: %v", e, err)
 	}
 }
@@ -150,7 +155,9 @@ func (s) TestLookupSuccess(t *testing.T) {
 
 	// Make sure that the fake server received the expected RouteLookupRequest
 	// proto.
-	req, err := server.RequestChan.Receive()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	req, err := server.RequestChan.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timed out wile waiting for a RouteLookupRequest")
 	}
@@ -168,7 +175,7 @@ func (s) TestLookupSuccess(t *testing.T) {
 		},
 	}
 
-	if e, err := errCh.Receive(); err != nil || e != nil {
+	if e, err := errCh.Receive(ctx); err != nil || e != nil {
 		t.Fatalf("lookup error: %v, error receiving from channel: %v", e, err)
 	}
 }

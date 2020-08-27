@@ -19,10 +19,10 @@
 package edsbalancer
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/golang/protobuf/proto"
@@ -31,11 +31,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
-	"google.golang.org/grpc/xds/internal/testutils"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/version"
@@ -51,13 +52,16 @@ var (
 func verifyExpectedRequests(fs *fakeserver.Server, resourceNames ...string) error {
 	wantReq := &xdspb.DiscoveryRequest{
 		TypeUrl: version.V2EndpointsURL,
-		Node:    testutils.EmptyNodeProtoV2,
+		Node:    xdstestutils.EmptyNodeProtoV2,
 	}
 	for _, name := range resourceNames {
 		if name != "" {
 			wantReq.ResourceNames = []string{name}
 		}
-		req, err := fs.XDSRequestChan.TimedReceive(time.Millisecond * 100)
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		req, err := fs.XDSRequestChan.Receive(ctx)
 		if err != nil {
 			return fmt.Errorf("timed out when expecting request {%+v} at fake server", wantReq)
 		}
@@ -98,7 +102,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 		return &bootstrap.Config{
 			BalancerName: fakeServer.Address,
 			Creds:        grpc.WithInsecure(),
-			NodeProto:    testutils.EmptyNodeProtoV2,
+			NodeProto:    xdstestutils.EmptyNodeProtoV2,
 		}, nil
 	}
 	defer func() { bootstrapConfigNew = oldBootstrapConfigNew }()
@@ -109,7 +113,9 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 		BalancerName:   fakeServer.Address,
 		EDSServiceName: "",
 	}, nil)
-	if _, err := fakeServer.NewConnChan.TimedReceive(1 * time.Second); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := fakeServer.NewConnChan.Receive(ctx); err != nil {
 		t.Fatal("Failed to connect to fake server")
 	}
 	t.Log("Client connection established to fake server...")
@@ -161,7 +167,10 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 
 	xdsC := fakeclient.NewClient()
 	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC))
-	gotCluster, err := xdsC.WaitForWatchEDS()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	gotCluster, err := xdsC.WaitForWatchEDS(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
@@ -175,7 +184,9 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	//
 	// TODO: check for loseContact() when errors indicating "lose contact" are
 	// handled correctly.
-	gotUpdate, err := edsRespChan.Receive()
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	gotUpdate, err := edsRespChan.Receive(ctx)
 	if err != nil {
 		t.Fatalf("edsBalancer failed to get edsUpdate %v", err)
 	}
@@ -199,10 +210,13 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 	cw := newXDSClientWrapper(nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, nil)
 	defer cw.close()
 
-	// Verify that the eds watch is registered for the expected resource name.
 	xdsC1 := fakeclient.NewClient()
 	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC1))
-	gotCluster, err := xdsC1.WaitForWatchEDS()
+
+	// Verify that the eds watch is registered for the expected resource name.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	gotCluster, err := xdsC1.WaitForWatchEDS(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
@@ -216,7 +230,7 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 	// close client that are passed through attributes).
 	xdsC2 := fakeclient.NewClient()
 	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC2))
-	gotCluster, err = xdsC2.WaitForWatchEDS()
+	gotCluster, err = xdsC2.WaitForWatchEDS(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
@@ -224,7 +238,7 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 		t.Fatalf("xdsClient.WatchEndpoints() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
 	}
 
-	if err := xdsC1.WaitForClose(); err != testutils.ErrRecvTimeout {
+	if err := xdsC1.WaitForClose(ctx); err != context.DeadlineExceeded {
 		t.Fatalf("clientWrapper closed xdsClient received in attributes")
 	}
 }

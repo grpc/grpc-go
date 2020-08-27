@@ -19,6 +19,7 @@
 package rls
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -31,6 +32,8 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/testdata"
 )
+
+const defaultTestTimeout = 1 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -99,7 +102,9 @@ func (s) TestUpdateControlChannelFirstConfig(t *testing.T) {
 	t.Logf("Sending service config %+v to RLS LB policy ...", lbCfg)
 	rlsB.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: lbCfg})
 
-	if _, err := lis.connCh.Receive(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := lis.connCh.Receive(ctx); err != nil {
 		t.Fatal("Timeout expired when waiting for LB policy to create control channel")
 	}
 
@@ -132,7 +137,9 @@ func (s) TestUpdateControlChannelSwitch(t *testing.T) {
 	t.Logf("Sending service config %+v to RLS LB policy ...", lbCfg)
 	rlsB.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: lbCfg})
 
-	if _, err := lis1.connCh.Receive(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := lis1.connCh.Receive(ctx); err != nil {
 		t.Fatal("Timeout expired when waiting for LB policy to create control channel")
 	}
 
@@ -140,7 +147,7 @@ func (s) TestUpdateControlChannelSwitch(t *testing.T) {
 	t.Logf("Sending service config %+v to RLS LB policy ...", lbCfg)
 	rlsB.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: lbCfg})
 
-	if _, err := lis2.connCh.Receive(); err != nil {
+	if _, err := lis2.connCh.Receive(ctx); err != nil {
 		t.Fatal("Timeout expired when waiting for LB policy to create control channel")
 	}
 
@@ -169,14 +176,17 @@ func (s) TestUpdateControlChannelTimeout(t *testing.T) {
 	lbCfg := &lbConfig{lookupService: server.Address, lookupServiceTimeout: 1 * time.Second}
 	t.Logf("Sending service config %+v to RLS LB policy ...", lbCfg)
 	rlsB.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: lbCfg})
-	if _, err := lis.connCh.Receive(); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := lis.connCh.Receive(ctx); err != nil {
 		t.Fatal("Timeout expired when waiting for LB policy to create control channel")
 	}
 
 	lbCfg = &lbConfig{lookupService: server.Address, lookupServiceTimeout: 2 * time.Second}
 	t.Logf("Sending service config %+v to RLS LB policy ...", lbCfg)
 	rlsB.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: lbCfg})
-	if _, err := lis.connCh.Receive(); err != testutils.ErrRecvTimeout {
+	if _, err := lis.connCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Fatal("LB policy created new control channel when only lookupServiceTimeout changed")
 	}
 
@@ -215,7 +225,9 @@ func (s) TestUpdateControlChannelWithCreds(t *testing.T) {
 	t.Logf("Sending service config %+v to RLS LB policy ...", lbCfg)
 	rlsB.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: lbCfg})
 
-	if _, err := lis.connCh.Receive(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := lis.connCh.Receive(ctx); err != nil {
 		t.Fatal("Timeout expired when waiting for LB policy to create control channel")
 	}
 

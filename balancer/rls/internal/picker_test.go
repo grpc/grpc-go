@@ -260,7 +260,9 @@ func TestPick_DataCacheMiss_PendingCacheMiss(t *testing.T) {
 			// If the test specified that a new RLS request should be made,
 			// verify it.
 			if test.wantRLSRequest {
-				if rlsErr, err := rlsCh.Receive(); err != nil || rlsErr != nil {
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+				if rlsErr, err := rlsCh.Receive(ctx); err != nil || rlsErr != nil {
 					t.Fatalf("startRLS() = %v, error receiving from channel: %v", rlsErr, err)
 				}
 			}
@@ -339,7 +341,9 @@ func TestPick_DataCacheMiss_PendingCacheHit(t *testing.T) {
 			}
 
 			// Make sure that no RLS request was sent out.
-			if _, err := rlsCh.Receive(); err != testutils.ErrRecvTimeout {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			if _, err := rlsCh.Receive(ctx); err != context.DeadlineExceeded {
 				t.Fatalf("RLS request sent out when pending entry exists")
 			}
 		})
@@ -483,7 +487,9 @@ func TestPick_DataCacheHit_PendingCacheMiss(t *testing.T) {
 			// If the test specified that a new RLS request should be made,
 			// verify it.
 			if test.wantRLSRequest {
-				if rlsErr, err := rlsCh.Receive(); err != nil || rlsErr != nil {
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+				if rlsErr, err := rlsCh.Receive(ctx); err != nil || rlsErr != nil {
 					t.Fatalf("startRLS() = %v, error receiving from channel: %v", rlsErr, err)
 				}
 			}
@@ -590,7 +596,9 @@ func TestPick_DataCacheHit_PendingCacheHit(t *testing.T) {
 				t.Fatalf("Pick() returned error {%v}, want {%v}", err, test.wantErr)
 			}
 			// Make sure that no RLS request was sent out.
-			if _, err := rlsCh.Receive(); err != testutils.ErrRecvTimeout {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			if _, err := rlsCh.Receive(ctx); err != context.DeadlineExceeded {
 				t.Fatalf("RLS request sent out when pending entry exists")
 			}
 			if test.wantErr != nil {
