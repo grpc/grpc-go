@@ -22,14 +22,11 @@ package fakeclient
 import (
 	"context"
 	"sync"
-	"time"
 
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
-
-const defaultTestTimeout = 1 * time.Second
 
 // Client is a fake implementation of an xds client. It exposes a bunch of
 // channels to signal the occurrence of various events.
