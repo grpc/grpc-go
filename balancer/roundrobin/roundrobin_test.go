@@ -47,15 +47,11 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-type testServer struct {
-	testpb.UnimplementedTestServiceServer
-}
-
-func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+func emptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 	return &testpb.Empty{}, nil
 }
 
-func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
+func fullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
 	return nil
 }
 
@@ -85,7 +81,10 @@ func startTestServers(count int) (_ *test, err error) {
 		}
 
 		s := grpc.NewServer()
-		testpb.RegisterTestServiceServer(s, &testServer{})
+		testpb.RegisterTestServiceService(s, &testpb.TestServiceService{
+			EmptyCall:      emptyCall,
+			FullDuplexCall: fullDuplexCall,
+		})
 		t.servers = append(t.servers, s)
 		t.addresses = append(t.addresses, lis.Addr().String())
 

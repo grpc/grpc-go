@@ -126,8 +126,6 @@ var (
 var raceMode bool // set by race.go in race mode
 
 type testServer struct {
-	testpb.UnimplementedTestServiceServer
-
 	security           string // indicate the authentication protocol used by this server.
 	earlyFail          bool   // whether to error out the execution of a service handler prematurely.
 	setAndSendHeader   bool   // whether to call setHeader and sendHeader.
@@ -135,6 +133,8 @@ type testServer struct {
 	multipleSetTrailer bool   // whether to call setTrailer multiple times.
 	unaryCallSleepTime time.Duration
 }
+
+var _ testpb.UnstableTestServiceService = (*testServer)(nil)
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
@@ -566,7 +566,7 @@ func newTest(t *testing.T, e env) *test {
 	return te
 }
 
-func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network, address string) (net.Listener, error)) net.Listener {
+func (te *test) listenAndServe(ts interface{}, listen func(network, address string) (net.Listener, error)) net.Listener {
 	te.t.Helper()
 	te.t.Logf("Running test in %s environment...", te.e.name)
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(te.maxStream)}
@@ -626,7 +626,7 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 	sopts = append(sopts, te.customServerOptions...)
 	s := grpc.NewServer(sopts...)
 	if ts != nil {
-		testpb.RegisterTestServiceServer(s, ts)
+		testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(ts))
 	}
 
 	// Create a new default health server if enableHealthServer is set, or use
@@ -691,20 +691,20 @@ func (w wrapHS) Stop() {
 	w.s.Close()
 }
 
-func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) *listenerWrapper {
+func (te *test) startServerWithConnControl(ts interface{}) *listenerWrapper {
 	l := te.listenAndServe(ts, listenWithConnControl)
 	return l.(*listenerWrapper)
 }
 
 // startServer starts a gRPC server exposing the provided TestService
 // implementation. Callers should defer a call to te.tearDown to clean up
-func (te *test) startServer(ts testpb.TestServiceServer) {
+func (te *test) startServer(ts interface{}) {
 	te.t.Helper()
 	te.listenAndServe(ts, net.Listen)
 }
 
 // startServers starts 'num' gRPC servers exposing the provided TestService.
-func (te *test) startServers(ts testpb.TestServiceServer, num int) {
+func (te *test) startServers(ts interface{}, num int) {
 	for i := 0; i < num; i++ {
 		te.startServer(ts)
 		te.srvs = append(te.srvs, te.srv.(*grpc.Server))
@@ -3892,15 +3892,13 @@ func equalError(x, y error) bool {
 	return x == y || (x != nil && y != nil && x.Error() == y.Error())
 }
 
-// concurrentSendServer is a TestServiceServer whose
+// concurrentSendServer is a TestServiceService whose
 // StreamingOutputCall makes ten serial Send calls, sending payloads
 // "0".."9", inclusive.  TestServerStreamingConcurrent verifies they
 // were received in the correct order, and that there were no races.
 //
-// All other TestServiceServer methods crash if called.
-type concurrentSendServer struct {
-	testpb.TestServiceServer
-}
+// All other TestServiceService methods return unimplemented if called.
+type concurrentSendServer struct{}
 
 func (s concurrentSendServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
 	for i := 0; i < 10; i++ {
@@ -4496,12 +4494,11 @@ func testStreamServerInterceptor(t *testing.T, e env) {
 	}
 }
 
-// funcServer implements methods of TestServiceServer using funcs,
+// funcServer implements methods of TestServiceService using funcs,
 // similar to an http.HandlerFunc.
-// Any unimplemented method will crash. Tests implement the method(s)
+// Any unimplemented method will return unimplemented. Tests implement the method(s)
 // they need.
 type funcServer struct {
-	testpb.TestServiceServer
 	unaryCall          func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
 	streamingInputCall func(stream testpb.TestService_StreamingInputCallServer) error
 	fullDuplexCall     func(stream testpb.TestService_FullDuplexCallServer) error
@@ -4872,10 +4869,10 @@ func (s) TestFlowControlLogicalRace(t *testing.T) {
 	defer lis.Close()
 
 	s := grpc.NewServer()
-	testpb.RegisterTestServiceServer(s, &flowControlLogicalRaceServer{
+	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(&flowControlLogicalRaceServer{
 		itemCount: itemCount,
 		itemSize:  itemSize,
-	})
+	}))
 	defer s.Stop()
 
 	go s.Serve(lis)
@@ -4929,8 +4926,6 @@ func (s) TestFlowControlLogicalRace(t *testing.T) {
 }
 
 type flowControlLogicalRaceServer struct {
-	testpb.TestServiceServer
-
 	itemSize  int
 	itemCount int
 }
@@ -5077,9 +5072,6 @@ func (fw *filterWriter) Write(p []byte) (n int, err error) {
 // stubServer is a server that is easy to customize within individual test
 // cases.
 type stubServer struct {
-	// Guarantees we satisfy this interface; panics if unimplemented methods are called.
-	testpb.TestServiceServer
-
 	// Customizable implementations of server handlers.
 	emptyCall      func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error)
 	unaryCall      func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
@@ -5133,7 +5125,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
 
 	s := grpc.NewServer(sopts...)
-	testpb.RegisterTestServiceServer(s, ss)
+	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(ss))
 	go s.Serve(lis)
 	ss.cleanups = append(ss.cleanups, s.Stop)
 	ss.s = s
@@ -6276,7 +6268,7 @@ func (s) TestServeExitsWhenListenerClosed(t *testing.T) {
 
 	s := grpc.NewServer()
 	defer s.Stop()
-	testpb.RegisterTestServiceServer(s, ss)
+	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(ss))
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -6495,7 +6487,7 @@ func (s) TestDisabledIOBuffers(t *testing.T) {
 	}
 
 	s := grpc.NewServer(grpc.WriteBufferSize(0), grpc.ReadBufferSize(0))
-	testpb.RegisterTestServiceServer(s, ss)
+	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(ss))
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -6708,7 +6700,7 @@ func (s) TestNetPipeConn(t *testing.T) {
 	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 		return &testpb.SimpleResponse{}, nil
 	}}
-	testpb.RegisterTestServiceServer(s, ts)
+	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(ts))
 	go s.Serve(pl)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -6791,7 +6783,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 			return err
 		},
 	}
-	testpb.RegisterTestServiceServer(s1, ts)
+	testpb.RegisterTestServiceService(s1, testpb.NewTestServiceService(ts))
 	go s1.Serve(lis1)
 
 	conn2Established := grpcsync.NewEvent()
@@ -6801,7 +6793,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	}
 	s2 := grpc.NewServer()
 	defer s2.Stop()
-	testpb.RegisterTestServiceServer(s2, ts)
+	testpb.RegisterTestServiceService(s2, testpb.NewTestServiceService(ts))
 	go s2.Serve(lis2)
 
 	r := manual.NewBuilderWithScheme("whatever")

@@ -75,10 +75,11 @@ func (byteBufCodec) String() string {
 // workerServer implements WorkerService rpc handlers.
 // It can create benchmarkServer or benchmarkClient on demand.
 type workerServer struct {
-	testpb.UnimplementedWorkerServiceServer
 	stop       chan<- bool
 	serverPort int
 }
+
+var _ testpb.UnstableWorkerServiceService = (*workerServer)(nil)
 
 func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) error {
 	var bs *benchmarkServer
@@ -209,10 +210,10 @@ func main() {
 
 	s := grpc.NewServer()
 	stop := make(chan bool)
-	testpb.RegisterWorkerServiceServer(s, &workerServer{
+	testpb.RegisterWorkerServiceService(s, testpb.NewWorkerServiceService(&workerServer{
 		stop:       stop,
 		serverPort: *serverPort,
-	})
+	}))
 
 	go func() {
 		<-stop

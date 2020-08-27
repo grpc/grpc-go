@@ -37,11 +37,11 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
-var requireUnimplemented *bool
+var migrationMode *bool
 
 func main() {
 	var flags flag.FlagSet
-	requireUnimplemented = flags.Bool("requireUnimplementedServers", true, "unset to match legacy behavior")
+	migrationMode = flags.Bool("migration_mode", false, "set to generate new symbols only; requires symbols produced by legacy protoc-gen-go")
 
 	protogen.Options{
 		ParamFunc: flags.Set,

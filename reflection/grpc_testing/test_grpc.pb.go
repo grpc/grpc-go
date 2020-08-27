@@ -11,7 +11,7 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion6
+const _ = grpc.SupportPackageIsVersion7
 
 // SearchServiceClient is the client API for SearchService service.
 //
@@ -29,6 +29,10 @@ func NewSearchServiceClient(cc grpc.ClientConnInterface) SearchServiceClient {
 	return &searchServiceClient{cc}
 }
 
+var searchServiceSearchStreamDesc = &grpc.StreamDesc{
+	StreamName: "Search",
+}
+
 func (c *searchServiceClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error) {
 	out := new(SearchResponse)
 	err := c.cc.Invoke(ctx, "/grpc.testing.SearchService/Search", in, out, opts...)
@@ -38,8 +42,14 @@ func (c *searchServiceClient) Search(ctx context.Context, in *SearchRequest, opt
 	return out, nil
 }
 
+var searchServiceStreamingSearchStreamDesc = &grpc.StreamDesc{
+	StreamName:    "StreamingSearch",
+	ServerStreams: true,
+	ClientStreams: true,
+}
+
 func (c *searchServiceClient) StreamingSearch(ctx context.Context, opts ...grpc.CallOption) (SearchService_StreamingSearchClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_SearchService_serviceDesc.Streams[0], "/grpc.testing.SearchService/StreamingSearch", opts...)
+	stream, err := c.cc.NewStream(ctx, searchServiceStreamingSearchStreamDesc, "/grpc.testing.SearchService/StreamingSearch", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -69,49 +79,34 @@ func (x *searchServiceStreamingSearchClient) Recv() (*SearchResponse, error) {
 	return m, nil
 }
 
-// SearchServiceServer is the server API for SearchService service.
-// All implementations should embed UnimplementedSearchServiceServer
-// for forward compatibility
-type SearchServiceServer interface {
-	Search(context.Context, *SearchRequest) (*SearchResponse, error)
-	StreamingSearch(SearchService_StreamingSearchServer) error
+// SearchServiceService is the service API for SearchService service.
+// Fields should be assigned to their respective handler implementations only before
+// RegisterSearchServiceService is called.  Any unassigned fields will result in the
+// handler for that method returning an Unimplemented error.
+type SearchServiceService struct {
+	Search          func(context.Context, *SearchRequest) (*SearchResponse, error)
+	StreamingSearch func(SearchService_StreamingSearchServer) error
 }
 
-// UnimplementedSearchServiceServer should be embedded to have forward compatible implementations.
-type UnimplementedSearchServiceServer struct {
-}
-
-func (*UnimplementedSearchServiceServer) Search(context.Context, *SearchRequest) (*SearchResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
-}
-func (*UnimplementedSearchServiceServer) StreamingSearch(SearchService_StreamingSearchServer) error {
-	return status.Errorf(codes.Unimplemented, "method StreamingSearch not implemented")
-}
-
-func RegisterSearchServiceServer(s *grpc.Server, srv SearchServiceServer) {
-	s.RegisterService(&_SearchService_serviceDesc, srv)
-}
-
-func _SearchService_Search_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func (s *SearchServiceService) search(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SearchRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(SearchServiceServer).Search(ctx, in)
+		return s.Search(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
-		Server:     srv,
+		Server:     s,
 		FullMethod: "/grpc.testing.SearchService/Search",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SearchServiceServer).Search(ctx, req.(*SearchRequest))
+		return s.Search(ctx, req.(*SearchRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
-
-func _SearchService_StreamingSearch_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(SearchServiceServer).StreamingSearch(&searchServiceStreamingSearchServer{stream})
+func (s *SearchServiceService) streamingSearch(_ interface{}, stream grpc.ServerStream) error {
+	return s.StreamingSearch(&searchServiceStreamingSearchServer{stream})
 }
 
 type SearchService_StreamingSearchServer interface {
@@ -136,22 +131,67 @@ func (x *searchServiceStreamingSearchServer) Recv() (*SearchRequest, error) {
 	return m, nil
 }
 
-var _SearchService_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "grpc.testing.SearchService",
-	HandlerType: (*SearchServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "Search",
-			Handler:    _SearchService_Search_Handler,
+// RegisterSearchServiceService registers a service implementation with a gRPC server.
+func RegisterSearchServiceService(s grpc.ServiceRegistrar, srv *SearchServiceService) {
+	srvCopy := *srv
+	if srvCopy.Search == nil {
+		srvCopy.Search = func(context.Context, *SearchRequest) (*SearchResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
+		}
+	}
+	if srvCopy.StreamingSearch == nil {
+		srvCopy.StreamingSearch = func(SearchService_StreamingSearchServer) error {
+			return status.Errorf(codes.Unimplemented, "method StreamingSearch not implemented")
+		}
+	}
+	sd := grpc.ServiceDesc{
+		ServiceName: "grpc.testing.SearchService",
+		Methods: []grpc.MethodDesc{
+			{
+				MethodName: "Search",
+				Handler:    srvCopy.search,
+			},
 		},
-	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "StreamingSearch",
-			Handler:       _SearchService_StreamingSearch_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName:    "StreamingSearch",
+				Handler:       srvCopy.streamingSearch,
+				ServerStreams: true,
+				ClientStreams: true,
+			},
 		},
-	},
-	Metadata: "reflection/grpc_testing/test.proto",
+		Metadata: "reflection/grpc_testing/test.proto",
+	}
+
+	s.RegisterService(&sd, nil)
+}
+
+// NewSearchServiceService creates a new SearchServiceService containing the
+// implemented methods of the SearchService service in s.  Any unimplemented
+// methods will result in the gRPC server returning an UNIMPLEMENTED status to the client.
+// This includes situations where the method handler is misspelled or has the wrong
+// signature.  For this reason, this function should be used with great care and
+// is not recommended to be used by most users.
+func NewSearchServiceService(s interface{}) *SearchServiceService {
+	ns := &SearchServiceService{}
+	if h, ok := s.(interface {
+		Search(context.Context, *SearchRequest) (*SearchResponse, error)
+	}); ok {
+		ns.Search = h.Search
+	}
+	if h, ok := s.(interface {
+		StreamingSearch(SearchService_StreamingSearchServer) error
+	}); ok {
+		ns.StreamingSearch = h.StreamingSearch
+	}
+	return ns
+}
+
+// UnstableSearchServiceService is the service API for SearchService service.
+// New methods may be added to this interface if they are added to the service
+// definition, which is not a backward-compatible change.  For this reason,
+// use of this type is not recommended.
+type UnstableSearchServiceService interface {
+	Search(context.Context, *SearchRequest) (*SearchResponse, error)
+	StreamingSearch(SearchService_StreamingSearchServer) error
 }

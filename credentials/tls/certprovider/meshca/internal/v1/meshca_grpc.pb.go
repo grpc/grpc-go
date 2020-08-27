@@ -11,82 +11,81 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion6
+const _ = grpc.SupportPackageIsVersion7
 
-// MeshCertificateServiceClient is the client API for MeshCertificateService service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type MeshCertificateServiceClient interface {
+// MeshCertificateServiceService is the service API for MeshCertificateService service.
+// Fields should be assigned to their respective handler implementations only before
+// RegisterMeshCertificateServiceService is called.  Any unassigned fields will result in the
+// handler for that method returning an Unimplemented error.
+type MeshCertificateServiceService struct {
 	// Using provided CSR, returns a signed certificate that represents a GCP
 	// service account identity.
-	CreateCertificate(ctx context.Context, in *MeshCertificateRequest, opts ...grpc.CallOption) (*MeshCertificateResponse, error)
+	CreateCertificate func(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error)
 }
 
-type meshCertificateServiceClient struct {
-	cc grpc.ClientConnInterface
-}
-
-func NewMeshCertificateServiceClient(cc grpc.ClientConnInterface) MeshCertificateServiceClient {
-	return &meshCertificateServiceClient{cc}
-}
-
-func (c *meshCertificateServiceClient) CreateCertificate(ctx context.Context, in *MeshCertificateRequest, opts ...grpc.CallOption) (*MeshCertificateResponse, error) {
-	out := new(MeshCertificateResponse)
-	err := c.cc.Invoke(ctx, "/google.security.meshca.v1.MeshCertificateService/CreateCertificate", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// MeshCertificateServiceServer is the server API for MeshCertificateService service.
-// All implementations should embed UnimplementedMeshCertificateServiceServer
-// for forward compatibility
-type MeshCertificateServiceServer interface {
-	// Using provided CSR, returns a signed certificate that represents a GCP
-	// service account identity.
-	CreateCertificate(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error)
-}
-
-// UnimplementedMeshCertificateServiceServer should be embedded to have forward compatible implementations.
-type UnimplementedMeshCertificateServiceServer struct {
-}
-
-func (*UnimplementedMeshCertificateServiceServer) CreateCertificate(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateCertificate not implemented")
-}
-
-func RegisterMeshCertificateServiceServer(s *grpc.Server, srv MeshCertificateServiceServer) {
-	s.RegisterService(&_MeshCertificateService_serviceDesc, srv)
-}
-
-func _MeshCertificateService_CreateCertificate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func (s *MeshCertificateServiceService) createCertificate(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MeshCertificateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MeshCertificateServiceServer).CreateCertificate(ctx, in)
+		return s.CreateCertificate(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
-		Server:     srv,
+		Server:     s,
 		FullMethod: "/google.security.meshca.v1.MeshCertificateService/CreateCertificate",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MeshCertificateServiceServer).CreateCertificate(ctx, req.(*MeshCertificateRequest))
+		return s.CreateCertificate(ctx, req.(*MeshCertificateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-var _MeshCertificateService_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "google.security.meshca.v1.MeshCertificateService",
-	HandlerType: (*MeshCertificateServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "CreateCertificate",
-			Handler:    _MeshCertificateService_CreateCertificate_Handler,
+// RegisterMeshCertificateServiceService registers a service implementation with a gRPC server.
+func RegisterMeshCertificateServiceService(s grpc.ServiceRegistrar, srv *MeshCertificateServiceService) {
+	srvCopy := *srv
+	if srvCopy.CreateCertificate == nil {
+		srvCopy.CreateCertificate = func(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method CreateCertificate not implemented")
+		}
+	}
+	sd := grpc.ServiceDesc{
+		ServiceName: "google.security.meshca.v1.MeshCertificateService",
+		Methods: []grpc.MethodDesc{
+			{
+				MethodName: "CreateCertificate",
+				Handler:    srvCopy.createCertificate,
+			},
 		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "istio/google/security/meshca/v1/meshca.proto",
+		Streams:  []grpc.StreamDesc{},
+		Metadata: "istio/google/security/meshca/v1/meshca.proto",
+	}
+
+	s.RegisterService(&sd, nil)
+}
+
+// NewMeshCertificateServiceService creates a new MeshCertificateServiceService containing the
+// implemented methods of the MeshCertificateService service in s.  Any unimplemented
+// methods will result in the gRPC server returning an UNIMPLEMENTED status to the client.
+// This includes situations where the method handler is misspelled or has the wrong
+// signature.  For this reason, this function should be used with great care and
+// is not recommended to be used by most users.
+func NewMeshCertificateServiceService(s interface{}) *MeshCertificateServiceService {
+	ns := &MeshCertificateServiceService{}
+	if h, ok := s.(interface {
+		CreateCertificate(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error)
+	}); ok {
+		ns.CreateCertificate = h.CreateCertificate
+	}
+	return ns
+}
+
+// UnstableMeshCertificateServiceService is the service API for MeshCertificateService service.
+// New methods may be added to this interface if they are added to the service
+// definition, which is not a backward-compatible change.  For this reason,
+// use of this type is not recommended.
+type UnstableMeshCertificateServiceService interface {
+	// Using provided CSR, returns a signed certificate that represents a GCP
+	// service account identity.
+	CreateCertificate(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error)
 }

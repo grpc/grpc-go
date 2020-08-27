@@ -73,9 +73,9 @@ var (
 	errorID int32 = 32202
 )
 
-type testServer struct {
-	testpb.UnimplementedTestServiceServer
-}
+type testServer struct{}
+
+var _ testpb.UnstableTestServiceService = (*testServer)(nil)
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	if err := grpc.SendHeader(ctx, testHeaderMetadata); err != nil {
@@ -165,7 +165,7 @@ type test struct {
 	clientStatsHandler stats.Handler
 	serverStatsHandler stats.Handler
 
-	testServer testpb.TestServiceServer // nil means none
+	testService *testpb.TestServiceService // nil means none
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
 	srvAddr string
@@ -200,8 +200,8 @@ func newTest(t *testing.T, tc *testConfig, ch stats.Handler, sh stats.Handler) *
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
-func (te *test) startServer(ts testpb.TestServiceServer) {
-	te.testServer = ts
+func (te *test) startServer(ts *testpb.TestServiceService) {
+	te.testService = ts
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		te.t.Fatalf("Failed to listen: %v", err)
@@ -218,8 +218,8 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	}
 	s := grpc.NewServer(opts...)
 	te.srv = s
-	if te.testServer != nil {
-		testpb.RegisterTestServiceServer(s, te.testServer)
+	if te.testService != nil {
+		testpb.RegisterTestServiceService(s, te.testService)
 	}
 
 	go s.Serve(lis)
@@ -815,7 +815,7 @@ func checkServerStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {
 	h := &statshandler{}
 	te := newTest(t, tc, nil, h)
-	te.startServer(&testServer{})
+	te.startServer(testpb.NewTestServiceService(&testServer{}))
 	defer te.tearDown()
 
 	var (
@@ -1106,7 +1106,7 @@ func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map[int]*checkFuncWithCount) {
 	h := &statshandler{}
 	te := newTest(t, tc, h, nil)
-	te.startServer(&testServer{})
+	te.startServer(testpb.NewTestServiceService(&testServer{}))
 	defer te.tearDown()
 
 	var (

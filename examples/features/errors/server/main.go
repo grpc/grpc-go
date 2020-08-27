@@ -39,7 +39,6 @@ var port = flag.Int("port", 50052, "port number")
 
 // server is used to implement helloworld.GreeterServer.
 type server struct {
-	pb.UnimplementedGreeterServer
 	mu    sync.Mutex
 	count map[string]int
 }
@@ -78,7 +77,8 @@ func main() {
 	}
 
 	s := grpc.NewServer()
-	pb.RegisterGreeterServer(s, &server{count: make(map[string]int)})
+	hw := &server{count: make(map[string]int)}
+	pb.RegisterGreeterService(s, &pb.GreeterService{SayHello: hw.SayHello})
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

@@ -32,13 +32,8 @@ import (
 
 const addr = "localhost:50051"
 
-type ecServer struct {
-	pb.UnimplementedEchoServer
-	addr string
-}
-
-func (s *ecServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
-	return &pb.EchoResponse{Message: fmt.Sprintf("%s (from %s)", req.Message, s.addr)}, nil
+func unaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+	return &pb.EchoResponse{Message: fmt.Sprintf("%s (from %s)", req.Message, addr)}, nil
 }
 
 func main() {
@@ -47,7 +42,7 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterEchoServer(s, &ecServer{addr: addr})
+	pb.RegisterEchoService(s, &pb.EchoService{UnaryEcho: unaryEcho})
 	log.Printf("serving on %s\n", addr)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)

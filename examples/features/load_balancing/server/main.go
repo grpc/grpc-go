@@ -36,7 +36,6 @@ var (
 )
 
 type ecServer struct {
-	pb.UnimplementedEchoServer
 	addr string
 }
 
@@ -50,7 +49,8 @@ func startServer(addr string) {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterEchoServer(s, &ecServer{addr: addr})
+	e := &ecServer{addr: addr}
+	pb.RegisterEchoService(s, &pb.EchoService{UnaryEcho: e.UnaryEcho})
 	log.Printf("serving on %s\n", addr)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
