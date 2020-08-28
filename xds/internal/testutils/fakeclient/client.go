@@ -24,8 +24,8 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/store"
 )
 
 // Client is a fake implementation of an xds client. It exposes a bunch of
@@ -40,6 +40,7 @@ type Client struct {
 	edsCancelCh  *testutils.Channel
 	loadReportCh *testutils.Channel
 	closeCh      *testutils.Channel
+	loadStore    *store.Store
 
 	mu        sync.Mutex
 	serviceCb func(xdsclient.ServiceUpdate, error)
@@ -160,9 +161,14 @@ type ReportLoadArgs struct {
 }
 
 // ReportLoad starts reporting load about clusterName to server.
-func (xdsC *Client) ReportLoad(server string, clusterName string, loadStore lrs.Store) (cancel func()) {
+func (xdsC *Client) ReportLoad(server string, clusterName string) (cancel func()) {
 	xdsC.loadReportCh.Send(ReportLoadArgs{Server: server, Cluster: clusterName})
 	return func() {}
+}
+
+// LoadStore returns the underlying load data store.
+func (xdsC *Client) LoadStore() *store.Store {
+	return xdsC.loadStore
 }
 
 // WaitForReportLoad waits for ReportLoad to be invoked on this client and
@@ -208,5 +214,6 @@ func NewClientWithName(name string) *Client {
 		edsCancelCh:  testutils.NewChannel(),
 		loadReportCh: testutils.NewChannel(),
 		closeCh:      testutils.NewChannel(),
+		loadStore:    &store.Store{},
 	}
 }

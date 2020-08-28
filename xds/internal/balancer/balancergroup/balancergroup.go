@@ -24,14 +24,21 @@ import (
 	"time"
 
 	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/cache"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/balancer/lrs"
 )
+
+// loadReporter wraps the methods from the loadStore that are used here.
+type loadReporter interface {
+	CallStarted(locality string)
+	CallFinished(locality string, err error)
+	CallServerLoad(locality, name string, val float64)
+}
 
 // subBalancerWrapper is used to keep the configurations that will be used to start
 // the underlying balancer. It can be called to start/stop the underlying
@@ -180,7 +187,7 @@ func (sbc *subBalancerWrapper) stopBalancer() {
 type BalancerGroup struct {
 	cc        balancer.ClientConn
 	logger    *grpclog.PrefixLogger
-	loadStore lrs.Store
+	loadStore loadReporter
 
 	// stateAggregator is where the state/picker updates will be sent to. It's
 	// provided by the parent balancer, to build a picker with all the
@@ -235,7 +242,7 @@ var DefaultSubBalancerCloseTimeout = 15 * time.Minute
 
 // New creates a new BalancerGroup. Note that the BalancerGroup
 // needs to be started to work.
-func New(cc balancer.ClientConn, stateAggregator BalancerStateAggregator, loadStore lrs.Store, logger *grpclog.PrefixLogger) *BalancerGroup {
+func New(cc balancer.ClientConn, stateAggregator BalancerStateAggregator, loadStore loadReporter, logger *grpclog.PrefixLogger) *BalancerGroup {
 	return &BalancerGroup{
 		cc:        cc,
 		logger:    logger,
@@ -493,38 +500,43 @@ const (
 type loadReportPicker struct {
 	p balancer.Picker
 
-	id        internal.LocalityID
-	loadStore lrs.Store
+	locality  string
+	loadStore loadReporter
 }
 
-func newLoadReportPicker(p balancer.Picker, id internal.LocalityID, loadStore lrs.Store) *loadReportPicker {
+func newLoadReportPicker(p balancer.Picker, id internal.LocalityID, loadStore loadReporter) *loadReportPicker {
 	return &loadReportPicker{
 		p:         p,
-		id:        id,
+		locality:  id.String(),
 		loadStore: loadStore,
 	}
 }
 
 func (lrp *loadReportPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	res, err := lrp.p.Pick(info)
-	if lrp.loadStore != nil && err == nil {
-		lrp.loadStore.CallStarted(lrp.id)
-		td := res.Done
-		res.Done = func(info balancer.DoneInfo) {
-			lrp.loadStore.CallFinished(lrp.id, info.Err)
-			if load, ok := info.ServerLoad.(*orcapb.OrcaLoadReport); ok {
-				lrp.loadStore.CallServerLoad(lrp.id, serverLoadCPUName, load.CpuUtilization)
-				lrp.loadStore.CallServerLoad(lrp.id, serverLoadMemoryName, load.MemUtilization)
-				for n, d := range load.RequestCost {
-					lrp.loadStore.CallServerLoad(lrp.id, n, d)
-				}
-				for n, d := range load.Utilization {
-					lrp.loadStore.CallServerLoad(lrp.id, n, d)
-				}
-			}
-			if td != nil {
-				td(info)
-			}
+	if err != nil {
+		return res, err
+	}
+
+	lrp.loadStore.CallStarted(lrp.locality)
+	oldDone := res.Done
+	res.Done = func(info balancer.DoneInfo) {
+		if oldDone != nil {
+			oldDone(info)
+		}
+		lrp.loadStore.CallFinished(lrp.locality, info.Err)
+
+		load, ok := info.ServerLoad.(*orcapb.OrcaLoadReport)
+		if !ok {
+			return
+		}
+		lrp.loadStore.CallServerLoad(lrp.locality, serverLoadCPUName, load.CpuUtilization)
+		lrp.loadStore.CallServerLoad(lrp.locality, serverLoadMemoryName, load.MemUtilization)
+		for n, d := range load.RequestCost {
+			lrp.loadStore.CallServerLoad(lrp.locality, n, d)
+		}
+		for n, d := range load.Utilization {
+			lrp.loadStore.CallServerLoad(lrp.locality, n, d)
 		}
 	}
 	return res, err

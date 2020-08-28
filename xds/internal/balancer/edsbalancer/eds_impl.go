@@ -34,9 +34,9 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
-	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/store"
 )
 
 // TODO: make this a environment variable?
@@ -66,9 +66,9 @@ type edsBalancerImpl struct {
 	logger *grpclog.PrefixLogger
 
 	enqueueChildBalancerStateUpdate func(priorityType, balancer.State)
+	loadStore                       func() *store.Store
 
 	subBalancerBuilder   balancer.Builder
-	loadStore            lrs.Store
 	priorityToLocalities map[priorityType]*balancerGroupWithConfig
 	respReceived         bool
 
@@ -99,18 +99,18 @@ type edsBalancerImpl struct {
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
-func newEDSBalancerImpl(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), loadStore lrs.Store, logger *grpclog.PrefixLogger) *edsBalancerImpl {
+func newEDSBalancerImpl(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), loadStore func() *store.Store, logger *grpclog.PrefixLogger) *edsBalancerImpl {
 	edsImpl := &edsBalancerImpl{
 		cc:                 cc,
 		logger:             logger,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
 
 		enqueueChildBalancerStateUpdate: enqueueState,
+		loadStore:                       loadStore,
 
 		priorityToLocalities: make(map[priorityType]*balancerGroupWithConfig),
 		priorityToState:      make(map[priorityType]*balancer.State),
 		subConnToPriority:    make(map[balancer.SubConn]priorityType),
-		loadStore:            loadStore,
 	}
 	// Don't start balancer group here. Start it when handling the first EDS
 	// response. Otherwise the balancer group will be started with round-robin,
@@ -170,7 +170,7 @@ func (edsImpl *edsBalancerImpl) updateDrops(dropConfig []xdsclient.OverloadDropC
 		// Update picker with old inner picker, new drops.
 		edsImpl.cc.UpdateState(balancer.State{
 			ConnectivityState: edsImpl.innerState.ConnectivityState,
-			Picker:            newDropPicker(edsImpl.innerState.Picker, newDrops, edsImpl.loadStore)},
+			Picker:            newDropPicker(edsImpl.innerState.Picker, newDrops, edsImpl.loadStore())},
 		)
 	}
 	edsImpl.pickerMu.Unlock()
@@ -240,7 +240,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponse(edsResp xdsclient.EndpointsUpd
 			ccPriorityWrapper := edsImpl.ccWrapperWithPriority(priority)
 			stateAggregator := weightedaggregator.New(ccPriorityWrapper, edsImpl.logger, newRandomWRR)
 			bgwc = &balancerGroupWithConfig{
-				bg:              balancergroup.New(ccPriorityWrapper, stateAggregator, edsImpl.loadStore, edsImpl.logger),
+				bg:              balancergroup.New(ccPriorityWrapper, stateAggregator, edsImpl.loadStore(), edsImpl.logger),
 				stateAggregator: stateAggregator,
 				configs:         make(map[internal.LocalityID]*localityConfig),
 			}
@@ -403,7 +403,7 @@ func (edsImpl *edsBalancerImpl) updateState(priority priorityType, s balancer.St
 		defer edsImpl.pickerMu.Unlock()
 		edsImpl.innerState = s
 		// Don't reset drops when it's a state change.
-		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: newDropPicker(s.Picker, edsImpl.drops, edsImpl.loadStore)})
+		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: newDropPicker(s.Picker, edsImpl.drops, edsImpl.loadStore())})
 	}
 }
 
@@ -451,13 +451,20 @@ func (edsImpl *edsBalancerImpl) close() {
 	}
 }
 
+// dropReporter wraps the single method used by the dropPicker to report dropped
+// calls to the load store.
+type dropReporter interface {
+	// CallDropped reports the drop of one RPC with the given category.
+	CallDropped(category string)
+}
+
 type dropPicker struct {
 	drops     []*dropper
 	p         balancer.Picker
-	loadStore lrs.Store
+	loadStore dropReporter
 }
 
-func newDropPicker(p balancer.Picker, drops []*dropper, loadStore lrs.Store) *dropPicker {
+func newDropPicker(p balancer.Picker, drops []*dropper, loadStore dropReporter) *dropPicker {
 	return &dropPicker{
 		drops:     drops,
 		p:         p,

@@ -20,25 +20,29 @@ package client
 import (
 	"context"
 
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	"github.com/golang/protobuf/proto"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/xds/internal/balancer/lrs"
+	"google.golang.org/grpc/xds/internal/client/store"
 )
 
-const nodeMetadataHostnameKey = "PROXYLESS_CLIENT_HOSTNAME"
+// NodeMetadataHostnameKey is the metadata key for specifying the target name in
+// the node proto of an LRS request.
+const NodeMetadataHostnameKey = "PROXYLESS_CLIENT_HOSTNAME"
 
-// ReportLoad sends the load of the given clusterName from loadStore to the
-// given server. If the server is not an empty string, and is different from the
-// xds server, a new ClientConn will be created.
+// LoadStore returns the underlying load data store used by the xDS client.
+func (c *Client) LoadStore() *store.Store {
+	return c.loadStore
+}
+
+// ReportLoad sends the load of the given clusterName to the given server. If
+// the server is not an empty string, and is different from the xds server, a
+// new ClientConn will be created.
 //
 // The same options used for creating the Client will be used (including
 // NodeProto, and dial options if necessary).
 //
 // It returns a function to cancel the load reporting stream. If server is
 // different from xds server, the ClientConn will also be closed.
-func (c *Client) ReportLoad(server string, clusterName string, loadStore lrs.Store) func() {
+func (c *Client) ReportLoad(server string, clusterName string) func() {
 	var (
 		cc      *grpc.ClientConn
 		closeCC bool
@@ -59,21 +63,11 @@ func (c *Client) ReportLoad(server string, clusterName string, loadStore lrs.Sto
 		closeCC = true
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-
-	nodeTemp := proto.Clone(c.opts.Config.NodeProto).(*corepb.Node)
-	if nodeTemp == nil {
-		nodeTemp = &corepb.Node{}
-	}
-	if nodeTemp.Metadata == nil {
-		nodeTemp.Metadata = &structpb.Struct{}
-	}
-	if nodeTemp.Metadata.Fields == nil {
-		nodeTemp.Metadata.Fields = make(map[string]*structpb.Value)
-	}
-	nodeTemp.Metadata.Fields[nodeMetadataHostnameKey] = &structpb.Value{
-		Kind: &structpb.Value_StringValue{StringValue: c.opts.TargetName},
-	}
-	go loadStore.ReportTo(ctx, c.cc, clusterName, nodeTemp)
+	go c.apiClient.ReportLoad(ctx, c.cc, LoadReportingOptions{
+		Store:       c.loadStore,
+		ClusterName: clusterName,
+		TargetName:  c.opts.TargetName,
+	})
 	return func() {
 		cancel()
 		if closeCC {
