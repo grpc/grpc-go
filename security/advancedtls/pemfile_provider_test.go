@@ -50,54 +50,56 @@ func restoreMockFunctionsBack() {
 }
 
 func (s) TestNewPEMFileProvider(t *testing.T) {
-	// We deliberately use an empty watching function for watching goroutine, since we are not testing watching behaviors.
 	tests := []struct {
-		desc          string
-		certFile      string
-		keyFile       string
-		trustFile     string
-		expectedError bool
+		desc      string
+		options   PEMFileProviderOptions
+		certFile  string
+		keyFile   string
+		trustFile string
+		wantError bool
 	}{
 		{
-			desc:          "Expect error if no credential files specified",
-			certFile:      "",
-			keyFile:       "",
-			trustFile:     "",
-			expectedError: true,
+			desc:      "Expect error if no credential files specified",
+			options:   PEMFileProviderOptions{},
+			wantError: true,
 		},
 		{
-			desc:          "Expect error if only certFile is specified",
-			certFile:      testdata.Path("client_cert_1.pem"),
-			keyFile:       "",
-			trustFile:     "",
-			expectedError: true,
+			desc: "Expect error if only certFile is specified",
+			options: PEMFileProviderOptions{
+				CertFile: testdata.Path("client_cert_1.pem"),
+			},
+			wantError: true,
 		},
 		{
-			desc:          "Should be good if only identity key cert pairs are specified",
-			certFile:      testdata.Path("client_cert_1.pem"),
-			keyFile:       testdata.Path("client_key_1.pem"),
-			trustFile:     "",
-			expectedError: false,
+			desc: "Should be good if only identity key cert pairs are specified",
+			options: PEMFileProviderOptions{
+				KeyFile:  testdata.Path("client_key_1.pem"),
+				CertFile: testdata.Path("client_cert_1.pem"),
+			},
+			wantError: false,
 		},
 		{
-			desc:          "Should be good if only root certs are specified",
-			certFile:      "",
-			keyFile:       "",
-			trustFile:     testdata.Path("client_trust_cert_1.pem"),
-			expectedError: false,
+			desc: "Should be good if only root certs are specified",
+			options: PEMFileProviderOptions{
+				TrustFile: testdata.Path("client_trust_cert_1.pem"),
+			},
+			wantError: false,
+		},
+		{
+			desc: "Should be good if both identity pairs and root certs are specified",
+			options: PEMFileProviderOptions{
+				KeyFile:   testdata.Path("client_key_1.pem"),
+				CertFile:  testdata.Path("client_cert_1.pem"),
+				TrustFile: testdata.Path("client_trust_cert_1.pem"),
+			},
+			wantError: false,
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			options := &PEMFileProviderOptions{
-				KeyFile:   test.keyFile,
-				CertFile:  test.certFile,
-				TrustFile: test.trustFile,
-			}
-			provider, err := NewPEMFileProvider(options)
-			if (err != nil) != test.expectedError {
-				t.Fatalf("got and want mismatch, want expectedError = %v, got %v", test.expectedError, err != nil)
+			provider, err := NewPEMFileProvider(test.options)
+			if (err != nil) != test.wantError {
+				t.Fatalf("NewPEMFileProvider(%v) = %v, want %v", test.options, err, test.wantError)
 			}
 			if err != nil {
 				return
@@ -108,27 +110,30 @@ func (s) TestNewPEMFileProvider(t *testing.T) {
 
 }
 
-// This test overwrites the credential reading function used by the watching goroutine. It is tested under different stages:
-// At stage 0, we force reading function to load clientPeer1 and serverTrust1, and see if the credentials are picked up by the watching go routine.
-// At stage 1, we force reading function to cause an error. The watching go routine should log the error while leaving the credentials unchanged.
-// At stage 2, we force reading function to load clientPeer2 and serverTrust2, and see if the new credentials are picked up.
+// This test overwrites the credential reading function used by the watching
+// goroutine. It is tested under different stages:
+// At stage 0, we force reading function to load clientPeer1 and serverTrust1,
+// and see if the credentials are picked up by the watching go routine.
+// At stage 1, we force reading function to cause an error. The watching go
+// routine should log the error while leaving the credentials unchanged.
+// At stage 2, we force reading function to load clientPeer2 and serverTrust2,
+// and see if the new credentials are picked up.
 func (s) TestWatchingRoutineUpdates(t *testing.T) {
 	// Load certificates.
 	cs := &certStore{}
-	err := cs.loadCerts()
-	if err != nil {
+	if err := cs.loadCerts(); err != nil {
 		t.Fatalf("cs.loadCerts() failed: %v", err)
 	}
 	tests := []struct {
 		desc         string
-		options      *PEMFileProviderOptions
+		options      PEMFileProviderOptions
 		wantKmStage0 certprovider.KeyMaterial
 		wantKmStage1 certprovider.KeyMaterial
 		wantKmStage2 certprovider.KeyMaterial
 	}{
 		{
 			desc: "use identity certs and root certs",
-			options: &PEMFileProviderOptions{
+			options: PEMFileProviderOptions{
 				CertFile:  "not_empty_cert_file",
 				KeyFile:   "not_empty_key_file",
 				TrustFile: "not_empty_trust_file",
@@ -139,7 +144,7 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 		},
 		{
 			desc: "use identity certs only",
-			options: &PEMFileProviderOptions{
+			options: PEMFileProviderOptions{
 				CertFile: "not_empty_cert_file",
 				KeyFile:  "not_empty_key_file",
 			},
@@ -149,7 +154,7 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 		},
 		{
 			desc: "use trust certs only",
-			options: &PEMFileProviderOptions{
+			options: PEMFileProviderOptions{
 				TrustFile: "not_empty_trust_file",
 			},
 			wantKmStage0: certprovider.KeyMaterial{Roots: cs.serverTrust1},
@@ -158,12 +163,12 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		testInterval := 200 * time.Millisecond
-		test.options.IdentityInterval = &testInterval
-		test.options.RootInterval = &testInterval
+		test.options.IdentityInterval = testInterval
+		test.options.RootInterval = testInterval
 		t.Run(test.desc, func(t *testing.T) {
 			stage := &stageInfo{}
+			oldReadKeyCertPairFunc := readKeyCertPairFunc
 			readKeyCertPairFunc = func(certFile, keyFile string) (tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
@@ -176,6 +181,10 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 					return tls.Certificate{}, fmt.Errorf("test stage not supported")
 				}
 			}
+			defer func() {
+				readKeyCertPairFunc = oldReadKeyCertPairFunc
+			}()
+			oldReadTrustCertFunc := readTrustCertFunc
 			readTrustCertFunc = func(trustFile string) (*x509.CertPool, error) {
 				switch stage.read() {
 				case 0:
@@ -188,29 +197,33 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 					return nil, fmt.Errorf("test stage not supported")
 				}
 			}
-			defer restoreMockFunctionsBack()
+			defer func() {
+				readTrustCertFunc = oldReadTrustCertFunc
+			}()
 			provider, err := NewPEMFileProvider(test.options)
 			if err != nil {
 				t.Fatalf("NewPEMFileProvider failed: %v", err)
 			}
 			defer provider.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+			defer cancel()
 			//// ------------------------Stage 0------------------------------------
 			time.Sleep(1 * time.Second)
-			gotKM, err := provider.KeyMaterial(context.Background())
+			gotKM, err := provider.KeyMaterial(ctx)
 			if !cmp.Equal(*gotKM, test.wantKmStage0, cmp.AllowUnexported(big.Int{}, x509.CertPool{})) {
 				t.Fatalf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmStage0)
 			}
 			// ------------------------Stage 1------------------------------------
 			stage.increase()
 			time.Sleep(1 * time.Second)
-			gotKM, err = provider.KeyMaterial(context.Background())
+			gotKM, err = provider.KeyMaterial(ctx)
 			if !cmp.Equal(*gotKM, test.wantKmStage1, cmp.AllowUnexported(big.Int{}, x509.CertPool{})) {
 				t.Fatalf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmStage1)
 			}
 			//// ------------------------Stage 2------------------------------------
 			stage.increase()
 			time.Sleep(1 * time.Second)
-			gotKM, err = provider.KeyMaterial(context.Background())
+			gotKM, err = provider.KeyMaterial(ctx)
 			if !cmp.Equal(*gotKM, test.wantKmStage2, cmp.AllowUnexported(big.Int{}, x509.CertPool{})) {
 				t.Fatalf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmStage2)
 			}
