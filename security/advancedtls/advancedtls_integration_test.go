@@ -409,7 +409,7 @@ func (s) TestEnd2End(t *testing.T) {
 				t.Fatalf("failed to listen: %v", err)
 			}
 			defer lis.Close()
-			pb.RegisterGreeterServer(s, &serverImpl{})
+			pb.RegisterGreeterService(s, pb.NewGreeterService(&serverImpl{}))
 			go s.Serve(lis)
 			clientOptions := &ClientOptions{
 				Certificates:         test.clientCert,
@@ -451,7 +451,7 @@ func (s) TestEnd2End(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer conn2.Close()
-			//// --------------------------------------------------------------------
+			// ----------------------------------------------------------------------
 			stage.increase()
 			// ------------------------Scenario 4------------------------------------
 			// stage = 2,  new connection should succeed
