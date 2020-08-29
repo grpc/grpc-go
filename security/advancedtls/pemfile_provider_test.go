@@ -23,7 +23,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"testing"
 	"time"
@@ -32,22 +31,6 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
-
-func restoreMockFunctionsBack() {
-	readKeyCertPairFunc = tls.LoadX509KeyPair
-	readTrustCertFunc = func(trustFile string) (*x509.CertPool, error) {
-		trustData, err := ioutil.ReadFile(trustFile)
-		if err != nil {
-			return nil, err
-		}
-		trustPool := x509.NewCertPool()
-		ok := trustPool.AppendCertsFromPEM(trustData)
-		if !ok {
-			return nil, fmt.Errorf("failed to call AppendCertsFromPEM")
-		}
-		return trustPool, nil
-	}
-}
 
 func (s) TestNewPEMFileProvider(t *testing.T) {
 	tests := []struct {
@@ -205,9 +188,10 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 				t.Fatalf("NewPEMFileProvider failed: %v", err)
 			}
 			defer provider.Close()
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			//// ------------------------Stage 0------------------------------------
+			// wait for the refreshing go-routine to pick up the changes.
 			time.Sleep(1 * time.Second)
 			gotKM, err := provider.KeyMaterial(ctx)
 			if !cmp.Equal(*gotKM, test.wantKmStage0, cmp.AllowUnexported(big.Int{}, x509.CertPool{})) {
@@ -215,12 +199,14 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 			}
 			// ------------------------Stage 1------------------------------------
 			stage.increase()
+			// wait for the refreshing go-routine to pick up the changes.
 			time.Sleep(1 * time.Second)
 			gotKM, err = provider.KeyMaterial(ctx)
 			if !cmp.Equal(*gotKM, test.wantKmStage1, cmp.AllowUnexported(big.Int{}, x509.CertPool{})) {
 				t.Fatalf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmStage1)
 			}
 			//// ------------------------Stage 2------------------------------------
+			// wait for the refreshing go-routine to pick up the changes.
 			stage.increase()
 			time.Sleep(1 * time.Second)
 			gotKM, err = provider.KeyMaterial(ctx)
