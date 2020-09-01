@@ -64,7 +64,6 @@ func (c *Client) ReportLoad(server string, clusterName string) func() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	go c.apiClient.ReportLoad(ctx, c.cc, LoadReportingOptions{
-		Store:       c.loadStore,
 		ClusterName: clusterName,
 		TargetName:  c.opts.TargetName,
 	})

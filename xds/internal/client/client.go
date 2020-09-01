@@ -118,8 +118,6 @@ type APIClient interface {
 
 // LoadReportingOptions contains configuration knobs for reporting load data.
 type LoadReportingOptions struct {
-	// Store contains the load data reported by the LB policy implementation.
-	Store *load.Store
 	// ClusterName is the cluster name for which load is being reported.
 	ClusterName string
 	// TargetName is the target of the parent ClientConn.
