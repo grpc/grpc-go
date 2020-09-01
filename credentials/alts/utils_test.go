@@ -176,6 +176,13 @@ func (s) TestClientAuthorizationCheck(t *testing.T) {
 			codes.OK, // err is nil, code is OK.
 		},
 		{
+			"working case (case ignored)",
+			peer.NewContext(ctx, p),
+			[]string{strings.ToUpper(testServiceAccount1), testServiceAccount2},
+			true,
+			codes.OK, // err is nil, code is OK.
+		},
+		{
 			"context does not have AuthInfo",
 			ctx,
 			[]string{testServiceAccount1, testServiceAccount2},
