@@ -41,7 +41,7 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
-	"google.golang.org/grpc/xds/internal/client/store"
+	"google.golang.org/grpc/xds/internal/client/load"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 
@@ -229,7 +229,7 @@ func waitForNewEDSLB(t *testing.T, ch *testutils.Channel) *fakeEDSBalancer {
 // cleanup.
 func setup(edsLBCh *testutils.Channel, xdsClientCh *testutils.Channel) func() {
 	origNewEDSBalancer := newEDSBalancer
-	newEDSBalancer = func(cc balancer.ClientConn, enqueue func(priorityType, balancer.State), _ func() *store.Store, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
+	newEDSBalancer = func(cc balancer.ClientConn, enqueue func(priorityType, balancer.State), _ func() *load.Store, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
 		edsLB := newFakeEDSBalancer(cc)
 		defer func() { edsLBCh.Send(edsLB) }()
 		return edsLB

@@ -26,14 +26,14 @@ import (
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
-	"google.golang.org/grpc/xds/internal/client/store"
+	"google.golang.org/grpc/xds/internal/client/load"
 )
 
 // xdsClientInterface contains only the xds_client methods needed by EDS
 // balancer. It's defined so we can override xdsclientNew function in tests.
 type xdsClientInterface interface {
 	WatchEndpoints(clusterName string, edsCb func(xdsclient.EndpointsUpdate, error)) (cancel func())
-	LoadStore() *store.Store
+	LoadStore() *load.Store
 	ReportLoad(server string, clusterName string) (cancel func())
 	Close()
 }
@@ -215,7 +215,7 @@ func (c *xdsclientWrapper) startLoadReport(edsServiceNameBeingWatched string, lo
 	}
 }
 
-func (c *xdsclientWrapper) loadStore() *store.Store {
+func (c *xdsclientWrapper) loadStore() *load.Store {
 	if c.xdsClient == nil {
 		return nil
 	}

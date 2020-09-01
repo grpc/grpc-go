@@ -25,7 +25,7 @@ import (
 
 	"google.golang.org/grpc/internal/testutils"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/store"
+	"google.golang.org/grpc/xds/internal/client/load"
 )
 
 // Client is a fake implementation of an xds client. It exposes a bunch of
@@ -40,7 +40,7 @@ type Client struct {
 	edsCancelCh  *testutils.Channel
 	loadReportCh *testutils.Channel
 	closeCh      *testutils.Channel
-	loadStore    *store.Store
+	loadStore    *load.Store
 
 	mu        sync.Mutex
 	serviceCb func(xdsclient.ServiceUpdate, error)
@@ -167,7 +167,7 @@ func (xdsC *Client) ReportLoad(server string, clusterName string) (cancel func()
 }
 
 // LoadStore returns the underlying load data store.
-func (xdsC *Client) LoadStore() *store.Store {
+func (xdsC *Client) LoadStore() *load.Store {
 	return xdsC.loadStore
 }
 
@@ -214,6 +214,6 @@ func NewClientWithName(name string) *Client {
 		edsCancelCh:  testutils.NewChannel(),
 		loadReportCh: testutils.NewChannel(),
 		closeCh:      testutils.NewChannel(),
-		loadStore:    &store.Store{},
+		loadStore:    &load.Store{},
 	}
 }

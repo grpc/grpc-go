@@ -36,7 +36,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/store"
+	"google.golang.org/grpc/xds/internal/client/load"
 )
 
 // TODO: make this a environment variable?
@@ -66,7 +66,7 @@ type edsBalancerImpl struct {
 	logger *grpclog.PrefixLogger
 
 	enqueueChildBalancerStateUpdate func(priorityType, balancer.State)
-	loadStore                       func() *store.Store
+	loadStore                       func() *load.Store
 
 	subBalancerBuilder   balancer.Builder
 	priorityToLocalities map[priorityType]*balancerGroupWithConfig
@@ -99,7 +99,7 @@ type edsBalancerImpl struct {
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
-func newEDSBalancerImpl(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), loadStore func() *store.Store, logger *grpclog.PrefixLogger) *edsBalancerImpl {
+func newEDSBalancerImpl(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), loadStore func() *load.Store, logger *grpclog.PrefixLogger) *edsBalancerImpl {
 	edsImpl := &edsBalancerImpl{
 		cc:                 cc,
 		logger:             logger,

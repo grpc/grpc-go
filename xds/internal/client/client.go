@@ -39,7 +39,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
-	"google.golang.org/grpc/xds/internal/client/store"
+	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -80,7 +80,7 @@ type BuildOptions struct {
 	Backoff func(int) time.Duration
 	// LoadStore contains load reports which need to be pushed to the management
 	// server.
-	LoadStore *store.Store
+	LoadStore *load.Store
 	// Logger provides enhanced logging capabilities.
 	Logger *grpclog.PrefixLogger
 }
@@ -119,7 +119,7 @@ type APIClient interface {
 // LoadReportingOptions contains configuration knobs for reporting load data.
 type LoadReportingOptions struct {
 	// Store contains the load data reported by the LB policy implementation.
-	Store *store.Store
+	Store *load.Store
 	// ClusterName is the cluster name for which load is being reported.
 	ClusterName string
 	// TargetName is the target of the parent ClientConn.
@@ -294,7 +294,7 @@ type Client struct {
 	opts      Options
 	cc        *grpc.ClientConn // Connection to the xDS server
 	apiClient APIClient
-	loadStore *store.Store
+	loadStore *load.Store
 
 	logger *grpclog.PrefixLogger
 
@@ -350,7 +350,7 @@ func New(opts Options) (*Client, error) {
 	c := &Client{
 		done:      grpcsync.NewEvent(),
 		opts:      opts,
-		loadStore: &store.Store{},
+		loadStore: &load.Store{},
 
 		updateCh:    buffer.NewUnbounded(),
 		ldsWatchers: make(map[string]map[*watchInfo]bool),

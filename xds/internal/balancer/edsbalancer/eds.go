@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/serviceconfig"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/store"
+	"google.golang.org/grpc/xds/internal/client/load"
 )
 
 const (
@@ -40,7 +40,7 @@ const (
 )
 
 var (
-	newEDSBalancer = func(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), loadStore func() *store.Store, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
+	newEDSBalancer = func(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), loadStore func() *load.Store, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
 		return newEDSBalancerImpl(cc, enqueueState, loadStore, logger)
 	}
 )

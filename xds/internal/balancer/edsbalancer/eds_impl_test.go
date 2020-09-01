@@ -33,7 +33,7 @@ import (
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/store"
+	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
 
@@ -59,7 +59,7 @@ func init() {
 //  - change drop rate
 func (s) TestEDS_OneLocality(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, func() *store.Store { return nil }, nil)
+	edsb := newEDSBalancerImpl(cc, nil, func() *load.Store { return nil }, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// One locality with one backend.
@@ -180,7 +180,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 //  - update locality weight
 func (s) TestEDS_TwoLocalities(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, func() *store.Store { return nil }, nil)
+	edsb := newEDSBalancerImpl(cc, nil, func() *load.Store { return nil }, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, each with one backend.
@@ -311,7 +311,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 // healthy ones are used.
 func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, func() *store.Store { return nil }, nil)
+	edsb := newEDSBalancerImpl(cc, nil, func() *load.Store { return nil }, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, each 3 backend, one Healthy, one Unhealthy, one Unknown.
@@ -383,7 +383,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 }
 
 func (s) TestClose(t *testing.T) {
-	edsb := newEDSBalancerImpl(nil, nil, func() *store.Store { return nil }, nil)
+	edsb := newEDSBalancerImpl(nil, nil, func() *load.Store { return nil }, nil)
 	// This is what could happen when switching between fallback and eds. This
 	// make sure it doesn't panic.
 	edsb.close()
@@ -394,7 +394,7 @@ func (s) TestClose(t *testing.T) {
 // It should send an error picker with transient failure to the parent.
 func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, func() *store.Store { return nil }, nil)
+	edsb := newEDSBalancerImpl(cc, nil, func() *load.Store { return nil }, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// The first update is an empty update.
@@ -458,7 +458,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 // eds response.
 func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, func() *store.Store { return nil }, nil)
+	edsb := newEDSBalancerImpl(cc, nil, func() *load.Store { return nil }, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	t.Logf("update sub-balancer to test-const-balancer")
@@ -595,7 +595,7 @@ func (*testInlineUpdateBalancer) Close() {
 // by acquiring a locked mutex.
 func (s) TestEDS_ChildPolicyUpdatePickerInline(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, func() *store.Store { return nil }, nil)
+	edsb := newEDSBalancerImpl(cc, nil, func() *load.Store { return nil }, nil)
 	edsb.enqueueChildBalancerStateUpdate = func(p priorityType, state balancer.State) {
 		// For this test, euqueue needs to happen asynchronously (like in the
 		// real implementation).
@@ -683,9 +683,9 @@ func (s) TestDropPicker(t *testing.T) {
 }
 
 func (s) TestEDS_LoadReport(t *testing.T) {
-	loadStore := &store.Store{}
+	loadStore := &load.Store{}
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, func() *store.Store { return loadStore }, nil)
+	edsb := newEDSBalancerImpl(cc, nil, func() *load.Store { return loadStore }, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityID)
@@ -716,10 +716,10 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	// We expect the 10 picks to be split between the localities since they are
 	// of equal weight. And since we only mark the picks routed to sc2 as done,
 	// the picks on sc1 should show up as inProgress.
-	wantStoreData := &store.Data{
-		LocalityStats: map[string]store.LocalityData{
-			locality1.String(): {RequestStats: store.RequestData{InProgress: 5}},
-			locality2.String(): {RequestStats: store.RequestData{Succeeded: 5}},
+	wantStoreData := &load.Data{
+		LocalityStats: map[string]load.LocalityData{
+			locality1.String(): {RequestStats: load.RequestData{InProgress: 5}},
+			locality2.String(): {RequestStats: load.RequestData{Succeeded: 5}},
 		},
 	}
 	for i := 0; i < 10; i++ {

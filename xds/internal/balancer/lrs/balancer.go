@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal"
 	xdsinternal "google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/client/store"
+	"google.golang.org/grpc/xds/internal/client/load"
 )
 
 func init() {
@@ -123,11 +123,11 @@ func (b *lrsBalancer) Close() {
 
 type ccWrapper struct {
 	balancer.ClientConn
-	loadStore  *store.Store
+	loadStore  *load.Store
 	localityID *internal.LocalityID
 }
 
-func newCCWrapper(cc balancer.ClientConn, loadStore *store.Store, localityID *internal.LocalityID) *ccWrapper {
+func newCCWrapper(cc balancer.ClientConn, loadStore *load.Store, localityID *internal.LocalityID) *ccWrapper {
 	return &ccWrapper{
 		ClientConn: cc,
 		loadStore:  loadStore,
@@ -143,7 +143,7 @@ func (ccw *ccWrapper) UpdateState(s balancer.State) {
 // xdsClientInterface contains only the xds_client methods needed by LRS
 // balancer. It's defined so we can override xdsclient in tests.
 type xdsClientInterface interface {
-	LoadStore() *store.Store
+	LoadStore() *load.Store
 	ReportLoad(server string, clusterName string) func()
 	Close()
 }
@@ -203,7 +203,7 @@ func (w *xdsClientWrapper) update(newConfig *lbConfig, attr *attributes.Attribut
 	}
 }
 
-func (w *xdsClientWrapper) loadStore() *store.Store {
+func (w *xdsClientWrapper) loadStore() *load.Store {
 	if w.c == nil {
 		return nil
 	}

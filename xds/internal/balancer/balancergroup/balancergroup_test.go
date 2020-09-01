@@ -41,7 +41,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
-	"google.golang.org/grpc/xds/internal/client/store"
+	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
 
@@ -71,7 +71,7 @@ func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	}
 }
 
-func newTestBalancerGroup(t *testing.T, loadStore *store.Store) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
+func newTestBalancerGroup(t *testing.T, loadStore *load.Store) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
@@ -401,7 +401,7 @@ func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 }
 
 func (s) TestBalancerGroup_LoadReport(t *testing.T) {
-	loadStore := &store.Store{}
+	loadStore := &load.Store{}
 	cc, gator, bg := newTestBalancerGroup(t, loadStore)
 
 	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityID)
@@ -441,11 +441,11 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 	// subConns in each group, we expect the picks to be equally split between
 	// the subConns. We do not call Done() on picks routed to sc1, so we expect
 	// these to show up as pending rpcs.
-	wantStoreData := &store.Data{
-		LocalityStats: map[string]store.LocalityData{
+	wantStoreData := &load.Data{
+		LocalityStats: map[string]load.LocalityData{
 			testBalancerIDs[0].String(): {
-				RequestStats: store.RequestData{Succeeded: 10, InProgress: 10},
-				LoadStats: map[string]store.LoadData{
+				RequestStats: load.RequestData{Succeeded: 10, InProgress: 10},
+				LoadStats: map[string]load.ServerLoadData{
 					"cpu_utilization": {Count: 10, Sum: 100},
 					"mem_utilization": {Count: 10, Sum: 50},
 					"pic":             {Count: 10, Sum: 31.4},
@@ -453,8 +453,8 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 				},
 			},
 			testBalancerIDs[1].String(): {
-				RequestStats: store.RequestData{Succeeded: 10},
-				LoadStats: map[string]store.LoadData{
+				RequestStats: load.RequestData{Succeeded: 10},
+				LoadStats: map[string]load.ServerLoadData{
 					"cpu_utilization": {Count: 10, Sum: 100},
 					"mem_utilization": {Count: 10, Sum: 50},
 					"pic":             {Count: 10, Sum: 31.4},

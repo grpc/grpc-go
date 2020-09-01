@@ -21,7 +21,7 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/xds/internal/client/store"
+	"google.golang.org/grpc/xds/internal/client/load"
 )
 
 // NodeMetadataHostnameKey is the metadata key for specifying the target name in
@@ -29,7 +29,7 @@ import (
 const NodeMetadataHostnameKey = "PROXYLESS_CLIENT_HOSTNAME"
 
 // LoadStore returns the underlying load data store used by the xDS client.
-func (c *Client) LoadStore() *store.Store {
+func (c *Client) LoadStore() *load.Store {
 	return c.loadStore
 }
 

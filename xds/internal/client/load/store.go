@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// Package store provides functionality to record and maintain load data.
-package store
+// Package load provides functionality to record and maintain load data.
+package load
 
 import (
 	"sync"
@@ -24,7 +24,7 @@ import (
 
 const negativeOneUInt64 = ^uint64(0)
 
-// Store provides functionality for LB policy implementations to report load
+// Store is a repository for LB policy implementations to report store load
 // data. It is safe for concurrent use.
 //
 // A zero Store is empty and ready for use.
@@ -128,7 +128,7 @@ type LocalityData struct {
 	RequestStats RequestData
 	// LoadStats contains server load data for requests made to the locality,
 	// indexed by the load type.
-	LoadStats map[string]LoadData
+	LoadStats map[string]ServerLoadData
 }
 
 // RequestData contains request counts.
@@ -141,8 +141,8 @@ type RequestData struct {
 	InProgress uint64
 }
 
-// LoadData contains server load data.
-type LoadData struct {
+// ServerLoadData contains server load data.
+type ServerLoadData struct {
 	// Count is the number of load reports.
 	Count uint64
 	// Sum is the total value of all load reports.
@@ -188,14 +188,14 @@ func (ls *Store) Stats() *Data {
 				Errored:    errored,
 				InProgress: inProgress,
 			},
-			LoadStats: make(map[string]LoadData),
+			LoadStats: make(map[string]ServerLoadData),
 		}
 		countData.serverLoads.Range(func(key, val interface{}) bool {
 			sum, count := val.(*rpcLoadData).loadAndClear()
 			if count == 0 {
 				return true
 			}
-			ld.LoadStats[key.(string)] = LoadData{
+			ld.LoadStats[key.(string)] = ServerLoadData{
 				Count: count,
 				Sum:   sum,
 			}

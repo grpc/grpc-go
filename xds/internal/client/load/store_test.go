@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package store
+package load
 
 import (
 	"fmt"
@@ -98,7 +98,7 @@ func TestLocalityStats(t *testing.T) {
 			LocalityStats: map[string]LocalityData{
 				localities[0]: {
 					RequestStats: RequestData{Succeeded: 20, Errored: 10, InProgress: 10},
-					LoadStats: map[string]LoadData{
+					LoadStats: map[string]ServerLoadData{
 						"net":  {Count: 20, Sum: 20},
 						"disk": {Count: 20, Sum: 40},
 						"cpu":  {Count: 20, Sum: 60},
@@ -107,7 +107,7 @@ func TestLocalityStats(t *testing.T) {
 				},
 				localities[1]: {
 					RequestStats: RequestData{Succeeded: 40, Errored: 20, InProgress: 20},
-					LoadStats: map[string]LoadData{
+					LoadStats: map[string]ServerLoadData{
 						"net":  {Count: 40, Sum: 40},
 						"disk": {Count: 40, Sum: 80},
 						"cpu":  {Count: 40, Sum: 120},
@@ -191,7 +191,7 @@ func TestResetAfterStats(t *testing.T) {
 			LocalityStats: map[string]LocalityData{
 				localities[0]: {
 					RequestStats: RequestData{Succeeded: 20, Errored: 10, InProgress: 10},
-					LoadStats: map[string]LoadData{
+					LoadStats: map[string]ServerLoadData{
 						"net":  {Count: 20, Sum: 20},
 						"disk": {Count: 20, Sum: 40},
 						"cpu":  {Count: 20, Sum: 60},
@@ -200,7 +200,7 @@ func TestResetAfterStats(t *testing.T) {
 				},
 				localities[1]: {
 					RequestStats: RequestData{Succeeded: 40, Errored: 20, InProgress: 20},
-					LoadStats: map[string]LoadData{
+					LoadStats: map[string]ServerLoadData{
 						"net":  {Count: 40, Sum: 40},
 						"disk": {Count: 40, Sum: 80},
 						"cpu":  {Count: 40, Sum: 120},
