@@ -107,7 +107,7 @@ func (v3c *client) HandleLoadStatsResponse(s grpc.ClientStream, clusterName stri
 	return interval, nil
 }
 
-func (v3c *client) SendPeriodicLoadStatsRequest(s grpc.ClientStream, clusterName string) error {
+func (v3c *client) SendLoadStatsRequest(s grpc.ClientStream, clusterName string) error {
 	stream, ok := s.(lrsStream)
 	if !ok {
 		return fmt.Errorf("lrs: Attempt to send request on unsupported stream type: %T", s)

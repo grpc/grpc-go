@@ -80,9 +80,10 @@ type VersionedClient interface {
 	// server asks the client to report load for.
 	HandleLoadStatsResponse(s grpc.ClientStream, clusterName string) (time.Duration, error)
 
-	// SendPeriodicLoadStatsRequest sends the periodic load report with load
-	// data reporting by the LB policies.
-	SendPeriodicLoadStatsRequest(s grpc.ClientStream, clusterName string) error
+	// SendLoadStatsRequest will be invoked at regular intervals to send load
+	// report with load data reported since the last time this method was
+	// invoked.
+	SendLoadStatsRequest(s grpc.ClientStream, clusterName string) error
 }
 
 // TransportHelper contains all xDS transport protocol related functionality
@@ -495,7 +496,7 @@ func (t *TransportHelper) sendLoads(ctx context.Context, stream grpc.ClientStrea
 		case <-ctx.Done():
 			return
 		}
-		if err := t.vClient.SendPeriodicLoadStatsRequest(stream, clusterName); err != nil {
+		if err := t.vClient.SendLoadStatsRequest(stream, clusterName); err != nil {
 			logger.Warning(err)
 			return
 		}
