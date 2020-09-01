@@ -216,7 +216,7 @@ func (c *xdsclientWrapper) startLoadReport(edsServiceNameBeingWatched string, lo
 }
 
 func (c *xdsclientWrapper) loadStore() *load.Store {
-	if c.xdsClient == nil {
+	if c == nil || c.xdsClient == nil {
 		return nil
 	}
 	return c.xdsClient.LoadStore()

@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/serviceconfig"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/load"
 )
 
 const (
@@ -40,8 +39,8 @@ const (
 )
 
 var (
-	newEDSBalancer = func(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), loadStore func() *load.Store, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
-		return newEDSBalancerImpl(cc, enqueueState, loadStore, logger)
+	newEDSBalancer = func(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), xdsClient *xdsclientWrapper, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
+		return newEDSBalancerImpl(cc, enqueueState, xdsClient, logger)
 	}
 )
 
@@ -65,7 +64,7 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 	}
 	x.logger = prefixLogger((x))
 	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.buildOpts, x.logger)
-	x.edsImpl = newEDSBalancer(x.cc, x.enqueueChildBalancerState, x.client.loadStore, x.logger)
+	x.edsImpl = newEDSBalancer(x.cc, x.enqueueChildBalancerState, x.client, x.logger)
 	x.logger.Infof("Created")
 	go x.run()
 	return x

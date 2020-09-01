@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/load"
 )
 
 // TODO: make this a environment variable?
@@ -62,11 +61,11 @@ type balancerGroupWithConfig struct {
 // The localities are picked as weighted round robin. A configurable child
 // policy is used to manage endpoints in each locality.
 type edsBalancerImpl struct {
-	cc     balancer.ClientConn
-	logger *grpclog.PrefixLogger
+	cc        balancer.ClientConn
+	logger    *grpclog.PrefixLogger
+	xdsClient *xdsclientWrapper // To fetch the load.Store from.
 
 	enqueueChildBalancerStateUpdate func(priorityType, balancer.State)
-	loadStore                       func() *load.Store
 
 	subBalancerBuilder   balancer.Builder
 	priorityToLocalities map[priorityType]*balancerGroupWithConfig
@@ -99,14 +98,14 @@ type edsBalancerImpl struct {
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
-func newEDSBalancerImpl(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), loadStore func() *load.Store, logger *grpclog.PrefixLogger) *edsBalancerImpl {
+func newEDSBalancerImpl(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), xdsClient *xdsclientWrapper, logger *grpclog.PrefixLogger) *edsBalancerImpl {
 	edsImpl := &edsBalancerImpl{
 		cc:                 cc,
 		logger:             logger,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
+		xdsClient:          xdsClient,
 
 		enqueueChildBalancerStateUpdate: enqueueState,
-		loadStore:                       loadStore,
 
 		priorityToLocalities: make(map[priorityType]*balancerGroupWithConfig),
 		priorityToState:      make(map[priorityType]*balancer.State),
@@ -170,7 +169,7 @@ func (edsImpl *edsBalancerImpl) updateDrops(dropConfig []xdsclient.OverloadDropC
 		// Update picker with old inner picker, new drops.
 		edsImpl.cc.UpdateState(balancer.State{
 			ConnectivityState: edsImpl.innerState.ConnectivityState,
-			Picker:            newDropPicker(edsImpl.innerState.Picker, newDrops, edsImpl.loadStore())},
+			Picker:            newDropPicker(edsImpl.innerState.Picker, newDrops, edsImpl.xdsClient.loadStore())},
 		)
 	}
 	edsImpl.pickerMu.Unlock()
@@ -240,7 +239,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponse(edsResp xdsclient.EndpointsUpd
 			ccPriorityWrapper := edsImpl.ccWrapperWithPriority(priority)
 			stateAggregator := weightedaggregator.New(ccPriorityWrapper, edsImpl.logger, newRandomWRR)
 			bgwc = &balancerGroupWithConfig{
-				bg:              balancergroup.New(ccPriorityWrapper, stateAggregator, edsImpl.loadStore(), edsImpl.logger),
+				bg:              balancergroup.New(ccPriorityWrapper, stateAggregator, edsImpl.xdsClient.loadStore(), edsImpl.logger),
 				stateAggregator: stateAggregator,
 				configs:         make(map[internal.LocalityID]*localityConfig),
 			}
@@ -403,7 +402,7 @@ func (edsImpl *edsBalancerImpl) updateState(priority priorityType, s balancer.St
 		defer edsImpl.pickerMu.Unlock()
 		edsImpl.innerState = s
 		// Don't reset drops when it's a state change.
-		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: newDropPicker(s.Picker, edsImpl.drops, edsImpl.loadStore())})
+		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: newDropPicker(s.Picker, edsImpl.drops, edsImpl.xdsClient.loadStore())})
 	}
 }
 
