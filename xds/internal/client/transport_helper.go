@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
@@ -44,7 +45,7 @@ func (e ErrResourceTypeUnsupported) Error() string {
 // specific client implementations. This mainly deals with the actual sending
 // and receiving of messages.
 type VersionedClient interface {
-	// NewStream returns a new grpc.ClientStream specific to the underlying
+	// NewStream returns a new xDS client stream specific to the underlying
 	// transport protocol version.
 	NewStream(ctx context.Context) (grpc.ClientStream, error)
 
@@ -54,7 +55,7 @@ type VersionedClient interface {
 
 	// RecvResponse uses the provided stream to receive a response specific to
 	// the underlying transport protocol version.
-	RecvResponse(stream grpc.ClientStream) (proto.Message, error)
+	RecvResponse(s grpc.ClientStream) (proto.Message, error)
 
 	// HandleResponse parses and validates the received response and notifies
 	// the top-level client which in turn notifies the registered watchers.
@@ -64,6 +65,25 @@ type VersionedClient interface {
 	// supported, implementations must return an error of type
 	// ErrResourceTypeUnsupported.
 	HandleResponse(proto.Message) (ResourceType, string, string, error)
+
+	// NewLoadStatsStream returns a new LRS client stream specific to the underlying
+	// transport protocol version.
+	NewLoadStatsStream(ctx context.Context, cc *grpc.ClientConn) (grpc.ClientStream, error)
+
+	// SendFirstLoadStatsRequest constructs and sends the first request on the
+	// LRS stream. This contains the node proto with appropriate metadata
+	// fields.
+	SendFirstLoadStatsRequest(s grpc.ClientStream, targetName string) error
+
+	// HandleLoadStatsResponse receives the first response from the server which
+	// contains the load reporting interval and the clusters for which the
+	// server asks the client to report load for.
+	HandleLoadStatsResponse(s grpc.ClientStream, clusterName string) (time.Duration, error)
+
+	// SendLoadStatsRequest will be invoked at regular intervals to send load
+	// report with load data reported since the last time this method was
+	// invoked.
+	SendLoadStatsRequest(s grpc.ClientStream, clusterName string) error
 }
 
 // TransportHelper contains all xDS transport protocol related functionality
@@ -418,4 +438,67 @@ func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStrea
 		t.versionMap[rType] = version
 	}
 	return target, rType, version, nonce, send
+}
+
+// ReportLoad starts an LRS stream to report load data to the management server.
+// It blocks until the context is cancelled.
+func (t *TransportHelper) ReportLoad(ctx context.Context, cc *grpc.ClientConn, opts LoadReportingOptions) {
+	retries := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		if retries != 0 {
+			timer := time.NewTimer(t.backoff(retries))
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return
+			}
+		}
+
+		retries++
+		stream, err := t.vClient.NewLoadStatsStream(ctx, cc)
+		if err != nil {
+			logger.Warningf("lrs: failed to create stream: %v", err)
+			continue
+		}
+		logger.Infof("lrs: created LRS stream")
+
+		if err := t.vClient.SendFirstLoadStatsRequest(stream, opts.TargetName); err != nil {
+			logger.Warningf("lrs: failed to send first request: %v", err)
+			continue
+		}
+
+		interval, err := t.vClient.HandleLoadStatsResponse(stream, opts.ClusterName)
+		if err != nil {
+			logger.Warning(err)
+			continue
+		}
+
+		retries = 0
+		t.sendLoads(ctx, stream, opts.ClusterName, interval)
+	}
+}
+
+func (t *TransportHelper) sendLoads(ctx context.Context, stream grpc.ClientStream, clusterName string, interval time.Duration) {
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+	for {
+		select {
+		case <-tick.C:
+		case <-ctx.Done():
+			return
+		}
+		if err := t.vClient.SendLoadStatsRequest(stream, clusterName); err != nil {
+			logger.Warning(err)
+			return
+		}
+	}
 }

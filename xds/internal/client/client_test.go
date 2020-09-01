@@ -113,6 +113,9 @@ func (c *testAPIClient) RemoveWatch(resourceType ResourceType, resourceName stri
 	c.removeWatches[resourceType].Send(resourceName)
 }
 
+func (c *testAPIClient) ReportLoad(ctx context.Context, cc *grpc.ClientConn, opts LoadReportingOptions) {
+}
+
 func (c *testAPIClient) Close() {}
 
 // TestWatchCallAnotherWatch covers the case where watch() is called inline by a

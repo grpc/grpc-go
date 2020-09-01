@@ -25,12 +25,15 @@ import (
 
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
 
@@ -679,11 +682,26 @@ func (s) TestDropPicker(t *testing.T) {
 	}
 }
 
+type loadStoreWrapper struct {
+	xdsClientInterface
+	ls *load.Store
+}
+
+func (l *loadStoreWrapper) LoadStore() *load.Store {
+	return l.ls
+}
+
 func (s) TestEDS_LoadReport(t *testing.T) {
-	testLoadStore := testutils.NewTestLoadStore()
+	// We create an xdsClientWrapper with a dummy xdsClientInterface which only
+	// implements the LoadStore() method to return the underlying load.Store to
+	// be used.
+	loadStore := &load.Store{}
+	cw := &xdsclientWrapper{
+		xdsClient: &loadStoreWrapper{ls: loadStore},
+	}
 
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, testLoadStore, nil)
+	edsb := newEDSBalancerImpl(cc, nil, cw, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityID)
@@ -695,9 +713,8 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
 	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
-	backendToBalancerID[sc1] = internal.LocalityID{
-		SubZone: testSubZones[0],
-	}
+	locality1 := internal.LocalityID{SubZone: testSubZones[0]}
+	backendToBalancerID[sc1] = locality1
 
 	// Add the second locality later to make sure sc2 belongs to the second
 	// locality. Otherwise the test is flaky because of a map is used in EDS to
@@ -707,31 +724,29 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	sc2 := <-cc.NewSubConnCh
 	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
 	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
-	backendToBalancerID[sc2] = internal.LocalityID{
-		SubZone: testSubZones[1],
-	}
+	locality2 := internal.LocalityID{SubZone: testSubZones[1]}
+	backendToBalancerID[sc2] = locality2
 
 	// Test roundrobin with two subconns.
 	p1 := <-cc.NewPickerCh
-	var (
-		wantStart []internal.LocalityID
-		wantEnd   []internal.LocalityID
-	)
-
+	// We expect the 10 picks to be split between the localities since they are
+	// of equal weight. And since we only mark the picks routed to sc2 as done,
+	// the picks on sc1 should show up as inProgress.
+	wantStoreData := &load.Data{
+		LocalityStats: map[string]load.LocalityData{
+			locality1.String(): {RequestStats: load.RequestData{InProgress: 5}},
+			locality2.String(): {RequestStats: load.RequestData{Succeeded: 5}},
+		},
+	}
 	for i := 0; i < 10; i++ {
 		scst, _ := p1.Pick(balancer.PickInfo{})
-		locality := backendToBalancerID[scst.SubConn]
-		wantStart = append(wantStart, locality)
 		if scst.Done != nil && scst.SubConn != sc1 {
 			scst.Done(balancer.DoneInfo{})
-			wantEnd = append(wantEnd, backendToBalancerID[scst.SubConn])
 		}
 	}
 
-	if !cmp.Equal(testLoadStore.CallsStarted, wantStart) {
-		t.Fatalf("want started: %v, got: %v", testLoadStore.CallsStarted, wantStart)
-	}
-	if !cmp.Equal(testLoadStore.CallsEnded, wantEnd) {
-		t.Fatalf("want ended: %v, got: %v", testLoadStore.CallsEnded, wantEnd)
+	gotStoreData := loadStore.Stats()
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("store.Stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }

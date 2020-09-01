@@ -32,14 +32,16 @@ import (
 
 	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
+	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
 
@@ -69,7 +71,7 @@ func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	}
 }
 
-func newTestBalancerGroup(t *testing.T, loadStore lrs.Store) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
+func newTestBalancerGroup(t *testing.T, loadStore *load.Store) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
@@ -399,8 +401,8 @@ func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 }
 
 func (s) TestBalancerGroup_LoadReport(t *testing.T) {
-	testLoadStore := testutils.NewTestLoadStore()
-	cc, gator, bg := newTestBalancerGroup(t, testLoadStore)
+	loadStore := &load.Store{}
+	cc, gator, bg := newTestBalancerGroup(t, loadStore)
 
 	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityID)
 
@@ -434,15 +436,35 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 
 	// Test roundrobin on the last picker.
 	p1 := <-cc.NewPickerCh
-	var (
-		wantStart []internal.LocalityID
-		wantEnd   []internal.LocalityID
-		wantCost  []testutils.TestServerLoad
-	)
-	for i := 0; i < 10; i++ {
+	// bg1 has a weight of 2, while bg2 has a weight of 1. So, we expect 20 of
+	// these picks to go to bg1 and 10 of them to bg2. And since there are two
+	// subConns in each group, we expect the picks to be equally split between
+	// the subConns. We do not call Done() on picks routed to sc1, so we expect
+	// these to show up as pending rpcs.
+	wantStoreData := &load.Data{
+		LocalityStats: map[string]load.LocalityData{
+			testBalancerIDs[0].String(): {
+				RequestStats: load.RequestData{Succeeded: 10, InProgress: 10},
+				LoadStats: map[string]load.ServerLoadData{
+					"cpu_utilization": {Count: 10, Sum: 100},
+					"mem_utilization": {Count: 10, Sum: 50},
+					"pic":             {Count: 10, Sum: 31.4},
+					"piu":             {Count: 10, Sum: 31.4},
+				},
+			},
+			testBalancerIDs[1].String(): {
+				RequestStats: load.RequestData{Succeeded: 10},
+				LoadStats: map[string]load.ServerLoadData{
+					"cpu_utilization": {Count: 10, Sum: 100},
+					"mem_utilization": {Count: 10, Sum: 50},
+					"pic":             {Count: 10, Sum: 31.4},
+					"piu":             {Count: 10, Sum: 31.4},
+				},
+			},
+		},
+	}
+	for i := 0; i < 30; i++ {
 		scst, _ := p1.Pick(balancer.PickInfo{})
-		locality := backendToBalancerID[scst.SubConn]
-		wantStart = append(wantStart, locality)
 		if scst.Done != nil && scst.SubConn != sc1 {
 			scst.Done(balancer.DoneInfo{
 				ServerLoad: &orcapb.OrcaLoadReport{
@@ -452,23 +474,12 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 					Utilization:    map[string]float64{"piu": 3.14},
 				},
 			})
-			wantEnd = append(wantEnd, locality)
-			wantCost = append(wantCost,
-				testutils.TestServerLoad{Name: serverLoadCPUName, D: 10},
-				testutils.TestServerLoad{Name: serverLoadMemoryName, D: 5},
-				testutils.TestServerLoad{Name: "pic", D: 3.14},
-				testutils.TestServerLoad{Name: "piu", D: 3.14})
 		}
 	}
 
-	if !cmp.Equal(testLoadStore.CallsStarted, wantStart) {
-		t.Fatalf("want started: %v, got: %v", testLoadStore.CallsStarted, wantStart)
-	}
-	if !cmp.Equal(testLoadStore.CallsEnded, wantEnd) {
-		t.Fatalf("want ended: %v, got: %v", testLoadStore.CallsEnded, wantEnd)
-	}
-	if !cmp.Equal(testLoadStore.CallsCost, wantCost, cmp.AllowUnexported(testutils.TestServerLoad{})) {
-		t.Fatalf("want cost: %v, got: %v", testLoadStore.CallsCost, wantCost)
+	gotStoreData := loadStore.Stats()
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.EquateApprox(0, 0.1)); diff != "" {
+		t.Errorf("store.Stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
 

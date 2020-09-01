@@ -29,17 +29,24 @@ const (
 	serverLoadMemoryName = "mem_utilization"
 )
 
+// loadReporter wraps the methods from the loadStore that are used here.
+type loadReporter interface {
+	CallStarted(locality string)
+	CallFinished(locality string, err error)
+	CallServerLoad(locality, name string, val float64)
+}
+
 type loadReportPicker struct {
 	p balancer.Picker
 
-	id        internal.LocalityID
-	loadStore Store
+	locality  string
+	loadStore loadReporter
 }
 
-func newLoadReportPicker(p balancer.Picker, id internal.LocalityID, loadStore Store) *loadReportPicker {
+func newLoadReportPicker(p balancer.Picker, id internal.LocalityID, loadStore loadReporter) *loadReportPicker {
 	return &loadReportPicker{
 		p:         p,
-		id:        id,
+		locality:  id.String(),
 		loadStore: loadStore,
 	}
 }
@@ -50,25 +57,29 @@ func (lrp *loadReportPicker) Pick(info balancer.PickInfo) (balancer.PickResult, 
 		return res, err
 	}
 
-	lrp.loadStore.CallStarted(lrp.id)
+	if lrp.loadStore == nil {
+		return res, err
+	}
+
+	lrp.loadStore.CallStarted(lrp.locality)
 	oldDone := res.Done
 	res.Done = func(info balancer.DoneInfo) {
 		if oldDone != nil {
 			oldDone(info)
 		}
-		lrp.loadStore.CallFinished(lrp.id, info.Err)
+		lrp.loadStore.CallFinished(lrp.locality, info.Err)
 
 		load, ok := info.ServerLoad.(*orcapb.OrcaLoadReport)
 		if !ok {
 			return
 		}
-		lrp.loadStore.CallServerLoad(lrp.id, serverLoadCPUName, load.CpuUtilization)
-		lrp.loadStore.CallServerLoad(lrp.id, serverLoadMemoryName, load.MemUtilization)
+		lrp.loadStore.CallServerLoad(lrp.locality, serverLoadCPUName, load.CpuUtilization)
+		lrp.loadStore.CallServerLoad(lrp.locality, serverLoadMemoryName, load.MemUtilization)
 		for n, d := range load.RequestCost {
-			lrp.loadStore.CallServerLoad(lrp.id, n, d)
+			lrp.loadStore.CallServerLoad(lrp.locality, n, d)
 		}
 		for n, d := range load.Utilization {
-			lrp.loadStore.CallServerLoad(lrp.id, n, d)
+			lrp.loadStore.CallServerLoad(lrp.locality, n, d)
 		}
 	}
 	return res, err

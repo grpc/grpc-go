@@ -93,7 +93,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 	defer cleanup()
 	t.Logf("Started fake xDS server at %s...", fakeServer.Address)
 
-	cw := newXDSClientWrapper(nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, nil)
+	cw := newXDSClientWrapper(nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
 	defer cw.close()
 	t.Logf("Started xDS client wrapper for endpoint %s...", testServiceName)
 
@@ -162,7 +162,7 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 		edsRespChan.Send(&edsUpdate{resp: update, err: err})
 	}
 
-	cw := newXDSClientWrapper(newEDS, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, nil)
+	cw := newXDSClientWrapper(newEDS, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
 	defer cw.close()
 
 	xdsC := fakeclient.NewClient()
@@ -207,7 +207,7 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 	}
 	defer func() { xdsclientNew = oldxdsclientNew }()
 
-	cw := newXDSClientWrapper(nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, nil)
+	cw := newXDSClientWrapper(nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
 	defer cw.close()
 
 	xdsC1 := fakeclient.NewClient()

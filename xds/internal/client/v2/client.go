@@ -23,11 +23,13 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpclog"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/version"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
@@ -67,6 +69,7 @@ func newClient(cc *grpc.ClientConn, opts xdsclient.BuildOptions) (xdsclient.APIC
 		cc:        cc,
 		parent:    opts.Parent,
 		nodeProto: nodeProto,
+		loadStore: opts.LoadStore,
 		logger:    opts.Logger,
 	}
 	v2c.ctx, v2c.cancelCtx = context.WithCancel(context.Background())
@@ -85,6 +88,7 @@ type client struct {
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	parent    xdsclient.UpdateHandler
+	loadStore *load.Store
 	logger    *grpclog.PrefixLogger
 
 	// ClientConn to the xDS gRPC server. Owned by the parent xdsClient.
@@ -99,6 +103,8 @@ type client struct {
 	// processing needs this to do the host matching.
 	ldsResourceName string
 	ldsWatchCount   int
+
+	lastLoadReportAt time.Time
 }
 
 // AddWatch overrides the transport helper's AddWatch to save the LDS
