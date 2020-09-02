@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 )
@@ -79,11 +78,6 @@ type weightedTargetBalancer struct {
 	targets map[string]target
 }
 
-// TODO: remove this and use strings directly as keys for balancer group.
-func makeLocalityFromName(name string) internal.LocalityID {
-	return internal.LocalityID{Region: name}
-}
-
 // UpdateClientConnState takes the new targets in balancer group,
 // creates/deletes sub-balancers and sends them update. Addresses are split into
 // groups based on hierarchy path.
@@ -99,9 +93,8 @@ func (w *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnStat
 	// Remove sub-pickers and sub-balancers that are not in the new config.
 	for name := range w.targets {
 		if _, ok := newConfig.Targets[name]; !ok {
-			l := makeLocalityFromName(name)
-			w.stateAggregator.Remove(l)
-			w.bg.Remove(l)
+			w.stateAggregator.Remove(name)
+			w.bg.Remove(name)
 			// Trigger a state/picker update, because we don't want `ClientConn`
 			// to pick this sub-balancer anymore.
 			rebuildStateAndPicker = true
@@ -114,19 +107,17 @@ func (w *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnStat
 	//
 	// For all sub-balancers, forward the address/balancer config update.
 	for name, newT := range newConfig.Targets {
-		l := makeLocalityFromName(name)
-
 		oldT, ok := w.targets[name]
 		if !ok {
 			// If this is a new sub-balancer, add weights to the picker map.
-			w.stateAggregator.Add(l, newT.Weight)
+			w.stateAggregator.Add(name, newT.Weight)
 			// Then add to the balancer group.
-			w.bg.Add(l, balancer.Get(newT.ChildPolicy.Name))
+			w.bg.Add(name, balancer.Get(newT.ChildPolicy.Name))
 			// Not trigger a state/picker update. Wait for the new sub-balancer
 			// to send its updates.
 		} else if newT.Weight != oldT.Weight {
 			// If this is an existing sub-balancer, update weight if necessary.
-			w.stateAggregator.UpdateWeight(l, newT.Weight)
+			w.stateAggregator.UpdateWeight(name, newT.Weight)
 			// Trigger a state/picker update, because we don't want `ClientConn`
 			// should do picks with the new weights now.
 			rebuildStateAndPicker = true
@@ -138,7 +129,7 @@ func (w *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnStat
 		// - Balancer config comes from the targets map.
 		//
 		// TODO: handle error? How to aggregate errors and return?
-		_ = w.bg.UpdateClientConnState(l, balancer.ClientConnState{
+		_ = w.bg.UpdateClientConnState(name, balancer.ClientConnState{
 			ResolverState: resolver.State{
 				Addresses:     addressesSplit[name],
 				ServiceConfig: s.ResolverState.ServiceConfig,

@@ -39,7 +39,6 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/testutils"
@@ -48,7 +47,7 @@ import (
 var (
 	rrBuilder        = balancer.Get(roundrobin.Name)
 	pfBuilder        = balancer.Get(grpc.PickFirstBalancerName)
-	testBalancerIDs  = []internal.LocalityID{{Region: "b1"}, {Region: "b2"}, {Region: "b3"}}
+	testBalancerIDs  = []string{"b1", "b2", "b3"}
 	testBackendAddrs []resolver.Address
 )
 
@@ -404,7 +403,7 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 	loadStore := &load.Store{}
 	cc, gator, bg := newTestBalancerGroup(t, loadStore)
 
-	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityID)
+	backendToBalancerID := make(map[balancer.SubConn]string)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -443,7 +442,7 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 	// these to show up as pending rpcs.
 	wantStoreData := &load.Data{
 		LocalityStats: map[string]load.LocalityData{
-			testBalancerIDs[0].String(): {
+			testBalancerIDs[0]: {
 				RequestStats: load.RequestData{Succeeded: 10, InProgress: 10},
 				LoadStats: map[string]load.ServerLoadData{
 					"cpu_utilization": {Count: 10, Sum: 100},
@@ -452,7 +451,7 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 					"piu":             {Count: 10, Sum: 31.4},
 				},
 			},
-			testBalancerIDs[1].String(): {
+			testBalancerIDs[1]: {
 				RequestStats: load.RequestData{Succeeded: 10},
 				LoadStats: map[string]load.ServerLoadData{
 					"cpu_utilization": {Count: 10, Sum: 100},

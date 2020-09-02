@@ -20,7 +20,6 @@ package balancergroup
 
 import (
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/xds/internal"
 )
 
 // BalancerStateAggregator aggregates sub-picker and connectivity states into a
@@ -34,5 +33,5 @@ type BalancerStateAggregator interface {
 	//
 	// It's up to the implementation whether this will trigger an update to the
 	// parent ClientConn.
-	UpdateState(id internal.LocalityID, state balancer.State)
+	UpdateState(id string, state balancer.State)
 }
