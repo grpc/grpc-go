@@ -24,7 +24,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
 
@@ -40,7 +39,7 @@ func (s) TestRoutingPickerGroupPick(t *testing.T) {
 		name string
 
 		routes  []route
-		pickers map[internal.LocalityID]*subBalancerState
+		pickers map[string]*subBalancerState
 		info    balancer.PickInfo
 
 		want    balancer.PickResult
@@ -55,8 +54,8 @@ func (s) TestRoutingPickerGroupPick(t *testing.T) {
 			routes: []route{
 				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), action: "action-0"},
 			},
-			pickers: map[internal.LocalityID]*subBalancerState{
-				makeLocalityFromName("action-0"): {state: balancer.State{
+			pickers: map[string]*subBalancerState{
+				"action-0": {state: balancer.State{
 					ConnectivityState: connectivity.Ready,
 					Picker:            testPickers[0],
 				}},
@@ -69,8 +68,8 @@ func (s) TestRoutingPickerGroupPick(t *testing.T) {
 			routes: []route{
 				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), action: "action-0"},
 			},
-			pickers: map[internal.LocalityID]*subBalancerState{
-				makeLocalityFromName("action-0"): {state: balancer.State{
+			pickers: map[string]*subBalancerState{
+				"action-0": {state: balancer.State{
 					ConnectivityState: connectivity.Ready,
 					Picker:            testPickers[0],
 				}},
@@ -84,12 +83,12 @@ func (s) TestRoutingPickerGroupPick(t *testing.T) {
 				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), action: "action-0"},
 				{m: newCompositeMatcher(newPathPrefixMatcher("/z/"), nil, nil), action: "action-1"},
 			},
-			pickers: map[internal.LocalityID]*subBalancerState{
-				makeLocalityFromName("action-0"): {state: balancer.State{
+			pickers: map[string]*subBalancerState{
+				"action-0": {state: balancer.State{
 					ConnectivityState: connectivity.Ready,
 					Picker:            testPickers[0],
 				}},
-				makeLocalityFromName("action-1"): {state: balancer.State{
+				"action-1": {state: balancer.State{
 					ConnectivityState: connectivity.Ready,
 					Picker:            testPickers[1],
 				}},
@@ -103,12 +102,12 @@ func (s) TestRoutingPickerGroupPick(t *testing.T) {
 				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), action: "action-0"},
 				{m: newCompositeMatcher(newPathPrefixMatcher("/z/"), nil, nil), action: "action-1"},
 			},
-			pickers: map[internal.LocalityID]*subBalancerState{
-				makeLocalityFromName("action-0"): {state: balancer.State{
+			pickers: map[string]*subBalancerState{
+				"action-0": {state: balancer.State{
 					ConnectivityState: connectivity.Ready,
 					Picker:            testPickers[0],
 				}},
-				makeLocalityFromName("action-1"): {state: balancer.State{
+				"action-1": {state: balancer.State{
 					ConnectivityState: connectivity.Ready,
 					Picker:            testPickers[1],
 				}},
@@ -122,12 +121,12 @@ func (s) TestRoutingPickerGroupPick(t *testing.T) {
 				{m: newCompositeMatcher(newPathExactMatcher("/a/b"), nil, nil), action: "action-0"},
 				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), action: "action-1"},
 			},
-			pickers: map[internal.LocalityID]*subBalancerState{
-				makeLocalityFromName("action-0"): {state: balancer.State{
+			pickers: map[string]*subBalancerState{
+				"action-0": {state: balancer.State{
 					ConnectivityState: connectivity.Ready,
 					Picker:            testPickers[0],
 				}},
-				makeLocalityFromName("action-1"): {state: balancer.State{
+				"action-1": {state: balancer.State{
 					ConnectivityState: connectivity.Ready,
 					Picker:            testPickers[1],
 				}},
@@ -142,12 +141,12 @@ func (s) TestRoutingPickerGroupPick(t *testing.T) {
 				{m: newCompositeMatcher(newPathPrefixMatcher("/a/"), nil, nil), action: "action-0"},
 				{m: newCompositeMatcher(newPathExactMatcher("/a/b"), nil, nil), action: "action-1"},
 			},
-			pickers: map[internal.LocalityID]*subBalancerState{
-				makeLocalityFromName("action-0"): {state: balancer.State{
+			pickers: map[string]*subBalancerState{
+				"action-0": {state: balancer.State{
 					ConnectivityState: connectivity.Ready,
 					Picker:            testPickers[0],
 				}},
-				makeLocalityFromName("action-1"): {state: balancer.State{
+				"action-1": {state: balancer.State{
 					ConnectivityState: connectivity.Ready,
 					Picker:            testPickers[1],
 				}},

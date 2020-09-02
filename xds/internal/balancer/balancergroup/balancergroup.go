@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/internal/cache"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal"
 )
 
 // loadReporter wraps the methods from the loadStore that are used here.
@@ -58,7 +57,7 @@ type subBalancerWrapper struct {
 	// of the actions are forwarded to the parent ClientConn with no change.
 	// Some are forward to balancer group with the sub-balancer ID.
 	balancer.ClientConn
-	id    internal.LocalityID
+	id    string
 	group *BalancerGroup
 
 	mu    sync.Mutex
@@ -202,7 +201,7 @@ type BalancerGroup struct {
 	// to sub-balancers after they are closed.
 	outgoingMu         sync.Mutex
 	outgoingStarted    bool
-	idToBalancerConfig map[internal.LocalityID]*subBalancerWrapper
+	idToBalancerConfig map[string]*subBalancerWrapper
 	// Cache for sub-balancers when they are removed.
 	balancerCache *cache.TimeoutCache
 
@@ -250,7 +249,7 @@ func New(cc balancer.ClientConn, stateAggregator BalancerStateAggregator, loadSt
 
 		stateAggregator: stateAggregator,
 
-		idToBalancerConfig: make(map[internal.LocalityID]*subBalancerWrapper),
+		idToBalancerConfig: make(map[string]*subBalancerWrapper),
 		balancerCache:      cache.NewTimeoutCache(DefaultSubBalancerCloseTimeout),
 		scToSubBalancer:    make(map[balancer.SubConn]*subBalancerWrapper),
 	}
@@ -281,7 +280,7 @@ func (bg *BalancerGroup) Start() {
 }
 
 // Add adds a balancer built by builder to the group, with given id.
-func (bg *BalancerGroup) Add(id internal.LocalityID, builder balancer.Builder) {
+func (bg *BalancerGroup) Add(id string, builder balancer.Builder) {
 	// Store data in static map, and then check to see if bg is started.
 	bg.outgoingMu.Lock()
 	var sbc *subBalancerWrapper
@@ -332,7 +331,7 @@ func (bg *BalancerGroup) Add(id internal.LocalityID, builder balancer.Builder) {
 // But doesn't close the balancer. The balancer is kept in a cache, and will be
 // closed after timeout. Cleanup work (closing sub-balancer and removing
 // subconns) will be done after timeout.
-func (bg *BalancerGroup) Remove(id internal.LocalityID) {
+func (bg *BalancerGroup) Remove(id string) {
 	bg.outgoingMu.Lock()
 	if sbToRemove, ok := bg.idToBalancerConfig[id]; ok {
 		if bg.outgoingStarted {
@@ -400,7 +399,7 @@ func (bg *BalancerGroup) UpdateSubConnState(sc balancer.SubConn, state balancer.
 
 // UpdateClientConnState handles ClientState (including balancer config and
 // addresses) from resolver. It finds the balancer and forwards the update.
-func (bg *BalancerGroup) UpdateClientConnState(id internal.LocalityID, s balancer.ClientConnState) error {
+func (bg *BalancerGroup) UpdateClientConnState(id string, s balancer.ClientConnState) error {
 	bg.outgoingMu.Lock()
 	defer bg.outgoingMu.Unlock()
 	if config, ok := bg.idToBalancerConfig[id]; ok {
@@ -449,7 +448,7 @@ func (bg *BalancerGroup) newSubConn(config *subBalancerWrapper, addrs []resolver
 // updateBalancerState: forward the new state to balancer state aggregator. The
 // aggregator will create an aggregated picker and an aggregated connectivity
 // state, then forward to ClientConn.
-func (bg *BalancerGroup) updateBalancerState(id internal.LocalityID, state balancer.State) {
+func (bg *BalancerGroup) updateBalancerState(id string, state balancer.State) {
 	bg.logger.Infof("Balancer state update from locality %v, new state: %+v", id, state)
 	if bg.loadStore != nil {
 		// Only wrap the picker to do load reporting if loadStore was set.
@@ -504,10 +503,10 @@ type loadReportPicker struct {
 	loadStore loadReporter
 }
 
-func newLoadReportPicker(p balancer.Picker, id internal.LocalityID, loadStore loadReporter) *loadReportPicker {
+func newLoadReportPicker(p balancer.Picker, id string, loadStore loadReporter) *loadReportPicker {
 	return &loadReportPicker{
 		p:         p,
-		locality:  id.String(),
+		locality:  id,
 		loadStore: loadStore,
 	}
 }

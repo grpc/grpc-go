@@ -141,9 +141,9 @@ func (edsImpl *edsBalancerImpl) handleChildPolicy(name string, config json.RawMe
 			// TODO: (eds) add support to balancer group to support smoothly
 			//  switching sub-balancers (keep old balancer around until new
 			//  balancer becomes ready).
-			bgwc.bg.Remove(id)
-			bgwc.bg.Add(id, edsImpl.subBalancerBuilder)
-			bgwc.bg.UpdateClientConnState(id, balancer.ClientConnState{
+			bgwc.bg.Remove(id.String())
+			bgwc.bg.Add(id.String(), edsImpl.subBalancerBuilder)
+			bgwc.bg.UpdateClientConnState(id.String(), balancer.ClientConnState{
 				ResolverState: resolver.State{Addresses: config.addrs},
 			})
 			// This doesn't need to manually update picker, because the new
@@ -315,8 +315,8 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 		config, ok := bgwc.configs[lid]
 		if !ok {
 			// A new balancer, add it to balancer group and balancer map.
-			bgwc.stateAggregator.Add(lid, newWeight)
-			bgwc.bg.Add(lid, edsImpl.subBalancerBuilder)
+			bgwc.stateAggregator.Add(lid.String(), newWeight)
+			bgwc.bg.Add(lid.String(), edsImpl.subBalancerBuilder)
 			config = &localityConfig{
 				weight: newWeight,
 			}
@@ -339,13 +339,13 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 
 		if weightChanged {
 			config.weight = newWeight
-			bgwc.stateAggregator.UpdateWeight(lid, newWeight)
+			bgwc.stateAggregator.UpdateWeight(lid.String(), newWeight)
 			rebuildStateAndPicker = true
 		}
 
 		if addrsChanged {
 			config.addrs = newAddrs
-			bgwc.bg.UpdateClientConnState(lid, balancer.ClientConnState{
+			bgwc.bg.UpdateClientConnState(lid.String(), balancer.ClientConnState{
 				ResolverState: resolver.State{Addresses: newAddrs},
 			})
 		}
@@ -354,8 +354,8 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 	// Delete localities that are removed in the latest response.
 	for lid := range bgwc.configs {
 		if _, ok := newLocalitiesSet[lid]; !ok {
-			bgwc.stateAggregator.Remove(lid)
-			bgwc.bg.Remove(lid)
+			bgwc.stateAggregator.Remove(lid.String())
+			bgwc.bg.Remove(lid.String())
 			delete(bgwc.configs, lid)
 			edsImpl.logger.Infof("Locality %v deleted", lid)
 			rebuildStateAndPicker = true

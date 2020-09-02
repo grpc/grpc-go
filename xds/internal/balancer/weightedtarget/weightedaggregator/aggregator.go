@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/wrr"
-	"google.golang.org/grpc/xds/internal"
 )
 
 type weightedPickerState struct {
@@ -68,7 +67,7 @@ type Aggregator struct {
 	// started.
 	//
 	// If an ID is not in map, it's either removed or never added.
-	idToPickerState map[internal.LocalityID]*weightedPickerState
+	idToPickerState map[string]*weightedPickerState
 }
 
 // New creates a new weighted balancer state aggregator.
@@ -77,7 +76,7 @@ func New(cc balancer.ClientConn, logger *grpclog.PrefixLogger, newWRR func() wrr
 		cc:              cc,
 		logger:          logger,
 		newWRR:          newWRR,
-		idToPickerState: make(map[internal.LocalityID]*weightedPickerState),
+		idToPickerState: make(map[string]*weightedPickerState),
 	}
 }
 
@@ -100,7 +99,7 @@ func (wbsa *Aggregator) Stop() {
 
 // Add adds a sub-balancer state with weight. It adds a place holder, and waits for
 // the real sub-balancer to update state.
-func (wbsa *Aggregator) Add(id internal.LocalityID, weight uint32) {
+func (wbsa *Aggregator) Add(id string, weight uint32) {
 	wbsa.mu.Lock()
 	defer wbsa.mu.Unlock()
 	wbsa.idToPickerState[id] = &weightedPickerState{
@@ -118,7 +117,7 @@ func (wbsa *Aggregator) Add(id internal.LocalityID, weight uint32) {
 
 // Remove removes the sub-balancer state. Future updates from this sub-balancer,
 // if any, will be ignored.
-func (wbsa *Aggregator) Remove(id internal.LocalityID) {
+func (wbsa *Aggregator) Remove(id string) {
 	wbsa.mu.Lock()
 	defer wbsa.mu.Unlock()
 	if _, ok := wbsa.idToPickerState[id]; !ok {
@@ -132,7 +131,7 @@ func (wbsa *Aggregator) Remove(id internal.LocalityID) {
 // UpdateWeight updates the weight for the given id. Note that this doesn't
 // trigger an update to the parent ClientConn. The caller should decide when
 // it's necessary, and call BuildAndUpdate.
-func (wbsa *Aggregator) UpdateWeight(id internal.LocalityID, newWeight uint32) {
+func (wbsa *Aggregator) UpdateWeight(id string, newWeight uint32) {
 	wbsa.mu.Lock()
 	defer wbsa.mu.Unlock()
 	pState, ok := wbsa.idToPickerState[id]
@@ -146,7 +145,7 @@ func (wbsa *Aggregator) UpdateWeight(id internal.LocalityID, newWeight uint32) {
 // It's usually called by the balancer group.
 //
 // It calls parent ClientConn's UpdateState with the new aggregated state.
-func (wbsa *Aggregator) UpdateState(id internal.LocalityID, newState balancer.State) {
+func (wbsa *Aggregator) UpdateState(id string, newState balancer.State) {
 	wbsa.mu.Lock()
 	defer wbsa.mu.Unlock()
 	oldState, ok := wbsa.idToPickerState[id]
