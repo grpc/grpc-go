@@ -191,7 +191,7 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			//// ------------------------Stage 0------------------------------------
-			// wait for the refreshing go-routine to pick up the changes.
+			// Wait for the refreshing go-routine to pick up the changes.
 			time.Sleep(1 * time.Second)
 			gotKM, err := provider.KeyMaterial(ctx)
 			if !cmp.Equal(*gotKM, test.wantKmStage0, cmp.AllowUnexported(big.Int{}, x509.CertPool{})) {
@@ -199,14 +199,14 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 			}
 			// ------------------------Stage 1------------------------------------
 			stage.increase()
-			// wait for the refreshing go-routine to pick up the changes.
+			// Wait for the refreshing go-routine to pick up the changes.
 			time.Sleep(1 * time.Second)
 			gotKM, err = provider.KeyMaterial(ctx)
 			if !cmp.Equal(*gotKM, test.wantKmStage1, cmp.AllowUnexported(big.Int{}, x509.CertPool{})) {
 				t.Fatalf("provider.KeyMaterial() = %+v, want %+v", *gotKM, test.wantKmStage1)
 			}
 			//// ------------------------Stage 2------------------------------------
-			// wait for the refreshing go-routine to pick up the changes.
+			// Wait for the refreshing go-routine to pick up the changes.
 			stage.increase()
 			time.Sleep(1 * time.Second)
 			gotKM, err = provider.KeyMaterial(ctx)
