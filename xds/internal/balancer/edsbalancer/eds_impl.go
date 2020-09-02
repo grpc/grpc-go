@@ -137,13 +137,13 @@ func (edsImpl *edsBalancerImpl) handleChildPolicy(name string, config json.RawMe
 		if bgwc == nil {
 			continue
 		}
-		for id, config := range bgwc.configs {
+		for lid, config := range bgwc.configs {
 			// TODO: (eds) add support to balancer group to support smoothly
 			//  switching sub-balancers (keep old balancer around until new
 			//  balancer becomes ready).
-			bgwc.bg.Remove(id.String())
-			bgwc.bg.Add(id.String(), edsImpl.subBalancerBuilder)
-			bgwc.bg.UpdateClientConnState(id.String(), balancer.ClientConnState{
+			bgwc.bg.Remove(lid.String())
+			bgwc.bg.Add(lid.String(), edsImpl.subBalancerBuilder)
+			bgwc.bg.UpdateClientConnState(lid.String(), balancer.ClientConnState{
 				ResolverState: resolver.State{Addresses: config.addrs},
 			})
 			// This doesn't need to manually update picker, because the new
