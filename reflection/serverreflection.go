@@ -278,8 +278,8 @@ func fileDescWithDependencies(fd *dpb.FileDescriptorProto, sentFileDescriptors m
 	for len(queue) > 0 {
 		currentfd := queue[0]
 		queue = queue[1:]
-		if sent := sentFileDescriptors[fd.GetName()]; len(r) == 0 || !sent {
-			sentFileDescriptors[fd.GetName()] = true
+		if sent := sentFileDescriptors[currentfd.GetName()]; len(r) == 0 || !sent {
+			sentFileDescriptors[currentfd.GetName()] = true
 			currentfdEncoded, err := proto.Marshal(currentfd)
 			if err != nil {
 				return nil, err
