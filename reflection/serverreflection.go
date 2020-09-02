@@ -272,21 +272,19 @@ func (s *serverReflectionServer) allExtensionNumbersForType(st reflect.Type) ([]
 // fileDescWithDependencies returns a slice of serialized fileDescriptors in
 // wire format ([]byte). The fileDescriptors will include fd and all the
 // transitive dependencies of fd with names not in sentFileDescriptors.
-func fileDescWithDependencies(fd *dpb.FileDescriptorProto, sentFileDescriptors map[string]struct{}) ([][]byte, error) {
+func fileDescWithDependencies(fd *dpb.FileDescriptorProto, sentFileDescriptors map[string]bool) ([][]byte, error) {
 	r := [][]byte{}
-	queue := make([]*dpb.FileDescriptorProto, 0)
-	queue = append(queue, fd)
+	queue := []*dpb.FileDescriptorProto{fd}
 	for len(queue) > 0 {
 		currentfd := queue[0]
 		queue = queue[1:]
-		if _, exists := sentFileDescriptors[fd.GetName()]; len(r) == 0 || !exists {
-			sentFileDescriptors[fd.GetName()] = struct{}{}
+		if sent := sentFileDescriptors[fd.GetName()]; len(r) == 0 || !sent {
+			sentFileDescriptors[fd.GetName()] = true
 			currentfdEncoded, err := proto.Marshal(currentfd)
 			if err != nil {
 				return nil, err
 			}
 			r = append(r, currentfdEncoded)
-
 		}
 		for _, dep := range currentfd.Dependency {
 			fdenc := proto.FileDescriptor(dep)
@@ -303,7 +301,7 @@ func fileDescWithDependencies(fd *dpb.FileDescriptorProto, sentFileDescriptors m
 // fileDescEncodingByFilename finds the file descriptor for given filename,
 // finds all of its previously unsent transitive dependencies, does marshalling
 // on them, and returns the marshalled result.
-func (s *serverReflectionServer) fileDescEncodingByFilename(name string, sentFileDescriptors map[string]struct{}) ([][]byte, error) {
+func (s *serverReflectionServer) fileDescEncodingByFilename(name string, sentFileDescriptors map[string]bool) ([][]byte, error) {
 	enc := proto.FileDescriptor(name)
 	if enc == nil {
 		return nil, fmt.Errorf("unknown file: %v", name)
@@ -337,7 +335,7 @@ func parseMetadata(meta interface{}) ([]byte, bool) {
 // given symbol, finds all of its previously unsent transitive dependencies,
 // does marshalling on them, and returns the marshalled result. The given symbol
 // can be a type, a service or a method.
-func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string, sentFileDescriptors map[string]struct{}) ([][]byte, error) {
+func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string, sentFileDescriptors map[string]bool) ([][]byte, error) {
 	_, symbols := s.getSymbols()
 	fd := symbols[name]
 	if fd == nil {
@@ -361,7 +359,7 @@ func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string, s
 // fileDescEncodingContainingExtension finds the file descriptor containing
 // given extension, finds all of its previously unsent transitive dependencies,
 // does marshalling on them, and returns the marshalled result.
-func (s *serverReflectionServer) fileDescEncodingContainingExtension(typeName string, extNum int32, sentFileDescriptors map[string]struct{}) ([][]byte, error) {
+func (s *serverReflectionServer) fileDescEncodingContainingExtension(typeName string, extNum int32, sentFileDescriptors map[string]bool) ([][]byte, error) {
 	st, err := typeForName(typeName)
 	if err != nil {
 		return nil, err
@@ -388,7 +386,7 @@ func (s *serverReflectionServer) allExtensionNumbersForTypeName(name string) ([]
 
 // ServerReflectionInfo is the reflection service handler.
 func (s *serverReflectionServer) ServerReflectionInfo(stream rpb.ServerReflection_ServerReflectionInfoServer) error {
-	sentFileDescriptors := make(map[string]struct{})
+	sentFileDescriptors := make(map[string]bool)
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
