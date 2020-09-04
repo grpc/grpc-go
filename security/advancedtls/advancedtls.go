@@ -227,16 +227,47 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 		}
 		rootCAs = systemRootCAs
 	}
-	// We have to set InsecureSkipVerify to true to skip the default checks and
-	// use the verification function we built from buildVerifyFunc.
+	// Fill the root and identity reloading functions based on the Provider
+	// implementation.
+	if o.RootProvider != nil {
+		o.GetRootCertificates = func(*GetRootCAsParams) (*GetRootCAsResults, error) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			km, err := o.RootProvider.KeyMaterial(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return &GetRootCAsResults{TrustCerts:km.Roots}, nil
+		}
+	}
+	if o.IdentityProvider != nil {
+		o.GetIdentityCertificatesForClient = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			km, err := o.IdentityProvider.KeyMaterial(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if len(km.Certs) == 0 {
+				return nil, fmt.Errorf(
+					"no identity cert on the client side in IdentityProvider")
+			}
+			if len(km.Certs) > 1 {
+				return nil, fmt.Errorf(
+					"there should always be only one identity cert chain on the client side in IdentityProvider")
+			}
+			return &km.Certs[0], nil
+		}
+	}
+	// Propagate tls.Config fields based on the user input.
 	config := &tls.Config{
 		ServerName:           o.ServerNameOverride,
 		Certificates:         o.Certificates,
 		GetClientCertificate: o.GetIdentityCertificatesForClient,
+		// We have to set InsecureSkipVerify to true to skip the default checks and
+		// use the verification function we built from buildVerifyFunc.
 		InsecureSkipVerify:   true,
-	}
-	if rootCAs != nil {
-		config.RootCAs = rootCAs
+		RootCAs: rootCAs,
 	}
 	return config, nil
 }
@@ -283,17 +314,48 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		// buildVerifyFunc.
 		clientAuth = tls.RequireAnyClientCert
 	}
+	// Fill the root and identity reloading functions based on the Provider
+	// implementation.
+	if o.RootProvider != nil {
+		o.GetRootCertificates = func(*GetRootCAsParams) (*GetRootCAsResults, error) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			km, err := o.RootProvider.KeyMaterial(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return &GetRootCAsResults{TrustCerts:km.Roots}, nil
+		}
+	}
+	if o.IdentityProvider != nil {
+		o.GetIdentityCertificatesForServer = func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			km, err := o.IdentityProvider.KeyMaterial(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if len(km.Certs) == 0 {
+				return nil, fmt.Errorf(
+					"no identity cert on the client side in IdentityProvider")
+			}
+			var certChains []*tls.Certificate
+			for i := 0; i < len(km.Certs); i++ {
+				certChains = append(certChains, &km.Certs[i])
+			}
+ 			return certChains, nil
+		}
+	}
+	// Propagate tls.Config fields based on the user input.
 	config := &tls.Config{
 		ClientAuth:   clientAuth,
 		Certificates: o.Certificates,
+		ClientCAs: clientCAs,
 	}
 	if o.GetIdentityCertificatesForServer != nil {
 		config.GetCertificate = func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return buildGetCertificates(clientHello, o)
 		}
-	}
-	if clientCAs != nil {
-		config.ClientCAs = clientCAs
 	}
 	return config, nil
 }
