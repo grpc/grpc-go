@@ -19,13 +19,14 @@
 package v2
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
-	"google.golang.org/grpc/xds/internal/version"
 )
 
 // doLDS makes a LDS watch, and waits for the response and ack to finish.
@@ -34,8 +35,10 @@ import (
 // pre-requirement for RDS, and RDS handle would fail without an existing LDS
 // watch.
 func doLDS(t *testing.T, v2c xdsclient.APIClient, fakeServer *fakeserver.Server) {
-	v2c.AddWatch(version.V2ListenerURL, goodLDSTarget1)
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+	v2c.AddWatch(xdsclient.ListenerResource, goodLDSTarget1)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout waiting for LDS request: %v", err)
 	}
 }
@@ -112,7 +115,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
-				typeURL:          version.V2RouteConfigURL,
+				rType:            xdsclient.RouteConfigResource,
 				resourceName:     goodRouteName1,
 				responseToHandle: test.rdsResponse,
 				wantHandleErr:    test.wantErr,
@@ -130,7 +133,7 @@ func (s) TestRDSHandleResponseWithoutLDSWatch(t *testing.T) {
 	defer cleanup()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(string, map[string]interface{}) {},
+		f: func(xdsclient.ResourceType, map[string]interface{}) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -149,7 +152,7 @@ func (s) TestRDSHandleResponseWithoutRDSWatch(t *testing.T) {
 	defer cleanup()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(string, map[string]interface{}) {},
+		f: func(xdsclient.ResourceType, map[string]interface{}) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)

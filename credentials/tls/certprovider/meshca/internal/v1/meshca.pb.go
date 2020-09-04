@@ -4,9 +4,13 @@
 package google_security_meshca_v1
 
 import (
+	context "context"
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
 	duration "github.com/golang/protobuf/ptypes/duration"
+	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 	math "math"
 )
 
@@ -152,4 +156,88 @@ var fileDescriptor_f72841047b94fe5e = []byte{
 	0xef, 0x11, 0xc6, 0xd9, 0x7f, 0x2a, 0x3d, 0x75, 0x7c, 0x36, 0xe3, 0x74, 0x22, 0xd5, 0xf6, 0x74,
 	0x75, 0x36, 0xec, 0xba, 0x62, 0xee, 0x66, 0x99, 0x93, 0xe5, 0x45, 0xb7, 0xcf, 0xc3, 0x77, 0x00,
 	0x00, 0x00, 0xff, 0xff, 0xb7, 0x0d, 0xfd, 0xff, 0xf7, 0x01, 0x00, 0x00,
+}
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ context.Context
+var _ grpc.ClientConnInterface
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the grpc package it is being compiled against.
+const _ = grpc.SupportPackageIsVersion6
+
+// MeshCertificateServiceClient is the client API for MeshCertificateService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+type MeshCertificateServiceClient interface {
+	// Using provided CSR, returns a signed certificate that represents a GCP
+	// service account identity.
+	CreateCertificate(ctx context.Context, in *MeshCertificateRequest, opts ...grpc.CallOption) (*MeshCertificateResponse, error)
+}
+
+type meshCertificateServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewMeshCertificateServiceClient(cc grpc.ClientConnInterface) MeshCertificateServiceClient {
+	return &meshCertificateServiceClient{cc}
+}
+
+func (c *meshCertificateServiceClient) CreateCertificate(ctx context.Context, in *MeshCertificateRequest, opts ...grpc.CallOption) (*MeshCertificateResponse, error) {
+	out := new(MeshCertificateResponse)
+	err := c.cc.Invoke(ctx, "/google.security.meshca.v1.MeshCertificateService/CreateCertificate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// MeshCertificateServiceServer is the server API for MeshCertificateService service.
+type MeshCertificateServiceServer interface {
+	// Using provided CSR, returns a signed certificate that represents a GCP
+	// service account identity.
+	CreateCertificate(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error)
+}
+
+// UnimplementedMeshCertificateServiceServer can be embedded to have forward compatible implementations.
+type UnimplementedMeshCertificateServiceServer struct {
+}
+
+func (*UnimplementedMeshCertificateServiceServer) CreateCertificate(ctx context.Context, req *MeshCertificateRequest) (*MeshCertificateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateCertificate not implemented")
+}
+
+func RegisterMeshCertificateServiceServer(s *grpc.Server, srv MeshCertificateServiceServer) {
+	s.RegisterService(&_MeshCertificateService_serviceDesc, srv)
+}
+
+func _MeshCertificateService_CreateCertificate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MeshCertificateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeshCertificateServiceServer).CreateCertificate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/google.security.meshca.v1.MeshCertificateService/CreateCertificate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeshCertificateServiceServer).CreateCertificate(ctx, req.(*MeshCertificateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _MeshCertificateService_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "google.security.meshca.v1.MeshCertificateService",
+	HandlerType: (*MeshCertificateServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateCertificate",
+			Handler:    _MeshCertificateService_CreateCertificate_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "istio/google/security/meshca/v1/meshca.proto",
 }

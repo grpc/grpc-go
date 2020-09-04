@@ -26,7 +26,6 @@ import (
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/xds/internal"
 )
 
 type subBalancerState struct {
@@ -59,14 +58,14 @@ type balancerStateAggregator struct {
 	// started.
 	//
 	// If an ID is not in map, it's either removed or never added.
-	idToPickerState map[internal.LocalityID]*subBalancerState
+	idToPickerState map[string]*subBalancerState
 }
 
 func newBalancerStateAggregator(cc balancer.ClientConn, logger *grpclog.PrefixLogger) *balancerStateAggregator {
 	return &balancerStateAggregator{
 		cc:              cc,
 		logger:          logger,
-		idToPickerState: make(map[internal.LocalityID]*subBalancerState),
+		idToPickerState: make(map[string]*subBalancerState),
 	}
 }
 
@@ -91,7 +90,7 @@ func (rbsa *balancerStateAggregator) close() {
 // for the real sub-balancer to update state.
 //
 // This is called when there's a new action.
-func (rbsa *balancerStateAggregator) add(id internal.LocalityID) {
+func (rbsa *balancerStateAggregator) add(id string) {
 	rbsa.mu.Lock()
 	defer rbsa.mu.Unlock()
 	rbsa.idToPickerState[id] = &subBalancerState{
@@ -110,7 +109,7 @@ func (rbsa *balancerStateAggregator) add(id internal.LocalityID) {
 // if any, will be ignored.
 //
 // This is called when an action is removed.
-func (rbsa *balancerStateAggregator) remove(id internal.LocalityID) {
+func (rbsa *balancerStateAggregator) remove(id string) {
 	rbsa.mu.Lock()
 	defer rbsa.mu.Unlock()
 	if _, ok := rbsa.idToPickerState[id]; !ok {
@@ -134,7 +133,7 @@ func (rbsa *balancerStateAggregator) updateRoutes(newRoutes []route) {
 // It's usually called by the balancer group.
 //
 // It calls parent ClientConn's UpdateState with the new aggregated state.
-func (rbsa *balancerStateAggregator) UpdateState(id internal.LocalityID, state balancer.State) {
+func (rbsa *balancerStateAggregator) UpdateState(id string, state balancer.State) {
 	rbsa.mu.Lock()
 	defer rbsa.mu.Unlock()
 	pickerSt, ok := rbsa.idToPickerState[id]

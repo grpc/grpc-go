@@ -268,7 +268,13 @@ if err != nil {
         log.Fatalf("failed to listen: %v", err)
 }
 grpcServer := grpc.NewServer()
-pb.RegisterRouteGuideServer(grpcServer, &routeGuideServer{})
+rgs := &routeGuideServer{}
+pb.RegisterRouteGuideService(grpcServer, pb.RouteGuideService{
+        GetFeature:   rgs.GetFeature,
+        ListFeatures: rgs.ListFeatures,
+        RecordRoute:  rgs.RecordRoute,
+        RouteChat:    rgs.RouteChat,
+})
 ... // determine whether to use TLS
 grpcServer.Serve(lis)
 ```

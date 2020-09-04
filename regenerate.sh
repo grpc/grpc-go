@@ -59,7 +59,8 @@ curl --silent https://raw.githubusercontent.com/istio/istio/master/security/prot
 
 mkdir -p ${WORKDIR}/out
 
-SOURCES=(
+# Generates legacy gRPC Server symbols in addition to the newer Service symbols
+LEGACY_SOURCES=(
   ${WORKDIR}/googleapis/google/rpc/code.proto
   ${WORKDIR}/grpc-proto/grpc/binlog/v1/binarylog.proto
   ${WORKDIR}/grpc-proto/grpc/channelz/v1/channelz.proto
@@ -69,19 +70,33 @@ SOURCES=(
   ${WORKDIR}/grpc-proto/grpc/health/v1/health.proto
   ${WORKDIR}/grpc-proto/grpc/lb/v1/load_balancer.proto
   ${WORKDIR}/grpc-proto/grpc/lookup/v1/rls.proto
+  ${WORKDIR}/grpc-proto/grpc/lookup/v1/rls_config.proto
   ${WORKDIR}/grpc-proto/grpc/service_config/service_config.proto
   ${WORKDIR}/grpc-proto/grpc/tls/provider/meshca/experimental/config.proto
   ${WORKDIR}/istio/istio/google/security/meshca/v1/meshca.proto
-  $(git ls-files --exclude-standard --cached --others "*.proto")
+  profiling/proto/service.proto
+  reflection/grpc_reflection_v1alpha/reflection.proto
 )
+
+# Generates only the new gRPC Service symbols
+SOURCES=(
+  $(git ls-files --exclude-standard --cached --others "*.proto" | grep -v '^\(profiling/proto/service.proto\|reflection/grpc_reflection_v1alpha/reflection.proto\)$')
+)
+
 # These options of the form 'Mfoo.proto=bar' instruct the codegen to use an
 # import path of 'bar' in the generated code when 'foo.proto' is imported in
 # one of the sources.
 OPTS=Mgrpc/service_config/service_config.proto=/internal/proto/grpc_service_config,\
 Menvoy/config/core/v3/config_source.proto=github.com/envoyproxy/go-control-plane/envoy/config/core/v3
+
 for src in ${SOURCES[@]}; do
   echo "protoc ${src}"
-  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS},requireUnimplementedServers=false:${WORKDIR}/out \
+  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS}:${WORKDIR}/out ${src}
+done
+
+for src in ${LEGACY_SOURCES[@]}; do
+  echo "protoc ${src}"
+  protoc --go_out=${OPTS},plugins=grpc:${WORKDIR}/out --go-grpc_out=${OPTS},migration_mode=true:${WORKDIR}/out \
     -I"." \
     -I${WORKDIR}/grpc-proto \
     -I${WORKDIR}/googleapis \

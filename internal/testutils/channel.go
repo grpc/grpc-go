@@ -18,21 +18,11 @@
 package testutils
 
 import (
-	"errors"
-	"time"
+	"context"
 )
 
-// ErrRecvTimeout is an error to indicate that a receive operation on the
-// channel timed out.
-var ErrRecvTimeout = errors.New("timed out when waiting for value on channel")
-
-const (
-	// DefaultChanRecvTimeout is the default timeout for receive operations on the
-	// underlying channel.
-	DefaultChanRecvTimeout = 1 * time.Second
-	// DefaultChanBufferSize is the default buffer size of the underlying channel.
-	DefaultChanBufferSize = 1
-)
+// DefaultChanBufferSize is the default buffer size of the underlying channel.
+const DefaultChanBufferSize = 1
 
 // Channel wraps a generic channel and provides a timed receive operation.
 type Channel struct {
@@ -44,16 +34,29 @@ func (cwt *Channel) Send(value interface{}) {
 	cwt.ch <- value
 }
 
-// Receive returns the value received on the underlying channel, or
-// ErrRecvTimeout if DefaultChanRecvTimeout amount of time elapses.
-func (cwt *Channel) Receive() (interface{}, error) {
-	timer := time.NewTimer(DefaultChanRecvTimeout)
+// Receive returns the value received on the underlying channel, or the error
+// returned by ctx if it is closed or cancelled.
+func (cwt *Channel) Receive(ctx context.Context) (interface{}, error) {
 	select {
-	case <-timer.C:
-		return nil, ErrRecvTimeout
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case got := <-cwt.ch:
-		timer.Stop()
 		return got, nil
+	}
+}
+
+// Replace clears the value on the underlying channel, and sends the new value.
+//
+// It's expected to be used with a size-1 channel, to only keep the most
+// up-to-date item. This method is inherently racy when invoked concurrently
+// from multiple goroutines.
+func (cwt *Channel) Replace(value interface{}) {
+	for {
+		select {
+		case cwt.ch <- value:
+			return
+		case <-cwt.ch:
+		}
 	}
 }
 

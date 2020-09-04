@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal"
 	xdsinternal "google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/client/load"
 )
 
 func init() {
@@ -44,8 +45,7 @@ func (l *lrsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balanc
 		cc:        cc,
 		buildOpts: opts,
 	}
-	b.loadStore = NewStore()
-	b.client = newXDSClientWrapper(b.loadStore)
+	b.client = &xdsClientWrapper{}
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
 	return b
@@ -63,9 +63,8 @@ type lrsBalancer struct {
 	cc        balancer.ClientConn
 	buildOpts balancer.BuildOptions
 
-	logger    *grpclog.PrefixLogger
-	loadStore Store
-	client    *xdsClientWrapper
+	logger *grpclog.PrefixLogger
+	client *xdsClientWrapper
 
 	config *lbConfig
 	lb     balancer.Balancer // The sub balancer.
@@ -77,6 +76,11 @@ func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
 	}
 
+	// Update load reporting config or xds client. This needs to be done before
+	// updating the child policy because we need the loadStore from the updated
+	// client to be passed to the ccWrapper.
+	b.client.update(newConfig, s.ResolverState.Attributes)
+
 	// If child policy is a different type, recreate the sub-balancer.
 	if b.config == nil || b.config.ChildPolicy.Name != newConfig.ChildPolicy.Name {
 		bb := balancer.Get(newConfig.ChildPolicy.Name)
@@ -86,10 +90,8 @@ func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		if b.lb != nil {
 			b.lb.Close()
 		}
-		b.lb = bb.Build(newCCWrapper(b.cc, b.loadStore, newConfig.Locality), b.buildOpts)
+		b.lb = bb.Build(newCCWrapper(b.cc, b.client.loadStore(), newConfig.Locality), b.buildOpts)
 	}
-	// Update load reporting config or xds client.
-	b.client.update(newConfig, s.ResolverState.Attributes)
 	b.config = newConfig
 
 	// Addresses and sub-balancer config are sent to sub-balancer.
@@ -121,11 +123,11 @@ func (b *lrsBalancer) Close() {
 
 type ccWrapper struct {
 	balancer.ClientConn
-	loadStore  Store
+	loadStore  *load.Store
 	localityID *internal.LocalityID
 }
 
-func newCCWrapper(cc balancer.ClientConn, loadStore Store, localityID *internal.LocalityID) *ccWrapper {
+func newCCWrapper(cc balancer.ClientConn, loadStore *load.Store, localityID *internal.LocalityID) *ccWrapper {
 	return &ccWrapper{
 		ClientConn: cc,
 		loadStore:  loadStore,
@@ -141,23 +143,16 @@ func (ccw *ccWrapper) UpdateState(s balancer.State) {
 // xdsClientInterface contains only the xds_client methods needed by LRS
 // balancer. It's defined so we can override xdsclient in tests.
 type xdsClientInterface interface {
-	ReportLoad(server string, clusterName string, loadStore Store) (cancel func())
+	LoadStore() *load.Store
+	ReportLoad(server string, clusterName string) func()
 	Close()
 }
 
 type xdsClientWrapper struct {
-	loadStore Store
-
 	c                xdsClientInterface
 	cancelLoadReport func()
 	clusterName      string
 	lrsServerName    string
-}
-
-func newXDSClientWrapper(loadStore Store) *xdsClientWrapper {
-	return &xdsClientWrapper{
-		loadStore: loadStore,
-	}
 }
 
 // update checks the config and xdsclient, and decides whether it needs to
@@ -203,9 +198,16 @@ func (w *xdsClientWrapper) update(newConfig *lbConfig, attr *attributes.Attribut
 			w.cancelLoadReport = nil
 		}
 		if w.c != nil {
-			w.cancelLoadReport = w.c.ReportLoad(w.lrsServerName, w.clusterName, w.loadStore)
+			w.cancelLoadReport = w.c.ReportLoad(w.lrsServerName, w.clusterName)
 		}
 	}
+}
+
+func (w *xdsClientWrapper) loadStore() *load.Store {
+	if w.c == nil {
+		return nil
+	}
+	return w.c.LoadStore()
 }
 
 func (w *xdsClientWrapper) close() {

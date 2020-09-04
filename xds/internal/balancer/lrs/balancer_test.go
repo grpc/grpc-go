@@ -19,6 +19,7 @@
 package lrs
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -32,7 +33,10 @@ import (
 	"google.golang.org/grpc/resolver"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
+
+const defaultTestTimeout = 1 * time.Second
 
 var (
 	testBackendAddrs = []resolver.Address{
@@ -45,53 +49,6 @@ var (
 	}
 )
 
-// This is a subset of testutils.fakeclient. Cannot use testutils.fakeclient
-// because testutils imports package lrs.
-//
-// TODO: after refactoring xdsclient to support load reporting, the testutils
-// package won't need to depend on lrs package for the store. And we can use the
-// testutils for this.
-type fakeXDSClient struct {
-	loadReportCh chan *reportLoadArgs
-}
-
-func newFakeXDSClient() *fakeXDSClient {
-	return &fakeXDSClient{
-		loadReportCh: make(chan *reportLoadArgs, 10),
-	}
-}
-
-// reportLoadArgs wraps the arguments passed to ReportLoad.
-type reportLoadArgs struct {
-	// server is the name of the server to which the load is reported.
-	server string
-	// cluster is the name of the cluster for which load is reported.
-	cluster string
-	// loadStore is the store where loads are stored.
-	loadStore interface{}
-}
-
-// ReportLoad starts reporting load about clusterName to server.
-func (xdsC *fakeXDSClient) ReportLoad(server string, clusterName string, loadStore Store) (cancel func()) {
-	xdsC.loadReportCh <- &reportLoadArgs{server: server, cluster: clusterName, loadStore: loadStore}
-	return func() {}
-}
-
-// waitForReportLoad waits for ReportLoad to be invoked on this client within a
-// reasonable timeout, and returns the arguments passed to it.
-func (xdsC *fakeXDSClient) waitForReportLoad() (*reportLoadArgs, error) {
-	select {
-	case <-time.After(time.Second):
-		return nil, fmt.Errorf("timeout")
-	case a := <-xdsC.loadReportCh:
-		return a, nil
-	}
-}
-
-// Close closes the xds client.
-func (xdsC *fakeXDSClient) Close() {
-}
-
 // TestLoadReporting verifies that the lrs balancer starts the loadReport
 // stream when the lbConfig passed to it contains a valid value for the LRS
 // server (empty string).
@@ -101,7 +58,7 @@ func TestLoadReporting(t *testing.T) {
 	lrsB := builder.Build(cc, balancer.BuildOptions{})
 	defer lrsB.Close()
 
-	xdsC := newFakeXDSClient()
+	xdsC := fakeclient.NewClient()
 	if err := lrsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses:  testBackendAddrs,
@@ -119,12 +76,15 @@ func TestLoadReporting(t *testing.T) {
 		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
 	}
 
-	got, err := xdsC.waitForReportLoad()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	got, err := xdsC.WaitForReportLoad(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err)
 	}
-	if got.server != testLRSServerName || got.cluster != testClusterName {
-		t.Fatalf("xdsClient.ReportLoad called with {%q, %q}: want {%q, %q}", got.server, got.cluster, testLRSServerName, testClusterName)
+	if got.Server != testLRSServerName || got.Cluster != testClusterName {
+		t.Fatalf("xdsClient.ReportLoad called with {%q, %q}: want {%q, %q}", got.Server, got.Cluster, testLRSServerName, testClusterName)
 	}
 
 	sc1 := <-cc.NewSubConnCh
@@ -150,26 +110,24 @@ func TestLoadReporting(t *testing.T) {
 		gotSCSt.Done(balancer.DoneInfo{Err: fmt.Errorf("error")})
 	}
 
-	loads := make(map[xdsinternal.LocalityID]*rpcCountData)
-
-	got.loadStore.(*lrsStore).localityRPCCount.Range(
-		func(key, value interface{}) bool {
-			loads[key.(xdsinternal.LocalityID)] = value.(*rpcCountData)
-			return true
-		},
-	)
-
-	countData, ok := loads[*testLocality]
+	// Dump load data from the store and compare with expected counts.
+	loadStore := xdsC.LoadStore()
+	if loadStore == nil {
+		t.Fatal("loadStore is nil in xdsClient")
+	}
+	sd := loadStore.Stats()
+	localityData, ok := sd.LocalityStats[testLocality.String()]
 	if !ok {
 		t.Fatalf("loads for %v not found in store", testLocality)
 	}
-	if *countData.succeeded != successCount {
-		t.Errorf("got succeeded %v, want %v", *countData.succeeded, successCount)
+	reqStats := localityData.RequestStats
+	if reqStats.Succeeded != successCount {
+		t.Errorf("got succeeded %v, want %v", reqStats.Succeeded, successCount)
 	}
-	if *countData.errored != errorCount {
-		t.Errorf("got errord %v, want %v", *countData.errored, errorCount)
+	if reqStats.Errored != errorCount {
+		t.Errorf("got errord %v, want %v", reqStats.Errored, errorCount)
 	}
-	if *countData.inProgress != 0 {
-		t.Errorf("got inProgress %v, want %v", *countData.inProgress, 0)
+	if reqStats.InProgress != 0 {
+		t.Errorf("got inProgress %v, want %v", reqStats.InProgress, 0)
 	}
 }

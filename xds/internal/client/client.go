@@ -21,6 +21,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -38,6 +39,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -76,6 +78,9 @@ type BuildOptions struct {
 	// Backoff returns the amount of time to backoff before retrying broken
 	// streams.
 	Backoff func(int) time.Duration
+	// LoadStore contains load reports which need to be pushed to the management
+	// server.
+	LoadStore *load.Store
 	// Logger provides enhanced logging capabilities.
 	Logger *grpclog.PrefixLogger
 }
@@ -96,12 +101,27 @@ type APIClientBuilder interface {
 // version specific implementations of the xDS client.
 type APIClient interface {
 	// AddWatch adds a watch for an xDS resource given its type and name.
-	AddWatch(resourceType, resourceName string)
+	AddWatch(ResourceType, string)
+
 	// RemoveWatch cancels an already registered watch for an xDS resource
 	// given its type and name.
-	RemoveWatch(resourceType, resourceName string)
+	RemoveWatch(ResourceType, string)
+
+	// ReportLoad starts an LRS stream to periodically report load using the
+	// provided ClientConn, which represent a connection to the management
+	// server.
+	ReportLoad(ctx context.Context, cc *grpc.ClientConn, opts LoadReportingOptions)
+
 	// Close cleans up resources allocated by the API client.
 	Close()
+}
+
+// LoadReportingOptions contains configuration knobs for reporting load data.
+type LoadReportingOptions struct {
+	// ClusterName is the cluster name for which load is being reported.
+	ClusterName string
+	// TargetName is the target of the parent ClientConn.
+	TargetName string
 }
 
 // UpdateHandler receives and processes (by taking appropriate actions) xDS
@@ -272,6 +292,7 @@ type Client struct {
 	opts      Options
 	cc        *grpc.ClientConn // Connection to the xDS server
 	apiClient APIClient
+	loadStore *load.Store
 
 	logger *grpclog.PrefixLogger
 
@@ -325,8 +346,9 @@ func New(opts Options) (*Client, error) {
 	}
 
 	c := &Client{
-		done: grpcsync.NewEvent(),
-		opts: opts,
+		done:      grpcsync.NewEvent(),
+		opts:      opts,
+		loadStore: &load.Store{},
 
 		updateCh:    buffer.NewUnbounded(),
 		ldsWatchers: make(map[string]map[*watchInfo]bool),
@@ -352,6 +374,7 @@ func New(opts Options) (*Client, error) {
 		Parent:    c,
 		NodeProto: opts.Config.NodeProto,
 		Backoff:   backoff.DefaultExponential.Backoff,
+		LoadStore: c.loadStore,
 		Logger:    c.logger,
 	})
 	if err != nil {
@@ -395,4 +418,66 @@ func (c *Client) Close() {
 	c.apiClient.Close()
 	c.cc.Close()
 	c.logger.Infof("Shutdown")
+}
+
+// ResourceType identifies resources in a transport protocol agnostic way. These
+// will be used in transport version agnostic code, while the versioned API
+// clients will map these to appropriate version URLs.
+type ResourceType int
+
+// Version agnostic resource type constants.
+const (
+	UnknownResource ResourceType = iota
+	ListenerResource
+	HTTPConnManagerResource
+	RouteConfigResource
+	ClusterResource
+	EndpointsResource
+)
+
+func (r ResourceType) String() string {
+	switch r {
+	case ListenerResource:
+		return "ListenerResource"
+	case HTTPConnManagerResource:
+		return "HTTPConnManagerResource"
+	case RouteConfigResource:
+		return "RouteConfigResource"
+	case ClusterResource:
+		return "ClusterResource"
+	case EndpointsResource:
+		return "EndpointsResource"
+	default:
+		return "UnknownResource"
+	}
+}
+
+// IsListenerResource returns true if the provider URL corresponds to an xDS
+// Listener resource.
+func IsListenerResource(url string) bool {
+	return url == version.V2ListenerURL || url == version.V3ListenerURL
+}
+
+// IsHTTPConnManagerResource returns true if the provider URL corresponds to an xDS
+// HTTPConnManager resource.
+func IsHTTPConnManagerResource(url string) bool {
+	return url == version.V2HTTPConnManagerURL || url == version.V3HTTPConnManagerURL
+}
+
+// IsRouteConfigResource returns true if the provider URL corresponds to an xDS
+// RouteConfig resource.
+func IsRouteConfigResource(url string) bool {
+	return url == version.V2RouteConfigURL || url == version.V3RouteConfigURL
+}
+
+// IsClusterResource returns true if the provider URL corresponds to an xDS
+// Cluster resource.
+func IsClusterResource(url string) bool {
+	return url == version.V2ClusterURL || url == version.V3ClusterURL
+}
+
+// IsEndpointsResource returns true if the provider URL corresponds to an xDS
+// Endpoints resource.
+func IsEndpointsResource(url string) bool {
+	return url == version.V2EndpointsURL || url == version.V3EndpointsURL
 }

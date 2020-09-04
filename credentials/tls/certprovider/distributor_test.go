@@ -1,3 +1,5 @@
+// +build go1.13
+
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -21,14 +23,25 @@ package certprovider
 import (
 	"context"
 	"errors"
-	"fmt"
-	"reflect"
-	"sync"
 	"testing"
 	"time"
 )
 
 var errProviderTestInternal = errors.New("provider internal error")
+
+// TestDistributorEmpty tries to read key material from an empty distributor and
+// expects the call to timeout.
+func (s) TestDistributorEmpty(t *testing.T) {
+	dist := NewDistributor()
+
+	// This call to KeyMaterial() should timeout because no key material has
+	// been set on the distributor as yet.
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if err := readAndVerifyKeyMaterial(ctx, dist, nil); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+}
 
 // TestDistributor invokes the different methods on the Distributor type and
 // verifies the results.
@@ -36,124 +49,64 @@ func (s) TestDistributor(t *testing.T) {
 	dist := NewDistributor()
 
 	// Read cert/key files from testdata.
-	km, err := loadKeyMaterials()
-	if err != nil {
+	km1 := loadKeyMaterials(t, "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
+	km2 := loadKeyMaterials(t, "x509/server2_cert.pem", "x509/server2_key.pem", "x509/client_ca_cert.pem")
+
+	// Push key material into the distributor and make sure that a call to
+	// KeyMaterial() returns the expected key material, with both the local
+	// certs and root certs.
+	dist.Set(km1, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := readAndVerifyKeyMaterial(ctx, dist, km1); err != nil {
 		t.Fatal(err)
 	}
-	// wantKM1 has both local and root certs.
-	wantKM1 := *km
-	// wantKM2 has only local certs. Roots are nil-ed out.
-	wantKM2 := *km
-	wantKM2.Roots = nil
 
-	// Create a goroutines which work in lockstep with the rest of the test.
-	// This goroutine reads the key material from the distributor while the rest
-	// of the test sets it.
-	var wg sync.WaitGroup
-	wg.Add(1)
-	errCh := make(chan error)
-	proceedCh := make(chan struct{})
-	go func() {
-		defer wg.Done()
+	// Push new key material into the distributor and make sure that a call to
+	// KeyMaterial() returns the expected key material, with only root certs.
+	dist.Set(km2, nil)
+	if err := readAndVerifyKeyMaterial(ctx, dist, km2); err != nil {
+		t.Fatal(err)
+	}
 
-		// The first call to KeyMaterial() should timeout because no key
-		// material has been set on the distributor as yet.
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout/2)
-		defer cancel()
-		if _, err := dist.KeyMaterial(ctx); err != context.DeadlineExceeded {
-			errCh <- err
-			return
-		}
-		proceedCh <- struct{}{}
+	// Push an error into the distributor and make sure that a call to
+	// KeyMaterial() returns that error and nil keyMaterial.
+	dist.Set(km2, errProviderTestInternal)
+	if gotKM, err := dist.KeyMaterial(ctx); gotKM != nil || !errors.Is(err, errProviderTestInternal) {
+		t.Fatalf("KeyMaterial() = {%v, %v}, want {nil, %v}", gotKM, err, errProviderTestInternal)
+	}
 
-		// This call to KeyMaterial() should return the key material with both
-		// the local certs and the root certs.
-		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-		gotKM, err := dist.KeyMaterial(ctx)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		if !reflect.DeepEqual(gotKM, &wantKM1) {
-			errCh <- fmt.Errorf("provider.KeyMaterial() = %+v, want %+v", gotKM, wantKM1)
-		}
-		proceedCh <- struct{}{}
-
-		// This call to KeyMaterial() should eventually return key material with
-		// only the local certs.
-		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-		for {
-			gotKM, err := dist.KeyMaterial(ctx)
-			if err != nil {
-				errCh <- err
-				return
-			}
-			if reflect.DeepEqual(gotKM, &wantKM2) {
-				break
-			}
-		}
-		proceedCh <- struct{}{}
-
-		// This call to KeyMaterial() should return nil key material and a
-		// non-nil error.
-		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-		for {
-			gotKM, err := dist.KeyMaterial(ctx)
-			if gotKM == nil && err == errProviderTestInternal {
-				break
-			}
-			if err != nil {
-				// If we have gotten any error other than
-				// errProviderTestInternal, we should bail out.
-				errCh <- err
-				return
-			}
-		}
-		proceedCh <- struct{}{}
-
-		// This call to KeyMaterial() should eventually return errProviderClosed
-		// error.
-		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-		for {
-			if _, err := dist.KeyMaterial(ctx); err == errProviderClosed {
-				break
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-	}()
-
-	waitAndDo(t, proceedCh, errCh, func() {
-		dist.Set(&wantKM1, nil)
-	})
-
-	waitAndDo(t, proceedCh, errCh, func() {
-		dist.Set(&wantKM2, nil)
-	})
-
-	waitAndDo(t, proceedCh, errCh, func() {
-		dist.Set(&wantKM2, errProviderTestInternal)
-	})
-
-	waitAndDo(t, proceedCh, errCh, func() {
-		dist.Stop()
-	})
-
+	// Stop the distributor and KeyMaterial() should return errProviderClosed.
+	dist.Stop()
+	if km, err := dist.KeyMaterial(ctx); !errors.Is(err, errProviderClosed) {
+		t.Fatalf("KeyMaterial() = {%v, %v}, want {nil, %v}", km, err, errProviderClosed)
+	}
 }
 
-func waitAndDo(t *testing.T, proceedCh chan struct{}, errCh chan error, do func()) {
-	t.Helper()
+// TestDistributorConcurrency invokes methods on the distributor in parallel. It
+// exercises that the scenario where a distributor's KeyMaterial() method is
+// blocked waiting for keyMaterial, while the Set() method is called from
+// another goroutine. It verifies that the KeyMaterial() method eventually
+// returns with expected keyMaterial.
+func (s) TestDistributorConcurrency(t *testing.T) {
+	dist := NewDistributor()
 
-	timer := time.NewTimer(defaultTestTimeout)
-	select {
-	case <-timer.C:
-		t.Fatalf("test timed out when waiting for event from distributor")
-	case <-proceedCh:
-		do()
-	case err := <-errCh:
+	// Read cert/key files from testdata.
+	km := loadKeyMaterials(t, "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Push key material into the distributor from a goroutine and read from
+	// here to verify that the distributor returns the expected keyMaterial.
+	go func() {
+		// Add a small sleep here to make sure that the call to KeyMaterial()
+		// happens before the call to Set(), thereby the former is blocked till
+		// the latter happens.
+		time.Sleep(100 * time.Microsecond)
+		dist.Set(km, nil)
+	}()
+	if err := readAndVerifyKeyMaterial(ctx, dist, km); err != nil {
 		t.Fatal(err)
 	}
 }

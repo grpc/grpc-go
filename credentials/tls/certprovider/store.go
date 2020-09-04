@@ -38,6 +38,8 @@ type storeKey struct {
 	name string
 	// configuration of the certificate provider in string form.
 	config string
+	// opts contains the certificate name and other keyMaterial options.
+	opts Options
 }
 
 // wrappedProvider wraps a provider instance with a reference count.
@@ -57,17 +59,20 @@ type store struct {
 	providers map[storeKey]*wrappedProvider
 }
 
-// GetProvider returns a provider instance corresponding to name and config.
-// name is the registered name of the provider and config is the
-// provider-specific configuration. Implementations of the Builder interface
-// should clearly document the type of configuration accepted by them.
+// GetProvider returns a provider instance from which keyMaterial can be read.
 //
-// If a provider exists for the (name+config) combination, its reference count
-// is incremented before returning. If no provider exists for the (name+config)
-// combination, a new one is created using the registered builder. If no
-// registered builder is found, or the provider configuration is rejected by it,
-// a non-nil error is returned.
-func GetProvider(name string, config interface{}) (Provider, error) {
+// name is the registered name of the provider, config is the provider-specific
+// configuration, opts contains extra information that controls the keyMaterial
+// returned by the provider.
+//
+// Implementations of the Builder interface should clearly document the type of
+// configuration accepted by them.
+//
+// If a provider exists for passed arguments, its reference count is incremented
+// before returning. If no provider exists for the passed arguments, a new one
+// is created using the registered builder. If no registered builder is found,
+// or the provider configuration is rejected by it, a non-nil error is returned.
+func GetProvider(name string, config interface{}, opts Options) (Provider, error) {
 	provStore.mu.Lock()
 	defer provStore.mu.Unlock()
 
@@ -83,13 +88,14 @@ func GetProvider(name string, config interface{}) (Provider, error) {
 	sk := storeKey{
 		name:   name,
 		config: string(stableConfig.Canonical()),
+		opts:   opts,
 	}
 	if wp, ok := provStore.providers[sk]; ok {
 		wp.refCount++
 		return wp, nil
 	}
 
-	provider := builder.Build(stableConfig)
+	provider := builder.Build(stableConfig, opts)
 	if provider == nil {
 		return nil, fmt.Errorf("certprovider.Build(%v) failed", sk)
 	}

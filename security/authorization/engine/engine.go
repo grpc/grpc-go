@@ -22,10 +22,10 @@ import (
 	"strconv"
 
 	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
-	cel "github.com/google/cel-go/cel"
+	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
-	types "github.com/google/cel-go/common/types"
-	interpreter "github.com/google/cel-go/interpreter"
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/interpreter"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
@@ -33,7 +33,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var logger = grpclog.Component("channelz")
+var logger = grpclog.Component("authorization")
 
 var stringAttributeMap = map[string]func(*AuthorizationArgs) (string, error){
 	"request.url_path":                    (*AuthorizationArgs).getRequestURLPath,
@@ -324,6 +324,7 @@ func NewAuthorizationEngine(allow, deny *pb.RBAC) (*AuthorizationEngine, error) 
 			decls.NewVar("destination.address", decls.String),
 			decls.NewVar("destination.port", decls.Int),
 			decls.NewVar("connection.uri_san_peer_certificate", decls.String),
+			decls.NewVar("source.principal", decls.String),
 		),
 	)
 	if err != nil {

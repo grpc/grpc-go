@@ -23,11 +23,13 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpclog"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/version"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -38,6 +40,15 @@ import (
 func init() {
 	xdsclient.RegisterAPIClientBuilder(clientBuilder{})
 }
+
+var (
+	resourceTypeToURL = map[xdsclient.ResourceType]string{
+		xdsclient.ListenerResource:    version.V2ListenerURL,
+		xdsclient.RouteConfigResource: version.V2RouteConfigURL,
+		xdsclient.ClusterResource:     version.V2ClusterURL,
+		xdsclient.EndpointsResource:   version.V2EndpointsURL,
+	}
+)
 
 type clientBuilder struct{}
 
@@ -58,6 +69,7 @@ func newClient(cc *grpc.ClientConn, opts xdsclient.BuildOptions) (xdsclient.APIC
 		cc:        cc,
 		parent:    opts.Parent,
 		nodeProto: nodeProto,
+		loadStore: opts.LoadStore,
 		logger:    opts.Logger,
 	}
 	v3c.ctx, v3c.cancelCtx = context.WithCancel(context.Background())
@@ -76,6 +88,7 @@ type client struct {
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	parent    xdsclient.UpdateHandler
+	loadStore *load.Store
 	logger    *grpclog.PrefixLogger
 
 	// ClientConn to the xDS gRPC server. Owned by the parent xdsClient.
@@ -90,33 +103,35 @@ type client struct {
 	// processing needs this to do the host matching.
 	ldsResourceName string
 	ldsWatchCount   int
+
+	lastLoadReportAt time.Time
 }
 
 // AddWatch overrides the transport helper's AddWatch to save the LDS
-// resource_name. This is required when handling an RDS response to perform hot
+// resource_name. This is required when handling an RDS response to perform host
 // matching.
-func (v3c *client) AddWatch(resourceType, resourceName string) {
+func (v3c *client) AddWatch(rType xdsclient.ResourceType, rName string) {
 	v3c.mu.Lock()
 	// Special handling for LDS, because RDS needs the LDS resource_name for
 	// response host matching.
-	if resourceType == version.V2ListenerURL || resourceType == version.V3ListenerURL {
+	if rType == xdsclient.ListenerResource {
 		// Set hostname to the first LDS resource_name, and reset it when the
 		// last LDS watch is removed. The upper level Client isn't expected to
 		// watchLDS more than once.
 		v3c.ldsWatchCount++
 		if v3c.ldsWatchCount == 1 {
-			v3c.ldsResourceName = resourceName
+			v3c.ldsResourceName = rName
 		}
 	}
 	v3c.mu.Unlock()
-	v3c.TransportHelper.AddWatch(resourceType, resourceName)
+	v3c.TransportHelper.AddWatch(rType, rName)
 }
 
-func (v3c *client) RemoveWatch(resourceType, resourceName string) {
+func (v3c *client) RemoveWatch(rType xdsclient.ResourceType, rName string) {
 	v3c.mu.Lock()
 	// Special handling for LDS, because RDS needs the LDS resource_name for
 	// response host matching.
-	if resourceType == version.V2ListenerURL || resourceType == version.V3ListenerURL {
+	if rType == xdsclient.ListenerResource {
 		// Set hostname to the first LDS resource_name, and reset it when the
 		// last LDS watch is removed. The upper level Client isn't expected to
 		// watchLDS more than once.
@@ -126,30 +141,29 @@ func (v3c *client) RemoveWatch(resourceType, resourceName string) {
 		}
 	}
 	v3c.mu.Unlock()
-	v3c.TransportHelper.RemoveWatch(resourceType, resourceName)
+	v3c.TransportHelper.RemoveWatch(rType, rName)
 }
 
 func (v3c *client) NewStream(ctx context.Context) (grpc.ClientStream, error) {
 	return v3adsgrpc.NewAggregatedDiscoveryServiceClient(v3c.cc).StreamAggregatedResources(v3c.ctx, grpc.WaitForReady(true))
 }
 
-// sendRequest sends a request for provided typeURL and resource on the provided
-// stream.
+// sendRequest sends out a DiscoveryRequest for the given resourceNames, of type
+// rType, on the provided stream.
 //
 // version is the ack version to be sent with the request
-// - If this is the new request (not an ack/nack), version will be an empty
-// string
-// - If this is an ack, version will be the version from the response
+// - If this is the new request (not an ack/nack), version will be empty.
+// - If this is an ack, version will be the version from the response.
 // - If this is a nack, version will be the previous acked version (from
-// versionMap). If there was no ack before, it will be an empty string
-func (v3c *client) SendRequest(s grpc.ClientStream, resourceNames []string, typeURL, version, nonce string) error {
+//   versionMap). If there was no ack before, it will be empty.
+func (v3c *client) SendRequest(s grpc.ClientStream, resourceNames []string, rType xdsclient.ResourceType, version, nonce string) error {
 	stream, ok := s.(adsStream)
 	if !ok {
 		return fmt.Errorf("xds: Attempt to send request on unsupported stream type: %T", s)
 	}
 	req := &v3discoverypb.DiscoveryRequest{
 		Node:          v3c.nodeProto,
-		TypeUrl:       typeURL,
+		TypeUrl:       resourceTypeToURL[rType],
 		ResourceNames: resourceNames,
 		VersionInfo:   version,
 		ResponseNonce: nonce,
@@ -180,10 +194,11 @@ func (v3c *client) RecvResponse(s grpc.ClientStream) (proto.Message, error) {
 	return resp, nil
 }
 
-func (v3c *client) HandleResponse(r proto.Message) (string, string, string, error) {
+func (v3c *client) HandleResponse(r proto.Message) (xdsclient.ResourceType, string, string, error) {
+	rType := xdsclient.UnknownResource
 	resp, ok := r.(*v3discoverypb.DiscoveryResponse)
 	if !ok {
-		return "", "", "", fmt.Errorf("xds: unsupported message type: %T", resp)
+		return rType, "", "", fmt.Errorf("xds: unsupported message type: %T", resp)
 	}
 
 	// Note that the xDS transport protocol is versioned independently of
@@ -191,21 +206,26 @@ func (v3c *client) HandleResponse(r proto.Message) (string, string, string, erro
 	// of resource types using new versions of the transport protocol, or
 	// vice-versa. Hence we need to handle v3 type_urls as well here.
 	var err error
-	switch resp.GetTypeUrl() {
-	case version.V2ListenerURL, version.V3ListenerURL:
+	url := resp.GetTypeUrl()
+	switch {
+	case xdsclient.IsListenerResource(url):
 		err = v3c.handleLDSResponse(resp)
-	case version.V2RouteConfigURL, version.V3RouteConfigURL:
+		rType = xdsclient.ListenerResource
+	case xdsclient.IsRouteConfigResource(url):
 		err = v3c.handleRDSResponse(resp)
-	case version.V2ClusterURL, version.V3ClusterURL:
+		rType = xdsclient.RouteConfigResource
+	case xdsclient.IsClusterResource(url):
 		err = v3c.handleCDSResponse(resp)
-	case version.V2EndpointsURL, version.V3EndpointsURL:
+		rType = xdsclient.ClusterResource
+	case xdsclient.IsEndpointsResource(url):
 		err = v3c.handleEDSResponse(resp)
+		rType = xdsclient.EndpointsResource
 	default:
-		return "", "", "", xdsclient.ErrResourceTypeUnsupported{
+		return rType, "", "", xdsclient.ErrResourceTypeUnsupported{
 			ErrStr: fmt.Sprintf("Resource type %v unknown in response from server", resp.GetTypeUrl()),
 		}
 	}
-	return resp.GetTypeUrl(), resp.GetVersionInfo(), resp.GetNonce(), err
+	return rType, resp.GetVersionInfo(), resp.GetNonce(), err
 }
 
 // handleLDSResponse processes an LDS response received from the xDS server. On

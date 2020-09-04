@@ -142,7 +142,7 @@ func (s) TestDecodeEncodeGrpcMessage(t *testing.T) {
 	}
 }
 
-const binaryValue = string(128)
+const binaryValue = "\u0080"
 
 func (s) TestEncodeMetadataHeader(t *testing.T) {
 	for _, test := range []struct {

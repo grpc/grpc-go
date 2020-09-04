@@ -16,7 +16,7 @@
  *
  */
 
-// Package certprovider defines APIs for certificate providers in gRPC.
+// Package certprovider defines APIs for Certificate Providers in gRPC.
 //
 // Experimental
 //
@@ -36,18 +36,18 @@ var (
 	// closed.
 	errProviderClosed = errors.New("provider instance is closed")
 
-	// m is a map from name to provider builder.
+	// m is a map from name to Provider builder.
 	m = make(map[string]Builder)
 )
 
-// Register registers the provider builder, whose name as returned by its Name()
+// Register registers the Provider builder, whose name as returned by its Name()
 // method will be used as the name registered with this builder. Registered
 // Builders are used by the Store to create Providers.
 func Register(b Builder) {
 	m[b.Name()] = b
 }
 
-// getBuilder returns the provider builder registered with the given name.
+// getBuilder returns the Provider builder registered with the given name.
 // If no builder is registered with the provided name, nil will be returned.
 func getBuilder(name string) Builder {
 	if b, ok := m[name]; ok {
@@ -58,8 +58,9 @@ func getBuilder(name string) Builder {
 
 // Builder creates a Provider.
 type Builder interface {
-	// Build creates a new provider with the provided config.
-	Build(StableConfig) Provider
+	// Build creates a new Provider and initializes it with the given config and
+	// options combination.
+	Build(StableConfig, Options) Provider
 
 	// ParseConfig converts config input in a format specific to individual
 	// implementations and returns an implementation of the StableConfig
@@ -72,9 +73,9 @@ type Builder interface {
 	Name() string
 }
 
-// StableConfig wraps the method to return a stable provider configuration.
+// StableConfig wraps the method to return a stable Provider configuration.
 type StableConfig interface {
-	// Canonical returns provider config as an arbitrary byte slice.
+	// Canonical returns Provider config as an arbitrary byte slice.
 	// Equivalent configurations must return the same output.
 	Canonical() []byte
 }
@@ -87,18 +88,30 @@ type StableConfig interface {
 // the latest secrets, and free to share any state between different
 // instantiations as they deem fit.
 type Provider interface {
-	// KeyMaterial returns the key material sourced by the provider.
+	// KeyMaterial returns the key material sourced by the Provider.
 	// Callers are expected to use the returned value as read-only.
 	KeyMaterial(ctx context.Context) (*KeyMaterial, error)
 
-	// Close cleans up resources allocated by the provider.
+	// Close cleans up resources allocated by the Provider.
 	Close()
 }
 
-// KeyMaterial wraps the certificates and keys returned by a provider instance.
+// KeyMaterial wraps the certificates and keys returned by a Provider instance.
 type KeyMaterial struct {
 	// Certs contains a slice of cert/key pairs used to prove local identity.
 	Certs []tls.Certificate
 	// Roots contains the set of trusted roots to validate the peer's identity.
 	Roots *x509.CertPool
+}
+
+// Options contains configuration knobs passed to a Provider at creation time.
+type Options struct {
+	// CertName holds the certificate name, whose key material is of interest to
+	// the caller.
+	CertName string
+	// WantRoot indicates if the caller is interested in the root certificate.
+	WantRoot bool
+	// WantIdentity indicates if the caller is interested in the identity
+	// certificate.
+	WantIdentity bool
 }

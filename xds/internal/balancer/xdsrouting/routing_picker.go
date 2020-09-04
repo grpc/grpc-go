@@ -22,7 +22,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal"
 )
 
 // pickerGroup contains a list of route matchers and their corresponding
@@ -33,10 +32,10 @@ type pickerGroup struct {
 	pickers map[string]balancer.Picker
 }
 
-func newPickerGroup(routes []route, idToPickerState map[internal.LocalityID]*subBalancerState) *pickerGroup {
+func newPickerGroup(routes []route, idToPickerState map[string]*subBalancerState) *pickerGroup {
 	pickers := make(map[string]balancer.Picker)
 	for id, st := range idToPickerState {
-		pickers[getNameFromLocality(id)] = st.state.Picker
+		pickers[id] = st.state.Picker
 	}
 	return &pickerGroup{
 		routes:  routes,

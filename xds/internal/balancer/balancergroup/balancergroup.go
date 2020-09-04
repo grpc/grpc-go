@@ -24,14 +24,20 @@ import (
 	"time"
 
 	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/cache"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/balancer/lrs"
 )
+
+// loadReporter wraps the methods from the loadStore that are used here.
+type loadReporter interface {
+	CallStarted(locality string)
+	CallFinished(locality string, err error)
+	CallServerLoad(locality, name string, val float64)
+}
 
 // subBalancerWrapper is used to keep the configurations that will be used to start
 // the underlying balancer. It can be called to start/stop the underlying
@@ -51,7 +57,7 @@ type subBalancerWrapper struct {
 	// of the actions are forwarded to the parent ClientConn with no change.
 	// Some are forward to balancer group with the sub-balancer ID.
 	balancer.ClientConn
-	id    internal.LocalityID
+	id    string
 	group *BalancerGroup
 
 	mu    sync.Mutex
@@ -180,7 +186,7 @@ func (sbc *subBalancerWrapper) stopBalancer() {
 type BalancerGroup struct {
 	cc        balancer.ClientConn
 	logger    *grpclog.PrefixLogger
-	loadStore lrs.Store
+	loadStore loadReporter
 
 	// stateAggregator is where the state/picker updates will be sent to. It's
 	// provided by the parent balancer, to build a picker with all the
@@ -195,7 +201,7 @@ type BalancerGroup struct {
 	// to sub-balancers after they are closed.
 	outgoingMu         sync.Mutex
 	outgoingStarted    bool
-	idToBalancerConfig map[internal.LocalityID]*subBalancerWrapper
+	idToBalancerConfig map[string]*subBalancerWrapper
 	// Cache for sub-balancers when they are removed.
 	balancerCache *cache.TimeoutCache
 
@@ -235,7 +241,7 @@ var DefaultSubBalancerCloseTimeout = 15 * time.Minute
 
 // New creates a new BalancerGroup. Note that the BalancerGroup
 // needs to be started to work.
-func New(cc balancer.ClientConn, stateAggregator BalancerStateAggregator, loadStore lrs.Store, logger *grpclog.PrefixLogger) *BalancerGroup {
+func New(cc balancer.ClientConn, stateAggregator BalancerStateAggregator, loadStore loadReporter, logger *grpclog.PrefixLogger) *BalancerGroup {
 	return &BalancerGroup{
 		cc:        cc,
 		logger:    logger,
@@ -243,7 +249,7 @@ func New(cc balancer.ClientConn, stateAggregator BalancerStateAggregator, loadSt
 
 		stateAggregator: stateAggregator,
 
-		idToBalancerConfig: make(map[internal.LocalityID]*subBalancerWrapper),
+		idToBalancerConfig: make(map[string]*subBalancerWrapper),
 		balancerCache:      cache.NewTimeoutCache(DefaultSubBalancerCloseTimeout),
 		scToSubBalancer:    make(map[balancer.SubConn]*subBalancerWrapper),
 	}
@@ -274,7 +280,7 @@ func (bg *BalancerGroup) Start() {
 }
 
 // Add adds a balancer built by builder to the group, with given id.
-func (bg *BalancerGroup) Add(id internal.LocalityID, builder balancer.Builder) {
+func (bg *BalancerGroup) Add(id string, builder balancer.Builder) {
 	// Store data in static map, and then check to see if bg is started.
 	bg.outgoingMu.Lock()
 	var sbc *subBalancerWrapper
@@ -325,7 +331,7 @@ func (bg *BalancerGroup) Add(id internal.LocalityID, builder balancer.Builder) {
 // But doesn't close the balancer. The balancer is kept in a cache, and will be
 // closed after timeout. Cleanup work (closing sub-balancer and removing
 // subconns) will be done after timeout.
-func (bg *BalancerGroup) Remove(id internal.LocalityID) {
+func (bg *BalancerGroup) Remove(id string) {
 	bg.outgoingMu.Lock()
 	if sbToRemove, ok := bg.idToBalancerConfig[id]; ok {
 		if bg.outgoingStarted {
@@ -393,7 +399,7 @@ func (bg *BalancerGroup) UpdateSubConnState(sc balancer.SubConn, state balancer.
 
 // UpdateClientConnState handles ClientState (including balancer config and
 // addresses) from resolver. It finds the balancer and forwards the update.
-func (bg *BalancerGroup) UpdateClientConnState(id internal.LocalityID, s balancer.ClientConnState) error {
+func (bg *BalancerGroup) UpdateClientConnState(id string, s balancer.ClientConnState) error {
 	bg.outgoingMu.Lock()
 	defer bg.outgoingMu.Unlock()
 	if config, ok := bg.idToBalancerConfig[id]; ok {
@@ -442,7 +448,7 @@ func (bg *BalancerGroup) newSubConn(config *subBalancerWrapper, addrs []resolver
 // updateBalancerState: forward the new state to balancer state aggregator. The
 // aggregator will create an aggregated picker and an aggregated connectivity
 // state, then forward to ClientConn.
-func (bg *BalancerGroup) updateBalancerState(id internal.LocalityID, state balancer.State) {
+func (bg *BalancerGroup) updateBalancerState(id string, state balancer.State) {
 	bg.logger.Infof("Balancer state update from locality %v, new state: %+v", id, state)
 	if bg.loadStore != nil {
 		// Only wrap the picker to do load reporting if loadStore was set.
@@ -493,38 +499,43 @@ const (
 type loadReportPicker struct {
 	p balancer.Picker
 
-	id        internal.LocalityID
-	loadStore lrs.Store
+	locality  string
+	loadStore loadReporter
 }
 
-func newLoadReportPicker(p balancer.Picker, id internal.LocalityID, loadStore lrs.Store) *loadReportPicker {
+func newLoadReportPicker(p balancer.Picker, id string, loadStore loadReporter) *loadReportPicker {
 	return &loadReportPicker{
 		p:         p,
-		id:        id,
+		locality:  id,
 		loadStore: loadStore,
 	}
 }
 
 func (lrp *loadReportPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	res, err := lrp.p.Pick(info)
-	if lrp.loadStore != nil && err == nil {
-		lrp.loadStore.CallStarted(lrp.id)
-		td := res.Done
-		res.Done = func(info balancer.DoneInfo) {
-			lrp.loadStore.CallFinished(lrp.id, info.Err)
-			if load, ok := info.ServerLoad.(*orcapb.OrcaLoadReport); ok {
-				lrp.loadStore.CallServerLoad(lrp.id, serverLoadCPUName, load.CpuUtilization)
-				lrp.loadStore.CallServerLoad(lrp.id, serverLoadMemoryName, load.MemUtilization)
-				for n, d := range load.RequestCost {
-					lrp.loadStore.CallServerLoad(lrp.id, n, d)
-				}
-				for n, d := range load.Utilization {
-					lrp.loadStore.CallServerLoad(lrp.id, n, d)
-				}
-			}
-			if td != nil {
-				td(info)
-			}
+	if err != nil {
+		return res, err
+	}
+
+	lrp.loadStore.CallStarted(lrp.locality)
+	oldDone := res.Done
+	res.Done = func(info balancer.DoneInfo) {
+		if oldDone != nil {
+			oldDone(info)
+		}
+		lrp.loadStore.CallFinished(lrp.locality, info.Err)
+
+		load, ok := info.ServerLoad.(*orcapb.OrcaLoadReport)
+		if !ok {
+			return
+		}
+		lrp.loadStore.CallServerLoad(lrp.locality, serverLoadCPUName, load.CpuUtilization)
+		lrp.loadStore.CallServerLoad(lrp.locality, serverLoadMemoryName, load.MemUtilization)
+		for n, d := range load.RequestCost {
+			lrp.loadStore.CallServerLoad(lrp.locality, n, d)
+		}
+		for n, d := range load.Utilization {
+			lrp.loadStore.CallServerLoad(lrp.locality, n, d)
 		}
 	}
 	return res, err

@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/internal/hierarchy"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 )
 
@@ -80,16 +79,6 @@ type routingBalancer struct {
 	routes  []route
 }
 
-// TODO: remove this and use strings directly as keys for balancer group.
-func makeLocalityFromName(name string) internal.LocalityID {
-	return internal.LocalityID{Region: name}
-}
-
-// TODO: remove this and use strings directly as keys for balancer group.
-func getNameFromLocality(id internal.LocalityID) string {
-	return id.Region
-}
-
 func (rb *routingBalancer) updateActions(s balancer.ClientConnState, newConfig *lbConfig) (needRebuild bool) {
 	addressesSplit := hierarchy.Group(s.ResolverState.Addresses)
 	var rebuildStateAndPicker bool
@@ -97,9 +86,8 @@ func (rb *routingBalancer) updateActions(s balancer.ClientConnState, newConfig *
 	// Remove sub-pickers and sub-balancers that are not in the new action list.
 	for name := range rb.actions {
 		if _, ok := newConfig.actions[name]; !ok {
-			l := makeLocalityFromName(name)
-			rb.stateAggregator.remove(l)
-			rb.bg.Remove(l)
+			rb.stateAggregator.remove(name)
+			rb.bg.Remove(name)
 			// Trigger a state/picker update, because we don't want `ClientConn`
 			// to pick this sub-balancer anymore.
 			rebuildStateAndPicker = true
@@ -110,12 +98,11 @@ func (rb *routingBalancer) updateActions(s balancer.ClientConnState, newConfig *
 	// - add to balancer group if it's new,
 	// - forward the address/balancer config update.
 	for name, newT := range newConfig.actions {
-		l := makeLocalityFromName(name)
 		if _, ok := rb.actions[name]; !ok {
 			// If this is a new sub-balancer, add weights to the picker map.
-			rb.stateAggregator.add(l)
+			rb.stateAggregator.add(name)
 			// Then add to the balancer group.
-			rb.bg.Add(l, balancer.Get(newT.ChildPolicy.Name))
+			rb.bg.Add(name, balancer.Get(newT.ChildPolicy.Name))
 			// Not trigger a state/picker update. Wait for the new sub-balancer
 			// to send its updates.
 		}
@@ -125,7 +112,7 @@ func (rb *routingBalancer) updateActions(s balancer.ClientConnState, newConfig *
 		// - Balancer config comes from the targets map.
 		//
 		// TODO: handle error? How to aggregate errors and return?
-		_ = rb.bg.UpdateClientConnState(l, balancer.ClientConnState{
+		_ = rb.bg.UpdateClientConnState(name, balancer.ClientConnState{
 			ResolverState: resolver.State{
 				Addresses:     addressesSplit[name],
 				ServiceConfig: s.ResolverState.ServiceConfig,

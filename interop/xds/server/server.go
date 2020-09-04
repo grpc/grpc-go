@@ -49,16 +49,12 @@ func getHostname() string {
 	return hostname
 }
 
-type server struct {
-	testpb.UnimplementedTestServiceServer
-}
-
-func (s *server) EmptyCall(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+func emptyCall(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 	grpc.SetHeader(ctx, metadata.Pairs("hostname", hostname))
 	return &testpb.Empty{}, nil
 }
 
-func (s *server) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+func unaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	grpc.SetHeader(ctx, metadata.Pairs("hostname", hostname))
 	return &testpb.SimpleResponse{ServerId: *serverID, Hostname: hostname}, nil
 }
@@ -71,6 +67,6 @@ func main() {
 		logger.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	testpb.RegisterTestServiceServer(s, &server{})
+	testpb.RegisterTestServiceService(s, &testpb.TestServiceService{EmptyCall: emptyCall, UnaryCall: unaryCall})
 	s.Serve(lis)
 }
