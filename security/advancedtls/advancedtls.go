@@ -447,8 +447,8 @@ func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 //   2. will ignore basic certificate check when setting InsecureSkipVerify
 //   to true.
 func buildVerifyFunc(c *advancedTLSCreds,
-	serverName string,
-	rawConn net.Conn) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+		serverName string,
+		rawConn net.Conn) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		chains := verifiedChains
 		var leafCert *x509.Certificate
