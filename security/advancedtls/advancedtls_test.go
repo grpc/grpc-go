@@ -413,11 +413,13 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			}
 			// Start a server using ServerOptions in another goroutine.
 			serverOptions := &ServerOptions{
-				Certificates:    test.serverCert,
-				GetCertificates: test.serverGetCert,
+				IdentityCertificateOptions: IdentityCertificateOptions{
+					Certificates:                     test.serverCert,
+					GetIdentityCertificatesForServer: test.serverGetCert,
+				},
 				RootCertificateOptions: RootCertificateOptions{
-					RootCACerts: test.serverRoot,
-					GetRootCAs:  test.serverGetRoot,
+					RootCACerts:         test.serverRoot,
+					GetRootCertificates: test.serverGetRoot,
 				},
 				RequireClientCert: test.serverMutualTLS,
 				VerifyPeer:        test.serverVerifyFunc,
@@ -452,12 +454,14 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			}
 			defer conn.Close()
 			clientOptions := &ClientOptions{
-				Certificates:         test.clientCert,
-				GetClientCertificate: test.clientGetCert,
-				VerifyPeer:           test.clientVerifyFunc,
+				IdentityCertificateOptions: IdentityCertificateOptions{
+					Certificates:                     test.clientCert,
+					GetIdentityCertificatesForClient: test.clientGetCert,
+				},
+				VerifyPeer: test.clientVerifyFunc,
 				RootCertificateOptions: RootCertificateOptions{
-					RootCACerts: test.clientRoot,
-					GetRootCAs:  test.clientGetRoot,
+					RootCACerts:         test.clientRoot,
+					GetRootCertificates: test.clientGetRoot,
 				},
 				VType: test.clientVType,
 			}
@@ -660,7 +664,9 @@ func (s) TestOptionsConfig(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			serverOptions := &ServerOptions{
-				Certificates:      test.serverCert,
+				IdentityCertificateOptions: IdentityCertificateOptions{
+					Certificates: test.serverCert,
+				},
 				RequireClientCert: test.serverMutualTLS,
 				VType:             test.serverVType,
 			}
@@ -670,7 +676,7 @@ func (s) TestOptionsConfig(t *testing.T) {
 			}
 			// Verify that the system-provided certificates would be used
 			// when no verification method was set in serverOptions.
-			if serverOptions.RootCACerts == nil && serverOptions.GetRootCAs == nil &&
+			if serverOptions.RootCACerts == nil && serverOptions.GetRootCertificates == nil &&
 				serverOptions.RequireClientCert && serverConfig.ClientCAs == nil {
 				t.Fatalf("Failed to assign system-provided certificates on the server side.")
 			}
@@ -683,7 +689,7 @@ func (s) TestOptionsConfig(t *testing.T) {
 			}
 			// Verify that the system-provided certificates would be used
 			// when no verification method was set in clientOptions.
-			if clientOptions.RootCACerts == nil && clientOptions.GetRootCAs == nil &&
+			if clientOptions.RootCACerts == nil && clientOptions.GetRootCertificates == nil &&
 				clientConfig.RootCAs == nil {
 				t.Fatalf("Failed to assign system-provided certificates on the client side.")
 			}
@@ -734,8 +740,10 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			serverOptions := &ServerOptions{
-				GetCertificates: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
-					return []*tls.Certificate{&serverCert1, &serverCert2, &serverCert3}, nil
+				IdentityCertificateOptions: IdentityCertificateOptions{
+					GetIdentityCertificatesForServer: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+						return []*tls.Certificate{&serverCert1, &serverCert2, &serverCert3}, nil
+					},
 				},
 			}
 			serverConfig, err := serverOptions.config()
