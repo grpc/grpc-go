@@ -83,19 +83,21 @@ type GetRootCAsResults struct {
 
 // RootCertificateOptions contains options to obtain root trust certificates
 // for both the client and the server.
-// At most one of the options needs to be set. If none of them are set, we
+// At most one of the options could be set. If none of them are set, we
 // use the system default trust certificates.
 type RootCertificateOptions struct {
-	// If GetRootCAs is set, it will be used every time when verifying
+	// If RootCACerts is set, it will be used every time when verifying
 	// the peer certificates, without performing root certificate reloading.
 	RootCACerts *x509.CertPool
-	// If GetRootCAs is set, it will be invoked per new connection.
+	// If GetRootCertificates is set, it will be invoked to obtain root certs in
+	// every new connection.
 	GetRootCertificates func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-	// If RootProvider is set, we will use the reloading logic in the provider
-	// implementation to reload the certificates.
+	// If RootProvider is set, we will use the root certs from the Provider's
+	// KeyMaterial() call in every new connection.
 	RootProvider certprovider.Provider
 }
 
+// nonNilFieldCount returns the number of set fields in RootCertificateOptions.
 func (o RootCertificateOptions) nonNilFieldCount() int {
 	cnt := 0
 	rv := reflect.ValueOf(o)
@@ -109,24 +111,25 @@ func (o RootCertificateOptions) nonNilFieldCount() int {
 
 // IdentityCertificateOptions contains options to obtain identity certificates
 // for both the client and the server.
-// At most one of the options needs to be set.
+// At most one of the options could be set.
 type IdentityCertificateOptions struct {
 	// If Certificates is set, it will be used every time when needed to present
 	//identity certificates, without performing identity certificate reloading.
 	Certificates []tls.Certificate
-	// If GetIdentityCertificatesForClient is set, it will be invoked per new
-	// connection.
-	// This field can only be set on client side.
+	// If GetIdentityCertificatesForClient is set, it will be invoked to obtain
+	// identity certs in every new connection.
+	// This field MUST be set on client side.
 	GetIdentityCertificatesForClient func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
-	// If GetIdentityCertificatesForServer is set, it will be invoked per new
-	// connection.
-	// This field can only be set on server side.
+	// If GetIdentityCertificatesForServer is set, it will be invoked to obtain
+	// identity certs in every new connection.
+	// This field MUST be set on server side.
 	GetIdentityCertificatesForServer func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
-	// If IdentityProvider is set, we will use the reloading logic in the provider
-	// implementation to reload the certificates.
+	// If IdentityProvider is set, we will use the identity certs from the
+	// Provider's KeyMaterial() call in every new connection.
 	IdentityProvider certprovider.Provider
 }
 
+// nonNilFieldCount returns the number of set fields in IdentityCertificateOptions.
 func (o IdentityCertificateOptions) nonNilFieldCount() int {
 	cnt := 0
 	rv := reflect.ValueOf(o)
@@ -171,7 +174,8 @@ type ClientOptions struct {
 	// it will override the virtual host name of authority (e.g. :authority
 	// header field) in requests.
 	ServerNameOverride string
-	// RootCertificateOptions is REQUIRED to be correctly set on client side.
+	// RootCertificateOptions is OPTIONAL on client side. If not set, we will
+	// try to use the default trust certificates in users' OS system.
 	RootCertificateOptions
 	// VType is the verification type on the client side.
 	VType VerificationType
@@ -334,10 +338,6 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 			km, err := o.IdentityProvider.KeyMaterial(ctx)
 			if err != nil {
 				return nil, err
-			}
-			if len(km.Certs) == 0 {
-				return nil, fmt.Errorf(
-					"no identity cert on the client side in IdentityProvider")
 			}
 			var certChains []*tls.Certificate
 			for i := 0; i < len(km.Certs); i++ {

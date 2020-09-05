@@ -48,10 +48,14 @@ func Test(t *testing.T) {
 }
 
 type fakeRootProvider struct {
-	isClient bool
+	isClient  bool
+	wantError bool
 }
 
 func (fake fakeRootProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
+	if fake.wantError {
+		return nil, fmt.Errorf("bad fakeRootProvider")
+	}
 	cs := &certStore{}
 	err := cs.loadCerts()
 	if err != nil {
@@ -59,28 +63,37 @@ func (fake fakeRootProvider) KeyMaterial(ctx context.Context) (*certprovider.Key
 	}
 	if fake.isClient {
 		return &certprovider.KeyMaterial{Roots: cs.clientTrust1}, nil
-	} else {
-		return &certprovider.KeyMaterial{Roots: cs.serverTrust1}, nil
 	}
+	return &certprovider.KeyMaterial{Roots: cs.serverTrust1}, nil
 }
 
 func (fake fakeRootProvider) Close() {}
 
 type fakeIdentityProvider struct {
-	isClient bool
+	isClient      bool
+	wantMultiCert bool
+	wantError     bool
 }
 
 func (fake fakeIdentityProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
 	cs := &certStore{}
 	err := cs.loadCerts()
+	if fake.wantError {
+		return nil, fmt.Errorf("bad fakeIdentityProvider")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to load certs: %v", err)
 	}
 	if fake.isClient {
+		if fake.wantMultiCert {
+			return &certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer1, cs.clientPeer2}}, nil
+		}
 		return &certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer1}}, nil
-	} else {
-		return &certprovider.KeyMaterial{Certs: []tls.Certificate{cs.serverPeer1}}, nil
 	}
+	if fake.wantMultiCert {
+		return &certprovider.KeyMaterial{Certs: []tls.Certificate{cs.serverPeer1, cs.serverPeer2}}, nil
+	}
+	return &certprovider.KeyMaterial{Certs: []tls.Certificate{cs.serverPeer1}}, nil
 }
 
 func (fake fakeIdentityProvider) Close() {}
@@ -566,17 +579,77 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverVType:                CertVerification,
 			serverExpectError:          true,
 		},
-		// Client: set clientIdentityProvider and clientRootProvider
+		// Client: set a clientIdentityProvider which will get multiple cert chains
 		// Server: set serverIdentityProvider and serverRootProvider with mutual TLS on
-		// Expected Behavior: success
+		// Expected Behavior: server side failure due to multiple cert chains in
+		// clientIdentityProvider
 		{
-			desc:                   "Client sets root and identity provider with verifyFuncGood; Server sets root and identity provider; mutualTLS",
+			desc:                   "Client sets multiple certs in clientIdentityProvider; Server sets root and identity provider; mutualTLS",
+			clientIdentityProvider: fakeIdentityProvider{isClient: true, wantMultiCert: true},
+			clientRootProvider:     fakeRootProvider{isClient: true},
+			clientVerifyFunc:       clientVerifyFuncGood,
+			clientVType:            CertVerification,
+			serverMutualTLS:        true,
+			serverIdentityProvider: fakeIdentityProvider{isClient: false},
+			serverRootProvider:     fakeRootProvider{isClient: false},
+			serverVType:            CertVerification,
+			serverExpectError:      true,
+		},
+		// Client: set a bad clientIdentityProvider
+		// Server: set serverIdentityProvider and serverRootProvider with mutual TLS on
+		// Expected Behavior: server side failure due to bad clientIdentityProvider
+		{
+			desc:                   "Client sets bad clientIdentityProvider; Server sets root and identity provider; mutualTLS",
+			clientIdentityProvider: fakeIdentityProvider{isClient: true, wantError: true},
+			clientRootProvider:     fakeRootProvider{isClient: true},
+			clientVerifyFunc:       clientVerifyFuncGood,
+			clientVType:            CertVerification,
+			serverMutualTLS:        true,
+			serverIdentityProvider: fakeIdentityProvider{isClient: false},
+			serverRootProvider:     fakeRootProvider{isClient: false},
+			serverVType:            CertVerification,
+			serverExpectError:      true,
+		},
+		// Client: set clientIdentityProvider and clientRootProvider
+		// Server: set bad serverRootProvider with mutual TLS on
+		// Expected Behavior: server side failure due to bad serverRootProvider
+		{
+			desc:                   "Client sets root and identity provider; Server sets bad root provider; mutualTLS",
 			clientIdentityProvider: fakeIdentityProvider{isClient: true},
 			clientRootProvider:     fakeRootProvider{isClient: true},
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVType:            CertVerification,
 			serverMutualTLS:        true,
 			serverIdentityProvider: fakeIdentityProvider{isClient: false},
+			serverRootProvider:     fakeRootProvider{isClient: false, wantError: true},
+			serverVType:            CertVerification,
+			serverExpectError:      true,
+		},
+		// Client: set clientIdentityProvider and clientRootProvider
+		// Server: set serverIdentityProvider and serverRootProvider with mutual TLS on
+		// Expected Behavior: success
+		{
+			desc:                   "Client sets root and identity provider; Server sets root and identity provider; mutualTLS",
+			clientIdentityProvider: fakeIdentityProvider{isClient: true},
+			clientRootProvider:     fakeRootProvider{isClient: true},
+			clientVerifyFunc:       clientVerifyFuncGood,
+			clientVType:            CertVerification,
+			serverMutualTLS:        true,
+			serverIdentityProvider: fakeIdentityProvider{isClient: false},
+			serverRootProvider:     fakeRootProvider{isClient: false},
+			serverVType:            CertVerification,
+		},
+		// Client: set clientIdentityProvider and clientRootProvider
+		// Server: set serverIdentityProvider getting multiple cert chains and serverRootProvider with mutual TLS on
+		// Expected Behavior: success, because server side has SNI
+		{
+			desc:                   "Client sets root and identity provider; Server sets multiple certs in serverIdentityProvider; mutualTLS",
+			clientIdentityProvider: fakeIdentityProvider{isClient: true},
+			clientRootProvider:     fakeRootProvider{isClient: true},
+			clientVerifyFunc:       clientVerifyFuncGood,
+			clientVType:            CertVerification,
+			serverMutualTLS:        true,
+			serverIdentityProvider: fakeIdentityProvider{isClient: false, wantMultiCert: true},
 			serverRootProvider:     fakeRootProvider{isClient: false},
 			serverVType:            CertVerification,
 		},
