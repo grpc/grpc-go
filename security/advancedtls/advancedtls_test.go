@@ -34,6 +34,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
@@ -44,6 +45,226 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
+}
+
+type fakeRootProvider struct {
+	isClient bool
+}
+
+func (fake fakeRootProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
+	cs := &certStore{}
+	err := cs.loadCerts()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load certs: %v", err)
+	}
+	if fake.isClient {
+		return &certprovider.KeyMaterial{Roots: cs.clientTrust1}, nil
+	} else {
+		return &certprovider.KeyMaterial{Roots: cs.serverTrust1}, nil
+	}
+}
+
+func (fake fakeRootProvider) Close() {}
+
+type fakeIdentityProvider struct {
+	isClient bool
+}
+
+func (fake fakeIdentityProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
+	cs := &certStore{}
+	err := cs.loadCerts()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load certs: %v", err)
+	}
+	if fake.isClient {
+		return &certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer1}}, nil
+	} else {
+		return &certprovider.KeyMaterial{Certs: []tls.Certificate{cs.serverPeer1}}, nil
+	}
+}
+
+func (fake fakeIdentityProvider) Close() {}
+
+func (s) TestClientOptionsConfig(t *testing.T) {
+	tests := []struct {
+		desc        string
+		clientVType VerificationType
+		IdentityCertificateOptions
+		RootCertificateOptions
+		wantError bool
+	}{
+		{
+			desc:        "Skip default verification and provide no root credentials",
+			clientVType: SkipVerification,
+			wantError:   true,
+		},
+		{
+			desc:        "More than one fields in RootCertificateOptions is specified",
+			clientVType: CertVerification,
+			RootCertificateOptions: RootCertificateOptions{
+				RootCACerts:  x509.NewCertPool(),
+				RootProvider: fakeRootProvider{},
+			},
+			wantError: true,
+		},
+		{
+			desc:        "More than one fields in IdentityCertificateOptions is specified",
+			clientVType: CertVerification,
+			IdentityCertificateOptions: IdentityCertificateOptions{
+				GetIdentityCertificatesForClient: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+					return nil, nil
+				},
+				IdentityProvider: fakeIdentityProvider{},
+			},
+			wantError: true,
+		},
+		{
+			desc: "Specify GetIdentityCertificatesForServer",
+			IdentityCertificateOptions: IdentityCertificateOptions{
+				GetIdentityCertificatesForServer: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+					return nil, nil
+				},
+			},
+			wantError: true,
+		},
+		{
+			desc:        "Use system default if no fields in RootCertificateOptions is specified",
+			clientVType: CertVerification,
+		},
+		{
+			desc:        "Good case with mutual TLS",
+			clientVType: CertVerification,
+			RootCertificateOptions: RootCertificateOptions{
+				RootProvider: fakeRootProvider{},
+			},
+			IdentityCertificateOptions: IdentityCertificateOptions{
+				IdentityProvider: fakeIdentityProvider{},
+			},
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			clientOptions := &ClientOptions{
+				VType:                      test.clientVType,
+				IdentityCertificateOptions: test.IdentityCertificateOptions,
+				RootCertificateOptions:     test.RootCertificateOptions,
+			}
+			clientConfig, err := clientOptions.config()
+			if (err != nil) != test.wantError {
+				t.Fatalf("Error mismatch in calling clientOptions.config, wantError =%v, got %v", test.wantError, err != nil)
+			}
+			if err != nil {
+				return
+			}
+			// Verify that the system-provided certificates would be used
+			// when no verification method was set in clientOptions.
+			if clientOptions.RootCACerts == nil && clientOptions.GetRootCertificates == nil && clientOptions.RootProvider == nil {
+				if clientConfig.RootCAs == nil {
+					t.Fatalf("Failed to assign system-provided certificates on the client side.")
+				}
+			}
+		})
+	}
+}
+
+func (s) TestServerOptionsConfig(t *testing.T) {
+	tests := []struct {
+		desc              string
+		requireClientCert bool
+		serverVType       VerificationType
+		IdentityCertificateOptions
+		RootCertificateOptions
+		wantError bool
+	}{
+		{
+			desc:              "Skip default verification and provide no root credentials",
+			requireClientCert: true,
+			serverVType:       SkipVerification,
+			wantError:         true,
+		},
+		{
+			desc:              "More than one fields in RootCertificateOptions is specified",
+			requireClientCert: true,
+			serverVType:       CertVerification,
+			RootCertificateOptions: RootCertificateOptions{
+				RootCACerts: x509.NewCertPool(),
+				GetRootCertificates: func(*GetRootCAsParams) (*GetRootCAsResults, error) {
+					return nil, nil
+				},
+			},
+			wantError: true,
+		},
+		{
+			desc:        "More than one fields in IdentityCertificateOptions is specified",
+			serverVType: CertVerification,
+			IdentityCertificateOptions: IdentityCertificateOptions{
+				Certificates:     []tls.Certificate{},
+				IdentityProvider: fakeIdentityProvider{},
+			},
+			wantError: true,
+		},
+		{
+			desc:        "no field in IdentityCertificateOptions is specified",
+			serverVType: CertVerification,
+			wantError:   true,
+		},
+		{
+			desc: "Specify GetIdentityCertificatesForClient",
+			IdentityCertificateOptions: IdentityCertificateOptions{
+				GetIdentityCertificatesForClient: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+					return nil, nil
+				},
+			},
+			wantError: true,
+		},
+		{
+			desc:              "Use system default if no fields in RootCertificateOptions is specified",
+			requireClientCert: true,
+			serverVType:       CertVerification,
+			IdentityCertificateOptions: IdentityCertificateOptions{
+				Certificates: []tls.Certificate{},
+			},
+		},
+		{
+			desc:              "Good case with mutual TLS",
+			requireClientCert: true,
+			serverVType:       CertVerification,
+			RootCertificateOptions: RootCertificateOptions{
+				RootProvider: fakeRootProvider{},
+			},
+			IdentityCertificateOptions: IdentityCertificateOptions{
+				GetIdentityCertificatesForServer: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+					return nil, nil
+				},
+			},
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			serverOptions := &ServerOptions{
+				VType:                      test.serverVType,
+				RequireClientCert:          test.requireClientCert,
+				IdentityCertificateOptions: test.IdentityCertificateOptions,
+				RootCertificateOptions:     test.RootCertificateOptions,
+			}
+			serverConfig, err := serverOptions.config()
+			if (err != nil) != test.wantError {
+				t.Fatalf("Error mismatch in calling serverConfig.config, wantError =%v, got %v", test.wantError, err != nil)
+			}
+			if err != nil {
+				return
+			}
+			// Verify that the system-provided certificates would be used
+			// when no verification method was set in clientOptions.
+			if serverOptions.RootCACerts == nil && serverOptions.GetRootCertificates == nil && serverOptions.RootProvider == nil {
+				if serverConfig.ClientCAs == nil {
+					t.Fatalf("Failed to assign system-provided certificates on the server side.")
+				}
+			}
+		})
+	}
 }
 
 func (s) TestClientServerHandshake(t *testing.T) {
@@ -109,7 +330,8 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		clientGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		clientVerifyFunc           CustomVerificationFunc
 		clientVType                VerificationType
-		clientExpectCreateError    bool
+		clientRootProvider         certprovider.Provider
+		clientIdentityProvider     certprovider.Provider
 		clientExpectHandshakeError bool
 		serverMutualTLS            bool
 		serverCert                 []tls.Certificate
@@ -118,23 +340,10 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		serverGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		serverVerifyFunc           CustomVerificationFunc
 		serverVType                VerificationType
+		serverRootProvider         certprovider.Provider
+		serverIdentityProvider     certprovider.Provider
 		serverExpectError          bool
 	}{
-		// Client: nil setting
-		// Server: only set serverCert with mutual TLS off
-		// Expected Behavior: server side failure
-		// Reason: if clientRoot, clientGetRoot and verifyFunc is not set, client
-		// side doesn't provide any verification mechanism. We don't allow this
-		// even setting vType to SkipVerification. Clients should at least provide
-		// their own verification logic.
-		{
-			desc:                    "Client has no trust cert; server sends peer cert",
-			clientVType:             SkipVerification,
-			clientExpectCreateError: true,
-			serverCert:              []tls.Certificate{serverPeerCert},
-			serverVType:             CertAndHostVerification,
-			serverExpectError:       true,
-		},
 		// Client: nil setting except verifyFuncGood
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: success
@@ -202,18 +411,6 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverVType:                CertVerification,
 			serverExpectError:          true,
 		},
-		// Client: set clientGetRoot and clientVerifyFunc
-		// Server: nil setting
-		// Expected Behavior: server side failure
-		// Reason: server side must either set serverCert or serverGetCert
-		{
-			desc:              "Client sets reload root function with verifyFuncGood; server sets nil",
-			clientGetRoot:     getRootCAsForClient,
-			clientVerifyFunc:  clientVerifyFuncGood,
-			clientVType:       CertVerification,
-			serverVType:       CertVerification,
-			serverExpectError: true,
-		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
 		// Server: set serverRoot and serverCert with mutual TLS on
 		// Expected Behavior: success
@@ -227,25 +424,6 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverCert:       []tls.Certificate{serverPeerCert},
 			serverRoot:       serverTrustPool,
 			serverVType:      CertVerification,
-		},
-		// Client: set clientGetRoot, clientVerifyFunc and clientCert
-		// Server: set serverCert, but not setting any of serverRoot, serverGetRoot
-		// or serverVerifyFunc, with mutual TLS on
-		// Expected Behavior: server side failure
-		// Reason: server side needs to provide any verification mechanism when
-		// mTLS in on, even setting vType to SkipVerification. Servers should at
-		// least provide their own verification logic.
-		{
-			desc:                       "Client sets peer cert, reload root function with verifyFuncGood; server sets no verification; mutualTLS",
-			clientCert:                 []tls.Certificate{clientPeerCert},
-			clientGetRoot:              getRootCAsForClient,
-			clientVerifyFunc:           clientVerifyFuncGood,
-			clientVType:                CertVerification,
-			clientExpectHandshakeError: true,
-			serverMutualTLS:            true,
-			serverCert:                 []tls.Certificate{serverPeerCert},
-			serverVType:                SkipVerification,
-			serverExpectError:          true,
 		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
 		// Server: set serverGetRoot and serverCert with mutual TLS on
@@ -403,6 +581,20 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverVType:                CertVerification,
 			serverExpectError:          true,
 		},
+		// Client: set clientIdentityProvider and clientRootProvider
+		// Server: set serverIdentityProvider and serverRootProvider with mutual TLS on
+		// Expected Behavior: success
+		{
+			desc:                   "Client sets root and identity provider with verifyFuncGood; Server sets root and identity provider; mutualTLS",
+			clientIdentityProvider: fakeIdentityProvider{isClient: true},
+			clientRootProvider:     fakeRootProvider{isClient: true},
+			clientVerifyFunc:       clientVerifyFuncGood,
+			clientVType:            CertVerification,
+			serverMutualTLS:        true,
+			serverIdentityProvider: fakeIdentityProvider{isClient: false},
+			serverRootProvider:     fakeRootProvider{isClient: false},
+			serverVType:            CertVerification,
+		},
 	} {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
@@ -416,10 +608,12 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				IdentityCertificateOptions: IdentityCertificateOptions{
 					Certificates:                     test.serverCert,
 					GetIdentityCertificatesForServer: test.serverGetCert,
+					IdentityProvider:                 test.serverIdentityProvider,
 				},
 				RootCertificateOptions: RootCertificateOptions{
 					RootCACerts:         test.serverRoot,
 					GetRootCertificates: test.serverGetRoot,
+					RootProvider:        test.serverRootProvider,
 				},
 				RequireClientCert: test.serverMutualTLS,
 				VerifyPeer:        test.serverVerifyFunc,
@@ -457,22 +651,19 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				IdentityCertificateOptions: IdentityCertificateOptions{
 					Certificates:                     test.clientCert,
 					GetIdentityCertificatesForClient: test.clientGetCert,
+					IdentityProvider:                 test.clientIdentityProvider,
 				},
 				VerifyPeer: test.clientVerifyFunc,
 				RootCertificateOptions: RootCertificateOptions{
 					RootCACerts:         test.clientRoot,
 					GetRootCertificates: test.clientGetRoot,
+					RootProvider:        test.clientRootProvider,
 				},
 				VType: test.clientVType,
 			}
-			clientTLS, newClientErr := NewClientCreds(clientOptions)
-			if newClientErr != nil && test.clientExpectCreateError {
-				return
-			}
-			if newClientErr != nil && !test.clientExpectCreateError ||
-				newClientErr == nil && test.clientExpectCreateError {
-				t.Fatalf("Expect error: %v, but err is %v",
-					test.clientExpectCreateError, newClientErr)
+			clientTLS, err := NewClientCreds(clientOptions)
+			if err != nil {
+				t.Fatalf("NewClientCreds failed: %v", err)
 			}
 			_, clientAuthInfo, handshakeErr := clientTLS.ClientHandshake(context.Background(),
 				lisAddr, conn)
@@ -636,64 +827,6 @@ func (s) TestWrapSyscallConn(t *testing.T) {
 	if _, ok := wrapConn.(syscall.Conn); !ok {
 		t.Errorf("returned conn (type %T) doesn't implement syscall.Conn, want implement",
 			wrapConn)
-	}
-}
-
-func (s) TestOptionsConfig(t *testing.T) {
-	serverPeerCert, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
-		testdata.Path("server_key_1.pem"))
-	if err != nil {
-		t.Fatalf("Server is unable to parse peer certificates. Error: %v", err)
-	}
-	tests := []struct {
-		desc            string
-		clientVType     VerificationType
-		serverMutualTLS bool
-		serverCert      []tls.Certificate
-		serverVType     VerificationType
-	}{
-		{
-			desc:            "Client uses system-provided RootCAs; server uses system-provided ClientCAs",
-			clientVType:     CertVerification,
-			serverMutualTLS: true,
-			serverCert:      []tls.Certificate{serverPeerCert},
-			serverVType:     CertAndHostVerification,
-		},
-	}
-	for _, test := range tests {
-		test := test
-		t.Run(test.desc, func(t *testing.T) {
-			serverOptions := &ServerOptions{
-				IdentityCertificateOptions: IdentityCertificateOptions{
-					Certificates: test.serverCert,
-				},
-				RequireClientCert: test.serverMutualTLS,
-				VType:             test.serverVType,
-			}
-			serverConfig, err := serverOptions.config()
-			if err != nil {
-				t.Fatalf("Unable to generate serverConfig. Error: %v", err)
-			}
-			// Verify that the system-provided certificates would be used
-			// when no verification method was set in serverOptions.
-			if serverOptions.RootCACerts == nil && serverOptions.GetRootCertificates == nil &&
-				serverOptions.RequireClientCert && serverConfig.ClientCAs == nil {
-				t.Fatalf("Failed to assign system-provided certificates on the server side.")
-			}
-			clientOptions := &ClientOptions{
-				VType: test.clientVType,
-			}
-			clientConfig, err := clientOptions.config()
-			if err != nil {
-				t.Fatalf("Unable to generate clientConfig. Error: %v", err)
-			}
-			// Verify that the system-provided certificates would be used
-			// when no verification method was set in clientOptions.
-			if clientOptions.RootCACerts == nil && clientOptions.GetRootCertificates == nil &&
-				clientConfig.RootCAs == nil {
-				t.Fatalf("Failed to assign system-provided certificates on the client side.")
-			}
-		})
 	}
 }
 

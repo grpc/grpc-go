@@ -237,7 +237,7 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 			if err != nil {
 				return nil, err
 			}
-			return &GetRootCAsResults{TrustCerts:km.Roots}, nil
+			return &GetRootCAsResults{TrustCerts: km.Roots}, nil
 		}
 	}
 	if o.IdentityProvider != nil {
@@ -266,8 +266,8 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 		GetClientCertificate: o.GetIdentityCertificatesForClient,
 		// We have to set InsecureSkipVerify to true to skip the default checks and
 		// use the verification function we built from buildVerifyFunc.
-		InsecureSkipVerify:   true,
-		RootCAs: rootCAs,
+		InsecureSkipVerify: true,
+		RootCAs:            rootCAs,
 	}
 	return config, nil
 }
@@ -324,7 +324,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 			if err != nil {
 				return nil, err
 			}
-			return &GetRootCAsResults{TrustCerts:km.Roots}, nil
+			return &GetRootCAsResults{TrustCerts: km.Roots}, nil
 		}
 	}
 	if o.IdentityProvider != nil {
@@ -343,14 +343,14 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 			for i := 0; i < len(km.Certs); i++ {
 				certChains = append(certChains, &km.Certs[i])
 			}
- 			return certChains, nil
+			return certChains, nil
 		}
 	}
 	// Propagate tls.Config fields based on the user input.
 	config := &tls.Config{
 		ClientAuth:   clientAuth,
 		Certificates: o.Certificates,
-		ClientCAs: clientCAs,
+		ClientCAs:    clientCAs,
 	}
 	if o.GetIdentityCertificatesForServer != nil {
 		config.GetCertificate = func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
