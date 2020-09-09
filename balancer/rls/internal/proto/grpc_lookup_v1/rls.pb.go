@@ -4,12 +4,8 @@
 package grpc_lookup_v1
 
 import (
-	context "context"
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
-	grpc "google.golang.org/grpc"
-	codes "google.golang.org/grpc/codes"
-	status "google.golang.org/grpc/status"
 	math "math"
 )
 
@@ -179,86 +175,4 @@ var fileDescriptor_3bab962d3362f3ca = []byte{
 	0x3c, 0x43, 0xca, 0x45, 0xc6, 0x72, 0x4e, 0x85, 0xe2, 0xd1, 0xee, 0x52, 0xd4, 0x3a, 0xb1, 0x3a,
 	0x29, 0xa7, 0xcf, 0x5e, 0xb3, 0x1d, 0x27, 0xef, 0x01, 0x00, 0x00, 0xff, 0xff, 0xca, 0x8d, 0x5c,
 	0xc7, 0x39, 0x02, 0x00, 0x00,
-}
-
-// Reference imports to suppress errors if they are not otherwise used.
-var _ context.Context
-var _ grpc.ClientConnInterface
-
-// This is a compile-time assertion to ensure that this generated file
-// is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion6
-
-// RouteLookupServiceClient is the client API for RouteLookupService service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
-type RouteLookupServiceClient interface {
-	// Lookup returns a target for a single key.
-	RouteLookup(ctx context.Context, in *RouteLookupRequest, opts ...grpc.CallOption) (*RouteLookupResponse, error)
-}
-
-type routeLookupServiceClient struct {
-	cc grpc.ClientConnInterface
-}
-
-func NewRouteLookupServiceClient(cc grpc.ClientConnInterface) RouteLookupServiceClient {
-	return &routeLookupServiceClient{cc}
-}
-
-func (c *routeLookupServiceClient) RouteLookup(ctx context.Context, in *RouteLookupRequest, opts ...grpc.CallOption) (*RouteLookupResponse, error) {
-	out := new(RouteLookupResponse)
-	err := c.cc.Invoke(ctx, "/grpc.lookup.v1.RouteLookupService/RouteLookup", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// RouteLookupServiceServer is the server API for RouteLookupService service.
-type RouteLookupServiceServer interface {
-	// Lookup returns a target for a single key.
-	RouteLookup(context.Context, *RouteLookupRequest) (*RouteLookupResponse, error)
-}
-
-// UnimplementedRouteLookupServiceServer can be embedded to have forward compatible implementations.
-type UnimplementedRouteLookupServiceServer struct {
-}
-
-func (*UnimplementedRouteLookupServiceServer) RouteLookup(ctx context.Context, req *RouteLookupRequest) (*RouteLookupResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RouteLookup not implemented")
-}
-
-func RegisterRouteLookupServiceServer(s *grpc.Server, srv RouteLookupServiceServer) {
-	s.RegisterService(&_RouteLookupService_serviceDesc, srv)
-}
-
-func _RouteLookupService_RouteLookup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RouteLookupRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(RouteLookupServiceServer).RouteLookup(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/grpc.lookup.v1.RouteLookupService/RouteLookup",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RouteLookupServiceServer).RouteLookup(ctx, req.(*RouteLookupRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-var _RouteLookupService_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "grpc.lookup.v1.RouteLookupService",
-	HandlerType: (*RouteLookupServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "RouteLookup",
-			Handler:    _RouteLookupService_RouteLookup_Handler,
-		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "grpc/lookup/v1/rls.proto",
 }

@@ -37,11 +37,11 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
-var migrationMode *bool
+var genUnstableServerInterfaces *bool
 
 func main() {
 	var flags flag.FlagSet
-	migrationMode = flags.Bool("migration_mode", false, "set to generate new symbols only; requires symbols produced by legacy protoc-gen-go")
+	genUnstableServerInterfaces = flags.Bool("gen_unstable_server_interfaces", false, `set to generate legacy "Server" interfaces which do not guarantee backward compatibility`)
 
 	protogen.Options{
 		ParamFunc: flags.Set,

@@ -63,14 +63,13 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	for _, service := range file.Services {
 		genClient(gen, file, g, service)
 		genService(gen, file, g, service)
-		genUnstableServiceInterface(gen, file, g, service)
+		if *genUnstableServerInterfaces {
+			genUnstableServerInterface(gen, file, g, service)
+		}
 	}
 }
 
 func genClient(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
-	if *migrationMode {
-		return
-	}
 	clientName := service.GoName + "Client"
 
 	g.P("// ", clientName, " is the client API for ", service.GoName, " service.")
@@ -258,9 +257,6 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 
 	// Service registration.
 	genRegisterFunction(gen, file, g, service)
-
-	// Short-cut service constructor.
-	genServiceConstructor(gen, g, service)
 }
 
 func genRegisterFunction(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
@@ -324,46 +320,71 @@ func genRegisterFunction(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	g.P()
 }
 
-func genServiceConstructor(gen *protogen.Plugin, g *protogen.GeneratedFile, service *protogen.Service) {
-	g.P("// New", service.GoName, "Service creates a new ", service.GoName, "Service containing the")
-	g.P("// implemented methods of the ", service.GoName, " service in s.  Any unimplemented")
-	g.P("// methods will result in the gRPC server returning an UNIMPLEMENTED status to the client.")
-	g.P("// This includes situations where the method handler is misspelled or has the wrong")
-	g.P("// signature.  For this reason, this function should be used with great care and")
-	g.P("// is not recommended to be used by most users.")
-	g.P("func New", service.GoName, "Service(s interface{}) *", service.GoName, "Service {")
-	g.P("ns := &", service.GoName, "Service{}")
-	for _, method := range service.Methods {
-		g.P("if h, ok := s.(interface {", methodSignature(g, method), "}); ok {")
-		g.P("ns.", method.GoName, " = h.", method.GoName)
-		g.P("}")
-	}
-	g.P("return ns")
-	g.P("}")
-	g.P()
-}
-
-func genUnstableServiceInterface(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
+func genUnstableServerInterface(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
 	// Service interface.
-	serviceType := service.GoName + "Service"
-	g.P("// Unstable", serviceType, " is the service API for ", service.GoName, " service.")
+	serverType := service.GoName + "Server"
+	g.P("// ", serverType, " is the service API for ", service.GoName, " service.")
 	g.P("// New methods may be added to this interface if they are added to the service")
 	g.P("// definition, which is not a backward-compatible change.  For this reason, ")
-	g.P("// use of this type is not recommended.")
+	g.P("// use of this type is not recommended unless you own the service definition.")
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 		g.P("//")
 		g.P(deprecationComment)
 	}
-	g.Annotate("Unstable"+serviceType, service.Location)
-	g.P("type Unstable", serviceType, " interface {")
+	g.Annotate(serverType, service.Location)
+	g.P("type ", serverType, " interface {")
 	for _, method := range service.Methods {
-		g.Annotate("Unstable"+serviceType+"."+method.GoName, method.Location)
+		g.Annotate(serverType+"."+method.GoName, method.Location)
 		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 			g.P(deprecationComment)
 		}
 		g.P(method.Comments.Leading,
 			methodSignature(g, method))
 	}
+	g.P("}")
+	g.P()
+
+	// Unimplemented implementation.
+	genUnimplementedServer(gen, file, g, service)
+
+	// Service registration.
+	genUnstableRegisterFunction(gen, file, g, service)
+}
+
+func genUnimplementedServer(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
+	// Server Unimplemented struct for forward compatibility.
+	serverType := service.GoName + "Server"
+	g.P("// Unimplemented", serverType, " can be embedded to have forward compatible implementations of")
+	g.P("// ", serverType)
+	g.P("type Unimplemented", serverType, " struct {")
+	g.P("}")
+	g.P()
+	for _, method := range service.Methods {
+		nilArg := ""
+		if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
+			nilArg = "nil,"
+		}
+		g.P("func (*Unimplemented", serverType, ") ", methodSignature(g, method), "{")
+		g.P("return ", nilArg, statusPackage.Ident("Errorf"), "(", codesPackage.Ident("Unimplemented"), `, "method `, method.GoName, ` not implemented")`)
+		g.P("}")
+	}
+	g.P()
+}
+
+func genUnstableRegisterFunction(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
+	serverType := service.GoName + "Server"
+	g.P("// Register", serverType, " registers a service implementation with a gRPC server.")
+	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
+		g.P("//")
+		g.P(deprecationComment)
+	}
+	g.P("func Register", serverType, "(s ", grpcPackage.Ident("ServiceRegistrar"), ", srv ", serverType, ") {")
+	g.P("str := &", service.GoName, "Service{")
+	for _, method := range service.Methods {
+		g.P(method.GoName, ": srv.", method.GoName, ",")
+	}
+	g.P("}")
+	g.P("Register", service.GoName, "Service(s, str)")
 	g.P("}")
 	g.P()
 }
@@ -452,9 +473,6 @@ func genMethodHandler(gen *protogen.Plugin, g *protogen.GeneratedFile, method *p
 }
 
 func genServerStreamTypes(gen *protogen.Plugin, g *protogen.GeneratedFile, method *protogen.Method) {
-	if *migrationMode {
-		return
-	}
 	if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
 		// Unary method
 		return

@@ -165,36 +165,3 @@ func RegisterMetricsServiceService(s grpc.ServiceRegistrar, srv *MetricsServiceS
 
 	s.RegisterService(&sd, nil)
 }
-
-// NewMetricsServiceService creates a new MetricsServiceService containing the
-// implemented methods of the MetricsService service in s.  Any unimplemented
-// methods will result in the gRPC server returning an UNIMPLEMENTED status to the client.
-// This includes situations where the method handler is misspelled or has the wrong
-// signature.  For this reason, this function should be used with great care and
-// is not recommended to be used by most users.
-func NewMetricsServiceService(s interface{}) *MetricsServiceService {
-	ns := &MetricsServiceService{}
-	if h, ok := s.(interface {
-		GetAllGauges(*EmptyMessage, MetricsService_GetAllGaugesServer) error
-	}); ok {
-		ns.GetAllGauges = h.GetAllGauges
-	}
-	if h, ok := s.(interface {
-		GetGauge(context.Context, *GaugeRequest) (*GaugeResponse, error)
-	}); ok {
-		ns.GetGauge = h.GetGauge
-	}
-	return ns
-}
-
-// UnstableMetricsServiceService is the service API for MetricsService service.
-// New methods may be added to this interface if they are added to the service
-// definition, which is not a backward-compatible change.  For this reason,
-// use of this type is not recommended.
-type UnstableMetricsServiceService interface {
-	// Returns the values of all the gauges that are currently being maintained by
-	// the service
-	GetAllGauges(*EmptyMessage, MetricsService_GetAllGaugesServer) error
-	// Returns the value of one gauge
-	GetGauge(context.Context, *GaugeRequest) (*GaugeResponse, error)
-}

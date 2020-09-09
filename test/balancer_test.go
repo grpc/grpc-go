@@ -179,7 +179,7 @@ func testPickExtraMetadata(t *testing.T, e env) {
 		grpc.WithBalancerName(testBalancerName),
 		grpc.WithUserAgent(testUserAgent),
 	}
-	te.startServer((&testServer{security: e.security}).Svc())
+	te.startServer(testServer{security: e.security}.Svc())
 	defer te.tearDown()
 
 	// Set resolver to xds to trigger the extra metadata code path.
@@ -228,7 +228,7 @@ func testDoneInfo(t *testing.T, e env) {
 		grpc.WithBalancerName(testBalancerName),
 	}
 	te.userAgent = failAppUA
-	te.startServer((&testServer{security: e.security}).Svc())
+	te.startServer(testServer{security: e.security}.Svc())
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -498,7 +498,7 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	}
 
 	s := grpc.NewServer()
-	testpb.RegisterTestServiceService(s, testServer{}.Svc())
+	testpb.RegisterTestServiceService(s, (&testServer{}).Svc())
 	go s.Serve(lis)
 	defer s.Stop()
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())

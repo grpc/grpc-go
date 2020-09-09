@@ -91,28 +91,3 @@ func RegisterGreeterService(s grpc.ServiceRegistrar, srv *GreeterService) {
 
 	s.RegisterService(&sd, nil)
 }
-
-// NewGreeterService creates a new GreeterService containing the
-// implemented methods of the Greeter service in s.  Any unimplemented
-// methods will result in the gRPC server returning an UNIMPLEMENTED status to the client.
-// This includes situations where the method handler is misspelled or has the wrong
-// signature.  For this reason, this function should be used with great care and
-// is not recommended to be used by most users.
-func NewGreeterService(s interface{}) *GreeterService {
-	ns := &GreeterService{}
-	if h, ok := s.(interface {
-		SayHello(context.Context, *HelloRequest) (*HelloReply, error)
-	}); ok {
-		ns.SayHello = h.SayHello
-	}
-	return ns
-}
-
-// UnstableGreeterService is the service API for Greeter service.
-// New methods may be added to this interface if they are added to the service
-// definition, which is not a backward-compatible change.  For this reason,
-// use of this type is not recommended.
-type UnstableGreeterService interface {
-	// Sends a greeting
-	SayHello(context.Context, *HelloRequest) (*HelloReply, error)
-}

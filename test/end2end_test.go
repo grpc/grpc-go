@@ -134,8 +134,6 @@ type testServer struct {
 	unaryCallSleepTime time.Duration
 }
 
-var _ testpb.UnstableTestServiceService = (*testServer)(nil)
-
 // Svc returns a registerable TestService for this testServer instances.
 // Because `s` is passed by value for convenience, any subsequent changes to
 // `s` are not recognized.
@@ -4859,10 +4857,10 @@ func (s) TestFlowControlLogicalRace(t *testing.T) {
 	defer lis.Close()
 
 	s := grpc.NewServer()
-	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(&flowControlLogicalRaceServer{
+	testpb.RegisterTestServiceService(s, (&flowControlLogicalRaceServer{
 		itemCount: itemCount,
 		itemSize:  itemSize,
-	}))
+	}).Svc())
 	defer s.Stop()
 
 	go s.Serve(lis)
@@ -4918,6 +4916,12 @@ func (s) TestFlowControlLogicalRace(t *testing.T) {
 type flowControlLogicalRaceServer struct {
 	itemSize  int
 	itemCount int
+}
+
+func (s *flowControlLogicalRaceServer) Svc() *testpb.TestServiceService {
+	return &testpb.TestServiceService{
+		StreamingOutputCall: s.StreamingOutputCall,
+	}
 }
 
 func (s *flowControlLogicalRaceServer) StreamingOutputCall(req *testpb.StreamingOutputCallRequest, srv testpb.TestService_StreamingOutputCallServer) error {
@@ -5083,16 +5087,12 @@ type stubServer struct {
 	r *manual.Resolver
 }
 
-func (ss *stubServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-	return ss.emptyCall(ctx, in)
-}
-
-func (ss *stubServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	return ss.unaryCall(ctx, in)
-}
-
-func (ss *stubServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
-	return ss.fullDuplexCall(stream)
+func (ss *stubServer) Svc() *testpb.TestServiceService {
+	return &testpb.TestServiceService{
+		EmptyCall:      ss.emptyCall,
+		UnaryCall:      ss.unaryCall,
+		FullDuplexCall: ss.fullDuplexCall,
+	}
 }
 
 // Start starts the server and creates a client connected to it.
@@ -5115,7 +5115,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
 
 	s := grpc.NewServer(sopts...)
-	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(ss))
+	testpb.RegisterTestServiceService(s, ss.Svc())
 	go s.Serve(lis)
 	ss.cleanups = append(ss.cleanups, s.Stop)
 	ss.s = s
@@ -6258,7 +6258,7 @@ func (s) TestServeExitsWhenListenerClosed(t *testing.T) {
 
 	s := grpc.NewServer()
 	defer s.Stop()
-	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(ss))
+	testpb.RegisterTestServiceService(s, ss.Svc())
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -6477,7 +6477,7 @@ func (s) TestDisabledIOBuffers(t *testing.T) {
 	}
 
 	s := grpc.NewServer(grpc.WriteBufferSize(0), grpc.ReadBufferSize(0))
-	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(ss))
+	testpb.RegisterTestServiceService(s, ss.Svc())
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {

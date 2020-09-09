@@ -118,7 +118,14 @@ type testServer struct {
 	te *test
 }
 
-var _ testpb.UnstableTestServiceService = (*testServer)(nil)
+func (s *testServer) Svc() *testpb.TestServiceService {
+	return &testpb.TestServiceService{
+		UnaryCall:        s.UnaryCall,
+		FullDuplexCall:   s.FullDuplexCall,
+		ClientStreamCall: s.ClientStreamCall,
+		ServerStreamCall: s.ServerStreamCall,
+	}
+}
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -784,7 +791,7 @@ func (ed *expectedData) toServerLogEntries() []*pb.GrpcLogEntry {
 
 func runRPCs(t *testing.T, tc *testConfig, cc *rpcConfig) *expectedData {
 	te := newTest(t, tc)
-	te.startServer(testpb.NewTestServiceService(&testServer{te: te}))
+	te.startServer((&testServer{te: te}).Svc())
 	defer te.tearDown()
 
 	expect := &expectedData{
