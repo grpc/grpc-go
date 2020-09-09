@@ -249,12 +249,12 @@ func testFileByFilenameTransitiveClosure(t *testing.T, stream rpb.ServerReflecti
 			t.Errorf("FileByFilename(%v)\nreceived: %q,\nwant: %q", filename, r.GetFileDescriptorResponse().FileDescriptorProto[0], fdProto2Ext2Byte)
 		}
 		if expectClosure {
-			if len(r.GetFileDescriptorResponse().FileDescriptorProto) < 2 {
+			if len(r.GetFileDescriptorResponse().FileDescriptorProto) != 2 {
 				t.Errorf("FileByFilename(%v) returned %v file descriptors, expected 2", filename, len(r.GetFileDescriptorResponse().FileDescriptorProto))
 			} else if !reflect.DeepEqual(r.GetFileDescriptorResponse().FileDescriptorProto[1], fdProto2Byte) {
 				t.Errorf("FileByFilename(%v)\nreceived: %q,\nwant: %q", filename, r.GetFileDescriptorResponse().FileDescriptorProto[1], fdProto2Byte)
 			}
-		} else if len(r.GetFileDescriptorResponse().FileDescriptorProto) > 1 {
+		} else if len(r.GetFileDescriptorResponse().FileDescriptorProto) != 1 {
 			t.Errorf("FileByFilename(%v) returned %v file descriptors, expected 1", filename, len(r.GetFileDescriptorResponse().FileDescriptorProto))
 		}
 	default:
