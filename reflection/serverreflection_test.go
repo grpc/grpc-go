@@ -214,6 +214,8 @@ func (x) TestReflectionEnd2end(t *testing.T) {
 		t.Fatalf("cannot get ServerReflectionInfo: %v", err)
 	}
 
+	testFileByFilenameTransitiveClosure(t, stream, true)
+	testFileByFilenameTransitiveClosure(t, stream, false)
 	testFileByFilename(t, stream)
 	testFileByFilenameError(t, stream)
 	testFileContainingSymbol(t, stream)
@@ -225,6 +227,39 @@ func (x) TestReflectionEnd2end(t *testing.T) {
 	testListServices(t, stream)
 
 	s.Stop()
+}
+
+func testFileByFilenameTransitiveClosure(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient, expectClosure bool) {
+	filename := "reflection/grpc_testing/proto2_ext2.proto"
+	if err := stream.Send(&rpb.ServerReflectionRequest{
+		MessageRequest: &rpb.ServerReflectionRequest_FileByFilename{
+			FileByFilename: filename,
+		},
+	}); err != nil {
+		t.Fatalf("failed to send request: %v", err)
+	}
+	r, err := stream.Recv()
+	if err != nil {
+		// io.EOF is not ok.
+		t.Fatalf("failed to recv response: %v", err)
+	}
+	switch r.MessageResponse.(type) {
+	case *rpb.ServerReflectionResponse_FileDescriptorResponse:
+		if !reflect.DeepEqual(r.GetFileDescriptorResponse().FileDescriptorProto[0], fdProto2Ext2Byte) {
+			t.Errorf("FileByFilename(%v)\nreceived: %q,\nwant: %q", filename, r.GetFileDescriptorResponse().FileDescriptorProto[0], fdProto2Ext2Byte)
+		}
+		if expectClosure {
+			if len(r.GetFileDescriptorResponse().FileDescriptorProto) != 2 {
+				t.Errorf("FileByFilename(%v) returned %v file descriptors, expected 2", filename, len(r.GetFileDescriptorResponse().FileDescriptorProto))
+			} else if !reflect.DeepEqual(r.GetFileDescriptorResponse().FileDescriptorProto[1], fdProto2Byte) {
+				t.Errorf("FileByFilename(%v)\nreceived: %q,\nwant: %q", filename, r.GetFileDescriptorResponse().FileDescriptorProto[1], fdProto2Byte)
+			}
+		} else if len(r.GetFileDescriptorResponse().FileDescriptorProto) != 1 {
+			t.Errorf("FileByFilename(%v) returned %v file descriptors, expected 1", filename, len(r.GetFileDescriptorResponse().FileDescriptorProto))
+		}
+	default:
+		t.Errorf("FileByFilename(%v) = %v, want type <ServerReflectionResponse_FileDescriptorResponse>", filename, r.MessageResponse)
+	}
 }
 
 func testFileByFilename(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
