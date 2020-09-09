@@ -87,7 +87,7 @@ func (s) TestCredsBundleBoth(t *testing.T) {
 	te.customServerOptions = []grpc.ServerOption{
 		grpc.Creds(creds),
 	}
-	te.startServer(&testServer{})
+	te.startServer(testServer{}.Svc())
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -109,7 +109,7 @@ func (s) TestCredsBundleTransportCredentials(t *testing.T) {
 	te.customServerOptions = []grpc.ServerOption{
 		grpc.Creds(creds),
 	}
-	te.startServer(&testServer{})
+	te.startServer(testServer{}.Svc())
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -125,7 +125,7 @@ func (s) TestCredsBundlePerRPCCredentials(t *testing.T) {
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithCredentialsBundle(&testCredsBundle{t: t, mode: bundlePerRPCOnly}),
 	}
-	te.startServer(&testServer{})
+	te.startServer(testServer{}.Svc())
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -159,7 +159,7 @@ func (c *clientTimeoutCreds) Clone() credentials.TransportCredentials {
 func (s) TestNonFailFastRPCSucceedOnTimeoutCreds(t *testing.T) {
 	te := newTest(t, env{name: "timeout-cred", network: "tcp", security: "empty"})
 	te.userAgent = testAppUA
-	te.startServer(&testServer{security: te.e.security})
+	te.startServer(testServer{security: te.e.security}.Svc())
 	defer te.tearDown()
 
 	cc := te.clientConn(grpc.WithTransportCredentials(&clientTimeoutCreds{}))
@@ -183,7 +183,7 @@ func (s) TestGRPCMethodAccessibleToCredsViaContextRequestInfo(t *testing.T) {
 	const wantMethod = "/grpc.testing.TestService/EmptyCall"
 	te := newTest(t, env{name: "context-request-info", network: "tcp"})
 	te.userAgent = testAppUA
-	te.startServer(&testServer{security: te.e.security})
+	te.startServer(testServer{security: te.e.security}.Svc())
 	defer te.tearDown()
 
 	cc := te.clientConn(grpc.WithPerRPCCredentials(&methodTestCreds{}))
@@ -218,7 +218,7 @@ func (c clientAlwaysFailCred) Clone() credentials.TransportCredentials {
 
 func (s) TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "empty", balancer: "round_robin"})
-	te.startServer(&testServer{security: te.e.security})
+	te.startServer(testServer{security: te.e.security}.Svc())
 	defer te.tearDown()
 
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(clientAlwaysFailCred{})}
@@ -246,7 +246,7 @@ func (s) TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 
 func (s) TestWaitForReadyRPCErrorOnBadCertificates(t *testing.T) {
 	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "empty", balancer: "round_robin"})
-	te.startServer(&testServer{security: te.e.security})
+	te.startServer(testServer{security: te.e.security}.Svc())
 	defer te.tearDown()
 
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(clientAlwaysFailCred{})}
@@ -312,7 +312,7 @@ func testPerRPCCredentialsViaDialOptions(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.tapHandle = authHandle
 	te.perRPCCreds = testPerRPCCredentials{}
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -331,7 +331,7 @@ func (s) TestPerRPCCredentialsViaCallOptions(t *testing.T) {
 func testPerRPCCredentialsViaCallOptions(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.tapHandle = authHandle
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -371,7 +371,7 @@ func testPerRPCCredentialsViaDialOptionsAndCallOptions(t *testing.T, e env) {
 		}
 		return ctx, nil
 	}
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	defer te.tearDown()
 
 	cc := te.clientConn()

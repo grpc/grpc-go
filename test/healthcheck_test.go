@@ -140,7 +140,7 @@ func setupServer(sc *svrConfig) (s *grpc.Server, lis net.Listener, ts *testHealt
 		ts = newTestHealthServer()
 	}
 	healthgrpc.RegisterHealthServer(s, ts)
-	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(&testServer{}))
+	testpb.RegisterTestServiceService(s, testServer{}.Svc())
 	go s.Serve(lis)
 	return s, lis, ts, s.Stop, nil
 }
