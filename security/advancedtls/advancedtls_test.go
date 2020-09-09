@@ -159,9 +159,9 @@ func (s) TestClientOptionsConfig(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			clientOptions := &ClientOptions{
-				VType:                      test.clientVType,
-				IdentityCertificateOptions: test.IdentityCertificateOptions,
-				RootCertificateOptions:     test.RootCertificateOptions,
+				VType:           test.clientVType,
+				IdentityOptions: test.IdentityCertificateOptions,
+				RootOptions:     test.RootCertificateOptions,
 			}
 			clientConfig, err := clientOptions.config()
 			if (err != nil) != test.wantError {
@@ -172,7 +172,8 @@ func (s) TestClientOptionsConfig(t *testing.T) {
 			}
 			// Verify that the system-provided certificates would be used
 			// when no verification method was set in clientOptions.
-			if clientOptions.RootCACerts == nil && clientOptions.GetRootCertificates == nil && clientOptions.RootProvider == nil {
+			if clientOptions.RootOptions.RootCACerts == nil &&
+				clientOptions.RootOptions.GetRootCertificates == nil && clientOptions.RootOptions.RootProvider == nil {
 				if clientConfig.RootCAs == nil {
 					t.Fatalf("Failed to assign system-provided certificates on the client side.")
 				}
@@ -257,10 +258,10 @@ func (s) TestServerOptionsConfig(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			serverOptions := &ServerOptions{
-				VType:                      test.serverVType,
-				RequireClientCert:          test.requireClientCert,
-				IdentityCertificateOptions: test.IdentityCertificateOptions,
-				RootCertificateOptions:     test.RootCertificateOptions,
+				VType:             test.serverVType,
+				RequireClientCert: test.requireClientCert,
+				IdentityOptions:   test.IdentityCertificateOptions,
+				RootOptions:       test.RootCertificateOptions,
 			}
 			serverConfig, err := serverOptions.config()
 			if (err != nil) != test.wantError {
@@ -271,7 +272,8 @@ func (s) TestServerOptionsConfig(t *testing.T) {
 			}
 			// Verify that the system-provided certificates would be used
 			// when no verification method was set in clientOptions.
-			if serverOptions.RootCACerts == nil && serverOptions.GetRootCertificates == nil && serverOptions.RootProvider == nil {
+			if serverOptions.RootOptions.RootCACerts == nil &&
+				serverOptions.RootOptions.GetRootCertificates == nil && serverOptions.RootOptions.RootProvider == nil {
 				if serverConfig.ClientCAs == nil {
 					t.Fatalf("Failed to assign system-provided certificates on the server side.")
 				}
@@ -663,12 +665,12 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			}
 			// Start a server using ServerOptions in another goroutine.
 			serverOptions := &ServerOptions{
-				IdentityCertificateOptions: IdentityCertificateOptions{
+				IdentityOptions: IdentityCertificateOptions{
 					Certificates:                     test.serverCert,
 					GetIdentityCertificatesForServer: test.serverGetCert,
 					IdentityProvider:                 test.serverIdentityProvider,
 				},
-				RootCertificateOptions: RootCertificateOptions{
+				RootOptions: RootCertificateOptions{
 					RootCACerts:         test.serverRoot,
 					GetRootCertificates: test.serverGetRoot,
 					RootProvider:        test.serverRootProvider,
@@ -706,13 +708,13 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			}
 			defer conn.Close()
 			clientOptions := &ClientOptions{
-				IdentityCertificateOptions: IdentityCertificateOptions{
+				IdentityOptions: IdentityCertificateOptions{
 					Certificates:                     test.clientCert,
 					GetIdentityCertificatesForClient: test.clientGetCert,
 					IdentityProvider:                 test.clientIdentityProvider,
 				},
 				VerifyPeer: test.clientVerifyFunc,
-				RootCertificateOptions: RootCertificateOptions{
+				RootOptions: RootCertificateOptions{
 					RootCACerts:         test.clientRoot,
 					GetRootCertificates: test.clientGetRoot,
 					RootProvider:        test.clientRootProvider,
@@ -794,7 +796,7 @@ func (s) TestAdvancedTLSOverrideServerName(t *testing.T) {
 		t.Fatalf("Client is unable to load trust certs. Error: %v", err)
 	}
 	clientOptions := &ClientOptions{
-		RootCertificateOptions: RootCertificateOptions{
+		RootOptions: RootCertificateOptions{
 			RootCACerts: clientTrustPool,
 		},
 		ServerNameOverride: expectedServerName,
@@ -816,7 +818,7 @@ func (s) TestTLSClone(t *testing.T) {
 		t.Fatalf("Client is unable to load trust certs. Error: %v", err)
 	}
 	clientOptions := &ClientOptions{
-		RootCertificateOptions: RootCertificateOptions{
+		RootOptions: RootCertificateOptions{
 			RootCACerts: clientTrustPool,
 		},
 		ServerNameOverride: expectedServerName,
@@ -931,7 +933,7 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			serverOptions := &ServerOptions{
-				IdentityCertificateOptions: IdentityCertificateOptions{
+				IdentityOptions: IdentityCertificateOptions{
 					GetIdentityCertificatesForServer: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 						return []*tls.Certificate{&serverCert1, &serverCert2, &serverCert3}, nil
 					},

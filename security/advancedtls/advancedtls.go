@@ -162,9 +162,9 @@ const (
 
 // ClientOptions contains the fields needed to be filled by the client.
 type ClientOptions struct {
-	// IdentityCertificateOptions is OPTIONAL on client side. This field only
-	// needs to be set if mutual authentication is required on server side.
-	IdentityCertificateOptions
+	// IdentityOptions is OPTIONAL on client side. This field only needs to be
+	// set if mutual authentication is required on server side.
+	IdentityOptions IdentityCertificateOptions
 	// VerifyPeer is a custom verification check after certificate signature
 	// check.
 	// If this is set, we will perform this customized check after doing the
@@ -174,26 +174,25 @@ type ClientOptions struct {
 	// it will override the virtual host name of authority (e.g. :authority
 	// header field) in requests.
 	ServerNameOverride string
-	// RootCertificateOptions is OPTIONAL on client side. If not set, we will
-	// try to use the default trust certificates in users' OS system.
-	RootCertificateOptions
+	// RootOptions is OPTIONAL on client side. If not set, we will try to use the
+	// default trust certificates in users' OS system.
+	RootOptions RootCertificateOptions
 	// VType is the verification type on the client side.
 	VType VerificationType
 }
 
 // ServerOptions contains the fields needed to be filled by the server.
 type ServerOptions struct {
-	// IdentityCertificateOptions is REQUIRED on server side.
-	IdentityCertificateOptions
+	// IdentityOptions is REQUIRED on server side.
+	IdentityOptions IdentityCertificateOptions
 	// VerifyPeer is a custom verification check after certificate signature
 	// check.
 	// If this is set, we will perform this customized check after doing the
 	// normal check(s) indicated by setting VType.
 	VerifyPeer CustomVerificationFunc
-	// RootCertificateOptions is OPTIONAL on server side. This field only
-	// needs to be set if mutual authentication is required(RequireClientCert
-	// is true).
-	RootCertificateOptions
+	// RootOptions is OPTIONAL on server side. This field only needs to be set if
+	// mutual authentication is required(RequireClientCert is true).
+	RootOptions RootCertificateOptions
 	// If the server want the client to send certificates.
 	RequireClientCert bool
 	// VType is the verification type on the server side.
@@ -202,114 +201,96 @@ type ServerOptions struct {
 
 func (o *ClientOptions) config() (*tls.Config, error) {
 	if o.VType == SkipVerification && o.VerifyPeer == nil {
-		return nil, fmt.Errorf(
-			"client needs to provide custom verification mechanism if choose to skip default verification")
+		return nil, fmt.Errorf("client needs to provide custom verification mechanism if choose to skip default verification")
 	}
 	// Make sure users didn't specify more than one fields in
 	// RootCertificateOptions and IdentityCertificateOptions.
-	rootOptionNum := o.RootCertificateOptions.nonNilFieldCount()
+	rootOptionNum := o.RootOptions.nonNilFieldCount()
 	if rootOptionNum > 1 {
-		return nil, fmt.Errorf(
-			"at most one field in RootCertificateOptions could be specified")
+		return nil, fmt.Errorf("at most one field in RootCertificateOptions could be specified")
 	}
-	identityOptionNum := o.IdentityCertificateOptions.nonNilFieldCount()
+	identityOptionNum := o.IdentityOptions.nonNilFieldCount()
 	if identityOptionNum > 1 {
-		return nil, fmt.Errorf(
-			"at most one field in IdentityCertificateOptions could be specified")
+		return nil, fmt.Errorf("at most one field in IdentityCertificateOptions could be specified")
 	}
-	if o.GetIdentityCertificatesForServer != nil {
-		return nil, fmt.Errorf(
-			"GetIdentityCertificatesForServer cannot be specified on the client side")
+	if o.IdentityOptions.GetIdentityCertificatesForServer != nil {
+		return nil, fmt.Errorf("GetIdentityCertificatesForServer cannot be specified on the client side")
 	}
-	// Use system default trust certificate if no verification specified.
-	rootCAs := o.RootCACerts
-	if o.VType != SkipVerification && rootOptionNum == 0 {
-		// Set rootCAs to system default.
-		systemRootCAs, err := x509.SystemCertPool()
-		if err != nil {
-			return nil, err
-		}
-		rootCAs = systemRootCAs
+	config := &tls.Config{
+		ServerName: o.ServerNameOverride,
+		// We have to set InsecureSkipVerify to true to skip the default checks and
+		// use the verification function we built from buildVerifyFunc.
+		InsecureSkipVerify: true,
 	}
-	// Fill the root and identity reloading functions based on the Provider
-	// implementation.
-	if o.RootProvider != nil {
-		o.GetRootCertificates = func(*GetRootCAsParams) (*GetRootCAsResults, error) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			km, err := o.RootProvider.KeyMaterial(ctx)
+	// Propagate root-certificate-related fields in tls.Config.
+	switch {
+	case o.RootOptions.RootCACerts != nil:
+		config.RootCAs = o.RootOptions.RootCACerts
+	case o.RootOptions.GetRootCertificates != nil:
+		// In cases when users provide GetRootCertificates callback, since this
+		// callback is not contained in tls.Config, we have nothing to set here.
+		// We will invoke the callback in ClientHandshake.
+	case o.RootOptions.RootProvider != nil:
+		o.RootOptions.GetRootCertificates = func(*GetRootCAsParams) (*GetRootCAsResults, error) {
+			km, err := o.RootOptions.RootProvider.KeyMaterial(context.Background())
 			if err != nil {
 				return nil, err
 			}
 			return &GetRootCAsResults{TrustCerts: km.Roots}, nil
 		}
+	default:
+		// No root certificate options specified by user. Use the certificates
+		// stored in system default path as the last resort.
+		if o.VType != SkipVerification {
+			systemRootCAs, err := x509.SystemCertPool()
+			if err != nil {
+				return nil, err
+			}
+			config.RootCAs = systemRootCAs
+		}
 	}
-	if o.IdentityProvider != nil {
-		o.GetIdentityCertificatesForClient = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			km, err := o.IdentityProvider.KeyMaterial(ctx)
+	// Propagate identity-certificate-related fields in tls.Config.
+	switch {
+	case o.IdentityOptions.Certificates != nil:
+		config.Certificates = o.IdentityOptions.Certificates
+	case o.IdentityOptions.GetIdentityCertificatesForClient != nil:
+		config.GetClientCertificate = o.IdentityOptions.GetIdentityCertificatesForClient
+	case o.IdentityOptions.IdentityProvider != nil:
+		config.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			km, err := o.IdentityOptions.IdentityProvider.KeyMaterial(context.Background())
 			if err != nil {
 				return nil, err
 			}
 			if len(km.Certs) == 0 {
-				return nil, fmt.Errorf(
-					"no identity cert on the client side in IdentityProvider")
+				return nil, fmt.Errorf("no identity cert on the client side in IdentityProvider")
 			}
 			if len(km.Certs) > 1 {
-				return nil, fmt.Errorf(
-					"there should always be only one identity cert chain on the client side in IdentityProvider")
+				return nil, fmt.Errorf("there should always be only one identity cert chain on the client side in IdentityProvider")
 			}
 			return &km.Certs[0], nil
 		}
-	}
-	// Propagate tls.Config fields based on the user input.
-	config := &tls.Config{
-		ServerName:           o.ServerNameOverride,
-		Certificates:         o.Certificates,
-		GetClientCertificate: o.GetIdentityCertificatesForClient,
-		// We have to set InsecureSkipVerify to true to skip the default checks and
-		// use the verification function we built from buildVerifyFunc.
-		InsecureSkipVerify: true,
-		RootCAs:            rootCAs,
+	default:
+		// It's fine for users to not specify identity certificate options here.
 	}
 	return config, nil
 }
 
 func (o *ServerOptions) config() (*tls.Config, error) {
 	if o.RequireClientCert && o.VType == SkipVerification && o.VerifyPeer == nil {
-		return nil, fmt.Errorf(
-			"server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
+		return nil, fmt.Errorf("server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
 	// Make sure users didn't specify more than one fields in
 	// RootCertificateOptions and IdentityCertificateOptions.
-	rootOptionNum := o.RootCertificateOptions.nonNilFieldCount()
+	rootOptionNum := o.RootOptions.nonNilFieldCount()
 	if rootOptionNum > 1 {
-		return nil, fmt.Errorf(
-			"at most one field in RootCertificateOptions could be specified")
+		return nil, fmt.Errorf("at most one field in RootCertificateOptions could be specified")
 	}
-	identityOptionNum := o.IdentityCertificateOptions.nonNilFieldCount()
+	identityOptionNum := o.IdentityOptions.nonNilFieldCount()
 	if identityOptionNum > 1 {
-		return nil, fmt.Errorf(
-			"at most one field in IdentityCertificateOptions could be specified")
+		return nil, fmt.Errorf("at most one field in IdentityCertificateOptions could be specified")
 	}
-	if identityOptionNum == 0 {
-		return nil, fmt.Errorf(
-			"needs to specify at least one field in IdentityCertificateOptions")
-	}
-	if o.GetIdentityCertificatesForClient != nil {
-		return nil, fmt.Errorf(
-			"GetIdentityCertificatesForClient cannot be specified on the server side")
-	}
-	// Use system default trust certificate if no verification specified.
-	clientCAs := o.RootCACerts
-	if o.VType != SkipVerification && rootOptionNum == 0 && o.RequireClientCert {
-		// Set clientCAs to system default.
-		systemRootCAs, err := x509.SystemCertPool()
-		if err != nil {
-			return nil, err
-		}
-		clientCAs = systemRootCAs
+	if o.IdentityOptions.GetIdentityCertificatesForClient != nil {
+		return nil, fmt.Errorf("GetIdentityCertificatesForClient cannot be specified on the server side")
 	}
 	clientAuth := tls.NoClientCert
 	if o.RequireClientCert {
@@ -318,24 +299,48 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		// buildVerifyFunc.
 		clientAuth = tls.RequireAnyClientCert
 	}
-	// Fill the root and identity reloading functions based on the Provider
-	// implementation.
-	if o.RootProvider != nil {
-		o.GetRootCertificates = func(*GetRootCAsParams) (*GetRootCAsResults, error) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			km, err := o.RootProvider.KeyMaterial(ctx)
+	config := &tls.Config{
+		ClientAuth: clientAuth,
+		//Certificates: o.IdentityOptions.Certificates,
+	}
+	// Propagate root-certificate-related fields in tls.Config.
+	switch {
+	case o.RootOptions.RootCACerts != nil:
+		config.ClientCAs = o.RootOptions.RootCACerts
+	case o.RootOptions.GetRootCertificates != nil:
+		// In cases when users provide GetRootCertificates callback, since this
+		// callback is not contained in tls.Config, we have nothing to set here.
+		// We will invoke the callback in ClientHandshake.
+	case o.RootOptions.RootProvider != nil:
+		o.RootOptions.GetRootCertificates = func(*GetRootCAsParams) (*GetRootCAsResults, error) {
+			km, err := o.RootOptions.RootProvider.KeyMaterial(context.Background())
 			if err != nil {
 				return nil, err
 			}
 			return &GetRootCAsResults{TrustCerts: km.Roots}, nil
 		}
+	default:
+		// No root certificate options specified by user. Use the certificates
+		// stored in system default path as the last resort.
+		if o.VType != SkipVerification && o.RequireClientCert {
+			systemRootCAs, err := x509.SystemCertPool()
+			if err != nil {
+				return nil, err
+			}
+			config.ClientCAs = systemRootCAs
+		}
 	}
-	if o.IdentityProvider != nil {
-		o.GetIdentityCertificatesForServer = func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			km, err := o.IdentityProvider.KeyMaterial(ctx)
+	// Propagate identity-certificate-related fields in tls.Config.
+	switch {
+	case o.IdentityOptions.Certificates != nil:
+		config.Certificates = o.IdentityOptions.Certificates
+	case o.IdentityOptions.GetIdentityCertificatesForServer != nil:
+		config.GetCertificate = func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			return buildGetCertificates(clientHello, o)
+		}
+	case o.IdentityOptions.IdentityProvider != nil:
+		o.IdentityOptions.GetIdentityCertificatesForServer = func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+			km, err := o.IdentityOptions.IdentityProvider.KeyMaterial(context.Background())
 			if err != nil {
 				return nil, err
 			}
@@ -345,17 +350,11 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 			}
 			return certChains, nil
 		}
-	}
-	// Propagate tls.Config fields based on the user input.
-	config := &tls.Config{
-		ClientAuth:   clientAuth,
-		Certificates: o.Certificates,
-		ClientCAs:    clientCAs,
-	}
-	if o.GetIdentityCertificatesForServer != nil {
 		config.GetCertificate = func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return buildGetCertificates(clientHello, o)
 		}
+	default:
+		return nil, fmt.Errorf("needs to specify at least one field in IdentityCertificateOptions")
 	}
 	return config, nil
 }
@@ -532,7 +531,7 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 	tc := &advancedTLSCreds{
 		config:     conf,
 		isClient:   true,
-		getRootCAs: o.GetRootCertificates,
+		getRootCAs: o.RootOptions.GetRootCertificates,
 		verifyFunc: o.VerifyPeer,
 		vType:      o.VType,
 	}
@@ -550,7 +549,7 @@ func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) 
 	tc := &advancedTLSCreds{
 		config:     conf,
 		isClient:   false,
-		getRootCAs: o.GetRootCertificates,
+		getRootCAs: o.RootOptions.GetRootCertificates,
 		verifyFunc: o.VerifyPeer,
 		vType:      o.VType,
 	}
