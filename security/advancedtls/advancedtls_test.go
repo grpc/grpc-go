@@ -92,10 +92,10 @@ func (f fakeProvider) Close() {}
 
 func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 	tests := []struct {
-		desc        string
-		clientVType VerificationType
-		IdentityCertificateOptions
-		RootCertificateOptions
+		desc            string
+		clientVType     VerificationType
+		IdentityOptions IdentityCertificateOptions
+		RootOptions     RootCertificateOptions
 	}{
 		{
 			desc:        "Skip default verification and provide no root credentials",
@@ -104,7 +104,7 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 		{
 			desc:        "More than one fields in RootCertificateOptions is specified",
 			clientVType: CertVerification,
-			RootCertificateOptions: RootCertificateOptions{
+			RootOptions: RootCertificateOptions{
 				RootCACerts:  x509.NewCertPool(),
 				RootProvider: fakeProvider{},
 			},
@@ -112,7 +112,7 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 		{
 			desc:        "More than one fields in IdentityCertificateOptions is specified",
 			clientVType: CertVerification,
-			IdentityCertificateOptions: IdentityCertificateOptions{
+			IdentityOptions: IdentityCertificateOptions{
 				GetIdentityCertificatesForClient: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 					return nil, nil
 				},
@@ -121,7 +121,7 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 		},
 		{
 			desc: "Specify GetIdentityCertificatesForServer",
-			IdentityCertificateOptions: IdentityCertificateOptions{
+			IdentityOptions: IdentityCertificateOptions{
 				GetIdentityCertificatesForServer: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 					return nil, nil
 				},
@@ -133,8 +133,8 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			clientOptions := &ClientOptions{
 				VType:           test.clientVType,
-				IdentityOptions: test.IdentityCertificateOptions,
-				RootOptions:     test.RootCertificateOptions,
+				IdentityOptions: test.IdentityOptions,
+				RootOptions:     test.RootOptions,
 			}
 			_, err := clientOptions.config()
 			if err == nil {
@@ -146,10 +146,10 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 
 func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 	tests := []struct {
-		desc        string
-		clientVType VerificationType
-		IdentityCertificateOptions
-		RootCertificateOptions
+		desc            string
+		clientVType     VerificationType
+		IdentityOptions IdentityCertificateOptions
+		RootOptions     RootCertificateOptions
 	}{
 		{
 			desc:        "Use system default if no fields in RootCertificateOptions is specified",
@@ -158,10 +158,10 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 		{
 			desc:        "Good case with mutual TLS",
 			clientVType: CertVerification,
-			RootCertificateOptions: RootCertificateOptions{
+			RootOptions: RootCertificateOptions{
 				RootProvider: fakeProvider{},
 			},
-			IdentityCertificateOptions: IdentityCertificateOptions{
+			IdentityOptions: IdentityCertificateOptions{
 				IdentityProvider: fakeProvider{pt: provTypeIdentity},
 			},
 		},
@@ -171,8 +171,8 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			clientOptions := &ClientOptions{
 				VType:           test.clientVType,
-				IdentityOptions: test.IdentityCertificateOptions,
-				RootOptions:     test.RootCertificateOptions,
+				IdentityOptions: test.IdentityOptions,
+				RootOptions:     test.RootOptions,
 			}
 			clientConfig, err := clientOptions.config()
 			if err != nil {
@@ -195,8 +195,8 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 		desc              string
 		requireClientCert bool
 		serverVType       VerificationType
-		IdentityCertificateOptions
-		RootCertificateOptions
+		IdentityOptions   IdentityCertificateOptions
+		RootOptions       RootCertificateOptions
 	}{
 		{
 			desc:              "Skip default verification and provide no root credentials",
@@ -207,7 +207,7 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 			desc:              "More than one fields in RootCertificateOptions is specified",
 			requireClientCert: true,
 			serverVType:       CertVerification,
-			RootCertificateOptions: RootCertificateOptions{
+			RootOptions: RootCertificateOptions{
 				RootCACerts: x509.NewCertPool(),
 				GetRootCertificates: func(*GetRootCAsParams) (*GetRootCAsResults, error) {
 					return nil, nil
@@ -217,7 +217,7 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 		{
 			desc:        "More than one fields in IdentityCertificateOptions is specified",
 			serverVType: CertVerification,
-			IdentityCertificateOptions: IdentityCertificateOptions{
+			IdentityOptions: IdentityCertificateOptions{
 				Certificates:     []tls.Certificate{},
 				IdentityProvider: fakeProvider{pt: provTypeIdentity},
 			},
@@ -228,7 +228,7 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 		},
 		{
 			desc: "Specify GetIdentityCertificatesForClient",
-			IdentityCertificateOptions: IdentityCertificateOptions{
+			IdentityOptions: IdentityCertificateOptions{
 				GetIdentityCertificatesForClient: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 					return nil, nil
 				},
@@ -241,12 +241,12 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 			serverOptions := &ServerOptions{
 				VType:             test.serverVType,
 				RequireClientCert: test.requireClientCert,
-				IdentityOptions:   test.IdentityCertificateOptions,
-				RootOptions:       test.RootCertificateOptions,
+				IdentityOptions:   test.IdentityOptions,
+				RootOptions:       test.RootOptions,
 			}
 			_, err := serverOptions.config()
 			if err == nil {
-				t.Fatalf("serverOptions{%v}.config() returns no err, wantErr != nil", serverOptions)
+				t.Fatalf("ServerOptions{%v}.config() returns no err, wantErr != nil", serverOptions)
 			}
 		})
 	}
@@ -257,14 +257,14 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 		desc              string
 		requireClientCert bool
 		serverVType       VerificationType
-		IdentityCertificateOptions
-		RootCertificateOptions
+		IdentityOptions   IdentityCertificateOptions
+		RootOptions       RootCertificateOptions
 	}{
 		{
 			desc:              "Use system default if no fields in RootCertificateOptions is specified",
 			requireClientCert: true,
 			serverVType:       CertVerification,
-			IdentityCertificateOptions: IdentityCertificateOptions{
+			IdentityOptions: IdentityCertificateOptions{
 				Certificates: []tls.Certificate{},
 			},
 		},
@@ -272,10 +272,10 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 			desc:              "Good case with mutual TLS",
 			requireClientCert: true,
 			serverVType:       CertVerification,
-			RootCertificateOptions: RootCertificateOptions{
+			RootOptions: RootCertificateOptions{
 				RootProvider: fakeProvider{},
 			},
-			IdentityCertificateOptions: IdentityCertificateOptions{
+			IdentityOptions: IdentityCertificateOptions{
 				GetIdentityCertificatesForServer: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 					return nil, nil
 				},
@@ -288,8 +288,8 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 			serverOptions := &ServerOptions{
 				VType:             test.serverVType,
 				RequireClientCert: test.requireClientCert,
-				IdentityOptions:   test.IdentityCertificateOptions,
-				RootOptions:       test.RootCertificateOptions,
+				IdentityOptions:   test.IdentityOptions,
+				RootOptions:       test.RootOptions,
 			}
 			serverConfig, err := serverOptions.config()
 			if err != nil {

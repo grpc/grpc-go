@@ -93,8 +93,8 @@ type RootCertificateOptions struct {
 	// every new connection.
 	GetRootCertificates func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 	// If RootProvider is set, we will use the root certs from the Provider's
-	// KeyMaterial() call in every new connection. The Provider must not be empty.
-	// Otherwise, KeyMaterial() will block forever.
+	// KeyMaterial() call in every new connection. The Provider must have initial
+	// credentials if specified. Otherwise, KeyMaterial() will block forever.
 	RootProvider certprovider.Provider
 }
 
@@ -127,7 +127,8 @@ type IdentityCertificateOptions struct {
 	GetIdentityCertificatesForServer func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 	// If IdentityProvider is set, we will use the identity certs from the
 	// Provider's KeyMaterial() call in every new connection. The Provider must
-	// not be empty. Otherwise, KeyMaterial() will block forever.
+	// have initial credentials if specified. Otherwise, KeyMaterial() will block
+	// forever.
 	IdentityProvider certprovider.Provider
 }
 
@@ -304,7 +305,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 	case o.RootOptions.GetRootCertificates != nil:
 		// In cases when users provide GetRootCertificates callback, since this
 		// callback is not contained in tls.Config, we have nothing to set here.
-		// We will invoke the callback in ClientHandshake.
+		// We will invoke the callback in ServerHandshake.
 	case o.RootOptions.RootProvider != nil:
 		o.RootOptions.GetRootCertificates = func(*GetRootCAsParams) (*GetRootCAsResults, error) {
 			km, err := o.RootOptions.RootProvider.KeyMaterial(context.Background())
