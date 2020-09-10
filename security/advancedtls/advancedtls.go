@@ -93,7 +93,8 @@ type RootCertificateOptions struct {
 	// every new connection.
 	GetRootCertificates func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 	// If RootProvider is set, we will use the root certs from the Provider's
-	// KeyMaterial() call in every new connection.
+	// KeyMaterial() call in every new connection. The Provider must not be empty.
+	// Otherwise, KeyMaterial() will block forever.
 	RootProvider certprovider.Provider
 }
 
@@ -125,7 +126,8 @@ type IdentityCertificateOptions struct {
 	// This field MUST be set on server side.
 	GetIdentityCertificatesForServer func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 	// If IdentityProvider is set, we will use the identity certs from the
-	// Provider's KeyMaterial() call in every new connection.
+	// Provider's KeyMaterial() call in every new connection. The Provider must
+	// not be empty. Otherwise, KeyMaterial() will block forever.
 	IdentityProvider certprovider.Provider
 }
 
@@ -205,12 +207,10 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 	}
 	// Make sure users didn't specify more than one fields in
 	// RootCertificateOptions and IdentityCertificateOptions.
-	rootOptionNum := o.RootOptions.nonNilFieldCount()
-	if rootOptionNum > 1 {
+	if num := o.RootOptions.nonNilFieldCount(); num > 1 {
 		return nil, fmt.Errorf("at most one field in RootCertificateOptions could be specified")
 	}
-	identityOptionNum := o.IdentityOptions.nonNilFieldCount()
-	if identityOptionNum > 1 {
+	if num := o.IdentityOptions.nonNilFieldCount(); num > 1 {
 		return nil, fmt.Errorf("at most one field in IdentityCertificateOptions could be specified")
 	}
 	if o.IdentityOptions.GetIdentityCertificatesForServer != nil {
@@ -261,10 +261,7 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 			if err != nil {
 				return nil, err
 			}
-			if len(km.Certs) == 0 {
-				return nil, fmt.Errorf("no identity cert on the client side in IdentityProvider")
-			}
-			if len(km.Certs) > 1 {
+			if len(km.Certs) != 1 {
 				return nil, fmt.Errorf("there should always be only one identity cert chain on the client side in IdentityProvider")
 			}
 			return &km.Certs[0], nil
@@ -281,12 +278,10 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 	}
 	// Make sure users didn't specify more than one fields in
 	// RootCertificateOptions and IdentityCertificateOptions.
-	rootOptionNum := o.RootOptions.nonNilFieldCount()
-	if rootOptionNum > 1 {
+	if num := o.RootOptions.nonNilFieldCount(); num > 1 {
 		return nil, fmt.Errorf("at most one field in RootCertificateOptions could be specified")
 	}
-	identityOptionNum := o.IdentityOptions.nonNilFieldCount()
-	if identityOptionNum > 1 {
+	if num := o.IdentityOptions.nonNilFieldCount(); num > 1 {
 		return nil, fmt.Errorf("at most one field in IdentityCertificateOptions could be specified")
 	}
 	if o.IdentityOptions.GetIdentityCertificatesForClient != nil {
@@ -301,7 +296,6 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 	}
 	config := &tls.Config{
 		ClientAuth: clientAuth,
-		//Certificates: o.IdentityOptions.Certificates,
 	}
 	// Propagate root-certificate-related fields in tls.Config.
 	switch {
