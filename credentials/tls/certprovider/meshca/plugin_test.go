@@ -185,7 +185,7 @@ func setupFakeMeshCA(t *testing.T, withErrors, withShortLife bool) (addr string,
 
 // TestCreateCertificate spawns up a fake Mesh CA server, and creates a plugin
 // and attempts to read key material from it.
-func TestCreateCertificate(t *testing.T) {
+func (s) TestCreateCertificate(t *testing.T) {
 	addr, cancel := setupFakeMeshCA(t, false, false)
 	defer cancel()
 
@@ -214,14 +214,17 @@ func TestCreateCertificate(t *testing.T) {
 	// We don't really care about the exact key material returned here. All we
 	// care about is whether we get any key material at all, and that we don't
 	// get any errors.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	// We give the context a larger deadline than usual because the CSR
+	// generation seems to be taking quite a bit of time, especially under the
+	// race detector.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*defaultTestTimeout)
 	defer cancel()
 	if _, err = prov.KeyMaterial(ctx); err != nil {
 		t.Fatalf("provider.KeyMaterial(ctx) failed: %v", err)
 	}
 }
 
-func TestCreateCertificateWithBackoff(t *testing.T) {
+func (s) TestCreateCertificateWithBackoff(t *testing.T) {
 	addr, cancel := setupFakeMeshCA(t, true, false)
 	defer cancel()
 
@@ -260,7 +263,7 @@ func TestCreateCertificateWithBackoff(t *testing.T) {
 	// We don't really care about the exact key material returned here. All we
 	// care about is whether we get any key material at all, and that we don't
 	// get any errors.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*defaultTestTimeout)
 	defer cancel()
 	if _, err = prov.KeyMaterial(ctx); err != nil {
 		t.Fatalf("provider.KeyMaterial(ctx) failed: %v", err)
@@ -275,7 +278,7 @@ func TestCreateCertificateWithBackoff(t *testing.T) {
 	}
 }
 
-func TestCreateCertificateWithRefresh(t *testing.T) {
+func (s) TestCreateCertificateWithRefresh(t *testing.T) {
 	addr, cancel := setupFakeMeshCA(t, false, true)
 	defer cancel()
 
@@ -301,7 +304,7 @@ func TestCreateCertificateWithRefresh(t *testing.T) {
 	}
 	defer prov.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*defaultTestTimeout)
 	defer cancel()
 	km1, err := prov.KeyMaterial(ctx)
 	if err != nil {

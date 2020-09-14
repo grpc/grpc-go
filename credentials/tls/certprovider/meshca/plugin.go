@@ -225,6 +225,9 @@ func (p *providerPlugin) updateKeyMaterial(ctx context.Context) time.Duration {
 			continue
 		}
 
+		// At this point, the received response has been deemed good.
+		retries = 0
+
 		// All certs signed by the MeshCA roll up to the same root. And treating
 		// the last element of the returned chain as the root is the only
 		// supported option to get the root certificate. So, we ignore the
