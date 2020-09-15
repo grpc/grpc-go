@@ -24,8 +24,58 @@ import (
 
 const negativeOneUInt64 = ^uint64(0)
 
-// Store is a repository for LB policy implementations to report store load
-// data. It is safe for concurrent use.
+// A pair of cluster and service name. The same cluster can be used by multiple
+// services, and one service can use multiple clusters. So we need a pair with
+// both name to accurately indicate where the load belongs.
+type clusterAndServiceNames struct {
+	cluster string
+	service string
+}
+
+type Store struct {
+	clusters sync.Map // map[clusterAndServiceNames]*rpcCountData
+}
+
+// PerCluster returns the PerClusterStore for the given clusterName +
+// serviceName.
+func (ls *Store) PerCluster(clusterName, serviceName string) *PerClusterStore {
+	if ls == nil {
+		return nil
+	}
+
+	k := clusterAndServiceNames{
+		cluster: clusterName,
+		service: serviceName,
+	}
+	p, ok := ls.clusters.Load(k)
+	if !ok {
+		s := &PerClusterStore{}
+		p, _ = ls.clusters.LoadOrStore(k, s)
+	}
+	return p.(*PerClusterStore)
+}
+
+// CallServerLoad adds one server load record for the given locality. The
+// load type is specified by desc, and its value by val.
+func (ls *Store) CallServerLoad(clusterName, serviceName, locality, name string, d float64) {
+	if ls == nil {
+		return
+	}
+
+	k := clusterAndServiceNames{
+		cluster: clusterName,
+		service: serviceName,
+	}
+	p, ok := ls.clusters.Load(k)
+	if !ok {
+		s := &PerClusterStore{}
+		p, _ = ls.clusters.LoadOrStore(k, s)
+	}
+	p.(*PerClusterStore).CallServerLoad(locality, name, d)
+}
+
+// PerClusterStore is a repository for LB policy implementations to report store
+// load data. It is safe for concurrent use.
 //
 // A zero Store is empty and ready for use.
 //
@@ -38,7 +88,7 @@ const negativeOneUInt64 = ^uint64(0)
 // RWMutex.
 // Neither of these conditions are met here, and we should transition to a
 // regular map with a mutex for better type safety.
-type Store struct {
+type PerClusterStore struct {
 	drops            sync.Map // map[string]*uint64
 	localityRPCCount sync.Map // map[string]*rpcCountData
 }
@@ -47,7 +97,7 @@ type Store struct {
 // updates are done atomically.
 
 // CallDropped adds one drop record with the given category to store.
-func (ls *Store) CallDropped(category string) {
+func (ls *PerClusterStore) CallDropped(category string) {
 	if ls == nil {
 		return
 	}
@@ -61,7 +111,7 @@ func (ls *Store) CallDropped(category string) {
 }
 
 // CallStarted adds one call started record for the given locality.
-func (ls *Store) CallStarted(locality string) {
+func (ls *PerClusterStore) CallStarted(locality string) {
 	if ls == nil {
 		return
 	}
@@ -76,7 +126,7 @@ func (ls *Store) CallStarted(locality string) {
 
 // CallFinished adds one call finished record for the given locality.
 // For successful calls, err needs to be nil.
-func (ls *Store) CallFinished(locality string, err error) {
+func (ls *PerClusterStore) CallFinished(locality string, err error) {
 	if ls == nil {
 		return
 	}
@@ -97,7 +147,7 @@ func (ls *Store) CallFinished(locality string, err error) {
 
 // CallServerLoad adds one server load record for the given locality. The
 // load type is specified by desc, and its value by val.
-func (ls *Store) CallServerLoad(locality, name string, d float64) {
+func (ls *PerClusterStore) CallServerLoad(locality, name string, d float64) {
 	if ls == nil {
 		return
 	}
@@ -158,7 +208,7 @@ func newStoreData() *Data {
 
 // Stats returns and resets all loads reported to the store, except inProgress
 // rpc counts.
-func (ls *Store) Stats() *Data {
+func (ls *PerClusterStore) Stats() *Data {
 	if ls == nil {
 		return nil
 	}

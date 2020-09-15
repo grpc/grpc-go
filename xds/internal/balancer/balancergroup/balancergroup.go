@@ -24,6 +24,7 @@ import (
 	"time"
 
 	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
+	"google.golang.org/grpc/xds/internal/client/load"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -31,13 +32,6 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
 )
-
-// loadReporter wraps the methods from the loadStore that are used here.
-type loadReporter interface {
-	CallStarted(locality string)
-	CallFinished(locality string, err error)
-	CallServerLoad(locality, name string, val float64)
-}
 
 // subBalancerWrapper is used to keep the configurations that will be used to start
 // the underlying balancer. It can be called to start/stop the underlying
@@ -186,7 +180,7 @@ func (sbc *subBalancerWrapper) stopBalancer() {
 type BalancerGroup struct {
 	cc        balancer.ClientConn
 	logger    *grpclog.PrefixLogger
-	loadStore loadReporter
+	loadStore load.PerClusterReporter
 
 	// stateAggregator is where the state/picker updates will be sent to. It's
 	// provided by the parent balancer, to build a picker with all the
@@ -241,7 +235,7 @@ var DefaultSubBalancerCloseTimeout = 15 * time.Minute
 
 // New creates a new BalancerGroup. Note that the BalancerGroup
 // needs to be started to work.
-func New(cc balancer.ClientConn, stateAggregator BalancerStateAggregator, loadStore loadReporter, logger *grpclog.PrefixLogger) *BalancerGroup {
+func New(cc balancer.ClientConn, stateAggregator BalancerStateAggregator, loadStore load.PerClusterReporter, logger *grpclog.PrefixLogger) *BalancerGroup {
 	return &BalancerGroup{
 		cc:        cc,
 		logger:    logger,
@@ -500,10 +494,10 @@ type loadReportPicker struct {
 	p balancer.Picker
 
 	locality  string
-	loadStore loadReporter
+	loadStore load.PerClusterReporter
 }
 
-func newLoadReportPicker(p balancer.Picker, id string, loadStore loadReporter) *loadReportPicker {
+func newLoadReportPicker(p balancer.Picker, id string, loadStore load.PerClusterReporter) *loadReportPicker {
 	return &loadReportPicker{
 		p:         p,
 		locality:  id,

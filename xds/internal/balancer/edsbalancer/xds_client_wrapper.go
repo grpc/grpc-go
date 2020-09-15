@@ -19,6 +19,8 @@
 package edsbalancer
 
 import (
+	"sync"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
@@ -45,6 +47,43 @@ var (
 	bootstrapConfigNew = bootstrap.NewConfig
 )
 
+type loadStoreWrapper struct {
+	mu      sync.RWMutex
+	store   *load.Store
+	service string
+}
+
+func (lsw *loadStoreWrapper) update(store *load.Store, service string) {
+	lsw.mu.Lock()
+	defer lsw.mu.Unlock()
+	lsw.store = store
+	lsw.service = service
+}
+
+func (lsw *loadStoreWrapper) CallStarted(locality string) {
+	lsw.mu.RLock()
+	defer lsw.mu.RUnlock()
+	lsw.store.PerCluster(lsw.service, "").CallStarted(locality)
+}
+
+func (lsw *loadStoreWrapper) CallFinished(locality string, err error) {
+	lsw.mu.RLock()
+	defer lsw.mu.RUnlock()
+	lsw.store.PerCluster(lsw.service, "").CallFinished(locality, err)
+}
+
+func (lsw *loadStoreWrapper) CallServerLoad(locality, name string, val float64) {
+	lsw.mu.RLock()
+	defer lsw.mu.RUnlock()
+	lsw.store.PerCluster(lsw.service, "").CallServerLoad(locality, name, val)
+}
+
+func (lsw *loadStoreWrapper) CallDropped(category string) {
+	lsw.mu.RLock()
+	defer lsw.mu.RUnlock()
+	lsw.store.PerCluster(lsw.service, "").CallDropped(category)
+}
+
 // xdsclientWrapper is responsible for getting the xds client from attributes or
 // creating a new xds client, and start watching EDS. The given callbacks will
 // be called with EDS updates or errors.
@@ -58,6 +97,7 @@ type xdsclientWrapper struct {
 	// xdsClient could come from attributes, or created with balancerName.
 	xdsClient xdsClientInterface
 
+	load *loadStoreWrapper
 	// edsServiceName is the edsServiceName currently being watched, not
 	// necessary the edsServiceName from service config.
 	//
@@ -82,6 +122,7 @@ func newXDSClientWrapper(newEDSUpdate func(xdsclient.EndpointsUpdate, error), bb
 		logger:       logger,
 		newEDSUpdate: newEDSUpdate,
 		bbo:          bbo,
+		load:         &loadStoreWrapper{},
 	}
 }
 
@@ -201,7 +242,7 @@ func (c *xdsclientWrapper) startEndpointsWatch(nameToWatch string) {
 // Caller can cal this when the loadReportServer name changes, but
 // edsServiceName doesn't (so we only need to restart load reporting, not EDS
 // watch).
-func (c *xdsclientWrapper) startLoadReport(edsServiceNameBeingWatched string, loadReportServer *string) {
+func (c *xdsclientWrapper) startLoadReport(loadReportServer *string) {
 	if c.xdsClient == nil {
 		c.logger.Warningf("xds: xdsClient is nil when trying to start load reporting. This means xdsClient wasn't passed in from the resolver, and xdsClient.New failed")
 		return
@@ -211,15 +252,16 @@ func (c *xdsclientWrapper) startLoadReport(edsServiceNameBeingWatched string, lo
 	}
 	c.loadReportServer = loadReportServer
 	if c.loadReportServer != nil {
-		c.cancelLoadReport = c.xdsClient.ReportLoad(*c.loadReportServer, edsServiceNameBeingWatched)
+		c.cancelLoadReport = c.xdsClient.ReportLoad(*c.loadReportServer, c.edsServiceName)
 	}
 }
 
-func (c *xdsclientWrapper) loadStore() *load.Store {
-	if c == nil || c.xdsClient == nil {
+func (c *xdsclientWrapper) loadStore() load.PerClusterReporter {
+	if c == nil || c.load.store == nil {
 		return nil
 	}
-	return c.xdsClient.LoadStore()
+	// return c.xdsClient.LoadStore().PerCluster(c.edsServiceName, "")
+	return c.load
 }
 
 // handleUpdate applies the service config and attributes updates to the client,
@@ -227,38 +269,25 @@ func (c *xdsclientWrapper) loadStore() *load.Store {
 func (c *xdsclientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attributes) {
 	clientChanged := c.updateXDSClient(config, attr)
 
-	var (
-		restartEndpointsWatch bool
-		restartLoadReport     bool
-	)
-
-	// The clusterName to watch should come from CDS response, via service
-	// config. If it's an empty string, fallback user's dial target.
-	nameToWatch := config.EDSServiceName
-	if nameToWatch == "" {
-		c.logger.Warningf("eds: cluster name to watch is an empty string. Fallback to user's dial target")
-		nameToWatch = c.bbo.Target.Endpoint
-	}
-
 	// Need to restart EDS watch when one of the following happens:
 	// - the xds_client is updated
 	// - the xds_client didn't change, but the edsServiceName changed
-	//
+	if clientChanged || c.edsServiceName != config.EDSServiceName {
+		c.startEndpointsWatch(config.EDSServiceName)
+		// TODO: this update for the LRS service name is too early. It should
+		// only apply to the new EDS response. But this is applied to the RPCs
+		// before the new EDS response. To fully fix this, the EDS balancer
+		// needs to do a graceful switch to another EDS implementation.
+		//
+		// This is OK for now, because we don't actually expect edsServiceName
+		// to change. Fix this (a bigger change) will happen later.
+		c.load.update(c.xdsClient.LoadStore(), c.edsServiceName)
+	}
+
 	// Only need to restart load reporting when:
-	// - no need to restart EDS, but loadReportServer name changed
-	if clientChanged || c.edsServiceName != nameToWatch {
-		restartEndpointsWatch = true
-		restartLoadReport = true
-	} else if !equalStringPointers(c.loadReportServer, config.LrsLoadReportingServerName) {
-		restartLoadReport = true
-	}
-
-	if restartEndpointsWatch {
-		c.startEndpointsWatch(nameToWatch)
-	}
-
-	if restartLoadReport {
-		c.startLoadReport(nameToWatch, config.LrsLoadReportingServerName)
+	// - the loadReportServer name changed
+	if !equalStringPointers(c.loadReportServer, config.LrsLoadReportingServerName) {
+		c.startLoadReport(config.LrsLoadReportingServerName)
 	}
 }
 
