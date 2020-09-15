@@ -56,7 +56,7 @@ func TestDrops(t *testing.T) {
 		}
 	)
 
-	ls := Store{}
+	ls := PerClusterStore{}
 	var wg sync.WaitGroup
 	for category, count := range drops {
 		for i := 0; i < count; i++ {
@@ -118,7 +118,7 @@ func TestLocalityStats(t *testing.T) {
 		}
 	)
 
-	ls := Store{}
+	ls := PerClusterStore{}
 	var wg sync.WaitGroup
 	for locality, data := range localityData {
 		wg.Add(data.start)
@@ -211,7 +211,7 @@ func TestResetAfterStats(t *testing.T) {
 		}
 	)
 
-	reportLoad := func(ls *Store) {
+	reportLoad := func(ls *PerClusterStore) {
 		for category, count := range drops {
 			for i := 0; i < count; i++ {
 				ls.CallDropped(category)
@@ -233,7 +233,7 @@ func TestResetAfterStats(t *testing.T) {
 		}
 	}
 
-	ls := Store{}
+	ls := PerClusterStore{}
 	reportLoad(&ls)
 	gotStoreData := ls.Stats()
 	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty()); diff != "" {

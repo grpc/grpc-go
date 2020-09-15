@@ -70,7 +70,7 @@ func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	}
 }
 
-func newTestBalancerGroup(t *testing.T, loadStore *load.Store) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
+func newTestBalancerGroup(t *testing.T, loadStore *load.PerClusterStore) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
@@ -400,7 +400,7 @@ func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 }
 
 func (s) TestBalancerGroup_LoadReport(t *testing.T) {
-	loadStore := &load.Store{}
+	loadStore := &load.PerClusterStore{}
 	cc, gator, bg := newTestBalancerGroup(t, loadStore)
 
 	backendToBalancerID := make(map[balancer.SubConn]string)

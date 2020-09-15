@@ -682,12 +682,12 @@ func (s) TestDropPicker(t *testing.T) {
 	}
 }
 
-type loadStoreWrapper struct {
+type testLoadStoreWrapper struct {
 	xdsClientInterface
 	ls *load.Store
 }
 
-func (l *loadStoreWrapper) LoadStore() *load.Store {
+func (l *testLoadStoreWrapper) LoadStore() *load.Store {
 	return l.ls
 }
 
@@ -697,7 +697,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	// be used.
 	loadStore := &load.Store{}
 	cw := &xdsClientWrapper{
-		xdsClient: &loadStoreWrapper{ls: loadStore},
+		load: &loadStoreWrapper{store: loadStore, service: testClusterNames[0]},
 	}
 
 	cc := testutils.NewTestClientConn(t)
@@ -745,7 +745,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 		}
 	}
 
-	gotStoreData := loadStore.Stats()
+	gotStoreData := loadStore.PerCluster(testClusterNames[0], "").Stats()
 	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty()); diff != "" {
 		t.Errorf("store.Stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
