@@ -22,12 +22,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"regexp"
-	"runtime/debug"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/grpclog"
 )
@@ -63,25 +65,33 @@ func init() {
 	}
 }
 
-// getStackFrame gets, from the stack byte string, the appropriate stack frame.
-func getStackFrame(stack []byte, frame int) (string, error) {
-	s := strings.Split(string(stack), "\n")
-	if frame >= (len(s)-1)/2 {
+// getCallingPrefix returns the <file:line> at the given depth from the stack.
+func getCallingPrefix(depth int) (string, error) {
+	_, file, line, ok := runtime.Caller(depth)
+	if !ok {
 		return "", errors.New("frame request out-of-bounds")
 	}
-	split := strings.Split(strings.Fields(s[(frame*2)+2][1:])[0], "/")
-	return fmt.Sprintf("%v:", split[len(split)-1]), nil
+	return fmt.Sprintf("%s:%d", path.Base(file), line), nil
+}
+
+// Returns the last component of the stringified current time, which is of the
+// format "m=±<value>", where value is the monotonic clock reading formatted as
+// a decimal number of seconds.
+func getTimeSuffix() string {
+	parts := strings.Split(time.Now().String(), " ")
+	return fmt.Sprintf(" (%s)", parts[len(parts)-1])
 }
 
 // log logs the message with the specified parameters to the tLogger.
 func (g *tLogger) log(ltype logType, depth int, format string, args ...interface{}) {
-	s := debug.Stack()
-	prefix, err := getStackFrame(s, callingFrame+depth)
-	args = append([]interface{}{prefix}, args...)
+	prefix, err := getCallingPrefix(callingFrame + depth)
 	if err != nil {
 		g.t.Error(err)
 		return
 	}
+	args = append([]interface{}{prefix}, args...)
+	args = append(args, getTimeSuffix())
+
 	if format == "" {
 		switch ltype {
 		case errorLog:
