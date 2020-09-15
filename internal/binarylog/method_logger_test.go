@@ -37,7 +37,7 @@ func (s) TestLog(t *testing.T) {
 	ml := newMethodLogger(10, 10)
 	// Set sink to testing buffer.
 	buf := bytes.NewBuffer(nil)
-	ml.sink = newWriterSink(buf)
+	ml.sink = NewWriterSink(buf)
 
 	addr := "1.2.3.4"
 	port := 790
