@@ -47,7 +47,8 @@ const (
 	serverFeaturesV3 = "xds_v3"
 
 	// Type name for Google default credentials.
-	googleDefaultCreds              = "google_default"
+	credsGoogleDefault              = "google_default"
+	credsInsecure                   = "insecure"
 	gRPCUserAgentName               = "gRPC Go"
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
 )
@@ -161,9 +162,12 @@ func NewConfig() (*Config, error) {
 			xs := servers[0]
 			config.BalancerName = xs.ServerURI
 			for _, cc := range xs.ChannelCreds {
-				if cc.Type == googleDefaultCreds {
+				// We stop at the first credential type that we support.
+				if cc.Type == credsGoogleDefault {
 					config.Creds = grpc.WithCredentialsBundle(google.NewDefaultCredentials())
-					// We stop at the first credential type that we support.
+					break
+				} else if cc.Type == credsInsecure {
+					config.Creds = grpc.WithInsecure()
 					break
 				}
 			}
@@ -185,7 +189,10 @@ func NewConfig() (*Config, error) {
 	}
 
 	if config.BalancerName == "" {
-		return nil, fmt.Errorf("xds: Required field %q not found in bootstrap", "xds_servers.server_uri")
+		return nil, fmt.Errorf("xds: Required field %q not found in bootstrap %s", "xds_servers.server_uri", jsonData["xds_servers"])
+	}
+	if config.Creds == nil {
+		return nil, fmt.Errorf("xds: Required field %q doesn't contain valid value in bootstrap %s", "xds_servers.channel_creds", jsonData["xds_servers"])
 	}
 
 	// We end up using v3 transport protocol version only if the following

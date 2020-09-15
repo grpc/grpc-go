@@ -67,15 +67,6 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 	r.logger = prefixLogger((r))
 	r.logger.Infof("Creating resolver for target: %+v", t)
 
-	if config.Creds == nil {
-		// TODO: Once we start supporting a mechanism to register credential
-		// types, a failure to find the credential type mentioned in the
-		// bootstrap file should result in a failure, and not in using
-		// credentials from the parent channel (passed through the
-		// resolver.BuildOptions).
-		config.Creds = r.defaultDialCreds(config.BalancerName, rbo)
-	}
-
 	var dopts []grpc.DialOption
 	if rbo.Dialer != nil {
 		dopts = []grpc.DialOption{grpc.WithContextDialer(rbo.Dialer)}
@@ -96,28 +87,6 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 
 	go r.run()
 	return r, nil
-}
-
-// defaultDialCreds builds a DialOption containing the credentials to be used
-// while talking to the xDS server (this is done only if the xds bootstrap
-// process does not return any credentials to use). If the parent channel
-// contains DialCreds, we use it as is. If it contains a CredsBundle, we use
-// just the transport credentials from the bundle. If we don't find any
-// credentials on the parent channel, we resort to using an insecure channel.
-func (r *xdsResolver) defaultDialCreds(balancerName string, rbo resolver.BuildOptions) grpc.DialOption {
-	switch {
-	case rbo.DialCreds != nil:
-		if err := rbo.DialCreds.OverrideServerName(balancerName); err != nil {
-			r.logger.Errorf("Failed to override server name in credentials: %v, using Insecure", err)
-			return grpc.WithInsecure()
-		}
-		return grpc.WithTransportCredentials(rbo.DialCreds)
-	case rbo.CredsBundle != nil:
-		return grpc.WithTransportCredentials(rbo.CredsBundle.TransportCredentials())
-	default:
-		r.logger.Warningf("No credentials available, using Insecure")
-		return grpc.WithInsecure()
-	}
 }
 
 // Name helps implement the resolver.Builder interface.
