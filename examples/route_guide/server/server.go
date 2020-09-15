@@ -60,6 +60,15 @@ type routeGuideServer struct {
 	routeNotes map[string][]*pb.RouteNote
 }
 
+func (s *routeGuideServer) Svc() *pb.RouteGuideService {
+	return &pb.RouteGuideService{
+		GetFeature:   s.GetFeature,
+		ListFeatures: s.ListFeatures,
+		RecordRoute:  s.RecordRoute,
+		RouteChat:    s.RouteChat,
+	}
+}
+
 // GetFeature returns the feature at the given point.
 func (s *routeGuideServer) GetFeature(ctx context.Context, point *pb.Point) (*pb.Feature, error) {
 	for _, feature := range s.savedFeatures {
@@ -237,7 +246,7 @@ func main() {
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
 	grpcServer := grpc.NewServer(opts...)
-	pb.RegisterRouteGuideServer(grpcServer, newServer())
+	pb.RegisterRouteGuideService(grpcServer, newServer().Svc())
 	grpcServer.Serve(lis)
 }
 
