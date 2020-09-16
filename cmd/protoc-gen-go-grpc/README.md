@@ -98,7 +98,7 @@ type myEchoService{
 
 // Optional; not recommended: to guarantee myEchoService fully implements
 // EchoService:
-var _ pb.UnstableEchoService = &myEchoService{}
+var _ pb.EchoServer = &myEchoService{}
 
 func main() {
      // ...
@@ -111,7 +111,7 @@ func main() {
 
 
      // Optional: to gracefully detect missing methods:
-     if _, ok := &myEchoService{}.(pb.UnstableEchoService); !ok {
+     if _, ok := &myEchoService{}.(pb.EchoServer); !ok {
         fmt.Println("myEchoService does not implement all methods of EchoService.")
      }
 

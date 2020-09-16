@@ -75,7 +75,14 @@ var (
 
 type testServer struct{}
 
-var _ testpb.UnstableTestServiceService = (*testServer)(nil)
+func (s *testServer) Svc() *testpb.TestServiceService {
+	return &testpb.TestServiceService{
+		UnaryCall:        s.UnaryCall,
+		FullDuplexCall:   s.FullDuplexCall,
+		ClientStreamCall: s.ClientStreamCall,
+		ServerStreamCall: s.ServerStreamCall,
+	}
+}
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	if err := grpc.SendHeader(ctx, testHeaderMetadata); err != nil {
@@ -815,7 +822,7 @@ func checkServerStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {
 	h := &statshandler{}
 	te := newTest(t, tc, nil, h)
-	te.startServer(testpb.NewTestServiceService(&testServer{}))
+	te.startServer((&testServer{}).Svc())
 	defer te.tearDown()
 
 	var (
@@ -1106,7 +1113,7 @@ func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map[int]*checkFuncWithCount) {
 	h := &statshandler{}
 	te := newTest(t, tc, h, nil)
-	te.startServer(testpb.NewTestServiceService(&testServer{}))
+	te.startServer((&testServer{}).Svc())
 	defer te.tearDown()
 
 	var (

@@ -117,7 +117,7 @@ func (s) TestGracefulStop(t *testing.T) {
 		},
 	}
 	s := grpc.NewServer()
-	testpb.RegisterTestServiceService(s, testpb.NewTestServiceService(ss))
+	testpb.RegisterTestServiceService(s, ss.Svc())
 
 	// 1. Start Server
 	wg := sync.WaitGroup{}

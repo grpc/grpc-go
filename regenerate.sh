@@ -96,7 +96,7 @@ done
 
 for src in ${LEGACY_SOURCES[@]}; do
   echo "protoc ${src}"
-  protoc --go_out=${OPTS},plugins=grpc:${WORKDIR}/out --go-grpc_out=${OPTS},migration_mode=true:${WORKDIR}/out \
+  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS},gen_unstable_server_interfaces=true:${WORKDIR}/out \
     -I"." \
     -I${WORKDIR}/grpc-proto \
     -I${WORKDIR}/googleapis \

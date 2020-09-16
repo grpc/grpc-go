@@ -151,11 +151,16 @@ type server struct {
 	gauges map[string]*gauge
 }
 
-var _ metricspb.UnstableMetricsServiceService = (*server)(nil)
-
 // newMetricsServer returns a new metrics server.
 func newMetricsServer() *server {
 	return &server{gauges: make(map[string]*gauge)}
+}
+
+func (s *server) Svc() *metricspb.MetricsServiceService {
+	return &metricspb.MetricsServiceService{
+		GetAllGauges: s.GetAllGauges,
+		GetGauge:     s.GetGauge,
+	}
 }
 
 // GetAllGauges returns all gauges.
@@ -203,9 +208,8 @@ func startServer(server *server, port int) {
 	}
 
 	s := grpc.NewServer()
-	metricspb.RegisterMetricsServiceService(s, metricspb.NewMetricsServiceService(server))
+	metricspb.RegisterMetricsServiceService(s, server.Svc())
 	s.Serve(lis)
-
 }
 
 // performRPCs uses weightedRandomTestSelector to select test case and runs the tests.

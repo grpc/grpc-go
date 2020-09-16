@@ -13,6 +13,51 @@ import (
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion7
 
+// ProfilingClient is the client API for Profiling service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type ProfilingClient interface {
+	// Enable allows users to toggle profiling on and off remotely.
+	Enable(ctx context.Context, in *EnableRequest, opts ...grpc.CallOption) (*EnableResponse, error)
+	// GetStreamStats is used to retrieve an array of stream-level stats from a
+	// gRPC client/server.
+	GetStreamStats(ctx context.Context, in *GetStreamStatsRequest, opts ...grpc.CallOption) (*GetStreamStatsResponse, error)
+}
+
+type profilingClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewProfilingClient(cc grpc.ClientConnInterface) ProfilingClient {
+	return &profilingClient{cc}
+}
+
+var profilingEnableStreamDesc = &grpc.StreamDesc{
+	StreamName: "Enable",
+}
+
+func (c *profilingClient) Enable(ctx context.Context, in *EnableRequest, opts ...grpc.CallOption) (*EnableResponse, error) {
+	out := new(EnableResponse)
+	err := c.cc.Invoke(ctx, "/grpc.go.profiling.v1alpha.Profiling/Enable", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+var profilingGetStreamStatsStreamDesc = &grpc.StreamDesc{
+	StreamName: "GetStreamStats",
+}
+
+func (c *profilingClient) GetStreamStats(ctx context.Context, in *GetStreamStatsRequest, opts ...grpc.CallOption) (*GetStreamStatsResponse, error) {
+	out := new(GetStreamStatsResponse)
+	err := c.cc.Invoke(ctx, "/grpc.go.profiling.v1alpha.Profiling/GetStreamStats", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProfilingService is the service API for Profiling service.
 // Fields should be assigned to their respective handler implementations only before
 // RegisterProfilingService is called.  Any unassigned fields will result in the
@@ -92,35 +137,35 @@ func RegisterProfilingService(s grpc.ServiceRegistrar, srv *ProfilingService) {
 	s.RegisterService(&sd, nil)
 }
 
-// NewProfilingService creates a new ProfilingService containing the
-// implemented methods of the Profiling service in s.  Any unimplemented
-// methods will result in the gRPC server returning an UNIMPLEMENTED status to the client.
-// This includes situations where the method handler is misspelled or has the wrong
-// signature.  For this reason, this function should be used with great care and
-// is not recommended to be used by most users.
-func NewProfilingService(s interface{}) *ProfilingService {
-	ns := &ProfilingService{}
-	if h, ok := s.(interface {
-		Enable(context.Context, *EnableRequest) (*EnableResponse, error)
-	}); ok {
-		ns.Enable = h.Enable
-	}
-	if h, ok := s.(interface {
-		GetStreamStats(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error)
-	}); ok {
-		ns.GetStreamStats = h.GetStreamStats
-	}
-	return ns
-}
-
-// UnstableProfilingService is the service API for Profiling service.
+// ProfilingServer is the service API for Profiling service.
 // New methods may be added to this interface if they are added to the service
 // definition, which is not a backward-compatible change.  For this reason,
-// use of this type is not recommended.
-type UnstableProfilingService interface {
+// use of this type is not recommended unless you own the service definition.
+type ProfilingServer interface {
 	// Enable allows users to toggle profiling on and off remotely.
 	Enable(context.Context, *EnableRequest) (*EnableResponse, error)
 	// GetStreamStats is used to retrieve an array of stream-level stats from a
 	// gRPC client/server.
 	GetStreamStats(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error)
+}
+
+// UnimplementedProfilingServer can be embedded to have forward compatible implementations of
+// ProfilingServer
+type UnimplementedProfilingServer struct {
+}
+
+func (*UnimplementedProfilingServer) Enable(context.Context, *EnableRequest) (*EnableResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Enable not implemented")
+}
+func (*UnimplementedProfilingServer) GetStreamStats(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetStreamStats not implemented")
+}
+
+// RegisterProfilingServer registers a service implementation with a gRPC server.
+func RegisterProfilingServer(s grpc.ServiceRegistrar, srv ProfilingServer) {
+	str := &ProfilingService{
+		Enable:         srv.Enable,
+		GetStreamStats: srv.GetStreamStats,
+	}
+	RegisterProfilingService(s, str)
 }

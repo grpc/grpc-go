@@ -168,7 +168,12 @@ func (x) TestAllExtensionNumbersForType(t *testing.T) {
 
 type server struct{}
 
-var _ pb.UnstableSearchServiceService = (*server)(nil)
+func (s *server) Svc() *pb.SearchServiceService {
+	return &pb.SearchServiceService{
+		Search:          s.Search,
+		StreamingSearch: s.StreamingSearch,
+	}
+}
 
 func (s *server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchResponse, error) {
 	return &pb.SearchResponse{}, nil
@@ -195,7 +200,7 @@ func (x) TestReflectionEnd2end(t *testing.T) {
 		t.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterSearchServiceService(s, pb.NewSearchServiceService(&server{}))
+	pb.RegisterSearchServiceService(s, (&server{}).Svc())
 	pbv3.RegisterSearchServiceV3Server(s, &serverV3{})
 	// Register reflection service on s.
 	Register(s)

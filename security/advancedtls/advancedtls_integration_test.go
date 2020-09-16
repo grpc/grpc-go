@@ -130,11 +130,8 @@ func (cs *certStore) loadCerts() error {
 	return nil
 }
 
-// serverImpl is used to implement pb.GreeterServer.
-type serverImpl struct{}
-
-// SayHello is a simple implementation of pb.GreeterServer.
-func (s *serverImpl) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+// sayHello is a simple implementation of the pb.GreeterServer SayHello method.
+func sayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
@@ -409,7 +406,7 @@ func (s) TestEnd2End(t *testing.T) {
 				t.Fatalf("failed to listen: %v", err)
 			}
 			defer lis.Close()
-			pb.RegisterGreeterService(s, pb.NewGreeterService(&serverImpl{}))
+			pb.RegisterGreeterService(s, &pb.GreeterService{SayHello: sayHello})
 			go s.Serve(lis)
 			clientOptions := &ClientOptions{
 				Certificates:         test.clientCert,

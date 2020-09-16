@@ -677,7 +677,15 @@ type testServer struct{}
 
 // NewTestServer creates a test server for test service.
 func NewTestServer() *testpb.TestServiceService {
-	return testpb.NewTestServiceService(testpb.UnstableTestServiceService(&testServer{}))
+	s := testServer{}
+	return &testpb.TestServiceService{
+		EmptyCall:           s.EmptyCall,
+		UnaryCall:           s.UnaryCall,
+		StreamingOutputCall: s.StreamingOutputCall,
+		StreamingInputCall:  s.StreamingInputCall,
+		FullDuplexCall:      s.FullDuplexCall,
+		HalfDuplexCall:      s.HalfDuplexCall,
+	}
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
