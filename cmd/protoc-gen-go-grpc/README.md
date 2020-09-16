@@ -62,29 +62,33 @@ Finally, pass this `Service` instance to the generated `Register` function:
 
 ### Migration from legacy version
 
+Older versions of `protoc-gen-go-grpc` and `protoc-gen-go` with the grpc plugin
+used a different method to register services.  With that method, it was only
+possible to register a service implementation that was a complete
+implementation of the service.  It was also possible to embed an
+`Unimplemented` implementation of the service, which was also generated and
+returned an UNIMPLEMENTED status for all methods.
+
+#### Generating the legacy API
+
+To avoid the need to update existing code, an option has been added to the code
+generator to produce the legacy API alongside the new API.  To use it:
+
+```sh
+# Example 1: with OPTS set to common options for protoc-gen-go and
+# protoc-gen-go-grpc
+protoc --go_out=${OPTS}:. --go-grpc_out=${OPTS},gen_unstable_server_interfaces=true:. *.proto
+
+# Example 2: if no special options are needed
+protoc --go_out=:. --go-grpc_out=gen_unstable_server_interfaces=true:. *.proto
+```
+
+**The use of this legacy API is NOT recommended.** It was discontinued as it
+results in compilation breakages when new methods are added to services, which
+is a backward-compatible change in all other languages supported by gRPC.  With
+the newer API, newly-added methods will return an UNIMPLEMENTED status.
+
 #### Updating existing code
-
-The previous version of protoc-gen-go-grpc used a different method to register
-services.  In that version, it was only possible to register a service
-implementation that was a complete implementation of the service.  It was also
-possible to embed an `Unimplemented` implementation of the service, which was
-also generated and returned an UNIMPLEMENTED status for all methods.  To make
-it easier to migrate from the previous version, two new symbols are generated:
-`New<Service>Service` and `Unstable<Service>Service`.
-
-`New<Service>Service` allows for easy wrapping of a service implementation into
-an instance of the new generated `Service` struct type.  *This has drawbacks,
-however: `New<Service>Service` accepts any parameter, and does not panic or
-error if any methods are missing, are misspelled, or have the wrong signature.*
-These methods will return an UNIMPLEMENTED status if called by a client.
-
-`Unstable<Service>Service` allows for asserting that a type properly implements
-all methods of a service.  It is generated with the name `Unstable` to denote
-that it will be extended whenever new methods are added to the service
-definition.  This kind of change to the service definition is considered
-backward-compatible in protobuf, but is not backward-compatible in Go, because
-adding methods to an interface invalidates any existing implementations.  *Use
-of this symbol could result in future compilation errors.*
 
 To convert your existing code using the previous code generator, please refer
 to the following example:
@@ -96,10 +100,6 @@ type myEchoService{
 // ... method handler implementation ...
 
 
-// Optional; not recommended: to guarantee myEchoService fully implements
-// EchoService:
-var _ pb.EchoServer = &myEchoService{}
-
 func main() {
      // ...
 
@@ -107,37 +107,12 @@ func main() {
      pb.RegisterEchoServer(grpcServer, &myEchoService{})
 
      // NEW:
-     pb.RegisterEchoService(grpcServer, pb.NewEchoService(&myEchoService{}))
-
-
-     // Optional: to gracefully detect missing methods:
-     if _, ok := &myEchoService{}.(pb.EchoServer); !ok {
-        fmt.Println("myEchoService does not implement all methods of EchoService.")
-     }
-
+     es := &myEchoService{}
+     pb.RegisterEchoService(grpcServer, pb.EchoService{
+        UnaryEcho: es.UnaryEcho,
+        // enumerate all methods in EchoService implemented by myEchoService...
+     })
 
      // ...
 }
 ```
-
-#### Updating generated code to support both legacy and new code
-
-`protoc-gen-go-grpc` supports a flag, `migration_mode`, which enables it to be
-run in tandem with the previous tool (`protoc-gen-go` with the grpc plugin).
-It can be used as follows:
-
-```sh
-go install github.com/golang/protobuf/protoc-gen-go
-
-# Example 1: with OPTS set to common options for protoc-gen-go and
-# protoc-gen-go-grpc
-protoc --go_out=${OPTS},plugins=grpc:. --go-grpc_out=${OPTS},migration_mode=true:. *.proto
-
-# Example 2: if no special options are needed
-protoc --go_out=plugins=grpc:. --go-grpc_out=migration_mode=true:. *.proto
-```
-
-This is recommended for temporary use only to ease migration from the legacy
-version.  The `Register<Service>Server` and `<Service>Server` symbols it
-produced are not backward compatible in the presence of newly added methods to
-a service.
