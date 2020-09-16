@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -58,7 +59,15 @@ var (
 	target = resolver.Target{Endpoint: targetStr}
 )
 
-func TestRegister(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestRegister(t *testing.T) {
 	b := resolver.Get(xdsScheme)
 	if b == nil {
 		t.Errorf("scheme %v is not registered", xdsScheme)
@@ -119,7 +128,7 @@ func errorDialer(_ context.Context, _ string) (net.Conn, error) {
 
 // TestResolverBuilder tests the xdsResolverBuilder's Build method with
 // different parameters.
-func TestResolverBuilder(t *testing.T) {
+func (s) TestResolverBuilder(t *testing.T) {
 	tests := []struct {
 		name          string
 		rbo           resolver.BuildOptions
@@ -262,7 +271,7 @@ func waitForWatchService(t *testing.T, xdsC *fakeclient.Client, wantTarget strin
 
 // TestXDSResolverWatchCallbackAfterClose tests the case where a service update
 // from the underlying xdsClient is received after the resolver is closed.
-func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
+func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
@@ -286,7 +295,7 @@ func TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 
 // TestXDSResolverBadServiceUpdate tests the case the xdsClient returns a bad
 // service update.
-func TestXDSResolverBadServiceUpdate(t *testing.T) {
+func (s) TestXDSResolverBadServiceUpdate(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
@@ -313,7 +322,7 @@ func TestXDSResolverBadServiceUpdate(t *testing.T) {
 
 // TestXDSResolverGoodServiceUpdate tests the happy case where the resolver
 // gets a good service update from the xdsClient.
-func TestXDSResolverGoodServiceUpdate(t *testing.T) {
+func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
@@ -372,7 +381,7 @@ func TestXDSResolverGoodServiceUpdate(t *testing.T) {
 
 // TestXDSResolverUpdates tests the cases where the resolver gets a good update
 // after an error, and an error after the good update.
-func TestXDSResolverGoodUpdateAfterError(t *testing.T) {
+func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
@@ -423,7 +432,7 @@ func TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 // TestXDSResolverResourceNotFoundError tests the cases where the resolver gets
 // a ResourceNotFoundError. It should generate a service config picking
 // weighted_target, but no child balancers.
-func TestXDSResolverResourceNotFoundError(t *testing.T) {
+func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		config:        &validConfig,
