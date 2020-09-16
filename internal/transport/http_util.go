@@ -185,14 +185,6 @@ func isWhitelistedHeader(hdr string) bool {
 	}
 }
 
-func (d *decodeState) status() *status.Status {
-	if d.data.statusGen == nil {
-		// No status-details were provided; generate status using code/msg.
-		d.data.statusGen = status.New(codes.Code(int32(*(d.data.rawStatusCode))), d.data.rawStatusMsg)
-	}
-	return d.data.statusGen
-}
-
 const binHdrSuffix = "-bin"
 
 func encodeBinHeader(v []byte) string {
