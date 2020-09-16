@@ -1218,7 +1218,9 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	for _, hf := range frame.Fields {
 		v, err := decodeMetadataHeader(hf.Name, hf.Value)
 		if err != nil {
-			errorf("Failed to decode metadata header (%q, %q): %v", hf.Name, hf.Value, err)
+			if logger.V(logLevel) {
+				logger.Errorf("Failed to decode metadata header (%q, %q): %v", hf.Name, hf.Value, err)
+			}
 			mdata[hf.Name] = []string{}
 			break
 		}
