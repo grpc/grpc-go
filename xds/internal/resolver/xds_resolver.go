@@ -20,12 +20,12 @@
 package resolver
 
 import (
-	"context"
 	"fmt"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 
 	xdsinternal "google.golang.org/grpc/xds/internal"
@@ -62,6 +62,7 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 	r := &xdsResolver{
 		target:   t,
 		cc:       cc,
+		closed:   grpcsync.NewEvent(),
 		updateCh: make(chan suWithError, 1),
 	}
 	r.logger = prefixLogger((r))
@@ -86,7 +87,8 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 		return nil, fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}
 	r.client = client
-	r.ctx, r.cancelCtx = context.WithCancel(context.Background())
+
+	// Register a watch on the xdsClient for the user's dial target.
 	cancelWatch := r.client.WatchService(r.target.Endpoint, r.handleServiceUpdate)
 	r.logger.Infof("Watch started on resource name %v with xds-client %p", r.target.Endpoint, r.client)
 	r.cancelWatch = func() {
@@ -145,10 +147,9 @@ type suWithError struct {
 // (which performs LDS/RDS queries for the same), and passes the received
 // updates to the ClientConn.
 type xdsResolver struct {
-	ctx       context.Context
-	cancelCtx context.CancelFunc
-	target    resolver.Target
-	cc        resolver.ClientConn
+	target resolver.Target
+	cc     resolver.ClientConn
+	closed *grpcsync.Event
 
 	logger *grpclog.PrefixLogger
 
@@ -176,7 +177,8 @@ type xdsResolver struct {
 func (r *xdsResolver) run() {
 	for {
 		select {
-		case <-r.ctx.Done():
+		case <-r.closed.Done():
+			return
 		case update := <-r.updateCh:
 			if update.err != nil {
 				r.logger.Warningf("Watch error on resource %v from xds-client %p, %v", r.target.Endpoint, r.client, update.err)
@@ -214,7 +216,7 @@ func (r *xdsResolver) run() {
 // the received update to the update channel, which is picked by the run
 // goroutine.
 func (r *xdsResolver) handleServiceUpdate(su xdsclient.ServiceUpdate, err error) {
-	if r.ctx.Err() != nil {
+	if r.closed.HasFired() {
 		// Do not pass updates to the ClientConn once the resolver is closed.
 		return
 	}
@@ -228,6 +230,6 @@ func (*xdsResolver) ResolveNow(o resolver.ResolveNowOptions) {}
 func (r *xdsResolver) Close() {
 	r.cancelWatch()
 	r.client.Close()
-	r.cancelCtx()
+	r.closed.Fire()
 	r.logger.Infof("Shutdown")
 }
