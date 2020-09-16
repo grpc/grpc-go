@@ -83,17 +83,17 @@ type GetRootCAsResults struct {
 
 // RootCertificateOptions contains options to obtain root trust certificates
 // for both the client and the server.
-// At most one of the options could be set. If none of them are set, we
+// At most one option could be set. If none of them are set, we
 // use the system default trust certificates.
 type RootCertificateOptions struct {
 	// If RootCACerts is set, it will be used every time when verifying
 	// the peer certificates, without performing root certificate reloading.
 	RootCACerts *x509.CertPool
-	// If GetRootCertificates is set, it will be invoked to obtain root certs in
+	// If GetRootCertificates is set, it will be invoked to obtain root certs for
 	// every new connection.
 	GetRootCertificates func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 	// If RootProvider is set, we will use the root certs from the Provider's
-	// KeyMaterial() call in every new connection. The Provider must have initial
+	// KeyMaterial() call in the new connections. The Provider must have initial
 	// credentials if specified. Otherwise, KeyMaterial() will block forever.
 	RootProvider certprovider.Provider
 }
@@ -112,21 +112,21 @@ func (o RootCertificateOptions) nonNilFieldCount() int {
 
 // IdentityCertificateOptions contains options to obtain identity certificates
 // for both the client and the server.
-// At most one of the options could be set.
+// At most one option could be set.
 type IdentityCertificateOptions struct {
 	// If Certificates is set, it will be used every time when needed to present
 	//identity certificates, without performing identity certificate reloading.
 	Certificates []tls.Certificate
 	// If GetIdentityCertificatesForClient is set, it will be invoked to obtain
-	// identity certs in every new connection.
+	// identity certs for every new connection.
 	// This field MUST be set on client side.
 	GetIdentityCertificatesForClient func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 	// If GetIdentityCertificatesForServer is set, it will be invoked to obtain
-	// identity certs in every new connection.
+	// identity certs for every new connection.
 	// This field MUST be set on server side.
 	GetIdentityCertificatesForServer func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 	// If IdentityProvider is set, we will use the identity certs from the
-	// Provider's KeyMaterial() call in every new connection. The Provider must
+	// Provider's KeyMaterial() call in the new connections. The Provider must
 	// have initial credentials if specified. Otherwise, KeyMaterial() will block
 	// forever.
 	IdentityProvider certprovider.Provider
