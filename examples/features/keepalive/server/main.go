@@ -48,12 +48,7 @@ var kasp = keepalive.ServerParameters{
 	Timeout:               1 * time.Second,  // Wait 1 second for the ping ack before assuming the connection is dead
 }
 
-// server implements EchoServer.
-type server struct {
-	pb.UnimplementedEchoServer
-}
-
-func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+func unaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: req.Message}, nil
 }
 
@@ -67,7 +62,7 @@ func main() {
 	}
 
 	s := grpc.NewServer(grpc.KeepaliveEnforcementPolicy(kaep), grpc.KeepaliveParams(kasp))
-	pb.RegisterEchoServer(s, &server{})
+	pb.RegisterEchoService(s, &pb.EchoService{UnaryEcho: unaryEcho})
 
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)

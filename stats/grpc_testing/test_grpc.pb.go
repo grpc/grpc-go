@@ -11,7 +11,7 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion6
+const _ = grpc.SupportPackageIsVersion7
 
 // TestServiceClient is the client API for TestService service.
 //
@@ -38,6 +38,10 @@ func NewTestServiceClient(cc grpc.ClientConnInterface) TestServiceClient {
 	return &testServiceClient{cc}
 }
 
+var testServiceUnaryCallStreamDesc = &grpc.StreamDesc{
+	StreamName: "UnaryCall",
+}
+
 func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
 	out := new(SimpleResponse)
 	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/UnaryCall", in, out, opts...)
@@ -47,8 +51,14 @@ func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, op
 	return out, nil
 }
 
+var testServiceFullDuplexCallStreamDesc = &grpc.StreamDesc{
+	StreamName:    "FullDuplexCall",
+	ServerStreams: true,
+	ClientStreams: true,
+}
+
 func (c *testServiceClient) FullDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_FullDuplexCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_TestService_serviceDesc.Streams[0], "/grpc.testing.TestService/FullDuplexCall", opts...)
+	stream, err := c.cc.NewStream(ctx, testServiceFullDuplexCallStreamDesc, "/grpc.testing.TestService/FullDuplexCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -78,8 +88,13 @@ func (x *testServiceFullDuplexCallClient) Recv() (*SimpleResponse, error) {
 	return m, nil
 }
 
+var testServiceClientStreamCallStreamDesc = &grpc.StreamDesc{
+	StreamName:    "ClientStreamCall",
+	ClientStreams: true,
+}
+
 func (c *testServiceClient) ClientStreamCall(ctx context.Context, opts ...grpc.CallOption) (TestService_ClientStreamCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_TestService_serviceDesc.Streams[1], "/grpc.testing.TestService/ClientStreamCall", opts...)
+	stream, err := c.cc.NewStream(ctx, testServiceClientStreamCallStreamDesc, "/grpc.testing.TestService/ClientStreamCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,8 +127,13 @@ func (x *testServiceClientStreamCallClient) CloseAndRecv() (*SimpleResponse, err
 	return m, nil
 }
 
+var testServiceServerStreamCallStreamDesc = &grpc.StreamDesc{
+	StreamName:    "ServerStreamCall",
+	ServerStreams: true,
+}
+
 func (c *testServiceClient) ServerStreamCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (TestService_ServerStreamCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_TestService_serviceDesc.Streams[2], "/grpc.testing.TestService/ServerStreamCall", opts...)
+	stream, err := c.cc.NewStream(ctx, testServiceServerStreamCallStreamDesc, "/grpc.testing.TestService/ServerStreamCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -144,64 +164,53 @@ func (x *testServiceServerStreamCallClient) Recv() (*SimpleResponse, error) {
 	return m, nil
 }
 
-// TestServiceServer is the server API for TestService service.
-// All implementations should embed UnimplementedTestServiceServer
-// for forward compatibility
-type TestServiceServer interface {
+// TestServiceService is the service API for TestService service.
+// Fields should be assigned to their respective handler implementations only before
+// RegisterTestServiceService is called.  Any unassigned fields will result in the
+// handler for that method returning an Unimplemented error.
+type TestServiceService struct {
 	// One request followed by one response.
 	// The server returns the client id as-is.
-	UnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error)
+	UnaryCall func(context.Context, *SimpleRequest) (*SimpleResponse, error)
 	// A sequence of requests with each request served by the server immediately.
 	// As one request could lead to multiple responses, this interface
 	// demonstrates the idea of full duplexing.
-	FullDuplexCall(TestService_FullDuplexCallServer) error
+	FullDuplexCall func(TestService_FullDuplexCallServer) error
 	// Client stream
-	ClientStreamCall(TestService_ClientStreamCallServer) error
+	ClientStreamCall func(TestService_ClientStreamCallServer) error
 	// Server stream
-	ServerStreamCall(*SimpleRequest, TestService_ServerStreamCallServer) error
+	ServerStreamCall func(*SimpleRequest, TestService_ServerStreamCallServer) error
 }
 
-// UnimplementedTestServiceServer should be embedded to have forward compatible implementations.
-type UnimplementedTestServiceServer struct {
-}
-
-func (*UnimplementedTestServiceServer) UnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
-}
-func (*UnimplementedTestServiceServer) FullDuplexCall(TestService_FullDuplexCallServer) error {
-	return status.Errorf(codes.Unimplemented, "method FullDuplexCall not implemented")
-}
-func (*UnimplementedTestServiceServer) ClientStreamCall(TestService_ClientStreamCallServer) error {
-	return status.Errorf(codes.Unimplemented, "method ClientStreamCall not implemented")
-}
-func (*UnimplementedTestServiceServer) ServerStreamCall(*SimpleRequest, TestService_ServerStreamCallServer) error {
-	return status.Errorf(codes.Unimplemented, "method ServerStreamCall not implemented")
-}
-
-func RegisterTestServiceServer(s *grpc.Server, srv TestServiceServer) {
-	s.RegisterService(&_TestService_serviceDesc, srv)
-}
-
-func _TestService_UnaryCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func (s *TestServiceService) unaryCall(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SimpleRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TestServiceServer).UnaryCall(ctx, in)
+		return s.UnaryCall(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
-		Server:     srv,
+		Server:     s,
 		FullMethod: "/grpc.testing.TestService/UnaryCall",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TestServiceServer).UnaryCall(ctx, req.(*SimpleRequest))
+		return s.UnaryCall(ctx, req.(*SimpleRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
-
-func _TestService_FullDuplexCall_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TestServiceServer).FullDuplexCall(&testServiceFullDuplexCallServer{stream})
+func (s *TestServiceService) fullDuplexCall(_ interface{}, stream grpc.ServerStream) error {
+	return s.FullDuplexCall(&testServiceFullDuplexCallServer{stream})
+}
+func (s *TestServiceService) clientStreamCall(_ interface{}, stream grpc.ServerStream) error {
+	return s.ClientStreamCall(&testServiceClientStreamCallServer{stream})
+}
+func (s *TestServiceService) serverStreamCall(_ interface{}, stream grpc.ServerStream) error {
+	m := new(SimpleRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return s.ServerStreamCall(m, &testServiceServerStreamCallServer{stream})
 }
 
 type TestService_FullDuplexCallServer interface {
@@ -226,10 +235,6 @@ func (x *testServiceFullDuplexCallServer) Recv() (*SimpleRequest, error) {
 	return m, nil
 }
 
-func _TestService_ClientStreamCall_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TestServiceServer).ClientStreamCall(&testServiceClientStreamCallServer{stream})
-}
-
 type TestService_ClientStreamCallServer interface {
 	SendAndClose(*SimpleResponse) error
 	Recv() (*SimpleRequest, error)
@@ -252,14 +257,6 @@ func (x *testServiceClientStreamCallServer) Recv() (*SimpleRequest, error) {
 	return m, nil
 }
 
-func _TestService_ServerStreamCall_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(SimpleRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(TestServiceServer).ServerStreamCall(m, &testServiceServerStreamCallServer{stream})
-}
-
 type TestService_ServerStreamCallServer interface {
 	Send(*SimpleResponse) error
 	grpc.ServerStream
@@ -273,32 +270,57 @@ func (x *testServiceServerStreamCallServer) Send(m *SimpleResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-var _TestService_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "grpc.testing.TestService",
-	HandlerType: (*TestServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "UnaryCall",
-			Handler:    _TestService_UnaryCall_Handler,
+// RegisterTestServiceService registers a service implementation with a gRPC server.
+func RegisterTestServiceService(s grpc.ServiceRegistrar, srv *TestServiceService) {
+	srvCopy := *srv
+	if srvCopy.UnaryCall == nil {
+		srvCopy.UnaryCall = func(context.Context, *SimpleRequest) (*SimpleResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
+		}
+	}
+	if srvCopy.FullDuplexCall == nil {
+		srvCopy.FullDuplexCall = func(TestService_FullDuplexCallServer) error {
+			return status.Errorf(codes.Unimplemented, "method FullDuplexCall not implemented")
+		}
+	}
+	if srvCopy.ClientStreamCall == nil {
+		srvCopy.ClientStreamCall = func(TestService_ClientStreamCallServer) error {
+			return status.Errorf(codes.Unimplemented, "method ClientStreamCall not implemented")
+		}
+	}
+	if srvCopy.ServerStreamCall == nil {
+		srvCopy.ServerStreamCall = func(*SimpleRequest, TestService_ServerStreamCallServer) error {
+			return status.Errorf(codes.Unimplemented, "method ServerStreamCall not implemented")
+		}
+	}
+	sd := grpc.ServiceDesc{
+		ServiceName: "grpc.testing.TestService",
+		Methods: []grpc.MethodDesc{
+			{
+				MethodName: "UnaryCall",
+				Handler:    srvCopy.unaryCall,
+			},
 		},
-	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "FullDuplexCall",
-			Handler:       _TestService_FullDuplexCall_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName:    "FullDuplexCall",
+				Handler:       srvCopy.fullDuplexCall,
+				ServerStreams: true,
+				ClientStreams: true,
+			},
+			{
+				StreamName:    "ClientStreamCall",
+				Handler:       srvCopy.clientStreamCall,
+				ClientStreams: true,
+			},
+			{
+				StreamName:    "ServerStreamCall",
+				Handler:       srvCopy.serverStreamCall,
+				ServerStreams: true,
+			},
 		},
-		{
-			StreamName:    "ClientStreamCall",
-			Handler:       _TestService_ClientStreamCall_Handler,
-			ClientStreams: true,
-		},
-		{
-			StreamName:    "ServerStreamCall",
-			Handler:       _TestService_ServerStreamCall_Handler,
-			ServerStreams: true,
-		},
-	},
-	Metadata: "stats/grpc_testing/test.proto",
+		Metadata: "stats/grpc_testing/test.proto",
+	}
+
+	s.RegisterService(&sd, nil)
 }

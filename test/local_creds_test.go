@@ -64,7 +64,7 @@ func testLocalCredsE2ESucceed(network, address string) error {
 	s := grpc.NewServer(sopts...)
 	defer s.Stop()
 
-	testpb.RegisterTestServiceServer(s, ss)
+	testpb.RegisterTestServiceService(s, ss.Svc())
 
 	lis, err := net.Listen(network, address)
 	if err != nil {
@@ -162,7 +162,7 @@ func testLocalCredsE2EFail(dopts []grpc.DialOption) error {
 	s := grpc.NewServer(sopts...)
 	defer s.Stop()
 
-	testpb.RegisterTestServiceServer(s, ss)
+	testpb.RegisterTestServiceService(s, ss.Svc())
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {

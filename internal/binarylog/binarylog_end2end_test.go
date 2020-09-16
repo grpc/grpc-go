@@ -40,6 +40,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var grpclogLogger = grpclog.Component("binarylog")
+
 type s struct {
 	grpctest.Tester
 }
@@ -113,8 +115,16 @@ var (
 )
 
 type testServer struct {
-	testpb.UnimplementedTestServiceServer
 	te *test
+}
+
+func (s *testServer) Svc() *testpb.TestServiceService {
+	return &testpb.TestServiceService{
+		UnaryCall:        s.UnaryCall,
+		FullDuplexCall:   s.FullDuplexCall,
+		ClientStreamCall: s.ClientStreamCall,
+		ServerStreamCall: s.ServerStreamCall,
+	}
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -214,7 +224,7 @@ func (s *testServer) ServerStreamCall(in *testpb.SimpleRequest, stream testpb.Te
 type test struct {
 	t *testing.T
 
-	testServer testpb.TestServiceServer // nil means none
+	testService *testpb.TestServiceService // nil means none
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
 	srvAddr string // Server IP without port.
@@ -269,8 +279,8 @@ func (lw *listenerWrapper) Accept() (net.Conn, error) {
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
-func (te *test) startServer(ts testpb.TestServiceServer) {
-	te.testServer = ts
+func (te *test) startServer(ts *testpb.TestServiceService) {
+	te.testService = ts
 	lis, err := net.Listen("tcp", "localhost:0")
 
 	lis = &listenerWrapper{
@@ -284,8 +294,8 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	var opts []grpc.ServerOption
 	s := grpc.NewServer(opts...)
 	te.srv = s
-	if te.testServer != nil {
-		testpb.RegisterTestServiceServer(s, te.testServer)
+	if te.testService != nil {
+		testpb.RegisterTestServiceService(s, te.testService)
 	}
 
 	go s.Serve(lis)
@@ -539,7 +549,7 @@ func (ed *expectedData) newClientMessageEntry(client bool, rpcID, inRPCID uint64
 	}
 	data, err := proto.Marshal(msg)
 	if err != nil {
-		grpclog.Infof("binarylogging_testing: failed to marshal proto message: %v", err)
+		grpclogLogger.Infof("binarylogging_testing: failed to marshal proto message: %v", err)
 	}
 	return &pb.GrpcLogEntry{
 		Timestamp:            nil,
@@ -563,7 +573,7 @@ func (ed *expectedData) newServerMessageEntry(client bool, rpcID, inRPCID uint64
 	}
 	data, err := proto.Marshal(msg)
 	if err != nil {
-		grpclog.Infof("binarylogging_testing: failed to marshal proto message: %v", err)
+		grpclogLogger.Infof("binarylogging_testing: failed to marshal proto message: %v", err)
 	}
 	return &pb.GrpcLogEntry{
 		Timestamp:            nil,
@@ -612,7 +622,7 @@ func (ed *expectedData) newServerTrailerEntry(client bool, rpcID, inRPCID uint64
 	}
 	st, ok := status.FromError(stErr)
 	if !ok {
-		grpclog.Info("binarylogging: error in trailer is not a status error")
+		grpclogLogger.Info("binarylogging: error in trailer is not a status error")
 	}
 	stProto := st.Proto()
 	var (
@@ -622,7 +632,7 @@ func (ed *expectedData) newServerTrailerEntry(client bool, rpcID, inRPCID uint64
 	if stProto != nil && len(stProto.Details) != 0 {
 		detailsBytes, err = proto.Marshal(stProto)
 		if err != nil {
-			grpclog.Infof("binarylogging: failed to marshal status proto: %v", err)
+			grpclogLogger.Infof("binarylogging: failed to marshal status proto: %v", err)
 		}
 	}
 	return &pb.GrpcLogEntry{
@@ -781,7 +791,7 @@ func (ed *expectedData) toServerLogEntries() []*pb.GrpcLogEntry {
 
 func runRPCs(t *testing.T, tc *testConfig, cc *rpcConfig) *expectedData {
 	te := newTest(t, tc)
-	te.startServer(&testServer{te: te})
+	te.startServer((&testServer{te: te}).Svc())
 	defer te.tearDown()
 
 	expect := &expectedData{

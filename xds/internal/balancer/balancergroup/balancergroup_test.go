@@ -14,6 +14,15 @@
  * limitations under the License.
  */
 
+// All tests in this file are combination of balancer group and
+// weighted_balancerstate_aggregator, aka weighted_target tests. The difference
+// is weighted_target tests cannot add sub-balancers to balancer group directly,
+// they instead uses balancer config to control sub-balancers. Even though not
+// very suited, the tests still cover all the functionality.
+//
+// TODO: the tests should be moved to weighted_target, and balancer group's
+// tests should use a mock balancerstate_aggregator.
+
 package balancergroup
 
 import (
@@ -23,19 +32,22 @@ import (
 
 	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
+	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
 
 var (
 	rrBuilder        = balancer.Get(roundrobin.Name)
 	pfBuilder        = balancer.Get(grpc.PickFirstBalancerName)
-	testBalancerIDs  = []internal.LocalityID{{Region: "b1"}, {Region: "b2"}, {Region: "b3"}}
+	testBalancerIDs  = []string{"b1", "b2", "b3"}
 	testBackendAddrs []resolver.Address
 )
 
@@ -58,14 +70,22 @@ func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	}
 }
 
+func newTestBalancerGroup(t *testing.T, loadStore *load.Store) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
+	cc := testutils.NewTestClientConn(t)
+	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
+	gator.Start()
+	bg := New(cc, gator, loadStore, nil)
+	bg.Start()
+	return cc, gator, bg
+}
+
 // 1 balancer, 1 backend -> 2 backends -> 1 backend.
 func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, nil, nil)
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add one balancer to group.
-	bg.Add(testBalancerIDs[0], 1, rrBuilder)
+	gator.Add(testBalancerIDs[0], 1)
+	bg.Add(testBalancerIDs[0], rrBuilder)
 	// Send one resolved address.
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
 
@@ -117,17 +137,17 @@ func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 
 // 2 balancers, each with 1 backend.
 func (s) TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, nil, nil)
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
-	bg.Add(testBalancerIDs[0], 1, rrBuilder)
+	gator.Add(testBalancerIDs[0], 1)
+	bg.Add(testBalancerIDs[0], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
 	sc1 := <-cc.NewSubConnCh
 
-	bg.Add(testBalancerIDs[1], 1, rrBuilder)
+	gator.Add(testBalancerIDs[1], 1)
+	bg.Add(testBalancerIDs[1], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
 	sc2 := <-cc.NewSubConnCh
 
@@ -147,18 +167,18 @@ func (s) TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 
 // 2 balancers, each with more than 1 backends.
 func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, nil, nil)
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
-	bg.Add(testBalancerIDs[0], 1, rrBuilder)
+	gator.Add(testBalancerIDs[0], 1)
+	bg.Add(testBalancerIDs[0], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 	sc1 := <-cc.NewSubConnCh
 	sc2 := <-cc.NewSubConnCh
 
-	bg.Add(testBalancerIDs[1], 1, rrBuilder)
+	gator.Add(testBalancerIDs[1], 1)
+	bg.Add(testBalancerIDs[1], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 	sc3 := <-cc.NewSubConnCh
 	sc4 := <-cc.NewSubConnCh
@@ -232,18 +252,18 @@ func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 
 // 2 balancers with different weights.
 func (s) TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, nil, nil)
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
-	bg.Add(testBalancerIDs[0], 2, rrBuilder)
+	gator.Add(testBalancerIDs[0], 2)
+	bg.Add(testBalancerIDs[0], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 	sc1 := <-cc.NewSubConnCh
 	sc2 := <-cc.NewSubConnCh
 
-	bg.Add(testBalancerIDs[1], 1, rrBuilder)
+	gator.Add(testBalancerIDs[1], 1)
+	bg.Add(testBalancerIDs[1], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 	sc3 := <-cc.NewSubConnCh
 	sc4 := <-cc.NewSubConnCh
@@ -268,21 +288,22 @@ func (s) TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 
 // totally 3 balancers, add/remove balancer.
 func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, nil, nil)
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add three balancers to group and send one resolved address to both
 	// balancers.
-	bg.Add(testBalancerIDs[0], 1, rrBuilder)
+	gator.Add(testBalancerIDs[0], 1)
+	bg.Add(testBalancerIDs[0], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
 	sc1 := <-cc.NewSubConnCh
 
-	bg.Add(testBalancerIDs[1], 1, rrBuilder)
+	gator.Add(testBalancerIDs[1], 1)
+	bg.Add(testBalancerIDs[1], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[1:2]}})
 	sc2 := <-cc.NewSubConnCh
 
-	bg.Add(testBalancerIDs[2], 1, rrBuilder)
+	gator.Add(testBalancerIDs[2], 1)
+	bg.Add(testBalancerIDs[2], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[2], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[1:2]}})
 	sc3 := <-cc.NewSubConnCh
 
@@ -301,7 +322,9 @@ func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	}
 
 	// Remove the second balancer, while the others two are ready.
+	gator.Remove(testBalancerIDs[1])
 	bg.Remove(testBalancerIDs[1])
+	gator.BuildAndUpdate()
 	scToRemove := <-cc.RemoveSubConnCh
 	if !cmp.Equal(scToRemove, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove)
@@ -315,7 +338,9 @@ func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	// move balancer 3 into transient failure.
 	bg.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	// Remove the first balancer, while the third is transient failure.
+	gator.Remove(testBalancerIDs[0])
 	bg.Remove(testBalancerIDs[0])
+	gator.BuildAndUpdate()
 	scToRemove = <-cc.RemoveSubConnCh
 	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
@@ -330,18 +355,18 @@ func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 
 // 2 balancers, change balancer weight.
 func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, nil, nil)
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
-	bg.Add(testBalancerIDs[0], 2, rrBuilder)
+	gator.Add(testBalancerIDs[0], 2)
+	bg.Add(testBalancerIDs[0], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 	sc1 := <-cc.NewSubConnCh
 	sc2 := <-cc.NewSubConnCh
 
-	bg.Add(testBalancerIDs[1], 1, rrBuilder)
+	gator.Add(testBalancerIDs[1], 1)
+	bg.Add(testBalancerIDs[1], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 	sc3 := <-cc.NewSubConnCh
 	sc4 := <-cc.NewSubConnCh
@@ -363,7 +388,8 @@ func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
-	bg.ChangeWeight(testBalancerIDs[0], 3)
+	gator.UpdateWeight(testBalancerIDs[0], 3)
+	gator.BuildAndUpdate()
 
 	// Test roundrobin with new weight.
 	p2 := <-cc.NewPickerCh
@@ -374,24 +400,23 @@ func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 }
 
 func (s) TestBalancerGroup_LoadReport(t *testing.T) {
-	testLoadStore := testutils.NewTestLoadStore()
+	loadStore := &load.Store{}
+	cc, gator, bg := newTestBalancerGroup(t, loadStore)
 
-	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, testLoadStore, nil)
-	bg.Start()
-
-	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityID)
+	backendToBalancerID := make(map[balancer.SubConn]string)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
-	bg.Add(testBalancerIDs[0], 2, rrBuilder)
+	gator.Add(testBalancerIDs[0], 2)
+	bg.Add(testBalancerIDs[0], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 	sc1 := <-cc.NewSubConnCh
 	sc2 := <-cc.NewSubConnCh
 	backendToBalancerID[sc1] = testBalancerIDs[0]
 	backendToBalancerID[sc2] = testBalancerIDs[0]
 
-	bg.Add(testBalancerIDs[1], 1, rrBuilder)
+	gator.Add(testBalancerIDs[1], 1)
+	bg.Add(testBalancerIDs[1], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 	sc3 := <-cc.NewSubConnCh
 	sc4 := <-cc.NewSubConnCh
@@ -410,15 +435,35 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 
 	// Test roundrobin on the last picker.
 	p1 := <-cc.NewPickerCh
-	var (
-		wantStart []internal.LocalityID
-		wantEnd   []internal.LocalityID
-		wantCost  []testutils.TestServerLoad
-	)
-	for i := 0; i < 10; i++ {
+	// bg1 has a weight of 2, while bg2 has a weight of 1. So, we expect 20 of
+	// these picks to go to bg1 and 10 of them to bg2. And since there are two
+	// subConns in each group, we expect the picks to be equally split between
+	// the subConns. We do not call Done() on picks routed to sc1, so we expect
+	// these to show up as pending rpcs.
+	wantStoreData := &load.Data{
+		LocalityStats: map[string]load.LocalityData{
+			testBalancerIDs[0]: {
+				RequestStats: load.RequestData{Succeeded: 10, InProgress: 10},
+				LoadStats: map[string]load.ServerLoadData{
+					"cpu_utilization": {Count: 10, Sum: 100},
+					"mem_utilization": {Count: 10, Sum: 50},
+					"pic":             {Count: 10, Sum: 31.4},
+					"piu":             {Count: 10, Sum: 31.4},
+				},
+			},
+			testBalancerIDs[1]: {
+				RequestStats: load.RequestData{Succeeded: 10},
+				LoadStats: map[string]load.ServerLoadData{
+					"cpu_utilization": {Count: 10, Sum: 100},
+					"mem_utilization": {Count: 10, Sum: 50},
+					"pic":             {Count: 10, Sum: 31.4},
+					"piu":             {Count: 10, Sum: 31.4},
+				},
+			},
+		},
+	}
+	for i := 0; i < 30; i++ {
 		scst, _ := p1.Pick(balancer.PickInfo{})
-		locality := backendToBalancerID[scst.SubConn]
-		wantStart = append(wantStart, locality)
 		if scst.Done != nil && scst.SubConn != sc1 {
 			scst.Done(balancer.DoneInfo{
 				ServerLoad: &orcapb.OrcaLoadReport{
@@ -428,23 +473,12 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 					Utilization:    map[string]float64{"piu": 3.14},
 				},
 			})
-			wantEnd = append(wantEnd, locality)
-			wantCost = append(wantCost,
-				testutils.TestServerLoad{Name: serverLoadCPUName, D: 10},
-				testutils.TestServerLoad{Name: serverLoadMemoryName, D: 5},
-				testutils.TestServerLoad{Name: "pic", D: 3.14},
-				testutils.TestServerLoad{Name: "piu", D: 3.14})
 		}
 	}
 
-	if !cmp.Equal(testLoadStore.CallsStarted, wantStart) {
-		t.Fatalf("want started: %v, got: %v", testLoadStore.CallsStarted, wantStart)
-	}
-	if !cmp.Equal(testLoadStore.CallsEnded, wantEnd) {
-		t.Fatalf("want ended: %v, got: %v", testLoadStore.CallsEnded, wantEnd)
-	}
-	if !cmp.Equal(testLoadStore.CallsCost, wantCost, cmp.AllowUnexported(testutils.TestServerLoad{})) {
-		t.Fatalf("want cost: %v, got: %v", testLoadStore.CallsCost, wantCost)
+	gotStoreData := loadStore.Stats()
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.EquateApprox(0, 0.1)); diff != "" {
+		t.Errorf("store.Stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
 
@@ -459,13 +493,17 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 // Start the balancer group again and check for behavior.
 func (s) TestBalancerGroup_start_close(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, nil, nil)
+	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
+	gator.Start()
+	bg := New(cc, gator, nil, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
-	bg.Add(testBalancerIDs[0], 2, rrBuilder)
+	gator.Add(testBalancerIDs[0], 2)
+	bg.Add(testBalancerIDs[0], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
-	bg.Add(testBalancerIDs[1], 1, rrBuilder)
+	gator.Add(testBalancerIDs[1], 1)
+	bg.Add(testBalancerIDs[1], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 
 	bg.Start()
@@ -490,22 +528,26 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
+	gator.Stop()
 	bg.Close()
 	for i := 0; i < 4; i++ {
 		bg.UpdateSubConnState(<-cc.RemoveSubConnCh, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 	}
 
 	// Add b3, weight 1, backends [1,2].
-	bg.Add(testBalancerIDs[2], 1, rrBuilder)
+	gator.Add(testBalancerIDs[2], 1)
+	bg.Add(testBalancerIDs[2], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[2], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[1:3]}})
 
 	// Remove b1.
+	gator.Remove(testBalancerIDs[0])
 	bg.Remove(testBalancerIDs[0])
 
 	// Update b2 to weight 3, backends [0,3].
-	bg.ChangeWeight(testBalancerIDs[1], 3)
+	gator.UpdateWeight(testBalancerIDs[1], 3)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: append([]resolver.Address(nil), testBackendAddrs[0], testBackendAddrs[3])}})
 
+	gator.Start()
 	bg.Start()
 
 	m2 := make(map[resolver.Address]balancer.SubConn)
@@ -543,11 +585,15 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 // because of deadlock.
 func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, nil, nil)
+	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
+	gator.Start()
+	bg := New(cc, gator, nil, nil)
 
-	bg.Add(testBalancerIDs[0], 2, &testutils.TestConstBalancerBuilder{})
+	gator.Add(testBalancerIDs[0], 2)
+	bg.Add(testBalancerIDs[0], &testutils.TestConstBalancerBuilder{})
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
-	bg.Add(testBalancerIDs[1], 1, &testutils.TestConstBalancerBuilder{})
+	gator.Add(testBalancerIDs[1], 1)
+	bg.Add(testBalancerIDs[1], &testutils.TestConstBalancerBuilder{})
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 
 	bg.Start()
@@ -557,17 +603,17 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 // transient_failure, the picks won't fail with transient_failure, and should
 // instead wait for the other sub-balancer.
 func (s) TestBalancerGroup_InitOneSubBalancerTransientFailure(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, nil, nil)
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
-	bg.Add(testBalancerIDs[0], 1, rrBuilder)
+	gator.Add(testBalancerIDs[0], 1)
+	bg.Add(testBalancerIDs[0], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
 	sc1 := <-cc.NewSubConnCh
 
-	bg.Add(testBalancerIDs[1], 1, rrBuilder)
+	gator.Add(testBalancerIDs[1], 1)
+	bg.Add(testBalancerIDs[1], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
 	<-cc.NewSubConnCh
 
@@ -588,17 +634,17 @@ func (s) TestBalancerGroup_InitOneSubBalancerTransientFailure(t *testing.T) {
 // connecting, the overall state stays in transient_failure, and all picks
 // return transient failure error.
 func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, nil, nil)
-	bg.Start()
+	cc, gator, bg := newTestBalancerGroup(t, nil)
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
-	bg.Add(testBalancerIDs[0], 1, pfBuilder)
+	gator.Add(testBalancerIDs[0], 1)
+	bg.Add(testBalancerIDs[0], pfBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
 	sc1 := <-cc.NewSubConnCh
 
-	bg.Add(testBalancerIDs[1], 1, pfBuilder)
+	gator.Add(testBalancerIDs[1], 1)
+	bg.Add(testBalancerIDs[1], pfBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:1]}})
 	sc2 := <-cc.NewSubConnCh
 
@@ -639,15 +685,19 @@ func replaceDefaultSubBalancerCloseTimeout(n time.Duration) func() {
 // Two rr balancers are added to bg, each with 2 ready subConns. A sub-balancer
 // is removed later, so the balancer group returned has one sub-balancer in its
 // own map, and one sub-balancer in cache.
-func initBalancerGroupForCachingTest(t *testing.T) (*BalancerGroup, *testutils.TestClientConn, map[resolver.Address]balancer.SubConn) {
+func initBalancerGroupForCachingTest(t *testing.T) (*weightedaggregator.Aggregator, *BalancerGroup, *testutils.TestClientConn, map[resolver.Address]balancer.SubConn) {
 	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, nil, nil)
+	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
+	gator.Start()
+	bg := New(cc, gator, nil, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
-	bg.Add(testBalancerIDs[0], 2, rrBuilder)
+	gator.Add(testBalancerIDs[0], 2)
+	bg.Add(testBalancerIDs[0], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
-	bg.Add(testBalancerIDs[1], 1, rrBuilder)
+	gator.Add(testBalancerIDs[1], 1)
+	bg.Add(testBalancerIDs[1], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 
 	bg.Start()
@@ -672,7 +722,9 @@ func initBalancerGroupForCachingTest(t *testing.T) (*BalancerGroup, *testutils.T
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
+	gator.Remove(testBalancerIDs[1])
 	bg.Remove(testBalancerIDs[1])
+	gator.BuildAndUpdate()
 	// Don't wait for SubConns to be removed after close, because they are only
 	// removed after close timeout.
 	for i := 0; i < 10; i++ {
@@ -692,14 +744,14 @@ func initBalancerGroupForCachingTest(t *testing.T) (*BalancerGroup, *testutils.T
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
-	return bg, cc, m1
+	return gator, bg, cc, m1
 }
 
 // Test that if a sub-balancer is removed, and re-added within close timeout,
 // the subConns won't be re-created.
 func (s) TestBalancerGroup_locality_caching(t *testing.T) {
 	defer replaceDefaultSubBalancerCloseTimeout(10 * time.Second)()
-	bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
+	gator, bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
 
 	// Turn down subconn for addr2, shouldn't get picker update because
 	// sub-balancer1 was removed.
@@ -719,7 +771,8 @@ func (s) TestBalancerGroup_locality_caching(t *testing.T) {
 	// Re-add sub-balancer-1, because subconns were in cache, no new subconns
 	// should be created. But a new picker will still be generated, with subconn
 	// states update to date.
-	bg.Add(testBalancerIDs[1], 1, rrBuilder)
+	gator.Add(testBalancerIDs[1], 1)
+	bg.Add(testBalancerIDs[1], rrBuilder)
 
 	p3 := <-cc.NewPickerCh
 	want := []balancer.SubConn{
@@ -747,7 +800,7 @@ func (s) TestBalancerGroup_locality_caching(t *testing.T) {
 // immediately.
 func (s) TestBalancerGroup_locality_caching_close_group(t *testing.T) {
 	defer replaceDefaultSubBalancerCloseTimeout(10 * time.Second)()
-	bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
+	_, bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
 
 	bg.Close()
 	// The balancer group is closed. The subconns should be removed immediately.
@@ -776,7 +829,7 @@ func (s) TestBalancerGroup_locality_caching_close_group(t *testing.T) {
 // subConns will be removed.
 func (s) TestBalancerGroup_locality_caching_not_readd_within_timeout(t *testing.T) {
 	defer replaceDefaultSubBalancerCloseTimeout(time.Second)()
-	_, cc, addrToSC := initBalancerGroupForCachingTest(t)
+	_, _, cc, addrToSC := initBalancerGroupForCachingTest(t)
 
 	// The sub-balancer is not re-added withtin timeout. The subconns should be
 	// removed.
@@ -808,13 +861,14 @@ type noopBalancerBuilderWrapper struct {
 // builder. Old subconns should be removed, and new subconns should be created.
 func (s) TestBalancerGroup_locality_caching_readd_with_different_builder(t *testing.T) {
 	defer replaceDefaultSubBalancerCloseTimeout(10 * time.Second)()
-	bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
+	gator, bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
 
 	// Re-add sub-balancer-1, but with a different balancer builder. The
 	// sub-balancer was still in cache, but cann't be reused. This should cause
 	// old sub-balancer's subconns to be removed immediately, and new subconns
 	// to be created.
-	bg.Add(testBalancerIDs[1], 1, &noopBalancerBuilderWrapper{rrBuilder})
+	gator.Add(testBalancerIDs[1], 1)
+	bg.Add(testBalancerIDs[1], &noopBalancerBuilderWrapper{rrBuilder})
 
 	// The cached sub-balancer should be closed, and the subconns should be
 	// removed immediately.

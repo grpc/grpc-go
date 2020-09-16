@@ -40,17 +40,11 @@ var (
 	system = "" // empty string represents the health of the system
 )
 
-type echoServer struct {
-	pb.UnimplementedEchoServer
-}
-
-func (e *echoServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+func unaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{
 		Message: fmt.Sprintf("hello from localhost:%d", *port),
 	}, nil
 }
-
-var _ pb.EchoServer = &echoServer{}
 
 func main() {
 	flag.Parse()
@@ -63,7 +57,7 @@ func main() {
 	s := grpc.NewServer()
 	healthcheck := health.NewServer()
 	healthpb.RegisterHealthServer(s, healthcheck)
-	pb.RegisterEchoServer(s, &echoServer{})
+	pb.RegisterEchoService(s, &pb.EchoService{UnaryEcho: unaryEcho})
 
 	go func() {
 		// asynchronously inspect dependencies and toggle serving status as needed

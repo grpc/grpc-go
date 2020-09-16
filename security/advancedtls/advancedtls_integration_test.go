@@ -130,11 +130,8 @@ func (cs *certStore) loadCerts() error {
 	return nil
 }
 
-// serverImpl is used to implement pb.GreeterServer.
-type serverImpl struct{}
-
-// SayHello is a simple implementation of pb.GreeterServer.
-func (s *serverImpl) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+// sayHello is a simple implementation of the pb.GreeterServer SayHello method.
+func sayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
@@ -181,7 +178,7 @@ func callAndVerifyWithClientConn(connCtx context.Context, msg string, creds cred
 // the factor we modified in stage 1.
 // (could be change the client's trust certificate, or change custom
 // verification function, etc)
-func TestEnd2End(t *testing.T) {
+func (s) TestEnd2End(t *testing.T) {
 	cs := &certStore{}
 	err := cs.loadCerts()
 	if err != nil {
@@ -197,7 +194,7 @@ func TestEnd2End(t *testing.T) {
 		clientVerifyFunc CustomVerificationFunc
 		clientVType      VerificationType
 		serverCert       []tls.Certificate
-		serverGetCert    func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+		serverGetCert    func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 		serverRoot       *x509.CertPool
 		serverGetRoot    func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		serverVerifyFunc CustomVerificationFunc
@@ -271,12 +268,12 @@ func TestEnd2End(t *testing.T) {
 				return &VerificationResults{}, nil
 			},
 			clientVType: CertVerification,
-			serverGetCert: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+			serverGetCert: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
-					return &cs.serverPeer1, nil
+					return []*tls.Certificate{&cs.serverPeer1}, nil
 				default:
-					return &cs.serverPeer2, nil
+					return []*tls.Certificate{&cs.serverPeer2}, nil
 				}
 			},
 			serverRoot: cs.serverTrust1,
@@ -336,12 +333,12 @@ func TestEnd2End(t *testing.T) {
 				return nil, fmt.Errorf("custom authz check fails")
 			},
 			clientVType: CertVerification,
-			serverGetCert: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+			serverGetCert: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
-					return &cs.serverPeer1, nil
+					return []*tls.Certificate{&cs.serverPeer1}, nil
 				default:
-					return &cs.serverPeer2, nil
+					return []*tls.Certificate{&cs.serverPeer2}, nil
 				}
 			},
 			serverRoot: cs.serverTrust1,
@@ -388,8 +385,8 @@ func TestEnd2End(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			// Start a server using ServerOptions in another goroutine.
 			serverOptions := &ServerOptions{
-				Certificates:   test.serverCert,
-				GetCertificate: test.serverGetCert,
+				Certificates:    test.serverCert,
+				GetCertificates: test.serverGetCert,
 				RootCertificateOptions: RootCertificateOptions{
 					RootCACerts: test.serverRoot,
 					GetRootCAs:  test.serverGetRoot,
@@ -409,7 +406,7 @@ func TestEnd2End(t *testing.T) {
 				t.Fatalf("failed to listen: %v", err)
 			}
 			defer lis.Close()
-			pb.RegisterGreeterServer(s, &serverImpl{})
+			pb.RegisterGreeterService(s, &pb.GreeterService{SayHello: sayHello})
 			go s.Serve(lis)
 			clientOptions := &ClientOptions{
 				Certificates:         test.clientCert,
@@ -451,7 +448,7 @@ func TestEnd2End(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer conn2.Close()
-			//// --------------------------------------------------------------------
+			// ----------------------------------------------------------------------
 			stage.increase()
 			// ------------------------Scenario 4------------------------------------
 			// stage = 2,  new connection should succeed

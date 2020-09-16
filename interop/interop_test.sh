@@ -87,7 +87,7 @@ for case in ${CASES[@]}; do
     echo "$(tput setaf 4) testing: ${case} $(tput sgr 0)"
 
     CLIENT_LOG="$(mktemp)"
-    if ! timeout 20 go run ./interop/client --use_tls --server_host_override=foo.test.google.fr --use_test_ca --test_case="${case}" &> $CLIENT_LOG; then
+    if ! timeout 20 go run ./interop/client --use_tls --server_host_override=foo.test.google.fr --use_test_ca --test_case="${case}" &> $CLIENT_LOG; then  
         fail "FAIL: test case ${case}
         got server log:
         $(cat $SERVER_LOG)

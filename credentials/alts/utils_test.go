@@ -1,3 +1,5 @@
+// +build linux windows
+
 /*
  *
  * Copyright 2018 gRPC authors.
@@ -172,6 +174,13 @@ func (s) TestClientAuthorizationCheck(t *testing.T) {
 			"working case",
 			peer.NewContext(ctx, p),
 			[]string{testServiceAccount1, testServiceAccount2},
+			true,
+			codes.OK, // err is nil, code is OK.
+		},
+		{
+			"working case (case ignored)",
+			peer.NewContext(ctx, p),
+			[]string{strings.ToUpper(testServiceAccount1), testServiceAccount2},
 			true,
 			codes.OK, // err is nil, code is OK.
 		},

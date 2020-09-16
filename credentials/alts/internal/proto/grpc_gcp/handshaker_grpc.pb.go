@@ -11,7 +11,7 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion6
+const _ = grpc.SupportPackageIsVersion7
 
 // HandshakerServiceClient is the client API for HandshakerService service.
 //
@@ -34,8 +34,14 @@ func NewHandshakerServiceClient(cc grpc.ClientConnInterface) HandshakerServiceCl
 	return &handshakerServiceClient{cc}
 }
 
+var handshakerServiceDoHandshakeStreamDesc = &grpc.StreamDesc{
+	StreamName:    "DoHandshake",
+	ServerStreams: true,
+	ClientStreams: true,
+}
+
 func (c *handshakerServiceClient) DoHandshake(ctx context.Context, opts ...grpc.CallOption) (HandshakerService_DoHandshakeClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_HandshakerService_serviceDesc.Streams[0], "/grpc.gcp.HandshakerService/DoHandshake", opts...)
+	stream, err := c.cc.NewStream(ctx, handshakerServiceDoHandshakeStreamDesc, "/grpc.gcp.HandshakerService/DoHandshake", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -65,33 +71,22 @@ func (x *handshakerServiceDoHandshakeClient) Recv() (*HandshakerResp, error) {
 	return m, nil
 }
 
-// HandshakerServiceServer is the server API for HandshakerService service.
-// All implementations should embed UnimplementedHandshakerServiceServer
-// for forward compatibility
-type HandshakerServiceServer interface {
+// HandshakerServiceService is the service API for HandshakerService service.
+// Fields should be assigned to their respective handler implementations only before
+// RegisterHandshakerServiceService is called.  Any unassigned fields will result in the
+// handler for that method returning an Unimplemented error.
+type HandshakerServiceService struct {
 	// Handshaker service accepts a stream of handshaker request, returning a
 	// stream of handshaker response. Client is expected to send exactly one
 	// message with either client_start or server_start followed by one or more
 	// messages with next. Each time client sends a request, the handshaker
 	// service expects to respond. Client does not have to wait for service's
 	// response before sending next request.
-	DoHandshake(HandshakerService_DoHandshakeServer) error
+	DoHandshake func(HandshakerService_DoHandshakeServer) error
 }
 
-// UnimplementedHandshakerServiceServer should be embedded to have forward compatible implementations.
-type UnimplementedHandshakerServiceServer struct {
-}
-
-func (*UnimplementedHandshakerServiceServer) DoHandshake(HandshakerService_DoHandshakeServer) error {
-	return status.Errorf(codes.Unimplemented, "method DoHandshake not implemented")
-}
-
-func RegisterHandshakerServiceServer(s *grpc.Server, srv HandshakerServiceServer) {
-	s.RegisterService(&_HandshakerService_serviceDesc, srv)
-}
-
-func _HandshakerService_DoHandshake_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(HandshakerServiceServer).DoHandshake(&handshakerServiceDoHandshakeServer{stream})
+func (s *HandshakerServiceService) doHandshake(_ interface{}, stream grpc.ServerStream) error {
+	return s.DoHandshake(&handshakerServiceDoHandshakeServer{stream})
 }
 
 type HandshakerService_DoHandshakeServer interface {
@@ -116,17 +111,58 @@ func (x *handshakerServiceDoHandshakeServer) Recv() (*HandshakerReq, error) {
 	return m, nil
 }
 
-var _HandshakerService_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "grpc.gcp.HandshakerService",
-	HandlerType: (*HandshakerServiceServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "DoHandshake",
-			Handler:       _HandshakerService_DoHandshake_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
+// RegisterHandshakerServiceService registers a service implementation with a gRPC server.
+func RegisterHandshakerServiceService(s grpc.ServiceRegistrar, srv *HandshakerServiceService) {
+	srvCopy := *srv
+	if srvCopy.DoHandshake == nil {
+		srvCopy.DoHandshake = func(HandshakerService_DoHandshakeServer) error {
+			return status.Errorf(codes.Unimplemented, "method DoHandshake not implemented")
+		}
+	}
+	sd := grpc.ServiceDesc{
+		ServiceName: "grpc.gcp.HandshakerService",
+		Methods:     []grpc.MethodDesc{},
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName:    "DoHandshake",
+				Handler:       srvCopy.doHandshake,
+				ServerStreams: true,
+				ClientStreams: true,
+			},
 		},
-	},
-	Metadata: "grpc/gcp/handshaker.proto",
+		Metadata: "grpc/gcp/handshaker.proto",
+	}
+
+	s.RegisterService(&sd, nil)
+}
+
+// HandshakerServiceServer is the service API for HandshakerService service.
+// New methods may be added to this interface if they are added to the service
+// definition, which is not a backward-compatible change.  For this reason,
+// use of this type is not recommended unless you own the service definition.
+type HandshakerServiceServer interface {
+	// Handshaker service accepts a stream of handshaker request, returning a
+	// stream of handshaker response. Client is expected to send exactly one
+	// message with either client_start or server_start followed by one or more
+	// messages with next. Each time client sends a request, the handshaker
+	// service expects to respond. Client does not have to wait for service's
+	// response before sending next request.
+	DoHandshake(HandshakerService_DoHandshakeServer) error
+}
+
+// UnimplementedHandshakerServiceServer can be embedded to have forward compatible implementations of
+// HandshakerServiceServer
+type UnimplementedHandshakerServiceServer struct {
+}
+
+func (*UnimplementedHandshakerServiceServer) DoHandshake(HandshakerService_DoHandshakeServer) error {
+	return status.Errorf(codes.Unimplemented, "method DoHandshake not implemented")
+}
+
+// RegisterHandshakerServiceServer registers a service implementation with a gRPC server.
+func RegisterHandshakerServiceServer(s grpc.ServiceRegistrar, srv HandshakerServiceServer) {
+	str := &HandshakerServiceService{
+		DoHandshake: srv.DoHandshake,
+	}
+	RegisterHandshakerServiceService(s, str)
 }

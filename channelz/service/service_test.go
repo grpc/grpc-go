@@ -58,7 +58,7 @@ type protoToSocketOptFunc func([]*channelzpb.SocketOption) *channelz.SocketOptio
 
 // protoToSocketOpt is used in function socketProtoToStruct to extract socket option
 // data from unmarshaled proto message.
-// It is only defined under linux, non-appengine environment on x86 architecture.
+// It is only defined under linux environment on x86 architecture.
 var protoToSocketOpt protoToSocketOptFunc
 
 // emptyTime is used for detecting unset value of time.Time type.

@@ -34,6 +34,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+	"google.golang.org/grpc/internal/grpcutil"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -610,6 +611,10 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	if !ok {
 		return
 	}
+	if s.getState() == streamReadDone {
+		t.closeStream(s, true, http2.ErrCodeStreamClosed, false)
+		return
+	}
 	if size > 0 {
 		if err := s.fc.onData(size); err != nil {
 			t.closeStream(s, true, http2.ErrCodeFlowControl, false)
@@ -804,7 +809,7 @@ func (t *http2Server) writeHeaderLocked(s *Stream) error {
 	// first and create a slice of that exact size.
 	headerFields := make([]hpack.HeaderField, 0, 2) // at least :status, content-type will be there if none else.
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
-	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: contentType(s.contentSubtype)})
+	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: grpcutil.ContentType(s.contentSubtype)})
 	if s.sendCompress != "" {
 		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-encoding", Value: s.sendCompress})
 	}
@@ -854,7 +859,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 			}
 		} else { // Send a trailer only response.
 			headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
-			headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: contentType(s.contentSubtype)})
+			headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: grpcutil.ContentType(s.contentSubtype)})
 		}
 	}
 	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-status", Value: strconv.Itoa(int(st.Code()))})

@@ -11,7 +11,7 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion6
+const _ = grpc.SupportPackageIsVersion7
 
 // BenchmarkServiceClient is the client API for BenchmarkService service.
 //
@@ -36,6 +36,10 @@ func NewBenchmarkServiceClient(cc grpc.ClientConnInterface) BenchmarkServiceClie
 	return &benchmarkServiceClient{cc}
 }
 
+var benchmarkServiceUnaryCallStreamDesc = &grpc.StreamDesc{
+	StreamName: "UnaryCall",
+}
+
 func (c *benchmarkServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
 	out := new(SimpleResponse)
 	err := c.cc.Invoke(ctx, "/grpc.testing.BenchmarkService/UnaryCall", in, out, opts...)
@@ -45,8 +49,14 @@ func (c *benchmarkServiceClient) UnaryCall(ctx context.Context, in *SimpleReques
 	return out, nil
 }
 
+var benchmarkServiceStreamingCallStreamDesc = &grpc.StreamDesc{
+	StreamName:    "StreamingCall",
+	ServerStreams: true,
+	ClientStreams: true,
+}
+
 func (c *benchmarkServiceClient) StreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_BenchmarkService_serviceDesc.Streams[0], "/grpc.testing.BenchmarkService/StreamingCall", opts...)
+	stream, err := c.cc.NewStream(ctx, benchmarkServiceStreamingCallStreamDesc, "/grpc.testing.BenchmarkService/StreamingCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -76,8 +86,14 @@ func (x *benchmarkServiceStreamingCallClient) Recv() (*SimpleResponse, error) {
 	return m, nil
 }
 
+var benchmarkServiceUnconstrainedStreamingCallStreamDesc = &grpc.StreamDesc{
+	StreamName:    "UnconstrainedStreamingCall",
+	ServerStreams: true,
+	ClientStreams: true,
+}
+
 func (c *benchmarkServiceClient) UnconstrainedStreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_UnconstrainedStreamingCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_BenchmarkService_serviceDesc.Streams[1], "/grpc.testing.BenchmarkService/UnconstrainedStreamingCall", opts...)
+	stream, err := c.cc.NewStream(ctx, benchmarkServiceUnconstrainedStreamingCallStreamDesc, "/grpc.testing.BenchmarkService/UnconstrainedStreamingCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -107,59 +123,44 @@ func (x *benchmarkServiceUnconstrainedStreamingCallClient) Recv() (*SimpleRespon
 	return m, nil
 }
 
-// BenchmarkServiceServer is the server API for BenchmarkService service.
-// All implementations should embed UnimplementedBenchmarkServiceServer
-// for forward compatibility
-type BenchmarkServiceServer interface {
+// BenchmarkServiceService is the service API for BenchmarkService service.
+// Fields should be assigned to their respective handler implementations only before
+// RegisterBenchmarkServiceService is called.  Any unassigned fields will result in the
+// handler for that method returning an Unimplemented error.
+type BenchmarkServiceService struct {
 	// One request followed by one response.
 	// The server returns the client payload as-is.
-	UnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error)
+	UnaryCall func(context.Context, *SimpleRequest) (*SimpleResponse, error)
 	// One request followed by one response.
 	// The server returns the client payload as-is.
-	StreamingCall(BenchmarkService_StreamingCallServer) error
+	StreamingCall func(BenchmarkService_StreamingCallServer) error
 	// Unconstrainted streaming.
 	// Both server and client keep sending & receiving simultaneously.
-	UnconstrainedStreamingCall(BenchmarkService_UnconstrainedStreamingCallServer) error
+	UnconstrainedStreamingCall func(BenchmarkService_UnconstrainedStreamingCallServer) error
 }
 
-// UnimplementedBenchmarkServiceServer should be embedded to have forward compatible implementations.
-type UnimplementedBenchmarkServiceServer struct {
-}
-
-func (*UnimplementedBenchmarkServiceServer) UnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
-}
-func (*UnimplementedBenchmarkServiceServer) StreamingCall(BenchmarkService_StreamingCallServer) error {
-	return status.Errorf(codes.Unimplemented, "method StreamingCall not implemented")
-}
-func (*UnimplementedBenchmarkServiceServer) UnconstrainedStreamingCall(BenchmarkService_UnconstrainedStreamingCallServer) error {
-	return status.Errorf(codes.Unimplemented, "method UnconstrainedStreamingCall not implemented")
-}
-
-func RegisterBenchmarkServiceServer(s *grpc.Server, srv BenchmarkServiceServer) {
-	s.RegisterService(&_BenchmarkService_serviceDesc, srv)
-}
-
-func _BenchmarkService_UnaryCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func (s *BenchmarkServiceService) unaryCall(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SimpleRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(BenchmarkServiceServer).UnaryCall(ctx, in)
+		return s.UnaryCall(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
-		Server:     srv,
+		Server:     s,
 		FullMethod: "/grpc.testing.BenchmarkService/UnaryCall",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BenchmarkServiceServer).UnaryCall(ctx, req.(*SimpleRequest))
+		return s.UnaryCall(ctx, req.(*SimpleRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
-
-func _BenchmarkService_StreamingCall_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BenchmarkServiceServer).StreamingCall(&benchmarkServiceStreamingCallServer{stream})
+func (s *BenchmarkServiceService) streamingCall(_ interface{}, stream grpc.ServerStream) error {
+	return s.StreamingCall(&benchmarkServiceStreamingCallServer{stream})
+}
+func (s *BenchmarkServiceService) unconstrainedStreamingCall(_ interface{}, stream grpc.ServerStream) error {
+	return s.UnconstrainedStreamingCall(&benchmarkServiceUnconstrainedStreamingCallServer{stream})
 }
 
 type BenchmarkService_StreamingCallServer interface {
@@ -184,10 +185,6 @@ func (x *benchmarkServiceStreamingCallServer) Recv() (*SimpleRequest, error) {
 	return m, nil
 }
 
-func _BenchmarkService_UnconstrainedStreamingCall_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BenchmarkServiceServer).UnconstrainedStreamingCall(&benchmarkServiceUnconstrainedStreamingCallServer{stream})
-}
-
 type BenchmarkService_UnconstrainedStreamingCallServer interface {
 	Send(*SimpleResponse) error
 	Recv() (*SimpleRequest, error)
@@ -210,30 +207,50 @@ func (x *benchmarkServiceUnconstrainedStreamingCallServer) Recv() (*SimpleReques
 	return m, nil
 }
 
-var _BenchmarkService_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "grpc.testing.BenchmarkService",
-	HandlerType: (*BenchmarkServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "UnaryCall",
-			Handler:    _BenchmarkService_UnaryCall_Handler,
+// RegisterBenchmarkServiceService registers a service implementation with a gRPC server.
+func RegisterBenchmarkServiceService(s grpc.ServiceRegistrar, srv *BenchmarkServiceService) {
+	srvCopy := *srv
+	if srvCopy.UnaryCall == nil {
+		srvCopy.UnaryCall = func(context.Context, *SimpleRequest) (*SimpleResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
+		}
+	}
+	if srvCopy.StreamingCall == nil {
+		srvCopy.StreamingCall = func(BenchmarkService_StreamingCallServer) error {
+			return status.Errorf(codes.Unimplemented, "method StreamingCall not implemented")
+		}
+	}
+	if srvCopy.UnconstrainedStreamingCall == nil {
+		srvCopy.UnconstrainedStreamingCall = func(BenchmarkService_UnconstrainedStreamingCallServer) error {
+			return status.Errorf(codes.Unimplemented, "method UnconstrainedStreamingCall not implemented")
+		}
+	}
+	sd := grpc.ServiceDesc{
+		ServiceName: "grpc.testing.BenchmarkService",
+		Methods: []grpc.MethodDesc{
+			{
+				MethodName: "UnaryCall",
+				Handler:    srvCopy.unaryCall,
+			},
 		},
-	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "StreamingCall",
-			Handler:       _BenchmarkService_StreamingCall_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName:    "StreamingCall",
+				Handler:       srvCopy.streamingCall,
+				ServerStreams: true,
+				ClientStreams: true,
+			},
+			{
+				StreamName:    "UnconstrainedStreamingCall",
+				Handler:       srvCopy.unconstrainedStreamingCall,
+				ServerStreams: true,
+				ClientStreams: true,
+			},
 		},
-		{
-			StreamName:    "UnconstrainedStreamingCall",
-			Handler:       _BenchmarkService_UnconstrainedStreamingCall_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
-		},
-	},
-	Metadata: "benchmark/grpc_testing/services.proto",
+		Metadata: "benchmark/grpc_testing/services.proto",
+	}
+
+	s.RegisterService(&sd, nil)
 }
 
 // WorkerServiceClient is the client API for WorkerService service.
@@ -268,8 +285,14 @@ func NewWorkerServiceClient(cc grpc.ClientConnInterface) WorkerServiceClient {
 	return &workerServiceClient{cc}
 }
 
+var workerServiceRunServerStreamDesc = &grpc.StreamDesc{
+	StreamName:    "RunServer",
+	ServerStreams: true,
+	ClientStreams: true,
+}
+
 func (c *workerServiceClient) RunServer(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunServerClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_WorkerService_serviceDesc.Streams[0], "/grpc.testing.WorkerService/RunServer", opts...)
+	stream, err := c.cc.NewStream(ctx, workerServiceRunServerStreamDesc, "/grpc.testing.WorkerService/RunServer", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -299,8 +322,14 @@ func (x *workerServiceRunServerClient) Recv() (*ServerStatus, error) {
 	return m, nil
 }
 
+var workerServiceRunClientStreamDesc = &grpc.StreamDesc{
+	StreamName:    "RunClient",
+	ServerStreams: true,
+	ClientStreams: true,
+}
+
 func (c *workerServiceClient) RunClient(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunClientClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_WorkerService_serviceDesc.Streams[1], "/grpc.testing.WorkerService/RunClient", opts...)
+	stream, err := c.cc.NewStream(ctx, workerServiceRunClientStreamDesc, "/grpc.testing.WorkerService/RunClient", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -330,6 +359,10 @@ func (x *workerServiceRunClientClient) Recv() (*ClientStatus, error) {
 	return m, nil
 }
 
+var workerServiceCoreCountStreamDesc = &grpc.StreamDesc{
+	StreamName: "CoreCount",
+}
+
 func (c *workerServiceClient) CoreCount(ctx context.Context, in *CoreRequest, opts ...grpc.CallOption) (*CoreResponse, error) {
 	out := new(CoreResponse)
 	err := c.cc.Invoke(ctx, "/grpc.testing.WorkerService/CoreCount", in, out, opts...)
@@ -337,6 +370,10 @@ func (c *workerServiceClient) CoreCount(ctx context.Context, in *CoreRequest, op
 		return nil, err
 	}
 	return out, nil
+}
+
+var workerServiceQuitWorkerStreamDesc = &grpc.StreamDesc{
+	StreamName: "QuitWorker",
 }
 
 func (c *workerServiceClient) QuitWorker(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error) {
@@ -348,53 +385,70 @@ func (c *workerServiceClient) QuitWorker(ctx context.Context, in *Void, opts ...
 	return out, nil
 }
 
-// WorkerServiceServer is the server API for WorkerService service.
-// All implementations should embed UnimplementedWorkerServiceServer
-// for forward compatibility
-type WorkerServiceServer interface {
+// WorkerServiceService is the service API for WorkerService service.
+// Fields should be assigned to their respective handler implementations only before
+// RegisterWorkerServiceService is called.  Any unassigned fields will result in the
+// handler for that method returning an Unimplemented error.
+type WorkerServiceService struct {
 	// Start server with specified workload.
 	// First request sent specifies the ServerConfig followed by ServerStatus
 	// response. After that, a "Mark" can be sent anytime to request the latest
 	// stats. Closing the stream will initiate shutdown of the test server
 	// and once the shutdown has finished, the OK status is sent to terminate
 	// this RPC.
-	RunServer(WorkerService_RunServerServer) error
+	RunServer func(WorkerService_RunServerServer) error
 	// Start client with specified workload.
 	// First request sent specifies the ClientConfig followed by ClientStatus
 	// response. After that, a "Mark" can be sent anytime to request the latest
 	// stats. Closing the stream will initiate shutdown of the test client
 	// and once the shutdown has finished, the OK status is sent to terminate
 	// this RPC.
-	RunClient(WorkerService_RunClientServer) error
+	RunClient func(WorkerService_RunClientServer) error
 	// Just return the core count - unary call
-	CoreCount(context.Context, *CoreRequest) (*CoreResponse, error)
+	CoreCount func(context.Context, *CoreRequest) (*CoreResponse, error)
 	// Quit this worker
-	QuitWorker(context.Context, *Void) (*Void, error)
+	QuitWorker func(context.Context, *Void) (*Void, error)
 }
 
-// UnimplementedWorkerServiceServer should be embedded to have forward compatible implementations.
-type UnimplementedWorkerServiceServer struct {
+func (s *WorkerServiceService) runServer(_ interface{}, stream grpc.ServerStream) error {
+	return s.RunServer(&workerServiceRunServerServer{stream})
 }
-
-func (*UnimplementedWorkerServiceServer) RunServer(WorkerService_RunServerServer) error {
-	return status.Errorf(codes.Unimplemented, "method RunServer not implemented")
+func (s *WorkerServiceService) runClient(_ interface{}, stream grpc.ServerStream) error {
+	return s.RunClient(&workerServiceRunClientServer{stream})
 }
-func (*UnimplementedWorkerServiceServer) RunClient(WorkerService_RunClientServer) error {
-	return status.Errorf(codes.Unimplemented, "method RunClient not implemented")
+func (s *WorkerServiceService) coreCount(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CoreRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return s.CoreCount(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     s,
+		FullMethod: "/grpc.testing.WorkerService/CoreCount",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return s.CoreCount(ctx, req.(*CoreRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
-func (*UnimplementedWorkerServiceServer) CoreCount(context.Context, *CoreRequest) (*CoreResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CoreCount not implemented")
-}
-func (*UnimplementedWorkerServiceServer) QuitWorker(context.Context, *Void) (*Void, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method QuitWorker not implemented")
-}
-
-func RegisterWorkerServiceServer(s *grpc.Server, srv WorkerServiceServer) {
-	s.RegisterService(&_WorkerService_serviceDesc, srv)
-}
-
-func _WorkerService_RunServer_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(WorkerServiceServer).RunServer(&workerServiceRunServerServer{stream})
+func (s *WorkerServiceService) quitWorker(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Void)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return s.QuitWorker(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     s,
+		FullMethod: "/grpc.testing.WorkerService/QuitWorker",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return s.QuitWorker(ctx, req.(*Void))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 type WorkerService_RunServerServer interface {
@@ -419,10 +473,6 @@ func (x *workerServiceRunServerServer) Recv() (*ServerArgs, error) {
 	return m, nil
 }
 
-func _WorkerService_RunClient_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(WorkerServiceServer).RunClient(&workerServiceRunClientServer{stream})
-}
-
 type WorkerService_RunClientServer interface {
 	Send(*ClientStatus) error
 	Recv() (*ClientArgs, error)
@@ -445,68 +495,57 @@ func (x *workerServiceRunClientServer) Recv() (*ClientArgs, error) {
 	return m, nil
 }
 
-func _WorkerService_CoreCount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CoreRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+// RegisterWorkerServiceService registers a service implementation with a gRPC server.
+func RegisterWorkerServiceService(s grpc.ServiceRegistrar, srv *WorkerServiceService) {
+	srvCopy := *srv
+	if srvCopy.RunServer == nil {
+		srvCopy.RunServer = func(WorkerService_RunServerServer) error {
+			return status.Errorf(codes.Unimplemented, "method RunServer not implemented")
+		}
 	}
-	if interceptor == nil {
-		return srv.(WorkerServiceServer).CoreCount(ctx, in)
+	if srvCopy.RunClient == nil {
+		srvCopy.RunClient = func(WorkerService_RunClientServer) error {
+			return status.Errorf(codes.Unimplemented, "method RunClient not implemented")
+		}
 	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/grpc.testing.WorkerService/CoreCount",
+	if srvCopy.CoreCount == nil {
+		srvCopy.CoreCount = func(context.Context, *CoreRequest) (*CoreResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method CoreCount not implemented")
+		}
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).CoreCount(ctx, req.(*CoreRequest))
+	if srvCopy.QuitWorker == nil {
+		srvCopy.QuitWorker = func(context.Context, *Void) (*Void, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method QuitWorker not implemented")
+		}
 	}
-	return interceptor(ctx, in, info, handler)
-}
+	sd := grpc.ServiceDesc{
+		ServiceName: "grpc.testing.WorkerService",
+		Methods: []grpc.MethodDesc{
+			{
+				MethodName: "CoreCount",
+				Handler:    srvCopy.coreCount,
+			},
+			{
+				MethodName: "QuitWorker",
+				Handler:    srvCopy.quitWorker,
+			},
+		},
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName:    "RunServer",
+				Handler:       srvCopy.runServer,
+				ServerStreams: true,
+				ClientStreams: true,
+			},
+			{
+				StreamName:    "RunClient",
+				Handler:       srvCopy.runClient,
+				ServerStreams: true,
+				ClientStreams: true,
+			},
+		},
+		Metadata: "benchmark/grpc_testing/services.proto",
+	}
 
-func _WorkerService_QuitWorker_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Void)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WorkerServiceServer).QuitWorker(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/grpc.testing.WorkerService/QuitWorker",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).QuitWorker(ctx, req.(*Void))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-var _WorkerService_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "grpc.testing.WorkerService",
-	HandlerType: (*WorkerServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "CoreCount",
-			Handler:    _WorkerService_CoreCount_Handler,
-		},
-		{
-			MethodName: "QuitWorker",
-			Handler:    _WorkerService_QuitWorker_Handler,
-		},
-	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "RunServer",
-			Handler:       _WorkerService_RunServer_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
-		},
-		{
-			StreamName:    "RunClient",
-			Handler:       _WorkerService_RunClient_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
-		},
-	},
-	Metadata: "benchmark/grpc_testing/services.proto",
+	s.RegisterService(&sd, nil)
 }

@@ -1,5 +1,3 @@
-// +build go1.10
-
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -97,7 +95,7 @@ func (lb *rlsBalancer) handleClientConnUpdate(ccs *balancer.ClientConnState) {
 
 // UpdateClientConnState pushes the received ClientConnState update on the
 // update channel which will be processed asynchronously by the run goroutine.
-// Implements balancer.V2Balancer interface.
+// Implements balancer.Balancer interface.
 func (lb *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	select {
 	case lb.ccUpdateCh <- &ccs:
@@ -106,14 +104,14 @@ func (lb *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error
 	return nil
 }
 
-// ResolverErr implements balancer.V2Balancer interface.
+// ResolverErr implements balancer.Balancer interface.
 func (lb *rlsBalancer) ResolverError(error) {
 	// ResolverError is called by gRPC when the name resolver reports an error.
 	// TODO(easwars): How do we handle this?
 	logger.Fatal("rls: ResolverError is not yet unimplemented")
 }
 
-// UpdateSubConnState implements balancer.V2Balancer interface.
+// UpdateSubConnState implements balancer.Balancer interface.
 func (lb *rlsBalancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConnState) {
 	logger.Fatal("rls: UpdateSubConnState is not yet implemented")
 }

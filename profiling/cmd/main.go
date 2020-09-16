@@ -27,24 +27,26 @@ import (
 	ppb "google.golang.org/grpc/profiling/proto"
 )
 
+var logger = grpclog.Component("profiling")
+
 type snapshot struct {
 	StreamStats []*ppb.Stat
 }
 
 func main() {
 	if err := parseArgs(); err != nil {
-		grpclog.Errorf("error parsing flags: %v", err)
+		logger.Errorf("error parsing flags: %v", err)
 		os.Exit(1)
 	}
 
 	if *flagAddress != "" {
 		if err := remoteCommand(); err != nil {
-			grpclog.Errorf("error: %v", err)
+			logger.Errorf("error: %v", err)
 			os.Exit(1)
 		}
 	} else {
 		if err := localCommand(); err != nil {
-			grpclog.Errorf("error: %v", err)
+			logger.Errorf("error: %v", err)
 			os.Exit(1)
 		}
 	}

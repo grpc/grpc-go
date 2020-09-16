@@ -1,5 +1,3 @@
-// +build go1.10
-
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -27,7 +25,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/rls/internal/cache"
 	"google.golang.org/grpc/balancer/rls/internal/keys"
-	rlspb "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -44,10 +41,6 @@ type rlsPicker struct {
 	// The keyBuilder map used to generate RLS keys for the RPC. This is built
 	// by the LB policy based on the received ServiceConfig.
 	kbm keys.BuilderMap
-	// This is the request processing strategy as indicated by the LB policy's
-	// ServiceConfig. This controls how to process a RPC when the data required
-	// to make the pick decision is not in the cache.
-	strategy rlspb.RouteLookupConfig_RequestProcessingStrategy
 
 	// The following hooks are setup by the LB policy to enable the rlsPicker to
 	// access state stored in the policy. This approach has the following
@@ -79,15 +72,6 @@ type rlsPicker struct {
 	// rlsPicker returned by the child LB policy pointing to the default target
 	// specified in the service config.
 	defaultPick func(balancer.PickInfo) (balancer.PickResult, error)
-}
-
-// This helper function decides if the pick should delegate to the default
-// rlsPicker based on the request processing strategy. This is used when the
-// data cache does not have a valid entry for the current RPC and the RLS
-// request is throttled, or if the current data cache entry is in backoff.
-func (p *rlsPicker) shouldDelegateToDefault() bool {
-	return p.strategy == rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR ||
-		p.strategy == rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS
 }
 
 // Pick makes the routing decision for every outbound RPC.
@@ -125,9 +109,9 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		if p.shouldThrottle() {
 			// The entry doesn't exist or has expired and the new RLS request
 			// has been throttled. Treat it as an error and delegate to default
-			// pick or fail the pick, based on the request processing strategy.
+			// pick, if one exists, or fail the pick.
 			if entry == nil || entry.ExpiryTime.Before(now) {
-				if p.shouldDelegateToDefault() {
+				if p.defaultPick != nil {
 					return p.defaultPick(info)
 				}
 				return balancer.PickResult{}, errRLSThrottled
@@ -146,25 +130,20 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			// this cache entry.
 			return entry.ChildPicker.Pick(info)
 		} else if entry.BackoffTime.After(now) {
-			// The entry has expired, but is in backoff. We either delegate to
-			// the default rlsPicker or return the error from the last failed
-			// RLS request for this entry.
-			if p.shouldDelegateToDefault() {
+			// The entry has expired, but is in backoff. We delegate to the
+			// default pick, if one exists, or return the error from the last
+			// failed RLS request for this entry.
+			if p.defaultPick != nil {
 				return p.defaultPick(info)
 			}
 			return balancer.PickResult{}, entry.CallStatus
 		}
 	}
 
-	// Either we didn't find an entry or found an entry which had expired and
-	// was not in backoff (which is also essentially equivalent to not finding
-	// an entry), and we started an RLS request in the background. We either
-	// queue the pick or delegate to the default pick. In the former case, upon
-	// receipt of an RLS response, the LB policy will send a new rlsPicker to
-	// the channel, and the pick will be retried.
-	if p.strategy == rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR ||
-		p.strategy == rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR {
-		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
-	}
-	return p.defaultPick(info)
+	// We get here only in the following cases:
+	// * No data cache entry or expired entry, RLS request sent out
+	// * No valid data cache entry and Pending cache entry exists
+	// We need to queue to pick which will be handled once the RLS response is
+	// received.
+	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }

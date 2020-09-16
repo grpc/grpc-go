@@ -159,6 +159,16 @@ type xdsResolver struct {
 	updateCh chan suWithError
 	// cancelWatch is the function to cancel the watcher.
 	cancelWatch func()
+
+	// actions is a map from hash of weighted cluster, to the weighted cluster
+	// map, and it's assigned name. E.g.
+	//   "A40_B60_": {{A:40, B:60}, "A_B_", "A_B_0"}
+	//   "A30_B70_": {{A:30, B:70}, "A_B_", "A_B_1"}
+	//   "B90_C10_": {{B:90, C:10}, "B_C_", "B_C_0"}
+	actions map[string]actionWithAssignedName
+	// usedActionNameRandomNumber contains random numbers that have been used in
+	// assigned names, to avoid collision.
+	usedActionNameRandomNumber map[int64]bool
 }
 
 // run is a long running goroutine which blocks on receiving service updates
@@ -185,7 +195,7 @@ func (r *xdsResolver) run() {
 				r.cc.ReportError(update.err)
 				continue
 			}
-			sc, err := serviceUpdateToJSON(update.su)
+			sc, err := r.serviceUpdateToJSON(update.su)
 			if err != nil {
 				r.logger.Warningf("failed to convert update to service config: %v", err)
 				r.cc.ReportError(err)
@@ -220,19 +230,4 @@ func (r *xdsResolver) Close() {
 	r.client.Close()
 	r.cancelCtx()
 	r.logger.Infof("Shutdown")
-}
-
-// Keep scheme with "-experimental" temporarily. Remove after one release.
-const schemeExperimental = "xds-experimental"
-
-type xdsResolverExperimentalBuilder struct {
-	xdsResolverBuilder
-}
-
-func (*xdsResolverExperimentalBuilder) Scheme() string {
-	return schemeExperimental
-}
-
-func init() {
-	resolver.Register(&xdsResolverExperimentalBuilder{})
 }

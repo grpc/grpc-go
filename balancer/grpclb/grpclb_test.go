@@ -276,8 +276,6 @@ func (b *remoteBalancer) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServe
 }
 
 type testServer struct {
-	testpb.UnimplementedTestServiceServer
-
 	addr     string
 	fallback bool
 }
@@ -306,7 +304,11 @@ func startBackends(sn string, fallback bool, lis ...net.Listener) (servers []*gr
 			sn: sn,
 		}
 		s := grpc.NewServer(grpc.Creds(creds))
-		testpb.RegisterTestServiceServer(s, &testServer{addr: l.Addr().String(), fallback: fallback})
+		ts := &testServer{addr: l.Addr().String(), fallback: fallback}
+		testpb.RegisterTestServiceService(s, &testpb.TestServiceService{
+			EmptyCall:      ts.EmptyCall,
+			FullDuplexCall: ts.FullDuplexCall,
+		})
 		servers = append(servers, s)
 		go func(s *grpc.Server, l net.Listener) {
 			s.Serve(l)

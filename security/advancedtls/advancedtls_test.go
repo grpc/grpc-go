@@ -26,16 +26,27 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"net"
 	"reflect"
 	"syscall"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
-func TestClientServerHandshake(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestClientServerHandshake(t *testing.T) {
 	// ------------------Load Client Trust Cert and Peer Cert-------------------
 	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
 	if err != nil {
@@ -102,7 +113,7 @@ func TestClientServerHandshake(t *testing.T) {
 		clientExpectHandshakeError bool
 		serverMutualTLS            bool
 		serverCert                 []tls.Certificate
-		serverGetCert              func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+		serverGetCert              func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 		serverRoot                 *x509.CertPool
 		serverGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		serverVerifyFunc           CustomVerificationFunc
@@ -279,8 +290,8 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVerifyFunc: clientVerifyFuncGood,
 			clientVType:      CertVerification,
 			serverMutualTLS:  true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &serverPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				return []*tls.Certificate{&serverPeerCert}, nil
 			},
 			serverGetRoot:    getRootCAsForServer,
 			serverVerifyFunc: serverVerifyFunc,
@@ -300,8 +311,8 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVerifyFunc: clientVerifyFuncGood,
 			clientVType:      CertVerification,
 			serverMutualTLS:  true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &serverPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				return []*tls.Certificate{&serverPeerCert}, nil
 			},
 			serverGetRoot:     getRootCAsForServer,
 			serverVerifyFunc:  serverVerifyFunc,
@@ -322,8 +333,8 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVType:                CertVerification,
 			clientExpectHandshakeError: true,
 			serverMutualTLS:            true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &serverPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				return []*tls.Certificate{&serverPeerCert}, nil
 			},
 			serverGetRoot:     getRootCAsForServer,
 			serverVerifyFunc:  serverVerifyFunc,
@@ -344,8 +355,8 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVerifyFunc: clientVerifyFuncGood,
 			clientVType:      CertVerification,
 			serverMutualTLS:  true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &clientPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				return []*tls.Certificate{&clientPeerCert}, nil
 			},
 			serverGetRoot:     getRootCAsForServer,
 			serverVerifyFunc:  serverVerifyFunc,
@@ -366,8 +377,8 @@ func TestClientServerHandshake(t *testing.T) {
 			clientVType:                CertVerification,
 			clientExpectHandshakeError: true,
 			serverMutualTLS:            true,
-			serverGetCert: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return &serverPeerCert, nil
+			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+				return []*tls.Certificate{&serverPeerCert}, nil
 			},
 			serverGetRoot:     getRootCAsForClient,
 			serverVerifyFunc:  serverVerifyFunc,
@@ -402,8 +413,8 @@ func TestClientServerHandshake(t *testing.T) {
 			}
 			// Start a server using ServerOptions in another goroutine.
 			serverOptions := &ServerOptions{
-				Certificates:   test.serverCert,
-				GetCertificate: test.serverGetCert,
+				Certificates:    test.serverCert,
+				GetCertificates: test.serverGetCert,
 				RootCertificateOptions: RootCertificateOptions{
 					RootCACerts: test.serverRoot,
 					GetRootCAs:  test.serverGetRoot,
@@ -523,7 +534,7 @@ func compare(a1, a2 credentials.AuthInfo) bool {
 	}
 }
 
-func TestAdvancedTLSOverrideServerName(t *testing.T) {
+func (s) TestAdvancedTLSOverrideServerName(t *testing.T) {
 	expectedServerName := "server.name"
 	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
 	if err != nil {
@@ -545,7 +556,7 @@ func TestAdvancedTLSOverrideServerName(t *testing.T) {
 	}
 }
 
-func TestTLSClone(t *testing.T) {
+func (s) TestTLSClone(t *testing.T) {
 	expectedServerName := "server.name"
 	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
 	if err != nil {
@@ -573,7 +584,7 @@ func TestTLSClone(t *testing.T) {
 
 }
 
-func TestAppendH2ToNextProtos(t *testing.T) {
+func (s) TestAppendH2ToNextProtos(t *testing.T) {
 	tests := []struct {
 		name string
 		ps   []string
@@ -613,7 +624,7 @@ type nonSyscallConn struct {
 	net.Conn
 }
 
-func TestWrapSyscallConn(t *testing.T) {
+func (s) TestWrapSyscallConn(t *testing.T) {
 	sc := &syscallConn{}
 	nsc := &nonSyscallConn{}
 
@@ -624,7 +635,7 @@ func TestWrapSyscallConn(t *testing.T) {
 	}
 }
 
-func TestOptionsConfig(t *testing.T) {
+func (s) TestOptionsConfig(t *testing.T) {
 	serverPeerCert, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
 		testdata.Path("server_key_1.pem"))
 	if err != nil {
@@ -675,6 +686,76 @@ func TestOptionsConfig(t *testing.T) {
 			if clientOptions.RootCACerts == nil && clientOptions.GetRootCAs == nil &&
 				clientConfig.RootCAs == nil {
 				t.Fatalf("Failed to assign system-provided certificates on the client side.")
+			}
+		})
+	}
+}
+
+func (s) TestGetCertificatesSNI(t *testing.T) {
+	// Load server certificates for setting the serverGetCert callback function.
+	serverCert1, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"), testdata.Path("server_key_1.pem"))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(server_cert_1.pem, server_key_1.pem) failed: %v", err)
+	}
+	serverCert2, err := tls.LoadX509KeyPair(testdata.Path("server_cert_2.pem"), testdata.Path("server_key_2.pem"))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(server_cert_2.pem, server_key_2.pem) failed: %v", err)
+	}
+	serverCert3, err := tls.LoadX509KeyPair(testdata.Path("server_cert_3.pem"), testdata.Path("server_key_3.pem"))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(server_cert_3.pem, server_key_3.pem) failed: %v", err)
+	}
+
+	tests := []struct {
+		desc       string
+		serverName string
+		wantCert   tls.Certificate
+	}{
+		{
+			desc: "Select serverCert1",
+			// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
+			serverName: "foo.bar.com",
+			wantCert:   serverCert1,
+		},
+		{
+			desc: "Select serverCert2",
+			// "foo.bar.server2.com" is the common name on server certificate server_cert_2.pem.
+			serverName: "foo.bar.server2.com",
+			wantCert:   serverCert2,
+		},
+		{
+			desc: "Select serverCert3",
+			// "google.com" is one of the DNS names on server certificate server_cert_3.pem.
+			serverName: "google.com",
+			wantCert:   serverCert3,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			serverOptions := &ServerOptions{
+				GetCertificates: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+					return []*tls.Certificate{&serverCert1, &serverCert2, &serverCert3}, nil
+				},
+			}
+			serverConfig, err := serverOptions.config()
+			if err != nil {
+				t.Fatalf("serverOptions.config() failed: %v", err)
+			}
+			pointFormatUncompressed := uint8(0)
+			clientHello := &tls.ClientHelloInfo{
+				CipherSuites:      []uint16{tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA},
+				ServerName:        test.serverName,
+				SupportedCurves:   []tls.CurveID{tls.CurveP256},
+				SupportedPoints:   []uint8{pointFormatUncompressed},
+				SupportedVersions: []uint16{tls.VersionTLS10},
+			}
+			gotCertificate, err := serverConfig.GetCertificate(clientHello)
+			if err != nil {
+				t.Fatalf("serverConfig.GetCertificate(clientHello) failed: %v", err)
+			}
+			if !cmp.Equal(*gotCertificate, test.wantCert, cmp.AllowUnexported(big.Int{})) {
+				t.Errorf("GetCertificates() = %v, want %v", *gotCertificate, test.wantCert)
 			}
 		})
 	}

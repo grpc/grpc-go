@@ -35,10 +35,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/balancerload"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -60,6 +60,7 @@ type testBalancer struct {
 
 	newSubConnOptions balancer.NewSubConnOptions
 	pickInfos         []balancer.PickInfo
+	pickExtraMDs      []metadata.MD
 	doneInfo          []balancer.DoneInfo
 }
 
@@ -82,7 +83,7 @@ func (b *testBalancer) UpdateClientConnState(state balancer.ClientConnState) err
 		var err error
 		b.sc, err = b.cc.NewSubConn(state.ResolverState.Addresses, b.newSubConnOptions)
 		if err != nil {
-			grpclog.Errorf("testBalancer: failed to NewSubConn: %v", err)
+			logger.Errorf("testBalancer: failed to NewSubConn: %v", err)
 			return nil
 		}
 		b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: &picker{sc: b.sc, bal: b}})
@@ -92,9 +93,9 @@ func (b *testBalancer) UpdateClientConnState(state balancer.ClientConnState) err
 }
 
 func (b *testBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
-	grpclog.Infof("testBalancer: UpdateSubConnState: %p, %v", sc, s)
+	logger.Infof("testBalancer: UpdateSubConnState: %p, %v", sc, s)
 	if b.sc != sc {
-		grpclog.Infof("testBalancer: ignored state change because sc is not recognized")
+		logger.Infof("testBalancer: ignored state change because sc is not recognized")
 		return
 	}
 	if s.ConnectivityState == connectivity.Shutdown {
@@ -124,8 +125,10 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	if p.err != nil {
 		return balancer.PickResult{}, p.err
 	}
+	extraMD, _ := grpcutil.ExtraMetadata(info.Ctx)
 	info.Ctx = nil // Do not validate context.
 	p.bal.pickInfos = append(p.bal.pickInfos, info)
+	p.bal.pickExtraMDs = append(p.bal.pickExtraMDs, extraMD)
 	return balancer.PickResult{SubConn: p.sc, Done: func(d balancer.DoneInfo) { p.bal.doneInfo = append(p.bal.doneInfo, d) }}, nil
 }
 
@@ -140,20 +143,74 @@ func (s) TestCredsBundleFromBalancer(t *testing.T) {
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithBalancerName(testBalancerName),
 	}
-	creds, err := credentials.NewServerTLSFromFile(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+	creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		t.Fatalf("Failed to generate credentials %v", err)
 	}
 	te.customServerOptions = []grpc.ServerOption{
 		grpc.Creds(creds),
 	}
-	te.startServer(&testServer{})
+	te.startServer((&testServer{}).Svc())
 	defer te.tearDown()
 
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 		t.Fatalf("Test failed. Reason: %v", err)
+	}
+}
+
+func (s) TestPickExtraMetadata(t *testing.T) {
+	for _, e := range listTestEnv() {
+		testPickExtraMetadata(t, e)
+	}
+}
+
+func testPickExtraMetadata(t *testing.T, e env) {
+	te := newTest(t, e)
+	b := &testBalancer{}
+	balancer.Register(b)
+	const (
+		testUserAgent      = "test-user-agent"
+		testSubContentType = "proto"
+	)
+
+	te.customDialOptions = []grpc.DialOption{
+		grpc.WithBalancerName(testBalancerName),
+		grpc.WithUserAgent(testUserAgent),
+	}
+	te.startServer(testServer{security: e.security}.Svc())
+	defer te.tearDown()
+
+	// Set resolver to xds to trigger the extra metadata code path.
+	r := manual.NewBuilderWithScheme("xds")
+	resolver.Register(r)
+	defer func() {
+		resolver.UnregisterForTesting("xds")
+	}()
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
+	te.resolverScheme = "xds"
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+
+	// The RPCs will fail, but we don't care. We just need the pick to happen.
+	ctx1, cancel1 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel1()
+	tc.EmptyCall(ctx1, &testpb.Empty{})
+
+	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel2()
+	tc.EmptyCall(ctx2, &testpb.Empty{}, grpc.CallContentSubtype(testSubContentType))
+
+	want := []metadata.MD{
+		// First RPC doesn't have sub-content-type.
+		{"content-type": []string{"application/grpc"}},
+		// Second RPC has sub-content-type "proto".
+		{"content-type": []string{"application/grpc+proto"}},
+	}
+
+	if !cmp.Equal(b.pickExtraMDs, want) {
+		t.Fatalf("%s", cmp.Diff(b.pickExtraMDs, want))
 	}
 }
 
@@ -171,7 +228,7 @@ func testDoneInfo(t *testing.T, e env) {
 		grpc.WithBalancerName(testBalancerName),
 	}
 	te.userAgent = failAppUA
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -441,7 +498,7 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	}
 
 	s := grpc.NewServer()
-	testpb.RegisterTestServiceServer(s, &testServer{})
+	testpb.RegisterTestServiceService(s, (&testServer{}).Svc())
 	go s.Serve(lis)
 	defer s.Stop()
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
@@ -499,12 +556,12 @@ func (s) TestServersSwap(t *testing.T) {
 			t.Fatalf("Error while listening. Err: %v", err)
 		}
 		s := grpc.NewServer()
-		ts := &funcServer{
-			unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		ts := &testpb.TestServiceService{
+			UnaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return &testpb.SimpleResponse{Username: username}, nil
 			},
 		}
-		testpb.RegisterTestServiceServer(s, ts)
+		testpb.RegisterTestServiceService(s, ts)
 		go s.Serve(lis)
 		return lis.Addr().String(), s.Stop
 	}
@@ -559,12 +616,12 @@ func (s) TestEmptyAddrs(t *testing.T) {
 	s := grpc.NewServer()
 	defer s.Stop()
 	const one = "1"
-	ts := &funcServer{
-		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ts := &testpb.TestServiceService{
+		UnaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Username: one}, nil
 		},
 	}
-	testpb.RegisterTestServiceServer(s, ts)
+	testpb.RegisterTestServiceService(s, ts)
 	go s.Serve(lis)
 
 	// Initialize pickfirst client
@@ -648,12 +705,12 @@ func (s) TestWaitForReady(t *testing.T) {
 	s := grpc.NewServer()
 	defer s.Stop()
 	const one = "1"
-	ts := &funcServer{
-		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ts := &testpb.TestServiceService{
+		UnaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Username: one}, nil
 		},
 	}
-	testpb.RegisterTestServiceServer(s, ts)
+	testpb.RegisterTestServiceService(s, ts)
 	go s.Serve(lis)
 
 	// Initialize client

@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -346,7 +347,16 @@ func (cs *clientStream) newAttemptLocked(sh stats.Handler, trInfo *traceInfo) (r
 	if err := cs.ctx.Err(); err != nil {
 		return toRPCErr(err)
 	}
-	t, done, err := cs.cc.getTransport(cs.ctx, cs.callInfo.failFast, cs.callHdr.Method)
+
+	ctx := cs.ctx
+	if cs.cc.parsedTarget.Scheme == "xds" {
+		// Add extra metadata (metadata that will be added by transport) to context
+		// so the balancer can see them.
+		ctx = grpcutil.WithExtraMetadata(cs.ctx, metadata.Pairs(
+			"content-type", grpcutil.ContentType(cs.callHdr.ContentSubtype),
+		))
+	}
+	t, done, err := cs.cc.getTransport(ctx, cs.callInfo.failFast, cs.callHdr.Method)
 	if err != nil {
 		return err
 	}

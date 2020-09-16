@@ -29,8 +29,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal/testutils"
 
 	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
@@ -75,12 +75,30 @@ type Server struct {
 	// LRSResponseChan is a channel on which the Server accepts the LRS
 	// response to be sent to the client.
 	LRSResponseChan chan *Response
+	// NewConnChan is a channel on which the fake server notifies receipt of new
+	// connection attempts. Tests can gate on this event before proceeding to
+	// other actions which depend on a connection to the fake server being up.
+	NewConnChan *testutils.Channel
 	// Address is the host:port on which the Server is listening for requests.
 	Address string
 
 	// The underlying fake implementation of xDS and LRS.
 	xdsS *xdsServer
 	lrsS *lrsServer
+}
+
+type wrappedListener struct {
+	net.Listener
+	server *Server
+}
+
+func (wl *wrappedListener) Accept() (net.Conn, error) {
+	c, err := wl.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	wl.server.NewConnChan.Send(struct{}{})
+	return c, err
 }
 
 // StartServer makes a new Server and gets it to start listening on a local
@@ -95,17 +113,22 @@ func StartServer() (*Server, func(), error) {
 	s := &Server{
 		XDSRequestChan:  testutils.NewChannelWithSize(defaultChannelBufferSize),
 		LRSRequestChan:  testutils.NewChannelWithSize(defaultChannelBufferSize),
+		NewConnChan:     testutils.NewChannelWithSize(defaultChannelBufferSize),
 		XDSResponseChan: make(chan *Response, defaultChannelBufferSize),
 		LRSResponseChan: make(chan *Response, 1), // The server only ever sends one response.
 		Address:         lis.Addr().String(),
 	}
 	s.xdsS = &xdsServer{reqChan: s.XDSRequestChan, respChan: s.XDSResponseChan}
 	s.lrsS = &lrsServer{reqChan: s.LRSRequestChan, respChan: s.LRSResponseChan}
+	wp := &wrappedListener{
+		Listener: lis,
+		server:   s,
+	}
 
 	server := grpc.NewServer()
 	lrsgrpc.RegisterLoadReportingServiceServer(server, s.lrsS)
 	adsgrpc.RegisterAggregatedDiscoveryServiceServer(server, s.xdsS)
-	go server.Serve(lis)
+	go server.Serve(wp)
 
 	return s, func() { server.Stop() }, nil
 }

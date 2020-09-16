@@ -11,7 +11,7 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion6
+const _ = grpc.SupportPackageIsVersion7
 
 // ProfilingClient is the client API for Profiling service.
 //
@@ -32,6 +32,10 @@ func NewProfilingClient(cc grpc.ClientConnInterface) ProfilingClient {
 	return &profilingClient{cc}
 }
 
+var profilingEnableStreamDesc = &grpc.StreamDesc{
+	StreamName: "Enable",
+}
+
 func (c *profilingClient) Enable(ctx context.Context, in *EnableRequest, opts ...grpc.CallOption) (*EnableResponse, error) {
 	out := new(EnableResponse)
 	err := c.cc.Invoke(ctx, "/grpc.go.profiling.v1alpha.Profiling/Enable", in, out, opts...)
@@ -39,6 +43,10 @@ func (c *profilingClient) Enable(ctx context.Context, in *EnableRequest, opts ..
 		return nil, err
 	}
 	return out, nil
+}
+
+var profilingGetStreamStatsStreamDesc = &grpc.StreamDesc{
+	StreamName: "GetStreamStats",
 }
 
 func (c *profilingClient) GetStreamStats(ctx context.Context, in *GetStreamStatsRequest, opts ...grpc.CallOption) (*GetStreamStatsResponse, error) {
@@ -50,9 +58,89 @@ func (c *profilingClient) GetStreamStats(ctx context.Context, in *GetStreamStats
 	return out, nil
 }
 
-// ProfilingServer is the server API for Profiling service.
-// All implementations should embed UnimplementedProfilingServer
-// for forward compatibility
+// ProfilingService is the service API for Profiling service.
+// Fields should be assigned to their respective handler implementations only before
+// RegisterProfilingService is called.  Any unassigned fields will result in the
+// handler for that method returning an Unimplemented error.
+type ProfilingService struct {
+	// Enable allows users to toggle profiling on and off remotely.
+	Enable func(context.Context, *EnableRequest) (*EnableResponse, error)
+	// GetStreamStats is used to retrieve an array of stream-level stats from a
+	// gRPC client/server.
+	GetStreamStats func(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error)
+}
+
+func (s *ProfilingService) enable(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnableRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return s.Enable(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     s,
+		FullMethod: "/grpc.go.profiling.v1alpha.Profiling/Enable",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return s.Enable(ctx, req.(*EnableRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+func (s *ProfilingService) getStreamStats(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetStreamStatsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return s.GetStreamStats(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     s,
+		FullMethod: "/grpc.go.profiling.v1alpha.Profiling/GetStreamStats",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return s.GetStreamStats(ctx, req.(*GetStreamStatsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// RegisterProfilingService registers a service implementation with a gRPC server.
+func RegisterProfilingService(s grpc.ServiceRegistrar, srv *ProfilingService) {
+	srvCopy := *srv
+	if srvCopy.Enable == nil {
+		srvCopy.Enable = func(context.Context, *EnableRequest) (*EnableResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method Enable not implemented")
+		}
+	}
+	if srvCopy.GetStreamStats == nil {
+		srvCopy.GetStreamStats = func(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error) {
+			return nil, status.Errorf(codes.Unimplemented, "method GetStreamStats not implemented")
+		}
+	}
+	sd := grpc.ServiceDesc{
+		ServiceName: "grpc.go.profiling.v1alpha.Profiling",
+		Methods: []grpc.MethodDesc{
+			{
+				MethodName: "Enable",
+				Handler:    srvCopy.enable,
+			},
+			{
+				MethodName: "GetStreamStats",
+				Handler:    srvCopy.getStreamStats,
+			},
+		},
+		Streams:  []grpc.StreamDesc{},
+		Metadata: "profiling/proto/service.proto",
+	}
+
+	s.RegisterService(&sd, nil)
+}
+
+// ProfilingServer is the service API for Profiling service.
+// New methods may be added to this interface if they are added to the service
+// definition, which is not a backward-compatible change.  For this reason,
+// use of this type is not recommended unless you own the service definition.
 type ProfilingServer interface {
 	// Enable allows users to toggle profiling on and off remotely.
 	Enable(context.Context, *EnableRequest) (*EnableResponse, error)
@@ -61,7 +149,8 @@ type ProfilingServer interface {
 	GetStreamStats(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error)
 }
 
-// UnimplementedProfilingServer should be embedded to have forward compatible implementations.
+// UnimplementedProfilingServer can be embedded to have forward compatible implementations of
+// ProfilingServer
 type UnimplementedProfilingServer struct {
 }
 
@@ -72,59 +161,11 @@ func (*UnimplementedProfilingServer) GetStreamStats(context.Context, *GetStreamS
 	return nil, status.Errorf(codes.Unimplemented, "method GetStreamStats not implemented")
 }
 
-func RegisterProfilingServer(s *grpc.Server, srv ProfilingServer) {
-	s.RegisterService(&_Profiling_serviceDesc, srv)
-}
-
-func _Profiling_Enable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(EnableRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+// RegisterProfilingServer registers a service implementation with a gRPC server.
+func RegisterProfilingServer(s grpc.ServiceRegistrar, srv ProfilingServer) {
+	str := &ProfilingService{
+		Enable:         srv.Enable,
+		GetStreamStats: srv.GetStreamStats,
 	}
-	if interceptor == nil {
-		return srv.(ProfilingServer).Enable(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/grpc.go.profiling.v1alpha.Profiling/Enable",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProfilingServer).Enable(ctx, req.(*EnableRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Profiling_GetStreamStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetStreamStatsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ProfilingServer).GetStreamStats(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/grpc.go.profiling.v1alpha.Profiling/GetStreamStats",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProfilingServer).GetStreamStats(ctx, req.(*GetStreamStatsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-var _Profiling_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "grpc.go.profiling.v1alpha.Profiling",
-	HandlerType: (*ProfilingServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "Enable",
-			Handler:    _Profiling_Enable_Handler,
-		},
-		{
-			MethodName: "GetStreamStats",
-			Handler:    _Profiling_GetStreamStats_Handler,
-		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "profiling/proto/service.proto",
+	RegisterProfilingService(s, str)
 }

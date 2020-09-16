@@ -38,7 +38,7 @@ import (
 	"google.golang.org/grpc"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/testdata"
+	"google.golang.org/grpc/examples/data"
 
 	"github.com/golang/protobuf/proto"
 
@@ -54,11 +54,19 @@ var (
 )
 
 type routeGuideServer struct {
-	pb.UnimplementedRouteGuideServer
 	savedFeatures []*pb.Feature // read-only after initialized
 
 	mu         sync.Mutex // protects routeNotes
 	routeNotes map[string][]*pb.RouteNote
+}
+
+func (s *routeGuideServer) Svc() *pb.RouteGuideService {
+	return &pb.RouteGuideService{
+		GetFeature:   s.GetFeature,
+		ListFeatures: s.ListFeatures,
+		RecordRoute:  s.RecordRoute,
+		RouteChat:    s.RouteChat,
+	}
 }
 
 // GetFeature returns the feature at the given point.
@@ -226,10 +234,10 @@ func main() {
 	var opts []grpc.ServerOption
 	if *tls {
 		if *certFile == "" {
-			*certFile = testdata.Path("server1.pem")
+			*certFile = data.Path("x509/server_cert.pem")
 		}
 		if *keyFile == "" {
-			*keyFile = testdata.Path("server1.key")
+			*keyFile = data.Path("x509/server_key.pem")
 		}
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
@@ -238,7 +246,7 @@ func main() {
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
 	grpcServer := grpc.NewServer(opts...)
-	pb.RegisterRouteGuideServer(grpcServer, newServer())
+	pb.RegisterRouteGuideService(grpcServer, newServer().Svc())
 	grpcServer.Serve(lis)
 }
 

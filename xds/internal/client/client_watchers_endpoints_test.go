@@ -19,14 +19,14 @@
 package client
 
 import (
+	"context"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/testutils"
 )
 
 var (
@@ -55,12 +55,12 @@ type endpointsUpdateErr struct {
 // TestEndpointsWatch covers the cases:
 // - an update is received after a watch()
 // - an update for another resource name (which doesn't trigger callback)
-// - an upate is received after cancel()
+// - an update is received after cancel()
 func (s) TestEndpointsWatch(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -72,35 +72,40 @@ func (s) TestEndpointsWatch(t *testing.T) {
 	cancelWatch := c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[edsURL].Receive(); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := v2Client.addWatches[EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
-	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
+	v2Client.r.NewEndpoints(map[string]EndpointsUpdate{
 		testCDSName: wantUpdate,
 	})
 
-	if u, err := endpointsUpdateCh.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
+	if u, err := endpointsUpdateCh.Receive(ctx); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 		t.Errorf("unexpected endpointsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
 	// Another update for a different resource name.
-	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
+	v2Client.r.NewEndpoints(map[string]EndpointsUpdate{
 		"randomName": {},
 	})
 
-	if u, err := endpointsUpdateCh.TimedReceive(chanRecvTimeout); err != testutils.ErrRecvTimeout {
+	if u, err := endpointsUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 
 	// Cancel watch, and send update again.
 	cancelWatch()
-	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
+	v2Client.r.NewEndpoints(map[string]EndpointsUpdate{
 		testCDSName: wantUpdate,
 	})
 
-	if u, err := endpointsUpdateCh.TimedReceive(chanRecvTimeout); err != testutils.ErrRecvTimeout {
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if u, err := endpointsUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -108,10 +113,10 @@ func (s) TestEndpointsWatch(t *testing.T) {
 // TestEndpointsTwoWatchSameResourceName covers the case where an update is received
 // after two watch() for the same resource name.
 func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -124,41 +129,48 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 
 	var cancelLastWatch func()
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for i := 0; i < count; i++ {
 		endpointsUpdateCh := testutils.NewChannel()
 		endpointsUpdateChs = append(endpointsUpdateChs, endpointsUpdateCh)
 		cancelLastWatch = c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 			endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 		})
-		if _, err := v2Client.addWatches[edsURL].Receive(); i == 0 && err != nil {
-			t.Fatalf("want new watch to start, got error %v", err)
+
+		if i == 0 {
+			// A new watch is registered on the underlying API client only for
+			// the first iteration because we are using the same resource name.
+			if _, err := v2Client.addWatches[EndpointsResource].Receive(ctx); err != nil {
+				t.Fatalf("want new watch to start, got error %v", err)
+			}
 		}
 	}
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
-	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
+	v2Client.r.NewEndpoints(map[string]EndpointsUpdate{
 		testCDSName: wantUpdate,
 	})
 
 	for i := 0; i < count; i++ {
-		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
+		if u, err := endpointsUpdateChs[i].Receive(ctx); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 			t.Errorf("i=%v, unexpected endpointsUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
 
 	// Cancel the last watch, and send update again.
 	cancelLastWatch()
-	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
+	v2Client.r.NewEndpoints(map[string]EndpointsUpdate{
 		testCDSName: wantUpdate,
 	})
 
 	for i := 0; i < count-1; i++ {
-		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
+		if u, err := endpointsUpdateChs[i].Receive(ctx); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 			t.Errorf("i=%v, unexpected endpointsUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
 
-	if u, err := endpointsUpdateChs[count-1].TimedReceive(chanRecvTimeout); err != testutils.ErrRecvTimeout {
+	if u, err := endpointsUpdateChs[count-1].Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -166,10 +178,10 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 // TestEndpointsThreeWatchDifferentResourceName covers the case where an update is
 // received after three watch() for different resource names.
 func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -181,14 +193,21 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 	const count = 2
 
 	// Two watches for the same name.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for i := 0; i < count; i++ {
 		endpointsUpdateCh := testutils.NewChannel()
 		endpointsUpdateChs = append(endpointsUpdateChs, endpointsUpdateCh)
 		c.WatchEndpoints(testCDSName+"1", func(update EndpointsUpdate, err error) {
 			endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 		})
-		if _, err := v2Client.addWatches[edsURL].Receive(); i == 0 && err != nil {
-			t.Fatalf("want new watch to start, got error %v", err)
+
+		if i == 0 {
+			// A new watch is registered on the underlying API client only for
+			// the first iteration because we are using the same resource name.
+			if _, err := v2Client.addWatches[EndpointsResource].Receive(ctx); err != nil {
+				t.Fatalf("want new watch to start, got error %v", err)
+			}
 		}
 	}
 
@@ -197,24 +216,24 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 	c.WatchEndpoints(testCDSName+"2", func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh2.Send(endpointsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[edsURL].Receive(); err != nil {
+	if _, err := v2Client.addWatches[EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
 	wantUpdate1 := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
 	wantUpdate2 := EndpointsUpdate{Localities: []Locality{testLocalities[1]}}
-	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
+	v2Client.r.NewEndpoints(map[string]EndpointsUpdate{
 		testCDSName + "1": wantUpdate1,
 		testCDSName + "2": wantUpdate2,
 	})
 
 	for i := 0; i < count; i++ {
-		if u, err := endpointsUpdateChs[i].Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate1, nil}, endpointsCmpOpts...) {
+		if u, err := endpointsUpdateChs[i].Receive(ctx); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate1, nil}, endpointsCmpOpts...) {
 			t.Errorf("i=%v, unexpected endpointsUpdate: %v, error receiving from channel: %v", i, u, err)
 		}
 	}
 
-	if u, err := endpointsUpdateCh2.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate2, nil}, endpointsCmpOpts...) {
+	if u, err := endpointsUpdateCh2.Receive(ctx); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate2, nil}, endpointsCmpOpts...) {
 		t.Errorf("unexpected endpointsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 }
@@ -222,10 +241,10 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 // TestEndpointsWatchAfterCache covers the case where watch is called after the update
 // is in cache.
 func (s) TestEndpointsWatchAfterCache(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -237,16 +256,19 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[edsURL].Receive(); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := v2Client.addWatches[EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
-	v2Client.r.newEDSUpdate(map[string]EndpointsUpdate{
+	v2Client.r.NewEndpoints(map[string]EndpointsUpdate{
 		testCDSName: wantUpdate,
 	})
 
-	if u, err := endpointsUpdateCh.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
+	if u, err := endpointsUpdateCh.Receive(ctx); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 		t.Errorf("unexpected endpointsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -255,17 +277,19 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh2.Send(endpointsUpdateErr{u: update, err: err})
 	})
-	if n, err := v2Client.addWatches[edsURL].Receive(); err == nil {
+	if n, err := v2Client.addWatches[EndpointsResource].Receive(ctx); err != context.DeadlineExceeded {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
 	// New watch should receives the update.
-	if u, err := endpointsUpdateCh2.Receive(); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if u, err := endpointsUpdateCh2.Receive(ctx); err != nil || !cmp.Equal(u, endpointsUpdateErr{wantUpdate, nil}, endpointsCmpOpts...) {
 		t.Errorf("unexpected endpointsUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
 	// Old watch should see nothing.
-	if u, err := endpointsUpdateCh.TimedReceive(chanRecvTimeout); err != testutils.ErrRecvTimeout {
+	if u, err := endpointsUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -274,16 +298,10 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 // an CDS response for the request that it sends out. We want the watch callback
 // to be invoked with an error once the watchExpiryTimer fires.
 func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
-	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 500 * time.Millisecond
-	defer func() {
-		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
-	}()
-
-	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	v2ClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer))
+	c, err := New(clientOpts(testXDSServer, true))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -295,11 +313,13 @@ func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 	c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
 	})
-	if _, err := v2Client.addWatches[edsURL].Receive(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := v2Client.addWatches[EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	u, err := endpointsUpdateCh.TimedReceive(defaultWatchExpiryTimeout * 2)
+	u, err := endpointsUpdateCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("failed to get endpointsUpdate: %v", err)
 	}

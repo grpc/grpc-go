@@ -245,6 +245,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	// Determine the resolver to use.
 	cc.parsedTarget = grpcutil.ParseTarget(cc.target)
+	unixScheme := strings.HasPrefix(cc.target, "unix:")
 	channelz.Infof(logger, cc.channelzID, "parsed scheme: %q", cc.parsedTarget.Scheme)
 	resolverBuilder := cc.getResolver(cc.parsedTarget.Scheme)
 	if resolverBuilder == nil {
@@ -267,6 +268,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.authority = creds.Info().ServerName
 	} else if cc.dopts.insecure && cc.dopts.authority != "" {
 		cc.authority = cc.dopts.authority
+	} else if unixScheme {
+		cc.authority = "localhost"
 	} else {
 		// Use endpoint from "scheme://authority/endpoint" as the default
 		// authority for ClientConn.
@@ -860,9 +863,10 @@ func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
 // GetMethodConfig gets the method config of the input method.
 // If there's an exact match for input method (i.e. /service/method), we return
 // the corresponding MethodConfig.
-// If there isn't an exact match for the input method, we look for the default config
-// under the service (i.e /service/). If there is a default MethodConfig for
-// the service, we return it.
+// If there isn't an exact match for the input method, we look for the service's default
+// config under the service (i.e /service/) and then for the default for all services (empty string).
+//
+// If there is a default MethodConfig for the service, we return it.
 // Otherwise, we return an empty MethodConfig.
 func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	// TODO: Avoid the locking here.
@@ -871,12 +875,14 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	if cc.sc == nil {
 		return MethodConfig{}
 	}
-	m, ok := cc.sc.Methods[method]
-	if !ok {
-		i := strings.LastIndex(method, "/")
-		m = cc.sc.Methods[method[:i+1]]
+	if m, ok := cc.sc.Methods[method]; ok {
+		return m
 	}
-	return m
+	i := strings.LastIndex(method, "/")
+	if m, ok := cc.sc.Methods[method[:i+1]]; ok {
+		return m
+	}
+	return cc.sc.Methods[""]
 }
 
 func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {
@@ -1301,7 +1307,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 //
 // LB channel health checking is enabled when all requirements below are met:
 // 1. it is not disabled by the user with the WithDisableHealthCheck DialOption
-// 2. internal.HealthCheckFunc is set by importing the grpc/healthcheck package
+// 2. internal.HealthCheckFunc is set by importing the grpc/health package
 // 3. a service config with non-empty healthCheckConfig field is provided
 // 4. the load balancer requests it
 //

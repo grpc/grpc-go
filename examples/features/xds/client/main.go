@@ -1,5 +1,3 @@
-// +build go1.11
-
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -31,8 +29,7 @@ import (
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 
-	// TODO: change this to xds after the xds package is released.
-	_ "google.golang.org/grpc/xds/experimental" // To install the xds resolvers and balancers.
+	_ "google.golang.org/grpc/xds" // To install the xds resolvers and balancers.
 )
 
 const (

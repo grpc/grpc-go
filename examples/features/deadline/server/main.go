@@ -40,7 +40,6 @@ var port = flag.Int("port", 50052, "port number")
 
 // server is used to implement EchoServer.
 type server struct {
-	pb.UnimplementedEchoServer
 	client pb.EchoClient
 	cc     *grpc.ClientConn
 }
@@ -112,9 +111,12 @@ func main() {
 
 	echoServer := newEchoServer()
 	defer echoServer.Close()
-
 	grpcServer := grpc.NewServer()
-	pb.RegisterEchoServer(grpcServer, echoServer)
+
+	pb.RegisterEchoService(grpcServer, &pb.EchoService{
+		UnaryEcho:                  echoServer.UnaryEcho,
+		BidirectionalStreamingEcho: echoServer.BidirectionalStreamingEcho,
+	})
 
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)

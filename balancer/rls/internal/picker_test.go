@@ -1,5 +1,3 @@
-// +build go1.10
-
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -29,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/rls/internal/cache"
 	"google.golang.org/grpc/balancer/rls/internal/keys"
@@ -40,6 +39,12 @@ import (
 
 const defaultTestMaxAge = 5 * time.Second
 
+// initKeyBuilderMap initializes a keyBuilderMap of the form:
+// {
+// 		"gFoo": "k1=n1",
+//		"gBar/method1": "k2=n21,n22"
+// 		"gFoobar": "k3=n3",
+// }
 func initKeyBuilderMap() (keys.BuilderMap, error) {
 	kb1 := &rlspb.GrpcKeyBuilder{
 		Names:   []*rlspb.GrpcKeyBuilder_Name{{Service: "gFoo"}},
@@ -65,13 +70,31 @@ type fakeSubConn struct {
 	id int
 }
 
-// fakeChildPicker sends a PickResult with a fakeSubConn with the configured id.
-type fakeChildPicker struct {
+// fakePicker sends a PickResult with a fakeSubConn with the configured id.
+type fakePicker struct {
 	id int
 }
 
-func (p *fakeChildPicker) Pick(_ balancer.PickInfo) (balancer.PickResult, error) {
+func (p *fakePicker) Pick(_ balancer.PickInfo) (balancer.PickResult, error) {
 	return balancer.PickResult{SubConn: &fakeSubConn{id: p.id}}, nil
+}
+
+// newFakePicker returns a fakePicker configured with a random ID. The subConns
+// returned by this picker are of type fakefakeSubConn, and contain the same
+// random ID, which tests can use to verify.
+func newFakePicker() *fakePicker {
+	return &fakePicker{id: grpcrand.Intn(math.MaxInt32)}
+}
+
+func verifySubConn(sc balancer.SubConn, wantID int) error {
+	fsc, ok := sc.(*fakeSubConn)
+	if !ok {
+		return fmt.Errorf("Pick() returned a SubConn of type %T, want %T", sc, &fakeSubConn{})
+	}
+	if fsc.id != wantID {
+		return fmt.Errorf("Pick() returned SubConn %d, want %d", fsc.id, wantID)
+	}
+	return nil
 }
 
 // TestPickKeyBuilder verifies the different possible scenarios for forming an
@@ -112,8 +135,7 @@ func TestPickKeyBuilder(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			randID := grpcrand.Intn(math.MaxInt32)
 			p := rlsPicker{
-				kbm:      kbm,
-				strategy: rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
+				kbm: kbm,
 				readCache: func(key cache.Key) (*cache.Entry, bool) {
 					if !cmp.Equal(key, test.wantKey) {
 						t.Fatalf("rlsPicker using cacheKey %v, want %v", key, test.wantKey)
@@ -126,7 +148,7 @@ func TestPickKeyBuilder(t *testing.T) {
 						// Cache entry is configured with a child policy whose
 						// rlsPicker always returns an empty PickResult and nil
 						// error.
-						ChildPicker: &fakeChildPicker{id: randID},
+						ChildPicker: &fakePicker{id: randID},
 					}, false
 				},
 				// The other hooks are not set here because they are not expected to be
@@ -151,7 +173,188 @@ func TestPickKeyBuilder(t *testing.T) {
 	}
 }
 
-func TestPick(t *testing.T) {
+// TestPick_DataCacheMiss_PendingCacheMiss verifies different Pick scenarios
+// where the entry is neither found in the data cache nor in the pending cache.
+func TestPick_DataCacheMiss_PendingCacheMiss(t *testing.T) {
+	const (
+		rpcPath       = "/gFoo/method"
+		wantKeyMapStr = "k1=v1"
+	)
+	kbm, err := initKeyBuilderMap()
+	if err != nil {
+		t.Fatalf("Failed to create keyBuilderMap: %v", err)
+	}
+	md := metadata.New(map[string]string{"n1": "v1", "n3": "v3"})
+	wantKey := cache.Key{Path: rpcPath, KeyMap: wantKeyMapStr}
+
+	tests := []struct {
+		desc string
+		// Whether or not a default target is configured.
+		defaultPickExists bool
+		// Whether or not the RLS request should be throttled.
+		throttle bool
+		// Whether or not the test is expected to make a new RLS request.
+		wantRLSRequest bool
+		// Expected error returned by the rlsPicker under test.
+		wantErr error
+	}{
+		{
+			desc:              "rls request throttled with default pick",
+			defaultPickExists: true,
+			throttle:          true,
+		},
+		{
+			desc:     "rls request throttled without default pick",
+			throttle: true,
+			wantErr:  errRLSThrottled,
+		},
+		{
+			desc:           "rls request not throttled",
+			wantRLSRequest: true,
+			wantErr:        balancer.ErrNoSubConnAvailable,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			rlsCh := testutils.NewChannel()
+			defaultPicker := newFakePicker()
+
+			p := rlsPicker{
+				kbm: kbm,
+				// Cache lookup fails, no pending entry.
+				readCache: func(key cache.Key) (*cache.Entry, bool) {
+					if !cmp.Equal(key, wantKey) {
+						t.Fatalf("cache lookup using cacheKey %v, want %v", key, wantKey)
+					}
+					return nil, false
+				},
+				shouldThrottle: func() bool { return test.throttle },
+				startRLS: func(path string, km keys.KeyMap) {
+					if !test.wantRLSRequest {
+						rlsCh.Send(errors.New("RLS request attempted when none was expected"))
+						return
+					}
+					if path != rpcPath {
+						rlsCh.Send(fmt.Errorf("RLS request initiated for rpcPath %s, want %s", path, rpcPath))
+						return
+					}
+					if km.Str != wantKeyMapStr {
+						rlsCh.Send(fmt.Errorf("RLS request initiated with keys %v, want %v", km.Str, wantKeyMapStr))
+						return
+					}
+					rlsCh.Send(nil)
+				},
+			}
+			if test.defaultPickExists {
+				p.defaultPick = defaultPicker.Pick
+			}
+
+			gotResult, err := p.Pick(balancer.PickInfo{
+				FullMethodName: rpcPath,
+				Ctx:            metadata.NewOutgoingContext(context.Background(), md),
+			})
+			if err != test.wantErr {
+				t.Fatalf("Pick() returned error {%v}, want {%v}", err, test.wantErr)
+			}
+			// If the test specified that a new RLS request should be made,
+			// verify it.
+			if test.wantRLSRequest {
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+				if rlsErr, err := rlsCh.Receive(ctx); err != nil || rlsErr != nil {
+					t.Fatalf("startRLS() = %v, error receiving from channel: %v", rlsErr, err)
+				}
+			}
+			if test.wantErr != nil {
+				return
+			}
+
+			// We get here only for cases where we expect the pick to be
+			// delegated to the default picker.
+			if err := verifySubConn(gotResult.SubConn, defaultPicker.id); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// TestPick_DataCacheMiss_PendingCacheMiss verifies different Pick scenarios
+// where the entry is not found in the data cache, but there is a entry in the
+// pending cache. For all of these scenarios, no new RLS request will be sent.
+func TestPick_DataCacheMiss_PendingCacheHit(t *testing.T) {
+	const (
+		rpcPath       = "/gFoo/method"
+		wantKeyMapStr = "k1=v1"
+	)
+	kbm, err := initKeyBuilderMap()
+	if err != nil {
+		t.Fatalf("Failed to create keyBuilderMap: %v", err)
+	}
+	md := metadata.New(map[string]string{"n1": "v1", "n3": "v3"})
+	wantKey := cache.Key{Path: rpcPath, KeyMap: wantKeyMapStr}
+
+	tests := []struct {
+		desc              string
+		defaultPickExists bool
+	}{
+		{
+			desc:              "default pick exists",
+			defaultPickExists: true,
+		},
+		{
+			desc: "default pick does not exists",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			rlsCh := testutils.NewChannel()
+			p := rlsPicker{
+				kbm: kbm,
+				// Cache lookup fails, pending entry exists.
+				readCache: func(key cache.Key) (*cache.Entry, bool) {
+					if !cmp.Equal(key, wantKey) {
+						t.Fatalf("cache lookup using cacheKey %v, want %v", key, wantKey)
+					}
+					return nil, true
+				},
+				// Never throttle. We do not expect an RLS request to be sent out anyways.
+				shouldThrottle: func() bool { return false },
+				startRLS: func(_ string, _ keys.KeyMap) {
+					rlsCh.Send(nil)
+				},
+			}
+			if test.defaultPickExists {
+				p.defaultPick = func(info balancer.PickInfo) (balancer.PickResult, error) {
+					// We do not expect the default picker to be invoked at all.
+					// So, if we get here, the test will fail, because it
+					// expects the pick to be queued.
+					return balancer.PickResult{}, nil
+				}
+			}
+
+			if _, err := p.Pick(balancer.PickInfo{
+				FullMethodName: rpcPath,
+				Ctx:            metadata.NewOutgoingContext(context.Background(), md),
+			}); err != balancer.ErrNoSubConnAvailable {
+				t.Fatalf("Pick() returned error {%v}, want {%v}", err, balancer.ErrNoSubConnAvailable)
+			}
+
+			// Make sure that no RLS request was sent out.
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			if _, err := rlsCh.Receive(ctx); err != context.DeadlineExceeded {
+				t.Fatalf("RLS request sent out when pending entry exists")
+			}
+		})
+	}
+}
+
+// TestPick_DataCacheHit_PendingCacheMiss verifies different Pick scenarios
+// where the entry is found in the data cache, and there is no entry in the
+// pending cache. This includes cases where the entry in the data cache is
+// stale, expired or in backoff.
+func TestPick_DataCacheHit_PendingCacheMiss(t *testing.T) {
 	const (
 		rpcPath       = "/gFoo/method"
 		wantKeyMapStr = "k1=v1"
@@ -168,363 +371,94 @@ func TestPick(t *testing.T) {
 		desc string
 		// The cache entry, as returned by the overridden readCache hook.
 		cacheEntry *cache.Entry
-		// Whether or not a pending entry exists, as returned by the overridden
-		// readCache hook.
-		pending bool
+		// Whether or not a default target is configured.
+		defaultPickExists bool
 		// Whether or not the RLS request should be throttled.
 		throttle bool
 		// Whether or not the test is expected to make a new RLS request.
-		newRLSRequest bool
-		// Whether or not the test ends up delegating to the default pick.
-		useDefaultPick bool
-		// Whether or not the test ends up delegating to the child policy in
-		// the cache entry.
-		useChildPick bool
-		// Request processing strategy as used by the rlsPicker.
-		strategy rlspb.RouteLookupConfig_RequestProcessingStrategy
+		wantRLSRequest bool
+		// Whether or not the rlsPicker should delegate to the child picker.
+		wantChildPick bool
+		// Whether or not the rlsPicker should delegate to the default picker.
+		wantDefaultPick bool
 		// Expected error returned by the rlsPicker under test.
 		wantErr error
 	}{
 		{
-			desc:     "cacheMiss_pending_defaultTargetOnError",
-			pending:  true,
-			strategy: rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantErr:  balancer.ErrNoSubConnAvailable,
+			desc: "valid entry",
+			cacheEntry: &cache.Entry{
+				ExpiryTime: time.Now().Add(defaultTestMaxAge),
+				StaleTime:  time.Now().Add(defaultTestMaxAge),
+			},
+			wantChildPick: true,
 		},
 		{
-			desc:     "cacheMiss_pending_clientSeesError",
-			pending:  true,
-			strategy: rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantErr:  balancer.ErrNoSubConnAvailable,
+			desc:          "entryStale_requestThrottled",
+			cacheEntry:    &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
+			throttle:      true,
+			wantChildPick: true,
 		},
 		{
-			desc:           "cacheMiss_pending_defaultTargetOnMiss",
-			pending:        true,
-			useDefaultPick: true,
-			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantErr:        nil,
+			desc:           "entryStale_requestNotThrottled",
+			cacheEntry:     &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
+			wantRLSRequest: true,
+			wantChildPick:  true,
 		},
 		{
-			desc:          "cacheMiss_noPending_notThrottled_defaultTargetOnError",
-			newRLSRequest: true,
-			strategy:      rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantErr:       balancer.ErrNoSubConnAvailable,
+			desc:              "entryExpired_requestThrottled_defaultPickExists",
+			cacheEntry:        &cache.Entry{},
+			throttle:          true,
+			defaultPickExists: true,
+			wantDefaultPick:   true,
 		},
 		{
-			desc:          "cacheMiss_noPending_notThrottled_clientSeesError",
-			newRLSRequest: true,
-			strategy:      rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantErr:       balancer.ErrNoSubConnAvailable,
-		},
-		{
-			desc:           "cacheMiss_noPending_notThrottled_defaultTargetOnMiss",
-			newRLSRequest:  true,
-			useDefaultPick: true,
-			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantErr:        nil,
-		},
-		{
-			desc:           "cacheMiss_noPending_throttled_defaultTargetOnError",
-			throttle:       true,
-			useDefaultPick: true,
-			strategy:       rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantErr:        nil,
-		},
-		{
-			desc:     "cacheMiss_noPending_throttled_clientSeesError",
-			throttle: true,
-			strategy: rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantErr:  errRLSThrottled,
-		},
-		{
-			desc:           "cacheMiss_noPending_throttled_defaultTargetOnMiss",
-			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			throttle:       true,
-			useDefaultPick: true,
-			wantErr:        nil,
-		},
-		{
-			desc:           "cacheHit_noPending_boExpired_dataExpired_throttled_defaultTargetOnError",
-			cacheEntry:     &cache.Entry{}, // Everything is expired in this entry
-			throttle:       true,
-			useDefaultPick: true,
-			strategy:       rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantErr:        nil,
-		},
-		{
-			desc:       "cacheHit_noPending_boExpired_dataExpired_throttled_clientSeesError",
-			cacheEntry: &cache.Entry{}, // Everything is expired in this entry
+			desc:       "entryExpired_requestThrottled_defaultPickNotExists",
+			cacheEntry: &cache.Entry{},
 			throttle:   true,
-			strategy:   rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
 			wantErr:    errRLSThrottled,
 		},
 		{
-			desc:           "cacheHit_noPending_boExpired_dataExpired_throttled_defaultTargetOnMiss",
-			cacheEntry:     &cache.Entry{}, // Everything is expired in this entry
-			throttle:       true,
-			useDefaultPick: true,
-			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantErr:        nil,
-		},
-		{
-			desc:         "cacheHit_noPending_stale_boExpired_dataNotExpired_throttled_defaultTargetOnMiss",
-			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
-			throttle:     true, // Proactive refresh is throttled.
-			useChildPick: true,
-			strategy:     rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantErr:      nil,
-		},
-		{
-			desc:         "cacheHit_noPending_stale_boExpired_dataNotExpired_throttled_clientSeesError",
-			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
-			throttle:     true, // Proactive refresh is throttled.
-			useChildPick: true,
-			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantErr:      nil,
-		},
-		{
-			desc:         "cacheHit_noPending_stale_boExpired_dataNotExpired_throttled_defaultTargetOnError",
-			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
-			throttle:     true, // Proactive refresh is throttled.
-			useChildPick: true,
-			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantErr:      nil,
-		},
-		{
-			desc:          "cacheHit_noPending_boExpired_dataExpired_notThrottled_defaultTargetOnError",
-			cacheEntry:    &cache.Entry{}, // Everything is expired in this entry
-			newRLSRequest: true,
-			strategy:      rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantErr:       balancer.ErrNoSubConnAvailable,
-		},
-		{
-			desc:          "cacheHit_noPending_boExpired_dataExpired_notThrottled_clientSeesError",
-			cacheEntry:    &cache.Entry{}, // Everything is expired in this entry
-			newRLSRequest: true,
-			strategy:      rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantErr:       balancer.ErrNoSubConnAvailable,
-		},
-		{
-			desc:           "cacheHit_noPending_boExpired_dataExpired_notThrottled_defaultTargetOnMiss",
-			cacheEntry:     &cache.Entry{}, // Everything is expired in this entry
-			newRLSRequest:  true,
-			useDefaultPick: true,
-			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantErr:        nil,
-		},
-		{
-			desc:          "cacheHit_noPending_stale_boExpired_dataNotExpired_notThrottled_defaultTargetOnMiss",
-			cacheEntry:    &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
-			newRLSRequest: true, // Proactive refresh.
-			useChildPick:  true,
-			strategy:      rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantErr:       nil,
-		},
-		{
-			desc:          "cacheHit_noPending_stale_boExpired_dataNotExpired_notThrottled_clientSeesError",
-			cacheEntry:    &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
-			newRLSRequest: true, // Proactive refresh.
-			useChildPick:  true,
-			strategy:      rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantErr:       nil,
-		},
-		{
-			desc:          "cacheHit_noPending_stale_boExpired_dataNotExpired_notThrottled_defaultTargetOnError",
-			cacheEntry:    &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
-			newRLSRequest: true, // Proactive refresh.
-			useChildPick:  true,
-			strategy:      rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantErr:       nil,
-		},
-		{
-			desc:           "cacheHit_noPending_stale_boNotExpired_dataExpired_defaultTargetOnError",
-			cacheEntry:     &cache.Entry{BackoffTime: time.Now().Add(defaultTestMaxAge)},
-			useDefaultPick: true,
-			strategy:       rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantErr:        nil,
-		},
-		{
-			desc:           "cacheHit_noPending_stale_boNotExpired_dataExpired_defaultTargetOnMiss",
-			cacheEntry:     &cache.Entry{BackoffTime: time.Now().Add(defaultTestMaxAge)},
-			useDefaultPick: true,
-			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantErr:        nil,
-		},
-		{
-			desc: "cacheHit_noPending_stale_boNotExpired_dataExpired_clientSeesError",
-			cacheEntry: &cache.Entry{
-				BackoffTime: time.Now().Add(defaultTestMaxAge),
-				CallStatus:  rlsLastErr,
-			},
-			strategy: rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantErr:  rlsLastErr,
-		},
-		{
-			desc: "cacheHit_noPending_stale_boNotExpired_dataNotExpired_defaultTargetOnError",
-			cacheEntry: &cache.Entry{
-				ExpiryTime:  time.Now().Add(defaultTestMaxAge),
-				BackoffTime: time.Now().Add(defaultTestMaxAge),
-				CallStatus:  rlsLastErr,
-			},
-			useChildPick: true,
-			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantErr:      nil,
-		},
-		{
-			desc: "cacheHit_noPending_stale_boNotExpired_dataNotExpired_defaultTargetOnMiss",
-			cacheEntry: &cache.Entry{
-				ExpiryTime:  time.Now().Add(defaultTestMaxAge),
-				BackoffTime: time.Now().Add(defaultTestMaxAge),
-				CallStatus:  rlsLastErr,
-			},
-			useChildPick: true,
-			strategy:     rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantErr:      nil,
-		},
-		{
-			desc: "cacheHit_noPending_stale_boNotExpired_dataNotExpired_clientSeesError",
-			cacheEntry: &cache.Entry{
-				ExpiryTime:  time.Now().Add(defaultTestMaxAge),
-				BackoffTime: time.Now().Add(defaultTestMaxAge),
-				CallStatus:  rlsLastErr,
-			},
-			useChildPick: true,
-			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantErr:      nil,
-		},
-		{
-			desc: "cacheHit_noPending_notStale_dataNotExpired_defaultTargetOnError",
-			cacheEntry: &cache.Entry{
-				ExpiryTime: time.Now().Add(defaultTestMaxAge),
-				StaleTime:  time.Now().Add(defaultTestMaxAge),
-			},
-			useChildPick: true,
-			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantErr:      nil,
-		},
-		{
-			desc: "cacheHit_noPending_notStale_dataNotExpired_defaultTargetOnMiss",
-			cacheEntry: &cache.Entry{
-				ExpiryTime: time.Now().Add(defaultTestMaxAge),
-				StaleTime:  time.Now().Add(defaultTestMaxAge),
-			},
-			useChildPick: true,
-			strategy:     rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantErr:      nil,
-		},
-		{
-			desc: "cacheHit_noPending_notStale_dataNotExpired_clientSeesError",
-			cacheEntry: &cache.Entry{
-				ExpiryTime: time.Now().Add(defaultTestMaxAge),
-				StaleTime:  time.Now().Add(defaultTestMaxAge),
-			},
-			useChildPick: true,
-			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantErr:      nil,
-		},
-		{
-			desc:       "cacheHit_pending_dataExpired_boExpired_defaultTargetOnError",
-			cacheEntry: &cache.Entry{},
-			strategy:   rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantErr:    balancer.ErrNoSubConnAvailable,
-		},
-		{
-			desc:           "cacheHit_pending_dataExpired_boExpired_defaultTargetOnMiss",
+			desc:           "entryExpired_requestNotThrottled",
 			cacheEntry:     &cache.Entry{},
-			pending:        true,
-			useDefaultPick: true,
-			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantErr:        nil,
+			wantRLSRequest: true,
+			wantErr:        balancer.ErrNoSubConnAvailable,
 		},
 		{
-			desc:       "cacheHit_pending_dataExpired_boExpired_clientSeesError",
-			cacheEntry: &cache.Entry{},
-			pending:    true,
-			strategy:   rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantErr:    balancer.ErrNoSubConnAvailable,
-		},
-		{
-			desc: "cacheHit_pending_dataExpired_boNotExpired_defaultTargetOnError",
+			desc: "entryExpired_backoffNotExpired_defaultPickExists",
 			cacheEntry: &cache.Entry{
 				BackoffTime: time.Now().Add(defaultTestMaxAge),
 				CallStatus:  rlsLastErr,
 			},
-			useDefaultPick: true,
-			strategy:       rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantErr:        nil,
+			defaultPickExists: true,
 		},
 		{
-			desc: "cacheHit_pending_dataExpired_boNotExpired_defaultTargetOnMiss",
+			desc: "entryExpired_backoffNotExpired_defaultPickNotExists",
 			cacheEntry: &cache.Entry{
 				BackoffTime: time.Now().Add(defaultTestMaxAge),
 				CallStatus:  rlsLastErr,
 			},
-			pending:        true,
-			useDefaultPick: true,
-			strategy:       rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantErr:        nil,
-		},
-		{
-			desc: "cacheHit_pending_dataExpired_boNotExpired_clientSeesError",
-			cacheEntry: &cache.Entry{
-				BackoffTime: time.Now().Add(defaultTestMaxAge),
-				CallStatus:  rlsLastErr,
-			},
-			pending:  true,
-			strategy: rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantErr:  rlsLastErr,
-		},
-		{
-			desc:         "cacheHit_pending_dataNotExpired_defaultTargetOnError",
-			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
-			pending:      true,
-			useChildPick: true,
-			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_DEFAULT_TARGET_ON_ERROR,
-			wantErr:      nil,
-		},
-		{
-			desc:         "cacheHit_pending_dataNotExpired_defaultTargetOnMiss",
-			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
-			pending:      true,
-			useChildPick: true,
-			strategy:     rlspb.RouteLookupConfig_ASYNC_LOOKUP_DEFAULT_TARGET_ON_MISS,
-			wantErr:      nil,
-		},
-		{
-			desc:         "cacheHit_pending_dataNotExpired_clientSeesError",
-			cacheEntry:   &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
-			pending:      true,
-			useChildPick: true,
-			strategy:     rlspb.RouteLookupConfig_SYNC_LOOKUP_CLIENT_SEES_ERROR,
-			wantErr:      nil,
+			wantErr: rlsLastErr,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			rlsCh := testutils.NewChannel()
-			randID := grpcrand.Intn(math.MaxInt32)
-			// We instantiate a fakeChildPicker which will return a fakeSubConn
-			// with configured id. Either the childPicker or the defaultPicker
-			// is configured to use this fakePicker based on whether
-			// useChidlPick or useDefaultPick is set in the test.
-			childPicker := &fakeChildPicker{id: randID}
+			childPicker := newFakePicker()
+			defaultPicker := newFakePicker()
 
 			p := rlsPicker{
-				kbm:      kbm,
-				strategy: test.strategy,
+				kbm: kbm,
 				readCache: func(key cache.Key) (*cache.Entry, bool) {
 					if !cmp.Equal(key, wantKey) {
 						t.Fatalf("cache lookup using cacheKey %v, want %v", key, wantKey)
 					}
-					if test.useChildPick {
-						test.cacheEntry.ChildPicker = childPicker
-					}
-					return test.cacheEntry, test.pending
+					test.cacheEntry.ChildPicker = childPicker
+					return test.cacheEntry, false
 				},
 				shouldThrottle: func() bool { return test.throttle },
 				startRLS: func(path string, km keys.KeyMap) {
-					if !test.newRLSRequest {
+					if !test.wantRLSRequest {
 						rlsCh.Send(errors.New("RLS request attempted when none was expected"))
 						return
 					}
@@ -538,12 +472,9 @@ func TestPick(t *testing.T) {
 					}
 					rlsCh.Send(nil)
 				},
-				defaultPick: func(info balancer.PickInfo) (balancer.PickResult, error) {
-					if !test.useDefaultPick {
-						return balancer.PickResult{}, errors.New("Using default pick when the test doesn't want to use default pick")
-					}
-					return childPicker.Pick(info)
-				},
+			}
+			if test.defaultPickExists {
+				p.defaultPick = defaultPicker.Pick
 			}
 
 			gotResult, err := p.Pick(balancer.PickInfo{
@@ -553,25 +484,131 @@ func TestPick(t *testing.T) {
 			if err != test.wantErr {
 				t.Fatalf("Pick() returned error {%v}, want {%v}", err, test.wantErr)
 			}
-			if test.useChildPick || test.useDefaultPick {
-				// For cases where the pick is not queued, but is delegated to
-				// either the child rlsPicker or the default rlsPicker, we
-				// verify that the expected fakeSubConn is returned.
-				sc, ok := gotResult.SubConn.(*fakeSubConn)
-				if !ok {
-					t.Fatalf("Pick() returned a SubConn of type %T, want %T", gotResult.SubConn, &fakeSubConn{})
+			// If the test specified that a new RLS request should be made,
+			// verify it.
+			if test.wantRLSRequest {
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+				if rlsErr, err := rlsCh.Receive(ctx); err != nil || rlsErr != nil {
+					t.Fatalf("startRLS() = %v, error receiving from channel: %v", rlsErr, err)
 				}
-				if sc.id != randID {
-					t.Fatalf("Pick() returned SubConn %d, want %d", sc.id, randID)
+			}
+			if test.wantErr != nil {
+				return
+			}
+
+			// We get here only for cases where we expect the pick to be
+			// delegated to the child picker or the default picker.
+			if test.wantChildPick {
+				if err := verifySubConn(gotResult.SubConn, childPicker.id); err != nil {
+					t.Fatal(err)
+				}
+
+			}
+			if test.wantDefaultPick {
+				if err := verifySubConn(gotResult.SubConn, defaultPicker.id); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// TestPick_DataCacheHit_PendingCacheHit verifies different Pick scenarios where
+// the entry is found both in the data cache and in the pending cache. This
+// mostly verifies cases where the entry is stale, but there is already a
+// pending RLS request, so no new request should be sent out.
+func TestPick_DataCacheHit_PendingCacheHit(t *testing.T) {
+	const (
+		rpcPath       = "/gFoo/method"
+		wantKeyMapStr = "k1=v1"
+	)
+	kbm, err := initKeyBuilderMap()
+	if err != nil {
+		t.Fatalf("Failed to create keyBuilderMap: %v", err)
+	}
+	md := metadata.New(map[string]string{"n1": "v1", "n3": "v3"})
+	wantKey := cache.Key{Path: rpcPath, KeyMap: wantKeyMapStr}
+
+	tests := []struct {
+		desc string
+		// The cache entry, as returned by the overridden readCache hook.
+		cacheEntry *cache.Entry
+		// Whether or not a default target is configured.
+		defaultPickExists bool
+		// Expected error returned by the rlsPicker under test.
+		wantErr error
+	}{
+		{
+			desc:       "stale entry",
+			cacheEntry: &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
+		},
+		{
+			desc:              "stale entry with default picker",
+			cacheEntry:        &cache.Entry{ExpiryTime: time.Now().Add(defaultTestMaxAge)},
+			defaultPickExists: true,
+		},
+		{
+			desc:              "entryExpired_defaultPickExists",
+			cacheEntry:        &cache.Entry{},
+			defaultPickExists: true,
+			wantErr:           balancer.ErrNoSubConnAvailable,
+		},
+		{
+			desc:       "entryExpired_defaultPickNotExists",
+			cacheEntry: &cache.Entry{},
+			wantErr:    balancer.ErrNoSubConnAvailable,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			rlsCh := testutils.NewChannel()
+			childPicker := newFakePicker()
+
+			p := rlsPicker{
+				kbm: kbm,
+				readCache: func(key cache.Key) (*cache.Entry, bool) {
+					if !cmp.Equal(key, wantKey) {
+						t.Fatalf("cache lookup using cacheKey %v, want %v", key, wantKey)
+					}
+					test.cacheEntry.ChildPicker = childPicker
+					return test.cacheEntry, true
+				},
+				// Never throttle. We do not expect an RLS request to be sent out anyways.
+				shouldThrottle: func() bool { return false },
+				startRLS: func(path string, km keys.KeyMap) {
+					rlsCh.Send(nil)
+				},
+			}
+			if test.defaultPickExists {
+				p.defaultPick = func(info balancer.PickInfo) (balancer.PickResult, error) {
+					// We do not expect the default picker to be invoked at all.
+					// So, if we get here, we return an error.
+					return balancer.PickResult{}, errors.New("default picker invoked when expecting a child pick")
 				}
 			}
 
-			// If the test specified that a new RLS request should be made,
-			// verify it.
-			if test.newRLSRequest {
-				if rlsErr, err := rlsCh.Receive(); err != nil || rlsErr != nil {
-					t.Fatalf("startRLS() = %v, error receiving from channel: %v", rlsErr, err)
-				}
+			gotResult, err := p.Pick(balancer.PickInfo{
+				FullMethodName: rpcPath,
+				Ctx:            metadata.NewOutgoingContext(context.Background(), md),
+			})
+			if err != test.wantErr {
+				t.Fatalf("Pick() returned error {%v}, want {%v}", err, test.wantErr)
+			}
+			// Make sure that no RLS request was sent out.
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			if _, err := rlsCh.Receive(ctx); err != context.DeadlineExceeded {
+				t.Fatalf("RLS request sent out when pending entry exists")
+			}
+			if test.wantErr != nil {
+				return
+			}
+
+			// We get here only for cases where we expect the pick to be
+			// delegated to the child picker.
+			if err := verifySubConn(gotResult.SubConn, childPicker.id); err != nil {
+				t.Fatal(err)
 			}
 		})
 	}

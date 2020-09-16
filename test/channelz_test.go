@@ -85,7 +85,7 @@ func (s) TestCZServerRegistrationAndDeletion(t *testing.T) {
 		defer czCleanupWrapper(czCleanup, t)
 		e := tcpClearRREnv
 		te := newTest(t, e)
-		te.startServers(&testServer{security: e.security}, c.total)
+		te.startServers(testServer{security: e.security}.Svc(), c.total)
 
 		ss, end := channelz.GetServers(c.start, c.max)
 		if int64(len(ss)) != c.length || end != c.end {
@@ -104,7 +104,7 @@ func (s) TestCZGetServer(t *testing.T) {
 	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	defer te.tearDown()
 
 	ss, _ := channelz.GetServers(0, 0)
@@ -253,7 +253,7 @@ func (s) TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 	num := 3 // number of backends
 	te := newTest(t, e)
 	var svrAddrs []resolver.Address
-	te.startServers(&testServer{security: e.security}, num)
+	te.startServers(testServer{security: e.security}.Svc(), num)
 	r := manual.NewBuilderWithScheme("whatever")
 	for _, a := range te.srvAddrs {
 		svrAddrs = append(svrAddrs, resolver.Address{Addr: a})
@@ -339,7 +339,7 @@ func (s) TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 		defer czCleanupWrapper(czCleanup, t)
 		e := tcpClearRREnv
 		te := newTest(t, e)
-		te.startServer(&testServer{security: e.security})
+		te.startServer(testServer{security: e.security}.Svc())
 		var ccs []*grpc.ClientConn
 		for i := 0; i < c.total; i++ {
 			cc := te.clientConn()
@@ -504,7 +504,7 @@ func (s) TestCZChannelMetrics(t *testing.T) {
 	te := newTest(t, e)
 	te.maxClientSendMsgSize = newInt(8)
 	var svrAddrs []resolver.Address
-	te.startServers(&testServer{security: e.security}, num)
+	te.startServers(testServer{security: e.security}.Svc(), num)
 	r := manual.NewBuilderWithScheme("whatever")
 	for _, a := range te.srvAddrs {
 		svrAddrs = append(svrAddrs, resolver.Address{Addr: a})
@@ -590,7 +590,7 @@ func (s) TestCZServerMetrics(t *testing.T) {
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.maxServerReceiveMsgSize = newInt(8)
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	defer te.tearDown()
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
@@ -861,7 +861,7 @@ func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	te := newTest(t, e)
 	te.maxServerReceiveMsgSize = newInt(20)
 	te.maxClientReceiveMsgSize = newInt(20)
-	rcw := te.startServerWithConnControl(&testServer{security: e.security})
+	rcw := te.startServerWithConnControl(testServer{security: e.security}.Svc())
 	defer te.tearDown()
 	cc := te.clientConn()
 	tc := &testServiceClientWrapper{TestServiceClient: testpb.NewTestServiceClient(cc)}
@@ -963,7 +963,7 @@ func (s) TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *t
 	// Avoid overflowing connection level flow control window, which will lead to
 	// transport being closed.
 	te.serverInitialConnWindowSize = 65536 * 2
-	ts := &funcServer{fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+	ts := &testpb.TestServiceService{FullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
 		stream.Send(&testpb.StreamingOutputCallResponse{})
 		<-stream.Context().Done()
 		return status.Errorf(codes.DeadlineExceeded, "deadline exceeded or cancelled")
@@ -1048,7 +1048,7 @@ func (s) TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 	te.serverInitialConnWindowSize = 65536
 	te.clientInitialWindowSize = 65536
 	te.clientInitialConnWindowSize = 65536
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	defer te.tearDown()
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
@@ -1169,7 +1169,7 @@ func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 			MinTime:             500 * time.Millisecond,
 			PermitWithoutStream: true,
 		}))
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	te.clientConn() // Dial the server
 	defer te.tearDown()
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -1211,7 +1211,7 @@ func (s) TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	te := newTest(t, e)
 	te.maxServerReceiveMsgSize = newInt(20)
 	te.maxClientReceiveMsgSize = newInt(20)
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	defer te.tearDown()
 	cc, _ := te.clientConnWithConnControl()
 	tc := &testServiceClientWrapper{TestServiceClient: testpb.NewTestServiceClient(cc)}
@@ -1282,7 +1282,7 @@ func (s) TestCZServerSocketMetricsKeepAlive(t *testing.T) {
 		Timeout: 100 * time.Millisecond,
 	})
 	te.customServerOptions = append(te.customServerOptions, kpOption)
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	defer te.tearDown()
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
@@ -1342,7 +1342,7 @@ func (s) TestCZSocketGetSecurityValueTLS(t *testing.T) {
 	defer czCleanupWrapper(czCleanup, t)
 	e := tcpTLSRREnv
 	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	defer te.tearDown()
 	te.clientConn()
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -1368,7 +1368,7 @@ func (s) TestCZSocketGetSecurityValueTLS(t *testing.T) {
 			break
 		}
 		skt := channelz.GetSocket(id)
-		cert, _ := tls.LoadX509KeyPair(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+		cert, _ := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 		securityVal, ok := skt.SocketData.Security.(*credentials.TLSChannelzSecurityValue)
 		if !ok {
 			return false, fmt.Errorf("the SocketData.Security is of type: %T, want: *credentials.TLSChannelzSecurityValue", skt.SocketData.Security)
@@ -1467,7 +1467,7 @@ func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
 	te.resolverScheme = r.Scheme()
@@ -1560,7 +1560,7 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 	e := tcpClearRREnv
 	e.balancer = ""
 	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	r := manual.NewBuilderWithScheme("whatever")
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.InitialState(resolver.State{Addresses: addrs})
@@ -1663,7 +1663,7 @@ func (s) TestCZSubChannelPickedNewAddress(t *testing.T) {
 	e := tcpClearRREnv
 	e.balancer = ""
 	te := newTest(t, e)
-	te.startServers(&testServer{security: e.security}, 3)
+	te.startServers(testServer{security: e.security}.Svc(), 3)
 	r := manual.NewBuilderWithScheme("whatever")
 	var svrAddrs []resolver.Address
 	for _, a := range te.srvAddrs {
@@ -1722,7 +1722,7 @@ func (s) TestCZSubChannelConnectivityState(t *testing.T) {
 	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
 	te.resolverScheme = r.Scheme()
@@ -1816,7 +1816,7 @@ func (s) TestCZChannelConnectivityState(t *testing.T) {
 	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
 	te.resolverScheme = r.Scheme()
@@ -1939,7 +1939,7 @@ func (s) TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 	te := newTest(t, e)
 	channelz.SetMaxTraceEntry(1)
 	defer channelz.ResetMaxTraceEntryToDefault()
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
 	te.resolverScheme = r.Scheme()
@@ -1997,7 +1997,7 @@ func (s) TestCZTraceTopChannelDeletionTraceClear(t *testing.T) {
 	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security})
+	te.startServer(testServer{security: e.security}.Svc())
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
 	te.resolverScheme = r.Scheme()

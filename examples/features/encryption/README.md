@@ -30,16 +30,16 @@ base on TLS. Refer to the
 [godoc](https://godoc.org/google.golang.org/grpc/credentials) for details.
 
 In our example, we use the public/private keys created ahead: 
-* "server1.pem" contains the server certificate (public key). 
-* "server1.key" contains the server private key. 
-* "ca.pem" contains the certificate (certificate authority)
+* "server_cert.pem" contains the server certificate (public key). 
+* "server_key.pem" contains the server private key. 
+* "ca_cert.pem" contains the certificate (certificate authority)
 that can verify the server's certificate.
 
-On server side, we provide the paths to "server1.pem" and "server1.key" to
+On server side, we provide the paths to "server.pem" and "server.key" to
 configure TLS and create the server credential using
 [`credentials.NewServerTLSFromFile`](https://godoc.org/google.golang.org/grpc/credentials#NewServerTLSFromFile).
 
-On client side, we provide the path to the "ca.pem" to configure TLS and create
+On client side, we provide the path to the "ca_cert.pem" to configure TLS and create
 the client credential using
 [`credentials.NewClientTLSFromFile`](https://godoc.org/google.golang.org/grpc/credentials#NewClientTLSFromFile).
 Note that we override the server name with "x.test.youtube.com", as the server
