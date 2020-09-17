@@ -27,7 +27,7 @@ import (
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
-const prefix = "[meshca-plugin %p] "
+const prefix = "[%p] "
 
 var logger = grpclog.Component("meshca")
 

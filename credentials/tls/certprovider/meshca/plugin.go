@@ -50,14 +50,15 @@ const locationMetadataKey = "x-goog-request-params"
 // providerPlugin is an implementation of the certprovider.Provider interface,
 // which gets certificates signed by communicating with the MeshCA.
 type providerPlugin struct {
+	*certprovider.Distributor // Holds the key material.
+
 	cancel   context.CancelFunc
-	cc       *grpc.ClientConn          // Connection to MeshCA server.
-	cfg      *pluginConfig             // Plugin configuration.
-	opts     certprovider.Options      // Key material options.
-	dist     *certprovider.Distributor // Holds the key material.
-	logger   *grpclog.PrefixLogger     // Plugin instance specific prefix.
-	backoff  func(int) time.Duration   // Exponential backoff.
-	doneFunc func()                    // Notify the builder when done.
+	cc       *grpc.ClientConn        // Connection to MeshCA server.
+	cfg      *pluginConfig           // Plugin configuration.
+	opts     certprovider.Options    // Key material options.
+	logger   *grpclog.PrefixLogger   // Plugin instance specific prefix.
+	backoff  func(int) time.Duration // Exponential backoff.
+	doneFunc func()                  // Notify the builder when done.
 }
 
 // providerParams wraps params passed to the provider plugin at creation time.
@@ -73,13 +74,13 @@ type providerParams struct {
 func newProviderPlugin(params providerParams) *providerPlugin {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &providerPlugin{
-		cancel:   cancel,
-		cc:       params.cc,
-		cfg:      params.cfg,
-		opts:     params.opts,
-		backoff:  params.backoff,
-		doneFunc: params.doneFunc,
-		dist:     certprovider.NewDistributor(),
+		cancel:      cancel,
+		cc:          params.cc,
+		cfg:         params.cfg,
+		opts:        params.opts,
+		backoff:     params.backoff,
+		doneFunc:    params.doneFunc,
+		Distributor: certprovider.NewDistributor(),
 	}
 	p.logger = prefixLogger((p))
 	p.logger.Infof("plugin created")
@@ -87,13 +88,9 @@ func newProviderPlugin(params providerParams) *providerPlugin {
 	return p
 }
 
-func (p *providerPlugin) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
-	return p.dist.KeyMaterial(ctx)
-}
-
 func (p *providerPlugin) Close() {
 	p.logger.Infof("plugin closed")
-	p.dist.Stop()
+	p.Stop() // Stop the embedded distributor.
 	p.cancel()
 	p.doneFunc()
 }
@@ -114,12 +111,15 @@ func (p *providerPlugin) run(ctx context.Context) {
 		// whatever validity time it deems right.
 		refreshAfter := p.cfg.certGraceTime
 		if refreshAfter > certValidity {
-			refreshAfter = certValidity
+			// The default value of cert grace time is half that of the default
+			// cert validity time. So here, when we have to use a non-default
+			// cert life time, we will set the grace time again to half that of
+			// the validity time.
+			refreshAfter = certValidity / 2
 		}
 		timer := time.NewTimer(refreshAfter)
 		select {
 		case <-ctx.Done():
-			timer.Stop()
 			return
 		case <-timer.C:
 			certValidity = p.updateKeyMaterial(ctx)
@@ -149,9 +149,6 @@ func (p *providerPlugin) updateKeyMaterial(ctx context.Context) time.Duration {
 			select {
 			case <-timer.C:
 			case <-ctx.Done():
-				if !timer.Stop() {
-					<-timer.C
-				}
 				return 0
 			}
 		}
@@ -195,7 +192,7 @@ func (p *providerPlugin) updateKeyMaterial(ctx context.Context) time.Duration {
 		// entries form the chain from the root to the leaf.
 		certChain := resp.GetCertChain()
 		if l := len(certChain); l <= 1 {
-			p.logger.Errorf("Received certChain of length %d", l)
+			p.logger.Errorf("Received certificate chain contains %d certificates, need more than one", l)
 			continue
 		}
 
@@ -235,7 +232,7 @@ func (p *providerPlugin) updateKeyMaterial(ctx context.Context) time.Duration {
 		// supported option to get the root certificate. So, we ignore the
 		// options specified in the call to Build(), which contain certificate
 		// name and whether the caller is interested in identity or root cert.
-		p.dist.Set(&certprovider.KeyMaterial{Certs: []tls.Certificate{certPair}, Roots: roots}, nil)
+		p.Set(&certprovider.KeyMaterial{Certs: []tls.Certificate{certPair}, Roots: roots}, nil)
 		return time.Until(identity.NotAfter)
 	}
 }

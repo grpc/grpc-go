@@ -82,6 +82,10 @@ type pluginBuilder struct {
 func (b *pluginBuilder) Build(c certprovider.StableConfig, opts certprovider.Options) certprovider.Provider {
 	cfg, ok := c.(*pluginConfig)
 	if !ok {
+		// This is not expected when passing config returned by ParseConfig().
+		// This could indicate a bug in the certprovider.Store implementation or
+		// in cases where the user is directly using these APIs, could be a user
+		// error.
 		logger.Errorf("unsupported config type: %T", c)
 		return nil
 	}
@@ -129,21 +133,16 @@ func (b *pluginBuilder) Build(c certprovider.StableConfig, opts certprovider.Opt
 		opts:    opts,
 		backoff: backoffFunc,
 		doneFunc: func() {
-			// The plugin implementation will invoke this function which it is
+			// The plugin implementation will invoke this function when it is
 			// being closed, and here we take care of closing the ClientConn
-			// when there are no more plugins using it.
+			// when there are no more plugins using it. We need to acquire the
+			// lock before accessing the rcc from the enclosing function.
 			b.mu.Lock()
 			defer b.mu.Unlock()
-
-			cc, ok := b.clients[ccmk]
-			if !ok {
-				logger.Errorf("missing ClientConn to server: %s", ccmk)
-				return
-			}
-			cc.refCnt--
-			if cc.refCnt == 0 {
+			rcc.refCnt--
+			if rcc.refCnt == 0 {
 				logger.Infof("Closing grpc.ClientConn to %s", ccmk.name)
-				cc.cc.Close()
+				rcc.cc.Close()
 				delete(b.clients, ccmk)
 			}
 		},

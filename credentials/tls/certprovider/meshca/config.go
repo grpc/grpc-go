@@ -96,7 +96,7 @@ func pluginConfigFromJSON(data []byte) (*pluginConfig, error) {
 	}
 
 	if api := cfgProto.GetServer().GetApiType(); api != v3corepb.ApiConfigSource_GRPC {
-		return nil, fmt.Errorf("meshca: server has apiType %s, want %s", api.String(), v3corepb.ApiConfigSource_GRPC.String())
+		return nil, fmt.Errorf("meshca: server has apiType %s, want %s", api, v3corepb.ApiConfigSource_GRPC)
 	}
 
 	pc := &pluginConfig{}
@@ -161,7 +161,7 @@ func pluginConfigFromJSON(data []byte) (*pluginConfig, error) {
 }
 
 func (pc *pluginConfig) Canonical() []byte {
-	return []byte(fmt.Sprintf("%s:%s:%s:%s:%s:%s:%d:%s", pc.serverURI, pc.stsOpts.String(), pc.callTimeout.String(), pc.certLifetime.String(), pc.certGraceTime.String(), pc.keyType, pc.keySize, pc.location))
+	return []byte(fmt.Sprintf("%s:%s:%s:%s:%s:%s:%d:%s", pc.serverURI, pc.stsOpts, pc.callTimeout, pc.certLifetime, pc.certGraceTime, pc.keyType, pc.keySize, pc.location))
 }
 
 func makeStsOptsWithDefaults(stsCallCreds *v3corepb.GrpcService_GoogleGrpc_CallCredentials_StsService) sts.Options {
