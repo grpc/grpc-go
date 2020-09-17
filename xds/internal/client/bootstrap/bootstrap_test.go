@@ -38,7 +38,10 @@ var (
 		"emptyNodeProto": `
 		{
 			"xds_servers" : [{
-				"server_uri": "trafficdirector.googleapis.com:443"
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				]
 			}]
 		}`,
 		"unknownTopLevelFieldInFile": `
@@ -52,7 +55,7 @@ var (
 			"xds_servers" : [{
 				"server_uri": "trafficdirector.googleapis.com:443",
 				"channel_creds": [
-					{ "type": "not-google-default" }
+					{ "type": "insecure" }
 				]
 			}],
 			"unknownField": "foobar"
@@ -67,7 +70,10 @@ var (
 			    }
 			},
 			"xds_servers" : [{
-				"server_uri": "trafficdirector.googleapis.com:443"
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				]
 			}]
 		}`,
 		"unknownFieldInXdsServer": `
@@ -81,36 +87,9 @@ var (
 			"xds_servers" : [{
 				"server_uri": "trafficdirector.googleapis.com:443",
 				"channel_creds": [
-					{ "type": "not-google-default" }
+					{ "type": "insecure" }
 				],
 				"unknownField": "foobar"
-			}]
-		}`,
-		"emptyChannelCreds": `
-		{
-			"node": {
-				"id": "ENVOY_NODE_ID",
-				"metadata": {
-				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
-			    }
-			},
-			"xds_servers" : [{
-				"server_uri": "trafficdirector.googleapis.com:443"
-			}]
-		}`,
-		"nonGoogleDefaultCreds": `
-		{
-			"node": {
-				"id": "ENVOY_NODE_ID",
-				"metadata": {
-				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
-			    }
-			},
-			"xds_servers" : [{
-				"server_uri": "trafficdirector.googleapis.com:443",
-				"channel_creds": [
-					{ "type": "not-google-default" }
-				]
 			}]
 		}`,
 		"multipleChannelCreds": `
@@ -222,7 +201,7 @@ var (
 	}
 	nilCredsConfigV2 = &Config{
 		BalancerName: "trafficdirector.googleapis.com:443",
-		Creds:        nil,
+		Creds:        grpc.WithInsecure(),
 		NodeProto:    v2NodeProto,
 	}
 	nonNilCredsConfigV2 = &Config{
@@ -290,6 +269,33 @@ func TestNewConfigV2ProtoFailure(t *testing.T) {
 			    }
 			}
 		}`,
+		"emptyChannelCreds": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443"
+			}]
+		}`,
+		"nonGoogleDefaultCreds": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "not-google-default" }
+				]
+			}]
+		}`,
 	}
 	cancel := setupBootstrapOverride(bootstrapFileMap)
 	defer cancel()
@@ -331,6 +337,7 @@ func TestNewConfigV2ProtoSuccess(t *testing.T) {
 		{
 			"emptyNodeProto", &Config{
 				BalancerName: "trafficdirector.googleapis.com:443",
+				Creds:        grpc.WithInsecure(),
 				NodeProto: &v2corepb.Node{
 					BuildVersion:         gRPCVersion,
 					UserAgentName:        gRPCUserAgentName,
@@ -342,8 +349,6 @@ func TestNewConfigV2ProtoSuccess(t *testing.T) {
 		{"unknownTopLevelFieldInFile", nilCredsConfigV2},
 		{"unknownFieldInNodeProto", nilCredsConfigV2},
 		{"unknownFieldInXdsServer", nilCredsConfigV2},
-		{"emptyChannelCreds", nilCredsConfigV2},
-		{"nonGoogleDefaultCreds", nilCredsConfigV2},
 		{"multipleChannelCreds", nonNilCredsConfigV2},
 		{"goodBootstrap", nonNilCredsConfigV2},
 		{"multipleXDSServers", nonNilCredsConfigV2},

@@ -113,7 +113,7 @@ func getXDSClientMakerFunc(wantOpts xdsclient.Options) func(xdsclient.Options) (
 		// what the want option is. We should be able to do extensive
 		// credential testing in e2e tests.
 		if (gotOpts.Config.Creds != nil) != (wantOpts.Config.Creds != nil) {
-			return nil, fmt.Errorf("got len(creds): %s, want: %s", gotOpts.Config.Creds, wantOpts.Config.Creds)
+			return nil, fmt.Errorf("got len(creds): %v, want: %v", gotOpts.Config.Creds, wantOpts.Config.Creds)
 		}
 		if len(gotOpts.DialOpts) != len(wantOpts.DialOpts) {
 			return nil, fmt.Errorf("got len(DialOpts): %v, want: %v", len(gotOpts.DialOpts), len(wantOpts.DialOpts))
@@ -159,7 +159,7 @@ func (s) TestResolverBuilder(t *testing.T) {
 				NodeProto:    xdstestutils.EmptyNodeProtoV2,
 			},
 			xdsClientFunc: getXDSClientMakerFunc(xdsclient.Options{Config: validConfig}),
-			wantErr:       false,
+			wantErr:       true,
 		},
 		{
 			name:   "error-dialer-in-rbo",
