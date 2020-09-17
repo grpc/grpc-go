@@ -682,20 +682,11 @@ func (s) TestDropPicker(t *testing.T) {
 	}
 }
 
-type testLoadStoreWrapper struct {
-	xdsClientInterface
-	ls *load.Store
-}
-
-func (l *testLoadStoreWrapper) LoadStore() *load.Store {
-	return l.ls
-}
-
 func (s) TestEDS_LoadReport(t *testing.T) {
 	// We create an xdsClientWrapper with a dummy xdsClientInterface which only
 	// implements the LoadStore() method to return the underlying load.Store to
 	// be used.
-	loadStore := &load.Store{}
+	loadStore := load.NewStore()
 	cw := &xdsClientWrapper{
 		load: &loadStoreWrapper{store: loadStore, service: testClusterNames[0]},
 	}
