@@ -1206,8 +1206,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	state := &decodeState{}
 	// Initialize isGRPC value to be !initialHeader, since if a gRPC Response-Headers has already been received, then it means that the peer is speaking gRPC and we are in gRPC mode.
 	state.data.isGRPC = !initialHeader
-	if err := state.decodeHeader(frame); err != nil {
-		t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
+	if h2code, err := state.decodeHeader(frame); err != nil {
+		t.closeStream(s, err, true, h2code, status.Convert(err), nil, endStream)
 		return
 	}
 
