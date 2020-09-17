@@ -1,5 +1,3 @@
-// +build go1.11
-
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -47,8 +45,6 @@ const (
 
 // server is used to implement helloworld.GreeterServer.
 type server struct {
-	pb.UnimplementedGreeterServer
-
 	serverName string
 }
 
@@ -126,7 +122,8 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterGreeterServer(s, newServer(hostname))
+	hw := newServer(hostname)
+	pb.RegisterGreeterService(s, &pb.GreeterService{SayHello: hw.SayHello})
 
 	reflection.Register(s)
 	healthServer := health.NewServer()

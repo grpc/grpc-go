@@ -1,3 +1,5 @@
+// +build linux windows
+
 /*
  *
  * Copyright 2018 gRPC authors.

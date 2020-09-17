@@ -1,5 +1,3 @@
-// +build !appengine
-
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -122,6 +120,27 @@ func (bm BuilderMap) RLSKey(md metadata.MD, path string) KeyMap {
 	return b.keys(md)
 }
 
+// Equal reports whether bm and am represent equivalent BuilderMaps.
+func (bm BuilderMap) Equal(am BuilderMap) bool {
+	if (bm == nil) != (am == nil) {
+		return false
+	}
+	if len(bm) != len(am) {
+		return false
+	}
+
+	for key, bBuilder := range bm {
+		aBuilder, ok := am[key]
+		if !ok {
+			return false
+		}
+		if !bBuilder.Equal(aBuilder) {
+			return false
+		}
+	}
+	return true
+}
+
 // builder provides the actual functionality of building RLS keys. These are
 // stored in the BuilderMap.
 // While processing a pick, the picker looks in the BuilderMap for the
@@ -136,12 +155,53 @@ type builder struct {
 	matchers []matcher
 }
 
+// Equal reports whether b and a represent equivalent key builders.
+func (b builder) Equal(a builder) bool {
+	if (b.matchers == nil) != (a.matchers == nil) {
+		return false
+	}
+	if len(b.matchers) != len(a.matchers) {
+		return false
+	}
+	// Protobuf serialization maintains the order of repeated fields. Matchers
+	// are specified as a repeated field inside the KeyBuilder proto. If the
+	// order changes, it means that the order in the protobuf changed. We report
+	// this case as not being equal even though the builders could possible be
+	// functionally equal.
+	for i, bMatcher := range b.matchers {
+		aMatcher := a.matchers[i]
+		if !bMatcher.Equal(aMatcher) {
+			return false
+		}
+	}
+	return true
+}
+
 // matcher helps extract a key from request headers based on a given name.
 type matcher struct {
 	// The key used in the keyMap sent as part of the RLS request.
 	key string
 	// List of header names which can supply the value for this key.
 	names []string
+}
+
+// Equal reports if m and are are equivalent matchers.
+func (m matcher) Equal(a matcher) bool {
+	if m.key != a.key {
+		return false
+	}
+	if (m.names == nil) != (a.names == nil) {
+		return false
+	}
+	if len(m.names) != len(a.names) {
+		return false
+	}
+	for i := 0; i < len(m.names); i++ {
+		if m.names[i] != a.names[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (b builder) keys(md metadata.MD) KeyMap {

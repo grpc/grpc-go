@@ -47,15 +47,11 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-type testServer struct {
-	testpb.UnimplementedTestServiceServer
-}
-
-func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+func emptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 	return &testpb.Empty{}, nil
 }
 
-func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
+func fullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
 	return nil
 }
 
@@ -85,7 +81,10 @@ func startTestServers(count int) (_ *test, err error) {
 		}
 
 		s := grpc.NewServer()
-		testpb.RegisterTestServiceServer(s, &testServer{})
+		testpb.RegisterTestServiceService(s, &testpb.TestServiceService{
+			EmptyCall:      emptyCall,
+			FullDuplexCall: fullDuplexCall,
+		})
 		t.servers = append(t.servers, s)
 		t.addresses = append(t.addresses, lis.Addr().String())
 
@@ -98,8 +97,7 @@ func startTestServers(count int) (_ *test, err error) {
 }
 
 func (s) TestOneBackend(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	test, err := startTestServers(1)
 	if err != nil {
@@ -107,7 +105,7 @@ func (s) TestOneBackend(t *testing.T) {
 	}
 	defer test.cleanup()
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name))
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithResolvers(r), grpc.WithBalancerName(roundrobin.Name))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -128,8 +126,7 @@ func (s) TestOneBackend(t *testing.T) {
 }
 
 func (s) TestBackendsRoundRobin(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	backendCount := 5
 	test, err := startTestServers(backendCount)
@@ -138,7 +135,7 @@ func (s) TestBackendsRoundRobin(t *testing.T) {
 	}
 	defer test.cleanup()
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name))
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithResolvers(r), grpc.WithBalancerName(roundrobin.Name))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -187,8 +184,7 @@ func (s) TestBackendsRoundRobin(t *testing.T) {
 }
 
 func (s) TestAddressesRemoved(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	test, err := startTestServers(1)
 	if err != nil {
@@ -196,7 +192,7 @@ func (s) TestAddressesRemoved(t *testing.T) {
 	}
 	defer test.cleanup()
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name))
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithResolvers(r), grpc.WithBalancerName(roundrobin.Name))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -216,36 +212,24 @@ func (s) TestAddressesRemoved(t *testing.T) {
 	}
 
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
-	// Removing addresses results in an error reported to the clientconn, but
-	// the existing connections remain.  RPCs should still succeed.
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
-	}
 
-	// Stop the server to bring the channel state into transient failure.
-	test.cleanup()
-	// Wait for not-ready.
-	for src := cc.GetState(); src == connectivity.Ready; src = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, src) {
-			t.Fatalf("timed out waiting for state change.  got %v; want !%v", src, connectivity.Ready)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel2()
+	// Wait for state to change to transient failure.
+	for src := cc.GetState(); src != connectivity.TransientFailure; src = cc.GetState() {
+		if !cc.WaitForStateChange(ctx2, src) {
+			t.Fatalf("timed out waiting for state change.  got %v; want %v", src, connectivity.TransientFailure)
 		}
 	}
-	// Report an empty server list again; because the state is not ready, the
-	// empty address list error should surface to the user.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
 
 	const msgWant = "produced zero addresses"
-	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}); err == nil || !strings.Contains(status.Convert(err).Message(), msgWant) {
+	if _, err := testc.EmptyCall(ctx2, &testpb.Empty{}); err == nil || !strings.Contains(status.Convert(err).Message(), msgWant) {
 		t.Fatalf("EmptyCall() = _, %v, want _, Contains(Message(), %q)", err, msgWant)
 	}
-
 }
 
 func (s) TestCloseWithPendingRPC(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	test, err := startTestServers(1)
 	if err != nil {
@@ -253,7 +237,7 @@ func (s) TestCloseWithPendingRPC(t *testing.T) {
 	}
 	defer test.cleanup()
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name))
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithResolvers(r), grpc.WithBalancerName(roundrobin.Name))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -277,8 +261,7 @@ func (s) TestCloseWithPendingRPC(t *testing.T) {
 }
 
 func (s) TestNewAddressWhileBlocking(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	test, err := startTestServers(1)
 	if err != nil {
@@ -286,7 +269,7 @@ func (s) TestNewAddressWhileBlocking(t *testing.T) {
 	}
 	defer test.cleanup()
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name))
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithResolvers(r), grpc.WithBalancerName(roundrobin.Name))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -324,8 +307,7 @@ func (s) TestNewAddressWhileBlocking(t *testing.T) {
 }
 
 func (s) TestOneServerDown(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	backendCount := 3
 	test, err := startTestServers(backendCount)
@@ -334,7 +316,7 @@ func (s) TestOneServerDown(t *testing.T) {
 	}
 	defer test.cleanup()
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name))
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithResolvers(r), grpc.WithBalancerName(roundrobin.Name))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -421,8 +403,7 @@ func (s) TestOneServerDown(t *testing.T) {
 }
 
 func (s) TestAllServersDown(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	backendCount := 3
 	test, err := startTestServers(backendCount)
@@ -431,7 +412,7 @@ func (s) TestAllServersDown(t *testing.T) {
 	}
 	defer test.cleanup()
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name))
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithResolvers(r), grpc.WithBalancerName(roundrobin.Name))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}

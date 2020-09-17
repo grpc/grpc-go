@@ -30,12 +30,15 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/metadata"
 )
 
 var (
 	port     = flag.Int("port", 8080, "The server port")
 	serverID = flag.String("server_id", "go_server", "Server ID included in response")
 	hostname = getHostname()
+
+	logger = grpclog.Component("interop")
 )
 
 func getHostname() string {
@@ -46,11 +49,13 @@ func getHostname() string {
 	return hostname
 }
 
-type server struct {
-	testpb.UnimplementedTestServiceServer
+func emptyCall(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+	grpc.SetHeader(ctx, metadata.Pairs("hostname", hostname))
+	return &testpb.Empty{}, nil
 }
 
-func (s *server) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+func unaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	grpc.SetHeader(ctx, metadata.Pairs("hostname", hostname))
 	return &testpb.SimpleResponse{ServerId: *serverID, Hostname: hostname}, nil
 }
 
@@ -59,9 +64,9 @@ func main() {
 	p := strconv.Itoa(*port)
 	lis, err := net.Listen("tcp", ":"+p)
 	if err != nil {
-		grpclog.Fatalf("failed to listen: %v", err)
+		logger.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	testpb.RegisterTestServiceServer(s, &server{})
+	testpb.RegisterTestServiceService(s, &testpb.TestServiceService{EmptyCall: emptyCall, UnaryCall: unaryCall})
 	s.Serve(lis)
 }

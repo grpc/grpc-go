@@ -29,6 +29,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
@@ -76,14 +77,14 @@ func testResolverErrorPolling(t *testing.T, badUpdate func(*manual.Resolver), go
 		return 0
 	}
 
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 	rn := make(chan struct{})
 	defer func() { close(rn) }()
 	r.ResolveNowCallback = func(resolver.ResolveNowOptions) { rn <- struct{}{} }
 
 	defaultDialOptions := []DialOption{
 		WithInsecure(),
+		WithResolvers(r),
 		withResolveNowBackoff(resolverBackoff),
 	}
 	cc, err := Dial(r.Scheme()+":///test.server", append(defaultDialOptions, dopts...)...)
@@ -130,12 +131,12 @@ const happyBalancerName = "happy balancer"
 func init() {
 	// Register a balancer that never returns an error from
 	// UpdateClientConnState, and doesn't do anything else either.
-	fb := &funcBalancer{
-		updateClientConnState: func(s balancer.ClientConnState) error {
+	bf := stub.BalancerFuncs{
+		UpdateClientConnState: func(*stub.BalancerData, balancer.ClientConnState) error {
 			return nil
 		},
 	}
-	balancer.Register(&funcBalancerBuilder{name: happyBalancerName, instance: fb})
+	stub.Register(happyBalancerName, bf)
 }
 
 // TestResolverErrorPolling injects resolver errors and verifies ResolveNow is
@@ -172,11 +173,10 @@ func (s) TestServiceConfigErrorPolling(t *testing.T) {
 // sure there is no data race in this code path, and also that there is no
 // deadlock.
 func (s) TestResolverErrorInBuild(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{ServiceConfig: &serviceconfig.ParseResult{Err: errors.New("resolver build err")}})
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure())
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
 	}
@@ -193,10 +193,9 @@ func (s) TestResolverErrorInBuild(t *testing.T) {
 }
 
 func (s) TestServiceConfigErrorRPC(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure())
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
 	}

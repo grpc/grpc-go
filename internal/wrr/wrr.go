@@ -15,14 +15,18 @@
  * limitations under the License.
  */
 
+// Package wrr contains the interface and common implementations of wrr
+// algorithms.
 package wrr
 
 // WRR defines an interface that implements weighted round robin.
 type WRR interface {
 	// Add adds an item with weight to the WRR set.
+	//
+	// Add and Next need to be thread safe.
 	Add(item interface{}, weight int64)
 	// Next returns the next picked item.
 	//
-	// Next needs to be thread safe.
+	// Add and Next need to be thread safe.
 	Next() interface{}
 }

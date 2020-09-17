@@ -1,6 +1,4 @@
-// +build linux
-// +build !appengine
-// +build go1.11
+// +build linux,!appengine
 
 /*
  *
@@ -20,6 +18,7 @@
  *
  */
 
+// Binary grpclb_fallback is an interop test client for grpclb fallback.
 package main
 
 import (

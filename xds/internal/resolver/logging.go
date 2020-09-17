@@ -20,10 +20,15 @@ package resolver
 
 import (
 	"fmt"
+
+	"google.golang.org/grpc/grpclog"
+	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
 const prefix = "[xds-resolver %p] "
 
-func loggingPrefix(p *xdsResolver) string {
-	return fmt.Sprintf(prefix, p)
+var logger = grpclog.Component("xds")
+
+func prefixLogger(p *xdsResolver) *internalgrpclog.PrefixLogger {
+	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
 }

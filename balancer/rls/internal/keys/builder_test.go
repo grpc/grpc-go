@@ -1,5 +1,3 @@
-// +build !appengine
-
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -85,7 +83,7 @@ func TestMakeBuilderMap(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			builderMap, err := MakeBuilderMap(test.cfg)
-			if err != nil || !cmp.Equal(builderMap, test.wantBuilderMap, cmp.AllowUnexported(builder{}, matcher{})) {
+			if err != nil || !builderMap.Equal(test.wantBuilderMap) {
 				t.Errorf("MakeBuilderMap(%+v) returned {%v, %v}, want: {%v, nil}", test.cfg, builderMap, err, test.wantBuilderMap)
 			}
 		})
@@ -326,6 +324,204 @@ func TestMapToString(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			if gotStr := mapToString(test.input); gotStr != test.wantStr {
 				t.Errorf("mapToString(%v) = %s, want %s", test.input, gotStr, test.wantStr)
+			}
+		})
+	}
+}
+
+func TestBuilderMapEqual(t *testing.T) {
+	tests := []struct {
+		desc      string
+		a         BuilderMap
+		b         BuilderMap
+		wantEqual bool
+	}{
+		{
+			desc:      "nil builder maps",
+			a:         nil,
+			b:         nil,
+			wantEqual: true,
+		},
+		{
+			desc:      "empty builder maps",
+			a:         make(map[string]builder),
+			b:         make(map[string]builder),
+			wantEqual: true,
+		},
+		{
+			desc:      "nil and non-nil builder maps",
+			a:         nil,
+			b:         map[string]builder{"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}}},
+			wantEqual: false,
+		},
+		{
+			desc:      "empty and non-empty builder maps",
+			a:         make(map[string]builder),
+			b:         map[string]builder{"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}}},
+			wantEqual: false,
+		},
+		{
+			desc: "different number of map keys",
+			a: map[string]builder{
+				"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gBar/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+			},
+			b: map[string]builder{
+				"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+			},
+			wantEqual: false,
+		},
+		{
+			desc: "different map keys",
+			a: map[string]builder{
+				"/gBar/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+			},
+			b: map[string]builder{
+				"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+			},
+			wantEqual: false,
+		},
+		{
+			desc: "equal keys different values",
+			a: map[string]builder{
+				"/gBar/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1", "n2"}}}},
+			},
+			b: map[string]builder{
+				"/gBar/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+			},
+			wantEqual: false,
+		},
+		{
+			desc: "good match",
+			a: map[string]builder{
+				"/gBar/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+			},
+			b: map[string]builder{
+				"/gBar/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+			},
+			wantEqual: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			if gotEqual := test.a.Equal(test.b); gotEqual != test.wantEqual {
+				t.Errorf("BuilderMap.Equal(%v, %v) = %v, want %v", test.a, test.b, gotEqual, test.wantEqual)
+			}
+		})
+	}
+}
+
+func TestBuilderEqual(t *testing.T) {
+	tests := []struct {
+		desc      string
+		a         builder
+		b         builder
+		wantEqual bool
+	}{
+		{
+			desc:      "nil builders",
+			a:         builder{matchers: nil},
+			b:         builder{matchers: nil},
+			wantEqual: true,
+		},
+		{
+			desc:      "empty builders",
+			a:         builder{matchers: []matcher{}},
+			b:         builder{matchers: []matcher{}},
+			wantEqual: true,
+		},
+		{
+			desc:      "nil and non-nil builders",
+			a:         builder{matchers: nil},
+			b:         builder{matchers: []matcher{}},
+			wantEqual: false,
+		},
+		{
+			desc:      "empty and non-empty builders",
+			a:         builder{matchers: []matcher{}},
+			b:         builder{matchers: []matcher{{key: "foo"}}},
+			wantEqual: false,
+		},
+		{
+			desc:      "different number of matchers",
+			a:         builder{matchers: []matcher{{key: "foo"}, {key: "bar"}}},
+			b:         builder{matchers: []matcher{{key: "foo"}}},
+			wantEqual: false,
+		},
+		{
+			desc:      "equal number but differing matchers",
+			a:         builder{matchers: []matcher{{key: "bar"}}},
+			b:         builder{matchers: []matcher{{key: "foo"}}},
+			wantEqual: false,
+		},
+		{
+			desc:      "good match",
+			a:         builder{matchers: []matcher{{key: "foo"}}},
+			b:         builder{matchers: []matcher{{key: "foo"}}},
+			wantEqual: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			t.Run(test.desc, func(t *testing.T) {
+				if gotEqual := test.a.Equal(test.b); gotEqual != test.wantEqual {
+					t.Errorf("builder.Equal(%v, %v) = %v, want %v", test.a, test.b, gotEqual, test.wantEqual)
+				}
+			})
+		})
+	}
+}
+
+// matcher helps extract a key from request headers based on a given name.
+func TestMatcherEqual(t *testing.T) {
+	tests := []struct {
+		desc      string
+		a         matcher
+		b         matcher
+		wantEqual bool
+	}{
+		{
+			desc:      "different keys",
+			a:         matcher{key: "foo"},
+			b:         matcher{key: "bar"},
+			wantEqual: false,
+		},
+		{
+			desc:      "different number of names",
+			a:         matcher{key: "foo", names: []string{"v1", "v2"}},
+			b:         matcher{key: "foo", names: []string{"v1"}},
+			wantEqual: false,
+		},
+		{
+			desc:      "equal number but differing names",
+			a:         matcher{key: "foo", names: []string{"v1", "v2"}},
+			b:         matcher{key: "foo", names: []string{"v1", "v22"}},
+			wantEqual: false,
+		},
+		{
+			desc:      "same names in different order",
+			a:         matcher{key: "foo", names: []string{"v2", "v1"}},
+			b:         matcher{key: "foo", names: []string{"v1", "v3"}},
+			wantEqual: false,
+		},
+		{
+			desc:      "good match",
+			a:         matcher{key: "foo", names: []string{"v1", "v2"}},
+			b:         matcher{key: "foo", names: []string{"v1", "v2"}},
+			wantEqual: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			if gotEqual := test.a.Equal(test.b); gotEqual != test.wantEqual {
+				t.Errorf("matcher.Equal(%v, %v) = %v, want %v", test.a, test.b, gotEqual, test.wantEqual)
 			}
 		})
 	}

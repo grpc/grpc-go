@@ -27,7 +27,6 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -48,14 +47,33 @@ func (b *magicalLB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) ba
 	return b
 }
 
-func (b *magicalLB) HandleSubConnStateChange(balancer.SubConn, connectivity.State) {}
+func (b *magicalLB) ResolverError(error) {}
 
-func (b *magicalLB) HandleResolvedAddrs([]resolver.Address, error) {}
+func (b *magicalLB) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {}
+
+func (b *magicalLB) UpdateClientConnState(balancer.ClientConnState) error {
+	return nil
+}
 
 func (b *magicalLB) Close() {}
 
 func init() {
 	balancer.Register(&magicalLB{})
+}
+
+func startServers(t *testing.T, numServers int, maxStreams uint32) ([]*server, func()) {
+	var servers []*server
+	for i := 0; i < numServers; i++ {
+		s := newTestServer()
+		servers = append(servers, s)
+		go s.start(t, 0, maxStreams)
+		s.wait(t, 2*time.Second)
+	}
+	return servers, func() {
+		for i := 0; i < numServers; i++ {
+			servers[i].stop()
+		}
+	}
 }
 
 func checkPickFirst(cc *ClientConn, servers []*server) error {
@@ -129,14 +147,13 @@ func checkRoundRobin(cc *ClientConn, servers []*server) error {
 }
 
 func (s) TestSwitchBalancer(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	const numServers = 2
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -161,14 +178,13 @@ func (s) TestSwitchBalancer(t *testing.T) {
 
 // Test that balancer specified by dial option will not be overridden.
 func (s) TestBalancerDialOption(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	const numServers = 2
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}), WithBalancerName(roundrobin.Name))
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithCodec(testCodec{}), WithBalancerName(roundrobin.Name))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -189,10 +205,9 @@ func (s) TestBalancerDialOption(t *testing.T) {
 
 // First addr update contains grpclb.
 func (s) TestSwitchBalancerGRPCLBFirst(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -250,10 +265,9 @@ func (s) TestSwitchBalancerGRPCLBFirst(t *testing.T) {
 
 // First addr update does not contain grpclb.
 func (s) TestSwitchBalancerGRPCLBSecond(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -327,10 +341,9 @@ func (s) TestSwitchBalancerGRPCLBSecond(t *testing.T) {
 // when the resolved address doesn't contain grpclb addresses, balancer will be
 // switched back to roundrobin.
 func (s) TestSwitchBalancerGRPCLBRoundRobin(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -390,10 +403,9 @@ func (s) TestSwitchBalancerGRPCLBRoundRobin(t *testing.T) {
 // service config won't take effect. But when there's no grpclb address in a new
 // resolved address list, balancer will be switched to the new one.
 func (s) TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -477,14 +489,13 @@ func (s) TestSwitchBalancerGRPCLBWithGRPCLBNotRegistered(t *testing.T) {
 	internal.BalancerUnregister("grpclb")
 	defer balancer.Register(&magicalLB{})
 
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	const numServers = 3
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}

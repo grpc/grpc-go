@@ -14,10 +14,12 @@
 
 syntax = "proto2";
 
+option go_package = "google.golang.org/grpc/reflection/grpc_testing";
+
 package grpc.testing;
 
-import "proto2.proto";
-import "test.proto";
+import "reflection/grpc_testing/proto2.proto";
+import "reflection/grpc_testing/test.proto";
 
 extend ToBeExtended {
   optional int32 foo = 13;

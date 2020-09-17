@@ -26,47 +26,46 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/grpclog"
 	ppb "google.golang.org/grpc/profiling/proto"
 )
 
 func setEnabled(ctx context.Context, c ppb.ProfilingClient, enabled bool) error {
 	_, err := c.Enable(ctx, &ppb.EnableRequest{Enabled: enabled})
 	if err != nil {
-		grpclog.Infof("error calling Enable: %v\n", err)
+		logger.Infof("error calling Enable: %v\n", err)
 		return err
 	}
 
-	grpclog.Infof("successfully set enabled = %v", enabled)
+	logger.Infof("successfully set enabled = %v", enabled)
 	return nil
 }
 
 func retrieveSnapshot(ctx context.Context, c ppb.ProfilingClient, f string) error {
-	grpclog.Infof("getting stream stats")
+	logger.Infof("getting stream stats")
 	resp, err := c.GetStreamStats(ctx, &ppb.GetStreamStatsRequest{})
 	if err != nil {
-		grpclog.Errorf("error calling GetStreamStats: %v\n", err)
+		logger.Errorf("error calling GetStreamStats: %v\n", err)
 		return err
 	}
 	s := &snapshot{StreamStats: resp.StreamStats}
 
-	grpclog.Infof("creating snapshot file %s", f)
+	logger.Infof("creating snapshot file %s", f)
 	file, err := os.Create(f)
 	if err != nil {
-		grpclog.Errorf("cannot create %s: %v", f, err)
+		logger.Errorf("cannot create %s: %v", f, err)
 		return err
 	}
 	defer file.Close()
 
-	grpclog.Infof("encoding data and writing to snapshot file %s", f)
+	logger.Infof("encoding data and writing to snapshot file %s", f)
 	encoder := gob.NewEncoder(file)
 	err = encoder.Encode(s)
 	if err != nil {
-		grpclog.Infof("error encoding: %v", err)
+		logger.Infof("error encoding: %v", err)
 		return err
 	}
 
-	grpclog.Infof("successfully wrote profiling snapshot to %s", f)
+	logger.Infof("successfully wrote profiling snapshot to %s", f)
 	return nil
 }
 
@@ -78,10 +77,10 @@ func remoteCommand() error {
 		defer cancel()
 	}
 
-	grpclog.Infof("dialing %s", *flagAddress)
+	logger.Infof("dialing %s", *flagAddress)
 	cc, err := grpc.Dial(*flagAddress, grpc.WithInsecure())
 	if err != nil {
-		grpclog.Errorf("cannot dial %s: %v", *flagAddress, err)
+		logger.Errorf("cannot dial %s: %v", *flagAddress, err)
 		return err
 	}
 	defer cc.Close()

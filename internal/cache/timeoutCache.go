@@ -23,7 +23,9 @@ import (
 )
 
 type cacheEntry struct {
-	item     interface{}
+	item interface{}
+	// Note that to avoid deadlocks (potentially caused by lock ordering),
+	// callback can only be called without holding cache's mutex.
 	callback func()
 	timer    *time.Timer
 	// deleted is set to true in Remove() when the call to timer.Stop() fails.
@@ -89,7 +91,7 @@ func (c *TimeoutCache) Add(key, item interface{}, callback func()) (interface{},
 func (c *TimeoutCache) Remove(key interface{}) (item interface{}, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	entry, ok := c.removeInternal(key, false)
+	entry, ok := c.removeInternal(key)
 	if !ok {
 		return nil, false
 	}
@@ -99,7 +101,7 @@ func (c *TimeoutCache) Remove(key interface{}) (item interface{}, ok bool) {
 // removeInternal removes and returns the item with key.
 //
 // caller must hold c.mu.
-func (c *TimeoutCache) removeInternal(key interface{}, runCallback bool) (*cacheEntry, bool) {
+func (c *TimeoutCache) removeInternal(key interface{}) (*cacheEntry, bool) {
 	entry, ok := c.cache[key]
 	if !ok {
 		return nil, false
@@ -115,17 +117,28 @@ func (c *TimeoutCache) removeInternal(key interface{}, runCallback bool) (*cache
 		// of deleted and return.
 		entry.deleted = true
 	}
-	if runCallback {
-		entry.callback()
-	}
 	return entry, true
 }
 
 // Clear removes all entries, and runs the callbacks if runCallback is true.
 func (c *TimeoutCache) Clear(runCallback bool) {
+	var entries []*cacheEntry
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	for key := range c.cache {
-		c.removeInternal(key, runCallback)
+		if e, ok := c.removeInternal(key); ok {
+			entries = append(entries, e)
+		}
+	}
+	c.mu.Unlock()
+
+	if !runCallback {
+		return
+	}
+
+	// removeInternal removes entries from cache, and also stops the timer, so
+	// the callback is guaranteed to be not called. If runCallback is true,
+	// manual execute all callbacks.
+	for _, entry := range entries {
+		entry.callback()
 	}
 }

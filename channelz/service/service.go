@@ -16,18 +16,14 @@
  *
  */
 
-//go:generate ./regenerate.sh
-
 // Package service provides an implementation for channelz service server.
 package service
 
 import (
 	"context"
 	"net"
-	"time"
 
 	"github.com/golang/protobuf/ptypes"
-	durpb "github.com/golang/protobuf/ptypes/duration"
 	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
 	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
@@ -35,6 +31,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/status"
 )
@@ -43,9 +40,7 @@ func init() {
 	channelz.TurnOn()
 }
 
-func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
-	return ptypes.DurationProto(time.Duration(sec*1e9 + usec*1e3))
-}
+var logger = grpclog.Component("channelz")
 
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
 func RegisterChannelzServiceToServer(s *grpc.Server) {
@@ -56,7 +51,9 @@ func newCZServer() channelzgrpc.ChannelzServer {
 	return &serverImpl{}
 }
 
-type serverImpl struct{}
+type serverImpl struct {
+	channelzgrpc.UnimplementedChannelzServer
+}
 
 func connectivityStateToProto(s connectivity.State) *channelzpb.ChannelConnectivityState {
 	switch s {

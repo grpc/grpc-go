@@ -16,8 +16,6 @@
  *
  */
 
-//go:generate protoc -I grpc_testing --go_out=plugins=grpc:grpc_testing grpc_testing/control.proto grpc_testing/messages.proto grpc_testing/payloads.proto grpc_testing/services.proto grpc_testing/stats.proto
-
 /*
 Package benchmark implements the building blocks to setup end-to-end gRPC benchmarks.
 */
@@ -37,18 +35,20 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var logger = grpclog.Component("benchmark")
+
 // Allows reuse of the same testpb.Payload object.
 func setPayload(p *testpb.Payload, t testpb.PayloadType, size int) {
 	if size < 0 {
-		grpclog.Fatalf("Requested a response with invalid length %d", size)
+		logger.Fatalf("Requested a response with invalid length %d", size)
 	}
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
 	case testpb.PayloadType_UNCOMPRESSABLE:
-		grpclog.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
+		logger.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
 	default:
-		grpclog.Fatalf("Unsupported payload type: %d", t)
+		logger.Fatalf("Unsupported payload type: %d", t)
 	}
 	p.Type = t
 	p.Body = body
@@ -61,7 +61,14 @@ func NewPayload(t testpb.PayloadType, size int) *testpb.Payload {
 	return p
 }
 
-type testServer struct {
+type testServer struct{}
+
+func (s *testServer) Svc() *testpb.BenchmarkServiceService {
+	return &testpb.BenchmarkServiceService{
+		UnaryCall:                  s.UnaryCall,
+		StreamingCall:              s.StreamingCall,
+		UnconstrainedStreamingCall: s.UnconstrainedStreamingCall,
+	}
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -115,6 +122,7 @@ func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_U
 			err := stream.RecvMsg(in)
 			switch status.Code(err) {
 			case codes.Canceled:
+				return
 			case codes.OK:
 			default:
 				log.Fatalf("server recv error: %v", err)
@@ -127,6 +135,7 @@ func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_U
 			err := stream.Send(response)
 			switch status.Code(err) {
 			case codes.Unavailable:
+				return
 			case codes.OK:
 			default:
 				log.Fatalf("server send error: %v", err)
@@ -142,6 +151,14 @@ func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_U
 // The purpose is to benchmark the gRPC performance without protobuf serialization/deserialization overhead.
 type byteBufServer struct {
 	respSize int32
+}
+
+func (s *byteBufServer) Svc() *testpb.BenchmarkServiceService {
+	return &testpb.BenchmarkServiceService{
+		UnaryCall:                  s.UnaryCall,
+		StreamingCall:              s.StreamingCall,
+		UnconstrainedStreamingCall: s.UnconstrainedStreamingCall,
+	}
 }
 
 // UnaryCall is an empty function and is not used for benchmark.
@@ -207,15 +224,15 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) func() {
 	s := grpc.NewServer(opts...)
 	switch info.Type {
 	case "protobuf":
-		testpb.RegisterBenchmarkServiceServer(s, &testServer{})
+		testpb.RegisterBenchmarkServiceService(s, (&testServer{}).Svc())
 	case "bytebuf":
 		respSize, ok := info.Metadata.(int32)
 		if !ok {
-			grpclog.Fatalf("failed to StartServer, invalid metadata: %v, for Type: %v", info.Metadata, info.Type)
+			logger.Fatalf("failed to StartServer, invalid metadata: %v, for Type: %v", info.Metadata, info.Type)
 		}
-		testpb.RegisterBenchmarkServiceServer(s, &byteBufServer{respSize: respSize})
+		testpb.RegisterBenchmarkServiceService(s, (&byteBufServer{respSize: respSize}).Svc())
 	default:
-		grpclog.Fatalf("failed to StartServer, unknown Type: %v", info.Type)
+		logger.Fatalf("failed to StartServer, unknown Type: %v", info.Type)
 	}
 	go s.Serve(info.Listener)
 	return func() {
@@ -286,7 +303,7 @@ func NewClientConnWithContext(ctx context.Context, addr string, opts ...grpc.Dia
 	opts = append(opts, grpc.WithReadBufferSize(128*1024))
 	conn, err := grpc.DialContext(ctx, addr, opts...)
 	if err != nil {
-		grpclog.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
+		logger.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
 	}
 	return conn
 }

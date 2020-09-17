@@ -20,12 +20,12 @@
 package resolver
 
 import (
-	"context"
 	"fmt"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 
 	xdsinternal "google.golang.org/grpc/xds/internal"
@@ -33,9 +33,7 @@ import (
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
-// xDS balancer name is xds_experimental while resolver scheme is
-// xds-experimental since "_" is not a valid character in the URL.
-const xdsScheme = "xds-experimental"
+const xdsScheme = "xds"
 
 // For overriding in unittests.
 var (
@@ -64,9 +62,10 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 	r := &xdsResolver{
 		target:   t,
 		cc:       cc,
+		closed:   grpcsync.NewEvent(),
 		updateCh: make(chan suWithError, 1),
 	}
-	r.logger = grpclog.NewPrefixLogger(loggingPrefix(r))
+	r.logger = prefixLogger((r))
 	r.logger.Infof("Creating resolver for target: %+v", t)
 
 	if config.Creds == nil {
@@ -88,7 +87,8 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 		return nil, fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}
 	r.client = client
-	r.ctx, r.cancelCtx = context.WithCancel(context.Background())
+
+	// Register a watch on the xdsClient for the user's dial target.
 	cancelWatch := r.client.WatchService(r.target.Endpoint, r.handleServiceUpdate)
 	r.logger.Infof("Watch started on resource name %v with xds-client %p", r.target.Endpoint, r.client)
 	r.cancelWatch = func() {
@@ -147,10 +147,9 @@ type suWithError struct {
 // (which performs LDS/RDS queries for the same), and passes the received
 // updates to the ClientConn.
 type xdsResolver struct {
-	ctx       context.Context
-	cancelCtx context.CancelFunc
-	target    resolver.Target
-	cc        resolver.ClientConn
+	target resolver.Target
+	cc     resolver.ClientConn
+	closed *grpcsync.Event
 
 	logger *grpclog.PrefixLogger
 
@@ -161,31 +160,49 @@ type xdsResolver struct {
 	updateCh chan suWithError
 	// cancelWatch is the function to cancel the watcher.
 	cancelWatch func()
-}
 
-const jsonFormatSC = `{
-    "loadBalancingConfig":[
-      {
-        "cds_experimental":{
-          "Cluster": "%s"
-        }
-      }
-    ]
-  }`
+	// actions is a map from hash of weighted cluster, to the weighted cluster
+	// map, and it's assigned name. E.g.
+	//   "A40_B60_": {{A:40, B:60}, "A_B_", "A_B_0"}
+	//   "A30_B70_": {{A:30, B:70}, "A_B_", "A_B_1"}
+	//   "B90_C10_": {{B:90, C:10}, "B_C_", "B_C_0"}
+	actions map[string]actionWithAssignedName
+	// usedActionNameRandomNumber contains random numbers that have been used in
+	// assigned names, to avoid collision.
+	usedActionNameRandomNumber map[int64]bool
+}
 
 // run is a long running goroutine which blocks on receiving service updates
 // and passes it on the ClientConn.
 func (r *xdsResolver) run() {
 	for {
 		select {
-		case <-r.ctx.Done():
+		case <-r.closed.Done():
+			return
 		case update := <-r.updateCh:
 			if update.err != nil {
 				r.logger.Warningf("Watch error on resource %v from xds-client %p, %v", r.target.Endpoint, r.client, update.err)
+				if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
+					// If error is resource-not-found, it means the LDS resource
+					// was removed. Send an empty service config, which picks
+					// pick-first, with no address, and puts the ClientConn into
+					// transient failure..
+					r.cc.UpdateState(resolver.State{
+						ServiceConfig: r.cc.ParseServiceConfig("{}"),
+					})
+					continue
+				}
+				// Send error to ClientConn, and balancers, if error is not
+				// resource not found.
 				r.cc.ReportError(update.err)
 				continue
 			}
-			sc := fmt.Sprintf(jsonFormatSC, update.su.Cluster)
+			sc, err := r.serviceUpdateToJSON(update.su)
+			if err != nil {
+				r.logger.Warningf("failed to convert update to service config: %v", err)
+				r.cc.ReportError(err)
+				continue
+			}
 			r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.client, sc)
 			r.cc.UpdateState(resolver.State{
 				ServiceConfig: r.cc.ParseServiceConfig(sc),
@@ -199,7 +216,7 @@ func (r *xdsResolver) run() {
 // the received update to the update channel, which is picked by the run
 // goroutine.
 func (r *xdsResolver) handleServiceUpdate(su xdsclient.ServiceUpdate, err error) {
-	if r.ctx.Err() != nil {
+	if r.closed.HasFired() {
 		// Do not pass updates to the ClientConn once the resolver is closed.
 		return
 	}
@@ -213,6 +230,6 @@ func (*xdsResolver) ResolveNow(o resolver.ResolveNowOptions) {}
 func (r *xdsResolver) Close() {
 	r.cancelWatch()
 	r.client.Close()
-	r.cancelCtx()
+	r.closed.Fire()
 	r.logger.Infof("Shutdown")
 }

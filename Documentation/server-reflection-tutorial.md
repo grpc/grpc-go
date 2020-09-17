@@ -28,7 +28,7 @@ make the following changes:
 @@ -61,6 +62,8 @@ func main() {
         }
         s := grpc.NewServer()
-        pb.RegisterGreeterServer(s, &server{})
+        pb.RegisterGreeterService(s, &pb.GreeterService{SayHello: sayHello})
 +       // Register reflection service on gRPC server.
 +       reflection.Register(s)
         if err := s.Serve(lis); err != nil {
@@ -43,18 +43,8 @@ An example server with reflection registered can be found at
 
 After enabling Server Reflection in a server application, you can use gRPC CLI
 to check its services. gRPC CLI is only available in c++. Instructions on how to
-use gRPC CLI can be found at
+build and use gRPC CLI can be found at
 [command_line_tool.md](https://github.com/grpc/grpc/blob/master/doc/command_line_tool.md).
-
-To build gRPC CLI:
-
-```sh
-git clone https://github.com/grpc/grpc
-cd grpc
-git submodule update --init
-make grpc_cli
-cd bins/opt # grpc_cli is in directory bins/opt/
-```
 
 ## Use gRPC CLI to check services
 

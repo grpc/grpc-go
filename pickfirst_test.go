@@ -39,14 +39,16 @@ func errorDesc(err error) string {
 }
 
 func (s) TestOneBackendPickfirst(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	numServers := 1
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial(r.Scheme()+":///test.server",
+		WithInsecure(),
+		WithResolvers(r),
+		WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -72,14 +74,13 @@ func (s) TestOneBackendPickfirst(t *testing.T) {
 }
 
 func (s) TestBackendsPickfirst(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	numServers := 2
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -105,14 +106,13 @@ func (s) TestBackendsPickfirst(t *testing.T) {
 }
 
 func (s) TestNewAddressWhileBlockingPickfirst(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	numServers := 1
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -141,14 +141,13 @@ func (s) TestNewAddressWhileBlockingPickfirst(t *testing.T) {
 }
 
 func (s) TestCloseWithPendingRPCPickfirst(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	numServers := 1
-	_, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	_, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -177,14 +176,13 @@ func (s) TestCloseWithPendingRPCPickfirst(t *testing.T) {
 }
 
 func (s) TestOneServerDownPickfirst(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	numServers := 2
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -218,14 +216,13 @@ func (s) TestOneServerDownPickfirst(t *testing.T) {
 }
 
 func (s) TestAllServersDownPickfirst(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	numServers := 2
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -261,14 +258,13 @@ func (s) TestAllServersDownPickfirst(t *testing.T) {
 }
 
 func (s) TestAddressesRemovedPickfirst(t *testing.T) {
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
+	r := manual.NewBuilderWithScheme("whatever")
 
 	numServers := 3
-	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	servers, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}

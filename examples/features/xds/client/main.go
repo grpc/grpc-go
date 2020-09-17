@@ -1,5 +1,3 @@
-// +build go1.11
-
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -31,7 +29,7 @@ import (
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 
-	_ "google.golang.org/grpc/xds/experimental" // To install the xds resolvers and balancers.
+	_ "google.golang.org/grpc/xds" // To install the xds resolvers and balancers.
 )
 
 const (
@@ -49,7 +47,7 @@ Usage: client [name [target]]
   name
         The name you wish to be greeted by. Defaults to %q
   target
-        The URI of the server, e.g. "xds-experimental:///helloworld-service". Defaults to %q
+        The URI of the server, e.g. "xds:///helloworld-service". Defaults to %q
 `, defaultName, defaultTarget)
 
 		flag.PrintDefaults()

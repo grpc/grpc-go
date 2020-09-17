@@ -17,6 +17,7 @@
 package cdsbalancer
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,19 +31,19 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
 
 const (
 	clusterName        = "cluster1"
 	serviceName        = "service1"
-	defaultTestTimeout = 2 * time.Second
+	defaultTestTimeout = 1 * time.Second
 )
 
 type s struct {
@@ -55,11 +56,23 @@ func Test(t *testing.T) {
 
 type testClientConn struct {
 	balancer.ClientConn
+
+	newPickerCh *testutils.Channel // The last picker updated.
+}
+
+func newTestClientConn() *testClientConn {
+	return &testClientConn{
+		newPickerCh: testutils.NewChannelWithSize(1),
+	}
+}
+
+func (tcc *testClientConn) UpdateState(bs balancer.State) {
+	tcc.newPickerCh.Replace(bs)
 }
 
 // cdsWatchInfo wraps the update and the error sent in a CDS watch callback.
 type cdsWatchInfo struct {
-	update xdsclient.CDSUpdate
+	update xdsclient.ClusterUpdate
 	err    error
 }
 
@@ -78,13 +91,13 @@ func invokeWatchCbAndWait(xdsC *fakeclient.Client, cdsW cdsWatchInfo, wantCCS ba
 // to the test.
 type testEDSBalancer struct {
 	// ccsCh is a channel used to signal the receipt of a ClientConn update.
-	ccsCh chan balancer.ClientConnState
+	ccsCh *testutils.Channel
 	// scStateCh is a channel used to signal the receipt of a SubConn update.
-	scStateCh chan subConnWithState
+	scStateCh *testutils.Channel
 	// resolverErrCh is a channel used to signal a resolver error.
-	resolverErrCh chan error
+	resolverErrCh *testutils.Channel
 	// closeCh is a channel used to signal the closing of this balancer.
-	closeCh chan struct{}
+	closeCh *testutils.Channel
 }
 
 type subConnWithState struct {
@@ -94,89 +107,86 @@ type subConnWithState struct {
 
 func newTestEDSBalancer() *testEDSBalancer {
 	return &testEDSBalancer{
-		ccsCh:         make(chan balancer.ClientConnState, 1),
-		scStateCh:     make(chan subConnWithState, 1),
-		resolverErrCh: make(chan error, 1),
-		closeCh:       make(chan struct{}, 1),
+		ccsCh:         testutils.NewChannel(),
+		scStateCh:     testutils.NewChannel(),
+		resolverErrCh: testutils.NewChannel(),
+		closeCh:       testutils.NewChannel(),
 	}
 }
 
 func (tb *testEDSBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
-	tb.ccsCh <- ccs
+	tb.ccsCh.Send(ccs)
 	return nil
 }
 
 func (tb *testEDSBalancer) ResolverError(err error) {
-	tb.resolverErrCh <- err
+	tb.resolverErrCh.Send(err)
 }
 
 func (tb *testEDSBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	tb.scStateCh <- subConnWithState{sc: sc, state: state}
+	tb.scStateCh.Send(subConnWithState{sc: sc, state: state})
 }
 
 func (tb *testEDSBalancer) Close() {
-	tb.closeCh <- struct{}{}
+	tb.closeCh.Send(struct{}{})
 }
 
 // waitForClientConnUpdate verifies if the testEDSBalancer receives the
 // provided ClientConnState within a reasonable amount of time.
 func (tb *testEDSBalancer) waitForClientConnUpdate(wantCCS balancer.ClientConnState) error {
-	timer := time.NewTimer(defaultTestTimeout)
-	select {
-	case <-timer.C:
-		return errors.New("Timeout when expecting ClientConn update on EDS balancer")
-	case gotCCS := <-tb.ccsCh:
-		timer.Stop()
-		if !cmp.Equal(gotCCS, wantCCS, cmpopts.IgnoreUnexported(attributes.Attributes{})) {
-			return fmt.Errorf("received ClientConnState: %+v, want %+v", gotCCS, wantCCS)
-		}
-		return nil
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ccs, err := tb.ccsCh.Receive(ctx)
+	if err != nil {
+		return err
 	}
+	gotCCS := ccs.(balancer.ClientConnState)
+	if !cmp.Equal(gotCCS, wantCCS, cmpopts.IgnoreUnexported(attributes.Attributes{})) {
+		return fmt.Errorf("received ClientConnState: %+v, want %+v", gotCCS, wantCCS)
+	}
+	return nil
 }
 
 // waitForSubConnUpdate verifies if the testEDSBalancer receives the provided
 // SubConn update within a reasonable amount of time.
 func (tb *testEDSBalancer) waitForSubConnUpdate(wantSCS subConnWithState) error {
-	timer := time.NewTimer(defaultTestTimeout)
-	select {
-	case <-timer.C:
-		return errors.New("Timeout when expecting SubConn update on EDS balancer")
-	case gotSCS := <-tb.scStateCh:
-		timer.Stop()
-		if !cmp.Equal(gotSCS, wantSCS, cmp.AllowUnexported(subConnWithState{})) {
-			return fmt.Errorf("received SubConnState: %+v, want %+v", gotSCS, wantSCS)
-		}
-		return nil
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	scs, err := tb.scStateCh.Receive(ctx)
+	if err != nil {
+		return err
 	}
+	gotSCS := scs.(subConnWithState)
+	if !cmp.Equal(gotSCS, wantSCS, cmp.AllowUnexported(subConnWithState{})) {
+		return fmt.Errorf("received SubConnState: %+v, want %+v", gotSCS, wantSCS)
+	}
+	return nil
 }
 
 // waitForResolverError verifies if the testEDSBalancer receives the
 // provided resolver error within a reasonable amount of time.
 func (tb *testEDSBalancer) waitForResolverError(wantErr error) error {
-	timer := time.NewTimer(defaultTestTimeout)
-	select {
-	case <-timer.C:
-		return errors.New("Timeout when expecting a resolver error")
-	case gotErr := <-tb.resolverErrCh:
-		timer.Stop()
-		if gotErr != wantErr {
-			return fmt.Errorf("received resolver error: %v, want %v", gotErr, wantErr)
-		}
-		return nil
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	gotErr, err := tb.resolverErrCh.Receive(ctx)
+	if err != nil {
+		return err
 	}
+	if gotErr != wantErr {
+		return fmt.Errorf("received resolver error: %v, want %v", gotErr, wantErr)
+	}
+	return nil
 }
 
 // waitForClose verifies that the edsBalancer is closed with a reasonable
 // amount of time.
 func (tb *testEDSBalancer) waitForClose() error {
-	timer := time.NewTimer(defaultTestTimeout)
-	select {
-	case <-timer.C:
-		return errors.New("Timeout when expecting a close")
-	case <-tb.closeCh:
-		timer.Stop()
-		return nil
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := tb.closeCh.Receive(ctx); err != nil {
+		return err
 	}
+	return nil
 }
 
 // cdsCCS is a helper function to construct a good update passed from the
@@ -186,7 +196,7 @@ func cdsCCS(cluster string, xdsClient interface{}) balancer.ClientConnState {
       "loadBalancingConfig":[
         {
           "cds_experimental":{
-            "Cluster": %s
+            "Cluster": "%s"
           }
         }
       ]
@@ -216,40 +226,43 @@ func edsCCS(service string, enableLRS bool, xdsClient interface{}) balancer.Clie
 
 // setup creates a cdsBalancer and an edsBalancer (and overrides the
 // newEDSBalancer function to return it), and also returns a cleanup function.
-func setup() (*cdsBalancer, *testEDSBalancer, func()) {
+func setup() (*cdsBalancer, *testEDSBalancer, *testClientConn, func()) {
 	builder := cdsBB{}
-	tcc := &testClientConn{}
-	cdsB := builder.Build(tcc, balancer.BuildOptions{}).(balancer.V2Balancer)
+	tcc := newTestClientConn()
+	cdsB := builder.Build(tcc, balancer.BuildOptions{})
 
 	edsB := newTestEDSBalancer()
 	oldEDSBalancerBuilder := newEDSBalancer
-	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.V2Balancer, error) {
+	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, error) {
 		return edsB, nil
 	}
 
-	return cdsB.(*cdsBalancer), edsB, func() {
+	return cdsB.(*cdsBalancer), edsB, tcc, func() {
 		newEDSBalancer = oldEDSBalancerBuilder
 	}
 }
 
 // setupWithWatch does everything that setup does, and also pushes a ClientConn
 // update to the cdsBalancer and waits for a CDS watch call to be registered.
-func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, func()) {
+func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *testClientConn, func()) {
 	t.Helper()
 
 	xdsC := fakeclient.NewClient()
-	cdsB, edsB, cancel := setup()
+	cdsB, edsB, tcc, cancel := setup()
 	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != nil {
 		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
 	}
-	gotCluster, err := xdsC.WaitForWatchCluster()
+
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	gotCluster, err := xdsC.WaitForWatchCluster(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 	}
 	if gotCluster != clusterName {
 		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, clusterName)
 	}
-	return xdsC, cdsB, edsB, cancel
+	return xdsC, cdsB, edsB, tcc, cancel
 }
 
 // TestUpdateClientConnState invokes the UpdateClientConnState method on the
@@ -303,7 +316,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cdsB, _, cancel := setup()
+			cdsB, _, _, cancel := setup()
 			defer func() {
 				cancel()
 				cdsB.Close()
@@ -316,7 +329,9 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 				// When we wanted an error and got it, we should return early.
 				return
 			}
-			gotCluster, err := xdsC.WaitForWatchCluster()
+			ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer ctxCancel()
+			gotCluster, err := xdsC.WaitForWatchCluster(ctx)
 			if err != nil {
 				t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 			}
@@ -330,7 +345,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 // TestUpdateClientConnStateAfterClose invokes the UpdateClientConnState method
 // on the cdsBalancer after close and verifies that it returns an error.
 func (s) TestUpdateClientConnStateAfterClose(t *testing.T) {
-	cdsB, _, cancel := setup()
+	cdsB, _, _, cancel := setup()
 	defer cancel()
 	cdsB.Close()
 
@@ -343,7 +358,7 @@ func (s) TestUpdateClientConnStateAfterClose(t *testing.T) {
 // update with the same cluster and xdsClient does not cause the cdsBalancer to
 // create a new watch.
 func (s) TestUpdateClientConnStateWithSameState(t *testing.T) {
-	xdsC, cdsB, _, cancel := setupWithWatch(t)
+	xdsC, cdsB, _, _, cancel := setupWithWatch(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
@@ -352,7 +367,9 @@ func (s) TestUpdateClientConnStateWithSameState(t *testing.T) {
 	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != nil {
 		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
 	}
-	if _, err := xdsC.WaitForWatchCluster(); err != testutils.ErrRecvTimeout {
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if _, err := xdsC.WaitForWatchCluster(ctx); err != context.DeadlineExceeded {
 		t.Fatalf("waiting for WatchCluster() should have timed out, but returned error: %v", err)
 	}
 }
@@ -361,7 +378,7 @@ func (s) TestUpdateClientConnStateWithSameState(t *testing.T) {
 // different updates and verifies that the expect ClientConnState is propagated
 // to the edsBalancer.
 func (s) TestHandleClusterUpdate(t *testing.T) {
-	xdsC, cdsB, edsB, cancel := setupWithWatch(t)
+	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
@@ -369,23 +386,19 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		cdsUpdate xdsclient.CDSUpdate
+		cdsUpdate xdsclient.ClusterUpdate
 		updateErr error
 		wantCCS   balancer.ClientConnState
 	}{
 		{
 			name:      "happy-case-with-lrs",
-			cdsUpdate: xdsclient.CDSUpdate{ServiceName: serviceName, EnableLRS: true},
+			cdsUpdate: xdsclient.ClusterUpdate{ServiceName: serviceName, EnableLRS: true},
 			wantCCS:   edsCCS(serviceName, true, xdsC),
 		},
 		{
 			name:      "happy-case-without-lrs",
-			cdsUpdate: xdsclient.CDSUpdate{ServiceName: serviceName},
+			cdsUpdate: xdsclient.ClusterUpdate{ServiceName: serviceName},
 			wantCCS:   edsCCS(serviceName, false, xdsC),
-		},
-		{
-			name:      "cdsWatch-returns-error",
-			updateErr: errors.New("cdsUpdate error"),
 		},
 	}
 
@@ -398,42 +411,149 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 	}
 }
 
-// TestResolverError verifies that an existing watch is cancelled when a
-// resolver error is received by the cdsBalancer, and also that the same error
-// is propagated to the edsBalancer.
-func (s) TestResolverError(t *testing.T) {
-	xdsC, cdsB, edsB, cancel := setupWithWatch(t)
+// TestHandleClusterUpdateError covers the cases that an error is returned from
+// the watcher.
+//
+// Includes error with and without a child eds balancer, and whether error is a
+// resource-not-found error.
+func (s) TestHandleClusterUpdateError(t *testing.T) {
+	xdsC, cdsB, edsB, tcc, cancel := setupWithWatch(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
 	}()
 
-	cdsUpdate := xdsclient.CDSUpdate{ServiceName: serviceName}
+	// An error before eds balancer is built. Should result in an error picker.
+	// And this is not a resource not found error, watch shouldn't be canceled.
+	err1 := errors.New("cdsBalancer resolver error 1")
+	xdsC.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{}, err1)
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelClusterWatch(ctx); err == nil {
+		t.Fatal("watch was canceled, want not canceled (timeout error)")
+	}
+	if err := edsB.waitForResolverError(err1); err == nil {
+		t.Fatal("eds balancer shouldn't get error (shouldn't be built yet)")
+	}
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	state, err := tcc.newPickerCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("failed to get picker, expect an error picker")
+	}
+	picker := state.(balancer.State).Picker
+	if _, perr := picker.Pick(balancer.PickInfo{}); perr == nil {
+		t.Fatalf("want picker to always fail, got nil")
+	}
+
+	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
 	wantCCS := edsCCS(serviceName, false, xdsC)
 	if err := invokeWatchCbAndWait(xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
 
-	rErr := errors.New("cdsBalancer resolver error")
-	cdsB.ResolverError(rErr)
-	if err := xdsC.WaitForCancelClusterWatch(); err != nil {
+	// An error after eds balancer is build, eds should receive the error. This
+	// is not a resource not found error, watch shouldn't be canceled
+	err2 := errors.New("cdsBalancer resolver error 2")
+	xdsC.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{}, err2)
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelClusterWatch(ctx); err == nil {
+		t.Fatal("watch was canceled, want not canceled (timeout error)")
+	}
+	if err := edsB.waitForResolverError(err2); err != nil {
+		t.Fatalf("eds balancer should get error, waitForError failed: %v", err)
+	}
+
+	// A resource not found error. Watch should not be canceled because this
+	// means CDS resource is removed, and eds should receive the error.
+	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
+	xdsC.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{}, resourceErr)
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelClusterWatch(ctx); err == nil {
+		t.Fatalf("want watch to be not canceled, watchForCancel should timeout")
+	}
+	if err := edsB.waitForResolverError(resourceErr); err != nil {
+		t.Fatalf("eds balancer should get resource-not-found error, waitForError failed: %v", err)
+	}
+}
+
+// TestResolverError verifies that resolvers errors (with type
+// resource-not-found or others) are handled correctly.
+func (s) TestResolverError(t *testing.T) {
+	xdsC, cdsB, edsB, tcc, cancel := setupWithWatch(t)
+	defer func() {
+		cancel()
+		cdsB.Close()
+	}()
+
+	// An error before eds balancer is built. Should result in an error picker.
+	// Not a resource not found error, watch shouldn't be canceled.
+	err1 := errors.New("cdsBalancer resolver error 1")
+	cdsB.ResolverError(err1)
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelClusterWatch(ctx); err == nil {
+		t.Fatal("watch was canceled, want not canceled (timeout error)")
+	}
+	if err := edsB.waitForResolverError(err1); err == nil {
+		t.Fatal("eds balancer shouldn't get error (shouldn't be built yet)")
+	}
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	state, err := tcc.newPickerCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("failed to get picker, expect an error picker")
+	}
+	picker := state.(balancer.State).Picker
+	if _, perr := picker.Pick(balancer.PickInfo{}); perr == nil {
+		t.Fatalf("want picker to always fail, got nil")
+	}
+
+	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
+	wantCCS := edsCCS(serviceName, false, xdsC)
+	if err := invokeWatchCbAndWait(xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
-	if err := edsB.waitForResolverError(rErr); err != nil {
-		t.Fatal(err)
+
+	// Not a resource not found error, watch shouldn't be canceled, and eds
+	// should receive the error.
+	err2 := errors.New("cdsBalancer resolver error 2")
+	cdsB.ResolverError(err2)
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelClusterWatch(ctx); err == nil {
+		t.Fatal("watch was canceled, want not canceled (timeout error)")
+	}
+	if err := edsB.waitForResolverError(err2); err != nil {
+		t.Fatalf("eds balancer should get error, waitForError failed: %v", err)
+	}
+
+	// A resource not found error. Watch should be canceled, and eds should
+	// receive the error.
+	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
+	cdsB.ResolverError(resourceErr)
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelClusterWatch(ctx); err != nil {
+		t.Fatalf("want watch to be canceled, watchForCancel failed: %v", err)
+	}
+	if err := edsB.waitForResolverError(resourceErr); err != nil {
+		t.Fatalf("eds balancer should get resource-not-found error, waitForError failed: %v", err)
 	}
 }
 
 // TestUpdateSubConnState pushes a SubConn update to the cdsBalancer and
 // verifies that the update is propagated to the edsBalancer.
 func (s) TestUpdateSubConnState(t *testing.T) {
-	xdsC, cdsB, edsB, cancel := setupWithWatch(t)
+	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
 	}()
 
-	cdsUpdate := xdsclient.CDSUpdate{ServiceName: serviceName}
+	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
 	wantCCS := edsCCS(serviceName, false, xdsC)
 	if err := invokeWatchCbAndWait(xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
@@ -450,17 +570,19 @@ func (s) TestUpdateSubConnState(t *testing.T) {
 // TestClose calls Close() on the cdsBalancer, and verifies that the underlying
 // edsBalancer is also closed.
 func (s) TestClose(t *testing.T) {
-	xdsC, cdsB, edsB, cancel := setupWithWatch(t)
+	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
 	defer cancel()
 
-	cdsUpdate := xdsclient.CDSUpdate{ServiceName: serviceName}
+	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
 	wantCCS := edsCCS(serviceName, false, xdsC)
 	if err := invokeWatchCbAndWait(xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
 
 	cdsB.Close()
-	if err := xdsC.WaitForCancelClusterWatch(); err != nil {
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := xdsC.WaitForCancelClusterWatch(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if err := edsB.waitForClose(); err != nil {

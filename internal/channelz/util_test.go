@@ -1,4 +1,4 @@
-// +build linux,go1.10,!appengine
+// +build linux,!appengine
 
 /*
  *

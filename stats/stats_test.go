@@ -73,8 +73,15 @@ var (
 	errorID int32 = 32202
 )
 
-type testServer struct {
-	testpb.UnimplementedTestServiceServer
+type testServer struct{}
+
+func (s *testServer) Svc() *testpb.TestServiceService {
+	return &testpb.TestServiceService{
+		UnaryCall:        s.UnaryCall,
+		FullDuplexCall:   s.FullDuplexCall,
+		ClientStreamCall: s.ClientStreamCall,
+		ServerStreamCall: s.ServerStreamCall,
+	}
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -165,7 +172,7 @@ type test struct {
 	clientStatsHandler stats.Handler
 	serverStatsHandler stats.Handler
 
-	testServer testpb.TestServiceServer // nil means none
+	testService *testpb.TestServiceService // nil means none
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
 	srvAddr string
@@ -200,8 +207,8 @@ func newTest(t *testing.T, tc *testConfig, ch stats.Handler, sh stats.Handler) *
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
-func (te *test) startServer(ts testpb.TestServiceServer) {
-	te.testServer = ts
+func (te *test) startServer(ts *testpb.TestServiceService) {
+	te.testService = ts
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		te.t.Fatalf("Failed to listen: %v", err)
@@ -218,8 +225,8 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	}
 	s := grpc.NewServer(opts...)
 	te.srv = s
-	if te.testServer != nil {
-		testpb.RegisterTestServiceServer(s, te.testServer)
+	if te.testService != nil {
+		testpb.RegisterTestServiceService(s, te.testService)
 	}
 
 	go s.Serve(lis)
@@ -446,6 +453,9 @@ func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
+	if st.Compression != e.compression {
+		t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
+	}
 	if d.client {
 		// additional headers might be injected so instead of testing equality, test that all the
 		// expected headers keys have the expected header values.
@@ -460,9 +470,6 @@ func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 		}
 		if st.LocalAddr.String() != e.serverAddr {
 			t.Fatalf("st.LocalAddr = %v, want %v", st.LocalAddr, e.serverAddr)
-		}
-		if st.Compression != e.compression {
-			t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
 		}
 		// additional headers might be injected so instead of testing equality, test that all the
 		// expected headers keys have the expected header values.
@@ -575,15 +582,15 @@ func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
+	if st.Compression != e.compression {
+		t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
+	}
 	if d.client {
 		if st.FullMethod != e.method {
 			t.Fatalf("st.FullMethod = %s, want %v", st.FullMethod, e.method)
 		}
 		if st.RemoteAddr.String() != e.serverAddr {
 			t.Fatalf("st.RemoteAddr = %v, want %v", st.RemoteAddr, e.serverAddr)
-		}
-		if st.Compression != e.compression {
-			t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
 		}
 		// additional headers might be injected so instead of testing equality, test that all the
 		// expected headers keys have the expected header values.
@@ -815,7 +822,7 @@ func checkServerStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {
 	h := &statshandler{}
 	te := newTest(t, tc, nil, h)
-	te.startServer(&testServer{})
+	te.startServer((&testServer{}).Svc())
 	defer te.tearDown()
 
 	var (
@@ -1106,7 +1113,7 @@ func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map[int]*checkFuncWithCount) {
 	h := &statshandler{}
 	te := newTest(t, tc, h, nil)
-	te.startServer(&testServer{})
+	te.startServer((&testServer{}).Svc())
 	defer te.tearDown()
 
 	var (

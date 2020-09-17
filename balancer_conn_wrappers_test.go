@@ -25,41 +25,10 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
-	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 )
-
-var _ balancer.V2Balancer = &funcBalancer{}
-
-type funcBalancer struct {
-	updateClientConnState func(s balancer.ClientConnState) error
-}
-
-func (*funcBalancer) HandleSubConnStateChange(balancer.SubConn, connectivity.State) {
-	panic("unimplemented") // v1 API
-}
-func (*funcBalancer) HandleResolvedAddrs([]resolver.Address, error) {
-	panic("unimplemented") // v1 API
-}
-func (b *funcBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	return b.updateClientConnState(s)
-}
-func (*funcBalancer) ResolverError(error) {}
-func (*funcBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
-	panic("unimplemented") // we never have sub-conns
-}
-func (*funcBalancer) Close() {}
-
-type funcBalancerBuilder struct {
-	name     string
-	instance *funcBalancer
-}
-
-func (b *funcBalancerBuilder) Build(balancer.ClientConn, balancer.BuildOptions) balancer.Balancer {
-	return b.instance
-}
-func (b *funcBalancerBuilder) Name() string { return b.name }
 
 // TestBalancerErrorResolverPolling injects balancer errors and verifies
 // ResolveNow is called on the resolver with the appropriate backoff strategy
@@ -67,8 +36,8 @@ func (b *funcBalancerBuilder) Name() string { return b.name }
 func (s) TestBalancerErrorResolverPolling(t *testing.T) {
 	// The test balancer will return ErrBadResolverState iff the
 	// ClientConnState contains no addresses.
-	fb := &funcBalancer{
-		updateClientConnState: func(s balancer.ClientConnState) error {
+	bf := stub.BalancerFuncs{
+		UpdateClientConnState: func(_ *stub.BalancerData, s balancer.ClientConnState) error {
 			if len(s.ResolverState.Addresses) == 0 {
 				return balancer.ErrBadResolverState
 			}
@@ -76,7 +45,7 @@ func (s) TestBalancerErrorResolverPolling(t *testing.T) {
 		},
 	}
 	const balName = "BalancerErrorResolverPolling"
-	balancer.Register(&funcBalancerBuilder{name: balName, instance: fb})
+	stub.Register(balName, bf)
 
 	testResolverErrorPolling(t,
 		func(r *manual.Resolver) {
