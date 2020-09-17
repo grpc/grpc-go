@@ -97,7 +97,6 @@ func NewPEMFileProvider(o PEMFileProviderOptions) (*PEMFileProvider, error) {
 		return nil, fmt.Errorf("private key file and identity cert file should be both specified or not specified")
 	}
 	if o.IdentityInterval == 0 {
-		logger.Warningf("heyheyhey")
 		o.IdentityInterval = defaultIdentityInterval
 	}
 	if o.RootInterval == 0 {
