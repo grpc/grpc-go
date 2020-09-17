@@ -181,7 +181,7 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 			// Verify that the system-provided certificates would be used
 			// when no verification method was set in clientOptions.
 			if clientOptions.RootOptions.RootCACerts == nil &&
-				clientOptions.RootOptions.GetRootCertificates == nil && clientOptions.RootOptions.RootProvider == nil {
+					clientOptions.RootOptions.GetRootCertificates == nil && clientOptions.RootOptions.RootProvider == nil {
 				if clientConfig.RootCAs == nil {
 					t.Fatalf("Failed to assign system-provided certificates on the client side.")
 				}
@@ -298,7 +298,7 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 			// Verify that the system-provided certificates would be used
 			// when no verification method was set in serverOptions.
 			if serverOptions.RootOptions.RootCACerts == nil &&
-				serverOptions.RootOptions.GetRootCertificates == nil && serverOptions.RootOptions.RootProvider == nil {
+					serverOptions.RootOptions.GetRootCertificates == nil && serverOptions.RootOptions.RootProvider == nil {
 				if serverConfig.ClientCAs == nil {
 					t.Fatalf("Failed to assign system-provided certificates on the server side.")
 				}
@@ -764,7 +764,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				return
 			}
 			if handshakeErr != nil && !test.clientExpectHandshakeError ||
-				handshakeErr == nil && test.clientExpectHandshakeError {
+					handshakeErr == nil && test.clientExpectHandshakeError {
 				t.Fatalf("Expect error: %v, but err is %v",
 					test.clientExpectHandshakeError, handshakeErr)
 			}
@@ -803,9 +803,9 @@ func compare(a1, a2 credentials.AuthInfo) bool {
 		state1 := a1.(credentials.TLSInfo).State
 		state2 := a2.(credentials.TLSInfo).State
 		if state1.Version == state2.Version &&
-			state1.HandshakeComplete == state2.HandshakeComplete &&
-			state1.CipherSuite == state2.CipherSuite &&
-			state1.NegotiatedProtocol == state2.NegotiatedProtocol {
+				state1.HandshakeComplete == state2.HandshakeComplete &&
+				state1.CipherSuite == state2.CipherSuite &&
+				state1.NegotiatedProtocol == state2.NegotiatedProtocol {
 			return true
 		}
 		return false
@@ -859,7 +859,7 @@ func (s) TestTLSClone(t *testing.T) {
 	cc.OverrideServerName("")
 	if c.Info().ServerName != expectedServerName {
 		t.Fatalf("Change in clone should not affect the original, "+
-			"c.Info().ServerName = %v, want %v", c.Info().ServerName, expectedServerName)
+				"c.Info().ServerName = %v, want %v", c.Info().ServerName, expectedServerName)
 	}
 
 }
