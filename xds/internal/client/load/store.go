@@ -32,8 +32,18 @@ type clusterAndServiceNames struct {
 	service string
 }
 
+// Store keeps the loads for multiple clusters and services to be reported via
+// LRS. It is safe for concurrent use.
 type Store struct {
-	clusters sync.Map // map[clusterAndServiceNames]*rpcCountData
+	mu       sync.RWMutex
+	clusters map[clusterAndServiceNames]*PerClusterStore
+}
+
+// NewStore creates a Store.
+func NewStore() *Store {
+	return &Store{
+		clusters: make(map[clusterAndServiceNames]*PerClusterStore),
+	}
 }
 
 // PerCluster returns the PerClusterStore for the given clusterName +
@@ -47,37 +57,26 @@ func (ls *Store) PerCluster(clusterName, serviceName string) *PerClusterStore {
 		cluster: clusterName,
 		service: serviceName,
 	}
-	p, ok := ls.clusters.Load(k)
-	if !ok {
-		s := &PerClusterStore{}
-		p, _ = ls.clusters.LoadOrStore(k, s)
-	}
-	return p.(*PerClusterStore)
-}
 
-// CallServerLoad adds one server load record for the given locality. The
-// load type is specified by desc, and its value by val.
-func (ls *Store) CallServerLoad(clusterName, serviceName, locality, name string, d float64) {
-	if ls == nil {
-		return
+	ls.mu.RLock()
+	if p, ok := ls.clusters[k]; ok {
+		ls.mu.RUnlock()
+		return p
 	}
+	ls.mu.RUnlock()
 
-	k := clusterAndServiceNames{
-		cluster: clusterName,
-		service: serviceName,
-	}
-	p, ok := ls.clusters.Load(k)
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+	p, ok := ls.clusters[k]
 	if !ok {
-		s := &PerClusterStore{}
-		p, _ = ls.clusters.LoadOrStore(k, s)
+		p = &PerClusterStore{}
+		ls.clusters[k] = p
 	}
-	p.(*PerClusterStore).CallServerLoad(locality, name, d)
+	return p
 }
 
 // PerClusterStore is a repository for LB policy implementations to report store
 // load data. It is safe for concurrent use.
-//
-// A zero Store is empty and ready for use.
 //
 // TODO(easwars): Use regular maps with mutexes instead of sync.Map here. The
 // latter is optimized for two common use cases: (1) when the entry for a given
