@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2020 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,93 +23,35 @@
 package binarylog
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"sync"
-	"time"
 
 	pb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
 	iblog "google.golang.org/grpc/internal/binarylog"
 )
 
-// SetDefaultSink sets the sink where binary logs will be written to.
+// SetSink sets the destination for the binary log entries.
 //
-// Not thread safe. Only set during initialization.
-func SetDefaultSink(s Sink) {
+// NOTE: this function must only be called during initialization time (i.e. in
+// an init() function), and is not thread-safe.
+func SetSink(s Sink) {
 	if iblog.DefaultSink != nil {
 		iblog.DefaultSink.Close()
 	}
 	iblog.DefaultSink = s
 }
 
-// Sink writes log entry into the binary log sink.
+// Sink represents the destination for the binary log entries.
 type Sink interface {
-	// Write will be called to write the log entry into the sink.
+	// Write marshals the log entry and writes it to the destination. The format
+	// is not specified, but should have sufficient information to rebuild the
+	// entry. Some options are: proto bytes, or proto json.
 	//
-	// It should be thread-safe so it can be called in parallel.
+	// Note this function needs to be thread-safe.
 	Write(*pb.GrpcLogEntry) error
-	// Close will be called when the Sink is replaced by a new Sink.
+	// Close closes this sink and cleans up resources (e.g. the flushing
+	// goroutine).
 	Close() error
-}
-
-type bufWriteCloserSink struct {
-	mu     sync.Mutex
-	closer io.Closer
-	out    Sink          // out is built on buf.
-	buf    *bufio.Writer // buf is kept for flush.
-
-	writeStartOnce sync.Once
-	writeTicker    *time.Ticker
-}
-
-func (fs *bufWriteCloserSink) Write(e *pb.GrpcLogEntry) error {
-	// Start the write loop when Write is called.
-	fs.writeStartOnce.Do(fs.startFlushGoroutine)
-	fs.mu.Lock()
-	if err := fs.out.Write(e); err != nil {
-		fs.mu.Unlock()
-		return err
-	}
-	fs.mu.Unlock()
-	return nil
-}
-
-const (
-	bufFlushDuration = 60 * time.Second
-)
-
-func (fs *bufWriteCloserSink) startFlushGoroutine() {
-	fs.writeTicker = time.NewTicker(bufFlushDuration)
-	go func() {
-		for range fs.writeTicker.C {
-			fs.mu.Lock()
-			fs.buf.Flush()
-			fs.mu.Unlock()
-		}
-	}()
-}
-
-func (fs *bufWriteCloserSink) Close() error {
-	if fs.writeTicker != nil {
-		fs.writeTicker.Stop()
-	}
-	fs.mu.Lock()
-	fs.buf.Flush()
-	fs.closer.Close()
-	fs.out.Close()
-	fs.mu.Unlock()
-	return nil
-}
-
-func newBufWriteCloserSink(o io.WriteCloser) Sink {
-	bufW := bufio.NewWriter(o)
-	return &bufWriteCloserSink{
-		closer: o,
-		out:    iblog.NewWriterSink(bufW),
-		buf:    bufW,
-	}
 }
 
 // NewTempFileSink creates a temp file and returns a Sink that writes to this
@@ -119,5 +61,5 @@ func NewTempFileSink() (Sink, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file: %v", err)
 	}
-	return newBufWriteCloserSink(tempFile), nil
+	return iblog.NewBufferedSink(tempFile), nil
 }

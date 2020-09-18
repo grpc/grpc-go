@@ -19,8 +19,11 @@
 package binarylog
 
 import (
+	"bufio"
 	"encoding/binary"
 	"io"
+	"sync"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	pb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
@@ -49,13 +52,13 @@ type noopSink struct{}
 func (ns *noopSink) Write(*pb.GrpcLogEntry) error { return nil }
 func (ns *noopSink) Close() error                 { return nil }
 
-// NewWriterSink creates a binary log sink with the given writer.
+// newWriterSink creates a binary log sink with the given writer.
 //
 // Write() marshals the proto message and writes it to the given writer. Each
 // message is prefixed with a 4 byte big endian unsigned integer as the length.
 //
 // No buffer is done, Close() doesn't try to close the writer.
-func NewWriterSink(w io.Writer) Sink {
+func newWriterSink(w io.Writer) Sink {
 	return &writerSink{out: w}
 }
 
@@ -80,3 +83,77 @@ func (ws *writerSink) Write(e *pb.GrpcLogEntry) error {
 }
 
 func (ws *writerSink) Close() error { return nil }
+
+type bufferedSink struct {
+	mu     sync.Mutex
+	closer io.Closer
+	out    Sink          // out is built on buf.
+	buf    *bufio.Writer // buf is kept for flush.
+
+	writeStartOnce sync.Once
+	writeTicker    *time.Ticker
+}
+
+func (fs *bufferedSink) Write(e *pb.GrpcLogEntry) error {
+	// Start the write loop when Write is called.
+	fs.writeStartOnce.Do(fs.startFlushGoroutine)
+	fs.mu.Lock()
+	if err := fs.out.Write(e); err != nil {
+		fs.mu.Unlock()
+		return err
+	}
+	fs.mu.Unlock()
+	return nil
+}
+
+const (
+	bufFlushDuration = 60 * time.Second
+)
+
+func (fs *bufferedSink) startFlushGoroutine() {
+	fs.writeTicker = time.NewTicker(bufFlushDuration)
+	go func() {
+		for range fs.writeTicker.C {
+			fs.mu.Lock()
+			if err := fs.buf.Flush(); err != nil {
+				grpclogLogger.Warningf("failed to flush to Sink: %v", err)
+			}
+			fs.mu.Unlock()
+		}
+	}()
+}
+
+func (fs *bufferedSink) Close() error {
+	if fs.writeTicker != nil {
+		fs.writeTicker.Stop()
+	}
+	fs.mu.Lock()
+	if err := fs.buf.Flush(); err != nil {
+		grpclogLogger.Warningf("failed to flush to Sink: %v", err)
+	}
+	if err := fs.closer.Close(); err != nil {
+		grpclogLogger.Warningf("failed to close the underlying WriterCloser: %v", err)
+	}
+	if err := fs.out.Close(); err != nil {
+		grpclogLogger.Warningf("failed to close the Sink: %v", err)
+	}
+	fs.mu.Unlock()
+	return nil
+}
+
+// NewBufferedSink creates a binary log sink with the given WriteCloser.
+//
+// Write() marshals the proto message and writes it to the given writer. Each
+// message is prefixed with a 4 byte big endian unsigned integer as the length.
+//
+// Content is kept in a buffer, and is flushed every 60 seconds.
+//
+// Close closes the WriteCloser.
+func NewBufferedSink(o io.WriteCloser) Sink {
+	bufW := bufio.NewWriter(o)
+	return &bufferedSink{
+		closer: o,
+		out:    newWriterSink(bufW),
+		buf:    bufW,
+	}
+}

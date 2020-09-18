@@ -54,7 +54,7 @@ func init() {
 	// Setting environment variable in tests doesn't work because of the init
 	// orders. Set the loggers directly here.
 	iblog.SetLogger(iblog.AllLogger)
-	binarylog.SetDefaultSink(testSink)
+	binarylog.SetSink(testSink)
 }
 
 var testSink = &testBinLogSink{}
