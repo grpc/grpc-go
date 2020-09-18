@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
-	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
 var (
@@ -65,69 +64,6 @@ func (s *stageInfo) reset() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.stage = 0
-}
-
-// certStore contains all the certificates used in the integration tests.
-type certStore struct {
-	// clientPeer1 is the certificate sent by client to prove its identity.
-	// It is trusted by serverTrust1.
-	clientPeer1 tls.Certificate
-	// clientPeer2 is the certificate sent by client to prove its identity.
-	// It is trusted by serverTrust2.
-	clientPeer2 tls.Certificate
-	// serverPeer1 is the certificate sent by server to prove its identity.
-	// It is trusted by clientTrust1.
-	serverPeer1 tls.Certificate
-	// serverPeer2 is the certificate sent by server to prove its identity.
-	// It is trusted by clientTrust2.
-	serverPeer2  tls.Certificate
-	clientTrust1 *x509.CertPool
-	clientTrust2 *x509.CertPool
-	serverTrust1 *x509.CertPool
-	serverTrust2 *x509.CertPool
-}
-
-// loadCerts function is used to load test certificates at the beginning of
-// each integration test.
-func (cs *certStore) loadCerts() error {
-	var err error
-	cs.clientPeer1, err = tls.LoadX509KeyPair(testdata.Path("client_cert_1.pem"),
-		testdata.Path("client_key_1.pem"))
-	if err != nil {
-		return err
-	}
-	cs.clientPeer2, err = tls.LoadX509KeyPair(testdata.Path("client_cert_2.pem"),
-		testdata.Path("client_key_2.pem"))
-	if err != nil {
-		return err
-	}
-	cs.serverPeer1, err = tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
-		testdata.Path("server_key_1.pem"))
-	if err != nil {
-		return err
-	}
-	cs.serverPeer2, err = tls.LoadX509KeyPair(testdata.Path("server_cert_2.pem"),
-		testdata.Path("server_key_2.pem"))
-	if err != nil {
-		return err
-	}
-	cs.clientTrust1, err = readTrustCert(testdata.Path("client_trust_cert_1.pem"))
-	if err != nil {
-		return err
-	}
-	cs.clientTrust2, err = readTrustCert(testdata.Path("client_trust_cert_2.pem"))
-	if err != nil {
-		return err
-	}
-	cs.serverTrust1, err = readTrustCert(testdata.Path("server_trust_cert_1.pem"))
-	if err != nil {
-		return err
-	}
-	cs.serverTrust2, err = readTrustCert(testdata.Path("server_trust_cert_2.pem"))
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 type greeterServer struct {

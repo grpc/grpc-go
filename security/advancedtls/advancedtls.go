@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"syscall"
 	"time"
 
 	"google.golang.org/grpc/credentials"
@@ -374,7 +373,7 @@ func (c advancedTLSCreds) Info() credentials.ProtocolInfo {
 
 func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	// Use local cfg to avoid clobbering ServerName if using multiple endpoints.
-	cfg := cloneTLSConfig(c.config)
+	cfg := credinternal.CloneTLSConfig(c.config)
 	// We return the full authority name to users if ServerName is empty without
 	// stripping the trailing port.
 	if cfg.ServerName == "" {
@@ -404,11 +403,11 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 		},
 	}
 	info.SPIFFEID = credinternal.SPIFFEIDFromState(conn.ConnectionState())
-	return WrapSyscallConn(rawConn, conn), info, nil
+	return credinternal.WrapSyscallConn(rawConn, conn), info, nil
 }
 
 func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	cfg := cloneTLSConfig(c.config)
+	cfg := credinternal.CloneTLSConfig(c.config)
 	cfg.VerifyPeerCertificate = buildVerifyFunc(c, "", rawConn)
 	conn := tls.Server(rawConn, cfg)
 	if err := conn.Handshake(); err != nil {
@@ -422,12 +421,12 @@ func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credenti
 		},
 	}
 	info.SPIFFEID = credinternal.SPIFFEIDFromState(conn.ConnectionState())
-	return WrapSyscallConn(rawConn, conn), info, nil
+	return credinternal.WrapSyscallConn(rawConn, conn), info, nil
 }
 
 func (c *advancedTLSCreds) Clone() credentials.TransportCredentials {
 	return &advancedTLSCreds{
-		config:     cloneTLSConfig(c.config),
+		config:     credinternal.CloneTLSConfig(c.config),
 		verifyFunc: c.verifyFunc,
 		getRootCAs: c.getRootCAs,
 		isClient:   c.isClient,
@@ -530,7 +529,7 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 		verifyFunc: o.VerifyPeer,
 		vType:      o.VType,
 	}
-	tc.config.NextProtos = appendH2ToNextProtos(tc.config.NextProtos)
+	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
 }
 
@@ -548,64 +547,6 @@ func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) 
 		verifyFunc: o.VerifyPeer,
 		vType:      o.VType,
 	}
-	tc.config.NextProtos = appendH2ToNextProtos(tc.config.NextProtos)
+	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
-}
-
-// TODO(ZhenLian): The code below are duplicates with gRPC-Go under
-//                 credentials/internal. Consider refactoring in the future.
-const alpnProtoStrH2 = "h2"
-
-func appendH2ToNextProtos(ps []string) []string {
-	for _, p := range ps {
-		if p == alpnProtoStrH2 {
-			return ps
-		}
-	}
-	ret := make([]string, 0, len(ps)+1)
-	ret = append(ret, ps...)
-	return append(ret, alpnProtoStrH2)
-}
-
-// We give syscall.Conn a new name here since syscall.Conn and net.Conn used
-// below have the same names.
-type sysConn = syscall.Conn
-
-// syscallConn keeps reference of rawConn to support syscall.Conn for channelz.
-// SyscallConn() (the method in interface syscall.Conn) is explicitly
-// implemented on this type,
-//
-// Interface syscall.Conn is implemented by most net.Conn implementations (e.g.
-// TCPConn, UnixConn), but is not part of net.Conn interface. So wrapper conns
-// that embed net.Conn don't implement syscall.Conn. (Side note: tls.Conn
-// doesn't embed net.Conn, so even if syscall.Conn is part of net.Conn, it won't
-// help here).
-type syscallConn struct {
-	net.Conn
-	// sysConn is a type alias of syscall.Conn. It's necessary because the name
-	// `Conn` collides with `net.Conn`.
-	sysConn
-}
-
-// WrapSyscallConn tries to wrap rawConn and newConn into a net.Conn that
-// implements syscall.Conn. rawConn will be used to support syscall, and newConn
-// will be used for read/write.
-//
-// This function returns newConn if rawConn doesn't implement syscall.Conn.
-func WrapSyscallConn(rawConn, newConn net.Conn) net.Conn {
-	sysConn, ok := rawConn.(syscall.Conn)
-	if !ok {
-		return newConn
-	}
-	return &syscallConn{
-		Conn:    newConn,
-		sysConn: sysConn,
-	}
-}
-
-func cloneTLSConfig(cfg *tls.Config) *tls.Config {
-	if cfg == nil {
-		return &tls.Config{}
-	}
-	return cfg.Clone()
 }

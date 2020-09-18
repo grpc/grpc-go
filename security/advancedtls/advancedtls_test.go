@@ -28,8 +28,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net"
-	"reflect"
-	"syscall"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -45,6 +43,94 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
+}
+
+// certStore contains all the certificates used in the integration tests.
+type certStore struct {
+	// clientPeer1 is the certificate sent by client to prove its identity.
+	// It is trusted by serverTrust1.
+	clientPeer1 tls.Certificate
+	// clientPeer2 is the certificate sent by client to prove its identity.
+	// It is trusted by serverTrust2.
+	clientPeer2 tls.Certificate
+	// serverPeer1 is the certificate sent by server to prove its identity.
+	// It is trusted by clientTrust1.
+	serverPeer1 tls.Certificate
+	// serverPeer2 is the certificate sent by server to prove its identity.
+	// It is trusted by clientTrust2.
+	serverPeer2 tls.Certificate
+	// serverPeer3 is the certificate sent by server to prove its identity.
+	serverPeer3  tls.Certificate
+	clientTrust1 *x509.CertPool
+	clientTrust2 *x509.CertPool
+	serverTrust1 *x509.CertPool
+	serverTrust2 *x509.CertPool
+}
+
+func readTrustCert(fileName string) (*x509.CertPool, error) {
+	trustData, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		return nil, err
+	}
+	trustBlock, _ := pem.Decode(trustData)
+	if trustBlock == nil {
+		return nil, err
+	}
+	trustCert, err := x509.ParseCertificate(trustBlock.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	trustPool := x509.NewCertPool()
+	trustPool.AddCert(trustCert)
+	return trustPool, nil
+}
+
+// loadCerts function is used to load test certificates at the beginning of
+// each integration test.
+func (cs *certStore) loadCerts() error {
+	var err error
+	cs.clientPeer1, err = tls.LoadX509KeyPair(testdata.Path("client_cert_1.pem"),
+		testdata.Path("client_key_1.pem"))
+	if err != nil {
+		return err
+	}
+	cs.clientPeer2, err = tls.LoadX509KeyPair(testdata.Path("client_cert_2.pem"),
+		testdata.Path("client_key_2.pem"))
+	if err != nil {
+		return err
+	}
+	cs.serverPeer1, err = tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
+		testdata.Path("server_key_1.pem"))
+	if err != nil {
+		return err
+	}
+	cs.serverPeer2, err = tls.LoadX509KeyPair(testdata.Path("server_cert_2.pem"),
+		testdata.Path("server_key_2.pem"))
+	cs.serverPeer3, err = tls.LoadX509KeyPair(testdata.Path("server_cert_3.pem"),
+		testdata.Path("server_key_3.pem"))
+	if err != nil {
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	cs.clientTrust1, err = readTrustCert(testdata.Path("client_trust_cert_1.pem"))
+	if err != nil {
+		return err
+	}
+	cs.clientTrust2, err = readTrustCert(testdata.Path("client_trust_cert_2.pem"))
+	if err != nil {
+		return err
+	}
+	cs.serverTrust1, err = readTrustCert(testdata.Path("server_trust_cert_1.pem"))
+	if err != nil {
+		return err
+	}
+	cs.serverTrust2, err = readTrustCert(testdata.Path("server_trust_cert_2.pem"))
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type provType int
@@ -776,24 +862,6 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	}
 }
 
-func readTrustCert(fileName string) (*x509.CertPool, error) {
-	trustData, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		return nil, err
-	}
-	trustBlock, _ := pem.Decode(trustData)
-	if trustBlock == nil {
-		return nil, err
-	}
-	trustCert, err := x509.ParseCertificate(trustBlock.Bytes)
-	if err != nil {
-		return nil, err
-	}
-	trustPool := x509.NewCertPool()
-	trustPool.AddCert(trustCert)
-	return trustPool, nil
-}
-
 func compare(a1, a2 credentials.AuthInfo) bool {
 	if a1.AuthType() != a2.AuthType() {
 		return false
@@ -816,13 +884,14 @@ func compare(a1, a2 credentials.AuthInfo) bool {
 
 func (s) TestAdvancedTLSOverrideServerName(t *testing.T) {
 	expectedServerName := "server.name"
-	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
+	cs := &certStore{}
+	err := cs.loadCerts()
 	if err != nil {
-		t.Fatalf("Client is unable to load trust certs. Error: %v", err)
+		t.Fatalf("Failed to load certs: %v", err)
 	}
 	clientOptions := &ClientOptions{
 		RootOptions: RootCertificateOptions{
-			RootCACerts: clientTrustPool,
+			RootCACerts: cs.clientTrust1,
 		},
 		ServerNameOverride: expectedServerName,
 	}
@@ -836,100 +905,12 @@ func (s) TestAdvancedTLSOverrideServerName(t *testing.T) {
 	}
 }
 
-func (s) TestTLSClone(t *testing.T) {
-	expectedServerName := "server.name"
-	clientTrustPool, err := readTrustCert(testdata.Path("client_trust_cert_1.pem"))
-	if err != nil {
-		t.Fatalf("Client is unable to load trust certs. Error: %v", err)
-	}
-	clientOptions := &ClientOptions{
-		RootOptions: RootCertificateOptions{
-			RootCACerts: clientTrustPool,
-		},
-		ServerNameOverride: expectedServerName,
-	}
-	c, err := NewClientCreds(clientOptions)
-	if err != nil {
-		t.Fatalf("Failed to create new client: %v", err)
-	}
-	cc := c.Clone()
-	if cc.Info().ServerName != expectedServerName {
-		t.Fatalf("cc.Info().ServerName = %v, want %v", cc.Info().ServerName, expectedServerName)
-	}
-	cc.OverrideServerName("")
-	if c.Info().ServerName != expectedServerName {
-		t.Fatalf("Change in clone should not affect the original, "+
-			"c.Info().ServerName = %v, want %v", c.Info().ServerName, expectedServerName)
-	}
-
-}
-
-func (s) TestAppendH2ToNextProtos(t *testing.T) {
-	tests := []struct {
-		name string
-		ps   []string
-		want []string
-	}{
-		{
-			name: "empty",
-			ps:   nil,
-			want: []string{"h2"},
-		},
-		{
-			name: "only h2",
-			ps:   []string{"h2"},
-			want: []string{"h2"},
-		},
-		{
-			name: "with h2",
-			ps:   []string{"alpn", "h2"},
-			want: []string{"alpn", "h2"},
-		},
-		{
-			name: "no h2",
-			ps:   []string{"alpn"},
-			want: []string{"alpn", "h2"},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := appendH2ToNextProtos(tt.ps); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("appendH2ToNextProtos() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-type nonSyscallConn struct {
-	net.Conn
-}
-
-func (s) TestWrapSyscallConn(t *testing.T) {
-	sc := &syscallConn{}
-	nsc := &nonSyscallConn{}
-
-	wrapConn := WrapSyscallConn(sc, nsc)
-	if _, ok := wrapConn.(syscall.Conn); !ok {
-		t.Errorf("returned conn (type %T) doesn't implement syscall.Conn, want implement",
-			wrapConn)
-	}
-}
-
 func (s) TestGetCertificatesSNI(t *testing.T) {
-	// Load server certificates for setting the serverGetCert callback function.
-	serverCert1, err := tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"), testdata.Path("server_key_1.pem"))
+	cs := &certStore{}
+	err := cs.loadCerts()
 	if err != nil {
-		t.Fatalf("tls.LoadX509KeyPair(server_cert_1.pem, server_key_1.pem) failed: %v", err)
+		t.Fatalf("Failed to load certs: %v", err)
 	}
-	serverCert2, err := tls.LoadX509KeyPair(testdata.Path("server_cert_2.pem"), testdata.Path("server_key_2.pem"))
-	if err != nil {
-		t.Fatalf("tls.LoadX509KeyPair(server_cert_2.pem, server_key_2.pem) failed: %v", err)
-	}
-	serverCert3, err := tls.LoadX509KeyPair(testdata.Path("server_cert_3.pem"), testdata.Path("server_key_3.pem"))
-	if err != nil {
-		t.Fatalf("tls.LoadX509KeyPair(server_cert_3.pem, server_key_3.pem) failed: %v", err)
-	}
-
 	tests := []struct {
 		desc       string
 		serverName string
@@ -939,19 +920,19 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 			desc: "Select serverCert1",
 			// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
 			serverName: "foo.bar.com",
-			wantCert:   serverCert1,
+			wantCert:   cs.serverPeer1,
 		},
 		{
 			desc: "Select serverCert2",
 			// "foo.bar.server2.com" is the common name on server certificate server_cert_2.pem.
 			serverName: "foo.bar.server2.com",
-			wantCert:   serverCert2,
+			wantCert:   cs.serverPeer2,
 		},
 		{
 			desc: "Select serverCert3",
 			// "google.com" is one of the DNS names on server certificate server_cert_3.pem.
 			serverName: "google.com",
-			wantCert:   serverCert3,
+			wantCert:   cs.serverPeer3,
 		},
 	}
 	for _, test := range tests {
@@ -960,7 +941,7 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 			serverOptions := &ServerOptions{
 				IdentityOptions: IdentityCertificateOptions{
 					GetIdentityCertificatesForServer: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
-						return []*tls.Certificate{&serverCert1, &serverCert2, &serverCert3}, nil
+						return []*tls.Certificate{&cs.serverPeer1, &cs.serverPeer2, &cs.serverPeer3}, nil
 					},
 				},
 			}
