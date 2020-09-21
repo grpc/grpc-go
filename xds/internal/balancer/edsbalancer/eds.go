@@ -20,7 +20,6 @@
 package edsbalancer
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
@@ -30,6 +29,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/serviceconfig"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
@@ -52,12 +52,10 @@ type edsBalancerBuilder struct{}
 
 // Build helps implement the balancer.Builder interface.
 func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	ctx, cancel := context.WithCancel(context.Background())
 	x := &edsBalancer{
-		ctx:               ctx,
-		cancel:            cancel,
 		cc:                cc,
 		buildOpts:         opts,
+		closed:            grpcsync.NewEvent(),
 		grpcUpdate:        make(chan interface{}),
 		xdsClientUpdate:   make(chan *edsUpdate),
 		childPolicyUpdate: buffer.NewUnbounded(),
@@ -106,10 +104,8 @@ type edsBalancerImplInterface interface {
 type edsBalancer struct {
 	cc        balancer.ClientConn // *xdsClientConn
 	buildOpts balancer.BuildOptions
-	ctx       context.Context
-	cancel    context.CancelFunc
-
-	logger *grpclog.PrefixLogger
+	closed    *grpcsync.Event
+	logger    *grpclog.PrefixLogger
 
 	// edsBalancer continuously monitor the channels below, and will handle events from them in sync.
 	grpcUpdate        chan interface{}
@@ -135,7 +131,7 @@ func (x *edsBalancer) run() {
 			x.childPolicyUpdate.Load()
 			u := update.(*balancerStateWithPriority)
 			x.edsImpl.updateState(u.priority, u.s)
-		case <-x.ctx.Done():
+		case <-x.closed.Done():
 			x.client.close()
 			x.edsImpl.close()
 			return
@@ -227,21 +223,21 @@ func (x *edsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 	}
 	select {
 	case x.grpcUpdate <- update:
-	case <-x.ctx.Done():
+	case <-x.closed.Done():
 	}
 }
 
 func (x *edsBalancer) ResolverError(err error) {
 	select {
 	case x.grpcUpdate <- err:
-	case <-x.ctx.Done():
+	case <-x.closed.Done():
 	}
 }
 
 func (x *edsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	select {
 	case x.grpcUpdate <- &s:
-	case <-x.ctx.Done():
+	case <-x.closed.Done():
 	}
 	return nil
 }
@@ -254,7 +250,7 @@ type edsUpdate struct {
 func (x *edsBalancer) handleEDSUpdate(resp xdsclient.EndpointsUpdate, err error) {
 	select {
 	case x.xdsClientUpdate <- &edsUpdate{resp: resp, err: err}:
-	case <-x.ctx.Done():
+	case <-x.closed.Done():
 	}
 }
 
@@ -271,6 +267,6 @@ func (x *edsBalancer) enqueueChildBalancerState(p priorityType, s balancer.State
 }
 
 func (x *edsBalancer) Close() {
-	x.cancel()
+	x.closed.Fire()
 	x.logger.Infof("Shutdown")
 }
