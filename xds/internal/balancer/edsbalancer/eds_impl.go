@@ -63,7 +63,7 @@ type balancerGroupWithConfig struct {
 type edsBalancerImpl struct {
 	cc        balancer.ClientConn
 	logger    *grpclog.PrefixLogger
-	xdsClient *xdsclientWrapper // To fetch the load.Store from.
+	xdsClient *xdsClientWrapper // To fetch the load.Store from.
 
 	enqueueChildBalancerStateUpdate func(priorityType, balancer.State)
 
@@ -98,7 +98,7 @@ type edsBalancerImpl struct {
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
-func newEDSBalancerImpl(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), xdsClient *xdsclientWrapper, logger *grpclog.PrefixLogger) *edsBalancerImpl {
+func newEDSBalancerImpl(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), xdsClient *xdsClientWrapper, logger *grpclog.PrefixLogger) *edsBalancerImpl {
 	edsImpl := &edsBalancerImpl{
 		cc:                 cc,
 		logger:             logger,

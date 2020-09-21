@@ -39,7 +39,7 @@ const (
 )
 
 var (
-	newEDSBalancer = func(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), xdsClient *xdsclientWrapper, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
+	newEDSBalancer = func(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), xdsClient *xdsClientWrapper, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
 		return newEDSBalancerImpl(cc, enqueueState, xdsClient, logger)
 	}
 )
@@ -116,7 +116,7 @@ type edsBalancer struct {
 	xdsClientUpdate   chan *edsUpdate
 	childPolicyUpdate *buffer.Unbounded
 
-	client  *xdsclientWrapper // may change when passed a different service config
+	client  *xdsClientWrapper // may change when passed a different service config
 	config  *EDSConfig        // may change when passed a different service config
 	edsImpl edsBalancerImplInterface
 }

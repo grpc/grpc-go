@@ -696,7 +696,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	// implements the LoadStore() method to return the underlying load.Store to
 	// be used.
 	loadStore := &load.Store{}
-	cw := &xdsclientWrapper{
+	cw := &xdsClientWrapper{
 		xdsClient: &loadStoreWrapper{ls: loadStore},
 	}
 

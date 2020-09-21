@@ -229,7 +229,7 @@ func waitForNewEDSLB(t *testing.T, ch *testutils.Channel) *fakeEDSBalancer {
 // cleanup.
 func setup(edsLBCh *testutils.Channel, xdsClientCh *testutils.Channel) func() {
 	origNewEDSBalancer := newEDSBalancer
-	newEDSBalancer = func(cc balancer.ClientConn, enqueue func(priorityType, balancer.State), _ *xdsclientWrapper, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
+	newEDSBalancer = func(cc balancer.ClientConn, enqueue func(priorityType, balancer.State), _ *xdsClientWrapper, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
 		edsLB := newFakeEDSBalancer(cc)
 		defer func() { edsLBCh.Send(edsLB) }()
 		return edsLB
