@@ -364,7 +364,7 @@ func genUnimplementedServer(gen *protogen.Plugin, file *protogen.File, g *protog
 		if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
 			nilArg = "nil,"
 		}
-		g.P("func (Unimplemented", serverType, ") ", methodSignature(g, method), "{")
+		g.P("func (*Unimplemented", serverType, ") ", methodSignature(g, method), "{")
 		g.P("return ", nilArg, statusPackage.Ident("Errorf"), "(", codesPackage.Ident("Unimplemented"), `, "method `, method.GoName, ` not implemented")`)
 		g.P("}")
 	}
