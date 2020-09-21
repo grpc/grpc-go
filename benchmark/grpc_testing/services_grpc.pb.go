@@ -253,48 +253,6 @@ func RegisterBenchmarkServiceService(s grpc.ServiceRegistrar, srv *BenchmarkServ
 	s.RegisterService(&sd, nil)
 }
 
-// NewBenchmarkServiceService creates a new BenchmarkServiceService containing the
-// implemented methods of the BenchmarkService service in s.  Any unimplemented
-// methods will result in the gRPC server returning an UNIMPLEMENTED status to the client.
-// This includes situations where the method handler is misspelled or has the wrong
-// signature.  For this reason, this function should be used with great care and
-// is not recommended to be used by most users.
-func NewBenchmarkServiceService(s interface{}) *BenchmarkServiceService {
-	ns := &BenchmarkServiceService{}
-	if h, ok := s.(interface {
-		UnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error)
-	}); ok {
-		ns.UnaryCall = h.UnaryCall
-	}
-	if h, ok := s.(interface {
-		StreamingCall(BenchmarkService_StreamingCallServer) error
-	}); ok {
-		ns.StreamingCall = h.StreamingCall
-	}
-	if h, ok := s.(interface {
-		UnconstrainedStreamingCall(BenchmarkService_UnconstrainedStreamingCallServer) error
-	}); ok {
-		ns.UnconstrainedStreamingCall = h.UnconstrainedStreamingCall
-	}
-	return ns
-}
-
-// UnstableBenchmarkServiceService is the service API for BenchmarkService service.
-// New methods may be added to this interface if they are added to the service
-// definition, which is not a backward-compatible change.  For this reason,
-// use of this type is not recommended.
-type UnstableBenchmarkServiceService interface {
-	// One request followed by one response.
-	// The server returns the client payload as-is.
-	UnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error)
-	// One request followed by one response.
-	// The server returns the client payload as-is.
-	StreamingCall(BenchmarkService_StreamingCallServer) error
-	// Unconstrainted streaming.
-	// Both server and client keep sending & receiving simultaneously.
-	UnconstrainedStreamingCall(BenchmarkService_UnconstrainedStreamingCallServer) error
-}
-
 // WorkerServiceClient is the client API for WorkerService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -590,60 +548,4 @@ func RegisterWorkerServiceService(s grpc.ServiceRegistrar, srv *WorkerServiceSer
 	}
 
 	s.RegisterService(&sd, nil)
-}
-
-// NewWorkerServiceService creates a new WorkerServiceService containing the
-// implemented methods of the WorkerService service in s.  Any unimplemented
-// methods will result in the gRPC server returning an UNIMPLEMENTED status to the client.
-// This includes situations where the method handler is misspelled or has the wrong
-// signature.  For this reason, this function should be used with great care and
-// is not recommended to be used by most users.
-func NewWorkerServiceService(s interface{}) *WorkerServiceService {
-	ns := &WorkerServiceService{}
-	if h, ok := s.(interface {
-		RunServer(WorkerService_RunServerServer) error
-	}); ok {
-		ns.RunServer = h.RunServer
-	}
-	if h, ok := s.(interface {
-		RunClient(WorkerService_RunClientServer) error
-	}); ok {
-		ns.RunClient = h.RunClient
-	}
-	if h, ok := s.(interface {
-		CoreCount(context.Context, *CoreRequest) (*CoreResponse, error)
-	}); ok {
-		ns.CoreCount = h.CoreCount
-	}
-	if h, ok := s.(interface {
-		QuitWorker(context.Context, *Void) (*Void, error)
-	}); ok {
-		ns.QuitWorker = h.QuitWorker
-	}
-	return ns
-}
-
-// UnstableWorkerServiceService is the service API for WorkerService service.
-// New methods may be added to this interface if they are added to the service
-// definition, which is not a backward-compatible change.  For this reason,
-// use of this type is not recommended.
-type UnstableWorkerServiceService interface {
-	// Start server with specified workload.
-	// First request sent specifies the ServerConfig followed by ServerStatus
-	// response. After that, a "Mark" can be sent anytime to request the latest
-	// stats. Closing the stream will initiate shutdown of the test server
-	// and once the shutdown has finished, the OK status is sent to terminate
-	// this RPC.
-	RunServer(WorkerService_RunServerServer) error
-	// Start client with specified workload.
-	// First request sent specifies the ClientConfig followed by ClientStatus
-	// response. After that, a "Mark" can be sent anytime to request the latest
-	// stats. Closing the stream will initiate shutdown of the test client
-	// and once the shutdown has finished, the OK status is sent to terminate
-	// this RPC.
-	RunClient(WorkerService_RunClientServer) error
-	// Just return the core count - unary call
-	CoreCount(context.Context, *CoreRequest) (*CoreResponse, error)
-	// Quit this worker
-	QuitWorker(context.Context, *Void) (*Void, error)
 }

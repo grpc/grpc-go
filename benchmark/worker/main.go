@@ -79,7 +79,14 @@ type workerServer struct {
 	serverPort int
 }
 
-var _ testpb.UnstableWorkerServiceService = (*workerServer)(nil)
+func (s *workerServer) Svc() *testpb.WorkerServiceService {
+	return &testpb.WorkerServiceService{
+		RunServer:  s.RunServer,
+		RunClient:  s.RunClient,
+		CoreCount:  s.CoreCount,
+		QuitWorker: s.QuitWorker,
+	}
+}
 
 func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) error {
 	var bs *benchmarkServer
@@ -210,10 +217,10 @@ func main() {
 
 	s := grpc.NewServer()
 	stop := make(chan bool)
-	testpb.RegisterWorkerServiceService(s, testpb.NewWorkerServiceService(&workerServer{
+	testpb.RegisterWorkerServiceService(s, (&workerServer{
 		stop:       stop,
 		serverPort: *serverPort,
-	}))
+	}).Svc())
 
 	go func() {
 		<-stop

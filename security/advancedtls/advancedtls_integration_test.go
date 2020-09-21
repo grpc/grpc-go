@@ -130,11 +130,8 @@ func (cs *certStore) loadCerts() error {
 	return nil
 }
 
-// serverImpl is used to implement pb.GreeterServer.
-type serverImpl struct{}
-
-// SayHello is a simple implementation of pb.GreeterServer.
-func (s *serverImpl) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+// sayHello is a simple implementation of the pb.GreeterServer SayHello method.
+func sayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
@@ -388,11 +385,13 @@ func (s) TestEnd2End(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			// Start a server using ServerOptions in another goroutine.
 			serverOptions := &ServerOptions{
-				Certificates:    test.serverCert,
-				GetCertificates: test.serverGetCert,
-				RootCertificateOptions: RootCertificateOptions{
-					RootCACerts: test.serverRoot,
-					GetRootCAs:  test.serverGetRoot,
+				IdentityOptions: IdentityCertificateOptions{
+					Certificates:                     test.serverCert,
+					GetIdentityCertificatesForServer: test.serverGetCert,
+				},
+				RootOptions: RootCertificateOptions{
+					RootCACerts:         test.serverRoot,
+					GetRootCertificates: test.serverGetRoot,
 				},
 				RequireClientCert: true,
 				VerifyPeer:        test.serverVerifyFunc,
@@ -409,15 +408,17 @@ func (s) TestEnd2End(t *testing.T) {
 				t.Fatalf("failed to listen: %v", err)
 			}
 			defer lis.Close()
-			pb.RegisterGreeterService(s, pb.NewGreeterService(&serverImpl{}))
+			pb.RegisterGreeterService(s, &pb.GreeterService{SayHello: sayHello})
 			go s.Serve(lis)
 			clientOptions := &ClientOptions{
-				Certificates:         test.clientCert,
-				GetClientCertificate: test.clientGetCert,
-				VerifyPeer:           test.clientVerifyFunc,
-				RootCertificateOptions: RootCertificateOptions{
-					RootCACerts: test.clientRoot,
-					GetRootCAs:  test.clientGetRoot,
+				IdentityOptions: IdentityCertificateOptions{
+					Certificates:                     test.clientCert,
+					GetIdentityCertificatesForClient: test.clientGetCert,
+				},
+				VerifyPeer: test.clientVerifyFunc,
+				RootOptions: RootCertificateOptions{
+					RootCACerts:         test.clientRoot,
+					GetRootCertificates: test.clientGetRoot,
 				},
 				VType: test.clientVType,
 			}

@@ -20,12 +20,12 @@
 package resolver
 
 import (
-	"context"
 	"fmt"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 
 	xdsinternal "google.golang.org/grpc/xds/internal"
@@ -62,19 +62,11 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 	r := &xdsResolver{
 		target:   t,
 		cc:       cc,
+		closed:   grpcsync.NewEvent(),
 		updateCh: make(chan suWithError, 1),
 	}
 	r.logger = prefixLogger((r))
 	r.logger.Infof("Creating resolver for target: %+v", t)
-
-	if config.Creds == nil {
-		// TODO: Once we start supporting a mechanism to register credential
-		// types, a failure to find the credential type mentioned in the
-		// bootstrap file should result in a failure, and not in using
-		// credentials from the parent channel (passed through the
-		// resolver.BuildOptions).
-		config.Creds = r.defaultDialCreds(config.BalancerName, rbo)
-	}
 
 	var dopts []grpc.DialOption
 	if rbo.Dialer != nil {
@@ -86,7 +78,8 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 		return nil, fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}
 	r.client = client
-	r.ctx, r.cancelCtx = context.WithCancel(context.Background())
+
+	// Register a watch on the xdsClient for the user's dial target.
 	cancelWatch := r.client.WatchService(r.target.Endpoint, r.handleServiceUpdate)
 	r.logger.Infof("Watch started on resource name %v with xds-client %p", r.target.Endpoint, r.client)
 	r.cancelWatch = func() {
@@ -96,28 +89,6 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 
 	go r.run()
 	return r, nil
-}
-
-// defaultDialCreds builds a DialOption containing the credentials to be used
-// while talking to the xDS server (this is done only if the xds bootstrap
-// process does not return any credentials to use). If the parent channel
-// contains DialCreds, we use it as is. If it contains a CredsBundle, we use
-// just the transport credentials from the bundle. If we don't find any
-// credentials on the parent channel, we resort to using an insecure channel.
-func (r *xdsResolver) defaultDialCreds(balancerName string, rbo resolver.BuildOptions) grpc.DialOption {
-	switch {
-	case rbo.DialCreds != nil:
-		if err := rbo.DialCreds.OverrideServerName(balancerName); err != nil {
-			r.logger.Errorf("Failed to override server name in credentials: %v, using Insecure", err)
-			return grpc.WithInsecure()
-		}
-		return grpc.WithTransportCredentials(rbo.DialCreds)
-	case rbo.CredsBundle != nil:
-		return grpc.WithTransportCredentials(rbo.CredsBundle.TransportCredentials())
-	default:
-		r.logger.Warningf("No credentials available, using Insecure")
-		return grpc.WithInsecure()
-	}
 }
 
 // Name helps implement the resolver.Builder interface.
@@ -145,10 +116,9 @@ type suWithError struct {
 // (which performs LDS/RDS queries for the same), and passes the received
 // updates to the ClientConn.
 type xdsResolver struct {
-	ctx       context.Context
-	cancelCtx context.CancelFunc
-	target    resolver.Target
-	cc        resolver.ClientConn
+	target resolver.Target
+	cc     resolver.ClientConn
+	closed *grpcsync.Event
 
 	logger *grpclog.PrefixLogger
 
@@ -176,7 +146,8 @@ type xdsResolver struct {
 func (r *xdsResolver) run() {
 	for {
 		select {
-		case <-r.ctx.Done():
+		case <-r.closed.Done():
+			return
 		case update := <-r.updateCh:
 			if update.err != nil {
 				r.logger.Warningf("Watch error on resource %v from xds-client %p, %v", r.target.Endpoint, r.client, update.err)
@@ -214,7 +185,7 @@ func (r *xdsResolver) run() {
 // the received update to the update channel, which is picked by the run
 // goroutine.
 func (r *xdsResolver) handleServiceUpdate(su xdsclient.ServiceUpdate, err error) {
-	if r.ctx.Err() != nil {
+	if r.closed.HasFired() {
 		// Do not pass updates to the ClientConn once the resolver is closed.
 		return
 	}
@@ -228,6 +199,6 @@ func (*xdsResolver) ResolveNow(o resolver.ResolveNowOptions) {}
 func (r *xdsResolver) Close() {
 	r.cancelWatch()
 	r.client.Close()
-	r.cancelCtx()
+	r.closed.Fire()
 	r.logger.Infof("Shutdown")
 }

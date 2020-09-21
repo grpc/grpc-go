@@ -165,33 +165,3 @@ func RegisterSearchServiceService(s grpc.ServiceRegistrar, srv *SearchServiceSer
 
 	s.RegisterService(&sd, nil)
 }
-
-// NewSearchServiceService creates a new SearchServiceService containing the
-// implemented methods of the SearchService service in s.  Any unimplemented
-// methods will result in the gRPC server returning an UNIMPLEMENTED status to the client.
-// This includes situations where the method handler is misspelled or has the wrong
-// signature.  For this reason, this function should be used with great care and
-// is not recommended to be used by most users.
-func NewSearchServiceService(s interface{}) *SearchServiceService {
-	ns := &SearchServiceService{}
-	if h, ok := s.(interface {
-		Search(context.Context, *SearchRequest) (*SearchResponse, error)
-	}); ok {
-		ns.Search = h.Search
-	}
-	if h, ok := s.(interface {
-		StreamingSearch(SearchService_StreamingSearchServer) error
-	}); ok {
-		ns.StreamingSearch = h.StreamingSearch
-	}
-	return ns
-}
-
-// UnstableSearchServiceService is the service API for SearchService service.
-// New methods may be added to this interface if they are added to the service
-// definition, which is not a backward-compatible change.  For this reason,
-// use of this type is not recommended.
-type UnstableSearchServiceService interface {
-	Search(context.Context, *SearchRequest) (*SearchResponse, error)
-	StreamingSearch(SearchService_StreamingSearchServer) error
-}
