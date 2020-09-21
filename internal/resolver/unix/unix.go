@@ -16,6 +16,7 @@
  *
  */
 
+// Package unix implements a resolver for unix targets.
 package unix
 
 import (
