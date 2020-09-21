@@ -27,7 +27,7 @@ const negativeOneUInt64 = ^uint64(0)
 // A pair of cluster and service name. The same cluster can be used by multiple
 // services, and one service can use multiple clusters. So we need a pair with
 // both name to accurately indicate where the load belongs.
-type clusterAndServiceNames struct {
+type storeKey struct {
 	cluster string
 	service string
 }
@@ -36,13 +36,13 @@ type clusterAndServiceNames struct {
 // LRS. It is safe for concurrent use.
 type Store struct {
 	mu       sync.RWMutex
-	clusters map[clusterAndServiceNames]*PerClusterStore
+	clusters map[storeKey]*PerClusterStore
 }
 
 // NewStore creates a Store.
 func NewStore() *Store {
 	return &Store{
-		clusters: make(map[clusterAndServiceNames]*PerClusterStore),
+		clusters: make(map[storeKey]*PerClusterStore),
 	}
 }
 
@@ -53,7 +53,7 @@ func (ls *Store) PerCluster(clusterName, serviceName string) *PerClusterStore {
 		return nil
 	}
 
-	k := clusterAndServiceNames{
+	k := storeKey{
 		cluster: clusterName,
 		service: serviceName,
 	}

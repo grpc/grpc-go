@@ -208,12 +208,11 @@ func (c *xdsClientWrapper) updateXDSClient(config *EDSConfig, attr *attributes.A
 //
 // This usually means load report needs to be restarted, but this function does
 // NOT do that. Caller needs to call startLoadReport separately.
-func (c *xdsClientWrapper) startEndpointsWatch(nameToWatch string) {
+func (c *xdsClientWrapper) startEndpointsWatch() {
 	if c.xdsClient == nil {
 		return
 	}
 
-	c.edsServiceName = nameToWatch
 	if c.cancelEndpointsWatch != nil {
 		c.cancelEndpointsWatch()
 	}
@@ -252,7 +251,6 @@ func (c *xdsClientWrapper) loadStore() load.PerClusterReporter {
 	if c == nil || c.load.store == nil {
 		return nil
 	}
-	// return c.xdsClient.LoadStore().PerCluster(c.edsServiceName, "")
 	return c.load
 }
 
@@ -265,7 +263,8 @@ func (c *xdsClientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attr
 	// - the xds_client is updated
 	// - the xds_client didn't change, but the edsServiceName changed
 	if clientChanged || c.edsServiceName != config.EDSServiceName {
-		c.startEndpointsWatch(config.EDSServiceName)
+		c.edsServiceName = config.EDSServiceName
+		c.startEndpointsWatch()
 		// TODO: this update for the LRS service name is too early. It should
 		// only apply to the new EDS response. But this is applied to the RPCs
 		// before the new EDS response. To fully fix this, the EDS balancer
