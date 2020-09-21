@@ -143,7 +143,7 @@ type ServerReflectionServer interface {
 type UnimplementedServerReflectionServer struct {
 }
 
-func (*UnimplementedServerReflectionServer) ServerReflectionInfo(ServerReflection_ServerReflectionInfoServer) error {
+func (UnimplementedServerReflectionServer) ServerReflectionInfo(ServerReflection_ServerReflectionInfoServer) error {
 	return status.Errorf(codes.Unimplemented, "method ServerReflectionInfo not implemented")
 }
 

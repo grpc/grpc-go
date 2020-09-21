@@ -109,7 +109,7 @@ type MeshCertificateServiceServer interface {
 type UnimplementedMeshCertificateServiceServer struct {
 }
 
-func (*UnimplementedMeshCertificateServiceServer) CreateCertificate(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error) {
+func (UnimplementedMeshCertificateServiceServer) CreateCertificate(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateCertificate not implemented")
 }
 

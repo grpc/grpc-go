@@ -106,7 +106,7 @@ type RouteLookupServiceServer interface {
 type UnimplementedRouteLookupServiceServer struct {
 }
 
-func (*UnimplementedRouteLookupServiceServer) RouteLookup(context.Context, *RouteLookupRequest) (*RouteLookupResponse, error) {
+func (UnimplementedRouteLookupServiceServer) RouteLookup(context.Context, *RouteLookupRequest) (*RouteLookupResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RouteLookup not implemented")
 }
 

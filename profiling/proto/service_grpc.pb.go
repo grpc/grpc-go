@@ -154,10 +154,10 @@ type ProfilingServer interface {
 type UnimplementedProfilingServer struct {
 }
 
-func (*UnimplementedProfilingServer) Enable(context.Context, *EnableRequest) (*EnableResponse, error) {
+func (UnimplementedProfilingServer) Enable(context.Context, *EnableRequest) (*EnableResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Enable not implemented")
 }
-func (*UnimplementedProfilingServer) GetStreamStats(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error) {
+func (UnimplementedProfilingServer) GetStreamStats(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStreamStats not implemented")
 }
 
