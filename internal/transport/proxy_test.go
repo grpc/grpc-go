@@ -18,7 +18,7 @@
  *
  */
 
-package grpc
+package transport
 
 import (
 	"bufio"
@@ -143,7 +143,7 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 			return net.DialTimeout("tcp", addr, time.Until(deadline))
 		}
 		return net.Dial("tcp", addr)
-	})
+	}, "test")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	c, err := dialer(ctx, blis.Addr().String())
@@ -173,9 +173,6 @@ func (s) TestHTTPConnect(t *testing.T) {
 			if req.Method != http.MethodConnect {
 				return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
 			}
-			if req.UserAgent() != grpcUA {
-				return fmt.Errorf("unexpect user agent %q, want %q", req.UserAgent(), grpcUA)
-			}
 			return nil
 		},
 	)
@@ -194,9 +191,6 @@ func (s) TestHTTPConnectBasicAuth(t *testing.T) {
 		func(req *http.Request) error {
 			if req.Method != http.MethodConnect {
 				return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
-			}
-			if req.UserAgent() != grpcUA {
-				return fmt.Errorf("unexpect user agent %q, want %q", req.UserAgent(), grpcUA)
 			}
 			wantProxyAuthStr := "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
 			if got := req.Header.Get(proxyAuthHeaderKey); got != wantProxyAuthStr {

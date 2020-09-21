@@ -45,9 +45,6 @@ func (s) TestDialParseTargetUnknownScheme(t *testing.T) {
 	}{
 		{"/unix/socket/address", "/unix/socket/address"},
 
-		// Special test for "unix:///".
-		{"unix:///unix/socket/address", "unix:///unix/socket/address"},
-
 		// For known scheme.
 		{"passthrough://a.server.com/google.com", "google.com"},
 	} {

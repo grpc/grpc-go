@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net"
 	"reflect"
 	"strings"
 	"sync"
@@ -48,6 +47,7 @@ import (
 	_ "google.golang.org/grpc/balancer/roundrobin"           // To register roundrobin.
 	_ "google.golang.org/grpc/internal/resolver/dns"         // To register dns resolver.
 	_ "google.golang.org/grpc/internal/resolver/passthrough" // To register passthrough resolver.
+	_ "google.golang.org/grpc/internal/resolver/unix"        // To register unix resolver.
 )
 
 const (
@@ -191,21 +191,14 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 	cc.mkp = cc.dopts.copts.KeepaliveParams
 
-	if cc.dopts.copts.Dialer == nil {
-		cc.dopts.copts.Dialer = func(ctx context.Context, addr string) (net.Conn, error) {
-			network, addr := parseDialTarget(addr)
-			return (&net.Dialer{}).DialContext(ctx, network, addr)
-		}
-		if cc.dopts.withProxy {
-			cc.dopts.copts.Dialer = newProxyDialer(cc.dopts.copts.Dialer)
-		}
-	}
+	cc.dopts.copts.UseProxy = cc.dopts.withProxy
 
 	if cc.dopts.copts.UserAgent != "" {
 		cc.dopts.copts.UserAgent += " " + grpcUA
 	} else {
 		cc.dopts.copts.UserAgent = grpcUA
 	}
+	cc.dopts.copts.GrpcUA = grpcUA
 
 	if cc.dopts.timeout > 0 {
 		var cancel context.CancelFunc

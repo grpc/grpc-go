@@ -137,11 +137,23 @@ type http2Client struct {
 	connectionID uint64
 }
 
-func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
-	if fn != nil {
-		return fn(ctx, addr)
+func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr resolver.Address, useProxy bool, grpcUA string) (net.Conn, error) {
+	if fn == nil {
+		fn = func(fCtx context.Context, fAddr string) (net.Conn, error) {
+			if networkType := addr.Attributes.Value("network_type"); networkType != nil {
+				if networkTypeStr, ok := networkType.(string); ok {
+					return (&net.Dialer{}).DialContext(ctx, networkTypeStr, addr.Addr)
+				}
+				return nil, fmt.Errorf("network_type %v not of type string", networkType)
+			}
+			network, fAddr := parseDialTarget(fAddr)
+			return (&net.Dialer{}).DialContext(ctx, network, fAddr)
+		}
 	}
-	return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	if useProxy {
+		fn = newProxyDialer(fn, grpcUA)
+	}
+	return fn(ctx, addr.Addr)
 }
 
 func isTemporary(err error) bool {
@@ -172,7 +184,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		}
 	}()
 
-	conn, err := dial(connectCtx, opts.Dialer, addr.Addr)
+	conn, err := dial(connectCtx, opts.Dialer, addr, opts.UseProxy, opts.GrpcUA)
 	if err != nil {
 		if opts.FailOnNonTempDialError {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: error while dialing: %v", err)

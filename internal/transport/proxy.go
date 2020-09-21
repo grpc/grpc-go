@@ -16,7 +16,7 @@
  *
  */
 
-package grpc
+package transport
 
 import (
 	"bufio"
@@ -76,7 +76,7 @@ func basicAuth(username, password string) string {
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
-func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr string, proxyURL *url.URL) (_ net.Conn, err error) {
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr string, proxyURL *url.URL, grpcUA string) (_ net.Conn, err error) {
 	defer func() {
 		if err != nil {
 			conn.Close()
@@ -118,7 +118,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr stri
 // newProxyDialer returns a dialer that connects to proxy first if necessary.
 // The returned dialer checks if a proxy is necessary, dial to the proxy with the
 // provided dialer, does HTTP CONNECT handshake and returns the connection.
-func newProxyDialer(dialer func(context.Context, string) (net.Conn, error)) func(context.Context, string) (net.Conn, error) {
+func newProxyDialer(dialer func(context.Context, string) (net.Conn, error), grpcUA string) func(context.Context, string) (net.Conn, error) {
 	return func(ctx context.Context, addr string) (conn net.Conn, err error) {
 		var newAddr string
 		proxyURL, err := mapAddress(ctx, addr)
@@ -137,7 +137,7 @@ func newProxyDialer(dialer func(context.Context, string) (net.Conn, error)) func
 		}
 		if proxyURL != nil {
 			// proxy is disabled if proxyURL is nil.
-			conn, err = doHTTPConnectHandshake(ctx, conn, addr, proxyURL)
+			conn, err = doHTTPConnectHandshake(ctx, conn, addr, proxyURL, grpcUA)
 		}
 		return
 	}
