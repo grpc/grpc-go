@@ -37,6 +37,7 @@ import (
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
 
@@ -52,22 +53,6 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
-}
-
-type testClientConn struct {
-	balancer.ClientConn
-
-	newPickerCh *testutils.Channel // The last picker updated.
-}
-
-func newTestClientConn() *testClientConn {
-	return &testClientConn{
-		newPickerCh: testutils.NewChannelWithSize(1),
-	}
-}
-
-func (tcc *testClientConn) UpdateState(bs balancer.State) {
-	tcc.newPickerCh.Replace(bs)
 }
 
 // cdsWatchInfo wraps the update and the error sent in a CDS watch callback.
@@ -226,9 +211,9 @@ func edsCCS(service string, enableLRS bool, xdsClient interface{}) balancer.Clie
 
 // setup creates a cdsBalancer and an edsBalancer (and overrides the
 // newEDSBalancer function to return it), and also returns a cleanup function.
-func setup() (*cdsBalancer, *testEDSBalancer, *testClientConn, func()) {
+func setup(t *testing.T) (*cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, func()) {
 	builder := cdsBB{}
-	tcc := newTestClientConn()
+	tcc := xdstestutils.NewTestClientConn(t)
 	cdsB := builder.Build(tcc, balancer.BuildOptions{})
 
 	edsB := newTestEDSBalancer()
@@ -244,11 +229,11 @@ func setup() (*cdsBalancer, *testEDSBalancer, *testClientConn, func()) {
 
 // setupWithWatch does everything that setup does, and also pushes a ClientConn
 // update to the cdsBalancer and waits for a CDS watch call to be registered.
-func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *testClientConn, func()) {
+func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, func()) {
 	t.Helper()
 
 	xdsC := fakeclient.NewClient()
-	cdsB, edsB, tcc, cancel := setup()
+	cdsB, edsB, tcc, cancel := setup(t)
 	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != nil {
 		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
 	}
@@ -316,7 +301,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cdsB, _, _, cancel := setup()
+			cdsB, _, _, cancel := setup(t)
 			defer func() {
 				cancel()
 				cdsB.Close()
@@ -345,7 +330,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 // TestUpdateClientConnStateAfterClose invokes the UpdateClientConnState method
 // on the cdsBalancer after close and verifies that it returns an error.
 func (s) TestUpdateClientConnStateAfterClose(t *testing.T) {
-	cdsB, _, _, cancel := setup()
+	cdsB, _, _, cancel := setup(t)
 	defer cancel()
 	cdsB.Close()
 
@@ -435,13 +420,15 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	if err := edsB.waitForResolverError(err1); err == nil {
 		t.Fatal("eds balancer shouldn't get error (shouldn't be built yet)")
 	}
-	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
-	state, err := tcc.newPickerCh.Receive(ctx)
-	if err != nil {
+
+	var picker balancer.Picker
+	timer := time.NewTimer(defaultTestTimeout)
+	select {
+	case <-timer.C:
 		t.Fatalf("failed to get picker, expect an error picker")
+	case picker = <-tcc.NewPickerCh:
+		timer.Stop()
 	}
-	picker := state.(balancer.State).Picker
 	if _, perr := picker.Pick(balancer.PickInfo{}); perr == nil {
 		t.Fatalf("want picker to always fail, got nil")
 	}
@@ -500,13 +487,15 @@ func (s) TestResolverError(t *testing.T) {
 	if err := edsB.waitForResolverError(err1); err == nil {
 		t.Fatal("eds balancer shouldn't get error (shouldn't be built yet)")
 	}
-	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
-	state, err := tcc.newPickerCh.Receive(ctx)
-	if err != nil {
+
+	var picker balancer.Picker
+	timer := time.NewTimer(defaultTestTimeout)
+	select {
+	case <-timer.C:
 		t.Fatalf("failed to get picker, expect an error picker")
+	case picker = <-tcc.NewPickerCh:
+		timer.Stop()
 	}
-	picker := state.(balancer.State).Picker
 	if _, perr := picker.Pick(balancer.PickInfo{}); perr == nil {
 		t.Fatalf("want picker to always fail, got nil")
 	}
