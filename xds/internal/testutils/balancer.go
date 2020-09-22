@@ -28,9 +28,9 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// DefaultTestSubConnsCount is the number of TestSubConns initialized as part of
+// TestSubConnsCount is the number of TestSubConns initialized as part of
 // package init.
-const DefaultTestSubConnsCount = 16
+const TestSubConnsCount = 16
 
 // testingLogger wraps the logging methods from testing.T.
 type testingLogger interface {
@@ -42,7 +42,7 @@ type testingLogger interface {
 var TestSubConns []*TestSubConn
 
 func init() {
-	for i := 0; i < DefaultTestSubConnsCount; i++ {
+	for i := 0; i < TestSubConnsCount; i++ {
 		TestSubConns = append(TestSubConns, &TestSubConn{
 			id: fmt.Sprintf("sc%d", i),
 		})
