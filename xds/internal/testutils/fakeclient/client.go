@@ -214,6 +214,6 @@ func NewClientWithName(name string) *Client {
 		edsCancelCh:  testutils.NewChannel(),
 		loadReportCh: testutils.NewChannel(),
 		closeCh:      testutils.NewChannel(),
-		loadStore:    &load.Store{},
+		loadStore:    load.NewStore(),
 	}
 }

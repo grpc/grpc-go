@@ -65,7 +65,8 @@ func TestLoadReporting(t *testing.T) {
 			Attributes: attributes.New(xdsinternal.XDSClientID, xdsC),
 		},
 		BalancerConfig: &lbConfig{
-			EdsServiceName:             testClusterName,
+			ClusterName:                testClusterName,
+			EdsServiceName:             testServiceName,
 			LrsLoadReportingServerName: testLRSServerName,
 			Locality:                   testLocality,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
@@ -115,7 +116,7 @@ func TestLoadReporting(t *testing.T) {
 	if loadStore == nil {
 		t.Fatal("loadStore is nil in xdsClient")
 	}
-	sd := loadStore.Stats()
+	sd := loadStore.PerCluster(testClusterName, testServiceName).Stats()
 	localityData, ok := sd.LocalityStats[testLocality.String()]
 	if !ok {
 		t.Fatalf("loads for %v not found in store", testLocality)

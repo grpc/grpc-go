@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/load"
 )
 
 // TODO: make this a environment variable?
@@ -450,20 +451,13 @@ func (edsImpl *edsBalancerImpl) close() {
 	}
 }
 
-// dropReporter wraps the single method used by the dropPicker to report dropped
-// calls to the load store.
-type dropReporter interface {
-	// CallDropped reports the drop of one RPC with the given category.
-	CallDropped(category string)
-}
-
 type dropPicker struct {
 	drops     []*dropper
 	p         balancer.Picker
-	loadStore dropReporter
+	loadStore load.PerClusterReporter
 }
 
-func newDropPicker(p balancer.Picker, drops []*dropper, loadStore dropReporter) *dropPicker {
+func newDropPicker(p balancer.Picker, drops []*dropper, loadStore load.PerClusterReporter) *dropPicker {
 	return &dropPicker{
 		drops:     drops,
 		p:         p,

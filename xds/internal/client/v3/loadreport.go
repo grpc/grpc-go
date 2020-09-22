@@ -121,7 +121,7 @@ func (v3c *client) SendLoadStatsRequest(s grpc.ClientStream, clusterName string)
 		localityStats []*v3endpointpb.UpstreamLocalityStats
 	)
 
-	sd := v3c.loadStore.Stats()
+	sd := v3c.loadStore.PerCluster(clusterName, "").Stats()
 	for category, count := range sd.Drops {
 		droppedReqs = append(droppedReqs, &v3endpointpb.ClusterStats_DroppedRequests{
 			Category:     category,
