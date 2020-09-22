@@ -236,14 +236,7 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 	cfg := &tls.Config{
 		Certificates:       certs,
 		InsecureSkipVerify: true,
-	}
-	var keyUsages []x509.ExtKeyUsage
-	if c.isClient {
-		cfg.RootCAs = roots
-		keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
-	} else {
-		cfg.ClientCAs = roots
-		keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+		RootCAs:            roots,
 	}
 	cfg.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		// Parse all raw certificates presented by the peer.
@@ -265,7 +258,7 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 		opts := x509.VerifyOptions{
 			Roots:         roots,
 			Intermediates: intermediates,
-			KeyUsages:     keyUsages,
+			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		}
 		if _, err := certs[0].Verify(opts); err != nil {
 			return err
