@@ -77,7 +77,7 @@ type HandshakeInfo struct {
 	mu               sync.Mutex
 	rootProvider     certprovider.Provider
 	identityProvider certprovider.Provider
-	acceptedSANs     []string // Only on the client side.
+	acceptedSANs     map[string]bool // Only on the client side.
 }
 
 // SetRootCertProvider updates the root certificate provider.
@@ -97,7 +97,10 @@ func (chi *HandshakeInfo) SetIdentityCertProvider(identity certprovider.Provider
 // SetAcceptedSANs updates the list of accepted SANs.
 func (chi *HandshakeInfo) SetAcceptedSANs(sans []string) {
 	chi.mu.Lock()
-	chi.acceptedSANs = sans
+	chi.acceptedSANs = make(map[string]bool)
+	for _, san := range sans {
+		chi.acceptedSANs[san] = true
+	}
 	chi.mu.Unlock()
 }
 
@@ -135,10 +138,8 @@ func (chi *HandshakeInfo) matchingSANExists(cert *x509.Certificate) bool {
 	chi.mu.Lock()
 	defer chi.mu.Unlock()
 	for _, san := range sans {
-		for _, asan := range chi.acceptedSANs {
-			if san == asan {
-				return true
-			}
+		if chi.acceptedSANs[san] {
+			return true
 		}
 	}
 	return false
@@ -147,10 +148,14 @@ func (chi *HandshakeInfo) matchingSANExists(cert *x509.Certificate) bool {
 // NewHandshakeInfo returns a new instance of HandshakeInfo with the given root
 // and identity certificate providers.
 func NewHandshakeInfo(root, identity certprovider.Provider, sans ...string) *HandshakeInfo {
+	acceptedSANs := make(map[string]bool)
+	for _, san := range sans {
+		acceptedSANs[san] = true
+	}
 	return &HandshakeInfo{
 		rootProvider:     root,
 		identityProvider: identity,
-		acceptedSANs:     sans,
+		acceptedSANs:     acceptedSANs,
 	}
 }
 
