@@ -29,12 +29,8 @@ const scheme = "unix"
 type unixBuilder struct{}
 
 func (*unixBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
-	r := &unixResolver{
-		target: target,
-		cc:     cc,
-	}
-	r.start()
-	return r, nil
+	cc.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "/" + target.Endpoint, Attributes: attributes.New("network_type", "unix")}}})
+	return &unixResolver{}, nil
 }
 
 func (*unixBuilder) Scheme() string {
@@ -42,12 +38,6 @@ func (*unixBuilder) Scheme() string {
 }
 
 type unixResolver struct {
-	target resolver.Target
-	cc     resolver.ClientConn
-}
-
-func (r *unixResolver) start() {
-	r.cc.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "/" + r.target.Endpoint, Attributes: attributes.New("network_type", "unix")}}})
 }
 
 func (*unixResolver) ResolveNow(o resolver.ResolveNowOptions) {}

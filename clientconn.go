@@ -198,7 +198,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	} else {
 		cc.dopts.copts.UserAgent = grpcUA
 	}
-	cc.dopts.copts.GrpcUA = grpcUA
+	cc.dopts.copts.GRPCUA = grpcUA
 
 	if cc.dopts.timeout > 0 {
 		var cancel context.CancelFunc
