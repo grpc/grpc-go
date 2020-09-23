@@ -529,4 +529,4 @@ func genServerStreamTypes(gen *protogen.Plugin, g *protogen.GeneratedFile, metho
 
 const deprecationComment = "// Deprecated: Do not use."
 
-func unexport(s string) string { return strings.ToLower(s[:1]) + s[1:] }
+func unexport(s string) string { return "_" + strings.ToLower(s[:1]) + s[1:] }
