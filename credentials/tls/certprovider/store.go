@@ -76,7 +76,7 @@ func GetProvider(name string, config interface{}, opts Options) (Provider, error
 	provStore.mu.Lock()
 	defer provStore.mu.Unlock()
 
-	builder := GetBuilder(name)
+	builder := getBuilder(name)
 	if builder == nil {
 		return nil, fmt.Errorf("no registered builder for provider name: %s", name)
 	}

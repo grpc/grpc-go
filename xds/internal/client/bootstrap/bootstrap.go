@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -80,7 +81,16 @@ type Config struct {
 	NodeProto proto.Message
 	// CertProviderConfigs contain parsed configs for supported certificate
 	// provider plugins found in the bootstrap file.
-	CertProviderConfigs map[string]certprovider.StableConfig
+	CertProviderConfigs map[string]CertProviderConfig
+}
+
+// CertProviderConfig wraps the certificate provider plugin name and config
+// (corresponding to one plugin instance) found in the bootstrap file.
+type CertProviderConfig struct {
+	// Name is the registered name of the certificate provider.
+	Name string
+	// Config is the parsed config to be passed to the certificate provider.
+	Config certprovider.StableConfig
 }
 
 type channelCreds struct {
@@ -195,14 +205,15 @@ func NewConfig() (*Config, error) {
 			if err := json.Unmarshal(v, &providerInstances); err != nil {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
-			configs := make(map[string]certprovider.StableConfig)
+			configs := make(map[string]CertProviderConfig)
+			getBuilder := internal.GetCertificateProviderBuilder.(func(string) certprovider.Builder)
 			for instance, data := range providerInstances {
 				var providerConfigs map[string]json.RawMessage
 				if err := json.Unmarshal(data, &providerConfigs); err != nil {
 					return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), instance, err)
 				}
 				for name, cfg := range providerConfigs {
-					parser := certprovider.GetBuilder(name)
+					parser := getBuilder(name)
 					if parser == nil {
 						// We ignore plugins that we do not know about.
 						continue
@@ -211,7 +222,10 @@ func NewConfig() (*Config, error) {
 					if err != nil {
 						return nil, fmt.Errorf("xds: Config parsing for plugin %q failed: %v", name, err)
 					}
-					configs[instance] = c
+					configs[instance] = CertProviderConfig{
+						Name:   name,
+						Config: c,
+					}
 				}
 			}
 			config.CertProviderConfigs = configs

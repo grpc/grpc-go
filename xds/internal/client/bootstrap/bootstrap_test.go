@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -246,13 +247,13 @@ func (c *Config) compare(want *Config) error {
 	if len(gotCfgs) != len(wantCfgs) {
 		return fmt.Errorf("config.CertProviderConfigs is %d entries, want %d", len(gotCfgs), len(wantCfgs))
 	}
-	for name, gotCfg := range gotCfgs {
-		wantCfg := wantCfgs[name]
-		if wantCfg == nil {
-			return fmt.Errorf("config.CertProviderConfigs has unexpected plugin %q with config %q", name, string(gotCfg.Canonical()))
+	for instance, gotCfg := range gotCfgs {
+		wantCfg, ok := wantCfgs[instance]
+		if !ok {
+			return fmt.Errorf("config.CertProviderConfigs has unexpected plugin instance %q with config %q", instance, string(gotCfg.Config.Canonical()))
 		}
-		if !cmp.Equal(gotCfg.Canonical(), wantCfg.Canonical()) {
-			return fmt.Errorf("config.CertProviderConfigs for plugin %q has config %q, want %q", name, string(gotCfg.Canonical()), string(wantCfg.Canonical()))
+		if gotCfg.Name != wantCfg.Name || !cmp.Equal(gotCfg.Config.Canonical(), wantCfg.Config.Canonical()) {
+			return fmt.Errorf("config.CertProviderConfigs for plugin instance %q has config {%s, %s, want {%s, %s}", instance, gotCfg.Name, string(gotCfg.Config.Canonical()), wantCfg.Name, string(wantCfg.Config.Canonical()))
 		}
 	}
 	return nil
@@ -628,13 +629,13 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 			}
 		}`,
 	}
-	parser := certprovider.GetBuilder(fakeCertProviderName)
+
+	getBuilder := internal.GetCertificateProviderBuilder.(func(string) certprovider.Builder)
+	parser := getBuilder(fakeCertProviderName)
 	if parser == nil {
 		t.Fatalf("missing certprovider plugin %q", fakeCertProviderName)
 	}
-	wantCfg, err := parser.ParseConfig(json.RawMessage(`{
-						"configKey": "configValue"
-	}`))
+	wantCfg, err := parser.ParseConfig(json.RawMessage(`{"configKey": "configValue"}`))
 	if err != nil {
 		t.Fatalf("config parsing for plugin %q failed: %v", fakeCertProviderName, err)
 	}
@@ -652,8 +653,11 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 		Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
 		TransportAPI: version.TransportV3,
 		NodeProto:    v3NodeProto,
-		CertProviderConfigs: map[string]certprovider.StableConfig{
-			"fakeProviderInstance": wantCfg,
+		CertProviderConfigs: map[string]CertProviderConfig{
+			"fakeProviderInstance": {
+				Name:   fakeCertProviderName,
+				Config: wantCfg,
+			},
 		},
 	}
 	tests := []struct {

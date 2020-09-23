@@ -29,7 +29,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+
+	"google.golang.org/grpc/internal"
 )
+
+func init() {
+	internal.GetCertificateProviderBuilder = getBuilder
+}
 
 var (
 	// errProviderClosed is returned by Distributor.KeyMaterial when it is
@@ -47,9 +53,9 @@ func Register(b Builder) {
 	m[b.Name()] = b
 }
 
-// GetBuilder returns the Provider builder registered with the given name.
+// getBuilder returns the Provider builder registered with the given name.
 // If no builder is registered with the provided name, nil will be returned.
-func GetBuilder(name string) Builder {
+func getBuilder(name string) Builder {
 	if b, ok := m[name]; ok {
 		return b
 	}
