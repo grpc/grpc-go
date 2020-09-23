@@ -23,6 +23,7 @@ package meshca
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -126,7 +127,7 @@ var (
 // makeJSONConfig marshals the provided config proto into JSON. This makes it
 // possible for tests to specify the config in proto form, which is much easier
 // than specifying the config in JSON form.
-func makeJSONConfig(t *testing.T, cfg *configpb.GoogleMeshCaConfig) []byte {
+func makeJSONConfig(t *testing.T, cfg *configpb.GoogleMeshCaConfig) json.RawMessage {
 	t.Helper()
 
 	b := &bytes.Buffer{}
@@ -134,7 +135,7 @@ func makeJSONConfig(t *testing.T, cfg *configpb.GoogleMeshCaConfig) []byte {
 	if err := m.Marshal(b, cfg); err != nil {
 		t.Fatalf("jsonpb.Marshal(%+v) failed: %v", cfg, err)
 	}
-	return b.Bytes()
+	return json.RawMessage(b.Bytes())
 }
 
 // verifyReceivedRequest reads the HTTP request received by the fake client
@@ -295,7 +296,7 @@ func (s) TestParseConfigFailureCases(t *testing.T) {
 		},
 		{
 			desc:        "invalid JSON",
-			inputConfig: []byte(`bad bad json`),
+			inputConfig: json.RawMessage(`bad bad json`),
 			wantErr:     "failed to unmarshal config",
 		},
 		{

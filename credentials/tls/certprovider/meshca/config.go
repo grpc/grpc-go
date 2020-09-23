@@ -22,6 +22,7 @@ package meshca
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -88,7 +89,7 @@ type pluginConfig struct {
 // If the location field or STS audience field is missing, we try talking to the
 // GKE Metadata server and try to infer these values. If this attempt does not
 // succeed, we let those fields have empty values.
-func pluginConfigFromJSON(data []byte) (*pluginConfig, error) {
+func pluginConfigFromJSON(data json.RawMessage) (*pluginConfig, error) {
 	cfgProto := &configpb.GoogleMeshCaConfig{}
 	m := jsonpb.Unmarshaler{AllowUnknownFields: true}
 	if err := m.Unmarshal(bytes.NewReader(data), cfgProto); err != nil {

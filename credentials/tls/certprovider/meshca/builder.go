@@ -22,6 +22,7 @@ package meshca
 
 import (
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -151,11 +152,11 @@ func (b *pluginBuilder) Build(c certprovider.StableConfig, opts certprovider.Opt
 }
 
 // ParseConfig parses the configuration to be passed to the MeshCA plugin
-// implementation. Expects the config to be a byte slice which contains a
+// implementation. Expects the config to be a json.RawMessage which contains a
 // serialized JSON representation of the meshca_experimental.GoogleMeshCaConfig
 // proto message.
 func (b *pluginBuilder) ParseConfig(c interface{}) (certprovider.StableConfig, error) {
-	data, ok := c.([]byte)
+	data, ok := c.(json.RawMessage)
 	if !ok {
 		return nil, fmt.Errorf("meshca: unsupported config type: %T", c)
 	}
