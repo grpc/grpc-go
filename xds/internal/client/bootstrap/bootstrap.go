@@ -33,6 +33,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -77,6 +78,9 @@ type Config struct {
 	// NodeProto contains the Node proto to be used in xDS requests. The actual
 	// type depends on the transport protocol version used.
 	NodeProto proto.Message
+	// CertProviderConfigs contain parsed configs for supported certificate
+	// provider plugins found in the bootstrap file.
+	CertProviderConfigs map[string]certprovider.StableConfig
 }
 
 type channelCreds struct {
@@ -103,6 +107,10 @@ type xdsServer struct {
 //        }
 //      ],
 //      "server_features": [ ... ]
+//		"certificate_providers" : {
+//			"default": { default cert provider config },
+//			"foo": { config for provider foo }
+//		}
 //    },
 //    "node": <JSON form of Node proto>
 // }
@@ -182,6 +190,31 @@ func NewConfig() (*Config, error) {
 					serverSupportsV3 = true
 				}
 			}
+		case "certificate_providers":
+			var providerInstances map[string]json.RawMessage
+			if err := json.Unmarshal(v, &providerInstances); err != nil {
+				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
+			}
+			configs := make(map[string]certprovider.StableConfig)
+			for instance, data := range providerInstances {
+				var providerConfigs map[string]json.RawMessage
+				if err := json.Unmarshal(data, &providerConfigs); err != nil {
+					return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), instance, err)
+				}
+				for name, cfg := range providerConfigs {
+					parser := certprovider.GetBuilder(name)
+					if parser == nil {
+						// We ignore plugins that we do not know about.
+						continue
+					}
+					c, err := parser.ParseConfig(cfg)
+					if err != nil {
+						return nil, fmt.Errorf("xds: Config parsing for plugin %q failed: %v", name, err)
+					}
+					configs[instance] = c
+				}
+			}
+			config.CertProviderConfigs = configs
 		}
 		// Do not fail the xDS bootstrap when an unknown field is seen. This can
 		// happen when an older version client reads a newer version bootstrap
