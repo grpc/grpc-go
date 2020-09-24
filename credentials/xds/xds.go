@@ -19,7 +19,10 @@
 // Package xds provides a transport credentials implementation where the
 // security configuration is pushed by a management server using xDS APIs.
 //
-// All APIs in this package are EXPERIMENTAL.
+// Experimental
+//
+// Notice: All APIs in this package are EXPERIMENTAL and may be removed in a
+// later release.
 package xds
 
 import (
@@ -97,7 +100,7 @@ func (chi *HandshakeInfo) SetIdentityCertProvider(identity certprovider.Provider
 // SetAcceptedSANs updates the list of accepted SANs.
 func (chi *HandshakeInfo) SetAcceptedSANs(sans []string) {
 	chi.mu.Lock()
-	chi.acceptedSANs = make(map[string]bool)
+	chi.acceptedSANs = make(map[string]bool, len(sans))
 	for _, san := range sans {
 		chi.acceptedSANs[san] = true
 	}
@@ -111,16 +114,46 @@ func (chi *HandshakeInfo) validate(isClient bool) error {
 	// On the client side, rootProvider is mandatory. IdentityProvider is
 	// optional based on whether the client is doing TLS or mTLS.
 	if isClient && chi.rootProvider == nil {
-		return errors.New("root certificate provider is missing")
+		return errors.New("xds: CertificateProvider to fetch trusted roots is missing, cannot perform TLS handshake")
 	}
 
 	// On the server side, identityProvider is mandatory. RootProvider is
 	// optional based on whether the server is doing TLS or mTLS.
 	if !isClient && chi.identityProvider == nil {
-		return errors.New("identity certificate provider is missing")
+		return errors.New("xds: CertificateProvider to fetch identity certificate is missing, cannot perform TLS handshake")
 	}
 
 	return nil
+}
+
+func (chi *HandshakeInfo) makeTLSConfig(ctx context.Context) (*tls.Config, error) {
+	chi.mu.Lock()
+	// Since the call to KeyMaterial() can block, we read the providers under
+	// the lock but call the actual function after releasing the lock.
+	rootProv, idProv := chi.rootProvider, chi.identityProvider
+	chi.mu.Unlock()
+
+	// InsecureSkipVerify needs to be set to true because we need to perform
+	// custom verification to check the SAN on the received certificate.
+	// Currently the Go stdlib does complete verification of the cert (which
+	// includes hostname verification) or none. We are forced to go with the
+	// latter and perform the normal cert validation ourselves.
+	cfg := &tls.Config{InsecureSkipVerify: true}
+	if rootProv != nil {
+		km, err := rootProv.KeyMaterial(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("xds: fetching trusted roots from CertificateProvider failed: %v", err)
+		}
+		cfg.RootCAs = km.Roots
+	}
+	if idProv != nil {
+		km, err := idProv.KeyMaterial(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("xds: fetching identity certificates from CertificateProvider failed: %v", err)
+		}
+		cfg.Certificates = km.Certs
+	}
+	return cfg, nil
 }
 
 func (chi *HandshakeInfo) matchingSANExists(cert *x509.Certificate) bool {
@@ -211,37 +244,9 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 	// 4. Key usage to match whether client/server usage.
 	// 5. A `VerifyPeerCertificate` function which performs normal peer
 	// 	  cert verification using configured roots, and the custom SAN checks.
-	var certs []tls.Certificate
-	var roots *x509.CertPool
-	err := func() error {
-		// We use this anonymous function trick to be able to defer the unlock.
-		chi.mu.Lock()
-		defer chi.mu.Unlock()
-
-		if chi.rootProvider != nil {
-			km, err := chi.rootProvider.KeyMaterial(ctx)
-			if err != nil {
-				return fmt.Errorf("fetching root certificates failed: %v", err)
-			}
-			roots = km.Roots
-		}
-		if chi.identityProvider != nil {
-			km, err := chi.identityProvider.KeyMaterial(ctx)
-			if err != nil {
-				return fmt.Errorf("fetching identity certificates failed: %v", err)
-			}
-			certs = km.Certs
-		}
-		return nil
-	}()
+	cfg, err := chi.makeTLSConfig(ctx)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	cfg := &tls.Config{
-		Certificates:       certs,
-		InsecureSkipVerify: true,
-		RootCAs:            roots,
 	}
 	cfg.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		// Parse all raw certificates presented by the peer.
@@ -261,7 +266,7 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 			intermediates.AddCert(cert)
 		}
 		opts := x509.VerifyOptions{
-			Roots:         roots,
+			Roots:         cfg.RootCAs,
 			Intermediates: intermediates,
 			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		}
@@ -280,13 +285,7 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 	// actual Handshake() function in a goroutine because we need to respect the
 	// deadline specified on the passed in context, and we need a way to cancel
 	// the handshake if the context is cancelled.
-	var conn *tls.Conn
-	if c.isClient {
-		conn = tls.Client(rawConn, cfg)
-	} else {
-		conn = tls.Server(rawConn, cfg)
-	}
-
+	conn := tls.Client(rawConn, cfg)
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- conn.Handshake()
