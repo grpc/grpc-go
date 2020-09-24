@@ -32,6 +32,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/testdata"
@@ -219,11 +220,20 @@ func makeRootProvider(t *testing.T, caPath string) *fakeProvider {
 	return &fakeProvider{km: &certprovider.KeyMaterial{Roots: roots}}
 }
 
-// newTestContextWithHandshakeInfo returns a copy of the passed in context with
-// HandshakeInfo context value added to it.
-func newTestContextWithHandshakeInfo(ctx context.Context, root, identity certprovider.Provider, sans ...string) context.Context {
+// newTestContextWithHandshakeInfo returns a copy of parent with HandshakeInfo
+// context value added to it.
+func newTestContextWithHandshakeInfo(parent context.Context, root, identity certprovider.Provider, sans ...string) context.Context {
+	// Creating the HandshakeInfo and adding it to the attributes is very
+	// similar to what the CDS balancer would do when it intercepts calls to
+	// NewSubConn().
 	info := NewHandshakeInfo(root, identity, sans...)
-	return NewContextWithHandshakeInfo(ctx, info)
+	attr := SetHandshakeInfo(nil, info)
+
+	// Moving the attributes from the resolver.Address to the context passed to
+	// the handshaker is done in the transport layer. Since we directly call the
+	// handshaker in these tests, we need to do the same here.
+	contextWithHandshakeInfo := internal.NewClientHandshakeInfoContext.(func(context.Context, credentials.ClientHandshakeInfo) context.Context)
+	return contextWithHandshakeInfo(parent, credentials.ClientHandshakeInfo{Attributes: attr})
 }
 
 // compareAuthInfo compares the AuthInfo received on the client side after a
@@ -485,9 +495,17 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	// Create a root provider which will fail the handshake because it does not
+	// use the correct trust roots.
 	root1 := makeRootProvider(t, "x509/client_ca_cert.pem")
 	handshakeInfo := NewHandshakeInfo(root1, nil, defaultTestCertSAN)
-	ctx = NewContextWithHandshakeInfo(ctx, handshakeInfo)
+
+	// We need to repeat most of what newTestContextWithHandshakeInfo() does
+	// here because we need access to the underlying HandshakeInfo so that we
+	// can update it before the next call to ClientHandshake().
+	attr := SetHandshakeInfo(nil, handshakeInfo)
+	contextWithHandshakeInfo := internal.NewClientHandshakeInfoContext.(func(context.Context, credentials.ClientHandshakeInfo) context.Context)
+	ctx = contextWithHandshakeInfo(ctx, credentials.ClientHandshakeInfo{Attributes: attr})
 	if _, _, err := creds.ClientHandshake(ctx, authority, conn); err == nil {
 		t.Fatal("ClientHandshake() succeeded when expected to fail")
 	}
@@ -504,6 +522,8 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	}
 	defer conn.Close()
 
+	// Create a new root provider which uses the correct trust roots. And update
+	// the HandshakeInfo with the new provider.
 	root2 := makeRootProvider(t, "x509/server_ca_cert.pem")
 	handshakeInfo.SetRootCertProvider(root2)
 	_, ai, err := creds.ClientHandshake(ctx, authority, conn)

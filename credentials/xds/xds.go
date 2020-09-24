@@ -34,6 +34,7 @@ import (
 	"net"
 	"sync"
 
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	credinternal "google.golang.org/grpc/internal/credentials"
@@ -68,8 +69,21 @@ type credsImpl struct {
 	fallback credentials.TransportCredentials
 }
 
-// handshakeCtxKey is the context key used to store HandshakeInfo values.
-type handshakeCtxKey struct{}
+// handshakeAttrKey is the type used as the key to store HandshakeInfo in
+// the Attributes field of resolver.Address.
+type handshakeAttrKey struct{}
+
+// SetHandshakeInfo returns a copy of attr in which is updated with hInfo.
+func SetHandshakeInfo(attr *attributes.Attributes, hInfo *HandshakeInfo) *attributes.Attributes {
+	return attr.WithValues(handshakeAttrKey{}, hInfo)
+}
+
+// GetHandshakeInfo returns a pointer to the HandshakeInfo stored in attr.
+func GetHandshakeInfo(attr *attributes.Attributes) *HandshakeInfo {
+	v := attr.Value(handshakeAttrKey{})
+	hi, _ := v.(*HandshakeInfo)
+	return hi
+}
 
 // HandshakeInfo wraps all the security configuration required by client and
 // server handshake methods in credsImpl. The xDS implementation will be
@@ -84,54 +98,54 @@ type HandshakeInfo struct {
 }
 
 // SetRootCertProvider updates the root certificate provider.
-func (chi *HandshakeInfo) SetRootCertProvider(root certprovider.Provider) {
-	chi.mu.Lock()
-	chi.rootProvider = root
-	chi.mu.Unlock()
+func (hi *HandshakeInfo) SetRootCertProvider(root certprovider.Provider) {
+	hi.mu.Lock()
+	hi.rootProvider = root
+	hi.mu.Unlock()
 }
 
 // SetIdentityCertProvider updates the identity certificate provider.
-func (chi *HandshakeInfo) SetIdentityCertProvider(identity certprovider.Provider) {
-	chi.mu.Lock()
-	chi.identityProvider = identity
-	chi.mu.Unlock()
+func (hi *HandshakeInfo) SetIdentityCertProvider(identity certprovider.Provider) {
+	hi.mu.Lock()
+	hi.identityProvider = identity
+	hi.mu.Unlock()
 }
 
 // SetAcceptedSANs updates the list of accepted SANs.
-func (chi *HandshakeInfo) SetAcceptedSANs(sans []string) {
-	chi.mu.Lock()
-	chi.acceptedSANs = make(map[string]bool, len(sans))
+func (hi *HandshakeInfo) SetAcceptedSANs(sans []string) {
+	hi.mu.Lock()
+	hi.acceptedSANs = make(map[string]bool, len(sans))
 	for _, san := range sans {
-		chi.acceptedSANs[san] = true
+		hi.acceptedSANs[san] = true
 	}
-	chi.mu.Unlock()
+	hi.mu.Unlock()
 }
 
-func (chi *HandshakeInfo) validate(isClient bool) error {
-	chi.mu.Lock()
-	defer chi.mu.Unlock()
+func (hi *HandshakeInfo) validate(isClient bool) error {
+	hi.mu.Lock()
+	defer hi.mu.Unlock()
 
 	// On the client side, rootProvider is mandatory. IdentityProvider is
 	// optional based on whether the client is doing TLS or mTLS.
-	if isClient && chi.rootProvider == nil {
+	if isClient && hi.rootProvider == nil {
 		return errors.New("xds: CertificateProvider to fetch trusted roots is missing, cannot perform TLS handshake")
 	}
 
 	// On the server side, identityProvider is mandatory. RootProvider is
 	// optional based on whether the server is doing TLS or mTLS.
-	if !isClient && chi.identityProvider == nil {
+	if !isClient && hi.identityProvider == nil {
 		return errors.New("xds: CertificateProvider to fetch identity certificate is missing, cannot perform TLS handshake")
 	}
 
 	return nil
 }
 
-func (chi *HandshakeInfo) makeTLSConfig(ctx context.Context) (*tls.Config, error) {
-	chi.mu.Lock()
+func (hi *HandshakeInfo) makeTLSConfig(ctx context.Context) (*tls.Config, error) {
+	hi.mu.Lock()
 	// Since the call to KeyMaterial() can block, we read the providers under
 	// the lock but call the actual function after releasing the lock.
-	rootProv, idProv := chi.rootProvider, chi.identityProvider
-	chi.mu.Unlock()
+	rootProv, idProv := hi.rootProvider, hi.identityProvider
+	hi.mu.Unlock()
 
 	// InsecureSkipVerify needs to be set to true because we need to perform
 	// custom verification to check the SAN on the received certificate.
@@ -156,7 +170,7 @@ func (chi *HandshakeInfo) makeTLSConfig(ctx context.Context) (*tls.Config, error
 	return cfg, nil
 }
 
-func (chi *HandshakeInfo) matchingSANExists(cert *x509.Certificate) bool {
+func (hi *HandshakeInfo) matchingSANExists(cert *x509.Certificate) bool {
 	var sans []string
 	// SANs can be specified in any of these four fields on the parsed cert.
 	sans = append(sans, cert.DNSNames...)
@@ -168,10 +182,10 @@ func (chi *HandshakeInfo) matchingSANExists(cert *x509.Certificate) bool {
 		sans = append(sans, uri.String())
 	}
 
-	chi.mu.Lock()
-	defer chi.mu.Unlock()
+	hi.mu.Lock()
+	defer hi.mu.Unlock()
 	for _, san := range sans {
-		if chi.acceptedSANs[san] {
+		if hi.acceptedSANs[san] {
 			return true
 		}
 	}
@@ -192,21 +206,6 @@ func NewHandshakeInfo(root, identity certprovider.Provider, sans ...string) *Han
 	}
 }
 
-// NewContextWithHandshakeInfo returns a copy of the parent context with the
-// provided HandshakeInfo stored as a value.
-func NewContextWithHandshakeInfo(parent context.Context, info *HandshakeInfo) context.Context {
-	return context.WithValue(parent, handshakeCtxKey{}, info)
-}
-
-// handshakeInfoFromCtx returns a pointer to the HandshakeInfo stored in ctx.
-func handshakeInfoFromCtx(ctx context.Context) *HandshakeInfo {
-	val, ok := ctx.Value(handshakeCtxKey{}).(*HandshakeInfo)
-	if !ok {
-		return nil
-	}
-	return val
-}
-
 // ClientHandshake performs the TLS handshake on the client-side.
 //
 // It looks for the presence of a HandshakeInfo value in the passed in context
@@ -220,15 +219,29 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 		return nil, nil, errors.New("ClientHandshake() is not supported for server credentials")
 	}
 
-	chi := handshakeInfoFromCtx(ctx)
-	if chi == nil {
-		// A missing handshake info in the provided context could mean either
-		// the user did not specify an `xds` scheme in their dial target or that
-		// the xDS server did not provide any security configuration. In both of
-		// these cases, we use the fallback credentials specified by the user.
+	// The CDS balancer constructs a new HandshakeInfo using a call to
+	// NewHandshakeInfo(), and then adds it to the attributes field of the
+	// resolver.Address when handling calls to NewSubConn(). The transport layer
+	// takes care of shipping these attributes in the context to this handshake
+	// function. We first read the credentials.ClientHandshakeInfo type from the
+	// context, which contains the attributes added by the CDS balancer. We then
+	// read the HandshakeInfo from the attributes to get to the actual data that
+	// we need here for the handshake.
+	chi := credentials.ClientHandshakeInfoFromContext(ctx)
+	// If there are no attributes in the received context or the attributes does
+	// not contain a HandshakeInfo, it could either mean that the user did not
+	// specify an `xds` scheme in their dial target or that the xDS server did
+	// not provide any security configuration. In both of these cases, we use
+	// the fallback credentials specified by the user.
+	if chi.Attributes == nil {
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
-	if err := chi.validate(c.isClient); err != nil {
+	hi := GetHandshakeInfo(chi.Attributes)
+	if hi == nil {
+		return c.fallback.ClientHandshake(ctx, authority, rawConn)
+	}
+
+	if err := hi.validate(c.isClient); err != nil {
 		return nil, nil, err
 	}
 
@@ -244,7 +257,7 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 	// 4. Key usage to match whether client/server usage.
 	// 5. A `VerifyPeerCertificate` function which performs normal peer
 	// 	  cert verification using configured roots, and the custom SAN checks.
-	cfg, err := chi.makeTLSConfig(ctx)
+	cfg, err := hi.makeTLSConfig(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -275,7 +288,7 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 		}
 		// The SANs sent by the MeshCA are encoded as SPIFFE IDs. We need to
 		// only look at the SANs on the leaf cert.
-		if !chi.matchingSANExists(certs[0]) {
+		if !hi.matchingSANExists(certs[0]) {
 			return fmt.Errorf("SANs received in leaf certificate %+v does not match any of the accepted SANs", certs[0])
 		}
 		return nil
