@@ -95,18 +95,16 @@ func (s) TestNewPEMFileProvider(t *testing.T) {
 
 // This test overwrites the credential reading function used by the watching
 // goroutine. It is tested under different stages:
-// At stage 0, we force reading function to load clientPeer1 and serverTrust1,
+// At stage 0, we force reading function to load clientCert1 and serverTrust1,
 // and see if the credentials are picked up by the watching go routine.
 // At stage 1, we force reading function to cause an error. The watching go
 // routine should log the error while leaving the credentials unchanged.
-// At stage 2, we force reading function to load clientPeer2 and serverTrust2,
+// At stage 2, we force reading function to load clientCert2 and serverTrust2,
 // and see if the new credentials are picked up.
 func (s) TestWatchingRoutineUpdates(t *testing.T) {
 	// Load certificates.
 	cs := &certStore{}
-	if err := cs.loadCerts(); err != nil {
-		t.Fatalf("cs.loadCerts() failed: %v", err)
-	}
+	cs.loadCerts(t)
 	tests := []struct {
 		desc         string
 		options      PEMFileProviderOptions
@@ -121,9 +119,9 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 				KeyFile:   "not_empty_key_file",
 				TrustFile: "not_empty_trust_file",
 			},
-			wantKmStage0: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer1}, Roots: cs.serverTrust1},
-			wantKmStage1: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer1}, Roots: cs.serverTrust1},
-			wantKmStage2: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer2}, Roots: cs.serverTrust2},
+			wantKmStage0: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientCert1}, Roots: cs.serverTrust1},
+			wantKmStage1: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientCert1}, Roots: cs.serverTrust1},
+			wantKmStage2: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientCert2}, Roots: cs.serverTrust2},
 		},
 		{
 			desc: "use identity certs only",
@@ -131,9 +129,9 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 				CertFile: "not_empty_cert_file",
 				KeyFile:  "not_empty_key_file",
 			},
-			wantKmStage0: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer1}},
-			wantKmStage1: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer1}},
-			wantKmStage2: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientPeer2}},
+			wantKmStage0: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientCert1}},
+			wantKmStage1: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientCert1}},
+			wantKmStage2: certprovider.KeyMaterial{Certs: []tls.Certificate{cs.clientCert2}},
 		},
 		{
 			desc: "use trust certs only",
@@ -155,11 +153,11 @@ func (s) TestWatchingRoutineUpdates(t *testing.T) {
 			readKeyCertPairFunc = func(certFile, keyFile string) (tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
-					return cs.clientPeer1, nil
+					return cs.clientCert1, nil
 				case 1:
 					return tls.Certificate{}, fmt.Errorf("error occurred while reloading")
 				case 2:
-					return cs.clientPeer2, nil
+					return cs.clientCert2, nil
 				default:
 					return tls.Certificate{}, fmt.Errorf("test stage not supported")
 				}
