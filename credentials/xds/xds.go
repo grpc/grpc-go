@@ -73,7 +73,7 @@ type credsImpl struct {
 // the Attributes field of resolver.Address.
 type handshakeAttrKey struct{}
 
-// SetHandshakeInfo returns a copy of attr in which is updated with hInfo.
+// SetHandshakeInfo returns a copy of attr which is updated with hInfo.
 func SetHandshakeInfo(attr *attributes.Attributes, hInfo *HandshakeInfo) *attributes.Attributes {
 	return attr.WithValues(handshakeAttrKey{}, hInfo)
 }
@@ -195,7 +195,7 @@ func (hi *HandshakeInfo) matchingSANExists(cert *x509.Certificate) bool {
 // NewHandshakeInfo returns a new instance of HandshakeInfo with the given root
 // and identity certificate providers.
 func NewHandshakeInfo(root, identity certprovider.Provider, sans ...string) *HandshakeInfo {
-	acceptedSANs := make(map[string]bool)
+	acceptedSANs := make(map[string]bool, len(sans))
 	for _, san := range sans {
 		acceptedSANs[san] = true
 	}
