@@ -156,14 +156,12 @@ func (xdsC *Client) WaitForCancelEDSWatch(ctx context.Context) error {
 type ReportLoadArgs struct {
 	// Server is the name of the server to which the load is reported.
 	Server string
-	// Cluster is the name of the cluster for which load is reported.
-	Cluster string
 }
 
 // ReportLoad starts reporting load about clusterName to server.
-func (xdsC *Client) ReportLoad(server string, clusterName string) (cancel func()) {
-	xdsC.loadReportCh.Send(ReportLoadArgs{Server: server, Cluster: clusterName})
-	return func() {}
+func (xdsC *Client) ReportLoad(server string) (loadStore *load.Store, cancel func()) {
+	xdsC.loadReportCh.Send(ReportLoadArgs{Server: server})
+	return xdsC.loadStore, func() {}
 }
 
 // LoadStore returns the underlying load data store.

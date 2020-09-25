@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpclog"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/version"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -67,7 +66,6 @@ func newClient(cc *grpc.ClientConn, opts xdsclient.BuildOptions) (xdsclient.APIC
 		cc:        cc,
 		parent:    opts.Parent,
 		nodeProto: nodeProto,
-		loadStore: opts.LoadStore,
 		logger:    opts.Logger,
 	}
 	v3c.ctx, v3c.cancelCtx = context.WithCancel(context.Background())
@@ -86,7 +84,6 @@ type client struct {
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	parent    xdsclient.UpdateHandler
-	loadStore *load.Store
 	logger    *grpclog.PrefixLogger
 
 	// ClientConn to the xDS gRPC server. Owned by the parent xdsClient.

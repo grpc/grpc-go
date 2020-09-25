@@ -690,7 +690,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	lsWrapper := &loadStoreWrapper{}
 	lsWrapper.update(loadStore, testClusterNames[0])
 	cw := &xdsClientWrapper{
-		load: lsWrapper,
+		loadWrapper: lsWrapper,
 	}
 
 	cc := testutils.NewTestClientConn(t)
