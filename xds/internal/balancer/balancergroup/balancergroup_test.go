@@ -70,7 +70,7 @@ func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	}
 }
 
-func newTestBalancerGroup(t *testing.T, loadStore *load.PerClusterStore) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
+func newTestBalancerGroup(t *testing.T, loadStore load.PerClusterReporter) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
@@ -400,8 +400,12 @@ func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 }
 
 func (s) TestBalancerGroup_LoadReport(t *testing.T) {
-	loadStore := &load.PerClusterStore{}
-	cc, gator, bg := newTestBalancerGroup(t, loadStore)
+	loadStore := load.NewStore()
+	const (
+		testCluster    = "test-cluster"
+		testEDSService = "test-eds-service"
+	)
+	cc, gator, bg := newTestBalancerGroup(t, loadStore.PerCluster(testCluster, testEDSService))
 
 	backendToBalancerID := make(map[balancer.SubConn]string)
 
@@ -440,7 +444,9 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 	// subConns in each group, we expect the picks to be equally split between
 	// the subConns. We do not call Done() on picks routed to sc1, so we expect
 	// these to show up as pending rpcs.
-	wantStoreData := &load.Data{
+	wantStoreData := []*load.Data{{
+		Cluster: testCluster,
+		Service: testEDSService,
 		LocalityStats: map[string]load.LocalityData{
 			testBalancerIDs[0]: {
 				RequestStats: load.RequestData{Succeeded: 10, InProgress: 10},
@@ -461,7 +467,7 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 				},
 			},
 		},
-	}
+	}}
 	for i := 0; i < 30; i++ {
 		scst, _ := p1.Pick(balancer.PickInfo{})
 		if scst.Done != nil && scst.SubConn != sc1 {
@@ -476,9 +482,9 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 		}
 	}
 
-	gotStoreData := loadStore.Stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.EquateApprox(0, 0.1)); diff != "" {
-		t.Errorf("store.Stats() returned unexpected diff (-want +got):\n%s", diff)
+	gotStoreData := loadStore.Stats([]string{testCluster})
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.EquateApprox(0, 0.1), cmpopts.IgnoreFields(load.Data{}, "ReportInterval")); diff != "" {
+		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
 
