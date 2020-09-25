@@ -54,19 +54,11 @@ var (
 )
 
 type routeGuideServer struct {
+	pb.UnimplementedRouteGuideServer
 	savedFeatures []*pb.Feature // read-only after initialized
 
 	mu         sync.Mutex // protects routeNotes
 	routeNotes map[string][]*pb.RouteNote
-}
-
-func (s *routeGuideServer) Svc() *pb.RouteGuideService {
-	return &pb.RouteGuideService{
-		GetFeature:   s.GetFeature,
-		ListFeatures: s.ListFeatures,
-		RecordRoute:  s.RecordRoute,
-		RouteChat:    s.RouteChat,
-	}
 }
 
 // GetFeature returns the feature at the given point.
@@ -246,7 +238,7 @@ func main() {
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
 	grpcServer := grpc.NewServer(opts...)
-	pb.RegisterRouteGuideService(grpcServer, newServer().Svc())
+	pb.RegisterRouteGuideServer(grpcServer, newServer())
 	grpcServer.Serve(lis)
 }
 

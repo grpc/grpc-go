@@ -166,13 +166,8 @@ func (x) TestAllExtensionNumbersForType(t *testing.T) {
 
 // Do end2end tests.
 
-type server struct{}
-
-func (s *server) Svc() *pb.SearchServiceService {
-	return &pb.SearchServiceService{
-		Search:          s.Search,
-		StreamingSearch: s.StreamingSearch,
-	}
+type server struct {
+	pb.UnimplementedSearchServiceServer
 }
 
 func (s *server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchResponse, error) {
@@ -200,7 +195,7 @@ func (x) TestReflectionEnd2end(t *testing.T) {
 		t.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterSearchServiceService(s, (&server{}).Svc())
+	pb.RegisterSearchServiceServer(s, &server{})
 	pbv3.RegisterSearchServiceV3Server(s, &serverV3{})
 	// Register reflection service on s.
 	Register(s)

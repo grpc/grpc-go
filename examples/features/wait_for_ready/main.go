@@ -34,7 +34,12 @@ import (
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
-func unaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+// server is used to implement EchoServer.
+type server struct {
+	pb.UnimplementedEchoServer
+}
+
+func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: req.Message}, nil
 }
 
@@ -45,7 +50,7 @@ func serve() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterEchoService(s, &pb.EchoService{UnaryEcho: unaryEcho})
+	pb.RegisterEchoServer(s, &server{})
 
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)

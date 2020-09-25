@@ -130,8 +130,12 @@ func (cs *certStore) loadCerts() error {
 	return nil
 }
 
+type greeterServer struct {
+	pb.UnimplementedGreeterServer
+}
+
 // sayHello is a simple implementation of the pb.GreeterServer SayHello method.
-func sayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+func (greeterServer) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
@@ -408,7 +412,7 @@ func (s) TestEnd2End(t *testing.T) {
 				t.Fatalf("failed to listen: %v", err)
 			}
 			defer lis.Close()
-			pb.RegisterGreeterService(s, &pb.GreeterService{SayHello: sayHello})
+			pb.RegisterGreeterServer(s, greeterServer{})
 			go s.Serve(lis)
 			clientOptions := &ClientOptions{
 				IdentityOptions: IdentityCertificateOptions{

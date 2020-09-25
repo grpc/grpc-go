@@ -32,13 +32,8 @@ func NewMetricsServiceClient(cc grpc.ClientConnInterface) MetricsServiceClient {
 	return &metricsServiceClient{cc}
 }
 
-var metricsServiceGetAllGaugesStreamDesc = &grpc.StreamDesc{
-	StreamName:    "GetAllGauges",
-	ServerStreams: true,
-}
-
 func (c *metricsServiceClient) GetAllGauges(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (MetricsService_GetAllGaugesClient, error) {
-	stream, err := c.cc.NewStream(ctx, metricsServiceGetAllGaugesStreamDesc, "/grpc.testing.MetricsService/GetAllGauges", opts...)
+	stream, err := c.cc.NewStream(ctx, &_MetricsService_serviceDesc.Streams[0], "/grpc.testing.MetricsService/GetAllGauges", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -69,10 +64,6 @@ func (x *metricsServiceGetAllGaugesClient) Recv() (*GaugeResponse, error) {
 	return m, nil
 }
 
-var metricsServiceGetGaugeStreamDesc = &grpc.StreamDesc{
-	StreamName: "GetGauge",
-}
-
 func (c *metricsServiceClient) GetGauge(ctx context.Context, in *GaugeRequest, opts ...grpc.CallOption) (*GaugeResponse, error) {
 	out := new(GaugeResponse)
 	err := c.cc.Invoke(ctx, "/grpc.testing.MetricsService/GetGauge", in, out, opts...)
@@ -82,41 +73,47 @@ func (c *metricsServiceClient) GetGauge(ctx context.Context, in *GaugeRequest, o
 	return out, nil
 }
 
-// MetricsServiceService is the service API for MetricsService service.
-// Fields should be assigned to their respective handler implementations only before
-// RegisterMetricsServiceService is called.  Any unassigned fields will result in the
-// handler for that method returning an Unimplemented error.
-type MetricsServiceService struct {
+// MetricsServiceServer is the server API for MetricsService service.
+// All implementations must embed UnimplementedMetricsServiceServer
+// for forward compatibility
+type MetricsServiceServer interface {
 	// Returns the values of all the gauges that are currently being maintained by
 	// the service
-	GetAllGauges func(*EmptyMessage, MetricsService_GetAllGaugesServer) error
+	GetAllGauges(*EmptyMessage, MetricsService_GetAllGaugesServer) error
 	// Returns the value of one gauge
-	GetGauge func(context.Context, *GaugeRequest) (*GaugeResponse, error)
+	GetGauge(context.Context, *GaugeRequest) (*GaugeResponse, error)
+	mustEmbedUnimplementedMetricsServiceServer()
 }
 
-func (s *MetricsServiceService) getAllGauges(_ interface{}, stream grpc.ServerStream) error {
+// UnimplementedMetricsServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedMetricsServiceServer struct {
+}
+
+func (UnimplementedMetricsServiceServer) GetAllGauges(*EmptyMessage, MetricsService_GetAllGaugesServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetAllGauges not implemented")
+}
+func (UnimplementedMetricsServiceServer) GetGauge(context.Context, *GaugeRequest) (*GaugeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetGauge not implemented")
+}
+func (UnimplementedMetricsServiceServer) mustEmbedUnimplementedMetricsServiceServer() {}
+
+// UnsafeMetricsServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to MetricsServiceServer will
+// result in compilation errors.
+type UnsafeMetricsServiceServer interface {
+	mustEmbedUnimplementedMetricsServiceServer()
+}
+
+func RegisterMetricsServiceServer(s *grpc.Server, srv MetricsServiceServer) {
+	s.RegisterService(&_MetricsService_serviceDesc, srv)
+}
+
+func _MetricsService_GetAllGauges_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(EmptyMessage)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return s.GetAllGauges(m, &metricsServiceGetAllGaugesServer{stream})
-}
-func (s *MetricsServiceService) getGauge(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GaugeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return s.GetGauge(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     s,
-		FullMethod: "/grpc.testing.MetricsService/GetGauge",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return s.GetGauge(ctx, req.(*GaugeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(MetricsServiceServer).GetAllGauges(m, &metricsServiceGetAllGaugesServer{stream})
 }
 
 type MetricsService_GetAllGaugesServer interface {
@@ -132,36 +129,39 @@ func (x *metricsServiceGetAllGaugesServer) Send(m *GaugeResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-// RegisterMetricsServiceService registers a service implementation with a gRPC server.
-func RegisterMetricsServiceService(s grpc.ServiceRegistrar, srv *MetricsServiceService) {
-	srvCopy := *srv
-	if srvCopy.GetAllGauges == nil {
-		srvCopy.GetAllGauges = func(*EmptyMessage, MetricsService_GetAllGaugesServer) error {
-			return status.Errorf(codes.Unimplemented, "method GetAllGauges not implemented")
-		}
+func _MetricsService_GetGauge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GaugeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
 	}
-	if srvCopy.GetGauge == nil {
-		srvCopy.GetGauge = func(context.Context, *GaugeRequest) (*GaugeResponse, error) {
-			return nil, status.Errorf(codes.Unimplemented, "method GetGauge not implemented")
-		}
+	if interceptor == nil {
+		return srv.(MetricsServiceServer).GetGauge(ctx, in)
 	}
-	sd := grpc.ServiceDesc{
-		ServiceName: "grpc.testing.MetricsService",
-		Methods: []grpc.MethodDesc{
-			{
-				MethodName: "GetGauge",
-				Handler:    srvCopy.getGauge,
-			},
-		},
-		Streams: []grpc.StreamDesc{
-			{
-				StreamName:    "GetAllGauges",
-				Handler:       srvCopy.getAllGauges,
-				ServerStreams: true,
-			},
-		},
-		Metadata: "stress/grpc_testing/metrics.proto",
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.testing.MetricsService/GetGauge",
 	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MetricsServiceServer).GetGauge(ctx, req.(*GaugeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
 
-	s.RegisterService(&sd, nil)
+var _MetricsService_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "grpc.testing.MetricsService",
+	HandlerType: (*MetricsServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetGauge",
+			Handler:    _MetricsService_GetGauge_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "GetAllGauges",
+			Handler:       _MetricsService_GetAllGauges_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "stress/grpc_testing/metrics.proto",
 }
