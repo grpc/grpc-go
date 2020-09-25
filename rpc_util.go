@@ -636,7 +636,7 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 		return nil, err
 	}
 	if payInfo != nil {
-		payInfo.wireLength = len(d) + headerLen
+		payInfo.wireLength = len(d)
 	}
 
 	if st := checkRecvPayload(pf, s.RecvCompress(), compressor != nil || dc != nil); st != nil {
