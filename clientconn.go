@@ -508,7 +508,11 @@ type ClientConn struct {
 
 // WaitForStateChange waits until the connectivity.State of ClientConn changes from sourceState or
 // ctx expires. A true value is returned in former case and false in latter.
-// This is an EXPERIMENTAL API.
+//
+// Experimental
+//
+// Notice: This API is experimental and may be changed or removed in a
+// later release.
 func (cc *ClientConn) WaitForStateChange(ctx context.Context, sourceState connectivity.State) bool {
 	ch := cc.csMgr.getNotifyChan()
 	if cc.csMgr.getState() != sourceState {
@@ -523,7 +527,11 @@ func (cc *ClientConn) WaitForStateChange(ctx context.Context, sourceState connec
 }
 
 // GetState returns the connectivity.State of ClientConn.
-// This is an EXPERIMENTAL API.
+//
+// Experimental
+//
+// Notice: This API is experimental and may be changed or removed in a
+// later release.
 func (cc *ClientConn) GetState() connectivity.State {
 	return cc.csMgr.getState()
 }
@@ -773,7 +781,11 @@ func (cc *ClientConn) channelzMetric() *channelz.ChannelInternalMetric {
 }
 
 // Target returns the target string of the ClientConn.
-// This is an EXPERIMENTAL API.
+//
+// Experimental
+//
+// Notice: This API is experimental and may be changed or removed in a
+// later release.
 func (cc *ClientConn) Target() string {
 	return cc.target
 }
@@ -974,7 +986,10 @@ func (cc *ClientConn) resolveNow(o resolver.ResolveNowOptions) {
 // However, if a previously unavailable network becomes available, this may be
 // used to trigger an immediate reconnect.
 //
-// This API is EXPERIMENTAL.
+// Experimental
+//
+// Notice: This API is experimental and may be changed or removed in a
+// later release.
 func (cc *ClientConn) ResetConnectBackoff() {
 	cc.mu.Lock()
 	conns := cc.conns
