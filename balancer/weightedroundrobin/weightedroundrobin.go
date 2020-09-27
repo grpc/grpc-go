@@ -39,7 +39,10 @@ type AddrInfo struct {
 // SetAddrInfo returns a copy of addr in which the Attributes field is updated
 // with addrInfo.
 //
-// This is an EXPERIMENTAL API.
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func SetAddrInfo(addr resolver.Address, addrInfo AddrInfo) resolver.Address {
 	addr.Attributes = addr.Attributes.WithValues(attributeKey{}, addrInfo)
 	return addr
@@ -47,7 +50,10 @@ func SetAddrInfo(addr resolver.Address, addrInfo AddrInfo) resolver.Address {
 
 // GetAddrInfo returns the AddrInfo stored in the Attributes fields of addr.
 //
-// This is an EXPERIMENTAL API.
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func GetAddrInfo(addr resolver.Address) AddrInfo {
 	v := addr.Attributes.Value(attributeKey{})
 	ai, _ := v.(AddrInfo)
