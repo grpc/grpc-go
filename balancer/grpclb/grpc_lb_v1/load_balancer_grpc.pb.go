@@ -140,7 +140,7 @@ type LoadBalancerServer interface {
 type UnimplementedLoadBalancerServer struct {
 }
 
-func (*UnimplementedLoadBalancerServer) BalanceLoad(LoadBalancer_BalanceLoadServer) error {
+func (UnimplementedLoadBalancerServer) BalanceLoad(LoadBalancer_BalanceLoadServer) error {
 	return status.Errorf(codes.Unimplemented, "method BalanceLoad not implemented")
 }
 

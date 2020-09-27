@@ -348,7 +348,7 @@ func New(opts Options) (*Client, error) {
 	c := &Client{
 		done:      grpcsync.NewEvent(),
 		opts:      opts,
-		loadStore: &load.Store{},
+		loadStore: load.NewStore(),
 
 		updateCh:    buffer.NewUnbounded(),
 		ldsWatchers: make(map[string]map[*watchInfo]bool),

@@ -225,10 +225,10 @@ type HealthServer interface {
 type UnimplementedHealthServer struct {
 }
 
-func (*UnimplementedHealthServer) Check(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
+func (UnimplementedHealthServer) Check(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Check not implemented")
 }
-func (*UnimplementedHealthServer) Watch(*HealthCheckRequest, Health_WatchServer) error {
+func (UnimplementedHealthServer) Watch(*HealthCheckRequest, Health_WatchServer) error {
 	return status.Errorf(codes.Unimplemented, "method Watch not implemented")
 }
 

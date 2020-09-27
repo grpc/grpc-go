@@ -385,11 +385,13 @@ func (s) TestEnd2End(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			// Start a server using ServerOptions in another goroutine.
 			serverOptions := &ServerOptions{
-				Certificates:    test.serverCert,
-				GetCertificates: test.serverGetCert,
-				RootCertificateOptions: RootCertificateOptions{
-					RootCACerts: test.serverRoot,
-					GetRootCAs:  test.serverGetRoot,
+				IdentityOptions: IdentityCertificateOptions{
+					Certificates:                     test.serverCert,
+					GetIdentityCertificatesForServer: test.serverGetCert,
+				},
+				RootOptions: RootCertificateOptions{
+					RootCACerts:         test.serverRoot,
+					GetRootCertificates: test.serverGetRoot,
 				},
 				RequireClientCert: true,
 				VerifyPeer:        test.serverVerifyFunc,
@@ -409,12 +411,14 @@ func (s) TestEnd2End(t *testing.T) {
 			pb.RegisterGreeterService(s, &pb.GreeterService{SayHello: sayHello})
 			go s.Serve(lis)
 			clientOptions := &ClientOptions{
-				Certificates:         test.clientCert,
-				GetClientCertificate: test.clientGetCert,
-				VerifyPeer:           test.clientVerifyFunc,
-				RootCertificateOptions: RootCertificateOptions{
-					RootCACerts: test.clientRoot,
-					GetRootCAs:  test.clientGetRoot,
+				IdentityOptions: IdentityCertificateOptions{
+					Certificates:                     test.clientCert,
+					GetIdentityCertificatesForClient: test.clientGetCert,
+				},
+				VerifyPeer: test.clientVerifyFunc,
+				RootOptions: RootCertificateOptions{
+					RootCACerts:         test.clientRoot,
+					GetRootCertificates: test.clientGetRoot,
 				},
 				VType: test.clientVType,
 			}
