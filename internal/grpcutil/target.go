@@ -51,5 +51,10 @@ func ParseTarget(target string) (ret resolver.Target) {
 	if !ok {
 		return resolver.Target{Endpoint: target}
 	}
+	if ret.Scheme == "unix" {
+		// Add the "/" back in the unix case, so the unix resolver receives the
+		// actual endpoint.
+		ret.Endpoint = "/" + ret.Endpoint
+	}
 	return ret
 }

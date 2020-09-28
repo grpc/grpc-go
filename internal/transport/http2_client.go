@@ -149,8 +149,7 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 			}
 		} else {
 			fn = func(fCtx context.Context, fAddr string) (net.Conn, error) {
-				network, fAddr := parseDialTarget(fAddr)
-				return (&net.Dialer{}).DialContext(ctx, network, fAddr)
+				return (&net.Dialer{}).DialContext(ctx, "tcp", fAddr)
 			}
 		}
 	}
