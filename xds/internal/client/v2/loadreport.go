@@ -121,7 +121,7 @@ func (v2c *client) SendLoadStatsRequest(s grpc.ClientStream, clusterName string)
 		localityStats []*v2endpointpb.UpstreamLocalityStats
 	)
 
-	sd := v2c.loadStore.Stats()
+	sd := v2c.loadStore.PerCluster(clusterName, "").Stats()
 	for category, count := range sd.Drops {
 		droppedReqs = append(droppedReqs, &v2endpointpb.ClusterStats_DroppedRequests{
 			Category:     category,

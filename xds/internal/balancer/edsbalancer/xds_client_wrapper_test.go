@@ -107,36 +107,20 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 	}
 	defer func() { bootstrapConfigNew = oldBootstrapConfigNew }()
 
-	// Update with an empty edsServiceName should trigger an EDS watch
-	// for the user's dial target.
-	cw.handleUpdate(&EDSConfig{
-		BalancerName:   fakeServer.Address,
-		EDSServiceName: "",
-	}, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if _, err := fakeServer.NewConnChan.Receive(ctx); err != nil {
-		t.Fatal("Failed to connect to fake server")
-	}
-	t.Log("Client connection established to fake server...")
-	if err := verifyExpectedRequests(fakeServer, testServiceName); err != nil {
-		t.Fatal(err)
-	}
-
 	// Update with an non-empty edsServiceName should trigger an EDS watch for
-	// the same. The previously registered watch will be cancelled, which will
-	// result in an EDS request with no resource names being sent to the server.
+	// the same.
 	cw.handleUpdate(&EDSConfig{
 		BalancerName:   fakeServer.Address,
 		EDSServiceName: "foobar-1",
 	}, nil)
-	if err := verifyExpectedRequests(fakeServer, "", "foobar-1"); err != nil {
+	if err := verifyExpectedRequests(fakeServer, "foobar-1"); err != nil {
 		t.Fatal(err)
 	}
 
-	// Also test the case where the edsServerName changes from one
-	// non-empty name to another, and make sure a new watch is
-	// registered.
+	// Also test the case where the edsServerName changes from one non-empty
+	// name to another, and make sure a new watch is registered. The previously
+	// registered watch will be cancelled, which will result in an EDS request
+	// with no resource names being sent to the server.
 	cw.handleUpdate(&EDSConfig{
 		BalancerName:   fakeServer.Address,
 		EDSServiceName: "foobar-2",

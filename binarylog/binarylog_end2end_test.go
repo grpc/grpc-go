@@ -29,11 +29,11 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/binarylog"
 	pb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/binarylog"
+	iblog "google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	testpb "google.golang.org/grpc/stats/grpc_testing"
@@ -53,8 +53,8 @@ func Test(t *testing.T) {
 func init() {
 	// Setting environment variable in tests doesn't work because of the init
 	// orders. Set the loggers directly here.
-	binarylog.SetLogger(binarylog.AllLogger)
-	binarylog.SetDefaultSink(testSink)
+	iblog.SetLogger(iblog.AllLogger)
+	binarylog.SetSink(testSink)
 }
 
 var testSink = &testBinLogSink{}
@@ -503,7 +503,7 @@ func (ed *expectedData) newClientHeaderEntry(client bool, rpcID, inRPCID uint64)
 		Logger:               logger,
 		Payload: &pb.GrpcLogEntry_ClientHeader{
 			ClientHeader: &pb.ClientHeader{
-				Metadata:   binarylog.MdToMetadataProto(testMetadata),
+				Metadata:   iblog.MdToMetadataProto(testMetadata),
 				MethodName: ed.method,
 				Authority:  ed.te.srvAddr,
 			},
@@ -535,7 +535,7 @@ func (ed *expectedData) newServerHeaderEntry(client bool, rpcID, inRPCID uint64)
 		Logger:               logger,
 		Payload: &pb.GrpcLogEntry_ServerHeader{
 			ServerHeader: &pb.ServerHeader{
-				Metadata: binarylog.MdToMetadataProto(testMetadata),
+				Metadata: iblog.MdToMetadataProto(testMetadata),
 			},
 		},
 		Peer: peer,
@@ -643,7 +643,7 @@ func (ed *expectedData) newServerTrailerEntry(client bool, rpcID, inRPCID uint64
 		Logger:               logger,
 		Payload: &pb.GrpcLogEntry_Trailer{
 			Trailer: &pb.Trailer{
-				Metadata: binarylog.MdToMetadataProto(testTrailerMetadata),
+				Metadata: iblog.MdToMetadataProto(testTrailerMetadata),
 				// st will be nil if err was not a status error, but nil is ok.
 				StatusCode:    uint32(st.Code()),
 				StatusMessage: st.Message(),

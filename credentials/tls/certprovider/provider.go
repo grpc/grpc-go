@@ -29,7 +29,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+
+	"google.golang.org/grpc/internal"
 )
+
+func init() {
+	internal.GetCertificateProviderBuilder = getBuilder
+}
 
 var (
 	// errProviderClosed is returned by Distributor.KeyMaterial when it is

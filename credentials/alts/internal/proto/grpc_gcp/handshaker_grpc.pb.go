@@ -155,7 +155,7 @@ type HandshakerServiceServer interface {
 type UnimplementedHandshakerServiceServer struct {
 }
 
-func (*UnimplementedHandshakerServiceServer) DoHandshake(HandshakerService_DoHandshakeServer) error {
+func (UnimplementedHandshakerServiceServer) DoHandshake(HandshakerService_DoHandshakeServer) error {
 	return status.Errorf(codes.Unimplemented, "method DoHandshake not implemented")
 }
 
