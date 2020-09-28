@@ -47,18 +47,29 @@ import (
 // the value being the GCE zone in which the workload is running in.
 const locationMetadataKey = "x-goog-request-params"
 
+// For overriding from unit tests.
+var newDistributorFunc = func() distributor { return certprovider.NewDistributor() }
+
+// distributor wraps the methods on certprovider.Distributor which are used by
+// the plugin. This is very useful in tests which need to know exactly when the
+// plugin updates its key material.
+type distributor interface {
+	KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error)
+	Set(km *certprovider.KeyMaterial, err error)
+	Stop()
+}
+
 // providerPlugin is an implementation of the certprovider.Provider interface,
 // which gets certificates signed by communicating with the MeshCA.
 type providerPlugin struct {
-	*certprovider.Distributor // Holds the key material.
-
-	cancel   context.CancelFunc
-	cc       *grpc.ClientConn        // Connection to MeshCA server.
-	cfg      *pluginConfig           // Plugin configuration.
-	opts     certprovider.Options    // Key material options.
-	logger   *grpclog.PrefixLogger   // Plugin instance specific prefix.
-	backoff  func(int) time.Duration // Exponential backoff.
-	doneFunc func()                  // Notify the builder when done.
+	distributor // Holds the key material.
+	cancel      context.CancelFunc
+	cc          *grpc.ClientConn        // Connection to MeshCA server.
+	cfg         *pluginConfig           // Plugin configuration.
+	opts        certprovider.Options    // Key material options.
+	logger      *grpclog.PrefixLogger   // Plugin instance specific prefix.
+	backoff     func(int) time.Duration // Exponential backoff.
+	doneFunc    func()                  // Notify the builder when done.
 }
 
 // providerParams wraps params passed to the provider plugin at creation time.
@@ -80,7 +91,7 @@ func newProviderPlugin(params providerParams) *providerPlugin {
 		opts:        params.opts,
 		backoff:     params.backoff,
 		doneFunc:    params.doneFunc,
-		Distributor: certprovider.NewDistributor(),
+		distributor: newDistributorFunc(),
 	}
 	p.logger = prefixLogger((p))
 	p.logger.Infof("plugin created")
@@ -100,15 +111,15 @@ func (p *providerPlugin) Close() {
 func (p *providerPlugin) run(ctx context.Context) {
 	// We need to start fetching key material right away. The next attempt will
 	// be triggered by the timer firing.
-	certValidity := p.updateKeyMaterial(ctx)
-	if certValidity == 0 {
-		return
-	}
-
 	for {
-		// We request a certificate whose validity is usually twice as much as
-		// the grace period. But the server is free to return a certificate with
-		// whatever validity time it deems right.
+		certValidity, err := p.updateKeyMaterial(ctx)
+		if err != nil {
+			return
+		}
+
+		// We request a certificate with the configured validity duration (which
+		// is usually twice as much as the grace period). But the server is free
+		// to return a certificate with whatever validity time it deems right.
 		refreshAfter := p.cfg.certGraceTime
 		if refreshAfter > certValidity {
 			// The default value of cert grace time is half that of the default
@@ -122,7 +133,6 @@ func (p *providerPlugin) run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			certValidity = p.updateKeyMaterial(ctx)
 		}
 	}
 }
@@ -132,24 +142,23 @@ func (p *providerPlugin) run(ctx context.Context) {
 // deadline specified in ctx expires. Once it gets the CSR signed from the
 // MeshCA, it updates the Distributor with the new key material.
 //
-// It returns the amount of time the new certificate is valid for, or zero if
-// the context expires.
-func (p *providerPlugin) updateKeyMaterial(ctx context.Context) time.Duration {
+// It returns the amount of time the new certificate is valid for.
+func (p *providerPlugin) updateKeyMaterial(ctx context.Context) (time.Duration, error) {
 	client := meshpb.NewMeshCertificateServiceClient(p.cc)
 	retries := 0
 	for {
-		select {
-		case <-ctx.Done():
-			return 0
-		default:
+		if ctx.Err() != nil {
+			return 0, ctx.Err()
 		}
 
 		if retries != 0 {
-			timer := time.NewTimer(p.backoff(retries))
+			bi := p.backoff(retries)
+			p.logger.Warningf("Backing off for %s before attempting the next CreateCertificate() request", bi)
+			timer := time.NewTimer(bi)
 			select {
 			case <-timer.C:
 			case <-ctx.Done():
-				return 0
+				return 0, ctx.Err()
 			}
 		}
 		retries++
@@ -177,9 +186,11 @@ func (p *providerPlugin) updateKeyMaterial(ctx context.Context) time.Duration {
 			Csr:       string(csrPEM),
 			Validity:  &durationpb.Duration{Seconds: int64(p.cfg.certLifetime / time.Second)},
 		}
-		ctx, ctxCancel := context.WithTimeout(context.Background(), p.cfg.callTimeout)
-		ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(locationMetadataKey, p.cfg.location))
-		resp, err := client.CreateCertificate(ctx, req)
+		p.logger.Debugf("Sending CreateCertificate() request: %v", req)
+
+		callCtx, ctxCancel := context.WithTimeout(context.Background(), p.cfg.callTimeout)
+		callCtx = metadata.NewOutgoingContext(callCtx, metadata.Pairs(locationMetadataKey, p.cfg.location))
+		resp, err := client.CreateCertificate(callCtx, req)
 		if err != nil {
 			p.logger.Warningf("CreateCertificate request failed: %v", err)
 			ctxCancel()
@@ -233,7 +244,7 @@ func (p *providerPlugin) updateKeyMaterial(ctx context.Context) time.Duration {
 		// options specified in the call to Build(), which contain certificate
 		// name and whether the caller is interested in identity or root cert.
 		p.Set(&certprovider.KeyMaterial{Certs: []tls.Certificate{certPair}, Roots: roots}, nil)
-		return time.Until(identity.NotAfter)
+		return time.Until(identity.NotAfter), nil
 	}
 }
 

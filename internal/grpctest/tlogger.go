@@ -26,7 +26,6 @@ import (
 	"regexp"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -51,6 +50,7 @@ const (
 type tLogger struct {
 	v           int
 	t           *testing.T
+	start       time.Time
 	initialized bool
 
 	m      sync.Mutex // protects errors
@@ -74,14 +74,6 @@ func getCallingPrefix(depth int) (string, error) {
 	return fmt.Sprintf("%s:%d", path.Base(file), line), nil
 }
 
-// Returns the last component of the stringified current time, which is of the
-// format "m=±<value>", where value is the monotonic clock reading formatted as
-// a decimal number of seconds.
-func getTimeSuffix() string {
-	parts := strings.Split(time.Now().String(), " ")
-	return fmt.Sprintf(" (%s)", parts[len(parts)-1])
-}
-
 // log logs the message with the specified parameters to the tLogger.
 func (g *tLogger) log(ltype logType, depth int, format string, args ...interface{}) {
 	prefix, err := getCallingPrefix(callingFrame + depth)
@@ -90,7 +82,7 @@ func (g *tLogger) log(ltype logType, depth int, format string, args ...interface
 		return
 	}
 	args = append([]interface{}{prefix}, args...)
-	args = append(args, getTimeSuffix())
+	args = append(args, fmt.Sprintf(" (t=+%s)", time.Since(g.start)))
 
 	if format == "" {
 		switch ltype {
@@ -107,7 +99,8 @@ func (g *tLogger) log(ltype logType, depth int, format string, args ...interface
 			g.t.Log(args...)
 		}
 	} else {
-		format = "%v " + format
+		// Add formatting directives for the callingPrefix and timeSuffix.
+		format = "%v " + format + "%s"
 		switch ltype {
 		case errorLog:
 			if g.expected(fmt.Sprintf(format, args...)) {
@@ -131,6 +124,7 @@ func (g *tLogger) Update(t *testing.T) {
 		g.initialized = true
 	}
 	g.t = t
+	g.start = time.Now()
 	g.m.Lock()
 	defer g.m.Unlock()
 	g.errors = map[*regexp.Regexp]int{}

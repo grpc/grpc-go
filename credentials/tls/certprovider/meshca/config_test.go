@@ -30,7 +30,6 @@ import (
 	"net/http/httputil"
 	"strings"
 	"testing"
-	"time"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/jsonpb"
@@ -43,11 +42,9 @@ import (
 )
 
 const (
-	intervalNano       = 1000 * 1000 * 50 // 50ms
-	defaultTestTimeout = 1 * time.Second
-	testProjectID      = "test-project-id"
-	testGKECluster     = "test-gke-cluster"
-	testGCEZone        = "test-zone"
+	testProjectID  = "test-project-id"
+	testGKECluster = "test-gke-cluster"
+	testGCEZone    = "test-zone"
 )
 
 type s struct {
@@ -90,12 +87,12 @@ var (
 							},
 						},
 					},
-					Timeout: &durationpb.Duration{Nanos: intervalNano},
+					Timeout: &durationpb.Duration{Seconds: 10}, // 10s
 				},
 			},
 		},
-		CertificateLifetime: &durationpb.Duration{Nanos: intervalNano},
-		RenewalGracePeriod:  &durationpb.Duration{Nanos: intervalNano},
+		CertificateLifetime: &durationpb.Duration{Seconds: 86400}, // 1d
+		RenewalGracePeriod:  &durationpb.Duration{Seconds: 43200}, //12h
 		KeyType:             configpb.GoogleMeshCaConfig_KEY_TYPE_RSA,
 		KeySize:             uint32(2048),
 		Location:            "us-west1-b",
@@ -174,7 +171,7 @@ func verifyReceivedRequest(fc *testutils.FakeHTTPClient, wantURI string) error {
 // specified and no defaults are required.
 func (s) TestParseConfigSuccessFullySpecified(t *testing.T) {
 	inputConfig := makeJSONConfig(t, goodConfigFullySpecified)
-	wantConfig := "test-meshca:http://test-sts:test-resource:test-audience:test-scope:test-requested-token-type:test-subject-token-path:test-subject-token-type:test-actor-token-path:test-actor-token-type:50ms:50ms:50ms:RSA:2048:us-west1-b"
+	wantConfig := "test-meshca:http://test-sts:test-resource:test-audience:test-scope:test-requested-token-type:test-subject-token-path:test-subject-token-type:test-actor-token-path:test-actor-token-type:10s:24h0m0s:12h0m0s:RSA:2048:us-west1-b"
 
 	builder := newPluginBuilder()
 	gotConfig, err := builder.ParseConfig(inputConfig)

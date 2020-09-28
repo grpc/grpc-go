@@ -38,9 +38,9 @@ func overrideHTTPFuncs() func() {
 	// Directly override the functions which are used to read the zone and
 	// audience instead of overriding the http.Client.
 	origReadZone := readZoneFunc
-	readZoneFunc = func(_ httpDoer) string { return "test-zone" }
+	readZoneFunc = func(httpDoer) string { return "test-zone" }
 	origReadAudience := readAudienceFunc
-	readAudienceFunc = func(_ httpDoer) string { return "test-audience" }
+	readAudienceFunc = func(httpDoer) string { return "test-audience" }
 	return func() {
 		readZoneFunc = origReadZone
 		readAudienceFunc = origReadAudience
@@ -54,13 +54,13 @@ func (s) TestBuildSameConfig(t *testing.T) {
 	// channel of the same size here, even though we expect only one ClientConn
 	// to be pushed into this channel. This makes sure that even if more than
 	// one ClientConn ends up being created, the Build() call does not block.
-	cnt := 5
+	const cnt = 5
 	ccChan := testutils.NewChannelWithSize(cnt)
 
 	// Override the dial func to dial a dummy MeshCA endpoint, and also push the
 	// returned ClientConn on a channel to be inspected by the test.
 	origDialFunc := grpcDialFunc
-	grpcDialFunc = func(_ string, _ ...grpc.DialOption) (*grpc.ClientConn, error) {
+	grpcDialFunc = func(string, ...grpc.DialOption) (*grpc.ClientConn, error) {
 		cc, err := grpc.Dial("dummy-meshca-endpoint", grpc.WithInsecure())
 		ccChan.Send(cc)
 		return cc, err
@@ -121,13 +121,13 @@ func (s) TestBuildDifferentConfig(t *testing.T) {
 
 	// We will attempt to create two providers with different configs. So we
 	// expect two ClientConns to be pushed on to this channel.
-	cnt := 2
+	const cnt = 2
 	ccChan := testutils.NewChannelWithSize(cnt)
 
 	// Override the dial func to dial a dummy MeshCA endpoint, and also push the
 	// returned ClientConn on a channel to be inspected by the test.
 	origDialFunc := grpcDialFunc
-	grpcDialFunc = func(_ string, _ ...grpc.DialOption) (*grpc.ClientConn, error) {
+	grpcDialFunc = func(string, ...grpc.DialOption) (*grpc.ClientConn, error) {
 		cc, err := grpc.Dial("dummy-meshca-endpoint", grpc.WithInsecure())
 		ccChan.Send(cc)
 		return cc, err
