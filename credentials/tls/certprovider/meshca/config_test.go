@@ -148,9 +148,8 @@ func verifyReceivedRequest(fc *testutils.FakeHTTPClient, wantURI string) error {
 	if gotURI := gotReq.URL.String(); gotURI != wantURI {
 		return fmt.Errorf("request contains URL %q want %q", gotURI, wantURI)
 	}
-	wantFlavor := "Google"
-	if gotFlavor := gotReq.Header.Get("Metadata-Flavor"); gotFlavor != wantFlavor {
-		return fmt.Errorf("request contains flavor %q want %q", gotFlavor, wantFlavor)
+	if got, want := gotReq.Header.Get("Metadata-Flavor"), "Google"; got != want {
+		return fmt.Errorf("request contains flavor %q want %q", got, want)
 	}
 	return nil
 }

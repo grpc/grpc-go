@@ -115,7 +115,7 @@ func (s) TestBuildSameConfig(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
 		if !testCC.WaitForStateChange(ctx, state) {
-			t.Fatalf("timeout waiting for clientConn state to change from %s", state.String())
+			t.Fatalf("timeout waiting for clientConn state to change from %s", state)
 		}
 	}
 }
