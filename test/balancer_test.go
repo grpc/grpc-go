@@ -150,7 +150,7 @@ func (s) TestCredsBundleFromBalancer(t *testing.T) {
 	te.customServerOptions = []grpc.ServerOption{
 		grpc.Creds(creds),
 	}
-	te.startServer((&testServer{}).Svc())
+	te.startServer(&testServer{})
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -179,7 +179,7 @@ func testPickExtraMetadata(t *testing.T, e env) {
 		grpc.WithBalancerName(testBalancerName),
 		grpc.WithUserAgent(testUserAgent),
 	}
-	te.startServer(testServer{security: e.security}.Svc())
+	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
 	// Set resolver to xds to trigger the extra metadata code path.
@@ -228,7 +228,7 @@ func testDoneInfo(t *testing.T, e env) {
 		grpc.WithBalancerName(testBalancerName),
 	}
 	te.userAgent = failAppUA
-	te.startServer(testServer{security: e.security}.Svc())
+	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -498,7 +498,7 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	}
 
 	s := grpc.NewServer()
-	testpb.RegisterTestServiceService(s, (&testServer{}).Svc())
+	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
@@ -556,12 +556,12 @@ func (s) TestServersSwap(t *testing.T) {
 			t.Fatalf("Error while listening. Err: %v", err)
 		}
 		s := grpc.NewServer()
-		ts := &testpb.TestServiceService{
-			UnaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		ts := &funcServer{
+			unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return &testpb.SimpleResponse{Username: username}, nil
 			},
 		}
-		testpb.RegisterTestServiceService(s, ts)
+		testpb.RegisterTestServiceServer(s, ts)
 		go s.Serve(lis)
 		return lis.Addr().String(), s.Stop
 	}
@@ -616,12 +616,12 @@ func (s) TestEmptyAddrs(t *testing.T) {
 	s := grpc.NewServer()
 	defer s.Stop()
 	const one = "1"
-	ts := &testpb.TestServiceService{
-		UnaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ts := &funcServer{
+		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Username: one}, nil
 		},
 	}
-	testpb.RegisterTestServiceService(s, ts)
+	testpb.RegisterTestServiceServer(s, ts)
 	go s.Serve(lis)
 
 	// Initialize pickfirst client
@@ -705,12 +705,12 @@ func (s) TestWaitForReady(t *testing.T) {
 	s := grpc.NewServer()
 	defer s.Stop()
 	const one = "1"
-	ts := &testpb.TestServiceService{
-		UnaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ts := &funcServer{
+		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Username: one}, nil
 		},
 	}
-	testpb.RegisterTestServiceService(s, ts)
+	testpb.RegisterTestServiceServer(s, ts)
 	go s.Serve(lis)
 
 	// Initialize client

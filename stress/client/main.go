@@ -146,6 +146,7 @@ func (g *gauge) get() int64 {
 
 // server implements metrics server functions.
 type server struct {
+	metricspb.UnimplementedMetricsServiceServer
 	mutex sync.RWMutex
 	// gauges is a map from /stress_test/server_<n>/channel_<n>/stub_<n>/qps to its qps gauge.
 	gauges map[string]*gauge
@@ -154,13 +155,6 @@ type server struct {
 // newMetricsServer returns a new metrics server.
 func newMetricsServer() *server {
 	return &server{gauges: make(map[string]*gauge)}
-}
-
-func (s *server) Svc() *metricspb.MetricsServiceService {
-	return &metricspb.MetricsServiceService{
-		GetAllGauges: s.GetAllGauges,
-		GetGauge:     s.GetGauge,
-	}
 }
 
 // GetAllGauges returns all gauges.
@@ -208,8 +202,9 @@ func startServer(server *server, port int) {
 	}
 
 	s := grpc.NewServer()
-	metricspb.RegisterMetricsServiceService(s, server.Svc())
+	metricspb.RegisterMetricsServiceServer(s, server)
 	s.Serve(lis)
+
 }
 
 // performRPCs uses weightedRandomTestSelector to select test case and runs the tests.

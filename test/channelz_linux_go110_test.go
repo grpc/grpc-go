@@ -43,7 +43,7 @@ func testCZSocketMetricsSocketOption(t *testing.T, e env) {
 	czCleanup := channelz.NewChannelzStorage()
 	defer czCleanupWrapper(czCleanup, t)
 	te := newTest(t, e)
-	te.startServer((&testServer{security: e.security}).Svc())
+	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)

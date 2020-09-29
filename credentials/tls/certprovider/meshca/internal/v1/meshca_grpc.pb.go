@@ -30,10 +30,6 @@ func NewMeshCertificateServiceClient(cc grpc.ClientConnInterface) MeshCertificat
 	return &meshCertificateServiceClient{cc}
 }
 
-var meshCertificateServiceCreateCertificateStreamDesc = &grpc.StreamDesc{
-	StreamName: "CreateCertificate",
-}
-
 func (c *meshCertificateServiceClient) CreateCertificate(ctx context.Context, in *MeshCertificateRequest, opts ...grpc.CallOption) (*MeshCertificateResponse, error) {
 	out := new(MeshCertificateResponse)
 	err := c.cc.Invoke(ctx, "/google.security.meshca.v1.MeshCertificateService/CreateCertificate", in, out, opts...)
@@ -43,80 +39,64 @@ func (c *meshCertificateServiceClient) CreateCertificate(ctx context.Context, in
 	return out, nil
 }
 
-// MeshCertificateServiceService is the service API for MeshCertificateService service.
-// Fields should be assigned to their respective handler implementations only before
-// RegisterMeshCertificateServiceService is called.  Any unassigned fields will result in the
-// handler for that method returning an Unimplemented error.
-type MeshCertificateServiceService struct {
-	// Using provided CSR, returns a signed certificate that represents a GCP
-	// service account identity.
-	CreateCertificate func(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error)
-}
-
-func (s *MeshCertificateServiceService) createCertificate(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MeshCertificateRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return s.CreateCertificate(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     s,
-		FullMethod: "/google.security.meshca.v1.MeshCertificateService/CreateCertificate",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return s.CreateCertificate(ctx, req.(*MeshCertificateRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-// RegisterMeshCertificateServiceService registers a service implementation with a gRPC server.
-func RegisterMeshCertificateServiceService(s grpc.ServiceRegistrar, srv *MeshCertificateServiceService) {
-	srvCopy := *srv
-	if srvCopy.CreateCertificate == nil {
-		srvCopy.CreateCertificate = func(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error) {
-			return nil, status.Errorf(codes.Unimplemented, "method CreateCertificate not implemented")
-		}
-	}
-	sd := grpc.ServiceDesc{
-		ServiceName: "google.security.meshca.v1.MeshCertificateService",
-		Methods: []grpc.MethodDesc{
-			{
-				MethodName: "CreateCertificate",
-				Handler:    srvCopy.createCertificate,
-			},
-		},
-		Streams:  []grpc.StreamDesc{},
-		Metadata: "istio/google/security/meshca/v1/meshca.proto",
-	}
-
-	s.RegisterService(&sd, nil)
-}
-
-// MeshCertificateServiceServer is the service API for MeshCertificateService service.
-// New methods may be added to this interface if they are added to the service
-// definition, which is not a backward-compatible change.  For this reason,
-// use of this type is not recommended unless you own the service definition.
+// MeshCertificateServiceServer is the server API for MeshCertificateService service.
+// All implementations must embed UnimplementedMeshCertificateServiceServer
+// for forward compatibility
 type MeshCertificateServiceServer interface {
 	// Using provided CSR, returns a signed certificate that represents a GCP
 	// service account identity.
 	CreateCertificate(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error)
+	mustEmbedUnimplementedMeshCertificateServiceServer()
 }
 
-// UnimplementedMeshCertificateServiceServer can be embedded to have forward compatible implementations of
-// MeshCertificateServiceServer
+// UnimplementedMeshCertificateServiceServer must be embedded to have forward compatible implementations.
 type UnimplementedMeshCertificateServiceServer struct {
 }
 
 func (UnimplementedMeshCertificateServiceServer) CreateCertificate(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateCertificate not implemented")
 }
+func (UnimplementedMeshCertificateServiceServer) mustEmbedUnimplementedMeshCertificateServiceServer() {
+}
 
-// RegisterMeshCertificateServiceServer registers a service implementation with a gRPC server.
-func RegisterMeshCertificateServiceServer(s grpc.ServiceRegistrar, srv MeshCertificateServiceServer) {
-	str := &MeshCertificateServiceService{
-		CreateCertificate: srv.CreateCertificate,
+// UnsafeMeshCertificateServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to MeshCertificateServiceServer will
+// result in compilation errors.
+type UnsafeMeshCertificateServiceServer interface {
+	mustEmbedUnimplementedMeshCertificateServiceServer()
+}
+
+func RegisterMeshCertificateServiceServer(s *grpc.Server, srv MeshCertificateServiceServer) {
+	s.RegisterService(&_MeshCertificateService_serviceDesc, srv)
+}
+
+func _MeshCertificateService_CreateCertificate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MeshCertificateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
 	}
-	RegisterMeshCertificateServiceService(s, str)
+	if interceptor == nil {
+		return srv.(MeshCertificateServiceServer).CreateCertificate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/google.security.meshca.v1.MeshCertificateService/CreateCertificate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeshCertificateServiceServer).CreateCertificate(ctx, req.(*MeshCertificateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _MeshCertificateService_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "google.security.meshca.v1.MeshCertificateService",
+	HandlerType: (*MeshCertificateServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateCertificate",
+			Handler:    _MeshCertificateService_CreateCertificate_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "istio/google/security/meshca/v1/meshca.proto",
 }

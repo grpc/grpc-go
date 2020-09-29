@@ -41,7 +41,7 @@ type server struct{}
 
 func main() error {
 	s := grpc.NewServer()
-	pb.RegisterEchoService(s, &pb.EchoService{...})
+	pb.RegisterEchoServer(s, &server{})
 
 	// Include this to register a profiling-specific service within your server.
 	if err := profsvc.Init(&profsvc.ProfilingConfig{Server: s}); err != nil {

@@ -73,15 +73,8 @@ var (
 	errorID int32 = 32202
 )
 
-type testServer struct{}
-
-func (s *testServer) Svc() *testpb.TestServiceService {
-	return &testpb.TestServiceService{
-		UnaryCall:        s.UnaryCall,
-		FullDuplexCall:   s.FullDuplexCall,
-		ClientStreamCall: s.ClientStreamCall,
-		ServerStreamCall: s.ServerStreamCall,
-	}
+type testServer struct {
+	testpb.UnimplementedTestServiceServer
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -172,7 +165,7 @@ type test struct {
 	clientStatsHandler stats.Handler
 	serverStatsHandler stats.Handler
 
-	testService *testpb.TestServiceService // nil means none
+	testServer testpb.TestServiceServer // nil means none
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
 	srvAddr string
@@ -207,8 +200,8 @@ func newTest(t *testing.T, tc *testConfig, ch stats.Handler, sh stats.Handler) *
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
-func (te *test) startServer(ts *testpb.TestServiceService) {
-	te.testService = ts
+func (te *test) startServer(ts testpb.TestServiceServer) {
+	te.testServer = ts
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		te.t.Fatalf("Failed to listen: %v", err)
@@ -225,8 +218,8 @@ func (te *test) startServer(ts *testpb.TestServiceService) {
 	}
 	s := grpc.NewServer(opts...)
 	te.srv = s
-	if te.testService != nil {
-		testpb.RegisterTestServiceService(s, te.testService)
+	if te.testServer != nil {
+		testpb.RegisterTestServiceServer(s, te.testServer)
 	}
 
 	go s.Serve(lis)
@@ -822,7 +815,7 @@ func checkServerStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {
 	h := &statshandler{}
 	te := newTest(t, tc, nil, h)
-	te.startServer((&testServer{}).Svc())
+	te.startServer(&testServer{})
 	defer te.tearDown()
 
 	var (
@@ -1113,7 +1106,7 @@ func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map[int]*checkFuncWithCount) {
 	h := &statshandler{}
 	te := newTest(t, tc, h, nil)
-	te.startServer((&testServer{}).Svc())
+	te.startServer(&testServer{})
 	defer te.tearDown()
 
 	var (
