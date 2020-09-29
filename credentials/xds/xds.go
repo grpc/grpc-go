@@ -81,8 +81,8 @@ func SetHandshakeInfo(addr resolver.Address, hInfo *HandshakeInfo) resolver.Addr
 	return addr
 }
 
-// GetHandshakeInfo returns a pointer to the HandshakeInfo stored in attr.
-func GetHandshakeInfo(attr *attributes.Attributes) *HandshakeInfo {
+// getHandshakeInfo returns a pointer to the HandshakeInfo stored in attr.
+func getHandshakeInfo(attr *attributes.Attributes) *HandshakeInfo {
 	v := attr.Value(handshakeAttrKey{})
 	hi, _ := v.(*HandshakeInfo)
 	return hi
@@ -239,7 +239,7 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 	if chi.Attributes == nil {
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
-	hi := GetHandshakeInfo(chi.Attributes)
+	hi := getHandshakeInfo(chi.Attributes)
 	if hi == nil {
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
