@@ -40,20 +40,23 @@ func (c *meshCertificateServiceClient) CreateCertificate(ctx context.Context, in
 }
 
 // MeshCertificateServiceServer is the server API for MeshCertificateService service.
-// All implementations should embed UnimplementedMeshCertificateServiceServer
+// All implementations must embed UnimplementedMeshCertificateServiceServer
 // for forward compatibility
 type MeshCertificateServiceServer interface {
 	// Using provided CSR, returns a signed certificate that represents a GCP
 	// service account identity.
 	CreateCertificate(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error)
+	mustEmbedUnimplementedMeshCertificateServiceServer()
 }
 
-// UnimplementedMeshCertificateServiceServer should be embedded to have forward compatible implementations.
+// UnimplementedMeshCertificateServiceServer must be embedded to have forward compatible implementations.
 type UnimplementedMeshCertificateServiceServer struct {
 }
 
 func (UnimplementedMeshCertificateServiceServer) CreateCertificate(context.Context, *MeshCertificateRequest) (*MeshCertificateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateCertificate not implemented")
+}
+func (UnimplementedMeshCertificateServiceServer) mustEmbedUnimplementedMeshCertificateServiceServer() {
 }
 
 // UnsafeMeshCertificateServiceServer may be embedded to opt out of forward compatibility for this service.

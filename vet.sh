@@ -106,8 +106,9 @@ misspell -error .
 
 # - Check that generated proto files are up to date.
 if [[ -z "${VET_SKIP_PROTO}" ]]; then
-  PATH="/home/travis/bin:${PATH}" make proto && \
-    git status --porcelain 2>&1 | fail_on_output || \
+  rm -f $(git ls-files "*.pb.go" | grep -v 'grpc_testingv3/testv3.pb.go')
+  PATH="/home/travis/bin:${PATH}" make proto
+  git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
 fi
 
