@@ -87,8 +87,7 @@ func (s) TestBuildSameConfig(t *testing.T) {
 		providers = append(providers, p)
 	}
 
-	// Make sure only one ClientConn is created. Attempt to read the second
-	// ClientConn should timeout.
+	// Make sure only one ClientConn is created.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	val, err := ccChan.Receive(ctx)
@@ -96,6 +95,10 @@ func (s) TestBuildSameConfig(t *testing.T) {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
 	testCC := val.(*grpc.ClientConn)
+
+	// Attempt to read the second ClientConn should timeout.
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
 	if _, err := ccChan.Receive(ctx); err != context.DeadlineExceeded {
 		t.Fatal("Builder created more than one ClientConn")
 	}
@@ -104,15 +107,16 @@ func (s) TestBuildSameConfig(t *testing.T) {
 		p.Close()
 	}
 
-	state := testCC.GetState()
-	for i := 0; i < cnt; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-		testCC.WaitForStateChange(ctx, state)
+	for {
+		state := testCC.GetState()
 		if state == connectivity.Shutdown {
 			break
 		}
-		state = testCC.GetState()
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		if !testCC.WaitForStateChange(ctx, state) {
+			t.Fatalf("timeout waiting for clientConn state to change from %s", state.String())
+		}
 	}
 }
 
@@ -167,7 +171,7 @@ func (s) TestBuildDifferentConfig(t *testing.T) {
 	// second provider. The call to read key material should timeout, but it
 	// should not return certprovider.errProviderClosed.
 	providers[0].Close()
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer cancel()
 	if _, err := providers[1].KeyMaterial(ctx); err != context.DeadlineExceeded {
 		t.Fatalf("provider.KeyMaterial(ctx) = %v, want contextDeadlineExceeded", err)

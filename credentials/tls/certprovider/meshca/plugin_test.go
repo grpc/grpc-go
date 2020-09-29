@@ -46,12 +46,12 @@ import (
 )
 
 const (
-	defaultTestTimeout           = 100 * time.Millisecond
-	defaultTestCreateCertTimeout = 2 * time.Second
-	defaultTestDialTimeout       = 1 * time.Second
-	defaultTestCertLife          = time.Hour
-	shortTestCertLife            = 2 * time.Second
-	maxErrCount                  = 2
+	// Used when waiting for something that is expected to *not* happen.
+	defaultTestShortTimeout = 10 * time.Millisecond
+	defaultTestTimeout      = 5 * time.Second
+	defaultTestCertLife     = time.Hour
+	shortTestCertLife       = 2 * time.Second
+	maxErrCount             = 2
 )
 
 // fakeCA provides a very simple fake implementation of the certificate signing
@@ -224,7 +224,7 @@ func setup(t *testing.T, o opts) (events, string, func()) {
 		if uri != addr {
 			t.Fatalf("plugin dialing MeshCA at %s, want %s", uri, addr)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestDialTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
 		cc, err := grpc.DialContext(ctx, uri, grpc.WithInsecure(), grpc.WithBlock())
 		if err != nil {
@@ -309,14 +309,14 @@ func (s) TestCreateCertificate(t *testing.T) {
 	defer prov.Close()
 
 	// Wait till the plugin dials the MeshCA server.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestDialTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := e.dialDone.Receive(ctx); err != nil {
 		t.Fatal("timeout waiting for plugin to dial MeshCA")
 	}
 
 	// Wait till the plugin makes a CreateCertificate() call.
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestCreateCertTimeout)
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := e.createCertDone.Receive(ctx); err != nil {
 		t.Fatal("timeout waiting for plugin to make CreateCertificate RPC")
@@ -351,7 +351,7 @@ func (s) TestCreateCertificateWithBackoff(t *testing.T) {
 	defer prov.Close()
 
 	// Wait till the plugin dials the MeshCA server.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestDialTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := e.dialDone.Receive(ctx); err != nil {
 		t.Fatal("timeout waiting for plugin to dial MeshCA")
@@ -361,7 +361,7 @@ func (s) TestCreateCertificateWithBackoff(t *testing.T) {
 	// the CSR etc which seem to take reasonable amount of time. And in this
 	// test, the first two attempts will fail. Hence we give it a reasonable
 	// deadline here.
-	ctx, cancel = context.WithTimeout(context.Background(), 3*defaultTestCreateCertTimeout)
+	ctx, cancel = context.WithTimeout(context.Background(), 3*defaultTestTimeout)
 	defer cancel()
 	if _, err := e.createCertDone.Receive(ctx); err != nil {
 		t.Fatal("timeout waiting for plugin to make CreateCertificate RPC")
@@ -406,14 +406,14 @@ func (s) TestCreateCertificateWithRefresh(t *testing.T) {
 	defer prov.Close()
 
 	// Wait till the plugin dials the MeshCA server.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestDialTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := e.dialDone.Receive(ctx); err != nil {
 		t.Fatal("timeout waiting for plugin to dial MeshCA")
 	}
 
 	// Wait till the plugin makes a CreateCertificate() call.
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestCreateCertTimeout)
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := e.createCertDone.Receive(ctx); err != nil {
 		t.Fatal("timeout waiting for plugin to make CreateCertificate RPC")

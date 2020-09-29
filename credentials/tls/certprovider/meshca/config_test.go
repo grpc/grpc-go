@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/http/httputil"
 	"strings"
 	"testing"
 
@@ -146,23 +145,12 @@ func verifyReceivedRequest(fc *testutils.FakeHTTPClient, wantURI string) error {
 		return err
 	}
 	gotReq := val.(*http.Request)
-	gotR, err := httputil.DumpRequestOut(gotReq, false)
-	if err != nil {
-		return err
+	if gotURI := gotReq.URL.String(); gotURI != wantURI {
+		return fmt.Errorf("request contains URL %q want %q", gotURI, wantURI)
 	}
-
-	wantReq, err := http.NewRequest("GET", wantURI, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create http request: %v", err)
-	}
-	wantReq.Header.Set("Metadata-Flavor", "Google")
-	wantR, err := httputil.DumpRequestOut(wantReq, false)
-	if err != nil {
-		return err
-	}
-
-	if diff := cmp.Diff(string(wantR), string(gotR)); diff != "" {
-		return fmt.Errorf("HTTP request to MDS diff (-want +got):\n%s", diff)
+	wantFlavor := "Google"
+	if gotFlavor := gotReq.Header.Get("Metadata-Flavor"); gotFlavor != wantFlavor {
+		return fmt.Errorf("request contains flavor %q want %q", gotFlavor, wantFlavor)
 	}
 	return nil
 }
@@ -206,7 +194,7 @@ func (s) TestParseConfigSuccessWithDefaults(t *testing.T) {
 		"test-zone",                                      // Zone
 	)
 
-	// We expect the config parses to make four HTTP requests and receive four
+	// We expect the config parser to make four HTTP requests and receive four
 	// responses. Hence we setup the request and response channels in the fake
 	// client with appropriate buffer size.
 	fc := &testutils.FakeHTTPClient{
@@ -244,21 +232,21 @@ func (s) TestParseConfigSuccessWithDefaults(t *testing.T) {
 
 	// Spawn a goroutine to verify the HTTP requests sent out as part of the
 	// config parsing.
-	errCh := testutils.NewChannel()
+	errCh := make(chan error, 1)
 	go func() {
 		if err := verifyReceivedRequest(fc, "http://metadata.google.internal/computeMetadata/v1/project/project-id"); err != nil {
-			errCh.Send(err)
+			errCh <- err
 			return
 		}
 		if err := verifyReceivedRequest(fc, "http://metadata.google.internal/computeMetadata/v1/instance/attributes/cluster-name"); err != nil {
-			errCh.Send(err)
+			errCh <- err
 			return
 		}
 		if err := verifyReceivedRequest(fc, "http://metadata.google.internal/computeMetadata/v1/instance/zone"); err != nil {
-			errCh.Send(err)
+			errCh <- err
 			return
 		}
-		errCh.Send(nil)
+		errCh <- nil
 	}()
 
 	builder := newPluginBuilder()
@@ -271,9 +259,7 @@ func (s) TestParseConfigSuccessWithDefaults(t *testing.T) {
 		t.Errorf("builder.ParseConfig(%q) returned config does not match expected (-want +got):\n%s", inputConfig, diff)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if _, err := errCh.Receive(ctx); err != nil {
+	if err := <-errCh; err != nil {
 		t.Fatal(err)
 	}
 }

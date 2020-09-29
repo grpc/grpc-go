@@ -43,19 +43,20 @@ import (
 )
 
 const (
-	requestedTokenType   = "urn:ietf:params:oauth:token-type:access-token"
-	actorTokenPath       = "/var/run/secrets/token.jwt"
-	actorTokenType       = "urn:ietf:params:oauth:token-type:refresh_token"
-	actorTokenContents   = "actorToken.jwt.contents"
-	accessTokenContents  = "access_token"
-	subjectTokenPath     = "/var/run/secrets/token.jwt"
-	subjectTokenType     = "urn:ietf:params:oauth:token-type:id_token"
-	subjectTokenContents = "subjectToken.jwt.contents"
-	serviceURI           = "http://localhost"
-	exampleResource      = "https://backend.example.com/api"
-	exampleAudience      = "example-backend-service"
-	testScope            = "https://www.googleapis.com/auth/monitoring"
-	defaultTestTimeout   = 1 * time.Second
+	requestedTokenType      = "urn:ietf:params:oauth:token-type:access-token"
+	actorTokenPath          = "/var/run/secrets/token.jwt"
+	actorTokenType          = "urn:ietf:params:oauth:token-type:refresh_token"
+	actorTokenContents      = "actorToken.jwt.contents"
+	accessTokenContents     = "access_token"
+	subjectTokenPath        = "/var/run/secrets/token.jwt"
+	subjectTokenType        = "urn:ietf:params:oauth:token-type:id_token"
+	subjectTokenContents    = "subjectToken.jwt.contents"
+	serviceURI              = "http://localhost"
+	exampleResource         = "https://backend.example.com/api"
+	exampleAudience         = "example-backend-service"
+	testScope               = "https://www.googleapis.com/auth/monitoring"
+	defaultTestTimeout      = 1 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
 var (
@@ -416,9 +417,8 @@ func (s) TestGetRequestMetadataBadSubjectTokenRead(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		defer cancel()
-
 		if _, err := fc.ReqChan.Receive(ctx); err != context.DeadlineExceeded {
 			errCh <- err
 			return

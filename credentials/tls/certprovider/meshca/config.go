@@ -208,7 +208,7 @@ func makeHTTPClient() httpDoer {
 }
 
 func readMetadata(client httpDoer, uriPath string) (string, error) {
-	req, err := http.NewRequest("GET", path.Join(mdsBaseURI, uriPath), nil)
+	req, err := http.NewRequest("GET", mdsBaseURI+uriPath, nil)
 	if err != nil {
 		return "", err
 	}
