@@ -57,6 +57,8 @@ const (
 // fakeCA provides a very simple fake implementation of the certificate signing
 // service as exported by the MeshCA.
 type fakeCA struct {
+	meshgrpc.UnimplementedMeshCertificateServiceServer
+
 	withErrors    bool // Whether the CA returns errors to begin with.
 	withShortLife bool // Whether to create certs with short lifetime
 
@@ -202,9 +204,7 @@ func setup(t *testing.T, o opts) (events, string, func()) {
 
 	// Create a gRPC server and register the fake MeshCA on it.
 	server := grpc.NewServer()
-	meshgrpc.RegisterMeshCertificateServiceService(server, &meshgrpc.MeshCertificateServiceService{
-		CreateCertificate: fs.CreateCertificate,
-	})
+	meshgrpc.RegisterMeshCertificateServiceServer(server, fs)
 
 	// Start a net.Listener on a local port, and pass it to the gRPC server
 	// created above and start serving.
