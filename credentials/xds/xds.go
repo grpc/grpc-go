@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	credinternal "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/resolver"
 )
 
 // ClientOptions contains parameters to configure a new client-side xDS
@@ -73,9 +74,11 @@ type credsImpl struct {
 // the Attributes field of resolver.Address.
 type handshakeAttrKey struct{}
 
-// SetHandshakeInfo returns a copy of attr which is updated with hInfo.
-func SetHandshakeInfo(attr *attributes.Attributes, hInfo *HandshakeInfo) *attributes.Attributes {
-	return attr.WithValues(handshakeAttrKey{}, hInfo)
+// SetHandshakeInfo returns a copy of addr in which the Attributes field is
+// updated with hInfo.
+func SetHandshakeInfo(addr resolver.Address, hInfo *HandshakeInfo) resolver.Address {
+	addr.Attributes = addr.Attributes.WithValues(handshakeAttrKey{}, hInfo)
+	return addr
 }
 
 // GetHandshakeInfo returns a pointer to the HandshakeInfo stored in attr.
@@ -128,13 +131,13 @@ func (hi *HandshakeInfo) validate(isClient bool) error {
 	// On the client side, rootProvider is mandatory. IdentityProvider is
 	// optional based on whether the client is doing TLS or mTLS.
 	if isClient && hi.rootProvider == nil {
-		return errors.New("xds: CertificateProvider to fetch trusted roots is missing, cannot perform TLS handshake")
+		return errors.New("xds: CertificateProvider to fetch trusted roots is missing, cannot perform TLS handshake. Please check configuration on the management server")
 	}
 
 	// On the server side, identityProvider is mandatory. RootProvider is
 	// optional based on whether the server is doing TLS or mTLS.
 	if !isClient && hi.identityProvider == nil {
-		return errors.New("xds: CertificateProvider to fetch identity certificate is missing, cannot perform TLS handshake")
+		return errors.New("xds: CertificateProvider to fetch identity certificate is missing, cannot perform TLS handshake. Please check configuration on the management server")
 	}
 
 	return nil

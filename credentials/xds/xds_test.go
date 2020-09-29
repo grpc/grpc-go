@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
 )
 
@@ -227,13 +228,13 @@ func newTestContextWithHandshakeInfo(parent context.Context, root, identity cert
 	// similar to what the CDS balancer would do when it intercepts calls to
 	// NewSubConn().
 	info := NewHandshakeInfo(root, identity, sans...)
-	attr := SetHandshakeInfo(nil, info)
+	addr := SetHandshakeInfo(resolver.Address{}, info)
 
 	// Moving the attributes from the resolver.Address to the context passed to
 	// the handshaker is done in the transport layer. Since we directly call the
 	// handshaker in these tests, we need to do the same here.
 	contextWithHandshakeInfo := internal.NewClientHandshakeInfoContext.(func(context.Context, credentials.ClientHandshakeInfo) context.Context)
-	return contextWithHandshakeInfo(parent, credentials.ClientHandshakeInfo{Attributes: attr})
+	return contextWithHandshakeInfo(parent, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
 }
 
 // compareAuthInfo compares the AuthInfo received on the client side after a
@@ -503,9 +504,9 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	// We need to repeat most of what newTestContextWithHandshakeInfo() does
 	// here because we need access to the underlying HandshakeInfo so that we
 	// can update it before the next call to ClientHandshake().
-	attr := SetHandshakeInfo(nil, handshakeInfo)
+	addr := SetHandshakeInfo(resolver.Address{}, handshakeInfo)
 	contextWithHandshakeInfo := internal.NewClientHandshakeInfoContext.(func(context.Context, credentials.ClientHandshakeInfo) context.Context)
-	ctx = contextWithHandshakeInfo(ctx, credentials.ClientHandshakeInfo{Attributes: attr})
+	ctx = contextWithHandshakeInfo(ctx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
 	if _, _, err := creds.ClientHandshake(ctx, authority, conn); err == nil {
 		t.Fatal("ClientHandshake() succeeded when expected to fail")
 	}
