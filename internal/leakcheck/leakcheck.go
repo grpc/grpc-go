@@ -42,6 +42,7 @@ var goroutinesToIgnore = []string{
 	"runtime_mcall",
 	"(*loggingT).flushDaemon",
 	"goroutine in C code",
+	"httputil.DumpRequestOut", // TODO: Remove this once Go1.13 support is removed. https://github.com/golang/go/issues/37669.
 }
 
 // RegisterIgnoreGoroutine appends s into the ignore goroutine list. The

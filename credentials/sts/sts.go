@@ -111,6 +111,10 @@ type Options struct {
 	ActorTokenType string // Optional.
 }
 
+func (o Options) String() string {
+	return fmt.Sprintf("%s:%s:%s:%s:%s:%s:%s:%s:%s", o.TokenExchangeServiceURI, o.Resource, o.Audience, o.Scope, o.RequestedTokenType, o.SubjectTokenPath, o.SubjectTokenType, o.ActorTokenPath, o.ActorTokenType)
+}
+
 // NewCredentials returns a new PerRPCCredentials implementation, configured
 // using opts, which performs token exchange using STS.
 func NewCredentials(opts Options) (credentials.PerRPCCredentials, error) {
@@ -213,7 +217,7 @@ func validateOptions(opts Options) error {
 		return err
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("scheme is not supported: %s. Only http(s) is supported", u.Scheme)
+		return fmt.Errorf("scheme is not supported: %q. Only http(s) is supported", u.Scheme)
 	}
 
 	if opts.SubjectTokenPath == "" {
