@@ -43,10 +43,10 @@ func init() {
 
 var (
 	resourceTypeToURL = map[xdsclient.ResourceType]string{
-		xdsclient.ListenerResource:    version.V2ListenerURL,
-		xdsclient.RouteConfigResource: version.V2RouteConfigURL,
-		xdsclient.ClusterResource:     version.V2ClusterURL,
-		xdsclient.EndpointsResource:   version.V2EndpointsURL,
+		xdsclient.ListenerResource:    version.V3ListenerURL,
+		xdsclient.RouteConfigResource: version.V3RouteConfigURL,
+		xdsclient.ClusterResource:     version.V3ClusterURL,
+		xdsclient.EndpointsResource:   version.V3EndpointsURL,
 	}
 )
 
