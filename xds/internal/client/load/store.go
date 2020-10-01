@@ -56,9 +56,9 @@ func NewStore() *Store {
 // a slice with no specific order.
 //
 // If no clusterName is given (an empty slice), all data for all known clusters
-// are returned.
+// is returned.
 //
-// If a cluster's Data is empty (no load to report), it's not append to the
+// If a cluster's Data is empty (no load to report), it's not appended to the
 // returned slice.
 func (s *Store) Stats(clusterNames []string) []*Data {
 	var ret []*Data
@@ -87,7 +87,7 @@ func (s *Store) Stats(clusterNames []string) []*Data {
 func appendClusterStats(ret []*Data, cluster map[string]*perClusterStore) []*Data {
 	for _, d := range cluster {
 		data := d.stats()
-		if data.TotalDrops == 0 && len(data.Drops) == 0 && len(data.LocalityStats) == 0 {
+		if data == nil {
 			// Skip this data if it doesn't contain any information.
 			continue
 		}
@@ -278,6 +278,8 @@ func newData(cluster, service string) *Data {
 
 // stats returns and resets all loads reported to the store, except inProgress
 // rpc counts.
+//
+// It returns nil if the store doesn't contain any (new) data.
 func (ls *perClusterStore) stats() *Data {
 	if ls == nil {
 		return nil
@@ -329,6 +331,10 @@ func (ls *perClusterStore) stats() *Data {
 	sd.ReportInterval = time.Since(ls.lastLoadReportAt)
 	ls.lastLoadReportAt = time.Now()
 	ls.mu.Unlock()
+
+	if sd.TotalDrops == 0 && len(sd.Drops) == 0 && len(sd.LocalityStats) == 0 {
+		return nil
+	}
 	return sd
 }
 
