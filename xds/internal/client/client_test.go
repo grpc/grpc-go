@@ -53,9 +53,8 @@ const (
 	testEDSName = "test-eds"
 
 	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
-	defaultTestTimeout            = 1 * time.Second
-	// Used when waiting for events which are expected to *not* happen.
-	defaultTestShortTimeout = 10 * time.Millisecond
+	defaultTestTimeout            = 5 * time.Second
+	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
 )
 
 func clientOpts(balancerName string, overrideWatchExpiryTImeout bool) Options {
@@ -148,37 +147,29 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		// Calls another watch inline, to ensure there's deadlock.
 		client.WatchCluster("another-random-name", func(ClusterUpdate, error) {})
 
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
 		if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); firstTime && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 		firstTime = false
 	})
-
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate})
-	if err := verifyClusterUpdate(clusterUpdateCh, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
 	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate2})
-	if err := verifyClusterUpdate(clusterUpdateCh, wantUpdate2); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate2); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func verifyListenerUpdate(updateCh *testutils.Channel, wantUpdate ListenerUpdate) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
+func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate ListenerUpdate) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for listener update: %v", err)
@@ -190,10 +181,7 @@ func verifyListenerUpdate(updateCh *testutils.Channel, wantUpdate ListenerUpdate
 	return nil
 }
 
-func verifyRouteConfigUpdate(updateCh *testutils.Channel, wantUpdate RouteConfigUpdate) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
+func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate RouteConfigUpdate) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for route configuration update: %v", err)
@@ -205,10 +193,7 @@ func verifyRouteConfigUpdate(updateCh *testutils.Channel, wantUpdate RouteConfig
 	return nil
 }
 
-func verifyServiceUpdate(updateCh *testutils.Channel, wantUpdate ServiceUpdate) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
+func verifyServiceUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate ServiceUpdate) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for service update: %v", err)
@@ -220,10 +205,7 @@ func verifyServiceUpdate(updateCh *testutils.Channel, wantUpdate ServiceUpdate) 
 	return nil
 }
 
-func verifyClusterUpdate(updateCh *testutils.Channel, wantUpdate ClusterUpdate) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
+func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate ClusterUpdate) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for cluster update: %v", err)
@@ -235,10 +217,7 @@ func verifyClusterUpdate(updateCh *testutils.Channel, wantUpdate ClusterUpdate) 
 	return nil
 }
 
-func verifyEndpointsUpdate(updateCh *testutils.Channel, wantUpdate EndpointsUpdate) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
+func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate EndpointsUpdate) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for endpoints update: %v", err)

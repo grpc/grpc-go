@@ -58,16 +58,13 @@ func (s) TestClusterWatch(t *testing.T) {
 	cancelWatch := client.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 	})
-
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate})
-	if err := verifyClusterUpdate(clusterUpdateCh, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
@@ -76,16 +73,16 @@ func (s) TestClusterWatch(t *testing.T) {
 		testCDSName:  wantUpdate,
 		"randomName": {},
 	})
-	if err := verifyClusterUpdate(clusterUpdateCh, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
 	// Cancel watch, and send update again.
 	cancelWatch()
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate})
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer cancel()
-	if u, err := clusterUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
+	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	if u, err := clusterUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -112,9 +109,6 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 
 	var clusterUpdateChs []*testutils.Channel
 	var cancelLastWatch func()
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
 	const count = 2
 	for i := 0; i < count; i++ {
 		clusterUpdateCh := testutils.NewChannel()
@@ -135,7 +129,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate})
 	for i := 0; i < count; i++ {
-		if err := verifyClusterUpdate(clusterUpdateChs[i], wantUpdate); err != nil {
+		if err := verifyClusterUpdate(ctx, clusterUpdateChs[i], wantUpdate); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -144,14 +138,14 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 	cancelLastWatch()
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate})
 	for i := 0; i < count-1; i++ {
-		if err := verifyClusterUpdate(clusterUpdateChs[i], wantUpdate); err != nil {
+		if err := verifyClusterUpdate(ctx, clusterUpdateChs[i], wantUpdate); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer cancel()
-	if u, err := clusterUpdateChs[count-1].Receive(ctx); err != context.DeadlineExceeded {
+	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	if u, err := clusterUpdateChs[count-1].Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -176,12 +170,9 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 	}
 	apiClient := c.(*testAPIClient)
 
+	// Two watches for the same name.
 	var clusterUpdateChs []*testutils.Channel
 	const count = 2
-
-	// Two watches for the same name.
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	for i := 0; i < count; i++ {
 		clusterUpdateCh := testutils.NewChannel()
 		clusterUpdateChs = append(clusterUpdateChs, clusterUpdateCh)
@@ -215,11 +206,11 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 	})
 
 	for i := 0; i < count; i++ {
-		if err := verifyClusterUpdate(clusterUpdateChs[i], wantUpdate1); err != nil {
+		if err := verifyClusterUpdate(ctx, clusterUpdateChs[i], wantUpdate1); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := verifyClusterUpdate(clusterUpdateCh2, wantUpdate2); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate2); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -248,9 +239,6 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	client.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 	})
-
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
@@ -259,7 +247,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	client.NewClusters(map[string]ClusterUpdate{
 		testCDSName: wantUpdate,
 	})
-	if err := verifyClusterUpdate(clusterUpdateCh, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
@@ -268,21 +256,21 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	client.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(clusterUpdateErr{u: update, err: err})
 	})
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer cancel()
-	if n, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != context.DeadlineExceeded {
+	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	if n, err := apiClient.addWatches[ClusterResource].Receive(sCtx); err != context.DeadlineExceeded {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
 	// New watch should receives the update.
-	if err := verifyClusterUpdate(clusterUpdateCh2, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
 	// Old watch should see nothing.
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer cancel()
-	if u, err := clusterUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
+	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	if u, err := clusterUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -312,15 +300,10 @@ func (s) TestClusterWatchExpiryTimer(t *testing.T) {
 	client.WatchCluster(testCDSName, func(u ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: u, err: err})
 	})
-
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	u, err := clusterUpdateCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("timeout when waiting for cluster update: %v", err)
@@ -356,9 +339,6 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 	client.WatchCluster(testCDSName, func(u ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: u, err: err})
 	})
-
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
@@ -367,14 +347,14 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 	client.NewClusters(map[string]ClusterUpdate{
 		testCDSName: wantUpdate,
 	})
-	if err := verifyClusterUpdate(clusterUpdateCh, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
 	// Wait for an error, the error should never happen.
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestWatchExpiryTimeout)
-	defer cancel()
-	if u, err := clusterUpdateCh.Receive(ctx); err != context.DeadlineExceeded {
+	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestWatchExpiryTimeout)
+	defer sCancel()
+	if u, err := clusterUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
@@ -407,8 +387,6 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	client.WatchCluster(testCDSName+"1", func(update ClusterUpdate, err error) {
 		clusterUpdateCh1.Send(clusterUpdateErr{u: update, err: err})
 	})
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
@@ -418,8 +396,6 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	client.WatchCluster(testCDSName+"2", func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(clusterUpdateErr{u: update, err: err})
 	})
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
@@ -430,10 +406,10 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 		testCDSName + "1": wantUpdate1,
 		testCDSName + "2": wantUpdate2,
 	})
-	if err := verifyClusterUpdate(clusterUpdateCh1, wantUpdate1); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh1, wantUpdate1); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyClusterUpdate(clusterUpdateCh2, wantUpdate2); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -441,14 +417,12 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	client.NewClusters(map[string]ClusterUpdate{testCDSName + "2": wantUpdate2})
 
 	// Watcher 1 should get an error.
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if u, err := clusterUpdateCh1.Receive(ctx); err != nil || ErrType(u.(clusterUpdateErr).err) != ErrorTypeResourceNotFound {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v, want update with error resource not found", u, err)
 	}
 
 	// Watcher 2 should get the same update again.
-	if err := verifyClusterUpdate(clusterUpdateCh2, wantUpdate2); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -456,14 +430,14 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	client.NewClusters(map[string]ClusterUpdate{testCDSName + "2": wantUpdate2})
 
 	// Watcher 1 should not see an update.
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer cancel()
-	if u, err := clusterUpdateCh1.Receive(ctx); err != context.DeadlineExceeded {
+	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	if u, err := clusterUpdateCh1.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 
 	// Watcher 2 should get the same update again.
-	if err := verifyClusterUpdate(clusterUpdateCh2, wantUpdate2); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate2); err != nil {
 		t.Fatal(err)
 	}
 }
