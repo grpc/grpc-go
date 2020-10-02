@@ -157,7 +157,10 @@ grpc.WithTimeout
 http.CloseNotifier
 info.SecurityVersion
 resolver.Backend
-resolver.GRPCLB' "${SC_OUT}"
+resolver.GRPCLB
+Package github.com/golang/protobuf/proto is deprecated
+Package github.com/golang/protobuf/jsonpb is deprecated
+' "${SC_OUT}"
 
 # - special golint on package comments.
 lint_package_comment_per_package() {
