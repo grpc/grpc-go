@@ -118,8 +118,14 @@ type xdsServer struct {
 //      ],
 //      "server_features": [ ... ]
 //		"certificate_providers" : {
-//			"default": { default cert provider config },
-//			"foo": { config for provider foo }
+//			"default": {
+//				"plugin_name": "default-plugin-name",
+//				"config": {	default plugin config in JSON }
+//			},
+//			"foo": {
+//				"plugin_name": "foo",
+//				"config": { foo plugin config in JSON }
+//			}
 //		}
 //    },
 //    "node": <JSON form of Node proto>
@@ -208,24 +214,28 @@ func NewConfig() (*Config, error) {
 			configs := make(map[string]CertProviderConfig)
 			getBuilder := internal.GetCertificateProviderBuilder.(func(string) certprovider.Builder)
 			for instance, data := range providerInstances {
-				var providerConfigs map[string]json.RawMessage
-				if err := json.Unmarshal(data, &providerConfigs); err != nil {
+				var nameAndConfig struct {
+					PluginName string          `json:"plugin_name"`
+					Config     json.RawMessage `json:"config"`
+				}
+				if err := json.Unmarshal(data, &nameAndConfig); err != nil {
 					return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), instance, err)
 				}
-				for name, cfg := range providerConfigs {
-					parser := getBuilder(name)
-					if parser == nil {
-						// We ignore plugins that we do not know about.
-						continue
-					}
-					c, err := parser.ParseConfig(cfg)
-					if err != nil {
-						return nil, fmt.Errorf("xds: Config parsing for plugin %q failed: %v", name, err)
-					}
-					configs[instance] = CertProviderConfig{
-						Name:   name,
-						Config: c,
-					}
+
+				name := nameAndConfig.PluginName
+				parser := getBuilder(nameAndConfig.PluginName)
+				if parser == nil {
+					// We ignore plugins that we do not know about.
+					continue
+				}
+				cfg := nameAndConfig.Config
+				c, err := parser.ParseConfig(cfg)
+				if err != nil {
+					return nil, fmt.Errorf("xds: Config parsing for plugin %q failed: %v", name, err)
+				}
+				configs[instance] = CertProviderConfig{
+					Name:   name,
+					Config: c,
 				}
 			}
 			config.CertProviderConfigs = configs
