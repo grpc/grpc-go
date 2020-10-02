@@ -1,7 +1,7 @@
 # Configuration for probot-stale - https://github.com/probot/stale
 
 # Number of days of inactivity before an Issue or Pull Request becomes stale
-daysUntilStale: 7
+daysUntilStale: 6
 
 # Number of days of inactivity before an Issue or Pull Request with the stale label is closed.
 # Set to false to disable. If disabled, issues still need to be closed manually, but will remain marked as stale.
@@ -29,7 +29,7 @@ staleLabel: "stale"
 # Comment to post when marking as stale. Set to `false` to disable
 markComment: >
   This issue is labeled as requiring an update from the reporter, and no update has been received
-  after 7 days.  If no update is provided in the next 7 days, this issue will be automatically closed.
+  after 6 days.  If no update is provided in the next 7 days, this issue will be automatically closed.
 
 # Comment to post when removing the stale label.
 # unmarkComment: >
