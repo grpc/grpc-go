@@ -80,7 +80,7 @@ func (s) TestClusterWatch(t *testing.T) {
 	// Cancel watch, and send update again.
 	cancelWatch()
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate})
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := clusterUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
@@ -143,7 +143,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 		}
 	}
 
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := clusterUpdateChs[count-1].Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
@@ -256,7 +256,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	client.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(clusterUpdateErr{u: update, err: err})
 	})
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if n, err := apiClient.addWatches[ClusterResource].Receive(sCtx); err != context.DeadlineExceeded {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
@@ -268,7 +268,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	}
 
 	// Old watch should see nothing.
-	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := clusterUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
@@ -352,7 +352,7 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 	}
 
 	// Wait for an error, the error should never happen.
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestWatchExpiryTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestWatchExpiryTimeout)
 	defer sCancel()
 	if u, err := clusterUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
@@ -430,7 +430,7 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	client.NewClusters(map[string]ClusterUpdate{testCDSName + "2": wantUpdate2})
 
 	// Watcher 1 should not see an update.
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := clusterUpdateCh1.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)

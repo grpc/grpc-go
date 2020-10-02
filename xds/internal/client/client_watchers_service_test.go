@@ -143,7 +143,7 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
 		testRDSName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}},
 	})
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := serviceUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected serviceUpdate: %v, %v, want channel recv timeout", u, err)
@@ -227,7 +227,7 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := serviceUpdateCh2.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected serviceUpdate: %v, %v, want channel recv timeout", u, err)
@@ -356,7 +356,7 @@ func (s) TestServiceWatchWithClientClose(t *testing.T) {
 
 	// Client is closed before it receives the RDS response.
 	client.Close()
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := serviceUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected serviceUpdate: %v, %v, want channel recv timeout", u, err)
@@ -406,7 +406,7 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 
 	// Another LDS update with a the same RDS_name.
 	client.NewListeners(map[string]ListenerUpdate{testLDSName: {RouteConfigName: testRDSName}})
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := apiClient.removeWatches[RouteConfigResource].Receive(sCtx); err != context.DeadlineExceeded {
 		t.Fatalf("unexpected rds watch cancel")
@@ -471,7 +471,7 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
 		testRDSName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "new": 1}}}},
 	})
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := serviceUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected serviceUpdate: %v, want receiving from channel timeout", u)
@@ -484,7 +484,7 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 	if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
-	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := serviceUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected serviceUpdate: %v, want receiving from channel timeout", u)

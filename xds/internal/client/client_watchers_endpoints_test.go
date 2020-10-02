@@ -88,7 +88,7 @@ func (s) TestEndpointsWatch(t *testing.T) {
 
 	// Another update for a different resource name.
 	client.NewEndpoints(map[string]EndpointsUpdate{"randomName": {}})
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := endpointsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
@@ -97,7 +97,7 @@ func (s) TestEndpointsWatch(t *testing.T) {
 	// Cancel watch, and send update again.
 	cancelWatch()
 	client.NewEndpoints(map[string]EndpointsUpdate{testCDSName: wantUpdate})
-	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := endpointsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
@@ -162,7 +162,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 		}
 	}
 
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := endpointsUpdateChs[count-1].Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
@@ -273,7 +273,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	client.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh2.Send(endpointsUpdateErr{u: update, err: err})
 	})
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if n, err := apiClient.addWatches[EndpointsResource].Receive(sCtx); err != context.DeadlineExceeded {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
@@ -285,7 +285,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	}
 
 	// Old watch should see nothing.
-	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := endpointsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
