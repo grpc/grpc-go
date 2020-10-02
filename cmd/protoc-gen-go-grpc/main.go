@@ -32,14 +32,24 @@ package main
 
 import (
 	"flag"
+	"fmt"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
+const version = "1.0"
+
 var requireUnimplemented *bool
 
 func main() {
+	showVersion := flag.Bool("version", false, "print the version and exit")
+	flag.Parse()
+	if *showVersion {
+		fmt.Printf("protoc-gen-go-grpc %v\n", version)
+		return
+	}
+
 	var flags flag.FlagSet
 	requireUnimplemented = flags.Bool("require_unimplemented_servers", true, "set to false to match legacy behavior")
 
