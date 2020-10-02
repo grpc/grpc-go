@@ -21,7 +21,10 @@
 // queried by a client to remotely manage the gRPC profiling behaviour of an
 // application.
 //
-// This package and all its methods are EXPERIMENTAL.
+// Experimental
+//
+// Notice: This package is EXPERIMENTAL and may be changed or removed in a
+// later release.
 package service
 
 import (

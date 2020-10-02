@@ -23,7 +23,10 @@
 // reported. If local credentials is not used in local connections
 // (local TCP or UDS), it will fail.
 //
-// This package is EXPERIMENTAL.
+// Experimental
+//
+// Notice: This package is EXPERIMENTAL and may be changed or removed in a
+// later release.
 package local
 
 import (
