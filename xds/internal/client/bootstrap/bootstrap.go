@@ -120,7 +120,7 @@ type xdsServer struct {
 //		"certificate_providers" : {
 //			"default": {
 //				"plugin_name": "default-plugin-name",
-//				"config": {	default plugin config in JSON }
+//				"config": { default plugin config in JSON }
 //			},
 //			"foo": {
 //				"plugin_name": "foo",
