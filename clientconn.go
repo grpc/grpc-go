@@ -151,10 +151,10 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, cc.dopts.channelzParentID, target)
 			channelz.AddTraceEvent(logger, cc.channelzID, 0, &channelz.TraceEventDesc{
 				Desc:     "Channel Created",
-				Severity: channelz.CtINFO,
+				Severity: channelz.CtInfo,
 				Parent: &channelz.TraceEventDesc{
 					Desc:     fmt.Sprintf("Nested Channel(id:%d) created", cc.channelzID),
-					Severity: channelz.CtINFO,
+					Severity: channelz.CtInfo,
 				},
 			})
 		} else {
@@ -744,10 +744,10 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSub
 		ac.channelzID = channelz.RegisterSubChannel(ac, cc.channelzID, "")
 		channelz.AddTraceEvent(logger, ac.channelzID, 0, &channelz.TraceEventDesc{
 			Desc:     "Subchannel Created",
-			Severity: channelz.CtINFO,
+			Severity: channelz.CtInfo,
 			Parent: &channelz.TraceEventDesc{
 				Desc:     fmt.Sprintf("Subchannel(id:%d) created", ac.channelzID),
-				Severity: channelz.CtINFO,
+				Severity: channelz.CtInfo,
 			},
 		})
 	}
@@ -1033,12 +1033,12 @@ func (cc *ClientConn) Close() error {
 	if channelz.IsOn() {
 		ted := &channelz.TraceEventDesc{
 			Desc:     "Channel Deleted",
-			Severity: channelz.CtINFO,
+			Severity: channelz.CtInfo,
 		}
 		if cc.dopts.channelzParentID != 0 {
 			ted.Parent = &channelz.TraceEventDesc{
 				Desc:     fmt.Sprintf("Nested channel(id:%d) deleted", cc.channelzID),
-				Severity: channelz.CtINFO,
+				Severity: channelz.CtInfo,
 			}
 		}
 		channelz.AddTraceEvent(logger, cc.channelzID, 0, ted)
@@ -1451,10 +1451,10 @@ func (ac *addrConn) tearDown(err error) {
 	if channelz.IsOn() {
 		channelz.AddTraceEvent(logger, ac.channelzID, 0, &channelz.TraceEventDesc{
 			Desc:     "Subchannel Deleted",
-			Severity: channelz.CtINFO,
+			Severity: channelz.CtInfo,
 			Parent: &channelz.TraceEventDesc{
 				Desc:     fmt.Sprintf("Subchanel(id:%d) deleted", ac.channelzID),
-				Severity: channelz.CtINFO,
+				Severity: channelz.CtInfo,
 			},
 		})
 		// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to
