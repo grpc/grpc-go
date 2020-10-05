@@ -367,8 +367,8 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			}
 			t.controlBuf.put(&cleanupStream{
 				streamID: s.id,
-				rst:      true,
-				rstCode:  http2.ErrCodeRefusedStream,
+				rst:      false,
+				rstCode:  0,
 				onWrite:  func() {},
 			})
 			s.cancel()
