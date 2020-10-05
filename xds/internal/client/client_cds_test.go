@@ -32,15 +32,14 @@ import (
 	"google.golang.org/grpc/xds/internal/version"
 )
 
-func (s) TestValidateCluster(t *testing.T) {
-	const (
-		clusterName = "clusterName"
-		serviceName = "service"
-	)
-	var (
-		emptyUpdate = ClusterUpdate{ServiceName: "", EnableLRS: false}
-	)
+const (
+	clusterName = "clusterName"
+	serviceName = "service"
+)
 
+var emptyUpdate = ClusterUpdate{ServiceName: "", EnableLRS: false}
+
+func (s) TestValidateCluster_Failure(t *testing.T) {
 	tests := []struct {
 		name       string
 		cluster    *v3clusterpb.Cluster
@@ -98,6 +97,23 @@ func (s) TestValidateCluster(t *testing.T) {
 			wantUpdate: emptyUpdate,
 			wantErr:    true,
 		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if update, err := validateCluster(test.cluster); err == nil {
+				t.Errorf("validateCluster(%+v) = %v, wanted error", test.cluster, update)
+			}
+		})
+	}
+}
+
+func (s) TestValidateCluster_Success(t *testing.T) {
+	tests := []struct {
+		name       string
+		cluster    *v3clusterpb.Cluster
+		wantUpdate ClusterUpdate
+	}{
 		{
 			name: "happy-case-no-service-name-no-lrs",
 			cluster: &v3clusterpb.Cluster{
@@ -156,8 +172,11 @@ func (s) TestValidateCluster(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			update, err := validateCluster(test.cluster)
-			if ((err != nil) != test.wantErr) || !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
-				t.Errorf("validateCluster(%+v) = (%v, %v), wantErr: (%v, %v)", test.cluster, update, err, test.wantUpdate, test.wantErr)
+			if err != nil {
+				t.Errorf("validateCluster(%+v) failed: %v", test.cluster, err)
+			}
+			if !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
+				t.Errorf("validateCluster(%+v) = %v, want: %v", test.cluster, update, test.wantUpdate)
 			}
 		})
 	}
