@@ -25,6 +25,7 @@ package credentials
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"net/url"
 
 	"google.golang.org/grpc/grpclog"
@@ -48,7 +49,7 @@ func SPIFFEIDFromState(state tls.ConnectionState) *url.URL {
 			logger.Warning("invalid SPIFFE ID: total ID length larger than 2048 bytes")
 			return nil
 		}
-		if len(uri.Host) == 0 || len(uri.RawPath) == 0 || len(uri.Path) == 0 {
+		if len(uri.Host) == 0 || len(uri.Path) == 0 {
 			logger.Warning("invalid SPIFFE ID: domain or workload ID is empty")
 			return nil
 		}
@@ -58,6 +59,40 @@ func SPIFFEIDFromState(state tls.ConnectionState) *url.URL {
 		}
 		// A valid SPIFFE certificate can only have exactly one URI SAN field.
 		if len(state.PeerCertificates[0].URIs) > 1 {
+			logger.Warning("invalid SPIFFE ID: multiple URI SANs")
+			return nil
+		}
+		spiffeID = uri
+	}
+	return spiffeID
+}
+
+// SPIFFEIDFromState parses the SPIFFE ID from x509.Certificate. If the SPIFFE
+// ID format is invalid, return nil with warning.
+func SPIFFEIDFromCert(cert *x509.Certificate) *url.URL {
+	if cert == nil {
+		return nil
+	}
+	var spiffeID *url.URL
+	for _, uri := range cert.URIs {
+		if uri == nil || uri.Scheme != "spiffe" || uri.Opaque != "" || (uri.User != nil && uri.User.Username() != "") {
+			continue
+		}
+		// From this point, we assume the uri is intended for a SPIFFE ID.
+		if len(uri.String()) > 2048 {
+			logger.Warning("invalid SPIFFE ID: total ID length larger than 2048 bytes")
+			return nil
+		}
+		if len(uri.Host) == 0 || len(uri.Path) == 0 {
+			logger.Warning("invalid SPIFFE ID: domain or workload ID is empty")
+			return nil
+		}
+		if len(uri.Host) > 255 {
+			logger.Warning("invalid SPIFFE ID: domain length larger than 255 characters")
+			return nil
+		}
+		// A valid SPIFFE certificate can only have exactly one URI SAN field.
+		if len(cert.URIs) > 1 {
 			logger.Warning("invalid SPIFFE ID: multiple URI SANs")
 			return nil
 		}

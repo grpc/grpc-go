@@ -80,11 +80,19 @@ type certStore struct {
 	serverPeer1 tls.Certificate
 	// serverPeer2 is the certificate sent by server to prove its identity.
 	// It is trusted by clientTrust2.
-	serverPeer2  tls.Certificate
-	clientTrust1 *x509.CertPool
-	clientTrust2 *x509.CertPool
-	serverTrust1 *x509.CertPool
-	serverTrust2 *x509.CertPool
+	serverPeer2 tls.Certificate
+	// clientPeerSPIFFE1 is the certificate with the SPIFFE ID
+	// "spiffe://foo.bar.com/client/workload/1" sent by client to prove identity.
+	// It is trusted by serverTrust1.
+	clientPeerSPIFFE1 tls.Certificate
+	// serverPeerSPIFFE1 is the certificate with the SPIFFE ID
+	// "spiffe://foo.bar.com/client/workload/1" sent by client to prove identity.
+	// It is trusted by serverTrust1.
+	serverPeerSPIFFE1 tls.Certificate
+	clientTrust1      *x509.CertPool
+	clientTrust2      *x509.CertPool
+	serverTrust1      *x509.CertPool
+	serverTrust2      *x509.CertPool
 }
 
 // loadCerts function is used to load test certificates at the beginning of
@@ -108,6 +116,16 @@ func (cs *certStore) loadCerts() error {
 	}
 	cs.serverPeer2, err = tls.LoadX509KeyPair(testdata.Path("server_cert_2.pem"),
 		testdata.Path("server_key_2.pem"))
+	if err != nil {
+		return err
+	}
+	cs.clientPeerSPIFFE1, err = tls.LoadX509KeyPair(testdata.Path("client_cert_spiffe_1.pem"),
+		testdata.Path("client_key_spiffe_1.pem"))
+	if err != nil {
+		return err
+	}
+	cs.serverPeerSPIFFE1, err = tls.LoadX509KeyPair(testdata.Path("server_cert_spiffe_1.pem"),
+		testdata.Path("server_key_spiffe_1.pem"))
 	if err != nil {
 		return err
 	}
@@ -375,6 +393,52 @@ func (s) TestEnd2End(t *testing.T) {
 			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				switch stage.read() {
 				case 0, 2:
+					return &VerificationResults{}, nil
+				case 1:
+					return nil, fmt.Errorf("custom authz check fails")
+				default:
+					return nil, fmt.Errorf("custom authz check fails")
+				}
+			},
+			serverVType: CertVerification,
+		},
+		// Test if the SPIFFE ID is plumbed to VerificationFuncParams while
+		// performing the custom authorization.
+		// At initialization(stage = 0), client will be initialized with cert
+		// clientPeerSPIFFE1 and clientTrust1, server with serverPeerSPIFFE1 and
+		// serverTrust1.
+		// The mutual authentication works at the beginning, since clientPeerSPIFFE1
+		// trusted by serverTrust1, serverPeerSPIFFE1 trusted by clientTrust1.
+		// Besides, the client custom verification check allows the SPIFFE
+		// ID shown on serverPeerSPIFFE1, and server verification allows SPIFFE ID
+		// on clientPeerSPIFFE1.
+		// At stage 1, server disallows the the connections by setting custom
+		// verification check. The following calls should fail. Previous
+		// connections should not be affected.
+		// At stage 2, server allows the SPIFFE ID shown on the clientPeerSPIFFE1.
+		// Authentications should go back to normal.
+		{
+			desc:       "TestSPIFFEIDIsPlumbed",
+			clientCert: []tls.Certificate{cs.clientPeerSPIFFE1},
+			clientRoot: cs.clientTrust1,
+			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
+				if params.SPIFFEID == nil || params.SPIFFEID.Scheme != "spiffe" ||
+					params.SPIFFEID.Host != "foo.bar.com" || params.SPIFFEID.Path != "/server/workload/1" {
+					return nil, fmt.Errorf("custom authz check fails")
+				}
+				return &VerificationResults{}, nil
+
+			},
+			clientVType: CertVerification,
+			serverCert:  []tls.Certificate{cs.serverPeerSPIFFE1},
+			serverRoot:  cs.serverTrust1,
+			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
+				switch stage.read() {
+				case 0, 2:
+					if params.SPIFFEID == nil || params.SPIFFEID.Scheme != "spiffe" ||
+						params.SPIFFEID.Host != "foo.bar.com" || params.SPIFFEID.Path != "/client/workload/1" {
+						return nil, fmt.Errorf("custom authz check fails")
+					}
 					return &VerificationResults{}, nil
 				case 1:
 					return nil, fmt.Errorf("custom authz check fails")

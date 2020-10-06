@@ -27,6 +27,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
+	"net/url"
 	"reflect"
 	"syscall"
 	"time"
@@ -53,6 +54,10 @@ type VerificationFuncParams struct {
 	// certificate(s) and that verification passed. This field would be nil if
 	// either user chose not to verify or the verification failed.
 	Leaf *x509.Certificate
+	// The connection information stored during the verification.
+	RawConn net.Conn
+	// The SPIFFE ID stored in |State|.
+	SPIFFEID *url.URL
 }
 
 // VerificationResults contains the information about results of
@@ -502,13 +507,14 @@ func buildVerifyFunc(c *advancedTLSCreds,
 			}
 			leafCert = certs[0]
 		}
-		// Perform custom verification check if specified.
 		if c.verifyFunc != nil {
 			_, err := c.verifyFunc(&VerificationFuncParams{
 				ServerName:     serverName,
 				RawCerts:       rawCerts,
 				VerifiedChains: chains,
 				Leaf:           leafCert,
+				RawConn:        rawConn,
+				SPIFFEID:       credinternal.SPIFFEIDFromCert(leafCert),
 			})
 			return err
 		}
