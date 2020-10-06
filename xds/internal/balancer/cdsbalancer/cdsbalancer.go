@@ -21,17 +21,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
 
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -57,6 +61,10 @@ var (
 		// not deal with subConns.
 		return builder.Build(cc, opts), nil
 	}
+
+	getProviderFunc = func(name string, cfg interface{}, opts certprovider.Options) (certprovider.Provider, error) {
+		return certprovider.GetProvider(name, cfg, opts)
+	}
 )
 
 func init() {
@@ -80,6 +88,24 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 	}
 	b.logger = prefixLogger((b))
 	b.logger.Infof("Created")
+
+	xdsCredsInUse := false
+	switch {
+	case opts.DialCreds != nil:
+		if xds.CredentialsUsesXDS(opts.DialCreds) {
+			xdsCredsInUse = true
+		}
+	case opts.CredsBundle != nil:
+		if xds.CredentialsUsesXDS(opts.CredsBundle.TransportCredentials()) {
+			xdsCredsInUse = true
+		}
+	}
+	b.logger.Infof("xDS credentials in use: %v", xdsCredsInUse)
+	b.ccw = &ccWrapper{
+		ClientConn:    cc,
+		xdsCredsInUse: xdsCredsInUse,
+	}
+
 	go b.run()
 	return b
 }
@@ -110,6 +136,7 @@ func (cdsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, 
 // the cdsBalancer. This will be faked out in unittests.
 type xdsClientInterface interface {
 	WatchCluster(string, func(xdsclient.ClusterUpdate, error)) func()
+	CertProviderConfigs() map[string]bootstrap.CertProviderConfig
 	Close()
 }
 
@@ -146,6 +173,7 @@ type watchUpdate struct {
 // exposed to the edsBalancer.
 type cdsBalancer struct {
 	cc             balancer.ClientConn
+	ccw            *ccWrapper
 	bOpts          balancer.BuildOptions
 	updateCh       *buffer.Unbounded
 	client         xdsClientInterface
@@ -193,6 +221,7 @@ func (b *cdsBalancer) run() {
 					}
 					b.clusterToWatch = update.clusterName
 				}
+				b.ccw.setClient(b.client)
 
 			// SubConn updates are passthrough and are simply handed over to the
 			// underlying edsBalancer.
@@ -213,16 +242,34 @@ func (b *cdsBalancer) run() {
 				}
 
 				b.logger.Infof("Watch update from xds-client %p, content: %+v", b.client, update.cds)
+
+				// We process the security config from the received update
+				// before building the child policy or forwarding the update to
+				// it. The reason for doing this is because there is no
+				// guarantee that the child policy will try to create a new
+				// subConn inline. Processing the security configuration here
+				// and setting up the handshakeInfo will make sure that we
+				// handle such attempts to create new subConns properly.
+				if err := b.ccw.handleSecurityConfig(update.cds.SecurityCfg); err != nil {
+					// If the security config is invalid, for example, if the
+					// provider instance is not found in the bootstrap config,
+					// we need to put the channel in transient failure. Calling
+					// handleErrorFromUpdate() takes care of that.
+					b.logger.Warningf("Invalid security config update from xds-client %p: %v", b.client, err)
+					b.handleErrorFromUpdate(err, false)
+					break
+				}
+
 				// The first good update from the watch API leads to the
 				// instantiation of an edsBalancer. Further updates/errors are
 				// propagated to the existing edsBalancer.
 				if b.edsLB == nil {
-					var err error
-					b.edsLB, err = newEDSBalancer(b.cc, b.bOpts)
-					if b.edsLB == nil {
+					edsLB, err := newEDSBalancer(b.ccw, b.bOpts)
+					if err != nil {
 						b.logger.Errorf("Failed to create child policy of type %s, %v", edsName, err)
 						break
 					}
+					b.edsLB = edsLB
 					b.logger.Infof("Created child policy %p of type %s", b.edsLB, edsName)
 				}
 				lbCfg := &edsbalancer.EDSConfig{EDSServiceName: update.cds.ServiceName}
@@ -364,4 +411,133 @@ func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 // Close closes the cdsBalancer and the underlying edsBalancer.
 func (b *cdsBalancer) Close() {
 	b.closed.Fire()
+}
+
+// ccWrapper wraps the balancer.ClientConn that was passed in to the CDS
+// balancer during creation and intercepts the NewSubConn() call from the child
+// policy. Other methods of the balancer.ClientConn interface are not overridden
+// and hence get the original implementation.
+type ccWrapper struct {
+	balancer.ClientConn
+	xdsCredsInUse bool
+
+	// This mutex protects all fields below.
+	mu        sync.Mutex
+	xdsHI     *xds.HandshakeInfo
+	xdsClient xdsClientInterface
+	// The certificate providers are cached here to that they can be closed when
+	// a new provider is to be created.
+	cachedRoot     certprovider.Provider
+	cachedIdentity certprovider.Provider
+}
+
+// NewSubConn handles intercepts attempts create a new SubConn from the child
+// policy and adds an address attribute which provides all information required
+// by the xdsCreds handshaker to perform the TLS handshake.
+func (ccw *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	ccw.mu.Lock()
+	defer ccw.mu.Unlock()
+
+	if !ccw.xdsCredsInUse || ccw.xdsHI == nil {
+		return ccw.ClientConn.NewSubConn(addrs, opts)
+	}
+
+	newAddrs := make([]resolver.Address, len(addrs))
+	for i, addr := range addrs {
+		newAddrs[i] = xds.SetHandshakeInfo(addr, ccw.xdsHI)
+	}
+	return ccw.ClientConn.NewSubConn(newAddrs, opts)
+}
+
+// setClient updates the xdsClient within the wrapper.
+func (ccw *ccWrapper) setClient(c xdsClientInterface) {
+	ccw.mu.Lock()
+	ccw.xdsClient = c
+	ccw.mu.Unlock()
+}
+
+// handleSecurityConfig processes the security configuration received from the
+// management server, creates appropriate certificate provider plugins, and
+// updates the HandhakeInfo which is added as an address attribute in
+// NewSubConn() calls.
+func (ccw *ccWrapper) handleSecurityConfig(config *xdsclient.SecurityConfig) error {
+	ccw.mu.Lock()
+	defer ccw.mu.Unlock()
+
+	// If xdsCredentials are not in use, i.e, the user did not want to get
+	// security configuration from an xDS server, we should not be acting on the
+	// received security config here. Doing so poses a security threat.
+	if !ccw.xdsCredsInUse {
+		return nil
+	}
+	// Security config being nil is a valid case where the management server has
+	// not sent any security configuration. The xdsCredentials implementation
+	// handles this by delegating to its fallback credentials.
+	if config == nil {
+		return nil
+	}
+
+	cpc := ccw.xdsClient.CertProviderConfigs()
+	if cpc == nil {
+		// Bootstrap did not find any certificate provider configs, but the user
+		// has specified xdsCredentials and the management server has sent down
+		// security configuration.
+		return errors.New("xds: certificate_providers config missing in bootstrap file")
+	}
+
+	// A root provider is always present, whether we are using TLS or mTLS.
+	rootCfg, ok := cpc[config.RootInstanceName]
+	if !ok {
+		return fmt.Errorf("certificate provider instance %q not found in bootstrap file", config.RootInstanceName)
+	}
+	rootProvider, err := getProviderFunc(rootCfg.Name, rootCfg.Config, certprovider.Options{
+		CertName: config.RootCertName,
+		WantRoot: true,
+	})
+	if err != nil {
+		// This error is not expected since the bootstrap process parses the
+		// config and makes sure that it is acceptable to the plugin. Still, it
+		// is possible that the plugin parses the config successfully, but its
+		// Build() method errors out.
+		return fmt.Errorf("xds: failed to get plugin instance (%+v): %v", rootCfg, err)
+	}
+	if ccw.cachedRoot != nil {
+		ccw.cachedRoot.Close()
+	}
+	ccw.cachedRoot = rootProvider
+
+	// The identity provider is only present when using mTLS.
+	var identityProvider certprovider.Provider
+	if name := config.IdentityInstanceName; name != "" {
+		identityCfg := cpc[name]
+		if !ok {
+			return fmt.Errorf("certificate provider instance %q not found in bootstrap file", config.IdentityInstanceName)
+		}
+		identityProvider, err = getProviderFunc(identityCfg.Name, identityCfg.Config, certprovider.Options{
+			CertName:     config.IdentityCertName,
+			WantIdentity: true,
+		})
+		if err != nil {
+			// This error is not expected since the bootstrap process parses the
+			// config and makes sure that it is acceptable to the plugin. Still,
+			// it is possible that the plugin parses the config successfully,
+			// but its Build() method errors out.
+			return fmt.Errorf("xds: failed to get plugin instance (%+v): %v", identityCfg, err)
+		}
+	}
+	if ccw.cachedIdentity != nil {
+		ccw.cachedIdentity.Close()
+	}
+	ccw.cachedIdentity = identityProvider
+
+	if ccw.xdsHI == nil {
+		ccw.xdsHI = xds.NewHandshakeInfo(rootProvider, identityProvider, config.AcceptedSANs...)
+	} else {
+		// We set all fields here, even if some of them are nil, since they
+		// could have been non-nil earlier.
+		ccw.xdsHI.SetRootCertProvider(rootProvider)
+		ccw.xdsHI.SetIdentityCertProvider(identityProvider)
+		ccw.xdsHI.SetAcceptedSANs(config.AcceptedSANs)
+	}
+	return nil
 }

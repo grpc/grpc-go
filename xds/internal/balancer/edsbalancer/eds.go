@@ -198,6 +198,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 
 		x.config = cfg
 	case error:
+		x.logger.Warningf("Received error from resolver: %v", u)
 		x.handleErrorFromUpdate(u, true)
 	default:
 		// unreachable path

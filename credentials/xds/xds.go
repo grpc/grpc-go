@@ -81,8 +81,10 @@ func SetHandshakeInfo(addr resolver.Address, hInfo *HandshakeInfo) resolver.Addr
 	return addr
 }
 
-// getHandshakeInfo returns a pointer to the HandshakeInfo stored in attr.
-func getHandshakeInfo(attr *attributes.Attributes) *HandshakeInfo {
+// GetHandshakeInfo returns a pointer to the HandshakeInfo stored in attr.
+//
+// Outside of this package, this function is meant only to be used for testing.
+func GetHandshakeInfo(attr *attributes.Attributes) *HandshakeInfo {
 	v := attr.Value(handshakeAttrKey{})
 	hi, _ := v.(*HandshakeInfo)
 	return hi
@@ -244,7 +246,7 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 	if chi.Attributes == nil {
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
-	hi := getHandshakeInfo(chi.Attributes)
+	hi := GetHandshakeInfo(chi.Attributes)
 	if hi == nil {
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
@@ -354,4 +356,14 @@ func (c *credsImpl) Clone() credentials.TransportCredentials {
 
 func (c *credsImpl) OverrideServerName(_ string) error {
 	return errors.New("serverName for peer validation must be configured as a list of acceptable SANs")
+}
+
+// CredentialsUsesXDS returns true if c uses xDS to fetch security configuration
+// used at handshake time, and false otherwise.
+func CredentialsUsesXDS(c credentials.TransportCredentials) bool {
+	if c == nil {
+		return false
+	}
+	_, ok := c.(*credsImpl)
+	return ok
 }

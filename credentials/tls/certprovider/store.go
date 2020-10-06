@@ -80,9 +80,19 @@ func GetProvider(name string, config interface{}, opts Options) (Provider, error
 	if builder == nil {
 		return nil, fmt.Errorf("no registered builder for provider name: %s", name)
 	}
-	stableConfig, err := builder.ParseConfig(config)
-	if err != nil {
-		return nil, err
+
+	var (
+		stableConfig StableConfig
+		err          error
+	)
+	if c, ok := config.(StableConfig); ok {
+		// The config passed to the store has already been parsed.
+		stableConfig = c
+	} else {
+		stableConfig, err = builder.ParseConfig(config)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	sk := storeKey{

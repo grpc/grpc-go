@@ -418,6 +418,14 @@ func New(opts Options) (*Client, error) {
 	return c, nil
 }
 
+// CertProviderConfigs returns the certificate provider configuration from the
+// "certificate_providers" field of the bootstrap file. The returned value is a
+// map from plugin_instance_name to {plugin_name, plugin_config}. Callers must
+// not modify the returned map.
+func (c *Client) CertProviderConfigs() map[string]bootstrap.CertProviderConfig {
+	return c.opts.Config.CertProviderConfigs
+}
+
 // run is a goroutine for all the callbacks.
 //
 // Callback can be called in watch(), if an item is found in cache. Without this
