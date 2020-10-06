@@ -21,10 +21,13 @@ package credentials
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
+	"io/ioutil"
 	"net/url"
 	"testing"
 
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/testdata"
 )
 
 type s struct {
@@ -176,5 +179,27 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 				t.Errorf("want expectID = %v, but SPIFFE ID is %v", want, id)
 			}
 		})
+	}
+}
+
+func (s) TestSPIFFEIDFromCert(t *testing.T) {
+	data, err := ioutil.ReadFile(testdata.Path("x509/spiffe_cert.pem"))
+	if err != nil {
+		t.Fatalf("Failed to load the test credentials: %v", err)
+	}
+	block, rest := pem.Decode(data)
+	if len(rest) != 0 {
+		t.Fatalf("Failed to parse the certificate: invalid format")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("Failed to load the test credentials: %v", err)
+	}
+	uri := SPIFFEIDFromCert(cert)
+	if uri == nil {
+		t.Fatalf("SPIFFE ID is nil")
+	}
+	if uri.String() != "spiffe://foo.bar.com/client/workload/1" {
+		t.Fatalf("SPIFFE ID not expected, got %s, want %s", uri.String(), "spiffe://foo.bar.com/client/workload/1")
 	}
 }

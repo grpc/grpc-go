@@ -100,5 +100,16 @@ openssl x509 -req           \
   -extensions test_client
 openssl verify -verbose -CAfile client_ca_cert.pem  client2_cert.pem
 
+# Generate a cert with SPIFFE ID.
+openssl req -x509                                                         \
+  -newkey rsa:4096                                                        \
+  -keyout spiffe_key.pem                                                  \
+  -out spiffe_cert.pem                                                    \
+  -nodes                                                                  \
+  -days 3650                                                              \
+  -subj /C=US/ST=CA/L=SVL/O=gRPC/CN=test-client1/                         \
+  -addext "subjectAltName = URI:spiffe://foo.bar.com/client/workload/1"
+openssl verify -verbose -CAfile client_ca_cert.pem  client1_spiffe_cert.pem
+
 # Cleanup the CSRs.
 rm *_csr.pem
