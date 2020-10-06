@@ -222,7 +222,7 @@ type ClusterUpdate struct {
 	// EnableLRS indicates whether or not load should be reported through LRS.
 	EnableLRS bool
 	// SecurityCfg contains security configuration sent by the xDS server.
-	SecurityCfg SecurityConfig
+	SecurityCfg *SecurityConfig
 }
 
 // OverloadDropConfig contains the config to drop overloads.

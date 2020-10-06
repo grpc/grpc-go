@@ -322,7 +322,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 			wantUpdate: ClusterUpdate{
 				ServiceName: serviceName,
 				EnableLRS:   false,
-				SecurityCfg: SecurityConfig{
+				SecurityCfg: &SecurityConfig{
 					RootInstanceName: rootPluginInstance,
 					RootCertName:     rootCertName,
 				},
@@ -370,7 +370,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 			wantUpdate: ClusterUpdate{
 				ServiceName: serviceName,
 				EnableLRS:   false,
-				SecurityCfg: SecurityConfig{
+				SecurityCfg: &SecurityConfig{
 					RootInstanceName:     rootPluginInstance,
 					RootCertName:         rootCertName,
 					IdentityInstanceName: identityPluginInstance,
@@ -428,7 +428,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 			wantUpdate: ClusterUpdate{
 				ServiceName: serviceName,
 				EnableLRS:   false,
-				SecurityCfg: SecurityConfig{
+				SecurityCfg: &SecurityConfig{
 					RootInstanceName:     rootPluginInstance,
 					RootCertName:         rootCertName,
 					IdentityInstanceName: identityPluginInstance,

@@ -407,20 +407,15 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 		return emptyUpdate, fmt.Errorf("xds: unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
 
-	cu := ClusterUpdate{
-		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
-		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
-	}
 	sc, err := securityConfigFromCluster(cluster)
 	if err != nil {
 		return emptyUpdate, err
 	}
-	if sc != nil {
-		// A valid Cluster resource could contain no security configuration
-		// (transport_socket field is nil). Hence we need a nil check here.
-		cu.SecurityCfg = *sc
-	}
-	return cu, nil
+	return ClusterUpdate{
+		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
+		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
+		SecurityCfg: sc,
+	}, nil
 }
 
 // securityConfigFromCluster extracts the relevant security configuration from
