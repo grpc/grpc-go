@@ -77,7 +77,7 @@ declare -A EXPECTED_SERVER_OUTPUT=(
 
 declare -A EXPECTED_CLIENT_OUTPUT=(
     ["helloworld"]="Greeting: Hello world"
-    ["route_guide"]="location:<latitude:416851321 longitude:-742674555 >"
+    ["route_guide"]="location:{latitude:416851321 longitude:-742674555}"
     ["features/authentication"]="UnaryEcho:  hello world"
     ["features/compression"]="UnaryEcho call returned \"compress\", <nil>"
     ["features/deadline"]="wanted = DeadlineExceeded, got = DeadlineExceeded"
