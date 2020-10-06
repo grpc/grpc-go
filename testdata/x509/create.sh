@@ -109,7 +109,6 @@ openssl req -x509                                                         \
   -days 3650                                                              \
   -subj /C=US/ST=CA/L=SVL/O=gRPC/CN=test-client1/                         \
   -addext "subjectAltName = URI:spiffe://foo.bar.com/client/workload/1"
-openssl verify -verbose -CAfile client_ca_cert.pem  client1_spiffe_cert.pem
 
 # Cleanup the CSRs.
 rm *_csr.pem
