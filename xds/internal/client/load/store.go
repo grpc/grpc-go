@@ -33,7 +33,7 @@ const negativeOneUInt64 = ^uint64(0)
 type Store struct {
 	// mu only protects the map (2 layers). The read/write to *perClusterStore
 	// doesn't need to hold the mu.
-	mu sync.RWMutex
+	mu sync.Mutex
 	// clusters is a map with cluster name as the key. The second layer is a map
 	// with service name as the key. Each value (perClusterStore) contains data
 	// for a (cluster, service) pair.
@@ -62,8 +62,8 @@ func NewStore() *Store {
 // returned slice.
 func (s *Store) Stats(clusterNames []string) []*Data {
 	var ret []*Data
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if len(clusterNames) == 0 {
 		for _, c := range s.clusters {
@@ -103,15 +103,6 @@ func (s *Store) PerCluster(clusterName, serviceName string) PerClusterReporter {
 		return nil
 	}
 
-	s.mu.RLock()
-	if c, ok := s.clusters[clusterName]; ok {
-		if p, ok := c[serviceName]; ok {
-			s.mu.RUnlock()
-			return p
-		}
-	}
-	s.mu.RUnlock()
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c, ok := s.clusters[clusterName]
@@ -120,14 +111,14 @@ func (s *Store) PerCluster(clusterName, serviceName string) PerClusterReporter {
 		s.clusters[clusterName] = c
 	}
 
-	p, ok := c[serviceName]
-	if !ok {
-		p = &perClusterStore{
-			cluster: clusterName,
-			service: serviceName,
-		}
-		c[serviceName] = p
+	if p, ok := c[serviceName]; ok {
+		return p
 	}
+	p := &perClusterStore{
+		cluster: clusterName,
+		service: serviceName,
+	}
+	c[serviceName] = p
 	return p
 }
 
