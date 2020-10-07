@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	"google.golang.org/grpc/security/advancedtls/internal"
 )
 
 var (
@@ -119,8 +120,10 @@ func callAndVerifyWithClientConn(connCtx context.Context, msg string, creds cred
 // (could be change the client's trust certificate, or change custom
 // verification function, etc)
 func (s) TestEnd2End(t *testing.T) {
-	cs := &certStore{}
-	cs.loadCerts(t)
+	cs := &internal.CertStore{}
+	if err := cs.LoadCerts(); err != nil {
+		t.Fatalf("Function cs.LoadCerts() failed, err: %v", err)
+	}
 	stage := &stageInfo{}
 	for _, test := range []struct {
 		desc             string
@@ -154,23 +157,23 @@ func (s) TestEnd2End(t *testing.T) {
 			clientGetCert: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
-					return &cs.clientCert1, nil
+					return &cs.ClientCert1, nil
 				default:
-					return &cs.clientCert2, nil
+					return &cs.ClientCert2, nil
 				}
 			},
-			clientRoot: cs.clientTrust1,
+			clientRoot: cs.ClientTrust1,
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
 			clientVType: CertVerification,
-			serverCert:  []tls.Certificate{cs.serverCert1},
+			serverCert:  []tls.Certificate{cs.ServerCert1},
 			serverGetRoot: func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 				switch stage.read() {
 				case 0, 1:
-					return &GetRootCAsResults{TrustCerts: cs.serverTrust1}, nil
+					return &GetRootCAsResults{TrustCerts: cs.ServerTrust1}, nil
 				default:
-					return &GetRootCAsResults{TrustCerts: cs.serverTrust2}, nil
+					return &GetRootCAsResults{TrustCerts: cs.ServerTrust2}, nil
 				}
 			},
 			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
@@ -192,13 +195,13 @@ func (s) TestEnd2End(t *testing.T) {
 		// by clientTrust2.
 		{
 			desc:       "TestServerPeerCertReloadClientTrustCertReload",
-			clientCert: []tls.Certificate{cs.clientCert1},
+			clientCert: []tls.Certificate{cs.ClientCert1},
 			clientGetRoot: func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 				switch stage.read() {
 				case 0, 1:
-					return &GetRootCAsResults{TrustCerts: cs.clientTrust1}, nil
+					return &GetRootCAsResults{TrustCerts: cs.ClientTrust1}, nil
 				default:
-					return &GetRootCAsResults{TrustCerts: cs.clientTrust2}, nil
+					return &GetRootCAsResults{TrustCerts: cs.ClientTrust2}, nil
 				}
 			},
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
@@ -208,12 +211,12 @@ func (s) TestEnd2End(t *testing.T) {
 			serverGetCert: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
-					return []*tls.Certificate{&cs.serverCert1}, nil
+					return []*tls.Certificate{&cs.ServerCert1}, nil
 				default:
-					return []*tls.Certificate{&cs.serverCert2}, nil
+					return []*tls.Certificate{&cs.ServerCert2}, nil
 				}
 			},
-			serverRoot: cs.serverTrust1,
+			serverRoot: cs.ServerTrust1,
 			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
@@ -234,13 +237,13 @@ func (s) TestEnd2End(t *testing.T) {
 		// serverCert2. Now we should see the connection becomes normal again.
 		{
 			desc:       "TestClientCustomVerification",
-			clientCert: []tls.Certificate{cs.clientCert1},
+			clientCert: []tls.Certificate{cs.ClientCert1},
 			clientGetRoot: func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 				switch stage.read() {
 				case 0:
-					return &GetRootCAsResults{TrustCerts: cs.clientTrust1}, nil
+					return &GetRootCAsResults{TrustCerts: cs.ClientTrust1}, nil
 				default:
-					return &GetRootCAsResults{TrustCerts: cs.clientTrust2}, nil
+					return &GetRootCAsResults{TrustCerts: cs.ClientTrust2}, nil
 				}
 			},
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
@@ -273,12 +276,12 @@ func (s) TestEnd2End(t *testing.T) {
 			serverGetCert: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
-					return []*tls.Certificate{&cs.serverCert1}, nil
+					return []*tls.Certificate{&cs.ServerCert1}, nil
 				default:
-					return []*tls.Certificate{&cs.serverCert2}, nil
+					return []*tls.Certificate{&cs.ServerCert2}, nil
 				}
 			},
-			serverRoot: cs.serverTrust1,
+			serverRoot: cs.ServerTrust1,
 			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
@@ -297,14 +300,14 @@ func (s) TestEnd2End(t *testing.T) {
 		// authentications should go back to normal.
 		{
 			desc:       "TestServerCustomVerification",
-			clientCert: []tls.Certificate{cs.clientCert1},
-			clientRoot: cs.clientTrust1,
+			clientCert: []tls.Certificate{cs.ClientCert1},
+			clientRoot: cs.ClientTrust1,
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
 			clientVType: CertVerification,
-			serverCert:  []tls.Certificate{cs.serverCert1},
-			serverRoot:  cs.serverTrust1,
+			serverCert:  []tls.Certificate{cs.ServerCert1},
+			serverRoot:  cs.ServerTrust1,
 			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				switch stage.read() {
 				case 0, 2:
