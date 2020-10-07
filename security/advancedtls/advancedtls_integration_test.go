@@ -142,16 +142,16 @@ func (s) TestEnd2End(t *testing.T) {
 	}{
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert
-		// clientCert1 and clientTrust1, server with serverCert1 and serverTrust1.
-		// The mutual authentication works at the beginning, since clientCert1 is
-		// trusted by serverTrust1, and serverCert1 by clientTrust1.
-		// At stage 1, client changes clientCert1 to clientCert2. Since clientCert2
-		// is not trusted by serverTrust1, following rpc calls are expected to
+		// ClientCert1 and ClientTrust1, server with ServerCert1 and ServerTrust1.
+		// The mutual authentication works at the beginning, since ClientCert1 is
+		// trusted by ServerTrust1, and ServerCert1 by ClientTrust1.
+		// At stage 1, client changes ClientCert1 to ClientCert2. Since ClientCert2
+		// is not trusted by ServerTrust1, following rpc calls are expected to
 		// fail, while the previous rpc calls are still good because those are
 		// already authenticated.
-		// At stage 2, the server changes serverTrust1 to serverTrust2, and we
-		// should see it again accepts the connection, since clientCert2 is trusted
-		// by serverTrust2.
+		// At stage 2, the server changes ServerTrust1 to ServerTrust2, and we
+		// should see it again accepts the connection, since ClientCert2 is trusted
+		// by ServerTrust2.
 		{
 			desc: "TestClientPeerCertReloadServerTrustCertReload",
 			clientGetCert: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
@@ -183,16 +183,16 @@ func (s) TestEnd2End(t *testing.T) {
 		},
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert
-		// clientCert1 and clientTrust1, server with serverCert1 and serverTrust1.
-		// The mutual authentication works at the beginning, since clientCert1 is
-		// trusted by serverTrust1, and serverCert1 by clientTrust1.
-		// At stage 1, server changes serverCert1 to serverCert2. Since serverCert2
-		// is not trusted by clientTrust1, following rpc calls are expected to
+		// ClientCert1 and ClientTrust1, server with ServerCert1 and ServerTrust1.
+		// The mutual authentication works at the beginning, since ClientCert1 is
+		// trusted by ServerTrust1, and ServerCert1 by ClientTrust1.
+		// At stage 1, server changes ServerCert1 to ServerCert2. Since ServerCert2
+		// is not trusted by ClientTrust1, following rpc calls are expected to
 		// fail, while the previous rpc calls are still good because those are
 		// already authenticated.
-		// At stage 2, the client changes clientTrust1 to clientTrust2, and we
-		// should see it again accepts the connection, since serverCert2 is trusted
-		// by clientTrust2.
+		// At stage 2, the client changes ClientTrust1 to ClientTrust2, and we
+		// should see it again accepts the connection, since ServerCert2 is trusted
+		// by ClientTrust2.
 		{
 			desc:       "TestServerPeerCertReloadClientTrustCertReload",
 			clientCert: []tls.Certificate{cs.ClientCert1},
@@ -224,17 +224,17 @@ func (s) TestEnd2End(t *testing.T) {
 		},
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert
-		// clientCert1 and clientTrust1, server with serverCert1 and serverTrust1.
-		// The mutual authentication works at the beginning, since clientCert1
-		// trusted by serverTrust1, serverCert1 by clientTrust1, and also the
-		// custom verification check allows the CommonName on serverCert1.
-		// At stage 1, server changes serverCert1 to serverCert2, and client
-		// changes clientTrust1 to clientTrust2. Although serverCert2 is trusted by
-		// clientTrust2, our authorization check only accepts serverCert1, and
+		// ClientCert1 and ClientTrust1, server with ServerCert1 and ServerTrust1.
+		// The mutual authentication works at the beginning, since ClientCert1
+		// trusted by ServerTrust1, ServerCert1 by ClientTrust1, and also the
+		// custom verification check allows the CommonName on ServerCert1.
+		// At stage 1, server changes ServerCert1 to ServerCert2, and client
+		// changes ClientTrust1 to ClientTrust2. Although ServerCert2 is trusted by
+		// ClientTrust2, our authorization check only accepts ServerCert1, and
 		// hence the following calls should fail. Previous connections should
 		// not be affected.
 		// At stage 2, the client changes authorization check to only accept
-		// serverCert2. Now we should see the connection becomes normal again.
+		// ServerCert2. Now we should see the connection becomes normal again.
 		{
 			desc:       "TestClientCustomVerification",
 			clientCert: []tls.Certificate{cs.ClientCert1},
@@ -257,12 +257,12 @@ func (s) TestEnd2End(t *testing.T) {
 				authzCheck := false
 				switch stage.read() {
 				case 0, 1:
-					// foo.bar.com is the common name on serverCert1
+					// foo.bar.com is the common name on ServerCert1
 					if cert.Subject.CommonName == "foo.bar.com" {
 						authzCheck = true
 					}
 				default:
-					// foo.bar.server2.com is the common name on serverCert2
+					// foo.bar.server2.com is the common name on ServerCert2
 					if cert.Subject.CommonName == "foo.bar.server2.com" {
 						authzCheck = true
 					}
@@ -289,9 +289,9 @@ func (s) TestEnd2End(t *testing.T) {
 		},
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert
-		// clientCert1 and clientTrust1, server with serverCert1 and serverTrust1.
-		// The mutual authentication works at the beginning, since clientCert1
-		// trusted by serverTrust1, serverCert1 by clientTrust1, and also the
+		// ClientCert1 and ClientTrust1, server with ServerCert1 and ServerTrust1.
+		// The mutual authentication works at the beginning, since ClientCert1
+		// trusted by ServerTrust1, ServerCert1 by ClientTrust1, and also the
 		// custom verification check on server side allows all connections.
 		// At stage 1, server disallows the the connections by setting custom
 		// verification check. The following calls should fail. Previous

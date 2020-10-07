@@ -96,11 +96,11 @@ func (s) TestNewPEMFileProvider(t *testing.T) {
 
 // This test overwrites the credential reading function used by the watching
 // goroutine. It is tested under different stages:
-// At stage 0, we force reading function to load clientCert1 and serverTrust1,
+// At stage 0, we force reading function to load ClientCert1 and ServerTrust1,
 // and see if the credentials are picked up by the watching go routine.
 // At stage 1, we force reading function to cause an error. The watching go
 // routine should log the error while leaving the credentials unchanged.
-// At stage 2, we force reading function to load clientCert2 and serverTrust2,
+// At stage 2, we force reading function to load ClientCert2 and ServerTrust2,
 // and see if the new credentials are picked up.
 func (s) TestWatchingRoutineUpdates(t *testing.T) {
 	// Load certificates.

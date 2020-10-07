@@ -55,7 +55,6 @@ type fakeProvider struct {
 	isClient      bool
 	wantMultiCert bool
 	wantError     bool
-	t             *testing.T
 }
 
 func (f fakeProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
@@ -102,7 +101,7 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 			clientVType: CertVerification,
 			RootOptions: RootCertificateOptions{
 				RootCACerts:  x509.NewCertPool(),
-				RootProvider: fakeProvider{t: t},
+				RootProvider: fakeProvider{},
 			},
 		},
 		{
@@ -112,7 +111,7 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 				GetIdentityCertificatesForClient: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 					return nil, nil
 				},
-				IdentityProvider: fakeProvider{pt: provTypeIdentity, t: t},
+				IdentityProvider: fakeProvider{pt: provTypeIdentity},
 			},
 		},
 		{
@@ -155,10 +154,10 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 			desc:        "Good case with mutual TLS",
 			clientVType: CertVerification,
 			RootOptions: RootCertificateOptions{
-				RootProvider: fakeProvider{t: t},
+				RootProvider: fakeProvider{},
 			},
 			IdentityOptions: IdentityCertificateOptions{
-				IdentityProvider: fakeProvider{pt: provTypeIdentity, t: t},
+				IdentityProvider: fakeProvider{pt: provTypeIdentity},
 			},
 		},
 	}
@@ -215,7 +214,7 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 			serverVType: CertVerification,
 			IdentityOptions: IdentityCertificateOptions{
 				Certificates:     []tls.Certificate{},
-				IdentityProvider: fakeProvider{pt: provTypeIdentity, t: t},
+				IdentityProvider: fakeProvider{pt: provTypeIdentity},
 			},
 		},
 		{
@@ -269,7 +268,7 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 			requireClientCert: true,
 			serverVType:       CertVerification,
 			RootOptions: RootCertificateOptions{
-				RootProvider: fakeProvider{t: t},
+				RootProvider: fakeProvider{},
 			},
 			IdentityOptions: IdentityCertificateOptions{
 				GetIdentityCertificatesForServer: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
@@ -607,13 +606,13 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// clientIdentityProvider
 		{
 			desc:                   "Client sets multiple certs in clientIdentityProvider; Server sets root and identity provider; mutualTLS",
-			clientIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: true, wantMultiCert: true, t: t},
-			clientRootProvider:     fakeProvider{isClient: true, t: t},
+			clientIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: true, wantMultiCert: true},
+			clientRootProvider:     fakeProvider{isClient: true},
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVType:            CertVerification,
 			serverMutualTLS:        true,
-			serverIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: false, t: t},
-			serverRootProvider:     fakeProvider{isClient: false, t: t},
+			serverIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: false},
+			serverRootProvider:     fakeProvider{isClient: false},
 			serverVType:            CertVerification,
 			serverExpectError:      true,
 		},
@@ -622,13 +621,13 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// Expected Behavior: server side failure due to bad clientIdentityProvider
 		{
 			desc:                   "Client sets bad clientIdentityProvider; Server sets root and identity provider; mutualTLS",
-			clientIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: true, wantError: true, t: t},
-			clientRootProvider:     fakeProvider{isClient: true, t: t},
+			clientIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: true, wantError: true},
+			clientRootProvider:     fakeProvider{isClient: true},
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVType:            CertVerification,
 			serverMutualTLS:        true,
-			serverIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: false, t: t},
-			serverRootProvider:     fakeProvider{isClient: false, t: t},
+			serverIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: false},
+			serverRootProvider:     fakeProvider{isClient: false},
 			serverVType:            CertVerification,
 			serverExpectError:      true,
 		},
@@ -637,13 +636,13 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// Expected Behavior: server side failure due to bad serverRootProvider
 		{
 			desc:                   "Client sets root and identity provider; Server sets bad root provider; mutualTLS",
-			clientIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: true, t: t},
-			clientRootProvider:     fakeProvider{isClient: true, t: t},
+			clientIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: true},
+			clientRootProvider:     fakeProvider{isClient: true},
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVType:            CertVerification,
 			serverMutualTLS:        true,
-			serverIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: false, t: t},
-			serverRootProvider:     fakeProvider{isClient: false, wantError: true, t: t},
+			serverIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: false},
+			serverRootProvider:     fakeProvider{isClient: false, wantError: true},
 			serverVType:            CertVerification,
 			serverExpectError:      true,
 		},
@@ -652,13 +651,13 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// Expected Behavior: success
 		{
 			desc:                   "Client sets root and identity provider; Server sets root and identity provider; mutualTLS",
-			clientIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: true, t: t},
-			clientRootProvider:     fakeProvider{isClient: true, t: t},
+			clientIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: true},
+			clientRootProvider:     fakeProvider{isClient: true},
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVType:            CertVerification,
 			serverMutualTLS:        true,
-			serverIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: false, t: t},
-			serverRootProvider:     fakeProvider{isClient: false, t: t},
+			serverIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: false},
+			serverRootProvider:     fakeProvider{isClient: false},
 			serverVType:            CertVerification,
 		},
 		// Client: set clientIdentityProvider and clientRootProvider
@@ -666,13 +665,13 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// Expected Behavior: success, because server side has SNI
 		{
 			desc:                   "Client sets root and identity provider; Server sets multiple certs in serverIdentityProvider; mutualTLS",
-			clientIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: true, t: t},
-			clientRootProvider:     fakeProvider{isClient: true, t: t},
+			clientIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: true},
+			clientRootProvider:     fakeProvider{isClient: true},
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVType:            CertVerification,
 			serverMutualTLS:        true,
-			serverIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: false, wantMultiCert: true, t: t},
-			serverRootProvider:     fakeProvider{isClient: false, t: t},
+			serverIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: false, wantMultiCert: true},
+			serverRootProvider:     fakeProvider{isClient: false},
 			serverVType:            CertVerification,
 		},
 	} {
@@ -824,13 +823,13 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 		wantCert   tls.Certificate
 	}{
 		{
-			desc: "Select serverCert1",
+			desc: "Select ServerCert1",
 			// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
 			serverName: "foo.bar.com",
 			wantCert:   cs.ServerCert1,
 		},
 		{
-			desc: "Select serverCert2",
+			desc: "Select ServerCert2",
 			// "foo.bar.server2.com" is the common name on server certificate server_cert_2.pem.
 			serverName: "foo.bar.server2.com",
 			wantCert:   cs.ServerCert2,
