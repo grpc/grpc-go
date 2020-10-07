@@ -116,7 +116,14 @@ func TestLoadReporting(t *testing.T) {
 	if loadStore == nil {
 		t.Fatal("loadStore is nil in xdsClient")
 	}
-	sd := loadStore.PerCluster(testClusterName, testServiceName).Stats()
+	sds := loadStore.Stats([]string{testClusterName})
+	if len(sds) == 0 {
+		t.Fatalf("loads for cluster %v not found in store", testClusterName)
+	}
+	sd := sds[0]
+	if sd.Cluster != testClusterName || sd.Service != testServiceName {
+		t.Fatalf("got unexpected load for %q, %q, want %q, %q", sd.Cluster, sd.Service, testClusterName, testServiceName)
+	}
 	localityData, ok := sd.LocalityStats[testLocality.String()]
 	if !ok {
 		t.Fatalf("loads for %v not found in store", testLocality)

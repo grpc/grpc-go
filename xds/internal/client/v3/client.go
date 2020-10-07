@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
@@ -103,8 +102,6 @@ type client struct {
 	// processing needs this to do the host matching.
 	ldsResourceName string
 	ldsWatchCount   int
-
-	lastLoadReportAt time.Time
 }
 
 // AddWatch overrides the transport helper's AddWatch to save the LDS

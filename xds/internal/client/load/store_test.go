@@ -19,6 +19,7 @@ package load
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"testing"
 
@@ -56,7 +57,7 @@ func TestDrops(t *testing.T) {
 		}
 	)
 
-	ls := PerClusterStore{}
+	ls := perClusterStore{}
 	var wg sync.WaitGroup
 	for category, count := range drops {
 		for i := 0; i < count; i++ {
@@ -69,9 +70,9 @@ func TestDrops(t *testing.T) {
 	}
 	wg.Wait()
 
-	gotStoreData := ls.Stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("store.Stats() returned unexpected diff (-want +got):\n%s", diff)
+	gotStoreData := ls.stats()
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval")); diff != "" {
+		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
 
@@ -118,7 +119,7 @@ func TestLocalityStats(t *testing.T) {
 		}
 	)
 
-	ls := PerClusterStore{}
+	ls := perClusterStore{}
 	var wg sync.WaitGroup
 	for locality, data := range localityData {
 		wg.Add(data.start)
@@ -128,7 +129,7 @@ func TestLocalityStats(t *testing.T) {
 				wg.Done()
 			}(locality)
 		}
-		// The calls to CallStarted() need to happen before the other calls are
+		// The calls to callStarted() need to happen before the other calls are
 		// made. Hence the wait here.
 		wg.Wait()
 
@@ -152,9 +153,9 @@ func TestLocalityStats(t *testing.T) {
 		wg.Wait()
 	}
 
-	gotStoreData := ls.Stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("store.Stats() returned unexpected diff (-want +got):\n%s", diff)
+	gotStoreData := ls.stats()
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval")); diff != "" {
+		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
 
@@ -211,7 +212,7 @@ func TestResetAfterStats(t *testing.T) {
 		}
 	)
 
-	reportLoad := func(ls *PerClusterStore) {
+	reportLoad := func(ls *perClusterStore) {
 		for category, count := range drops {
 			for i := 0; i < count; i++ {
 				ls.CallDropped(category)
@@ -233,14 +234,14 @@ func TestResetAfterStats(t *testing.T) {
 		}
 	}
 
-	ls := PerClusterStore{}
+	ls := perClusterStore{}
 	reportLoad(&ls)
-	gotStoreData := ls.Stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("store.Stats() returned unexpected diff (-want +got):\n%s", diff)
+	gotStoreData := ls.stats()
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval")); diff != "" {
+		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 
-	// The above call to Stats() should have reset all load reports except the
+	// The above call to stats() should have reset all load reports except the
 	// inProgress rpc count. We are now going to push the same load data into
 	// the store. So, we should expect to see twice the count for inProgress.
 	for _, l := range localities {
@@ -249,8 +250,196 @@ func TestResetAfterStats(t *testing.T) {
 		wantStoreData.LocalityStats[l] = ls
 	}
 	reportLoad(&ls)
-	gotStoreData = ls.Stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("store.Stats() returned unexpected diff (-want +got):\n%s", diff)
+	gotStoreData = ls.stats()
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval")); diff != "" {
+		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	}
+}
+
+var sortDataSlice = cmp.Transformer("SortDataSlice", func(in []*Data) []*Data {
+	out := append([]*Data(nil), in...) // Copy input to avoid mutating it
+	sort.Slice(out,
+		func(i, j int) bool {
+			if out[i].Cluster < out[j].Cluster {
+				return true
+			}
+			if out[i].Cluster == out[j].Cluster {
+				return out[i].Service < out[j].Service
+			}
+			return false
+		},
+	)
+	return out
+})
+
+// Test all load are returned for the given clusters, and all clusters are
+// reported if no cluster is specified.
+func TestStoreStats(t *testing.T) {
+	var (
+		testClusters = []string{"c0", "c1", "c2"}
+		testServices = []string{"s0", "s1"}
+		testLocality = "test-locality"
+	)
+
+	store := NewStore()
+	for _, c := range testClusters {
+		for _, s := range testServices {
+			store.PerCluster(c, s).CallStarted(testLocality)
+			store.PerCluster(c, s).CallServerLoad(testLocality, "abc", 123)
+			store.PerCluster(c, s).CallDropped("dropped")
+			store.PerCluster(c, s).CallFinished(testLocality, nil)
+		}
+	}
+
+	wantC0 := []*Data{
+		{
+			Cluster: "c0", Service: "s0",
+			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
+			LocalityStats: map[string]LocalityData{
+				"test-locality": {
+					RequestStats: RequestData{Succeeded: 1},
+					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
+				},
+			},
+		},
+		{
+			Cluster: "c0", Service: "s1",
+			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
+			LocalityStats: map[string]LocalityData{
+				"test-locality": {
+					RequestStats: RequestData{Succeeded: 1},
+					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
+				},
+			},
+		},
+	}
+	// Call Stats with just "c0", this should return data for "c0", and not
+	// touch data for other clusters.
+	gotC0 := store.Stats([]string{"c0"})
+	if diff := cmp.Diff(wantC0, gotC0, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval"), sortDataSlice); diff != "" {
+		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	}
+
+	wantOther := []*Data{
+		{
+			Cluster: "c1", Service: "s0",
+			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
+			LocalityStats: map[string]LocalityData{
+				"test-locality": {
+					RequestStats: RequestData{Succeeded: 1},
+					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
+				},
+			},
+		},
+		{
+			Cluster: "c1", Service: "s1",
+			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
+			LocalityStats: map[string]LocalityData{
+				"test-locality": {
+					RequestStats: RequestData{Succeeded: 1},
+					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
+				},
+			},
+		},
+		{
+			Cluster: "c2", Service: "s0",
+			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
+			LocalityStats: map[string]LocalityData{
+				"test-locality": {
+					RequestStats: RequestData{Succeeded: 1},
+					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
+				},
+			},
+		},
+		{
+			Cluster: "c2", Service: "s1",
+			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
+			LocalityStats: map[string]LocalityData{
+				"test-locality": {
+					RequestStats: RequestData{Succeeded: 1},
+					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
+				},
+			},
+		},
+	}
+	// Call Stats with empty slice, this should return data for all the
+	// remaining clusters, and not include c0 (because c0 data was cleared).
+	gotOther := store.Stats(nil)
+	if diff := cmp.Diff(wantOther, gotOther, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval"), sortDataSlice); diff != "" {
+		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	}
+}
+
+// Test the cases that if a cluster doesn't have load to report, its data is not
+// appended to the slice returned by Stats().
+func TestStoreStatsEmptyDataNotReported(t *testing.T) {
+	var (
+		testServices = []string{"s0", "s1"}
+		testLocality = "test-locality"
+	)
+
+	store := NewStore()
+	// "c0"'s RPCs all finish with success.
+	for _, s := range testServices {
+		store.PerCluster("c0", s).CallStarted(testLocality)
+		store.PerCluster("c0", s).CallFinished(testLocality, nil)
+	}
+	// "c1"'s RPCs never finish (always inprocess).
+	for _, s := range testServices {
+		store.PerCluster("c1", s).CallStarted(testLocality)
+	}
+
+	want0 := []*Data{
+		{
+			Cluster: "c0", Service: "s0",
+			LocalityStats: map[string]LocalityData{
+				"test-locality": {RequestStats: RequestData{Succeeded: 1}},
+			},
+		},
+		{
+			Cluster: "c0", Service: "s1",
+			LocalityStats: map[string]LocalityData{
+				"test-locality": {RequestStats: RequestData{Succeeded: 1}},
+			},
+		},
+		{
+			Cluster: "c1", Service: "s0",
+			LocalityStats: map[string]LocalityData{
+				"test-locality": {RequestStats: RequestData{InProgress: 1}},
+			},
+		},
+		{
+			Cluster: "c1", Service: "s1",
+			LocalityStats: map[string]LocalityData{
+				"test-locality": {RequestStats: RequestData{InProgress: 1}},
+			},
+		},
+	}
+	// Call Stats with empty slice, this should return data for all the
+	// clusters.
+	got0 := store.Stats(nil)
+	if diff := cmp.Diff(want0, got0, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval"), sortDataSlice); diff != "" {
+		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	}
+
+	want1 := []*Data{
+		{
+			Cluster: "c1", Service: "s0",
+			LocalityStats: map[string]LocalityData{
+				"test-locality": {RequestStats: RequestData{InProgress: 1}},
+			},
+		},
+		{
+			Cluster: "c1", Service: "s1",
+			LocalityStats: map[string]LocalityData{
+				"test-locality": {RequestStats: RequestData{InProgress: 1}},
+			},
+		},
+	}
+	// Call Stats with empty slice again, this should return data only for "c1",
+	// because "c0" data was cleared, but "c1" has in-progress RPCs.
+	got1 := store.Stats(nil)
+	if diff := cmp.Diff(want1, got1, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval"), sortDataSlice); diff != "" {
+		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
