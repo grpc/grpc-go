@@ -15,14 +15,16 @@
  *
  */
 
+// Package internal contains helper functions for advancedtls.
 package internal
 
 import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"google.golang.org/grpc/security/advancedtls/testdata"
 	"io/ioutil"
+
+	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
 // CertStore contains all the certificates used in the integration tests.
