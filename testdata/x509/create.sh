@@ -110,5 +110,14 @@ openssl req -x509                                                         \
   -subj /C=US/ST=CA/L=SVL/O=gRPC/CN=test-client1/                         \
   -addext "subjectAltName = URI:spiffe://foo.bar.com/client/workload/1"
 
+# Generate a cert with SPIFFE ID and another SAN URI field(which doesn't meet SPIFFE specs).
+openssl req -x509                                                         \
+  -newkey rsa:4096                                                        \
+  -keyout multiple_uri_key.pem                                            \
+  -out multiple_uri_cert.pem                                              \
+  -nodes                                                                  \
+  -days 3650                                                              \
+  -subj /C=US/ST=CA/L=SVL/O=gRPC/CN=test-client1/                         \
+  -addext "subjectAltName = URI:spiffe://foo.bar.com/client/workload/1, URI:https://bar.baz.com/client"
 # Cleanup the CSRs.
 rm *_csr.pem

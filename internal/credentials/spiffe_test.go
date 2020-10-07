@@ -30,6 +30,8 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
+const wantURI = "spiffe://foo.bar.com/client/workload/1"
+
 type s struct {
 	grpctest.Tester
 }
@@ -183,23 +185,49 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 }
 
 func (s) TestSPIFFEIDFromCert(t *testing.T) {
-	data, err := ioutil.ReadFile(testdata.Path("x509/spiffe_cert.pem"))
-	if err != nil {
-		t.Fatalf("Failed to load the test credentials: %v", err)
+	tests := []struct {
+		name     string
+		dataPath string
+		// If we expect a SPIFFE ID to be returned.
+		expectID bool
+	}{
+		{
+			name:     "good certificate with SPIFFE ID",
+			dataPath: "x509/spiffe_cert.pem",
+			expectID: true,
+		},
+		{
+			name:     "bad certificate with SPIFFE ID and another URI",
+			dataPath: "x509/multiple_uri_cert.pem",
+			expectID: false,
+		},
+		{
+			name:     "certificate without SPIFFE ID",
+			dataPath: "x509/client1_cert.pem",
+			expectID: false,
+		},
 	}
-	block, rest := pem.Decode(data)
-	if len(rest) != 0 {
-		t.Fatalf("Failed to parse the certificate: invalid format")
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		t.Fatalf("Failed to load the test credentials: %v", err)
-	}
-	uri := SPIFFEIDFromCert(cert)
-	if uri == nil {
-		t.Fatalf("SPIFFE ID is nil")
-	}
-	if uri.String() != "spiffe://foo.bar.com/client/workload/1" {
-		t.Fatalf("SPIFFE ID not expected, got %s, want %s", uri.String(), "spiffe://foo.bar.com/client/workload/1")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := ioutil.ReadFile(testdata.Path(tt.dataPath))
+			if err != nil {
+				t.Fatalf("ioutil.ReadFile(%s) failed: %v", testdata.Path(tt.dataPath), err)
+			}
+			block, _ := pem.Decode(data)
+			if block == nil {
+				t.Fatalf("Failed to parse the certificate: byte block is nil")
+			}
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				t.Fatalf("x509.ParseCertificate(%b) failed: %v", block.Bytes, err)
+			}
+			uri := SPIFFEIDFromCert(cert)
+			if (uri != nil) != tt.expectID {
+				t.Fatalf("expectID got and want mismatch, got %t, want %t", uri != nil, tt.expectID)
+			}
+			if uri != nil && uri.String() != wantURI {
+				t.Fatalf("SPIFFE ID not expected, got %s, want %s", uri.String(), wantURI)
+			}
+		})
 	}
 }
