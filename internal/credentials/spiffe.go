@@ -45,7 +45,7 @@ func SPIFFEIDFromState(state tls.ConnectionState) *url.URL {
 // SPIFFEIDFromCert parses the SPIFFE ID from x509.Certificate. If the SPIFFE
 // ID format is invalid, return nil with warning.
 func SPIFFEIDFromCert(cert *x509.Certificate) *url.URL {
-	if cert == nil {
+	if cert == nil || cert.URIs == nil {
 		return nil
 	}
 	var spiffeID *url.URL
