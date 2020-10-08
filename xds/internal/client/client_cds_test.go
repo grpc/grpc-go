@@ -25,6 +25,8 @@ import (
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp"
@@ -177,6 +179,271 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			}
 			if !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
 				t.Errorf("validateCluster(%+v) = %v, want: %v", test.cluster, update, test.wantUpdate)
+			}
+		})
+	}
+}
+
+func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
+	const (
+		identityPluginInstance = "identityPluginInstance"
+		identityCertName       = "identityCert"
+		rootPluginInstance     = "rootPluginInstance"
+		rootCertName           = "rootCert"
+		serviceName            = "service"
+		san1                   = "san1"
+		san2                   = "san2"
+	)
+
+	tests := []struct {
+		name       string
+		cluster    *v3clusterpb.Cluster
+		wantUpdate ClusterUpdate
+		wantErr    bool
+	}{
+		{
+			name: "transport-socket-unsupported-typeURL",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: &anypb.Any{
+							TypeUrl: version.V3HTTPConnManagerURL,
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "transport-socket-unsupported-type",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: &anypb.Any{
+							TypeUrl: version.V3UpstreamTLSContextURL,
+							Value:   []byte{1, 2, 3, 4},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "transport-socket-unsupported-validation-context",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: &anypb.Any{
+							TypeUrl: version.V3UpstreamTLSContextURL,
+							Value: func() []byte {
+								tls := &v3tlspb.UpstreamTlsContext{
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
+											ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
+												Name: "foo-sds-secret",
+											},
+										},
+									},
+								}
+								mtls, _ := proto.Marshal(tls)
+								return mtls
+							}(),
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "happy-case-with-no-identity-certs",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: &anypb.Any{
+							TypeUrl: version.V3UpstreamTLSContextURL,
+							Value: func() []byte {
+								tls := &v3tlspb.UpstreamTlsContext{
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+											ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+												InstanceName:    rootPluginInstance,
+												CertificateName: rootCertName,
+											},
+										},
+									},
+								}
+								mtls, _ := proto.Marshal(tls)
+								return mtls
+							}(),
+						},
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ServiceName: serviceName,
+				EnableLRS:   false,
+				SecurityCfg: &SecurityConfig{
+					RootInstanceName: rootPluginInstance,
+					RootCertName:     rootCertName,
+				},
+			},
+		},
+		{
+			name: "happy-case-with-validation-context-provider-instance",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: &anypb.Any{
+							TypeUrl: version.V3UpstreamTLSContextURL,
+							Value: func() []byte {
+								tls := &v3tlspb.UpstreamTlsContext{
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+											InstanceName:    identityPluginInstance,
+											CertificateName: identityCertName,
+										},
+										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+											ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+												InstanceName:    rootPluginInstance,
+												CertificateName: rootCertName,
+											},
+										},
+									},
+								}
+								mtls, _ := proto.Marshal(tls)
+								return mtls
+							}(),
+						},
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ServiceName: serviceName,
+				EnableLRS:   false,
+				SecurityCfg: &SecurityConfig{
+					RootInstanceName:     rootPluginInstance,
+					RootCertName:         rootCertName,
+					IdentityInstanceName: identityPluginInstance,
+					IdentityCertName:     identityCertName,
+				},
+			},
+		},
+		{
+			name: "happy-case-with-combined-validation-context",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: &anypb.Any{
+							TypeUrl: version.V3UpstreamTLSContextURL,
+							Value: func() []byte {
+								tls := &v3tlspb.UpstreamTlsContext{
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+											InstanceName:    identityPluginInstance,
+											CertificateName: identityCertName,
+										},
+										ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+											CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+												DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+													MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+														{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: san1}},
+														{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: san2}},
+													},
+												},
+												ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+													InstanceName:    rootPluginInstance,
+													CertificateName: rootCertName,
+												},
+											},
+										},
+									},
+								}
+								mtls, _ := proto.Marshal(tls)
+								return mtls
+							}(),
+						},
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ServiceName: serviceName,
+				EnableLRS:   false,
+				SecurityCfg: &SecurityConfig{
+					RootInstanceName:     rootPluginInstance,
+					RootCertName:         rootCertName,
+					IdentityInstanceName: identityPluginInstance,
+					IdentityCertName:     identityCertName,
+					AcceptedSANs:         []string{san1, san2},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			update, err := validateCluster(test.cluster)
+			if ((err != nil) != test.wantErr) || !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
+				t.Errorf("validateCluster(%+v) = (%+v, %v), want: (%+v, %v)", test.cluster, update, err, test.wantUpdate, test.wantErr)
 			}
 		})
 	}
