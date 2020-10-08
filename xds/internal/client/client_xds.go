@@ -102,7 +102,7 @@ func getRouteConfigNameFromListener(lis *v3listenerpb.Listener, logger *grpclog.
 // validates them, and transforms them into a native struct which contains only
 // fields we are interested in. The provided hostname determines the route
 // configuration resources of interest.
-func UnmarshalRouteConfig(resources []*anypb.Any, hostname string, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdate, error) {
+func UnmarshalRouteConfig(resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdate, error) {
 	update := make(map[string]RouteConfigUpdate)
 	for _, r := range resources {
 		if !IsRouteConfigResource(r.GetTypeUrl()) {
@@ -112,10 +112,10 @@ func UnmarshalRouteConfig(resources []*anypb.Any, hostname string, logger *grpcl
 		if err := proto.Unmarshal(r.GetValue(), rc); err != nil {
 			return nil, fmt.Errorf("xds: failed to unmarshal resource in RDS response: %v", err)
 		}
-		logger.Infof("Resource with name: %v, type: %T, contains: %v. Picking routes for current watching hostname %v", rc.GetName(), rc, rc, hostname)
+		logger.Infof("Resource with name: %v, type: %T, contains: %v.", rc.GetName(), rc, rc)
 
 		// Use the hostname (resourceName for LDS) to find the routes.
-		u, err := generateRDSUpdateFromRouteConfiguration(rc, hostname, logger)
+		u, err := generateRDSUpdateFromRouteConfiguration(rc, logger)
 		if err != nil {
 			return nil, fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v with err: %v", rc, err)
 		}
@@ -140,30 +140,19 @@ func UnmarshalRouteConfig(resources []*anypb.Any, hostname string, logger *grpcl
 // field must be empty and whose route field must be set.  Inside that route
 // message, the cluster field will contain the clusterName or weighted clusters
 // we are looking for.
-func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, host string, logger *grpclog.PrefixLogger) (RouteConfigUpdate, error) {
-	//
-	// Currently this returns "" on error, and the caller will return an error.
-	// But the error doesn't contain details of why the response is invalid
-	// (mismatch domain or empty route).
-	//
-	// For logging purposes, we can log in line. But if we want to populate
-	// error details for nack, a detailed error needs to be returned.
-	vh := findBestMatchingVirtualHost(host, rc.GetVirtualHosts())
-	if vh == nil {
-		// No matching virtual host found.
-		return RouteConfigUpdate{}, fmt.Errorf("no matching virtual host found")
+func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, logger *grpclog.PrefixLogger) (RouteConfigUpdate, error) {
+	var vhs []*VirtualHost
+	for _, vh := range rc.GetVirtualHosts() {
+		routes, err := routesProtoToSlice(vh.Routes, logger)
+		if err != nil {
+			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
+		}
+		vhs = append(vhs, &VirtualHost{
+			Domains: vh.GetDomains(),
+			Routes:  routes,
+		})
 	}
-	if len(vh.Routes) == 0 {
-		// The matched virtual host has no routes, this is invalid because there
-		// should be at least one default route.
-		return RouteConfigUpdate{}, fmt.Errorf("matched virtual host has no routes")
-	}
-
-	routes, err := routesProtoToSlice(vh.Routes, logger)
-	if err != nil {
-		return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
-	}
-	return RouteConfigUpdate{Routes: routes}, nil
+	return RouteConfigUpdate{VirtualHosts: vhs}, nil
 }
 
 func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger) ([]*Route, error) {
@@ -337,14 +326,14 @@ func match(domain, host string) (domainMatchType, bool) {
 //  - If two matches are of the same pattern type, the longer match is better
 //    - This is to compare the length of the matching pattern, e.g. “*ABCDE” >
 //    “*ABC”
-func findBestMatchingVirtualHost(host string, vHosts []*v3routepb.VirtualHost) *v3routepb.VirtualHost {
+func findBestMatchingVirtualHost(host string, vHosts []*VirtualHost) *VirtualHost {
 	var (
-		matchVh   *v3routepb.VirtualHost
+		matchVh   *VirtualHost
 		matchType = domainMatchTypeInvalid
 		matchLen  int
 	)
 	for _, vh := range vHosts {
-		for _, domain := range vh.GetDomains() {
+		for _, domain := range vh.Domains {
 			typ, matched := match(domain, host)
 			if typ == domainMatchTypeInvalid {
 				// The rds response is invalid.

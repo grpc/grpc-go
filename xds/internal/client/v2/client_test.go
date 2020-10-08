@@ -236,7 +236,9 @@ var (
 		},
 		TypeUrl: version.V2RouteConfigURL,
 	}
-	emptyRouteConfig             = &xdspb.RouteConfiguration{}
+	emptyRouteConfig = &xdspb.RouteConfiguration{
+		Name: goodRouteName1,
+	}
 	marshaledEmptyRouteConfig, _ = proto.Marshal(emptyRouteConfig)
 	noVirtualHostsInRDSResponse  = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
@@ -410,11 +412,6 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 		t.Fatal(err)
 	}
 	defer v2c.Close()
-
-	// RDS needs an existing LDS watch for the hostname.
-	if test.rType == xdsclient.RouteConfigResource {
-		doLDS(t, v2c, fakeServer)
-	}
 
 	// Register the watcher, this will also trigger the v2Client to send the xDS
 	// request.

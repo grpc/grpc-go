@@ -149,6 +149,15 @@ type ListenerUpdate struct {
 // RouteConfigUpdate contains information received in an RDS response, which is
 // of interest to the registered RDS watcher.
 type RouteConfigUpdate struct {
+	VirtualHosts []*VirtualHost
+}
+
+// VirtualHost contains the routes for a list of Domains.
+//
+// Note that the domains in this slice can be a wildcard, not an exact string.
+// The consumer of this struct needs to find the best match for its hostname.
+type VirtualHost struct {
+	Domains []string
 	// Routes contains a list of routes, each containing matchers and
 	// corresponding action.
 	Routes []*Route

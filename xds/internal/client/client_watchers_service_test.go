@@ -67,7 +67,14 @@ func (s) TestServiceWatch(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
-		testRDSName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}},
+		testRDSName: {
+			VirtualHosts: []*VirtualHost{
+				{
+					Domains: []string{testLDSName},
+					Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+				},
+			},
+		},
 	})
 	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
@@ -81,10 +88,12 @@ func (s) TestServiceWatch(t *testing.T) {
 	}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
 		testRDSName: {
-			Routes: []*Route{{
-				Prefix: newStringP(""),
-				Action: map[string]uint32{testCDSName: 1},
-			}},
+			VirtualHosts: []*VirtualHost{
+				{
+					Domains: []string{testLDSName},
+					Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+				},
+			},
 		},
 	})
 	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate2); err != nil {
@@ -127,7 +136,14 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
-		testRDSName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}},
+		testRDSName: {
+			VirtualHosts: []*VirtualHost{
+				{
+					Domains: []string{testLDSName},
+					Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+				},
+			},
+		},
 	})
 	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
@@ -141,7 +157,14 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 
 	// Another update for the old name.
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
-		testRDSName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}},
+		testRDSName: {
+			VirtualHosts: []*VirtualHost{
+				{
+					Domains: []string{testLDSName},
+					Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+				},
+			},
+		},
 	})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
@@ -152,7 +175,14 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 	// RDS update for the new name.
 	wantUpdate2 := ServiceUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "2": 1}}}}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
-		testRDSName + "2": {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "2": 1}}}},
+		testRDSName + "2": {
+			VirtualHosts: []*VirtualHost{
+				{
+					Domains: []string{testLDSName},
+					Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "2": 1}}},
+				},
+			},
+		},
 	})
 	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate2); err != nil {
 		t.Fatal(err)
@@ -194,7 +224,14 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
-		testRDSName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}},
+		testRDSName: {
+			VirtualHosts: []*VirtualHost{
+				{
+					Domains: []string{testLDSName},
+					Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+				},
+			},
+		},
 	})
 	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
@@ -221,7 +258,14 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 	// timeout.
 	client.NewListeners(map[string]ListenerUpdate{testLDSName: {RouteConfigName: testRDSName}})
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
-		testRDSName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}},
+		testRDSName: {
+			VirtualHosts: []*VirtualHost{
+				{
+					Domains: []string{testLDSName},
+					Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+				},
+			},
+		},
 	})
 	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
@@ -396,7 +440,14 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
-		testRDSName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}},
+		testRDSName: {
+			VirtualHosts: []*VirtualHost{
+				{
+					Domains: []string{testLDSName},
+					Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+				},
+			},
+		},
 	})
 
 	wantUpdate := ServiceUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}}
@@ -449,7 +500,14 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
-		testRDSName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}},
+		testRDSName: {
+			VirtualHosts: []*VirtualHost{
+				{
+					Domains: []string{testLDSName},
+					Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+				},
+			},
+		},
 	})
 	wantUpdate := ServiceUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}}
 	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate); err != nil {
@@ -469,7 +527,14 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 	// Send RDS update for the removed LDS resource, expect no updates to
 	// callback, because RDS should be canceled.
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
-		testRDSName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "new": 1}}}},
+		testRDSName: {
+			VirtualHosts: []*VirtualHost{
+				{
+					Domains: []string{testLDSName},
+					Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "new": 1}}},
+				},
+			},
+		},
 	})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
@@ -491,7 +556,14 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 	}
 
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
-		testRDSName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "new2": 1}}}},
+		testRDSName: {
+			VirtualHosts: []*VirtualHost{
+				{
+					Domains: []string{testLDSName},
+					Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "new2": 1}}},
+				},
+			},
+		},
 	})
 	wantUpdate = ServiceUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "new2": 1}}}}
 	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate); err != nil {
