@@ -32,7 +32,7 @@ func TestParseTarget(t *testing.T) {
 		{Scheme: "passthrough", Authority: "", Endpoint: "/unix/socket/address"},
 	} {
 		str := test.Scheme + "://" + test.Authority + "/" + test.Endpoint
-		got := ParseTarget(str)
+		got := ParseTarget(str, false)
 		if got != test {
 			t.Errorf("ParseTarget(%q) = %+v, want %+v", str, got, test)
 		}
@@ -71,7 +71,7 @@ func TestParseTargetString(t *testing.T) {
 		{targetStr: "a//b", want: resolver.Target{Scheme: "", Authority: "", Endpoint: "a//b"}},
 		{targetStr: "a://b", want: resolver.Target{Scheme: "", Authority: "", Endpoint: "a://b"}},
 	} {
-		got := ParseTarget(test.targetStr)
+		got := ParseTarget(test.targetStr, false)
 		if got != test.want {
 			t.Errorf("ParseTarget(%q) = %+v, want %+v", test.targetStr, got, test.want)
 		}

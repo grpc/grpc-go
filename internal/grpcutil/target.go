@@ -41,10 +41,16 @@ func split2(s, sep string) (string, string, bool) {
 //
 // If target is not a valid scheme://authority/endpoint, it returns {Endpoint:
 // target}.
-func ParseTarget(target string) (ret resolver.Target) {
+func ParseTarget(target string, hasDialer bool) (ret resolver.Target) {
 	var ok bool
 	ret.Scheme, ret.Endpoint, ok = split2(target, "://")
 	if !ok {
+		if strings.HasPrefix(target, "unix:") && !hasDialer {
+			// Handle the "unix:[path]" case, because grpcutil.ParseTarget()
+			// only handles the "unix://[/absolute/path]" case. Only handle if
+			// the dialer is nil, to avoid a behavior change with custom dialers.
+			return resolver.Target{Scheme: "unix", Endpoint: target[len("unix:"):]}
+		}
 		return resolver.Target{Endpoint: target}
 	}
 	ret.Authority, ret.Endpoint, ok = split2(ret.Endpoint, "/")

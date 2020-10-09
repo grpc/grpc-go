@@ -191,14 +191,11 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 	cc.mkp = cc.dopts.copts.KeepaliveParams
 
-	cc.dopts.copts.UseProxy = cc.dopts.withProxy
-
 	if cc.dopts.copts.UserAgent != "" {
 		cc.dopts.copts.UserAgent += " " + grpcUA
 	} else {
 		cc.dopts.copts.UserAgent = grpcUA
 	}
-	cc.dopts.copts.GRPCUA = grpcUA
 
 	if cc.dopts.timeout > 0 {
 		var cancel context.CancelFunc
@@ -237,14 +234,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	// Determine the resolver to use.
-	cc.parsedTarget = grpcutil.ParseTarget(cc.target)
-	if cc.parsedTarget.Scheme == "" && strings.HasPrefix(cc.target, "unix:") && cc.dopts.copts.Dialer == nil {
-		// Handle the "unix:[path]" case, because grpcutil.ParseTarget() only handles the "unix://[/absolute/path]" case.
-		// Only handle if the dialer is nil, to avoid a behavior change with custom dialers.
-		cc.parsedTarget.Scheme = "unix"
-		cc.parsedTarget.Endpoint = cc.target[len("unix:"):]
-	}
-	unixScheme := strings.HasPrefix(cc.target, "unix:")
+	cc.parsedTarget = grpcutil.ParseTarget(cc.target, cc.dopts.copts.Dialer != nil)
 	channelz.Infof(logger, cc.channelzID, "parsed scheme: %q", cc.parsedTarget.Scheme)
 	resolverBuilder := cc.getResolver(cc.parsedTarget.Scheme)
 	if resolverBuilder == nil {
@@ -267,7 +257,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.authority = creds.Info().ServerName
 	} else if cc.dopts.insecure && cc.dopts.authority != "" {
 		cc.authority = cc.dopts.authority
-	} else if unixScheme {
+	} else if strings.HasPrefix(cc.target, "unix:") {
 		cc.authority = "localhost"
 	} else {
 		// Use endpoint from "scheme://authority/endpoint" as the default

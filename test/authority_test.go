@@ -59,16 +59,13 @@ func runUnixTest(t *testing.T, address, target, expectedAuthority string, dialer
 		address: address,
 		target:  target,
 	}
-	if dialer == nil {
-		if err := us.Start(nil); err != nil {
-			t.Fatalf("Error starting endpoint server: %v", err)
-			return
-		}
-	} else {
-		if err := us.Start(nil, grpc.WithContextDialer(dialer)); err != nil {
-			t.Fatalf("Error starting endpoint server: %v", err)
-			return
-		}
+	opts := []grpc.DialOption{}
+	if dialer != nil {
+		opts = append(opts, grpc.WithContextDialer(dialer))
+	}
+	if err := us.Start(nil, opts...); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+		return
 	}
 	defer us.Stop()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

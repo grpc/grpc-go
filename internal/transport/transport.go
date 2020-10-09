@@ -571,8 +571,6 @@ type ConnectOptions struct {
 	MaxHeaderListSize *uint32
 	// UseProxy specifies if a proxy should be used.
 	UseProxy bool
-	// GRPCUA is the grpc user agent string
-	GRPCUA string
 }
 
 // NewClientTransport establishes the transport with the required ConnectOptions

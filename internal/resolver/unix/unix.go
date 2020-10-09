@@ -26,24 +26,24 @@ import (
 
 const scheme = "unix"
 
-type unixBuilder struct{}
+type builder struct{}
 
-func (*unixBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+func (*builder) Build(target resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
 	cc.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: target.Endpoint, Attributes: attributes.New("network_type", "unix")}}})
 	return &unixResolver{}, nil
 }
 
-func (*unixBuilder) Scheme() string {
+func (*builder) Scheme() string {
 	return scheme
 }
 
 type unixResolver struct {
 }
 
-func (*unixResolver) ResolveNow(o resolver.ResolveNowOptions) {}
+func (*unixResolver) ResolveNow(resolver.ResolveNowOptions) {}
 
 func (*unixResolver) Close() {}
 
 func init() {
-	resolver.Register(&unixBuilder{})
+	resolver.Register(&builder{})
 }
