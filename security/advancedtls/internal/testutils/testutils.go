@@ -42,10 +42,14 @@ type CertStore struct {
 	// It is trusted by ClientTrust2.
 	ServerCert2 tls.Certificate
 	// ServerPeer3 is the certificate sent by server to prove its identity.
-	ServerPeer3  tls.Certificate
+	ServerPeer3 tls.Certificate
+	// ClientTrust1 is the root certificate used on the client side.
 	ClientTrust1 *x509.CertPool
+	// ClientTrust2 is the root certificate used on the client side.
 	ClientTrust2 *x509.CertPool
+	// ServerTrust1 is the root certificate used on the server side.
 	ServerTrust1 *x509.CertPool
+	// ServerTrust2 is the root certificate used on the server side.
 	ServerTrust2 *x509.CertPool
 }
 
