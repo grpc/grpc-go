@@ -86,7 +86,7 @@ func (s) TestUnix(t *testing.T) {
 		authority string
 	}{
 		{
-			name:      "UnixRelative1",
+			name:      "UnixRelative",
 			address:   "sock.sock",
 			target:    "unix:sock.sock",
 			authority: "localhost",
