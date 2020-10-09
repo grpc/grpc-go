@@ -29,19 +29,18 @@ type keyType string
 
 const key = keyType("grpc.internal.transport.networktype")
 
-// NetworkType contains the network type information.
-type NetworkType struct {
-	T string
-}
-
-// Set returns a copy of the provided address with attributes containing t.
+// Set returns a copy of the provided address with attributes containing networkType.
 func Set(address resolver.Address, networkType string) resolver.Address {
-	address.Attributes = address.Attributes.WithValues(key, &NetworkType{networkType})
+	address.Attributes = address.Attributes.WithValues(key, networkType)
 	return address
 }
 
-// Get returns the network type in the resolver.Address, or nil if not present.
-func Get(address resolver.Address) *NetworkType {
-	t, _ := address.Attributes.Value(key).(*NetworkType)
-	return t
+// Get returns the network type in the resolver.Address and true, or "", false
+// if not present.
+func Get(address resolver.Address) (string, bool) {
+	v := address.Attributes.Value(key)
+	if v == nil {
+		return "", false
+	}
+	return v.(string), true
 }

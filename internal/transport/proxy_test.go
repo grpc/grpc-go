@@ -138,14 +138,6 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 	defer overwrite(hpfe)()
 
 	// Dial to proxy server.
-	oldProxyDialer := proxyDialer
-	proxyDialer = func(ctx context.Context, string, addr string) (net.Conn, error) {
-		if deadline, ok := ctx.Deadline(); ok {
-			return net.DialTimeout("tcp", addr, time.Until(deadline))
-		}
-		return net.Dial("tcp", addr)
-	}
-	defer func() { proxyDialer = oldProxyDialer }()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	c, err := proxyDial(ctx, blis.Addr().String(), "test")

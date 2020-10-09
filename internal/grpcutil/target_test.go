@@ -34,15 +34,20 @@ func TestParseTarget(t *testing.T) {
 		str := test.Scheme + "://" + test.Authority + "/" + test.Endpoint
 		got := ParseTarget(str, false)
 		if got != test {
-			t.Errorf("ParseTarget(%q) = %+v, want %+v", str, got, test)
+			t.Errorf("ParseTarget(%q, false) = %+v, want %+v", str, got, test)
+		}
+		got = ParseTarget(str, true)
+		if got != test {
+			t.Errorf("ParseTarget(%q, true) = %+v, want %+v", str, got, test)
 		}
 	}
 }
 
 func TestParseTargetString(t *testing.T) {
 	for _, test := range []struct {
-		targetStr string
-		want      resolver.Target
+		targetStr      string
+		want           resolver.Target
+		wantWithDialer resolver.Target
 	}{
 		{targetStr: "", want: resolver.Target{Scheme: "", Authority: "", Endpoint: ""}},
 		{targetStr: ":///", want: resolver.Target{Scheme: "", Authority: "", Endpoint: ""}},
@@ -70,10 +75,23 @@ func TestParseTargetString(t *testing.T) {
 		{targetStr: "a:/b", want: resolver.Target{Scheme: "", Authority: "", Endpoint: "a:/b"}},
 		{targetStr: "a//b", want: resolver.Target{Scheme: "", Authority: "", Endpoint: "a//b"}},
 		{targetStr: "a://b", want: resolver.Target{Scheme: "", Authority: "", Endpoint: "a://b"}},
+
+		// Unix cases without custom dialer.
+		// unix:[local_path] and unix:[/absolute] have different behaviors with
+		// a custom dialer, to prevent behavior changes with custom dialers.
+		{targetStr: "unix:domain", want: resolver.Target{Scheme: "unix", Authority: "", Endpoint: "domain"}, wantWithDialer: resolver.Target{Scheme: "", Authority: "", Endpoint: "unix:domain"}},
+		{targetStr: "unix:/domain", want: resolver.Target{Scheme: "unix", Authority: "", Endpoint: "/domain"}, wantWithDialer: resolver.Target{Scheme: "", Authority: "", Endpoint: "unix:/domain"}},
 	} {
 		got := ParseTarget(test.targetStr, false)
 		if got != test.want {
-			t.Errorf("ParseTarget(%q) = %+v, want %+v", test.targetStr, got, test.want)
+			t.Errorf("ParseTarget(%q, false) = %+v, want %+v", test.targetStr, got, test.want)
+		}
+		if test.wantWithDialer == (resolver.Target{}) {
+			test.wantWithDialer = test.want
+		}
+		got = ParseTarget(test.targetStr, true)
+		if got != test.wantWithDialer {
+			t.Errorf("ParseTarget(%q, true) = %+v, want %+v", test.targetStr, got, test.wantWithDialer)
 		}
 	}
 }

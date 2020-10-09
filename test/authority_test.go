@@ -86,19 +86,19 @@ func (s) TestUnix(t *testing.T) {
 		authority string
 	}{
 		{
-			name:      "Unix1",
+			name:      "UnixRelative",
 			address:   "sock.sock",
 			target:    "unix:sock.sock",
 			authority: "localhost",
 		},
 		{
-			name:      "Unix2",
+			name:      "UnixAbsolute",
 			address:   "/tmp/sock.sock",
 			target:    "unix:/tmp/sock.sock",
 			authority: "localhost",
 		},
 		{
-			name:      "Unix3",
+			name:      "UnixAbsoluteAlternate",
 			address:   "/tmp/sock.sock",
 			target:    "unix:///tmp/sock.sock",
 			authority: "localhost",
@@ -122,13 +122,13 @@ func (s) TestUnixCustomDialer(t *testing.T) {
 		authority string
 	}{
 		{
-			name:      "Unix1",
+			name:      "UnixRelative",
 			address:   "sock.sock",
 			target:    "unix:sock.sock",
 			authority: "localhost",
 		},
 		{
-			name:      "Unix2",
+			name:      "UnixAbsolute",
 			address:   "/tmp/sock.sock",
 			target:    "unix:/tmp/sock.sock",
 			authority: "localhost",

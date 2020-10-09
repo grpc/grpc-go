@@ -594,7 +594,7 @@ func defaultDialOptions() dialOptions {
 		copts: transport.ConnectOptions{
 			WriteBufferSize: defaultWriteBufSize,
 			ReadBufferSize:  defaultReadBufSize,
-			UseProxy:        false,
+			UseProxy:        true,
 		},
 		resolveNowBackoff: internalbackoff.DefaultExponential.Backoff,
 	}
