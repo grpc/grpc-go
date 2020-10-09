@@ -21,6 +21,7 @@ package unix
 
 import (
 	"google.golang.org/grpc/attributes"
+	"google.golang.org/grpc/internal/transport/networktype"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -29,7 +30,7 @@ const scheme = "unix"
 type builder struct{}
 
 func (*builder) Build(target resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
-	cc.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: target.Endpoint, Attributes: attributes.New("network_type", "unix")}}})
+	cc.UpdateState(resolver.State{Addresses: []resolver.Address{networktype.Set(resolver.Address{Addr: target.Endpoint, Attributes: attributes.New()}, "unix")}})
 	return &unixResolver{}, nil
 }
 

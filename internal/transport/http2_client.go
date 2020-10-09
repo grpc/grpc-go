@@ -33,6 +33,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/internal/grpcutil"
+	"google.golang.org/grpc/internal/transport/networktype"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -142,12 +143,8 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 		return fn(ctx, addr.Addr)
 	}
 	networkTypeStr := "tcp"
-	if networkType := addr.Attributes.Value("network_type"); networkType != nil {
-		ok := false
-		networkTypeStr, ok = networkType.(string)
-		if !ok {
-			return nil, fmt.Errorf("network_type %v not of type string", networkType)
-		}
+	if networkType := networktype.Get(addr); networkType != nil {
+		networkTypeStr = networkType.T
 	}
 	if networkTypeStr == "tcp" && useProxy {
 		return newProxyDialer(func(fCtx context.Context, fAddr string) (net.Conn, error) {
