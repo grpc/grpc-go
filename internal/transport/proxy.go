@@ -33,6 +33,8 @@ import (
 
 const proxyAuthHeaderKey = "Proxy-Authorization"
 
+var proxyDialer = (&net.Dialer{}).DialContext
+
 var (
 	// errDisabled indicates that proxy is disabled for the address.
 	errDisabled = errors.New("proxy is disabled for the address")
@@ -115,32 +117,30 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr stri
 	return &bufConn{Conn: conn, r: r}, nil
 }
 
-// newProxyDialer returns a dialer that connects to proxy first if necessary.
-// The returned dialer checks if a proxy is necessary, dial to the proxy with the
-// provided dialer, does HTTP CONNECT handshake and returns the connection.
-func newProxyDialer(dialer func(context.Context, string) (net.Conn, error), grpcUA string) func(context.Context, string) (net.Conn, error) {
-	return func(ctx context.Context, addr string) (conn net.Conn, err error) {
-		var newAddr string
-		proxyURL, err := mapAddress(ctx, addr)
-		if err != nil {
-			if err != errDisabled {
-				return nil, err
-			}
-			newAddr = addr
-		} else {
-			newAddr = proxyURL.Host
+// proxyDial dials, connecting to a proxy first if necessary. Checks if a proxy
+// is necessary, dial to the proxy with using proxyDialer, does HTTP CONNECT
+// handshake, and returns the connection.
+func proxyDial(ctx context.Context, addr string, grpcUA string) (conn net.Conn, err error) {
+	var newAddr string
+	proxyURL, err := mapAddress(ctx, addr)
+	if err != nil {
+		if err != errDisabled {
+			return nil, err
 		}
+		newAddr = addr
+	} else {
+		newAddr = proxyURL.Host
+	}
 
-		conn, err = dialer(ctx, newAddr)
-		if err != nil {
-			return
-		}
-		if proxyURL != nil {
-			// proxy is disabled if proxyURL is nil.
-			conn, err = doHTTPConnectHandshake(ctx, conn, addr, proxyURL, grpcUA)
-		}
+	conn, err = proxyDialer(ctx, "tcp", newAddr)
+	if err != nil {
 		return
 	}
+	if proxyURL != nil {
+		// proxy is disabled if proxyURL is nil.
+		conn, err = doHTTPConnectHandshake(ctx, conn, addr, proxyURL, grpcUA)
+	}
+	return
 }
 
 func sendHTTPRequest(ctx context.Context, req *http.Request, conn net.Conn) error {
