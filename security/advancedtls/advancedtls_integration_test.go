@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
-	"google.golang.org/grpc/security/advancedtls/internal"
+	"google.golang.org/grpc/security/advancedtls/internal/testutils"
 )
 
 var (
@@ -120,9 +120,9 @@ func callAndVerifyWithClientConn(connCtx context.Context, msg string, creds cred
 // (could be change the client's trust certificate, or change custom
 // verification function, etc)
 func (s) TestEnd2End(t *testing.T) {
-	cs := &internal.CertStore{}
+	cs := &testutils.CertStore{}
 	if err := cs.LoadCerts(); err != nil {
-		t.Fatalf("Function cs.LoadCerts() failed, err: %v", err)
+		t.Fatalf("cs.LoadCerts() failed, err: %v", err)
 	}
 	stage := &stageInfo{}
 	for _, test := range []struct {

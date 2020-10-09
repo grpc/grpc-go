@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/security/advancedtls/internal"
+	"google.golang.org/grpc/security/advancedtls/internal/testutils"
 )
 
 type s struct {
@@ -61,7 +61,7 @@ func (f fakeProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMateria
 	if f.wantError {
 		return nil, fmt.Errorf("bad fakeProvider")
 	}
-	cs := &internal.CertStore{}
+	cs := &testutils.CertStore{}
 	if err := cs.LoadCerts(); err != nil {
 		return nil, fmt.Errorf("cs.LoadCerts() failed, err: %v", err)
 	}
@@ -303,9 +303,9 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 }
 
 func (s) TestClientServerHandshake(t *testing.T) {
-	cs := &internal.CertStore{}
+	cs := &testutils.CertStore{}
 	if err := cs.LoadCerts(); err != nil {
-		t.Fatalf("Function cs.LoadCerts() failed, err: %v", err)
+		t.Fatalf("cs.LoadCerts() failed, err: %v", err)
 	}
 	getRootCAsForClient := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return &GetRootCAsResults{TrustCerts: cs.ClientTrust1}, nil
@@ -792,9 +792,9 @@ func compare(a1, a2 credentials.AuthInfo) bool {
 
 func (s) TestAdvancedTLSOverrideServerName(t *testing.T) {
 	expectedServerName := "server.name"
-	cs := &internal.CertStore{}
+	cs := &testutils.CertStore{}
 	if err := cs.LoadCerts(); err != nil {
-		t.Fatalf("Function cs.LoadCerts() failed, err: %v", err)
+		t.Fatalf("cs.LoadCerts() failed, err: %v", err)
 	}
 	clientOptions := &ClientOptions{
 		RootOptions: RootCertificateOptions{
@@ -813,9 +813,9 @@ func (s) TestAdvancedTLSOverrideServerName(t *testing.T) {
 }
 
 func (s) TestGetCertificatesSNI(t *testing.T) {
-	cs := &internal.CertStore{}
+	cs := &testutils.CertStore{}
 	if err := cs.LoadCerts(); err != nil {
-		t.Fatalf("Function cs.LoadCerts() failed, err: %v", err)
+		t.Fatalf("cs.LoadCerts() failed, err: %v", err)
 	}
 	tests := []struct {
 		desc       string

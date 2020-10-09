@@ -15,8 +15,8 @@
  *
  */
 
-// Package internal contains helper functions for advancedtls.
-package internal
+// Package testutils contains helper functions for advancedtls.
+package testutils
 
 import (
 	"crypto/tls"

@@ -29,7 +29,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials/tls/certprovider"
-	"google.golang.org/grpc/security/advancedtls/internal"
+	"google.golang.org/grpc/security/advancedtls/internal/testutils"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
@@ -104,9 +104,9 @@ func (s) TestNewPEMFileProvider(t *testing.T) {
 // and see if the new credentials are picked up.
 func (s) TestWatchingRoutineUpdates(t *testing.T) {
 	// Load certificates.
-	cs := &internal.CertStore{}
+	cs := &testutils.CertStore{}
 	if err := cs.LoadCerts(); err != nil {
-		t.Fatalf("Function cs.LoadCerts() failed, err: %v", err)
+		t.Fatalf("cs.LoadCerts() failed, err: %v", err)
 	}
 	tests := []struct {
 		desc         string
