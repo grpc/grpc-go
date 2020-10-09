@@ -236,15 +236,15 @@ var (
 		},
 		TypeUrl: version.V2RouteConfigURL,
 	}
-	emptyRouteConfig = &xdspb.RouteConfiguration{
+	noVirtualHostsRouteConfig = &xdspb.RouteConfiguration{
 		Name: goodRouteName1,
 	}
-	marshaledEmptyRouteConfig, _ = proto.Marshal(emptyRouteConfig)
-	noVirtualHostsInRDSResponse  = &xdspb.DiscoveryResponse{
+	marshaledNoVirtualHostsRouteConfig, _ = proto.Marshal(noVirtualHostsRouteConfig)
+	noVirtualHostsInRDSResponse           = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: version.V2RouteConfigURL,
-				Value:   marshaledEmptyRouteConfig,
+				Value:   marshaledNoVirtualHostsRouteConfig,
 			},
 		},
 		TypeUrl: version.V2RouteConfigURL,
