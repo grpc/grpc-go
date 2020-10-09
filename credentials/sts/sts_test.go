@@ -43,19 +43,20 @@ import (
 )
 
 const (
-	requestedTokenType   = "urn:ietf:params:oauth:token-type:access-token"
-	actorTokenPath       = "/var/run/secrets/token.jwt"
-	actorTokenType       = "urn:ietf:params:oauth:token-type:refresh_token"
-	actorTokenContents   = "actorToken.jwt.contents"
-	accessTokenContents  = "access_token"
-	subjectTokenPath     = "/var/run/secrets/token.jwt"
-	subjectTokenType     = "urn:ietf:params:oauth:token-type:id_token"
-	subjectTokenContents = "subjectToken.jwt.contents"
-	serviceURI           = "http://localhost"
-	exampleResource      = "https://backend.example.com/api"
-	exampleAudience      = "example-backend-service"
-	testScope            = "https://www.googleapis.com/auth/monitoring"
-	defaultTestTimeout   = 1 * time.Second
+	requestedTokenType      = "urn:ietf:params:oauth:token-type:access-token"
+	actorTokenPath          = "/var/run/secrets/token.jwt"
+	actorTokenType          = "urn:ietf:params:oauth:token-type:refresh_token"
+	actorTokenContents      = "actorToken.jwt.contents"
+	accessTokenContents     = "access_token"
+	subjectTokenPath        = "/var/run/secrets/token.jwt"
+	subjectTokenType        = "urn:ietf:params:oauth:token-type:id_token"
+	subjectTokenContents    = "subjectToken.jwt.contents"
+	serviceURI              = "http://localhost"
+	exampleResource         = "https://backend.example.com/api"
+	exampleAudience         = "example-backend-service"
+	testScope               = "https://www.googleapis.com/auth/monitoring"
+	defaultTestTimeout      = 1 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
 var (
@@ -132,35 +133,13 @@ func makeGoodResponse() *http.Response {
 	}
 }
 
-// fakeHTTPDoer helps mock out the http.Client.Do calls made by the credentials
-// code under test. It makes the http.Request made by the credentials available
-// through a channel, and makes it possible to inject various responses.
-type fakeHTTPDoer struct {
-	reqCh  *testutils.Channel
-	respCh *testutils.Channel
-	err    error
-}
-
-func (fc *fakeHTTPDoer) Do(req *http.Request) (*http.Response, error) {
-	fc.reqCh.Send(req)
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	val, err := fc.respCh.Receive(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return val.(*http.Response), fc.err
-}
-
 // Overrides the http.Client with a fakeClient which sends a good response.
-func overrideHTTPClientGood() (*fakeHTTPDoer, func()) {
-	fc := &fakeHTTPDoer{
-		reqCh:  testutils.NewChannel(),
-		respCh: testutils.NewChannel(),
+func overrideHTTPClientGood() (*testutils.FakeHTTPClient, func()) {
+	fc := &testutils.FakeHTTPClient{
+		ReqChan:  testutils.NewChannel(),
+		RespChan: testutils.NewChannel(),
 	}
-	fc.respCh.Send(makeGoodResponse())
+	fc.RespChan.Send(makeGoodResponse())
 
 	origMakeHTTPDoer := makeHTTPDoer
 	makeHTTPDoer = func(_ *x509.CertPool) httpDoer { return fc }
@@ -168,7 +147,7 @@ func overrideHTTPClientGood() (*fakeHTTPDoer, func()) {
 }
 
 // Overrides the http.Client with the provided fakeClient.
-func overrideHTTPClient(fc *fakeHTTPDoer) func() {
+func overrideHTTPClient(fc *testutils.FakeHTTPClient) func() {
 	origMakeHTTPDoer := makeHTTPDoer
 	makeHTTPDoer = func(_ *x509.CertPool) httpDoer { return fc }
 	return func() { makeHTTPDoer = origMakeHTTPDoer }
@@ -244,11 +223,11 @@ func compareRequest(gotRequest *http.Request, wantReqParams *requestParameters) 
 // expected goodRequest. This is expected to be called in a separate goroutine
 // by the tests. So, any errors encountered are pushed to an error channel
 // which is monitored by the test.
-func receiveAndCompareRequest(reqCh *testutils.Channel, errCh chan error) {
+func receiveAndCompareRequest(ReqChan *testutils.Channel, errCh chan error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	val, err := reqCh.Receive(ctx)
+	val, err := ReqChan.Receive(ctx)
 	if err != nil {
 		errCh <- err
 		return
@@ -274,7 +253,7 @@ func (s) TestGetRequestMetadataSuccess(t *testing.T) {
 	}
 
 	errCh := make(chan error, 1)
-	go receiveAndCompareRequest(fc.reqCh, errCh)
+	go receiveAndCompareRequest(fc.ReqChan, errCh)
 
 	gotMetadata, err := creds.GetRequestMetadata(createTestContext(context.Background(), credentials.PrivacyAndIntegrity), "")
 	if err != nil {
@@ -323,9 +302,9 @@ func (s) TestGetRequestMetadataBadSecurityLevel(t *testing.T) {
 func (s) TestGetRequestMetadataCacheExpiry(t *testing.T) {
 	const expiresInSecs = 1
 	defer overrideSubjectTokenGood()()
-	fc := &fakeHTTPDoer{
-		reqCh:  testutils.NewChannel(),
-		respCh: testutils.NewChannel(),
+	fc := &testutils.FakeHTTPClient{
+		ReqChan:  testutils.NewChannel(),
+		RespChan: testutils.NewChannel(),
 	}
 	defer overrideHTTPClient(fc)()
 
@@ -340,7 +319,7 @@ func (s) TestGetRequestMetadataCacheExpiry(t *testing.T) {
 	// out a fresh request.
 	for i := 0; i < 2; i++ {
 		errCh := make(chan error, 1)
-		go receiveAndCompareRequest(fc.reqCh, errCh)
+		go receiveAndCompareRequest(fc.ReqChan, errCh)
 
 		respJSON, _ := json.Marshal(responseParameters{
 			AccessToken:     accessTokenContents,
@@ -354,7 +333,7 @@ func (s) TestGetRequestMetadataCacheExpiry(t *testing.T) {
 			StatusCode: http.StatusOK,
 			Body:       respBody,
 		}
-		fc.respCh.Send(resp)
+		fc.RespChan.Send(resp)
 
 		gotMetadata, err := creds.GetRequestMetadata(createTestContext(context.Background(), credentials.PrivacyAndIntegrity), "")
 		if err != nil {
@@ -399,9 +378,9 @@ func (s) TestGetRequestMetadataBadResponses(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			defer overrideSubjectTokenGood()()
 
-			fc := &fakeHTTPDoer{
-				reqCh:  testutils.NewChannel(),
-				respCh: testutils.NewChannel(),
+			fc := &testutils.FakeHTTPClient{
+				ReqChan:  testutils.NewChannel(),
+				RespChan: testutils.NewChannel(),
 			}
 			defer overrideHTTPClient(fc)()
 
@@ -411,9 +390,9 @@ func (s) TestGetRequestMetadataBadResponses(t *testing.T) {
 			}
 
 			errCh := make(chan error, 1)
-			go receiveAndCompareRequest(fc.reqCh, errCh)
+			go receiveAndCompareRequest(fc.ReqChan, errCh)
 
-			fc.respCh.Send(test.response)
+			fc.RespChan.Send(test.response)
 			if _, err := creds.GetRequestMetadata(createTestContext(context.Background(), credentials.PrivacyAndIntegrity), ""); err == nil {
 				t.Fatal("creds.GetRequestMetadata() succeeded when expected to fail")
 			}
@@ -438,10 +417,9 @@ func (s) TestGetRequestMetadataBadSubjectTokenRead(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		defer cancel()
-
-		if _, err := fc.reqCh.Receive(ctx); err != context.DeadlineExceeded {
+		if _, err := fc.ReqChan.Receive(ctx); err != context.DeadlineExceeded {
 			errCh <- err
 			return
 		}
@@ -698,12 +676,12 @@ func (s) TestSendRequest(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			client := &fakeHTTPDoer{
-				reqCh:  testutils.NewChannel(),
-				respCh: testutils.NewChannel(),
-				err:    test.respErr,
+			client := &testutils.FakeHTTPClient{
+				ReqChan:  testutils.NewChannel(),
+				RespChan: testutils.NewChannel(),
+				Err:      test.respErr,
 			}
-			client.respCh.Send(test.resp)
+			client.RespChan.Send(test.resp)
 			_, err := sendRequest(client, req)
 			if (err != nil) != test.wantErr {
 				t.Errorf("sendRequest(%v) = %v, wantErr: %v", req, err, test.wantErr)

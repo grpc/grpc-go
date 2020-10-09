@@ -63,7 +63,7 @@ func main() {
 		grpc.Creds(credentials.NewServerTLSFromCert(&cert)),
 	}
 	s := grpc.NewServer(opts...)
-	pb.RegisterEchoService(s, &pb.EchoService{UnaryEcho: unaryEcho})
+	pb.RegisterEchoServer(s, &ecServer{})
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -73,7 +73,11 @@ func main() {
 	}
 }
 
-func unaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+type ecServer struct {
+	pb.UnimplementedEchoServer
+}
+
+func (s *ecServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: req.Message}, nil
 }
 

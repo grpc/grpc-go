@@ -64,7 +64,7 @@ func main() {
 	}
 	altsTC := alts.NewServerCreds(opts)
 	grpcServer := grpc.NewServer(grpc.Creds(altsTC), grpc.InTapHandle(authz))
-	testpb.RegisterTestServiceService(grpcServer, interop.NewTestServer())
+	testpb.RegisterTestServiceServer(grpcServer, interop.NewTestServer())
 	grpcServer.Serve(lis)
 }
 

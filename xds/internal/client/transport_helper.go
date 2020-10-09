@@ -445,10 +445,8 @@ func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStrea
 func (t *TransportHelper) ReportLoad(ctx context.Context, cc *grpc.ClientConn, opts LoadReportingOptions) {
 	retries := 0
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
-		default:
 		}
 
 		if retries != 0 {

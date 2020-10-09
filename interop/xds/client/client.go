@@ -95,6 +95,10 @@ var (
 	logger = grpclog.Component("interop")
 )
 
+type statsService struct {
+	testpb.UnimplementedLoadBalancerStatsServiceServer
+}
+
 func hasRPCSucceeded() bool {
 	return atomic.LoadUint32(&rpcSucceeded) > 0
 }
@@ -107,7 +111,7 @@ func setRPCSucceeded() {
 // and return the distribution of remote peers. This is essentially a clientside
 // LB reporting mechanism that is designed to be queried by an external test
 // driver when verifying that the client is distributing RPCs as expected.
-func getClientStats(ctx context.Context, in *testpb.LoadBalancerStatsRequest) (*testpb.LoadBalancerStatsResponse, error) {
+func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalancerStatsRequest) (*testpb.LoadBalancerStatsResponse, error) {
 	mu.Lock()
 	watcherKey := statsWatcherKey{currentRequestID, currentRequestID + in.GetNumRpcs()}
 	watcher, ok := watchers[watcherKey]
@@ -222,7 +226,7 @@ func main() {
 	}
 	s := grpc.NewServer()
 	defer s.Stop()
-	testpb.RegisterLoadBalancerStatsServiceService(s, &testpb.LoadBalancerStatsServiceService{GetClientStats: getClientStats})
+	testpb.RegisterLoadBalancerStatsServiceServer(s, &statsService{})
 	go s.Serve(lis)
 
 	clients := make([]testpb.TestServiceClient, *numChannels)

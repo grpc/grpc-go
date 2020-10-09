@@ -61,14 +61,8 @@ func NewPayload(t testpb.PayloadType, size int) *testpb.Payload {
 	return p
 }
 
-type testServer struct{}
-
-func (s *testServer) Svc() *testpb.BenchmarkServiceService {
-	return &testpb.BenchmarkServiceService{
-		UnaryCall:                  s.UnaryCall,
-		StreamingCall:              s.StreamingCall,
-		UnconstrainedStreamingCall: s.UnconstrainedStreamingCall,
-	}
+type testServer struct {
+	testpb.UnimplementedBenchmarkServiceServer
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -150,15 +144,8 @@ func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_U
 // byteBufServer is a gRPC server that sends and receives byte buffer.
 // The purpose is to benchmark the gRPC performance without protobuf serialization/deserialization overhead.
 type byteBufServer struct {
+	testpb.UnimplementedBenchmarkServiceServer
 	respSize int32
-}
-
-func (s *byteBufServer) Svc() *testpb.BenchmarkServiceService {
-	return &testpb.BenchmarkServiceService{
-		UnaryCall:                  s.UnaryCall,
-		StreamingCall:              s.StreamingCall,
-		UnconstrainedStreamingCall: s.UnconstrainedStreamingCall,
-	}
 }
 
 // UnaryCall is an empty function and is not used for benchmark.
@@ -224,13 +211,13 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) func() {
 	s := grpc.NewServer(opts...)
 	switch info.Type {
 	case "protobuf":
-		testpb.RegisterBenchmarkServiceService(s, (&testServer{}).Svc())
+		testpb.RegisterBenchmarkServiceServer(s, &testServer{})
 	case "bytebuf":
 		respSize, ok := info.Metadata.(int32)
 		if !ok {
 			logger.Fatalf("failed to StartServer, invalid metadata: %v, for Type: %v", info.Metadata, info.Type)
 		}
-		testpb.RegisterBenchmarkServiceService(s, (&byteBufServer{respSize: respSize}).Svc())
+		testpb.RegisterBenchmarkServiceServer(s, &byteBufServer{respSize: respSize})
 	default:
 		logger.Fatalf("failed to StartServer, unknown Type: %v", info.Type)
 	}

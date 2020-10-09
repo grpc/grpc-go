@@ -30,12 +30,14 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
 
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/version"
 )
 
 // UnmarshalListener processes resources received in an LDS response, validates
@@ -405,10 +407,78 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 		return emptyUpdate, fmt.Errorf("xds: unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
 
+	sc, err := securityConfigFromCluster(cluster)
+	if err != nil {
+		return emptyUpdate, err
+	}
 	return ClusterUpdate{
 		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
 		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
+		SecurityCfg: sc,
 	}, nil
+}
+
+// securityConfigFromCluster extracts the relevant security configuration from
+// the received Cluster resource.
+func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, error) {
+	// The Cluster resource contains a `transport_socket` field, which contains
+	// a oneof `typed_config` field of type `protobuf.Any`. The any proto
+	// contains a marshaled representation of an `UpstreamTlsContext` message.
+	ts := cluster.GetTransportSocket()
+	if ts == nil {
+		return nil, nil
+	}
+	any := ts.GetTypedConfig()
+	if any == nil || any.TypeUrl != version.V3UpstreamTLSContextURL {
+		return nil, fmt.Errorf("xds: transport_socket field has unexpected typeURL: %s", any.TypeUrl)
+	}
+	upstreamCtx := &v3tlspb.UpstreamTlsContext{}
+	if err := proto.Unmarshal(any.GetValue(), upstreamCtx); err != nil {
+		return nil, fmt.Errorf("xds: failed to unmarshal UpstreamTlsContext in CDS response: %v", err)
+	}
+
+	// The `UpstreamTlsContext` has a `CommonTlsContext` which contains a
+	// `tls_certificate_certificate_provider_instance` field of type
+	// `CertificateProviderInstance`, which contains the provider instance name
+	// and the certificate name to fetch identity certs.
+	sc := &SecurityConfig{}
+	if identity := upstreamCtx.GetCommonTlsContext().GetTlsCertificateCertificateProviderInstance(); identity != nil {
+		sc.IdentityInstanceName = identity.GetInstanceName()
+		sc.IdentityCertName = identity.GetCertificateName()
+	}
+
+	// The `CommonTlsContext` contains a `validation_context_type` field which
+	// is a oneof. We can get the values that we are interested in from two of
+	// those possible values:
+	//  - combined validation context:
+	//    - contains a default validation context which holds the list of
+	//      accepted SANs.
+	//    - contains certificate provider instance configuration
+	//  - certificate provider instance configuration
+	//    - in this case, we do not get a list of accepted SANs.
+	switch t := upstreamCtx.GetCommonTlsContext().GetValidationContextType().(type) {
+	case *v3tlspb.CommonTlsContext_CombinedValidationContext:
+		combined := upstreamCtx.GetCommonTlsContext().GetCombinedValidationContext()
+		if def := combined.GetDefaultValidationContext(); def != nil {
+			for _, matcher := range def.GetMatchSubjectAltNames() {
+				// We only support exact matches for now.
+				if exact := matcher.GetExact(); exact != "" {
+					sc.AcceptedSANs = append(sc.AcceptedSANs, exact)
+				}
+			}
+		}
+		if pi := combined.GetValidationContextCertificateProviderInstance(); pi != nil {
+			sc.RootInstanceName = pi.GetInstanceName()
+			sc.RootCertName = pi.GetCertificateName()
+		}
+	case *v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance:
+		pi := upstreamCtx.GetCommonTlsContext().GetValidationContextCertificateProviderInstance()
+		sc.RootInstanceName = pi.GetInstanceName()
+		sc.RootCertName = pi.GetCertificateName()
+	default:
+		return nil, fmt.Errorf("xds: validation context contains unexpected type: %T", t)
+	}
+	return sc, nil
 }
 
 // UnmarshalEndpoints processes resources received in an EDS response,

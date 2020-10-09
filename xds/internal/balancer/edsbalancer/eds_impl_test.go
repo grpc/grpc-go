@@ -687,8 +687,10 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	// implements the LoadStore() method to return the underlying load.Store to
 	// be used.
 	loadStore := load.NewStore()
+	lsWrapper := &loadStoreWrapper{}
+	lsWrapper.update(loadStore, testClusterNames[0])
 	cw := &xdsClientWrapper{
-		load: &loadStoreWrapper{store: loadStore, service: testClusterNames[0]},
+		load: lsWrapper,
 	}
 
 	cc := testutils.NewTestClientConn(t)
@@ -723,12 +725,14 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	// We expect the 10 picks to be split between the localities since they are
 	// of equal weight. And since we only mark the picks routed to sc2 as done,
 	// the picks on sc1 should show up as inProgress.
-	wantStoreData := &load.Data{
+	wantStoreData := []*load.Data{{
+		Cluster: testClusterNames[0],
+		Service: "",
 		LocalityStats: map[string]load.LocalityData{
 			locality1.String(): {RequestStats: load.RequestData{InProgress: 5}},
 			locality2.String(): {RequestStats: load.RequestData{Succeeded: 5}},
 		},
-	}
+	}}
 	for i := 0; i < 10; i++ {
 		scst, _ := p1.Pick(balancer.PickInfo{})
 		if scst.Done != nil && scst.SubConn != sc1 {
@@ -736,8 +740,8 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 		}
 	}
 
-	gotStoreData := loadStore.PerCluster(testClusterNames[0], "").Stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty()); diff != "" {
-		t.Errorf("store.Stats() returned unexpected diff (-want +got):\n%s", diff)
+	gotStoreData := loadStore.Stats(testClusterNames[0:1])
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(load.Data{}, "ReportInterval")); diff != "" {
+		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }

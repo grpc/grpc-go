@@ -18,7 +18,10 @@
 
 // Package profiling exposes methods to manage profiling within gRPC.
 //
-// This package and all its methods are EXPERIMENTAL.
+// Experimental
+//
+// Notice: This package is EXPERIMENTAL and may be changed or removed in a
+// later release.
 package profiling
 
 import (

@@ -154,38 +154,43 @@ type loadStoreWrapper struct {
 	store      *load.Store
 	cluster    string
 	edsService string
+	perCluster load.PerClusterReporter
 }
 
 func (lsw *loadStoreWrapper) update(store *load.Store, cluster, edsService string) {
 	lsw.mu.Lock()
 	defer lsw.mu.Unlock()
+	if store == lsw.store && cluster == lsw.cluster && edsService == lsw.edsService {
+		return
+	}
 	lsw.store = store
 	lsw.cluster = cluster
 	lsw.edsService = edsService
+	lsw.perCluster = lsw.store.PerCluster(lsw.cluster, lsw.edsService)
 }
 
 func (lsw *loadStoreWrapper) CallStarted(locality string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	lsw.store.PerCluster(lsw.cluster, lsw.edsService).CallStarted(locality)
+	lsw.perCluster.CallStarted(locality)
 }
 
 func (lsw *loadStoreWrapper) CallFinished(locality string, err error) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	lsw.store.PerCluster(lsw.cluster, lsw.edsService).CallFinished(locality, err)
+	lsw.perCluster.CallFinished(locality, err)
 }
 
 func (lsw *loadStoreWrapper) CallServerLoad(locality, name string, val float64) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	lsw.store.PerCluster(lsw.cluster, lsw.edsService).CallServerLoad(locality, name, val)
+	lsw.perCluster.CallServerLoad(locality, name, val)
 }
 
 func (lsw *loadStoreWrapper) CallDropped(category string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	lsw.store.PerCluster(lsw.cluster, lsw.edsService).CallDropped(category)
+	lsw.perCluster.CallDropped(category)
 }
 
 type xdsClientWrapper struct {

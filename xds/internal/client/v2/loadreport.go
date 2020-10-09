@@ -116,58 +116,58 @@ func (v2c *client) SendLoadStatsRequest(s grpc.ClientStream, clusterName string)
 		return errors.New("lrs: LoadStore is not initialized")
 	}
 
-	var (
-		droppedReqs   []*v2endpointpb.ClusterStats_DroppedRequests
-		localityStats []*v2endpointpb.UpstreamLocalityStats
-	)
-
-	sd := v2c.loadStore.PerCluster(clusterName, "").Stats()
-	for category, count := range sd.Drops {
-		droppedReqs = append(droppedReqs, &v2endpointpb.ClusterStats_DroppedRequests{
-			Category:     category,
-			DroppedCount: count,
-		})
-	}
-	for l, localityData := range sd.LocalityStats {
-		lid, err := internal.LocalityIDFromString(l)
-		if err != nil {
-			return err
-		}
-		var loadMetricStats []*v2endpointpb.EndpointLoadMetricStats
-		for name, loadData := range localityData.LoadStats {
-			loadMetricStats = append(loadMetricStats, &v2endpointpb.EndpointLoadMetricStats{
-				MetricName:                    name,
-				NumRequestsFinishedWithMetric: loadData.Count,
-				TotalMetricValue:              loadData.Sum,
+	var clusterStats []*v2endpointpb.ClusterStats
+	sds := v2c.loadStore.Stats([]string{clusterName})
+	for _, sd := range sds {
+		var (
+			droppedReqs   []*v2endpointpb.ClusterStats_DroppedRequests
+			localityStats []*v2endpointpb.UpstreamLocalityStats
+		)
+		for category, count := range sd.Drops {
+			droppedReqs = append(droppedReqs, &v2endpointpb.ClusterStats_DroppedRequests{
+				Category:     category,
+				DroppedCount: count,
 			})
 		}
-		localityStats = append(localityStats, &v2endpointpb.UpstreamLocalityStats{
-			Locality: &v2corepb.Locality{
-				Region:  lid.Region,
-				Zone:    lid.Zone,
-				SubZone: lid.SubZone,
-			},
-			TotalSuccessfulRequests: localityData.RequestStats.Succeeded,
-			TotalRequestsInProgress: localityData.RequestStats.InProgress,
-			TotalErrorRequests:      localityData.RequestStats.Errored,
-			LoadMetricStats:         loadMetricStats,
-			UpstreamEndpointStats:   nil, // TODO: populate for per endpoint loads.
-		})
-	}
+		for l, localityData := range sd.LocalityStats {
+			lid, err := internal.LocalityIDFromString(l)
+			if err != nil {
+				return err
+			}
+			var loadMetricStats []*v2endpointpb.EndpointLoadMetricStats
+			for name, loadData := range localityData.LoadStats {
+				loadMetricStats = append(loadMetricStats, &v2endpointpb.EndpointLoadMetricStats{
+					MetricName:                    name,
+					NumRequestsFinishedWithMetric: loadData.Count,
+					TotalMetricValue:              loadData.Sum,
+				})
+			}
+			localityStats = append(localityStats, &v2endpointpb.UpstreamLocalityStats{
+				Locality: &v2corepb.Locality{
+					Region:  lid.Region,
+					Zone:    lid.Zone,
+					SubZone: lid.SubZone,
+				},
+				TotalSuccessfulRequests: localityData.RequestStats.Succeeded,
+				TotalRequestsInProgress: localityData.RequestStats.InProgress,
+				TotalErrorRequests:      localityData.RequestStats.Errored,
+				LoadMetricStats:         loadMetricStats,
+				UpstreamEndpointStats:   nil, // TODO: populate for per endpoint loads.
+			})
+		}
 
-	dur := time.Since(v2c.lastLoadReportAt)
-	v2c.lastLoadReportAt = time.Now()
-
-	cs := []*v2endpointpb.ClusterStats{
-		{
-			ClusterName:           clusterName,
+		clusterStats = append(clusterStats, &v2endpointpb.ClusterStats{
+			ClusterName:           sd.Cluster,
+			ClusterServiceName:    sd.Service,
 			UpstreamLocalityStats: localityStats,
 			TotalDroppedRequests:  sd.TotalDrops,
 			DroppedRequests:       droppedReqs,
-			LoadReportInterval:    ptypes.DurationProto(dur),
-		},
+			LoadReportInterval:    ptypes.DurationProto(sd.ReportInterval),
+		})
+
 	}
-	req := &lrspb.LoadStatsRequest{ClusterStats: cs}
+
+	req := &lrspb.LoadStatsRequest{ClusterStats: clusterStats}
 	v2c.logger.Infof("lrs: sending LRS loads: %+v", req)
 	return stream.Send(req)
 }

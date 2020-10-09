@@ -564,10 +564,12 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 			"server_features" : ["foo", "bar", "xds_v3"],
 			"certificate_providers": {
 				"unknownProviderInstance1": {
-					"foo1": "bar1"
+					"plugin_name": "foo",
+					"config": {"foo": "bar"}
 				},
 				"unknownProviderInstance2": {
-					"foo2": "bar2"
+					"plugin_name": "bar",
+					"config": {"foo": "bar"}
 				}
 			}
 		}`,
@@ -588,17 +590,12 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 			"server_features" : ["foo", "bar", "xds_v3"],
 			"certificate_providers": {
 				"unknownProviderInstance": {
-					"foo": "bar"
-				},
-				"fakeProviderInstance": {
-					"fake-certificate-provider": {
-						"configKey": "configValue"
-					}
+					"plugin_name": "foo",
+					"config": {"foo": "bar"}
 				},
 				"fakeProviderInstanceBad": {
-					"fake-certificate-provider": {
-						"configKey": 666
-					}
+					"plugin_name": "fake-certificate-provider",
+					"config": {"configKey": 666}
 				}
 			}
 		}`,
@@ -619,12 +616,12 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 			"server_features" : ["foo", "bar", "xds_v3"],
 			"certificate_providers": {
 				"unknownProviderInstance": {
-					"foo": "bar"
+					"plugin_name": "foo",
+					"config": {"foo": "bar"}
 				},
 				"fakeProviderInstance": {
-					"fake-certificate-provider": {
-						"configKey": "configValue"
-					}
+					"plugin_name": "fake-certificate-provider",
+					"config": {"configKey": "configValue"}
 				}
 			}
 		}`,
@@ -692,7 +689,7 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 			}
 			c, err := NewConfig()
 			if (err != nil) != test.wantErr {
-				t.Fatalf("NewConfig() returned: %v, wantErr: %v", err, test.wantErr)
+				t.Fatalf("NewConfig() returned: (%+v, %v), wantErr: %v", c.CertProviderConfigs, err, test.wantErr)
 			}
 			if test.wantErr {
 				return

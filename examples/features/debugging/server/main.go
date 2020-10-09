@@ -36,13 +36,23 @@ var (
 	ports = []string{":10001", ":10002", ":10003"}
 )
 
-// sayHello implements helloworld.GreeterServer.SayHello
-func sayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+// server is used to implement helloworld.GreeterServer.
+type server struct {
+	pb.UnimplementedGreeterServer
+}
+
+// SayHello implements helloworld.GreeterServer
+func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
-// sayHelloSlow implements helloworld.GreeterServer.SayHello
-func sayHelloSlow(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+// slow server is used to simulate a server that has a variable delay in its response.
+type slowServer struct {
+	pb.UnimplementedGreeterServer
+}
+
+// SayHello implements helloworld.GreeterServer
+func (s *slowServer) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	// Delay 100ms ~ 200ms before replying
 	time.Sleep(time.Duration(100+grpcrand.Intn(100)) * time.Millisecond)
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
@@ -60,7 +70,7 @@ func main() {
 	go s.Serve(lis)
 	defer s.Stop()
 
-	/***** Start three GreeterServers(with one of them to be the slow server). *****/
+	/***** Start three GreeterServers(with one of them to be the slowServer). *****/
 	for i := 0; i < 3; i++ {
 		lis, err := net.Listen("tcp", ports[i])
 		if err != nil {
@@ -69,9 +79,9 @@ func main() {
 		defer lis.Close()
 		s := grpc.NewServer()
 		if i == 2 {
-			pb.RegisterGreeterService(s, &pb.GreeterService{SayHello: sayHelloSlow})
+			pb.RegisterGreeterServer(s, &slowServer{})
 		} else {
-			pb.RegisterGreeterService(s, &pb.GreeterService{SayHello: sayHello})
+			pb.RegisterGreeterServer(s, &server{})
 		}
 		go s.Serve(lis)
 	}

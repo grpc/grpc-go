@@ -1316,7 +1316,13 @@ func (t *http2Client) reader() {
 				if s != nil {
 					// use error detail to provide better err message
 					code := http2ErrConvTab[se.Code]
-					msg := t.framer.fr.ErrorDetail().Error()
+					errorDetail := t.framer.fr.ErrorDetail()
+					var msg string
+					if errorDetail != nil {
+						msg = errorDetail.Error()
+					} else {
+						msg = "received invalid frame"
+					}
 					t.closeStream(s, status.Error(code, msg), true, http2.ErrCodeProtocol, status.New(code, msg), nil, false)
 				}
 				continue

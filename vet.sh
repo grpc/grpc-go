@@ -157,7 +157,26 @@ grpc.WithTimeout
 http.CloseNotifier
 info.SecurityVersion
 resolver.Backend
-resolver.GRPCLB' "${SC_OUT}"
+resolver.GRPCLB
+extDesc.Filename is deprecated
+BuildVersion is deprecated
+github.com/golang/protobuf/jsonpb is deprecated
+proto is deprecated
+xxx_messageInfo_
+proto.InternalMessageInfo is deprecated
+proto.EnumName is deprecated
+proto.ErrInternalBadWireType is deprecated
+proto.FileDescriptor is deprecated
+proto.Marshaler is deprecated
+proto.MessageType is deprecated
+proto.RegisterEnum is deprecated
+proto.RegisterFile is deprecated
+proto.RegisterType is deprecated
+proto.RegisterExtension is deprecated
+proto.RegisteredExtension is deprecated
+proto.RegisteredExtensions is deprecated
+proto.RegisterMapType is deprecated
+proto.Unmarshaler is deprecated' "${SC_OUT}"
 
 # - special golint on package comments.
 lint_package_comment_per_package() {

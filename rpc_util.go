@@ -197,7 +197,11 @@ func Header(md *metadata.MD) CallOption {
 
 // HeaderCallOption is a CallOption for collecting response header metadata.
 // The metadata field will be populated *after* the RPC completes.
-// This is an EXPERIMENTAL API.
+//
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type HeaderCallOption struct {
 	HeaderAddr *metadata.MD
 }
@@ -215,7 +219,11 @@ func Trailer(md *metadata.MD) CallOption {
 
 // TrailerCallOption is a CallOption for collecting response trailer metadata.
 // The metadata field will be populated *after* the RPC completes.
-// This is an EXPERIMENTAL API.
+//
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type TrailerCallOption struct {
 	TrailerAddr *metadata.MD
 }
@@ -233,7 +241,11 @@ func Peer(p *peer.Peer) CallOption {
 
 // PeerCallOption is a CallOption for collecting the identity of the remote
 // peer. The peer field will be populated *after* the RPC completes.
-// This is an EXPERIMENTAL API.
+//
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type PeerCallOption struct {
 	PeerAddr *peer.Peer
 }
@@ -268,7 +280,11 @@ func FailFast(failFast bool) CallOption {
 
 // FailFastCallOption is a CallOption for indicating whether an RPC should fail
 // fast or not.
-// This is an EXPERIMENTAL API.
+//
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type FailFastCallOption struct {
 	FailFast bool
 }
@@ -287,7 +303,11 @@ func MaxCallRecvMsgSize(bytes int) CallOption {
 
 // MaxRecvMsgSizeCallOption is a CallOption that indicates the maximum message
 // size in bytes the client can receive.
-// This is an EXPERIMENTAL API.
+//
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type MaxRecvMsgSizeCallOption struct {
 	MaxRecvMsgSize int
 }
@@ -306,7 +326,11 @@ func MaxCallSendMsgSize(bytes int) CallOption {
 
 // MaxSendMsgSizeCallOption is a CallOption that indicates the maximum message
 // size in bytes the client can send.
-// This is an EXPERIMENTAL API.
+//
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type MaxSendMsgSizeCallOption struct {
 	MaxSendMsgSize int
 }
@@ -325,7 +349,11 @@ func PerRPCCredentials(creds credentials.PerRPCCredentials) CallOption {
 
 // PerRPCCredsCallOption is a CallOption that indicates the per-RPC
 // credentials to use for the call.
-// This is an EXPERIMENTAL API.
+//
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type PerRPCCredsCallOption struct {
 	Creds credentials.PerRPCCredentials
 }
@@ -340,13 +368,20 @@ func (o PerRPCCredsCallOption) after(c *callInfo, attempt *csAttempt) {}
 // sending the request.  If WithCompressor is also set, UseCompressor has
 // higher priority.
 //
-// This API is EXPERIMENTAL.
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func UseCompressor(name string) CallOption {
 	return CompressorCallOption{CompressorType: name}
 }
 
 // CompressorCallOption is a CallOption that indicates the compressor to use.
-// This is an EXPERIMENTAL API.
+//
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type CompressorCallOption struct {
 	CompressorType string
 }
@@ -379,7 +414,11 @@ func CallContentSubtype(contentSubtype string) CallOption {
 
 // ContentSubtypeCallOption is a CallOption that indicates the content-subtype
 // used for marshaling messages.
-// This is an EXPERIMENTAL API.
+//
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type ContentSubtypeCallOption struct {
 	ContentSubtype string
 }
@@ -403,7 +442,10 @@ func (o ContentSubtypeCallOption) after(c *callInfo, attempt *csAttempt) {}
 // This function is provided for advanced users; prefer to use only
 // CallContentSubtype to select a registered codec instead.
 //
-// This is an EXPERIMENTAL API.
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func ForceCodec(codec encoding.Codec) CallOption {
 	return ForceCodecCallOption{Codec: codec}
 }
@@ -411,7 +453,10 @@ func ForceCodec(codec encoding.Codec) CallOption {
 // ForceCodecCallOption is a CallOption that indicates the codec used for
 // marshaling messages.
 //
-// This is an EXPERIMENTAL API.
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type ForceCodecCallOption struct {
 	Codec encoding.Codec
 }
@@ -433,7 +478,10 @@ func CallCustomCodec(codec Codec) CallOption {
 // CustomCodecCallOption is a CallOption that indicates the codec used for
 // marshaling messages.
 //
-// This is an EXPERIMENTAL API.
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type CustomCodecCallOption struct {
 	Codec Codec
 }
@@ -447,14 +495,21 @@ func (o CustomCodecCallOption) after(c *callInfo, attempt *csAttempt) {}
 // MaxRetryRPCBufferSize returns a CallOption that limits the amount of memory
 // used for buffering this RPC's requests for retry purposes.
 //
-// This API is EXPERIMENTAL.
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func MaxRetryRPCBufferSize(bytes int) CallOption {
 	return MaxRetryRPCBufferSizeCallOption{bytes}
 }
 
 // MaxRetryRPCBufferSizeCallOption is a CallOption indicating the amount of
 // memory to be used for caching this RPC for retry purposes.
-// This is an EXPERIMENTAL API.
+//
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type MaxRetryRPCBufferSizeCallOption struct {
 	MaxRetryRPCBufferSize int
 }

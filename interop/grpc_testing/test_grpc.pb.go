@@ -47,10 +47,6 @@ func NewTestServiceClient(cc grpc.ClientConnInterface) TestServiceClient {
 	return &testServiceClient{cc}
 }
 
-var testServiceEmptyCallStreamDesc = &grpc.StreamDesc{
-	StreamName: "EmptyCall",
-}
-
 func (c *testServiceClient) EmptyCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
 	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/EmptyCall", in, out, opts...)
@@ -58,10 +54,6 @@ func (c *testServiceClient) EmptyCall(ctx context.Context, in *Empty, opts ...gr
 		return nil, err
 	}
 	return out, nil
-}
-
-var testServiceUnaryCallStreamDesc = &grpc.StreamDesc{
-	StreamName: "UnaryCall",
 }
 
 func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
@@ -73,13 +65,8 @@ func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, op
 	return out, nil
 }
 
-var testServiceStreamingOutputCallStreamDesc = &grpc.StreamDesc{
-	StreamName:    "StreamingOutputCall",
-	ServerStreams: true,
-}
-
 func (c *testServiceClient) StreamingOutputCall(ctx context.Context, in *StreamingOutputCallRequest, opts ...grpc.CallOption) (TestService_StreamingOutputCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, testServiceStreamingOutputCallStreamDesc, "/grpc.testing.TestService/StreamingOutputCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &_TestService_serviceDesc.Streams[0], "/grpc.testing.TestService/StreamingOutputCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -110,13 +97,8 @@ func (x *testServiceStreamingOutputCallClient) Recv() (*StreamingOutputCallRespo
 	return m, nil
 }
 
-var testServiceStreamingInputCallStreamDesc = &grpc.StreamDesc{
-	StreamName:    "StreamingInputCall",
-	ClientStreams: true,
-}
-
 func (c *testServiceClient) StreamingInputCall(ctx context.Context, opts ...grpc.CallOption) (TestService_StreamingInputCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, testServiceStreamingInputCallStreamDesc, "/grpc.testing.TestService/StreamingInputCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &_TestService_serviceDesc.Streams[1], "/grpc.testing.TestService/StreamingInputCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -149,14 +131,8 @@ func (x *testServiceStreamingInputCallClient) CloseAndRecv() (*StreamingInputCal
 	return m, nil
 }
 
-var testServiceFullDuplexCallStreamDesc = &grpc.StreamDesc{
-	StreamName:    "FullDuplexCall",
-	ServerStreams: true,
-	ClientStreams: true,
-}
-
 func (c *testServiceClient) FullDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_FullDuplexCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, testServiceFullDuplexCallStreamDesc, "/grpc.testing.TestService/FullDuplexCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &_TestService_serviceDesc.Streams[2], "/grpc.testing.TestService/FullDuplexCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -186,14 +162,8 @@ func (x *testServiceFullDuplexCallClient) Recv() (*StreamingOutputCallResponse, 
 	return m, nil
 }
 
-var testServiceHalfDuplexCallStreamDesc = &grpc.StreamDesc{
-	StreamName:    "HalfDuplexCall",
-	ServerStreams: true,
-	ClientStreams: true,
-}
-
 func (c *testServiceClient) HalfDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_HalfDuplexCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, testServiceHalfDuplexCallStreamDesc, "/grpc.testing.TestService/HalfDuplexCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &_TestService_serviceDesc.Streams[3], "/grpc.testing.TestService/HalfDuplexCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -223,82 +193,110 @@ func (x *testServiceHalfDuplexCallClient) Recv() (*StreamingOutputCallResponse, 
 	return m, nil
 }
 
-// TestServiceService is the service API for TestService service.
-// Fields should be assigned to their respective handler implementations only before
-// RegisterTestServiceService is called.  Any unassigned fields will result in the
-// handler for that method returning an Unimplemented error.
-type TestServiceService struct {
+// TestServiceServer is the server API for TestService service.
+// All implementations must embed UnimplementedTestServiceServer
+// for forward compatibility
+type TestServiceServer interface {
 	// One empty request followed by one empty response.
-	EmptyCall func(context.Context, *Empty) (*Empty, error)
+	EmptyCall(context.Context, *Empty) (*Empty, error)
 	// One request followed by one response.
 	// The server returns the client payload as-is.
-	UnaryCall func(context.Context, *SimpleRequest) (*SimpleResponse, error)
+	UnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error)
 	// One request followed by a sequence of responses (streamed download).
 	// The server returns the payload with client desired type and sizes.
-	StreamingOutputCall func(*StreamingOutputCallRequest, TestService_StreamingOutputCallServer) error
+	StreamingOutputCall(*StreamingOutputCallRequest, TestService_StreamingOutputCallServer) error
 	// A sequence of requests followed by one response (streamed upload).
 	// The server returns the aggregated size of client payload as the result.
-	StreamingInputCall func(TestService_StreamingInputCallServer) error
+	StreamingInputCall(TestService_StreamingInputCallServer) error
 	// A sequence of requests with each request served by the server immediately.
 	// As one request could lead to multiple responses, this interface
 	// demonstrates the idea of full duplexing.
-	FullDuplexCall func(TestService_FullDuplexCallServer) error
+	FullDuplexCall(TestService_FullDuplexCallServer) error
 	// A sequence of requests followed by a sequence of responses.
 	// The server buffers all the client requests and then serves them in order. A
 	// stream of responses are returned to the client when the server starts with
 	// first request.
-	HalfDuplexCall func(TestService_HalfDuplexCallServer) error
+	HalfDuplexCall(TestService_HalfDuplexCallServer) error
+	mustEmbedUnimplementedTestServiceServer()
 }
 
-func (s *TestServiceService) emptyCall(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+// UnimplementedTestServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedTestServiceServer struct {
+}
+
+func (UnimplementedTestServiceServer) EmptyCall(context.Context, *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EmptyCall not implemented")
+}
+func (UnimplementedTestServiceServer) UnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
+}
+func (UnimplementedTestServiceServer) StreamingOutputCall(*StreamingOutputCallRequest, TestService_StreamingOutputCallServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamingOutputCall not implemented")
+}
+func (UnimplementedTestServiceServer) StreamingInputCall(TestService_StreamingInputCallServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamingInputCall not implemented")
+}
+func (UnimplementedTestServiceServer) FullDuplexCall(TestService_FullDuplexCallServer) error {
+	return status.Errorf(codes.Unimplemented, "method FullDuplexCall not implemented")
+}
+func (UnimplementedTestServiceServer) HalfDuplexCall(TestService_HalfDuplexCallServer) error {
+	return status.Errorf(codes.Unimplemented, "method HalfDuplexCall not implemented")
+}
+func (UnimplementedTestServiceServer) mustEmbedUnimplementedTestServiceServer() {}
+
+// UnsafeTestServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to TestServiceServer will
+// result in compilation errors.
+type UnsafeTestServiceServer interface {
+	mustEmbedUnimplementedTestServiceServer()
+}
+
+func RegisterTestServiceServer(s *grpc.Server, srv TestServiceServer) {
+	s.RegisterService(&_TestService_serviceDesc, srv)
+}
+
+func _TestService_EmptyCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return s.EmptyCall(ctx, in)
+		return srv.(TestServiceServer).EmptyCall(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
-		Server:     s,
+		Server:     srv,
 		FullMethod: "/grpc.testing.TestService/EmptyCall",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return s.EmptyCall(ctx, req.(*Empty))
+		return srv.(TestServiceServer).EmptyCall(ctx, req.(*Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
-func (s *TestServiceService) unaryCall(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+
+func _TestService_UnaryCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SimpleRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return s.UnaryCall(ctx, in)
+		return srv.(TestServiceServer).UnaryCall(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
-		Server:     s,
+		Server:     srv,
 		FullMethod: "/grpc.testing.TestService/UnaryCall",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return s.UnaryCall(ctx, req.(*SimpleRequest))
+		return srv.(TestServiceServer).UnaryCall(ctx, req.(*SimpleRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
-func (s *TestServiceService) streamingOutputCall(_ interface{}, stream grpc.ServerStream) error {
+
+func _TestService_StreamingOutputCall_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(StreamingOutputCallRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return s.StreamingOutputCall(m, &testServiceStreamingOutputCallServer{stream})
-}
-func (s *TestServiceService) streamingInputCall(_ interface{}, stream grpc.ServerStream) error {
-	return s.StreamingInputCall(&testServiceStreamingInputCallServer{stream})
-}
-func (s *TestServiceService) fullDuplexCall(_ interface{}, stream grpc.ServerStream) error {
-	return s.FullDuplexCall(&testServiceFullDuplexCallServer{stream})
-}
-func (s *TestServiceService) halfDuplexCall(_ interface{}, stream grpc.ServerStream) error {
-	return s.HalfDuplexCall(&testServiceHalfDuplexCallServer{stream})
+	return srv.(TestServiceServer).StreamingOutputCall(m, &testServiceStreamingOutputCallServer{stream})
 }
 
 type TestService_StreamingOutputCallServer interface {
@@ -312,6 +310,10 @@ type testServiceStreamingOutputCallServer struct {
 
 func (x *testServiceStreamingOutputCallServer) Send(m *StreamingOutputCallResponse) error {
 	return x.ServerStream.SendMsg(m)
+}
+
+func _TestService_StreamingInputCall_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TestServiceServer).StreamingInputCall(&testServiceStreamingInputCallServer{stream})
 }
 
 type TestService_StreamingInputCallServer interface {
@@ -336,6 +338,10 @@ func (x *testServiceStreamingInputCallServer) Recv() (*StreamingInputCallRequest
 	return m, nil
 }
 
+func _TestService_FullDuplexCall_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TestServiceServer).FullDuplexCall(&testServiceFullDuplexCallServer{stream})
+}
+
 type TestService_FullDuplexCallServer interface {
 	Send(*StreamingOutputCallResponse) error
 	Recv() (*StreamingOutputCallRequest, error)
@@ -356,6 +362,10 @@ func (x *testServiceFullDuplexCallServer) Recv() (*StreamingOutputCallRequest, e
 		return nil, err
 	}
 	return m, nil
+}
+
+func _TestService_HalfDuplexCall_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TestServiceServer).HalfDuplexCall(&testServiceHalfDuplexCallServer{stream})
 }
 
 type TestService_HalfDuplexCallServer interface {
@@ -380,79 +390,44 @@ func (x *testServiceHalfDuplexCallServer) Recv() (*StreamingOutputCallRequest, e
 	return m, nil
 }
 
-// RegisterTestServiceService registers a service implementation with a gRPC server.
-func RegisterTestServiceService(s grpc.ServiceRegistrar, srv *TestServiceService) {
-	srvCopy := *srv
-	if srvCopy.EmptyCall == nil {
-		srvCopy.EmptyCall = func(context.Context, *Empty) (*Empty, error) {
-			return nil, status.Errorf(codes.Unimplemented, "method EmptyCall not implemented")
-		}
-	}
-	if srvCopy.UnaryCall == nil {
-		srvCopy.UnaryCall = func(context.Context, *SimpleRequest) (*SimpleResponse, error) {
-			return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
-		}
-	}
-	if srvCopy.StreamingOutputCall == nil {
-		srvCopy.StreamingOutputCall = func(*StreamingOutputCallRequest, TestService_StreamingOutputCallServer) error {
-			return status.Errorf(codes.Unimplemented, "method StreamingOutputCall not implemented")
-		}
-	}
-	if srvCopy.StreamingInputCall == nil {
-		srvCopy.StreamingInputCall = func(TestService_StreamingInputCallServer) error {
-			return status.Errorf(codes.Unimplemented, "method StreamingInputCall not implemented")
-		}
-	}
-	if srvCopy.FullDuplexCall == nil {
-		srvCopy.FullDuplexCall = func(TestService_FullDuplexCallServer) error {
-			return status.Errorf(codes.Unimplemented, "method FullDuplexCall not implemented")
-		}
-	}
-	if srvCopy.HalfDuplexCall == nil {
-		srvCopy.HalfDuplexCall = func(TestService_HalfDuplexCallServer) error {
-			return status.Errorf(codes.Unimplemented, "method HalfDuplexCall not implemented")
-		}
-	}
-	sd := grpc.ServiceDesc{
-		ServiceName: "grpc.testing.TestService",
-		Methods: []grpc.MethodDesc{
-			{
-				MethodName: "EmptyCall",
-				Handler:    srvCopy.emptyCall,
-			},
-			{
-				MethodName: "UnaryCall",
-				Handler:    srvCopy.unaryCall,
-			},
+var _TestService_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "grpc.testing.TestService",
+	HandlerType: (*TestServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "EmptyCall",
+			Handler:    _TestService_EmptyCall_Handler,
 		},
-		Streams: []grpc.StreamDesc{
-			{
-				StreamName:    "StreamingOutputCall",
-				Handler:       srvCopy.streamingOutputCall,
-				ServerStreams: true,
-			},
-			{
-				StreamName:    "StreamingInputCall",
-				Handler:       srvCopy.streamingInputCall,
-				ClientStreams: true,
-			},
-			{
-				StreamName:    "FullDuplexCall",
-				Handler:       srvCopy.fullDuplexCall,
-				ServerStreams: true,
-				ClientStreams: true,
-			},
-			{
-				StreamName:    "HalfDuplexCall",
-				Handler:       srvCopy.halfDuplexCall,
-				ServerStreams: true,
-				ClientStreams: true,
-			},
+		{
+			MethodName: "UnaryCall",
+			Handler:    _TestService_UnaryCall_Handler,
 		},
-		Metadata: "interop/grpc_testing/test.proto",
-	}
-
-	s.RegisterService(&sd, nil)
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StreamingOutputCall",
+			Handler:       _TestService_StreamingOutputCall_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "StreamingInputCall",
+			Handler:       _TestService_StreamingInputCall_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "FullDuplexCall",
+			Handler:       _TestService_FullDuplexCall_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "HalfDuplexCall",
+			Handler:       _TestService_HalfDuplexCall_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
+	Metadata: "interop/grpc_testing/test.proto",
 }
 
 // UnimplementedServiceClient is the client API for UnimplementedService service.
@@ -471,10 +446,6 @@ func NewUnimplementedServiceClient(cc grpc.ClientConnInterface) UnimplementedSer
 	return &unimplementedServiceClient{cc}
 }
 
-var unimplementedServiceUnimplementedCallStreamDesc = &grpc.StreamDesc{
-	StreamName: "UnimplementedCall",
-}
-
 func (c *unimplementedServiceClient) UnimplementedCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
 	err := c.cc.Invoke(ctx, "/grpc.testing.UnimplementedService/UnimplementedCall", in, out, opts...)
@@ -484,54 +455,64 @@ func (c *unimplementedServiceClient) UnimplementedCall(ctx context.Context, in *
 	return out, nil
 }
 
-// UnimplementedServiceService is the service API for UnimplementedService service.
-// Fields should be assigned to their respective handler implementations only before
-// RegisterUnimplementedServiceService is called.  Any unassigned fields will result in the
-// handler for that method returning an Unimplemented error.
-type UnimplementedServiceService struct {
+// UnimplementedServiceServer is the server API for UnimplementedService service.
+// All implementations must embed UnimplementedUnimplementedServiceServer
+// for forward compatibility
+type UnimplementedServiceServer interface {
 	// A call that no server should implement
-	UnimplementedCall func(context.Context, *Empty) (*Empty, error)
+	UnimplementedCall(context.Context, *Empty) (*Empty, error)
+	mustEmbedUnimplementedUnimplementedServiceServer()
 }
 
-func (s *UnimplementedServiceService) unimplementedCall(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+// UnimplementedUnimplementedServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedUnimplementedServiceServer struct {
+}
+
+func (UnimplementedUnimplementedServiceServer) UnimplementedCall(context.Context, *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnimplementedCall not implemented")
+}
+func (UnimplementedUnimplementedServiceServer) mustEmbedUnimplementedUnimplementedServiceServer() {}
+
+// UnsafeUnimplementedServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to UnimplementedServiceServer will
+// result in compilation errors.
+type UnsafeUnimplementedServiceServer interface {
+	mustEmbedUnimplementedUnimplementedServiceServer()
+}
+
+func RegisterUnimplementedServiceServer(s *grpc.Server, srv UnimplementedServiceServer) {
+	s.RegisterService(&_UnimplementedService_serviceDesc, srv)
+}
+
+func _UnimplementedService_UnimplementedCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return s.UnimplementedCall(ctx, in)
+		return srv.(UnimplementedServiceServer).UnimplementedCall(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
-		Server:     s,
+		Server:     srv,
 		FullMethod: "/grpc.testing.UnimplementedService/UnimplementedCall",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return s.UnimplementedCall(ctx, req.(*Empty))
+		return srv.(UnimplementedServiceServer).UnimplementedCall(ctx, req.(*Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// RegisterUnimplementedServiceService registers a service implementation with a gRPC server.
-func RegisterUnimplementedServiceService(s grpc.ServiceRegistrar, srv *UnimplementedServiceService) {
-	srvCopy := *srv
-	if srvCopy.UnimplementedCall == nil {
-		srvCopy.UnimplementedCall = func(context.Context, *Empty) (*Empty, error) {
-			return nil, status.Errorf(codes.Unimplemented, "method UnimplementedCall not implemented")
-		}
-	}
-	sd := grpc.ServiceDesc{
-		ServiceName: "grpc.testing.UnimplementedService",
-		Methods: []grpc.MethodDesc{
-			{
-				MethodName: "UnimplementedCall",
-				Handler:    srvCopy.unimplementedCall,
-			},
+var _UnimplementedService_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "grpc.testing.UnimplementedService",
+	HandlerType: (*UnimplementedServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "UnimplementedCall",
+			Handler:    _UnimplementedService_UnimplementedCall_Handler,
 		},
-		Streams:  []grpc.StreamDesc{},
-		Metadata: "interop/grpc_testing/test.proto",
-	}
-
-	s.RegisterService(&sd, nil)
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "interop/grpc_testing/test.proto",
 }
 
 // LoadBalancerStatsServiceClient is the client API for LoadBalancerStatsService service.
@@ -550,10 +531,6 @@ func NewLoadBalancerStatsServiceClient(cc grpc.ClientConnInterface) LoadBalancer
 	return &loadBalancerStatsServiceClient{cc}
 }
 
-var loadBalancerStatsServiceGetClientStatsStreamDesc = &grpc.StreamDesc{
-	StreamName: "GetClientStats",
-}
-
 func (c *loadBalancerStatsServiceClient) GetClientStats(ctx context.Context, in *LoadBalancerStatsRequest, opts ...grpc.CallOption) (*LoadBalancerStatsResponse, error) {
 	out := new(LoadBalancerStatsResponse)
 	err := c.cc.Invoke(ctx, "/grpc.testing.LoadBalancerStatsService/GetClientStats", in, out, opts...)
@@ -563,52 +540,63 @@ func (c *loadBalancerStatsServiceClient) GetClientStats(ctx context.Context, in 
 	return out, nil
 }
 
-// LoadBalancerStatsServiceService is the service API for LoadBalancerStatsService service.
-// Fields should be assigned to their respective handler implementations only before
-// RegisterLoadBalancerStatsServiceService is called.  Any unassigned fields will result in the
-// handler for that method returning an Unimplemented error.
-type LoadBalancerStatsServiceService struct {
+// LoadBalancerStatsServiceServer is the server API for LoadBalancerStatsService service.
+// All implementations must embed UnimplementedLoadBalancerStatsServiceServer
+// for forward compatibility
+type LoadBalancerStatsServiceServer interface {
 	// Gets the backend distribution for RPCs sent by a test client.
-	GetClientStats func(context.Context, *LoadBalancerStatsRequest) (*LoadBalancerStatsResponse, error)
+	GetClientStats(context.Context, *LoadBalancerStatsRequest) (*LoadBalancerStatsResponse, error)
+	mustEmbedUnimplementedLoadBalancerStatsServiceServer()
 }
 
-func (s *LoadBalancerStatsServiceService) getClientStats(_ interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+// UnimplementedLoadBalancerStatsServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedLoadBalancerStatsServiceServer struct {
+}
+
+func (UnimplementedLoadBalancerStatsServiceServer) GetClientStats(context.Context, *LoadBalancerStatsRequest) (*LoadBalancerStatsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetClientStats not implemented")
+}
+func (UnimplementedLoadBalancerStatsServiceServer) mustEmbedUnimplementedLoadBalancerStatsServiceServer() {
+}
+
+// UnsafeLoadBalancerStatsServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to LoadBalancerStatsServiceServer will
+// result in compilation errors.
+type UnsafeLoadBalancerStatsServiceServer interface {
+	mustEmbedUnimplementedLoadBalancerStatsServiceServer()
+}
+
+func RegisterLoadBalancerStatsServiceServer(s *grpc.Server, srv LoadBalancerStatsServiceServer) {
+	s.RegisterService(&_LoadBalancerStatsService_serviceDesc, srv)
+}
+
+func _LoadBalancerStatsService_GetClientStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(LoadBalancerStatsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return s.GetClientStats(ctx, in)
+		return srv.(LoadBalancerStatsServiceServer).GetClientStats(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
-		Server:     s,
+		Server:     srv,
 		FullMethod: "/grpc.testing.LoadBalancerStatsService/GetClientStats",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return s.GetClientStats(ctx, req.(*LoadBalancerStatsRequest))
+		return srv.(LoadBalancerStatsServiceServer).GetClientStats(ctx, req.(*LoadBalancerStatsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// RegisterLoadBalancerStatsServiceService registers a service implementation with a gRPC server.
-func RegisterLoadBalancerStatsServiceService(s grpc.ServiceRegistrar, srv *LoadBalancerStatsServiceService) {
-	srvCopy := *srv
-	if srvCopy.GetClientStats == nil {
-		srvCopy.GetClientStats = func(context.Context, *LoadBalancerStatsRequest) (*LoadBalancerStatsResponse, error) {
-			return nil, status.Errorf(codes.Unimplemented, "method GetClientStats not implemented")
-		}
-	}
-	sd := grpc.ServiceDesc{
-		ServiceName: "grpc.testing.LoadBalancerStatsService",
-		Methods: []grpc.MethodDesc{
-			{
-				MethodName: "GetClientStats",
-				Handler:    srvCopy.getClientStats,
-			},
+var _LoadBalancerStatsService_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "grpc.testing.LoadBalancerStatsService",
+	HandlerType: (*LoadBalancerStatsServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetClientStats",
+			Handler:    _LoadBalancerStatsService_GetClientStats_Handler,
 		},
-		Streams:  []grpc.StreamDesc{},
-		Metadata: "interop/grpc_testing/test.proto",
-	}
-
-	s.RegisterService(&sd, nil)
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "interop/grpc_testing/test.proto",
 }

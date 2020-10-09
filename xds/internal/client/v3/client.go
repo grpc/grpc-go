@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
@@ -43,10 +42,10 @@ func init() {
 
 var (
 	resourceTypeToURL = map[xdsclient.ResourceType]string{
-		xdsclient.ListenerResource:    version.V2ListenerURL,
-		xdsclient.RouteConfigResource: version.V2RouteConfigURL,
-		xdsclient.ClusterResource:     version.V2ClusterURL,
-		xdsclient.EndpointsResource:   version.V2EndpointsURL,
+		xdsclient.ListenerResource:    version.V3ListenerURL,
+		xdsclient.RouteConfigResource: version.V3RouteConfigURL,
+		xdsclient.ClusterResource:     version.V3ClusterURL,
+		xdsclient.EndpointsResource:   version.V3EndpointsURL,
 	}
 )
 
@@ -103,8 +102,6 @@ type client struct {
 	// processing needs this to do the host matching.
 	ldsResourceName string
 	ldsWatchCount   int
-
-	lastLoadReportAt time.Time
 }
 
 // AddWatch overrides the transport helper's AddWatch to save the LDS
