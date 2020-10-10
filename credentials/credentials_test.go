@@ -24,11 +24,14 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/testdata"
 )
+
+const defaultTestTimeout = 10 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -60,7 +63,9 @@ func createTestContext(s SecurityLevel) context.Context {
 		Method:   "testInfo",
 		AuthInfo: auth,
 	}
-	return internal.NewRequestInfoContext.(func(context.Context, RequestInfo) context.Context)(context.Background(), ri)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	return internal.NewRequestInfoContext.(func(context.Context, RequestInfo) context.Context)(ctx, ri)
 }
 
 func (s) TestCheckSecurityLevel(t *testing.T) {
@@ -112,7 +117,9 @@ func (s) TestCheckSecurityLevelNoGetCommonAuthInfoMethod(t *testing.T) {
 		Method:   "testInfo",
 		AuthInfo: auth,
 	}
-	ctxWithRequestInfo := internal.NewRequestInfoContext.(func(context.Context, RequestInfo) context.Context)(context.Background(), ri)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctxWithRequestInfo := internal.NewRequestInfoContext.(func(context.Context, RequestInfo) context.Context)(ctx, ri)
 	if err := CheckSecurityLevel(ctxWithRequestInfo, PrivacyAndIntegrity); err != nil {
 		t.Fatalf("CheckSeurityLevel() returned failure but want success")
 	}
@@ -296,7 +303,9 @@ func gRPCServerHandshake(conn net.Conn) (AuthInfo, error) {
 // Client handshake implementation in gRPC.
 func gRPCClientHandshake(conn net.Conn, lisAddr string) (AuthInfo, error) {
 	clientTLS := NewTLS(&tls.Config{InsecureSkipVerify: true})
-	_, authInfo, err := clientTLS.ClientHandshake(context.Background(), lisAddr, conn)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, authInfo, err := clientTLS.ClientHandshake(ctx, lisAddr, conn)
 	if err != nil {
 		return nil, err
 	}
