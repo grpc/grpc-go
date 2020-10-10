@@ -50,10 +50,12 @@ func (s) TestStreamCleanup(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	if _, err := ss.client.UnaryCall(context.Background(), &testpb.SimpleRequest{}); status.Code(err) != codes.ResourceExhausted {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := ss.client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("should fail with ResourceExhausted, message's body size: %v, maximum message size the client can receive: %v", bodySize, callRecvMsgSize)
 	}
-	if _, err := ss.client.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+	if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("should succeed, err: %v", err)
 	}
 }
