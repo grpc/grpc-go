@@ -1,4 +1,4 @@
-// +build appengine
+// +build !go1.14
 
 /*
  *
@@ -24,7 +24,18 @@ import (
 	"crypto/tls"
 )
 
-// buildGetCertificates is a no-op for appengine builds.
+// buildGetCertificates returns the first cert contained in ServerOptions for
+// go builds before 1.4.
 func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
-	return nil, nil
+	if o.IdentityOptions.GetIdentityCertificatesForServer == nil {
+		return nil, fmt.Errorf("function GetCertificates must be specified")
+	}
+	certificates, err := o.IdentityOptions.GetIdentityCertificatesForServer(clientHello)
+	if err != nil {
+		return nil, err
+	}
+	if len(certificates) == 0 {
+		return nil, fmt.Errorf("no certificates configured")
+	}
+	return certificates[0], nil
 }
