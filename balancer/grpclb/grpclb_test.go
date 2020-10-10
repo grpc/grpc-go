@@ -495,7 +495,7 @@ func (s) TestGRPCLBWeighted(t *testing.T) {
 		tss.ls.sls <- &lbpb.ServerList{Servers: bes}
 
 		for i := 0; i < 1000; i++ {
-			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 				t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 			}
 			result += strconv.Itoa(portsToIndex[p.Addr.(*net.TCPAddr).Port])
@@ -605,18 +605,18 @@ func (s) TestDropRequest(t *testing.T) {
 			// 1st RPCs pick the first item in server list. They should succeed
 			// since they choose the non-drop-request backend according to the
 			// round robin policy.
-			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(!failfast)); err != nil {
+			if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(!failfast)); err != nil {
 				t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 			}
 			// 2nd RPCs pick the second item in server list. They should succeed
 			// since they choose the non-drop-request backend according to the
 			// round robin policy.
-			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(!failfast)); err != nil {
+			if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(!failfast)); err != nil {
 				t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 			}
 			// 3rd RPCs should fail, because they pick last item in server list,
 			// with Drop set to true.
-			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(!failfast)); status.Code(err) != codes.Unavailable {
+			if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(!failfast)); status.Code(err) != codes.Unavailable {
 				t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, %s", testC, err, codes.Unavailable)
 			}
 		}
@@ -625,7 +625,7 @@ func (s) TestDropRequest(t *testing.T) {
 	// Make one more RPC to move the picker index one step further, so it's not
 	// 0. The following RPCs will test that drop index is not reset. If picker
 	// index is at 0, we cannot tell whether it's reset or not.
-	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 	}
 
@@ -636,18 +636,18 @@ func (s) TestDropRequest(t *testing.T) {
 	time.Sleep(time.Second)
 	for i := 0; i < 3; i++ {
 		var p peer.Peer
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		if want := tss.bePorts[1]; p.Addr.(*net.TCPAddr).Port != want {
 			t.Errorf("got peer: %v, want peer port: %v", p.Addr, want)
 		}
 
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); status.Code(err) != codes.Unavailable {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); status.Code(err) != codes.Unavailable {
 			t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, %s", testC, err, codes.Unavailable)
 		}
 
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		if want := tss.bePorts[1]; p.Addr.(*net.TCPAddr).Port != want {
@@ -709,7 +709,7 @@ func (s) TestBalancerDisconnects(t *testing.T) {
 	}}})
 
 	var p peer.Peer
-	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 	}
 	if p.Addr.(*net.TCPAddr).Port != tests[0].bePorts[0] {
@@ -720,7 +720,7 @@ func (s) TestBalancerDisconnects(t *testing.T) {
 	// Stop balancer[0], balancer[1] should be used by grpclb.
 	// Check peer address to see if that happened.
 	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		if p.Addr.(*net.TCPAddr).Port == tests[1].bePorts[0] {
@@ -784,7 +784,7 @@ func (s) TestFallback(t *testing.T) {
 	}}})
 
 	var p peer.Peer
-	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 		t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	if p.Addr.String() != beLis.Addr().String() {
@@ -802,7 +802,7 @@ func (s) TestFallback(t *testing.T) {
 
 	var backendUsed bool
 	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
@@ -821,7 +821,7 @@ func (s) TestFallback(t *testing.T) {
 
 	var fallbackUsed bool
 	for i := 0; i < 2000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			// Because we are hard-closing the connection, above, it's possible
 			// for the first RPC attempt to be sent on the old connection,
 			// which will lead to an Unavailable error when it is closed.
@@ -847,7 +847,7 @@ func (s) TestFallback(t *testing.T) {
 
 	var backendUsed2 bool
 	for i := 0; i < 2000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
@@ -913,7 +913,7 @@ func (s) TestExplicitFallback(t *testing.T) {
 	var p peer.Peer
 	var backendUsed bool
 	for i := 0; i < 2000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
@@ -931,7 +931,7 @@ func (s) TestExplicitFallback(t *testing.T) {
 
 	var fallbackUsed bool
 	for i := 0; i < 2000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		if p.Addr.String() == beLis.Addr().String() {
@@ -949,7 +949,7 @@ func (s) TestExplicitFallback(t *testing.T) {
 
 	backendUsed = false
 	for i := 0; i < 2000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
@@ -1067,7 +1067,7 @@ func (s) TestFallBackWithNoServerAddress(t *testing.T) {
 
 		var backendUsed bool
 		for i := 0; i < 1000; i++ {
-			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 				t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 			}
 			if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
@@ -1144,7 +1144,7 @@ func (s) TestGRPCLBPickFirst(t *testing.T) {
 
 	result = ""
 	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		result += strconv.Itoa(portsToIndex[p.Addr.(*net.TCPAddr).Port])
@@ -1156,7 +1156,7 @@ func (s) TestGRPCLBPickFirst(t *testing.T) {
 	tss.ls.sls <- &lbpb.ServerList{Servers: beServers[2:]}
 	result = ""
 	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		result += strconv.Itoa(portsToIndex[p.Addr.(*net.TCPAddr).Port])
@@ -1168,7 +1168,7 @@ func (s) TestGRPCLBPickFirst(t *testing.T) {
 	tss.ls.sls <- &lbpb.ServerList{Servers: beServers[1:]}
 	result = ""
 	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		result += strconv.Itoa(portsToIndex[p.Addr.(*net.TCPAddr).Port])
@@ -1194,7 +1194,7 @@ func (s) TestGRPCLBPickFirst(t *testing.T) {
 
 	result = ""
 	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		result += strconv.Itoa(portsToIndex[p.Addr.(*net.TCPAddr).Port])
@@ -1206,7 +1206,7 @@ func (s) TestGRPCLBPickFirst(t *testing.T) {
 	tss.ls.sls <- &lbpb.ServerList{Servers: beServers[0:3]}
 	result = ""
 	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		result += strconv.Itoa(portsToIndex[p.Addr.(*net.TCPAddr).Port])
@@ -1295,12 +1295,14 @@ const (
 func (s) TestGRPCLBStatsUnarySuccess(t *testing.T) {
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTimeout)
+		defer cancel()
 		// The first non-failfast RPC succeeds, all connections are up.
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		for i := 0; i < countRPC-1; i++ {
-			testC.EmptyCall(context.Background(), &testpb.Empty{})
+			testC.EmptyCall(ctx, &testpb.Empty{})
 		}
 	}, &rpcStats{
 		numCallsStarted:               int64(countRPC),
@@ -1314,12 +1316,14 @@ func (s) TestGRPCLBStatsUnarySuccess(t *testing.T) {
 func (s) TestGRPCLBStatsUnaryDrop(t *testing.T) {
 	if err := runAndCheckStats(t, true, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTimeout)
+		defer cancel()
 		// The first non-failfast RPC succeeds, all connections are up.
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		for i := 0; i < countRPC-1; i++ {
-			testC.EmptyCall(context.Background(), &testpb.Empty{})
+			testC.EmptyCall(ctx, &testpb.Empty{})
 		}
 	}, &rpcStats{
 		numCallsStarted:               int64(countRPC),
@@ -1334,12 +1338,14 @@ func (s) TestGRPCLBStatsUnaryDrop(t *testing.T) {
 func (s) TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTimeout)
+		defer cancel()
 		// The first non-failfast RPC succeeds, all connections are up.
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		for i := 0; i < countRPC-1; i++ {
-			cc.Invoke(context.Background(), failtosendURI, &testpb.Empty{}, nil)
+			cc.Invoke(ctx, failtosendURI, &testpb.Empty{}, nil)
 		}
 	}, &rpcStats{
 		numCallsStarted:                        int64(countRPC),
@@ -1354,8 +1360,10 @@ func (s) TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 func (s) TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTimeout)
+		defer cancel()
 		// The first non-failfast RPC succeeds, all connections are up.
-		stream, err := testC.FullDuplexCall(context.Background(), grpc.WaitForReady(true))
+		stream, err := testC.FullDuplexCall(ctx, grpc.WaitForReady(true))
 		if err != nil {
 			t.Fatalf("%v.FullDuplexCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
@@ -1365,7 +1373,7 @@ func (s) TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 			}
 		}
 		for i := 0; i < countRPC-1; i++ {
-			stream, err = testC.FullDuplexCall(context.Background())
+			stream, err = testC.FullDuplexCall(ctx)
 			if err == nil {
 				// Wait for stream to end if err is nil.
 				for {
@@ -1387,8 +1395,10 @@ func (s) TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 func (s) TestGRPCLBStatsStreamingDrop(t *testing.T) {
 	if err := runAndCheckStats(t, true, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTimeout)
+		defer cancel()
 		// The first non-failfast RPC succeeds, all connections are up.
-		stream, err := testC.FullDuplexCall(context.Background(), grpc.WaitForReady(true))
+		stream, err := testC.FullDuplexCall(ctx, grpc.WaitForReady(true))
 		if err != nil {
 			t.Fatalf("%v.FullDuplexCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
@@ -1398,7 +1408,7 @@ func (s) TestGRPCLBStatsStreamingDrop(t *testing.T) {
 			}
 		}
 		for i := 0; i < countRPC-1; i++ {
-			stream, err = testC.FullDuplexCall(context.Background())
+			stream, err = testC.FullDuplexCall(ctx)
 			if err == nil {
 				// Wait for stream to end if err is nil.
 				for {
@@ -1421,8 +1431,10 @@ func (s) TestGRPCLBStatsStreamingDrop(t *testing.T) {
 func (s) TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTimeout)
+		defer cancel()
 		// The first non-failfast RPC succeeds, all connections are up.
-		stream, err := testC.FullDuplexCall(context.Background(), grpc.WaitForReady(true))
+		stream, err := testC.FullDuplexCall(ctx, grpc.WaitForReady(true))
 		if err != nil {
 			t.Fatalf("%v.FullDuplexCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
@@ -1432,7 +1444,7 @@ func (s) TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 			}
 		}
 		for i := 0; i < countRPC-1; i++ {
-			cc.NewStream(context.Background(), &grpc.StreamDesc{}, failtosendURI)
+			cc.NewStream(ctx, &grpc.StreamDesc{}, failtosendURI)
 		}
 	}, &rpcStats{
 		numCallsStarted:                        int64(countRPC),
