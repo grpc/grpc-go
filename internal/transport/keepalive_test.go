@@ -34,6 +34,8 @@ import (
 	"google.golang.org/grpc/keepalive"
 )
 
+const defaultTestTimeout = 10 * time.Second
+
 // TestMaxConnectionIdle tests that a server will send GoAway to an idle
 // client. An idle client is one who doesn't make any RPC calls for a duration
 // of MaxConnectionIdle time.
@@ -50,7 +52,9 @@ func (s) TestMaxConnectionIdle(t *testing.T) {
 		cancel()
 	}()
 
-	stream, err := client.NewStream(context.Background(), &CallHdr{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
@@ -87,7 +91,9 @@ func (s) TestMaxConnectionIdleBusyClient(t *testing.T) {
 		cancel()
 	}()
 
-	_, err := client.NewStream(context.Background(), &CallHdr{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
@@ -121,7 +127,9 @@ func (s) TestMaxConnectionAge(t *testing.T) {
 		cancel()
 	}()
 
-	_, err := client.NewStream(context.Background(), &CallHdr{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
@@ -228,8 +236,10 @@ func (s) TestKeepaliveServerWithResponsiveClient(t *testing.T) {
 	// Give keepalive logic some time by sleeping.
 	time.Sleep(4 * time.Second)
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Make sure the client transport is healthy.
-	if _, err := client.NewStream(context.Background(), &CallHdr{}); err != nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
 }
@@ -258,8 +268,10 @@ func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 	// Sleep for keepalive to close the connection.
 	time.Sleep(4 * time.Second)
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Make sure the client transport is not healthy.
-	if _, err := client.NewStream(context.Background(), &CallHdr{}); err == nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}); err == nil {
 		t.Fatal("client.NewStream() should have failed, but succeeded")
 	}
 }
@@ -287,8 +299,10 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 	// Give keepalive some time.
 	time.Sleep(4 * time.Second)
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Make sure the client transport is healthy.
-	if _, err := client.NewStream(context.Background(), &CallHdr{}); err != nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
 }
@@ -311,8 +325,10 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	}
 	defer conn.Close()
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Create a stream, but send no data on it.
-	if _, err := client.NewStream(context.Background(), &CallHdr{}); err != nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
 
@@ -320,7 +336,7 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	time.Sleep(4 * time.Second)
 
 	// Make sure the client transport is not healthy.
-	if _, err := client.NewStream(context.Background(), &CallHdr{}); err == nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}); err == nil {
 		t.Fatal("client.NewStream() should have failed, but succeeded")
 	}
 }
@@ -344,8 +360,10 @@ func (s) TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 	// Give keepalive some time.
 	time.Sleep(4 * time.Second)
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Make sure the client transport is healthy.
-	if _, err := client.NewStream(context.Background(), &CallHdr{}); err != nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
 }
@@ -391,8 +409,10 @@ func (s) TestKeepaliveClientFrequency(t *testing.T) {
 		t.Fatalf("client transport still healthy; expected GoAway from the server.")
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Make sure the client transport is not healthy.
-	if _, err := client.NewStream(context.Background(), &CallHdr{}); err == nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}); err == nil {
 		t.Fatal("client.NewStream() should have failed, but succeeded")
 	}
 }
@@ -434,8 +454,10 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 		t.Fatalf("client transport still healthy; expected GoAway from the server.")
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Make sure the client transport is not healthy.
-	if _, err := client.NewStream(context.Background(), &CallHdr{}); err == nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}); err == nil {
 		t.Fatal("client.NewStream() should have failed, but succeeded")
 	}
 }
@@ -463,7 +485,9 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 		cancel()
 	}()
 
-	if _, err := client.NewStream(context.Background(), &CallHdr{}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
 
@@ -481,7 +505,7 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 	}
 
 	// Make sure the client transport is not healthy.
-	if _, err := client.NewStream(context.Background(), &CallHdr{}); err == nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}); err == nil {
 		t.Fatal("client.NewStream() should have failed, but succeeded")
 	}
 }
@@ -514,8 +538,10 @@ func (s) TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 	// Give keepalive enough time.
 	time.Sleep(3 * time.Second)
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Make sure the client transport is healthy.
-	if _, err := client.NewStream(context.Background(), &CallHdr{}); err != nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
 }
@@ -543,7 +569,9 @@ func (s) TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 		cancel()
 	}()
 
-	if _, err := client.NewStream(context.Background(), &CallHdr{}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
 
@@ -551,7 +579,7 @@ func (s) TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	// Make sure the client transport is healthy.
-	if _, err := client.NewStream(context.Background(), &CallHdr{}); err != nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
 }
@@ -584,8 +612,10 @@ func (s) TestKeepaliveServerEnforcementWithDormantKeepaliveOnClient(t *testing.T
 	// No active streams on the client. Give keepalive enough time.
 	time.Sleep(5 * time.Second)
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Make sure the client transport is healthy.
-	if _, err := client.NewStream(context.Background(), &CallHdr{}); err != nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
 }
@@ -633,7 +663,9 @@ func (s) TestTCPUserTimeout(t *testing.T) {
 			cancel()
 		}()
 
-		stream, err := client.NewStream(context.Background(), &CallHdr{})
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		stream, err := client.NewStream(ctx, &CallHdr{})
 		if err != nil {
 			t.Fatalf("client.NewStream() failed: %v", err)
 		}
