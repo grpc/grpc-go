@@ -145,20 +145,18 @@ func NewPEMFileProvider(o PEMFileProviderOptions) (*PEMFileProvider, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
-		// Get the instant updates before the monitoring loop runs.
-		updateIdentityDistributor(provider.identityDistributor, o.CertFile, o.KeyFile)
-		updateRootDistributor(provider.rootDistributor, o.TrustFile)
 		for {
+			updateIdentityDistributor(provider.identityDistributor, o.CertFile, o.KeyFile)
+			updateRootDistributor(provider.rootDistributor, o.TrustFile)
 			select {
 			case <-ctx.Done():
 				identityTicker.Stop()
 				rootTicker.Stop()
 				return
 			case <-identityTicker.C:
-				updateIdentityDistributor(provider.identityDistributor, o.CertFile, o.KeyFile)
+				break
 			case <-rootTicker.C:
-				updateRootDistributor(provider.rootDistributor, o.TrustFile)
-			default:
+				break
 			}
 		}
 	}()
