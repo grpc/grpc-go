@@ -62,7 +62,14 @@ func (s) TestRDSWatch(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate := RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}}
+	wantUpdate := RouteConfigUpdate{
+		VirtualHosts: []*VirtualHost{
+			{
+				Domains: []string{testLDSName},
+				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+			},
+		},
+	}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate})
 	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
@@ -127,7 +134,14 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 		}
 	}
 
-	wantUpdate := RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}}
+	wantUpdate := RouteConfigUpdate{
+		VirtualHosts: []*VirtualHost{
+			{
+				Domains: []string{testLDSName},
+				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+			},
+		},
+	}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate})
 	for i := 0; i < count; i++ {
 		if err := verifyRouteConfigUpdate(ctx, rdsUpdateChs[i], wantUpdate); err != nil {
@@ -199,8 +213,22 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate1 := RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "1": 1}}}}
-	wantUpdate2 := RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "2": 1}}}}
+	wantUpdate1 := RouteConfigUpdate{
+		VirtualHosts: []*VirtualHost{
+			{
+				Domains: []string{testLDSName},
+				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "1": 1}}},
+			},
+		},
+	}
+	wantUpdate2 := RouteConfigUpdate{
+		VirtualHosts: []*VirtualHost{
+			{
+				Domains: []string{testLDSName},
+				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "2": 1}}},
+			},
+		},
+	}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
 		testRDSName + "1": wantUpdate1,
 		testRDSName + "2": wantUpdate2,
@@ -244,7 +272,14 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate := RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}}}
+	wantUpdate := RouteConfigUpdate{
+		VirtualHosts: []*VirtualHost{
+			{
+				Domains: []string{testLDSName},
+				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+			},
+		},
+	}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate})
 	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)

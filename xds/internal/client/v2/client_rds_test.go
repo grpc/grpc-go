@@ -74,10 +74,12 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 		// RouteConfiguration, since the others are covered in
 		// TestGetClusterFromRouteConfiguration.
 		{
-			name:          "no-virtual-hosts-in-response",
-			rdsResponse:   noVirtualHostsInRDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
+			name:        "no-virtual-hosts-in-response",
+			rdsResponse: noVirtualHostsInRDSResponse,
+			wantErr:     false,
+			wantUpdate: &xdsclient.RouteConfigUpdate{
+				VirtualHosts: nil,
+			},
 			wantUpdateErr: false,
 		},
 		// Response contains one good RouteConfiguration, uninteresting though.
@@ -90,24 +92,20 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 		},
 		// Response contains one good interesting RouteConfiguration.
 		{
-			name:          "one-good-route-config",
-			rdsResponse:   goodRDSResponse1,
-			wantErr:       false,
-			wantUpdate:    &xdsclient.RouteConfigUpdate{Routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{goodClusterName1: 1}}}},
-			wantUpdateErr: false,
-		},
-		{
-			name:        "one-good-route-config with routes",
+			name:        "one-good-route-config",
 			rdsResponse: goodRDSResponse1,
 			wantErr:     false,
 			wantUpdate: &xdsclient.RouteConfigUpdate{
-				// Instead of just weighted targets when routing is disabled,
-				// this result contains a route with perfix "", and action as
-				// weighted targets.
-				Routes: []*xdsclient.Route{{
-					Prefix: newStringP(""),
-					Action: map[string]uint32{goodClusterName1: 1},
-				}},
+				VirtualHosts: []*xdsclient.VirtualHost{
+					{
+						Domains: []string{uninterestingDomain},
+						Routes:  []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{uninterestingClusterName: 1}}},
+					},
+					{
+						Domains: []string{goodLDSTarget1},
+						Routes:  []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{goodClusterName1: 1}}},
+					},
+				},
 			},
 			wantUpdateErr: false,
 		},
@@ -123,25 +121,6 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 				wantUpdateErr:    test.wantUpdateErr,
 			})
 		})
-	}
-}
-
-// TestRDSHandleResponseWithoutLDSWatch tests the case where the v2Client
-// receives an RDS response without a registered LDS watcher.
-func (s) TestRDSHandleResponseWithoutLDSWatch(t *testing.T) {
-	_, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(xdsclient.ResourceType, map[string]interface{}) {},
-	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer v2c.Close()
-
-	if v2c.handleRDSResponse(goodRDSResponse1) == nil {
-		t.Fatal("v2c.handleRDSResponse() succeeded, should have failed")
 	}
 }
 
