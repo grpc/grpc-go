@@ -21,11 +21,16 @@ package credentials
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
+	"io/ioutil"
 	"net/url"
 	"testing"
 
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/testdata"
 )
+
+const wantURI = "spiffe://foo.bar.com/client/workload/1"
 
 type s struct {
 	grpctest.Tester
@@ -40,12 +45,12 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 		name string
 		urls []*url.URL
 		// If we expect a SPIFFE ID to be returned.
-		expectID bool
+		wantID bool
 	}{
 		{
-			name:     "empty URIs",
-			urls:     []*url.URL{},
-			expectID: false,
+			name:   "empty URIs",
+			urls:   []*url.URL{},
+			wantID: false,
 		},
 		{
 			name: "good SPIFFE ID",
@@ -57,7 +62,7 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 					RawPath: "workload/wl1",
 				},
 			},
-			expectID: true,
+			wantID: true,
 		},
 		{
 			name: "invalid host",
@@ -69,7 +74,7 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 					RawPath: "workload/wl1",
 				},
 			},
-			expectID: false,
+			wantID: false,
 		},
 		{
 			name: "invalid path",
@@ -81,7 +86,7 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 					RawPath: "",
 				},
 			},
-			expectID: false,
+			wantID: false,
 		},
 		{
 			name: "large path",
@@ -93,7 +98,7 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 					RawPath: string(make([]byte, 2050)),
 				},
 			},
-			expectID: false,
+			wantID: false,
 		},
 		{
 			name: "large host",
@@ -105,7 +110,7 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 					RawPath: "workload/wl1",
 				},
 			},
-			expectID: false,
+			wantID: false,
 		},
 		{
 			name: "multiple URI SANs",
@@ -129,7 +134,7 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 					RawPath: "workload/wl1",
 				},
 			},
-			expectID: false,
+			wantID: false,
 		},
 		{
 			name: "multiple URI SANs without SPIFFE ID",
@@ -147,7 +152,7 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 					RawPath: "workload/wl1",
 				},
 			},
-			expectID: false,
+			wantID: false,
 		},
 		{
 			name: "multiple URI SANs with one SPIFFE ID",
@@ -165,15 +170,63 @@ func (s) TestSPIFFEIDFromState(t *testing.T) {
 					RawPath: "workload/wl1",
 				},
 			},
-			expectID: false,
+			wantID: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			state := tls.ConnectionState{PeerCertificates: []*x509.Certificate{{URIs: tt.urls}}}
 			id := SPIFFEIDFromState(state)
-			if got, want := id != nil, tt.expectID; got != want {
-				t.Errorf("want expectID = %v, but SPIFFE ID is %v", want, id)
+			if got, want := id != nil, tt.wantID; got != want {
+				t.Errorf("want wantID = %v, but SPIFFE ID is %v", want, id)
+			}
+		})
+	}
+}
+
+func (s) TestSPIFFEIDFromCert(t *testing.T) {
+	tests := []struct {
+		name     string
+		dataPath string
+		// If we expect a SPIFFE ID to be returned.
+		wantID bool
+	}{
+		{
+			name:     "good certificate with SPIFFE ID",
+			dataPath: "x509/spiffe_cert.pem",
+			wantID:   true,
+		},
+		{
+			name:     "bad certificate with SPIFFE ID and another URI",
+			dataPath: "x509/multiple_uri_cert.pem",
+			wantID:   false,
+		},
+		{
+			name:     "certificate without SPIFFE ID",
+			dataPath: "x509/client1_cert.pem",
+			wantID:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := ioutil.ReadFile(testdata.Path(tt.dataPath))
+			if err != nil {
+				t.Fatalf("ioutil.ReadFile(%s) failed: %v", testdata.Path(tt.dataPath), err)
+			}
+			block, _ := pem.Decode(data)
+			if block == nil {
+				t.Fatalf("Failed to parse the certificate: byte block is nil")
+			}
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				t.Fatalf("x509.ParseCertificate(%b) failed: %v", block.Bytes, err)
+			}
+			uri := SPIFFEIDFromCert(cert)
+			if (uri != nil) != tt.wantID {
+				t.Fatalf("wantID got and want mismatch, got %t, want %t", uri != nil, tt.wantID)
+			}
+			if uri != nil && uri.String() != wantURI {
+				t.Fatalf("SPIFFE ID not expected, got %s, want %s", uri.String(), wantURI)
 			}
 		})
 	}

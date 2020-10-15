@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
-	"google.golang.org/grpc/security/advancedtls/testdata"
+	"google.golang.org/grpc/security/advancedtls/internal/testutils"
 )
 
 var (
@@ -65,69 +65,6 @@ func (s *stageInfo) reset() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.stage = 0
-}
-
-// certStore contains all the certificates used in the integration tests.
-type certStore struct {
-	// clientPeer1 is the certificate sent by client to prove its identity.
-	// It is trusted by serverTrust1.
-	clientPeer1 tls.Certificate
-	// clientPeer2 is the certificate sent by client to prove its identity.
-	// It is trusted by serverTrust2.
-	clientPeer2 tls.Certificate
-	// serverPeer1 is the certificate sent by server to prove its identity.
-	// It is trusted by clientTrust1.
-	serverPeer1 tls.Certificate
-	// serverPeer2 is the certificate sent by server to prove its identity.
-	// It is trusted by clientTrust2.
-	serverPeer2  tls.Certificate
-	clientTrust1 *x509.CertPool
-	clientTrust2 *x509.CertPool
-	serverTrust1 *x509.CertPool
-	serverTrust2 *x509.CertPool
-}
-
-// loadCerts function is used to load test certificates at the beginning of
-// each integration test.
-func (cs *certStore) loadCerts() error {
-	var err error
-	cs.clientPeer1, err = tls.LoadX509KeyPair(testdata.Path("client_cert_1.pem"),
-		testdata.Path("client_key_1.pem"))
-	if err != nil {
-		return err
-	}
-	cs.clientPeer2, err = tls.LoadX509KeyPair(testdata.Path("client_cert_2.pem"),
-		testdata.Path("client_key_2.pem"))
-	if err != nil {
-		return err
-	}
-	cs.serverPeer1, err = tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"),
-		testdata.Path("server_key_1.pem"))
-	if err != nil {
-		return err
-	}
-	cs.serverPeer2, err = tls.LoadX509KeyPair(testdata.Path("server_cert_2.pem"),
-		testdata.Path("server_key_2.pem"))
-	if err != nil {
-		return err
-	}
-	cs.clientTrust1, err = readTrustCert(testdata.Path("client_trust_cert_1.pem"))
-	if err != nil {
-		return err
-	}
-	cs.clientTrust2, err = readTrustCert(testdata.Path("client_trust_cert_2.pem"))
-	if err != nil {
-		return err
-	}
-	cs.serverTrust1, err = readTrustCert(testdata.Path("server_trust_cert_1.pem"))
-	if err != nil {
-		return err
-	}
-	cs.serverTrust2, err = readTrustCert(testdata.Path("server_trust_cert_2.pem"))
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 type greeterServer struct {
@@ -183,10 +120,9 @@ func callAndVerifyWithClientConn(connCtx context.Context, msg string, creds cred
 // (could be change the client's trust certificate, or change custom
 // verification function, etc)
 func (s) TestEnd2End(t *testing.T) {
-	cs := &certStore{}
-	err := cs.loadCerts()
-	if err != nil {
-		t.Fatalf("failed to load certs: %v", err)
+	cs := &testutils.CertStore{}
+	if err := cs.LoadCerts(); err != nil {
+		t.Fatalf("cs.LoadCerts() failed, err: %v", err)
 	}
 	stage := &stageInfo{}
 	for _, test := range []struct {
@@ -206,38 +142,38 @@ func (s) TestEnd2End(t *testing.T) {
 	}{
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert
-		// clientPeer1 and clientTrust1, server with serverPeer1 and serverTrust1.
-		// The mutual authentication works at the beginning, since clientPeer1 is
-		// trusted by serverTrust1, and serverPeer1 by clientTrust1.
-		// At stage 1, client changes clientPeer1 to clientPeer2. Since clientPeer2
-		// is not trusted by serverTrust1, following rpc calls are expected to
+		// ClientCert1 and ClientTrust1, server with ServerCert1 and ServerTrust1.
+		// The mutual authentication works at the beginning, since ClientCert1 is
+		// trusted by ServerTrust1, and ServerCert1 by ClientTrust1.
+		// At stage 1, client changes ClientCert1 to ClientCert2. Since ClientCert2
+		// is not trusted by ServerTrust1, following rpc calls are expected to
 		// fail, while the previous rpc calls are still good because those are
 		// already authenticated.
-		// At stage 2, the server changes serverTrust1 to serverTrust2, and we
-		// should see it again accepts the connection, since clientPeer2 is trusted
-		// by serverTrust2.
+		// At stage 2, the server changes ServerTrust1 to ServerTrust2, and we
+		// should see it again accepts the connection, since ClientCert2 is trusted
+		// by ServerTrust2.
 		{
 			desc: "TestClientPeerCertReloadServerTrustCertReload",
 			clientGetCert: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
-					return &cs.clientPeer1, nil
+					return &cs.ClientCert1, nil
 				default:
-					return &cs.clientPeer2, nil
+					return &cs.ClientCert2, nil
 				}
 			},
-			clientRoot: cs.clientTrust1,
+			clientRoot: cs.ClientTrust1,
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
 			clientVType: CertVerification,
-			serverCert:  []tls.Certificate{cs.serverPeer1},
+			serverCert:  []tls.Certificate{cs.ServerCert1},
 			serverGetRoot: func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 				switch stage.read() {
 				case 0, 1:
-					return &GetRootCAsResults{TrustCerts: cs.serverTrust1}, nil
+					return &GetRootCAsResults{TrustCerts: cs.ServerTrust1}, nil
 				default:
-					return &GetRootCAsResults{TrustCerts: cs.serverTrust2}, nil
+					return &GetRootCAsResults{TrustCerts: cs.ServerTrust2}, nil
 				}
 			},
 			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
@@ -247,25 +183,25 @@ func (s) TestEnd2End(t *testing.T) {
 		},
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert
-		// clientPeer1 and clientTrust1, server with serverPeer1 and serverTrust1.
-		// The mutual authentication works at the beginning, since clientPeer1 is
-		// trusted by serverTrust1, and serverPeer1 by clientTrust1.
-		// At stage 1, server changes serverPeer1 to serverPeer2. Since serverPeer2
-		// is not trusted by clientTrust1, following rpc calls are expected to
+		// ClientCert1 and ClientTrust1, server with ServerCert1 and ServerTrust1.
+		// The mutual authentication works at the beginning, since ClientCert1 is
+		// trusted by ServerTrust1, and ServerCert1 by ClientTrust1.
+		// At stage 1, server changes ServerCert1 to ServerCert2. Since ServerCert2
+		// is not trusted by ClientTrust1, following rpc calls are expected to
 		// fail, while the previous rpc calls are still good because those are
 		// already authenticated.
-		// At stage 2, the client changes clientTrust1 to clientTrust2, and we
-		// should see it again accepts the connection, since serverPeer2 is trusted
-		// by clientTrust2.
+		// At stage 2, the client changes ClientTrust1 to ClientTrust2, and we
+		// should see it again accepts the connection, since ServerCert2 is trusted
+		// by ClientTrust2.
 		{
 			desc:       "TestServerPeerCertReloadClientTrustCertReload",
-			clientCert: []tls.Certificate{cs.clientPeer1},
+			clientCert: []tls.Certificate{cs.ClientCert1},
 			clientGetRoot: func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 				switch stage.read() {
 				case 0, 1:
-					return &GetRootCAsResults{TrustCerts: cs.clientTrust1}, nil
+					return &GetRootCAsResults{TrustCerts: cs.ClientTrust1}, nil
 				default:
-					return &GetRootCAsResults{TrustCerts: cs.clientTrust2}, nil
+					return &GetRootCAsResults{TrustCerts: cs.ClientTrust2}, nil
 				}
 			},
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
@@ -275,12 +211,12 @@ func (s) TestEnd2End(t *testing.T) {
 			serverGetCert: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
-					return []*tls.Certificate{&cs.serverPeer1}, nil
+					return []*tls.Certificate{&cs.ServerCert1}, nil
 				default:
-					return []*tls.Certificate{&cs.serverPeer2}, nil
+					return []*tls.Certificate{&cs.ServerCert2}, nil
 				}
 			},
-			serverRoot: cs.serverTrust1,
+			serverRoot: cs.ServerTrust1,
 			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
@@ -288,26 +224,26 @@ func (s) TestEnd2End(t *testing.T) {
 		},
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert
-		// clientPeer1 and clientTrust1, server with serverPeer1 and serverTrust1.
-		// The mutual authentication works at the beginning, since clientPeer1
-		// trusted by serverTrust1, serverPeer1 by clientTrust1, and also the
-		// custom verification check allows the CommonName on serverPeer1.
-		// At stage 1, server changes serverPeer1 to serverPeer2, and client
-		// changes clientTrust1 to clientTrust2. Although serverPeer2 is trusted by
-		// clientTrust2, our authorization check only accepts serverPeer1, and
+		// ClientCert1 and ClientTrust1, server with ServerCert1 and ServerTrust1.
+		// The mutual authentication works at the beginning, since ClientCert1
+		// trusted by ServerTrust1, ServerCert1 by ClientTrust1, and also the
+		// custom verification check allows the CommonName on ServerCert1.
+		// At stage 1, server changes ServerCert1 to ServerCert2, and client
+		// changes ClientTrust1 to ClientTrust2. Although ServerCert2 is trusted by
+		// ClientTrust2, our authorization check only accepts ServerCert1, and
 		// hence the following calls should fail. Previous connections should
 		// not be affected.
 		// At stage 2, the client changes authorization check to only accept
-		// serverPeer2. Now we should see the connection becomes normal again.
+		// ServerCert2. Now we should see the connection becomes normal again.
 		{
 			desc:       "TestClientCustomVerification",
-			clientCert: []tls.Certificate{cs.clientPeer1},
+			clientCert: []tls.Certificate{cs.ClientCert1},
 			clientGetRoot: func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 				switch stage.read() {
 				case 0:
-					return &GetRootCAsResults{TrustCerts: cs.clientTrust1}, nil
+					return &GetRootCAsResults{TrustCerts: cs.ClientTrust1}, nil
 				default:
-					return &GetRootCAsResults{TrustCerts: cs.clientTrust2}, nil
+					return &GetRootCAsResults{TrustCerts: cs.ClientTrust2}, nil
 				}
 			},
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
@@ -321,12 +257,12 @@ func (s) TestEnd2End(t *testing.T) {
 				authzCheck := false
 				switch stage.read() {
 				case 0, 1:
-					// foo.bar.com is the common name on serverPeer1
+					// foo.bar.com is the common name on ServerCert1
 					if cert.Subject.CommonName == "foo.bar.com" {
 						authzCheck = true
 					}
 				default:
-					// foo.bar.server2.com is the common name on serverPeer2
+					// foo.bar.server2.com is the common name on ServerCert2
 					if cert.Subject.CommonName == "foo.bar.server2.com" {
 						authzCheck = true
 					}
@@ -340,12 +276,12 @@ func (s) TestEnd2End(t *testing.T) {
 			serverGetCert: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
-					return []*tls.Certificate{&cs.serverPeer1}, nil
+					return []*tls.Certificate{&cs.ServerCert1}, nil
 				default:
-					return []*tls.Certificate{&cs.serverPeer2}, nil
+					return []*tls.Certificate{&cs.ServerCert2}, nil
 				}
 			},
-			serverRoot: cs.serverTrust1,
+			serverRoot: cs.ServerTrust1,
 			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
@@ -353,9 +289,9 @@ func (s) TestEnd2End(t *testing.T) {
 		},
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert
-		// clientPeer1 and clientTrust1, server with serverPeer1 and serverTrust1.
-		// The mutual authentication works at the beginning, since clientPeer1
-		// trusted by serverTrust1, serverPeer1 by clientTrust1, and also the
+		// ClientCert1 and ClientTrust1, server with ServerCert1 and ServerTrust1.
+		// The mutual authentication works at the beginning, since ClientCert1
+		// trusted by ServerTrust1, ServerCert1 by ClientTrust1, and also the
 		// custom verification check on server side allows all connections.
 		// At stage 1, server disallows the the connections by setting custom
 		// verification check. The following calls should fail. Previous
@@ -364,14 +300,14 @@ func (s) TestEnd2End(t *testing.T) {
 		// authentications should go back to normal.
 		{
 			desc:       "TestServerCustomVerification",
-			clientCert: []tls.Certificate{cs.clientPeer1},
-			clientRoot: cs.clientTrust1,
+			clientCert: []tls.Certificate{cs.ClientCert1},
+			clientRoot: cs.ClientTrust1,
 			clientVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				return &VerificationResults{}, nil
 			},
 			clientVType: CertVerification,
-			serverCert:  []tls.Certificate{cs.serverPeer1},
-			serverRoot:  cs.serverTrust1,
+			serverCert:  []tls.Certificate{cs.ServerCert1},
+			serverRoot:  cs.ServerTrust1,
 			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 				switch stage.read() {
 				case 0, 2:

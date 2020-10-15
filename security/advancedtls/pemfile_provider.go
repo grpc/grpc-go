@@ -87,6 +87,36 @@ type PEMFileProvider struct {
 	cancel              context.CancelFunc
 }
 
+func updateIdentityDistributor(distributor *certprovider.Distributor, certFile, keyFile string) {
+	if distributor == nil {
+		return
+	}
+	// Read identity certs from PEM files.
+	identityCert, err := readKeyCertPairFunc(certFile, keyFile)
+	if err != nil {
+		// If the reading produces an error, we will skip the update for this
+		// round and log the error.
+		logger.Warningf("tls.LoadX509KeyPair reads %s and %s failed: %v", certFile, keyFile, err)
+		return
+	}
+	distributor.Set(&certprovider.KeyMaterial{Certs: []tls.Certificate{identityCert}}, nil)
+}
+
+func updateRootDistributor(distributor *certprovider.Distributor, trustFile string) {
+	if distributor == nil {
+		return
+	}
+	// Read root certs from PEM files.
+	trustPool, err := readTrustCertFunc(trustFile)
+	if err != nil {
+		// If the reading produces an error, we will skip the update for this
+		// round and log the error.
+		logger.Warningf("readTrustCertFunc reads %v failed: %v", trustFile, err)
+		return
+	}
+	distributor.Set(&certprovider.KeyMaterial{Roots: trustPool}, nil)
+}
+
 // NewPEMFileProvider returns a new PEMFileProvider constructed using the
 // provided options.
 func NewPEMFileProvider(o PEMFileProviderOptions) (*PEMFileProvider, error) {
@@ -113,42 +143,20 @@ func NewPEMFileProvider(o PEMFileProviderOptions) (*PEMFileProvider, error) {
 	identityTicker := time.NewTicker(o.IdentityInterval)
 	rootTicker := time.NewTicker(o.RootInterval)
 	ctx, cancel := context.WithCancel(context.Background())
-	// We pass a copy of PEMFileProviderOptions to the goroutine in case users
-	// change it after we start reloading.
+
 	go func() {
 		for {
+			updateIdentityDistributor(provider.identityDistributor, o.CertFile, o.KeyFile)
+			updateRootDistributor(provider.rootDistributor, o.TrustFile)
 			select {
 			case <-ctx.Done():
 				identityTicker.Stop()
 				rootTicker.Stop()
 				return
 			case <-identityTicker.C:
-				if provider.identityDistributor == nil {
-					continue
-				}
-				// Read identity certs from PEM files.
-				identityCert, err := readKeyCertPairFunc(o.CertFile, o.KeyFile)
-				if err != nil {
-					// If the reading produces an error, we will skip the update for this
-					// round and log the error.
-					logger.Warningf("tls.LoadX509KeyPair reads %s and %s failed: %v", o.CertFile, o.KeyFile, err)
-					continue
-				}
-				provider.identityDistributor.Set(&certprovider.KeyMaterial{Certs: []tls.Certificate{identityCert}}, nil)
+				break
 			case <-rootTicker.C:
-				if provider.rootDistributor == nil {
-					continue
-				}
-				// Read root certs from PEM files.
-				trustPool, err := readTrustCertFunc(o.TrustFile)
-				if err != nil {
-					// If the reading produces an error, we will skip the update for this
-					// round and log the error.
-					logger.Warningf("readTrustCertFunc reads %v failed: %v", o.TrustFile, err)
-					continue
-				}
-				provider.rootDistributor.Set(&certprovider.KeyMaterial{Roots: trustPool}, nil)
-			default:
+				break
 			}
 		}
 	}()

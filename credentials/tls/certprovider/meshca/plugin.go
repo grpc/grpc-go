@@ -38,6 +38,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	meshgrpc "google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/v1"
 	meshpb "google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/v1"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/metadata"
@@ -144,7 +145,7 @@ func (p *providerPlugin) run(ctx context.Context) {
 //
 // It returns the amount of time the new certificate is valid for.
 func (p *providerPlugin) updateKeyMaterial(ctx context.Context) (time.Duration, error) {
-	client := meshpb.NewMeshCertificateServiceClient(p.cc)
+	client := meshgrpc.NewMeshCertificateServiceClient(p.cc)
 	retries := 0
 	for {
 		if ctx.Err() != nil {
