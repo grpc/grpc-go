@@ -30,19 +30,19 @@ type builder struct{}
 
 func (*builder) Build(target resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
 	cc.UpdateState(resolver.State{Addresses: []resolver.Address{networktype.Set(resolver.Address{Addr: target.Endpoint}, "unix")}})
-	return &unixResolver{}, nil
+	return &nopResolver{}, nil
 }
 
 func (*builder) Scheme() string {
 	return scheme
 }
 
-type unixResolver struct {
+type nopResolver struct {
 }
 
-func (*unixResolver) ResolveNow(resolver.ResolveNowOptions) {}
+func (*nopResolver) ResolveNow(resolver.ResolveNowOptions) {}
 
-func (*unixResolver) Close() {}
+func (*nopResolver) Close() {}
 
 func init() {
 	resolver.Register(&builder{})
