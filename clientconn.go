@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net"
 	"reflect"
 	"strings"
 	"sync"
@@ -48,6 +47,7 @@ import (
 	_ "google.golang.org/grpc/balancer/roundrobin"           // To register roundrobin.
 	_ "google.golang.org/grpc/internal/resolver/dns"         // To register dns resolver.
 	_ "google.golang.org/grpc/internal/resolver/passthrough" // To register passthrough resolver.
+	_ "google.golang.org/grpc/internal/resolver/unix"        // To register unix resolver.
 )
 
 const (
@@ -191,16 +191,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 	cc.mkp = cc.dopts.copts.KeepaliveParams
 
-	if cc.dopts.copts.Dialer == nil {
-		cc.dopts.copts.Dialer = func(ctx context.Context, addr string) (net.Conn, error) {
-			network, addr := parseDialTarget(addr)
-			return (&net.Dialer{}).DialContext(ctx, network, addr)
-		}
-		if cc.dopts.withProxy {
-			cc.dopts.copts.Dialer = newProxyDialer(cc.dopts.copts.Dialer)
-		}
-	}
-
 	if cc.dopts.copts.UserAgent != "" {
 		cc.dopts.copts.UserAgent += " " + grpcUA
 	} else {
@@ -244,8 +234,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	// Determine the resolver to use.
-	cc.parsedTarget = grpcutil.ParseTarget(cc.target)
-	unixScheme := strings.HasPrefix(cc.target, "unix:")
+	cc.parsedTarget = grpcutil.ParseTarget(cc.target, cc.dopts.copts.Dialer != nil)
 	channelz.Infof(logger, cc.channelzID, "parsed scheme: %q", cc.parsedTarget.Scheme)
 	resolverBuilder := cc.getResolver(cc.parsedTarget.Scheme)
 	if resolverBuilder == nil {
@@ -268,7 +257,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.authority = creds.Info().ServerName
 	} else if cc.dopts.insecure && cc.dopts.authority != "" {
 		cc.authority = cc.dopts.authority
-	} else if unixScheme {
+	} else if strings.HasPrefix(cc.target, "unix:") {
 		cc.authority = "localhost"
 	} else {
 		// Use endpoint from "scheme://authority/endpoint" as the default

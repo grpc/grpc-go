@@ -33,6 +33,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/internal/grpcutil"
+	"google.golang.org/grpc/internal/transport/networktype"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -137,11 +138,18 @@ type http2Client struct {
 	connectionID uint64
 }
 
-func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
+func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr resolver.Address, useProxy bool, grpcUA string) (net.Conn, error) {
 	if fn != nil {
-		return fn(ctx, addr)
+		return fn(ctx, addr.Addr)
 	}
-	return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	networkType := "tcp"
+	if n, ok := networktype.Get(addr); ok {
+		networkType = n
+	}
+	if networkType == "tcp" && useProxy {
+		return proxyDial(ctx, addr.Addr, grpcUA)
+	}
+	return (&net.Dialer{}).DialContext(ctx, networkType, addr.Addr)
 }
 
 func isTemporary(err error) bool {
@@ -172,7 +180,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		}
 	}()
 
-	conn, err := dial(connectCtx, opts.Dialer, addr.Addr)
+	conn, err := dial(connectCtx, opts.Dialer, addr, opts.UseProxy, opts.UserAgent)
 	if err != nil {
 		if opts.FailOnNonTempDialError {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: error while dialing: %v", err)
