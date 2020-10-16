@@ -189,8 +189,8 @@ type cdsBalancer struct {
 // cancellation of existing watch and propagation of the same error to the
 // edsBalancer.
 func (b *cdsBalancer) handleClientConnUpdate(update *ccUpdate) {
-	// We first handle errors, if any, and then proceed with handling
-	// the update, only if the status quo has changed.
+	// We first handle errors, if any, and then proceed with handling the
+	// update, only if the status quo has changed.
 	if err := update.err; err != nil {
 		b.handleErrorFromUpdate(err, true)
 	}
@@ -198,9 +198,9 @@ func (b *cdsBalancer) handleClientConnUpdate(update *ccUpdate) {
 		return
 	}
 	if update.client != nil {
-		// Since the cdsBalancer doesn't own the xdsClient object, we
-		// don't have to bother about closing the old client here, but
-		// we still need to cancel the watch on the old client.
+		// Since the cdsBalancer doesn't own the xdsClient object, we don't have
+		// to bother about closing the old client here, but we still need to
+		// cancel the watch on the old client.
 		b.cancelWatch()
 		b.xdsClient = update.client
 	}
@@ -227,26 +227,23 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 
 	b.logger.Infof("Watch update from xds-client %p, content: %+v", b.xdsClient, update.cds)
 
-	// We process the security config from the received update
-	// before building the child policy or forwarding the update to
-	// it. The reason for doing this is because there is no
-	// guarantee that the child policy will try to create a new
-	// subConn inline. Processing the security configuration here
-	// and setting up the handshakeInfo will make sure that we
-	// handle such attempts to create new subConns properly.
+	// Process the security config from the received update before building the
+	// child policy or forwarding the update to it. We do this because the child
+	// policy may try to create a new subConn inline. Processing the security
+	// configuration here and setting up the handshakeInfo will make sure that
+	// such attempts are handled properly.
 	if err := b.ccw.handleSecurityConfig(update.cds.SecurityCfg); err != nil {
-		// If the security config is invalid, for example, if the
-		// provider instance is not found in the bootstrap config,
-		// we need to put the channel in transient failure. Calling
-		// handleErrorFromUpdate() takes care of that.
+		// If the security config is invalid, for example, if the provider
+		// instance is not found in the bootstrap config, we need to put the
+		// channel in transient failure.
 		b.logger.Warningf("Invalid security config update from xds-client %p: %v", b.xdsClient, err)
 		b.handleErrorFromUpdate(err, false)
 		return
 	}
 
-	// The first good update from the watch API leads to the
-	// instantiation of an edsBalancer. Further updates/errors are
-	// propagated to the existing edsBalancer.
+	// The first good update from the watch API leads to the instantiation of an
+	// edsBalancer. Further updates/errors are propagated to the existing
+	// edsBalancer.
 	if b.edsLB == nil {
 		edsLB, err := newEDSBalancer(b.ccw, b.bOpts)
 		if err != nil {
@@ -258,9 +255,9 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 	}
 	lbCfg := &edsbalancer.EDSConfig{EDSServiceName: update.cds.ServiceName}
 	if update.cds.EnableLRS {
-		// An empty string here indicates that the edsBalancer
-		// should use the same xDS server for load reporting as
-		// it does for EDS requests/responses.
+		// An empty string here indicates that the edsBalancer should use the
+		// same xDS server for load reporting as it does for EDS
+		// requests/responses.
 		lbCfg.LrsLoadReportingServerName = new(string)
 
 	}
@@ -438,9 +435,9 @@ type ccWrapper struct {
 	cachedIdentity certprovider.Provider
 }
 
-// NewSubConn handles intercepts attempts create a new SubConn from the child
-// policy and adds an address attribute which provides all information required
-// by the xdsCreds handshaker to perform the TLS handshake.
+// NewSubConn intercepts NewSubConn() calls from the child policy and adds an
+// address attribute which provides all information required by the xdsCreds
+// handshaker to perform the TLS handshake.
 func (ccw *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	ccw.mu.Lock()
 	defer ccw.mu.Unlock()
