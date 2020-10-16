@@ -81,7 +81,6 @@ type cdsBB struct{}
 // Build creates a new CDS balancer with the ClientConn.
 func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b := &cdsBalancer{
-		cc:          cc,
 		bOpts:       opts,
 		updateCh:    buffer.NewUnbounded(),
 		closed:      grpcsync.NewEvent(),
@@ -174,13 +173,12 @@ type watchUpdate struct {
 // is exposed to gRPC and implements the balancer.ClientConn interface which is
 // exposed to the edsBalancer.
 type cdsBalancer struct {
-	cc             balancer.ClientConn
-	ccw            *ccWrapper
-	bOpts          balancer.BuildOptions
-	updateCh       *buffer.Unbounded
-	xdsClient      xdsClientInterface
-	cancelWatch    func()
-	edsLB          balancer.Balancer
+	ccw            *ccWrapper            // ClientConn interface passed to child LB.
+	bOpts          balancer.BuildOptions // BuildOptions passed to child LB.
+	updateCh       *buffer.Unbounded     // Channel for gRPC and xdsClient updates.
+	xdsClient      xdsClientInterface    // xDS client to watch Cluster resource.
+	cancelWatch    func()                // Cluster watch cancel func.
+	edsLB          balancer.Balancer     // EDS child policy.
 	clusterToWatch string
 	logger         *grpclog.PrefixLogger
 	closed         *grpcsync.Event
@@ -339,7 +337,7 @@ func (b *cdsBalancer) handleErrorFromUpdate(err error, fromParent bool) {
 	} else {
 		// If eds balancer was never created, fail the RPCs with
 		// errors.
-		b.cc.UpdateState(balancer.State{
+		b.ccw.UpdateState(balancer.State{
 			ConnectivityState: connectivity.TransientFailure,
 			Picker:            base.NewErrPicker(err),
 		})
