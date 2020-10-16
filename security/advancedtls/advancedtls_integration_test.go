@@ -412,6 +412,131 @@ func (s) TestEnd2End(t *testing.T) {
 	}
 }
 
+type tmpCredsFiles struct {
+	clientCertTmp *os.File
+	clientKeyTmp  *os.File
+	clientTrustTmp *os.File
+	serverCertTmp *os.File
+	serverKeyTmp *os.File
+	serverTrustTmp *os.File
+}
+
+// Create temp files that are used to hold credentials.
+func createTmpFiles() (*tmpCredsFiles, error) {
+	tmpFiles := &tmpCredsFiles{}
+	var err error
+	tmpFiles.clientCertTmp, err = ioutil.TempFile(os.TempDir(), "pre-")
+	if err != nil {
+		return nil, err
+	}
+	tmpFiles.clientKeyTmp, err = ioutil.TempFile(os.TempDir(), "pre-")
+	if err != nil {
+		return nil, err
+	}
+	tmpFiles.clientTrustTmp, err = ioutil.TempFile(os.TempDir(), "pre-")
+	if err != nil {
+		return nil, err
+	}
+	tmpFiles.serverCertTmp, err = ioutil.TempFile(os.TempDir(), "pre-")
+	if err != nil {
+		return nil, err
+	}
+	tmpFiles.serverKeyTmp, err = ioutil.TempFile(os.TempDir(), "pre-")
+	if err != nil {
+		return nil, err
+	}
+	tmpFiles.serverTrustTmp, err = ioutil.TempFile(os.TempDir(), "pre-")
+	if err != nil {
+		return nil, err
+	}
+	return tmpFiles, nil
+}
+
+// Copy the credential contents to the temporary files.
+func (tmpFiles *tmpCredsFiles) copyCredsToTmpFiles() error {
+	if err := copyFileContents(testdata.Path("client_cert_1.pem"), tmpFiles.clientCertTmp.Name()); err != nil {
+		return err
+	}
+	if err := copyFileContents(testdata.Path("client_key_1.pem"), tmpFiles.clientKeyTmp.Name()); err != nil {
+		return err
+	}
+	if err := copyFileContents(testdata.Path("client_trust_cert_1.pem"), tmpFiles.clientTrustTmp.Name()); err != nil {
+		return err
+	}
+	if err := copyFileContents(testdata.Path("server_cert_1.pem"), tmpFiles.serverCertTmp.Name()); err != nil {
+		return err
+	}
+	if err := copyFileContents(testdata.Path("server_key_1.pem"), tmpFiles.serverKeyTmp.Name()); err != nil {
+		return err
+	}
+	if err := copyFileContents(testdata.Path("server_trust_cert_1.pem"), tmpFiles.serverTrustTmp.Name()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (tmpFiles *tmpCredsFiles) removeFiles() {
+	os.Remove(tmpFiles.clientCertTmp.Name())
+	os.Remove(tmpFiles.clientKeyTmp.Name())
+	os.Remove(tmpFiles.clientTrustTmp.Name())
+	os.Remove(tmpFiles.serverCertTmp.Name())
+	os.Remove(tmpFiles.serverKeyTmp.Name())
+	os.Remove(tmpFiles.serverTrustTmp.Name())
+}
+
+
+func copyFileContents(sourceFile, destinationFile string) error {
+	input, err := ioutil.ReadFile(sourceFile)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(destinationFile, input, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Create PEMFileProvider(s) watching the content changes of temporary
+// files.
+func createProviders(tmpFiles *tmpCredsFiles) (*PEMFileProvider, *PEMFileProvider, *PEMFileProvider, *PEMFileProvider, error) {
+	clientIdentityOptions := PEMFileProviderOptions{
+		CertFile:         tmpFiles.clientCertTmp.Name(),
+		KeyFile:          tmpFiles.clientKeyTmp.Name(),
+		IdentityInterval: 200 * time.Millisecond,
+	}
+	clientIdentityProvider, err := NewPEMFileProvider(clientIdentityOptions)
+	if err != nil {
+		return nil, nil, nil,nil, err
+	}
+	clientRootOptions := PEMFileProviderOptions{
+		TrustFile:    tmpFiles.clientTrustTmp.Name(),
+		RootInterval: 200 * time.Millisecond,
+	}
+	clientRootProvider, err := NewPEMFileProvider(clientRootOptions)
+	if err != nil {
+		return nil, nil, nil,nil, err
+	}
+	serverIdentityOptions := PEMFileProviderOptions{
+		CertFile:         tmpFiles.serverCertTmp.Name(),
+		KeyFile:          tmpFiles.serverKeyTmp.Name(),
+		IdentityInterval: 200 * time.Millisecond,
+	}
+	serverIdentityProvider, err := NewPEMFileProvider(serverIdentityOptions)
+	if err != nil {
+		return nil, nil, nil,nil, err
+	}
+	serverRootOptions := PEMFileProviderOptions{
+		TrustFile:    tmpFiles.serverTrustTmp.Name(),
+		RootInterval: 200 * time.Millisecond,
+	}
+	serverRootProvider, err := NewPEMFileProvider(serverRootOptions)
+	if err != nil {
+		return nil, nil, nil,nil, err
+	}
+	return clientIdentityProvider, clientRootProvider, serverIdentityProvider, serverRootProvider, nil
+}
+
 // In order to test advanced TLS provider features, we used temporary files to
 // hold credential data, and copy the contents under testdata/ to these tmp
 // files.
@@ -426,37 +551,11 @@ func (s) TestEnd2End(t *testing.T) {
 // Finally, the trust certs that other-side's RootProvider is watching get
 // changed. The connection should go back to normal again.
 func (s) TestPEMFileProviderEnd2End(t *testing.T) {
-	// Create temp files that are used to hold credentials.
-	clientCertTmp, err := ioutil.TempFile(os.TempDir(), "pre-")
+	tmpFiles, err := createTmpFiles()
 	if err != nil {
-		t.Fatalf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
+		t.Fatalf("createTmpFiles() failed, error: %v", err)
 	}
-	defer os.Remove(clientCertTmp.Name())
-	clientKeyTmp, err := ioutil.TempFile(os.TempDir(), "pre-")
-	if err != nil {
-		t.Fatalf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
-	}
-	defer os.Remove(clientKeyTmp.Name())
-	clientTrustTmp, err := ioutil.TempFile(os.TempDir(), "pre-")
-	if err != nil {
-		t.Fatalf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
-	}
-	defer os.Remove(clientTrustTmp.Name())
-	serverCertTmp, err := ioutil.TempFile(os.TempDir(), "pre-")
-	if err != nil {
-		t.Fatalf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
-	}
-	defer os.Remove(serverCertTmp.Name())
-	serverKeyTmp, err := ioutil.TempFile(os.TempDir(), "pre-")
-	if err != nil {
-		t.Fatalf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
-	}
-	defer os.Remove(serverKeyTmp.Name())
-	serverTrustTmp, err := ioutil.TempFile(os.TempDir(), "pre-")
-	if err != nil {
-		t.Fatalf("ioutil.TempFile(os.TempDir(), pre-) failed: %v", err)
-	}
-	defer os.Remove(serverTrustTmp.Name())
+	defer tmpFiles.removeFiles()
 	for _, test := range []struct {
 		desc                string
 		certUpdateFunc      func()
@@ -466,108 +565,58 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 		{
 			desc: "TestClientPeerCertProviderServerTrustCertProvider",
 			certUpdateFunc: func() {
-				err = copyFileContents(testdata.Path("client_cert_2.pem"), clientCertTmp.Name())
+				err = copyFileContents(testdata.Path("client_cert_2.pem"), tmpFiles.clientCertTmp.Name())
 				if err != nil {
-					t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_cert_2.pem"), clientCertTmp.Name(), err)
+					t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_cert_2.pem"), tmpFiles.clientCertTmp.Name(), err)
 				}
 			},
 			keyUpdateFunc: func() {
-				err = copyFileContents(testdata.Path("client_key_2.pem"), clientKeyTmp.Name())
+				err = copyFileContents(testdata.Path("client_key_2.pem"), tmpFiles.clientKeyTmp.Name())
 				if err != nil {
-					t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_key_2.pem"), clientKeyTmp.Name(), err)
+					t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_key_2.pem"), tmpFiles.clientKeyTmp.Name(), err)
 				}
 			},
 			trustCertUpdateFunc: func() {
-				err = copyFileContents(testdata.Path("server_trust_cert_2.pem"), serverTrustTmp.Name())
+				err = copyFileContents(testdata.Path("server_trust_cert_2.pem"), tmpFiles.serverTrustTmp.Name())
 				if err != nil {
-					t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("server_trust_cert_2.pem"), serverTrustTmp.Name(), err)
+					t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("server_trust_cert_2.pem"), tmpFiles.serverTrustTmp.Name(), err)
 				}
 			},
 		},
 		{
 			desc: "TestServerPeerCertProviderClientTrustCertProvider",
 			certUpdateFunc: func() {
-				err = copyFileContents(testdata.Path("server_cert_2.pem"), serverCertTmp.Name())
+				err = copyFileContents(testdata.Path("server_cert_2.pem"), tmpFiles.serverCertTmp.Name())
 				if err != nil {
-					t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("server_cert_2.pem"), serverCertTmp.Name(), err)
+					t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("server_cert_2.pem"), tmpFiles.serverCertTmp.Name(), err)
 				}
 			},
 			keyUpdateFunc: func() {
-				err = copyFileContents(testdata.Path("server_key_2.pem"), serverKeyTmp.Name())
+				err = copyFileContents(testdata.Path("server_key_2.pem"), tmpFiles.serverKeyTmp.Name())
 				if err != nil {
-					t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("server_key_2.pem"), serverKeyTmp.Name(), err)
+					t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("server_key_2.pem"), tmpFiles.serverKeyTmp.Name(), err)
 				}
 			},
 			trustCertUpdateFunc: func() {
-				err = copyFileContents(testdata.Path("client_trust_cert_2.pem"), clientTrustTmp.Name())
+				err = copyFileContents(testdata.Path("client_trust_cert_2.pem"), tmpFiles.clientTrustTmp.Name())
 				if err != nil {
-					t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_trust_cert_2.pem"), clientTrustTmp.Name(), err)
+					t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_trust_cert_2.pem"), tmpFiles.clientTrustTmp.Name(), err)
 				}
 			},
 		},
 	} {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			// Copy the credential contents to the temporary files.
-			err = copyFileContents(testdata.Path("client_cert_1.pem"), clientCertTmp.Name())
-			if err != nil {
-				t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_cert_1.pem"), clientCertTmp.Name(), err)
+			if err := tmpFiles.copyCredsToTmpFiles(); err != nil {
+				t.Fatalf("tmpFiles.copyCredsToTmpFiles() failed, error: %v", err)
 			}
-			err = copyFileContents(testdata.Path("client_key_1.pem"), clientKeyTmp.Name())
+			clientIdentityProvider, clientRootProvider, serverIdentityProvider, serverRootProvider, err := createProviders(tmpFiles)
 			if err != nil {
-				t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_key_1.pem"), clientKeyTmp.Name(), err)
-			}
-			err = copyFileContents(testdata.Path("client_trust_cert_1.pem"), clientTrustTmp.Name())
-			if err != nil {
-				t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_trust_cert_1.pem"), clientTrustTmp.Name(), err)
-			}
-			err = copyFileContents(testdata.Path("server_cert_1.pem"), serverCertTmp.Name())
-			if err != nil {
-				t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("server_cert_1.pem"), serverCertTmp.Name(), err)
-			}
-			err = copyFileContents(testdata.Path("server_key_1.pem"), serverKeyTmp.Name())
-			if err != nil {
-				t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("server_key_1.pem"), serverKeyTmp.Name(), err)
-			}
-			err = copyFileContents(testdata.Path("server_trust_cert_1.pem"), serverTrustTmp.Name())
-			if err != nil {
-				t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("server_trust_cert_1.pem"), serverTrustTmp.Name(), err)
-			}
-			// Create PEMFileProvider(s) watching the content changes of temporary
-			// files.
-			clientIdentityProvider, err := NewPEMFileProvider(PEMFileProviderOptions{
-				CertFile:         clientCertTmp.Name(),
-				KeyFile:          clientKeyTmp.Name(),
-				IdentityInterval: 200 * time.Millisecond,
-			})
-			if err != nil {
-				t.Errorf("NewPEMFileProvider failed: %v", err)
+				t.Fatalf("createProviders(%v) failed, error: %v", tmpFiles, err)
 			}
 			defer clientIdentityProvider.Close()
-			clientRootProvider, err := NewPEMFileProvider(PEMFileProviderOptions{
-				TrustFile:    clientTrustTmp.Name(),
-				RootInterval: 200 * time.Millisecond,
-			})
-			if err != nil {
-				t.Errorf("NewPEMFileProvider failed: %v", err)
-			}
 			defer clientRootProvider.Close()
-			serverIdentityProvider, err := NewPEMFileProvider(PEMFileProviderOptions{
-				CertFile:         serverCertTmp.Name(),
-				KeyFile:          serverKeyTmp.Name(),
-				IdentityInterval: 200 * time.Millisecond,
-			})
-			if err != nil {
-				t.Errorf("NewPEMFileProvider failed: %v", err)
-			}
 			defer serverIdentityProvider.Close()
-			serverRootProvider, err := NewPEMFileProvider(PEMFileProviderOptions{
-				TrustFile:    serverTrustTmp.Name(),
-				RootInterval: 200 * time.Millisecond,
-			})
-			if err != nil {
-				t.Errorf("NewPEMFileProvider failed: %v", err)
-			}
 			defer serverRootProvider.Close()
 			// Start a server and create a client using advancedtls API with Provider.
 			serverOptions := &ServerOptions{
@@ -612,6 +661,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			if err != nil {
 				t.Fatalf("clientTLSCreds failed to create, error: %v", err)
 			}
+
 			// At initialization, the connection should be good.
 			ctx1, cancel1 := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel1()
@@ -669,14 +719,3 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 	}
 }
 
-func copyFileContents(sourceFile, destinationFile string) error {
-	input, err := ioutil.ReadFile(sourceFile)
-	if err != nil {
-		return err
-	}
-	err = ioutil.WriteFile(destinationFile, input, 0644)
-	if err != nil {
-		return err
-	}
-	return nil
-}
