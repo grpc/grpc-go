@@ -22,10 +22,12 @@ import (
 	"fmt"
 	"testing"
 
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/xds"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -203,7 +205,8 @@ func makeNewSubConn(ctx context.Context, edsCC balancer.ClientConn, parentCC *xd
 		if got, want := gotAddrs[0].Addr, addrs[0].Addr; got != want {
 			return fmt.Errorf("resolver.Address passed to parent ClientConn has address %q, want %q", got, want)
 		}
-		if hi := xds.GetHandshakeInfo(gotAddrs[0].Attributes); (hi != nil) != wantAttributes {
+		getHI := internal.GetXDSHandshakeInfo.(func(attr *attributes.Attributes) *xds.HandshakeInfo)
+		if hi := getHI(gotAddrs[0].Attributes); (hi != nil) != wantAttributes {
 			return fmt.Errorf("resolver.Address passed to parent ClientConn contains attributes: %v, wantAttributes: %v", (hi != nil), wantAttributes)
 		}
 	}

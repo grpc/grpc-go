@@ -57,6 +57,9 @@ var (
 	// bootstrap code while parsing certificate provider configs in the
 	// bootstrap file.
 	GetCertificateProviderBuilder interface{} // func(string) certprovider.Builder
+	// GetXDSHandshakeInfo returns a pointer to the xds.HandshakeInfo stored in
+	// the passed in attributes. This is set by credentials/xds/xds.go.
+	GetXDSHandshakeInfo interface{} // func (attr *attributes.Attributes) *xds.HandshakeInfo
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.
