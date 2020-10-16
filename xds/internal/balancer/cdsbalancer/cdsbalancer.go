@@ -96,15 +96,13 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 	case opts.CredsBundle != nil:
 		creds = opts.CredsBundle.TransportCredentials()
 	}
-	xdsCredsInUse := false
 	if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
-		xdsCredsInUse = true
+		b.xdsCredsInUse = true
 	}
 
-	b.logger.Infof("xDS credentials in use: %v", xdsCredsInUse)
+	b.logger.Infof("xDS credentials in use: %v", b.xdsCredsInUse)
 	b.ccw = &ccWrapper{
-		ClientConn:    cc,
-		xdsCredsInUse: xdsCredsInUse,
+		ClientConn: cc,
 	}
 
 	go b.run()
@@ -182,6 +180,13 @@ type cdsBalancer struct {
 	clusterToWatch string
 	logger         *grpclog.PrefixLogger
 	closed         *grpcsync.Event
+
+	// The certificate providers are cached here to that they can be closed when
+	// a new provider is to be created.
+	cachedRoot     certprovider.Provider
+	cachedIdentity certprovider.Provider
+	xdsHI          *xds.HandshakeInfo
+	xdsCredsInUse  bool
 }
 
 // handleClientConnUpdate handles a ClientConnUpdate received from gRPC. Good
@@ -213,7 +218,90 @@ func (b *cdsBalancer) handleClientConnUpdate(update *ccUpdate) {
 		}
 		b.clusterToWatch = update.clusterName
 	}
-	b.ccw.setClient(b.xdsClient)
+}
+
+// handleSecurityConfig processes the security configuration received from the
+// management server, creates appropriate certificate provider plugins, and
+// updates the HandhakeInfo which is added as an address attribute in
+// NewSubConn() calls.
+func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) error {
+	// If xdsCredentials are not in use, i.e, the user did not want to get
+	// security configuration from an xDS server, we should not be acting on the
+	// received security config here. Doing so poses a security threat.
+	if !b.xdsCredsInUse {
+		return nil
+	}
+	// Security config being nil is a valid case where the management server has
+	// not sent any security configuration. The xdsCredentials implementation
+	// handles this by delegating to its fallback credentials.
+	if config == nil {
+		return nil
+	}
+
+	cpc := b.xdsClient.CertProviderConfigs()
+	if cpc == nil {
+		// Bootstrap did not find any certificate provider configs, but the user
+		// has specified xdsCredentials and the management server has sent down
+		// security configuration.
+		return errors.New("xds: certificate_providers config missing in bootstrap file")
+	}
+
+	// A root provider is required whether we are using TLS or mTLS.
+	rootCfg, ok := cpc[config.RootInstanceName]
+	if !ok {
+		return fmt.Errorf("certificate provider instance %q not found in bootstrap file", config.RootInstanceName)
+	}
+	rootProvider, err := getProviderFunc(rootCfg.Name, rootCfg.Config, certprovider.Options{
+		CertName: config.RootCertName,
+		WantRoot: true,
+	})
+	if err != nil {
+		// This error is not expected since the bootstrap process parses the
+		// config and makes sure that it is acceptable to the plugin. Still, it
+		// is possible that the plugin parses the config successfully, but its
+		// Build() method errors out.
+		return fmt.Errorf("xds: failed to get plugin instance (%+v): %v", rootCfg, err)
+	}
+	if b.cachedRoot != nil {
+		b.cachedRoot.Close()
+	}
+	b.cachedRoot = rootProvider
+
+	// The identity provider is only present when using mTLS.
+	var identityProvider certprovider.Provider
+	if name := config.IdentityInstanceName; name != "" {
+		identityCfg := cpc[name]
+		if !ok {
+			return fmt.Errorf("certificate provider instance %q not found in bootstrap file", config.IdentityInstanceName)
+		}
+		identityProvider, err = getProviderFunc(identityCfg.Name, identityCfg.Config, certprovider.Options{
+			CertName:     config.IdentityCertName,
+			WantIdentity: true,
+		})
+		if err != nil {
+			// This error is not expected since the bootstrap process parses the
+			// config and makes sure that it is acceptable to the plugin. Still,
+			// it is possible that the plugin parses the config successfully,
+			// but its Build() method errors out.
+			return fmt.Errorf("xds: failed to get plugin instance (%+v): %v", identityCfg, err)
+		}
+	}
+	if b.cachedIdentity != nil {
+		b.cachedIdentity.Close()
+	}
+	b.cachedIdentity = identityProvider
+
+	if b.xdsHI == nil {
+		b.xdsHI = xds.NewHandshakeInfo(rootProvider, identityProvider, config.AcceptedSANs...)
+	} else {
+		// We set all fields here, even if some of them are nil, since they
+		// could have been non-nil earlier.
+		b.xdsHI.SetRootCertProvider(rootProvider)
+		b.xdsHI.SetIdentityCertProvider(identityProvider)
+		b.xdsHI.SetAcceptedSANs(config.AcceptedSANs)
+	}
+	b.ccw.setHandshakeInfo(b.xdsHI)
+	return nil
 }
 
 // handleWatchUpdate handles a watch update from the xDS Client. Good updates
@@ -232,7 +320,7 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 	// policy may try to create a new subConn inline. Processing the security
 	// configuration here and setting up the handshakeInfo will make sure that
 	// such attempts are handled properly.
-	if err := b.ccw.handleSecurityConfig(update.cds.SecurityCfg); err != nil {
+	if err := b.handleSecurityConfig(update.cds.SecurityCfg); err != nil {
 		// If the security config is invalid, for example, if the provider
 		// instance is not found in the bootstrap config, we need to put the
 		// channel in transient failure.
@@ -423,16 +511,9 @@ func (b *cdsBalancer) Close() {
 // and hence get the original implementation.
 type ccWrapper struct {
 	balancer.ClientConn
-	xdsCredsInUse bool
 
-	// This mutex protects all fields below.
-	mu        sync.Mutex
-	xdsHI     *xds.HandshakeInfo
-	xdsClient xdsClientInterface
-	// The certificate providers are cached here to that they can be closed when
-	// a new provider is to be created.
-	cachedRoot     certprovider.Provider
-	cachedIdentity certprovider.Provider
+	mu    sync.Mutex
+	xdsHI *xds.HandshakeInfo
 }
 
 // NewSubConn intercepts NewSubConn() calls from the child policy and adds an
@@ -442,7 +523,7 @@ func (ccw *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubC
 	ccw.mu.Lock()
 	defer ccw.mu.Unlock()
 
-	if !ccw.xdsCredsInUse || ccw.xdsHI == nil {
+	if ccw.xdsHI == nil {
 		return ccw.ClientConn.NewSubConn(addrs, opts)
 	}
 
@@ -453,95 +534,9 @@ func (ccw *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubC
 	return ccw.ClientConn.NewSubConn(newAddrs, opts)
 }
 
-// setClient updates the xdsClient within the wrapper.
-func (ccw *ccWrapper) setClient(c xdsClientInterface) {
+// setHandshakeInfo updates the handshakeInfo within the wrapper.
+func (ccw *ccWrapper) setHandshakeInfo(hi *xds.HandshakeInfo) {
 	ccw.mu.Lock()
-	ccw.xdsClient = c
+	ccw.xdsHI = hi
 	ccw.mu.Unlock()
-}
-
-// handleSecurityConfig processes the security configuration received from the
-// management server, creates appropriate certificate provider plugins, and
-// updates the HandhakeInfo which is added as an address attribute in
-// NewSubConn() calls.
-func (ccw *ccWrapper) handleSecurityConfig(config *xdsclient.SecurityConfig) error {
-	ccw.mu.Lock()
-	defer ccw.mu.Unlock()
-
-	// If xdsCredentials are not in use, i.e, the user did not want to get
-	// security configuration from an xDS server, we should not be acting on the
-	// received security config here. Doing so poses a security threat.
-	if !ccw.xdsCredsInUse {
-		return nil
-	}
-	// Security config being nil is a valid case where the management server has
-	// not sent any security configuration. The xdsCredentials implementation
-	// handles this by delegating to its fallback credentials.
-	if config == nil {
-		return nil
-	}
-
-	cpc := ccw.xdsClient.CertProviderConfigs()
-	if cpc == nil {
-		// Bootstrap did not find any certificate provider configs, but the user
-		// has specified xdsCredentials and the management server has sent down
-		// security configuration.
-		return errors.New("xds: certificate_providers config missing in bootstrap file")
-	}
-
-	// A root provider is always present, whether we are using TLS or mTLS.
-	rootCfg, ok := cpc[config.RootInstanceName]
-	if !ok {
-		return fmt.Errorf("certificate provider instance %q not found in bootstrap file", config.RootInstanceName)
-	}
-	rootProvider, err := getProviderFunc(rootCfg.Name, rootCfg.Config, certprovider.Options{
-		CertName: config.RootCertName,
-		WantRoot: true,
-	})
-	if err != nil {
-		// This error is not expected since the bootstrap process parses the
-		// config and makes sure that it is acceptable to the plugin. Still, it
-		// is possible that the plugin parses the config successfully, but its
-		// Build() method errors out.
-		return fmt.Errorf("xds: failed to get plugin instance (%+v): %v", rootCfg, err)
-	}
-	if ccw.cachedRoot != nil {
-		ccw.cachedRoot.Close()
-	}
-	ccw.cachedRoot = rootProvider
-
-	// The identity provider is only present when using mTLS.
-	var identityProvider certprovider.Provider
-	if name := config.IdentityInstanceName; name != "" {
-		identityCfg := cpc[name]
-		if !ok {
-			return fmt.Errorf("certificate provider instance %q not found in bootstrap file", config.IdentityInstanceName)
-		}
-		identityProvider, err = getProviderFunc(identityCfg.Name, identityCfg.Config, certprovider.Options{
-			CertName:     config.IdentityCertName,
-			WantIdentity: true,
-		})
-		if err != nil {
-			// This error is not expected since the bootstrap process parses the
-			// config and makes sure that it is acceptable to the plugin. Still,
-			// it is possible that the plugin parses the config successfully,
-			// but its Build() method errors out.
-			return fmt.Errorf("xds: failed to get plugin instance (%+v): %v", identityCfg, err)
-		}
-	}
-	if ccw.cachedIdentity != nil {
-		ccw.cachedIdentity.Close()
-	}
-	ccw.cachedIdentity = identityProvider
-
-	if ccw.xdsHI == nil {
-		ccw.xdsHI = xds.NewHandshakeInfo(rootProvider, identityProvider, config.AcceptedSANs...)
-	} else {
-		// We set all fields here, even if some of them are nil, since they
-		// could have been non-nil earlier.
-		ccw.xdsHI.SetRootCertProvider(rootProvider)
-		ccw.xdsHI.SetIdentityCertProvider(identityProvider)
-		ccw.xdsHI.SetAcceptedSANs(config.AcceptedSANs)
-	}
-	return nil
 }
