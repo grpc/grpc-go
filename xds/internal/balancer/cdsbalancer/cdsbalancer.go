@@ -178,7 +178,7 @@ type cdsBalancer struct {
 	ccw            *ccWrapper
 	bOpts          balancer.BuildOptions
 	updateCh       *buffer.Unbounded
-	client         xdsClientInterface
+	xdsClient      xdsClientInterface
 	cancelWatch    func()
 	edsLB          balancer.Balancer
 	clusterToWatch string
@@ -204,7 +204,7 @@ func (b *cdsBalancer) run() {
 				if err := update.err; err != nil {
 					b.handleErrorFromUpdate(err, true)
 				}
-				if b.client == update.client && b.clusterToWatch == update.clusterName {
+				if b.xdsClient == update.client && b.clusterToWatch == update.clusterName {
 					break
 				}
 				if update.client != nil {
@@ -212,18 +212,18 @@ func (b *cdsBalancer) run() {
 					// don't have to bother about closing the old client here, but
 					// we still need to cancel the watch on the old client.
 					b.cancelWatch()
-					b.client = update.client
+					b.xdsClient = update.client
 				}
 				if update.clusterName != "" {
-					cancelWatch := b.client.WatchCluster(update.clusterName, b.handleClusterUpdate)
-					b.logger.Infof("Watch started on resource name %v with xds-client %p", update.clusterName, b.client)
+					cancelWatch := b.xdsClient.WatchCluster(update.clusterName, b.handleClusterUpdate)
+					b.logger.Infof("Watch started on resource name %v with xds-client %p", update.clusterName, b.xdsClient)
 					b.cancelWatch = func() {
 						cancelWatch()
-						b.logger.Infof("Watch cancelled on resource name %v with xds-client %p", update.clusterName, b.client)
+						b.logger.Infof("Watch cancelled on resource name %v with xds-client %p", update.clusterName, b.xdsClient)
 					}
 					b.clusterToWatch = update.clusterName
 				}
-				b.ccw.setClient(b.client)
+				b.ccw.setClient(b.xdsClient)
 
 			// SubConn updates are passthrough and are simply handed over to the
 			// underlying edsBalancer.
@@ -238,12 +238,12 @@ func (b *cdsBalancer) run() {
 			// underlying edsBalancer.
 			case *watchUpdate:
 				if err := update.err; err != nil {
-					b.logger.Warningf("Watch error from xds-client %p: %v", b.client, err)
+					b.logger.Warningf("Watch error from xds-client %p: %v", b.xdsClient, err)
 					b.handleErrorFromUpdate(err, false)
 					break
 				}
 
-				b.logger.Infof("Watch update from xds-client %p, content: %+v", b.client, update.cds)
+				b.logger.Infof("Watch update from xds-client %p, content: %+v", b.xdsClient, update.cds)
 
 				// We process the security config from the received update
 				// before building the child policy or forwarding the update to
@@ -257,7 +257,7 @@ func (b *cdsBalancer) run() {
 					// provider instance is not found in the bootstrap config,
 					// we need to put the channel in transient failure. Calling
 					// handleErrorFromUpdate() takes care of that.
-					b.logger.Warningf("Invalid security config update from xds-client %p: %v", b.client, err)
+					b.logger.Warningf("Invalid security config update from xds-client %p: %v", b.xdsClient, err)
 					b.handleErrorFromUpdate(err, false)
 					break
 				}
@@ -283,7 +283,7 @@ func (b *cdsBalancer) run() {
 
 				}
 				ccState := balancer.ClientConnState{
-					ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, b.client)},
+					ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, b.xdsClient)},
 					BalancerConfig: lbCfg,
 				}
 				if err := b.edsLB.UpdateClientConnState(ccState); err != nil {
