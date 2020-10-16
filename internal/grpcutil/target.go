@@ -37,15 +37,17 @@ func split2(s, sep string) (string, string, bool) {
 }
 
 // ParseTarget splits target into a resolver.Target struct containing scheme,
-// authority and endpoint.
+// authority and endpoint. skipUnixColonParsing indicates that the parse should
+// not parse "unix:[path]" cases. This should be true in cases where a custom
+// dialer is present, to prevent a behavior change.
 //
 // If target is not a valid scheme://authority/endpoint, it returns {Endpoint:
 // target}.
-func ParseTarget(target string, hasDialer bool) (ret resolver.Target) {
+func ParseTarget(target string, skipUnixColonParsing bool) (ret resolver.Target) {
 	var ok bool
 	ret.Scheme, ret.Endpoint, ok = split2(target, "://")
 	if !ok {
-		if strings.HasPrefix(target, "unix:") && !hasDialer {
+		if strings.HasPrefix(target, "unix:") && !skipUnixColonParsing {
 			// Handle the "unix:[path]" case, because splitting on :// only
 			// handles the "unix://[/absolute/path]" case. Only handle if the
 			// dialer is nil, to avoid a behavior change with custom dialers.

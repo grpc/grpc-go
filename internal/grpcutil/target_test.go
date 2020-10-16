@@ -86,12 +86,13 @@ func TestParseTargetString(t *testing.T) {
 		if got != test.want {
 			t.Errorf("ParseTarget(%q, false) = %+v, want %+v", test.targetStr, got, test.want)
 		}
-		if test.wantWithDialer == (resolver.Target{}) {
-			test.wantWithDialer = test.want
+		wantWithDialer := test.wantWithDialer
+		if wantWithDialer == (resolver.Target{}) {
+			wantWithDialer = test.want
 		}
 		got = ParseTarget(test.targetStr, true)
-		if got != test.wantWithDialer {
-			t.Errorf("ParseTarget(%q, true) = %+v, want %+v", test.targetStr, got, test.wantWithDialer)
+		if got != wantWithDialer {
+			t.Errorf("ParseTarget(%q, true) = %+v, want %+v", test.targetStr, got, wantWithDialer)
 		}
 	}
 }

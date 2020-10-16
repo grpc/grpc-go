@@ -110,8 +110,8 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr stri
 }
 
 // proxyDial dials, connecting to a proxy first if necessary. Checks if a proxy
-// is necessary, dial to the proxy with using proxyDialer, does HTTP CONNECT
-// handshake, and returns the connection.
+// is necessary, dials, does the HTTP CONNECT handshake, and returns the
+// connection.
 func proxyDial(ctx context.Context, addr string, grpcUA string) (conn net.Conn, err error) {
 	newAddr := addr
 	proxyURL, err := mapAddress(ctx, addr)
