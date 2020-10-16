@@ -361,12 +361,8 @@ func (c *credsImpl) OverrideServerName(_ string) error {
 	return errors.New("serverName for peer validation must be configured as a list of acceptable SANs")
 }
 
-// CredentialsUsesXDS returns true if c uses xDS to fetch security configuration
+// UsesXDS returns true if c uses xDS to fetch security configuration
 // used at handshake time, and false otherwise.
-func CredentialsUsesXDS(c credentials.TransportCredentials) bool {
-	if c == nil {
-		return false
-	}
-	_, ok := c.(*credsImpl)
-	return ok
+func (c *credsImpl) UsesXDS() bool {
+	return true
 }

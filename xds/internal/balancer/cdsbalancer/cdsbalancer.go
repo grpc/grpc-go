@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/buffer"
@@ -89,17 +90,18 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 	b.logger = prefixLogger((b))
 	b.logger.Infof("Created")
 
-	xdsCredsInUse := false
+	var creds credentials.TransportCredentials
 	switch {
 	case opts.DialCreds != nil:
-		if xds.CredentialsUsesXDS(opts.DialCreds) {
-			xdsCredsInUse = true
-		}
+		creds = opts.DialCreds
 	case opts.CredsBundle != nil:
-		if xds.CredentialsUsesXDS(opts.CredsBundle.TransportCredentials()) {
-			xdsCredsInUse = true
-		}
+		creds = opts.CredsBundle.TransportCredentials()
 	}
+	xdsCredsInUse := false
+	if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
+		xdsCredsInUse = true
+	}
+
 	b.logger.Infof("xDS credentials in use: %v", xdsCredsInUse)
 	b.ccw = &ccWrapper{
 		ClientConn:    cc,
