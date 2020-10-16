@@ -196,36 +196,6 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		wantError  bool
 	}{
 		{
-			name:      "no-virtual-hosts-in-rc",
-			rc:        &v3routepb.RouteConfiguration{},
-			wantError: true,
-		},
-		{
-			name: "no-domains-in-rc",
-			rc: &v3routepb.RouteConfiguration{
-				VirtualHosts: []*v3routepb.VirtualHost{{}},
-			},
-			wantError: true,
-		},
-		{
-			name: "non-matching-domain-in-rc",
-			rc: &v3routepb.RouteConfiguration{
-				VirtualHosts: []*v3routepb.VirtualHost{
-					{Domains: []string{uninterestingDomain}},
-				},
-			},
-			wantError: true,
-		},
-		{
-			name: "no-routes-in-rc",
-			rc: &v3routepb.RouteConfiguration{
-				VirtualHosts: []*v3routepb.VirtualHost{
-					{Domains: []string{ldsTarget}},
-				},
-			},
-			wantError: true,
-		},
-		{
 			name: "default-route-match-field-is-nil",
 			rc: &v3routepb.RouteConfiguration{
 				VirtualHosts: []*v3routepb.VirtualHost{
@@ -345,7 +315,18 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{clusterName: 1}}}},
+			wantUpdate: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{uninterestingDomain},
+						Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{uninterestingClusterName: 1}}},
+					},
+					{
+						Domains: []string{ldsTarget},
+						Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{clusterName: 1}}},
+					},
+				},
+			},
 		},
 		{
 			// default route's match is not empty string, but "/".
@@ -368,7 +349,14 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{clusterName: 1}}}},
+			wantUpdate: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{ldsTarget},
+						Routes:  []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{clusterName: 1}}},
+					},
+				},
+			},
 		},
 		{
 			// weights not add up to total-weight.
@@ -431,13 +419,20 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: RouteConfigUpdate{Routes: []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{"a": 2, "b": 3, "c": 5}}}},
+			wantUpdate: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{ldsTarget},
+						Routes:  []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{"a": 2, "b": 3, "c": 5}}},
+					},
+				},
+			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, ldsTarget, nil)
+			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil)
 			if (gotError != nil) != test.wantError || !cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty()) {
 				t.Errorf("generateRDSUpdateFromRouteConfiguration(%+v, %v) = %v, want %v", test.rc, ldsTarget, gotUpdate, test.wantUpdate)
 			}
@@ -559,52 +554,78 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "bad routeConfig resource",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3RouteConfigURL,
-					Value: func() []byte {
-						rc := &v3routepb.RouteConfiguration{
-							VirtualHosts: []*v3routepb.VirtualHost{
-								{Domains: []string{uninterestingDomain}},
-							},
-						}
-						m, _ := proto.Marshal(rc)
-						return m
-					}(),
-				},
-			},
-			wantErr: true,
-		},
-		{
 			name: "empty resource list",
 		},
 		{
 			name:      "v2 routeConfig resource",
 			resources: []*anypb.Any{v2RouteConfig},
 			wantUpdate: map[string]RouteConfigUpdate{
-				v2RouteConfigName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}}},
+				v2RouteConfigName: {
+					VirtualHosts: []*VirtualHost{
+						{
+							Domains: []string{uninterestingDomain},
+							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{uninterestingClusterName: 1}}},
+						},
+						{
+							Domains: []string{ldsTarget},
+							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}},
+						},
+					},
+				},
 			},
 		},
 		{
 			name:      "v3 routeConfig resource",
 			resources: []*anypb.Any{v3RouteConfig},
 			wantUpdate: map[string]RouteConfigUpdate{
-				v3RouteConfigName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}}},
+				v3RouteConfigName: {
+					VirtualHosts: []*VirtualHost{
+						{
+							Domains: []string{uninterestingDomain},
+							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{uninterestingClusterName: 1}}},
+						},
+						{
+							Domains: []string{ldsTarget},
+							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}},
+						},
+					},
+				},
 			},
 		},
 		{
 			name:      "multiple routeConfig resources",
 			resources: []*anypb.Any{v2RouteConfig, v3RouteConfig},
 			wantUpdate: map[string]RouteConfigUpdate{
-				v3RouteConfigName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}}},
-				v2RouteConfigName: {Routes: []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}}},
+				v3RouteConfigName: {
+					VirtualHosts: []*VirtualHost{
+						{
+							Domains: []string{uninterestingDomain},
+							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{uninterestingClusterName: 1}}},
+						},
+						{
+							Domains: []string{ldsTarget},
+							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}},
+						},
+					},
+				},
+				v2RouteConfigName: {
+					VirtualHosts: []*VirtualHost{
+						{
+							Domains: []string{uninterestingDomain},
+							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{uninterestingClusterName: 1}}},
+						},
+						{
+							Domains: []string{ldsTarget},
+							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}},
+						},
+					},
+				},
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, err := UnmarshalRouteConfig(test.resources, ldsTarget, nil)
+			update, err := UnmarshalRouteConfig(test.resources, nil)
 			if ((err != nil) != test.wantErr) || !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
 				t.Errorf("UnmarshalRouteConfig(%v, %v) = (%v, %v) want (%v, %v)", test.resources, ldsTarget, update, err, test.wantUpdate, test.wantErr)
 			}
@@ -660,38 +681,32 @@ func (s) TestMatch(t *testing.T) {
 
 func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
 	var (
-		oneExactMatch = &v3routepb.VirtualHost{
-			Name:    "one-exact-match",
+		oneExactMatch = &VirtualHost{
 			Domains: []string{"foo.bar.com"},
 		}
-		oneSuffixMatch = &v3routepb.VirtualHost{
-			Name:    "one-suffix-match",
+		oneSuffixMatch = &VirtualHost{
 			Domains: []string{"*.bar.com"},
 		}
-		onePrefixMatch = &v3routepb.VirtualHost{
-			Name:    "one-prefix-match",
+		onePrefixMatch = &VirtualHost{
 			Domains: []string{"foo.bar.*"},
 		}
-		oneUniversalMatch = &v3routepb.VirtualHost{
-			Name:    "one-universal-match",
+		oneUniversalMatch = &VirtualHost{
 			Domains: []string{"*"},
 		}
-		longExactMatch = &v3routepb.VirtualHost{
-			Name:    "one-exact-match",
+		longExactMatch = &VirtualHost{
 			Domains: []string{"v2.foo.bar.com"},
 		}
-		multipleMatch = &v3routepb.VirtualHost{
-			Name:    "multiple-match",
+		multipleMatch = &VirtualHost{
 			Domains: []string{"pi.foo.bar.com", "314.*", "*.159"},
 		}
-		vhs = []*v3routepb.VirtualHost{oneExactMatch, oneSuffixMatch, onePrefixMatch, oneUniversalMatch, longExactMatch, multipleMatch}
+		vhs = []*VirtualHost{oneExactMatch, oneSuffixMatch, onePrefixMatch, oneUniversalMatch, longExactMatch, multipleMatch}
 	)
 
 	tests := []struct {
 		name   string
 		host   string
-		vHosts []*v3routepb.VirtualHost
-		want   *v3routepb.VirtualHost
+		vHosts []*VirtualHost
+		want   *VirtualHost
 	}{
 		{name: "exact-match", host: "foo.bar.com", vHosts: vhs, want: oneExactMatch},
 		{name: "suffix-match", host: "123.bar.com", vHosts: vhs, want: oneSuffixMatch},

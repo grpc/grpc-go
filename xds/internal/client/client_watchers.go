@@ -272,7 +272,7 @@ func (c *Client) WatchService(serviceName string, cb func(ServiceUpdate, error))
 	}
 	c.mu.Unlock()
 
-	w := &serviceUpdateWatcher{c: c, serviceCb: cb}
+	w := &serviceUpdateWatcher{c: c, serviceName: serviceName, serviceCb: cb}
 	w.ldsCancel = c.watchLDS(serviceName, w.handleLDSResp)
 
 	return w.close
@@ -280,10 +280,15 @@ func (c *Client) WatchService(serviceName string, cb func(ServiceUpdate, error))
 
 // serviceUpdateWatcher handles LDS and RDS response, and calls the service
 // callback at the right time.
+//
+// TODO: move serviceUpdateWatcher and all its functions into xds resolver. The
+// resolver should be responsible for making WatchListener() and WatchRoute()
+// calls, and finding the best matching virtual host.
 type serviceUpdateWatcher struct {
-	c         *Client
-	ldsCancel func()
-	serviceCb func(ServiceUpdate, error)
+	c           *Client
+	serviceName string
+	ldsCancel   func()
+	serviceCb   func(ServiceUpdate, error)
 
 	mu        sync.Mutex
 	closed    bool
@@ -342,7 +347,15 @@ func (w *serviceUpdateWatcher) handleRDSResp(update RouteConfigUpdate, err error
 		w.serviceCb(ServiceUpdate{}, err)
 		return
 	}
-	w.serviceCb(ServiceUpdate(update), nil)
+
+	matchVh := findBestMatchingVirtualHost(w.serviceName, update.VirtualHosts)
+	if matchVh == nil {
+		// No matching virtual host found.
+		w.serviceCb(ServiceUpdate{}, fmt.Errorf("no matching virtual host found for %q", w.serviceName))
+		return
+	}
+
+	w.serviceCb(ServiceUpdate{Routes: matchVh.Routes}, nil)
 }
 
 func (w *serviceUpdateWatcher) close() {
