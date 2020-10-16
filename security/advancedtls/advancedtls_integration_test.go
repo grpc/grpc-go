@@ -42,6 +42,17 @@ var (
 	port    = ":50051"
 )
 
+const (
+	// Default timeout for normal connections.
+	defaultTestTimeout = 5 * time.Second
+	// Default timeout for failed connections.
+	defaultTestShortTimeout = 10 * time.Millisecond
+	// Intervals that set to monitor the credential updates.
+	credRefreshingInterval = 200 * time.Millisecond
+	// Time we wait for the credential updates to be picked up.
+	sleepInterval = 400 * time.Millisecond
+)
+
 // stageInfo contains a stage number indicating the current phase of each
 // integration test, and a mutex.
 // Based on the stage number of current test, we will use different
@@ -79,6 +90,8 @@ func (greeterServer) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.Hel
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
+// TODO(ZhenLian): remove shouldFail to the function signature to provider
+// tests.
 func callAndVerify(msg string, client pb.GreeterClient, shouldFail bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -89,6 +102,8 @@ func callAndVerify(msg string, client pb.GreeterClient, shouldFail bool) error {
 	return nil
 }
 
+// TODO(ZhenLian): remove shouldFail and add ...DialOption to the function
+// signature to provider cleaner tests.
 func callAndVerifyWithClientConn(connCtx context.Context, msg string, creds credentials.TransportCredentials, shouldFail bool) (*grpc.ClientConn, pb.GreeterClient, error) {
 	var conn *grpc.ClientConn
 	var err error
@@ -156,7 +171,7 @@ func (s) TestEnd2End(t *testing.T) {
 		// should see it again accepts the connection, since ClientCert2 is trusted
 		// by ServerTrust2.
 		{
-			desc: "TestClientPeerCertReloadServerTrustCertReload",
+			desc: "test the reloading feature for client identity callback and server trust callback",
 			clientGetCert: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
@@ -197,7 +212,7 @@ func (s) TestEnd2End(t *testing.T) {
 		// should see it again accepts the connection, since ServerCert2 is trusted
 		// by ClientTrust2.
 		{
-			desc:       "TestServerPeerCertReloadClientTrustCertReload",
+			desc:       "test the reloading feature for server identity callback and client trust callback",
 			clientCert: []tls.Certificate{cs.ClientCert1},
 			clientGetRoot: func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 				switch stage.read() {
@@ -239,7 +254,7 @@ func (s) TestEnd2End(t *testing.T) {
 		// At stage 2, the client changes authorization check to only accept
 		// ServerCert2. Now we should see the connection becomes normal again.
 		{
-			desc:       "TestClientCustomVerification",
+			desc:       "test client custom verification",
 			clientCert: []tls.Certificate{cs.ClientCert1},
 			clientGetRoot: func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 				switch stage.read() {
@@ -371,9 +386,9 @@ func (s) TestEnd2End(t *testing.T) {
 			}
 			// ------------------------Scenario 1------------------------------------
 			// stage = 0, initial connection should succeed
-			ctx1, cancel1 := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel1()
-			conn, greetClient, err := callAndVerifyWithClientConn(ctx1, "rpc call 1", clientTLSCreds, false)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			conn, greetClient, err := callAndVerifyWithClientConn(ctx, "rpc call 1", clientTLSCreds, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -388,9 +403,9 @@ func (s) TestEnd2End(t *testing.T) {
 			}
 			// ------------------------Scenario 3------------------------------------
 			// stage = 1, new connection should fail
-			ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel2()
-			conn2, greetClient, err := callAndVerifyWithClientConn(ctx2, "rpc call 3", clientTLSCreds, true)
+			shortCtx, shortCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+			defer shortCancel()
+			conn2, greetClient, err := callAndVerifyWithClientConn(shortCtx, "rpc call 3", clientTLSCreds, true)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -399,9 +414,7 @@ func (s) TestEnd2End(t *testing.T) {
 			stage.increase()
 			// ------------------------Scenario 4------------------------------------
 			// stage = 2,  new connection should succeed
-			ctx3, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel3()
-			conn3, greetClient, err := callAndVerifyWithClientConn(ctx3, "rpc call 4", clientTLSCreds, false)
+			conn3, greetClient, err := callAndVerifyWithClientConn(ctx, "rpc call 4", clientTLSCreds, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -413,11 +426,11 @@ func (s) TestEnd2End(t *testing.T) {
 }
 
 type tmpCredsFiles struct {
-	clientCertTmp *os.File
-	clientKeyTmp  *os.File
+	clientCertTmp  *os.File
+	clientKeyTmp   *os.File
 	clientTrustTmp *os.File
-	serverCertTmp *os.File
-	serverKeyTmp *os.File
+	serverCertTmp  *os.File
+	serverKeyTmp   *os.File
 	serverTrustTmp *os.File
 }
 
@@ -484,7 +497,6 @@ func (tmpFiles *tmpCredsFiles) removeFiles() {
 	os.Remove(tmpFiles.serverTrustTmp.Name())
 }
 
-
 func copyFileContents(sourceFile, destinationFile string) error {
 	input, err := ioutil.ReadFile(sourceFile)
 	if err != nil {
@@ -503,36 +515,36 @@ func createProviders(tmpFiles *tmpCredsFiles) (*PEMFileProvider, *PEMFileProvide
 	clientIdentityOptions := PEMFileProviderOptions{
 		CertFile:         tmpFiles.clientCertTmp.Name(),
 		KeyFile:          tmpFiles.clientKeyTmp.Name(),
-		IdentityInterval: 200 * time.Millisecond,
+		IdentityInterval: credRefreshingInterval,
 	}
 	clientIdentityProvider, err := NewPEMFileProvider(clientIdentityOptions)
 	if err != nil {
-		return nil, nil, nil,nil, err
+		return nil, nil, nil, nil, err
 	}
 	clientRootOptions := PEMFileProviderOptions{
 		TrustFile:    tmpFiles.clientTrustTmp.Name(),
-		RootInterval: 200 * time.Millisecond,
+		RootInterval: credRefreshingInterval,
 	}
 	clientRootProvider, err := NewPEMFileProvider(clientRootOptions)
 	if err != nil {
-		return nil, nil, nil,nil, err
+		return nil, nil, nil, nil, err
 	}
 	serverIdentityOptions := PEMFileProviderOptions{
 		CertFile:         tmpFiles.serverCertTmp.Name(),
 		KeyFile:          tmpFiles.serverKeyTmp.Name(),
-		IdentityInterval: 200 * time.Millisecond,
+		IdentityInterval: credRefreshingInterval,
 	}
 	serverIdentityProvider, err := NewPEMFileProvider(serverIdentityOptions)
 	if err != nil {
-		return nil, nil, nil,nil, err
+		return nil, nil, nil, nil, err
 	}
 	serverRootOptions := PEMFileProviderOptions{
 		TrustFile:    tmpFiles.serverTrustTmp.Name(),
-		RootInterval: 200 * time.Millisecond,
+		RootInterval: credRefreshingInterval,
 	}
 	serverRootProvider, err := NewPEMFileProvider(serverRootOptions)
 	if err != nil {
-		return nil, nil, nil,nil, err
+		return nil, nil, nil, nil, err
 	}
 	return clientIdentityProvider, clientRootProvider, serverIdentityProvider, serverRootProvider, nil
 }
@@ -563,7 +575,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 		trustCertUpdateFunc func()
 	}{
 		{
-			desc: "TestClientPeerCertProviderServerTrustCertProvider",
+			desc: "test the reloading feature for clientIdentityProvider and serverTrustProvider",
 			certUpdateFunc: func() {
 				err = copyFileContents(testdata.Path("client_cert_2.pem"), tmpFiles.clientCertTmp.Name())
 				if err != nil {
@@ -584,7 +596,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			},
 		},
 		{
-			desc: "TestServerPeerCertProviderClientTrustCertProvider",
+			desc: "test the reloading feature for serverIdentityProvider and clientTrustProvider",
 			certUpdateFunc: func() {
 				err = copyFileContents(testdata.Path("server_cert_2.pem"), tmpFiles.serverCertTmp.Name())
 				if err != nil {
@@ -663,9 +675,9 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			}
 
 			// At initialization, the connection should be good.
-			ctx1, cancel1 := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel1()
-			conn, greetClient, err := callAndVerifyWithClientConn(ctx1, "rpc call 1", clientTLSCreds, false)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			conn, greetClient, err := callAndVerifyWithClientConn(ctx, "rpc call 1", clientTLSCreds, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -673,7 +685,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			// Make the identity cert change, and wait 1 second for the provider to
 			// pick up the change.
 			test.certUpdateFunc()
-			time.Sleep(1 * time.Second)
+			time.Sleep(sleepInterval)
 			// The already-established connection should not be affected.
 			err = callAndVerify("rpc call 2", greetClient, false)
 			if err != nil {
@@ -681,9 +693,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			}
 			// New connections should still be good, because the Provider didn't pick
 			// up the changes due to key-cert mismatch.
-			ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel2()
-			conn2, greetClient, err := callAndVerifyWithClientConn(ctx2, "rpc call 3", clientTLSCreds, false)
+			conn2, greetClient, err := callAndVerifyWithClientConn(ctx, "rpc call 3", clientTLSCreds, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -691,13 +701,13 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			// Make the identity key change, and wait 1 second for the provider to
 			// pick up the change.
 			test.keyUpdateFunc()
-			time.Sleep(1 * time.Second)
+			time.Sleep(sleepInterval)
 			// New connections should fail now, because the Provider picked the
 			// change, and *_cert_2.pem is not trusted by *_trust_cert_1.pem on the
 			// other side.
-			ctx3, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel3()
-			conn3, greetClient, err := callAndVerifyWithClientConn(ctx3, "rpc call 4", clientTLSCreds, true)
+			shortCtx, shortCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+			defer shortCancel()
+			conn3, greetClient, err := callAndVerifyWithClientConn(shortCtx, "rpc call 4", clientTLSCreds, true)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -705,12 +715,10 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			// Make the trust cert change on the other side, and wait 1 second for
 			// the provider to pick up the change.
 			test.trustCertUpdateFunc()
-			time.Sleep(1 * time.Second)
+			time.Sleep(sleepInterval)
 			// New connections should be good, because the other side is using
 			// *_trust_cert_2.pem now.
-			ctx4, cancel4 := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel4()
-			conn4, greetClient, err := callAndVerifyWithClientConn(ctx4, "rpc call 5", clientTLSCreds, false)
+			conn4, greetClient, err := callAndVerifyWithClientConn(ctx, "rpc call 5", clientTLSCreds, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -718,4 +726,3 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 		})
 	}
 }
-
