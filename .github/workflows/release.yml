@@ -56,7 +56,7 @@ jobs:
           cp README.md build/
           cp LICENSE build/
 
-      - name: Build protoc-gen-go-grpc
+      - name: Build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
