@@ -174,6 +174,11 @@ func (hi *HandshakeInfo) makeTLSConfig(ctx context.Context) (*tls.Config, error)
 }
 
 func (hi *HandshakeInfo) matchingSANExists(cert *x509.Certificate) bool {
+	if len(hi.acceptedSANs) == 0 {
+		// An empty list of acceptedSANs means "accept everything".
+		return true
+	}
+
 	var sans []string
 	// SANs can be specified in any of these four fields on the parsed cert.
 	sans = append(sans, cert.DNSNames...)
