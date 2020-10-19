@@ -171,7 +171,7 @@ type ClientOptions struct {
 	// check.
 	// If this is set, we will perform this customized check after doing the
 	// normal check(s) indicated by setting VType.
-	VerifyPeer CustomVerificationFunc
+	VerifyPeer func(tls.ConnectionState) error
 	// ServerNameOverride is for testing only. If set to a non-empty string,
 	// it will override the virtual host name of authority (e.g. :authority
 	// header field) in requests.
@@ -191,7 +191,7 @@ type ServerOptions struct {
 	// check.
 	// If this is set, we will perform this customized check after doing the
 	// normal check(s) indicated by setting VType.
-	VerifyPeer CustomVerificationFunc
+	VerifyPeer func(tls.ConnectionState) error
 	// RootOptions is OPTIONAL on server side. This field only needs to be set if
 	// mutual authentication is required(RequireClientCert is true).
 	RootOptions RootCertificateOptions
@@ -221,6 +221,7 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 		// We have to set InsecureSkipVerify to true to skip the default checks and
 		// use the verification function we built from buildVerifyFunc.
 		InsecureSkipVerify: true,
+		VerifyConnection:   o.VerifyPeer,
 	}
 	// Propagate root-certificate-related fields in tls.Config.
 	switch {
@@ -295,7 +296,8 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		clientAuth = tls.RequireAnyClientCert
 	}
 	config := &tls.Config{
-		ClientAuth: clientAuth,
+		ClientAuth:       clientAuth,
+		VerifyConnection: o.VerifyPeer,
 	}
 	// Propagate root-certificate-related fields in tls.Config.
 	switch {
@@ -357,7 +359,6 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 // using TLS.
 type advancedTLSCreds struct {
 	config     *tls.Config
-	verifyFunc CustomVerificationFunc
 	getRootCAs func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 	isClient   bool
 	vType      VerificationType
@@ -427,7 +428,6 @@ func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credenti
 func (c *advancedTLSCreds) Clone() credentials.TransportCredentials {
 	return &advancedTLSCreds{
 		config:     credinternal.CloneTLSConfig(c.config),
-		verifyFunc: c.verifyFunc,
 		getRootCAs: c.getRootCAs,
 		isClient:   c.isClient,
 	}
@@ -449,8 +449,6 @@ func buildVerifyFunc(c *advancedTLSCreds,
 	serverName string,
 	rawConn net.Conn) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-		chains := verifiedChains
-		var leafCert *x509.Certificate
 		if c.vType == CertAndHostVerification || c.vType == CertVerification {
 			// perform possible trust credential reloading and certificate check
 			rootCAs := c.config.RootCAs
@@ -495,21 +493,10 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				opts.DNSName = serverName
 			}
 			var err error
-			chains, err = certs[0].Verify(opts)
+			_, err = certs[0].Verify(opts)
 			if err != nil {
 				return err
 			}
-			leafCert = certs[0]
-		}
-		// Perform custom verification check if specified.
-		if c.verifyFunc != nil {
-			_, err := c.verifyFunc(&VerificationFuncParams{
-				ServerName:     serverName,
-				RawCerts:       rawCerts,
-				VerifiedChains: chains,
-				Leaf:           leafCert,
-			})
-			return err
 		}
 		return nil
 	}
@@ -526,7 +513,6 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 		config:     conf,
 		isClient:   true,
 		getRootCAs: o.RootOptions.GetRootCertificates,
-		verifyFunc: o.VerifyPeer,
 		vType:      o.VType,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
@@ -544,7 +530,6 @@ func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) 
 		config:     conf,
 		isClient:   false,
 		getRootCAs: o.RootOptions.GetRootCertificates,
-		verifyFunc: o.VerifyPeer,
 		vType:      o.VType,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
