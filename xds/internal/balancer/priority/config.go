@@ -46,13 +46,13 @@ func parseConfig(c json.RawMessage) (*lbConfig, error) {
 	prioritiesSet := make(map[string]bool)
 	for _, name := range cfg.Priorities {
 		if _, ok := cfg.Children[name]; !ok {
-			return nil, fmt.Errorf("child name %v is not found in children %+v", name, cfg.Children)
+			return nil, fmt.Errorf("LB policy name %q found in Priorities field (%v) is not found in Children field (%+v)", name, cfg.Priorities, cfg.Children)
 		}
 		prioritiesSet[name] = true
 	}
 	for name := range cfg.Children {
 		if _, ok := prioritiesSet[name]; !ok {
-			return nil, fmt.Errorf("child with name %v is not used in priorities %+v", name, cfg.Children)
+			return nil, fmt.Errorf("LB policy name %q found in Children field (%v) is not found in Priorities field (%+v)", name, cfg.Children, cfg.Priorities)
 		}
 	}
 	return &cfg, nil
