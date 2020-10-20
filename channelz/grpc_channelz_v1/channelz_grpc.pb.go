@@ -159,7 +159,7 @@ type UnsafeChannelzServer interface {
 	mustEmbedUnimplementedChannelzServer()
 }
 
-func RegisterChannelzServer(s *grpc.Server, srv ChannelzServer) {
+func RegisterChannelzServer(s grpc.ServiceRegistrar, srv ChannelzServer) {
 	s.RegisterService(&_Channelz_serviceDesc, srv)
 }
 

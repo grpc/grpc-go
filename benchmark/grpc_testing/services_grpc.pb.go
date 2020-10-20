@@ -145,7 +145,7 @@ type UnsafeBenchmarkServiceServer interface {
 	mustEmbedUnimplementedBenchmarkServiceServer()
 }
 
-func RegisterBenchmarkServiceServer(s *grpc.Server, srv BenchmarkServiceServer) {
+func RegisterBenchmarkServiceServer(s grpc.ServiceRegistrar, srv BenchmarkServiceServer) {
 	s.RegisterService(&_BenchmarkService_serviceDesc, srv)
 }
 
@@ -407,7 +407,7 @@ type UnsafeWorkerServiceServer interface {
 	mustEmbedUnimplementedWorkerServiceServer()
 }
 
-func RegisterWorkerServiceServer(s *grpc.Server, srv WorkerServiceServer) {
+func RegisterWorkerServiceServer(s grpc.ServiceRegistrar, srv WorkerServiceServer) {
 	s.RegisterService(&_WorkerService_serviceDesc, srv)
 }
 

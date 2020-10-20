@@ -63,7 +63,7 @@ type UnsafeRouteLookupServiceServer interface {
 	mustEmbedUnimplementedRouteLookupServiceServer()
 }
 
-func RegisterRouteLookupServiceServer(s *grpc.Server, srv RouteLookupServiceServer) {
+func RegisterRouteLookupServiceServer(s grpc.ServiceRegistrar, srv RouteLookupServiceServer) {
 	s.RegisterService(&_RouteLookupService_serviceDesc, srv)
 }
 

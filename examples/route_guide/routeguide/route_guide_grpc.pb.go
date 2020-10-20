@@ -213,7 +213,7 @@ type UnsafeRouteGuideServer interface {
 	mustEmbedUnimplementedRouteGuideServer()
 }
 
-func RegisterRouteGuideServer(s *grpc.Server, srv RouteGuideServer) {
+func RegisterRouteGuideServer(s grpc.ServiceRegistrar, srv RouteGuideServer) {
 	s.RegisterService(&_RouteGuide_serviceDesc, srv)
 }
 

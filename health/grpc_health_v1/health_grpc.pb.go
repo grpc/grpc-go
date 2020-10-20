@@ -130,7 +130,7 @@ type UnsafeHealthServer interface {
 	mustEmbedUnimplementedHealthServer()
 }
 
-func RegisterHealthServer(s *grpc.Server, srv HealthServer) {
+func RegisterHealthServer(s grpc.ServiceRegistrar, srv HealthServer) {
 	s.RegisterService(&_Health_serviceDesc, srv)
 }
 

@@ -95,7 +95,7 @@ type UnsafeHandshakerServiceServer interface {
 	mustEmbedUnimplementedHandshakerServiceServer()
 }
 
-func RegisterHandshakerServiceServer(s *grpc.Server, srv HandshakerServiceServer) {
+func RegisterHandshakerServiceServer(s grpc.ServiceRegistrar, srv HandshakerServiceServer) {
 	s.RegisterService(&_HandshakerService_serviceDesc, srv)
 }
 

@@ -97,7 +97,7 @@ type UnsafeSearchServiceServer interface {
 	mustEmbedUnimplementedSearchServiceServer()
 }
 
-func RegisterSearchServiceServer(s *grpc.Server, srv SearchServiceServer) {
+func RegisterSearchServiceServer(s grpc.ServiceRegistrar, srv SearchServiceServer) {
 	s.RegisterService(&_SearchService_serviceDesc, srv)
 }
 

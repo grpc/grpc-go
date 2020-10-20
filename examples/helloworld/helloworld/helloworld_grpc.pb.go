@@ -63,7 +63,7 @@ type UnsafeGreeterServer interface {
 	mustEmbedUnimplementedGreeterServer()
 }
 
-func RegisterGreeterServer(s *grpc.Server, srv GreeterServer) {
+func RegisterGreeterServer(s grpc.ServiceRegistrar, srv GreeterServer) {
 	s.RegisterService(&_Greeter_serviceDesc, srv)
 }
 

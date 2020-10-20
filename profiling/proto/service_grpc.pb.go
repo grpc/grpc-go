@@ -79,7 +79,7 @@ type UnsafeProfilingServer interface {
 	mustEmbedUnimplementedProfilingServer()
 }
 
-func RegisterProfilingServer(s *grpc.Server, srv ProfilingServer) {
+func RegisterProfilingServer(s grpc.ServiceRegistrar, srv ProfilingServer) {
 	s.RegisterService(&_Profiling_serviceDesc, srv)
 }
 

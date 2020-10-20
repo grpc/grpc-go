@@ -104,7 +104,7 @@ type UnsafeMetricsServiceServer interface {
 	mustEmbedUnimplementedMetricsServiceServer()
 }
 
-func RegisterMetricsServiceServer(s *grpc.Server, srv MetricsServiceServer) {
+func RegisterMetricsServiceServer(s grpc.ServiceRegistrar, srv MetricsServiceServer) {
 	s.RegisterService(&_MetricsService_serviceDesc, srv)
 }
 
