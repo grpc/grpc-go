@@ -48,44 +48,75 @@ var (
 )
 
 type loadStoreWrapper struct {
-	mu         sync.RWMutex
+	mu      sync.RWMutex
+	service string
+	// Both store and perCluster will be nil if load reporting is disabled (EDS
+	// response doesn't have LRS server name).
 	store      *load.Store
-	service    string
 	perCluster load.PerClusterReporter
 }
 
-func (lsw *loadStoreWrapper) update(store *load.Store, service string) {
+func (lsw *loadStoreWrapper) updateServiceName(service string) {
 	lsw.mu.Lock()
 	defer lsw.mu.Unlock()
-	if store == lsw.store && service == lsw.service {
+	if lsw.service == service {
+		return
+	}
+	lsw.service = service
+
+	if lsw.store == nil {
+		return
+	}
+	lsw.perCluster = lsw.store.PerCluster(lsw.service, "")
+}
+
+func (lsw *loadStoreWrapper) updateLoadStore(store *load.Store) {
+	lsw.mu.Lock()
+	defer lsw.mu.Unlock()
+	if store == lsw.store {
 		return
 	}
 	lsw.store = store
-	lsw.service = service
-	lsw.perCluster = lsw.store.PerCluster(lsw.service, "")
+	lsw.perCluster = nil
+	if lsw.store != nil {
+		lsw.perCluster = lsw.store.PerCluster(lsw.service, "")
+	}
+
 }
 
 func (lsw *loadStoreWrapper) CallStarted(locality string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
+	if lsw.perCluster == nil {
+		return
+	}
 	lsw.perCluster.CallStarted(locality)
 }
 
 func (lsw *loadStoreWrapper) CallFinished(locality string, err error) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
+	if lsw.perCluster == nil {
+		return
+	}
 	lsw.perCluster.CallFinished(locality, err)
 }
 
 func (lsw *loadStoreWrapper) CallServerLoad(locality, name string, val float64) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
+	if lsw.perCluster == nil {
+		return
+	}
 	lsw.perCluster.CallServerLoad(locality, name, val)
 }
 
 func (lsw *loadStoreWrapper) CallDropped(category string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
+	if lsw.perCluster == nil {
+		return
+	}
 	lsw.perCluster.CallDropped(category)
 }
 
@@ -105,9 +136,6 @@ type xdsClientWrapper struct {
 	// loadWrapper is a wrapper with loadOriginal, with clusterName and
 	// edsServiceName. It's used children to report loads.
 	loadWrapper *loadStoreWrapper
-	// loadOriginal is the load.Store for reporting loads to lrsServerName. It's
-	// returned by the client.
-	loadOriginal *load.Store
 	// edsServiceName is the edsServiceName currently being watched, not
 	// necessary the edsServiceName from service config.
 	//
@@ -243,18 +271,20 @@ func (c *xdsClientWrapper) startEndpointsWatch() {
 // Caller can cal this when the loadReportServer name changes, but
 // edsServiceName doesn't (so we only need to restart load reporting, not EDS
 // watch).
-func (c *xdsClientWrapper) startLoadReport(loadReportServer *string) {
+func (c *xdsClientWrapper) startLoadReport(loadReportServer *string) *load.Store {
 	if c.cancelLoadReport != nil {
 		c.cancelLoadReport()
 	}
 	c.loadReportServer = loadReportServer
+	var loadStore *load.Store
 	if c.loadReportServer != nil {
-		c.loadOriginal, c.cancelLoadReport = c.xdsClient.ReportLoad(*c.loadReportServer)
+		loadStore, c.cancelLoadReport = c.xdsClient.ReportLoad(*c.loadReportServer)
 	}
+	return loadStore
 }
 
 func (c *xdsClientWrapper) loadStore() load.PerClusterReporter {
-	if c == nil || c.loadWrapper.store == nil {
+	if c == nil {
 		return nil
 	}
 	return c.loadWrapper
@@ -268,25 +298,12 @@ func (c *xdsClientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attr
 		return err
 	}
 
-	var updateLoadStore bool
-
 	// Need to restart EDS watch when one of the following happens:
 	// - the xds_client is updated
 	// - the xds_client didn't change, but the edsServiceName changed
 	if clientChanged || c.edsServiceName != config.EDSServiceName {
 		c.edsServiceName = config.EDSServiceName
 		c.startEndpointsWatch()
-		updateLoadStore = true
-	}
-
-	// Only need to restart load reporting when:
-	// - the loadReportServer name changed
-	if !equalStringPointers(c.loadReportServer, config.LrsLoadReportingServerName) {
-		c.startLoadReport(config.LrsLoadReportingServerName)
-		updateLoadStore = true
-	}
-
-	if updateLoadStore {
 		// TODO: this update for the LRS service name is too early. It should
 		// only apply to the new EDS response. But this is applied to the RPCs
 		// before the new EDS response. To fully fix this, the EDS balancer
@@ -294,8 +311,16 @@ func (c *xdsClientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attr
 		//
 		// This is OK for now, because we don't actually expect edsServiceName
 		// to change. Fix this (a bigger change) will happen later.
-		c.loadWrapper.update(c.loadOriginal, c.edsServiceName)
+		c.loadWrapper.updateServiceName(c.edsServiceName)
 	}
+
+	// Only need to restart load reporting when:
+	// - the loadReportServer name changed
+	if !equalStringPointers(c.loadReportServer, config.LrsLoadReportingServerName) {
+		loadStore := c.startLoadReport(config.LrsLoadReportingServerName)
+		c.loadWrapper.updateLoadStore(loadStore)
+	}
+
 	return nil
 }
 

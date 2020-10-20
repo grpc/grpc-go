@@ -26,8 +26,8 @@ import (
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
-	"github.com/golang/protobuf/proto"
 	durationpb "github.com/golang/protobuf/ptypes/duration"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	_ "google.golang.org/grpc/xds/internal/client/v2" // Register the v2 xDS API client.
 )
@@ -81,9 +82,9 @@ func (s) TestLRSClient(t *testing.T) {
 	// Report to the same address should not create new ClientConn.
 	store1, lrsCancel1 := xdsC.ReportLoad(fs.Address)
 	defer lrsCancel1()
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer cancel()
-	if u, err := fs.NewConnChan.Receive(ctx); err != context.DeadlineExceeded {
+	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	if u, err := fs.NewConnChan.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected NewConn: %v, %v, want channel recv timeout", u, err)
 	}
 
@@ -96,8 +97,6 @@ func (s) TestLRSClient(t *testing.T) {
 	// Report to a different address should create new ClientConn.
 	store2, lrsCancel2 := xdsC.ReportLoad(fs2.Address)
 	defer lrsCancel2()
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if u, err := fs2.NewConnChan.Receive(ctx); err != nil {
 		t.Errorf("unexpected timeout: %v, %v, want NewConn", u, err)
 	}
@@ -129,13 +128,14 @@ func (s) TestLRSClient(t *testing.T) {
 		t.Fatalf("unexpected load received, want load for cluster, eds, dropped for test")
 	}
 	receivedLoad[0].LoadReportInterval = nil
-	if want := (&endpointpb.ClusterStats{
+	want := (&endpointpb.ClusterStats{
 		ClusterName:          "cluster",
 		ClusterServiceName:   "eds",
 		TotalDroppedRequests: 1,
 		DroppedRequests:      []*endpointpb.ClusterStats_DroppedRequests{{Category: "test", DroppedCount: 1}},
-	}); !proto.Equal(want, receivedLoad[0]) {
-		t.Fatalf("unexpected load received, want load for cluster, eds, dropped for test")
+	})
+	if d := cmp.Diff(want, receivedLoad[0], protocmp.Transform()); d != "" {
+		t.Fatalf("unexpected load received, want load for cluster, eds, dropped for test, diff (-want +got):\n%s", d)
 	}
 
 	// Cancel this load reporting stream, server should see error canceled.
