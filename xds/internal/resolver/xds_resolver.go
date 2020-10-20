@@ -80,7 +80,7 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 	r.client = client
 
 	// Register a watch on the xdsClient for the user's dial target.
-	cancelWatch := r.client.WatchService(r.target.Endpoint, r.handleServiceUpdate)
+	cancelWatch := watchService(r.client, r.target.Endpoint, r.handleServiceUpdate, r.logger)
 	r.logger.Infof("Watch started on resource name %v with xds-client %p", r.target.Endpoint, r.client)
 	r.cancelWatch = func() {
 		cancelWatch()
@@ -99,14 +99,15 @@ func (*xdsResolverBuilder) Scheme() string {
 // xdsClientInterface contains methods from xdsClient.Client which are used by
 // the resolver. This will be faked out in unittests.
 type xdsClientInterface interface {
-	WatchService(string, func(xdsclient.ServiceUpdate, error)) func()
+	WatchListener(serviceName string, cb func(xdsclient.ListenerUpdate, error)) func()
+	WatchRoute(routeName string, cb func(xdsclient.RouteConfigUpdate, error)) func()
 	Close()
 }
 
 // suWithError wraps the ServiceUpdate and error received through a watch API
 // callback, so that it can pushed onto the update channel as a single entity.
 type suWithError struct {
-	su  xdsclient.ServiceUpdate
+	su  serviceUpdate
 	err error
 }
 
@@ -184,7 +185,7 @@ func (r *xdsResolver) run() {
 // handleServiceUpdate is the callback which handles service updates. It writes
 // the received update to the update channel, which is picked by the run
 // goroutine.
-func (r *xdsResolver) handleServiceUpdate(su xdsclient.ServiceUpdate, err error) {
+func (r *xdsResolver) handleServiceUpdate(su serviceUpdate, err error) {
 	if r.closed.HasFired() {
 		// Do not pass updates to the ClientConn once the resolver is closed.
 		return

@@ -21,7 +21,6 @@ package fakeclient
 
 import (
 	"context"
-	"sync"
 
 	"google.golang.org/grpc/internal/testutils"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -32,57 +31,94 @@ import (
 // channels to signal the occurrence of various events.
 type Client struct {
 	name         string
-	suWatchCh    *testutils.Channel
+	ldsWatchCh   *testutils.Channel
+	rdsWatchCh   *testutils.Channel
 	cdsWatchCh   *testutils.Channel
 	edsWatchCh   *testutils.Channel
-	suCancelCh   *testutils.Channel
+	ldsCancelCh  *testutils.Channel
+	rdsCancelCh  *testutils.Channel
 	cdsCancelCh  *testutils.Channel
 	edsCancelCh  *testutils.Channel
 	loadReportCh *testutils.Channel
 	closeCh      *testutils.Channel
 	loadStore    *load.Store
 
-	mu        sync.Mutex
-	serviceCb func(xdsclient.ServiceUpdate, error)
-	cdsCb     func(xdsclient.ClusterUpdate, error)
-	edsCb     func(xdsclient.EndpointsUpdate, error)
+	ldsCb func(xdsclient.ListenerUpdate, error)
+	rdsCb func(xdsclient.RouteConfigUpdate, error)
+	cdsCb func(xdsclient.ClusterUpdate, error)
+	edsCb func(xdsclient.EndpointsUpdate, error)
 }
 
-// WatchService registers a LDS/RDS watch.
-func (xdsC *Client) WatchService(target string, callback func(xdsclient.ServiceUpdate, error)) func() {
-	xdsC.mu.Lock()
-	defer xdsC.mu.Unlock()
-
-	xdsC.serviceCb = callback
-	xdsC.suWatchCh.Send(target)
+// WatchListener registers a LDS watch.
+func (xdsC *Client) WatchListener(serviceName string, callback func(xdsclient.ListenerUpdate, error)) func() {
+	xdsC.ldsCb = callback
+	xdsC.ldsWatchCh.Send(serviceName)
 	return func() {
-		xdsC.suCancelCh.Send(nil)
+		xdsC.ldsCancelCh.Send(nil)
 	}
 }
 
-// WaitForWatchService waits for WatchService to be invoked on this client and
+// WaitForWatchListener waits for WatchCluster to be invoked on this client and
 // returns the serviceName being watched.
-func (xdsC *Client) WaitForWatchService(ctx context.Context) (string, error) {
-	val, err := xdsC.suWatchCh.Receive(ctx)
+func (xdsC *Client) WaitForWatchListener(ctx context.Context) (string, error) {
+	val, err := xdsC.ldsWatchCh.Receive(ctx)
 	if err != nil {
 		return "", err
 	}
 	return val.(string), err
 }
 
-// InvokeWatchServiceCallback invokes the registered service watch callback.
-func (xdsC *Client) InvokeWatchServiceCallback(u xdsclient.ServiceUpdate, err error) {
-	xdsC.mu.Lock()
-	defer xdsC.mu.Unlock()
+// InvokeWatchListenerCallback invokes the registered ldsWatch callback.
+//
+// Not thread safe with WatchListener. Only call this after
+// WaitForWatchListener.
+func (xdsC *Client) InvokeWatchListenerCallback(update xdsclient.ListenerUpdate, err error) {
+	xdsC.ldsCb(update, err)
+}
 
-	xdsC.serviceCb(u, err)
+// WaitForCancelListenerWatch waits for a LDS watch to be cancelled  and returns
+// context.DeadlineExceeded otherwise.
+func (xdsC *Client) WaitForCancelListenerWatch(ctx context.Context) error {
+	_, err := xdsC.ldsCancelCh.Receive(ctx)
+	return err
+}
+
+// WatchRoute registers a RDS watch.
+func (xdsC *Client) WatchRoute(routeName string, callback func(xdsclient.RouteConfigUpdate, error)) func() {
+	xdsC.rdsCb = callback
+	xdsC.rdsWatchCh.Send(routeName)
+	return func() {
+		xdsC.rdsCancelCh.Send(nil)
+	}
+}
+
+// WaitForWatchRoute waits for WatchCluster to be invoked on this client and
+// returns the clusterName being watched.
+func (xdsC *Client) WaitForWatchRoute(ctx context.Context) (string, error) {
+	val, err := xdsC.rdsWatchCh.Receive(ctx)
+	if err != nil {
+		return "", err
+	}
+	return val.(string), err
+}
+
+// InvokeWatchRouteCallback invokes the registered rdsWatch callback.
+//
+// Not thread safe with WatchListener. Only call this after
+// WaitForWatchRoute.
+func (xdsC *Client) InvokeWatchRouteCallback(update xdsclient.RouteConfigUpdate, err error) {
+	xdsC.rdsCb(update, err)
+}
+
+// WaitForCancelRouteWatch waits for a RDS watch to be cancelled  and returns
+// context.DeadlineExceeded otherwise.
+func (xdsC *Client) WaitForCancelRouteWatch(ctx context.Context) error {
+	_, err := xdsC.rdsCancelCh.Receive(ctx)
+	return err
 }
 
 // WatchCluster registers a CDS watch.
 func (xdsC *Client) WatchCluster(clusterName string, callback func(xdsclient.ClusterUpdate, error)) func() {
-	xdsC.mu.Lock()
-	defer xdsC.mu.Unlock()
-
 	xdsC.cdsCb = callback
 	xdsC.cdsWatchCh.Send(clusterName)
 	return func() {
@@ -101,10 +137,10 @@ func (xdsC *Client) WaitForWatchCluster(ctx context.Context) (string, error) {
 }
 
 // InvokeWatchClusterCallback invokes the registered cdsWatch callback.
+//
+// Not thread safe with WatchListener. Only call this after
+// WaitForWatchCluster.
 func (xdsC *Client) InvokeWatchClusterCallback(update xdsclient.ClusterUpdate, err error) {
-	xdsC.mu.Lock()
-	defer xdsC.mu.Unlock()
-
 	xdsC.cdsCb(update, err)
 }
 
@@ -117,9 +153,6 @@ func (xdsC *Client) WaitForCancelClusterWatch(ctx context.Context) error {
 
 // WatchEndpoints registers an EDS watch for provided clusterName.
 func (xdsC *Client) WatchEndpoints(clusterName string, callback func(xdsclient.EndpointsUpdate, error)) (cancel func()) {
-	xdsC.mu.Lock()
-	defer xdsC.mu.Unlock()
-
 	xdsC.edsCb = callback
 	xdsC.edsWatchCh.Send(clusterName)
 	return func() {
@@ -138,10 +171,10 @@ func (xdsC *Client) WaitForWatchEDS(ctx context.Context) (string, error) {
 }
 
 // InvokeWatchEDSCallback invokes the registered edsWatch callback.
+//
+// Not thread safe with WatchListener. Only call this after
+// WaitForWatchEDS.
 func (xdsC *Client) InvokeWatchEDSCallback(update xdsclient.EndpointsUpdate, err error) {
-	xdsC.mu.Lock()
-	defer xdsC.mu.Unlock()
-
 	xdsC.edsCb(update, err)
 }
 
@@ -206,10 +239,12 @@ func NewClient() *Client {
 func NewClientWithName(name string) *Client {
 	return &Client{
 		name:         name,
-		suWatchCh:    testutils.NewChannel(),
+		ldsWatchCh:   testutils.NewChannel(),
+		rdsWatchCh:   testutils.NewChannel(),
 		cdsWatchCh:   testutils.NewChannel(),
 		edsWatchCh:   testutils.NewChannel(),
-		suCancelCh:   testutils.NewChannel(),
+		ldsCancelCh:  testutils.NewChannel(),
+		rdsCancelCh:  testutils.NewChannel(),
 		cdsCancelCh:  testutils.NewChannel(),
 		edsCancelCh:  testutils.NewChannel(),
 		loadReportCh: testutils.NewChannel(),

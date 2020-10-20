@@ -193,18 +193,6 @@ func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, w
 	return nil
 }
 
-func verifyServiceUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate ServiceUpdate) error {
-	u, err := updateCh.Receive(ctx)
-	if err != nil {
-		return fmt.Errorf("timeout when waiting for service update: %v", err)
-	}
-	gotUpdate := u.(serviceUpdateErr)
-	if gotUpdate.err != nil || !cmp.Equal(gotUpdate.u, wantUpdate, cmpopts.EquateEmpty()) {
-		return fmt.Errorf("unexpected service update: (%v, %v), want: (%v, nil)", gotUpdate.u, gotUpdate.err, wantUpdate)
-	}
-	return nil
-}
-
 func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate ClusterUpdate) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {

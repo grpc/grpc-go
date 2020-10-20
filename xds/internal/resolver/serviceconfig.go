@@ -137,6 +137,6 @@ func weightedClusterToBalancerConfig(wc map[string]uint32) balancerConfig {
 	return bc
 }
 
-func (r *xdsResolver) serviceUpdateToJSON(su xdsclient.ServiceUpdate) (string, error) {
+func (r *xdsResolver) serviceUpdateToJSON(su serviceUpdate) (string, error) {
 	return r.routesToJSON(su.Routes)
 }

@@ -53,7 +53,7 @@ func (s) TestLDSWatch(t *testing.T) {
 	apiClient := c.(*testAPIClient)
 
 	ldsUpdateCh := testutils.NewChannel()
-	cancelWatch := client.watchLDS(testLDSName, func(update ListenerUpdate, err error) {
+	cancelWatch := client.WatchListener(testLDSName, func(update ListenerUpdate, err error) {
 		ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 	})
 	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
@@ -114,7 +114,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 	for i := 0; i < count; i++ {
 		ldsUpdateCh := testutils.NewChannel()
 		ldsUpdateChs = append(ldsUpdateChs, ldsUpdateCh)
-		cancelLastWatch = client.watchLDS(testLDSName, func(update ListenerUpdate, err error) {
+		cancelLastWatch = client.WatchListener(testLDSName, func(update ListenerUpdate, err error) {
 			ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 		})
 
@@ -178,7 +178,7 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 	for i := 0; i < count; i++ {
 		ldsUpdateCh := testutils.NewChannel()
 		ldsUpdateChs = append(ldsUpdateChs, ldsUpdateCh)
-		client.watchLDS(testLDSName+"1", func(update ListenerUpdate, err error) {
+		client.WatchListener(testLDSName+"1", func(update ListenerUpdate, err error) {
 			ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 		})
 
@@ -193,7 +193,7 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 
 	// Third watch for a different name.
 	ldsUpdateCh2 := testutils.NewChannel()
-	client.watchLDS(testLDSName+"2", func(update ListenerUpdate, err error) {
+	client.WatchListener(testLDSName+"2", func(update ListenerUpdate, err error) {
 		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
 	})
 	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
@@ -238,7 +238,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	apiClient := c.(*testAPIClient)
 
 	ldsUpdateCh := testutils.NewChannel()
-	client.watchLDS(testLDSName, func(update ListenerUpdate, err error) {
+	client.WatchListener(testLDSName, func(update ListenerUpdate, err error) {
 		ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
 	})
 	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
@@ -253,7 +253,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 
 	// Another watch for the resource in cache.
 	ldsUpdateCh2 := testutils.NewChannel()
-	client.watchLDS(testLDSName, func(update ListenerUpdate, err error) {
+	client.WatchListener(testLDSName, func(update ListenerUpdate, err error) {
 		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
 	})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
@@ -300,7 +300,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	apiClient := c.(*testAPIClient)
 
 	ldsUpdateCh1 := testutils.NewChannel()
-	client.watchLDS(testLDSName+"1", func(update ListenerUpdate, err error) {
+	client.WatchListener(testLDSName+"1", func(update ListenerUpdate, err error) {
 		ldsUpdateCh1.Send(ldsUpdateErr{u: update, err: err})
 	})
 	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
@@ -308,7 +308,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	}
 	// Another watch for a different name.
 	ldsUpdateCh2 := testutils.NewChannel()
-	client.watchLDS(testLDSName+"2", func(update ListenerUpdate, err error) {
+	client.WatchListener(testLDSName+"2", func(update ListenerUpdate, err error) {
 		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
 	})
 	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
