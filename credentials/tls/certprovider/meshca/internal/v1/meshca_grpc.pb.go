@@ -66,7 +66,7 @@ type UnsafeMeshCertificateServiceServer interface {
 	mustEmbedUnimplementedMeshCertificateServiceServer()
 }
 
-func RegisterMeshCertificateServiceServer(s *grpc.Server, srv MeshCertificateServiceServer) {
+func RegisterMeshCertificateServiceServer(s grpc.ServiceRegistrar, srv MeshCertificateServiceServer) {
 	s.RegisterService(&_MeshCertificateService_serviceDesc, srv)
 }
 
