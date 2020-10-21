@@ -106,11 +106,11 @@ func (s) TestStaggeredMarshalAndUnmarshalUsingSamePool(t *testing.T) {
 	var err error
 
 	if m1, err = codec1.Marshal(&proto1); err != nil {
-		t.Errorf("codec.Marshal(%v) failed", proto1)
+		t.Errorf("codec.Marshal(%s) failed", &proto1)
 	}
 
 	if m2, err = codec2.Marshal(&proto2); err != nil {
-		t.Errorf("codec.Marshal(%v) failed", proto2)
+		t.Errorf("codec.Marshal(%s) failed", &proto2)
 	}
 
 	if err = codec1.Unmarshal(m1, &proto1); err != nil {

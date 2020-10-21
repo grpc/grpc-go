@@ -70,14 +70,14 @@ declare -A EXPECTED_SERVER_OUTPUT=(
     ["features/errors"]=""
     ["features/interceptor"]="unary echoing message \"hello world\""
     ["features/load_balancing"]="serving on :50051"
-    ["features/metadata"]="message:\"this is examples/metadata\" , sending echo"
+    ["features/metadata"]="message:\"this is examples/metadata\", sending echo"
     ["features/multiplex"]=":50051"
     ["features/name_resolving"]="serving on localhost:50051"
 )
 
 declare -A EXPECTED_CLIENT_OUTPUT=(
     ["helloworld"]="Greeting: Hello world"
-    ["route_guide"]="location:<latitude:416851321 longitude:-742674555 >"
+    ["route_guide"]="Feature: name: \"\", point:(416851321, -742674555)"
     ["features/authentication"]="UnaryEcho:  hello world"
     ["features/compression"]="UnaryEcho call returned \"compress\", <nil>"
     ["features/deadline"]="wanted = DeadlineExceeded, got = DeadlineExceeded"
