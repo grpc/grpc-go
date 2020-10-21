@@ -44,7 +44,7 @@ const (
 	rootFile = "ca.pem"
 
 	defaultTestRefreshDuration = 100 * time.Millisecond
-	defaultTestTimeout         = 11 * time.Second
+	defaultTestTimeout         = 5 * time.Second
 )
 
 type s struct {

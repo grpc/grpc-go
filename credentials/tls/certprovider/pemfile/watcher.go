@@ -21,6 +21,7 @@
 package pemfile
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -117,9 +118,9 @@ type watcher struct {
 	identityDistributor distributor
 	rootDistributor     distributor
 	opts                Options
-	certFileLastModTime time.Time
-	keyFileLastModTime  time.Time
-	rootFileLastModTime time.Time
+	certFileContents    []byte
+	keyFileContents     []byte
+	rootFileContents    []byte
 	cancel              context.CancelFunc
 }
 
@@ -135,72 +136,70 @@ type distributor interface {
 // updateIdentityDistributor checks if the cert/key files that the plugin is
 // watching have changed, and if so, reads the new contents and updates the
 // identityDistributor with the new key material.
+//
+// Skips updates when file reading or parsing fails.
+// TODO(easwars): Retry with limit (on the number of retries or the amount of
+// time) upon failures.
 func (w *watcher) updateIdentityDistributor() {
 	if w.identityDistributor == nil {
 		return
 	}
 
-	var (
-		certFileModTime, keyFileModTime time.Time
-		err                             error
-	)
-	certFileModTime, err = readFileModTime(w.opts.CertFile)
+	certFileContents, err := ioutil.ReadFile(w.opts.CertFile)
 	if err != nil {
-		logger.Warning(err)
+		logger.Warningf("certFile (%s) read failed: %v", w.opts.CertFile, err)
 		return
 	}
-	keyFileModTime, err = readFileModTime(w.opts.KeyFile)
+	keyFileContents, err := ioutil.ReadFile(w.opts.KeyFile)
 	if err != nil {
-		logger.Warning(err)
+		logger.Warningf("keyFile (%s) read failed: %v", w.opts.KeyFile, err)
 		return
 	}
-	if certFileModTime == w.certFileLastModTime && keyFileModTime == w.keyFileLastModTime {
-		// Files have not changed from the last round. Do nothing.
-		return
-	}
-
 	cert, err := readKeyCertPairFunc(w.opts.CertFile, w.opts.KeyFile)
 	if err != nil {
-		// Skip updates when cert/key pair parsing fails, and log the error.
 		logger.Warningf("tls.LoadX509KeyPair(%q, %q) failed: %v", w.opts.CertFile, w.opts.KeyFile, err)
 		return
 	}
 
-	// Update the last modification time only after successfully parsing the
-	// cert. The cert/key pair will not parse successfully if we catch them in
-	// the middle of an update.
-	w.certFileLastModTime = certFileModTime
-	w.keyFileLastModTime = keyFileModTime
+	// If the file contents have not changed, skip updating the distributor.
+	if bytes.Equal(w.certFileContents, certFileContents) && bytes.Equal(w.keyFileContents, keyFileContents) {
+		return
+	}
+
+	w.certFileContents = certFileContents
+	w.keyFileContents = keyFileContents
 	w.identityDistributor.Set(&certprovider.KeyMaterial{Certs: []tls.Certificate{cert}}, nil)
 }
 
 // updateRootDistributor checks if the root cert file that the plugin is
-// watching hs changed, and if so, reads the new contents and updates the
-// rootDistributor with the new key material.
+// watching hs changed, and if so, updates the rootDistributor with the new key
+// material.
+//
+// Skips updates when root cert reading or parsing fails.
+// TODO(easwars): Retry with limit (on the number of retries or the amount of
+// time) upon failures.
 func (w *watcher) updateRootDistributor() {
 	if w.rootDistributor == nil {
 		return
 	}
 
-	rootFileModTime, err := readFileModTime(w.opts.RootFile)
+	rootFileContents, err := ioutil.ReadFile(w.opts.RootFile)
 	if err != nil {
-		logger.Warning(err)
+		logger.Warningf("rootFile (%s) read failed: %v", w.opts.RootFile, err)
 		return
 	}
-	if rootFileModTime == w.rootFileLastModTime {
-		// File has not changed from the last round. Do nothing.
+	trustPool := x509.NewCertPool()
+	if !trustPool.AppendCertsFromPEM(rootFileContents) {
+		logger.Warning("failed to parse root certificate")
 		return
 	}
 
-	trustPool, err := readTrustCertFunc(w.opts.RootFile)
-	if err != nil {
-		// Skip updates when root cert parsing fails, and log the error.
-		logger.Warningf("readTrustCertFunc reads %v failed: %v", w.opts.RootFile, err)
+	// If the file contents have not changed, skip updating the distributor.
+	if bytes.Equal(w.rootFileContents, rootFileContents) {
 		return
 	}
 
-	// Update the last modification time only after successful parsing.
-	w.rootFileLastModTime = rootFileModTime
+	w.rootFileContents = rootFileContents
 	w.rootDistributor.Set(&certprovider.KeyMaterial{Roots: trustPool}, nil)
 }
 
