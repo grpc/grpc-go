@@ -7,7 +7,7 @@ on:
 
 jobs:
   create_release:
-    name: Create Release
+    name: Create cmd/protoc-gen-go-grpc Release
     runs-on: ubuntu-latest
     outputs: 
       upload_url: ${{ steps.create_release.outputs.upload_url }} 
