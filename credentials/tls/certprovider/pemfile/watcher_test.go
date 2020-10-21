@@ -36,6 +36,17 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
+const (
+	// These are the names of files inside temporary directories, which the
+	// plugin is asked to watch.
+	certFile = "cert.pem"
+	keyFile  = "key.pem"
+	rootFile = "ca.pem"
+
+	defaultTestRefreshDuration = 100 * time.Millisecond
+	defaultTestTimeout         = 11 * time.Second
+)
+
 type s struct {
 	grpctest.Tester
 }
@@ -106,17 +117,6 @@ func (s) TestNewProvider(t *testing.T) {
 		})
 	}
 }
-
-const (
-	// These are the names of files inside temporary directories, which the
-	// plugin is asked to watch.
-	certFile = "cert.pem"
-	keyFile  = "key.pem"
-	rootFile = "ca.pem"
-
-	defaultTestRefreshDuration = 100 * time.Millisecond
-	defaultTestTimeout         = 5 * time.Second
-)
 
 // wrappedDistributor wraps a distributor and pushes on a channel whenever new
 // key material is pushed to the distributor.
