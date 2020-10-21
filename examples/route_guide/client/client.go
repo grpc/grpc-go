@@ -72,7 +72,8 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 		if err != nil {
 			log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
 		}
-		log.Println(feature)
+		log.Printf("Feature: name: %q, point:(%v, %v)", feature.GetName(),
+			feature.GetLocation().GetLatitude(), feature.GetLocation().GetLongitude())
 	}
 }
 
