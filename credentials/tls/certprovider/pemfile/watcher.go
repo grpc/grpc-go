@@ -27,7 +27,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"time"
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
@@ -41,20 +40,9 @@ const (
 
 var (
 	// For overriding from unit tests.
-	readKeyCertPairFunc = tls.LoadX509KeyPair
-	readTrustCertFunc   = func(trustFile string) (*x509.CertPool, error) {
-		trustData, err := ioutil.ReadFile(trustFile)
-		if err != nil {
-			return nil, err
-		}
-		trustPool := x509.NewCertPool()
-		if !trustPool.AppendCertsFromPEM(trustData) {
-			return nil, fmt.Errorf("pemfile: failed to parse root certificate")
-		}
-		return trustPool, nil
-	}
-	newDistributorFunc = func() distributor { return certprovider.NewDistributor() }
-	logger             = grpclog.Component("pemfile")
+	newDistributor = func() distributor { return certprovider.NewDistributor() }
+
+	logger = grpclog.Component("pemfile")
 )
 
 // Options configures a certificate provider plugin that watches a specified set
@@ -97,10 +85,10 @@ func NewProvider(o Options) (certprovider.Provider, error) {
 
 	provider := &watcher{opts: o}
 	if o.CertFile != "" && o.KeyFile != "" {
-		provider.identityDistributor = newDistributorFunc()
+		provider.identityDistributor = newDistributor()
 	}
 	if o.RootFile != "" {
-		provider.rootDistributor = newDistributorFunc()
+		provider.rootDistributor = newDistributor()
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -155,7 +143,7 @@ func (w *watcher) updateIdentityDistributor() {
 		logger.Warningf("keyFile (%s) read failed: %v", w.opts.KeyFile, err)
 		return
 	}
-	cert, err := readKeyCertPairFunc(w.opts.CertFile, w.opts.KeyFile)
+	cert, err := tls.LoadX509KeyPair(w.opts.CertFile, w.opts.KeyFile)
 	if err != nil {
 		logger.Warningf("tls.LoadX509KeyPair(%q, %q) failed: %v", w.opts.CertFile, w.opts.KeyFile, err)
 		return
@@ -258,12 +246,4 @@ func (w *watcher) Close() {
 	if w.rootDistributor != nil {
 		w.rootDistributor.Stop()
 	}
-}
-
-func readFileModTime(name string) (time.Time, error) {
-	f, err := os.Stat(name)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("pemfile: os.Stat(%q) failed: %v", name, err)
-	}
-	return f.ModTime(), nil
 }

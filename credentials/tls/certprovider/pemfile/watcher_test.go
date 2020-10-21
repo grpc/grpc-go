@@ -177,12 +177,12 @@ func createTmpDirWithFiles(t *testing.T, dirSuffix, certSrc, keySrc, rootSrc str
 func initializeProvider(t *testing.T, testName string) (string, certprovider.Provider, *testutils.Channel, func()) {
 	t.Helper()
 
-	// Override the newDistributorFunc to one which pushes on a channel that we
+	// Override the newDistributor to one which pushes on a channel that we
 	// can block on.
-	origDistributorFunc := newDistributorFunc
+	origDistributorFunc := newDistributor
 	distCh := testutils.NewChannel()
 	d := newWrappedDistributor(distCh)
-	newDistributorFunc = func() distributor { return d }
+	newDistributor = func() distributor { return d }
 
 	// Create a new provider to watch the files in tmpdir.
 	dir := createTmpDirWithFiles(t, testName+"*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/client_ca_cert.pem")
@@ -211,7 +211,7 @@ func initializeProvider(t *testing.T, testName string) (string, certprovider.Pro
 	}
 
 	return dir, prov, distCh, func() {
-		newDistributorFunc = origDistributorFunc
+		newDistributor = origDistributorFunc
 		prov.Close()
 	}
 }
@@ -290,13 +290,13 @@ func (s) TestProvider_UpdateSuccess(t *testing.T) {
 // symlink is updates to point to new files. Verifies that the changes are
 // picked up by the provider.
 func (s) TestProvider_UpdateSuccessWithSymlink(t *testing.T) {
-	// Override the newDistributorFunc to one which pushes on a channel that we
+	// Override the newDistributor to one which pushes on a channel that we
 	// can block on.
-	origDistributorFunc := newDistributorFunc
+	origDistributorFunc := newDistributor
 	distCh := testutils.NewChannel()
 	d := newWrappedDistributor(distCh)
-	newDistributorFunc = func() distributor { return d }
-	defer func() { newDistributorFunc = origDistributorFunc }()
+	newDistributor = func() distributor { return d }
+	defer func() { newDistributor = origDistributorFunc }()
 
 	// Create two tempDirs with different files.
 	dir1 := createTmpDirWithFiles(t, "update_with_symlink1_*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/client_ca_cert.pem")
