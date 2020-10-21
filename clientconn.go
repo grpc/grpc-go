@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
+	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
@@ -104,6 +105,17 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
 }
 
+type defaultConfigSelector struct {
+	cc *ClientConn
+}
+
+func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) *iresolver.RPCConfig {
+	return &iresolver.RPCConfig{
+		Context:      rpcInfo.Context,
+		MethodConfig: dcs.cc.GetMethodConfig(rpcInfo.Method),
+	}
+}
+
 // DialContext creates a client connection to the given target. By default, it's
 // a non-blocking dial (the function won't wait for connections to be
 // established, and connecting happens in the background). To make it a blocking
@@ -132,6 +144,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 	cc.retryThrottler.Store((*retryThrottler)(nil))
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
+	cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
 
 	for _, opt := range opts {
 		opt.apply(&cc.dopts)
@@ -487,6 +500,8 @@ type ClientConn struct {
 	balancerBuildOpts balancer.BuildOptions
 	blockingpicker    *pickerWrapper
 
+	safeConfigSelector iresolver.SafeConfigSelector
+
 	mu              sync.RWMutex
 	resolverWrapper *ccResolverWrapper
 	sc              *ServiceConfig
@@ -629,6 +644,13 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	} else {
 		if sc, ok := s.ServiceConfig.Config.(*ServiceConfig); s.ServiceConfig.Err == nil && ok {
 			cc.applyServiceConfigAndBalancer(sc, s.Addresses)
+			if configSelector := iresolver.GetConfigSelector(s); configSelector != nil {
+				fmt.Println("received non-nil config selector yay")
+				if len(s.ServiceConfig.Config.(*ServiceConfig).Methods) != 0 {
+					channelz.Infof(logger, cc.channelzID, "method configs in service config will be ignored due to presence of config selector")
+				}
+				cc.safeConfigSelector.UpdateConfigSelector(configSelector)
+			}
 		} else {
 			ret = balancer.ErrBadResolverState
 			if cc.balancerWrapper == nil {
