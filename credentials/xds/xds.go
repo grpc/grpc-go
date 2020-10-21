@@ -43,7 +43,7 @@ import (
 )
 
 func init() {
-	internal.GetXDSHandshakeInfo = getHandshakeInfo
+	internal.GetXDSHandshakeInfoForTesting = getHandshakeInfo
 }
 
 // ClientOptions contains parameters to configure a new client-side xDS

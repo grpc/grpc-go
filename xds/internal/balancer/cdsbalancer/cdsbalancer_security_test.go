@@ -166,13 +166,13 @@ func setupWithXDSCreds(t *testing.T, storeErr bool) (*fakeclient.Client, *cdsBal
 	// provider creation. Create a channel with size 2, so we have buffer to
 	// push notifications for both providers.
 	providerCh := testutils.NewChannelWithSize(2)
-	origGetProviderFunc := getProviderFunc
+	origGetProviderFunc := getProvider
 	if storeErr {
-		getProviderFunc = func(string, interface{}, certprovider.Options) (certprovider.Provider, error) {
+		getProvider = func(string, interface{}, certprovider.Options) (certprovider.Provider, error) {
 			return nil, errors.New("certprovider.Store failed to created provider")
 		}
 	} else {
-		getProviderFunc = func(name string, cfg interface{}, opts certprovider.Options) (certprovider.Provider, error) {
+		getProvider = func(name string, cfg interface{}, opts certprovider.Options) (certprovider.Provider, error) {
 			providerCh.Send(nil)
 			return origGetProviderFunc(name, cfg, opts)
 		}
@@ -180,7 +180,7 @@ func setupWithXDSCreds(t *testing.T, storeErr bool) (*fakeclient.Client, *cdsBal
 
 	return xdsC, cdsB.(*cdsBalancer), edsB, tcc, providerCh, func() {
 		newEDSBalancer = oldEDSBalancerBuilder
-		getProviderFunc = origGetProviderFunc
+		getProvider = origGetProviderFunc
 	}
 }
 
@@ -205,7 +205,7 @@ func makeNewSubConn(ctx context.Context, edsCC balancer.ClientConn, parentCC *xd
 		if got, want := gotAddrs[0].Addr, addrs[0].Addr; got != want {
 			return fmt.Errorf("resolver.Address passed to parent ClientConn has address %q, want %q", got, want)
 		}
-		getHI := internal.GetXDSHandshakeInfo.(func(attr *attributes.Attributes) *xds.HandshakeInfo)
+		getHI := internal.GetXDSHandshakeInfoForTesting.(func(attr *attributes.Attributes) *xds.HandshakeInfo)
 		if hi := getHI(gotAddrs[0].Attributes); (hi != nil) != wantAttributes {
 			return fmt.Errorf("resolver.Address passed to parent ClientConn contains attributes: %v, wantAttributes: %v", (hi != nil), wantAttributes)
 		}
@@ -222,12 +222,12 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 	// Override the certificate provider creation function to get notified about
 	// provider creation.
 	providerCh := testutils.NewChannel()
-	origGetProviderFunc := getProviderFunc
-	getProviderFunc = func(name string, cfg interface{}, opts certprovider.Options) (certprovider.Provider, error) {
+	origGetProviderFunc := getProvider
+	getProvider = func(name string, cfg interface{}, opts certprovider.Options) (certprovider.Provider, error) {
 		providerCh.Send(nil)
 		return origGetProviderFunc(name, cfg, opts)
 	}
-	defer func() { getProviderFunc = origGetProviderFunc }()
+	defer func() { getProvider = origGetProviderFunc }()
 
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the

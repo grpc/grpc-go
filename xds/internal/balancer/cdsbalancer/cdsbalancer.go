@@ -63,9 +63,7 @@ var (
 		return builder.Build(cc, opts), nil
 	}
 
-	getProviderFunc = func(name string, cfg interface{}, opts certprovider.Options) (certprovider.Provider, error) {
-		return certprovider.GetProvider(name, cfg, opts)
-	}
+	getProvider = certprovider.GetProvider
 )
 
 func init() {
@@ -251,7 +249,7 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) err
 	if !ok {
 		return fmt.Errorf("certificate provider instance %q not found in bootstrap file", config.RootInstanceName)
 	}
-	rootProvider, err := getProviderFunc(rootCfg.Name, rootCfg.Config, certprovider.Options{
+	rootProvider, err := getProvider(rootCfg.Name, rootCfg.Config, certprovider.Options{
 		CertName: config.RootCertName,
 		WantRoot: true,
 	})
@@ -260,7 +258,7 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) err
 		// config and makes sure that it is acceptable to the plugin. Still, it
 		// is possible that the plugin parses the config successfully, but its
 		// Build() method errors out.
-		return fmt.Errorf("xds: failed to get plugin instance (%+v): %v", rootCfg, err)
+		return fmt.Errorf("xds: failed to get security plugin instance (%+v): %v", rootCfg, err)
 	}
 	if b.cachedRoot != nil {
 		b.cachedRoot.Close()
@@ -274,7 +272,7 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) err
 		if !ok {
 			return fmt.Errorf("certificate provider instance %q not found in bootstrap file", config.IdentityInstanceName)
 		}
-		identityProvider, err = getProviderFunc(identityCfg.Name, identityCfg.Config, certprovider.Options{
+		identityProvider, err = getProvider(identityCfg.Name, identityCfg.Config, certprovider.Options{
 			CertName:     config.IdentityCertName,
 			WantIdentity: true,
 		})
@@ -283,7 +281,7 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) err
 			// config and makes sure that it is acceptable to the plugin. Still,
 			// it is possible that the plugin parses the config successfully,
 			// but its Build() method errors out.
-			return fmt.Errorf("xds: failed to get plugin instance (%+v): %v", identityCfg, err)
+			return fmt.Errorf("xds: failed to get security plugin instance (%+v): %v", identityCfg, err)
 		}
 	}
 	if b.cachedIdentity != nil {
