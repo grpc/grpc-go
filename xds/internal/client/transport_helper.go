@@ -255,10 +255,11 @@ func (t *TransportHelper) send(ctx context.Context) {
 			case *watchAction:
 				target, rType, version, nonce = t.processWatchInfo(update)
 			case *ackAction:
-				target, rType, version, nonce, errMsg, send = t.processAckInfo(update, stream)
+				target, rType, version, nonce, send = t.processAckInfo(update, stream)
 				if !send {
 					continue
 				}
+				errMsg = update.errMsg
 			}
 			if stream == nil {
 				// There's no stream yet. Skip the request. This request
@@ -398,13 +399,13 @@ type ackAction struct {
 // processAckInfo pulls the fields needed by the ack request from a ackAction.
 //
 // If no active watch is found for this ack, it returns false for send.
-func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStream) (target []string, rType ResourceType, version, nonce, errMsg string, send bool) {
+func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStream) (target []string, rType ResourceType, version, nonce string, send bool) {
 	if ack.stream != stream {
 		// If ACK's stream isn't the current sending stream, this means the ACK
 		// was pushed to queue before the old stream broke, and a new stream has
 		// been started since. Return immediately here so we don't update the
 		// nonce for the new stream.
-		return nil, UnknownResource, "", "", "", false
+		return nil, UnknownResource, "", "", false
 	}
 	rType = ack.rType
 
@@ -424,7 +425,7 @@ func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStrea
 		// canceled while the ackAction is in queue), because there's no resource
 		// name. And if we send a request with empty resource name list, the
 		// server may treat it as a wild card and send us everything.
-		return nil, UnknownResource, "", "", "", false
+		return nil, UnknownResource, "", "", false
 	}
 	send = true
 	target = mapToSlice(s)
@@ -439,7 +440,7 @@ func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStrea
 	} else {
 		t.versionMap[rType] = version
 	}
-	return target, rType, version, nonce, ack.errMsg, send
+	return target, rType, version, nonce, send
 }
 
 // ReportLoad starts an LRS stream to report load data to the management server.
