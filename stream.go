@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcutil"
+	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -170,7 +171,16 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	if err := cc.waitForResolvedAddrs(ctx); err != nil {
 		return nil, err
 	}
-	mc := cc.GetMethodConfig(method)
+
+	rpcConfig := cc.safeConfigSelector.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: method})
+	if rpcConfig == nil {
+		rpcConfig = &iresolver.RPCConfig{Context: ctx}
+	}
+	if rpcConfig.Context != nil {
+		ctx = rpcConfig.Context
+	}
+
+	mc := rpcConfig.MethodConfig // cc.GetMethodConfig(method)
 	if mc.WaitForReady != nil {
 		c.failFast = !*mc.WaitForReady
 	}
@@ -539,8 +549,8 @@ func (cs *clientStream) shouldRetry(err error) error {
 		code = status.Convert(err).Code()
 	}
 
-	rp := cs.methodConfig.retryPolicy
-	if rp == nil || !rp.retryableStatusCodes[code] {
+	rp := cs.methodConfig.RetryPolicy
+	if rp == nil || !rp.RetryableStatusCodes[code] {
 		return err
 	}
 
@@ -549,7 +559,7 @@ func (cs *clientStream) shouldRetry(err error) error {
 	if cs.retryThrottler.throttle() {
 		return err
 	}
-	if cs.numRetries+1 >= rp.maxAttempts {
+	if cs.numRetries+1 >= rp.MaxAttempts {
 		return err
 	}
 
@@ -558,9 +568,9 @@ func (cs *clientStream) shouldRetry(err error) error {
 		dur = time.Millisecond * time.Duration(pushback)
 		cs.numRetriesSincePushback = 0
 	} else {
-		fact := math.Pow(rp.backoffMultiplier, float64(cs.numRetriesSincePushback))
-		cur := float64(rp.initialBackoff) * fact
-		if max := float64(rp.maxBackoff); cur > max {
+		fact := math.Pow(rp.BackoffMultiplier, float64(cs.numRetriesSincePushback))
+		cur := float64(rp.InitialBackoff) * fact
+		if max := float64(rp.MaxBackoff); cur > max {
 			cur = max
 		}
 		dur = time.Duration(grpcrand.Int63n(int64(cur)))
