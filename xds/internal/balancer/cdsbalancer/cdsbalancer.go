@@ -538,3 +538,6 @@ func (ccw *ccWrapper) setHandshakeInfo(hi *xds.HandshakeInfo) {
 	ccw.xdsHI = hi
 	ccw.mu.Unlock()
 }
+
+// TODO(easwars): Look into whether the cdsBalancer also needs to wrap the
+// SubConn interface and add attributes to addresses in UpdateAddresses() call.
