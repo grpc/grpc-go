@@ -45,7 +45,7 @@ func UnmarshalListener(resources []*anypb.Any, logger *grpclog.PrefixLogger) (ma
 	update := make(map[string]ListenerUpdate)
 	for _, r := range resources {
 		if !IsListenerResource(r.GetTypeUrl()) {
-			return nil, fmt.Errorf("xds: unexpected resource type: %s in LDS response", r.GetTypeUrl())
+			return nil, fmt.Errorf("xds: unexpected resource type: %q in LDS response", r.GetTypeUrl())
 		}
 		lis := &v3listenerpb.Listener{}
 		if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
@@ -69,7 +69,7 @@ func getRouteConfigNameFromListener(lis *v3listenerpb.Listener, logger *grpclog.
 	}
 	apiLisAny := lis.GetApiListener().GetApiListener()
 	if !IsHTTPConnManagerResource(apiLisAny.GetTypeUrl()) {
-		return "", fmt.Errorf("xds: unexpected resource type: %s in LDS response", apiLisAny.GetTypeUrl())
+		return "", fmt.Errorf("xds: unexpected resource type: %q in LDS response", apiLisAny.GetTypeUrl())
 	}
 	apiLis := &v3httppb.HttpConnectionManager{}
 	if err := proto.Unmarshal(apiLisAny.GetValue(), apiLis); err != nil {
@@ -106,7 +106,7 @@ func UnmarshalRouteConfig(resources []*anypb.Any, hostname string, logger *grpcl
 	update := make(map[string]RouteConfigUpdate)
 	for _, r := range resources {
 		if !IsRouteConfigResource(r.GetTypeUrl()) {
-			return nil, fmt.Errorf("xds: unexpected resource type: %s in RDS response", r.GetTypeUrl())
+			return nil, fmt.Errorf("xds: unexpected resource type: %q in RDS response", r.GetTypeUrl())
 		}
 		rc := &v3routepb.RouteConfiguration{}
 		if err := proto.Unmarshal(r.GetValue(), rc); err != nil {
@@ -370,7 +370,7 @@ func UnmarshalCluster(resources []*anypb.Any, logger *grpclog.PrefixLogger) (map
 	update := make(map[string]ClusterUpdate)
 	for _, r := range resources {
 		if !IsClusterResource(r.GetTypeUrl()) {
-			return nil, fmt.Errorf("xds: unexpected resource type: %s in CDS response", r.GetTypeUrl())
+			return nil, fmt.Errorf("xds: unexpected resource type: %q in CDS response", r.GetTypeUrl())
 		}
 
 		cluster := &v3clusterpb.Cluster{}
@@ -418,7 +418,7 @@ func UnmarshalEndpoints(resources []*anypb.Any, logger *grpclog.PrefixLogger) (m
 	update := make(map[string]EndpointsUpdate)
 	for _, r := range resources {
 		if !IsEndpointsResource(r.GetTypeUrl()) {
-			return nil, fmt.Errorf("xds: unexpected resource type: %s in EDS response", r.GetTypeUrl())
+			return nil, fmt.Errorf("xds: unexpected resource type: %q in EDS response", r.GetTypeUrl())
 		}
 
 		cla := &v3endpointpb.ClusterLoadAssignment{}
