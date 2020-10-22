@@ -51,7 +51,9 @@ type loadStoreWrapper struct {
 	mu      sync.RWMutex
 	service string
 	// Both store and perCluster will be nil if load reporting is disabled (EDS
-	// response doesn't have LRS server name).
+	// response doesn't have LRS server name). Note that methods on Store and
+	// perCluster all handle nil, so there's no need to check nil before calling
+	// them.
 	store      *load.Store
 	perCluster load.PerClusterReporter
 }
@@ -63,10 +65,6 @@ func (lsw *loadStoreWrapper) updateServiceName(service string) {
 		return
 	}
 	lsw.service = service
-
-	if lsw.store == nil {
-		return
-	}
 	lsw.perCluster = lsw.store.PerCluster(lsw.service, "")
 }
 
@@ -78,45 +76,30 @@ func (lsw *loadStoreWrapper) updateLoadStore(store *load.Store) {
 	}
 	lsw.store = store
 	lsw.perCluster = nil
-	if lsw.store != nil {
-		lsw.perCluster = lsw.store.PerCluster(lsw.service, "")
-	}
-
+	lsw.perCluster = lsw.store.PerCluster(lsw.service, "")
 }
 
 func (lsw *loadStoreWrapper) CallStarted(locality string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	if lsw.perCluster == nil {
-		return
-	}
 	lsw.perCluster.CallStarted(locality)
 }
 
 func (lsw *loadStoreWrapper) CallFinished(locality string, err error) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	if lsw.perCluster == nil {
-		return
-	}
 	lsw.perCluster.CallFinished(locality, err)
 }
 
 func (lsw *loadStoreWrapper) CallServerLoad(locality, name string, val float64) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	if lsw.perCluster == nil {
-		return
-	}
 	lsw.perCluster.CallServerLoad(locality, name, val)
 }
 
 func (lsw *loadStoreWrapper) CallDropped(category string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	if lsw.perCluster == nil {
-		return
-	}
 	lsw.perCluster.CallDropped(category)
 }
 
@@ -225,8 +208,8 @@ func (c *xdsClientWrapper) updateXDSClient(config *EDSConfig, attr *attributes.A
 		dopts = []grpc.DialOption{grpc.WithContextDialer(dialer)}
 	}
 
-	// TODO: there's no long a need to read bootstrap file and create a new xds
-	// client. The EDS balancer should always get the xds client from
+	// TODO: there's no longer a need to read bootstrap file and create a new
+	// xds client. The EDS balancer should always get the xds client from
 	// attributes. Otherwise, this function should just fail. Also, xdsclient
 	// will be shared by multiple clients, so trying to make an xds client is
 	// just the wrong move.

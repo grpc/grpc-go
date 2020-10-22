@@ -178,7 +178,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 		}
 
 		if err := x.client.handleUpdate(cfg, u.ResolverState.Attributes); err != nil {
-			x.logger.Infof("failed to update xds clients: %v", err)
+			x.logger.Warningf("failed to update xds clients: %v", err)
 		}
 
 		if x.config == nil {

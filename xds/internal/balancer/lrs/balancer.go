@@ -155,7 +155,9 @@ type loadStoreWrapper struct {
 	cluster    string
 	edsService string
 	// Both store and perCluster will be nil if load reporting is disabled (EDS
-	// response doesn't have LRS server name).
+	// response doesn't have LRS server name). Note that methods on Store and
+	// perCluster all handle nil, so there's no need to check nil before calling
+	// them.
 	store      *load.Store
 	perCluster load.PerClusterReporter
 }
@@ -168,10 +170,6 @@ func (lsw *loadStoreWrapper) updateClusterAndService(cluster, edsService string)
 	}
 	lsw.cluster = cluster
 	lsw.edsService = edsService
-
-	if lsw.store == nil {
-		return
-	}
 	lsw.perCluster = lsw.store.PerCluster(lsw.cluster, lsw.edsService)
 }
 
@@ -183,44 +181,30 @@ func (lsw *loadStoreWrapper) updateLoadStore(store *load.Store) {
 	}
 	lsw.store = store
 	lsw.perCluster = nil
-	if lsw.store != nil {
-		lsw.perCluster = lsw.store.PerCluster(lsw.cluster, lsw.edsService)
-	}
+	lsw.perCluster = lsw.store.PerCluster(lsw.cluster, lsw.edsService)
 }
 
 func (lsw *loadStoreWrapper) CallStarted(locality string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	if lsw.perCluster == nil {
-		return
-	}
 	lsw.perCluster.CallStarted(locality)
 }
 
 func (lsw *loadStoreWrapper) CallFinished(locality string, err error) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	if lsw.perCluster == nil {
-		return
-	}
 	lsw.perCluster.CallFinished(locality, err)
 }
 
 func (lsw *loadStoreWrapper) CallServerLoad(locality, name string, val float64) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	if lsw.perCluster == nil {
-		return
-	}
 	lsw.perCluster.CallServerLoad(locality, name, val)
 }
 
 func (lsw *loadStoreWrapper) CallDropped(category string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	if lsw.perCluster == nil {
-		return
-	}
 	lsw.perCluster.CallDropped(category)
 }
 
