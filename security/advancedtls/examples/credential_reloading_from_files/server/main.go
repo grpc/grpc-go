@@ -33,11 +33,10 @@ import (
 	"google.golang.org/grpc/security/advancedtls/testdata"
 
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
-
 )
 
 var (
-	port    = ":50051"
+	port = ":50051"
 )
 
 const (
@@ -106,4 +105,3 @@ func main() {
 		log.Fatalf("failed to serve: %v", err)
 	}
 }
-

@@ -96,4 +96,3 @@ func main() {
 	defer conn.Close()
 	fmt.Printf("Getting message from server: %s...\n", reply.Message)
 }
-
