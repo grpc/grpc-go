@@ -159,10 +159,10 @@ func (s) TestServiceWatch(t *testing.T) {
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	waitForWatchRoute(ctx, t, xdsC, routeStr)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	wantUpdate := serviceUpdate{Routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}
-	xdsC.InvokeWatchRouteCallback(xdsclient.RouteConfigUpdate{
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
@@ -180,7 +180,7 @@ func (s) TestServiceWatch(t *testing.T) {
 			Action: map[string]uint32{cluster: 1},
 		}},
 	}
-	xdsC.InvokeWatchRouteCallback(xdsclient.RouteConfigUpdate{
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
@@ -213,10 +213,10 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	waitForWatchRoute(ctx, t, xdsC, routeStr)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	wantUpdate := serviceUpdate{Routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}
-	xdsC.InvokeWatchRouteCallback(xdsclient.RouteConfigUpdate{
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
@@ -230,14 +230,14 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 
 	// Another LDS update with a different RDS_name.
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr + "2"}, nil)
-	if err := xdsC.WaitForCancelRouteWatch(ctx); err != nil {
+	if err := xdsC.WaitForCancelRouteConfigWatch(ctx); err != nil {
 		t.Fatalf("wait for cancel route watch failed: %v, want nil", err)
 	}
-	waitForWatchRoute(ctx, t, xdsC, routeStr+"2")
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr+"2")
 
 	// RDS update for the new name.
 	wantUpdate2 := serviceUpdate{Routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster + "2": 1}}}}
-	xdsC.InvokeWatchRouteCallback(xdsclient.RouteConfigUpdate{
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
@@ -265,10 +265,10 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	waitForWatchRoute(ctx, t, xdsC, routeStr)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	wantUpdate := serviceUpdate{Routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}
-	xdsC.InvokeWatchRouteCallback(xdsclient.RouteConfigUpdate{
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
@@ -285,7 +285,7 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	if err := xdsC.WaitForCancelRouteWatch(sCtx); err != context.DeadlineExceeded {
+	if err := xdsC.WaitForCancelRouteConfigWatch(sCtx); err != context.DeadlineExceeded {
 		t.Fatalf("wait for cancel route watch failed: %v, want nil", err)
 	}
 }

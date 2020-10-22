@@ -27,8 +27,9 @@ import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
-// serviceUpdate contains information received from LDS and RDS responses,
-// which is of interest to the registered service watcher.
+// serviceUpdate contains information received from the RDS responses which is
+// of interested to the xds resolver. The RDS request is built by first making a
+// LDS to get the RouteConfig name.
 type serviceUpdate struct {
 	// Routes contain matchers+actions to route RPCs.
 	Routes []*xdsclient.Route
@@ -99,7 +100,7 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsclient.ListenerUpdate, er
 	if w.rdsCancel != nil {
 		w.rdsCancel()
 	}
-	w.rdsCancel = w.c.WatchRoute(update.RouteConfigName, w.handleRDSResp)
+	w.rdsCancel = w.c.WatchRouteConfig(update.RouteConfigName, w.handleRDSResp)
 }
 
 func (w *serviceUpdateWatcher) handleRDSResp(update xdsclient.RouteConfigUpdate, err error) {

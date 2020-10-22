@@ -100,7 +100,7 @@ func (*xdsResolverBuilder) Scheme() string {
 // the resolver. This will be faked out in unittests.
 type xdsClientInterface interface {
 	WatchListener(serviceName string, cb func(xdsclient.ListenerUpdate, error)) func()
-	WatchRoute(routeName string, cb func(xdsclient.RouteConfigUpdate, error)) func()
+	WatchRouteConfig(routeName string, cb func(xdsclient.RouteConfigUpdate, error)) func()
 	Close()
 }
 

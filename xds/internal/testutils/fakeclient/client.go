@@ -84,7 +84,7 @@ func (xdsC *Client) WaitForCancelListenerWatch(ctx context.Context) error {
 }
 
 // WatchRoute registers a RDS watch.
-func (xdsC *Client) WatchRoute(routeName string, callback func(xdsclient.RouteConfigUpdate, error)) func() {
+func (xdsC *Client) WatchRouteConfig(routeName string, callback func(xdsclient.RouteConfigUpdate, error)) func() {
 	xdsC.rdsCb = callback
 	xdsC.rdsWatchCh.Send(routeName)
 	return func() {
@@ -92,9 +92,9 @@ func (xdsC *Client) WatchRoute(routeName string, callback func(xdsclient.RouteCo
 	}
 }
 
-// WaitForWatchRoute waits for WatchCluster to be invoked on this client and
-// returns the clusterName being watched.
-func (xdsC *Client) WaitForWatchRoute(ctx context.Context) (string, error) {
+// WaitForWatchRouteConfig waits for WatchCluster to be invoked on this client and
+// returns the routeName being watched.
+func (xdsC *Client) WaitForWatchRouteConfig(ctx context.Context) (string, error) {
 	val, err := xdsC.rdsWatchCh.Receive(ctx)
 	if err != nil {
 		return "", err
@@ -102,17 +102,17 @@ func (xdsC *Client) WaitForWatchRoute(ctx context.Context) (string, error) {
 	return val.(string), err
 }
 
-// InvokeWatchRouteCallback invokes the registered rdsWatch callback.
+// InvokeWatchRouteConfigCallback invokes the registered rdsWatch callback.
 //
-// Not thread safe with WatchListener. Only call this after
-// WaitForWatchRoute.
-func (xdsC *Client) InvokeWatchRouteCallback(update xdsclient.RouteConfigUpdate, err error) {
+// Not thread safe with WatchRouteConfig. Only call this after
+// WaitForWatchRouteConfig.
+func (xdsC *Client) InvokeWatchRouteConfigCallback(update xdsclient.RouteConfigUpdate, err error) {
 	xdsC.rdsCb(update, err)
 }
 
-// WaitForCancelRouteWatch waits for a RDS watch to be cancelled  and returns
+// WaitForCancelRouteConfigWatch waits for a RDS watch to be cancelled  and returns
 // context.DeadlineExceeded otherwise.
-func (xdsC *Client) WaitForCancelRouteWatch(ctx context.Context) error {
+func (xdsC *Client) WaitForCancelRouteConfigWatch(ctx context.Context) error {
 	_, err := xdsC.rdsCancelCh.Receive(ctx)
 	return err
 }
@@ -138,7 +138,7 @@ func (xdsC *Client) WaitForWatchCluster(ctx context.Context) (string, error) {
 
 // InvokeWatchClusterCallback invokes the registered cdsWatch callback.
 //
-// Not thread safe with WatchListener. Only call this after
+// Not thread safe with WatchCluster. Only call this after
 // WaitForWatchCluster.
 func (xdsC *Client) InvokeWatchClusterCallback(update xdsclient.ClusterUpdate, err error) {
 	xdsC.cdsCb(update, err)
@@ -172,7 +172,7 @@ func (xdsC *Client) WaitForWatchEDS(ctx context.Context) (string, error) {
 
 // InvokeWatchEDSCallback invokes the registered edsWatch callback.
 //
-// Not thread safe with WatchListener. Only call this after
+// Not thread safe with WatchEndpoints. Only call this after
 // WaitForWatchEDS.
 func (xdsC *Client) InvokeWatchEDSCallback(update xdsclient.EndpointsUpdate, err error) {
 	xdsC.edsCb(update, err)

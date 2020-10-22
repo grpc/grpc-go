@@ -271,13 +271,13 @@ func waitForWatchListener(ctx context.Context, t *testing.T, xdsC *fakeclient.Cl
 	}
 }
 
-// waitForWatchRoute waits for the WatchRoute method to be called on the
+// waitForWatchRouteConfig waits for the WatchRoute method to be called on the
 // xdsClient within a reasonable amount of time, and also verifies that the
 // watch is called with the expected target.
-func waitForWatchRoute(ctx context.Context, t *testing.T, xdsC *fakeclient.Client, wantTarget string) {
+func waitForWatchRouteConfig(ctx context.Context, t *testing.T, xdsC *fakeclient.Client, wantTarget string) {
 	t.Helper()
 
-	gotTarget, err := xdsC.WaitForWatchRoute(ctx)
+	gotTarget, err := xdsC.WaitForWatchRouteConfig(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchService failed with error: %v", err)
 	}
@@ -300,12 +300,12 @@ func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	waitForWatchRoute(ctx, t, xdsC, routeStr)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	// Call the watchAPI callback after closing the resolver, and make sure no
 	// update is triggerred on the ClientConn.
 	xdsR.Close()
-	xdsC.InvokeWatchRouteCallback(xdsclient.RouteConfigUpdate{
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
@@ -336,12 +336,12 @@ func (s) TestXDSResolverBadServiceUpdate(t *testing.T) {
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	waitForWatchRoute(ctx, t, xdsC, routeStr)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr := errors.New("bad serviceupdate")
-	xdsC.InvokeWatchRouteCallback(xdsclient.RouteConfigUpdate{}, suErr)
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{}, suErr)
 
 	if gotErrVal, gotErr := tcc.errorCh.Receive(ctx); gotErr != nil || gotErrVal != suErr {
 		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr)
@@ -365,7 +365,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	waitForWatchRoute(ctx, t, xdsC, routeStr)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 	defer replaceRandNumGenerator(0)()
 
 	for _, tt := range []struct {
@@ -386,7 +386,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	} {
 		// Invoke the watchAPI callback with a good service update and wait for the
 		// UpdateState method to be called on the ClientConn.
-		xdsC.InvokeWatchRouteCallback(xdsclient.RouteConfigUpdate{
+		xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 			VirtualHosts: []*xdsclient.VirtualHost{
 				{
 					Domains: []string{targetStr},
@@ -435,12 +435,12 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	waitForWatchRoute(ctx, t, xdsC, routeStr)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr := errors.New("bad serviceupdate")
-	xdsC.InvokeWatchRouteCallback(xdsclient.RouteConfigUpdate{}, suErr)
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{}, suErr)
 
 	if gotErrVal, gotErr := tcc.errorCh.Receive(ctx); gotErr != nil || gotErrVal != suErr {
 		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr)
@@ -448,7 +448,7 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
-	xdsC.InvokeWatchRouteCallback(xdsclient.RouteConfigUpdate{
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
@@ -471,7 +471,7 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr2 := errors.New("bad serviceupdate 2")
-	xdsC.InvokeWatchRouteCallback(xdsclient.RouteConfigUpdate{}, suErr2)
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{}, suErr2)
 	if gotErrVal, gotErr := tcc.errorCh.Receive(ctx); gotErr != nil || gotErrVal != suErr2 {
 		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr2)
 	}
@@ -495,12 +495,12 @@ func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	waitForWatchRoute(ctx, t, xdsC, routeStr)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "resource removed error")
-	xdsC.InvokeWatchRouteCallback(xdsclient.RouteConfigUpdate{}, suErr)
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{}, suErr)
 
 	if gotErrVal, gotErr := tcc.errorCh.Receive(ctx); gotErr != context.DeadlineExceeded {
 		t.Fatalf("ClientConn.ReportError() received %v, %v, want channel recv timeout", gotErrVal, gotErr)

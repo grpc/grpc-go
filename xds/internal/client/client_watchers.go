@@ -222,12 +222,12 @@ func (c *Client) WatchListener(serviceName string, cb func(ListenerUpdate, error
 	return c.watch(wi)
 }
 
-// WatchRoute starts a listener watcher for the service..
+// WatchRouteConfig starts a listener watcher for the service..
 //
 // Note that during race (e.g. an xDS response is received while the user is
 // calling cancel()), there's a small window where the callback can be called
 // after the watcher is canceled. The caller needs to handle this case.
-func (c *Client) WatchRoute(routeName string, cb func(RouteConfigUpdate, error)) (cancel func()) {
+func (c *Client) WatchRouteConfig(routeName string, cb func(RouteConfigUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
 		c:           c,
 		rType:       RouteConfigResource,
