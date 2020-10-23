@@ -32,6 +32,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/security/advancedtls/internal/testutils"
@@ -512,7 +513,7 @@ func copyFileContents(sourceFile, destinationFile string) error {
 
 // Create PEMFileProvider(s) watching the content changes of temporary
 // files.
-func createProviders(tmpFiles *tmpCredsFiles) (*PEMFileProvider, *PEMFileProvider, *PEMFileProvider, *PEMFileProvider, error) {
+func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovider.Provider, certprovider.Provider, certprovider.Provider, error) {
 	clientIdentityOptions := pemfile.Options{
 		CertFile:            tmpFiles.clientCertTmp.Name(),
 		KeyFile:             tmpFiles.clientKeyTmp.Name(),
