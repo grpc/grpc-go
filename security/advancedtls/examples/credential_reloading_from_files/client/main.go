@@ -85,12 +85,12 @@ func main() {
 	// At initialization, the connection should be good.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultConnTimeout)
 	defer cancel()
-	conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds), grpc.WithBlock())
+	conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
 	if err != nil {
 		log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
 	}
 	greetClient := pb.NewGreeterClient(conn)
-	reply, err := greetClient.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"})
+	reply, err := greetClient.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
 	if err != nil {
 		log.Fatalf("greetClient.SayHello failed: %v", err)
 	}
