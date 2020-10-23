@@ -83,7 +83,7 @@ func (xdsC *Client) WaitForCancelListenerWatch(ctx context.Context) error {
 	return err
 }
 
-// WatchRoute registers a RDS watch.
+// WatchRouteConfig registers a RDS watch.
 func (xdsC *Client) WatchRouteConfig(routeName string, callback func(xdsclient.RouteConfigUpdate, error)) func() {
 	xdsC.rdsCb = callback
 	xdsC.rdsWatchCh.Send(routeName)
