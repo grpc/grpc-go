@@ -37,14 +37,16 @@ var address = "localhost:50051"
 
 const (
 	// Default timeout for normal connections.
-	defaultConnTimeout = 5 * time.Second
+	defaultConnTimeout = 10 * time.Second
 	// Intervals that set to monitor the credential updates.
-	credRefreshingInterval = 200 * time.Millisecond
+	credRefreshingInterval = 1 * time.Minute
 )
 
 func main() {
 	flag.Parse()
 
+	// TODO(ZhenLian): change function signatures to reflect the changes in
+	// https://github.com/grpc/grpc-go/pull/3981.
 	identityOptions := advancedtls.PEMFileProviderOptions{
 		CertFile:         testdata.Path("client_cert_1.pem"),
 		KeyFile:          testdata.Path("client_key_1.pem"),
@@ -83,7 +85,7 @@ func main() {
 	// At initialization, the connection should be good.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultConnTimeout)
 	defer cancel()
-	conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
+	conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
 	}

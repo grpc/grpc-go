@@ -80,9 +80,6 @@ for example in ${EXAMPLES[@]}; do
     SERVER_LOG="$(mktemp)"
     go run ./$example/*server/*.go &> $SERVER_LOG  &
 
-    # Wait for the server to be set up
-    sleep 2s
-
     CLIENT_LOG="$(mktemp)"
     if ! timeout 20 go run ${example}/*client/*.go &> $CLIENT_LOG; then
         fail "client failed to communicate with server

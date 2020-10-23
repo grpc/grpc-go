@@ -38,7 +38,7 @@ import (
 var port = ":50051"
 
 // Intervals that set to monitor the credential updates.
-const credRefreshingInterval = 200 * time.Millisecond
+const credRefreshingInterval = 1 * time.Minute
 
 type greeterServer struct {
 	pb.UnimplementedGreeterServer
@@ -53,6 +53,8 @@ func main() {
 	flag.Parse()
 	fmt.Printf("server starting on port %s...\n", port)
 
+	// TODO(ZhenLian): change function signatures to reflect the changes in
+	// https://github.com/grpc/grpc-go/pull/3981.
 	identityOptions := advancedtls.PEMFileProviderOptions{
 		CertFile:         testdata.Path("server_cert_1.pem"),
 		KeyFile:          testdata.Path("server_key_1.pem"),
