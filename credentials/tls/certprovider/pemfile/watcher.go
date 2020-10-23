@@ -143,17 +143,16 @@ func (w *watcher) updateIdentityDistributor() {
 		logger.Warningf("keyFile (%s) read failed: %v", w.opts.KeyFile, err)
 		return
 	}
-	cert, err := tls.LoadX509KeyPair(w.opts.CertFile, w.opts.KeyFile)
-	if err != nil {
-		logger.Warningf("tls.LoadX509KeyPair(%q, %q) failed: %v", w.opts.CertFile, w.opts.KeyFile, err)
-		return
-	}
-
 	// If the file contents have not changed, skip updating the distributor.
 	if bytes.Equal(w.certFileContents, certFileContents) && bytes.Equal(w.keyFileContents, keyFileContents) {
 		return
 	}
 
+	cert, err := tls.LoadX509KeyPair(w.opts.CertFile, w.opts.KeyFile)
+	if err != nil {
+		logger.Warningf("tls.LoadX509KeyPair(%q, %q) failed: %v", w.opts.CertFile, w.opts.KeyFile, err)
+		return
+	}
 	w.certFileContents = certFileContents
 	w.keyFileContents = keyFileContents
 	w.identityDistributor.Set(&certprovider.KeyMaterial{Certs: []tls.Certificate{cert}}, nil)
@@ -181,7 +180,6 @@ func (w *watcher) updateRootDistributor() {
 		logger.Warning("failed to parse root certificate")
 		return
 	}
-
 	// If the file contents have not changed, skip updating the distributor.
 	if bytes.Equal(w.rootFileContents, rootFileContents) {
 		return
