@@ -16,7 +16,8 @@
  *
  */
 
-// The client demonstrates how to supply an OAuth2 token for every RPC.
+// The client demonstrates how to use the credential reloading feature in
+// advancedtls to make a mTLS connection to the server.
 package main
 
 import (
@@ -32,13 +33,11 @@ import (
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
-var (
-	address = "localhost:50051"
-)
+var address = "localhost:50051"
 
 const (
 	// Default timeout for normal connections.
-	defaultTestTimeout = 5 * time.Second
+	defaultConnTimeout = 5 * time.Second
 	// Intervals that set to monitor the credential updates.
 	credRefreshingInterval = 200 * time.Millisecond
 )
@@ -46,52 +45,52 @@ const (
 func main() {
 	flag.Parse()
 
-	clientIdentityOptions := advancedtls.PEMFileProviderOptions{
+	identityOptions := advancedtls.PEMFileProviderOptions{
 		CertFile:         testdata.Path("client_cert_1.pem"),
 		KeyFile:          testdata.Path("client_key_1.pem"),
 		IdentityInterval: credRefreshingInterval,
 	}
-	clientIdentityProvider, err := advancedtls.NewPEMFileProvider(clientIdentityOptions)
+	identityProvider, err := advancedtls.NewPEMFileProvider(identityOptions)
 	if err != nil {
-		log.Fatalf("advancedtls.NewPEMFileProvider(%v) failed, error: %v", clientIdentityOptions, err)
+		log.Fatalf("advancedtls.NewPEMFileProvider(%v) failed: %v", identityOptions, err)
 	}
-	clientRootOptions := advancedtls.PEMFileProviderOptions{
+	rootOptions := advancedtls.PEMFileProviderOptions{
 		TrustFile:    testdata.Path("client_trust_cert_1.pem"),
 		RootInterval: credRefreshingInterval,
 	}
-	clientRootProvider, err := advancedtls.NewPEMFileProvider(clientRootOptions)
+	rootProvider, err := advancedtls.NewPEMFileProvider(rootOptions)
 	if err != nil {
-		log.Fatalf("advancedtls.NewPEMFileProvider(%v) failed, error: %v", clientRootOptions, err)
+		log.Fatalf("advancedtls.NewPEMFileProvider(%v) failed: %v", rootOptions, err)
 	}
 
-	clientOptions := &advancedtls.ClientOptions{
+	options := &advancedtls.ClientOptions{
 		IdentityOptions: advancedtls.IdentityCertificateOptions{
-			IdentityProvider: clientIdentityProvider,
+			IdentityProvider: identityProvider,
 		},
 		VerifyPeer: func(params *advancedtls.VerificationFuncParams) (*advancedtls.VerificationResults, error) {
 			return &advancedtls.VerificationResults{}, nil
 		},
 		RootOptions: advancedtls.RootCertificateOptions{
-			RootProvider: clientRootProvider,
+			RootProvider: rootProvider,
 		},
 		VType: advancedtls.CertVerification,
 	}
-	clientTLSCreds, err := advancedtls.NewClientCreds(clientOptions)
+	clientTLSCreds, err := advancedtls.NewClientCreds(options)
 	if err != nil {
-		log.Fatalf("advancedtls.NewClientCreds(%v) failed, error: %v", clientOptions, err)
+		log.Fatalf("advancedtls.NewClientCreds(%v) failed: %v", options, err)
 	}
 
 	// At initialization, the connection should be good.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultConnTimeout)
 	defer cancel()
 	conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
 	if err != nil {
-		log.Fatalf("grpc.DialContext to %s failed, error: %v", address, err)
+		log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
 	}
 	greetClient := pb.NewGreeterClient(conn)
 	reply, err := greetClient.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"})
 	if err != nil {
-		log.Fatalf("greetClient.SayHello failed, error: %v", err)
+		log.Fatalf("greetClient.SayHello failed: %v", err)
 	}
 	defer conn.Close()
 	fmt.Printf("Getting message from server: %s...\n", reply.Message)

@@ -16,8 +16,8 @@
  *
  */
 
-// The server demonstrates how to consume and validate OAuth2 tokens provided by
-// clients for each RPC.
+// The server demonstrates how to use the credential reloading feature in
+// advancedtls to serve mTLS connections from the client.
 package main
 
 import (
@@ -35,14 +35,10 @@ import (
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
 
-var (
-	port = ":50051"
-)
+var port = ":50051"
 
-const (
-	// Intervals that set to monitor the credential updates.
-	credRefreshingInterval = 200 * time.Millisecond
-)
+// Intervals that set to monitor the credential updates.
+const credRefreshingInterval = 200 * time.Millisecond
 
 type greeterServer struct {
 	pb.UnimplementedGreeterServer
@@ -57,33 +53,33 @@ func main() {
 	flag.Parse()
 	fmt.Printf("server starting on port %s...\n", port)
 
-	serverIdentityOptions := advancedtls.PEMFileProviderOptions{
+	identityOptions := advancedtls.PEMFileProviderOptions{
 		CertFile:         testdata.Path("server_cert_1.pem"),
 		KeyFile:          testdata.Path("server_key_1.pem"),
 		IdentityInterval: credRefreshingInterval,
 	}
-	serverIdentityProvider, err := advancedtls.NewPEMFileProvider(serverIdentityOptions)
+	identityProvider, err := advancedtls.NewPEMFileProvider(identityOptions)
 	if err != nil {
-		log.Fatalf("advancedtls.NewPEMFileProvider(%v) failed, error: %v", serverIdentityOptions, err)
+		log.Fatalf("advancedtls.NewPEMFileProvider(%v) failed: %v", identityOptions, err)
 	}
-	defer serverIdentityProvider.Close()
-	serverRootOptions := advancedtls.PEMFileProviderOptions{
+	defer identityProvider.Close()
+	rootOptions := advancedtls.PEMFileProviderOptions{
 		TrustFile:    testdata.Path("server_trust_cert_1.pem"),
 		RootInterval: credRefreshingInterval,
 	}
-	serverRootProvider, err := advancedtls.NewPEMFileProvider(serverRootOptions)
+	rootProvider, err := advancedtls.NewPEMFileProvider(rootOptions)
 	if err != nil {
-		log.Fatalf("advancedtls.NewPEMFileProvider(%v) failed, error: %v", serverRootOptions, err)
+		log.Fatalf("advancedtls.NewPEMFileProvider(%v) failed: %v", rootOptions, err)
 	}
-	defer serverRootProvider.Close()
+	defer rootProvider.Close()
 
 	// Start a server and create a client using advancedtls API with Provider.
-	serverOptions := &advancedtls.ServerOptions{
+	options := &advancedtls.ServerOptions{
 		IdentityOptions: advancedtls.IdentityCertificateOptions{
-			IdentityProvider: serverIdentityProvider,
+			IdentityProvider: identityProvider,
 		},
 		RootOptions: advancedtls.RootCertificateOptions{
-			RootProvider: serverRootProvider,
+			RootProvider: rootProvider,
 		},
 		RequireClientCert: true,
 		VerifyPeer: func(params *advancedtls.VerificationFuncParams) (*advancedtls.VerificationResults, error) {
@@ -91,9 +87,9 @@ func main() {
 		},
 		VType: advancedtls.CertVerification,
 	}
-	serverTLSCreds, err := advancedtls.NewServerCreds(serverOptions)
+	serverTLSCreds, err := advancedtls.NewServerCreds(options)
 	if err != nil {
-		log.Fatalf("advancedtls.NewServerCreds(%v) failed, error: %v", serverOptions, err)
+		log.Fatalf("advancedtls.NewServerCreds(%v) failed: %v", options, err)
 	}
 	s := grpc.NewServer(grpc.Creds(serverTLSCreds))
 	lis, err := net.Listen("tcp", port)
