@@ -489,14 +489,14 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 		for _, vv := range added {
 			for i, v := range vv {
 				if i%2 == 0 {
-					k = v
+					k = strings.ToLower(v)
 					continue
 				}
 				// HTTP doesn't allow you to set pseudoheaders after non pseudoheaders were set.
 				if isReservedHeader(k) {
 					continue
 				}
-				headerFields = append(headerFields, hpack.HeaderField{Name: strings.ToLower(k), Value: encodeMetadataHeader(k, v)})
+				headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 			}
 		}
 	}
