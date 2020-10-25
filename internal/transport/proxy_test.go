@@ -18,7 +18,7 @@
  *
  */
 
-package grpc
+package transport
 
 import (
 	"bufio"
@@ -138,15 +138,9 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 	defer overwrite(hpfe)()
 
 	// Dial to proxy server.
-	dialer := newProxyDialer(func(ctx context.Context, addr string) (net.Conn, error) {
-		if deadline, ok := ctx.Deadline(); ok {
-			return net.DialTimeout("tcp", addr, time.Until(deadline))
-		}
-		return net.Dial("tcp", addr)
-	})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	c, err := dialer(ctx, blis.Addr().String())
+	c, err := proxyDial(ctx, blis.Addr().String(), "test")
 	if err != nil {
 		t.Fatalf("http connect Dial failed: %v", err)
 	}
@@ -173,9 +167,6 @@ func (s) TestHTTPConnect(t *testing.T) {
 			if req.Method != http.MethodConnect {
 				return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
 			}
-			if req.UserAgent() != grpcUA {
-				return fmt.Errorf("unexpect user agent %q, want %q", req.UserAgent(), grpcUA)
-			}
 			return nil
 		},
 	)
@@ -194,9 +185,6 @@ func (s) TestHTTPConnectBasicAuth(t *testing.T) {
 		func(req *http.Request) error {
 			if req.Method != http.MethodConnect {
 				return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
-			}
-			if req.UserAgent() != grpcUA {
-				return fmt.Errorf("unexpect user agent %q, want %q", req.UserAgent(), grpcUA)
 			}
 			wantProxyAuthStr := "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
 			if got := req.Header.Get(proxyAuthHeaderKey); got != wantProxyAuthStr {

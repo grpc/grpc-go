@@ -21,17 +21,19 @@ package test
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-func runUnixTest(t *testing.T, address, target, expectedAuthority string) {
+func runUnixTest(t *testing.T, address, target, expectedAuthority string, dialer func(context.Context, string) (net.Conn, error)) {
 	if err := os.RemoveAll(address); err != nil {
 		t.Fatalf("Error removing socket file %v: %v\n", address, err)
 	}
@@ -57,7 +59,11 @@ func runUnixTest(t *testing.T, address, target, expectedAuthority string) {
 		address: address,
 		target:  target,
 	}
-	if err := us.Start(nil); err != nil {
+	opts := []grpc.DialOption{}
+	if dialer != nil {
+		opts = append(opts, grpc.WithContextDialer(dialer))
+	}
+	if err := us.Start(nil, opts...); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 		return
 	}
@@ -70,6 +76,8 @@ func runUnixTest(t *testing.T, address, target, expectedAuthority string) {
 	}
 }
 
+// TestUnix does end to end tests with the various supported unix target
+// formats, ensuring that the authority is set to localhost in every case.
 func (s) TestUnix(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -78,19 +86,19 @@ func (s) TestUnix(t *testing.T) {
 		authority string
 	}{
 		{
-			name:      "Unix1",
+			name:      "UnixRelative",
 			address:   "sock.sock",
 			target:    "unix:sock.sock",
 			authority: "localhost",
 		},
 		{
-			name:      "Unix2",
+			name:      "UnixAbsolute",
 			address:   "/tmp/sock.sock",
 			target:    "unix:/tmp/sock.sock",
 			authority: "localhost",
 		},
 		{
-			name:      "Unix3",
+			name:      "UnixAbsoluteAlternate",
 			address:   "/tmp/sock.sock",
 			target:    "unix:///tmp/sock.sock",
 			authority: "localhost",
@@ -98,7 +106,44 @@ func (s) TestUnix(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			runUnixTest(t, test.address, test.target, test.authority)
+			runUnixTest(t, test.address, test.target, test.authority, nil)
+		})
+	}
+}
+
+// TestUnixCustomDialer does end to end tests with various supported unix target
+// formats, ensuring that the target sent to the dialer does NOT have the
+// "unix:" prefix stripped.
+func (s) TestUnixCustomDialer(t *testing.T) {
+	tests := []struct {
+		name      string
+		address   string
+		target    string
+		authority string
+	}{
+		{
+			name:      "UnixRelative",
+			address:   "sock.sock",
+			target:    "unix:sock.sock",
+			authority: "localhost",
+		},
+		{
+			name:      "UnixAbsolute",
+			address:   "/tmp/sock.sock",
+			target:    "unix:/tmp/sock.sock",
+			authority: "localhost",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dialer := func(ctx context.Context, address string) (net.Conn, error) {
+				if address != test.target {
+					return nil, fmt.Errorf("expected target %v in custom dialer, instead got %v", test.target, address)
+				}
+				address = address[len("unix:"):]
+				return (&net.Dialer{}).DialContext(ctx, "unix", address)
+			}
+			runUnixTest(t, test.address, test.target, test.authority, dialer)
 		})
 	}
 }

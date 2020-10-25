@@ -358,26 +358,37 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 	tests := []struct {
 		desc             string
 		handshakeFunc    testHandshakeFunc
-		rootProvider     certprovider.Provider
-		identityProvider certprovider.Provider
+		handshakeInfoCtx func(ctx context.Context) context.Context
 	}{
 		{
-			// Since we don't specify rootProvider and identityProvider here,
-			// the test does not add a HandshakeInfo context value, and thereby
-			// the ClientHandshake() method will delegate to the fallback.
 			desc:          "fallback",
 			handshakeFunc: testServerTLSHandshake,
+			handshakeInfoCtx: func(ctx context.Context) context.Context {
+				// Since we don't add a HandshakeInfo to the context, the
+				// ClientHandshake() method will delegate to the fallback.
+				return ctx
+			},
 		},
 		{
 			desc:          "TLS",
 			handshakeFunc: testServerTLSHandshake,
-			rootProvider:  makeRootProvider(t, "x509/server_ca_cert.pem"),
+			handshakeInfoCtx: func(ctx context.Context) context.Context {
+				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), nil, defaultTestCertSAN)
+			},
 		},
 		{
-			desc:             "mTLS",
-			handshakeFunc:    testServerMutualTLSHandshake,
-			rootProvider:     makeRootProvider(t, "x509/server_ca_cert.pem"),
-			identityProvider: makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"),
+			desc:          "mTLS",
+			handshakeFunc: testServerMutualTLSHandshake,
+			handshakeInfoCtx: func(ctx context.Context) context.Context {
+				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"), defaultTestCertSAN)
+			},
+		},
+		{
+			desc:          "mTLS with no acceptedSANs specified",
+			handshakeFunc: testServerMutualTLSHandshake,
+			handshakeInfoCtx: func(ctx context.Context) context.Context {
+				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"))
+			},
 		},
 	}
 
@@ -400,10 +411,7 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			if test.rootProvider != nil || test.identityProvider != nil {
-				ctx = newTestContextWithHandshakeInfo(ctx, test.rootProvider, test.identityProvider, defaultTestCertSAN)
-			}
-			_, ai, err := creds.ClientHandshake(ctx, authority, conn)
+			_, ai, err := creds.ClientHandshake(test.handshakeInfoCtx(ctx), authority, conn)
 			if err != nil {
 				t.Fatalf("ClientHandshake() returned failed: %q", err)
 			}

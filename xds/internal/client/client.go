@@ -149,6 +149,15 @@ type ListenerUpdate struct {
 // RouteConfigUpdate contains information received in an RDS response, which is
 // of interest to the registered RDS watcher.
 type RouteConfigUpdate struct {
+	VirtualHosts []*VirtualHost
+}
+
+// VirtualHost contains the routes for a list of Domains.
+//
+// Note that the domains in this slice can be a wildcard, not an exact string.
+// The consumer of this struct needs to find the best match for its hostname.
+type VirtualHost struct {
+	Domains []string
 	// Routes contains a list of routes, each containing matchers and
 	// corresponding action.
 	Routes []*Route
@@ -188,6 +197,31 @@ type ServiceUpdate struct {
 	Routes []*Route
 }
 
+// SecurityConfig contains the security configuration received as part of the
+// Cluster resource.
+type SecurityConfig struct {
+	// RootInstanceName identifies the certProvider plugin to be used to fetch
+	// root certificates. This instance name will be resolved to the plugin name
+	// and its associated configuration from the certificate_providers field of
+	// the bootstrap file.
+	RootInstanceName string
+	// RootCertName is the certificate name to be passed to the plugin (looked
+	// up from the bootstrap file) while fetching root certificates.
+	RootCertName string
+	// IdentityInstanceName identifies the certProvider plugin to be used to
+	// fetch identity certificates. This instance name will be resolved to the
+	// plugin name and its associated configuration from the
+	// certificate_providers field of the bootstrap file.
+	IdentityInstanceName string
+	// IdentityCertName is the certificate name to be passed to the plugin
+	// (looked up from the bootstrap file) while fetching identity certificates.
+	IdentityCertName string
+	// AcceptedSANs is a list of Subject Alternative Names. During the TLS
+	// handshake, the SAN present in the peer certificate is compared against
+	// this list, and the handshake succeeds only if a match is found.
+	AcceptedSANs []string
+}
+
 // ClusterUpdate contains information from a received CDS response, which is of
 // interest to the registered CDS watcher.
 type ClusterUpdate struct {
@@ -196,6 +230,8 @@ type ClusterUpdate struct {
 	ServiceName string
 	// EnableLRS indicates whether or not load should be reported through LRS.
 	EnableLRS bool
+	// SecurityCfg contains security configuration sent by the xDS server.
+	SecurityCfg *SecurityConfig
 }
 
 // OverloadDropConfig contains the config to drop overloads.

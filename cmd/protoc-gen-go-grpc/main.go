@@ -38,7 +38,7 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
-const version = "1.0"
+const version = "1.0.1"
 
 var requireUnimplemented *bool
 

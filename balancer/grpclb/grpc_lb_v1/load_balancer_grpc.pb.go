@@ -83,7 +83,7 @@ type UnsafeLoadBalancerServer interface {
 	mustEmbedUnimplementedLoadBalancerServer()
 }
 
-func RegisterLoadBalancerServer(s *grpc.Server, srv LoadBalancerServer) {
+func RegisterLoadBalancerServer(s grpc.ServiceRegistrar, srv LoadBalancerServer) {
 	s.RegisterService(&_LoadBalancer_serviceDesc, srv)
 }
 

@@ -251,7 +251,7 @@ type UnsafeTestServiceServer interface {
 	mustEmbedUnimplementedTestServiceServer()
 }
 
-func RegisterTestServiceServer(s *grpc.Server, srv TestServiceServer) {
+func RegisterTestServiceServer(s grpc.ServiceRegistrar, srv TestServiceServer) {
 	s.RegisterService(&_TestService_serviceDesc, srv)
 }
 
@@ -480,7 +480,7 @@ type UnsafeUnimplementedServiceServer interface {
 	mustEmbedUnimplementedUnimplementedServiceServer()
 }
 
-func RegisterUnimplementedServiceServer(s *grpc.Server, srv UnimplementedServiceServer) {
+func RegisterUnimplementedServiceServer(s grpc.ServiceRegistrar, srv UnimplementedServiceServer) {
 	s.RegisterService(&_UnimplementedService_serviceDesc, srv)
 }
 
@@ -566,7 +566,7 @@ type UnsafeLoadBalancerStatsServiceServer interface {
 	mustEmbedUnimplementedLoadBalancerStatsServiceServer()
 }
 
-func RegisterLoadBalancerStatsServiceServer(s *grpc.Server, srv LoadBalancerStatsServiceServer) {
+func RegisterLoadBalancerStatsServiceServer(s grpc.ServiceRegistrar, srv LoadBalancerStatsServiceServer) {
 	s.RegisterService(&_LoadBalancerStatsService_serviceDesc, srv)
 }
 

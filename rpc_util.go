@@ -27,7 +27,6 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -870,40 +869,6 @@ func setCallInfoCodec(c *callInfo) error {
 		return status.Errorf(codes.Internal, "no codec registered for content-subtype %s", c.contentSubtype)
 	}
 	return nil
-}
-
-// parseDialTarget returns the network and address to pass to dialer
-func parseDialTarget(target string) (net string, addr string) {
-	net = "tcp"
-
-	m1 := strings.Index(target, ":")
-	m2 := strings.Index(target, ":/")
-
-	// handle unix:addr which will fail with url.Parse
-	if m1 >= 0 && m2 < 0 {
-		if n := target[0:m1]; n == "unix" {
-			net = n
-			addr = target[m1+1:]
-			return net, addr
-		}
-	}
-	if m2 >= 0 {
-		t, err := url.Parse(target)
-		if err != nil {
-			return net, target
-		}
-		scheme := t.Scheme
-		addr = t.Path
-		if scheme == "unix" {
-			net = scheme
-			if addr == "" {
-				addr = t.Host
-			}
-			return net, addr
-		}
-	}
-
-	return net, target
 }
 
 // channelzData is used to store channelz related data for ClientConn, addrConn and Server.

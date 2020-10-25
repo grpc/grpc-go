@@ -30,12 +30,14 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
 
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/version"
 )
 
 // UnmarshalListener processes resources received in an LDS response, validates
@@ -45,7 +47,7 @@ func UnmarshalListener(resources []*anypb.Any, logger *grpclog.PrefixLogger) (ma
 	update := make(map[string]ListenerUpdate)
 	for _, r := range resources {
 		if !IsListenerResource(r.GetTypeUrl()) {
-			return nil, fmt.Errorf("xds: unexpected resource type: %s in LDS response", r.GetTypeUrl())
+			return nil, fmt.Errorf("xds: unexpected resource type: %q in LDS response", r.GetTypeUrl())
 		}
 		lis := &v3listenerpb.Listener{}
 		if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
@@ -69,7 +71,7 @@ func getRouteConfigNameFromListener(lis *v3listenerpb.Listener, logger *grpclog.
 	}
 	apiLisAny := lis.GetApiListener().GetApiListener()
 	if !IsHTTPConnManagerResource(apiLisAny.GetTypeUrl()) {
-		return "", fmt.Errorf("xds: unexpected resource type: %s in LDS response", apiLisAny.GetTypeUrl())
+		return "", fmt.Errorf("xds: unexpected resource type: %q in LDS response", apiLisAny.GetTypeUrl())
 	}
 	apiLis := &v3httppb.HttpConnectionManager{}
 	if err := proto.Unmarshal(apiLisAny.GetValue(), apiLis); err != nil {
@@ -102,20 +104,20 @@ func getRouteConfigNameFromListener(lis *v3listenerpb.Listener, logger *grpclog.
 // validates them, and transforms them into a native struct which contains only
 // fields we are interested in. The provided hostname determines the route
 // configuration resources of interest.
-func UnmarshalRouteConfig(resources []*anypb.Any, hostname string, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdate, error) {
+func UnmarshalRouteConfig(resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdate, error) {
 	update := make(map[string]RouteConfigUpdate)
 	for _, r := range resources {
 		if !IsRouteConfigResource(r.GetTypeUrl()) {
-			return nil, fmt.Errorf("xds: unexpected resource type: %s in RDS response", r.GetTypeUrl())
+			return nil, fmt.Errorf("xds: unexpected resource type: %q in RDS response", r.GetTypeUrl())
 		}
 		rc := &v3routepb.RouteConfiguration{}
 		if err := proto.Unmarshal(r.GetValue(), rc); err != nil {
 			return nil, fmt.Errorf("xds: failed to unmarshal resource in RDS response: %v", err)
 		}
-		logger.Infof("Resource with name: %v, type: %T, contains: %v. Picking routes for current watching hostname %v", rc.GetName(), rc, rc, hostname)
+		logger.Infof("Resource with name: %v, type: %T, contains: %v.", rc.GetName(), rc, rc)
 
 		// Use the hostname (resourceName for LDS) to find the routes.
-		u, err := generateRDSUpdateFromRouteConfiguration(rc, hostname, logger)
+		u, err := generateRDSUpdateFromRouteConfiguration(rc, logger)
 		if err != nil {
 			return nil, fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v with err: %v", rc, err)
 		}
@@ -140,30 +142,19 @@ func UnmarshalRouteConfig(resources []*anypb.Any, hostname string, logger *grpcl
 // field must be empty and whose route field must be set.  Inside that route
 // message, the cluster field will contain the clusterName or weighted clusters
 // we are looking for.
-func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, host string, logger *grpclog.PrefixLogger) (RouteConfigUpdate, error) {
-	//
-	// Currently this returns "" on error, and the caller will return an error.
-	// But the error doesn't contain details of why the response is invalid
-	// (mismatch domain or empty route).
-	//
-	// For logging purposes, we can log in line. But if we want to populate
-	// error details for nack, a detailed error needs to be returned.
-	vh := findBestMatchingVirtualHost(host, rc.GetVirtualHosts())
-	if vh == nil {
-		// No matching virtual host found.
-		return RouteConfigUpdate{}, fmt.Errorf("no matching virtual host found")
+func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, logger *grpclog.PrefixLogger) (RouteConfigUpdate, error) {
+	var vhs []*VirtualHost
+	for _, vh := range rc.GetVirtualHosts() {
+		routes, err := routesProtoToSlice(vh.Routes, logger)
+		if err != nil {
+			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
+		}
+		vhs = append(vhs, &VirtualHost{
+			Domains: vh.GetDomains(),
+			Routes:  routes,
+		})
 	}
-	if len(vh.Routes) == 0 {
-		// The matched virtual host has no routes, this is invalid because there
-		// should be at least one default route.
-		return RouteConfigUpdate{}, fmt.Errorf("matched virtual host has no routes")
-	}
-
-	routes, err := routesProtoToSlice(vh.Routes, logger)
-	if err != nil {
-		return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
-	}
-	return RouteConfigUpdate{Routes: routes}, nil
+	return RouteConfigUpdate{VirtualHosts: vhs}, nil
 }
 
 func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger) ([]*Route, error) {
@@ -337,14 +328,14 @@ func match(domain, host string) (domainMatchType, bool) {
 //  - If two matches are of the same pattern type, the longer match is better
 //    - This is to compare the length of the matching pattern, e.g. “*ABCDE” >
 //    “*ABC”
-func findBestMatchingVirtualHost(host string, vHosts []*v3routepb.VirtualHost) *v3routepb.VirtualHost {
+func findBestMatchingVirtualHost(host string, vHosts []*VirtualHost) *VirtualHost {
 	var (
-		matchVh   *v3routepb.VirtualHost
+		matchVh   *VirtualHost
 		matchType = domainMatchTypeInvalid
 		matchLen  int
 	)
 	for _, vh := range vHosts {
-		for _, domain := range vh.GetDomains() {
+		for _, domain := range vh.Domains {
 			typ, matched := match(domain, host)
 			if typ == domainMatchTypeInvalid {
 				// The rds response is invalid.
@@ -370,7 +361,7 @@ func UnmarshalCluster(resources []*anypb.Any, logger *grpclog.PrefixLogger) (map
 	update := make(map[string]ClusterUpdate)
 	for _, r := range resources {
 		if !IsClusterResource(r.GetTypeUrl()) {
-			return nil, fmt.Errorf("xds: unexpected resource type: %s in CDS response", r.GetTypeUrl())
+			return nil, fmt.Errorf("xds: unexpected resource type: %q in CDS response", r.GetTypeUrl())
 		}
 
 		cluster := &v3clusterpb.Cluster{}
@@ -405,10 +396,78 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 		return emptyUpdate, fmt.Errorf("xds: unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
 
+	sc, err := securityConfigFromCluster(cluster)
+	if err != nil {
+		return emptyUpdate, err
+	}
 	return ClusterUpdate{
 		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
 		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
+		SecurityCfg: sc,
 	}, nil
+}
+
+// securityConfigFromCluster extracts the relevant security configuration from
+// the received Cluster resource.
+func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, error) {
+	// The Cluster resource contains a `transport_socket` field, which contains
+	// a oneof `typed_config` field of type `protobuf.Any`. The any proto
+	// contains a marshaled representation of an `UpstreamTlsContext` message.
+	ts := cluster.GetTransportSocket()
+	if ts == nil {
+		return nil, nil
+	}
+	any := ts.GetTypedConfig()
+	if any == nil || any.TypeUrl != version.V3UpstreamTLSContextURL {
+		return nil, fmt.Errorf("xds: transport_socket field has unexpected typeURL: %s", any.TypeUrl)
+	}
+	upstreamCtx := &v3tlspb.UpstreamTlsContext{}
+	if err := proto.Unmarshal(any.GetValue(), upstreamCtx); err != nil {
+		return nil, fmt.Errorf("xds: failed to unmarshal UpstreamTlsContext in CDS response: %v", err)
+	}
+
+	// The `UpstreamTlsContext` has a `CommonTlsContext` which contains a
+	// `tls_certificate_certificate_provider_instance` field of type
+	// `CertificateProviderInstance`, which contains the provider instance name
+	// and the certificate name to fetch identity certs.
+	sc := &SecurityConfig{}
+	if identity := upstreamCtx.GetCommonTlsContext().GetTlsCertificateCertificateProviderInstance(); identity != nil {
+		sc.IdentityInstanceName = identity.GetInstanceName()
+		sc.IdentityCertName = identity.GetCertificateName()
+	}
+
+	// The `CommonTlsContext` contains a `validation_context_type` field which
+	// is a oneof. We can get the values that we are interested in from two of
+	// those possible values:
+	//  - combined validation context:
+	//    - contains a default validation context which holds the list of
+	//      accepted SANs.
+	//    - contains certificate provider instance configuration
+	//  - certificate provider instance configuration
+	//    - in this case, we do not get a list of accepted SANs.
+	switch t := upstreamCtx.GetCommonTlsContext().GetValidationContextType().(type) {
+	case *v3tlspb.CommonTlsContext_CombinedValidationContext:
+		combined := upstreamCtx.GetCommonTlsContext().GetCombinedValidationContext()
+		if def := combined.GetDefaultValidationContext(); def != nil {
+			for _, matcher := range def.GetMatchSubjectAltNames() {
+				// We only support exact matches for now.
+				if exact := matcher.GetExact(); exact != "" {
+					sc.AcceptedSANs = append(sc.AcceptedSANs, exact)
+				}
+			}
+		}
+		if pi := combined.GetValidationContextCertificateProviderInstance(); pi != nil {
+			sc.RootInstanceName = pi.GetInstanceName()
+			sc.RootCertName = pi.GetCertificateName()
+		}
+	case *v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance:
+		pi := upstreamCtx.GetCommonTlsContext().GetValidationContextCertificateProviderInstance()
+		sc.RootInstanceName = pi.GetInstanceName()
+		sc.RootCertName = pi.GetCertificateName()
+	default:
+		return nil, fmt.Errorf("xds: validation context contains unexpected type: %T", t)
+	}
+	return sc, nil
 }
 
 // UnmarshalEndpoints processes resources received in an EDS response,
@@ -418,7 +477,7 @@ func UnmarshalEndpoints(resources []*anypb.Any, logger *grpclog.PrefixLogger) (m
 	update := make(map[string]EndpointsUpdate)
 	for _, r := range resources {
 		if !IsEndpointsResource(r.GetTypeUrl()) {
-			return nil, fmt.Errorf("xds: unexpected resource type: %s in EDS response", r.GetTypeUrl())
+			return nil, fmt.Errorf("xds: unexpected resource type: %q in EDS response", r.GetTypeUrl())
 		}
 
 		cla := &v3endpointpb.ClusterLoadAssignment{}

@@ -20,8 +20,12 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpctest"
@@ -49,7 +53,8 @@ const (
 	testEDSName = "test-eds"
 
 	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
-	defaultTestTimeout            = 1 * time.Second
+	defaultTestTimeout            = 5 * time.Second
+	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
 )
 
 func clientOpts(balancerName string, overrideWatchExpiryTImeout bool) Options {
@@ -68,24 +73,22 @@ func clientOpts(balancerName string, overrideWatchExpiryTImeout bool) Options {
 }
 
 type testAPIClient struct {
-	r UpdateHandler
-
 	addWatches    map[ResourceType]*testutils.Channel
 	removeWatches map[ResourceType]*testutils.Channel
 }
 
-func overrideNewAPIClient() (<-chan *testAPIClient, func()) {
+func overrideNewAPIClient() (*testutils.Channel, func()) {
 	origNewAPIClient := newAPIClient
-	ch := make(chan *testAPIClient, 1)
+	ch := testutils.NewChannel()
 	newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, opts BuildOptions) (APIClient, error) {
-		ret := newTestAPIClient(opts.Parent)
-		ch <- ret
+		ret := newTestAPIClient()
+		ch.Send(ret)
 		return ret, nil
 	}
 	return ch, func() { newAPIClient = origNewAPIClient }
 }
 
-func newTestAPIClient(r UpdateHandler) *testAPIClient {
+func newTestAPIClient() *testAPIClient {
 	addWatches := map[ResourceType]*testutils.Channel{
 		ListenerResource:    testutils.NewChannel(),
 		RouteConfigResource: testutils.NewChannel(),
@@ -99,7 +102,6 @@ func newTestAPIClient(r UpdateHandler) *testAPIClient {
 		EndpointsResource:   testutils.NewChannel(),
 	}
 	return &testAPIClient{
-		r:             r,
 		addWatches:    addWatches,
 		removeWatches: removeWatches,
 	}
@@ -121,53 +123,108 @@ func (c *testAPIClient) Close() {}
 // TestWatchCallAnotherWatch covers the case where watch() is called inline by a
 // callback. It makes sure it doesn't cause a deadlock.
 func (s) TestWatchCallAnotherWatch(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	c, err := New(clientOpts(testXDSServer, false))
+	client, err := New(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
-	defer c.Close()
+	defer client.Close()
 
-	v2Client := <-v2ClientCh
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	c, err := apiClientCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout when waiting for API client to be created: %v", err)
+	}
+	apiClient := c.(*testAPIClient)
 
 	clusterUpdateCh := testutils.NewChannel()
 	firstTime := true
-	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
+	client.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
 		// Calls another watch inline, to ensure there's deadlock.
-		c.WatchCluster("another-random-name", func(ClusterUpdate, error) {})
+		client.WatchCluster("another-random-name", func(ClusterUpdate, error) {})
 
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-		if _, err := v2Client.addWatches[ClusterResource].Receive(ctx); firstTime && err != nil {
+		if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); firstTime && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 		firstTime = false
 	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if _, err := v2Client.addWatches[ClusterResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
-	v2Client.r.NewClusters(map[string]ClusterUpdate{
-		testCDSName: wantUpdate,
-	})
-
-	if u, err := clusterUpdateCh.Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate, nil}) {
-		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
+	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate})
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate); err != nil {
+		t.Fatal(err)
 	}
 
 	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}
-	v2Client.r.NewClusters(map[string]ClusterUpdate{
-		testCDSName: wantUpdate2,
-	})
-
-	if u, err := clusterUpdateCh.Receive(ctx); err != nil || u != (clusterUpdateErr{wantUpdate2, nil}) {
-		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
+	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate2})
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate2); err != nil {
+		t.Fatal(err)
 	}
+}
+
+func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate ListenerUpdate) error {
+	u, err := updateCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("timeout when waiting for listener update: %v", err)
+	}
+	gotUpdate := u.(ldsUpdateErr)
+	if gotUpdate.err != nil || !cmp.Equal(gotUpdate.u, wantUpdate) {
+		return fmt.Errorf("unexpected endpointsUpdate: (%v, %v), want: (%v, nil)", gotUpdate.u, gotUpdate.err, wantUpdate)
+	}
+	return nil
+}
+
+func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate RouteConfigUpdate) error {
+	u, err := updateCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("timeout when waiting for route configuration update: %v", err)
+	}
+	gotUpdate := u.(rdsUpdateErr)
+	if gotUpdate.err != nil || !cmp.Equal(gotUpdate.u, wantUpdate) {
+		return fmt.Errorf("unexpected route config update: (%v, %v), want: (%v, nil)", gotUpdate.u, gotUpdate.err, wantUpdate)
+	}
+	return nil
+}
+
+func verifyServiceUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate ServiceUpdate) error {
+	u, err := updateCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("timeout when waiting for service update: %v", err)
+	}
+	gotUpdate := u.(serviceUpdateErr)
+	if gotUpdate.err != nil || !cmp.Equal(gotUpdate.u, wantUpdate, cmpopts.EquateEmpty()) {
+		return fmt.Errorf("unexpected service update: (%v, %v), want: (%v, nil)", gotUpdate.u, gotUpdate.err, wantUpdate)
+	}
+	return nil
+}
+
+func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate ClusterUpdate) error {
+	u, err := updateCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("timeout when waiting for cluster update: %v", err)
+	}
+	gotUpdate := u.(clusterUpdateErr)
+	if gotUpdate.err != nil || !cmp.Equal(gotUpdate.u, wantUpdate) {
+		return fmt.Errorf("unexpected clusterUpdate: (%v, %v), want: (%v, nil)", gotUpdate.u, gotUpdate.err, wantUpdate)
+	}
+	return nil
+}
+
+func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate EndpointsUpdate) error {
+	u, err := updateCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("timeout when waiting for endpoints update: %v", err)
+	}
+	gotUpdate := u.(endpointsUpdateErr)
+	if gotUpdate.err != nil || !cmp.Equal(gotUpdate.u, wantUpdate, cmpopts.EquateEmpty()) {
+		return fmt.Errorf("unexpected endpointsUpdate: (%v, %v), want: (%v, nil)", gotUpdate.u, gotUpdate.err, wantUpdate)
+	}
+	return nil
 }

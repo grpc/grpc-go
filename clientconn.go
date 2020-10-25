@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net"
 	"reflect"
 	"strings"
 	"sync"
@@ -48,6 +47,7 @@ import (
 	_ "google.golang.org/grpc/balancer/roundrobin"           // To register roundrobin.
 	_ "google.golang.org/grpc/internal/resolver/dns"         // To register dns resolver.
 	_ "google.golang.org/grpc/internal/resolver/passthrough" // To register passthrough resolver.
+	_ "google.golang.org/grpc/internal/resolver/unix"        // To register unix resolver.
 )
 
 const (
@@ -151,10 +151,10 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, cc.dopts.channelzParentID, target)
 			channelz.AddTraceEvent(logger, cc.channelzID, 0, &channelz.TraceEventDesc{
 				Desc:     "Channel Created",
-				Severity: channelz.CtINFO,
+				Severity: channelz.CtInfo,
 				Parent: &channelz.TraceEventDesc{
 					Desc:     fmt.Sprintf("Nested Channel(id:%d) created", cc.channelzID),
-					Severity: channelz.CtINFO,
+					Severity: channelz.CtInfo,
 				},
 			})
 		} else {
@@ -190,16 +190,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.dopts.defaultServiceConfig, _ = scpr.Config.(*ServiceConfig)
 	}
 	cc.mkp = cc.dopts.copts.KeepaliveParams
-
-	if cc.dopts.copts.Dialer == nil {
-		cc.dopts.copts.Dialer = func(ctx context.Context, addr string) (net.Conn, error) {
-			network, addr := parseDialTarget(addr)
-			return (&net.Dialer{}).DialContext(ctx, network, addr)
-		}
-		if cc.dopts.withProxy {
-			cc.dopts.copts.Dialer = newProxyDialer(cc.dopts.copts.Dialer)
-		}
-	}
 
 	if cc.dopts.copts.UserAgent != "" {
 		cc.dopts.copts.UserAgent += " " + grpcUA
@@ -244,8 +234,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	// Determine the resolver to use.
-	cc.parsedTarget = grpcutil.ParseTarget(cc.target)
-	unixScheme := strings.HasPrefix(cc.target, "unix:")
+	cc.parsedTarget = grpcutil.ParseTarget(cc.target, cc.dopts.copts.Dialer != nil)
 	channelz.Infof(logger, cc.channelzID, "parsed scheme: %q", cc.parsedTarget.Scheme)
 	resolverBuilder := cc.getResolver(cc.parsedTarget.Scheme)
 	if resolverBuilder == nil {
@@ -268,7 +257,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.authority = creds.Info().ServerName
 	} else if cc.dopts.insecure && cc.dopts.authority != "" {
 		cc.authority = cc.dopts.authority
-	} else if unixScheme {
+	} else if strings.HasPrefix(cc.target, "unix:") {
 		cc.authority = "localhost"
 	} else {
 		// Use endpoint from "scheme://authority/endpoint" as the default
@@ -744,10 +733,10 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSub
 		ac.channelzID = channelz.RegisterSubChannel(ac, cc.channelzID, "")
 		channelz.AddTraceEvent(logger, ac.channelzID, 0, &channelz.TraceEventDesc{
 			Desc:     "Subchannel Created",
-			Severity: channelz.CtINFO,
+			Severity: channelz.CtInfo,
 			Parent: &channelz.TraceEventDesc{
 				Desc:     fmt.Sprintf("Subchannel(id:%d) created", ac.channelzID),
-				Severity: channelz.CtINFO,
+				Severity: channelz.CtInfo,
 			},
 		})
 	}
@@ -1033,12 +1022,12 @@ func (cc *ClientConn) Close() error {
 	if channelz.IsOn() {
 		ted := &channelz.TraceEventDesc{
 			Desc:     "Channel Deleted",
-			Severity: channelz.CtINFO,
+			Severity: channelz.CtInfo,
 		}
 		if cc.dopts.channelzParentID != 0 {
 			ted.Parent = &channelz.TraceEventDesc{
 				Desc:     fmt.Sprintf("Nested channel(id:%d) deleted", cc.channelzID),
-				Severity: channelz.CtINFO,
+				Severity: channelz.CtInfo,
 			}
 		}
 		channelz.AddTraceEvent(logger, cc.channelzID, 0, ted)
@@ -1451,10 +1440,10 @@ func (ac *addrConn) tearDown(err error) {
 	if channelz.IsOn() {
 		channelz.AddTraceEvent(logger, ac.channelzID, 0, &channelz.TraceEventDesc{
 			Desc:     "Subchannel Deleted",
-			Severity: channelz.CtINFO,
+			Severity: channelz.CtInfo,
 			Parent: &channelz.TraceEventDesc{
 				Desc:     fmt.Sprintf("Subchanel(id:%d) deleted", ac.channelzID),
-				Severity: channelz.CtINFO,
+				Severity: channelz.CtInfo,
 			},
 		})
 		// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to

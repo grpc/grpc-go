@@ -85,7 +85,7 @@ type UnsafeServerReflectionServer interface {
 	mustEmbedUnimplementedServerReflectionServer()
 }
 
-func RegisterServerReflectionServer(s *grpc.Server, srv ServerReflectionServer) {
+func RegisterServerReflectionServer(s grpc.ServiceRegistrar, srv ServerReflectionServer) {
 	s.RegisterService(&_ServerReflection_serviceDesc, srv)
 }
 

@@ -51,7 +51,7 @@ type VersionedClient interface {
 
 	// SendRequest constructs and sends out a DiscoveryRequest message specific
 	// to the underlying transport protocol version.
-	SendRequest(s grpc.ClientStream, resourceNames []string, rType ResourceType, version string, nonce string) error
+	SendRequest(s grpc.ClientStream, resourceNames []string, rType ResourceType, version, nonce, errMsg string) error
 
 	// RecvResponse uses the provided stream to receive a response specific to
 	// the underlying transport protocol version.
@@ -246,10 +246,10 @@ func (t *TransportHelper) send(ctx context.Context) {
 			t.sendCh.Load()
 
 			var (
-				target         []string
-				rType          ResourceType
-				version, nonce string
-				send           bool
+				target                 []string
+				rType                  ResourceType
+				version, nonce, errMsg string
+				send                   bool
 			)
 			switch update := u.(type) {
 			case *watchAction:
@@ -259,6 +259,7 @@ func (t *TransportHelper) send(ctx context.Context) {
 				if !send {
 					continue
 				}
+				errMsg = update.errMsg
 			}
 			if stream == nil {
 				// There's no stream yet. Skip the request. This request
@@ -267,7 +268,7 @@ func (t *TransportHelper) send(ctx context.Context) {
 				// sending response back).
 				continue
 			}
-			if err := t.vClient.SendRequest(stream, target, rType, version, nonce); err != nil {
+			if err := t.vClient.SendRequest(stream, target, rType, version, nonce, errMsg); err != nil {
 				t.logger.Warningf("ADS request for {target: %q, type: %v, version: %q, nonce: %q} failed: %v", target, rType, version, nonce, err)
 				// send failed, clear the current stream.
 				stream = nil
@@ -292,7 +293,7 @@ func (t *TransportHelper) sendExisting(stream grpc.ClientStream) bool {
 	t.nonceMap = make(map[ResourceType]string)
 
 	for rType, s := range t.watchMap {
-		if err := t.vClient.SendRequest(stream, mapToSlice(s), rType, "", ""); err != nil {
+		if err := t.vClient.SendRequest(stream, mapToSlice(s), rType, "", "", ""); err != nil {
 			t.logger.Errorf("ADS request failed: %v", err)
 			return false
 		}
@@ -321,6 +322,7 @@ func (t *TransportHelper) recv(stream grpc.ClientStream) bool {
 				rType:   rType,
 				version: "",
 				nonce:   nonce,
+				errMsg:  err.Error(),
 				stream:  stream,
 			})
 			t.logger.Warningf("Sending NACK for response type: %v, version: %v, nonce: %v, reason: %v", rType, version, nonce, err)
@@ -387,6 +389,7 @@ type ackAction struct {
 	rType   ResourceType
 	version string // NACK if version is an empty string.
 	nonce   string
+	errMsg  string // Empty unless it's a NACK.
 	// ACK/NACK are tagged with the stream it's for. When the stream is down,
 	// all the ACK/NACK for this stream will be dropped, and the version/nonce
 	// won't be updated.

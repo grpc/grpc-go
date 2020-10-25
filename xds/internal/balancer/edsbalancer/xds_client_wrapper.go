@@ -48,40 +48,45 @@ var (
 )
 
 type loadStoreWrapper struct {
-	mu      sync.RWMutex
-	store   *load.Store
-	service string
+	mu         sync.RWMutex
+	store      *load.Store
+	service    string
+	perCluster load.PerClusterReporter
 }
 
 func (lsw *loadStoreWrapper) update(store *load.Store, service string) {
 	lsw.mu.Lock()
 	defer lsw.mu.Unlock()
+	if store == lsw.store && service == lsw.service {
+		return
+	}
 	lsw.store = store
 	lsw.service = service
+	lsw.perCluster = lsw.store.PerCluster(lsw.service, "")
 }
 
 func (lsw *loadStoreWrapper) CallStarted(locality string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	lsw.store.PerCluster(lsw.service, "").CallStarted(locality)
+	lsw.perCluster.CallStarted(locality)
 }
 
 func (lsw *loadStoreWrapper) CallFinished(locality string, err error) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	lsw.store.PerCluster(lsw.service, "").CallFinished(locality, err)
+	lsw.perCluster.CallFinished(locality, err)
 }
 
 func (lsw *loadStoreWrapper) CallServerLoad(locality, name string, val float64) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	lsw.store.PerCluster(lsw.service, "").CallServerLoad(locality, name, val)
+	lsw.perCluster.CallServerLoad(locality, name, val)
 }
 
 func (lsw *loadStoreWrapper) CallDropped(category string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	lsw.store.PerCluster(lsw.service, "").CallDropped(category)
+	lsw.perCluster.CallDropped(category)
 }
 
 // xdsclientWrapper is responsible for getting the xds client from attributes or

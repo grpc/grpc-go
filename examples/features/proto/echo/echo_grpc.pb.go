@@ -181,7 +181,7 @@ type UnsafeEchoServer interface {
 	mustEmbedUnimplementedEchoServer()
 }
 
-func RegisterEchoServer(s *grpc.Server, srv EchoServer) {
+func RegisterEchoServer(s grpc.ServiceRegistrar, srv EchoServer) {
 	s.RegisterService(&_Echo_serviceDesc, srv)
 }
 
