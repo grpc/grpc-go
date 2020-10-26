@@ -91,7 +91,7 @@ func (b *pluginBuilder) ParseConfig(c interface{}) (*certprovider.BuildableConfi
 	if err != nil {
 		return nil, err
 	}
-	return certprovider.NewBuildableConfig(pluginName, cfg.canonical(), func(opts certprovider.StartOptions) certprovider.Provider {
+	return certprovider.NewBuildableConfig(pluginName, cfg.canonical(), func(opts certprovider.BuildOptions) certprovider.Provider {
 		b.mu.Lock()
 		defer b.mu.Unlock()
 

@@ -67,7 +67,7 @@ type providerPlugin struct {
 	cancel      context.CancelFunc
 	cc          *grpc.ClientConn          // Connection to MeshCA server.
 	cfg         *pluginConfig             // Plugin configuration.
-	opts        certprovider.StartOptions // Key material options.
+	opts        certprovider.BuildOptions // Key material options.
 	logger      *grpclog.PrefixLogger     // Plugin instance specific prefix.
 	backoff     func(int) time.Duration   // Exponential backoff.
 	doneFunc    func()                    // Notify the builder when done.
@@ -78,7 +78,7 @@ type providerParams struct {
 	// This ClientConn to the MeshCA server is owned by the builder.
 	cc       *grpc.ClientConn
 	cfg      *pluginConfig
-	opts     certprovider.StartOptions
+	opts     certprovider.BuildOptions
 	backoff  func(int) time.Duration
 	doneFunc func()
 }

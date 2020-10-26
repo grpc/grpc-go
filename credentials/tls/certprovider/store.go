@@ -39,7 +39,7 @@ type storeKey struct {
 	// configuration of the certificate provider in string form.
 	config string
 	// opts contains the certificate name and other keyMaterial options.
-	opts StartOptions
+	opts BuildOptions
 }
 
 // wrappedProvider wraps a provider instance with a reference count.
@@ -80,7 +80,7 @@ func (wp *wrappedProvider) Close() {
 type BuildableConfig struct {
 	name    string
 	config  []byte
-	starter func(StartOptions) Provider
+	starter func(BuildOptions) Provider
 	pStore  *store
 }
 
@@ -89,7 +89,7 @@ type BuildableConfig struct {
 // the given JSON configuration as part of their ParseConfig() method.
 // Equivalent configurations are expected to invoke this function with the same
 // config argument.
-func NewBuildableConfig(name string, config []byte, starter func(StartOptions) Provider) *BuildableConfig {
+func NewBuildableConfig(name string, config []byte, starter func(BuildOptions) Provider) *BuildableConfig {
 	return &BuildableConfig{
 		name:    name,
 		config:  config,
@@ -101,7 +101,7 @@ func NewBuildableConfig(name string, config []byte, starter func(StartOptions) P
 // Build kicks off a provider instance with the wrapped configuration. Multiple
 // invocations of this method with the same opts will result in provider
 // instances being reused.
-func (bc *BuildableConfig) Build(opts StartOptions) (Provider, error) {
+func (bc *BuildableConfig) Build(opts BuildOptions) (Provider, error) {
 	provStore.mu.Lock()
 	defer provStore.mu.Unlock()
 
@@ -129,6 +129,7 @@ func (bc *BuildableConfig) Build(opts StartOptions) (Provider, error) {
 	return wp, nil
 }
 
+// String returns the provider name and config as a colon separated string.
 func (bc *BuildableConfig) String() string {
 	return fmt.Sprintf("%s:%s", bc.name, string(bc.config))
 }
@@ -146,7 +147,7 @@ func ParseConfig(name string, config interface{}) (*BuildableConfig, error) {
 
 // GetProvider is a convenience function to create a provider given the name,
 // config and build options.
-func GetProvider(name string, config interface{}, opts StartOptions) (Provider, error) {
+func GetProvider(name string, config interface{}, opts BuildOptions) (Provider, error) {
 	bc, err := ParseConfig(name, config)
 	if err != nil {
 		return nil, err

@@ -79,7 +79,7 @@ func (b *fakeProviderBuilder) ParseConfig(config interface{}) (*BuildableConfig,
 	if !ok {
 		return nil, fmt.Errorf("providerBuilder %s received config of type %T, want string", b.name, config)
 	}
-	return NewBuildableConfig(b.name, []byte(s), func(StartOptions) Provider {
+	return NewBuildableConfig(b.name, []byte(s), func(BuildOptions) Provider {
 		fp := &fakeProvider{
 			Distributor: NewDistributor(),
 			config:      s,
@@ -100,7 +100,7 @@ type fakeProvider struct {
 	config string
 }
 
-func (p *fakeProvider) Start(StartOptions) Provider {
+func (p *fakeProvider) Start(BuildOptions) Provider {
 	// This is practically a no-op since this provider doesn't do any work which
 	// needs to be started at this point.
 	return p
@@ -167,19 +167,11 @@ func compareKeyMaterial(got, want *KeyMaterial) error {
 	return nil
 }
 
-func createProvider(t *testing.T, name, config string, opts StartOptions) Provider {
+func createProvider(t *testing.T, name, config string, opts BuildOptions) Provider {
 	t.Helper()
-	builder := getBuilder(name)
-	if builder == nil {
-		t.Fatalf("no builder registered with name %q", name)
-	}
-	bc, err := builder.ParseConfig(config)
+	prov, err := GetProvider(name, config, opts)
 	if err != nil {
-		t.Fatalf("builder.ParseConfig(%q) failed: %v", config, err)
-	}
-	prov, err := bc.Build(opts)
-	if err != nil {
-		t.Fatalf("buildableConfig.Build(%v) failed: %v", opts, err)
+		t.Fatalf("GetProvider(%s, %s, %v) failed: %v", name, config, opts, err)
 	}
 	return prov
 }
@@ -187,7 +179,7 @@ func createProvider(t *testing.T, name, config string, opts StartOptions) Provid
 // TestStoreSingleProvider creates a single provider through the store and calls
 // methods on them.
 func (s) TestStoreSingleProvider(t *testing.T) {
-	prov := createProvider(t, fakeProvider1Name, fakeConfig, StartOptions{CertName: "default"})
+	prov := createProvider(t, fakeProvider1Name, fakeConfig, BuildOptions{CertName: "default"})
 	defer prov.Close()
 
 	// Our fakeProviderBuilder pushes newly created providers on a channel. Grab
@@ -233,7 +225,7 @@ func (s) TestStoreSingleProvider(t *testing.T) {
 func (s) TestStoreSingleProviderSameConfigDifferentOpts(t *testing.T) {
 	// Create three readers on the same fake provider. Two of these readers use
 	// certName `foo`, while the third one uses certName `bar`.
-	optsFoo := StartOptions{CertName: "foo"}
+	optsFoo := BuildOptions{CertName: "foo"}
 	provFoo1 := createProvider(t, fakeProvider1Name, fakeConfig, optsFoo)
 	provFoo2 := createProvider(t, fakeProvider1Name, fakeConfig, optsFoo)
 	defer func() {
@@ -259,7 +251,7 @@ func (s) TestStoreSingleProviderSameConfigDifferentOpts(t *testing.T) {
 		t.Fatalf("A second provider created when expected to be shared by the store")
 	}
 
-	optsBar := StartOptions{CertName: "bar"}
+	optsBar := BuildOptions{CertName: "bar"}
 	provBar1 := createProvider(t, fakeProvider1Name, fakeConfig, optsBar)
 	defer provBar1.Close()
 
@@ -306,7 +298,7 @@ func (s) TestStoreSingleProviderSameConfigDifferentOpts(t *testing.T) {
 // would take place.
 func (s) TestStoreSingleProviderDifferentConfigs(t *testing.T) {
 	// Create two providers of the same type, but with different configs.
-	opts := StartOptions{CertName: "foo"}
+	opts := BuildOptions{CertName: "foo"}
 	cfg1 := fakeConfig + "1111"
 	cfg2 := fakeConfig + "2222"
 
@@ -365,7 +357,7 @@ func (s) TestStoreSingleProviderDifferentConfigs(t *testing.T) {
 // TestStoreMultipleProviders creates providers of different types and makes
 // sure closing of one does not affect the other.
 func (s) TestStoreMultipleProviders(t *testing.T) {
-	opts := StartOptions{CertName: "foo"}
+	opts := BuildOptions{CertName: "foo"}
 	prov1 := createProvider(t, fakeProvider1Name, fakeConfig, opts)
 	defer prov1.Close()
 	// Our fakeProviderBuilder pushes newly created providers on a channel. Grab

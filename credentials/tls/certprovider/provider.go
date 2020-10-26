@@ -96,8 +96,8 @@ type KeyMaterial struct {
 	Roots *x509.CertPool
 }
 
-// StartOptions contains parameters passed to a Provider at build time.
-type StartOptions struct {
+// BuildOptions contains parameters passed to a Provider at build time.
+type BuildOptions struct {
 	// CertName holds the certificate name, whose key material is of interest to
 	// the caller.
 	CertName string

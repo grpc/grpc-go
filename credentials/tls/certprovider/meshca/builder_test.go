@@ -80,7 +80,7 @@ func (s) TestBuildSameConfig(t *testing.T) {
 	// end up sharing the same ClientConn.
 	providers := []certprovider.Provider{}
 	for i := 0; i < cnt; i++ {
-		p, err := buildableConfig.Build(certprovider.StartOptions{})
+		p, err := buildableConfig.Build(certprovider.BuildOptions{})
 		if err != nil {
 			t.Fatalf("Build(%+v) failed: %v", buildableConfig, err)
 		}
@@ -151,7 +151,7 @@ func (s) TestBuildDifferentConfig(t *testing.T) {
 			t.Fatalf("builder.ParseConfig(%q) failed: %v", inputConfig, err)
 		}
 
-		p, err := buildableConfig.Build(certprovider.StartOptions{})
+		p, err := buildableConfig.Build(certprovider.BuildOptions{})
 		if err != nil {
 			t.Fatalf("Build(%+v) failed: %v", buildableConfig, err)
 		}

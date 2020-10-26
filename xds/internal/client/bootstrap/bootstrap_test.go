@@ -501,7 +501,7 @@ func (b *fakeCertProviderBuilder) ParseConfig(cfg interface{}) (*certprovider.Bu
 		return nil, errors.New("fakeCertProviderBuilder received invalid config")
 	}
 	fc := &fakeStableConfig{config: cfgData}
-	return certprovider.NewBuildableConfig(fakeCertProviderName, fc.canonical(), func(certprovider.StartOptions) certprovider.Provider {
+	return certprovider.NewBuildableConfig(fakeCertProviderName, fc.canonical(), func(certprovider.BuildOptions) certprovider.Provider {
 		return &fakeCertProvider{}
 	}), nil
 }

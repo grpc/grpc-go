@@ -42,7 +42,6 @@ import (
 	configpb "google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/meshca_experimental"
 	meshgrpc "google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/v1"
 	meshpb "google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/v1"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils"
 )
 
@@ -54,8 +53,6 @@ const (
 	shortTestCertLife       = 2 * time.Second
 	maxErrCount             = 2
 )
-
-var getBuilder = internal.GetCertificateProviderBuilder.(func(string) certprovider.Builder)
 
 // fakeCA provides a very simple fake implementation of the certificate signing
 // service as exported by the MeshCA.
@@ -306,17 +303,9 @@ func (s) TestCreateCertificate(t *testing.T) {
 	inputConfig := makeJSONConfig(t, cfg)
 
 	// Lookup MeshCA plugin builder, parse config and start the plugin.
-	builder := getBuilder(pluginName)
-	if builder == nil {
-		t.Fatalf("No registered builder for name (%q)", pluginName)
-	}
-	buildableCfg, err := builder.ParseConfig(inputConfig)
+	prov, err := certprovider.GetProvider(pluginName, inputConfig, certprovider.BuildOptions{})
 	if err != nil {
-		t.Fatalf("ParseConfig(%s) failed: %v", string(inputConfig), err)
-	}
-	prov, err := buildableCfg.Build(certprovider.StartOptions{})
-	if err != nil {
-		t.Fatalf("Build(%+v) failed: %v", buildableCfg, err)
+		t.Fatalf("GetProvider(%s, %s) failed: %v", pluginName, string(inputConfig), err)
 	}
 	defer prov.Close()
 
@@ -357,17 +346,9 @@ func (s) TestCreateCertificateWithBackoff(t *testing.T) {
 	inputConfig := makeJSONConfig(t, cfg)
 
 	// Lookup MeshCA plugin builder, parse config and start the plugin.
-	builder := getBuilder(pluginName)
-	if builder == nil {
-		t.Fatalf("No registered builder for name (%q)", pluginName)
-	}
-	buildableCfg, err := builder.ParseConfig(inputConfig)
+	prov, err := certprovider.GetProvider(pluginName, inputConfig, certprovider.BuildOptions{})
 	if err != nil {
-		t.Fatalf("ParseConfig(%s) failed: %v", string(inputConfig), err)
-	}
-	prov, err := buildableCfg.Build(certprovider.StartOptions{})
-	if err != nil {
-		t.Fatalf("Build(%+v) failed: %v", buildableCfg, err)
+		t.Fatalf("GetProvider(%s, %s) failed: %v", pluginName, string(inputConfig), err)
 	}
 	defer prov.Close()
 
@@ -421,17 +402,9 @@ func (s) TestCreateCertificateWithRefresh(t *testing.T) {
 	inputConfig := makeJSONConfig(t, cfg)
 
 	// Lookup MeshCA plugin builder, parse config and start the plugin.
-	builder := getBuilder(pluginName)
-	if builder == nil {
-		t.Fatalf("No registered builder for name (%q)", pluginName)
-	}
-	buildableCfg, err := builder.ParseConfig(inputConfig)
+	prov, err := certprovider.GetProvider(pluginName, inputConfig, certprovider.BuildOptions{})
 	if err != nil {
-		t.Fatalf("ParseConfig(%s) failed: %v", string(inputConfig), err)
-	}
-	prov, err := buildableCfg.Build(certprovider.StartOptions{})
-	if err != nil {
-		t.Fatalf("Build(%+v) failed: %v", buildableCfg, err)
+		t.Fatalf("GetProvider(%s, %s) failed: %v", pluginName, string(inputConfig), err)
 	}
 	defer prov.Close()
 
