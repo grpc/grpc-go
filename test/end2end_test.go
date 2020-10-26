@@ -2397,8 +2397,8 @@ func testTap(t *testing.T, e env) {
 		ResponseSize: 45,
 		Payload:      payload,
 	}
-	if _, err := tc.UnaryCall(context.Background(), req); status.Code(err) != codes.Unavailable {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, %s", err, codes.Unavailable)
+	if _, err := tc.UnaryCall(context.Background(), req); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, %s", err, codes.PermissionDenied)
 	}
 }
 

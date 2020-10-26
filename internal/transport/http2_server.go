@@ -355,6 +355,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	if state.data.statsTrace != nil {
 		s.ctx = stats.SetIncomingTrace(s.ctx, state.data.statsTrace)
 	}
+	var sts *status.Status
 	if t.inTapHandle != nil {
 		var err error
 		info := &tap.Info{
@@ -365,14 +366,11 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			if logger.V(logLevel) {
 				logger.Warningf("transport: http2Server.operateHeaders got an error from InTapHandle: %v", err)
 			}
-			t.controlBuf.put(&cleanupStream{
-				streamID: s.id,
-				rst:      false,
-				rstCode:  0,
-				onWrite:  func() {},
-			})
-			s.cancel()
-			return false
+			var ok bool
+			sts, ok = status.FromError(err)
+			if !ok {
+				sts = status.New(codes.PermissionDenied, err.Error())
+			}
 		}
 	}
 	t.mu.Lock()
@@ -427,7 +425,9 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		}
 		t.stats.HandleRPC(s.ctx, inHeader)
 	}
-	s.ctxDone = s.ctx.Done()
+	if s.ctx != nil {
+		s.ctxDone = s.ctx.Done()
+	}
 	s.wq = newWriteQuota(defaultWriteQuota, s.ctxDone)
 	s.trReader = &transportReader{
 		reader: &recvBufferReader{
@@ -445,6 +445,10 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		streamID: s.id,
 		wq:       s.wq,
 	})
+	if sts != nil {
+		t.WriteStatus(s, sts)
+		return false
+	}
 	handle(s)
 	return false
 }
