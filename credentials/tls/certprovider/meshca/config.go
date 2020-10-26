@@ -161,7 +161,7 @@ func pluginConfigFromJSON(data json.RawMessage) (*pluginConfig, error) {
 	return pc, nil
 }
 
-func (pc *pluginConfig) Canonical() []byte {
+func (pc *pluginConfig) canonical() []byte {
 	return []byte(fmt.Sprintf("%s:%s:%s:%s:%s:%s:%d:%s", pc.serverURI, pc.stsOpts, pc.callTimeout, pc.certLifetime, pc.certGraceTime, pc.keyType, pc.keySize, pc.location))
 }
 

@@ -75,92 +75,83 @@ type pluginBuilder struct {
 	clients map[ccMapKey]*refCountedCC
 }
 
-// Build returns a MeshCA certificate provider for the passed in configuration
-// and options.
-//
-// This builder takes care of sharing the ClientConn to the MeshCA server among
-// different plugin instantiations.
-func (b *pluginBuilder) Build(c certprovider.StableConfig, opts certprovider.Options) certprovider.Provider {
-	cfg, ok := c.(*pluginConfig)
-	if !ok {
-		// This is not expected when passing config returned by ParseConfig().
-		// This could indicate a bug in the certprovider.Store implementation or
-		// in cases where the user is directly using these APIs, could be a user
-		// error.
-		logger.Errorf("unsupported config type: %T", c)
-		return nil
-	}
-
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	ccmk := ccMapKey{
-		name:    cfg.serverURI,
-		stsOpts: cfg.stsOpts,
-	}
-	rcc, ok := b.clients[ccmk]
-	if !ok {
-		// STS call credentials take care of exchanging a locally provisioned
-		// JWT token for an access token which will be accepted by the MeshCA.
-		callCreds, err := sts.NewCredentials(cfg.stsOpts)
-		if err != nil {
-			logger.Errorf("sts.NewCredentials() failed: %v", err)
-			return nil
-		}
-
-		// MeshCA is a public endpoint whose certificate is Web-PKI compliant.
-		// So, we just need to use the system roots to authenticate the MeshCA.
-		cp, err := x509.SystemCertPool()
-		if err != nil {
-			logger.Errorf("x509.SystemCertPool() failed: %v", err)
-			return nil
-		}
-		transportCreds := credentials.NewClientTLSFromCert(cp, "")
-
-		cc, err := grpcDialFunc(cfg.serverURI, grpc.WithTransportCredentials(transportCreds), grpc.WithPerRPCCredentials(callCreds))
-		if err != nil {
-			logger.Errorf("grpc.Dial(%s) failed: %v", cfg.serverURI, err)
-			return nil
-		}
-
-		rcc = &refCountedCC{cc: cc}
-		b.clients[ccmk] = rcc
-	}
-	rcc.refCnt++
-
-	p := newProviderPlugin(providerParams{
-		cc:      rcc.cc,
-		cfg:     cfg,
-		opts:    opts,
-		backoff: backoffFunc,
-		doneFunc: func() {
-			// The plugin implementation will invoke this function when it is
-			// being closed, and here we take care of closing the ClientConn
-			// when there are no more plugins using it. We need to acquire the
-			// lock before accessing the rcc from the enclosing function.
-			b.mu.Lock()
-			defer b.mu.Unlock()
-			rcc.refCnt--
-			if rcc.refCnt == 0 {
-				logger.Infof("Closing grpc.ClientConn to %s", ccmk.name)
-				rcc.cc.Close()
-				delete(b.clients, ccmk)
-			}
-		},
-	})
-	return p
-}
-
 // ParseConfig parses the configuration to be passed to the MeshCA plugin
 // implementation. Expects the config to be a json.RawMessage which contains a
 // serialized JSON representation of the meshca_experimental.GoogleMeshCaConfig
 // proto message.
-func (b *pluginBuilder) ParseConfig(c interface{}) (certprovider.StableConfig, error) {
+//
+// Takes care of sharing the ClientConn to the MeshCA server among
+// different plugin instantiations.
+func (b *pluginBuilder) ParseConfig(c interface{}) (*certprovider.BuildableConfig, error) {
 	data, ok := c.(json.RawMessage)
 	if !ok {
 		return nil, fmt.Errorf("meshca: unsupported config type: %T", c)
 	}
-	return pluginConfigFromJSON(data)
+	cfg, err := pluginConfigFromJSON(data)
+	if err != nil {
+		return nil, err
+	}
+	return certprovider.NewBuildableConfig(pluginName, cfg.canonical(), func(opts certprovider.StartOptions) certprovider.Provider {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+
+		ccmk := ccMapKey{
+			name:    cfg.serverURI,
+			stsOpts: cfg.stsOpts,
+		}
+		rcc, ok := b.clients[ccmk]
+		if !ok {
+			// STS call credentials take care of exchanging a locally provisioned
+			// JWT token for an access token which will be accepted by the MeshCA.
+			callCreds, err := sts.NewCredentials(cfg.stsOpts)
+			if err != nil {
+				logger.Errorf("sts.NewCredentials() failed: %v", err)
+				return nil
+			}
+
+			// MeshCA is a public endpoint whose certificate is Web-PKI compliant.
+			// So, we just need to use the system roots to authenticate the MeshCA.
+			cp, err := x509.SystemCertPool()
+			if err != nil {
+				logger.Errorf("x509.SystemCertPool() failed: %v", err)
+				return nil
+			}
+			transportCreds := credentials.NewClientTLSFromCert(cp, "")
+
+			cc, err := grpcDialFunc(cfg.serverURI, grpc.WithTransportCredentials(transportCreds), grpc.WithPerRPCCredentials(callCreds))
+			if err != nil {
+				logger.Errorf("grpc.Dial(%s) failed: %v", cfg.serverURI, err)
+				return nil
+			}
+
+			rcc = &refCountedCC{cc: cc}
+			b.clients[ccmk] = rcc
+		}
+		rcc.refCnt++
+
+		p := newProviderPlugin(providerParams{
+			cc:      rcc.cc,
+			cfg:     cfg,
+			opts:    opts,
+			backoff: backoffFunc,
+			doneFunc: func() {
+				// The plugin implementation will invoke this function when it is
+				// being closed, and here we take care of closing the ClientConn
+				// when there are no more plugins using it. We need to acquire the
+				// lock before accessing the rcc from the enclosing function.
+				b.mu.Lock()
+				defer b.mu.Unlock()
+				rcc.refCnt--
+				if rcc.refCnt == 0 {
+					logger.Infof("Closing grpc.ClientConn to %s", ccmk.name)
+					rcc.cc.Close()
+					delete(b.clients, ccmk)
+				}
+			},
+		})
+		return p
+
+	}), nil
 }
 
 // Name returns the MeshCA plugin name.

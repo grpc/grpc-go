@@ -42,6 +42,7 @@ import (
 	configpb "google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/meshca_experimental"
 	meshgrpc "google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/v1"
 	meshpb "google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/v1"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils"
 )
 
@@ -53,6 +54,8 @@ const (
 	shortTestCertLife       = 2 * time.Second
 	maxErrCount             = 2
 )
+
+var getBuilder = internal.GetCertificateProviderBuilder.(func(string) certprovider.Builder)
 
 // fakeCA provides a very simple fake implementation of the certificate signing
 // service as exported by the MeshCA.
@@ -297,14 +300,23 @@ func (s) TestCreateCertificate(t *testing.T) {
 	e, addr, cancel := setup(t, opts{})
 	defer cancel()
 
-	// Set the MeshCA targetURI in the plugin configuration to point to our fake
-	// MeshCA.
+	// Set the MeshCA targetURI to point to our fake MeshCA.
 	cfg := proto.Clone(goodConfigFullySpecified).(*configpb.GoogleMeshCaConfig)
 	cfg.Server.GrpcServices[0].GetGoogleGrpc().TargetUri = addr
 	inputConfig := makeJSONConfig(t, cfg)
-	prov, err := certprovider.GetProvider(pluginName, inputConfig, certprovider.Options{})
+
+	// Lookup MeshCA plugin builder, parse config and start the plugin.
+	builder := getBuilder(pluginName)
+	if builder == nil {
+		t.Fatalf("No registered builder for name (%q)", pluginName)
+	}
+	buildableCfg, err := builder.ParseConfig(inputConfig)
 	if err != nil {
-		t.Fatalf("certprovider.GetProvider(%s, %s) failed: %v", pluginName, cfg, err)
+		t.Fatalf("ParseConfig(%s) failed: %v", string(inputConfig), err)
+	}
+	prov, err := buildableCfg.Build(certprovider.StartOptions{})
+	if err != nil {
+		t.Fatalf("Build(%+v) failed: %v", buildableCfg, err)
 	}
 	defer prov.Close()
 
@@ -339,14 +351,23 @@ func (s) TestCreateCertificateWithBackoff(t *testing.T) {
 	e, addr, cancel := setup(t, opts{withbackoff: true})
 	defer cancel()
 
-	// Set the MeshCA targetURI in the plugin configuration to point to our fake
-	// MeshCA.
+	// Set the MeshCA targetURI to point to our fake MeshCA.
 	cfg := proto.Clone(goodConfigFullySpecified).(*configpb.GoogleMeshCaConfig)
 	cfg.Server.GrpcServices[0].GetGoogleGrpc().TargetUri = addr
 	inputConfig := makeJSONConfig(t, cfg)
-	prov, err := certprovider.GetProvider(pluginName, inputConfig, certprovider.Options{})
+
+	// Lookup MeshCA plugin builder, parse config and start the plugin.
+	builder := getBuilder(pluginName)
+	if builder == nil {
+		t.Fatalf("No registered builder for name (%q)", pluginName)
+	}
+	buildableCfg, err := builder.ParseConfig(inputConfig)
 	if err != nil {
-		t.Fatalf("certprovider.GetProvider(%s, %s) failed: %v", pluginName, cfg, err)
+		t.Fatalf("ParseConfig(%s) failed: %v", string(inputConfig), err)
+	}
+	prov, err := buildableCfg.Build(certprovider.StartOptions{})
+	if err != nil {
+		t.Fatalf("Build(%+v) failed: %v", buildableCfg, err)
 	}
 	defer prov.Close()
 
@@ -394,14 +415,23 @@ func (s) TestCreateCertificateWithRefresh(t *testing.T) {
 	e, addr, cancel := setup(t, opts{withShortLife: true})
 	defer cancel()
 
-	// Set the MeshCA targetURI in the plugin configuration to point to our fake
-	// MeshCA.
+	// Set the MeshCA targetURI to point to our fake MeshCA.
 	cfg := proto.Clone(goodConfigFullySpecified).(*configpb.GoogleMeshCaConfig)
 	cfg.Server.GrpcServices[0].GetGoogleGrpc().TargetUri = addr
 	inputConfig := makeJSONConfig(t, cfg)
-	prov, err := certprovider.GetProvider(pluginName, inputConfig, certprovider.Options{})
+
+	// Lookup MeshCA plugin builder, parse config and start the plugin.
+	builder := getBuilder(pluginName)
+	if builder == nil {
+		t.Fatalf("No registered builder for name (%q)", pluginName)
+	}
+	buildableCfg, err := builder.ParseConfig(inputConfig)
 	if err != nil {
-		t.Fatalf("certprovider.GetProvider(%s, %s) failed: %v", pluginName, cfg, err)
+		t.Fatalf("ParseConfig(%s) failed: %v", string(inputConfig), err)
+	}
+	prov, err := buildableCfg.Build(certprovider.StartOptions{})
+	if err != nil {
+		t.Fatalf("Build(%+v) failed: %v", buildableCfg, err)
 	}
 	defer prov.Close()
 
