@@ -203,10 +203,10 @@ type lrsServer struct {
 
 func (lrsS *lrsServer) StreamLoadStats(s lrsgrpc.LoadReportingService_StreamLoadStatsServer) error {
 	req, err := s.Recv()
+	lrsS.reqChan.Send(&Request{req, err})
 	if err != nil {
 		return err
 	}
-	lrsS.reqChan.Send(&Request{req, err})
 
 	select {
 	case r := <-lrsS.respChan:
@@ -222,12 +222,12 @@ func (lrsS *lrsServer) StreamLoadStats(s lrsgrpc.LoadReportingService_StreamLoad
 
 	for {
 		req, err := s.Recv()
+		lrsS.reqChan.Send(&Request{req, err})
 		if err != nil {
 			if err == io.EOF {
 				return nil
 			}
 			return err
 		}
-		lrsS.reqChan.Send(&Request{req, err})
 	}
 }

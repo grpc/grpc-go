@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/xds/internal/client/load"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/buffer"
@@ -71,19 +72,21 @@ type VersionedClient interface {
 	NewLoadStatsStream(ctx context.Context, cc *grpc.ClientConn) (grpc.ClientStream, error)
 
 	// SendFirstLoadStatsRequest constructs and sends the first request on the
-	// LRS stream. This contains the node proto with appropriate metadata
-	// fields.
-	SendFirstLoadStatsRequest(s grpc.ClientStream, targetName string) error
+	// LRS stream.
+	SendFirstLoadStatsRequest(s grpc.ClientStream) error
 
 	// HandleLoadStatsResponse receives the first response from the server which
 	// contains the load reporting interval and the clusters for which the
 	// server asks the client to report load for.
-	HandleLoadStatsResponse(s grpc.ClientStream, clusterName string) (time.Duration, error)
+	//
+	// If the response sets SendAllClusters to true, the returned clusters is
+	// nil.
+	HandleLoadStatsResponse(s grpc.ClientStream) (clusters []string, _ time.Duration, _ error)
 
 	// SendLoadStatsRequest will be invoked at regular intervals to send load
 	// report with load data reported since the last time this method was
 	// invoked.
-	SendLoadStatsRequest(s grpc.ClientStream, clusterName string) error
+	SendLoadStatsRequest(s grpc.ClientStream, loads []*load.Data) error
 }
 
 // TransportHelper contains all xDS transport protocol related functionality
@@ -443,9 +446,9 @@ func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStrea
 	return target, rType, version, nonce, send
 }
 
-// ReportLoad starts an LRS stream to report load data to the management server.
+// reportLoad starts an LRS stream to report load data to the management server.
 // It blocks until the context is cancelled.
-func (t *TransportHelper) ReportLoad(ctx context.Context, cc *grpc.ClientConn, opts LoadReportingOptions) {
+func (t *TransportHelper) reportLoad(ctx context.Context, cc *grpc.ClientConn, opts loadReportingOptions) {
 	retries := 0
 	for {
 		if ctx.Err() != nil {
@@ -472,23 +475,23 @@ func (t *TransportHelper) ReportLoad(ctx context.Context, cc *grpc.ClientConn, o
 		}
 		logger.Infof("lrs: created LRS stream")
 
-		if err := t.vClient.SendFirstLoadStatsRequest(stream, opts.TargetName); err != nil {
+		if err := t.vClient.SendFirstLoadStatsRequest(stream); err != nil {
 			logger.Warningf("lrs: failed to send first request: %v", err)
 			continue
 		}
 
-		interval, err := t.vClient.HandleLoadStatsResponse(stream, opts.ClusterName)
+		clusters, interval, err := t.vClient.HandleLoadStatsResponse(stream)
 		if err != nil {
 			logger.Warning(err)
 			continue
 		}
 
 		retries = 0
-		t.sendLoads(ctx, stream, opts.ClusterName, interval)
+		t.sendLoads(ctx, stream, opts.loadStore, clusters, interval)
 	}
 }
 
-func (t *TransportHelper) sendLoads(ctx context.Context, stream grpc.ClientStream, clusterName string, interval time.Duration) {
+func (t *TransportHelper) sendLoads(ctx context.Context, stream grpc.ClientStream, store *load.Store, clusterNames []string, interval time.Duration) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for {
@@ -497,7 +500,7 @@ func (t *TransportHelper) sendLoads(ctx context.Context, stream grpc.ClientStrea
 		case <-ctx.Done():
 			return
 		}
-		if err := t.vClient.SendLoadStatsRequest(stream, clusterName); err != nil {
+		if err := t.vClient.SendLoadStatsRequest(stream, store.Stats(clusterNames)); err != nil {
 			logger.Warning(err)
 			return
 		}

@@ -30,6 +30,7 @@ import (
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/xds/internal/client/load"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/backoff"
@@ -39,7 +40,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
-	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -78,9 +78,6 @@ type BuildOptions struct {
 	// Backoff returns the amount of time to backoff before retrying broken
 	// streams.
 	Backoff func(int) time.Duration
-	// LoadStore contains load reports which need to be pushed to the management
-	// server.
-	LoadStore *load.Store
 	// Logger provides enhanced logging capabilities.
 	Logger *grpclog.PrefixLogger
 }
@@ -99,6 +96,12 @@ type APIClientBuilder interface {
 
 // APIClient represents the functionality provided by transport protocol
 // version specific implementations of the xDS client.
+//
+// TODO: unexport this interface and all the methods after the PR to make
+// xdsClient sharable by clients. AddWatch and RemoveWatch are exported for
+// v2/v3 to override because they need to keep track of LDS name for RDS to use.
+// After the share xdsClient change, that's no longer necessary. After that, we
+// will still keep this interface for testing purposes.
 type APIClient interface {
 	// AddWatch adds a watch for an xDS resource given its type and name.
 	AddWatch(ResourceType, string)
@@ -107,21 +110,18 @@ type APIClient interface {
 	// given its type and name.
 	RemoveWatch(ResourceType, string)
 
-	// ReportLoad starts an LRS stream to periodically report load using the
+	// reportLoad starts an LRS stream to periodically report load using the
 	// provided ClientConn, which represent a connection to the management
 	// server.
-	ReportLoad(ctx context.Context, cc *grpc.ClientConn, opts LoadReportingOptions)
+	reportLoad(ctx context.Context, cc *grpc.ClientConn, opts loadReportingOptions)
 
 	// Close cleans up resources allocated by the API client.
 	Close()
 }
 
-// LoadReportingOptions contains configuration knobs for reporting load data.
-type LoadReportingOptions struct {
-	// ClusterName is the cluster name for which load is being reported.
-	ClusterName string
-	// TargetName is the target of the parent ClientConn.
-	TargetName string
+// loadReportingOptions contains configuration knobs for reporting load data.
+type loadReportingOptions struct {
+	loadStore *load.Store
 }
 
 // UpdateHandler receives and processes (by taking appropriate actions) xDS
@@ -328,7 +328,6 @@ type Client struct {
 	opts      Options
 	cc        *grpc.ClientConn // Connection to the xDS server
 	apiClient APIClient
-	loadStore *load.Store
 
 	logger *grpclog.PrefixLogger
 
@@ -342,6 +341,11 @@ type Client struct {
 	cdsCache    map[string]ClusterUpdate
 	edsWatchers map[string]map[*watchInfo]bool
 	edsCache    map[string]EndpointsUpdate
+
+	// Changes to map lrsClients and the lrsClient inside the map need to be
+	// protected by lrsMu.
+	lrsMu      sync.Mutex
+	lrsClients map[string]*lrsClient
 }
 
 // New returns a new xdsClient configured with opts.
@@ -382,9 +386,8 @@ func New(opts Options) (*Client, error) {
 	}
 
 	c := &Client{
-		done:      grpcsync.NewEvent(),
-		opts:      opts,
-		loadStore: load.NewStore(),
+		done: grpcsync.NewEvent(),
+		opts: opts,
 
 		updateCh:    buffer.NewUnbounded(),
 		ldsWatchers: make(map[string]map[*watchInfo]bool),
@@ -395,6 +398,7 @@ func New(opts Options) (*Client, error) {
 		cdsCache:    make(map[string]ClusterUpdate),
 		edsWatchers: make(map[string]map[*watchInfo]bool),
 		edsCache:    make(map[string]EndpointsUpdate),
+		lrsClients:  make(map[string]*lrsClient),
 	}
 
 	cc, err := grpc.Dial(opts.Config.BalancerName, dopts...)
@@ -410,7 +414,6 @@ func New(opts Options) (*Client, error) {
 		Parent:    c,
 		NodeProto: opts.Config.NodeProto,
 		Backoff:   backoff.DefaultExponential.Backoff,
-		LoadStore: c.loadStore,
 		Logger:    c.logger,
 	})
 	if err != nil {

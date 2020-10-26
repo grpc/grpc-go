@@ -66,7 +66,7 @@ func (s) TestXDSLoadReporting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err)
 	}
-	if got.Server != "" || got.Cluster != testEDSClusterName {
-		t.Fatalf("xdsClient.ReportLoad called with {%v, %v}: want {\"\", %v}", got.Server, got.Cluster, testEDSClusterName)
+	if got.Server != "" {
+		t.Fatalf("xdsClient.ReportLoad called with {%v}: want {\"\"}", got.Server)
 	}
 }

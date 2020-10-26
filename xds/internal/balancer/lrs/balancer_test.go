@@ -84,8 +84,8 @@ func TestLoadReporting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err)
 	}
-	if got.Server != testLRSServerName || got.Cluster != testClusterName {
-		t.Fatalf("xdsClient.ReportLoad called with {%q, %q}: want {%q, %q}", got.Server, got.Cluster, testLRSServerName, testClusterName)
+	if got.Server != testLRSServerName {
+		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got.Server, testLRSServerName)
 	}
 
 	sc1 := <-cc.NewSubConnCh
