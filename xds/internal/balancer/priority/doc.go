@@ -17,4 +17,8 @@
  */
 
 // Package priority implements the priority balancer.
+//
+// This balancer will be kept in internal until we use it in the xds balancers,
+// and are confident its functionalities are stable. It will then be exported
+// for more users.
 package priority

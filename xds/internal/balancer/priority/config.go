@@ -33,7 +33,12 @@ type child struct {
 type lbConfig struct {
 	serviceconfig.LoadBalancingConfig
 
-	Children   map[string]*child
+	// Children is a map from the child balancer names to their configs. Child
+	// names can be found in field Priorities.
+	Children map[string]*child
+	// Priorities is a list of child balancer names. They are sorted from
+	// highest priority to low. The type/config for each child can be found in
+	// field Children, with the balancer name as the key.
 	Priorities []string
 }
 
