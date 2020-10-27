@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -172,15 +173,17 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		return nil, err
 	}
 
+	var mc serviceconfig.MethodConfig
+	var onCommit func()
 	rpcConfig := cc.safeConfigSelector.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: method})
-	if rpcConfig == nil {
-		rpcConfig = &iresolver.RPCConfig{Context: ctx}
-	}
-	if rpcConfig.Context != nil {
-		ctx = rpcConfig.Context
+	if rpcConfig != nil {
+		if rpcConfig.Context != nil {
+			ctx = rpcConfig.Context
+		}
+		mc = rpcConfig.MethodConfig
+		onCommit = rpcConfig.OnCommitted
 	}
 
-	mc := rpcConfig.MethodConfig // cc.GetMethodConfig(method)
 	if mc.WaitForReady != nil {
 		c.failFast = !*mc.WaitForReady
 	}
@@ -282,6 +285,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		cancel:       cancel,
 		beginTime:    beginTime,
 		firstAttempt: true,
+		onCommit:     onCommit,
 	}
 	if !cc.dopts.disableRetry {
 		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)
@@ -442,7 +446,8 @@ type clientStream struct {
 	// place where we need to check if the attempt is nil.
 	attempt *csAttempt
 	// TODO(hedging): hedging will have multiple attempts simultaneously.
-	committed  bool                       // active attempt committed for retry?
+	committed  bool // active attempt committed for retry?
+	onCommit   func()
 	buffer     []func(a *csAttempt) error // operations to replay on retry
 	bufferSize int                        // current size of buffer
 }
@@ -471,6 +476,9 @@ type csAttempt struct {
 }
 
 func (cs *clientStream) commitAttemptLocked() {
+	if !cs.committed && cs.onCommit != nil {
+		cs.onCommit()
+	}
 	cs.committed = true
 	cs.buffer = nil
 }

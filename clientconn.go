@@ -637,7 +637,6 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 		if sc, ok := s.ServiceConfig.Config.(*ServiceConfig); s.ServiceConfig.Err == nil && ok {
 			cc.applyServiceConfigAndBalancer(sc, s.Addresses)
 			if configSelector := iresolver.GetConfigSelector(s); configSelector != nil {
-				fmt.Println("received non-nil config selector yay")
 				if len(s.ServiceConfig.Config.(*ServiceConfig).Methods) != 0 {
 					channelz.Infof(logger, cc.channelzID, "method configs in service config will be ignored due to presence of config selector")
 				}

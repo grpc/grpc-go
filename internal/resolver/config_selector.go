@@ -41,7 +41,9 @@ type RPCInfo struct {
 
 // RPCConfig describes the configuration to use for each RPC.
 type RPCConfig struct {
-	Context      context.Context            // passes info to LB Policy Picker
+	// The context to use for the remainder of the RPC; can pass info to LB
+	// policy or affect timeout or metadata.
+	Context      context.Context
 	MethodConfig serviceconfig.MethodConfig // configuration to use for this RPC
 	OnCommitted  func()                     // Called when the RPC has been committed (retries no longer possible)
 }
