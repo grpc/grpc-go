@@ -146,6 +146,7 @@ func (s) TestSafeConfigSelector(t *testing.T) {
 			}
 			retChan2 <- resp2
 			if got := <-gotConfigChan; !reflect.DeepEqual(got, resp2) {
+				t.Fatalf("SelectConfig(%v) = %v; want %v", testRPCInfo, got, resp2)
 			}
 		}
 		if !cs1Done {
