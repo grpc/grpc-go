@@ -105,8 +105,6 @@ type healthCheckConfig struct {
 	ServiceName string
 }
 
-type retryPolicy = internalserviceconfig.RetryPolicy
-
 type jsonRetryPolicy struct {
 	MaxAttempts          int
 	InitialBackoff       string
@@ -311,7 +309,7 @@ func parseServiceConfig(js string) *serviceconfig.ParseResult {
 	return &serviceconfig.ParseResult{Config: &sc}
 }
 
-func convertRetryPolicy(jrp *jsonRetryPolicy) (p *retryPolicy, err error) {
+func convertRetryPolicy(jrp *jsonRetryPolicy) (p *internalserviceconfig.RetryPolicy, err error) {
 	if jrp == nil {
 		return nil, nil
 	}
@@ -333,7 +331,7 @@ func convertRetryPolicy(jrp *jsonRetryPolicy) (p *retryPolicy, err error) {
 		return nil, nil
 	}
 
-	rp := &retryPolicy{
+	rp := &internalserviceconfig.RetryPolicy{
 		MaxAttempts:          jrp.MaxAttempts,
 		InitialBackoff:       *ib,
 		MaxBackoff:           *mb,

@@ -82,6 +82,8 @@ func (s) TestConfigSelector(t *testing.T) {
 	testMD := metadata.MD{"footest": []string{"bazbar"}}
 	mdOut := metadata.MD{"handler": []string{"value"}}
 
+	var onCommittedCalled bool
+
 	testCases := []struct {
 		name   string
 		md     metadata.MD
@@ -114,6 +116,14 @@ func (s) TestConfigSelector(t *testing.T) {
 				Timeout: &shorterTimeout,
 			},
 		},
+	}, {
+		name: "onCommitted callback",
+		md:   testMD,
+		config: &iresolver.RPCConfig{
+			OnCommitted: func() {
+				onCommittedCalled = true
+			},
+		},
 	}}
 
 	for _, tc := range testCases {
@@ -124,6 +134,7 @@ func (s) TestConfigSelector(t *testing.T) {
 				t.Fatalf("last config not consumed by config selector")
 			}
 
+			onCommittedCalled = false
 			ctx = metadata.NewOutgoingContext(ctx, tc.md)
 			if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 				t.Fatalf("client.EmptyCall(_, _) = _, %v; want _, nil", err)
@@ -174,6 +185,9 @@ func (s) TestConfigSelector(t *testing.T) {
 				t.Errorf("received deadline = %v; want ~%v", deadlineGot, deadlineSent)
 			}
 
+			if tc.config != nil && tc.config.OnCommitted != nil && !onCommittedCalled {
+				t.Errorf("OnCommitted callback not called")
+			}
 		})
 	}
 
