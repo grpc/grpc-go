@@ -311,13 +311,13 @@ func TestRoutesToJSON(t *testing.T) {
 func TestServiceUpdateToJSON(t *testing.T) {
 	tests := []struct {
 		name     string
-		su       xdsclient.ServiceUpdate
+		su       serviceUpdate
 		wantJSON string
 		wantErr  bool
 	}{
 		{
 			name: "routing",
-			su: xdsclient.ServiceUpdate{
+			su: serviceUpdate{
 				Routes: []*xdsclient.Route{{
 					Path:   newStringP("/service_1/method_1"),
 					Action: map[string]uint32{"cluster_1": 75, "cluster_2": 25},

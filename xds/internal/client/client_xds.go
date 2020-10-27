@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -258,100 +257,6 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 		routesRet = append(routesRet, &route)
 	}
 	return routesRet, nil
-}
-
-type domainMatchType int
-
-const (
-	domainMatchTypeInvalid domainMatchType = iota
-	domainMatchTypeUniversal
-	domainMatchTypePrefix
-	domainMatchTypeSuffix
-	domainMatchTypeExact
-)
-
-// Exact > Suffix > Prefix > Universal > Invalid.
-func (t domainMatchType) betterThan(b domainMatchType) bool {
-	return t > b
-}
-
-func matchTypeForDomain(d string) domainMatchType {
-	if d == "" {
-		return domainMatchTypeInvalid
-	}
-	if d == "*" {
-		return domainMatchTypeUniversal
-	}
-	if strings.HasPrefix(d, "*") {
-		return domainMatchTypeSuffix
-	}
-	if strings.HasSuffix(d, "*") {
-		return domainMatchTypePrefix
-	}
-	if strings.Contains(d, "*") {
-		return domainMatchTypeInvalid
-	}
-	return domainMatchTypeExact
-}
-
-func match(domain, host string) (domainMatchType, bool) {
-	switch typ := matchTypeForDomain(domain); typ {
-	case domainMatchTypeInvalid:
-		return typ, false
-	case domainMatchTypeUniversal:
-		return typ, true
-	case domainMatchTypePrefix:
-		// abc.*
-		return typ, strings.HasPrefix(host, strings.TrimSuffix(domain, "*"))
-	case domainMatchTypeSuffix:
-		// *.123
-		return typ, strings.HasSuffix(host, strings.TrimPrefix(domain, "*"))
-	case domainMatchTypeExact:
-		return typ, domain == host
-	default:
-		return domainMatchTypeInvalid, false
-	}
-}
-
-// findBestMatchingVirtualHost returns the virtual host whose domains field best
-// matches host
-//
-// The domains field support 4 different matching pattern types:
-//  - Exact match
-//  - Suffix match (e.g. “*ABC”)
-//  - Prefix match (e.g. “ABC*)
-//  - Universal match (e.g. “*”)
-//
-// The best match is defined as:
-//  - A match is better if it’s matching pattern type is better
-//    - Exact match > suffix match > prefix match > universal match
-//  - If two matches are of the same pattern type, the longer match is better
-//    - This is to compare the length of the matching pattern, e.g. “*ABCDE” >
-//    “*ABC”
-func findBestMatchingVirtualHost(host string, vHosts []*VirtualHost) *VirtualHost {
-	var (
-		matchVh   *VirtualHost
-		matchType = domainMatchTypeInvalid
-		matchLen  int
-	)
-	for _, vh := range vHosts {
-		for _, domain := range vh.Domains {
-			typ, matched := match(domain, host)
-			if typ == domainMatchTypeInvalid {
-				// The rds response is invalid.
-				return nil
-			}
-			if matchType.betterThan(typ) || matchType == typ && matchLen >= len(domain) || !matched {
-				// The previous match has better type, or the previous match has
-				// better length, or this domain isn't a match.
-				continue
-			}
-			matchVh = vh
-			matchType = typ
-			matchLen = len(domain)
-		}
-	}
-	return matchVh
 }
 
 // UnmarshalCluster processes resources received in an CDS response, validates

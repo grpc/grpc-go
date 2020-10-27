@@ -190,13 +190,6 @@ type Int64Range struct {
 	End   int64 `json:"end"`
 }
 
-// ServiceUpdate contains information received from LDS and RDS responses,
-// which is of interest to the registered service watcher.
-type ServiceUpdate struct {
-	// Routes contain matchers+actions to route RPCs.
-	Routes []*Route
-}
-
 // SecurityConfig contains the security configuration received as part of the
 // Cluster resource.
 type SecurityConfig struct {

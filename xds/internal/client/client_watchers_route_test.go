@@ -55,7 +55,7 @@ func (s) TestRDSWatch(t *testing.T) {
 	apiClient := c.(*testAPIClient)
 
 	rdsUpdateCh := testutils.NewChannel()
-	cancelWatch := client.watchRDS(testRDSName, func(update RouteConfigUpdate, err error) {
+	cancelWatch := client.WatchRouteConfig(testRDSName, func(update RouteConfigUpdate, err error) {
 		rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
 	})
 	if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
@@ -121,7 +121,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 	for i := 0; i < count; i++ {
 		rdsUpdateCh := testutils.NewChannel()
 		rdsUpdateChs = append(rdsUpdateChs, rdsUpdateCh)
-		cancelLastWatch = client.watchRDS(testRDSName, func(update RouteConfigUpdate, err error) {
+		cancelLastWatch = client.WatchRouteConfig(testRDSName, func(update RouteConfigUpdate, err error) {
 			rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
 		})
 
@@ -191,7 +191,7 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 	for i := 0; i < count; i++ {
 		rdsUpdateCh := testutils.NewChannel()
 		rdsUpdateChs = append(rdsUpdateChs, rdsUpdateCh)
-		client.watchRDS(testRDSName+"1", func(update RouteConfigUpdate, err error) {
+		client.WatchRouteConfig(testRDSName+"1", func(update RouteConfigUpdate, err error) {
 			rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
 		})
 
@@ -206,7 +206,7 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 
 	// Third watch for a different name.
 	rdsUpdateCh2 := testutils.NewChannel()
-	client.watchRDS(testRDSName+"2", func(update RouteConfigUpdate, err error) {
+	client.WatchRouteConfig(testRDSName+"2", func(update RouteConfigUpdate, err error) {
 		rdsUpdateCh2.Send(rdsUpdateErr{u: update, err: err})
 	})
 	if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
@@ -265,7 +265,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 	apiClient := c.(*testAPIClient)
 
 	rdsUpdateCh := testutils.NewChannel()
-	client.watchRDS(testRDSName, func(update RouteConfigUpdate, err error) {
+	client.WatchRouteConfig(testRDSName, func(update RouteConfigUpdate, err error) {
 		rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
 	})
 	if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
@@ -287,7 +287,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 
 	// Another watch for the resource in cache.
 	rdsUpdateCh2 := testutils.NewChannel()
-	client.watchRDS(testRDSName, func(update RouteConfigUpdate, err error) {
+	client.WatchRouteConfig(testRDSName, func(update RouteConfigUpdate, err error) {
 		rdsUpdateCh2.Send(rdsUpdateErr{u: update, err: err})
 	})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
