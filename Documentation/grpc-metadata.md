@@ -110,9 +110,9 @@ md := metadata.Pairs("k1", "v1", "k1", "v2", "k2", "v3")
 ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 // later, add some more metadata to the context (e.g. in an interceptor)
-md, _ := metadata.FromOutgoingContext(ctx)
+send, _ := metadata.FromOutgoingContext(ctx)
 newMD := metadata.Pairs("k3", "v3")
-ctx = metadata.NewContext(ctx, metadata.Join(metadata.New(send), newMD))
+ctx = metadata.NewOutgoingContext(ctx, metadata.Join(send, newMD))
 
 // make unary RPC
 response, err := client.SomeRPC(ctx, someRequest)
