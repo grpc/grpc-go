@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: setup GOARCH
-        if: ${{ matrix.TYPE == "386" }}
+        if: ${{ matrix.TYPE == '386' }}
         run: GOARCH=${{ matrix.TYPE }}
         
       - name: Setup Go
