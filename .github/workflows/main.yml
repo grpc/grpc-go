@@ -20,28 +20,20 @@ jobs:
     strategy:
       matrix:
         goversion: [1.11, 1.12, 1.13, 1.14]
-        VET: [novet]
-        RACE: [norace]
-        GOARCH: [amd64]
+        TYPE: [""]
         include:
-          - VET: vet
+          - TYPE: vet
             goversion: 1.14
-          - RACE: race
+          - TYPE: race
             goversion: 1.14
-          - GOARCH: 386
+          - TYPE: 386
             goversion: 1.14
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    env:
-      GOARCH: ${{ matrix.GOARCH }}
 
     steps:
-      - name: setup env
-        run: |
-          GOPATH="$HOME/go"
-          PATH="$PATH:$GOPATH/bin"
-          mkdir -p "$GOPATH/bin"
-
+      - name: setup GOARCH
+        if: ${{ matrix.TYPE == "386" }}
+        run: GOARCH=${{ matrix.TYPE }}
+        
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
@@ -49,14 +41,14 @@ jobs:
 
       - uses: actions/checkout@v2
 
-      - name: Run vet
-        if: ${{ matrix.VET == 'vet' }}
+      - name: vet
+        if: ${{ matrix.TYPE == 'vet' }}
         run: ./vet.sh -install && ./vet.sh
 
       - name: Run tests
-        if: ${{ matrix.RACE != 'race' }}
+        if: ${{ matrix.TYPE != 'race' && matrix.TYPE != 'vet' }}
         run: make test
 
       - name: Run test race
-        if: ${{ matrix.RACE == 'race' }}
+        if: ${{ matrix.TYPE == 'race' }}
         run: make testrace
