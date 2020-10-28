@@ -28,11 +28,11 @@ jobs:
 
       # Runs a single command using the runners shell
       - name: Install vet
-        run: vet.sh -install
+        run: ./vet.sh -install
 
       # Runs a set of commands using the runners shell
       - name: Run vet
-        run: vet.sh
+        run: ./vet.sh
 
       - name: Run tests
         run: make test
