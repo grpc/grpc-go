@@ -32,7 +32,7 @@ jobs:
     steps:
       - name: setup GOARCH
         if: ${{ matrix.TYPE == '386' }}
-        run: GOARCH=${{ matrix.TYPE }}
+        run: export GOARCH=${{ matrix.TYPE }}
         
       - name: Setup Go
         uses: actions/setup-go@v2
@@ -47,7 +47,7 @@ jobs:
 
       - name: Run tests
         if: ${{ matrix.TYPE != 'race' && matrix.TYPE != 'vet' }}
-        run: make test
+        run: echo $GOARCH; make test
 
       - name: Run test race
         if: ${{ matrix.TYPE == 'race' }}
