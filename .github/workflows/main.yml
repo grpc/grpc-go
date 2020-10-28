@@ -32,10 +32,10 @@ jobs:
             goversion: 1.14
 
     # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-      - env:
-          GOARCH: ${{ matrix.GOARCH }}
+    env:
+      GOARCH: ${{ matrix.GOARCH }}
 
+    steps:
       - name: setup env
         run: |
           GOPATH="$HOME/go"
