@@ -31,11 +31,10 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       - name: setup env
-        shell: bash
         run: |
-          echo "::set-env name=GOPATH::$HOME/go"
-          echo "::add-path::$HOME/go/bin"
-          mkdir -p "$HOME/go/bin"
+          GOPATH="$HOME/go"
+          PATH="$PATH:$GOPATH/bin"
+          mkdir -p "$GOPATH/bin"
 
       # Setup Go
       - name: Setup Go
