@@ -16,10 +16,17 @@ env:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
+  tests:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goversion: [1.11, 1.12, 1.13, 1.14]
+        include:
+          - goversion: 1.14
+            RACE: on
+          - GOARCH: 386
+            goversion: 1.14
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
