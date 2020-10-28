@@ -26,15 +26,16 @@ jobs:
       - name: setup env
         shell: bash
         run: |
-          echo "::set-env name=GOPATH::${{ github.workspace }}/go"
-          echo "::add-path::${{ github.workspace }}/go/bin"
-
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+          echo "::set-env name=GOPATH::$HOME/go"
+          echo "::add-path::$HOME/go/bin"
+          mkdir -p "$HOME/go/bin"
 
       # Setup Go
       - name: Setup Go
         uses: actions/setup-go@v2
+
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
 
       # Runs a single command using the runners shell
       - name: Install vet
