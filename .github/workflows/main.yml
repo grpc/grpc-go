@@ -40,7 +40,8 @@ jobs:
       - name: Install vet
         run: |
           ./vet.sh -install
-          which 
+          which go
+          which golint
 
       # Runs a set of commands using the runners shell
       - name: Run vet
