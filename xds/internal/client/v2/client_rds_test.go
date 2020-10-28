@@ -34,10 +34,8 @@ import (
 // This is called by RDS tests to start LDS first, because LDS is a
 // pre-requirement for RDS, and RDS handle would fail without an existing LDS
 // watch.
-func doLDS(t *testing.T, v2c xdsclient.APIClient, fakeServer *fakeserver.Server) {
+func doLDS(ctx context.Context, t *testing.T, v2c xdsclient.APIClient, fakeServer *fakeserver.Server) {
 	v2c.AddWatch(xdsclient.ListenerResource, goodLDSTarget1)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout waiting for LDS request: %v", err)
 	}
@@ -137,7 +135,10 @@ func (s) TestRDSHandleResponseWithoutRDSWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer v2c.Close()
-	doLDS(t, v2c, fakeServer)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	doLDS(ctx, t, v2c, fakeServer)
 
 	if v2c.handleRDSResponse(badResourceTypeInRDSResponse) == nil {
 		t.Fatal("v2c.handleRDSResponse() succeeded, should have failed")
