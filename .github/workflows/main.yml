@@ -23,6 +23,12 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
+      - name: setup env
+        shell: bash
+        run: |
+          echo "::set-env name=GOPATH::${{ github.workspace }}/go"
+          echo "::add-path::${{ github.workspace }}/go/bin"
+
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
@@ -34,7 +40,7 @@ jobs:
       - name: Install vet
         run: |
           ./vet.sh -install
-          ls /opt/hostedtoolcache/go/1.14.10/x64/bin
+          which 
 
       # Runs a set of commands using the runners shell
       - name: Run vet
