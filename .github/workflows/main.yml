@@ -26,6 +26,10 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
+      # Setup Go
+      - name: Setup Go
+        uses: actions/setup-go@v2
+
       # Runs a single command using the runners shell
       - name: Install vet
         run: ./vet.sh -install
