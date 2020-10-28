@@ -33,8 +33,9 @@ jobs:
       # Runs a single command using the runners shell
       - name: Install vet
         run: |
-          PATH=${PATH}:${GOBIN}
-          echo $PATH
+          echo $GOPATH
+          ls ~/go/bin
+          PATH=${PATH}:${GOPATH}/bin
           ./vet.sh -install
 
       # Runs a set of commands using the runners shell
