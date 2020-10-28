@@ -33,12 +33,14 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
+      - env
+        - GOARCH: ${{ matrix.GOARCH }}
+
       - name: setup env
         run: |
           GOPATH="$HOME/go"
           PATH="$PATH:$GOPATH/bin"
           mkdir -p "$GOPATH/bin"
-          GOARCH=${{ matrix.GOARCH }}
 
       - name: Setup Go
         uses: actions/setup-go@v2
@@ -55,9 +57,9 @@ jobs:
         run: ./vet.sh
 
       - name: Run tests
-        if: ${{ matrix.VET == 'novet' && $matrix.RACE == 'norace' }}
+        if: ${{ matrix.VET == 'novet' && matrix.RACE == 'norace' }}
         run: make test
 
       - name: Run test race
-        if: ${{ matrix.VET == 'novet' && $matrix.RACE == 'race' }}
+        if: ${{ matrix.VET == 'novet' && matrix.RACE == 'race' }}
         run: make testrace
