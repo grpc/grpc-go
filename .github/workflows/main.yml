@@ -1,5 +1,3 @@
-# This is a basic workflow to help you get started with Actions
-
 name: Testing
 
 # Controls when the action will run. Triggers the workflow on push or pull request
@@ -22,10 +20,13 @@ jobs:
     strategy:
       matrix:
         goversion: [1.11, 1.12, 1.13, 1.14]
-        RACE: [off]
+        VET: [novet]
+        RACE: [norace]
         GOARCH: [amd64]
         include:
-          - RACE: on
+          - VET: vet
+            goversion: 1.14
+          - RACE: race
             goversion: 1.14
           - GOARCH: 386
             goversion: 1.14
@@ -39,25 +40,24 @@ jobs:
           mkdir -p "$GOPATH/bin"
           GOARCH=${{ matrix.GOARCH }}
 
-      # Setup Go
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.goversion }}
 
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      # Runs a single command using the runners shell
       - name: Install vet
-        run: |
-          ./vet.sh -install
-          which go
-          which golint
+        run: ./vet.sh -install
 
-      # Runs a set of commands using the runners shell
       - name: Run vet
+        if: ${{ matrix.VET == 'vet' }}
         run: ./vet.sh
 
       - name: Run tests
+        if: ${{ matrix.VET == 'novet' && $matrix.RACE == 'norace' }}
         run: make test
+
+      - name: Run test race
+        if: ${{ matrix.VET == 'novet' && $matrix.RACE == 'race' }}
+        run: make testrace
