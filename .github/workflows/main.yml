@@ -22,6 +22,8 @@ jobs:
     strategy:
       matrix:
         goversion: [1.11, 1.12, 1.13, 1.14]
+        RACE: off
+        GOARCH: amd64
         include:
           - RACE: on
             goversion: 1.14
@@ -35,6 +37,7 @@ jobs:
           GOPATH="$HOME/go"
           PATH="$PATH:$GOPATH/bin"
           mkdir -p "$GOPATH/bin"
+          GOARCH=${{ matrix.GOARCH }}
 
       # Setup Go
       - name: Setup Go
