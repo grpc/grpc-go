@@ -20,8 +20,8 @@ jobs:
     strategy:
       matrix:
         goversion: [1.11, 1.12, 1.13, 1.14]
-        VET: [novet]
-        RACE: [norace]
+        VET: []
+        RACE: []
         GOARCH: [amd64]
         include:
           - VET: vet
@@ -57,9 +57,9 @@ jobs:
         run: ./vet.sh
 
       - name: Run tests
-        if: ${{ matrix.VET == 'novet' && matrix.RACE == 'norace' }}
+        if: ${{ matrix.RACE != 'race' }}
         run: make test
 
       - name: Run test race
-        if: ${{ matrix.VET == 'novet' && matrix.RACE == 'race' }}
+        if: ${{ matrix.RACE == 'race' }}
         run: make testrace
