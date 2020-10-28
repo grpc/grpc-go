@@ -20,8 +20,8 @@ jobs:
     strategy:
       matrix:
         goversion: [1.11, 1.12, 1.13, 1.14]
-        VET: []
-        RACE: []
+        VET: [novet]
+        RACE: [norace]
         GOARCH: [amd64]
         include:
           - VET: vet
@@ -49,12 +49,9 @@ jobs:
 
       - uses: actions/checkout@v2
 
-      - name: Install vet
-        run: ./vet.sh -install
-
       - name: Run vet
         if: ${{ matrix.VET == 'vet' }}
-        run: ./vet.sh
+        run: ./vet.sh -install && ./vet.sh
 
       - name: Run tests
         if: ${{ matrix.RACE != 'race' }}
