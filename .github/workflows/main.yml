@@ -33,8 +33,9 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - env
-        - GOARCH: ${{ matrix.GOARCH }}
+      - name: initial env
+        env:
+          GOARCH: ${{ matrix.GOARCH }}
 
       - name: setup env
         run: |
