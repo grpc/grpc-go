@@ -25,17 +25,20 @@ import (
 
 func TestPathFullMatcherMatch(t *testing.T) {
 	tests := []struct {
-		name     string
-		fullPath string
-		path     string
-		want     bool
+		name            string
+		fullPath        string
+		caseInsensitive bool
+		path            string
+		want            bool
 	}{
 		{name: "match", fullPath: "/s/m", path: "/s/m", want: true},
+		{name: "case insensitive match", fullPath: "/s/m", caseInsensitive: true, path: "/S/m", want: true},
 		{name: "not match", fullPath: "/s/m", path: "/a/b", want: false},
+		{name: "case insensitive not match", fullPath: "/s/m", caseInsensitive: true, path: "/a/b", want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fpm := newPathExactMatcher(tt.fullPath)
+			fpm := newPathExactMatcher(tt.fullPath, tt.caseInsensitive)
 			if got := fpm.match(tt.path); got != tt.want {
 				t.Errorf("{%q}.match(%q) = %v, want %v", tt.fullPath, tt.path, got, tt.want)
 			}
@@ -45,17 +48,20 @@ func TestPathFullMatcherMatch(t *testing.T) {
 
 func TestPathPrefixMatcherMatch(t *testing.T) {
 	tests := []struct {
-		name   string
-		prefix string
-		path   string
-		want   bool
+		name            string
+		prefix          string
+		caseInsensitive bool
+		path            string
+		want            bool
 	}{
 		{name: "match", prefix: "/s/", path: "/s/m", want: true},
+		{name: "case insensitive match", prefix: "/s/", caseInsensitive: true, path: "/S/m", want: true},
 		{name: "not match", prefix: "/s/", path: "/a/b", want: false},
+		{name: "case insensitive not match", prefix: "/s/", caseInsensitive: true, path: "/a/b", want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fpm := newPathPrefixMatcher(tt.prefix)
+			fpm := newPathPrefixMatcher(tt.prefix, tt.caseInsensitive)
 			if got := fpm.match(tt.path); got != tt.want {
 				t.Errorf("{%q}.match(%q) = %v, want %v", tt.prefix, tt.path, got, tt.want)
 			}

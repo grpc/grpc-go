@@ -38,7 +38,7 @@ func TestAndMatcherMatch(t *testing.T) {
 	}{
 		{
 			name: "both match",
-			pm:   newPathExactMatcher("/a/b"),
+			pm:   newPathExactMatcher("/a/b", false),
 			hm:   newHeaderExactMatcher("th", "tv"),
 			info: balancer.PickInfo{
 				FullMethodName: "/a/b",
@@ -48,7 +48,7 @@ func TestAndMatcherMatch(t *testing.T) {
 		},
 		{
 			name: "only one match",
-			pm:   newPathExactMatcher("/a/b"),
+			pm:   newPathExactMatcher("/a/b", false),
 			hm:   newHeaderExactMatcher("th", "tv"),
 			info: balancer.PickInfo{
 				FullMethodName: "/z/y",
@@ -58,7 +58,7 @@ func TestAndMatcherMatch(t *testing.T) {
 		},
 		{
 			name: "both not match",
-			pm:   newPathExactMatcher("/z/y"),
+			pm:   newPathExactMatcher("/z/y", false),
 			hm:   newHeaderExactMatcher("th", "abc"),
 			info: balancer.PickInfo{
 				FullMethodName: "/a/b",
@@ -68,7 +68,7 @@ func TestAndMatcherMatch(t *testing.T) {
 		},
 		{
 			name: "fake header",
-			pm:   newPathPrefixMatcher("/"),
+			pm:   newPathPrefixMatcher("/", false),
 			hm:   newHeaderExactMatcher("content-type", "fake"),
 			info: balancer.PickInfo{
 				FullMethodName: "/a/b",
@@ -80,7 +80,7 @@ func TestAndMatcherMatch(t *testing.T) {
 		},
 		{
 			name: "binary header",
-			pm:   newPathPrefixMatcher("/"),
+			pm:   newPathPrefixMatcher("/", false),
 			hm:   newHeaderPresentMatcher("t-bin", true),
 			info: balancer.PickInfo{
 				FullMethodName: "/a/b",
@@ -146,8 +146,8 @@ func TestCompositeMatcherEqual(t *testing.T) {
 	}{
 		{
 			name: "equal",
-			pm:   newPathExactMatcher("/a/b"),
-			mm:   newCompositeMatcher(newPathExactMatcher("/a/b"), nil, nil),
+			pm:   newPathExactMatcher("/a/b", false),
+			mm:   newCompositeMatcher(newPathExactMatcher("/a/b", false), nil, nil),
 			want: true,
 		},
 		{
@@ -158,9 +158,9 @@ func TestCompositeMatcherEqual(t *testing.T) {
 		},
 		{
 			name: "not equal",
-			pm:   newPathExactMatcher("/a/b"),
+			pm:   newPathExactMatcher("/a/b", false),
 			fm:   newFractionMatcher(123),
-			mm:   newCompositeMatcher(newPathExactMatcher("/a/b"), nil, nil),
+			mm:   newCompositeMatcher(newPathExactMatcher("/a/b", false), nil, nil),
 			want: false,
 		},
 	}

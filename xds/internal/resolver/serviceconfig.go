@@ -56,12 +56,13 @@ type cdsBalancerConfig struct {
 }
 
 type route struct {
-	Path     *string                    `json:"path,omitempty"`
-	Prefix   *string                    `json:"prefix,omitempty"`
-	Regex    *string                    `json:"regex,omitempty"`
-	Headers  []*xdsclient.HeaderMatcher `json:"headers,omitempty"`
-	Fraction *wrapperspb.UInt32Value    `json:"matchFraction,omitempty"`
-	Action   string                     `json:"action"`
+	Path            *string                    `json:"path,omitempty"`
+	Prefix          *string                    `json:"prefix,omitempty"`
+	Regex           *string                    `json:"regex,omitempty"`
+	CaseInsensitive bool                       `json:"caseInsensitive"`
+	Headers         []*xdsclient.HeaderMatcher `json:"headers,omitempty"`
+	Fraction        *wrapperspb.UInt32Value    `json:"matchFraction,omitempty"`
+	Action          string                     `json:"action"`
 }
 
 type xdsActionConfig struct {
@@ -80,10 +81,11 @@ func (r *xdsResolver) routesToJSON(routes []*xdsclient.Route) (string, error) {
 	var rts []*route
 	for _, rt := range routes {
 		t := &route{
-			Path:    rt.Path,
-			Prefix:  rt.Prefix,
-			Regex:   rt.Regex,
-			Headers: rt.Headers,
+			Path:            rt.Path,
+			Prefix:          rt.Prefix,
+			Regex:           rt.Regex,
+			Headers:         rt.Headers,
+			CaseInsensitive: rt.CaseInsensitive,
 		}
 
 		if f := rt.Fraction; f != nil {

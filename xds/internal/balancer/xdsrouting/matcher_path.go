@@ -30,14 +30,26 @@ type pathMatcherInterface interface {
 }
 
 type pathExactMatcher struct {
-	fullPath string
+	// fullPath is all upper case if caseInsensitive is true.
+	fullPath        string
+	caseInsensitive bool
 }
 
-func newPathExactMatcher(p string) *pathExactMatcher {
-	return &pathExactMatcher{fullPath: p}
+func newPathExactMatcher(p string, caseInsensitive bool) *pathExactMatcher {
+	ret := &pathExactMatcher{
+		fullPath:        p,
+		caseInsensitive: caseInsensitive,
+	}
+	if caseInsensitive {
+		ret.fullPath = strings.ToUpper(p)
+	}
+	return ret
 }
 
 func (pem *pathExactMatcher) match(path string) bool {
+	if pem.caseInsensitive {
+		return pem.fullPath == strings.ToUpper(path)
+	}
 	return pem.fullPath == path
 }
 
@@ -46,7 +58,7 @@ func (pem *pathExactMatcher) equal(m pathMatcherInterface) bool {
 	if !ok {
 		return false
 	}
-	return pem.fullPath == mm.fullPath
+	return pem.fullPath == mm.fullPath && pem.caseInsensitive == mm.caseInsensitive
 }
 
 func (pem *pathExactMatcher) String() string {
@@ -54,14 +66,26 @@ func (pem *pathExactMatcher) String() string {
 }
 
 type pathPrefixMatcher struct {
-	prefix string
+	// prefix is all upper case if caseInsensitive is true.
+	prefix          string
+	caseInsensitive bool
 }
 
-func newPathPrefixMatcher(p string) *pathPrefixMatcher {
-	return &pathPrefixMatcher{prefix: p}
+func newPathPrefixMatcher(p string, caseInsensitive bool) *pathPrefixMatcher {
+	ret := &pathPrefixMatcher{
+		prefix:          p,
+		caseInsensitive: caseInsensitive,
+	}
+	if caseInsensitive {
+		ret.prefix = strings.ToUpper(p)
+	}
+	return ret
 }
 
 func (ppm *pathPrefixMatcher) match(path string) bool {
+	if ppm.caseInsensitive {
+		return strings.HasPrefix(strings.ToUpper(path), ppm.prefix)
+	}
 	return strings.HasPrefix(path, ppm.prefix)
 }
 
@@ -70,7 +94,7 @@ func (ppm *pathPrefixMatcher) equal(m pathMatcherInterface) bool {
 	if !ok {
 		return false
 	}
-	return ppm.prefix == mm.prefix
+	return ppm.prefix == mm.prefix && ppm.caseInsensitive == mm.caseInsensitive
 }
 
 func (ppm *pathPrefixMatcher) String() string {
