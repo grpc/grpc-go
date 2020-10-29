@@ -8,6 +8,17 @@ activity on the connection.
 For how to configure keepalive, see
 https://godoc.org/google.golang.org/grpc/keepalive for the options.
 
+## Why do I need this?
+
+Keepalive can be useful to detect TCP level connection failures. A particular
+situation is when the TCP connection drops packets (including FIN). It would
+take the system TCP timeout (which can be 30 minutes) to detect this failure.
+Keepalive would allow gRPC to detect this failure much sooner.
+
+Another usage is (as the name suggests) to keep the connection alive. For
+example in cases where the L4 proxies are configured to kill "idle" connections.
+Sending pings would make the connections not "idle".
+
 ## What should I set?
 
 It should be sufficient for most users to set [client
