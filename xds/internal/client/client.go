@@ -277,28 +277,6 @@ type EndpointsUpdate struct {
 	Localities []Locality
 }
 
-// Options provides all parameters required for the creation of an xDS client.
-type Options struct {
-	// Config contains a fully populated bootstrap config. It is the
-	// responsibility of the caller to use some sane defaults here if the
-	// bootstrap process returned with certain fields left unspecified.
-	Config bootstrap.Config
-	// DialOpts contains dial options to be used when dialing the xDS server.
-	DialOpts []grpc.DialOption
-	// TargetName is the target of the parent ClientConn.
-	TargetName string
-	// WatchExpiryTimeout is the amount of time the client is willing to wait
-	// for the first response from the server for any resource being watched.
-	// Expiry will not cause cancellation of the watch. It will only trigger the
-	// invocation of the registered callback and it is left up to the caller to
-	// decide whether or not they want to cancel the watch.
-	//
-	// If this field is left unspecified, a default value of 15 seconds will be
-	// used. This is based on the default value of the initial_fetch_timeout
-	// field in corepb.ConfigSource proto.
-	WatchExpiryTimeout time.Duration
-}
-
 // Function to be overridden in tests.
 var newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, opts BuildOptions) (APIClient, error) {
 	cb := getAPIClientBuilder(apiVersion)
@@ -308,23 +286,19 @@ var newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, op
 	return cb.Build(cc, opts)
 }
 
-// Client is a full fledged gRPC client which queries a set of discovery APIs
-// (collectively termed as xDS) on a remote management server, to discover
-// various dynamic resources.
-//
-// A single client object will be shared by the xds resolver and balancer
-// implementations. But the same client can only be shared by the same parent
-// ClientConn.
+// clientImpl is the real implementation of the xds client. The exported Client
+// is a wrapper of this struct with a ref count.
 //
 // Implements UpdateHandler interface.
 // TODO(easwars): Make a wrapper struct which implements this interface in the
 // style of ccBalancerWrapper so that the Client type does not implement these
 // exported methods.
-type Client struct {
-	done      *grpcsync.Event
-	opts      Options
-	cc        *grpc.ClientConn // Connection to the xDS server
-	apiClient APIClient
+type clientImpl struct {
+	done               *grpcsync.Event
+	config             *bootstrap.Config
+	cc                 *grpc.ClientConn // Connection to the xDS server
+	apiClient          APIClient
+	watchExpiryTimeout time.Duration
 
 	logger *grpclog.PrefixLogger
 
@@ -345,46 +319,40 @@ type Client struct {
 	lrsClients map[string]*lrsClient
 }
 
-// New returns a new xdsClient configured with opts.
-func New(opts Options) (*Client, error) {
+// newWithConfig returns a new xdsClient with the given config.
+func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (*clientImpl, error) {
 	switch {
-	case opts.Config.BalancerName == "":
+	case config.BalancerName == "":
 		return nil, errors.New("xds: no xds_server name provided in options")
-	case opts.Config.Creds == nil:
+	case config.Creds == nil:
 		return nil, errors.New("xds: no credentials provided in options")
-	case opts.Config.NodeProto == nil:
+	case config.NodeProto == nil:
 		return nil, errors.New("xds: no node_proto provided in options")
 	}
 
-	switch opts.Config.TransportAPI {
+	switch config.TransportAPI {
 	case version.TransportV2:
-		if _, ok := opts.Config.NodeProto.(*v2corepb.Node); !ok {
-			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", opts.Config.NodeProto, opts.Config.TransportAPI)
+		if _, ok := config.NodeProto.(*v2corepb.Node); !ok {
+			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", config.NodeProto, config.TransportAPI)
 		}
 	case version.TransportV3:
-		if _, ok := opts.Config.NodeProto.(*v3corepb.Node); !ok {
-			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", opts.Config.NodeProto, opts.Config.TransportAPI)
+		if _, ok := config.NodeProto.(*v3corepb.Node); !ok {
+			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", config.NodeProto, config.TransportAPI)
 		}
 	}
 
 	dopts := []grpc.DialOption{
-		opts.Config.Creds,
+		config.Creds,
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:    5 * time.Minute,
 			Timeout: 20 * time.Second,
 		}),
 	}
-	dopts = append(dopts, opts.DialOpts...)
 
-	if opts.WatchExpiryTimeout == 0 {
-		// This is based on the default value of the initial_fetch_timeout field
-		// in corepb.ConfigSource proto.
-		opts.WatchExpiryTimeout = 15 * time.Second
-	}
-
-	c := &Client{
-		done: grpcsync.NewEvent(),
-		opts: opts,
+	c := &clientImpl{
+		done:               grpcsync.NewEvent(),
+		config:             config,
+		watchExpiryTimeout: watchExpiryTimeout,
 
 		updateCh:    buffer.NewUnbounded(),
 		ldsWatchers: make(map[string]map[*watchInfo]bool),
@@ -398,18 +366,18 @@ func New(opts Options) (*Client, error) {
 		lrsClients:  make(map[string]*lrsClient),
 	}
 
-	cc, err := grpc.Dial(opts.Config.BalancerName, dopts...)
+	cc, err := grpc.Dial(config.BalancerName, dopts...)
 	if err != nil {
 		// An error from a non-blocking dial indicates something serious.
-		return nil, fmt.Errorf("xds: failed to dial balancer {%s}: %v", opts.Config.BalancerName, err)
+		return nil, fmt.Errorf("xds: failed to dial balancer {%s}: %v", config.BalancerName, err)
 	}
 	c.cc = cc
 	c.logger = prefixLogger((c))
-	c.logger.Infof("Created ClientConn to xDS server: %s", opts.Config.BalancerName)
+	c.logger.Infof("Created ClientConn to xDS server: %s", config.BalancerName)
 
-	apiClient, err := newAPIClient(opts.Config.TransportAPI, cc, BuildOptions{
+	apiClient, err := newAPIClient(config.TransportAPI, cc, BuildOptions{
 		Parent:    c,
-		NodeProto: opts.Config.NodeProto,
+		NodeProto: config.NodeProto,
 		Backoff:   backoff.DefaultExponential.Backoff,
 		Logger:    c.logger,
 	})
@@ -426,7 +394,7 @@ func New(opts Options) (*Client, error) {
 // "certificate_providers" field of the bootstrap file. The key in the returned
 // map is the plugin_instance_name. Callers must not modify the returned map.
 func (c *Client) CertProviderConfigs() map[string]*certprovider.BuildableConfig {
-	return c.opts.Config.CertProviderConfigs
+	return c.config.CertProviderConfigs
 }
 
 // run is a goroutine for all the callbacks.
@@ -435,7 +403,7 @@ func (c *Client) CertProviderConfigs() map[string]*certprovider.BuildableConfig 
 // goroutine, the callback will be called inline, which might cause a deadlock
 // in user's code. Callbacks also cannot be simple `go callback()` because the
 // order matters.
-func (c *Client) run() {
+func (c *clientImpl) run() {
 	for {
 		select {
 		case t := <-c.updateCh.Get():
@@ -451,7 +419,7 @@ func (c *Client) run() {
 }
 
 // Close closes the gRPC connection to the xDS server.
-func (c *Client) Close() {
+func (c *clientImpl) Close() {
 	if c.done.HasFired() {
 		return
 	}
