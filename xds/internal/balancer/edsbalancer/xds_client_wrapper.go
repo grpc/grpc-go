@@ -22,13 +22,10 @@ import (
 	"fmt"
 	"sync"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpclog"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/client/load"
 )
 
@@ -39,13 +36,6 @@ type xdsClientInterface interface {
 	ReportLoad(server string) (loadStore *load.Store, cancel func())
 	Close()
 }
-
-var (
-	xdsclientNew = func(opts xdsclient.Options) (xdsClientInterface, error) {
-		return xdsclient.New(opts)
-	}
-	bootstrapConfigNew = bootstrap.NewConfig
-)
 
 type loadStoreWrapper struct {
 	mu      sync.RWMutex
@@ -110,9 +100,7 @@ type xdsClientWrapper struct {
 	logger *grpclog.PrefixLogger
 
 	newEDSUpdate func(xdsclient.EndpointsUpdate, error)
-	bbo          balancer.BuildOptions
 
-	balancerName string
 	// xdsClient could come from attributes, or created with balancerName.
 	xdsClient xdsClientInterface
 
@@ -138,36 +126,12 @@ type xdsClientWrapper struct {
 //
 // The given callbacks won't be called until the underlying xds_client is
 // working and sends updates.
-func newXDSClientWrapper(newEDSUpdate func(xdsclient.EndpointsUpdate, error), bbo balancer.BuildOptions, logger *grpclog.PrefixLogger) *xdsClientWrapper {
+func newXDSClientWrapper(newEDSUpdate func(xdsclient.EndpointsUpdate, error), logger *grpclog.PrefixLogger) *xdsClientWrapper {
 	return &xdsClientWrapper{
 		logger:       logger,
 		newEDSUpdate: newEDSUpdate,
-		bbo:          bbo,
 		loadWrapper:  &loadStoreWrapper{},
 	}
-}
-
-// replaceXDSClient replaces xdsClient fields to the newClient if they are
-// different. If xdsClient is replaced, the balancerName field will also be
-// updated to newBalancerName.
-//
-// If the old xdsClient is replaced, and was created locally (not from
-// attributes), it will be closed.
-//
-// It returns whether xdsClient is replaced.
-func (c *xdsClientWrapper) replaceXDSClient(newClient xdsClientInterface, newBalancerName string) bool {
-	if c.xdsClient == newClient {
-		return false
-	}
-	oldClient := c.xdsClient
-	oldBalancerName := c.balancerName
-	c.xdsClient = newClient
-	c.balancerName = newBalancerName
-	if oldBalancerName != "" {
-		// OldBalancerName!="" means if the old client was not from attributes.
-		oldClient.Close()
-	}
-	return true
 }
 
 // updateXDSClient sets xdsClient in wrapper to the correct one based on the
@@ -185,43 +149,19 @@ func (c *xdsClientWrapper) replaceXDSClient(newClient xdsClientInterface, newBal
 // - if balancer names are the same, do nothing, and return false
 // - if balancer names are different, create new one, and return true
 func (c *xdsClientWrapper) updateXDSClient(config *EDSConfig, attr *attributes.Attributes) (bool, error) {
-	if attr != nil {
-		if clientFromAttr, _ := attr.Value(xdsinternal.XDSClientID).(xdsClientInterface); clientFromAttr != nil {
-			// This will also clear balancerName, to indicate that client is
-			// from attributes.
-			return c.replaceXDSClient(clientFromAttr, ""), nil
-		}
+	if attr == nil {
+		return false, fmt.Errorf("unexported nil attributes, want attributes with xdsClient")
+	}
+	clientFromAttr, _ := attr.Value(xdsinternal.XDSClientID).(xdsClientInterface)
+	if clientFromAttr == nil {
+		return false, fmt.Errorf("no xdsClient found in attributes")
 	}
 
-	clientConfig, err := bootstrapConfigNew()
-	if err != nil {
-		// TODO: propagate this error to ClientConn, and fail RPCs if necessary.
-		clientConfig = &bootstrap.Config{BalancerName: config.BalancerName}
-	}
-
-	if c.balancerName == clientConfig.BalancerName {
+	if c.xdsClient == clientFromAttr {
 		return false, nil
 	}
-
-	var dopts []grpc.DialOption
-	if dialer := c.bbo.Dialer; dialer != nil {
-		dopts = []grpc.DialOption{grpc.WithContextDialer(dialer)}
-	}
-
-	// TODO: there's no longer a need to read bootstrap file and create a new
-	// xds client. The EDS balancer should always get the xds client from
-	// attributes. Otherwise, this function should just fail. Also, xdsclient
-	// will be shared by multiple clients, so trying to make an xds client is
-	// just the wrong move.
-	newClient, err := xdsclientNew(xdsclient.Options{Config: *clientConfig, DialOpts: dopts})
-	if err != nil {
-		// This should never fail. xdsclientnew does a non-blocking dial, and
-		// all the config passed in should be validated.
-		//
-		// This could leave c.xdsClient as nil if this is the first update.
-		return false, fmt.Errorf("eds: failed to create xdsClient, error: %v", err)
-	}
-	return c.replaceXDSClient(newClient, clientConfig.BalancerName), nil
+	c.xdsClient = clientFromAttr
+	return true, nil
 }
 
 // startEndpointsWatch starts the EDS watch. Caller can call this when the
@@ -320,10 +260,6 @@ func (c *xdsClientWrapper) cancelWatch() {
 
 func (c *xdsClientWrapper) close() {
 	c.cancelWatch()
-	if c.xdsClient != nil && c.balancerName != "" {
-		// Only close xdsClient if it's not from attributes.
-		c.xdsClient.Close()
-	}
 }
 
 // equalStringPointers returns true if

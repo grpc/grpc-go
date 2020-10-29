@@ -29,8 +29,6 @@ import (
 // for EDS balancers.
 type EDSConfig struct {
 	serviceconfig.LoadBalancingConfig
-	// BalancerName represents the load balancer to use.
-	BalancerName string
 	// ChildPolicy represents the load balancing config for the child
 	// policy.
 	ChildPolicy *loadBalancingConfig
@@ -50,7 +48,6 @@ type EDSConfig struct {
 // and Fallbackspolicy are post-processed, and for each, the first installed
 // policy is kept.
 type edsConfigJSON struct {
-	BalancerName               string
 	ChildPolicy                []*loadBalancingConfig
 	FallbackPolicy             []*loadBalancingConfig
 	EDSServiceName             string
@@ -66,7 +63,6 @@ func (l *EDSConfig) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	l.BalancerName = configJSON.BalancerName
 	l.EDSServiceName = configJSON.EDSServiceName
 	l.LrsLoadReportingServerName = configJSON.LRSLoadReportingServerName
 

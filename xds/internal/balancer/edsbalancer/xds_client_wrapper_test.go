@@ -24,22 +24,12 @@ import (
 	"fmt"
 	"testing"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
-
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/resolver"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
-	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
-	"google.golang.org/grpc/xds/internal/version"
 )
 
 var (
@@ -49,28 +39,25 @@ var (
 
 // Given a list of resource names, verifies that EDS requests for the same are
 // received at the fake server.
-func verifyExpectedRequests(fs *fakeserver.Server, resourceNames ...string) error {
-	wantReq := &xdspb.DiscoveryRequest{
-		TypeUrl: version.V2EndpointsURL,
-		Node:    xdstestutils.EmptyNodeProtoV2,
-	}
+func verifyExpectedRequests(fc *fakeclient.Client, resourceNames ...string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	for _, name := range resourceNames {
-		if name != "" {
-			wantReq.ResourceNames = []string{name}
+		if name == "" {
+			// ResourceName empty string indicates a cancel.
+			if err := fc.WaitForCancelEDSWatch(ctx); err != nil {
+				return fmt.Errorf("timed out when expecting resource %q", name)
+			}
+			return nil
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-		req, err := fs.XDSRequestChan.Receive(ctx)
+		resName, err := fc.WaitForWatchEDS(ctx)
 		if err != nil {
-			return fmt.Errorf("timed out when expecting request {%+v} at fake server", wantReq)
+			return fmt.Errorf("timed out when expecting resource %q, %p", name, fc)
 		}
-		edsReq := req.(*fakeserver.Request)
-		if edsReq.Err != nil {
-			return fmt.Errorf("eds RPC failed with err: %v", edsReq.Err)
-		}
-		if !proto.Equal(edsReq.Req, wantReq) {
-			return fmt.Errorf("got EDS request %v, expected: %v, diff: %s", edsReq.Req, wantReq, cmp.Diff(edsReq.Req, wantReq, cmp.Comparer(proto.Equal)))
+		if resName != name {
+			return fmt.Errorf("got EDS request for resource %q, expected: %q", resName, name)
 		}
 	}
 	return nil
@@ -86,34 +73,16 @@ func verifyExpectedRequests(fs *fakeserver.Server, resourceNames ...string) erro
 // * Sends updates with different edsServiceNames and expects new watches to be
 //   registered.
 func (s) TestClientWrapperWatchEDS(t *testing.T) {
-	fakeServer, cleanup, err := fakeserver.StartServer()
-	if err != nil {
-		t.Fatalf("Failed to start fake xDS server: %v", err)
-	}
-	defer cleanup()
-	t.Logf("Started fake xDS server at %s...", fakeServer.Address)
+	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
 
-	cw := newXDSClientWrapper(nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
+	cw := newXDSClientWrapper(nil, nil)
 	defer cw.close()
 	t.Logf("Started xDS client wrapper for endpoint %s...", testServiceName)
 
-	oldBootstrapConfigNew := bootstrapConfigNew
-	bootstrapConfigNew = func() (*bootstrap.Config, error) {
-		return &bootstrap.Config{
-			BalancerName: fakeServer.Address,
-			Creds:        grpc.WithInsecure(),
-			NodeProto:    xdstestutils.EmptyNodeProtoV2,
-		}, nil
-	}
-	defer func() { bootstrapConfigNew = oldBootstrapConfigNew }()
-
 	// Update with an non-empty edsServiceName should trigger an EDS watch for
 	// the same.
-	cw.handleUpdate(&EDSConfig{
-		BalancerName:   fakeServer.Address,
-		EDSServiceName: "foobar-1",
-	}, nil)
-	if err := verifyExpectedRequests(fakeServer, "foobar-1"); err != nil {
+	cw.handleUpdate(&EDSConfig{EDSServiceName: "foobar-1"}, attributes.New(xdsinternal.XDSClientID, xdsC))
+	if err := verifyExpectedRequests(xdsC, "foobar-1"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -121,11 +90,8 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 	// name to another, and make sure a new watch is registered. The previously
 	// registered watch will be cancelled, which will result in an EDS request
 	// with no resource names being sent to the server.
-	cw.handleUpdate(&EDSConfig{
-		BalancerName:   fakeServer.Address,
-		EDSServiceName: "foobar-2",
-	}, nil)
-	if err := verifyExpectedRequests(fakeServer, "", "foobar-2"); err != nil {
+	cw.handleUpdate(&EDSConfig{EDSServiceName: "foobar-2"}, attributes.New(xdsinternal.XDSClientID, xdsC))
+	if err := verifyExpectedRequests(xdsC, "", "foobar-2"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -146,7 +112,7 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 		edsRespChan.Send(&edsUpdate{resp: update, err: err})
 	}
 
-	cw := newXDSClientWrapper(newEDS, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
+	cw := newXDSClientWrapper(newEDS, nil)
 	defer cw.close()
 
 	xdsC := fakeclient.NewClient()
@@ -184,14 +150,7 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 // clientWrapper receives the xdsClient to use in the attributes section of the
 // update.
 func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
-	oldxdsclientNew := xdsclientNew
-	xdsclientNew = func(_ xdsclient.Options) (xdsClientInterface, error) {
-		t.Fatalf("unexpected call to xdsclientNew when xds_client is set in attributes")
-		return nil, nil
-	}
-	defer func() { xdsclientNew = oldxdsclientNew }()
-
-	cw := newXDSClientWrapper(nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
+	cw := newXDSClientWrapper(nil, nil)
 	defer cw.close()
 
 	xdsC1 := fakeclient.NewClient()

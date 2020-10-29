@@ -51,17 +51,16 @@ func init() {
 type edsBalancerBuilder struct{}
 
 // Build helps implement the balancer.Builder interface.
-func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	x := &edsBalancer{
 		cc:                cc,
-		buildOpts:         opts,
 		closed:            grpcsync.NewEvent(),
 		grpcUpdate:        make(chan interface{}),
 		xdsClientUpdate:   make(chan *edsUpdate),
 		childPolicyUpdate: buffer.NewUnbounded(),
 	}
 	x.logger = prefixLogger((x))
-	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.buildOpts, x.logger)
+	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.logger)
 	x.edsImpl = newEDSBalancer(x.cc, x.enqueueChildBalancerState, x.client, x.logger)
 	x.logger.Infof("Created")
 	go x.run()
@@ -102,10 +101,9 @@ type edsBalancerImplInterface interface {
 //
 // It currently has only an edsBalancer. Later, we may add fallback.
 type edsBalancer struct {
-	cc        balancer.ClientConn // *xdsClientConn
-	buildOpts balancer.BuildOptions
-	closed    *grpcsync.Event
-	logger    *grpclog.PrefixLogger
+	cc     balancer.ClientConn // *xdsClientConn
+	closed *grpcsync.Event
+	logger *grpclog.PrefixLogger
 
 	// edsBalancer continuously monitor the channels below, and will handle events from them in sync.
 	grpcUpdate        chan interface{}
