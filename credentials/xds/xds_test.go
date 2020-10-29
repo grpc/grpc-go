@@ -303,12 +303,7 @@ func (s) TestClientCredsInvalidHandshakeInfo(t *testing.T) {
 
 	pCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	ctx := newTestContextWithHandshakeInfo(pCtx, nil, nil)
-	if _, _, err := creds.ClientHandshake(ctx, authority, nil); err == nil {
-		t.Fatal("ClientHandshake succeeded without certificate providers in HandshakeInfo")
-	}
-
-	ctx = newTestContextWithHandshakeInfo(pCtx, nil, &fakeProvider{})
+	ctx := newTestContextWithHandshakeInfo(pCtx, nil, &fakeProvider{})
 	if _, _, err := creds.ClientHandshake(ctx, authority, nil); err == nil {
 		t.Fatal("ClientHandshake succeeded without root certificate provider in HandshakeInfo")
 	}

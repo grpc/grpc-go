@@ -142,10 +142,6 @@ func (hi *HandshakeInfo) UseFallbackCreds() bool {
 }
 
 func (hi *HandshakeInfo) validate(isClient bool) error {
-	if hi == nil {
-		return nil
-	}
-
 	hi.mu.Lock()
 	defer hi.mu.Unlock()
 
@@ -266,11 +262,11 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
 	hi := getHandshakeInfo(chi.Attributes)
-	if err := hi.validate(c.isClient); err != nil {
-		return nil, nil, err
-	}
 	if hi.UseFallbackCreds() {
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
+	}
+	if err := hi.validate(c.isClient); err != nil {
+		return nil, nil, err
 	}
 
 	// We build the tls.Config with the following values
