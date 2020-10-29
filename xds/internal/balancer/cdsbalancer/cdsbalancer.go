@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
@@ -83,6 +82,7 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 		updateCh:    buffer.NewUnbounded(),
 		closed:      grpcsync.NewEvent(),
 		cancelWatch: func() {}, // No-op at this point.
+		xdsHI:       xds.NewHandshakeInfo(nil, nil),
 	}
 	b.logger = prefixLogger((b))
 	b.logger.Infof("Created")
@@ -97,12 +97,12 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 	if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
 		b.xdsCredsInUse = true
 	}
-
 	b.logger.Infof("xDS credentials in use: %v", b.xdsCredsInUse)
+
 	b.ccw = &ccWrapper{
 		ClientConn: cc,
+		xdsHI:      b.xdsHI,
 	}
-
 	go b.run()
 	return b
 }
@@ -229,10 +229,17 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) err
 	if !b.xdsCredsInUse {
 		return nil
 	}
+
 	// Security config being nil is a valid case where the management server has
 	// not sent any security configuration. The xdsCredentials implementation
 	// handles this by delegating to its fallback credentials.
 	if config == nil {
+		// We need to explicitly set the fields to nil here since this might be
+		// a case of switching from a good security configuration to an empty
+		// one where fallback credentials are to be used.
+		b.xdsHI.SetRootCertProvider(nil)
+		b.xdsHI.SetIdentityCertProvider(nil)
+		b.xdsHI.SetAcceptedSANs(nil)
 		return nil
 	}
 
@@ -263,7 +270,6 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) err
 	if b.cachedRoot != nil {
 		b.cachedRoot.Close()
 	}
-	b.cachedRoot = rootProvider
 
 	// The identity provider is only present when using mTLS.
 	var identityProvider certprovider.Provider
@@ -287,18 +293,15 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) err
 	if b.cachedIdentity != nil {
 		b.cachedIdentity.Close()
 	}
+
+	b.cachedRoot = rootProvider
 	b.cachedIdentity = identityProvider
 
-	if b.xdsHI == nil {
-		b.xdsHI = xds.NewHandshakeInfo(rootProvider, identityProvider, config.AcceptedSANs...)
-	} else {
-		// We set all fields here, even if some of them are nil, since they
-		// could have been non-nil earlier.
-		b.xdsHI.SetRootCertProvider(rootProvider)
-		b.xdsHI.SetIdentityCertProvider(identityProvider)
-		b.xdsHI.SetAcceptedSANs(config.AcceptedSANs)
-	}
-	b.ccw.setHandshakeInfo(b.xdsHI)
+	// We set all fields here, even if some of them are nil, since they
+	// could have been non-nil earlier.
+	b.xdsHI.SetRootCertProvider(rootProvider)
+	b.xdsHI.SetIdentityCertProvider(identityProvider)
+	b.xdsHI.SetAcceptedSANs(config.AcceptedSANs)
 	return nil
 }
 
@@ -510,7 +513,8 @@ func (b *cdsBalancer) Close() {
 type ccWrapper struct {
 	balancer.ClientConn
 
-	mu    sync.Mutex
+	// The certificate providers in this HandshakeInfo are updated based on the
+	// received security configuration in the Cluster resource.
 	xdsHI *xds.HandshakeInfo
 }
 
@@ -518,25 +522,11 @@ type ccWrapper struct {
 // address attribute which provides all information required by the xdsCreds
 // handshaker to perform the TLS handshake.
 func (ccw *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	ccw.mu.Lock()
-	defer ccw.mu.Unlock()
-
-	if ccw.xdsHI == nil {
-		return ccw.ClientConn.NewSubConn(addrs, opts)
-	}
-
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
 		newAddrs[i] = xds.SetHandshakeInfo(addr, ccw.xdsHI)
 	}
 	return ccw.ClientConn.NewSubConn(newAddrs, opts)
-}
-
-// setHandshakeInfo updates the handshakeInfo within the wrapper.
-func (ccw *ccWrapper) setHandshakeInfo(hi *xds.HandshakeInfo) {
-	ccw.mu.Lock()
-	ccw.xdsHI = hi
-	ccw.mu.Unlock()
 }
 
 // TODO(easwars): Look into whether the cdsBalancer also needs to wrap the

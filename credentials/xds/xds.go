@@ -129,7 +129,21 @@ func (hi *HandshakeInfo) SetAcceptedSANs(sans []string) {
 	hi.mu.Unlock()
 }
 
+func (hi *HandshakeInfo) UseFallbackCreds() bool {
+	if hi == nil {
+		return true
+	}
+
+	hi.mu.Lock()
+	defer hi.mu.Unlock()
+	return hi.identityProvider == nil && hi.rootProvider == nil
+}
+
 func (hi *HandshakeInfo) validate(isClient bool) error {
+	if hi == nil {
+		return nil
+	}
+
 	hi.mu.Lock()
 	defer hi.mu.Unlock()
 
@@ -250,12 +264,11 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
 	hi := getHandshakeInfo(chi.Attributes)
-	if hi == nil {
-		return c.fallback.ClientHandshake(ctx, authority, rawConn)
-	}
-
 	if err := hi.validate(c.isClient); err != nil {
 		return nil, nil, err
+	}
+	if hi.UseFallbackCreds() {
+		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
 
 	// We build the tls.Config with the following values
