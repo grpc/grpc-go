@@ -129,6 +129,8 @@ func (hi *HandshakeInfo) SetAcceptedSANs(sans []string) {
 	hi.mu.Unlock()
 }
 
+// UseFallbackCreds returns true when fallback credentials are to be used based
+// on the contents of the HandshakeInfo.
 func (hi *HandshakeInfo) UseFallbackCreds() bool {
 	if hi == nil {
 		return true
