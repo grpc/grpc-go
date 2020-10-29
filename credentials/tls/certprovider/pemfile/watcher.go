@@ -18,6 +18,11 @@
 
 // Package pemfile provides a file watching certificate provider plugin
 // implementation which works for files with PEM contents.
+//
+// Experimental
+//
+// Notice: All APIs in this package are experimental and may be removed in a
+// later release.
 package pemfile
 
 import (
@@ -205,6 +210,12 @@ func (w *watcher) run(ctx context.Context) {
 		case <-ctx.Done():
 			identityTicker.Stop()
 			rootTicker.Stop()
+			if w.identityDistributor != nil {
+				w.identityDistributor.Stop()
+			}
+			if w.rootDistributor != nil {
+				w.rootDistributor.Stop()
+			}
 			return
 		case <-identityTicker.C:
 			w.updateIdentityDistributor()
@@ -238,10 +249,4 @@ func (w *watcher) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, e
 // Close cleans up resources allocated by the watcher.
 func (w *watcher) Close() {
 	w.cancel()
-	if w.identityDistributor != nil {
-		w.identityDistributor.Stop()
-	}
-	if w.rootDistributor != nil {
-		w.rootDistributor.Stop()
-	}
 }
