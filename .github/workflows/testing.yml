@@ -1,0 +1,97 @@
+name: Testing
+
+# Trigger on pushes, PRs (excluding documentation changes), and nightly.
+on:
+  push:
+  pull_request:
+    paths-ignore:
+      - 'Documentation/**'
+      - 'version.go'
+  schedule:
+    - cron: 0 0 * * * # daily at 00:00
+
+# Always force the use of Go modules
+env:
+  GO111MODULE: on
+
+jobs:
+  # Check generated protos match their source repos (optional for PRs).
+  vet-proto:
+    runs-on: ubuntu-latest
+    steps:
+      # Setup the environment.
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.14
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      # Run the vet checks.
+      - name: vet
+        run: ./vet.sh -install && ./vet.sh
+
+  # Run the main gRPC-Go tests.
+  tests:
+    # Proto checks are run in the above job.
+    env:
+      VET_SKIP_PROTO: 1
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - type: vet
+            goversion: 1.14
+          - type: race
+            goversion: 1.14
+          - type: 386
+            goversion: 1.14
+          - type: retry
+            goversion: 1.14
+          - type: extras
+            goversion: 1.14
+          - type: tests
+            goversion: 1.13
+          - type: tests
+            goversion: 1.12
+          - type: tests
+            goversion: 1.11  # Keep until interop tests no longer require Go1.11
+
+    steps:
+      # Setup the environment.
+      - name: Setup GOARCH=386
+        if: ${{ matrix.type == '386' }}
+        run: echo "GOARCH=386" >> $GITHUB_ENV
+      - name: Setup RETRY
+        if: ${{ matrix.type == 'retry' }}
+        run: echo "GRPC_GO_RETRY=on" >> $GITHUB_ENV
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.goversion }}
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      # Only run vet for 'vet' runs.
+      - name: Run vet.sh
+        if: ${{ matrix.type == 'vet' }}
+        run: ./vet.sh -install && ./vet.sh
+
+      # Main tests run for everything except when testing "extras" and the race detector.
+      - name: Run tests
+        if: ${{ matrix.type != 'extras' && matrix.type != 'race' }}
+        run: make test
+
+      # Race detector tests
+      - name: Run test race
+        if: ${{ matrix.TYPE == 'race' }}
+        run: make testrace
+
+      # Non-core gRPC tests (examples, interop, etc)
+      - name: Run extras tests
+        if: ${{ matrix.TYPE == 'extras' }}
+        run: |
+          examples/examples_test.sh
+          security/advancedtls/examples/examples_test.sh
+          interop/interop_test.sh
+          make testsubmodule
