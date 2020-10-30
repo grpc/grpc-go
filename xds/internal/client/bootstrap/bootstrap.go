@@ -35,14 +35,11 @@ import (
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
 const (
-	// Environment variable which holds the name of the xDS bootstrap file.
-	bootstrapFileEnv = "GRPC_XDS_BOOTSTRAP"
-	// Environment variable which controls the use of xDS v3 API.
-	v3SupportEnv = "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT"
 	// The "server_features" field in the bootstrap file contains a list of
 	// features supported by the server. A value of "xds_v3" indicates that the
 	// server supports the v3 version of the xDS transport protocol.
@@ -142,11 +139,11 @@ type xdsServer struct {
 func NewConfig() (*Config, error) {
 	config := &Config{}
 
-	fName, ok := os.LookupEnv(bootstrapFileEnv)
-	if !ok {
-		return nil, fmt.Errorf("xds: Environment variable %v not defined", bootstrapFileEnv)
+	fName := os.Getenv(env.BootstrapFileName)
+	if fName == "" {
+		return nil, fmt.Errorf("xds: Environment variable %q not defined", env.BootstrapFileName)
 	}
-	logger.Infof("Got bootstrap file location from %v environment variable: %v", bootstrapFileEnv, fName)
+	logger.Infof("Got bootstrap file location %q from environment variable %s", fName, env.BootstrapFileName)
 
 	data, err := bootstrapFileReadFunc(fName)
 	if err != nil {
@@ -259,11 +256,7 @@ func NewConfig() (*Config, error) {
 	// 2. Environment variable "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT" is set to
 	//    true.
 	// The default value of the enum type "version.TransportAPI" is v2.
-	//
-	// TODO: there are multiple env variables, GRPC_XDS_BOOTSTRAP and
-	// GRPC_XDS_EXPERIMENTAL_V3_SUPPORT. Move all env variables into a separate
-	// package.
-	if v3Env := os.Getenv(v3SupportEnv); v3Env == "true" {
+	if v3Env := os.Getenv(env.XDSV3Support); v3Env == "true" {
 		if serverSupportsV3 {
 			config.TransportAPI = version.TransportV3
 		}
