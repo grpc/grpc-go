@@ -609,9 +609,7 @@ func (s) TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	fakeServer.XDSResponseChan <- &fakeserver.Response{Err: errors.New("RPC error")}
 	t.Log("Bad LDS response pushed to fakeServer...")
 
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	val, err := fakeServer.XDSRequestChan.Receive(sCtx)
+	val, err := fakeServer.XDSRequestChan.Receive(ctx)
 	if err == context.DeadlineExceeded {
 		t.Fatalf("Timeout expired when expecting LDS update")
 	}
