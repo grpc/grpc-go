@@ -58,8 +58,12 @@ jobs:
         run: ./vet.sh -install && ./vet.sh
 
       - name: Run tests
-        if: ${{ matrix.type == 'tests' || matrix.type == 'vet' }}
+        if: ${{ matrix.type != 'extras' && matrix.type != 'race' }}
         run: echo $GOARCH; make test
+
+      - name: Run test race
+        if: ${{ matrix.TYPE == 'race' }}
+        run: make testrace
 
       - name: Run extras tests
         if: ${{ matrix.TYPE == 'extras' }}
@@ -68,7 +72,3 @@ jobs:
           security/advancedtls/examples/examples_test.sh
           interop/interop_test.sh
           make testsubmodule
-
-      - name: Run test race
-        if: ${{ matrix.TYPE == 'race' }}
-        run: make testrace
