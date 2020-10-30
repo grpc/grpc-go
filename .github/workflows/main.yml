@@ -5,35 +5,47 @@ name: Testing
 on:
   push:
   pull_request:
-    paths_ignore:
-    - 'Documentation/**'
-    - 'version.go'
+    paths-ignore:
+      - 'Documentation/**'
+      - 'version.go'
+  schedule:
+    - cron: 0 0 * * * # daily at 00:00
 
 env:
   VET_SKIP_PROTO: 1
+  GO111MODULE: on
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   tests:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        goversion: [1.11, 1.12, 1.13, 1.14]
-        TYPE: [""]
         include:
-          - TYPE: vet
+          - type: vet
             goversion: 1.14
-          - TYPE: race
+          - type: race
             goversion: 1.14
-          - TYPE: 386
+          - type: 386
             goversion: 1.14
+          - type: retry
+            goversion: 1.14
+          - type: extras
+            goversion: 1.14
+          - type: tests
+            goversion: 1.13
+          - type: tests
+            goversion: 1.12
+          - type: tests
+            goversion: 1.11  # Keep until interop tests no longer require Go1.11
 
     steps:
-      - name: setup GOARCH
-        if: ${{ matrix.TYPE == '386' }}
-        run: export GOARCH=${{ matrix.TYPE }}
-        
+      - name: setup GOARCH=386
+        if: ${{ matrix.type == '386' }}
+        run: echo "GOARCH=386" >> $GITHUB_ENV
+      - name: setup RETRY
+        if: ${{ matrix.type == 'retry' }}
+        run: echo "GRPC_GO_RETRY=on" >> $GITHUB_ENV
+
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
@@ -42,12 +54,20 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: vet
-        if: ${{ matrix.TYPE == 'vet' }}
+        if: ${{ matrix.type == 'vet' }}
         run: ./vet.sh -install && ./vet.sh
 
       - name: Run tests
-        if: ${{ matrix.TYPE != 'race' && matrix.TYPE != 'vet' }}
+        if: ${{ matrix.type != 'race' && matrix.type != 'extras' }}
         run: echo $GOARCH; make test
+
+      - name: Run extras tests
+        if: ${{ matrix.TYPE == 'extras' }}
+        run: |
+          examples/examples_test.sh
+          security/advancedtls/examples/examples_test.sh
+          interop/interop_test.sh
+          make testsubmodule
 
       - name: Run test race
         if: ${{ matrix.TYPE == 'race' }}
