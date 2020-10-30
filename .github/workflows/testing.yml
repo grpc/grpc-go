@@ -58,7 +58,7 @@ jobs:
         run: ./vet.sh -install && ./vet.sh
 
       - name: Run tests
-        if: ${{ matrix.type != 'race' && matrix.type != 'extras' }}
+        if: ${{ matrix.type == 'tests' || matrix.type == 'vet' }}
         run: echo $GOARCH; make test
 
       - name: Run extras tests
