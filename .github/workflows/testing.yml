@@ -25,7 +25,10 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: vet
-        run: ./vet.sh -install && ./vet.sh
+        run: |
+          echo $PATH
+          ls $HOME
+          ./vet.sh -install && ./vet.sh
 
   tests:
     env:
