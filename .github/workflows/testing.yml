@@ -1,7 +1,6 @@
 name: Testing
 
-# Controls when the action will run. Triggers the workflow on push or pull request
-# events but only for the master branch
+# Trigger on pushes, PRs (excluding documentation changes), and nightly.
 on:
   push:
   pull_request:
@@ -11,26 +10,31 @@ on:
   schedule:
     - cron: 0 0 * * * # daily at 00:00
 
+# Always force the use of Go modules
 env:
   GO111MODULE: on
 
 jobs:
+  # Check generated protos match their source repos (optional for PRs).
   vet-proto:
     runs-on: ubuntu-latest
     steps:
+      # Setup the environment.
       - uses: actions/setup-go@v2
         with:
           go-version: 1.14
-
       - uses: actions/checkout@v2
 
+      # Run the vet checks.
       - name: vet
         run: |
           echo $PATH
           ls $HOME
           ./vet.sh -install && ./vet.sh
 
+  # Run the main gRPC-Go tests.
   tests:
+    # Proto checks are run in the above job.
     env:
       VET_SKIP_PROTO: 1
     runs-on: ubuntu-latest
@@ -55,32 +59,35 @@ jobs:
             goversion: 1.11  # Keep until interop tests no longer require Go1.11
 
     steps:
+      # Setup the environment.
       - name: setup GOARCH=386
         if: ${{ matrix.type == '386' }}
         run: echo "GOARCH=386" >> $GITHUB_ENV
       - name: setup RETRY
         if: ${{ matrix.type == 'retry' }}
         run: echo "GRPC_GO_RETRY=on" >> $GITHUB_ENV
-
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.goversion }}
-
       - uses: actions/checkout@v2
 
+      # Only run vet for 'vet' runs.
       - name: vet
         if: ${{ matrix.type == 'vet' }}
         run: ./vet.sh -install && ./vet.sh
 
+      # Main tests run for everything except when testing "extras" and the race detector.
       - name: Run tests
         if: ${{ matrix.type != 'extras' && matrix.type != 'race' }}
         run: echo $GOARCH; make test
 
+      # Race detector tests
       - name: Run test race
         if: ${{ matrix.TYPE == 'race' }}
         run: make testrace
 
+      # Non-core gRPC tests (examples, interop, etc)
       - name: Run extras tests
         if: ${{ matrix.TYPE == 'extras' }}
         run: |
