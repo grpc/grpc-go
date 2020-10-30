@@ -139,11 +139,9 @@ func newFakeGRPCServer() *fakeGRPCServer {
 
 func (s) TestNewServer(t *testing.T) {
 	// The xds package adds a couple of server options (unary and stream
-	// interceptors) to the server options passed in by the user. Since we pass
-	// a single ServerOption in the test, we expect to see 3 in the call to
-	// grpc.NewGRPCServer().
-	wantServerOpts := 3
+	// interceptors) to the server options passed in by the user.
 	serverOpts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials())}
+	wantServerOpts := len(serverOpts) + 2
 
 	origNewGRPCServer := newGRPCServer
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServerInterface {

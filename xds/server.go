@@ -25,7 +25,6 @@ import (
 	"sync"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -268,7 +267,9 @@ func (s *GRPCServer) Stop() {
 func (s *GRPCServer) GracefulStop() {
 	s.quit.Fire()
 	s.gs.GracefulStop()
-	s.xdsC.Close()
+	if s.xdsC != nil {
+		s.xdsC.Close()
+	}
 }
 
 // xdsUnaryInterceptor is the unary interceptor added to the gRPC server to
@@ -294,24 +295,8 @@ type listenerWrapper struct {
 	net.Listener
 	cancelWatch func()
 
-	// Mutex to protect the certificate providers.
-	mu       sync.Mutex
-	root     certprovider.Provider
-	identity certprovider.Provider
+	// TODO(easwars): Add fields for certificate providers.
 }
-
-// TODO(easwars): Uncomment when adding security integration. Vet is unhappy
-// about unused functions.
-/*
-// setProviders updates the certificate providers used by the listenerWrapper.
-// This is invoked upon processing the security configuration received in an LDS
-// response.
-func (l *listenerWrapper) setProviders(root, identity certprovider.Provider) {
-	l.mu.Lock()
-	l.root, l.identity = root, identity
-	l.mu.Unlock()
-}
-*/
 
 // Accept blocks on an Accept() on the underlying listener, and wraps the
 // returned net.Conn with the configured certificate providers.
@@ -320,28 +305,16 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return &conn{Conn: c, root: l.root, identity: l.identity}, nil
+	return &conn{Conn: c}, nil
 }
 
 // Close closes the underlying listener. It also cancels the xDS watch
 // registered in Serve() and closes any certificate provider instances created
 // based on security configuration received in the LDS response.
 func (l *listenerWrapper) Close() error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	l.Listener.Close()
 	if l.cancelWatch != nil {
 		l.cancelWatch()
-	}
-	if l.root != nil {
-		l.root.Close()
-	}
-	if l.identity != nil {
-		l.identity.Close()
 	}
 	return nil
 }
@@ -349,13 +322,6 @@ func (l *listenerWrapper) Close() error {
 // conn is a thin wrapper around a net.Conn returned by Accept().
 type conn struct {
 	net.Conn
-	root     certprovider.Provider
-	identity certprovider.Provider
-}
 
-// Providers returns the configured certificate providers. Credentials
-// implementations can type assert and invoke this method and use the returned
-// certificate providers in the TLS handshake.
-func (c *conn) Providers() (root certprovider.Provider, identity certprovider.Provider) {
-	return c.root, c.identity
+	// TODO(easwars): Add fields for certificate providers.
 }
