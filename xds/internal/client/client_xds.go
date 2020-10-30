@@ -259,6 +259,10 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 	return routesRet, nil
 }
 
+// TransportSocket proto message has a `name` field which is expected to be set
+// to this value by the management server.
+const transportSocketName = "envoy.transport_sockets.tls"
+
 // UnmarshalCluster processes resources received in an CDS response, validates
 // them, and transforms them into a native struct which contains only fields we
 // are interested in.
@@ -321,6 +325,9 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 	ts := cluster.GetTransportSocket()
 	if ts == nil {
 		return nil, nil
+	}
+	if name := ts.GetName(); name != transportSocketName {
+		return nil, fmt.Errorf("xds: transport_socket field has unexpected name: %s", name)
 	}
 	any := ts.GetTypedConfig()
 	if any == nil || any.TypeUrl != version.V3UpstreamTLSContextURL {

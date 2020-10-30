@@ -202,6 +202,30 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 		wantErr    bool
 	}{
 		{
+			name: "transport-socket-unsupported-name",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "unsupported-foo",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: &anypb.Any{
+							TypeUrl: version.V3UpstreamTLSContextURL,
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "transport-socket-unsupported-typeURL",
 			cluster: &v3clusterpb.Cluster{
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -298,6 +322,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
 						TypedConfig: &anypb.Any{
 							TypeUrl: version.V3UpstreamTLSContextURL,
@@ -342,6 +367,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
 						TypedConfig: &anypb.Any{
 							TypeUrl: version.V3UpstreamTLSContextURL,
@@ -392,6 +418,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
 						TypedConfig: &anypb.Any{
 							TypeUrl: version.V3UpstreamTLSContextURL,
