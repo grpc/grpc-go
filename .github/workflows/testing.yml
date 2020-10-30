@@ -12,11 +12,24 @@ on:
     - cron: 0 0 * * * # daily at 00:00
 
 env:
-  VET_SKIP_PROTO: 1
   GO111MODULE: on
 
 jobs:
+  vet-proto:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v2
+        with:
+          go-version: 1.14
+
+      - uses: actions/checkout@v2
+
+      - name: vet
+        run: ./vet.sh -install && ./vet.sh
+
   tests:
+    env:
+      VET_SKIP_PROTO: 1
     runs-on: ubuntu-latest
     strategy:
       matrix:
