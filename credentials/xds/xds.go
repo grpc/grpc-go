@@ -37,9 +37,14 @@ import (
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/internal"
 	credinternal "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/resolver"
 )
+
+func init() {
+	internal.GetXDSHandshakeInfoForTesting = getHandshakeInfo
+}
 
 // ClientOptions contains parameters to configure a new client-side xDS
 // credentials implementation.
@@ -122,6 +127,18 @@ func (hi *HandshakeInfo) SetAcceptedSANs(sans []string) {
 		hi.acceptedSANs[san] = true
 	}
 	hi.mu.Unlock()
+}
+
+// UseFallbackCreds returns true when fallback credentials are to be used based
+// on the contents of the HandshakeInfo.
+func (hi *HandshakeInfo) UseFallbackCreds() bool {
+	if hi == nil {
+		return true
+	}
+
+	hi.mu.Lock()
+	defer hi.mu.Unlock()
+	return hi.identityProvider == nil && hi.rootProvider == nil
 }
 
 func (hi *HandshakeInfo) validate(isClient bool) error {
@@ -245,10 +262,9 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
 	hi := getHandshakeInfo(chi.Attributes)
-	if hi == nil {
+	if hi.UseFallbackCreds() {
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
-
 	if err := hi.validate(c.isClient); err != nil {
 		return nil, nil, err
 	}
@@ -354,4 +370,10 @@ func (c *credsImpl) Clone() credentials.TransportCredentials {
 
 func (c *credsImpl) OverrideServerName(_ string) error {
 	return errors.New("serverName for peer validation must be configured as a list of acceptable SANs")
+}
+
+// UsesXDS returns true if c uses xDS to fetch security configuration
+// used at handshake time, and false otherwise.
+func (c *credsImpl) UsesXDS() bool {
+	return true
 }

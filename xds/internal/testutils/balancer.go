@@ -20,6 +20,8 @@
 package testutils
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -151,6 +153,21 @@ func (tcc *TestClientConn) ResolveNow(resolver.ResolveNowOptions) {
 // Target panics.
 func (tcc *TestClientConn) Target() string {
 	panic("not implemented")
+}
+
+// WaitForErrPicker waits until an error picker is pushed to this ClientConn.
+// Returns error if the provided context expires or a non-error picker is pushed
+// to the ClientConn.
+func (tcc *TestClientConn) WaitForErrPicker(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return errors.New("timeout when waiting for an error picker")
+	case picker := <-tcc.NewPickerCh:
+		if _, perr := picker.Pick(balancer.PickInfo{}); perr == nil {
+			return fmt.Errorf("balancer returned a picker which is not an error picker")
+		}
+	}
+	return nil
 }
 
 // IsRoundRobin checks whether f's return value is roundrobin of elements from
