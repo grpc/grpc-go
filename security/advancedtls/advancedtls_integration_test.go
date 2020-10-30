@@ -32,6 +32,8 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/security/advancedtls/internal/testutils"
 	"google.golang.org/grpc/security/advancedtls/testdata"
@@ -511,38 +513,38 @@ func copyFileContents(sourceFile, destinationFile string) error {
 
 // Create PEMFileProvider(s) watching the content changes of temporary
 // files.
-func createProviders(tmpFiles *tmpCredsFiles) (*PEMFileProvider, *PEMFileProvider, *PEMFileProvider, *PEMFileProvider, error) {
-	clientIdentityOptions := PEMFileProviderOptions{
-		CertFile:         tmpFiles.clientCertTmp.Name(),
-		KeyFile:          tmpFiles.clientKeyTmp.Name(),
-		IdentityInterval: credRefreshingInterval,
+func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovider.Provider, certprovider.Provider, certprovider.Provider, error) {
+	clientIdentityOptions := pemfile.Options{
+		CertFile:            tmpFiles.clientCertTmp.Name(),
+		KeyFile:             tmpFiles.clientKeyTmp.Name(),
+		CertRefreshDuration: credRefreshingInterval,
 	}
-	clientIdentityProvider, err := NewPEMFileProvider(clientIdentityOptions)
+	clientIdentityProvider, err := pemfile.NewProvider(clientIdentityOptions)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	clientRootOptions := PEMFileProviderOptions{
-		TrustFile:    tmpFiles.clientTrustTmp.Name(),
-		RootInterval: credRefreshingInterval,
+	clientRootOptions := pemfile.Options{
+		RootFile:            tmpFiles.clientTrustTmp.Name(),
+		RootRefreshDuration: credRefreshingInterval,
 	}
-	clientRootProvider, err := NewPEMFileProvider(clientRootOptions)
+	clientRootProvider, err := pemfile.NewProvider(clientRootOptions)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	serverIdentityOptions := PEMFileProviderOptions{
-		CertFile:         tmpFiles.serverCertTmp.Name(),
-		KeyFile:          tmpFiles.serverKeyTmp.Name(),
-		IdentityInterval: credRefreshingInterval,
+	serverIdentityOptions := pemfile.Options{
+		CertFile:            tmpFiles.serverCertTmp.Name(),
+		KeyFile:             tmpFiles.serverKeyTmp.Name(),
+		CertRefreshDuration: credRefreshingInterval,
 	}
-	serverIdentityProvider, err := NewPEMFileProvider(serverIdentityOptions)
+	serverIdentityProvider, err := pemfile.NewProvider(serverIdentityOptions)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	serverRootOptions := PEMFileProviderOptions{
-		TrustFile:    tmpFiles.serverTrustTmp.Name(),
-		RootInterval: credRefreshingInterval,
+	serverRootOptions := pemfile.Options{
+		RootFile:            tmpFiles.serverTrustTmp.Name(),
+		RootRefreshDuration: credRefreshingInterval,
 	}
-	serverRootProvider, err := NewPEMFileProvider(serverRootOptions)
+	serverRootProvider, err := pemfile.NewProvider(serverRootOptions)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
