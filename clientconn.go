@@ -144,7 +144,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 	cc.retryThrottler.Store((*retryThrottler)(nil))
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
-	cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
 
 	for _, opt := range opts {
 		opt.apply(&cc.dopts)
@@ -631,6 +630,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	var ret error
 	if cc.dopts.disableServiceConfig || s.ServiceConfig == nil {
 		cc.maybeApplyDefaultServiceConfig(s.Addresses)
+		cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
 		// TODO: do we need to apply a failing LB policy if there is no
 		// default, per the error handling design?
 	} else {
@@ -641,6 +641,8 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 					channelz.Infof(logger, cc.channelzID, "method configs in service config will be ignored due to presence of config selector")
 				}
 				cc.safeConfigSelector.UpdateConfigSelector(configSelector)
+			} else {
+				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
 			}
 		} else {
 			ret = balancer.ErrBadResolverState
