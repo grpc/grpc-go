@@ -148,10 +148,16 @@ func newXDSClientWrapper(newEDSUpdate func(xdsclient.EndpointsUpdate, error), lo
 // the balancerName (from bootstrap file or from service config) changed.
 // - if balancer names are the same, do nothing, and return false
 // - if balancer names are different, create new one, and return true
-func (c *xdsClientWrapper) updateXDSClient(config *EDSConfig, attr *attributes.Attributes) (bool, error) {
+func (c *xdsClientWrapper) updateXDSClient(attr *attributes.Attributes) (bool, error) {
 	if attr == nil {
 		return false, fmt.Errorf("unexported nil attributes, want attributes with xdsClient")
 	}
+	// TODO: change the way xdsClient is retrieved from attributes. One option
+	// is to add helper functions.
+	//
+	// Or, since xdsClient will become a singleton, this can just call
+	// xdsclient.New() instead. And if we decide to do this, do it in Build
+	// instead of when handling updates.
 	clientFromAttr, _ := attr.Value(xdsinternal.XDSClientID).(xdsClientInterface)
 	if clientFromAttr == nil {
 		return false, fmt.Errorf("no xdsClient found in attributes")
@@ -216,7 +222,7 @@ func (c *xdsClientWrapper) loadStore() load.PerClusterReporter {
 // handleUpdate applies the service config and attributes updates to the client,
 // including updating the xds_client to use, and updating the EDS name to watch.
 func (c *xdsClientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attributes) error {
-	clientChanged, err := c.updateXDSClient(config, attr)
+	clientChanged, err := c.updateXDSClient(attr)
 	if err != nil {
 		return err
 	}
