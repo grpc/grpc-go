@@ -610,7 +610,7 @@ func (s) TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	t.Log("Bad LDS response pushed to fakeServer...")
 
 	val, err := fakeServer.XDSRequestChan.Receive(ctx)
-	if err == context.DeadlineExceeded {
+	if err != nil {
 		t.Fatalf("Timeout expired when expecting LDS update")
 	}
 	gotRequest := val.(*fakeserver.Request)
