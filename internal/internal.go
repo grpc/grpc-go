@@ -61,6 +61,10 @@ var (
 	// stored in the passed in attributes. This is set by
 	// credentials/xds/xds.go.
 	GetXDSHandshakeInfoForTesting interface{} // func (attr *attributes.Attributes) *xds.HandshakeInfo
+	// GetServerCredentials returns the transport credentials configured on a
+	// gRPC server. An xDS-enabled server needs to know what type of credentials
+	// is configured on the underlying gRPC server. This is set by server.go.
+	GetServerCredentials interface{} // func (s interface{}) *credentials.TransportCredentials
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.
