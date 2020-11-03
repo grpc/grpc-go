@@ -92,7 +92,7 @@ type CommonAuthInfo struct {
 }
 
 // GetCommonAuthInfo returns the pointer to CommonAuthInfo struct.
-func (c *CommonAuthInfo) GetCommonAuthInfo() *CommonAuthInfo {
+func (c CommonAuthInfo) GetCommonAuthInfo() CommonAuthInfo {
 	return c
 }
 
@@ -231,7 +231,7 @@ func ClientHandshakeInfoFromContext(ctx context.Context) ClientHandshakeInfo {
 // This API is experimental.
 func CheckSecurityLevel(ctx context.Context, level SecurityLevel) error {
 	type internalInfo interface {
-		GetCommonAuthInfo() *CommonAuthInfo
+		GetCommonAuthInfo() CommonAuthInfo
 	}
 	ri, _ := RequestInfoFromContext(ctx)
 	if ri.AuthInfo == nil {
