@@ -151,12 +151,12 @@ func serverAndClientHandshake(lis net.Listener) (credentials.SecurityLevel, erro
 		if info, ok := clientAuthInfo.(internalInfo); ok {
 			clientSecLevel = info.GetCommonAuthInfo().SecurityLevel
 		} else {
-			return credentials.Invalid, fmt.Errorf("Error at client-side: client's AuthInfo does not implement GetCommonAuthInfo().")
+			return credentials.Invalid, fmt.Errorf("Error at client-side: client's AuthInfo does not implement GetCommonAuthInfo()")
 		}
 		if info, ok := (serverHandleResult.authInfo).(internalInfo); ok {
 			serverSecLevel = info.GetCommonAuthInfo().SecurityLevel
 		} else {
-			return credentials.Invalid, fmt.Errorf("Error at server-side: server's AuthInfo does not implement GetCommonAuthInfo().")
+			return credentials.Invalid, fmt.Errorf("Error at server-side: server's AuthInfo does not implement GetCommonAuthInfo()")
 		}
 		if clientSecLevel != serverSecLevel {
 			return credentials.Invalid, fmt.Errorf("client's AuthInfo contains %s but server's AuthInfo contains %s", clientSecLevel.String(), serverSecLevel.String())
