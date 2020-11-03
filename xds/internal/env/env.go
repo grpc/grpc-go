@@ -20,13 +20,23 @@
 // related to the xDS implementation in gRPC.
 package env
 
+import (
+	"os"
+	"strings"
+)
+
 const (
-	// BootstrapFileName is the name of the environment variable which holds the
-	// name of the bootstrap file.
-	BootstrapFileName = "GRPC_XDS_BOOTSTRAP"
-	// XDSV3Support is the name of the environment variable which indicates
-	// whether or not xDS v3 transport protocol is supported. A value of "true"
-	// indicates that the v3 protocol is supported, while all other values
-	// indicate that the protocol is unsupported.
-	XDSV3Support = "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT"
+	bootstrapFileNameEnv = "GRPC_XDS_BOOTSTRAP"
+	xdsV3SupportEnv      = "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT"
+)
+
+var (
+	// BootstrapFileName holds the name of the file which contains xDS bootstrap
+	// configuration. Users can specify the location of the bootstrap file by
+	// setting the environment variable "GRPC_XDS_BOOSTRAP".
+	BootstrapFileName = os.Getenv(bootstrapFileNameEnv)
+	// V3Support indicates whether xDS v3 API support is enabled, which can be
+	// done by setting the environment variable
+	// "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT" to "true".
+	V3Support = strings.EqualFold(os.Getenv(xdsV3SupportEnv), "true")
 )

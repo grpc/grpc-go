@@ -25,7 +25,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
 
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -139,11 +138,11 @@ type xdsServer struct {
 func NewConfig() (*Config, error) {
 	config := &Config{}
 
-	fName := os.Getenv(env.BootstrapFileName)
+	fName := env.BootstrapFileName
 	if fName == "" {
-		return nil, fmt.Errorf("xds: Environment variable %q not defined", env.BootstrapFileName)
+		return nil, fmt.Errorf("xds: Environment variable %q not defined", "GRPC_XDS_BOOTSTRAP")
 	}
-	logger.Infof("Got bootstrap file location %q from environment variable %s", fName, env.BootstrapFileName)
+	logger.Infof("Got bootstrap file location %q", fName)
 
 	data, err := bootstrapFileReadFunc(fName)
 	if err != nil {
@@ -256,10 +255,8 @@ func NewConfig() (*Config, error) {
 	// 2. Environment variable "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT" is set to
 	//    true.
 	// The default value of the enum type "version.TransportAPI" is v2.
-	if v3Env := os.Getenv(env.XDSV3Support); v3Env == "true" {
-		if serverSupportsV3 {
-			config.TransportAPI = version.TransportV3
-		}
+	if env.V3Support && serverSupportsV3 {
+		config.TransportAPI = version.TransportV3
 	}
 
 	if err := config.updateNodeProto(); err != nil {
