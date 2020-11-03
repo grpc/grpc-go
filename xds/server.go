@@ -32,7 +32,14 @@ import (
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
-const serverPrefix = "[xds-server %p] "
+const (
+	serverPrefix = "[xds-server %p] "
+
+	// The resource_name in the LDS request sent by the xDS-enabled gRPC server
+	// is of this format where the formatting directive at the end is replaced
+	// with the IP:Port specified by the user application.
+	listenerResourceNameFormat = "grpc/server?udpa.resource.listening_address=%s"
+)
 
 var (
 	// These new functions will be overridden in unit tests.
@@ -151,6 +158,7 @@ func (s *GRPCServer) RegisterService(sd *grpc.ServiceDesc, ss interface{}) {
 	s.gs.RegisterService(sd, ss)
 }
 
+// initXDSClient creates a new xdsClient if there is no existing one available.
 func (s *GRPCServer) initXDSClient() error {
 	s.clientMu.Lock()
 	defer s.clientMu.Unlock()
@@ -159,12 +167,11 @@ func (s *GRPCServer) initXDSClient() error {
 		return nil
 	}
 
+	// Read the bootstrap file as part of initializing the xdsClient.
 	config, err := newXDSConfig()
 	if err != nil {
 		return fmt.Errorf("xds: failed to read bootstrap file: %v", err)
 	}
-	// TODO(easwars): Figure out how to pass extra NodeProto metadata fields
-	// here.
 	client, err := newXDSClient(xdsclient.Options{Config: *config})
 	if err != nil {
 		return fmt.Errorf("xds: failed to create xds-client: %v", err)
@@ -176,7 +183,7 @@ func (s *GRPCServer) initXDSClient() error {
 
 // Serve gets the underlying gRPC server to accept incoming connections on the
 // listening address in opts. A connection to the management server, to receive
-// xDS configuration, is initiated here
+// xDS configuration, is initiated here.
 //
 // Serve will return a non-nil error unless Stop or GracefulStop is called.
 func (s *GRPCServer) Serve(opts ServeOptions) error {
@@ -191,9 +198,26 @@ func (s *GRPCServer) Serve(opts ServeOptions) error {
 		return err
 	}
 
+	lw, err := s.newListenerWrapper(opts)
+	if lw == nil {
+		// Error returned can be nil (when Stop/GracefulStop() is called). So,
+		// we need to check the returned listenerWrapper instead.
+		return err
+	}
+	return s.gs.Serve(lw)
+}
+
+// newListenerWrapper starts a net.Listener on the address specified in opts. It
+// then registers a watch for a Listener resource and blocks until a good
+// response is received or the server is stopped by a call to
+// Stop/GracefulStop().
+//
+// Returns a listenerWrapper, which implements the net.Listener interface, that
+// can be passed to grpcServer.Serve().
+func (s *GRPCServer) newListenerWrapper(opts ServeOptions) (*listenerWrapper, error) {
 	lis, err := net.Listen(opts.Network, opts.Address)
 	if err != nil {
-		return fmt.Errorf("xds: failed to listen on %+v: %v", opts, err)
+		return nil, fmt.Errorf("xds: failed to listen on %+v: %v", opts, err)
 	}
 	lw := &listenerWrapper{Listener: lis}
 	s.logger.Infof("Started a net.Listener on %s", lis.Addr().String())
@@ -208,7 +232,7 @@ func (s *GRPCServer) Serve(opts ServeOptions) error {
 	// Register an LDS watch using our xdsClient, and specify the listening
 	// address as the resource name.
 	// TODO(easwars): Check if literal IPv6 addresses need an enclosing [].
-	name := fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", opts.Address)
+	name := fmt.Sprintf(listenerResourceNameFormat, opts.Address)
 	cancelWatch := s.xdsC.WatchListener(name, func(update xdsclient.ListenerUpdate, err error) {
 		if err != nil {
 			// We simply log an error here and hope we get a successful update
@@ -242,11 +266,10 @@ func (s *GRPCServer) Serve(opts ServeOptions) error {
 		// need to explicitly close the listener. Cancellation of the xDS watch
 		// is handled by the listenerWrapper.
 		lw.Close()
-		return nil
+		return nil, nil
 	case <-goodUpdate.Done():
 	}
-
-	return s.gs.Serve(lw)
+	return lw, nil
 }
 
 // Stop stops the underlying gRPC server. It immediately closes all open
