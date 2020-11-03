@@ -224,6 +224,9 @@ func (lb *lbBalancer) newRemoteBalancerCCWrapper() {
 	if lb.opt.Dialer != nil {
 		dopts = append(dopts, grpc.WithContextDialer(lb.opt.Dialer))
 	}
+	if lb.opt.CustomUserAgent != "" {
+		dopts = append(dopts, grpc.WithUserAgent(lb.opt.CustomUserAgent))
+	}
 	// Explicitly set pickfirst as the balancer.
 	dopts = append(dopts, grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"pick_first"}`))
 	dopts = append(dopts, grpc.WithResolvers(lb.manualResolver))
