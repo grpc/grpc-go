@@ -52,7 +52,7 @@ type routeConfig struct {
 	// Path, Prefix and Regex can have at most one set. This is guaranteed by
 	// config parsing.
 	path, prefix, regex string
-	// Indicates if prefix/path matching should be case sensitive. The default
+	// Indicates if prefix/path matching should be case insensitive. The default
 	// is false (case sensitive).
 	caseInsensitive bool
 

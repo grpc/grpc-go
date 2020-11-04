@@ -167,7 +167,7 @@ type VirtualHost struct {
 // indication of the action to take upon match.
 type Route struct {
 	Path, Prefix, Regex *string
-	// Indicates if prefix/path matching should be case sensitive. The default
+	// Indicates if prefix/path matching should be case insensitive. The default
 	// is false (case sensitive).
 	CaseInsensitive bool
 	Headers         []*HeaderMatcher

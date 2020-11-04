@@ -47,6 +47,16 @@ func TestAndMatcherMatch(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "both match with path case insensitive",
+			pm:   newPathExactMatcher("/A/B", true),
+			hm:   newHeaderExactMatcher("th", "tv"),
+			info: balancer.PickInfo{
+				FullMethodName: "/a/b",
+				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
+			},
+			want: true,
+		},
+		{
 			name: "only one match",
 			pm:   newPathExactMatcher("/a/b", false),
 			hm:   newHeaderExactMatcher("th", "tv"),
