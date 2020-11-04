@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -267,10 +268,7 @@ func setupBootstrapOverride(bootstrapFileMap map[string]string) func() {
 		}
 		return nil, os.ErrNotExist
 	}
-	return func() {
-		bootstrapFileReadFunc = oldFileReadFunc
-		os.Unsetenv(bootstrapFileEnv)
-	}
+	return func() { bootstrapFileReadFunc = oldFileReadFunc }
 }
 
 // TODO: enable leak check for this package when
@@ -336,9 +334,10 @@ func TestNewConfigV2ProtoFailure(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if err := os.Setenv(bootstrapFileEnv, test.name); err != nil {
-				t.Fatalf("os.Setenv(%s, %s) failed with error: %v", bootstrapFileEnv, test.name, err)
-			}
+			origBootstrapFileName := env.BootstrapFileName
+			env.BootstrapFileName = test.name
+			defer func() { env.BootstrapFileName = origBootstrapFileName }()
+
 			if _, err := NewConfig(); err == nil {
 				t.Fatalf("NewConfig() returned nil error, expected to fail")
 			}
@@ -379,9 +378,10 @@ func TestNewConfigV2ProtoSuccess(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if err := os.Setenv(bootstrapFileEnv, test.name); err != nil {
-				t.Fatalf("os.Setenv(%s, %s) failed with error: %v", bootstrapFileEnv, test.name, err)
-			}
+			origBootstrapFileName := env.BootstrapFileName
+			env.BootstrapFileName = test.name
+			defer func() { env.BootstrapFileName = origBootstrapFileName }()
+
 			c, err := NewConfig()
 			if err != nil {
 				t.Fatalf("NewConfig() failed: %v", err)
@@ -398,10 +398,9 @@ func TestNewConfigV2ProtoSuccess(t *testing.T) {
 // on the client. In this case, whether the server supports v3 or not, the
 // client will end up using v2.
 func TestNewConfigV3SupportNotEnabledOnClient(t *testing.T) {
-	if err := os.Setenv(v3SupportEnv, "false"); err != nil {
-		t.Fatalf("os.Setenv(%s, %s) failed with error: %v", v3SupportEnv, "true", err)
-	}
-	defer os.Unsetenv(v3SupportEnv)
+	origV3Support := env.V3Support
+	env.V3Support = false
+	defer func() { env.V3Support = origV3Support }()
 
 	cancel := setupBootstrapOverride(v3BootstrapFileMap)
 	defer cancel()
@@ -416,9 +415,10 @@ func TestNewConfigV3SupportNotEnabledOnClient(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if err := os.Setenv(bootstrapFileEnv, test.name); err != nil {
-				t.Fatalf("os.Setenv(%s, %s) failed with error: %v", bootstrapFileEnv, test.name, err)
-			}
+			origBootstrapFileName := env.BootstrapFileName
+			env.BootstrapFileName = test.name
+			defer func() { env.BootstrapFileName = origBootstrapFileName }()
+
 			c, err := NewConfig()
 			if err != nil {
 				t.Fatalf("NewConfig() failed: %v", err)
@@ -435,10 +435,9 @@ func TestNewConfigV3SupportNotEnabledOnClient(t *testing.T) {
 // client. Here the client ends up using v2 or v3 based on what the server
 // supports.
 func TestNewConfigV3SupportEnabledOnClient(t *testing.T) {
-	if err := os.Setenv(v3SupportEnv, "true"); err != nil {
-		t.Fatalf("os.Setenv(%s, %s) failed with error: %v", v3SupportEnv, "true", err)
-	}
-	defer os.Unsetenv(v3SupportEnv)
+	origV3Support := env.V3Support
+	env.V3Support = true
+	defer func() { env.V3Support = origV3Support }()
 
 	cancel := setupBootstrapOverride(v3BootstrapFileMap)
 	defer cancel()
@@ -453,9 +452,10 @@ func TestNewConfigV3SupportEnabledOnClient(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if err := os.Setenv(bootstrapFileEnv, test.name); err != nil {
-				t.Fatalf("os.Setenv(%s, %s) failed with error: %v", bootstrapFileEnv, test.name, err)
-			}
+			origBootstrapFileName := env.BootstrapFileName
+			env.BootstrapFileName = test.name
+			defer func() { env.BootstrapFileName = origBootstrapFileName }()
+
 			c, err := NewConfig()
 			if err != nil {
 				t.Fatalf("NewConfig() failed: %v", err)
@@ -470,7 +470,10 @@ func TestNewConfigV3SupportEnabledOnClient(t *testing.T) {
 // TestNewConfigBootstrapFileEnvNotSet tests the case where the bootstrap file
 // environment variable is not set.
 func TestNewConfigBootstrapFileEnvNotSet(t *testing.T) {
-	os.Unsetenv(bootstrapFileEnv)
+	origBootstrapFileName := env.BootstrapFileName
+	env.BootstrapFileName = ""
+	defer func() { env.BootstrapFileName = origBootstrapFileName }()
+
 	if _, err := NewConfig(); err == nil {
 		t.Errorf("NewConfig() returned nil error, expected to fail")
 	}
@@ -637,10 +640,9 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 		t.Fatalf("config parsing for plugin %q failed: %v", fakeCertProviderName, err)
 	}
 
-	if err := os.Setenv(v3SupportEnv, "true"); err != nil {
-		t.Fatalf("os.Setenv(%s, %s) failed with error: %v", v3SupportEnv, "true", err)
-	}
-	defer os.Unsetenv(v3SupportEnv)
+	origV3Support := env.V3Support
+	env.V3Support = true
+	defer func() { env.V3Support = origV3Support }()
 
 	cancel := setupBootstrapOverride(bootstrapFileMap)
 	defer cancel()
@@ -684,9 +686,10 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if err := os.Setenv(bootstrapFileEnv, test.name); err != nil {
-				t.Fatalf("os.Setenv(%s, %s) failed with error: %v", bootstrapFileEnv, test.name, err)
-			}
+			origBootstrapFileName := env.BootstrapFileName
+			env.BootstrapFileName = test.name
+			defer func() { env.BootstrapFileName = origBootstrapFileName }()
+
 			c, err := NewConfig()
 			if (err != nil) != test.wantErr {
 				t.Fatalf("NewConfig() returned: (%+v, %v), wantErr: %v", c.CertProviderConfigs, err, test.wantErr)
