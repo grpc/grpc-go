@@ -59,7 +59,7 @@ const (
 )
 
 func clientOpts(balancerName string, overrideWatchExpiryTimeout bool) (*bootstrap.Config, time.Duration) {
-	watchExpiryTimeout := time.Duration(0)
+	watchExpiryTimeout := time.Second * 15
 	if overrideWatchExpiryTimeout {
 		watchExpiryTimeout = defaultTestWatchExpiryTimeout
 	}
