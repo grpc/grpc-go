@@ -86,7 +86,7 @@ type BuildableConfig struct {
 
 // NewBuildableConfig creates a new BuildableConfig with the given arguments.
 // Provider implementations are expected to invoke this function after parsing
-// the given JSON configuration as part of their ParseConfig() method.
+// the given configuration as part of their ParseConfig() method.
 // Equivalent configurations are expected to invoke this function with the same
 // config argument.
 func NewBuildableConfig(name string, config []byte, starter func(BuildOptions) Provider) *BuildableConfig {
