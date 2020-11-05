@@ -16,7 +16,7 @@
  *
  */
 
-// Package envconfig contains grpc settings configured by environment variables.
+// Package envconfig contains gRPC settings configured by environment variables.
 package envconfig
 
 import (
@@ -25,9 +25,8 @@ import (
 )
 
 const (
-	prefix          = "GRPC_GO_"
-	retryStr        = prefix + "RETRY"
-	txtErrIgnoreStr = prefix + "IGNORE_TXT_ERRORS"
+	retryStr        = "GRPC_GO_RETRY"
+	txtErrIgnoreStr = "GRPC_GO_IGNORE_TXT_ERRORS"
 )
 
 var (
