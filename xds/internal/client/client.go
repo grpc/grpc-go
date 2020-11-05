@@ -215,6 +215,16 @@ type SecurityConfig struct {
 	AcceptedSANs []string
 }
 
+// CircuitBreakerThreshold contains the circuit breakers configuration
+// received as part of the Cluster resource.
+type CircuitBreakerThreshold struct {
+	// RoutingPriority is the routing priority for the threshold. DEFAULT or
+	// HIGH.
+	RoutingPriority string
+	// MaxRequests is the maximum requests for the threshold.
+	MaxRequests uint32
+}
+
 // ClusterUpdate contains information from a received CDS response, which is of
 // interest to the registered CDS watcher.
 type ClusterUpdate struct {
@@ -225,6 +235,8 @@ type ClusterUpdate struct {
 	EnableLRS bool
 	// SecurityCfg contains security configuration sent by the xDS server.
 	SecurityCfg *SecurityConfig
+	// Thresholds contains the circuit breaker thresholds, if any.
+	Thresholds []CircuitBreakerThreshold
 }
 
 // OverloadDropConfig contains the config to drop overloads.

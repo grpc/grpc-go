@@ -309,10 +309,15 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	if err != nil {
 		return emptyUpdate, err
 	}
+	cbt, err := circuitBreakersFromCluster(cluster)
+	if err != nil {
+		return emptyUpdate, err
+	}
 	return ClusterUpdate{
 		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
 		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
 		SecurityCfg: sc,
+		Thresholds:  cbt,
 	}, nil
 }
 
@@ -380,6 +385,36 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 		return nil, fmt.Errorf("xds: validation context contains unexpected type: %T", t)
 	}
 	return sc, nil
+}
+
+// circuitBreakersFromCluster extracts the circuit breakers configuration from
+// the received cluster resource. Returns nil if no CircuitBreakers or no
+// Thresholds in CircuitBreakers.
+func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) ([]CircuitBreakerThreshold, error) {
+	circuitBreakers := cluster.GetCircuitBreakers()
+	if circuitBreakers == nil {
+		return nil, nil
+	}
+	thresholds := circuitBreakers.GetThresholds()
+	if thresholds == nil {
+		return nil, nil
+	}
+	cbt := make([]CircuitBreakerThreshold, 0)
+	for _, threshold := range thresholds {
+		maxRequestsPb := threshold.GetMaxRequests()
+		var maxRequests uint32 = 1024
+		if maxRequestsPb != nil {
+			maxRequests = maxRequestsPb.GetValue()
+		}
+		cbt = append(cbt, CircuitBreakerThreshold{
+			RoutingPriority: threshold.GetPriority().String(),
+			MaxRequests:     maxRequests,
+		})
+	}
+	if len(cbt) == 0 {
+		return nil, nil
+	}
+	return cbt, nil
 }
 
 // UnmarshalEndpoints processes resources received in an EDS response,
