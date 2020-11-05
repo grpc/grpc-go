@@ -103,7 +103,9 @@ func (so *ServeOptions) validate() error {
 }
 
 // GRPCServer wraps a gRPC server and provides server-side xDS functionality, by
-// communication with a management server using xDS APIs.
+// communication with a management server using xDS APIs. It implements the
+// grpc.ServiceRegistrar interface and can be passed to service registration
+// functions in IDL generated code.
 //
 // Experimental
 //
@@ -121,16 +123,9 @@ type GRPCServer struct {
 	xdsC     xdsClientInterface
 }
 
-// NewGRPCServer creates a gRPC server using the passed in ServerOptions. It
-// adds additional stream and unary interceptors to perform any xDS specific
-// functionality, and this is transparent to the users.
-//
-// Communication with the management server to receive xDS configuration is not
-// started here. The underlying gRPC server has no service registered and has
-// not started to accept requests yet.
-//
-// GRPCServer implements grpc.ServiceRegistrar interface and can be passed to
-// service registration functions in IDL generated code.
+// NewGRPCServer creates an xDS-enabled gRPC server using the passed in opts.
+// The underlying gRPC server has no service registered and has not started to
+// accept requests yet.
 //
 // Experimental
 //
