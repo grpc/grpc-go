@@ -8,7 +8,6 @@ require (
 	google.golang.org/grpc/examples v0.0.0-20201020200225-9519efffeb5d
 )
 
-// TODO(Zhenlian): remove these lines when advancedtls becomes stable.
 replace google.golang.org/grpc => ../../
 
 replace google.golang.org/grpc/examples => ../../examples
