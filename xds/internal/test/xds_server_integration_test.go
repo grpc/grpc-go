@@ -149,11 +149,7 @@ func (s) TestServerSideXDS(t *testing.T) {
 	// Create a clientconn and make a successful RPC
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	dopts := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-	}
-	cc, err := grpc.DialContext(ctx, localAddress, dopts...)
+	cc, err := grpc.DialContext(ctx, localAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
