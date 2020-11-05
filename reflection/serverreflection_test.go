@@ -25,6 +25,7 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
@@ -50,6 +51,8 @@ var (
 	fdProto2ExtByte  []byte
 	fdProto2Ext2Byte []byte
 )
+
+const defaultTestTimeout = 10 * time.Second
 
 type x struct {
 	grpctest.Tester
@@ -209,7 +212,9 @@ func (x) TestReflectionEnd2end(t *testing.T) {
 	defer conn.Close()
 
 	c := rpb.NewServerReflectionClient(conn)
-	stream, err := c.ServerReflectionInfo(context.Background(), grpc.WaitForReady(true))
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := c.ServerReflectionInfo(ctx, grpc.WaitForReady(true))
 	if err != nil {
 		t.Fatalf("cannot get ServerReflectionInfo: %v", err)
 	}

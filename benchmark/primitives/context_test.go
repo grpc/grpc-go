@@ -24,6 +24,8 @@ import (
 	"time"
 )
 
+const defaultTestTimeout = 10 * time.Second
+
 func BenchmarkCancelContextErrNoErr(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	for i := 0; i < b.N; i++ {
@@ -72,7 +74,7 @@ func BenchmarkCancelContextChannelGotErr(b *testing.B) {
 }
 
 func BenchmarkTimerContextErrNoErr(b *testing.B) {
-	ctx, cancel := context.WithTimeout(context.Background(), 24*time.Hour)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	for i := 0; i < b.N; i++ {
 		if err := ctx.Err(); err != nil {
 			b.Fatal("error")
@@ -92,7 +94,7 @@ func BenchmarkTimerContextErrGotErr(b *testing.B) {
 }
 
 func BenchmarkTimerContextChannelNoErr(b *testing.B) {
-	ctx, cancel := context.WithTimeout(context.Background(), 24*time.Hour)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	for i := 0; i < b.N; i++ {
 		select {
 		case <-ctx.Done():

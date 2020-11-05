@@ -37,6 +37,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const defaultTestTimeout = 10 * time.Second
+
 type s struct {
 	grpctest.Tester
 }
@@ -281,8 +283,10 @@ func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.Simple
 	} else {
 		req = &testpb.SimpleRequest{Id: errorID}
 	}
-	ctx := metadata.NewOutgoingContext(context.Background(), testMetadata)
-	resp, err = tc.UnaryCall(ctx, req, grpc.WaitForReady(!c.failfast))
+
+	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	resp, err = tc.UnaryCall(metadata.NewOutgoingContext(tCtx, testMetadata), req, grpc.WaitForReady(!c.failfast))
 	return req, resp, err
 }
 
@@ -293,7 +297,9 @@ func (te *test) doFullDuplexCallRoundtrip(c *rpcConfig) ([]*testpb.SimpleRequest
 		err   error
 	)
 	tc := testpb.NewTestServiceClient(te.clientConn())
-	stream, err := tc.FullDuplexCall(metadata.NewOutgoingContext(context.Background(), testMetadata), grpc.WaitForReady(!c.failfast))
+	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := tc.FullDuplexCall(metadata.NewOutgoingContext(tCtx, testMetadata), grpc.WaitForReady(!c.failfast))
 	if err != nil {
 		return reqs, resps, err
 	}
@@ -332,7 +338,9 @@ func (te *test) doClientStreamCall(c *rpcConfig) ([]*testpb.SimpleRequest, *test
 		err  error
 	)
 	tc := testpb.NewTestServiceClient(te.clientConn())
-	stream, err := tc.ClientStreamCall(metadata.NewOutgoingContext(context.Background(), testMetadata), grpc.WaitForReady(!c.failfast))
+	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := tc.ClientStreamCall(metadata.NewOutgoingContext(tCtx, testMetadata), grpc.WaitForReady(!c.failfast))
 	if err != nil {
 		return reqs, resp, err
 	}
@@ -367,7 +375,9 @@ func (te *test) doServerStreamCall(c *rpcConfig) (*testpb.SimpleRequest, []*test
 		startID = errorID
 	}
 	req = &testpb.SimpleRequest{Id: startID}
-	stream, err := tc.ServerStreamCall(metadata.NewOutgoingContext(context.Background(), testMetadata), req, grpc.WaitForReady(!c.failfast))
+	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := tc.ServerStreamCall(metadata.NewOutgoingContext(tCtx, testMetadata), req, grpc.WaitForReady(!c.failfast))
 	if err != nil {
 		return req, resps, err
 	}
@@ -1286,7 +1296,9 @@ func (s) TestClientStatsFullDuplexRPCError(t *testing.T) {
 
 func (s) TestTags(t *testing.T) {
 	b := []byte{5, 2, 4, 3, 1}
-	ctx := stats.SetTags(context.Background(), b)
+	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx := stats.SetTags(tCtx, b)
 	if tg := stats.OutgoingTags(ctx); !reflect.DeepEqual(tg, b) {
 		t.Errorf("OutgoingTags(%v) = %v; want %v", ctx, tg, b)
 	}
@@ -1294,7 +1306,7 @@ func (s) TestTags(t *testing.T) {
 		t.Errorf("Tags(%v) = %v; want nil", ctx, tg)
 	}
 
-	ctx = stats.SetIncomingTags(context.Background(), b)
+	ctx = stats.SetIncomingTags(tCtx, b)
 	if tg := stats.Tags(ctx); !reflect.DeepEqual(tg, b) {
 		t.Errorf("Tags(%v) = %v; want %v", ctx, tg, b)
 	}
@@ -1305,7 +1317,9 @@ func (s) TestTags(t *testing.T) {
 
 func (s) TestTrace(t *testing.T) {
 	b := []byte{5, 2, 4, 3, 1}
-	ctx := stats.SetTrace(context.Background(), b)
+	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx := stats.SetTrace(tCtx, b)
 	if tr := stats.OutgoingTrace(ctx); !reflect.DeepEqual(tr, b) {
 		t.Errorf("OutgoingTrace(%v) = %v; want %v", ctx, tr, b)
 	}
@@ -1313,7 +1327,7 @@ func (s) TestTrace(t *testing.T) {
 		t.Errorf("Trace(%v) = %v; want nil", ctx, tr)
 	}
 
-	ctx = stats.SetIncomingTrace(context.Background(), b)
+	ctx = stats.SetIncomingTrace(tCtx, b)
 	if tr := stats.Trace(ctx); !reflect.DeepEqual(tr, b) {
 		t.Errorf("Trace(%v) = %v; want %v", ctx, tr, b)
 	}
