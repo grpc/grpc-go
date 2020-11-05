@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	xdsinternal "google.golang.org/grpc/xds/internal"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -313,9 +312,6 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			t.Fatalf("ClientConn.UpdateState returned error: %v", err)
 		}
 		rState := gotState.(resolver.State)
-		if gotClient := rState.Attributes.Value(xdsinternal.XDSClientID); gotClient != xdsC {
-			t.Fatalf("ClientConn.UpdateState got xdsClient: %v, want %v", gotClient, xdsC)
-		}
 		if err := rState.ServiceConfig.Err; err != nil {
 			t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
 		}
@@ -371,9 +367,6 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
 	}
 	rState := gotState.(resolver.State)
-	if gotClient := rState.Attributes.Value(xdsinternal.XDSClientID); gotClient != xdsC {
-		t.Fatalf("ClientConn.UpdateState got xdsClient: %v, want %v", gotClient, xdsC)
-	}
 	if err := rState.ServiceConfig.Err; err != nil {
 		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
 	}
@@ -422,11 +415,6 @@ func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
 	}
 	rState := gotState.(resolver.State)
-	// This update shouldn't have xds-client in it, because it doesn't pick an
-	// xds balancer.
-	if gotClient := rState.Attributes.Value(xdsinternal.XDSClientID); gotClient != nil {
-		t.Fatalf("ClientConn.UpdateState got xdsClient: %v, want <nil>", gotClient)
-	}
 	wantParsedConfig := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)("{}")
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantParsedConfig.Config) {
 		t.Error("ClientConn.UpdateState got wrong service config")

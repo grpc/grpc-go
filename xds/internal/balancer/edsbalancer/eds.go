@@ -43,6 +43,7 @@ var (
 	newEDSBalancer = func(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), xdsClient *xdsClientWrapper, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
 		return newEDSBalancerImpl(cc, enqueueState, xdsClient, logger)
 	}
+	newXDSClient = func() (xdsClientInterface, error) { return xdsclient.New() }
 )
 
 func init() {
@@ -61,7 +62,14 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptio
 		childPolicyUpdate: buffer.NewUnbounded(),
 	}
 	x.logger = prefixLogger((x))
-	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.logger)
+
+	client, err := newXDSClient()
+	if err != nil {
+		x.logger.Errorf("xds: failed to create xds-client: %v", err)
+		return nil
+	}
+
+	x.client = newXDSClientWrapper(client, x.handleEDSUpdate, x.logger)
 	x.edsImpl = newEDSBalancer(x.cc, x.enqueueChildBalancerState, x.client, x.logger)
 	x.logger.Infof("Created")
 	go x.run()
@@ -177,7 +185,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 			return
 		}
 
-		if err := x.client.handleUpdate(cfg, u.ResolverState.Attributes); err != nil {
+		if err := x.client.handleUpdate(cfg); err != nil {
 			x.logger.Warningf("failed to update xds clients: %v", err)
 		}
 

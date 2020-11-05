@@ -30,9 +30,6 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/attributes"
-	xdsinternal "google.golang.org/grpc/xds/internal"
-
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
@@ -262,6 +259,10 @@ func (b *fakeBalancer) Close() {}
 //   Instead, we expect the existing edsLB to receive the new child policy.
 func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	defer func() { newXDSClient = oldNewXDSClient }()
+
 	edsLBCh := testutils.NewChannel()
 	cancel := setup(edsLBCh)
 	defer cancel()
@@ -275,7 +276,6 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 	defer edsB.Close()
 
 	edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, xdsC)},
 		BalancerConfig: &EDSConfig{
 			ChildPolicy: &loadBalancingConfig{
 				Name:   fakeBalancerA,
@@ -298,7 +298,6 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 	})
 
 	edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, xdsC)},
 		BalancerConfig: &EDSConfig{
 			ChildPolicy: &loadBalancingConfig{
 				Name:   fakeBalancerB,
@@ -317,6 +316,10 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 // the subConnStateChange to appropriate child balancers.
 func (s) TestXDSSubConnStateChange(t *testing.T) {
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	defer func() { newXDSClient = oldNewXDSClient }()
+
 	edsLBCh := testutils.NewChannel()
 	cancel := setup(edsLBCh)
 	defer cancel()
@@ -330,7 +333,6 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	defer edsB.Close()
 
 	edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, xdsC)},
 		BalancerConfig: &EDSConfig{EDSServiceName: testEDSClusterName},
 	})
 
@@ -358,6 +360,10 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 // handle fallback.
 func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	defer func() { newXDSClient = oldNewXDSClient }()
+
 	edsLBCh := testutils.NewChannel()
 	cancel := setup(edsLBCh)
 	defer cancel()
@@ -371,7 +377,6 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	defer edsB.Close()
 
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, xdsC)},
 		BalancerConfig: &EDSConfig{EDSServiceName: testEDSClusterName},
 	}); err != nil {
 		t.Fatal(err)
@@ -422,6 +427,10 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 // handle fallback.
 func (s) TestErrorFromResolver(t *testing.T) {
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	defer func() { newXDSClient = oldNewXDSClient }()
+
 	edsLBCh := testutils.NewChannel()
 	cancel := setup(edsLBCh)
 	defer cancel()
@@ -435,7 +444,6 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	defer edsB.Close()
 
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, xdsC)},
 		BalancerConfig: &EDSConfig{EDSServiceName: testEDSClusterName},
 	}); err != nil {
 		t.Fatal(err)

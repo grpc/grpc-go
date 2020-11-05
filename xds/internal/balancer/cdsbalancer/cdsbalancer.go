@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
@@ -36,7 +35,6 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
 
-	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
@@ -60,6 +58,7 @@ var (
 		// not deal with subConns.
 		return builder.Build(cc, opts), nil
 	}
+	newXDSClient  = func() (xdsClientInterface, error) { return xdsclient.New() }
 	buildProvider = buildProviderFunc
 )
 
@@ -84,6 +83,13 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 	}
 	b.logger = prefixLogger((b))
 	b.logger.Infof("Created")
+
+	client, err := newXDSClient()
+	if err != nil {
+		b.logger.Errorf("failed to create xds-client: %v", err)
+		return nil
+	}
+	b.xdsClient = client
 
 	var creds credentials.TransportCredentials
 	switch {
@@ -140,7 +146,6 @@ type xdsClientInterface interface {
 // watcher with the xdsClient, while a non-nil error causes it to cancel the
 // existing watch and propagate the error to the underlying edsBalancer.
 type ccUpdate struct {
-	client      xdsClientInterface
 	clusterName string
 	err         error
 }
@@ -195,15 +200,8 @@ func (b *cdsBalancer) handleClientConnUpdate(update *ccUpdate) {
 	if err := update.err; err != nil {
 		b.handleErrorFromUpdate(err, true)
 	}
-	if b.xdsClient == update.client && b.clusterToWatch == update.clusterName {
+	if b.clusterToWatch == update.clusterName {
 		return
-	}
-	if update.client != nil {
-		// Since the cdsBalancer doesn't own the xdsClient object, we don't have
-		// to bother about closing the old client here, but we still need to
-		// cancel the watch on the old client.
-		b.cancelWatch()
-		b.xdsClient = update.client
 	}
 	if update.clusterName != "" {
 		cancelWatch := b.xdsClient.WatchCluster(update.clusterName, b.handleClusterUpdate)
@@ -349,7 +347,6 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 
 	}
 	ccState := balancer.ClientConnState{
-		ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, b.xdsClient)},
 		BalancerConfig: lbCfg,
 	}
 	if err := b.edsLB.UpdateClientConnState(ccState); err != nil {
@@ -467,17 +464,7 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 		b.logger.Warningf("xds: no clusterName found in LoadBalancingConfig: %+v", lbCfg)
 		return balancer.ErrBadResolverState
 	}
-	client := state.ResolverState.Attributes.Value(xdsinternal.XDSClientID)
-	if client == nil {
-		b.logger.Warningf("xds: no xdsClient found in resolver state attributes")
-		return balancer.ErrBadResolverState
-	}
-	newClient, ok := client.(xdsClientInterface)
-	if !ok {
-		b.logger.Warningf("xds: unexpected xdsClient type: %T", client)
-		return balancer.ErrBadResolverState
-	}
-	b.updateCh.Put(&ccUpdate{client: newClient, clusterName: lbCfg.ClusterName})
+	b.updateCh.Put(&ccUpdate{clusterName: lbCfg.ClusterName})
 	return nil
 }
 
@@ -502,6 +489,7 @@ func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 // Close closes the cdsBalancer and the underlying edsBalancer.
 func (b *cdsBalancer) Close() {
 	b.closed.Fire()
+	b.xdsClient.Close()
 }
 
 // ccWrapper wraps the balancer.ClientConn that was passed in to the CDS
