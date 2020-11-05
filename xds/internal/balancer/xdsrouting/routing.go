@@ -136,9 +136,9 @@ func routeToMatcher(r routeConfig) (*compositeMatcher, error) {
 		}
 		pathMatcher = newPathRegexMatcher(re)
 	case r.path != "":
-		pathMatcher = newPathExactMatcher(r.path)
+		pathMatcher = newPathExactMatcher(r.path, r.caseInsensitive)
 	default:
-		pathMatcher = newPathPrefixMatcher(r.prefix)
+		pathMatcher = newPathPrefixMatcher(r.prefix, r.caseInsensitive)
 	}
 
 	var headerMatchers []headerMatcherInterface

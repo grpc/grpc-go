@@ -167,9 +167,12 @@ type VirtualHost struct {
 // indication of the action to take upon match.
 type Route struct {
 	Path, Prefix, Regex *string
-	Headers             []*HeaderMatcher
-	Fraction            *uint32
-	Action              map[string]uint32 // action is weighted clusters.
+	// Indicates if prefix/path matching should be case insensitive. The default
+	// is false (case sensitive).
+	CaseInsensitive bool
+	Headers         []*HeaderMatcher
+	Fraction        *uint32
+	Action          map[string]uint32 // action is weighted clusters.
 }
 
 // HeaderMatcher represents header matchers.
