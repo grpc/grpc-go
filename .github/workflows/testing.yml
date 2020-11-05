@@ -38,6 +38,7 @@ jobs:
       VET_SKIP_PROTO: 1
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - type: vet
