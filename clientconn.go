@@ -259,6 +259,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.authority = cc.dopts.authority
 	} else if strings.HasPrefix(cc.target, "unix:") {
 		cc.authority = "localhost"
+	} else if strings.HasPrefix(cc.parsedTarget.Endpoint, ":") || cc.parsedTarget.Endpoint == "" {
+		cc.authority = "localhost" + cc.parsedTarget.Endpoint
 	} else {
 		// Use endpoint from "scheme://authority/endpoint" as the default
 		// authority for ClientConn.
