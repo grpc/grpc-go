@@ -33,6 +33,7 @@ func TestPathFullMatcherMatch(t *testing.T) {
 	}{
 		{name: "match", fullPath: "/s/m", path: "/s/m", want: true},
 		{name: "case insensitive match", fullPath: "/s/m", caseInsensitive: true, path: "/S/m", want: true},
+		{name: "case insensitive match 2", fullPath: "/s/M", caseInsensitive: true, path: "/S/m", want: true},
 		{name: "not match", fullPath: "/s/m", path: "/a/b", want: false},
 		{name: "case insensitive not match", fullPath: "/s/m", caseInsensitive: true, path: "/a/b", want: false},
 	}
@@ -56,6 +57,7 @@ func TestPathPrefixMatcherMatch(t *testing.T) {
 	}{
 		{name: "match", prefix: "/s/", path: "/s/m", want: true},
 		{name: "case insensitive match", prefix: "/s/", caseInsensitive: true, path: "/S/m", want: true},
+		{name: "case insensitive match 2", prefix: "/S/", caseInsensitive: true, path: "/s/m", want: true},
 		{name: "not match", prefix: "/s/", path: "/a/b", want: false},
 		{name: "case insensitive not match", prefix: "/s/", caseInsensitive: true, path: "/a/b", want: false},
 	}
