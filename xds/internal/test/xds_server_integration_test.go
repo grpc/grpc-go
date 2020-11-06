@@ -31,16 +31,16 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
-	listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v2"
-
+	v2discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/xds"
+	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/version"
 )
@@ -59,38 +59,25 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// TestServerSideXDS is an e2e tests for xDS use on the server. This does not
-// use any xDS features because we have not implemented any on the server side.
-func (s) TestServerSideXDS(t *testing.T) {
-	// Spin up a fake xDS management server on a local port.
-	// TODO(easwars): Switch to using the server from envoy-go-control-plane.
-	fs, cleanup, err := fakeserver.StartServer()
-	if err != nil {
-		t.Fatalf("failed to start fake xDS server: %v", err)
-	}
-	defer cleanup()
-	t.Logf("Started xDS management server at %s", fs.Address)
-
-	// Setup the fakeserver to respond with a Listener resource.
-	fs.XDSResponseChan <- &fakeserver.Response{
-		Resp: &xdspb.DiscoveryResponse{
+func setupListenerResponse(respCh chan *fakeserver.Response, name string) {
+	respCh <- &fakeserver.Response{
+		Resp: &v2discoverypb.DiscoveryResponse{
 			Resources: []*anypb.Any{
 				{
 					TypeUrl: version.V2ListenerURL,
 					Value: func() []byte {
-						l := &xdspb.Listener{
+						l := &v3listenerpb.Listener{
 							// This needs to match the name we are querying for.
 							Name: listenerName,
-							ApiListener: &listenerpb.ApiListener{
+							ApiListener: &v3listenerpb.ApiListener{
 								ApiListener: &anypb.Any{
-
 									TypeUrl: version.V2HTTPConnManagerURL,
 									Value: func() []byte {
-										cm := &httppb.HttpConnectionManager{
-											RouteSpecifier: &httppb.HttpConnectionManager_Rds{
-												Rds: &httppb.Rds{
-													ConfigSource: &basepb.ConfigSource{
-														ConfigSourceSpecifier: &basepb.ConfigSource_Ads{Ads: &basepb.AggregatedConfigSource{}},
+										cm := &v3httppb.HttpConnectionManager{
+											RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+												Rds: &v3httppb.Rds{
+													ConfigSource: &v3corepb.ConfigSource{
+														ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
 													},
 													RouteConfigName: "route-config",
 												},
@@ -110,7 +97,9 @@ func (s) TestServerSideXDS(t *testing.T) {
 			TypeUrl: version.V2ListenerURL,
 		},
 	}
+}
 
+func setupBootstrapFile(t *testing.T, serverURI string) func() {
 	// Create a bootstrap file in a temporary directory.
 	tmpdir, err := ioutil.TempDir("", "xds-server-test*")
 	if err != nil {
@@ -130,35 +119,60 @@ func (s) TestServerSideXDS(t *testing.T) {
 					{ "type": "insecure" }
 				]
 			}]
-		}`, fs.Address)
+		}`, serverURI)
 	bootstrapFileName := path.Join(tmpdir, "bootstrap")
 	if err := ioutil.WriteFile(bootstrapFileName, []byte(bootstrapContents), os.ModePerm); err != nil {
 		t.Fatalf("failed to write bootstrap file: %v", err)
 	}
-	if err := os.Setenv("GRPC_XDS_BOOTSTRAP", bootstrapFileName); err != nil {
-		t.Fatalf("failed to update bootstrap environment variable: %v", err)
-	}
+
+	origBootstrapFileName := env.BootstrapFileName
+	env.BootstrapFileName = bootstrapFileName
 	t.Logf("Create bootstrap file at %s with contents\n%s", bootstrapFileName, bootstrapContents)
+	return func() { env.BootstrapFileName = origBootstrapFileName }
+}
+
+// TestServerSideXDS is an e2e tests for xDS use on the server. This does not
+// use any xDS features because we have not implemented any on the server side.
+func (s) TestServerSideXDS(t *testing.T) {
+	// Spin up a fake xDS management server on a local port.
+	// TODO(easwars): Switch to using the server from envoy-go-control-plane.
+	fs, cleanup, err := fakeserver.StartServer()
+	if err != nil {
+		t.Fatalf("failed to start fake xDS server: %v", err)
+	}
+	defer cleanup()
+	t.Logf("Started xDS management server at %s", fs.Address)
+
+	// Setup the fakeserver to respond with a Listener resource.
+	setupListenerResponse(fs.XDSResponseChan, listenerName)
+	// Create a bootstrap file in a temporary directory.
+	defer setupBootstrapFile(t, fs.Address)()
 
 	// Initialize a gRPC server which uses xDS, and register stubServer on it.
 	server := xds.NewGRPCServer()
 	testpb.RegisterTestServiceServer(server, &testService{})
-	defer server.Stop()
 
-	go server.Serve(xds.ServeOptions{Network: "tcp", Address: localAddress})
+	go func() {
+		defer server.Stop()
 
-	// Create a clientconn and make a successful RPC
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	cc, err := grpc.DialContext(ctx, localAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
+		// Create a clientconn and make a successful RPC
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		cc, err := grpc.DialContext(ctx, localAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			t.Fatalf("failed to dial local test server: %v", err)
+		}
+		defer cc.Close()
 
-	client := testpb.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("rpc EmptyCall() failed: %v", err)
+		client := testpb.NewTestServiceClient(cc)
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+			t.Fatalf("rpc EmptyCall() failed: %v", err)
+		}
+	}()
+
+	opts := xds.ServeOptions{Network: "tcp", Address: localAddress}
+	if err := server.Serve(opts); err != nil {
+		t.Fatalf("Serve(%+v) failed: %v", opts, err)
 	}
 }
 

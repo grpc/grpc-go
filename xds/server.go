@@ -182,6 +182,8 @@ func (s *GRPCServer) initXDSClient() error {
 //
 // Serve will return a non-nil error unless Stop or GracefulStop is called.
 func (s *GRPCServer) Serve(opts ServeOptions) error {
+	s.logger.Infof("Serve() called with options: %+v", opts)
+
 	// Validate the listening address in opts.
 	if err := opts.validate(); err != nil {
 		return err
@@ -192,7 +194,6 @@ func (s *GRPCServer) Serve(opts ServeOptions) error {
 	if err := s.initXDSClient(); err != nil {
 		return err
 	}
-
 	lw, err := s.newListenerWrapper(opts)
 	if lw == nil {
 		// Error returned can be nil (when Stop/GracefulStop() is called). So,
