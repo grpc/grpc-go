@@ -92,6 +92,5 @@ jobs:
         if: ${{ matrix.TYPE == 'extras' }}
         run: |
           examples/examples_test.sh
-          security/advancedtls/examples/examples_test.sh
           interop/interop_test.sh
           make testsubmodule
