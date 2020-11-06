@@ -69,7 +69,6 @@ var (
 	readAudienceFunc = readAudience
 )
 
-// Implements the certprovider.StableConfig interface.
 type pluginConfig struct {
 	serverURI     string
 	stsOpts       sts.Options

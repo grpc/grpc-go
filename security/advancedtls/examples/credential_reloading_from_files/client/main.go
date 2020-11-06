@@ -47,9 +47,9 @@ func main() {
 	flag.Parse()
 
 	identityOptions := pemfile.Options{
-		CertFile:            testdata.Path("client_cert_1.pem"),
-		KeyFile:             testdata.Path("client_key_1.pem"),
-		CertRefreshDuration: credRefreshingInterval,
+		CertFile:        testdata.Path("client_cert_1.pem"),
+		KeyFile:         testdata.Path("client_key_1.pem"),
+		RefreshDuration: credRefreshingInterval,
 	}
 	identityProvider, err := pemfile.NewProvider(identityOptions)
 	if err != nil {

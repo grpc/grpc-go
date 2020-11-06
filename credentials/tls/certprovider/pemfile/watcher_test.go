@@ -187,11 +187,10 @@ func initializeProvider(t *testing.T, testName string) (string, certprovider.Pro
 	// Create a new provider to watch the files in tmpdir.
 	dir := createTmpDirWithFiles(t, testName+"*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/client_ca_cert.pem")
 	opts := Options{
-		CertFile:            path.Join(dir, certFile),
-		KeyFile:             path.Join(dir, keyFile),
-		RootFile:            path.Join(dir, rootFile),
-		CertRefreshDuration: defaultTestRefreshDuration,
-		RootRefreshDuration: defaultTestRefreshDuration,
+		CertFile:        path.Join(dir, certFile),
+		KeyFile:         path.Join(dir, keyFile),
+		RootFile:        path.Join(dir, rootFile),
+		RefreshDuration: defaultTestRefreshDuration,
 	}
 	prov, err := NewProvider(opts)
 	if err != nil {
@@ -314,11 +313,10 @@ func (s) TestProvider_UpdateSuccessWithSymlink(t *testing.T) {
 
 	// Create a provider which watches the files pointed to by the symlink.
 	opts := Options{
-		CertFile:            path.Join(symLinkName, certFile),
-		KeyFile:             path.Join(symLinkName, keyFile),
-		RootFile:            path.Join(symLinkName, rootFile),
-		CertRefreshDuration: defaultTestRefreshDuration,
-		RootRefreshDuration: defaultTestRefreshDuration,
+		CertFile:        path.Join(symLinkName, certFile),
+		KeyFile:         path.Join(symLinkName, keyFile),
+		RootFile:        path.Join(symLinkName, rootFile),
+		RefreshDuration: defaultTestRefreshDuration,
 	}
 	prov, err := NewProvider(opts)
 	if err != nil {

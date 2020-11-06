@@ -62,14 +62,10 @@ type Options struct {
 	// RootFile is the file that holds trusted root certificate(s).
 	// Optional.
 	RootFile string
-	// CertRefreshDuration is the amount of time the plugin waits before
-	// checking for updates in the specified identity certificate and key file.
+	// RefreshDuration is the amount of time the plugin waits before checking
+	// for updates in the specified files.
 	// Optional. If not set, a default value (1 hour) will be used.
-	CertRefreshDuration time.Duration
-	// RootRefreshDuration is the amount of time the plugin waits before
-	// checking for updates in the specified root file.
-	// Optional. If not set, a default value (2 hour) will be used.
-	RootRefreshDuration time.Duration
+	RefreshDuration time.Duration
 }
 
 // NewProvider returns a new certificate provider plugin that is configured to
@@ -81,11 +77,8 @@ func NewProvider(o Options) (certprovider.Provider, error) {
 	if keySpecified, certSpecified := o.KeyFile != "", o.CertFile != ""; keySpecified != certSpecified {
 		return nil, fmt.Errorf("pemfile: private key file and identity cert file should be both specified or not specified")
 	}
-	if o.CertRefreshDuration == 0 {
-		o.CertRefreshDuration = defaultCertRefreshDuration
-	}
-	if o.RootRefreshDuration == 0 {
-		o.RootRefreshDuration = defaultRootRefreshDuration
+	if o.RefreshDuration == 0 {
+		o.RefreshDuration = defaultCertRefreshDuration
 	}
 
 	provider := &watcher{opts: o}
@@ -203,13 +196,13 @@ func (w *watcher) run(ctx context.Context) {
 	w.updateIdentityDistributor()
 	w.updateRootDistributor()
 
-	identityTicker := time.NewTicker(w.opts.CertRefreshDuration)
-	rootTicker := time.NewTicker(w.opts.RootRefreshDuration)
+	ticker := time.NewTicker(w.opts.RefreshDuration)
 	for {
+		w.updateIdentityDistributor()
+		w.updateRootDistributor()
 		select {
 		case <-ctx.Done():
-			identityTicker.Stop()
-			rootTicker.Stop()
+			ticker.Stop()
 			if w.identityDistributor != nil {
 				w.identityDistributor.Stop()
 			}
@@ -217,10 +210,7 @@ func (w *watcher) run(ctx context.Context) {
 				w.rootDistributor.Stop()
 			}
 			return
-		case <-identityTicker.C:
-			w.updateIdentityDistributor()
-		case <-rootTicker.C:
-			w.updateRootDistributor()
+		case <-ticker.C:
 		}
 	}
 }
