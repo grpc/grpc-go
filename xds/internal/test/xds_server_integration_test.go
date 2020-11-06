@@ -47,8 +47,8 @@ import (
 
 const (
 	defaultTestTimeout = 10 * time.Second
-	localAddress       = "127.0.0.1:9999"
-	listenerName       = "grpc/server?udpa.resource.listening_address=127.0.0.1:9999"
+	localAddress       = "localhost:9999"
+	listenerName       = "grpc/server?udpa.resource.listening_address=localhost:9999"
 )
 
 type s struct {
@@ -83,6 +83,7 @@ func (s) TestServerSideXDS(t *testing.T) {
 							Name: listenerName,
 							ApiListener: &listenerpb.ApiListener{
 								ApiListener: &anypb.Any{
+
 									TypeUrl: version.V2HTTPConnManagerURL,
 									Value: func() []byte {
 										cm := &httppb.HttpConnectionManager{
