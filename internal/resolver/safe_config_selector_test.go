@@ -19,10 +19,10 @@
 package resolver
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/serviceconfig"
 )
@@ -61,8 +61,8 @@ func (s) TestSafeConfigSelector(t *testing.T) {
 	cs1 := &fakeConfigSelector{
 		selectConfig: func(r RPCInfo) *RPCConfig {
 			cs1Called <- struct{}{}
-			if !reflect.DeepEqual(r, testRPCInfo) {
-				t.Errorf("SelectConfig(%v) called; want %v", r, testRPCInfo)
+			if diff := cmp.Diff(r, testRPCInfo); diff != "" {
+				t.Errorf("SelectConfig(%v) called; want %v\n  Diffs:\n%s", r, testRPCInfo, diff)
 			}
 			return <-retChan1
 		},
@@ -70,8 +70,8 @@ func (s) TestSafeConfigSelector(t *testing.T) {
 	cs2 := &fakeConfigSelector{
 		selectConfig: func(r RPCInfo) *RPCConfig {
 			cs2Called <- struct{}{}
-			if !reflect.DeepEqual(r, testRPCInfo) {
-				t.Errorf("SelectConfig(%v) called; want %v", r, testRPCInfo)
+			if diff := cmp.Diff(r, testRPCInfo); diff != "" {
+				t.Errorf("SelectConfig(%v) called; want %v\n  Diffs:\n%s", r, testRPCInfo, diff)
 			}
 			return <-retChan2
 		},
@@ -145,8 +145,9 @@ func (s) TestSafeConfigSelector(t *testing.T) {
 				cs1Done = true
 			}
 			retChan2 <- resp2
-			if got := <-gotConfigChan; !reflect.DeepEqual(got, resp2) {
-				t.Fatalf("SelectConfig(%v) = %v; want %v", testRPCInfo, got, resp2)
+			got := <-gotConfigChan
+			if diff := cmp.Diff(got, resp2); diff != "" {
+				t.Fatalf("SelectConfig(%v) = %v; want %v\n  Diffs:\n%s", testRPCInfo, got, resp2, diff)
 			}
 		}
 		if !cs1Done {
