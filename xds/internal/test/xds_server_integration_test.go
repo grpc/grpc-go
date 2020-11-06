@@ -162,12 +162,14 @@ func (s) TestServerSideXDS(t *testing.T) {
 		cc, err := grpc.DialContext(ctx, localAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			errCh <- fmt.Errorf("failed to dial local test server: %v", err)
+			return
 		}
 		defer cc.Close()
 
 		client := testpb.NewTestServiceClient(cc)
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 			errCh <- fmt.Errorf("rpc EmptyCall() failed: %v", err)
+			return
 		}
 		errCh <- nil
 	}()
