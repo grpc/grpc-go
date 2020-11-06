@@ -7,8 +7,7 @@ This example demonstrates how to set the reloading fields in advancedtls API.
 Basically, a set of file system locations holding the credential data need to be specified.
 Once the credential data needs to be updated, users just change the credential data in the file system, and gRPC will pick up the changes automatically.
 
-This example only shows how to set the API, without demonstrating the way to reload credentials on file system. 
-To learn more about how to do that in Go, please see `advancedtls_integration_test.go`.
+This example doesn't replace the credential files with new files, but if they were overwritten, gRPC would read them and apply changes automatically.
 
 A couple of things to note:
  1. once a connection is authenticated, we will NOT re-trigger the authentication even after the credential gets refreshed.
