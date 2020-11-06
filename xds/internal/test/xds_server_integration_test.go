@@ -152,6 +152,7 @@ func (s) TestServerSideXDS(t *testing.T) {
 	server := xds.NewGRPCServer()
 	testpb.RegisterTestServiceServer(server, &testService{})
 
+	errCh := make(chan error, 1)
 	go func() {
 		defer server.Stop()
 
@@ -160,19 +161,24 @@ func (s) TestServerSideXDS(t *testing.T) {
 		defer cancel()
 		cc, err := grpc.DialContext(ctx, localAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
-			t.Fatalf("failed to dial local test server: %v", err)
+			errCh <- fmt.Errorf("failed to dial local test server: %v", err)
 		}
 		defer cc.Close()
 
 		client := testpb.NewTestServiceClient(cc)
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-			t.Fatalf("rpc EmptyCall() failed: %v", err)
+			errCh <- fmt.Errorf("rpc EmptyCall() failed: %v", err)
 		}
+		errCh <- nil
 	}()
 
 	opts := xds.ServeOptions{Network: "tcp", Address: localAddress}
 	if err := server.Serve(opts); err != nil {
 		t.Fatalf("Serve(%+v) failed: %v", opts, err)
+	}
+
+	if err := <-errCh; err != nil {
+		t.Fatal(err)
 	}
 }
 
