@@ -35,8 +35,11 @@ type ConfigSelector interface {
 
 // RPCInfo contains RPC information needed by a ConfigSelector.
 type RPCInfo struct {
-	Context context.Context // Contains headers, application timeout
-	Method  string          // i.e. "/Service/Method"
+	// Context is the user's context for the RPC and contains headers and
+	// application timeout.  It is passed for interception purposes and for
+	// efficiency reasons.  SelectConfig should not be blocking.
+	Context context.Context
+	Method  string // i.e. "/Service/Method"
 }
 
 // RPCConfig describes the configuration to use for each RPC.
