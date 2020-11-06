@@ -75,18 +75,9 @@ type Config struct {
 	// NodeProto contains the Node proto to be used in xDS requests. The actual
 	// type depends on the transport protocol version used.
 	NodeProto proto.Message
-	// CertProviderConfigs contain parsed configs for supported certificate
-	// provider plugins found in the bootstrap file.
-	CertProviderConfigs map[string]CertProviderConfig
-}
-
-// CertProviderConfig wraps the certificate provider plugin name and config
-// (corresponding to one plugin instance) found in the bootstrap file.
-type CertProviderConfig struct {
-	// Name is the registered name of the certificate provider.
-	Name string
-	// Config is the parsed config to be passed to the certificate provider.
-	Config certprovider.StableConfig
+	// CertProviderConfigs contains a mapping from certificate provider plugin
+	// instance names to parsed buildable configs.
+	CertProviderConfigs map[string]*certprovider.BuildableConfig
 }
 
 type channelCreds struct {
@@ -207,7 +198,7 @@ func NewConfig() (*Config, error) {
 			if err := json.Unmarshal(v, &providerInstances); err != nil {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
-			configs := make(map[string]CertProviderConfig)
+			configs := make(map[string]*certprovider.BuildableConfig)
 			getBuilder := internal.GetCertificateProviderBuilder.(func(string) certprovider.Builder)
 			for instance, data := range providerInstances {
 				var nameAndConfig struct {
@@ -224,15 +215,11 @@ func NewConfig() (*Config, error) {
 					// We ignore plugins that we do not know about.
 					continue
 				}
-				cfg := nameAndConfig.Config
-				c, err := parser.ParseConfig(cfg)
+				bc, err := parser.ParseConfig(nameAndConfig.Config)
 				if err != nil {
 					return nil, fmt.Errorf("xds: Config parsing for plugin %q failed: %v", name, err)
 				}
-				configs[instance] = CertProviderConfig{
-					Name:   name,
-					Config: c,
-				}
+				configs[instance] = bc
 			}
 			config.CertProviderConfigs = configs
 		}

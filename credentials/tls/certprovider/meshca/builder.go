@@ -65,7 +65,7 @@ type refCountedCC struct {
 }
 
 // pluginBuilder is an implementation of the certprovider.Builder interface,
-// which build certificate provider instances which get certificates signed from
+// which builds certificate provider instances to get certificates signed from
 // the MeshCA.
 type pluginBuilder struct {
 	// A collection of ClientConns to the MeshCA server along with a reference
@@ -75,22 +75,30 @@ type pluginBuilder struct {
 	clients map[ccMapKey]*refCountedCC
 }
 
-// Build returns a MeshCA certificate provider for the passed in configuration
-// and options.
+// ParseConfig parses the configuration to be passed to the MeshCA plugin
+// implementation. Expects the config to be a json.RawMessage which contains a
+// serialized JSON representation of the meshca_experimental.GoogleMeshCaConfig
+// proto message.
 //
-// This builder takes care of sharing the ClientConn to the MeshCA server among
+// Takes care of sharing the ClientConn to the MeshCA server among
 // different plugin instantiations.
-func (b *pluginBuilder) Build(c certprovider.StableConfig, opts certprovider.Options) certprovider.Provider {
-	cfg, ok := c.(*pluginConfig)
+func (b *pluginBuilder) ParseConfig(c interface{}) (*certprovider.BuildableConfig, error) {
+	data, ok := c.(json.RawMessage)
 	if !ok {
-		// This is not expected when passing config returned by ParseConfig().
-		// This could indicate a bug in the certprovider.Store implementation or
-		// in cases where the user is directly using these APIs, could be a user
-		// error.
-		logger.Errorf("unsupported config type: %T", c)
-		return nil
+		return nil, fmt.Errorf("meshca: unsupported config type: %T", c)
 	}
+	cfg, err := pluginConfigFromJSON(data)
+	if err != nil {
+		return nil, err
+	}
+	return certprovider.NewBuildableConfig(pluginName, cfg.canonical(), func(opts certprovider.BuildOptions) certprovider.Provider {
+		return b.buildFromConfig(cfg, opts)
+	}), nil
+}
 
+// buildFromConfig builds a certificate provider instance for the given config
+// and options. Provider instances are shared wherever possible.
+func (b *pluginBuilder) buildFromConfig(cfg *pluginConfig, opts certprovider.BuildOptions) certprovider.Provider {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -149,18 +157,6 @@ func (b *pluginBuilder) Build(c certprovider.StableConfig, opts certprovider.Opt
 		},
 	})
 	return p
-}
-
-// ParseConfig parses the configuration to be passed to the MeshCA plugin
-// implementation. Expects the config to be a json.RawMessage which contains a
-// serialized JSON representation of the meshca_experimental.GoogleMeshCaConfig
-// proto message.
-func (b *pluginBuilder) ParseConfig(c interface{}) (certprovider.StableConfig, error) {
-	data, ok := c.(json.RawMessage)
-	if !ok {
-		return nil, fmt.Errorf("meshca: unsupported config type: %T", c)
-	}
-	return pluginConfigFromJSON(data)
 }
 
 // Name returns the MeshCA plugin name.

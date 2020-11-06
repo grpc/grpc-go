@@ -251,10 +251,10 @@ func (c *Config) compare(want *Config) error {
 	for instance, gotCfg := range gotCfgs {
 		wantCfg, ok := wantCfgs[instance]
 		if !ok {
-			return fmt.Errorf("config.CertProviderConfigs has unexpected plugin instance %q with config %q", instance, string(gotCfg.Config.Canonical()))
+			return fmt.Errorf("config.CertProviderConfigs has unexpected plugin instance %q with config %q", instance, gotCfg.String())
 		}
-		if gotCfg.Name != wantCfg.Name || !cmp.Equal(gotCfg.Config.Canonical(), wantCfg.Config.Canonical()) {
-			return fmt.Errorf("config.CertProviderConfigs for plugin instance %q has config {%s, %s, want {%s, %s}", instance, gotCfg.Name, string(gotCfg.Config.Canonical()), wantCfg.Name, string(wantCfg.Config.Canonical()))
+		if got, want := gotCfg.String(), wantCfg.String(); got != want {
+			return fmt.Errorf("config.CertProviderConfigs for plugin instance %q has config %q, want %q", instance, got, want)
 		}
 	}
 	return nil
@@ -489,13 +489,9 @@ const fakeCertProviderName = "fake-certificate-provider"
 // interprets the config provided to it as JSON with a single key and value.
 type fakeCertProviderBuilder struct{}
 
-func (b *fakeCertProviderBuilder) Build(certprovider.StableConfig, certprovider.Options) certprovider.Provider {
-	return &fakeCertProvider{}
-}
-
 // ParseConfig expects input in JSON format containing a map from string to
 // string, with a single entry and mapKey being "configKey".
-func (b *fakeCertProviderBuilder) ParseConfig(cfg interface{}) (certprovider.StableConfig, error) {
+func (b *fakeCertProviderBuilder) ParseConfig(cfg interface{}) (*certprovider.BuildableConfig, error) {
 	config, ok := cfg.(json.RawMessage)
 	if !ok {
 		return nil, fmt.Errorf("fakeCertProviderBuilder received config of type %T, want []byte", config)
@@ -507,7 +503,10 @@ func (b *fakeCertProviderBuilder) ParseConfig(cfg interface{}) (certprovider.Sta
 	if len(cfgData) != 1 || cfgData["configKey"] == "" {
 		return nil, errors.New("fakeCertProviderBuilder received invalid config")
 	}
-	return &fakeStableConfig{config: cfgData}, nil
+	fc := &fakeStableConfig{config: cfgData}
+	return certprovider.NewBuildableConfig(fakeCertProviderName, fc.canonical(), func(certprovider.BuildOptions) certprovider.Provider {
+		return &fakeCertProvider{}
+	}), nil
 }
 
 func (b *fakeCertProviderBuilder) Name() string {
@@ -518,7 +517,7 @@ type fakeStableConfig struct {
 	config map[string]string
 }
 
-func (c *fakeStableConfig) Canonical() []byte {
+func (c *fakeStableConfig) canonical() []byte {
 	var cfg string
 	for k, v := range c.config {
 		cfg = fmt.Sprintf("%s:%s", k, v)
@@ -652,11 +651,8 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 		Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
 		TransportAPI: version.TransportV3,
 		NodeProto:    v3NodeProto,
-		CertProviderConfigs: map[string]CertProviderConfig{
-			"fakeProviderInstance": {
-				Name:   fakeCertProviderName,
-				Config: wantCfg,
-			},
+		CertProviderConfigs: map[string]*certprovider.BuildableConfig{
+			"fakeProviderInstance": wantCfg,
 		},
 	}
 	tests := []struct {

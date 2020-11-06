@@ -65,12 +65,12 @@ type distributor interface {
 type providerPlugin struct {
 	distributor // Holds the key material.
 	cancel      context.CancelFunc
-	cc          *grpc.ClientConn        // Connection to MeshCA server.
-	cfg         *pluginConfig           // Plugin configuration.
-	opts        certprovider.Options    // Key material options.
-	logger      *grpclog.PrefixLogger   // Plugin instance specific prefix.
-	backoff     func(int) time.Duration // Exponential backoff.
-	doneFunc    func()                  // Notify the builder when done.
+	cc          *grpc.ClientConn          // Connection to MeshCA server.
+	cfg         *pluginConfig             // Plugin configuration.
+	opts        certprovider.BuildOptions // Key material options.
+	logger      *grpclog.PrefixLogger     // Plugin instance specific prefix.
+	backoff     func(int) time.Duration   // Exponential backoff.
+	doneFunc    func()                    // Notify the builder when done.
 }
 
 // providerParams wraps params passed to the provider plugin at creation time.
@@ -78,7 +78,7 @@ type providerParams struct {
 	// This ClientConn to the MeshCA server is owned by the builder.
 	cc       *grpc.ClientConn
 	cfg      *pluginConfig
-	opts     certprovider.Options
+	opts     certprovider.BuildOptions
 	backoff  func(int) time.Duration
 	doneFunc func()
 }
