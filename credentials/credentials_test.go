@@ -24,10 +24,13 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/testdata"
 )
+
+const defaultTestTimeout = 10 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -280,7 +283,9 @@ func gRPCServerHandshake(conn net.Conn) (AuthInfo, error) {
 // Client handshake implementation in gRPC.
 func gRPCClientHandshake(conn net.Conn, lisAddr string) (AuthInfo, error) {
 	clientTLS := NewTLS(&tls.Config{InsecureSkipVerify: true})
-	_, authInfo, err := clientTLS.ClientHandshake(context.Background(), lisAddr, conn)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, authInfo, err := clientTLS.ClientHandshake(ctx, lisAddr, conn)
 	if err != nil {
 		return nil, err
 	}

@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
 
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -61,8 +60,7 @@ var (
 		// not deal with subConns.
 		return builder.Build(cc, opts), nil
 	}
-
-	getProvider = certprovider.GetProvider
+	buildProvider = buildProviderFunc
 )
 
 func init() {
@@ -133,7 +131,7 @@ func (cdsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, 
 // the cdsBalancer. This will be faked out in unittests.
 type xdsClientInterface interface {
 	WatchCluster(string, func(xdsclient.ClusterUpdate, error)) func()
-	CertProviderConfigs() map[string]bootstrap.CertProviderConfig
+	CertProviderConfigs() map[string]*certprovider.BuildableConfig
 	Close()
 }
 
@@ -252,48 +250,28 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) err
 	}
 
 	// A root provider is required whether we are using TLS or mTLS.
-	rootCfg, ok := cpc[config.RootInstanceName]
-	if !ok {
-		return fmt.Errorf("certificate provider instance %q not found in bootstrap file", config.RootInstanceName)
-	}
-	rootProvider, err := getProvider(rootCfg.Name, rootCfg.Config, certprovider.Options{
-		CertName: config.RootCertName,
-		WantRoot: true,
-	})
+	rootProvider, err := buildProvider(cpc, config.RootInstanceName, config.RootCertName, false, true)
 	if err != nil {
-		// This error is not expected since the bootstrap process parses the
-		// config and makes sure that it is acceptable to the plugin. Still, it
-		// is possible that the plugin parses the config successfully, but its
-		// Build() method errors out.
-		return fmt.Errorf("xds: failed to get security plugin instance (%+v): %v", rootCfg, err)
-	}
-	if b.cachedRoot != nil {
-		b.cachedRoot.Close()
+		return err
 	}
 
 	// The identity provider is only present when using mTLS.
 	var identityProvider certprovider.Provider
-	if name := config.IdentityInstanceName; name != "" {
-		identityCfg := cpc[name]
-		if !ok {
-			return fmt.Errorf("certificate provider instance %q not found in bootstrap file", config.IdentityInstanceName)
-		}
-		identityProvider, err = getProvider(identityCfg.Name, identityCfg.Config, certprovider.Options{
-			CertName:     config.IdentityCertName,
-			WantIdentity: true,
-		})
+	if name, cert := config.IdentityInstanceName, config.IdentityCertName; name != "" {
+		var err error
+		identityProvider, err = buildProvider(cpc, name, cert, true, false)
 		if err != nil {
-			// This error is not expected since the bootstrap process parses the
-			// config and makes sure that it is acceptable to the plugin. Still,
-			// it is possible that the plugin parses the config successfully,
-			// but its Build() method errors out.
-			return fmt.Errorf("xds: failed to get security plugin instance (%+v): %v", identityCfg, err)
+			return err
 		}
+	}
+
+	// Close the old providers and cache the new ones.
+	if b.cachedRoot != nil {
+		b.cachedRoot.Close()
 	}
 	if b.cachedIdentity != nil {
 		b.cachedIdentity.Close()
 	}
-
 	b.cachedRoot = rootProvider
 	b.cachedIdentity = identityProvider
 
@@ -303,6 +281,26 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) err
 	b.xdsHI.SetIdentityCertProvider(identityProvider)
 	b.xdsHI.SetAcceptedSANs(config.AcceptedSANs)
 	return nil
+}
+
+func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanceName, certName string, wantIdentity, wantRoot bool) (certprovider.Provider, error) {
+	cfg, ok := configs[instanceName]
+	if !ok {
+		return nil, fmt.Errorf("certificate provider instance %q not found in bootstrap file", instanceName)
+	}
+	provider, err := cfg.Build(certprovider.BuildOptions{
+		CertName:     certName,
+		WantIdentity: wantIdentity,
+		WantRoot:     wantRoot,
+	})
+	if err != nil {
+		// This error is not expected since the bootstrap process parses the
+		// config and makes sure that it is acceptable to the plugin. Still, it
+		// is possible that the plugin parses the config successfully, but its
+		// Build() method errors out.
+		return nil, fmt.Errorf("xds: failed to get security plugin instance (%+v): %v", cfg, err)
+	}
+	return provider, nil
 }
 
 // handleWatchUpdate handles a watch update from the xDS Client. Good updates

@@ -25,7 +25,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
 
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -35,14 +34,11 @@ import (
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
 const (
-	// Environment variable which holds the name of the xDS bootstrap file.
-	bootstrapFileEnv = "GRPC_XDS_BOOTSTRAP"
-	// Environment variable which controls the use of xDS v3 API.
-	v3SupportEnv = "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT"
 	// The "server_features" field in the bootstrap file contains a list of
 	// features supported by the server. A value of "xds_v3" indicates that the
 	// server supports the v3 version of the xDS transport protocol.
@@ -79,18 +75,9 @@ type Config struct {
 	// NodeProto contains the Node proto to be used in xDS requests. The actual
 	// type depends on the transport protocol version used.
 	NodeProto proto.Message
-	// CertProviderConfigs contain parsed configs for supported certificate
-	// provider plugins found in the bootstrap file.
-	CertProviderConfigs map[string]CertProviderConfig
-}
-
-// CertProviderConfig wraps the certificate provider plugin name and config
-// (corresponding to one plugin instance) found in the bootstrap file.
-type CertProviderConfig struct {
-	// Name is the registered name of the certificate provider.
-	Name string
-	// Config is the parsed config to be passed to the certificate provider.
-	Config certprovider.StableConfig
+	// CertProviderConfigs contains a mapping from certificate provider plugin
+	// instance names to parsed buildable configs.
+	CertProviderConfigs map[string]*certprovider.BuildableConfig
 }
 
 type channelCreds struct {
@@ -142,11 +129,11 @@ type xdsServer struct {
 func NewConfig() (*Config, error) {
 	config := &Config{}
 
-	fName, ok := os.LookupEnv(bootstrapFileEnv)
-	if !ok {
-		return nil, fmt.Errorf("xds: Environment variable %v not defined", bootstrapFileEnv)
+	fName := env.BootstrapFileName
+	if fName == "" {
+		return nil, fmt.Errorf("xds: Environment variable %q not defined", "GRPC_XDS_BOOTSTRAP")
 	}
-	logger.Infof("Got bootstrap file location from %v environment variable: %v", bootstrapFileEnv, fName)
+	logger.Infof("Got bootstrap file location %q", fName)
 
 	data, err := bootstrapFileReadFunc(fName)
 	if err != nil {
@@ -211,7 +198,7 @@ func NewConfig() (*Config, error) {
 			if err := json.Unmarshal(v, &providerInstances); err != nil {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
-			configs := make(map[string]CertProviderConfig)
+			configs := make(map[string]*certprovider.BuildableConfig)
 			getBuilder := internal.GetCertificateProviderBuilder.(func(string) certprovider.Builder)
 			for instance, data := range providerInstances {
 				var nameAndConfig struct {
@@ -228,15 +215,11 @@ func NewConfig() (*Config, error) {
 					// We ignore plugins that we do not know about.
 					continue
 				}
-				cfg := nameAndConfig.Config
-				c, err := parser.ParseConfig(cfg)
+				bc, err := parser.ParseConfig(nameAndConfig.Config)
 				if err != nil {
 					return nil, fmt.Errorf("xds: Config parsing for plugin %q failed: %v", name, err)
 				}
-				configs[instance] = CertProviderConfig{
-					Name:   name,
-					Config: c,
-				}
+				configs[instance] = bc
 			}
 			config.CertProviderConfigs = configs
 		}
@@ -259,14 +242,8 @@ func NewConfig() (*Config, error) {
 	// 2. Environment variable "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT" is set to
 	//    true.
 	// The default value of the enum type "version.TransportAPI" is v2.
-	//
-	// TODO: there are multiple env variables, GRPC_XDS_BOOTSTRAP and
-	// GRPC_XDS_EXPERIMENTAL_V3_SUPPORT. Move all env variables into a separate
-	// package.
-	if v3Env := os.Getenv(v3SupportEnv); v3Env == "true" {
-		if serverSupportsV3 {
-			config.TransportAPI = version.TransportV3
-		}
+	if env.V3Support && serverSupportsV3 {
+		config.TransportAPI = version.TransportV3
 	}
 
 	if err := config.updateNodeProto(); err != nil {

@@ -144,6 +144,7 @@ const (
       },
       {
         "prefix":"/service_2/method_1",
+        "caseInsensitive":true,
         "action":"cluster_1_0"
       },
       {
@@ -214,8 +215,9 @@ func TestRoutesToJSON(t *testing.T) {
 					Action: map[string]uint32{"cluster_1": 1},
 				},
 				{
-					Prefix: newStringP("/service_2/method_1"),
-					Action: map[string]uint32{"cluster_1": 1},
+					Prefix:          newStringP("/service_2/method_1"),
+					CaseInsensitive: true,
+					Action:          map[string]uint32{"cluster_1": 1},
 				},
 				{
 					Regex:  newStringP("^/service_2/method_3$"),

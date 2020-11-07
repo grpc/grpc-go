@@ -135,9 +135,11 @@ func (s) TestChainUnaryServerInterceptor(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	resp, err := ss.client.UnaryCall(context.Background(), &testpb.SimpleRequest{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	resp, err := ss.client.UnaryCall(ctx, &testpb.SimpleRequest{})
 	if s, ok := status.FromError(err); !ok || s.Code() != codes.OK {
-		t.Fatalf("ss.client.UnaryCall(context.Background(), _) = %v, %v; want nil, <status with Code()=OK>", resp, err)
+		t.Fatalf("ss.client.UnaryCall(ctx, _) = %v, %v; want nil, <status with Code()=OK>", resp, err)
 	}
 
 	respBytes := resp.Payload.GetBody()
@@ -181,9 +183,11 @@ func (s) TestChainOnBaseUnaryServerInterceptor(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	resp, err := ss.client.EmptyCall(context.Background(), &testpb.Empty{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	resp, err := ss.client.EmptyCall(ctx, &testpb.Empty{})
 	if s, ok := status.FromError(err); !ok || s.Code() != codes.OK {
-		t.Fatalf("ss.client.EmptyCall(context.Background(), _) = %v, %v; want nil, <status with Code()=OK>", resp, err)
+		t.Fatalf("ss.client.EmptyCall(ctx, _) = %v, %v; want nil, <status with Code()=OK>", resp, err)
 	}
 }
 
@@ -268,7 +272,9 @@ func (s) TestChainStreamServerInterceptor(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	stream, err := ss.client.FullDuplexCall(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := ss.client.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("failed to FullDuplexCall: %v", err)
 	}

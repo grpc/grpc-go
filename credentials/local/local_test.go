@@ -31,6 +31,8 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 )
 
+const defaultTestTimeout = 10 * time.Second
+
 type s struct {
 	grpctest.Tester
 }
@@ -98,7 +100,10 @@ func serverLocalHandshake(conn net.Conn) (credentials.AuthInfo, error) {
 // Client local handshake implementation.
 func clientLocalHandshake(conn net.Conn, lisAddr string) (credentials.AuthInfo, error) {
 	cred := NewCredentials()
-	_, authInfo, err := cred.ClientHandshake(context.Background(), lisAddr, conn)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	_, authInfo, err := cred.ClientHandshake(ctx, lisAddr, conn)
 	if err != nil {
 		return nil, err
 	}

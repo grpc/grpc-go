@@ -30,6 +30,7 @@ import (
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/xds/internal/client/load"
 
 	"google.golang.org/grpc"
@@ -167,9 +168,12 @@ type VirtualHost struct {
 // indication of the action to take upon match.
 type Route struct {
 	Path, Prefix, Regex *string
-	Headers             []*HeaderMatcher
-	Fraction            *uint32
-	Action              map[string]uint32 // action is weighted clusters.
+	// Indicates if prefix/path matching should be case insensitive. The default
+	// is false (case sensitive).
+	CaseInsensitive bool
+	Headers         []*HeaderMatcher
+	Fraction        *uint32
+	Action          map[string]uint32 // action is weighted clusters.
 }
 
 // HeaderMatcher represents header matchers.
@@ -419,10 +423,9 @@ func New(opts Options) (*Client, error) {
 }
 
 // CertProviderConfigs returns the certificate provider configuration from the
-// "certificate_providers" field of the bootstrap file. The returned value is a
-// map from plugin_instance_name to {plugin_name, plugin_config}. Callers must
-// not modify the returned map.
-func (c *Client) CertProviderConfigs() map[string]bootstrap.CertProviderConfig {
+// "certificate_providers" field of the bootstrap file. The key in the returned
+// map is the plugin_instance_name. Callers must not modify the returned map.
+func (c *Client) CertProviderConfigs() map[string]*certprovider.BuildableConfig {
 	return c.opts.Config.CertProviderConfigs
 }
 
