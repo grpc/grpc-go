@@ -70,7 +70,7 @@ func getSecurityLevel(network, addr string) (credentials.SecurityLevel, error) {
 		return credentials.PrivacyAndIntegrity, nil
 	// Not a local connection and should fail
 	default:
-		return credentials.Invalid, fmt.Errorf("local credentials rejected connection to non-local address %q", addr)
+		return credentials.InvalidSecurityLevel, fmt.Errorf("local credentials rejected connection to non-local address %q", addr)
 	}
 }
 

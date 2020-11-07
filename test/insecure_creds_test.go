@@ -48,6 +48,15 @@ func (cr testLegacyPerRPCCredentials) RequireTransportSecurity() bool {
 	return true
 }
 
+func getSecurityLevel(ai credentials.AuthInfo) credentials.SecurityLevel {
+	if c, ok := ai.(interface {
+		GetCommonAuthInfo() credentials.CommonAuthInfo
+	}); ok {
+		return c.GetCommonAuthInfo().SecurityLevel
+	}
+	return credentials.InvalidSecurityLevel
+}
+
 // TestInsecureCreds tests the use of insecure creds on the server and client
 // side, and verifies that expect security level and auth info are returned.
 // Also verifies that this credential can interop with existing `WithInsecure`
@@ -86,13 +95,8 @@ func (s) TestInsecureCreds(t *testing.T) {
 						return nil, status.Error(codes.DataLoss, "Failed to get peer from ctx")
 					}
 					// Check security level.
-					var secLevel credentials.SecurityLevel
-					type internalInfo interface {
-						GetCommonAuthInfo() credentials.CommonAuthInfo
-					}
-					if info, ok := pr.AuthInfo.(internalInfo); ok {
-						secLevel = info.GetCommonAuthInfo().SecurityLevel
-					} else {
+					secLevel := getSecurityLevel(pr.AuthInfo)
+					if secLevel == credentials.InvalidSecurityLevel {
 						return nil, status.Errorf(codes.Unauthenticated, "peer.AuthInfo does not implement GetCommonAuthInfo()")
 					}
 					if secLevel != credentials.NoSecurity {

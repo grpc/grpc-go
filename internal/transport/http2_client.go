@@ -241,7 +241,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 			if cd.RequireTransportSecurity() {
 				if ci, ok := authInfo.(internalInfo); ok {
 					secLevel := ci.GetCommonAuthInfo().SecurityLevel
-					if secLevel != credentials.Invalid && secLevel < credentials.PrivacyAndIntegrity {
+					if secLevel != credentials.InvalidSecurityLevel && secLevel < credentials.PrivacyAndIntegrity {
 						return nil, connectionErrorf(true, nil, "transport: cannot send secure credentials on an insecure connection")
 					}
 				}
@@ -571,7 +571,8 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 	// options, then both sets of credentials will be applied.
 	if callCreds := callHdr.Creds; callCreds != nil {
 		if callCreds.RequireTransportSecurity() {
-			if !t.isSecure || credentials.CheckSecurityLevel(ctx, credentials.PrivacyAndIntegrity) != nil {
+			ri, _ := credentials.RequestInfoFromContext(ctx)
+			if !t.isSecure || credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity) != nil {
 				return nil, status.Error(codes.Unauthenticated, "transport: cannot send secure credentials on an insecure connection")
 			}
 		}
