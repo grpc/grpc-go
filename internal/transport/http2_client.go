@@ -231,15 +231,14 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		contextWithHandshakeInfo := internal.NewClientHandshakeInfoContext.(func(context.Context, credentials.ClientHandshakeInfo) context.Context)
 		connectCtx = contextWithHandshakeInfo(connectCtx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
 		conn, authInfo, err = transportCreds.ClientHandshake(connectCtx, addr.ServerName, conn)
-		type internalInfo interface {
-			GetCommonAuthInfo() credentials.CommonAuthInfo
-		}
 		if err != nil {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: authentication handshake failed: %v", err)
 		}
 		for _, cd := range perRPCCreds {
 			if cd.RequireTransportSecurity() {
-				if ci, ok := authInfo.(internalInfo); ok {
+				if ci, ok := authInfo.(interface {
+					GetCommonAuthInfo() credentials.CommonAuthInfo
+				}); ok {
 					secLevel := ci.GetCommonAuthInfo().SecurityLevel
 					if secLevel != credentials.InvalidSecurityLevel && secLevel < credentials.PrivacyAndIntegrity {
 						return nil, connectionErrorf(true, nil, "transport: cannot send secure credentials on an insecure connection")
