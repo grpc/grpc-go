@@ -65,7 +65,7 @@ func (s) TestGetSecurityLevel(t *testing.T) {
 		{
 			testNetwork: "tcp",
 			testAddr:    "192.168.0.1:10000",
-			want:        credentials.Invalid,
+			want:        credentials.InvalidSecurityLevel,
 		},
 	}
 	for _, tc := range testCases {
@@ -77,6 +77,15 @@ func (s) TestGetSecurityLevel(t *testing.T) {
 }
 
 type serverHandshake func(net.Conn) (credentials.AuthInfo, error)
+
+func getSecurityLevelFromAuthInfo(ai credentials.AuthInfo) credentials.SecurityLevel {
+	if c, ok := ai.(interface {
+		GetCommonAuthInfo() credentials.CommonAuthInfo
+	}); ok {
+		return c.GetCommonAuthInfo().SecurityLevel
+	}
+	return credentials.InvalidSecurityLevel
+}
 
 // Server local handshake implementation.
 func serverLocalHandshake(conn net.Conn) (credentials.AuthInfo, error) {
@@ -140,21 +149,26 @@ func serverAndClientHandshake(lis net.Listener) (credentials.SecurityLevel, erro
 	defer lis.Close()
 	clientAuthInfo, err := clientHandle(clientLocalHandshake, lis.Addr().Network(), lis.Addr().String())
 	if err != nil {
-		return credentials.Invalid, fmt.Errorf("Error at client-side: %v", err)
+		return credentials.InvalidSecurityLevel, fmt.Errorf("Error at client-side: %v", err)
 	}
 	select {
 	case <-timer.C:
-		return credentials.Invalid, fmt.Errorf("Test didn't finish in time")
+		return credentials.InvalidSecurityLevel, fmt.Errorf("Test didn't finish in time")
 	case serverHandleResult := <-done:
 		if serverHandleResult.err != nil {
-			return credentials.Invalid, fmt.Errorf("Error at server-side: %v", serverHandleResult.err)
+			return credentials.InvalidSecurityLevel, fmt.Errorf("Error at server-side: %v", serverHandleResult.err)
 		}
-		clientLocal, _ := clientAuthInfo.(Info)
-		serverLocal, _ := serverHandleResult.authInfo.(Info)
-		clientSecLevel := clientLocal.CommonAuthInfo.SecurityLevel
-		serverSecLevel := serverLocal.CommonAuthInfo.SecurityLevel
+		clientSecLevel := getSecurityLevelFromAuthInfo(clientAuthInfo)
+		serverSecLevel := getSecurityLevelFromAuthInfo(serverHandleResult.authInfo)
+
+		if clientSecLevel == credentials.InvalidSecurityLevel {
+			return credentials.InvalidSecurityLevel, fmt.Errorf("Error at client-side: client's AuthInfo does not implement GetCommonAuthInfo()")
+		}
+		if serverSecLevel == credentials.InvalidSecurityLevel {
+			return credentials.InvalidSecurityLevel, fmt.Errorf("Error at server-side: server's AuthInfo does not implement GetCommonAuthInfo()")
+		}
 		if clientSecLevel != serverSecLevel {
-			return credentials.Invalid, fmt.Errorf("client's AuthInfo contains %s but server's AuthInfo contains %s", clientSecLevel.String(), serverSecLevel.String())
+			return credentials.InvalidSecurityLevel, fmt.Errorf("client's AuthInfo contains %s but server's AuthInfo contains %s", clientSecLevel.String(), serverSecLevel.String())
 		}
 		return clientSecLevel, nil
 	}

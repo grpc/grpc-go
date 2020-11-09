@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/testdata"
 )
@@ -57,17 +56,6 @@ func (ta testAuthInfo) AuthType() string {
 	return "testAuthInfo"
 }
 
-func createTestContext(s SecurityLevel) context.Context {
-	auth := &testAuthInfo{CommonAuthInfo: CommonAuthInfo{SecurityLevel: s}}
-	ri := RequestInfo{
-		Method:   "testInfo",
-		AuthInfo: auth,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	return internal.NewRequestInfoContext.(func(context.Context, RequestInfo) context.Context)(ctx, ri)
-}
-
 func (s) TestCheckSecurityLevel(t *testing.T) {
 	testCases := []struct {
 		authLevel SecurityLevel
@@ -90,18 +78,18 @@ func (s) TestCheckSecurityLevel(t *testing.T) {
 			want:      true,
 		},
 		{
-			authLevel: Invalid,
+			authLevel: InvalidSecurityLevel,
 			testLevel: IntegrityOnly,
 			want:      true,
 		},
 		{
-			authLevel: Invalid,
+			authLevel: InvalidSecurityLevel,
 			testLevel: PrivacyAndIntegrity,
 			want:      true,
 		},
 	}
 	for _, tc := range testCases {
-		err := CheckSecurityLevel(createTestContext(tc.authLevel), tc.testLevel)
+		err := CheckSecurityLevel(testAuthInfo{CommonAuthInfo: CommonAuthInfo{SecurityLevel: tc.authLevel}}, tc.testLevel)
 		if tc.want && (err != nil) {
 			t.Fatalf("CheckSeurityLevel(%s, %s) returned failure but want success", tc.authLevel.String(), tc.testLevel.String())
 		} else if !tc.want && (err == nil) {
@@ -112,15 +100,7 @@ func (s) TestCheckSecurityLevel(t *testing.T) {
 }
 
 func (s) TestCheckSecurityLevelNoGetCommonAuthInfoMethod(t *testing.T) {
-	auth := &testAuthInfoNoGetCommonAuthInfoMethod{}
-	ri := RequestInfo{
-		Method:   "testInfo",
-		AuthInfo: auth,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	ctxWithRequestInfo := internal.NewRequestInfoContext.(func(context.Context, RequestInfo) context.Context)(ctx, ri)
-	if err := CheckSecurityLevel(ctxWithRequestInfo, PrivacyAndIntegrity); err != nil {
+	if err := CheckSecurityLevel(testAuthInfoNoGetCommonAuthInfoMethod{}, PrivacyAndIntegrity); err != nil {
 		t.Fatalf("CheckSeurityLevel() returned failure but want success")
 	}
 }
