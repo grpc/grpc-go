@@ -25,7 +25,7 @@ import (
 )
 
 // ReportLoad starts an load reporting stream to the given server. If the server
-// is not an empty string, and is different from the xds server, a new
+// is not an empty string, and is different from the management server, a new
 // ClientConn will be created.
 //
 // The same options used for creating the Client will be used (including
@@ -58,13 +58,14 @@ func (c *clientImpl) ReportLoad(server string) (*load.Store, func()) {
 }
 
 // lrsClient maps to one lrsServer. It contains:
-// - a ClientConn to this server (only if it's different from the xds server)
+// - a ClientConn to this server (only if it's different from the management
+// server)
 // - a load.Store that contains loads only for this server
 type lrsClient struct {
 	parent *clientImpl
 	server string
 
-	cc           *grpc.ClientConn // nil if the server is same as the xds server
+	cc           *grpc.ClientConn // nil if the server is same as the management server
 	refCount     int
 	cancelStream func()
 	loadStore    *load.Store
@@ -109,7 +110,7 @@ func (lrsC *lrsClient) unRef() (closed bool) {
 }
 
 // startStream starts the LRS stream to the server. If server is not the same
-// xDS server from the parent, it also creates a ClientConn.
+// management server from the parent, it also creates a ClientConn.
 func (lrsC *lrsClient) startStream() {
 	var cc *grpc.ClientConn
 
@@ -118,7 +119,7 @@ func (lrsC *lrsClient) startStream() {
 		// Reuse the xDS client if server is the same.
 		cc = lrsC.parent.cc
 	} else {
-		lrsC.parent.logger.Infof("LRS server is different from xDS server, starting a new ClientConn")
+		lrsC.parent.logger.Infof("LRS server is different from management server, starting a new ClientConn")
 		ccNew, err := grpc.Dial(lrsC.server, lrsC.parent.config.Creds)
 		if err != nil {
 			// An error from a non-blocking dial indicates something serious.

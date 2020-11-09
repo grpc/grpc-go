@@ -40,7 +40,7 @@ var bootstrapNewConfig = bootstrap.NewConfig
 // various dynamic resources.
 //
 // The xds client is a singleton. It will be shared by the xds resolver and
-// balancer implementations, cross multiple ClientConns and Servers.
+// balancer implementations, across multiple ClientConns and Servers.
 type Client struct {
 	*clientImpl
 
@@ -77,7 +77,8 @@ func New() (*Client, error) {
 }
 
 // Close closes the client. It does ref count of the xds client implementation,
-// and closes the gRPC connection to the xDS server when ref count reaches 0.
+// and closes the gRPC connection to the management server when ref count
+// reaches 0.
 func (c *Client) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -90,8 +91,7 @@ func (c *Client) Close() {
 	}
 }
 
-// NewWithConfigForTesting is exported for testing only. For prod uses, call
-// New().
+// NewWithConfigForTesting is exported for testing only.
 func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout time.Duration) (*Client, error) {
 	cl, err := newWithConfig(config, watchExpiryTimeout)
 	if err != nil {

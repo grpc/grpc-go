@@ -45,8 +45,7 @@ func Test(t *testing.T) {
 }
 
 const (
-	testXDSServer   = "xds-server"
-	chanRecvTimeout = 100 * time.Millisecond
+	testXDSServer = "xds-server"
 
 	testLDSName = "test-lds"
 	testRDSName = "test-rds"
@@ -59,7 +58,7 @@ const (
 )
 
 func clientOpts(balancerName string, overrideWatchExpiryTimeout bool) (*bootstrap.Config, time.Duration) {
-	watchExpiryTimeout := time.Second * 15
+	watchExpiryTimeout := defaultWatchExpiryTimeout
 	if overrideWatchExpiryTimeout {
 		watchExpiryTimeout = defaultTestWatchExpiryTimeout
 	}

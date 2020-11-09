@@ -296,7 +296,7 @@ var newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, op
 type clientImpl struct {
 	done               *grpcsync.Event
 	config             *bootstrap.Config
-	cc                 *grpc.ClientConn // Connection to the xDS server
+	cc                 *grpc.ClientConn // Connection to the management server.
 	apiClient          APIClient
 	watchExpiryTimeout time.Duration
 
@@ -373,7 +373,7 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 	}
 	c.cc = cc
 	c.logger = prefixLogger((c))
-	c.logger.Infof("Created ClientConn to xDS server: %s", config.BalancerName)
+	c.logger.Infof("Created ClientConn to xDS management server: %s", config.BalancerName)
 
 	apiClient, err := newAPIClient(config.TransportAPI, cc, BuildOptions{
 		Parent:    c,
@@ -418,7 +418,7 @@ func (c *clientImpl) run() {
 	}
 }
 
-// Close closes the gRPC connection to the xDS server.
+// Close closes the gRPC connection to the management server.
 func (c *clientImpl) Close() {
 	if c.done.HasFired() {
 		return
