@@ -20,12 +20,14 @@ package test
 
 import (
 	"context"
-	"reflect"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -41,13 +43,13 @@ func (f funcConfigSelector) SelectConfig(i iresolver.RPCInfo) *iresolver.RPCConf
 }
 
 func (s) TestConfigSelector(t *testing.T) {
-	gotInfoChan := make(chan *iresolver.RPCInfo, 1)
-	sendConfigChan := make(chan *iresolver.RPCConfig, 1)
-	gotContextChan := make(chan context.Context, 1)
+	gotInfoChan := testutils.NewChannelWithSize(1)
+	sendConfigChan := testutils.NewChannelWithSize(1)
+	gotContextChan := testutils.NewChannelWithSize(1)
 
 	ss := &stubServer{
 		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			gotContextChan <- ctx
+			gotContextChan.SendContext(ctx, ctx)
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -58,13 +60,22 @@ func (s) TestConfigSelector(t *testing.T) {
 	}
 	defer ss.Stop()
 
+	ctxDeadline := time.Now().Add(10 * time.Second)
+	ctx, cancel := context.WithDeadline(context.Background(), ctxDeadline)
+	defer cancel()
+
 	state := iresolver.SetConfigSelector(resolver.State{
 		Addresses:     []resolver.Address{{Addr: ss.address}},
 		ServiceConfig: parseCfg(ss.r, "{}"),
 	}, funcConfigSelector{
 		f: func(i iresolver.RPCInfo) *iresolver.RPCConfig {
-			gotInfoChan <- &i
-			cfg := <-sendConfigChan
+			gotInfoChan.Send(&i)
+			cfgI, err := sendConfigChan.Receive(ctx)
+			if err != nil {
+				t.Errorf("error waiting for RPCConfig: %v", err)
+				return nil
+			}
+			cfg := cfgI.(*iresolver.RPCConfig)
 			if cfg != nil && cfg.Context == nil {
 				cfg.Context = i.Context
 			}
@@ -73,9 +84,8 @@ func (s) TestConfigSelector(t *testing.T) {
 	})
 	ss.r.UpdateState(state) // Blocks until config selector is applied
 
-	longdeadlineCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	longCtxDeadline := time.Now().Add(30 * time.Second)
+	longdeadlineCtx, cancel := context.WithDeadline(context.Background(), longCtxDeadline)
 	defer cancel()
 	shorterTimeout := 3 * time.Second
 
@@ -88,26 +98,38 @@ func (s) TestConfigSelector(t *testing.T) {
 		name   string
 		md     metadata.MD
 		config *iresolver.RPCConfig
+
+		wantMD       metadata.MD
+		wantDeadline time.Time
+		wantTimeout  time.Duration
 	}{{
-		name:   "basic",
-		md:     testMD,
-		config: &iresolver.RPCConfig{},
+		name:         "basic",
+		md:           testMD,
+		config:       &iresolver.RPCConfig{},
+		wantMD:       testMD,
+		wantDeadline: ctxDeadline,
 	}, {
 		name: "alter MD",
 		md:   testMD,
 		config: &iresolver.RPCConfig{
 			Context: metadata.NewOutgoingContext(ctx, mdOut),
 		},
+		wantMD:       mdOut,
+		wantDeadline: ctxDeadline,
 	}, {
 		name: "alter timeout; remove MD",
 		md:   testMD,
 		config: &iresolver.RPCConfig{
-			Context: longdeadlineCtx,
+			Context: longdeadlineCtx, // no metadata
 		},
+		wantMD:       nil,
+		wantDeadline: longCtxDeadline,
 	}, {
-		name:   "nil config",
-		md:     metadata.MD{},
-		config: nil,
+		name:         "nil config",
+		md:           metadata.MD{},
+		config:       nil,
+		wantMD:       nil,
+		wantDeadline: ctxDeadline,
 	}, {
 		name: "alter timeout via method config; remove MD",
 		md:   testMD,
@@ -116,6 +138,8 @@ func (s) TestConfigSelector(t *testing.T) {
 				Timeout: &shorterTimeout,
 			},
 		},
+		wantMD:      nil,
+		wantTimeout: shorterTimeout,
 	}, {
 		name: "onCommitted callback",
 		md:   testMD,
@@ -124,65 +148,66 @@ func (s) TestConfigSelector(t *testing.T) {
 				onCommittedCalled = true
 			},
 		},
+		wantMD:       testMD,
+		wantDeadline: ctxDeadline,
 	}}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			select {
-			case sendConfigChan <- tc.config:
-			default:
+			if !sendConfigChan.SendOrFail(tc.config) {
 				t.Fatalf("last config not consumed by config selector")
 			}
 
 			onCommittedCalled = false
 			ctx = metadata.NewOutgoingContext(ctx, tc.md)
+			startTime := time.Now()
 			if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 				t.Fatalf("client.EmptyCall(_, _) = _, %v; want _, nil", err)
 			}
 
-			var gotInfo *iresolver.RPCInfo
-			select {
-			case gotInfo = <-gotInfoChan:
-			default:
+			gotInfoI, ok := gotInfoChan.ReceiveOrFail()
+			if !ok {
 				t.Fatalf("no config selector data")
 			}
-
-			var gotContext context.Context
-			select {
-			case gotContext = <-gotContextChan:
-			default:
-				t.Fatalf("no context received")
-			}
+			gotInfo := gotInfoI.(*iresolver.RPCInfo)
 
 			if want := "/grpc.testing.TestService/EmptyCall"; gotInfo.Method != want {
 				t.Errorf("gotInfo.Method = %q; want %q", gotInfo.Method, want)
 			}
 
-			if gotMD, _ := metadata.FromOutgoingContext(gotInfo.Context); !reflect.DeepEqual(tc.md, gotMD) {
-				t.Errorf("gotInfo.Context contains MD %v; want %v", gotMD, tc.md)
+			gotContextI, ok := gotContextChan.ReceiveOrFail()
+			if !ok {
+				t.Fatalf("no context received")
+			}
+			gotContext := gotContextI.(context.Context)
+
+			gotMD, _ := metadata.FromOutgoingContext(gotInfo.Context)
+			if diff := cmp.Diff(tc.md, gotMD); diff != "" {
+				t.Errorf("gotInfo.Context contains MD %v; want %v\nDiffs: %v", gotMD, tc.md, diff)
 			}
 
-			sentMD, _ := metadata.FromOutgoingContext(ctx)
+			sentMD := tc.md // what was sent with the RPC
 			if tc.config != nil && tc.config.Context != nil {
-				sentMD, _ = metadata.FromOutgoingContext(tc.config.Context)
+				sentMD, _ = metadata.FromOutgoingContext(tc.config.Context) // what we ended up sending
 			}
-			gotMD, _ := metadata.FromIncomingContext(gotContext)
-			for k, v := range sentMD {
-				if !reflect.DeepEqual(gotMD[k], v) {
-					t.Errorf("received md = %v; want contains(%v)", gotMD, sentMD)
+			gotMD, _ = metadata.FromIncomingContext(gotContext)
+			// Remove entries from gotMD not in sentMD (e.g. authority header).
+			for k, _ := range gotMD {
+				if _, ok := sentMD[k]; !ok {
+					delete(gotMD, k)
 				}
 			}
-
-			deadlineSent, _ := ctx.Deadline()
-			if tc.config != nil && tc.config.Context != nil {
-				deadlineSent, _ = tc.config.Context.Deadline()
+			if diff := cmp.Diff(sentMD, gotMD, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("received md = %v; want %v\nDiffs: %v", gotMD, sentMD, diff)
 			}
-			if tc.config != nil && tc.config.MethodConfig.Timeout != nil && *tc.config.MethodConfig.Timeout < time.Until(deadlineSent) {
-				deadlineSent = time.Now().Add(*tc.config.MethodConfig.Timeout)
+
+			wantDeadline := tc.wantDeadline
+			if wantDeadline == (time.Time{}) {
+				wantDeadline = startTime.Add(tc.wantTimeout)
 			}
 			deadlineGot, _ := gotContext.Deadline()
-			if diff := deadlineGot.Sub(deadlineSent); diff > time.Second || diff < -time.Second {
-				t.Errorf("received deadline = %v; want ~%v", deadlineGot, deadlineSent)
+			if diff := deadlineGot.Sub(wantDeadline); diff > time.Second || diff < -time.Second {
+				t.Errorf("received deadline = %v; want ~%v", deadlineGot, wantDeadline)
 			}
 
 			if tc.config != nil && tc.config.OnCommitted != nil && !onCommittedCalled {
