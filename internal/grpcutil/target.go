@@ -60,9 +60,17 @@ func ParseTarget(target string, skipUnixColonParsing bool) (ret resolver.Target)
 		return resolver.Target{Endpoint: target}
 	}
 	if ret.Scheme == "unix" {
+		// Prevents behavior change in "unix:///[...]" case.
+		if skipUnixColonParsing && ret.Authority == "" {
+			return resolver.Target{Endpoint: target}
+		}
 		// Add the "/" back in the unix case, so the unix resolver receives the
 		// actual endpoint.
 		ret.Endpoint = "/" + ret.Endpoint
+	}
+	// Prevents behavior change in "passthrough:///unix:///a/b/c" case.
+	if !skipUnixColonParsing && ret.Scheme == "passthrough" && strings.HasPrefix(ret.Endpoint, "unix:") {
+		return ParseTarget(ret.Endpoint, false)
 	}
 	return ret
 }

@@ -20,6 +20,8 @@
 package unix
 
 import (
+	"fmt"
+
 	"google.golang.org/grpc/internal/transport/networktype"
 	"google.golang.org/grpc/resolver"
 )
@@ -29,6 +31,9 @@ const scheme = "unix"
 type builder struct{}
 
 func (*builder) Build(target resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
+	if target.Authority != "" {
+		return nil, fmt.Errorf("invalid (non-empty) authority: %v", target.Authority)
+	}
 	cc.UpdateState(resolver.State{Addresses: []resolver.Address{networktype.Set(resolver.Address{Addr: target.Endpoint}, "unix")}})
 	return &nopResolver{}, nil
 }
