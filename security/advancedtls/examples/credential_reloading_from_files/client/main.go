@@ -23,8 +23,9 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
 	"time"
 
 	"google.golang.org/grpc"
@@ -40,15 +41,32 @@ const (
 	// Default timeout for normal connections.
 	defaultConnTimeout = 10 * time.Second
 	// Intervals that set to monitor the credential updates.
-	credRefreshingInterval = 1 * time.Minute
+	credRefreshingInterval = 500 * time.Millisecond
 )
 
 func main() {
 	flag.Parse()
 
+	// Create temporary files holding old credential contents.
+	certTmpFile, err := ioutil.TempFile(os.TempDir(), "pre-")
+	if err != nil {
+		log.Fatalf("ioutil.TempFile(%s, %s) failed: %v", os.TempDir(), "pre-", err)
+	}
+	if err := copyFileContents(testdata.Path("client_cert_1.pem"), certTmpFile.Name()); err != nil {
+		log.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("another_client_cert_1.pem"), certTmpFile.Name(), err)
+	}
+	keyTmpFile, err := ioutil.TempFile(os.TempDir(), "pre-")
+	if err != nil {
+		log.Fatalf("ioutil.TempFile(%s, %s) failed: %v", os.TempDir(), "pre-", err)
+	}
+	if err := copyFileContents(testdata.Path("client_key_1.pem"), keyTmpFile.Name()); err != nil {
+		log.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("another_client_key_1.pem"), keyTmpFile.Name(), err)
+	}
+
+	// Initialize credential struct using reloading API.
 	identityOptions := pemfile.Options{
-		CertFile:        testdata.Path("client_cert_1.pem"),
-		KeyFile:         testdata.Path("client_key_1.pem"),
+		CertFile:        certTmpFile.Name(),
+		KeyFile:         keyTmpFile.Name(),
 		RefreshDuration: credRefreshingInterval,
 	}
 	identityProvider, err := pemfile.NewProvider(identityOptions)
@@ -81,18 +99,55 @@ func main() {
 		log.Fatalf("advancedtls.NewClientCreds(%v) failed: %v", options, err)
 	}
 
-	// At initialization, the connection should be good.
+	// Make a connection using the old credentials.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultConnTimeout)
 	defer cancel()
-	conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
+	oldConn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
 	if err != nil {
 		log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
 	}
-	greetClient := pb.NewGreeterClient(conn)
-	reply, err := greetClient.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
+	oldClient := pb.NewGreeterClient(oldConn)
+	_, err = oldClient.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
 	if err != nil {
-		log.Fatalf("greetClient.SayHello failed: %v", err)
+		log.Fatalf("oldClient.SayHello failed: %v", err)
 	}
-	defer conn.Close()
-	fmt.Printf("Getting message from server: %s...\n", reply.Message)
+	defer oldConn.Close()
+
+	// Change the contents of the credential files.
+	// Cert "another_client_cert_1.pem" is also trusted by "server_cert_1.pem".
+	if err := copyFileContents(testdata.Path("another_client_cert_1.pem"), certTmpFile.Name()); err != nil {
+		log.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("another_client_cert_1.pem"), certTmpFile.Name(), err)
+	}
+	if err := copyFileContents(testdata.Path("another_client_key_1.pem"), keyTmpFile.Name()); err != nil {
+		log.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("another_client_key_1.pem"), keyTmpFile.Name(), err)
+	}
+
+	// Wait for 1 second for the provider to load the new contents.
+	time.Sleep(time.Second)
+
+	// Make a connection using the new credential contents, while the credential
+	// struct remains the same.
+	// The common name of the old and new certificate will be logged on the
+	// server side.
+	newConn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
+	if err != nil {
+		log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
+	}
+	newClient := pb.NewGreeterClient(newConn)
+	_, err = newClient.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
+	if err != nil {
+		log.Fatalf("newClient.SayHello failed: %v", err)
+	}
+}
+
+func copyFileContents(sourceFile, destinationFile string) error {
+	input, err := ioutil.ReadFile(sourceFile)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(destinationFile, input, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
 }

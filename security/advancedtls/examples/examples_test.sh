@@ -50,11 +50,11 @@ EXAMPLES=(
 )
 
 declare -A EXPECTED_SERVER_OUTPUT=(
-    ["credential_reloading_from_files"]=""
+    ["credential_reloading_from_files"]="Client common name: foo.bar.hoo.com.Client common name: foo.bar.another.client.com."
 )
 
 declare -A EXPECTED_CLIENT_OUTPUT=(
-    ["credential_reloading_from_files"]="Getting message from server: Hello gRPC..."
+    ["credential_reloading_from_files"]=""
 )
 
 cd ./security/advancedtls/examples
