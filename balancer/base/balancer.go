@@ -109,11 +109,12 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		// different. So if users want to set different attributes to create
 		// duplicate connections to the same backend, it doesn't work. This is
 		// fine for now, because duplicate is done by setting Metadata today.
+		//
 		// TODO: read attributes to handle duplicate connections.
 		aNoAttrs := a
 		aNoAttrs.Attributes = nil
 		addrsSet[aNoAttrs] = struct{}{}
-		if _, ok := b.subConns[aNoAttrs]; !ok {
+		if sc, ok := b.subConns[aNoAttrs]; !ok {
 			// a is a new address (not existing in b.subConns).
 			//
 			// When creating SubConn, the original address with attributes is
@@ -127,6 +128,13 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 			b.subConns[aNoAttrs] = sc
 			b.scStates[sc] = connectivity.Idle
 			sc.Connect()
+		} else {
+			// Always update the subconn's address in case the attributes
+			// changed. This is a noop if the current address is the same as the
+			// old one (reflect.DeepEqual).
+			//
+			// TODO: delete this when this balancer reads attributes.
+			sc.UpdateAddresses([]resolver.Address{a})
 		}
 	}
 	for a, sc := range b.subConns {
