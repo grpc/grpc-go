@@ -48,9 +48,6 @@ func (scs *SafeConfigSelector) SelectConfig(r RPCInfo) *RPCConfig {
 	ccsPtr := atomic.LoadPointer(&scs.ccs)
 	var ccs *countingConfigSelector
 	for {
-		if ccsPtr == nil {
-			return nil
-		}
 		ccs = (*countingConfigSelector)(ccsPtr)
 		ccs.wg.Add(1)
 		ccsPtr2 := atomic.LoadPointer(&scs.ccs)
