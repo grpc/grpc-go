@@ -143,44 +143,42 @@ func (s) TestServerSideXDS(t *testing.T) {
 	defer cleanup()
 	t.Logf("Started xDS management server at %s", fs.Address)
 
-	// Setup the fakeserver to respond with a Listener resource.
-	setupListenerResponse(fs.XDSResponseChan, listenerName)
 	// Create a bootstrap file in a temporary directory.
 	defer setupBootstrapFile(t, fs.Address)()
 
 	// Initialize a gRPC server which uses xDS, and register stubServer on it.
 	server := xds.NewGRPCServer()
 	testpb.RegisterTestServiceServer(server, &testService{})
+	defer server.Stop()
 
-	errCh := make(chan error, 1)
 	go func() {
-		defer server.Stop()
-
-		// Create a clientconn and make a successful RPC
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-		cc, err := grpc.DialContext(ctx, localAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			errCh <- fmt.Errorf("failed to dial local test server: %v", err)
-			return
+		opts := xds.ServeOptions{Network: "tcp", Address: localAddress}
+		if err := server.Serve(opts); err != nil {
+			t.Errorf("Serve(%+v) failed: %v", opts, err)
 		}
-		defer cc.Close()
-
-		client := testpb.NewTestServiceClient(cc)
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-			errCh <- fmt.Errorf("rpc EmptyCall() failed: %v", err)
-			return
-		}
-		errCh <- nil
 	}()
 
-	opts := xds.ServeOptions{Network: "tcp", Address: localAddress}
-	if err := server.Serve(opts); err != nil {
-		t.Fatalf("Serve(%+v) failed: %v", opts, err)
-	}
+	// Create a ClientConn and make a successful RPC.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
-	if err := <-errCh; err != nil {
-		t.Fatal(err)
+	// Setup the fake management server to respond with a Listener resource.
+	go func() {
+		if _, err := fs.XDSRequestChan.Receive(ctx); err != nil {
+			t.Errorf("timeout when waiting for listener request: %v", err)
+		}
+		setupListenerResponse(fs.XDSResponseChan, listenerName)
+	}()
+
+	cc, err := grpc.DialContext(ctx, localAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testpb.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
 }
 
