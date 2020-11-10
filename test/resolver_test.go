@@ -186,19 +186,15 @@ func (s) TestConfigSelector(t *testing.T) {
 				t.Errorf("gotInfo.Context contains MD %v; want %v\nDiffs: %v", gotMD, tc.md, diff)
 			}
 
-			sentMD := tc.md // what was sent with the RPC
-			if tc.config != nil && tc.config.Context != nil {
-				sentMD, _ = metadata.FromOutgoingContext(tc.config.Context) // what we ended up sending
-			}
 			gotMD, _ = metadata.FromIncomingContext(gotContext)
-			// Remove entries from gotMD not in sentMD (e.g. authority header).
+			// Remove entries from gotMD not in tc.wantMD (e.g. authority header).
 			for k, _ := range gotMD {
-				if _, ok := sentMD[k]; !ok {
+				if _, ok := tc.wantMD[k]; !ok {
 					delete(gotMD, k)
 				}
 			}
-			if diff := cmp.Diff(sentMD, gotMD, cmpopts.EquateEmpty()); diff != "" {
-				t.Errorf("received md = %v; want %v\nDiffs: %v", gotMD, sentMD, diff)
+			if diff := cmp.Diff(tc.wantMD, gotMD, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("received md = %v; want %v\nDiffs: %v", gotMD, tc.wantMD, diff)
 			}
 
 			wantDeadline := tc.wantDeadline
