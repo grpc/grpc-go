@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"sync"
 
 	"google.golang.org/grpc"
@@ -81,9 +82,6 @@ type grpcServerInterface interface {
 // Notice: This type is EXPERIMENTAL and may be changed or removed in a
 // later release.
 type ServeOptions struct {
-	// Network identifies the local network to listen on. The network must be
-	// "tcp", "tcp4", "tcp6".
-	Network string
 	// Address contains the local address to listen on. This should be of the
 	// form "host:port", where the host must be a literal IP address, and port
 	// must be a literal port number. If the host is a literal IPv6 address it
@@ -93,11 +91,15 @@ type ServeOptions struct {
 }
 
 func (so *ServeOptions) validate() error {
-	if net := so.Network; net != "tcp" && net != "tcp4" && net != "tcp6" {
-		return fmt.Errorf("xds: unsupported network type %q for server listener", net)
-	}
-	if _, _, err := net.SplitHostPort(so.Address); err != nil {
+	addr, port, err := net.SplitHostPort(so.Address)
+	if err != nil {
 		return fmt.Errorf("xds: unsupported address %q for server listener", so.Address)
+	}
+	if net.ParseIP(addr) == nil {
+		return fmt.Errorf("xds: failed to parse %q as a valid literal IP address", addr)
+	}
+	if _, err := strconv.Atoi(port); err != nil {
+		return fmt.Errorf("%q is not a valid listener port", port)
 	}
 	return nil
 }
@@ -211,7 +213,7 @@ func (s *GRPCServer) Serve(opts ServeOptions) error {
 // Returns a listenerWrapper, which implements the net.Listener interface, that
 // can be passed to grpcServer.Serve().
 func (s *GRPCServer) newListenerWrapper(opts ServeOptions) (*listenerWrapper, error) {
-	lis, err := net.Listen(opts.Network, opts.Address)
+	lis, err := net.Listen("tcp", opts.Address)
 	if err != nil {
 		return nil, fmt.Errorf("xds: failed to listen on %+v: %v", opts, err)
 	}

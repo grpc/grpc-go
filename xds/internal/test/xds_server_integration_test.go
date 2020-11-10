@@ -41,14 +41,13 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/xds"
 	"google.golang.org/grpc/xds/internal/env"
+	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
 const (
 	defaultTestTimeout = 10 * time.Second
-	localAddress       = "localhost:9999"
-	listenerName       = "grpc/server?udpa.resource.listening_address=localhost:9999"
 )
 
 type s struct {
@@ -68,7 +67,7 @@ func setupListenerResponse(respCh chan *fakeserver.Response, name string) {
 					Value: func() []byte {
 						l := &v3listenerpb.Listener{
 							// This needs to match the name we are querying for.
-							Name: listenerName,
+							Name: name,
 							ApiListener: &v3listenerpb.ApiListener{
 								ApiListener: &anypb.Any{
 									TypeUrl: version.V2HTTPConnManagerURL,
@@ -151,8 +150,13 @@ func (s) TestServerSideXDS(t *testing.T) {
 	testpb.RegisterTestServiceServer(server, &testService{})
 	defer server.Stop()
 
+	localAddr, err := testutils.ListenerHostPort()
+	if err != nil {
+		t.Fatalf("testutils.ListenerHostPort() failed: %v", err)
+	}
+
 	go func() {
-		opts := xds.ServeOptions{Network: "tcp", Address: localAddress}
+		opts := xds.ServeOptions{Address: localAddr}
 		if err := server.Serve(opts); err != nil {
 			t.Errorf("Serve(%+v) failed: %v", opts, err)
 		}
@@ -167,10 +171,10 @@ func (s) TestServerSideXDS(t *testing.T) {
 		if _, err := fs.XDSRequestChan.Receive(ctx); err != nil {
 			t.Errorf("timeout when waiting for listener request: %v", err)
 		}
-		setupListenerResponse(fs.XDSResponseChan, listenerName)
+		setupListenerResponse(fs.XDSResponseChan, fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", localAddr))
 	}()
 
-	cc, err := grpc.DialContext(ctx, localAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.DialContext(ctx, localAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
