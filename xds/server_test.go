@@ -196,7 +196,7 @@ func setupOverrides(t *testing.T) (*fakeGRPCServer, *testutils.Channel, func()) 
 
 	clientCh := testutils.NewChannel()
 	origNewXDSClient := newXDSClient
-	newXDSClient = func(xdsclient.Options) (xdsClientInterface, error) {
+	newXDSClient = func() (xdsClientInterface, error) {
 		c := fakeclient.NewClient()
 		clientCh.Send(c)
 		return c, nil
@@ -365,7 +365,7 @@ func (s) TestServeNewClientFailure(t *testing.T) {
 	defer func() { newXDSConfig = origNewXDSConfig }()
 
 	origNewXDSClient := newXDSClient
-	newXDSClient = func(xdsclient.Options) (xdsClientInterface, error) {
+	newXDSClient = func() (xdsClientInterface, error) {
 		return nil, errors.New("xdsClient creation failed")
 	}
 	defer func() { newXDSClient = origNewXDSClient }()
