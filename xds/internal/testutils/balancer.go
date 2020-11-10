@@ -56,8 +56,8 @@ type TestSubConn struct {
 	id string
 }
 
-// UpdateAddresses panics.
-func (tsc *TestSubConn) UpdateAddresses([]resolver.Address) { panic("not implemented") }
+// UpdateAddresses is a no-op.
+func (tsc *TestSubConn) UpdateAddresses([]resolver.Address) {}
 
 // Connect is a no-op.
 func (tsc *TestSubConn) Connect() {}
