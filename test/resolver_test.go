@@ -176,7 +176,7 @@ func (s) TestConfigSelector(t *testing.T) {
 
 			gotMD, _ = metadata.FromIncomingContext(gotContext)
 			// Remove entries from gotMD not in tc.wantMD (e.g. authority header).
-			for k, _ := range gotMD {
+			for k := range gotMD {
 				if _, ok := tc.wantMD[k]; !ok {
 					delete(gotMD, k)
 				}
