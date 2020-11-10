@@ -44,6 +44,8 @@ import (
 const (
 	defaultTestTimeout      = 5 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
+
+	defaultClientWatchExpiryTimeout = 15 * time.Second
 )
 
 type s struct {
@@ -66,7 +68,7 @@ func (s) TestLRSClient(t *testing.T) {
 		Creds:        grpc.WithInsecure(),
 		NodeProto:    &v2corepb.Node{},
 		TransportAPI: version.TransportV2,
-	}, 15*time.Second)
+	}, defaultClientWatchExpiryTimeout)
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}

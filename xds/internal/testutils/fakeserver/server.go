@@ -16,7 +16,7 @@
  *
  */
 
-// Package fakeserver provides a fake implementation of an management server.
+// Package fakeserver provides a fake implementation of the management server.
 package fakeserver
 
 import (

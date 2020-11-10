@@ -57,7 +57,7 @@ var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
 var bootstrapFileReadFunc = ioutil.ReadFile
 
 // Config provides the xDS client with several key bits of information that it
-// requires in its interaction with an management server. The Config is
+// requires in its interaction with the management server. The Config is
 // initialized from the bootstrap file.
 type Config struct {
 	// BalancerName is the name of the management server to connect to.
