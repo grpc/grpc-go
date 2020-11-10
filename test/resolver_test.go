@@ -43,8 +43,6 @@ func (f funcConfigSelector) SelectConfig(i iresolver.RPCInfo) *iresolver.RPCConf
 }
 
 func (s) TestConfigSelector(t *testing.T) {
-	gotInfoChan := testutils.NewChannelWithSize(1)
-	sendConfigChan := testutils.NewChannelWithSize(1)
 	gotContextChan := testutils.NewChannelWithSize(1)
 
 	ss := &stubServer{
@@ -63,26 +61,6 @@ func (s) TestConfigSelector(t *testing.T) {
 	ctxDeadline := time.Now().Add(10 * time.Second)
 	ctx, cancel := context.WithDeadline(context.Background(), ctxDeadline)
 	defer cancel()
-
-	state := iresolver.SetConfigSelector(resolver.State{
-		Addresses:     []resolver.Address{{Addr: ss.address}},
-		ServiceConfig: parseCfg(ss.r, "{}"),
-	}, funcConfigSelector{
-		f: func(i iresolver.RPCInfo) *iresolver.RPCConfig {
-			gotInfoChan.Send(&i)
-			cfgI, err := sendConfigChan.Receive(ctx)
-			if err != nil {
-				t.Errorf("error waiting for RPCConfig: %v", err)
-				return nil
-			}
-			cfg := cfgI.(*iresolver.RPCConfig)
-			if cfg != nil && cfg.Context == nil {
-				cfg.Context = i.Context
-			}
-			return cfg
-		},
-	})
-	ss.r.UpdateState(state) // Blocks until config selector is applied
 
 	longCtxDeadline := time.Now().Add(30 * time.Second)
 	longdeadlineCtx, cancel := context.WithDeadline(context.Background(), longCtxDeadline)
@@ -154,22 +132,32 @@ func (s) TestConfigSelector(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if !sendConfigChan.SendOrFail(tc.config) {
-				t.Fatalf("last config not consumed by config selector")
-			}
+			var gotInfo *iresolver.RPCInfo
+			state := iresolver.SetConfigSelector(resolver.State{
+				Addresses:     []resolver.Address{{Addr: ss.address}},
+				ServiceConfig: parseCfg(ss.r, "{}"),
+			}, funcConfigSelector{
+				f: func(i iresolver.RPCInfo) *iresolver.RPCConfig {
+					gotInfo = &i
+					cfg := tc.config
+					if cfg != nil && cfg.Context == nil {
+						cfg.Context = i.Context
+					}
+					return cfg
+				},
+			})
+			ss.r.UpdateState(state) // Blocks until config selector is applied
 
 			onCommittedCalled = false
-			ctx = metadata.NewOutgoingContext(ctx, tc.md)
+			ctx := metadata.NewOutgoingContext(ctx, tc.md)
 			startTime := time.Now()
 			if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 				t.Fatalf("client.EmptyCall(_, _) = _, %v; want _, nil", err)
 			}
 
-			gotInfoI, ok := gotInfoChan.ReceiveOrFail()
-			if !ok {
+			if gotInfo == nil {
 				t.Fatalf("no config selector data")
 			}
-			gotInfo := gotInfoI.(*iresolver.RPCInfo)
 
 			if want := "/grpc.testing.TestService/EmptyCall"; gotInfo.Method != want {
 				t.Errorf("gotInfo.Method = %q; want %q", gotInfo.Method, want)
