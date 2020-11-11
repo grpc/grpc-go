@@ -236,6 +236,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
 				cc.sc = &sc
+				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
 				scSet = true
 			}
 		default:
@@ -285,6 +286,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
 				cc.sc = &sc
+				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
 			}
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -553,6 +555,7 @@ func (cc *ClientConn) scWatcher() {
 			// TODO: load balance policy runtime change is ignored.
 			// We may revisit this decision in the future.
 			cc.sc = &sc
+			cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
 			cc.mu.Unlock()
 		case <-cc.ctx.Done():
 			return
@@ -595,8 +598,10 @@ func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
 		return
 	}
 	if cc.dopts.defaultServiceConfig != nil {
+		cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
 		cc.applyServiceConfigAndBalancer(cc.dopts.defaultServiceConfig, addrs)
 	} else {
+		cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
 		cc.applyServiceConfigAndBalancer(emptyServiceConfig, addrs)
 	}
 }
@@ -630,7 +635,6 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	var ret error
 	if cc.dopts.disableServiceConfig || s.ServiceConfig == nil {
 		cc.maybeApplyDefaultServiceConfig(s.Addresses)
-		cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
 		// TODO: do we need to apply a failing LB policy if there is no
 		// default, per the error handling design?
 	} else {
