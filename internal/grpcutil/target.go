@@ -21,6 +21,7 @@
 package grpcutil
 
 import (
+	"net/url"
 	"strings"
 
 	"google.golang.org/grpc/resolver"
@@ -59,18 +60,43 @@ func ParseTarget(target string, skipUnixColonParsing bool) (ret resolver.Target)
 	if !ok {
 		return resolver.Target{Endpoint: target}
 	}
-	if ret.Scheme == "unix" {
-		// Prevents behavior change in "unix:///[...]" case.
-		if skipUnixColonParsing && ret.Authority == "" {
-			return resolver.Target{Endpoint: target}
-		}
+	if ret.Scheme == "unix" && !skipUnixColonParsing {
 		// Add the "/" back in the unix case, so the unix resolver receives the
 		// actual endpoint.
-		ret.Endpoint = "/" + ret.Endpoint
-	}
-	// Prevents behavior change in "passthrough:///unix:///a/b/c" case.
-	if !skipUnixColonParsing && ret.Scheme == "passthrough" && strings.HasPrefix(ret.Endpoint, "unix:") {
-		return ParseTarget(ret.Endpoint, false)
+		if !skipUnixColonParsing {
+			ret.Endpoint = "/" + ret.Endpoint
+		}
 	}
 	return ret
+}
+
+// ParseDialTarget returns the network and address to pass to dialer
+func ParseDialTarget(target string) (string, string) {
+	net := "tcp"
+
+	m1 := strings.Index(target, ":")
+	m2 := strings.Index(target, ":/")
+
+	// handle unix:addr which will fail with url.Parse
+	if m1 >= 0 && m2 < 0 {
+		if n := target[0:m1]; n == "unix" {
+			return n, target[m1+1:]
+		}
+	}
+	if m2 >= 0 {
+		t, err := url.Parse(target)
+		if err != nil {
+			return net, target
+		}
+		scheme := t.Scheme
+		addr := t.Path
+		if scheme == "unix" {
+			if addr == "" {
+				addr = t.Host
+			}
+			return scheme, addr
+		}
+	}
+
+	return net, target
 }

@@ -143,13 +143,16 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 		return fn(ctx, addr.Addr)
 	}
 	networkType := "tcp"
+	address := addr.Addr
 	if n, ok := networktype.Get(addr); ok {
 		networkType = n
+	} else {
+		networkType, address = grpcutil.ParseDialTarget(address)
 	}
 	if networkType == "tcp" && useProxy {
-		return proxyDial(ctx, addr.Addr, grpcUA)
+		return proxyDial(ctx, address, grpcUA)
 	}
-	return (&net.Dialer{}).DialContext(ctx, networkType, addr.Addr)
+	return (&net.Dialer{}).DialContext(ctx, networkType, address)
 }
 
 func isTemporary(err error) bool {
