@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,7 +34,7 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-func authorityChecker(expectedAuthority string) func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+func authorityChecker(expectedAuthority *string) func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 	return func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 		md, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
@@ -43,11 +44,11 @@ func authorityChecker(expectedAuthority string) func(context.Context, *testpb.Em
 		if !ok {
 			return nil, status.Error(codes.InvalidArgument, "no authority header")
 		}
-		if len(auths) < 1 {
-			return nil, status.Error(codes.InvalidArgument, "no authority header")
+		if len(auths) != 1 {
+			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("no authority header, auths = %v", auths))
 		}
-		if auths[0] != expectedAuthority {
-			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid authority header %v, expected %v", auths[0], expectedAuthority))
+		if auths[0] != *expectedAuthority {
+			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid authority header %v, expected %v", auths[0], *expectedAuthority))
 		}
 		return &testpb.Empty{}, nil
 	}
@@ -58,7 +59,7 @@ func runUnixTest(t *testing.T, address, target, expectedAuthority string, dialer
 		t.Fatalf("Error removing socket file %v: %v\n", address, err)
 	}
 	ss := &stubServer{
-		emptyCall: authorityChecker(expectedAuthority),
+		emptyCall: authorityChecker(&expectedAuthority),
 		network:   "unix",
 		address:   address,
 		target:    target,
@@ -72,7 +73,7 @@ func runUnixTest(t *testing.T, address, target, expectedAuthority string, dialer
 		return
 	}
 	defer ss.Stop()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_, err := ss.client.EmptyCall(ctx, &testpb.Empty{})
 	if err != nil {
@@ -153,21 +154,33 @@ func (s) TestUnixCustomDialer(t *testing.T) {
 }
 
 func (s) TestColonPortAuthority(t *testing.T) {
-	port := ":50051"
+	expectedAuthority := ""
 	ss := &stubServer{
-		emptyCall: authorityChecker("localhost" + port),
+		emptyCall: authorityChecker(&expectedAuthority),
 		network:   "tcp",
-		address:   "localhost" + port,
-		target:    port,
 	}
 	if err := ss.Start(nil); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 		return
 	}
 	defer ss.Stop()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	s := strings.Split(ss.address, ":")
+	if len(s) != 2 {
+		t.Fatalf("No port in address: %v", ss.address)
+		return
+	}
+	expectedAuthority = "localhost:" + s[1]
+	// ss.Start dials, but not the ":[port]" target that is being tested here.
+	// Dial again, with ":[port]" as the target.
+	cc, err := grpc.Dial(":"+s[1], grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("grpc.Dial(%q) = %v", ss.target, err)
+		return
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_, err := ss.client.EmptyCall(ctx, &testpb.Empty{})
+	_, err = testpb.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
 	if err != nil {
 		t.Errorf("us.client.EmptyCall(_, _) = _, %v; want _, nil", err)
 	}
