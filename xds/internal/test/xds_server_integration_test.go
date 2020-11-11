@@ -150,9 +150,9 @@ func (s) TestServerSideXDS(t *testing.T) {
 	testpb.RegisterTestServiceServer(server, &testService{})
 	defer server.Stop()
 
-	localAddr, err := testutils.ListenerHostPort()
+	localAddr, err := testutils.AvailableHostPort()
 	if err != nil {
-		t.Fatalf("testutils.ListenerHostPort() failed: %v", err)
+		t.Fatalf("testutils.AvailableHostPort() failed: %v", err)
 	}
 
 	go func() {

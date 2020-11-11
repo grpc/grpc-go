@@ -230,9 +230,9 @@ func (s) TestServeSuccess(t *testing.T) {
 	server := NewGRPCServer()
 	defer server.Stop()
 
-	localAddr, err := xdstestutils.ListenerHostPort()
+	localAddr, err := xdstestutils.AvailableHostPort()
 	if err != nil {
-		t.Fatalf("testutils.ListenerHostPort() failed: %v", err)
+		t.Fatalf("testutils.AvailableHostPort() failed: %v", err)
 	}
 
 	// Call Serve() in a goroutine, and push on a channel when Serve returns.
@@ -291,9 +291,9 @@ func (s) TestServeWithStop(t *testing.T) {
 	// it after the LDS watch has been registered.
 	server := NewGRPCServer()
 
-	localAddr, err := xdstestutils.ListenerHostPort()
+	localAddr, err := xdstestutils.AvailableHostPort()
 	if err != nil {
-		t.Fatalf("testutils.ListenerHostPort() failed: %v", err)
+		t.Fatalf("testutils.AvailableHostPort() failed: %v", err)
 	}
 
 	// Call Serve() in a goroutine, and push on a channel when Serve returns.
@@ -350,9 +350,9 @@ func (s) TestServeBootstrapFailure(t *testing.T) {
 	server := NewGRPCServer()
 	defer server.Stop()
 
-	localAddr, err := xdstestutils.ListenerHostPort()
+	localAddr, err := xdstestutils.AvailableHostPort()
 	if err != nil {
-		t.Fatalf("testutils.ListenerHostPort() failed: %v", err)
+		t.Fatalf("testutils.AvailableHostPort() failed: %v", err)
 	}
 
 	serveDone := testutils.NewChannel()
@@ -394,9 +394,9 @@ func (s) TestServeNewClientFailure(t *testing.T) {
 	server := NewGRPCServer()
 	defer server.Stop()
 
-	localAddr, err := xdstestutils.ListenerHostPort()
+	localAddr, err := xdstestutils.AvailableHostPort()
 	if err != nil {
-		t.Fatalf("testutils.ListenerHostPort() failed: %v", err)
+		t.Fatalf("testutils.AvailableHostPort() failed: %v", err)
 	}
 
 	serveDone := testutils.NewChannel()
