@@ -85,8 +85,7 @@ type ServeOptions struct {
 	// Address contains the local address to listen on. This should be of the
 	// form "host:port", where the host must be a literal IP address, and port
 	// must be a literal port number. If the host is a literal IPv6 address it
-	// must be enclosed in square brackets, as in "[2001:db8::1]:80. The host
-	// portion can be left unspecified.
+	// must be enclosed in square brackets, as in "[2001:db8::1]:80.
 	Address string
 }
 
