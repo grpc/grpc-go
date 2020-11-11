@@ -190,7 +190,7 @@ func setupOverrides(t *testing.T) (*fakeGRPCServer, *testutils.Channel, func()) 
 	newXDSConfig = func() (*bootstrap.Config, error) {
 		return &bootstrap.Config{
 			BalancerName: "dummyBalancer",
-			Creds:        grpc.WithInsecure(),
+			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 			NodeProto:    xdstestutils.EmptyNodeProtoV3,
 		}, nil
 	}
@@ -378,7 +378,7 @@ func (s) TestServeNewClientFailure(t *testing.T) {
 	newXDSConfig = func() (*bootstrap.Config, error) {
 		return &bootstrap.Config{
 			BalancerName: "dummyBalancer",
-			Creds:        grpc.WithInsecure(),
+			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 			NodeProto:    xdstestutils.EmptyNodeProtoV3,
 		}, nil
 	}
