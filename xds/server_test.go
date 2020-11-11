@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -259,7 +258,7 @@ func (s) TestServeSuccess(t *testing.T) {
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
 	wantName := fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", localAddr)
-	if !strings.HasPrefix(name, wantName) {
+	if name != wantName {
 		t.Fatalf("LDS watch registered for name %q, want %q", name, wantName)
 	}
 
@@ -321,7 +320,7 @@ func (s) TestServeWithStop(t *testing.T) {
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
 	wantName := fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", localAddr)
-	if !strings.HasPrefix(name, wantName) {
+	if name != wantName {
 		server.Stop()
 		t.Fatalf("LDS watch registered for name %q, wantPrefix %q", name, wantName)
 	}
