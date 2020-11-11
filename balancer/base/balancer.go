@@ -130,8 +130,11 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 			sc.Connect()
 		} else {
 			// Always update the subconn's address in case the attributes
-			// changed. This is a noop if the current address is the same as the
-			// old one (reflect.DeepEqual).
+			// changed.
+			//
+			// The SubConn does a reflect.DeepEqual of the new and old
+			// addresses. So this is a noop if the current address is the same
+			// as the old one (including attributes).
 			//
 			// TODO: delete this when this balancer reads attributes.
 			sc.UpdateAddresses([]resolver.Address{a})
