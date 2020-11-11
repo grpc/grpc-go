@@ -63,9 +63,7 @@ func ParseTarget(target string, skipUnixColonParsing bool) (ret resolver.Target)
 	if ret.Scheme == "unix" && !skipUnixColonParsing {
 		// Add the "/" back in the unix case, so the unix resolver receives the
 		// actual endpoint.
-		if !skipUnixColonParsing {
-			ret.Endpoint = "/" + ret.Endpoint
-		}
+		ret.Endpoint = "/" + ret.Endpoint
 	}
 	return ret
 }
