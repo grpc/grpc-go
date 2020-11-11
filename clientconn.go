@@ -661,6 +661,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 				} else {
 					err = status.Errorf(codes.Unavailable, "illegal service config type: %T", s.ServiceConfig.Config)
 				}
+				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
 				cc.blockingpicker.updatePicker(base.NewErrPicker(err))
 				cc.csMgr.updateState(connectivity.TransientFailure)
 				cc.mu.Unlock()
