@@ -42,7 +42,8 @@ func (ts TokenSource) GetRequestMetadata(ctx context.Context, uri ...string) (ma
 	if err != nil {
 		return nil, err
 	}
-	if err = credentials.CheckSecurityLevel(ctx, credentials.PrivacyAndIntegrity); err != nil {
+	ri, _ := credentials.RequestInfoFromContext(ctx)
+	if err = credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
 		return nil, fmt.Errorf("unable to transfer TokenSource PerRPCCredentials: %v", err)
 	}
 	return map[string]string{
@@ -84,7 +85,8 @@ func (j jwtAccess) GetRequestMetadata(ctx context.Context, uri ...string) (map[s
 	if err != nil {
 		return nil, err
 	}
-	if err = credentials.CheckSecurityLevel(ctx, credentials.PrivacyAndIntegrity); err != nil {
+	ri, _ := credentials.RequestInfoFromContext(ctx)
+	if err = credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
 		return nil, fmt.Errorf("unable to transfer jwtAccess PerRPCCredentials: %v", err)
 	}
 	return map[string]string{
@@ -107,7 +109,8 @@ func NewOauthAccess(token *oauth2.Token) credentials.PerRPCCredentials {
 }
 
 func (oa oauthAccess) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	if err := credentials.CheckSecurityLevel(ctx, credentials.PrivacyAndIntegrity); err != nil {
+	ri, _ := credentials.RequestInfoFromContext(ctx)
+	if err := credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
 		return nil, fmt.Errorf("unable to transfer oauthAccess PerRPCCredentials: %v", err)
 	}
 	return map[string]string{
@@ -144,7 +147,8 @@ func (s *serviceAccount) GetRequestMetadata(ctx context.Context, uri ...string) 
 			return nil, err
 		}
 	}
-	if err := credentials.CheckSecurityLevel(ctx, credentials.PrivacyAndIntegrity); err != nil {
+	ri, _ := credentials.RequestInfoFromContext(ctx)
+	if err := credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
 		return nil, fmt.Errorf("unable to transfer serviceAccount PerRPCCredentials: %v", err)
 	}
 	return map[string]string{

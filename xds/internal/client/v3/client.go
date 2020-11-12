@@ -181,8 +181,9 @@ func (v3c *client) HandleResponse(r proto.Message) (xdsclient.ResourceType, stri
 	return rType, resp.GetVersionInfo(), resp.GetNonce(), err
 }
 
-// handleLDSResponse processes an LDS response received from the xDS server. On
-// receipt of a good response, it also invokes the registered watcher callback.
+// handleLDSResponse processes an LDS response received from the management
+// server. On receipt of a good response, it also invokes the registered watcher
+// callback.
 func (v3c *client) handleLDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
 	update, err := xdsclient.UnmarshalListener(resp.GetResources(), v3c.logger)
 	if err != nil {
@@ -192,9 +193,9 @@ func (v3c *client) handleLDSResponse(resp *v3discoverypb.DiscoveryResponse) erro
 	return nil
 }
 
-// handleRDSResponse processes an RDS response received from the xDS server. On
-// receipt of a good response, it caches validated resources and also invokes
-// the registered watcher callback.
+// handleRDSResponse processes an RDS response received from the management
+// server. On receipt of a good response, it caches validated resources and also
+// invokes the registered watcher callback.
 func (v3c *client) handleRDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
 	update, err := xdsclient.UnmarshalRouteConfig(resp.GetResources(), v3c.logger)
 	if err != nil {
@@ -204,8 +205,9 @@ func (v3c *client) handleRDSResponse(resp *v3discoverypb.DiscoveryResponse) erro
 	return nil
 }
 
-// handleCDSResponse processes an CDS response received from the xDS server. On
-// receipt of a good response, it also invokes the registered watcher callback.
+// handleCDSResponse processes an CDS response received from the management
+// server. On receipt of a good response, it also invokes the registered watcher
+// callback.
 func (v3c *client) handleCDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
 	update, err := xdsclient.UnmarshalCluster(resp.GetResources(), v3c.logger)
 	if err != nil {

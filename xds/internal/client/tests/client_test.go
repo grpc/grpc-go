@@ -20,8 +20,10 @@ package tests_test
 
 import (
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
@@ -38,81 +40,69 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-const (
-	testXDSServer = "xds-server"
-)
-
-func clientOpts(balancerName string) xdsclient.Options {
-	return xdsclient.Options{
-		Config: bootstrap.Config{
-			BalancerName: balancerName,
-			Creds:        grpc.WithInsecure(),
-			NodeProto:    testutils.EmptyNodeProtoV2,
-		},
-	}
-}
+const testXDSServer = "xds-server"
 
 func (s) TestNew(t *testing.T) {
 	tests := []struct {
 		name    string
-		opts    xdsclient.Options
+		config  *bootstrap.Config
 		wantErr bool
 	}{
-		{name: "empty-opts", opts: xdsclient.Options{}, wantErr: true},
+		{
+			name:    "empty-opts",
+			config:  &bootstrap.Config{},
+			wantErr: true,
+		},
 		{
 			name: "empty-balancer-name",
-			opts: xdsclient.Options{
-				Config: bootstrap.Config{
-					Creds:     grpc.WithInsecure(),
-					NodeProto: testutils.EmptyNodeProtoV2,
-				},
+			config: &bootstrap.Config{
+				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+				NodeProto: testutils.EmptyNodeProtoV2,
 			},
 			wantErr: true,
 		},
 		{
 			name: "empty-dial-creds",
-			opts: xdsclient.Options{
-				Config: bootstrap.Config{
-					BalancerName: testXDSServer,
-					NodeProto:    testutils.EmptyNodeProtoV2,
-				},
+			config: &bootstrap.Config{
+				BalancerName: testXDSServer,
+				NodeProto:    testutils.EmptyNodeProtoV2,
 			},
 			wantErr: true,
 		},
 		{
 			name: "empty-node-proto",
-			opts: xdsclient.Options{
-				Config: bootstrap.Config{
-					BalancerName: testXDSServer,
-					Creds:        grpc.WithInsecure(),
-				},
+			config: &bootstrap.Config{
+				BalancerName: testXDSServer,
+				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 			},
 			wantErr: true,
 		},
 		{
 			name: "node-proto-version-mismatch",
-			opts: xdsclient.Options{
-				Config: bootstrap.Config{
-					BalancerName: testXDSServer,
-					Creds:        grpc.WithInsecure(),
-					NodeProto:    testutils.EmptyNodeProtoV3,
-					TransportAPI: version.TransportV2,
-				},
+			config: &bootstrap.Config{
+				BalancerName: testXDSServer,
+				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
+				NodeProto:    testutils.EmptyNodeProtoV3,
+				TransportAPI: version.TransportV2,
 			},
 			wantErr: true,
 		},
 		// TODO(easwars): Add cases for v3 API client.
 		{
 			name: "happy-case",
-			opts: clientOpts(testXDSServer),
+			config: &bootstrap.Config{
+				BalancerName: testXDSServer,
+				Creds:        grpc.WithInsecure(),
+				NodeProto:    testutils.EmptyNodeProtoV2,
+			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c, err := xdsclient.New(test.opts)
+			c, err := xdsclient.NewWithConfigForTesting(test.config, 15*time.Second)
 			if (err != nil) != test.wantErr {
-				t.Fatalf("New(%+v) = %v, wantErr: %v", test.opts, err, test.wantErr)
+				t.Fatalf("New(%+v) = %v, wantErr: %v", test.config, err, test.wantErr)
 			}
 			if c != nil {
 				c.Close()

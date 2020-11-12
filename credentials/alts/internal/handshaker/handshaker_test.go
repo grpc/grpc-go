@@ -56,6 +56,8 @@ var (
 	}
 )
 
+const defaultTestTimeout = 10 * time.Second
+
 // testRPCStream mimics a altspb.HandshakerService_DoHandshakeClient object.
 type testRPCStream struct {
 	grpc.ClientStream
@@ -133,6 +135,10 @@ func (s) TestClientHandshake(t *testing.T) {
 	} {
 		errc := make(chan error)
 		stat.Reset()
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+
 		for i := 0; i < testCase.numberOfHandshakes; i++ {
 			stream := &testRPCStream{
 				t:        t,
@@ -155,7 +161,7 @@ func (s) TestClientHandshake(t *testing.T) {
 				side: core.ClientSide,
 			}
 			go func() {
-				_, context, err := chs.ClientHandshake(context.Background())
+				_, context, err := chs.ClientHandshake(ctx)
 				if err == nil && context == nil {
 					panic("expected non-nil ALTS context")
 				}
@@ -188,6 +194,10 @@ func (s) TestServerHandshake(t *testing.T) {
 	} {
 		errc := make(chan error)
 		stat.Reset()
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+
 		for i := 0; i < testCase.numberOfHandshakes; i++ {
 			stream := &testRPCStream{
 				t:        t,
@@ -207,7 +217,7 @@ func (s) TestServerHandshake(t *testing.T) {
 				side:       core.ServerSide,
 			}
 			go func() {
-				_, context, err := shs.ServerHandshake(context.Background())
+				_, context, err := shs.ServerHandshake(ctx)
 				if err == nil && context == nil {
 					panic("expected non-nil ALTS context")
 				}
@@ -258,7 +268,10 @@ func (s) TestPeerNotResponding(t *testing.T) {
 		},
 		side: core.ClientSide,
 	}
-	_, context, err := chs.ClientHandshake(context.Background())
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, context, err := chs.ClientHandshake(ctx)
 	chs.Close()
 	if context != nil {
 		t.Error("expected non-nil ALTS context")

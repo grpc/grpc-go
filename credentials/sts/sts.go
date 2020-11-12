@@ -151,7 +151,8 @@ type callCreds struct {
 // GetRequestMetadata returns the cached accessToken, if available and valid, or
 // fetches a new one by performing an STS token exchange.
 func (c *callCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
-	if err := credentials.CheckSecurityLevel(ctx, credentials.PrivacyAndIntegrity); err != nil {
+	ri, _ := credentials.RequestInfoFromContext(ctx)
+	if err := credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
 		return nil, fmt.Errorf("unable to transfer STS PerRPCCredentials: %v", err)
 	}
 

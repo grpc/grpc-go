@@ -32,6 +32,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/xds/internal/env"
@@ -57,10 +58,10 @@ var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
 var bootstrapFileReadFunc = ioutil.ReadFile
 
 // Config provides the xDS client with several key bits of information that it
-// requires in its interaction with an xDS server. The Config is initialized
-// from the bootstrap file.
+// requires in its interaction with the management server. The Config is
+// initialized from the bootstrap file.
 type Config struct {
-	// BalancerName is the name of the xDS server to connect to.
+	// BalancerName is the name of the management server to connect to.
 	//
 	// The bootstrap file contains a list of servers (with name+creds), but we
 	// pick the first one.
@@ -75,18 +76,13 @@ type Config struct {
 	// NodeProto contains the Node proto to be used in xDS requests. The actual
 	// type depends on the transport protocol version used.
 	NodeProto proto.Message
-	// CertProviderConfigs contain parsed configs for supported certificate
-	// provider plugins found in the bootstrap file.
-	CertProviderConfigs map[string]CertProviderConfig
-}
-
-// CertProviderConfig wraps the certificate provider plugin name and config
-// (corresponding to one plugin instance) found in the bootstrap file.
-type CertProviderConfig struct {
-	// Name is the registered name of the certificate provider.
-	Name string
-	// Config is the parsed config to be passed to the certificate provider.
-	Config certprovider.StableConfig
+	// CertProviderConfigs contains a mapping from certificate provider plugin
+	// instance names to parsed buildable configs.
+	CertProviderConfigs map[string]*certprovider.BuildableConfig
+	// ServerResourceNameID contains the value to be used as the id in the
+	// resource name used to fetch the Listener resource on the xDS-enabled gRPC
+	// server.
+	ServerResourceNameID string
 }
 
 type channelCreds struct {
@@ -105,26 +101,27 @@ type xdsServer struct {
 // The format of the bootstrap file will be as follows:
 // {
 //    "xds_server": {
-//      "server_uri": <string containing URI of xds server>,
+//      "server_uri": <string containing URI of management server>,
 //      "channel_creds": [
 //        {
 //          "type": <string containing channel cred type>,
 //          "config": <JSON object containing config for the type>
 //        }
 //      ],
-//      "server_features": [ ... ]
-//		"certificate_providers" : {
-//			"default": {
-//				"plugin_name": "default-plugin-name",
-//				"config": { default plugin config in JSON }
-//			},
-//			"foo": {
-//				"plugin_name": "foo",
-//				"config": { foo plugin config in JSON }
-//			}
-//		}
 //    },
-//    "node": <JSON form of Node proto>
+//    "node": <JSON form of Node proto>,
+//    "server_features": [ ... ],
+//    "certificate_providers" : {
+//      "default": {
+//        "plugin_name": "default-plugin-name",
+//        "config": { default plugin config in JSON }
+//       },
+//      "foo": {
+//        "plugin_name": "foo",
+//        "config": { foo plugin config in JSON }
+//      }
+//    },
+//    "grpc_server_resource_name_id": "grpc/server"
 // }
 //
 // Currently, we support exactly one type of credential, which is
@@ -177,7 +174,7 @@ func NewConfig() (*Config, error) {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 			if len(servers) < 1 {
-				return nil, fmt.Errorf("xds: bootstrap file parsing failed during bootstrap: file doesn't contain any xds server to connect to")
+				return nil, fmt.Errorf("xds: bootstrap file parsing failed during bootstrap: file doesn't contain any management server to connect to")
 			}
 			xs := servers[0]
 			config.BalancerName = xs.ServerURI
@@ -187,7 +184,7 @@ func NewConfig() (*Config, error) {
 					config.Creds = grpc.WithCredentialsBundle(google.NewDefaultCredentials())
 					break
 				} else if cc.Type == credsInsecure {
-					config.Creds = grpc.WithInsecure()
+					config.Creds = grpc.WithTransportCredentials(insecure.NewCredentials())
 					break
 				}
 			}
@@ -207,7 +204,7 @@ func NewConfig() (*Config, error) {
 			if err := json.Unmarshal(v, &providerInstances); err != nil {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
-			configs := make(map[string]CertProviderConfig)
+			configs := make(map[string]*certprovider.BuildableConfig)
 			getBuilder := internal.GetCertificateProviderBuilder.(func(string) certprovider.Builder)
 			for instance, data := range providerInstances {
 				var nameAndConfig struct {
@@ -224,17 +221,17 @@ func NewConfig() (*Config, error) {
 					// We ignore plugins that we do not know about.
 					continue
 				}
-				cfg := nameAndConfig.Config
-				c, err := parser.ParseConfig(cfg)
+				bc, err := parser.ParseConfig(nameAndConfig.Config)
 				if err != nil {
 					return nil, fmt.Errorf("xds: Config parsing for plugin %q failed: %v", name, err)
 				}
-				configs[instance] = CertProviderConfig{
-					Name:   name,
-					Config: c,
-				}
+				configs[instance] = bc
 			}
 			config.CertProviderConfigs = configs
+		case "grpc_server_resource_name_id":
+			if err := json.Unmarshal(v, &config.ServerResourceNameID); err != nil {
+				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
+			}
 		}
 		// Do not fail the xDS bootstrap when an unknown field is seen. This can
 		// happen when an older version client reads a newer version bootstrap

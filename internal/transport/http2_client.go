@@ -243,6 +243,18 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		if err != nil {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: authentication handshake failed: %v", err)
 		}
+		for _, cd := range perRPCCreds {
+			if cd.RequireTransportSecurity() {
+				if ci, ok := authInfo.(interface {
+					GetCommonAuthInfo() credentials.CommonAuthInfo
+				}); ok {
+					secLevel := ci.GetCommonAuthInfo().SecurityLevel
+					if secLevel != credentials.InvalidSecurityLevel && secLevel < credentials.PrivacyAndIntegrity {
+						return nil, connectionErrorf(true, nil, "transport: cannot send secure credentials on an insecure connection")
+					}
+				}
+			}
+		}
 		isSecure = true
 		if transportCreds.Info().SecurityProtocol == "tls" {
 			scheme = "https"
@@ -566,8 +578,11 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 	// Note: if these credentials are provided both via dial options and call
 	// options, then both sets of credentials will be applied.
 	if callCreds := callHdr.Creds; callCreds != nil {
-		if !t.isSecure && callCreds.RequireTransportSecurity() {
-			return nil, status.Error(codes.Unauthenticated, "transport: cannot send secure credentials on an insecure connection")
+		if callCreds.RequireTransportSecurity() {
+			ri, _ := credentials.RequestInfoFromContext(ctx)
+			if !t.isSecure || credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity) != nil {
+				return nil, status.Error(codes.Unauthenticated, "transport: cannot send secure credentials on an insecure connection")
+			}
 		}
 		data, err := callCreds.GetRequestMetadata(ctx, audience)
 		if err != nil {

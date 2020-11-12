@@ -255,7 +255,10 @@ func (s) TestGetRequestMetadataSuccess(t *testing.T) {
 	errCh := make(chan error, 1)
 	go receiveAndCompareRequest(fc.ReqChan, errCh)
 
-	gotMetadata, err := creds.GetRequestMetadata(createTestContext(context.Background(), credentials.PrivacyAndIntegrity), "")
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	gotMetadata, err := creds.GetRequestMetadata(createTestContext(ctx, credentials.PrivacyAndIntegrity), "")
 	if err != nil {
 		t.Fatalf("creds.GetRequestMetadata() = %v", err)
 	}
@@ -270,7 +273,7 @@ func (s) TestGetRequestMetadataSuccess(t *testing.T) {
 	// from the cache. This will fail if the credentials tries to send a fresh
 	// request here since we have not configured our fakeClient to return any
 	// response on retries.
-	gotMetadata, err = creds.GetRequestMetadata(createTestContext(context.Background(), credentials.PrivacyAndIntegrity), "")
+	gotMetadata, err = creds.GetRequestMetadata(createTestContext(ctx, credentials.PrivacyAndIntegrity), "")
 	if err != nil {
 		t.Fatalf("creds.GetRequestMetadata() = %v", err)
 	}
@@ -290,7 +293,9 @@ func (s) TestGetRequestMetadataBadSecurityLevel(t *testing.T) {
 		t.Fatalf("NewCredentials(%v) = %v", goodOptions, err)
 	}
 
-	gotMetadata, err := creds.GetRequestMetadata(createTestContext(context.Background(), credentials.IntegrityOnly), "")
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	gotMetadata, err := creds.GetRequestMetadata(createTestContext(ctx, credentials.IntegrityOnly), "")
 	if err == nil {
 		t.Fatalf("creds.GetRequestMetadata() succeeded with metadata %v, expected to fail", gotMetadata)
 	}
@@ -335,7 +340,9 @@ func (s) TestGetRequestMetadataCacheExpiry(t *testing.T) {
 		}
 		fc.RespChan.Send(resp)
 
-		gotMetadata, err := creds.GetRequestMetadata(createTestContext(context.Background(), credentials.PrivacyAndIntegrity), "")
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		gotMetadata, err := creds.GetRequestMetadata(createTestContext(ctx, credentials.PrivacyAndIntegrity), "")
 		if err != nil {
 			t.Fatalf("creds.GetRequestMetadata() = %v", err)
 		}
@@ -374,6 +381,8 @@ func (s) TestGetRequestMetadataBadResponses(t *testing.T) {
 		},
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			defer overrideSubjectTokenGood()()
@@ -393,7 +402,7 @@ func (s) TestGetRequestMetadataBadResponses(t *testing.T) {
 			go receiveAndCompareRequest(fc.ReqChan, errCh)
 
 			fc.RespChan.Send(test.response)
-			if _, err := creds.GetRequestMetadata(createTestContext(context.Background(), credentials.PrivacyAndIntegrity), ""); err == nil {
+			if _, err := creds.GetRequestMetadata(createTestContext(ctx, credentials.PrivacyAndIntegrity), ""); err == nil {
 				t.Fatal("creds.GetRequestMetadata() succeeded when expected to fail")
 			}
 			if err := <-errCh; err != nil {
@@ -426,7 +435,9 @@ func (s) TestGetRequestMetadataBadSubjectTokenRead(t *testing.T) {
 		errCh <- nil
 	}()
 
-	if _, err := creds.GetRequestMetadata(createTestContext(context.Background(), credentials.PrivacyAndIntegrity), ""); err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := creds.GetRequestMetadata(createTestContext(ctx, credentials.PrivacyAndIntegrity), ""); err == nil {
 		t.Fatal("creds.GetRequestMetadata() succeeded when expected to fail")
 	}
 	if err := <-errCh; err != nil {
@@ -604,6 +615,9 @@ func (s) TestConstructRequest(t *testing.T) {
 			},
 		},
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if test.subjectTokenReadErr {
@@ -618,7 +632,7 @@ func (s) TestConstructRequest(t *testing.T) {
 				defer overrideActorTokenGood()()
 			}
 
-			gotRequest, err := constructRequest(context.Background(), test.opts)
+			gotRequest, err := constructRequest(ctx, test.opts)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("constructRequest(%v) = %v, wantErr: %v", test.opts, err, test.wantErr)
 			}
@@ -634,7 +648,9 @@ func (s) TestConstructRequest(t *testing.T) {
 
 func (s) TestSendRequest(t *testing.T) {
 	defer overrideSubjectTokenGood()()
-	req, err := constructRequest(context.Background(), goodOptions)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	req, err := constructRequest(ctx, goodOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
