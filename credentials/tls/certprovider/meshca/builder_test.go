@@ -71,7 +71,7 @@ func (s) TestBuildSameConfig(t *testing.T) {
 	// invocations of Build().
 	inputConfig := makeJSONConfig(t, goodConfigFullySpecified)
 	builder := newPluginBuilder()
-	stableConfig, err := builder.ParseConfig(inputConfig)
+	buildableConfig, err := builder.ParseConfig(inputConfig)
 	if err != nil {
 		t.Fatalf("builder.ParseConfig(%q) failed: %v", inputConfig, err)
 	}
@@ -80,9 +80,9 @@ func (s) TestBuildSameConfig(t *testing.T) {
 	// end up sharing the same ClientConn.
 	providers := []certprovider.Provider{}
 	for i := 0; i < cnt; i++ {
-		p := builder.Build(stableConfig, certprovider.Options{})
-		if p == nil {
-			t.Fatalf("builder.Build(%s) failed: %v", string(stableConfig.Canonical()), err)
+		p, err := buildableConfig.Build(certprovider.BuildOptions{})
+		if err != nil {
+			t.Fatalf("Build(%+v) failed: %v", buildableConfig, err)
 		}
 		providers = append(providers, p)
 	}
@@ -146,14 +146,14 @@ func (s) TestBuildDifferentConfig(t *testing.T) {
 		cfg := proto.Clone(goodConfigFullySpecified).(*configpb.GoogleMeshCaConfig)
 		cfg.Server.GrpcServices[0].GetGoogleGrpc().TargetUri = fmt.Sprintf("test-mesh-ca:%d", i)
 		inputConfig := makeJSONConfig(t, cfg)
-		stableConfig, err := builder.ParseConfig(inputConfig)
+		buildableConfig, err := builder.ParseConfig(inputConfig)
 		if err != nil {
 			t.Fatalf("builder.ParseConfig(%q) failed: %v", inputConfig, err)
 		}
 
-		p := builder.Build(stableConfig, certprovider.Options{})
-		if p == nil {
-			t.Fatalf("builder.Build(%s) failed: %v", string(stableConfig.Canonical()), err)
+		p, err := buildableConfig.Build(certprovider.BuildOptions{})
+		if err != nil {
+			t.Fatalf("Build(%+v) failed: %v", buildableConfig, err)
 		}
 		providers = append(providers, p)
 	}

@@ -43,6 +43,8 @@ var (
 	canceled         = 0
 )
 
+const defaultTestTimeout = 10 * time.Second
+
 type testCodec struct {
 }
 
@@ -237,7 +239,8 @@ func (s) TestUnaryClientInterceptor(t *testing.T) {
 	}()
 
 	var reply string
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	parentCtx := context.WithValue(ctx, ctxKey("parentKey"), 0)
 	if err := cc.Invoke(parentCtx, "/foo/bar", &expectedRequest, &reply); err != nil || reply != expectedResponse {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
@@ -305,7 +308,8 @@ func (s) TestChainUnaryClientInterceptor(t *testing.T) {
 	}()
 
 	var reply string
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	parentCtx := context.WithValue(ctx, ctxKey("parentKey"), 0)
 	if err := cc.Invoke(parentCtx, "/foo/bar", &expectedRequest, &reply); err != nil || reply != expectedResponse+"321" {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
@@ -346,7 +350,8 @@ func (s) TestChainOnBaseUnaryClientInterceptor(t *testing.T) {
 	}()
 
 	var reply string
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	parentCtx := context.WithValue(ctx, ctxKey("parentKey"), 0)
 	if err := cc.Invoke(parentCtx, "/foo/bar", &expectedRequest, &reply); err != nil || reply != expectedResponse {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
@@ -407,7 +412,8 @@ func (s) TestChainStreamClientInterceptor(t *testing.T) {
 		server.stop()
 	}()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	parentCtx := context.WithValue(ctx, ctxKey("parentKey"), 0)
 	_, err := cc.NewStream(parentCtx, &StreamDesc{}, "/foo/bar")
 	if err != nil {
@@ -418,7 +424,9 @@ func (s) TestChainStreamClientInterceptor(t *testing.T) {
 func (s) TestInvoke(t *testing.T) {
 	server, cc := setUp(t, 0, math.MaxUint32)
 	var reply string
-	if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply); err != nil || reply != expectedResponse {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := cc.Invoke(ctx, "/foo/bar", &expectedRequest, &reply); err != nil || reply != expectedResponse {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
 	}
 	cc.Close()
@@ -429,7 +437,9 @@ func (s) TestInvokeLargeErr(t *testing.T) {
 	server, cc := setUp(t, 0, math.MaxUint32)
 	var reply string
 	req := "hello"
-	err := cc.Invoke(context.Background(), "/foo/bar", &req, &reply)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	err := cc.Invoke(ctx, "/foo/bar", &req, &reply)
 	if _, ok := status.FromError(err); !ok {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) receives non rpc error.")
 	}
@@ -445,7 +455,9 @@ func (s) TestInvokeErrorSpecialChars(t *testing.T) {
 	server, cc := setUp(t, 0, math.MaxUint32)
 	var reply string
 	req := "weird error"
-	err := cc.Invoke(context.Background(), "/foo/bar", &req, &reply)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	err := cc.Invoke(ctx, "/foo/bar", &req, &reply)
 	if _, ok := status.FromError(err); !ok {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) receives non rpc error.")
 	}

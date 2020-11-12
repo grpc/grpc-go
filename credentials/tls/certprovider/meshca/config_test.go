@@ -160,13 +160,13 @@ func (s) TestParseConfigSuccessFullySpecified(t *testing.T) {
 	inputConfig := makeJSONConfig(t, goodConfigFullySpecified)
 	wantConfig := "test-meshca:http://test-sts:test-resource:test-audience:test-scope:test-requested-token-type:test-subject-token-path:test-subject-token-type:test-actor-token-path:test-actor-token-type:10s:24h0m0s:12h0m0s:RSA:2048:us-west1-b"
 
-	builder := newPluginBuilder()
-	gotConfig, err := builder.ParseConfig(inputConfig)
+	cfg, err := pluginConfigFromJSON(inputConfig)
 	if err != nil {
-		t.Fatalf("builder.ParseConfig(%q) failed: %v", inputConfig, err)
+		t.Fatalf("pluginConfigFromJSON(%q) failed: %v", inputConfig, err)
 	}
-	if diff := cmp.Diff(wantConfig, string(gotConfig.Canonical())); diff != "" {
-		t.Errorf("builder.ParseConfig(%q) returned config does not match expected (-want +got):\n%s", inputConfig, diff)
+	gotConfig := cfg.canonical()
+	if diff := cmp.Diff(wantConfig, string(gotConfig)); diff != "" {
+		t.Errorf("pluginConfigFromJSON(%q) returned config does not match expected (-want +got):\n%s", inputConfig, diff)
 	}
 }
 
@@ -248,13 +248,12 @@ func (s) TestParseConfigSuccessWithDefaults(t *testing.T) {
 		errCh <- nil
 	}()
 
-	builder := newPluginBuilder()
-	gotConfig, err := builder.ParseConfig(inputConfig)
+	cfg, err := pluginConfigFromJSON(inputConfig)
 	if err != nil {
-		t.Fatalf("builder.ParseConfig(%q) failed: %v", inputConfig, err)
-
+		t.Fatalf("pluginConfigFromJSON(%q) failed: %v", inputConfig, err)
 	}
-	if diff := cmp.Diff(wantConfig, string(gotConfig.Canonical())); diff != "" {
+	gotConfig := cfg.canonical()
+	if diff := cmp.Diff(wantConfig, string(gotConfig)); diff != "" {
 		t.Errorf("builder.ParseConfig(%q) returned config does not match expected (-want +got):\n%s", inputConfig, diff)
 	}
 
@@ -268,14 +267,9 @@ func (s) TestParseConfigSuccessWithDefaults(t *testing.T) {
 func (s) TestParseConfigFailureCases(t *testing.T) {
 	tests := []struct {
 		desc        string
-		inputConfig interface{}
+		inputConfig json.RawMessage
 		wantErr     string
 	}{
-		{
-			desc:        "bad config type",
-			inputConfig: struct{ foo string }{foo: "bar"},
-			wantErr:     "unsupported config type",
-		},
 		{
 			desc:        "invalid JSON",
 			inputConfig: json.RawMessage(`bad bad json`),
@@ -396,10 +390,9 @@ func (s) TestParseConfigFailureCases(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			builder := newPluginBuilder()
-			sc, err := builder.ParseConfig(test.inputConfig)
+			cfg, err := pluginConfigFromJSON(test.inputConfig)
 			if err == nil {
-				t.Fatalf("builder.ParseConfig(%q) = %v, expected to return error (%v)", test.inputConfig, string(sc.Canonical()), test.wantErr)
+				t.Fatalf("pluginConfigFromJSON(%q) = %v, expected to return error (%v)", test.inputConfig, string(cfg.canonical()), test.wantErr)
 
 			}
 			if !strings.Contains(err.Error(), test.wantErr) {

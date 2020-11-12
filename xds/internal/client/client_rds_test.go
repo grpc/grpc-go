@@ -280,7 +280,14 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 							Route: &v3routepb.RouteAction{
 								ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
 							}}}}}}},
-			wantError: true,
+			wantUpdate: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{ldsTarget},
+						Routes:  []*Route{{Prefix: newStringP("/"), CaseInsensitive: true, Action: map[string]uint32{clusterName: 1}}},
+					},
+				},
+			},
 		},
 		{
 			name: "good-route-config-with-empty-string-route",
@@ -434,7 +441,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil)
 			if (gotError != nil) != test.wantError || !cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty()) {
-				t.Errorf("generateRDSUpdateFromRouteConfiguration(%+v, %v) = %v, want %v", test.rc, ldsTarget, gotUpdate, test.wantUpdate)
+				t.Errorf("generateRDSUpdateFromRouteConfiguration(%+v, %v) returned unexpected, diff (-want +got):\\n%s", test.rc, ldsTarget, cmp.Diff(test.wantUpdate, gotUpdate, cmpopts.EquateEmpty()))
 			}
 		})
 	}
@@ -654,8 +661,22 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
 					CaseSensitive: &wrapperspb.BoolValue{Value: false},
 				},
+				Action: &v3routepb.Route_Route{
+					Route: &v3routepb.RouteAction{
+						ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+							WeightedClusters: &v3routepb.WeightedCluster{
+								Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+									{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}},
+									{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
+								},
+								TotalWeight: &wrapperspb.UInt32Value{Value: 100},
+							}}}},
 			}},
-			wantErr: true,
+			wantRoutes: []*Route{{
+				Prefix:          newStringP("/"),
+				CaseInsensitive: true,
+				Action:          map[string]uint32{"A": 40, "B": 60},
+			}},
 		},
 		{
 			name: "good",

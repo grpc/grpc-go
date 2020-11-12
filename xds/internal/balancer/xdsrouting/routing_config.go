@@ -52,6 +52,9 @@ type routeConfig struct {
 	// Path, Prefix and Regex can have at most one set. This is guaranteed by
 	// config parsing.
 	path, prefix, regex string
+	// Indicates if prefix/path matching should be case insensitive. The default
+	// is false (case sensitive).
+	caseInsensitive bool
 
 	headers  []headerMatcher
 	fraction *uint32
@@ -74,6 +77,7 @@ type lbConfig struct {
 type routeJSON struct {
 	// Path, Prefix and Regex can have at most one non-nil.
 	Path, Prefix, Regex *string
+	CaseInsensitive     bool
 	// Zero or more header matchers.
 	Headers       []*xdsclient.HeaderMatcher
 	MatchFraction *wrapperspb.UInt32Value
@@ -99,6 +103,7 @@ func (jc lbConfigJSON) toLBConfig() *lbConfig {
 		case r.Regex != nil:
 			tempR.regex = *r.Regex
 		}
+		tempR.caseInsensitive = r.CaseInsensitive
 		for _, h := range r.Headers {
 			var tempHeader headerMatcher
 			switch {

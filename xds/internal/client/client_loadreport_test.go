@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/client"
@@ -44,6 +45,8 @@ import (
 const (
 	defaultTestTimeout      = 5 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
+
+	defaultClientWatchExpiryTimeout = 15 * time.Second
 )
 
 type s struct {
@@ -61,14 +64,12 @@ func (s) TestLRSClient(t *testing.T) {
 	}
 	defer sCleanup()
 
-	xdsC, err := client.New(client.Options{
-		Config: bootstrap.Config{
-			BalancerName: fs.Address,
-			Creds:        grpc.WithInsecure(),
-			NodeProto:    &v2corepb.Node{},
-			TransportAPI: version.TransportV2,
-		},
-	})
+	xdsC, err := client.NewWithConfigForTesting(&bootstrap.Config{
+		BalancerName: fs.Address,
+		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
+		NodeProto:    &v2corepb.Node{},
+		TransportAPI: version.TransportV2,
+	}, defaultClientWatchExpiryTimeout)
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}
@@ -128,12 +129,12 @@ func (s) TestLRSClient(t *testing.T) {
 		t.Fatalf("unexpected load received, want load for cluster, eds, dropped for test")
 	}
 	receivedLoad[0].LoadReportInterval = nil
-	want := (&endpointpb.ClusterStats{
+	want := &endpointpb.ClusterStats{
 		ClusterName:          "cluster",
 		ClusterServiceName:   "eds",
 		TotalDroppedRequests: 1,
 		DroppedRequests:      []*endpointpb.ClusterStats_DroppedRequests{{Category: "test", DroppedCount: 1}},
-	})
+	}
 	if d := cmp.Diff(want, receivedLoad[0], protocmp.Transform()); d != "" {
 		t.Fatalf("unexpected load received, want load for cluster, eds, dropped for test, diff (-want +got):\n%s", d)
 	}

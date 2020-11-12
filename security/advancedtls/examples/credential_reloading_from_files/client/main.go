@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/security/advancedtls"
 	"google.golang.org/grpc/security/advancedtls/testdata"
@@ -45,24 +46,22 @@ const (
 func main() {
 	flag.Parse()
 
-	// TODO(ZhenLian): change function signatures to reflect the changes in
-	// https://github.com/grpc/grpc-go/pull/3981.
-	identityOptions := advancedtls.PEMFileProviderOptions{
-		CertFile:         testdata.Path("client_cert_1.pem"),
-		KeyFile:          testdata.Path("client_key_1.pem"),
-		IdentityInterval: credRefreshingInterval,
+	identityOptions := pemfile.Options{
+		CertFile:            testdata.Path("client_cert_1.pem"),
+		KeyFile:             testdata.Path("client_key_1.pem"),
+		CertRefreshDuration: credRefreshingInterval,
 	}
-	identityProvider, err := advancedtls.NewPEMFileProvider(identityOptions)
+	identityProvider, err := pemfile.NewProvider(identityOptions)
 	if err != nil {
-		log.Fatalf("advancedtls.NewPEMFileProvider(%v) failed: %v", identityOptions, err)
+		log.Fatalf("pemfile.NewProvider(%v) failed: %v", identityOptions, err)
 	}
-	rootOptions := advancedtls.PEMFileProviderOptions{
-		TrustFile:    testdata.Path("client_trust_cert_1.pem"),
-		RootInterval: credRefreshingInterval,
+	rootOptions := pemfile.Options{
+		RootFile:            testdata.Path("client_trust_cert_1.pem"),
+		RootRefreshDuration: credRefreshingInterval,
 	}
-	rootProvider, err := advancedtls.NewPEMFileProvider(rootOptions)
+	rootProvider, err := pemfile.NewProvider(rootOptions)
 	if err != nil {
-		log.Fatalf("advancedtls.NewPEMFileProvider(%v) failed: %v", rootOptions, err)
+		log.Fatalf("pemfile.NewProvider(%v) failed: %v", rootOptions, err)
 	}
 
 	options := &advancedtls.ClientOptions{

@@ -25,7 +25,7 @@ import (
 )
 
 // ReportLoad starts an load reporting stream to the given server. If the server
-// is not an empty string, and is different from the xds server, a new
+// is not an empty string, and is different from the management server, a new
 // ClientConn will be created.
 //
 // The same options used for creating the Client will be used (including
@@ -33,7 +33,7 @@ import (
 //
 // It returns a Store for the user to report loads, a function to cancel the
 // load reporting stream.
-func (c *Client) ReportLoad(server string) (*load.Store, func()) {
+func (c *clientImpl) ReportLoad(server string) (*load.Store, func()) {
 	c.lrsMu.Lock()
 	defer c.lrsMu.Unlock()
 
@@ -58,20 +58,21 @@ func (c *Client) ReportLoad(server string) (*load.Store, func()) {
 }
 
 // lrsClient maps to one lrsServer. It contains:
-// - a ClientConn to this server (only if it's different from the xds server)
+// - a ClientConn to this server (only if it's different from the management
+// server)
 // - a load.Store that contains loads only for this server
 type lrsClient struct {
-	parent *Client
+	parent *clientImpl
 	server string
 
-	cc           *grpc.ClientConn // nil if the server is same as the xds server
+	cc           *grpc.ClientConn // nil if the server is same as the management server
 	refCount     int
 	cancelStream func()
 	loadStore    *load.Store
 }
 
 // newLRSClient creates a new LRS stream to the server.
-func newLRSClient(parent *Client, server string) *lrsClient {
+func newLRSClient(parent *clientImpl, server string) *lrsClient {
 	return &lrsClient{
 		parent:   parent,
 		server:   server,
@@ -109,18 +110,17 @@ func (lrsC *lrsClient) unRef() (closed bool) {
 }
 
 // startStream starts the LRS stream to the server. If server is not the same
-// xDS server from the parent, it also creates a ClientConn.
+// management server from the parent, it also creates a ClientConn.
 func (lrsC *lrsClient) startStream() {
 	var cc *grpc.ClientConn
 
 	lrsC.parent.logger.Infof("Starting load report to server: %s", lrsC.server)
-	if lrsC.server == "" || lrsC.server == lrsC.parent.opts.Config.BalancerName {
+	if lrsC.server == "" || lrsC.server == lrsC.parent.config.BalancerName {
 		// Reuse the xDS client if server is the same.
 		cc = lrsC.parent.cc
 	} else {
-		lrsC.parent.logger.Infof("LRS server is different from xDS server, starting a new ClientConn")
-		dopts := append([]grpc.DialOption{lrsC.parent.opts.Config.Creds}, lrsC.parent.opts.DialOpts...)
-		ccNew, err := grpc.Dial(lrsC.server, dopts...)
+		lrsC.parent.logger.Infof("LRS server is different from management server, starting a new ClientConn")
+		ccNew, err := grpc.Dial(lrsC.server, lrsC.parent.config.Creds)
 		if err != nil {
 			// An error from a non-blocking dial indicates something serious.
 			lrsC.parent.logger.Infof("xds: failed to dial load report server {%s}: %v", lrsC.server, err)

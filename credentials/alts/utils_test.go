@@ -26,6 +26,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
@@ -37,6 +38,8 @@ const (
 	testServiceAccount1 = "service_account1"
 	testServiceAccount2 = "service_account2"
 	testServiceAccount3 = "service_account3"
+
+	defaultTestTimeout = 10 * time.Second
 )
 
 func setupManufacturerReader(testOS string, reader func() (io.Reader, error)) func() {
@@ -101,7 +104,8 @@ func (s) TestIsRunningOnGCPNoProductNameFile(t *testing.T) {
 }
 
 func (s) TestAuthInfoFromContext(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	altsAuthInfo := &fakeALTSAuthInfo{}
 	p := &peer.Peer{
 		AuthInfo: altsAuthInfo,
@@ -158,7 +162,8 @@ func (s) TestAuthInfoFromPeer(t *testing.T) {
 }
 
 func (s) TestClientAuthorizationCheck(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	altsAuthInfo := &fakeALTSAuthInfo{testServiceAccount1}
 	p := &peer.Peer{
 		AuthInfo: altsAuthInfo,

@@ -64,26 +64,12 @@ func getBuilder(name string) Builder {
 
 // Builder creates a Provider.
 type Builder interface {
-	// Build creates a new Provider and initializes it with the given config and
-	// options combination.
-	Build(StableConfig, Options) Provider
-
-	// ParseConfig converts config input in a format specific to individual
-	// implementations and returns an implementation of the StableConfig
-	// interface.
-	// Equivalent configurations must return StableConfig types whose
-	// Canonical() method returns the same output.
-	ParseConfig(interface{}) (StableConfig, error)
+	// ParseConfig parses the given config, which is in a format specific to individual
+	// implementations, and returns a BuildableConfig on success.
+	ParseConfig(interface{}) (*BuildableConfig, error)
 
 	// Name returns the name of providers built by this builder.
 	Name() string
-}
-
-// StableConfig wraps the method to return a stable Provider configuration.
-type StableConfig interface {
-	// Canonical returns Provider config as an arbitrary byte slice.
-	// Equivalent configurations must return the same output.
-	Canonical() []byte
 }
 
 // Provider makes it possible to keep channel credential implementations up to
@@ -110,8 +96,8 @@ type KeyMaterial struct {
 	Roots *x509.CertPool
 }
 
-// Options contains configuration knobs passed to a Provider at creation time.
-type Options struct {
+// BuildOptions contains parameters passed to a Provider at build time.
+type BuildOptions struct {
 	// CertName holds the certificate name, whose key material is of interest to
 	// the caller.
 	CertName string

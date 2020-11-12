@@ -40,7 +40,7 @@ func (s) TestClusterWatch(t *testing.T) {
 	apiClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	client, err := New(clientOpts(testXDSServer, false))
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -93,7 +93,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 	apiClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	client, err := New(clientOpts(testXDSServer, false))
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -156,7 +156,7 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 	apiClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	client, err := New(clientOpts(testXDSServer, false))
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -221,7 +221,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	apiClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	client, err := New(clientOpts(testXDSServer, false))
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -282,7 +282,7 @@ func (s) TestClusterWatchExpiryTimer(t *testing.T) {
 	apiClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	client, err := New(clientOpts(testXDSServer, true))
+	client, err := newWithConfig(clientOpts(testXDSServer, true))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -321,7 +321,7 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 	apiClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	client, err := New(clientOpts(testXDSServer, true))
+	client, err := newWithConfig(clientOpts(testXDSServer, true))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -369,7 +369,7 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	apiClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	client, err := New(clientOpts(testXDSServer, false))
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}

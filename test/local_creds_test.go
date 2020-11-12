@@ -43,9 +43,16 @@ func testLocalCredsE2ESucceed(network, address string) error {
 			if !ok {
 				return nil, status.Error(codes.DataLoss, "Failed to get peer from ctx")
 			}
+			type internalInfo interface {
+				GetCommonAuthInfo() credentials.CommonAuthInfo
+			}
+			var secLevel credentials.SecurityLevel
+			if info, ok := (pr.AuthInfo).(internalInfo); ok {
+				secLevel = info.GetCommonAuthInfo().SecurityLevel
+			} else {
+				return nil, status.Errorf(codes.Unauthenticated, "peer.AuthInfo does not implement GetCommonAuthInfo()")
+			}
 			// Check security level
-			info := pr.AuthInfo.(local.Info)
-			secLevel := info.CommonAuthInfo.SecurityLevel
 			switch network {
 			case "unix":
 				if secLevel != credentials.PrivacyAndIntegrity {
