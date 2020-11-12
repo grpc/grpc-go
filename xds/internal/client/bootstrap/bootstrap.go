@@ -78,6 +78,10 @@ type Config struct {
 	// CertProviderConfigs contains a mapping from certificate provider plugin
 	// instance names to parsed buildable configs.
 	CertProviderConfigs map[string]*certprovider.BuildableConfig
+	// ServerResourceNameID contains the value to be used as the id in the
+	// resource name used to fetch the Listener resource on the xDS-enabled gRPC
+	// server.
+	ServerResourceNameID string
 }
 
 type channelCreds struct {
@@ -103,19 +107,20 @@ type xdsServer struct {
 //          "config": <JSON object containing config for the type>
 //        }
 //      ],
-//      "server_features": [ ... ]
-//		"certificate_providers" : {
-//			"default": {
-//				"plugin_name": "default-plugin-name",
-//				"config": { default plugin config in JSON }
-//			},
-//			"foo": {
-//				"plugin_name": "foo",
-//				"config": { foo plugin config in JSON }
-//			}
-//		}
 //    },
-//    "node": <JSON form of Node proto>
+//    "node": <JSON form of Node proto>,
+//    "server_features": [ ... ],
+//    "certificate_providers" : {
+//      "default": {
+//        "plugin_name": "default-plugin-name",
+//        "config": { default plugin config in JSON }
+//       },
+//      "foo": {
+//        "plugin_name": "foo",
+//        "config": { foo plugin config in JSON }
+//      }
+//    },
+//    "grpc_server_resource_name_id": "grpc/server"
 // }
 //
 // Currently, we support exactly one type of credential, which is
@@ -222,6 +227,10 @@ func NewConfig() (*Config, error) {
 				configs[instance] = bc
 			}
 			config.CertProviderConfigs = configs
+		case "grpc_server_resource_name_id":
+			if err := json.Unmarshal(v, &config.ServerResourceNameID); err != nil {
+				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
+			}
 		}
 		// Do not fail the xDS bootstrap when an unknown field is seen. This can
 		// happen when an older version client reads a newer version bootstrap
