@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
@@ -43,7 +44,7 @@ const (
 
 var (
 	fpb1, fpb2                   *fakeProviderBuilder
-	bootstrapCertProviderConfigs map[string]*certprovider.BuildableConfig
+	bootstrapConfig              *bootstrap.Config
 	cdsUpdateWithGoodSecurityCfg = xdsclient.ClusterUpdate{
 		ServiceName: serviceName,
 		SecurityCfg: &xdsclient.SecurityConfig{
@@ -64,9 +65,11 @@ func init() {
 	fpb2 = &fakeProviderBuilder{name: fakeProvider2Name}
 	cfg1, _ := fpb1.ParseConfig(fakeConfig + "1111")
 	cfg2, _ := fpb2.ParseConfig(fakeConfig + "2222")
-	bootstrapCertProviderConfigs = map[string]*certprovider.BuildableConfig{
-		"default1": cfg1,
-		"default2": cfg2,
+	bootstrapConfig = &bootstrap.Config{
+		CertProviderConfigs: map[string]*certprovider.BuildableConfig{
+			"default1": cfg1,
+			"default2": cfg2,
+		},
 	}
 	certprovider.Register(fpb1)
 	certprovider.Register(fpb2)
@@ -326,7 +329,7 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 
 		if i == 0 {
 			// Set the bootstrap config used by the fake client.
-			xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+			xdsC.SetBootstrapConfig(bootstrapConfig)
 		}
 
 		// Here we invoke the watch callback registered on the fake xdsClient. A bad
@@ -373,7 +376,7 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 	defer func() { buildProvider = origBuildProvider }()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. Even
 	// though the received update is good, the certprovider.Store is configured
@@ -409,7 +412,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	}()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. A bad
 	// security config is passed here. So, we expect the CDS balancer to not
@@ -465,7 +468,7 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 	}()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
@@ -496,7 +499,7 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	}()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
@@ -546,7 +549,7 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	}()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
@@ -617,7 +620,7 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 	defer func() { buildProvider = origBuildProvider }()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
