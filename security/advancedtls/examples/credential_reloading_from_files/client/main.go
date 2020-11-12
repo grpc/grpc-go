@@ -53,14 +53,14 @@ func main() {
 		log.Fatalf("ioutil.TempFile(%s, %s) failed: %v", os.TempDir(), "pre-", err)
 	}
 	if err := copyFileContents(testdata.Path("client_cert_1.pem"), certTmpFile.Name()); err != nil {
-		log.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("another_client_cert_1.pem"), certTmpFile.Name(), err)
+		log.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_cert_1.pem"), certTmpFile.Name(), err)
 	}
 	keyTmpFile, err := ioutil.TempFile(os.TempDir(), "pre-")
 	if err != nil {
 		log.Fatalf("ioutil.TempFile(%s, %s) failed: %v", os.TempDir(), "pre-", err)
 	}
 	if err := copyFileContents(testdata.Path("client_key_1.pem"), keyTmpFile.Name()); err != nil {
-		log.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("another_client_key_1.pem"), keyTmpFile.Name(), err)
+		log.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_key_1.pem"), keyTmpFile.Name(), err)
 	}
 
 	// Initialize credential struct using reloading API.

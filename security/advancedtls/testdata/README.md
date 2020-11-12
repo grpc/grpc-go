@@ -14,7 +14,13 @@ commands we run:
    $ openssl req -x509 -newkey rsa:4096 -keyout ca_key.pem -out ca_cert.pem -nodes -days $DURATION_DAYS
    ```
 
-2. Generate a CSR `csr.pem` using `subject_key.pem`:
+2. Generate a private key `subject_key.pem` for the subject: 
+      
+      ```
+      $ openssl genrsa -out subject_key.pem 4096
+      ```
+   
+3. Generate a CSR `csr.pem` using `subject_key.pem`:
 
    ```
    $ openssl req -new -key subject_key.pem -out csr.pem
@@ -23,12 +29,6 @@ commands we run:
    In those cases, we can create a configuration file(for example, localhost-openssl.cnf), and do the following:
    ```
    $ openssl req -new -key subject_key.pem -out csr.pem -config $CONFIG_FILE_NAME
-   ```
-
-3. Generate a private key `subject_key.pem` for the subject: 
-   
-   ```
-   $ openssl genrsa -out subject_key.pem 4096
    ```
 
 4. Use `ca_key.pem` and `ca_cert.pem` to sign `csr.pem`, and get a certificate, `subject_cert.pem`, for the subject:
