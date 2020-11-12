@@ -594,15 +594,13 @@ func init() {
 
 func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
 	if cc.sc != nil {
-		cc.applyServiceConfigAndBalancer(cc.sc, addrs)
+		cc.applyServiceConfigAndBalancer(cc.sc, nil, addrs)
 		return
 	}
 	if cc.dopts.defaultServiceConfig != nil {
-		cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
-		cc.applyServiceConfigAndBalancer(cc.dopts.defaultServiceConfig, addrs)
+		cc.applyServiceConfigAndBalancer(cc.dopts.defaultServiceConfig, &defaultConfigSelector{cc}, addrs)
 	} else {
-		cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
-		cc.applyServiceConfigAndBalancer(emptyServiceConfig, addrs)
+		cc.applyServiceConfigAndBalancer(emptyServiceConfig, &defaultConfigSelector{cc}, addrs)
 	}
 }
 
@@ -639,15 +637,15 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 		// default, per the error handling design?
 	} else {
 		if sc, ok := s.ServiceConfig.Config.(*ServiceConfig); s.ServiceConfig.Err == nil && ok {
-			cc.applyServiceConfigAndBalancer(sc, s.Addresses)
-			if configSelector := iresolver.GetConfigSelector(s); configSelector != nil {
+			configSelector := iresolver.GetConfigSelector(s)
+			if configSelector != nil {
 				if len(s.ServiceConfig.Config.(*ServiceConfig).Methods) != 0 {
 					channelz.Infof(logger, cc.channelzID, "method configs in service config will be ignored due to presence of config selector")
 				}
-				cc.safeConfigSelector.UpdateConfigSelector(configSelector)
 			} else {
-				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
+				configSelector = &defaultConfigSelector{cc}
 			}
+			cc.applyServiceConfigAndBalancer(sc, configSelector, s.Addresses)
 		} else {
 			ret = balancer.ErrBadResolverState
 			if cc.balancerWrapper == nil {
@@ -937,12 +935,15 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method st
 	return t, done, nil
 }
 
-func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, addrs []resolver.Address) {
+func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSelector iresolver.ConfigSelector, addrs []resolver.Address) {
 	if sc == nil {
 		// should never reach here.
 		return
 	}
 	cc.sc = sc
+	if configSelector != nil {
+		cc.safeConfigSelector.UpdateConfigSelector(configSelector)
+	}
 
 	if cc.sc.retryThrottling != nil {
 		newThrottler := &retryThrottler{
