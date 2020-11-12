@@ -65,8 +65,8 @@ func main() {
 	}
 	defer identityProvider.Close()
 	rootOptions := pemfile.Options{
-		RootFile:            testdata.Path("server_trust_cert_1.pem"),
-		RootRefreshDuration: credRefreshingInterval,
+		RootFile:        testdata.Path("server_trust_cert_1.pem"),
+		RefreshDuration: credRefreshingInterval,
 	}
 	rootProvider, err := pemfile.NewProvider(rootOptions)
 	if err != nil {

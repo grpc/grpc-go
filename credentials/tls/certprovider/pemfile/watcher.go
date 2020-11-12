@@ -38,10 +38,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-const (
-	defaultCertRefreshDuration = 1 * time.Hour
-	defaultRootRefreshDuration = 2 * time.Hour
-)
+const defaultCertRefreshDuration = 1 * time.Hour
 
 var (
 	// For overriding from unit tests.

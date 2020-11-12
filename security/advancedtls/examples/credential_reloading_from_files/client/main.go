@@ -56,8 +56,8 @@ func main() {
 		log.Fatalf("pemfile.NewProvider(%v) failed: %v", identityOptions, err)
 	}
 	rootOptions := pemfile.Options{
-		RootFile:            testdata.Path("client_trust_cert_1.pem"),
-		RootRefreshDuration: credRefreshingInterval,
+		RootFile:        testdata.Path("client_trust_cert_1.pem"),
+		RefreshDuration: credRefreshingInterval,
 	}
 	rootProvider, err := pemfile.NewProvider(rootOptions)
 	if err != nil {
