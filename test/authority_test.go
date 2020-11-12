@@ -24,6 +24,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,7 +35,7 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-func authorityChecker(expectedAuthority *string) func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+func authorityChecker(expectedAuthority *string, authorityMu *sync.Mutex) func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 	return func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 		md, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
@@ -46,6 +47,10 @@ func authorityChecker(expectedAuthority *string) func(context.Context, *testpb.E
 		}
 		if len(auths) != 1 {
 			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("no authority header, auths = %v", auths))
+		}
+		if authorityMu != nil {
+			authorityMu.Lock()
+			defer authorityMu.Unlock()
 		}
 		if auths[0] != *expectedAuthority {
 			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid authority header %v, expected %v", auths[0], *expectedAuthority))
@@ -59,7 +64,7 @@ func runUnixTest(t *testing.T, address, target, expectedAuthority string, dialer
 		t.Fatalf("Error removing socket file %v: %v\n", address, err)
 	}
 	ss := &stubServer{
-		emptyCall: authorityChecker(&expectedAuthority),
+		emptyCall: authorityChecker(&expectedAuthority, nil),
 		network:   "unix",
 		address:   address,
 		target:    target,
@@ -70,7 +75,6 @@ func runUnixTest(t *testing.T, address, target, expectedAuthority string, dialer
 	}
 	if err := ss.Start(nil, opts...); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
-		return
 	}
 	defer ss.Stop()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -155,27 +159,28 @@ func (s) TestUnixCustomDialer(t *testing.T) {
 
 func (s) TestColonPortAuthority(t *testing.T) {
 	expectedAuthority := ""
+	var authorityMu sync.Mutex
 	ss := &stubServer{
-		emptyCall: authorityChecker(&expectedAuthority),
+		emptyCall: authorityChecker(&expectedAuthority, &authorityMu),
 		network:   "tcp",
 	}
 	if err := ss.Start(nil); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
-		return
 	}
 	defer ss.Stop()
 	s := strings.Split(ss.address, ":")
-	if len(s) != 2 {
-		t.Fatalf("No port in address: %v", ss.address)
-		return
+	_, port, err := net.SplitHostPort(ss.address)
+	if err != nil {
+		t.Fatalf("Failed splitting host from post: %v", err)
 	}
-	expectedAuthority = "localhost:" + s[1]
+	authorityMu.Lock()
+	expectedAuthority = "localhost:" + port
+	authorityMu.Unlock()
 	// ss.Start dials, but not the ":[port]" target that is being tested here.
 	// Dial again, with ":[port]" as the target.
 	cc, err := grpc.Dial(":"+s[1], grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("grpc.Dial(%q) = %v", ss.target, err)
-		return
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
