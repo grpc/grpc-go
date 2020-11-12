@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/client"
@@ -65,7 +66,7 @@ func (s) TestLRSClient(t *testing.T) {
 
 	xdsC, err := client.NewWithConfigForTesting(&bootstrap.Config{
 		BalancerName: fs.Address,
-		Creds:        grpc.WithInsecure(),
+		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 		NodeProto:    &v2corepb.Node{},
 		TransportAPI: version.TransportV2,
 	}, defaultClientWatchExpiryTimeout)
@@ -128,12 +129,12 @@ func (s) TestLRSClient(t *testing.T) {
 		t.Fatalf("unexpected load received, want load for cluster, eds, dropped for test")
 	}
 	receivedLoad[0].LoadReportInterval = nil
-	want := (&endpointpb.ClusterStats{
+	want := &endpointpb.ClusterStats{
 		ClusterName:          "cluster",
 		ClusterServiceName:   "eds",
 		TotalDroppedRequests: 1,
 		DroppedRequests:      []*endpointpb.ClusterStats_DroppedRequests{{Category: "test", DroppedCount: 1}},
-	})
+	}
 	if d := cmp.Diff(want, receivedLoad[0], protocmp.Transform()); d != "" {
 		t.Fatalf("unexpected load received, want load for cluster, eds, dropped for test, diff (-want +got):\n%s", d)
 	}

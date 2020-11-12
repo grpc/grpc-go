@@ -42,14 +42,11 @@ const (
 	targetStr               = "target"
 	routeStr                = "route"
 	cluster                 = "cluster"
-	balancerName            = "dummyBalancer"
 	defaultTestTimeout      = 1 * time.Second
 	defaultTestShortTimeout = 100 * time.Microsecond
 )
 
-var (
-	target = resolver.Target{Endpoint: targetStr}
-)
+var target = resolver.Target{Endpoint: targetStr}
 
 type s struct {
 	grpctest.Tester

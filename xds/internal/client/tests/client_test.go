@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
@@ -39,9 +40,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-const (
-	testXDSServer = "xds-server"
-)
+const testXDSServer = "xds-server"
 
 func (s) TestNew(t *testing.T) {
 	tests := []struct {
@@ -57,7 +56,7 @@ func (s) TestNew(t *testing.T) {
 		{
 			name: "empty-balancer-name",
 			config: &bootstrap.Config{
-				Creds:     grpc.WithInsecure(),
+				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 				NodeProto: testutils.EmptyNodeProtoV2,
 			},
 			wantErr: true,
@@ -74,7 +73,7 @@ func (s) TestNew(t *testing.T) {
 			name: "empty-node-proto",
 			config: &bootstrap.Config{
 				BalancerName: testXDSServer,
-				Creds:        grpc.WithInsecure(),
+				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 			},
 			wantErr: true,
 		},
@@ -82,7 +81,7 @@ func (s) TestNew(t *testing.T) {
 			name: "node-proto-version-mismatch",
 			config: &bootstrap.Config{
 				BalancerName: testXDSServer,
-				Creds:        grpc.WithInsecure(),
+				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 				NodeProto:    testutils.EmptyNodeProtoV3,
 				TransportAPI: version.TransportV2,
 			},

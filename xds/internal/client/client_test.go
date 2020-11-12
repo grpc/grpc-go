@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
@@ -64,7 +65,7 @@ func clientOpts(balancerName string, overrideWatchExpiryTimeout bool) (*bootstra
 	}
 	return &bootstrap.Config{
 		BalancerName: balancerName,
-		Creds:        grpc.WithInsecure(),
+		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 		NodeProto:    xdstestutils.EmptyNodeProtoV2,
 	}, watchExpiryTimeout
 }

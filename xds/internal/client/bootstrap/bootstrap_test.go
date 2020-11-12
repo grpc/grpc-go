@@ -33,6 +33,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/xds/internal/env"
@@ -207,7 +208,7 @@ var (
 	}
 	nilCredsConfigV2 = &Config{
 		BalancerName: "trafficdirector.googleapis.com:443",
-		Creds:        grpc.WithInsecure(),
+		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 		NodeProto:    v2NodeProto,
 	}
 	nonNilCredsConfigV2 = &Config{
@@ -362,7 +363,7 @@ func TestNewConfigV2ProtoSuccess(t *testing.T) {
 		{
 			"emptyNodeProto", &Config{
 				BalancerName: "trafficdirector.googleapis.com:443",
-				Creds:        grpc.WithInsecure(),
+				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 				NodeProto: &v2corepb.Node{
 					BuildVersion:         gRPCVersion,
 					UserAgentName:        gRPCUserAgentName,

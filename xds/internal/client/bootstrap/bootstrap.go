@@ -32,6 +32,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/xds/internal/env"
@@ -183,7 +184,7 @@ func NewConfig() (*Config, error) {
 					config.Creds = grpc.WithCredentialsBundle(google.NewDefaultCredentials())
 					break
 				} else if cc.Type == credsInsecure {
-					config.Creds = grpc.WithInsecure()
+					config.Creds = grpc.WithTransportCredentials(insecure.NewCredentials())
 					break
 				}
 			}
