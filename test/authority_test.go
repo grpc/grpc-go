@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -168,7 +167,6 @@ func (s) TestColonPortAuthority(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	s := strings.Split(ss.address, ":")
 	_, port, err := net.SplitHostPort(ss.address)
 	if err != nil {
 		t.Fatalf("Failed splitting host from post: %v", err)
@@ -178,7 +176,7 @@ func (s) TestColonPortAuthority(t *testing.T) {
 	authorityMu.Unlock()
 	// ss.Start dials, but not the ":[port]" target that is being tested here.
 	// Dial again, with ":[port]" as the target.
-	cc, err := grpc.Dial(":"+s[1], grpc.WithInsecure())
+	cc, err := grpc.Dial(":"+port, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("grpc.Dial(%q) = %v", ss.target, err)
 	}
