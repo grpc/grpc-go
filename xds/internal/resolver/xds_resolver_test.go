@@ -21,13 +21,10 @@ package resolver
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpctest"
@@ -38,8 +35,6 @@ import (
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
 
@@ -53,11 +48,6 @@ const (
 )
 
 var (
-	validConfig = bootstrap.Config{
-		BalancerName: balancerName,
-		Creds:        grpc.WithInsecure(),
-		NodeProto:    xdstestutils.EmptyNodeProtoV2,
-	}
 	target = resolver.Target{Endpoint: targetStr}
 )
 
@@ -104,87 +94,24 @@ func newTestClientConn() *testClientConn {
 	}
 }
 
-func getXDSClientMakerFunc(wantOpts xdsclient.Options) func(xdsclient.Options) (xdsClientInterface, error) {
-	return func(gotOpts xdsclient.Options) (xdsClientInterface, error) {
-		if gotOpts.Config.BalancerName != wantOpts.Config.BalancerName {
-			return nil, fmt.Errorf("got balancerName: %s, want: %s", gotOpts.Config.BalancerName, wantOpts.Config.BalancerName)
-		}
-		// We cannot compare two DialOption objects to see if they are equal
-		// because each of these is a function pointer. So, the only thing we
-		// can do here is to check if the got option is nil or not based on
-		// what the want option is. We should be able to do extensive
-		// credential testing in e2e tests.
-		if (gotOpts.Config.Creds != nil) != (wantOpts.Config.Creds != nil) {
-			return nil, fmt.Errorf("got len(creds): %v, want: %v", gotOpts.Config.Creds, wantOpts.Config.Creds)
-		}
-		if len(gotOpts.DialOpts) != len(wantOpts.DialOpts) {
-			return nil, fmt.Errorf("got len(DialOpts): %v, want: %v", len(gotOpts.DialOpts), len(wantOpts.DialOpts))
-		}
-		return fakeclient.NewClient(), nil
-	}
-}
-
-func errorDialer(_ context.Context, _ string) (net.Conn, error) {
-	return nil, errors.New("dial error")
-}
-
 // TestResolverBuilder tests the xdsResolverBuilder's Build method with
 // different parameters.
 func (s) TestResolverBuilder(t *testing.T) {
 	tests := []struct {
 		name          string
-		rbo           resolver.BuildOptions
-		config        bootstrap.Config
-		xdsClientFunc func(xdsclient.Options) (xdsClientInterface, error)
+		xdsClientFunc func() (xdsClientInterface, error)
 		wantErr       bool
 	}{
 		{
-			name:    "empty-config",
-			rbo:     resolver.BuildOptions{},
-			config:  bootstrap.Config{},
-			wantErr: true,
-		},
-		{
-			name: "no-balancer-name-in-config",
-			rbo:  resolver.BuildOptions{},
-			config: bootstrap.Config{
-				Creds:     grpc.WithInsecure(),
-				NodeProto: xdstestutils.EmptyNodeProtoV2,
+			name: "simple-good",
+			xdsClientFunc: func() (xdsClientInterface, error) {
+				return fakeclient.NewClient(), nil
 			},
-			wantErr: true,
-		},
-		{
-			name: "no-creds-in-config",
-			rbo:  resolver.BuildOptions{},
-			config: bootstrap.Config{
-				BalancerName: balancerName,
-				NodeProto:    xdstestutils.EmptyNodeProtoV2,
-			},
-			xdsClientFunc: getXDSClientMakerFunc(xdsclient.Options{Config: validConfig}),
-			wantErr:       true,
-		},
-		{
-			name:   "error-dialer-in-rbo",
-			rbo:    resolver.BuildOptions{Dialer: errorDialer},
-			config: validConfig,
-			xdsClientFunc: getXDSClientMakerFunc(xdsclient.Options{
-				Config:   validConfig,
-				DialOpts: []grpc.DialOption{grpc.WithContextDialer(errorDialer)},
-			}),
 			wantErr: false,
 		},
 		{
-			name:          "simple-good",
-			rbo:           resolver.BuildOptions{},
-			config:        validConfig,
-			xdsClientFunc: getXDSClientMakerFunc(xdsclient.Options{Config: validConfig}),
-			wantErr:       false,
-		},
-		{
-			name:   "newXDSClient-throws-error",
-			rbo:    resolver.BuildOptions{},
-			config: validConfig,
-			xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) {
+			name: "newXDSClient-throws-error",
+			xdsClientFunc: func() (xdsClientInterface, error) {
 				return nil, errors.New("newXDSClient-throws-error")
 			},
 			wantErr: true,
@@ -192,19 +119,10 @@ func (s) TestResolverBuilder(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// Fake out the bootstrap process by providing our own config.
-			oldConfigMaker := newXDSConfig
-			newXDSConfig = func() (*bootstrap.Config, error) {
-				if test.config.BalancerName == "" {
-					return nil, fmt.Errorf("no balancer name found in config")
-				}
-				return &test.config, nil
-			}
 			// Fake out the xdsClient creation process by providing a fake.
 			oldClientMaker := newXDSClient
 			newXDSClient = test.xdsClientFunc
 			defer func() {
-				newXDSConfig = oldConfigMaker
 				newXDSClient = oldClientMaker
 			}()
 
@@ -213,7 +131,7 @@ func (s) TestResolverBuilder(t *testing.T) {
 				t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
 			}
 
-			r, err := builder.Build(target, newTestClientConn(), test.rbo)
+			r, err := builder.Build(target, newTestClientConn(), resolver.BuildOptions{})
 			if (err != nil) != test.wantErr {
 				t.Fatalf("builder.Build(%v) returned err: %v, wantErr: %v", target, err, test.wantErr)
 			}
@@ -227,19 +145,15 @@ func (s) TestResolverBuilder(t *testing.T) {
 }
 
 type setupOpts struct {
-	config        *bootstrap.Config
-	xdsClientFunc func(xdsclient.Options) (xdsClientInterface, error)
+	xdsClientFunc func() (xdsClientInterface, error)
 }
 
 func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *testClientConn, func()) {
 	t.Helper()
 
-	oldConfigMaker := newXDSConfig
-	newXDSConfig = func() (*bootstrap.Config, error) { return opts.config, nil }
 	oldClientMaker := newXDSClient
 	newXDSClient = opts.xdsClientFunc
 	cancel := func() {
-		newXDSConfig = oldConfigMaker
 		newXDSClient = oldClientMaker
 	}
 
@@ -291,8 +205,7 @@ func waitForWatchRouteConfig(ctx context.Context, t *testing.T, xdsC *fakeclient
 func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		config:        &validConfig,
-		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
 	})
 	defer cancel()
 
@@ -324,8 +237,7 @@ func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 func (s) TestXDSResolverBadServiceUpdate(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		config:        &validConfig,
-		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
 	})
 	defer func() {
 		cancel()
@@ -353,8 +265,7 @@ func (s) TestXDSResolverBadServiceUpdate(t *testing.T) {
 func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		config:        &validConfig,
-		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
 	})
 	defer func() {
 		cancel()
@@ -423,8 +334,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		config:        &validConfig,
-		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
 	})
 	defer func() {
 		cancel()
@@ -483,8 +393,7 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		config:        &validConfig,
-		xdsClientFunc: func(_ xdsclient.Options) (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
 	})
 	defer func() {
 		cancel()

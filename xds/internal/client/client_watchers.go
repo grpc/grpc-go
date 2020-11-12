@@ -35,7 +35,7 @@ const (
 
 // watchInfo holds all the information from a watch() call.
 type watchInfo struct {
-	c      *Client
+	c      *clientImpl
 	rType  ResourceType
 	target string
 
@@ -113,7 +113,7 @@ func (wi *watchInfo) cancel() {
 	wi.state = watchInfoStateCanceled
 }
 
-func (c *Client) watch(wi *watchInfo) (cancel func()) {
+func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger.Debugf("new watch for type %v, resource name %v", wi.rType, wi.target)
@@ -208,7 +208,7 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 // Note that during race (e.g. an xDS response is received while the user is
 // calling cancel()), there's a small window where the callback can be called
 // after the watcher is canceled. The caller needs to handle this case.
-func (c *Client) WatchListener(serviceName string, cb func(ListenerUpdate, error)) (cancel func()) {
+func (c *clientImpl) WatchListener(serviceName string, cb func(ListenerUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
 		c:           c,
 		rType:       ListenerResource,
@@ -216,7 +216,7 @@ func (c *Client) WatchListener(serviceName string, cb func(ListenerUpdate, error
 		ldsCallback: cb,
 	}
 
-	wi.expiryTimer = time.AfterFunc(c.opts.WatchExpiryTimeout, func() {
+	wi.expiryTimer = time.AfterFunc(c.watchExpiryTimeout, func() {
 		wi.timeout()
 	})
 	return c.watch(wi)
@@ -227,7 +227,7 @@ func (c *Client) WatchListener(serviceName string, cb func(ListenerUpdate, error
 // Note that during race (e.g. an xDS response is received while the user is
 // calling cancel()), there's a small window where the callback can be called
 // after the watcher is canceled. The caller needs to handle this case.
-func (c *Client) WatchRouteConfig(routeName string, cb func(RouteConfigUpdate, error)) (cancel func()) {
+func (c *clientImpl) WatchRouteConfig(routeName string, cb func(RouteConfigUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
 		c:           c,
 		rType:       RouteConfigResource,
@@ -235,7 +235,7 @@ func (c *Client) WatchRouteConfig(routeName string, cb func(RouteConfigUpdate, e
 		rdsCallback: cb,
 	}
 
-	wi.expiryTimer = time.AfterFunc(c.opts.WatchExpiryTimeout, func() {
+	wi.expiryTimer = time.AfterFunc(c.watchExpiryTimeout, func() {
 		wi.timeout()
 	})
 	return c.watch(wi)
@@ -250,7 +250,7 @@ func (c *Client) WatchRouteConfig(routeName string, cb func(RouteConfigUpdate, e
 // Note that during race (e.g. an xDS response is received while the user is
 // calling cancel()), there's a small window where the callback can be called
 // after the watcher is canceled. The caller needs to handle this case.
-func (c *Client) WatchCluster(clusterName string, cb func(ClusterUpdate, error)) (cancel func()) {
+func (c *clientImpl) WatchCluster(clusterName string, cb func(ClusterUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
 		c:           c,
 		rType:       ClusterResource,
@@ -258,7 +258,7 @@ func (c *Client) WatchCluster(clusterName string, cb func(ClusterUpdate, error))
 		cdsCallback: cb,
 	}
 
-	wi.expiryTimer = time.AfterFunc(c.opts.WatchExpiryTimeout, func() {
+	wi.expiryTimer = time.AfterFunc(c.watchExpiryTimeout, func() {
 		wi.timeout()
 	})
 	return c.watch(wi)
@@ -272,7 +272,7 @@ func (c *Client) WatchCluster(clusterName string, cb func(ClusterUpdate, error))
 // Note that during race (e.g. an xDS response is received while the user is
 // calling cancel()), there's a small window where the callback can be called
 // after the watcher is canceled. The caller needs to handle this case.
-func (c *Client) WatchEndpoints(clusterName string, cb func(EndpointsUpdate, error)) (cancel func()) {
+func (c *clientImpl) WatchEndpoints(clusterName string, cb func(EndpointsUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
 		c:           c,
 		rType:       EndpointsResource,
@@ -280,7 +280,7 @@ func (c *Client) WatchEndpoints(clusterName string, cb func(EndpointsUpdate, err
 		edsCallback: cb,
 	}
 
-	wi.expiryTimer = time.AfterFunc(c.opts.WatchExpiryTimeout, func() {
+	wi.expiryTimer = time.AfterFunc(c.watchExpiryTimeout, func() {
 		wi.timeout()
 	})
 	return c.watch(wi)

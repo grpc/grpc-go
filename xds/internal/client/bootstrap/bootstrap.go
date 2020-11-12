@@ -57,10 +57,10 @@ var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
 var bootstrapFileReadFunc = ioutil.ReadFile
 
 // Config provides the xDS client with several key bits of information that it
-// requires in its interaction with an xDS server. The Config is initialized
-// from the bootstrap file.
+// requires in its interaction with the management server. The Config is
+// initialized from the bootstrap file.
 type Config struct {
-	// BalancerName is the name of the xDS server to connect to.
+	// BalancerName is the name of the management server to connect to.
 	//
 	// The bootstrap file contains a list of servers (with name+creds), but we
 	// pick the first one.
@@ -96,7 +96,7 @@ type xdsServer struct {
 // The format of the bootstrap file will be as follows:
 // {
 //    "xds_server": {
-//      "server_uri": <string containing URI of xds server>,
+//      "server_uri": <string containing URI of management server>,
 //      "channel_creds": [
 //        {
 //          "type": <string containing channel cred type>,
@@ -168,7 +168,7 @@ func NewConfig() (*Config, error) {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 			if len(servers) < 1 {
-				return nil, fmt.Errorf("xds: bootstrap file parsing failed during bootstrap: file doesn't contain any xds server to connect to")
+				return nil, fmt.Errorf("xds: bootstrap file parsing failed during bootstrap: file doesn't contain any management server to connect to")
 			}
 			xs := servers[0]
 			config.BalancerName = xs.ServerURI

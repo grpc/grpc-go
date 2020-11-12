@@ -44,8 +44,8 @@ const (
 
 var (
 	// These new functions will be overridden in unit tests.
-	newXDSClient = func(opts xdsclient.Options) (xdsClientInterface, error) {
-		return xdsclient.New(opts)
+	newXDSClient = func() (xdsClientInterface, error) {
+		return xdsclient.New()
 	}
 	newXDSConfig  = bootstrap.NewConfig
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServerInterface {
@@ -163,12 +163,7 @@ func (s *GRPCServer) initXDSClient() error {
 		return nil
 	}
 
-	// Read the bootstrap file as part of initializing the xdsClient.
-	config, err := newXDSConfig()
-	if err != nil {
-		return fmt.Errorf("xds: failed to read bootstrap file: %v", err)
-	}
-	client, err := newXDSClient(xdsclient.Options{Config: *config})
+	client, err := newXDSClient()
 	if err != nil {
 		return fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}
