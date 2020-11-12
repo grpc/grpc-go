@@ -35,28 +35,22 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-func authorityChecker(expectedAuthority *string, authorityMu *sync.Mutex) func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-	return func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-		md, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			return nil, status.Error(codes.InvalidArgument, "failed to parse metadata")
-		}
-		auths, ok := md[":authority"]
-		if !ok {
-			return nil, status.Error(codes.InvalidArgument, "no authority header")
-		}
-		if len(auths) != 1 {
-			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("no authority header, auths = %v", auths))
-		}
-		if authorityMu != nil {
-			authorityMu.Lock()
-			defer authorityMu.Unlock()
-		}
-		if auths[0] != *expectedAuthority {
-			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid authority header %v, expected %v", auths[0], *expectedAuthority))
-		}
-		return &testpb.Empty{}, nil
+func authorityChecker(ctx context.Context, expectedAuthority string) (*testpb.Empty, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "failed to parse metadata")
 	}
+	auths, ok := md[":authority"]
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "no authority header")
+	}
+	if len(auths) != 1 {
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("no authority header, auths = %v", auths))
+	}
+	if auths[0] != expectedAuthority {
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid authority header %v, expected %v", auths[0], expectedAuthority))
+	}
+	return &testpb.Empty{}, nil
 }
 
 func runUnixTest(t *testing.T, address, target, expectedAuthority string, dialer func(context.Context, string) (net.Conn, error)) {
@@ -64,10 +58,12 @@ func runUnixTest(t *testing.T, address, target, expectedAuthority string, dialer
 		t.Fatalf("Error removing socket file %v: %v\n", address, err)
 	}
 	ss := &stubServer{
-		emptyCall: authorityChecker(&expectedAuthority, nil),
-		network:   "unix",
-		address:   address,
-		target:    target,
+		emptyCall: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			return authorityChecker(ctx, expectedAuthority)
+		},
+		network: "unix",
+		address: address,
+		target:  target,
 	}
 	opts := []grpc.DialOption{}
 	if dialer != nil {
@@ -161,8 +157,12 @@ func (s) TestColonPortAuthority(t *testing.T) {
 	expectedAuthority := ""
 	var authorityMu sync.Mutex
 	ss := &stubServer{
-		emptyCall: authorityChecker(&expectedAuthority, &authorityMu),
-		network:   "tcp",
+		emptyCall: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			authorityMu.Lock()
+			defer authorityMu.Unlock()
+			return authorityChecker(ctx, expectedAuthority)
+		},
+		network: "tcp",
 	}
 	if err := ss.Start(nil); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
