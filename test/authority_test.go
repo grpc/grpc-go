@@ -149,6 +149,8 @@ func (s) TestUnixCustomDialer(t *testing.T) {
 	}
 }
 
+// TestColonPortAuthority does an end to end test with the target for grpc.Dial
+// being ":[port]". Ensures authority is "localhost:[port]".
 func (s) TestColonPortAuthority(t *testing.T) {
 	expectedAuthority := ""
 	var authorityMu sync.Mutex
