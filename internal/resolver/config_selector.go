@@ -71,5 +71,20 @@ func GetConfigSelector(state resolver.State) ConfigSelector {
 
 type countingConfigSelector struct {
 	ConfigSelector
-	wg sync.WaitGroup // number of in-flight calls to this ConfigSelector
+	// mu is read-locked when ConfigSelector is in use.  It is write-locked to
+	// block until all outstanding uses are finished.
+	mu sync.RWMutex
+}
+
+func (c *countingConfigSelector) Add() {
+	c.mu.RLock()
+}
+
+func (c *countingConfigSelector) Done() {
+	c.mu.RUnlock()
+}
+
+func (c *countingConfigSelector) Wait() {
+	c.mu.Lock()
+	c.mu.Unlock()
 }

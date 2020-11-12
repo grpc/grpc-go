@@ -40,7 +40,7 @@ func (scs *SafeConfigSelector) UpdateConfigSelector(cs ConfigSelector) {
 	if oldCCSPtr == nil {
 		return
 	}
-	(*countingConfigSelector)(oldCCSPtr).wg.Wait()
+	(*countingConfigSelector)(oldCCSPtr).Wait()
 }
 
 // SelectConfig defers to the current ConfigSelector in scs.
@@ -49,7 +49,7 @@ func (scs *SafeConfigSelector) SelectConfig(r RPCInfo) *RPCConfig {
 	var ccs *countingConfigSelector
 	for {
 		ccs = (*countingConfigSelector)(ccsPtr)
-		ccs.wg.Add(1)
+		ccs.Add()
 		ccsPtr2 := atomic.LoadPointer(&scs.ccs)
 		if ccsPtr == ccsPtr2 {
 			// Use ccs with confidence!
@@ -57,9 +57,9 @@ func (scs *SafeConfigSelector) SelectConfig(r RPCInfo) *RPCConfig {
 		}
 		// ccs changed; try to use the new one instead, because the old one is
 		// no longer valid to use.
-		ccs.wg.Done()
+		ccs.Done()
 		ccsPtr = ccsPtr2
 	}
-	defer ccs.wg.Done()
+	defer ccs.Done()
 	return ccs.SelectConfig(r)
 }

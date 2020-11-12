@@ -40,7 +40,7 @@ func (scs *SafeConfigSelector) UpdateConfigSelector(cs ConfigSelector) {
 	scs.ccs = &countingConfigSelector{ConfigSelector: cs}
 	scs.mu.Unlock()
 	if oldCCS != nil {
-		oldCCS.wg.Wait()
+		oldCCS.Wait()
 	}
 }
 
@@ -48,8 +48,8 @@ func (scs *SafeConfigSelector) UpdateConfigSelector(cs ConfigSelector) {
 func (scs *SafeConfigSelector) SelectConfig(r RPCInfo) *RPCConfig {
 	scs.mu.Lock()
 	ccs := scs.ccs
-	ccs.wg.Add(1)
+	ccs.Add()
 	scs.mu.Unlock()
-	defer ccs.wg.Done()
+	defer ccs.Done()
 	return ccs.SelectConfig(r)
 }

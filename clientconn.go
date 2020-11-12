@@ -106,13 +106,13 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 }
 
 type defaultConfigSelector struct {
-	cc *ClientConn
+	sc *ServiceConfig
 }
 
 func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) *iresolver.RPCConfig {
 	return &iresolver.RPCConfig{
 		Context:      rpcInfo.Context,
-		MethodConfig: dcs.cc.GetMethodConfig(rpcInfo.Method),
+		MethodConfig: getMethodConfig(dcs.sc, rpcInfo.Method),
 	}
 }
 
@@ -236,7 +236,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
 				cc.sc = &sc
-				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
+				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{&sc})
 				scSet = true
 			}
 		default:
@@ -286,7 +286,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
 				cc.sc = &sc
-				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
+				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{&sc})
 			}
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -555,7 +555,7 @@ func (cc *ClientConn) scWatcher() {
 			// TODO: load balance policy runtime change is ignored.
 			// We may revisit this decision in the future.
 			cc.sc = &sc
-			cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
+			cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{&sc})
 			cc.mu.Unlock()
 		case <-cc.ctx.Done():
 			return
@@ -598,9 +598,9 @@ func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
 		return
 	}
 	if cc.dopts.defaultServiceConfig != nil {
-		cc.applyServiceConfigAndBalancer(cc.dopts.defaultServiceConfig, &defaultConfigSelector{cc}, addrs)
+		cc.applyServiceConfigAndBalancer(cc.dopts.defaultServiceConfig, &defaultConfigSelector{cc.dopts.defaultServiceConfig}, addrs)
 	} else {
-		cc.applyServiceConfigAndBalancer(emptyServiceConfig, &defaultConfigSelector{cc}, addrs)
+		cc.applyServiceConfigAndBalancer(emptyServiceConfig, &defaultConfigSelector{emptyServiceConfig}, addrs)
 	}
 }
 
@@ -643,7 +643,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 					channelz.Infof(logger, cc.channelzID, "method configs in service config will be ignored due to presence of config selector")
 				}
 			} else {
-				configSelector = &defaultConfigSelector{cc}
+				configSelector = &defaultConfigSelector{sc}
 			}
 			cc.applyServiceConfigAndBalancer(sc, configSelector, s.Addresses)
 		} else {
@@ -655,7 +655,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 				} else {
 					err = status.Errorf(codes.Unavailable, "illegal service config type: %T", s.ServiceConfig.Config)
 				}
-				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc})
+				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc.sc})
 				cc.blockingpicker.updatePicker(base.NewErrPicker(err))
 				cc.csMgr.updateState(connectivity.TransientFailure)
 				cc.mu.Unlock()
@@ -890,6 +890,20 @@ func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
 	return curAddrFound
 }
 
+func getMethodConfig(sc *ServiceConfig, method string) MethodConfig {
+	if sc == nil {
+		return MethodConfig{}
+	}
+	if m, ok := sc.Methods[method]; ok {
+		return m
+	}
+	i := strings.LastIndex(method, "/")
+	if m, ok := sc.Methods[method[:i+1]]; ok {
+		return m
+	}
+	return sc.Methods[""]
+}
+
 // GetMethodConfig gets the method config of the input method.
 // If there's an exact match for input method (i.e. /service/method), we return
 // the corresponding MethodConfig.
@@ -902,17 +916,7 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	// TODO: Avoid the locking here.
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
-	if cc.sc == nil {
-		return MethodConfig{}
-	}
-	if m, ok := cc.sc.Methods[method]; ok {
-		return m
-	}
-	i := strings.LastIndex(method, "/")
-	if m, ok := cc.sc.Methods[method[:i+1]]; ok {
-		return m
-	}
-	return cc.sc.Methods[""]
+	return getMethodConfig(cc.sc, method)
 }
 
 func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {
