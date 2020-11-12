@@ -139,15 +139,19 @@ type http2Client struct {
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr resolver.Address, useProxy bool, grpcUA string) (net.Conn, error) {
-	if fn != nil {
-		return fn(ctx, addr.Addr)
-	}
 	networkType := "tcp"
 	address := addr.Addr
-	if n, ok := networktype.Get(addr); ok {
+	n, ok := networktype.Get(addr)
+	if fn != nil {
+		if ok && n == "unix" {
+			return fn(ctx, "unix:///"+address)
+		}
+		return fn(ctx, address)
+	}
+	if ok {
 		networkType = n
 	} else {
-		networkType, address = grpcutil.ParseDialTarget(address)
+		networkType, address = parseDialTarget(address)
 	}
 	if networkType == "tcp" && useProxy {
 		return proxyDial(ctx, address, grpcUA)

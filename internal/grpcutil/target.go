@@ -21,7 +21,6 @@
 package grpcutil
 
 import (
-	"net/url"
 	"strings"
 
 	"google.golang.org/grpc/resolver"
@@ -49,9 +48,10 @@ func ParseTarget(target string, skipUnixColonParsing bool) (ret resolver.Target)
 	ret.Scheme, ret.Endpoint, ok = split2(target, "://")
 	if !ok {
 		if strings.HasPrefix(target, "unix:") && !skipUnixColonParsing {
-			// Handle the "unix:[path]" case, because splitting on :// only
-			// handles the "unix://[/absolute/path]" case. Only handle if the
-			// dialer is nil, to avoid a behavior change with custom dialers.
+			// Handle the "unix:[local/path]" and "unix:[/absolute/path]" cases,
+			// because splitting on :// only handles the
+			// "unix://[/absolute/path]" case. Only handle if the dialer is nil,
+			// to avoid a behavior change with custom dialers.
 			return resolver.Target{Scheme: "unix", Endpoint: target[len("unix:"):]}
 		}
 		return resolver.Target{Endpoint: target}
@@ -60,46 +60,10 @@ func ParseTarget(target string, skipUnixColonParsing bool) (ret resolver.Target)
 	if !ok {
 		return resolver.Target{Endpoint: target}
 	}
-	if ret.Scheme == "unix" {
-		if !skipUnixColonParsing {
-			// Add the "/" back in the unix case, so the unix resolver receives the
-			// actual endpoint.
-			ret.Endpoint = "/" + ret.Endpoint
-		} else {
-			// Custom dialer should receive "unix:///[...]".
-			return resolver.Target{Endpoint: target}
-		}
+	if ret.Scheme == "unix" && !skipUnixColonParsing && ret.Authority == "" {
+		// Add the "/" back in the "unix://[/absolute/path]" case, so the unix
+		// resolver receives the actual endpoint.
+		ret.Endpoint = "/" + ret.Endpoint
 	}
 	return ret
-}
-
-// ParseDialTarget returns the network and address to pass to dialer
-func ParseDialTarget(target string) (string, string) {
-	net := "tcp"
-
-	m1 := strings.Index(target, ":")
-	m2 := strings.Index(target, ":/")
-
-	// handle unix:addr which will fail with url.Parse
-	if m1 >= 0 && m2 < 0 {
-		if n := target[0:m1]; n == "unix" {
-			return n, target[m1+1:]
-		}
-	}
-	if m2 >= 0 {
-		t, err := url.Parse(target)
-		if err != nil {
-			return net, target
-		}
-		scheme := t.Scheme
-		addr := t.Path
-		if scheme == "unix" {
-			if addr == "" {
-				addr = t.Host
-			}
-			return scheme, addr
-		}
-	}
-
-	return net, target
 }

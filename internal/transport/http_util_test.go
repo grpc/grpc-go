@@ -250,3 +250,32 @@ func (s) TestDecodeHeaderH2ErrCode(t *testing.T) {
 		})
 	}
 }
+
+func (s) TestParseDialTarget(t *testing.T) {
+	for _, test := range []struct {
+		target, wantNet, wantAddr string
+	}{
+		{"unix:a", "unix", "a"},
+		{"unix:a/b/c", "unix", "a/b/c"},
+		{"unix:/a", "unix", "/a"},
+		{"unix:/a/b/c", "unix", "/a/b/c"},
+		{"unix://a", "unix", "a"},
+		{"unix://a/b/c", "unix", "/b/c"},
+		{"unix:///a", "unix", "/a"},
+		{"unix:///a/b/c", "unix", "/a/b/c"},
+		{"unix:etcd:0", "unix", "etcd:0"},
+		{"unix:///tmp/unix-3", "unix", "/tmp/unix-3"},
+		{"unix://domain", "unix", "domain"},
+		{"unix://etcd:0", "unix", "etcd:0"},
+		{"unix:///etcd:0", "unix", "/etcd:0"},
+		{"passthrough://unix://domain", "tcp", "passthrough://unix://domain"},
+		{"https://google.com:443", "tcp", "https://google.com:443"},
+		{"dns:///google.com", "tcp", "dns:///google.com"},
+		{"/unix/socket/address", "tcp", "/unix/socket/address"},
+	} {
+		gotNet, gotAddr := parseDialTarget(test.target)
+		if gotNet != test.wantNet || gotAddr != test.wantAddr {
+			t.Errorf("parseDialTarget(%q) = %s, %s want %s, %s", test.target, gotNet, gotAddr, test.wantNet, test.wantAddr)
+		}
+	}
+}
