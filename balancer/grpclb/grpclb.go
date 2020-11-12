@@ -298,7 +298,7 @@ func (lb *lbBalancer) aggregateSubConnStates() connectivity.State {
 			switch state {
 			case connectivity.Ready:
 				return connectivity.Ready
-			case connectivity.Connecting:
+			case connectivity.Connecting, connectivity.Idle:
 				numConnecting++
 			}
 		}
