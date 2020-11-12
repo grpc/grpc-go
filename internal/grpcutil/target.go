@@ -60,9 +60,9 @@ func ParseTarget(target string, skipUnixColonParsing bool) (ret resolver.Target)
 	if !ok {
 		return resolver.Target{Endpoint: target}
 	}
-	if ret.Scheme == "unix" && !skipUnixColonParsing && ret.Authority == "" {
-		// Add the "/" back in the "unix://[/absolute/path]" case, so the unix
-		// resolver receives the actual endpoint.
+	if ret.Scheme == "unix" {
+		// Add the "/" back in the unix case, so the unix resolver receives the
+		// actual endpoint in the "unix://[/absolute/path]" case.
 		ret.Endpoint = "/" + ret.Endpoint
 	}
 	return ret

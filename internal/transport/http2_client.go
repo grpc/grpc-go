@@ -139,18 +139,20 @@ type http2Client struct {
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr resolver.Address, useProxy bool, grpcUA string) (net.Conn, error) {
-	networkType := "tcp"
 	address := addr.Addr
-	n, ok := networktype.Get(addr)
+	networkType, ok := networktype.Get(addr)
 	if fn != nil {
-		if ok && n == "unix" {
-			return fn(ctx, "unix:///"+address)
+		if networkType == "unix" {
+			// For backward compatibility, if the user dialed "unix:///path",
+			// the passthrough resolver would be used and the user's custom
+			// dialer would see "unix:///path". Since the unix resolver is used
+			// and the address is now "/path", prepend "unix://" so the user's
+			// custom dialer sees the same address.
+			return fn(ctx, "unix://"+address)
 		}
 		return fn(ctx, address)
 	}
-	if ok {
-		networkType = n
-	} else {
+	if !ok {
 		networkType, address = parseDialTarget(address)
 	}
 	if networkType == "tcp" && useProxy {
