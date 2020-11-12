@@ -40,19 +40,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-const (
-	testXDSServer = "xds-server"
-)
-
-func clientOpts(balancerName string) xdsclient.Options {
-	return xdsclient.Options{
-		Config: bootstrap.Config{
-			BalancerName: balancerName,
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto:    testutils.EmptyNodeProtoV2,
-		},
-	}
-}
+const testXDSServer = "xds-server"
 
 func (s) TestNew(t *testing.T) {
 	tests := []struct {
