@@ -239,6 +239,9 @@ func (c *Config) compare(want *Config) error {
 	if diff := cmp.Diff(want.NodeProto, c.NodeProto, cmp.Comparer(proto.Equal)); diff != "" {
 		return fmt.Errorf("config.NodeProto diff (-want, +got):\n%s", diff)
 	}
+	if c.ServerResourceNameID != want.ServerResourceNameID {
+		return fmt.Errorf("config.ServerResourceNameID is %q, want %q", c.ServerResourceNameID, want.ServerResourceNameID)
+	}
 
 	// A vanilla cmp.Equal or cmp.Diff will not produce useful error message
 	// here. So, we iterate through the list of configs and compare them one at
@@ -689,6 +692,84 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 			c, err := NewConfig()
 			if (err != nil) != test.wantErr {
 				t.Fatalf("NewConfig() returned: (%+v, %v), wantErr: %v", c.CertProviderConfigs, err, test.wantErr)
+			}
+			if test.wantErr {
+				return
+			}
+			if err := c.compare(test.wantConfig); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestNewConfigWithServerResourceNameID(t *testing.T) {
+	cancel := setupBootstrapOverride(map[string]string{
+		"badServerResourceNameID": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "google_default" }
+				]
+			}],
+			"grpc_server_resource_name_id": 123456789
+		}`,
+		"goodServerResourceNameID": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "google_default" }
+				]
+			}],
+			"grpc_server_resource_name_id": "grpc/server"
+		}`,
+	})
+	defer cancel()
+
+	tests := []struct {
+		name       string
+		wantConfig *Config
+		wantErr    bool
+	}{
+		{
+			name:    "badServerResourceNameID",
+			wantErr: true,
+		},
+		{
+			name: "goodServerResourceNameID",
+			wantConfig: &Config{
+				BalancerName:         "trafficdirector.googleapis.com:443",
+				Creds:                grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
+				TransportAPI:         version.TransportV2,
+				NodeProto:            v2NodeProto,
+				ServerResourceNameID: "grpc/server",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			origBootstrapFileName := env.BootstrapFileName
+			env.BootstrapFileName = test.name
+			defer func() { env.BootstrapFileName = origBootstrapFileName }()
+
+			c, err := NewConfig()
+			if (err != nil) != test.wantErr {
+				t.Fatalf("NewConfig() returned (%+v, %v), wantErr: %v", c, err, test.wantErr)
 			}
 			if test.wantErr {
 				return
