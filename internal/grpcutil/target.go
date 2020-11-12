@@ -60,10 +60,15 @@ func ParseTarget(target string, skipUnixColonParsing bool) (ret resolver.Target)
 	if !ok {
 		return resolver.Target{Endpoint: target}
 	}
-	if ret.Scheme == "unix" && !skipUnixColonParsing {
-		// Add the "/" back in the unix case, so the unix resolver receives the
-		// actual endpoint.
-		ret.Endpoint = "/" + ret.Endpoint
+	if ret.Scheme == "unix" {
+		if !skipUnixColonParsing {
+			// Add the "/" back in the unix case, so the unix resolver receives the
+			// actual endpoint.
+			ret.Endpoint = "/" + ret.Endpoint
+		} else {
+			// Custom dialer should receive "unix:///[...]".
+			return resolver.Target{Endpoint: target}
+		}
 	}
 	return ret
 }
