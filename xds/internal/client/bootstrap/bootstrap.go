@@ -76,7 +76,7 @@ type Config struct {
 	// NodeProto contains the Node proto to be used in xDS requests. The actual
 	// type depends on the transport protocol version used.
 	NodeProto proto.Message
-	// CertProviderConfig contains a mapping from certificate provider plugin
+	// CertProviderConfigs contains a mapping from certificate provider plugin
 	// instance names to parsed buildable configs.
 	CertProviderConfigs map[string]*certprovider.BuildableConfig
 	// ServerResourceNameID contains the value to be used as the id in the
