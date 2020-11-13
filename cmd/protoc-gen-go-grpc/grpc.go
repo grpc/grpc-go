@@ -180,9 +180,9 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 		g.P(deprecationComment)
 	}
-	serviceDescVar := "_" + service.GoName + "_serviceDesc"
+	serviceDescVar := service.GoName + "_ServiceDesc"
 	g.P("func Register", service.GoName, "Server(s ", grpcPackage.Ident("ServiceRegistrar"), ", srv ", serverType, ") {")
-	g.P("s.RegisterService(&", serviceDescVar, `, srv)`)
+	g.P("s.RegisterService(", serviceDescVar, `, srv)`)
 	g.P("}")
 	g.P()
 
@@ -194,7 +194,10 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	}
 
 	// Service descriptor.
-	g.P("var ", serviceDescVar, " = ", grpcPackage.Ident("ServiceDesc"), " {")
+	g.P("// ", serviceDescVar, " is the *", grpcPackage.Ident("ServiceDesc"), " for ", service.GoName, " service.")
+	g.P("// It's only intended for direct use with ", grpcPackage.Ident("RegisterService"), ",")
+	g.P("// and not to be introspected or modified (even as a copy)")
+	g.P("var ", serviceDescVar, " = &", grpcPackage.Ident("ServiceDesc"), " {")
 	g.P("ServiceName: ", strconv.Quote(string(service.Desc.FullName())), ",")
 	g.P("HandlerType: (*", serverType, ")(nil),")
 	g.P("Methods: []", grpcPackage.Ident("MethodDesc"), "{")
@@ -263,8 +266,8 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 		return
 	}
 	streamType := unexport(service.GoName) + method.GoName + "Client"
-	serviceDescVar := "_" + service.GoName + "_serviceDesc"
-	g.P("stream, err := c.cc.NewStream(ctx, &", serviceDescVar, ".Streams[", index, `], "`, sname, `", opts...)`)
+	serviceDescVar := service.GoName + "_ServiceDesc"
+	g.P("stream, err := c.cc.NewStream(ctx, ", serviceDescVar, ".Streams[", index, `], "`, sname, `", opts...)`)
 	g.P("if err != nil { return nil, err }")
 	g.P("x := &", streamType, "{stream}")
 	if !method.Desc.IsStreamingClient() {
