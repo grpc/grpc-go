@@ -86,5 +86,5 @@ func (c *countingConfigSelector) Done() {
 
 func (c *countingConfigSelector) Wait() {
 	c.mu.Lock()
-	c.mu.Unlock() //lint:ignore SA2001 necessary to unlock after locking to unblock and RLocks
+	c.mu.Unlock() //lint:ignore SA2001 necessary to unlock after locking to unblock any RLocks
 }
