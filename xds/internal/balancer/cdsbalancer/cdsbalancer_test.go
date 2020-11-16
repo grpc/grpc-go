@@ -204,8 +204,12 @@ func edsCCS(service string, enableLRS bool) balancer.ClientConnState {
 
 // setup creates a cdsBalancer and an edsBalancer (and overrides the
 // newEDSBalancer function to return it), and also returns a cleanup function.
-func setup(t *testing.T) (*cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, func()) {
+func setup(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, func()) {
 	t.Helper()
+
+	xdsC := fakeclient.NewClient()
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
 
 	builder := balancer.Get(cdsName)
 	if builder == nil {
@@ -221,8 +225,9 @@ func setup(t *testing.T) (*cdsBalancer, *testEDSBalancer, *xdstestutils.TestClie
 		return edsB, nil
 	}
 
-	return cdsB.(*cdsBalancer), edsB, tcc, func() {
+	return xdsC, cdsB.(*cdsBalancer), edsB, tcc, func() {
 		newEDSBalancer = oldEDSBalancerBuilder
+		newXDSClient = oldNewXDSClient
 	}
 }
 
@@ -231,11 +236,7 @@ func setup(t *testing.T) (*cdsBalancer, *testEDSBalancer, *xdstestutils.TestClie
 func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, func()) {
 	t.Helper()
 
-	xdsC := fakeclient.NewClient()
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
-
-	cdsB, edsB, tcc, cancel := setup(t)
+	xdsC, cdsB, edsB, tcc, cancel := setup(t)
 	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName)); err != nil {
 		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
 	}
@@ -249,10 +250,7 @@ func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBal
 	if gotCluster != clusterName {
 		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, clusterName)
 	}
-	return xdsC, cdsB, edsB, tcc, func() {
-		cancel()
-		newXDSClient = oldNewXDSClient
-	}
+	return xdsC, cdsB, edsB, tcc, cancel
 }
 
 // TestUpdateClientConnState invokes the UpdateClientConnState method on the
@@ -284,12 +282,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			xdsC := fakeclient.NewClient()
-			oldNewXDSClient := newXDSClient
-			newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
-			defer func() { newXDSClient = oldNewXDSClient }()
-
-			cdsB, _, _, cancel := setup(t)
+			xdsC, cdsB, _, _, cancel := setup(t)
 			defer func() {
 				cancel()
 				cdsB.Close()

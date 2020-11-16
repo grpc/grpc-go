@@ -189,15 +189,20 @@ func waitForNewEDSLB(t *testing.T, ch *testutils.Channel) *fakeEDSBalancer {
 // edsLB, creates fake version of them and makes them available on the provided
 // channels. The returned cancel function should be called by the test for
 // cleanup.
-func setup(edsLBCh *testutils.Channel) func() {
+func setup(edsLBCh *testutils.Channel) (*fakeclient.Client, func()) {
+	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+
 	origNewEDSBalancer := newEDSBalancer
 	newEDSBalancer = func(cc balancer.ClientConn, enqueue func(priorityType, balancer.State), _ *xdsClientWrapper, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
 		edsLB := newFakeEDSBalancer(cc)
 		defer func() { edsLBCh.Send(edsLB) }()
 		return edsLB
 	}
-	return func() {
+	return xdsC, func() {
 		newEDSBalancer = origNewEDSBalancer
+		newXDSClient = oldNewXDSClient
 	}
 }
 
@@ -258,13 +263,8 @@ func (b *fakeBalancer) Close() {}
 //   This time around, we expect no new xdsClient or edsLB to be created.
 //   Instead, we expect the existing edsLB to receive the new child policy.
 func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
-	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
-	defer func() { newXDSClient = oldNewXDSClient }()
-
 	edsLBCh := testutils.NewChannel()
-	cancel := setup(edsLBCh)
+	xdsC, cancel := setup(edsLBCh)
 	defer cancel()
 
 	builder := balancer.Get(edsName)
@@ -315,13 +315,8 @@ func (s) TestXDSConnfigChildPolicyUpdate(t *testing.T) {
 // TestXDSSubConnStateChange verifies if the top-level edsBalancer passes on
 // the subConnStateChange to appropriate child balancers.
 func (s) TestXDSSubConnStateChange(t *testing.T) {
-	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
-	defer func() { newXDSClient = oldNewXDSClient }()
-
 	edsLBCh := testutils.NewChannel()
-	cancel := setup(edsLBCh)
+	xdsC, cancel := setup(edsLBCh)
 	defer cancel()
 
 	builder := balancer.Get(edsName)
@@ -359,13 +354,8 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 // If it's connection error, nothing will happen. This will need to change to
 // handle fallback.
 func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
-	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
-	defer func() { newXDSClient = oldNewXDSClient }()
-
 	edsLBCh := testutils.NewChannel()
-	cancel := setup(edsLBCh)
+	xdsC, cancel := setup(edsLBCh)
 	defer cancel()
 
 	builder := balancer.Get(edsName)
@@ -426,13 +416,8 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 // If it's connection error, nothing will happen. This will need to change to
 // handle fallback.
 func (s) TestErrorFromResolver(t *testing.T) {
-	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
-	defer func() { newXDSClient = oldNewXDSClient }()
-
 	edsLBCh := testutils.NewChannel()
-	cancel := setup(edsLBCh)
+	xdsC, cancel := setup(edsLBCh)
 	defer cancel()
 
 	builder := balancer.Get(edsName)
