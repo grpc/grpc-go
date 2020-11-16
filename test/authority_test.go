@@ -176,7 +176,12 @@ func (s) TestColonPortAuthority(t *testing.T) {
 	authorityMu.Unlock()
 	// ss.Start dials, but not the ":[port]" target that is being tested here.
 	// Dial again, with ":[port]" as the target.
-	cc, err := grpc.Dial(":"+port, grpc.WithInsecure())
+	//
+	// Append "localhost" before calling net.Dial, in case net.Dial on certain
+	// platforms doesn't work well for address without the IP.
+	cc, err := grpc.Dial(":"+port, grpc.WithInsecure(), grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "tcp", "localhost"+addr)
+	}))
 	if err != nil {
 		t.Fatalf("grpc.Dial(%q) = %v", ss.target, err)
 	}
