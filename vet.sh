@@ -53,7 +53,7 @@ if [[ "$1" = "-install" ]]; then
   fi
   if [[ -z "${VET_SKIP_PROTO}" ]]; then
     if [[ "${TRAVIS}" = "true" ]]; then
-      PROTOBUF_VERSION=3.3.0
+      PROTOBUF_VERSION=3.14.0
       PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
       pushd /home/travis
       wget https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/${PROTOC_FILENAME}
@@ -61,7 +61,7 @@ if [[ "$1" = "-install" ]]; then
       bin/protoc --version
       popd
     elif [[ "${GITHUB_ACTIONS}" = "true" ]]; then
-      PROTOBUF_VERSION=3.3.0
+      PROTOBUF_VERSION=3.14.0
       PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
       pushd /home/runner/go
       wget https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/${PROTOC_FILENAME}
