@@ -105,14 +105,10 @@ func (s) TestSafeConfigSelector(t *testing.T) {
 		close(csSwapped)
 	}()
 
-	// cs1 should not have returned yet
-	select {
-	case <-cs1Returned:
-		t.Fatalf("first call to SelectConfig returned before send on retChan1")
-	default:
-	}
+	// Allow cs1 to return and cs2 to eventually be swapped in.
+	retChan1 <- resp1
 
-	cs1Done := false
+	cs1Done := false // set when cs2 is first called
 	for dl := time.Now().Add(150 * time.Millisecond); !time.Now().After(dl); {
 		gotConfigChan := make(chan *RPCConfig)
 		go func() {
@@ -123,7 +119,7 @@ func (s) TestSafeConfigSelector(t *testing.T) {
 			t.Fatalf("timed out waiting for cs1 or cs2 to be called")
 		case <-cs1Called:
 			// Initially, before swapping to cs2, cs1 should be called
-			retChan1 <- resp1 // this may unblock the first call, but that's okay
+			retChan1 <- resp1
 			go func() { <-gotConfigChan }()
 			if cs1Done {
 				t.Fatalf("cs1 called after cs2")
@@ -131,7 +127,6 @@ func (s) TestSafeConfigSelector(t *testing.T) {
 		case <-cs2Called:
 			// Success! the new config selector is being called
 			if !cs1Done {
-				retChan1 <- resp1 // unblock the last cs1 call
 				select {
 				case <-csSwapped:
 				case <-time.After(50 * time.Millisecond):
@@ -150,18 +145,7 @@ func (s) TestSafeConfigSelector(t *testing.T) {
 				t.Fatalf("SelectConfig(%v) = %v; want %v\n  Diffs:\n%s", testRPCInfo, got, resp2, diff)
 			}
 		}
-		if !cs1Done {
-			// cs2 has not been called yet, which means there must be an
-			// in-flight cs1 call.  We should not see UpdateConfigSelector
-			// return, but it may have been swapped out.
-			select {
-			case <-csSwapped:
-				t.Fatalf("config selector swapped with pending cs1 call")
-			case <-time.After(10 * time.Millisecond):
-			}
-		} else {
-			time.Sleep(10 * time.Millisecond)
-		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	if !cs1Done {
 		t.Fatalf("timed out waiting for cs2 to be called")

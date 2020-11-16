@@ -69,22 +69,25 @@ func GetConfigSelector(state resolver.State) ConfigSelector {
 	return cs
 }
 
-type countingConfigSelector struct {
-	ConfigSelector
-	// mu is read-locked when ConfigSelector is in use.  It is write-locked to
-	// block until all outstanding uses are finished.
+// SafeConfigSelector allows for safe switching of ConfigSelector
+// implementations such that previous values are guaranteed to not be in use
+// when UpdateConfigSelector returns.
+type SafeConfigSelector struct {
 	mu sync.RWMutex
+	cs ConfigSelector
 }
 
-func (c *countingConfigSelector) Add() {
-	c.mu.RLock()
+// UpdateConfigSelector swaps to the provided ConfigSelector and blocks until
+// all uses of the previous ConfigSelector have completed.
+func (scs *SafeConfigSelector) UpdateConfigSelector(cs ConfigSelector) {
+	scs.mu.Lock()
+	defer scs.mu.Unlock()
+	scs.cs = cs
 }
 
-func (c *countingConfigSelector) Done() {
-	c.mu.RUnlock()
-}
-
-func (c *countingConfigSelector) Wait() {
-	c.mu.Lock()
-	c.mu.Unlock() //lint:ignore SA2001 necessary to unlock after locking to unblock any RLocks
+// SelectConfig defers to the current ConfigSelector in scs.
+func (scs *SafeConfigSelector) SelectConfig(r RPCInfo) *RPCConfig {
+	scs.mu.RLock()
+	defer scs.mu.RUnlock()
+	return scs.cs.SelectConfig(r)
 }
