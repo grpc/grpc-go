@@ -1,3 +1,5 @@
+// +build !386
+
 /*
  *
  * Copyright 2020 gRPC authors.
