@@ -20,9 +20,7 @@ package pemfile
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
@@ -46,17 +44,12 @@ func (p *pluginBuilder) ParseConfig(c interface{}) (*certprovider.BuildableConfi
 	if !ok {
 		return nil, fmt.Errorf("meshca: unsupported config type: %T", c)
 	}
-	cfg, err := pluginConfigFromJSON(data)
+	opts, err := pluginConfigFromJSON(data)
 	if err != nil {
 		return nil, err
 	}
-	return certprovider.NewBuildableConfig(pluginName, cfg.canonical(), func(certprovider.BuildOptions) certprovider.Provider {
-		return newProvider(Options{
-			CertFile:        cfg.certFile,
-			KeyFile:         cfg.keyFile,
-			RootFile:        cfg.keyFile,
-			RefreshDuration: cfg.refreshInterval,
-		})
+	return certprovider.NewBuildableConfig(pluginName, opts.canonical(), func(certprovider.BuildOptions) certprovider.Provider {
+		return newProvider(opts)
 	}), nil
 }
 
@@ -64,19 +57,10 @@ func (p *pluginBuilder) Name() string {
 	return pluginName
 }
 
-type pluginConfig struct {
-	certFile        string
-	keyFile         string
-	caFile          string
-	refreshInterval time.Duration
-}
-
-func (pc *pluginConfig) canonical() []byte {
-	return []byte(fmt.Sprintf("%s:%s:%s:%s", pc.certFile, pc.keyFile, pc.caFile, pc.refreshInterval))
-}
-
-func pluginConfigFromJSON(jd json.RawMessage) (*pluginConfig, error) {
-	// Anonymous struct to unmarshal the JSON config into.
+func pluginConfigFromJSON(jd json.RawMessage) (Options, error) {
+	// The only difference between this anonymous struct and the Options struct
+	// is that the refresh_interval is represented here a duration proto, while
+	// in the latter a time.Duration is used.
 	cfg := &struct {
 		CertificateFile   string          `json:"certificate_file,omitempty"`
 		PrivateKeyFile    string          `json:"private_key_file,omitempty"`
@@ -84,40 +68,29 @@ func pluginConfigFromJSON(jd json.RawMessage) (*pluginConfig, error) {
 		RefreshInterval   json.RawMessage `json:"refresh_interval,omitempty"`
 	}{}
 	if err := json.Unmarshal(jd, cfg); err != nil {
-		return nil, fmt.Errorf("pemfile: json.Unmarshal(%s) failed: %v", string(jd), err)
+		return Options{}, fmt.Errorf("pemfile: json.Unmarshal(%s) failed: %v", string(jd), err)
 	}
 
-	pc := &pluginConfig{
-		certFile: cfg.CertificateFile,
-		keyFile:  cfg.PrivateKeyFile,
-		caFile:   cfg.CACertificateFile,
+	opts := Options{
+		CertFile: cfg.CertificateFile,
+		KeyFile:  cfg.PrivateKeyFile,
+		RootFile: cfg.CACertificateFile,
 		// Refresh interval is the only field in the configuration for which we
 		// support a default value. We cannot possibly have valid defaults for
 		// file paths to watch. Also, it is valid to specify an empty path for
 		// some of those fields if the user does not want to watch them.
-		refreshInterval: defaultRefreshInterval,
+		RefreshDuration: defaultRefreshInterval,
 	}
 	if cfg.RefreshInterval != nil {
 		dur := &durationpb.Duration{}
 		if err := protojson.Unmarshal(cfg.RefreshInterval, dur); err != nil {
-			return nil, fmt.Errorf("pemfile: protojson.Unmarshal(%+v) failed: %v", cfg.RefreshInterval, err)
+			return Options{}, fmt.Errorf("pemfile: protojson.Unmarshal(%+v) failed: %v", cfg.RefreshInterval, err)
 		}
-		pc.refreshInterval = dur.AsDuration()
+		opts.RefreshDuration = dur.AsDuration()
 	}
 
-	if pc.certFile == "" && pc.keyFile == "" && pc.caFile == "" {
-		return nil, fmt.Errorf("pemfile: at least one credential file needs to be specified")
+	if err := opts.validate(); err != nil {
+		return Options{}, err
 	}
-	if keySpecified, certSpecified := pc.keyFile != "", pc.certFile != ""; keySpecified != certSpecified {
-		return nil, fmt.Errorf("pemfile: private key file and identity cert file should be both specified or not specified")
-	}
-	// C-core has a limitation that they cannot verify that a certificate file
-	// matches a key file. So, the only way to get around this is to make sure
-	// that both files are in the same directory and that they do an atomic
-	// read. Even though Java/Go do not have this limitation, we want the
-	// overall plugin behavior to be consistent across languages.
-	if certDir, keyDir := filepath.Dir(pc.certFile), filepath.Dir(pc.keyFile); certDir != keyDir {
-		return nil, errors.New("pemfile: certificate and key file must be in the same directory")
-	}
-	return pc, nil
+	return opts, nil
 }

@@ -30,8 +30,10 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"path/filepath"
 	"time"
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
@@ -65,14 +67,33 @@ type Options struct {
 	RefreshDuration time.Duration
 }
 
+func (o Options) canonical() []byte {
+	return []byte(fmt.Sprintf("%s:%s:%s:%s", o.CertFile, o.KeyFile, o.RootFile, o.RefreshDuration))
+}
+
+func (o Options) validate() error {
+	if o.CertFile == "" && o.KeyFile == "" && o.RootFile == "" {
+		return fmt.Errorf("pemfile: at least one credential file needs to be specified")
+	}
+	if keySpecified, certSpecified := o.KeyFile != "", o.CertFile != ""; keySpecified != certSpecified {
+		return fmt.Errorf("pemfile: private key file and identity cert file should be both specified or not specified")
+	}
+	// C-core has a limitation that they cannot verify that a certificate file
+	// matches a key file. So, the only way to get around this is to make sure
+	// that both files are in the same directory and that they do an atomic
+	// read. Even though Java/Go do not have this limitation, we want the
+	// overall plugin behavior to be consistent across languages.
+	if certDir, keyDir := filepath.Dir(o.CertFile), filepath.Dir(o.KeyFile); certDir != keyDir {
+		return errors.New("pemfile: certificate and key file must be in the same directory")
+	}
+	return nil
+}
+
 // NewProvider returns a new certificate provider plugin that is configured to
 // watch the PEM files specified in the passed in options.
 func NewProvider(o Options) (certprovider.Provider, error) {
-	if o.CertFile == "" && o.KeyFile == "" && o.RootFile == "" {
-		return nil, fmt.Errorf("pemfile: at least one credential file needs to be specified")
-	}
-	if keySpecified, certSpecified := o.KeyFile != "", o.CertFile != ""; keySpecified != certSpecified {
-		return nil, fmt.Errorf("pemfile: private key file and identity cert file should be both specified or not specified")
+	if err := o.validate(); err != nil {
+		return nil, err
 	}
 	return newProvider(o), nil
 }
