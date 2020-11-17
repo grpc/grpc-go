@@ -59,8 +59,8 @@ func (p *pluginBuilder) Name() string {
 
 func pluginConfigFromJSON(jd json.RawMessage) (Options, error) {
 	// The only difference between this anonymous struct and the Options struct
-	// is that the refresh_interval is represented here a duration proto, while
-	// in the latter a time.Duration is used.
+	// is that the refresh_interval is represented here as a duration proto,
+	// while in the latter a time.Duration is used.
 	cfg := &struct {
 		CertificateFile   string          `json:"certificate_file,omitempty"`
 		PrivateKeyFile    string          `json:"private_key_file,omitempty"`
