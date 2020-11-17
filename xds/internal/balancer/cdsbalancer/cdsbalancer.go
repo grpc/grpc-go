@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
 
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -131,7 +132,7 @@ func (cdsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, 
 // the cdsBalancer. This will be faked out in unittests.
 type xdsClientInterface interface {
 	WatchCluster(string, func(xdsclient.ClusterUpdate, error)) func()
-	CertProviderConfigs() map[string]*certprovider.BuildableConfig
+	BootstrapConfig() *bootstrap.Config
 	Close()
 }
 
@@ -241,13 +242,14 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) err
 		return nil
 	}
 
-	cpc := b.xdsClient.CertProviderConfigs()
-	if cpc == nil {
+	bc := b.xdsClient.BootstrapConfig()
+	if bc == nil || bc.CertProviderConfigs == nil {
 		// Bootstrap did not find any certificate provider configs, but the user
 		// has specified xdsCredentials and the management server has sent down
 		// security configuration.
 		return errors.New("xds: certificate_providers config missing in bootstrap file")
 	}
+	cpc := bc.CertProviderConfigs
 
 	// A root provider is required whether we are using TLS or mTLS.
 	rootProvider, err := buildProvider(cpc, config.RootInstanceName, config.RootCertName, false, true)
