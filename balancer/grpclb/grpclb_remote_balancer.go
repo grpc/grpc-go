@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
+	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -76,10 +77,7 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 			// net.SplitHostPort() will return too many colons error.
 			ipStr = fmt.Sprintf("[%s]", ipStr)
 		}
-		addr := resolver.Address{
-			Addr:     fmt.Sprintf("%s:%d", ipStr, s.Port),
-			Metadata: &md,
-		}
+		addr := imetadata.Set(resolver.Address{Addr: fmt.Sprintf("%s:%d", ipStr, s.Port)}, md)
 		if logger.V(2) {
 			logger.Infof("lbBalancer: server list entry[%d]: ipStr:|%s|, port:|%d|, load balancer token:|%v|",
 				i, ipStr, s.Port, s.LoadBalanceToken)
@@ -164,7 +162,7 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 	// Create new SubConns.
 	for _, addr := range backendAddrs {
 		addrWithoutMD := addr
-		addrWithoutMD.Metadata = nil
+		addrWithoutMD.Attributes = nil
 		addrsSet[addrWithoutMD] = struct{}{}
 		lb.backendAddrsWithoutMetadata = append(lb.backendAddrsWithoutMetadata, addrWithoutMD)
 

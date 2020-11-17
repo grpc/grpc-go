@@ -125,7 +125,7 @@ func (ccc *lbCacheClientConn) NewSubConn(addrs []resolver.Address, opts balancer
 		return nil, fmt.Errorf("grpclb calling NewSubConn with addrs of length %v", len(addrs))
 	}
 	addrWithoutMD := addrs[0]
-	addrWithoutMD.Metadata = nil
+	addrWithoutMD.Attributes = nil
 
 	ccc.mu.Lock()
 	defer ccc.mu.Unlock()

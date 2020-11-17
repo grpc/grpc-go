@@ -33,6 +33,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/internal/grpcutil"
+	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/transport/networktype"
 
 	"google.golang.org/grpc/codes"
@@ -60,7 +61,7 @@ type http2Client struct {
 	cancel     context.CancelFunc
 	ctxDone    <-chan struct{} // Cache the ctx.Done() chan.
 	userAgent  string
-	md         interface{}
+	md         metadata.MD
 	conn       net.Conn // underlying communication channel
 	loopy      *loopyWriter
 	remoteAddr net.Addr
@@ -268,7 +269,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		ctxDone:               ctx.Done(), // Cache Done chan.
 		cancel:                cancel,
 		userAgent:             opts.UserAgent,
-		md:                    addr.Metadata,
 		conn:                  conn,
 		remoteAddr:            conn.RemoteAddr(),
 		localAddr:             conn.LocalAddr(),
@@ -295,6 +295,12 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		onClose:               onClose,
 		keepaliveEnabled:      keepaliveEnabled,
 		bufferPool:            newBufferPool(),
+	}
+
+	if md, ok := addr.Metadata.(*metadata.MD); ok {
+		t.md = *md
+	} else if md := imetadata.Get(addr); md != nil {
+		t.md = md
 	}
 	t.controlBuf = newControlBuffer(t.ctxDone)
 	if opts.InitialWindowSize >= defaultWindowSize {
@@ -512,14 +518,12 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 			}
 		}
 	}
-	if md, ok := t.md.(*metadata.MD); ok {
-		for k, vv := range *md {
-			if isReservedHeader(k) {
-				continue
-			}
-			for _, v := range vv {
-				headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
-			}
+	for k, vv := range t.md {
+		if isReservedHeader(k) {
+			continue
+		}
+		for _, v := range vv {
+			headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 		}
 	}
 	return headerFields, nil
