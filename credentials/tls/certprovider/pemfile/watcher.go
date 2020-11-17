@@ -69,11 +69,17 @@ type Options struct {
 // watch the PEM files specified in the passed in options.
 func NewProvider(o Options) (certprovider.Provider, error) {
 	if o.CertFile == "" && o.KeyFile == "" && o.RootFile == "" {
-		return nil, fmt.Errorf("pemfile: NewProvider(%+v) needs at least one credential file to be specified", o)
+		return nil, fmt.Errorf("pemfile: at least one credential file needs to be specified")
 	}
 	if keySpecified, certSpecified := o.KeyFile != "", o.CertFile != ""; keySpecified != certSpecified {
-		return nil, fmt.Errorf("pemfile: NewProvider(%+v) needs private key file and identity cert file to be both specified or not specified", o)
+		return nil, fmt.Errorf("pemfile: private key file and identity cert file should be both specified or not specified")
 	}
+	return newProvider(o), nil
+}
+
+// newProvider is used to create a new certificate provider plugin after
+// validating the options, and hence does not return an error.
+func newProvider(o Options) certprovider.Provider {
 	if o.RefreshDuration == 0 {
 		o.RefreshDuration = defaultCertRefreshDuration
 	}
@@ -89,8 +95,7 @@ func NewProvider(o Options) (certprovider.Provider, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	provider.cancel = cancel
 	go provider.run(ctx)
-
-	return provider, nil
+	return provider
 }
 
 // watcher is a certificate provider plugin that implements the

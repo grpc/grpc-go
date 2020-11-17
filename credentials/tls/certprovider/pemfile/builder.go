@@ -51,18 +51,12 @@ func (p *pluginBuilder) ParseConfig(c interface{}) (*certprovider.BuildableConfi
 		return nil, err
 	}
 	return certprovider.NewBuildableConfig(pluginName, cfg.canonical(), func(certprovider.BuildOptions) certprovider.Provider {
-		p, err := NewProvider(Options{
+		return newProvider(Options{
 			CertFile:        cfg.certFile,
 			KeyFile:         cfg.keyFile,
 			RootFile:        cfg.keyFile,
 			RefreshDuration: cfg.refreshInterval,
 		})
-		if err != nil {
-			// This should never really happen since we validate the config in
-			// ParseConfig and we do not use the BuildOptions passed in here.
-			logger.Error(err)
-		}
-		return p
 	}), nil
 }
 
