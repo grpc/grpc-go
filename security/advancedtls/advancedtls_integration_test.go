@@ -515,34 +515,34 @@ func copyFileContents(sourceFile, destinationFile string) error {
 // files.
 func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovider.Provider, certprovider.Provider, certprovider.Provider, error) {
 	clientIdentityOptions := pemfile.Options{
-		CertFile:            tmpFiles.clientCertTmp.Name(),
-		KeyFile:             tmpFiles.clientKeyTmp.Name(),
-		CertRefreshDuration: credRefreshingInterval,
+		CertFile:        tmpFiles.clientCertTmp.Name(),
+		KeyFile:         tmpFiles.clientKeyTmp.Name(),
+		RefreshDuration: credRefreshingInterval,
 	}
 	clientIdentityProvider, err := pemfile.NewProvider(clientIdentityOptions)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
 	clientRootOptions := pemfile.Options{
-		RootFile:            tmpFiles.clientTrustTmp.Name(),
-		RootRefreshDuration: credRefreshingInterval,
+		RootFile:        tmpFiles.clientTrustTmp.Name(),
+		RefreshDuration: credRefreshingInterval,
 	}
 	clientRootProvider, err := pemfile.NewProvider(clientRootOptions)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
 	serverIdentityOptions := pemfile.Options{
-		CertFile:            tmpFiles.serverCertTmp.Name(),
-		KeyFile:             tmpFiles.serverKeyTmp.Name(),
-		CertRefreshDuration: credRefreshingInterval,
+		CertFile:        tmpFiles.serverCertTmp.Name(),
+		KeyFile:         tmpFiles.serverKeyTmp.Name(),
+		RefreshDuration: credRefreshingInterval,
 	}
 	serverIdentityProvider, err := pemfile.NewProvider(serverIdentityOptions)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
 	serverRootOptions := pemfile.Options{
-		RootFile:            tmpFiles.serverTrustTmp.Name(),
-		RootRefreshDuration: credRefreshingInterval,
+		RootFile:        tmpFiles.serverTrustTmp.Name(),
+		RefreshDuration: credRefreshingInterval,
 	}
 	serverRootProvider, err := pemfile.NewProvider(serverRootOptions)
 	if err != nil {
