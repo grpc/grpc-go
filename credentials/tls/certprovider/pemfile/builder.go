@@ -25,15 +25,14 @@ import (
 	"path/filepath"
 	"time"
 
+	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/durationpb"
-
-	"google.golang.org/grpc/credentials/tls/certprovider"
 )
 
 const (
 	pluginName             = "file_watcher"
-	defaultRefreshInterval = 600 * time.Second
+	defaultRefreshInterval = 10 * time.Minute
 )
 
 func init() {
@@ -61,7 +60,7 @@ func (p *pluginBuilder) ParseConfig(c interface{}) (*certprovider.BuildableConfi
 		if err != nil {
 			// This should never really happen since we validate the config in
 			// ParseConfig and we do not use the BuildOptions passed in here.
-			logger.Errorf("NewProvider(%+v) failed: %v", err)
+			logger.Error(err)
 		}
 		return p
 	}), nil
@@ -79,7 +78,7 @@ type pluginConfig struct {
 }
 
 func (pc *pluginConfig) canonical() []byte {
-	return []byte(fmt.Sprintf("%s:%s:%s:%s", pc.certFile, pc.keyFile, pc.caFile, pc.refreshInterval.String()))
+	return []byte(fmt.Sprintf("%s:%s:%s:%s", pc.certFile, pc.keyFile, pc.caFile, pc.refreshInterval))
 }
 
 func pluginConfigFromJSON(jd json.RawMessage) (*pluginConfig, error) {
