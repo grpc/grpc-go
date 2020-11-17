@@ -68,7 +68,7 @@ func (s) TestServerSideXDS(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Spin up a fake xDS management server on a local port.
+	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
 	fs, err := e2e.StartManagementServer(ctx)
 	if err != nil {
@@ -78,6 +78,7 @@ func (s) TestServerSideXDS(t *testing.T) {
 
 	// Create a bootstrap file in a temporary directory.
 	cleanup, err := e2e.SetupBootstrapFile(e2e.BootstrapOptions{
+		Version:   e2e.TransportV3,
 		NodeID:    nodeID,
 		ServerURI: fs.Address,
 	})

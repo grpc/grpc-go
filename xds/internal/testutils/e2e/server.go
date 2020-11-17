@@ -53,10 +53,11 @@ type ManagementServer struct {
 	// new connections.
 	Address string
 
-	version int
-	gs      *grpc.Server
-	xs      v3server.Server
-	cache   v3cache.SnapshotCache
+	cancel  context.CancelFunc    // To stop the v3 ADS service.
+	xs      v3server.Server       // v3 implementation of ADS.
+	gs      *grpc.Server          // gRPC server which exports the ADS service.
+	cache   v3cache.SnapshotCache // Resource snapshot.
+	version int                   // Version of resource snapshot.
 }
 
 // StartManagementServer initializes a management server which implements the
@@ -70,22 +71,27 @@ func StartManagementServer(ctx context.Context) (*ManagementServer, error) {
 	cache := v3cache.NewSnapshotCache(true, v3cache.IDHash{}, serverLogger{})
 	logger.Infof("Created new snapshot cache...")
 
-	// Create an xDS management server and register the ADS implementation provided by it rough a gRPC server.
+	lis, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return nil, fmt.Errorf("failed to start xDS management server: %v", err)
+	}
+
+	// Create an xDS management server and register the ADS implementation
+	// provided by it on a gRPC server. Cancelling the context passed to the
+	// server is the only way of stopping it at the end of the test.
+	ctx, cancel := context.WithCancel(ctx)
 	xs := v3server.NewServer(ctx, cache, v3server.CallbackFuncs{})
 	gs := grpc.NewServer()
 	v3discoverygrpc.RegisterAggregatedDiscoveryServiceServer(gs, xs)
 	logger.Infof("Registered Aggregated Discovery Service (ADS)...")
 
 	// Start serving.
-	lis, err := net.Listen("tcp", ":0")
-	if err != nil {
-		return nil, fmt.Errorf("failed to start xDS management server: %v", err)
-	}
 	go gs.Serve(lis)
 	logger.Infof("xDS management server serving at: %v...", lis.Addr().String())
 
 	return &ManagementServer{
 		Address: lis.Addr().String(),
+		cancel:  cancel,
 		version: 0,
 		gs:      gs,
 		xs:      xs,
@@ -109,10 +115,8 @@ func (s *ManagementServer) Update(opts UpdateOptions) error {
 
 	// Create a snapshot with the passed in resources.
 	var listeners []types.Resource
-	if opts.Listeners != nil {
-		for _, l := range opts.Listeners {
-			listeners = append(listeners, l)
-		}
+	for _, l := range opts.Listeners {
+		listeners = append(listeners, l)
 	}
 	snapshot := v3cache.NewSnapshot(strconv.Itoa(s.version), nil, nil, nil, listeners, nil, nil)
 	if err := snapshot.Consistent(); err != nil {
@@ -130,6 +134,9 @@ func (s *ManagementServer) Update(opts UpdateOptions) error {
 
 // Stop stops the management server.
 func (s *ManagementServer) Stop() {
+	if s.cancel != nil {
+		s.cancel()
+	}
 	s.gs.Stop()
 	logger.Infof("Stopped the xDS management server...")
 }
