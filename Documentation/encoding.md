@@ -132,7 +132,7 @@ As a reminder, all `CallOption`s may be converted into `DialOption`s that become
 the default for all RPCs sent through a client using `grpc.WithDefaultCallOptions`:
 
 ```go
-	myclient := grpc.Dial(ctx, target, grpc.WithDefaultCallOptions(grpc.UseCompresor("gzip")))
+	myclient := grpc.Dial(ctx, target, grpc.WithDefaultCallOptions(grpc.UseCompressor("gzip")))
 ```
 
 When specified in either of these ways, messages will be compressed using this
