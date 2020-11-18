@@ -32,6 +32,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 const (
@@ -168,6 +169,49 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{ServiceName: serviceName, EnableLRS: true},
+		},
+		{
+			name: "happiest-case-with-circuitbreakers",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				CircuitBreakers: &v3clusterpb.CircuitBreakers{
+					Thresholds: []*v3clusterpb.CircuitBreakers_Thresholds{
+						{
+							Priority:    v3corepb.RoutingPriority_DEFAULT,
+							MaxRequests: wrapperspb.UInt32(512),
+						},
+						{
+							Priority:    v3corepb.RoutingPriority_HIGH,
+							MaxRequests: nil,
+						},
+					},
+				},
+				LrsServer: &v3corepb.ConfigSource{
+					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+						Self: &v3corepb.SelfConfigSource{},
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{ServiceName: serviceName, EnableLRS: true, Thresholds: []CircuitBreakerThreshold{
+				{
+					RoutingPriority: "DEFAULT",
+					MaxRequests:     512,
+				},
+				{
+					RoutingPriority: "HIGH",
+					MaxRequests:     1024,
+				},
+			}},
 		},
 	}
 
