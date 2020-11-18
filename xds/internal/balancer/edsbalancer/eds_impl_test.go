@@ -656,7 +656,7 @@ func (s) TestDropPicker(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			p := newDropPicker(constPicker, tt.drops, nil)
+			p := newDropPicker(constPicker, tt.drops, nil, "")
 
 			// scCount is the number of sc's returned by pick. The opposite of
 			// drop-count.

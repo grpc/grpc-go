@@ -305,6 +305,15 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) err
 	return nil
 }
 
+func getCircuitBreaking(update xdsclient.ClusterUpdate) (circuitBreaking bool, maxRequests uint32) {
+	for _, threshold := range update.Thresholds {
+		if threshold.RoutingPriority == "DEFAULT" {
+			return true, threshold.MaxRequests
+		}
+	}
+	return false, 0
+}
+
 // handleWatchUpdate handles a watch update from the xDS Client. Good updates
 // lead to clientConn updates being invoked on the underlying edsBalancer.
 func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
@@ -342,13 +351,13 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 		b.edsLB = edsLB
 		b.logger.Infof("Created child policy %p of type %s", b.edsLB, edsName)
 	}
-	lbCfg := &edsbalancer.EDSConfig{EDSServiceName: update.cds.ServiceName}
+	circuitBreaking, maxRequests := getCircuitBreaking(update.cds)
+	lbCfg := &edsbalancer.EDSConfig{EDSServiceName: update.cds.ServiceName, CircuitBreaking: circuitBreaking, MaxRequests: maxRequests}
 	if update.cds.EnableLRS {
 		// An empty string here indicates that the edsBalancer should use the
 		// same xDS server for load reporting as it does for EDS
 		// requests/responses.
 		lbCfg.LrsLoadReportingServerName = new(string)
-
 	}
 	ccState := balancer.ClientConnState{
 		ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, b.xdsClient)},

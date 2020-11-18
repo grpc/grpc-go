@@ -93,6 +93,8 @@ type edsBalancerImplInterface interface {
 	handleSubConnStateChange(sc balancer.SubConn, state connectivity.State)
 	// updateState handle a balancer state update from the priority.
 	updateState(priority priorityType, s balancer.State)
+	// updateConfig ???
+	updateConfig(edsConfig *EDSConfig)
 	// close closes the eds balancer.
 	close()
 }
@@ -180,6 +182,8 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 		if err := x.client.handleUpdate(cfg, u.ResolverState.Attributes); err != nil {
 			x.logger.Warningf("failed to update xds clients: %v", err)
 		}
+
+		x.edsImpl.updateConfig(cfg)
 
 		if x.config == nil {
 			x.config = cfg

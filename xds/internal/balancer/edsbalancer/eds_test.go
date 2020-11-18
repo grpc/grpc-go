@@ -112,6 +112,8 @@ func (f *fakeEDSBalancer) handleEDSResponse(edsResp xdsclient.EndpointsUpdate) {
 
 func (f *fakeEDSBalancer) updateState(priority priorityType, s balancer.State) {}
 
+func (f *fakeEDSBalancer) updateConfig(edsConfig *EDSConfig) {}
+
 func (f *fakeEDSBalancer) close() {}
 
 func (f *fakeEDSBalancer) waitForChildPolicy(wantPolicy *loadBalancingConfig) error {
