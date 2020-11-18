@@ -23,7 +23,6 @@
 package hierarchy
 
 import (
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -37,19 +36,12 @@ func Get(addr resolver.Address) []string {
 	if attrs == nil {
 		return nil
 	}
-	path, ok := attrs.Value(pathKey).([]string)
-	if !ok {
-		return nil
-	}
+	path, _ := attrs.Value(pathKey).([]string)
 	return path
 }
 
 // Set overrides the hierarchical path in addr with path.
 func Set(addr resolver.Address, path []string) resolver.Address {
-	if addr.Attributes == nil {
-		addr.Attributes = attributes.New(pathKey, path)
-		return addr
-	}
 	addr.Attributes = addr.Attributes.WithValues(pathKey, path)
 	return addr
 }

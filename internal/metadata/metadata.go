@@ -22,7 +22,6 @@
 package metadata
 
 import (
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 )
@@ -37,10 +36,7 @@ func Get(addr resolver.Address) metadata.MD {
 	if attrs == nil {
 		return nil
 	}
-	md, ok := attrs.Value(mdKey).(metadata.MD)
-	if !ok {
-		return nil
-	}
+	md, _ := attrs.Value(mdKey).(metadata.MD)
 	return md
 }
 
@@ -49,10 +45,6 @@ func Get(addr resolver.Address) metadata.MD {
 // When a SubConn is created with this address, the RPCs sent on it will all
 // have this metadata.
 func Set(addr resolver.Address, md metadata.MD) resolver.Address {
-	if addr.Attributes == nil {
-		addr.Attributes = attributes.New(mdKey, md)
-		return addr
-	}
 	addr.Attributes = addr.Attributes.WithValues(mdKey, md)
 	return addr
 }

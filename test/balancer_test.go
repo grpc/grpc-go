@@ -579,19 +579,16 @@ func (s) TestMetadataInAddressAttributes(t *testing.T) {
 	stub.Register(mdBalancerName, bf)
 	t.Logf("Registered balancer %s...", mdBalancerName)
 
-	r := manual.NewBuilderWithScheme("whatever")
-	t.Logf("Registered manual resolver with scheme %s...", r.Scheme())
-
 	testMDChan := make(chan []string, 1)
 	ss := &stubServer{
 		emptyCall: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			md, ok := metadata.FromIncomingContext(ctx)
 			if ok {
 				select {
-				case <-testMDChan:
-				default:
+				case testMDChan <- md[testMDKey]:
+				case <-ctx.Done():
+					return nil, ctx.Err()
 				}
-				testMDChan <- md[testMDKey]
 			}
 			return &testpb.Empty{}, nil
 		},
@@ -601,6 +598,7 @@ func (s) TestMetadataInAddressAttributes(t *testing.T) {
 	}
 	defer ss.Stop()
 
+	r := manual.NewBuilderWithScheme("whatever")
 	dopts := []grpc.DialOption{
 		grpc.WithInsecure(),
 		grpc.WithResolvers(r),
