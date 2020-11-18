@@ -36,7 +36,7 @@ import (
 	"google.golang.org/grpc/xds/internal/version"
 )
 
-func (s) TestGetRouteConfigFromListener(t *testing.T) {
+func (s) TestProcessClientSideListener(t *testing.T) {
 	const (
 		goodLDSTarget       = "lds.target.good:1111"
 		goodRouteConfigName = "GoodRouteConfig"
@@ -172,9 +172,15 @@ func (s) TestGetRouteConfigFromListener(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotRoute, err := getRouteConfigNameFromListener(test.lis, nil)
-			if (err != nil) != test.wantErr || gotRoute != test.wantRoute {
-				t.Errorf("getRouteConfigNameFromListener(%+v) = (%s, %v), want (%s, %v)", test.lis, gotRoute, err, test.wantRoute, test.wantErr)
+			update, err := processClientSideListener(test.lis, nil)
+			if (err != nil) != test.wantErr {
+				t.Errorf("processClientSideListener(%+v) = %v, wantErr %v", test.lis, err, test.wantErr)
+			}
+			if test.wantErr {
+				return
+			}
+			if update.RouteConfigName != test.wantRoute {
+				t.Errorf("processClientSideListener(%+v) = %q want %q", test.lis, update.RouteConfigName, test.wantRoute)
 			}
 		})
 	}

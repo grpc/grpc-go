@@ -19,6 +19,7 @@
 package client
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -39,6 +40,10 @@ import (
 	"google.golang.org/grpc/xds/internal/version"
 )
 
+// TransportSocket proto message has a `name` field which is expected to be set
+// to this value by the management server.
+const transportSocketName = "envoy.transport_sockets.tls"
+
 // UnmarshalListener processes resources received in an LDS response, validates
 // them, and transforms them into a native struct which contains only fields we
 // are interested in.
@@ -53,50 +58,135 @@ func UnmarshalListener(resources []*anypb.Any, logger *grpclog.PrefixLogger) (ma
 			return nil, fmt.Errorf("xds: failed to unmarshal resource in LDS response: %v", err)
 		}
 		logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, lis)
-		routeName, err := getRouteConfigNameFromListener(lis, logger)
+
+		var (
+			lu  *ListenerUpdate
+			err error
+		)
+		if lis.GetApiListener() != nil {
+			lu, err = processClientSideListener(lis, logger)
+		} else {
+			lu, err = processServerSideListener(lis, logger)
+		}
 		if err != nil {
 			return nil, err
 		}
-		update[lis.GetName()] = ListenerUpdate{RouteConfigName: routeName}
+		update[lis.GetName()] = *lu
 	}
 	return update, nil
 }
 
-// getRouteConfigNameFromListener checks if the provided Listener proto meets
+// processClientSideListener checks if the provided Listener proto meets
 // the expected criteria. If so, it returns a non-empty routeConfigName.
-func getRouteConfigNameFromListener(lis *v3listenerpb.Listener, logger *grpclog.PrefixLogger) (string, error) {
+func processClientSideListener(lis *v3listenerpb.Listener, logger *grpclog.PrefixLogger) (*ListenerUpdate, error) {
 	if lis.GetApiListener() == nil {
-		return "", fmt.Errorf("xds: no api_listener field in LDS response %+v", lis)
+		return nil, fmt.Errorf("xds: no api_listener field in LDS response %+v", lis)
 	}
 	apiLisAny := lis.GetApiListener().GetApiListener()
 	if !IsHTTPConnManagerResource(apiLisAny.GetTypeUrl()) {
-		return "", fmt.Errorf("xds: unexpected resource type: %q in LDS response", apiLisAny.GetTypeUrl())
+		return nil, fmt.Errorf("xds: unexpected resource type: %q in LDS response", apiLisAny.GetTypeUrl())
 	}
 	apiLis := &v3httppb.HttpConnectionManager{}
 	if err := proto.Unmarshal(apiLisAny.GetValue(), apiLis); err != nil {
-		return "", fmt.Errorf("xds: failed to unmarshal api_listner in LDS response: %v", err)
+		return nil, fmt.Errorf("xds: failed to unmarshal api_listner in LDS response: %v", err)
 	}
 
 	logger.Infof("Resource with type %T, contains %v", apiLis, apiLis)
 	switch apiLis.RouteSpecifier.(type) {
 	case *v3httppb.HttpConnectionManager_Rds:
 		if apiLis.GetRds().GetConfigSource().GetAds() == nil {
-			return "", fmt.Errorf("xds: ConfigSource is not ADS in LDS response: %+v", lis)
+			return nil, fmt.Errorf("xds: ConfigSource is not ADS in LDS response: %+v", lis)
 		}
 		name := apiLis.GetRds().GetRouteConfigName()
 		if name == "" {
-			return "", fmt.Errorf("xds: empty route_config_name in LDS response: %+v", lis)
+			return nil, fmt.Errorf("xds: empty route_config_name in LDS response: %+v", lis)
 		}
-		return name, nil
+		return &ListenerUpdate{RouteConfigName: name}, nil
 	case *v3httppb.HttpConnectionManager_RouteConfig:
 		// TODO: Add support for specifying the RouteConfiguration inline
 		// in the LDS response.
-		return "", fmt.Errorf("xds: LDS response contains RDS config inline. Not supported for now: %+v", apiLis)
+		return nil, fmt.Errorf("xds: LDS response contains RDS config inline. Not supported for now: %+v", apiLis)
 	case nil:
-		return "", fmt.Errorf("xds: no RouteSpecifier in received LDS response: %+v", apiLis)
+		return nil, fmt.Errorf("xds: no RouteSpecifier in received LDS response: %+v", apiLis)
 	default:
-		return "", fmt.Errorf("xds: unsupported type %T for RouteSpecifier in received LDS response", apiLis.RouteSpecifier)
+		return nil, fmt.Errorf("xds: unsupported type %T for RouteSpecifier in received LDS response", apiLis.RouteSpecifier)
 	}
+}
+
+func processServerSideListener(lis *v3listenerpb.Listener, logger *grpclog.PrefixLogger) (*ListenerUpdate, error) {
+	// Make sure that an address encoded in the received listener resource, and
+	// that it matches the one specified in the name. Listener names on the
+	// server-side as in the following format:
+	// grpc/server?udpa.resource.listening_address=IP:Port.
+	addr := lis.GetAddress()
+	if addr == nil {
+		return nil, fmt.Errorf("xds: no address field in LDS response: %+v", lis)
+	}
+	sockAddr := addr.GetSocketAddress()
+	if sockAddr == nil {
+		return nil, fmt.Errorf("xds: no socket_address field in LDS response: %+v", lis)
+	}
+	host, port, err := getAddressFromName(lis.GetName())
+	if err != nil {
+		return nil, fmt.Errorf("xds: no host:port in name field of LDS response: %+v", lis)
+	}
+	if h := sockAddr.GetAddress(); host != h {
+		return nil, fmt.Errorf("xds: socket_address host does not match the one in name. Got %q, want %q", h, host)
+	}
+	if p := strconv.Itoa(int(sockAddr.GetPortValue())); port != p {
+		return nil, fmt.Errorf("xds: socket_address port does not match the one in name. Got %q, want %q", p, port)
+	}
+
+	// Make sure that the listener resource contains a single filter chain with
+	// the application_protocols field set to "managed-mtls", and the
+	// "transport_socket" field containing the appropriate security
+	// configuration.
+	fcs := lis.GetFilterChains()
+	if n := len(fcs); n != 1 {
+		return nil, fmt.Errorf("xds: filter chains count in LDS response does not match expected. Got %d, want 1", n)
+	}
+	fc := fcs[0]
+	aps := fc.GetFilterChainMatch().GetApplicationProtocols()
+	if len(aps) != 1 || aps[0] != "managed-mtls" {
+		return nil, fmt.Errorf("xds: application_protocols in LDS response does not match expected. Got %v, want %q", aps, "managed-mtls")
+	}
+
+	// If the transport_socket field is not specified, it means that the control
+	// plane has not sent us any security config. This is fine and the server
+	// will use the fallback credentials configured as part of the
+	// xdsCredentials.
+	ts := fc.GetTransportSocket()
+	if ts == nil {
+		return &ListenerUpdate{}, nil
+	}
+	if name := ts.GetName(); name != transportSocketName {
+		return nil, fmt.Errorf("xds: transport_socket field has unexpected name: %s", name)
+	}
+	any := ts.GetTypedConfig()
+	if any == nil || any.TypeUrl != version.V3DownstreamTLSContextURL {
+		return nil, fmt.Errorf("xds: transport_socket field has unexpected typeURL: %s", any.TypeUrl)
+	}
+	downstreamCtx := &v3tlspb.DownstreamTlsContext{}
+	if err := proto.Unmarshal(any.GetValue(), downstreamCtx); err != nil {
+		return nil, fmt.Errorf("xds: failed to unmarshal DownstreamTlsContext in LDS response: %v", err)
+	}
+	if downstreamCtx.GetCommonTlsContext() == nil {
+		return nil, errors.New("xds: DownstreamTlsContext in LDS response does not contain a CommonTlsContext")
+	}
+	sc, err := securityConfigFromCommonTLSContext(downstreamCtx.GetCommonTlsContext())
+	if err != nil {
+		return nil, err
+	}
+	return &ListenerUpdate{SecurityCfg: sc}, nil
+}
+
+func getAddressFromName(name string) (host string, port string, err error) {
+	var addr string
+	_, err = fmt.Sscanf(name, "grpc/server?udpa.resource.listening_address=%s", &addr)
+	if err != nil {
+		return "", "", err
+	}
+	return net.SplitHostPort(addr)
 }
 
 // UnmarshalRouteConfig processes resources received in an RDS response,
@@ -259,10 +349,6 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 	return routesRet, nil
 }
 
-// TransportSocket proto message has a `name` field which is expected to be set
-// to this value by the management server.
-const transportSocketName = "envoy.transport_sockets.tls"
-
 // UnmarshalCluster processes resources received in an CDS response, validates
 // them, and transforms them into a native struct which contains only fields we
 // are interested in.
@@ -337,13 +423,21 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 	if err := proto.Unmarshal(any.GetValue(), upstreamCtx); err != nil {
 		return nil, fmt.Errorf("xds: failed to unmarshal UpstreamTlsContext in CDS response: %v", err)
 	}
+	if upstreamCtx.GetCommonTlsContext() == nil {
+		return nil, errors.New("xds: UpstreamTlsContext in CDS response does not contain a CommonTlsContext")
+	}
 
-	// The `UpstreamTlsContext` has a `CommonTlsContext` which contains a
+	return securityConfigFromCommonTLSContext(upstreamCtx.GetCommonTlsContext())
+}
+
+// common is expected to be not nil.
+func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext) (*SecurityConfig, error) {
+	// The `CommonTlsContext` contains a
 	// `tls_certificate_certificate_provider_instance` field of type
 	// `CertificateProviderInstance`, which contains the provider instance name
 	// and the certificate name to fetch identity certs.
 	sc := &SecurityConfig{}
-	if identity := upstreamCtx.GetCommonTlsContext().GetTlsCertificateCertificateProviderInstance(); identity != nil {
+	if identity := common.GetTlsCertificateCertificateProviderInstance(); identity != nil {
 		sc.IdentityInstanceName = identity.GetInstanceName()
 		sc.IdentityCertName = identity.GetCertificateName()
 	}
@@ -357,9 +451,9 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 	//    - contains certificate provider instance configuration
 	//  - certificate provider instance configuration
 	//    - in this case, we do not get a list of accepted SANs.
-	switch t := upstreamCtx.GetCommonTlsContext().GetValidationContextType().(type) {
+	switch t := common.GetValidationContextType().(type) {
 	case *v3tlspb.CommonTlsContext_CombinedValidationContext:
-		combined := upstreamCtx.GetCommonTlsContext().GetCombinedValidationContext()
+		combined := common.GetCombinedValidationContext()
 		if def := combined.GetDefaultValidationContext(); def != nil {
 			for _, matcher := range def.GetMatchSubjectAltNames() {
 				// We only support exact matches for now.
@@ -373,7 +467,7 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 			sc.RootCertName = pi.GetCertificateName()
 		}
 	case *v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance:
-		pi := upstreamCtx.GetCommonTlsContext().GetValidationContextCertificateProviderInstance()
+		pi := common.GetValidationContextCertificateProviderInstance()
 		sc.RootInstanceName = pi.GetInstanceName()
 		sc.RootCertName = pi.GetCertificateName()
 	default:
