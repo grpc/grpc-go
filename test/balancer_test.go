@@ -561,7 +561,6 @@ func (s) TestMetadataInAddressAttributes(t *testing.T) {
 			if len(addrs) == 0 {
 				return nil
 			}
-
 			// Only use the first address.
 			sc, err := bd.ClientConn.NewSubConn([]resolver.Address{
 				imetadata.Set(addrs[0], metadata.Pairs(testMDKey, testMDValue)),
@@ -593,33 +592,17 @@ func (s) TestMetadataInAddressAttributes(t *testing.T) {
 			return &testpb.Empty{}, nil
 		},
 	}
-	if err := ss.Start(nil); err != nil {
+	if err := ss.Start(nil, grpc.WithDefaultServiceConfig(
+		fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, mdBalancerName),
+	)); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
 
-	r := manual.NewBuilderWithScheme("whatever")
-	dopts := []grpc.DialOption{
-		grpc.WithInsecure(),
-		grpc.WithResolvers(r),
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, mdBalancerName)),
-	}
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cc.Close()
-	tc := testpb.NewTestServiceClient(cc)
-	t.Log("Created a ClientConn...")
-
-	state := resolver.State{Addresses: []resolver.Address{{Addr: ss.address}}}
-	r.UpdateState(state)
-	t.Logf("Pushing resolver state update: %v through the manual resolver", state)
-
 	// The RPC should succeed with the expected md.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+	if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 	}
 	t.Log("Made an RPC which succeeded...")
