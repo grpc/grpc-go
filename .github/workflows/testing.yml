@@ -4,9 +4,6 @@ name: Testing
 on:
   push:
   pull_request:
-    paths-ignore:
-      - 'Documentation/**'
-      - 'version.go'
   schedule:
     - cron: 0 0 * * * # daily at 00:00
 
