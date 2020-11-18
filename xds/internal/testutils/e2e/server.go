@@ -66,7 +66,7 @@ type ManagementServer struct {
 // resource snapshot held by the management server, as required by the test
 // logic. When the test is done, it should call the Stop() method to cleanup
 // resources allocated by the management server.
-func StartManagementServer(ctx context.Context) (*ManagementServer, error) {
+func StartManagementServer() (*ManagementServer, error) {
 	// Create a snapshot cache.
 	cache := v3cache.NewSnapshotCache(true, v3cache.IDHash{}, serverLogger{})
 	logger.Infof("Created new snapshot cache...")
@@ -79,7 +79,7 @@ func StartManagementServer(ctx context.Context) (*ManagementServer, error) {
 	// Create an xDS management server and register the ADS implementation
 	// provided by it on a gRPC server. Cancelling the context passed to the
 	// server is the only way of stopping it at the end of the test.
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	xs := v3server.NewServer(ctx, cache, v3server.CallbackFuncs{})
 	gs := grpc.NewServer()
 	v3discoverygrpc.RegisterAggregatedDiscoveryServiceServer(gs, xs)
