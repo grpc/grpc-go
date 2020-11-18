@@ -38,8 +38,9 @@ import (
 )
 
 const (
-	defaultTestTimeout      = 5 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond
+	defaultTestTimeout       = 5 * time.Second
+	defaultTestShortTimeout  = 10 * time.Millisecond
+	testServerResourceNameID = "/path/to/resource"
 )
 
 type s struct {
@@ -135,19 +136,16 @@ func (s) TestRegisterService(t *testing.T) {
 func setupOverrides(t *testing.T) (*fakeGRPCServer, *testutils.Channel, func()) {
 	t.Helper()
 
-	origNewXDSConfig := newXDSConfig
-	newXDSConfig = func() (*bootstrap.Config, error) {
-		return &bootstrap.Config{
-			BalancerName: "dummyBalancer",
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto:    xdstestutils.EmptyNodeProtoV3,
-		}, nil
-	}
-
 	clientCh := testutils.NewChannel()
 	origNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) {
 		c := fakeclient.NewClient()
+		c.SetBootstrapConfig(&bootstrap.Config{
+			BalancerName:         "dummyBalancer",
+			Creds:                grpc.WithTransportCredentials(insecure.NewCredentials()),
+			NodeProto:            xdstestutils.EmptyNodeProtoV3,
+			ServerResourceNameID: testServerResourceNameID,
+		})
 		clientCh.Send(c)
 		return c, nil
 	}
@@ -157,7 +155,6 @@ func setupOverrides(t *testing.T) (*fakeGRPCServer, *testutils.Channel, func()) 
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServerInterface { return fs }
 
 	return fs, clientCh, func() {
-		newXDSConfig = origNewXDSConfig
 		newXDSClient = origNewXDSClient
 		newGRPCServer = origNewGRPCServer
 	}
@@ -206,7 +203,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", lis.Addr().String())
+	wantName := fmt.Sprintf("%s?udpa.resource.listening_address=%s", client.BootstrapConfig().ServerResourceNameID, lis.Addr().String())
 	if name != wantName {
 		t.Fatalf("LDS watch registered for name %q, want %q", name, wantName)
 	}
@@ -268,7 +265,7 @@ func (s) TestServeWithStop(t *testing.T) {
 		server.Stop()
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", lis.Addr().String())
+	wantName := fmt.Sprintf("%s?udpa.resource.listening_address=%s", client.BootstrapConfig().ServerResourceNameID, lis.Addr().String())
 	if name != wantName {
 		server.Stop()
 		t.Fatalf("LDS watch registered for name %q, wantPrefix %q", name, wantName)
@@ -323,16 +320,6 @@ func (s) TestServeBootstrapFailure(t *testing.T) {
 // TestServeNewClientFailure tests the case where xds client creation fails and
 // verifies that Server() exits with a non-nil error.
 func (s) TestServeNewClientFailure(t *testing.T) {
-	origNewXDSConfig := newXDSConfig
-	newXDSConfig = func() (*bootstrap.Config, error) {
-		return &bootstrap.Config{
-			BalancerName: "dummyBalancer",
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto:    xdstestutils.EmptyNodeProtoV3,
-		}, nil
-	}
-	defer func() { newXDSConfig = origNewXDSConfig }()
-
 	origNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) {
 		return nil, errors.New("xdsClient creation failed")
