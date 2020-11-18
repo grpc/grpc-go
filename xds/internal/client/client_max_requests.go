@@ -91,11 +91,3 @@ func (c *ServiceRequestsCounter) EndRequest() error {
 	src.services[c.ServiceName] = sInfo
 	return nil
 }
-
-// Copy copies the counter, or nil if it is nil.
-func (c *ServiceRequestsCounter) Copy() *ServiceRequestsCounter {
-	if c == nil {
-		return nil
-	}
-	return &ServiceRequestsCounter{ServiceName: c.ServiceName}
-}
