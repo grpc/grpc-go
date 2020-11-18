@@ -18,7 +18,6 @@ package edsbalancer
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -94,11 +93,11 @@ type edsBalancerImpl struct {
 	subConnMu         sync.Mutex
 	subConnToPriority map[balancer.SubConn]priorityType
 
-	pickerMu       sync.Mutex
-	dropConfig     []xdsclient.OverloadDropConfig
-	drops          []*dropper
-	innerState     balancer.State // The state of the picker without drop support.
-	edsServiceName string
+	pickerMu   sync.Mutex
+	dropConfig []xdsclient.OverloadDropConfig
+	drops      []*dropper
+	innerState balancer.State // The state of the picker without drop support.
+	counter    *client.ServiceRequestsCounter
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
@@ -173,7 +172,7 @@ func (edsImpl *edsBalancerImpl) updateDrops(dropConfig []xdsclient.OverloadDropC
 		// Update picker with old inner picker, new drops.
 		edsImpl.cc.UpdateState(balancer.State{
 			ConnectivityState: edsImpl.innerState.ConnectivityState,
-			Picker:            newDropPicker(edsImpl.innerState.Picker, newDrops, edsImpl.xdsClient.loadStore(), edsImpl.edsServiceName)},
+			Picker:            newDropPicker(edsImpl.innerState.Picker, newDrops, edsImpl.xdsClient.loadStore(), edsImpl.counter)},
 		)
 	}
 	edsImpl.pickerMu.Unlock()
@@ -392,10 +391,16 @@ func (edsImpl *edsBalancerImpl) handleSubConnStateChange(sc balancer.SubConn, s 
 	}
 }
 
+// updateConfig handles changes to the circuit breaking configuration.
 func (edsImpl *edsBalancerImpl) updateConfig(edsConfig *EDSConfig) {
-	fmt.Println(edsImpl)
-	edsImpl.edsServiceName = edsConfig.EDSServiceName
-	client.UpdateService(edsConfig.EDSServiceName, edsConfig.CircuitBreaking, edsConfig.MaxRequests)
+	if edsImpl.counter == nil || edsImpl.counter.ServiceName != edsConfig.EDSServiceName {
+		edsImpl.counter = &client.ServiceRequestsCounter{ServiceName: edsConfig.EDSServiceName}
+	}
+	edsImpl.counter.UpdateService(edsConfig.CircuitBreaking, edsConfig.MaxRequests)
+	if !edsConfig.CircuitBreaking {
+		// counter should be nil to prevent overhead in dropPicker.
+		edsImpl.counter = nil
+	}
 }
 
 // updateState first handles priority, and then wraps picker in a drop picker
@@ -412,7 +417,7 @@ func (edsImpl *edsBalancerImpl) updateState(priority priorityType, s balancer.St
 		defer edsImpl.pickerMu.Unlock()
 		edsImpl.innerState = s
 		// Don't reset drops when it's a state change.
-		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: newDropPicker(s.Picker, edsImpl.drops, edsImpl.xdsClient.loadStore(), edsImpl.edsServiceName)})
+		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: newDropPicker(s.Picker, edsImpl.drops, edsImpl.xdsClient.loadStore(), edsImpl.counter)})
 	}
 }
 
@@ -461,18 +466,18 @@ func (edsImpl *edsBalancerImpl) close() {
 }
 
 type dropPicker struct {
-	drops       []*dropper
-	p           balancer.Picker
-	loadStore   load.PerClusterReporter
-	serviceName string
+	drops     []*dropper
+	p         balancer.Picker
+	loadStore load.PerClusterReporter
+	counter   *client.ServiceRequestsCounter
 }
 
-func newDropPicker(p balancer.Picker, drops []*dropper, loadStore load.PerClusterReporter, serviceName string) *dropPicker {
+func newDropPicker(p balancer.Picker, drops []*dropper, loadStore load.PerClusterReporter, counter *client.ServiceRequestsCounter) *dropPicker {
 	return &dropPicker{
-		drops:       drops,
-		p:           p,
-		loadStore:   loadStore,
-		serviceName: serviceName,
+		drops:     drops,
+		p:         p,
+		loadStore: loadStore,
+		counter:   counter,
 	}
 }
 
@@ -497,13 +502,13 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	// TODO: (eds) don't drop unless the inner picker is READY. Similar to
 	// https://github.com/grpc/grpc-go/issues/2622.
 	pr, err := d.p.Pick(info)
-	if err != nil {
-		if err := client.StartRequest(d.serviceName); err != nil {
+	if d.counter != nil && err != nil {
+		if err := d.counter.StartRequest(); err != nil {
 			return balancer.PickResult{}, status.Errorf(codes.Unavailable, err.Error())
 		}
 		oldDone := pr.Done
 		pr.Done = func(doneInfo balancer.DoneInfo) {
-			client.EndRequest(d.serviceName)
+			d.counter.EndRequest()
 			if oldDone != nil {
 				oldDone(doneInfo)
 			}
