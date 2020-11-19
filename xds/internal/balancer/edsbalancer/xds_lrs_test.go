@@ -22,10 +22,7 @@ import (
 	"context"
 	"testing"
 
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/resolver"
-	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
 
@@ -33,6 +30,11 @@ import (
 // stream when the lbConfig passed to it contains a valid value for the LRS
 // server (empty string).
 func (s) TestXDSLoadReporting(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	defer func() { newXDSClient = oldNewXDSClient }()
+
 	builder := balancer.Get(edsName)
 	cc := newNoopTestClientConn()
 	edsB, ok := builder.Build(cc, balancer.BuildOptions{}).(*edsBalancer)
@@ -41,9 +43,7 @@ func (s) TestXDSLoadReporting(t *testing.T) {
 	}
 	defer edsB.Close()
 
-	xdsC := fakeclient.NewClient()
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, xdsC)},
 		BalancerConfig: &EDSConfig{
 			EDSServiceName:             testEDSClusterName,
 			LrsLoadReportingServerName: new(string),

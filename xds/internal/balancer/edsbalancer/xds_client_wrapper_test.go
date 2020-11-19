@@ -25,9 +25,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/internal/testutils"
-	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
@@ -75,13 +73,13 @@ func verifyExpectedRequests(fc *fakeclient.Client, resourceNames ...string) erro
 func (s) TestClientWrapperWatchEDS(t *testing.T) {
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
 
-	cw := newXDSClientWrapper(nil, nil)
+	cw := newXDSClientWrapper(xdsC, nil, nil)
 	defer cw.close()
 	t.Logf("Started xDS client wrapper for endpoint %s...", testServiceName)
 
 	// Update with an non-empty edsServiceName should trigger an EDS watch for
 	// the same.
-	cw.handleUpdate(&EDSConfig{EDSServiceName: "foobar-1"}, attributes.New(xdsinternal.XDSClientID, xdsC))
+	cw.handleUpdate(&EDSConfig{EDSServiceName: "foobar-1"})
 	if err := verifyExpectedRequests(xdsC, "foobar-1"); err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +88,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 	// name to another, and make sure a new watch is registered. The previously
 	// registered watch will be cancelled, which will result in an EDS request
 	// with no resource names being sent to the server.
-	cw.handleUpdate(&EDSConfig{EDSServiceName: "foobar-2"}, attributes.New(xdsinternal.XDSClientID, xdsC))
+	cw.handleUpdate(&EDSConfig{EDSServiceName: "foobar-2"})
 	if err := verifyExpectedRequests(xdsC, "", "foobar-2"); err != nil {
 		t.Fatal(err)
 	}
@@ -112,11 +110,11 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 		edsRespChan.Send(&edsUpdate{resp: update, err: err})
 	}
 
-	cw := newXDSClientWrapper(newEDS, nil)
+	xdsC := fakeclient.NewClient()
+	cw := newXDSClientWrapper(xdsC, newEDS, nil)
 	defer cw.close()
 
-	xdsC := fakeclient.NewClient()
-	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC))
+	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -143,45 +141,5 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	update := gotUpdate.(*edsUpdate)
 	if !cmp.Equal(update.resp, (xdsclient.EndpointsUpdate{})) || update.err != watchErr {
 		t.Fatalf("want update {nil, %v}, got %+v", watchErr, update)
-	}
-}
-
-// TestClientWrapperGetsXDSClientInAttributes verfies the case where the
-// clientWrapper receives the xdsClient to use in the attributes section of the
-// update.
-func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
-	cw := newXDSClientWrapper(nil, nil)
-	defer cw.close()
-
-	xdsC1 := fakeclient.NewClient()
-	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC1))
-
-	// Verify that the eds watch is registered for the expected resource name.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	gotCluster, err := xdsC1.WaitForWatchEDS(ctx)
-	if err != nil {
-		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
-	}
-	if gotCluster != testEDSClusterName {
-		t.Fatalf("xdsClient.WatchEndpoints() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
-	}
-
-	// Pass a new client in the attributes. Verify that the watch is
-	// re-registered on the new client, and that the old client is not closed
-	// (because clientWrapper only closes clients that it creates, it does not
-	// close client that are passed through attributes).
-	xdsC2 := fakeclient.NewClient()
-	cw.handleUpdate(&EDSConfig{EDSServiceName: testEDSClusterName}, attributes.New(xdsinternal.XDSClientID, xdsC2))
-	gotCluster, err = xdsC2.WaitForWatchEDS(ctx)
-	if err != nil {
-		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
-	}
-	if gotCluster != testEDSClusterName {
-		t.Fatalf("xdsClient.WatchEndpoints() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
-	}
-
-	if err := xdsC1.WaitForClose(ctx); err != context.DeadlineExceeded {
-		t.Fatalf("clientWrapper closed xdsClient received in attributes")
 	}
 }
