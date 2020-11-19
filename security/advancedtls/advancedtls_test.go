@@ -867,8 +867,8 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 			if err != nil {
 				t.Fatalf("serverConfig.GetCertificate(clientHello) failed: %v", err)
 			}
-			if !cmp.Equal(*gotCertificate, test.wantCert, cmp.AllowUnexported(big.Int{})) {
-				t.Errorf("GetCertificates() = %v, want %v", *gotCertificate, test.wantCert)
+			if !gotCertificate.Leaf.Equal(test.wantCert.Leaf) {
+				t.Errorf("GetCertificates() returned leaf certificate does not match expected (-want +got):\n%s", cmp.Diff(test.wantCert, *gotCertificate, cmp.AllowUnexported(big.Int{})))
 			}
 		})
 	}
