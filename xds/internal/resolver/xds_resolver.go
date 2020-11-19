@@ -22,7 +22,6 @@ package resolver
 import (
 	"fmt"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -30,17 +29,15 @@ import (
 
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
 const xdsScheme = "xds"
 
 // For overriding in unittests.
 var (
-	newXDSClient = func(opts xdsclient.Options) (xdsClientInterface, error) {
-		return xdsclient.New(opts)
+	newXDSClient = func() (xdsClientInterface, error) {
+		return xdsclient.New()
 	}
-	newXDSConfig = bootstrap.NewConfig
 )
 
 func init() {
@@ -53,12 +50,7 @@ type xdsResolverBuilder struct{}
 //
 // The xds bootstrap process is performed (and a new xds client is built) every
 // time an xds resolver is built.
-func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rbo resolver.BuildOptions) (resolver.Resolver, error) {
-	config, err := newXDSConfig()
-	if err != nil {
-		return nil, fmt.Errorf("xds: failed to read bootstrap file: %v", err)
-	}
-
+func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
 	r := &xdsResolver{
 		target:   t,
 		cc:       cc,
@@ -68,12 +60,7 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 	r.logger = prefixLogger((r))
 	r.logger.Infof("Creating resolver for target: %+v", t)
 
-	var dopts []grpc.DialOption
-	if rbo.Dialer != nil {
-		dopts = []grpc.DialOption{grpc.WithContextDialer(rbo.Dialer)}
-	}
-
-	client, err := newXDSClient(xdsclient.Options{Config: *config, DialOpts: dopts, TargetName: t.Endpoint})
+	client, err := newXDSClient()
 	if err != nil {
 		return nil, fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}

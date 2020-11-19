@@ -44,16 +44,7 @@ const (
 
 var (
 	fpb1, fpb2                   *fakeProviderBuilder
-	bootstrapCertProviderConfigs = map[string]bootstrap.CertProviderConfig{
-		"default1": {
-			Name:   fakeProvider1Name,
-			Config: &fakeStableConfig{config: fakeConfig + "1111"},
-		},
-		"default2": {
-			Name:   fakeProvider2Name,
-			Config: &fakeStableConfig{config: fakeConfig + "2222"},
-		},
-	}
+	bootstrapConfig              *bootstrap.Config
 	cdsUpdateWithGoodSecurityCfg = xdsclient.ClusterUpdate{
 		ServiceName: serviceName,
 		SecurityCfg: &xdsclient.SecurityConfig{
@@ -72,6 +63,14 @@ var (
 func init() {
 	fpb1 = &fakeProviderBuilder{name: fakeProvider1Name}
 	fpb2 = &fakeProviderBuilder{name: fakeProvider2Name}
+	cfg1, _ := fpb1.ParseConfig(fakeConfig + "1111")
+	cfg2, _ := fpb2.ParseConfig(fakeConfig + "2222")
+	bootstrapConfig = &bootstrap.Config{
+		CertProviderConfigs: map[string]*certprovider.BuildableConfig{
+			"default1": cfg1,
+			"default2": cfg2,
+		},
+	}
 	certprovider.Register(fpb1)
 	certprovider.Register(fpb2)
 }
@@ -82,40 +81,38 @@ type fakeProviderBuilder struct {
 	name string
 }
 
-func (b *fakeProviderBuilder) Build(certprovider.StableConfig, certprovider.Options) certprovider.Provider {
-	p := &fakeProvider{}
-	return p
-}
-
-func (b *fakeProviderBuilder) ParseConfig(config interface{}) (certprovider.StableConfig, error) {
+func (b *fakeProviderBuilder) ParseConfig(config interface{}) (*certprovider.BuildableConfig, error) {
 	s, ok := config.(string)
 	if !ok {
 		return nil, fmt.Errorf("providerBuilder %s received config of type %T, want string", b.name, config)
 	}
-	return &fakeStableConfig{config: s}, nil
+	return certprovider.NewBuildableConfig(b.name, []byte(s), func(certprovider.BuildOptions) certprovider.Provider {
+		return &fakeProvider{
+			Distributor: certprovider.NewDistributor(),
+			config:      s,
+		}
+	}), nil
 }
 
 func (b *fakeProviderBuilder) Name() string {
 	return b.name
 }
 
-type fakeStableConfig struct {
-	config string
-}
-
-func (c *fakeStableConfig) Canonical() []byte {
-	return []byte(c.config)
-}
-
 // fakeProvider is an implementation of the Provider interface which provides a
 // method for tests to invoke to push new key materials.
 type fakeProvider struct {
-	certprovider.Provider
+	*certprovider.Distributor
+	config string
+}
+
+// Close helps implement the Provider interface.
+func (p *fakeProvider) Close() {
+	p.Distributor.Stop()
 }
 
 // setupWithXDSCreds performs all the setup steps required for tests which use
 // xDSCredentials.
-func setupWithXDSCreds(t *testing.T, storeErr bool) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, *testutils.Channel, func()) {
+func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, func()) {
 	t.Helper()
 
 	builder := balancer.Get(cdsName)
@@ -162,25 +159,8 @@ func setupWithXDSCreds(t *testing.T, storeErr bool) (*fakeclient.Client, *cdsBal
 		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, clusterName)
 	}
 
-	// Override the certificate provider creation function to get notified about
-	// provider creation. Create a channel with size 2, so we have buffer to
-	// push notifications for both providers.
-	providerCh := testutils.NewChannelWithSize(2)
-	origGetProviderFunc := getProvider
-	if storeErr {
-		getProvider = func(string, interface{}, certprovider.Options) (certprovider.Provider, error) {
-			return nil, errors.New("certprovider.Store failed to created provider")
-		}
-	} else {
-		getProvider = func(name string, cfg interface{}, opts certprovider.Options) (certprovider.Provider, error) {
-			providerCh.Send(nil)
-			return origGetProviderFunc(name, cfg, opts)
-		}
-	}
-
-	return xdsC, cdsB.(*cdsBalancer), edsB, tcc, providerCh, func() {
+	return xdsC, cdsB.(*cdsBalancer), edsB, tcc, func() {
 		newEDSBalancer = oldEDSBalancerBuilder
-		getProvider = origGetProviderFunc
 	}
 }
 
@@ -223,16 +203,6 @@ func makeNewSubConn(ctx context.Context, edsCC balancer.ClientConn, parentCC *xd
 // the address attributes added as part of the intercepted NewSubConn() method
 // indicate the use of fallback credentials.
 func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
-	// Override the certificate provider creation function to get notified about
-	// provider creation.
-	providerCh := testutils.NewChannel()
-	origGetProviderFunc := getProvider
-	getProvider = func(name string, cfg interface{}, opts certprovider.Options) (certprovider.Provider, error) {
-		providerCh.Send(nil)
-		return origGetProviderFunc(name, cfg, opts)
-	}
-	defer func() { getProvider = origGetProviderFunc }()
-
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
@@ -241,6 +211,17 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 		cancel()
 		cdsB.Close()
 	}()
+
+	// Override the provider builder function to push on a channel. We do not
+	// expect this function to be called as part of this test.
+	providerCh := testutils.NewChannel()
+	origBuildProvider := buildProvider
+	buildProvider = func(c map[string]*certprovider.BuildableConfig, id, cert string, wi, wr bool) (certprovider.Provider, error) {
+		p, err := origBuildProvider(c, id, cert, wi, wr)
+		providerCh.Send(nil)
+		return p, err
+	}
+	defer func() { buildProvider = origBuildProvider }()
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
@@ -255,7 +236,9 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Make a NewSubConn and verify that attributes are not added.
+	// Make a NewSubConn and verify that the HandshakeInfo does not contain any
+	// certificate providers, forcing the credentials implementation to use
+	// fallback creds.
 	if err := makeNewSubConn(ctx, edsB.parentCC, tcc, true); err != nil {
 		t.Fatal(err)
 	}
@@ -278,11 +261,22 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 	// This creates a CDS balancer which uses xdsCredentials, pushes a
 	// ClientConnState update with a fake xdsClient, and makes sure that the CDS
 	// balancer registers a watch on the provided xdsClient.
-	xdsC, cdsB, edsB, tcc, providerCh, cancel := setupWithXDSCreds(t, false)
+	xdsC, cdsB, edsB, tcc, cancel := setupWithXDSCreds(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
 	}()
+
+	// Override the provider builder function to push on a channel. We do not
+	// expect this function to be called as part of this test.
+	providerCh := testutils.NewChannel()
+	origBuildProvider := buildProvider
+	buildProvider = func(c map[string]*certprovider.BuildableConfig, id, cert string, wi, wr bool) (certprovider.Provider, error) {
+		p, err := origBuildProvider(c, id, cert, wi, wr)
+		providerCh.Send(nil)
+		return p, err
+	}
+	defer func() { buildProvider = origBuildProvider }()
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
@@ -298,7 +292,9 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Make a NewSubConn and verify that attributes are not added.
+	// Make a NewSubConn and verify that the HandshakeInfo does not contain any
+	// certificate providers, forcing the credentials implementation to use
+	// fallback creds.
 	if err := makeNewSubConn(ctx, edsB.parentCC, tcc, true); err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +321,7 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 		// This creates a CDS balancer which uses xdsCredentials, pushes a
 		// ClientConnState update with a fake xdsClient, and makes sure that the CDS
 		// balancer registers a watch on the provided xdsClient.
-		xdsC, cdsB, edsB, tcc, _, cancel := setupWithXDSCreds(t, false)
+		xdsC, cdsB, edsB, tcc, cancel := setupWithXDSCreds(t)
 		defer func() {
 			cancel()
 			cdsB.Close()
@@ -333,7 +329,7 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 
 		if i == 0 {
 			// Set the bootstrap config used by the fake client.
-			xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+			xdsC.SetBootstrapConfig(bootstrapConfig)
 		}
 
 		// Here we invoke the watch callback registered on the fake xdsClient. A bad
@@ -366,14 +362,21 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 	// This creates a CDS balancer which uses xdsCredentials, pushes a
 	// ClientConnState update with a fake xdsClient, and makes sure that the CDS
 	// balancer registers a watch on the provided xdsClient.
-	xdsC, cdsB, edsB, tcc, _, cancel := setupWithXDSCreds(t, true)
+	xdsC, cdsB, edsB, tcc, cancel := setupWithXDSCreds(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
 	}()
 
+	// Override the provider builder function to return an error.
+	origBuildProvider := buildProvider
+	buildProvider = func(c map[string]*certprovider.BuildableConfig, id, cert string, wi, wr bool) (certprovider.Provider, error) {
+		return nil, errors.New("certprovider store error")
+	}
+	defer func() { buildProvider = origBuildProvider }()
+
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. Even
 	// though the received update is good, the certprovider.Store is configured
@@ -402,14 +405,14 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	// This creates a CDS balancer which uses xdsCredentials, pushes a
 	// ClientConnState update with a fake xdsClient, and makes sure that the CDS
 	// balancer registers a watch on the provided xdsClient.
-	xdsC, cdsB, edsB, tcc, providerCh, cancel := setupWithXDSCreds(t, false)
+	xdsC, cdsB, edsB, tcc, cancel := setupWithXDSCreds(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
 	}()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. A bad
 	// security config is passed here. So, we expect the CDS balancer to not
@@ -442,12 +445,6 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
-	// Make sure two certificate providers are created.
-	for i := 0; i < 2; i++ {
-		if _, err := providerCh.Receive(ctx); err != nil {
-			t.Fatalf("Failed to create certificate provider upon receipt of security config")
-		}
-	}
 
 	// Make a NewSubConn and verify that attributes are added.
 	if err := makeNewSubConn(ctx, edsB.parentCC, tcc, false); err != nil {
@@ -464,14 +461,14 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 	// This creates a CDS balancer which uses xdsCredentials, pushes a
 	// ClientConnState update with a fake xdsClient, and makes sure that the CDS
 	// balancer registers a watch on the provided xdsClient.
-	xdsC, cdsB, edsB, tcc, providerCh, cancel := setupWithXDSCreds(t, false)
+	xdsC, cdsB, edsB, tcc, cancel := setupWithXDSCreds(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
 	}()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
@@ -483,12 +480,6 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
-	}
-	// Make sure two certificate providers are created.
-	for i := 0; i < 2; i++ {
-		if _, err := providerCh.Receive(ctx); err != nil {
-			t.Fatalf("Failed to create certificate provider upon receipt of security config")
-		}
 	}
 
 	// Make a NewSubConn and verify that attributes are added.
@@ -501,14 +492,14 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	// This creates a CDS balancer which uses xdsCredentials, pushes a
 	// ClientConnState update with a fake xdsClient, and makes sure that the CDS
 	// balancer registers a watch on the provided xdsClient.
-	xdsC, cdsB, edsB, tcc, providerCh, cancel := setupWithXDSCreds(t, false)
+	xdsC, cdsB, edsB, tcc, cancel := setupWithXDSCreds(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
 	}()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
@@ -520,12 +511,6 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
-	}
-	// Make sure two certificate providers are created.
-	for i := 0; i < 2; i++ {
-		if _, err := providerCh.Receive(ctx); err != nil {
-			t.Fatalf("Failed to create certificate provider upon receipt of security config")
-		}
 	}
 
 	// Make a NewSubConn and verify that attributes are added.
@@ -557,14 +542,14 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	// This creates a CDS balancer which uses xdsCredentials, pushes a
 	// ClientConnState update with a fake xdsClient, and makes sure that the CDS
 	// balancer registers a watch on the provided xdsClient.
-	xdsC, cdsB, edsB, tcc, providerCh, cancel := setupWithXDSCreds(t, false)
+	xdsC, cdsB, edsB, tcc, cancel := setupWithXDSCreds(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
 	}()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
@@ -576,12 +561,6 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
-	}
-	// Make sure two certificate providers are created.
-	for i := 0; i < 2; i++ {
-		if _, err := providerCh.Receive(ctx); err != nil {
-			t.Fatalf("Failed to create certificate provider upon receipt of security config")
-		}
 	}
 
 	// Make a NewSubConn and verify that attributes are added.
@@ -624,14 +603,24 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 	// This creates a CDS balancer which uses xdsCredentials, pushes a
 	// ClientConnState update with a fake xdsClient, and makes sure that the CDS
 	// balancer registers a watch on the provided xdsClient.
-	xdsC, cdsB, edsB, tcc, providerCh, cancel := setupWithXDSCreds(t, false)
+	xdsC, cdsB, edsB, tcc, cancel := setupWithXDSCreds(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
 	}()
 
+	// Override the provider builder function to push on a channel.
+	providerCh := testutils.NewChannel()
+	origBuildProvider := buildProvider
+	buildProvider = func(c map[string]*certprovider.BuildableConfig, id, cert string, wi, wr bool) (certprovider.Provider, error) {
+		p, err := origBuildProvider(c, id, cert, wi, wr)
+		providerCh.Send(nil)
+		return p, err
+	}
+	defer func() { buildProvider = origBuildProvider }()
+
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to

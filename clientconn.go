@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
+	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
@@ -102,6 +103,17 @@ const (
 // Dial creates a client connection to the given target.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
+}
+
+type defaultConfigSelector struct {
+	sc *ServiceConfig
+}
+
+func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) *iresolver.RPCConfig {
+	return &iresolver.RPCConfig{
+		Context:      rpcInfo.Context,
+		MethodConfig: getMethodConfig(dcs.sc, rpcInfo.Method),
+	}
 }
 
 // DialContext creates a client connection to the given target. By default, it's
@@ -224,6 +236,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
 				cc.sc = &sc
+				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{&sc})
 				scSet = true
 			}
 		default:
@@ -259,6 +272,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.authority = cc.dopts.authority
 	} else if strings.HasPrefix(cc.target, "unix:") {
 		cc.authority = "localhost"
+	} else if strings.HasPrefix(cc.parsedTarget.Endpoint, ":") {
+		cc.authority = "localhost" + cc.parsedTarget.Endpoint
 	} else {
 		// Use endpoint from "scheme://authority/endpoint" as the default
 		// authority for ClientConn.
@@ -271,6 +286,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
 				cc.sc = &sc
+				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{&sc})
 			}
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -288,6 +304,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		DialCreds:        credsClone,
 		CredsBundle:      cc.dopts.copts.CredsBundle,
 		Dialer:           cc.dopts.copts.Dialer,
+		CustomUserAgent:  cc.dopts.copts.UserAgent,
 		ChannelzParentID: cc.channelzID,
 		Target:           cc.parsedTarget,
 	}
@@ -476,6 +493,8 @@ type ClientConn struct {
 	balancerBuildOpts balancer.BuildOptions
 	blockingpicker    *pickerWrapper
 
+	safeConfigSelector iresolver.SafeConfigSelector
+
 	mu              sync.RWMutex
 	resolverWrapper *ccResolverWrapper
 	sc              *ServiceConfig
@@ -536,6 +555,7 @@ func (cc *ClientConn) scWatcher() {
 			// TODO: load balance policy runtime change is ignored.
 			// We may revisit this decision in the future.
 			cc.sc = &sc
+			cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{&sc})
 			cc.mu.Unlock()
 		case <-cc.ctx.Done():
 			return
@@ -574,13 +594,13 @@ func init() {
 
 func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
 	if cc.sc != nil {
-		cc.applyServiceConfigAndBalancer(cc.sc, addrs)
+		cc.applyServiceConfigAndBalancer(cc.sc, nil, addrs)
 		return
 	}
 	if cc.dopts.defaultServiceConfig != nil {
-		cc.applyServiceConfigAndBalancer(cc.dopts.defaultServiceConfig, addrs)
+		cc.applyServiceConfigAndBalancer(cc.dopts.defaultServiceConfig, &defaultConfigSelector{cc.dopts.defaultServiceConfig}, addrs)
 	} else {
-		cc.applyServiceConfigAndBalancer(emptyServiceConfig, addrs)
+		cc.applyServiceConfigAndBalancer(emptyServiceConfig, &defaultConfigSelector{emptyServiceConfig}, addrs)
 	}
 }
 
@@ -617,7 +637,15 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 		// default, per the error handling design?
 	} else {
 		if sc, ok := s.ServiceConfig.Config.(*ServiceConfig); s.ServiceConfig.Err == nil && ok {
-			cc.applyServiceConfigAndBalancer(sc, s.Addresses)
+			configSelector := iresolver.GetConfigSelector(s)
+			if configSelector != nil {
+				if len(s.ServiceConfig.Config.(*ServiceConfig).Methods) != 0 {
+					channelz.Infof(logger, cc.channelzID, "method configs in service config will be ignored due to presence of config selector")
+				}
+			} else {
+				configSelector = &defaultConfigSelector{sc}
+			}
+			cc.applyServiceConfigAndBalancer(sc, configSelector, s.Addresses)
 		} else {
 			ret = balancer.ErrBadResolverState
 			if cc.balancerWrapper == nil {
@@ -627,6 +655,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 				} else {
 					err = status.Errorf(codes.Unavailable, "illegal service config type: %T", s.ServiceConfig.Config)
 				}
+				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc.sc})
 				cc.blockingpicker.updatePicker(base.NewErrPicker(err))
 				cc.csMgr.updateState(connectivity.TransientFailure)
 				cc.mu.Unlock()
@@ -861,6 +890,20 @@ func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
 	return curAddrFound
 }
 
+func getMethodConfig(sc *ServiceConfig, method string) MethodConfig {
+	if sc == nil {
+		return MethodConfig{}
+	}
+	if m, ok := sc.Methods[method]; ok {
+		return m
+	}
+	i := strings.LastIndex(method, "/")
+	if m, ok := sc.Methods[method[:i+1]]; ok {
+		return m
+	}
+	return sc.Methods[""]
+}
+
 // GetMethodConfig gets the method config of the input method.
 // If there's an exact match for input method (i.e. /service/method), we return
 // the corresponding MethodConfig.
@@ -873,17 +916,7 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	// TODO: Avoid the locking here.
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
-	if cc.sc == nil {
-		return MethodConfig{}
-	}
-	if m, ok := cc.sc.Methods[method]; ok {
-		return m
-	}
-	i := strings.LastIndex(method, "/")
-	if m, ok := cc.sc.Methods[method[:i+1]]; ok {
-		return m
-	}
-	return cc.sc.Methods[""]
+	return getMethodConfig(cc.sc, method)
 }
 
 func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {
@@ -906,12 +939,15 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method st
 	return t, done, nil
 }
 
-func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, addrs []resolver.Address) {
+func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSelector iresolver.ConfigSelector, addrs []resolver.Address) {
 	if sc == nil {
 		// should never reach here.
 		return
 	}
 	cc.sc = sc
+	if configSelector != nil {
+		cc.safeConfigSelector.UpdateConfigSelector(configSelector)
+	}
 
 	if cc.sc.retryThrottling != nil {
 		newThrottler := &retryThrottler{

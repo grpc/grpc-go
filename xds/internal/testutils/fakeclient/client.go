@@ -43,7 +43,7 @@ type Client struct {
 	loadReportCh *testutils.Channel
 	closeCh      *testutils.Channel
 	loadStore    *load.Store
-	certConfigs  map[string]bootstrap.CertProviderConfig
+	bootstrapCfg *bootstrap.Config
 
 	ldsCb func(xdsclient.ListenerUpdate, error)
 	rdsCb func(xdsclient.RouteConfigUpdate, error)
@@ -223,14 +223,14 @@ func (xdsC *Client) WaitForClose(ctx context.Context) error {
 	return err
 }
 
-// CertProviderConfigs returns the configured certificate provider configs.
-func (xdsC *Client) CertProviderConfigs() map[string]bootstrap.CertProviderConfig {
-	return xdsC.certConfigs
+// BootstrapConfig returns the bootstrap config.
+func (xdsC *Client) BootstrapConfig() *bootstrap.Config {
+	return xdsC.bootstrapCfg
 }
 
-// SetCertProviderConfigs updates the certificate provider configs.
-func (xdsC *Client) SetCertProviderConfigs(configs map[string]bootstrap.CertProviderConfig) {
-	xdsC.certConfigs = configs
+// SetBootstrapConfig updates the bootstrap config.
+func (xdsC *Client) SetBootstrapConfig(cfg *bootstrap.Config) {
+	xdsC.bootstrapCfg = cfg
 }
 
 // Name returns the name of the xds client.

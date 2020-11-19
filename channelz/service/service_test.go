@@ -69,6 +69,8 @@ var protoToSocketOpt protoToSocketOptFunc
 // TODO: Go1.7 is no longer supported - does this need a change?
 var emptyTime time.Time
 
+const defaultTestTimeout = 10 * time.Second
+
 type dummyChannel struct {
 	state                    connectivity.State
 	target                   string
@@ -327,7 +329,9 @@ func (s) TestGetTopChannels(t *testing.T) {
 		defer channelz.RemoveEntry(id)
 	}
 	s := newCZServer()
-	resp, _ := s.GetTopChannels(context.Background(), &channelzpb.GetTopChannelsRequest{StartChannelId: 0})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	resp, _ := s.GetTopChannels(ctx, &channelzpb.GetTopChannelsRequest{StartChannelId: 0})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want true, got %v", resp.GetEnd())
 	}
@@ -340,7 +344,7 @@ func (s) TestGetTopChannels(t *testing.T) {
 		id := channelz.RegisterChannel(tcs[0], 0, "")
 		defer channelz.RemoveEntry(id)
 	}
-	resp, _ = s.GetTopChannels(context.Background(), &channelzpb.GetTopChannelsRequest{StartChannelId: 0})
+	resp, _ = s.GetTopChannels(ctx, &channelzpb.GetTopChannelsRequest{StartChannelId: 0})
 	if resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want false, got %v", resp.GetEnd())
 	}
@@ -374,7 +378,9 @@ func (s) TestGetServers(t *testing.T) {
 		defer channelz.RemoveEntry(id)
 	}
 	svr := newCZServer()
-	resp, _ := svr.GetServers(context.Background(), &channelzpb.GetServersRequest{StartServerId: 0})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	resp, _ := svr.GetServers(ctx, &channelzpb.GetServersRequest{StartServerId: 0})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want true, got %v", resp.GetEnd())
 	}
@@ -387,7 +393,7 @@ func (s) TestGetServers(t *testing.T) {
 		id := channelz.RegisterServer(ss[0], "")
 		defer channelz.RemoveEntry(id)
 	}
-	resp, _ = svr.GetServers(context.Background(), &channelzpb.GetServersRequest{StartServerId: 0})
+	resp, _ = svr.GetServers(ctx, &channelzpb.GetServersRequest{StartServerId: 0})
 	if resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want false, got %v", resp.GetEnd())
 	}
@@ -407,7 +413,9 @@ func (s) TestGetServerSockets(t *testing.T) {
 		defer channelz.RemoveEntry(id)
 	}
 	svr := newCZServer()
-	resp, _ := svr.GetServerSockets(context.Background(), &channelzpb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: 0})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	resp, _ := svr.GetServerSockets(ctx, &channelzpb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: 0})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want: true, got: %v", resp.GetEnd())
 	}
@@ -424,7 +432,7 @@ func (s) TestGetServerSockets(t *testing.T) {
 		id := channelz.RegisterNormalSocket(&dummySocket{}, svrID, "")
 		defer channelz.RemoveEntry(id)
 	}
-	resp, _ = svr.GetServerSockets(context.Background(), &channelzpb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: 0})
+	resp, _ = svr.GetServerSockets(ctx, &channelzpb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: 0})
 	if resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want false, got %v", resp.GetEnd())
 	}
@@ -446,9 +454,11 @@ func (s) TestGetServerSocketsNonZeroStartID(t *testing.T) {
 		defer channelz.RemoveEntry(id)
 	}
 	svr := newCZServer()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Make GetServerSockets with startID = ids[1]+1, so socket-1 won't be
 	// included in the response.
-	resp, _ := svr.GetServerSockets(context.Background(), &channelzpb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: ids[1] + 1})
+	resp, _ := svr.GetServerSockets(ctx, &channelzpb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: ids[1] + 1})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want: true, got: %v", resp.GetEnd())
 	}
@@ -512,7 +522,9 @@ func (s) TestGetChannel(t *testing.T) {
 		defer channelz.RemoveEntry(id)
 	}
 	svr := newCZServer()
-	resp, _ := svr.GetChannel(context.Background(), &channelzpb.GetChannelRequest{ChannelId: ids[0]})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	resp, _ := svr.GetChannel(ctx, &channelzpb.GetChannelRequest{ChannelId: ids[0]})
 	metrics := resp.GetChannel()
 	subChans := metrics.GetSubchannelRef()
 	if len(subChans) != 1 || subChans[0].GetName() != refNames[2] || subChans[0].GetSubchannelId() != ids[2] {
@@ -552,7 +564,7 @@ func (s) TestGetChannel(t *testing.T) {
 			}
 		}
 	}
-	resp, _ = svr.GetChannel(context.Background(), &channelzpb.GetChannelRequest{ChannelId: ids[1]})
+	resp, _ = svr.GetChannel(ctx, &channelzpb.GetChannelRequest{ChannelId: ids[1]})
 	metrics = resp.GetChannel()
 	nestedChans = metrics.GetChannelRef()
 	if len(nestedChans) != 1 || nestedChans[0].GetName() != refNames[3] || nestedChans[0].GetChannelId() != ids[3] {
@@ -598,7 +610,9 @@ func (s) TestGetSubChannel(t *testing.T) {
 		defer channelz.RemoveEntry(id)
 	}
 	svr := newCZServer()
-	resp, _ := svr.GetSubchannel(context.Background(), &channelzpb.GetSubchannelRequest{SubchannelId: ids[1]})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	resp, _ := svr.GetSubchannel(ctx, &channelzpb.GetSubchannelRequest{SubchannelId: ids[1]})
 	metrics := resp.GetSubchannel()
 	want := map[int64]string{
 		ids[2]: refNames[2],
@@ -719,8 +733,10 @@ func (s) TestGetSocket(t *testing.T) {
 		ids[i] = channelz.RegisterNormalSocket(s, svrID, strconv.Itoa(i))
 		defer channelz.RemoveEntry(ids[i])
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for i, s := range ss {
-		resp, _ := svr.GetSocket(context.Background(), &channelzpb.GetSocketRequest{SocketId: ids[i]})
+		resp, _ := svr.GetSocket(ctx, &channelzpb.GetSocketRequest{SocketId: ids[i]})
 		metrics := resp.GetSocket()
 		if !reflect.DeepEqual(metrics.GetRef(), &channelzpb.SocketRef{SocketId: ids[i], Name: strconv.Itoa(i)}) || !reflect.DeepEqual(socketProtoToStruct(metrics), s) {
 			t.Fatalf("resp.GetSocket() want: metrics.GetRef() = %#v and %#v, got: metrics.GetRef() = %#v and %#v", &channelzpb.SocketRef{SocketId: ids[i], Name: strconv.Itoa(i)}, s, metrics.GetRef(), socketProtoToStruct(metrics))

@@ -38,7 +38,7 @@ func (s) TestLDSWatch(t *testing.T) {
 	apiClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	client, err := New(clientOpts(testXDSServer, false))
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -91,7 +91,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 	apiClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	client, err := New(clientOpts(testXDSServer, false))
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -157,7 +157,7 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 	apiClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	client, err := New(clientOpts(testXDSServer, false))
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -223,7 +223,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	apiClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	client, err := New(clientOpts(testXDSServer, false))
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -285,7 +285,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	apiClientCh, cleanup := overrideNewAPIClient()
 	defer cleanup()
 
-	client, err := New(clientOpts(testXDSServer, false))
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}

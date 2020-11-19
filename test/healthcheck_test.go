@@ -315,9 +315,12 @@ func (s) TestHealthCheckWithGoAway(t *testing.T) {
 	}
 }`)})
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	// make some rpcs to make sure connection is working.
 	if err := verifyResultWithDelay(func() (bool, error) {
-		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		return true, nil
@@ -326,8 +329,6 @@ func (s) TestHealthCheckWithGoAway(t *testing.T) {
 	}
 
 	// the stream rpc will persist through goaway event.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx, grpc.WaitForReady(true))
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -407,9 +408,11 @@ func (s) TestHealthCheckWithConnClose(t *testing.T) {
 	}
 }`)})
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// make some rpcs to make sure connection is working.
 	if err := verifyResultWithDelay(func() (bool, error) {
-		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		return true, nil
@@ -470,9 +473,11 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 		ServiceConfig: sc,
 	})
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// make some rpcs to make sure connection is working.
 	if err := verifyResultWithDelay(func() (bool, error) {
-		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		return true, nil
@@ -481,8 +486,6 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	}
 
 	// the stream rpc will persist through goaway event.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx, grpc.WaitForReady(true))
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -561,9 +564,11 @@ func (s) TestHealthCheckWithClientConnClose(t *testing.T) {
 	}
 }`)})
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// make some rpcs to make sure connection is working.
 	if err := verifyResultWithDelay(func() (bool, error) {
-		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		return true, nil
@@ -765,9 +770,11 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 	}
 }`)})
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// send some rpcs to make sure transport has been created and is ready for use.
 	if err := verifyResultWithDelay(func() (bool, error) {
-		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		return true, nil
@@ -804,9 +811,11 @@ func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 	}
 }`)})
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// send some rpcs to make sure transport has been created and is ready for use.
 	if err := verifyResultWithDelay(func() (bool, error) {
-		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		return true, nil
@@ -837,9 +846,11 @@ func testHealthCheckDisableWithServiceConfig(t *testing.T, addr string) {
 
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: addr}}})
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// send some rpcs to make sure transport has been created and is ready for use.
 	if err := verifyResultWithDelay(func() (bool, error) {
-		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		return true, nil

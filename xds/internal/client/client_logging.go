@@ -29,6 +29,6 @@ const prefix = "[xds-client %p] "
 
 var logger = grpclog.Component("xds")
 
-func prefixLogger(p *Client) *internalgrpclog.PrefixLogger {
+func prefixLogger(p *clientImpl) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
 }

@@ -33,6 +33,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/internal/grpcutil"
+	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/transport/networktype"
 
 	"google.golang.org/grpc/codes"
@@ -60,7 +61,7 @@ type http2Client struct {
 	cancel     context.CancelFunc
 	ctxDone    <-chan struct{} // Cache the ctx.Done() chan.
 	userAgent  string
-	md         interface{}
+	md         metadata.MD
 	conn       net.Conn // underlying communication channel
 	loopy      *loopyWriter
 	remoteAddr net.Addr
@@ -234,6 +235,18 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		if err != nil {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: authentication handshake failed: %v", err)
 		}
+		for _, cd := range perRPCCreds {
+			if cd.RequireTransportSecurity() {
+				if ci, ok := authInfo.(interface {
+					GetCommonAuthInfo() credentials.CommonAuthInfo
+				}); ok {
+					secLevel := ci.GetCommonAuthInfo().SecurityLevel
+					if secLevel != credentials.InvalidSecurityLevel && secLevel < credentials.PrivacyAndIntegrity {
+						return nil, connectionErrorf(true, nil, "transport: cannot send secure credentials on an insecure connection")
+					}
+				}
+			}
+		}
 		isSecure = true
 		if transportCreds.Info().SecurityProtocol == "tls" {
 			scheme = "https"
@@ -256,7 +269,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		ctxDone:               ctx.Done(), // Cache Done chan.
 		cancel:                cancel,
 		userAgent:             opts.UserAgent,
-		md:                    addr.Metadata,
 		conn:                  conn,
 		remoteAddr:            conn.RemoteAddr(),
 		localAddr:             conn.LocalAddr(),
@@ -283,6 +295,12 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		onClose:               onClose,
 		keepaliveEnabled:      keepaliveEnabled,
 		bufferPool:            newBufferPool(),
+	}
+
+	if md, ok := addr.Metadata.(*metadata.MD); ok {
+		t.md = *md
+	} else if md := imetadata.Get(addr); md != nil {
+		t.md = md
 	}
 	t.controlBuf = newControlBuffer(t.ctxDone)
 	if opts.InitialWindowSize >= defaultWindowSize {
@@ -500,14 +518,12 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 			}
 		}
 	}
-	if md, ok := t.md.(*metadata.MD); ok {
-		for k, vv := range *md {
-			if isReservedHeader(k) {
-				continue
-			}
-			for _, v := range vv {
-				headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
-			}
+	for k, vv := range t.md {
+		if isReservedHeader(k) {
+			continue
+		}
+		for _, v := range vv {
+			headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 		}
 	}
 	return headerFields, nil
@@ -557,8 +573,11 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 	// Note: if these credentials are provided both via dial options and call
 	// options, then both sets of credentials will be applied.
 	if callCreds := callHdr.Creds; callCreds != nil {
-		if !t.isSecure && callCreds.RequireTransportSecurity() {
-			return nil, status.Error(codes.Unauthenticated, "transport: cannot send secure credentials on an insecure connection")
+		if callCreds.RequireTransportSecurity() {
+			ri, _ := credentials.RequestInfoFromContext(ctx)
+			if !t.isSecure || credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity) != nil {
+				return nil, status.Error(codes.Unauthenticated, "transport: cannot send secure credentials on an insecure connection")
+			}
 		}
 		data, err := callCreds.GetRequestMetadata(ctx, audience)
 		if err != nil {

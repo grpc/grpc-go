@@ -43,11 +43,11 @@ func NewCredentials() credentials.TransportCredentials {
 type insecureTC struct{}
 
 func (insecureTC) ClientHandshake(ctx context.Context, _ string, conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return conn, Info{credentials.CommonAuthInfo{SecurityLevel: credentials.NoSecurity}}, nil
+	return conn, info{credentials.CommonAuthInfo{SecurityLevel: credentials.NoSecurity}}, nil
 }
 
 func (insecureTC) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return conn, Info{credentials.CommonAuthInfo{SecurityLevel: credentials.NoSecurity}}, nil
+	return conn, info{credentials.CommonAuthInfo{SecurityLevel: credentials.NoSecurity}}, nil
 }
 
 func (insecureTC) Info() credentials.ProtocolInfo {
@@ -62,13 +62,13 @@ func (insecureTC) OverrideServerName(string) error {
 	return nil
 }
 
-// Info contains the auth information for an insecure connection.
+// info contains the auth information for an insecure connection.
 // It implements the AuthInfo interface.
-type Info struct {
+type info struct {
 	credentials.CommonAuthInfo
 }
 
-// AuthType returns the type of Info as a string.
-func (Info) AuthType() string {
+// AuthType returns the type of info as a string.
+func (info) AuthType() string {
 	return "insecure"
 }

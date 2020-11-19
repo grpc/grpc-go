@@ -38,14 +38,14 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// Info contains the auth information for a local connection.
+// info contains the auth information for a local connection.
 // It implements the AuthInfo interface.
-type Info struct {
+type info struct {
 	credentials.CommonAuthInfo
 }
 
-// AuthType returns the type of Info as a string.
-func (Info) AuthType() string {
+// AuthType returns the type of info as a string.
+func (info) AuthType() string {
 	return "local"
 }
 
@@ -70,7 +70,7 @@ func getSecurityLevel(network, addr string) (credentials.SecurityLevel, error) {
 		return credentials.PrivacyAndIntegrity, nil
 	// Not a local connection and should fail
 	default:
-		return credentials.Invalid, fmt.Errorf("local credentials rejected connection to non-local address %q", addr)
+		return credentials.InvalidSecurityLevel, fmt.Errorf("local credentials rejected connection to non-local address %q", addr)
 	}
 }
 
@@ -79,7 +79,7 @@ func (*localTC) ClientHandshake(ctx context.Context, authority string, conn net.
 	if err != nil {
 		return nil, nil, err
 	}
-	return conn, Info{credentials.CommonAuthInfo{SecurityLevel: secLevel}}, nil
+	return conn, info{credentials.CommonAuthInfo{SecurityLevel: secLevel}}, nil
 }
 
 func (*localTC) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -87,7 +87,7 @@ func (*localTC) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInfo, 
 	if err != nil {
 		return nil, nil, err
 	}
-	return conn, Info{credentials.CommonAuthInfo{SecurityLevel: secLevel}}, nil
+	return conn, info{credentials.CommonAuthInfo{SecurityLevel: secLevel}}, nil
 }
 
 // NewCredentials returns a local credential implementing credentials.TransportCredentials.

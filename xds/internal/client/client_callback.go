@@ -26,7 +26,7 @@ type watcherInfoWithUpdate struct {
 
 // scheduleCallback should only be called by methods of watchInfo, which checks
 // for watcher states and maintain consistency.
-func (c *Client) scheduleCallback(wi *watchInfo, update interface{}, err error) {
+func (c *clientImpl) scheduleCallback(wi *watchInfo, update interface{}, err error) {
 	c.updateCh.Put(&watcherInfoWithUpdate{
 		wi:     wi,
 		update: update,
@@ -34,7 +34,7 @@ func (c *Client) scheduleCallback(wi *watchInfo, update interface{}, err error) 
 	})
 }
 
-func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
+func (c *clientImpl) callCallback(wiu *watcherInfoWithUpdate) {
 	c.mu.Lock()
 	// Use a closure to capture the callback and type assertion, to save one
 	// more switch case.
@@ -74,7 +74,7 @@ func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *Client) NewListeners(updates map[string]ListenerUpdate) {
+func (c *clientImpl) NewListeners(updates map[string]ListenerUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -109,7 +109,7 @@ func (c *Client) NewListeners(updates map[string]ListenerUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *Client) NewRouteConfigs(updates map[string]RouteConfigUpdate) {
+func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -130,7 +130,7 @@ func (c *Client) NewRouteConfigs(updates map[string]RouteConfigUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *Client) NewClusters(updates map[string]ClusterUpdate) {
+func (c *clientImpl) NewClusters(updates map[string]ClusterUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -165,7 +165,7 @@ func (c *Client) NewClusters(updates map[string]ClusterUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *Client) NewEndpoints(updates map[string]EndpointsUpdate) {
+func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdate) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

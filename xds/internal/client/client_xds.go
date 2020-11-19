@@ -171,10 +171,6 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 			continue
 		}
 
-		if caseSensitive := match.GetCaseSensitive(); caseSensitive != nil && !caseSensitive.Value {
-			return nil, fmt.Errorf("route %+v has case-sensitive false", r)
-		}
-
 		pathSp := match.GetPathSpecifier()
 		if pathSp == nil {
 			return nil, fmt.Errorf("route %+v doesn't have a path specifier", r)
@@ -191,6 +187,10 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 		default:
 			logger.Warningf("route %+v has an unrecognized path specifier: %+v", r, pt)
 			continue
+		}
+
+		if caseSensitive := match.GetCaseSensitive(); caseSensitive != nil {
+			route.CaseInsensitive = !caseSensitive.Value
 		}
 
 		for _, h := range match.GetHeaders() {

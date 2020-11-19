@@ -83,8 +83,10 @@ func checkPickFirst(cc *ClientConn, servers []*server) error {
 		err   error
 	)
 	connected := false
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for i := 0; i < 5000; i++ {
-		if err = cc.Invoke(context.Background(), "/foo/bar", &req, &reply); errorDesc(err) == servers[0].port {
+		if err = cc.Invoke(ctx, "/foo/bar", &req, &reply); errorDesc(err) == servers[0].port {
 			if connected {
 				// connected is set to false if peer is not server[0]. So if
 				// connected is true here, this is the second time we saw
@@ -100,9 +102,10 @@ func checkPickFirst(cc *ClientConn, servers []*server) error {
 	if !connected {
 		return fmt.Errorf("pickfirst is not in effect after 5 second, EmptyCall() = _, %v, want _, %v", err, servers[0].port)
 	}
+
 	// The following RPCs should all succeed with the first server.
 	for i := 0; i < 3; i++ {
-		err = cc.Invoke(context.Background(), "/foo/bar", &req, &reply)
+		err = cc.Invoke(ctx, "/foo/bar", &req, &reply)
 		if errorDesc(err) != servers[0].port {
 			return fmt.Errorf("index %d: want peer %v, got peer %v", i, servers[0].port, err)
 		}
@@ -117,6 +120,8 @@ func checkRoundRobin(cc *ClientConn, servers []*server) error {
 		err   error
 	)
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Make sure connections to all servers are up.
 	for i := 0; i < 2; i++ {
 		// Do this check twice, otherwise the first RPC's transport may still be
@@ -124,7 +129,7 @@ func checkRoundRobin(cc *ClientConn, servers []*server) error {
 		for _, s := range servers {
 			var up bool
 			for i := 0; i < 5000; i++ {
-				if err = cc.Invoke(context.Background(), "/foo/bar", &req, &reply); errorDesc(err) == s.port {
+				if err = cc.Invoke(ctx, "/foo/bar", &req, &reply); errorDesc(err) == s.port {
 					up = true
 					break
 				}
@@ -138,7 +143,7 @@ func checkRoundRobin(cc *ClientConn, servers []*server) error {
 
 	serverCount := len(servers)
 	for i := 0; i < 3*serverCount; i++ {
-		err = cc.Invoke(context.Background(), "/foo/bar", &req, &reply)
+		err = cc.Invoke(ctx, "/foo/bar", &req, &reply)
 		if errorDesc(err) != servers[i%serverCount].port {
 			return fmt.Errorf("index %d: want peer %v, got peer %v", i, servers[i%serverCount].port, err)
 		}

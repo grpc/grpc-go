@@ -28,6 +28,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
@@ -60,7 +61,6 @@ const (
 	goodRouteName1           = "GoodRouteConfig1"
 	goodRouteName2           = "GoodRouteConfig2"
 	goodEDSName              = "GoodClusterAssignment1"
-	uninterestingRouteName   = "UninterestingRouteName"
 	uninterestingDomain      = "uninteresting.domain"
 	goodClusterName1         = "GoodClusterName1"
 	goodClusterName2         = "GoodClusterName2"
@@ -635,7 +635,7 @@ func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 	rb := manual.NewBuilderWithScheme(scheme)
 	rb.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: "no.such.server"}}})
 
-	cc, err := grpc.Dial(scheme+":///whatever", grpc.WithInsecure(), grpc.WithResolvers(rb))
+	cc, err := grpc.Dial(scheme+":///whatever", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(rb))
 	if err != nil {
 		t.Fatalf("Failed to dial ClientConn: %v", err)
 	}
