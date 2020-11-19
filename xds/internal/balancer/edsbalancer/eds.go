@@ -93,7 +93,7 @@ type edsBalancerImplInterface interface {
 	handleSubConnStateChange(sc balancer.SubConn, state connectivity.State)
 	// updateState handle a balancer state update from the priority.
 	updateState(priority priorityType, s balancer.State)
-	// updateConfig ???
+	// updateConfig handles an update to the eds configuration.
 	updateConfig(edsConfig *EDSConfig)
 	// close closes the eds balancer.
 	close()
