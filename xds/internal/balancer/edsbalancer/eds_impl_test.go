@@ -550,6 +550,63 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	}
 }
 
+func (s) TestEDS_CircuitBreaking(t *testing.T) {
+	cc := testutils.NewTestClientConn(t)
+	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+	edsb.updateConfig(&EDSConfig{EDSServiceName: "test", CircuitBreaking: true, MaxRequests: 50})
+
+	// One locality with one backend.
+	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
+	edsb.handleEDSResponse(parseEDSRespProtoForTesting(clab1.Build()))
+	sc1 := <-cc.NewSubConnCh
+	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
+
+	// Picks with drops.
+	dones := []func(){}
+	p := <-cc.NewPickerCh
+	for i := 0; i < 100; i++ {
+		pr, err := p.Pick(balancer.PickInfo{})
+		// TODO: the dropping algorithm needs a design. When the dropping algorithm
+		// is fixed, this test also needs fix.
+		if i < 50 && err != nil {
+			t.Errorf("The first 50%% picks should be non-drops, got error %v", err)
+		} else if i > 50 && err == nil {
+			t.Errorf("The second 50%% picks should be drops, got error <nil>")
+		}
+		dones = append(dones, func() {
+			if pr.Done != nil {
+				pr.Done(balancer.DoneInfo{})
+			}
+		})
+	}
+
+	for _, done := range dones {
+		done()
+	}
+	dones = []func(){}
+
+	// Pick without drops.
+	for i := 0; i < 50; i++ {
+		pr, err := p.Pick(balancer.PickInfo{})
+		if err != nil {
+			t.Errorf("The third 50%% picks should be non-drops, got error %v", err)
+		}
+		dones = append(dones, func() {
+			if pr.Done != nil {
+				pr.Done(balancer.DoneInfo{})
+			}
+		})
+	}
+
+	// Without this, future tests with the same service name will fail.
+	for _, done := range dones {
+		done()
+	}
+}
+
 func init() {
 	balancer.Register(&testInlineUpdateBalancerBuilder{})
 }

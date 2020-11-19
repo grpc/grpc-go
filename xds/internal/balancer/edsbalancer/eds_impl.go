@@ -502,7 +502,7 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	// TODO: (eds) don't drop unless the inner picker is READY. Similar to
 	// https://github.com/grpc/grpc-go/issues/2622.
 	pr, err := d.p.Pick(info)
-	if d.counter != nil && err != nil {
+	if d.counter != nil && err == nil {
 		if err := d.counter.StartRequest(); err != nil {
 			return balancer.PickResult{}, status.Errorf(codes.Unavailable, err.Error())
 		}
