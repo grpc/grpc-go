@@ -74,16 +74,6 @@ type grpcServerInterface interface {
 	GracefulStop()
 }
 
-func validateListener(lis net.Listener) error {
-	if _, ok := lis.(*net.TCPListener); !ok {
-		return fmt.Errorf("xds: GRPCServer expects a net.TCPListener. Got %T", lis)
-	}
-	if _, ok := lis.Addr().(*net.TCPAddr); !ok {
-		return fmt.Errorf("xds: GRPCServer expects listener to return a net.TCPAddr. Got %T", lis.Addr())
-	}
-	return nil
-}
-
 // GRPCServer wraps a gRPC server and provides server-side xDS functionality, by
 // communication with a management server using xDS APIs. It implements the
 // grpc.ServiceRegistrar interface and can be passed to service registration
@@ -162,8 +152,8 @@ func (s *GRPCServer) initXDSClient() error {
 // Serve will return a non-nil error unless Stop or GracefulStop is called.
 func (s *GRPCServer) Serve(lis net.Listener) error {
 	s.logger.Infof("Serve() passed a net.Listener on %s", lis.Addr().String())
-	if err := validateListener(lis); err != nil {
-		return err
+	if _, ok := lis.Addr().(*net.TCPAddr); !ok {
+		return fmt.Errorf("xds: GRPCServer expects listener to return a net.TCPAddr. Got %T", lis.Addr())
 	}
 
 	// If this is the first time Serve() is being called, we need to initialize

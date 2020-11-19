@@ -94,7 +94,7 @@ func (s) TestServerSideXDS(t *testing.T) {
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("xdstestutils.LocalTCPListener() failed: %v", err)
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 
 	go func() {
