@@ -19,17 +19,12 @@
 package client_test
 
 import (
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/xds/internal/client"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 type counterTest struct {
 	name            string
@@ -60,7 +55,7 @@ func testCounter(t *testing.T, test counterTest) {
 				fail(err)
 				return
 			}
-			time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond)
+			time.Sleep(time.Duration(1) * time.Millisecond)
 			if err := counter.EndRequest(); err != nil {
 				fail(err)
 				return
