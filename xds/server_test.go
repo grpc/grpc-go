@@ -50,57 +50,6 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func (s) TestServeOptions_Validate(t *testing.T) {
-	tests := []struct {
-		desc    string
-		opts    ServeOptions
-		wantErr bool
-	}{
-		{
-			desc:    "empty options",
-			opts:    ServeOptions{},
-			wantErr: true,
-		},
-		{
-			desc:    "bad address",
-			opts:    ServeOptions{Address: "I'm a bad IP address"},
-			wantErr: true,
-		},
-		{
-			desc:    "no port",
-			opts:    ServeOptions{Address: "1.2.3.4"},
-			wantErr: true,
-		},
-		{
-			desc:    "empty hostname",
-			opts:    ServeOptions{Address: ":1234"},
-			wantErr: true,
-		},
-		{
-			desc:    "localhost",
-			opts:    ServeOptions{Address: "localhost:1234"},
-			wantErr: true,
-		},
-		{
-			desc: "ipv4",
-			opts: ServeOptions{Address: "1.2.3.4:1234"},
-		},
-		{
-			desc: "ipv6",
-			opts: ServeOptions{Address: "[1:2::3:4]:1234"},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.desc, func(t *testing.T) {
-			err := test.opts.validate()
-			if (err != nil) != test.wantErr {
-				t.Errorf("ServeOptions.validate(%+v) returned err %v, wantErr: %v", test.opts, err, test.wantErr)
-			}
-		})
-	}
-}
-
 type fakeGRPCServer struct {
 	done              chan struct{}
 	registerServiceCh *testutils.Channel
@@ -229,15 +178,15 @@ func (s) TestServeSuccess(t *testing.T) {
 	server := NewGRPCServer()
 	defer server.Stop()
 
-	localAddr, err := xdstestutils.AvailableHostPort()
+	lis, err := xdstestutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("testutils.AvailableHostPort() failed: %v", err)
+		t.Fatalf("xdstestutils.LocalTCPListener() failed: %v", err)
 	}
 
 	// Call Serve() in a goroutine, and push on a channel when Serve returns.
 	serveDone := testutils.NewChannel()
 	go func() {
-		if err := server.Serve(ServeOptions{Address: localAddr}); err != nil {
+		if err := server.Serve(lis); err != nil {
 			t.Error(err)
 		}
 		serveDone.Send(nil)
@@ -257,7 +206,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", localAddr)
+	wantName := fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", lis.Addr().String())
 	if name != wantName {
 		t.Fatalf("LDS watch registered for name %q, want %q", name, wantName)
 	}
@@ -290,15 +239,15 @@ func (s) TestServeWithStop(t *testing.T) {
 	// it after the LDS watch has been registered.
 	server := NewGRPCServer()
 
-	localAddr, err := xdstestutils.AvailableHostPort()
+	lis, err := xdstestutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("testutils.AvailableHostPort() failed: %v", err)
+		t.Fatalf("xdstestutils.LocalTCPListener() failed: %v", err)
 	}
 
 	// Call Serve() in a goroutine, and push on a channel when Serve returns.
 	serveDone := testutils.NewChannel()
 	go func() {
-		if err := server.Serve(ServeOptions{Address: localAddr}); err != nil {
+		if err := server.Serve(lis); err != nil {
 			t.Error(err)
 		}
 		serveDone.Send(nil)
@@ -319,7 +268,7 @@ func (s) TestServeWithStop(t *testing.T) {
 		server.Stop()
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", localAddr)
+	wantName := fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", lis.Addr().String())
 	if name != wantName {
 		server.Stop()
 		t.Fatalf("LDS watch registered for name %q, wantPrefix %q", name, wantName)
@@ -349,14 +298,14 @@ func (s) TestServeBootstrapFailure(t *testing.T) {
 	server := NewGRPCServer()
 	defer server.Stop()
 
-	localAddr, err := xdstestutils.AvailableHostPort()
+	lis, err := xdstestutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("testutils.AvailableHostPort() failed: %v", err)
+		t.Fatalf("xdstestutils.LocalTCPListener() failed: %v", err)
 	}
 
 	serveDone := testutils.NewChannel()
 	go func() {
-		err := server.Serve(ServeOptions{Address: localAddr})
+		err := server.Serve(lis)
 		serveDone.Send(err)
 	}()
 
@@ -393,14 +342,14 @@ func (s) TestServeNewClientFailure(t *testing.T) {
 	server := NewGRPCServer()
 	defer server.Stop()
 
-	localAddr, err := xdstestutils.AvailableHostPort()
+	lis, err := xdstestutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("testutils.AvailableHostPort() failed: %v", err)
+		t.Fatalf("xdstestutils.LocalTCPListener() failed: %v", err)
 	}
 
 	serveDone := testutils.NewChannel()
 	go func() {
-		err := server.Serve(ServeOptions{Address: localAddr})
+		err := server.Serve(lis)
 		serveDone.Send(err)
 	}()
 

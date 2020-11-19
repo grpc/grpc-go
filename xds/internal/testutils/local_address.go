@@ -20,21 +20,7 @@ package testutils
 
 import "net"
 
-// AvailableHostPort returns a local address to listen on. This will be of the
-// form "host:port", where the host will be a literal IP address, and port
-// must be a literal port number. If the host is a literal IPv6 address it
-// will be enclosed in square brackets, as in "[2001:db8::1]:80.
-//
-// This is useful for tests which need to call the Serve() method on
-// xds.GRPCServer which needs to be passed an IP:Port to listen on, where the IP
-// must be a literal IP and not localhost. This approach will work on support
-// one or both of IPv4 or IPv6.
-func AvailableHostPort() (string, error) {
-	l, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		return "", err
-	}
-	addr := l.Addr().String()
-	l.Close()
-	return addr, nil
+// LocalTCPListener returns a net.Listener listening on local address and port.
+func LocalTCPListener() (net.Listener, error) {
+	return net.Listen("tcp", ":0")
 }
