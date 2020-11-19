@@ -21,7 +21,6 @@ package client_test
 import (
 	"sync"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc/xds/internal/client"
 )
@@ -37,8 +36,12 @@ type counterTest struct {
 func testCounter(t *testing.T, test counterTest) {
 	counter := client.ServiceRequestsCounter{ServiceName: test.name}
 	counter.UpdateService(test.circuitBreaking, test.maxRequests)
-	wg := sync.WaitGroup{}
-	wg.Add(int(test.numRequests))
+	requestsStartedWg := sync.WaitGroup{}
+	requestsStartedWg.Add(1)
+	requestsSent := sync.WaitGroup{}
+	requestsSent.Add(int(test.numRequests))
+	requestsDoneWg := sync.WaitGroup{}
+	requestsDoneWg.Add(int(test.numRequests))
 	var firstError error = nil
 	errorMu := sync.Mutex{}
 	fail := func(err error) {
@@ -50,19 +53,22 @@ func testCounter(t *testing.T, test counterTest) {
 	}
 	for i := 0; i < int(test.numRequests); i++ {
 		go func() {
-			defer wg.Done()
+			defer requestsDoneWg.Done()
 			if err := counter.StartRequest(); err != nil {
 				fail(err)
+				requestsSent.Done()
 				return
 			}
-			time.Sleep(time.Duration(1) * time.Millisecond)
+			requestsSent.Done()
+			requestsStartedWg.Wait()
 			if err := counter.EndRequest(); err != nil {
 				fail(err)
-				return
 			}
 		}()
 	}
-	wg.Wait()
+	requestsSent.Wait()
+	requestsStartedWg.Done()
+	requestsDoneWg.Wait()
 	if test.errorExpected && firstError == nil {
 		t.Error("no error when error expected")
 	}

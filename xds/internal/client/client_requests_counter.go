@@ -71,6 +71,7 @@ func (c *ServiceRequestsCounter) StartRequest() error {
 		return fmt.Errorf("service name %v not identified", c.ServiceName)
 	}
 	sInfo.numRequests++
+	fmt.Println("StartRequest:", c.ServiceName, sInfo.maxRequests, sInfo.numRequests)
 	if sInfo.circuitBreaking && sInfo.numRequests > sInfo.maxRequests {
 		return fmt.Errorf("max requests %v exceeded on service %v", sInfo.maxRequests, c.ServiceName)
 	}
@@ -88,6 +89,7 @@ func (c *ServiceRequestsCounter) EndRequest() error {
 		return fmt.Errorf("service name %v not identified", c.ServiceName)
 	}
 	sInfo.numRequests--
+	fmt.Println("EndRequest:", c.ServiceName, sInfo.maxRequests, sInfo.numRequests)
 	src.services[c.ServiceName] = sInfo
 	return nil
 }
