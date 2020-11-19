@@ -285,7 +285,6 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) err
 	return nil
 }
 
-<<<<<<< HEAD
 func getCircuitBreaking(update xdsclient.ClusterUpdate) (circuitBreaking bool, maxRequests uint32) {
 	for _, threshold := range update.Thresholds {
 		if threshold.RoutingPriority == "DEFAULT" {
