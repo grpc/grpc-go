@@ -303,7 +303,7 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 	if !ok {
 		return nil, status.Error(codes.Internal, "failed to receive metadata")
 	}
-	if !s.fallback && (md == nil || md["lb-token"][0] != lbToken) {
+	if !s.fallback && (md == nil || len(md["lb-token"]) == 0 || md["lb-token"][0] != lbToken) {
 		return nil, status.Errorf(codes.Internal, "received unexpected metadata: %v", md)
 	}
 	grpc.SetTrailer(ctx, metadata.Pairs(testmdkey, s.addr))
