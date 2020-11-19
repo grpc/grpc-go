@@ -28,7 +28,6 @@
 package xds
 
 import (
-	_ "google.golang.org/grpc/credentials/tls/certprovider/meshca"  // Register the MeshCA certificate provider plugin.
 	_ "google.golang.org/grpc/credentials/tls/certprovider/pemfile" // Register the file watcher certificate provider plugin.
 	_ "google.golang.org/grpc/xds/internal/balancer"                // Register the balancers.
 	_ "google.golang.org/grpc/xds/internal/client/v2"               // Register the v2 xDS API client.
