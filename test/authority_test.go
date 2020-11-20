@@ -85,43 +85,41 @@ type authorityTest struct {
 	address        string
 	target         string
 	authority      string
-	expectedTarget string
+	dialTargetWant string
 }
 
-func tests() []authorityTest {
-	return []authorityTest{
-		{
-			name:      "UnixRelative",
-			address:   "sock.sock",
-			target:    "unix:sock.sock",
-			authority: "localhost",
-		},
-		{
-			name:      "UnixAbsolute",
-			address:   "/tmp/sock.sock",
-			target:    "unix:/tmp/sock.sock",
-			authority: "localhost",
-		},
-		{
-			name:      "UnixAbsoluteAlternate",
-			address:   "/tmp/sock.sock",
-			target:    "unix:///tmp/sock.sock",
-			authority: "localhost",
-		},
-		{
-			name:           "UnixPassthrough",
-			address:        "/tmp/sock.sock",
-			target:         "passthrough:///unix:///tmp/sock.sock",
-			authority:      "unix:///tmp/sock.sock",
-			expectedTarget: "unix:///tmp/sock.sock",
-		},
-	}
+var authorityTests = []authorityTest{
+	{
+		name:      "UnixRelative",
+		address:   "sock.sock",
+		target:    "unix:sock.sock",
+		authority: "localhost",
+	},
+	{
+		name:      "UnixAbsolute",
+		address:   "/tmp/sock.sock",
+		target:    "unix:/tmp/sock.sock",
+		authority: "localhost",
+	},
+	{
+		name:      "UnixAbsoluteAlternate",
+		address:   "/tmp/sock.sock",
+		target:    "unix:///tmp/sock.sock",
+		authority: "localhost",
+	},
+	{
+		name:           "UnixPassthrough",
+		address:        "/tmp/sock.sock",
+		target:         "passthrough:///unix:///tmp/sock.sock",
+		authority:      "unix:///tmp/sock.sock",
+		dialTargetWant: "unix:///tmp/sock.sock",
+	},
 }
 
 // TestUnix does end to end tests with the various supported unix target
 // formats, ensuring that the authority is set as expected.
 func (s) TestUnix(t *testing.T) {
-	for _, test := range tests() {
+	for _, test := range authorityTests {
 		t.Run(test.name, func(t *testing.T) {
 			runUnixTest(t, test.address, test.target, test.authority, nil)
 		})
@@ -132,14 +130,14 @@ func (s) TestUnix(t *testing.T) {
 // formats, ensuring that the target sent to the dialer does NOT have the
 // "unix:" prefix stripped.
 func (s) TestUnixCustomDialer(t *testing.T) {
-	for _, test := range tests() {
+	for _, test := range authorityTests {
 		t.Run(test.name+"WithDialer", func(t *testing.T) {
-			if test.expectedTarget == "" {
-				test.expectedTarget = test.target
+			if test.dialTargetWant == "" {
+				test.dialTargetWant = test.target
 			}
 			dialer := func(ctx context.Context, address string) (net.Conn, error) {
-				if address != test.expectedTarget {
-					return nil, fmt.Errorf("expected target %v in custom dialer, instead got %v", test.expectedTarget, address)
+				if address != test.dialTargetWant {
+					return nil, fmt.Errorf("expected target %v in custom dialer, instead got %v", test.dialTargetWant, address)
 				}
 				address = address[len("unix:"):]
 				return (&net.Dialer{}).DialContext(ctx, "unix", address)
