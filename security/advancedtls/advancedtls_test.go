@@ -24,11 +24,9 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"math/big"
 	"net"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/grpctest"
@@ -820,25 +818,27 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 	tests := []struct {
 		desc       string
 		serverName string
-		wantCert   tls.Certificate
+		// Use Common Name on the certificate to differentiate if we choose the right cert. The common name on all of the three certs are different.
+		wantCommonName string
 	}{
 		{
 			desc: "Select ServerCert1",
 			// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
-			serverName: "foo.bar.com",
-			wantCert:   cs.ServerCert1,
+			serverName:     "foo.bar.com",
+			wantCommonName: "foo.bar.com",
 		},
 		{
 			desc: "Select ServerCert2",
 			// "foo.bar.server2.com" is the common name on server certificate server_cert_2.pem.
-			serverName: "foo.bar.server2.com",
-			wantCert:   cs.ServerCert2,
+			serverName:     "foo.bar.server2.com",
+			wantCommonName: "foo.bar.server2.com",
 		},
 		{
 			desc: "Select serverCert3",
+			// "foo.bar.server3.com" is the common name on server certificate server_cert_3.pem.
 			// "google.com" is one of the DNS names on server certificate server_cert_3.pem.
-			serverName: "google.com",
-			wantCert:   cs.ServerPeer3,
+			serverName:     "google.com",
+			wantCommonName: "foo.bar.server3.com",
 		},
 	}
 	for _, test := range tests {
@@ -867,8 +867,18 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 			if err != nil {
 				t.Fatalf("serverConfig.GetCertificate(clientHello) failed: %v", err)
 			}
-			if !gotCertificate.Leaf.Equal(test.wantCert.Leaf) {
-				t.Errorf("GetCertificates() returned leaf certificate does not match expected (-want +got):\n%s", cmp.Diff(test.wantCert, *gotCertificate, cmp.AllowUnexported(big.Int{})))
+			if gotCertificate == nil || len(gotCertificate.Certificate) == 0 {
+				t.Fatalf("Got nil or empty Certificate after calling serverConfig.GetCertificate.")
+			}
+			parsedCert, err := x509.ParseCertificate(gotCertificate.Certificate[0])
+			if err != nil {
+				t.Fatalf("x509.ParseCertificate(%v) failed: %v", gotCertificate.Certificate[0], err)
+			}
+			if parsedCert == nil {
+				t.Fatalf("Got nil Certificate after calling x509.ParseCertificate.")
+			}
+			if parsedCert.Subject.CommonName != test.wantCommonName {
+				t.Errorf("Common name mismatch, got %v, want %v", parsedCert.Subject.CommonName, test.wantCommonName)
 			}
 		})
 	}
