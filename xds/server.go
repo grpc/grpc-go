@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strconv"
 	"sync"
 
 	"google.golang.org/grpc"
@@ -73,34 +72,6 @@ type grpcServerInterface interface {
 	Serve(net.Listener) error
 	Stop()
 	GracefulStop()
-}
-
-// ServeOptions contains parameters to configure the Serve() method.
-//
-// Experimental
-//
-// Notice: This type is EXPERIMENTAL and may be changed or removed in a
-// later release.
-type ServeOptions struct {
-	// Address contains the local address to listen on. This should be of the
-	// form "host:port", where the host must be a literal IP address, and port
-	// must be a literal port number. If the host is a literal IPv6 address it
-	// must be enclosed in square brackets, as in "[2001:db8::1]:80.
-	Address string
-}
-
-func (so *ServeOptions) validate() error {
-	addr, port, err := net.SplitHostPort(so.Address)
-	if err != nil {
-		return fmt.Errorf("xds: unsupported address %q for server listener", so.Address)
-	}
-	if net.ParseIP(addr) == nil {
-		return fmt.Errorf("xds: failed to parse %q as a valid literal IP address", addr)
-	}
-	if _, err := strconv.Atoi(port); err != nil {
-		return fmt.Errorf("%q is not a valid listener port", port)
-	}
-	return nil
 }
 
 // GRPCServer wraps a gRPC server and provides server-side xDS functionality, by
@@ -173,16 +144,16 @@ func (s *GRPCServer) initXDSClient() error {
 }
 
 // Serve gets the underlying gRPC server to accept incoming connections on the
-// listening address in opts. A connection to the management server, to receive
-// xDS configuration, is initiated here.
+// listener lis, which is expected to be listening on a TCP port.
+//
+// A connection to the management server, to receive xDS configuration, is
+// initiated here.
 //
 // Serve will return a non-nil error unless Stop or GracefulStop is called.
-func (s *GRPCServer) Serve(opts ServeOptions) error {
-	s.logger.Infof("Serve() called with options: %+v", opts)
-
-	// Validate the listening address in opts.
-	if err := opts.validate(); err != nil {
-		return err
+func (s *GRPCServer) Serve(lis net.Listener) error {
+	s.logger.Infof("Serve() passed a net.Listener on %s", lis.Addr().String())
+	if _, ok := lis.Addr().(*net.TCPAddr); !ok {
+		return fmt.Errorf("xds: GRPCServer expects listener to return a net.TCPAddr. Got %T", lis.Addr())
 	}
 
 	// If this is the first time Serve() is being called, we need to initialize
@@ -190,7 +161,7 @@ func (s *GRPCServer) Serve(opts ServeOptions) error {
 	if err := s.initXDSClient(); err != nil {
 		return err
 	}
-	lw, err := s.newListenerWrapper(opts)
+	lw, err := s.newListenerWrapper(lis)
 	if lw == nil {
 		// Error returned can be nil (when Stop/GracefulStop() is called). So,
 		// we need to check the returned listenerWrapper instead.
@@ -199,20 +170,15 @@ func (s *GRPCServer) Serve(opts ServeOptions) error {
 	return s.gs.Serve(lw)
 }
 
-// newListenerWrapper starts a net.Listener on the address specified in opts. It
-// then registers a watch for a Listener resource and blocks until a good
+// newListenerWrapper creates and returns a listenerWrapper, which is a thin
+// wrapper around the passed in listener lis, that can be passed to
+// grpcServer.Serve().
+//
+// It then registers a watch for a Listener resource and blocks until a good
 // response is received or the server is stopped by a call to
 // Stop/GracefulStop().
-//
-// Returns a listenerWrapper, which implements the net.Listener interface, that
-// can be passed to grpcServer.Serve().
-func (s *GRPCServer) newListenerWrapper(opts ServeOptions) (*listenerWrapper, error) {
-	lis, err := net.Listen("tcp", opts.Address)
-	if err != nil {
-		return nil, fmt.Errorf("xds: failed to listen on %+v: %v", opts, err)
-	}
+func (s *GRPCServer) newListenerWrapper(lis net.Listener) (*listenerWrapper, error) {
 	lw := &listenerWrapper{Listener: lis}
-	s.logger.Infof("Started a net.Listener on %s", lis.Addr().String())
 
 	// This is used to notify that a good update has been received and that
 	// Serve() can be invoked on the underlying gRPC server. Using a
@@ -224,7 +190,7 @@ func (s *GRPCServer) newListenerWrapper(opts ServeOptions) (*listenerWrapper, er
 	// Register an LDS watch using our xdsClient, and specify the listening
 	// address as the resource name.
 	// TODO(easwars): Check if literal IPv6 addresses need an enclosing [].
-	name := fmt.Sprintf(listenerResourceNameFormat, opts.Address)
+	name := fmt.Sprintf(listenerResourceNameFormat, lis.Addr().String())
 	cancelWatch := s.xdsC.WatchListener(name, func(update xdsclient.ListenerUpdate, err error) {
 		if err != nil {
 			// We simply log an error here and hope we get a successful update
