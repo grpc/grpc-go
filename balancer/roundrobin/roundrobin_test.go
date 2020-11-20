@@ -527,9 +527,7 @@ func (s) TestUpdateAddressAttributes(t *testing.T) {
 	// The second RPC should not set metadata, so there's no md in the channel.
 	select {
 	case md1 := <-test.serverImpls[0].testMDChan:
-		if len(md1) != 0 {
-			t.Fatalf("got md: %v, want empty metadata", md1)
-		}
+		t.Fatalf("got md: %v, want empty metadata", md1)
 	case <-time.After(time.Microsecond * 100):
 	}
 
