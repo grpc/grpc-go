@@ -38,40 +38,10 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 		wantUpdate    *xdsclient.ListenerUpdate
 		wantUpdateErr bool
 	}{
-		// Badly marshaled LDS response.
-		{
-			name:          "badly-marshaled-response",
-			ldsResponse:   badlyMarshaledLDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
-			wantUpdateErr: false,
-		},
-		// Response does not contain Listener proto.
-		{
-			name:          "no-listener-proto-in-response",
-			ldsResponse:   badResourceTypeInLDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
-			wantUpdateErr: false,
-		},
 		// No APIListener in the response. Just one test case here for a bad
 		// ApiListener, since the others are covered in
 		// TestGetRouteConfigNameFromListener.
-		{
-			name:          "no-apiListener-in-response",
-			ldsResponse:   noAPIListenerLDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
-			wantUpdateErr: false,
-		},
 		// Response contains one listener and it is good.
-		{
-			name:          "one-good-listener",
-			ldsResponse:   goodLDSResponse1,
-			wantErr:       false,
-			wantUpdate:    &xdsclient.ListenerUpdate{RouteConfigName: goodRouteName1},
-			wantUpdateErr: false,
-		},
 		// Response contains multiple good listeners, including the one we are
 		// interested in.
 		{

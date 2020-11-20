@@ -27,6 +27,7 @@ import (
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	v3cache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	v3server "github.com/envoyproxy/go-control-plane/pkg/server/v3"
@@ -60,13 +61,21 @@ type ManagementServer struct {
 	version int                   // Version of resource snapshot.
 }
 
+// CallbackFuncs provides hooks to various events on the management server.
+type CallbackFuncs struct {
+	StreamOpenFunc     func(context.Context, int64, string) error
+	StreamClosedFunc   func(int64)
+	StreamRequestFunc  func(int64, *v3discoverypb.DiscoveryRequest) error
+	StreamResponseFunc func(int64, *v3discoverypb.DiscoveryRequest, *v3discoverypb.DiscoveryResponse)
+}
+
 // StartManagementServer initializes a management server which implements the
 // AggregatedDiscoveryService endpoint. The management server is initialized
 // with no resources. Tests should call the Update() method to change the
 // resource snapshot held by the management server, as required by the test
 // logic. When the test is done, it should call the Stop() method to cleanup
 // resources allocated by the management server.
-func StartManagementServer() (*ManagementServer, error) {
+func StartManagementServer(cb *CallbackFuncs) (*ManagementServer, error) {
 	// Create a snapshot cache.
 	cache := v3cache.NewSnapshotCache(true, v3cache.IDHash{}, serverLogger{})
 	logger.Infof("Created new snapshot cache...")
@@ -79,8 +88,15 @@ func StartManagementServer() (*ManagementServer, error) {
 	// Create an xDS management server and register the ADS implementation
 	// provided by it on a gRPC server. Cancelling the context passed to the
 	// server is the only way of stopping it at the end of the test.
+	serverCallbacks := v3server.CallbackFuncs{}
+	if cb != nil {
+		serverCallbacks.StreamOpenFunc = cb.StreamOpenFunc
+		serverCallbacks.StreamClosedFunc = cb.StreamClosedFunc
+		serverCallbacks.StreamRequestFunc = cb.StreamRequestFunc
+		serverCallbacks.StreamResponseFunc = cb.StreamResponseFunc
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	xs := v3server.NewServer(ctx, cache, v3server.CallbackFuncs{})
+	xs := v3server.NewServer(ctx, cache, serverCallbacks)
 	gs := grpc.NewServer()
 	v3discoverygrpc.RegisterAggregatedDiscoveryServiceServer(gs, xs)
 	logger.Infof("Registered Aggregated Discovery Service (ADS)...")

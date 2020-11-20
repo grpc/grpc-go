@@ -65,12 +65,9 @@ func (s) TestServerSideXDS(t *testing.T) {
 	env.V3Support = true
 	defer func() { env.V3Support = origV3Support }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
-	fs, err := e2e.StartManagementServer()
+	fs, err := e2e.StartManagementServer(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,6 +134,8 @@ func (s) TestServerSideXDS(t *testing.T) {
 	}()
 
 	// Create a ClientConn and make a successful RPC.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	cc, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)

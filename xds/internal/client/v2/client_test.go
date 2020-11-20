@@ -20,20 +20,17 @@ package v2
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
+
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/resolver/manual"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/version"
@@ -65,7 +62,6 @@ const (
 	goodClusterName1         = "GoodClusterName1"
 	goodClusterName2         = "GoodClusterName2"
 	uninterestingClusterName = "UninterestingClusterName"
-	httpConnManagerURL       = "type.googleapis.com/envoy.config.filter.network.http_connection_manager.v2.HttpConnectionManager"
 )
 
 var (
@@ -114,7 +110,7 @@ var (
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
-				TypeUrl: httpConnManagerURL,
+				TypeUrl: version.V2HTTPConnManagerURL,
 				Value:   marshaledConnMgr1,
 			},
 		},
@@ -124,19 +120,17 @@ var (
 		Name: goodLDSTarget2,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
-				TypeUrl: httpConnManagerURL,
+				TypeUrl: version.V2HTTPConnManagerURL,
 				Value:   marshaledConnMgr1,
 			},
 		},
 	}
-	marshaledListener2, _     = proto.Marshal(goodListener2)
-	noAPIListener             = &xdspb.Listener{Name: goodLDSTarget1}
-	marshaledNoAPIListener, _ = proto.Marshal(noAPIListener)
-	badAPIListener2           = &xdspb.Listener{
+	marshaledListener2, _ = proto.Marshal(goodListener2)
+	badAPIListener2       = &xdspb.Listener{
 		Name: goodLDSTarget2,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
-				TypeUrl: httpConnManagerURL,
+				TypeUrl: version.V2HTTPConnManagerURL,
 				Value:   []byte{1, 2, 3, 4},
 			},
 		},
@@ -160,20 +154,11 @@ var (
 		},
 		TypeUrl: version.V2ListenerURL,
 	}
-	emptyLDSResponse          = &xdspb.DiscoveryResponse{TypeUrl: version.V2ListenerURL}
-	badlyMarshaledLDSResponse = &xdspb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: version.V2ListenerURL,
-				Value:   []byte{1, 2, 3, 4},
-			},
-		},
-		TypeUrl: version.V2ListenerURL,
-	}
+	emptyLDSResponse             = &xdspb.DiscoveryResponse{TypeUrl: version.V2ListenerURL}
 	badResourceTypeInLDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: httpConnManagerURL,
+				TypeUrl: version.V2HTTPConnManagerURL,
 				Value:   marshaledConnMgr1,
 			},
 		},
@@ -188,15 +173,6 @@ var (
 			{
 				TypeUrl: version.V2ListenerURL,
 				Value:   marshaledListener1,
-			},
-		},
-		TypeUrl: version.V2ListenerURL,
-	}
-	noAPIListenerLDSResponse = &xdspb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: version.V2ListenerURL,
-				Value:   marshaledNoAPIListener,
 			},
 		},
 		TypeUrl: version.V2ListenerURL,
@@ -230,7 +206,7 @@ var (
 	badResourceTypeInRDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: httpConnManagerURL,
+				TypeUrl: version.V2HTTPConnManagerURL,
 				Value:   marshaledConnMgr1,
 			},
 		},
@@ -512,186 +488,6 @@ func newV2Client(p xdsclient.UpdateHandler, cc *grpc.ClientConn, n *basepb.Node,
 
 // TestV2ClientBackoffAfterRecvError verifies if the v2Client backs off when it
 // encounters a Recv error while receiving an LDS response.
-func (s) TestV2ClientBackoffAfterRecvError(t *testing.T) {
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	// Override the v2Client backoff function with this, so that we can verify
-	// that a backoff actually was triggered.
-	boCh := make(chan int, 1)
-	clientBackoff := func(v int) time.Duration {
-		boCh <- v
-		return 0
-	}
-
-	callbackCh := make(chan struct{})
-	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(xdsclient.ResourceType, map[string]interface{}) { close(callbackCh) },
-	}, cc, goodNodeProto, clientBackoff, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer v2c.Close()
-	t.Log("Started xds v2Client...")
-
-	v2c.AddWatch(xdsclient.ListenerResource, goodLDSTarget1)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
-		t.Fatalf("Timeout expired when expecting an LDS request")
-	}
-	t.Log("FakeServer received request...")
-
-	fakeServer.XDSResponseChan <- &fakeserver.Response{Err: errors.New("RPC error")}
-	t.Log("Bad LDS response pushed to fakeServer...")
-
-	timer := time.NewTimer(defaultTestShortTimeout)
-	select {
-	case <-timer.C:
-		t.Fatal("Timeout when expecting LDS update")
-	case <-boCh:
-		timer.Stop()
-		t.Log("v2Client backed off before retrying...")
-	case <-callbackCh:
-		t.Fatal("Received unexpected LDS callback")
-	}
-
-	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
-		t.Fatalf("Timeout expired when expecting an LDS request")
-	}
-	t.Log("FakeServer received request after backoff...")
-}
-
-// TestV2ClientRetriesAfterBrokenStream verifies the case where a stream
-// encountered a Recv() error, and is expected to send out xDS requests for
-// registered watchers once it comes back up again.
-func (s) TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	callbackCh := testutils.NewChannel()
-	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(rType xdsclient.ResourceType, d map[string]interface{}) {
-			if rType == xdsclient.ListenerResource {
-				if u, ok := d[goodLDSTarget1]; ok {
-					t.Logf("Received LDS callback with ldsUpdate {%+v}", u)
-					callbackCh.Send(struct{}{})
-				}
-			}
-		},
-	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer v2c.Close()
-	t.Log("Started xds v2Client...")
-
-	v2c.AddWatch(xdsclient.ListenerResource, goodLDSTarget1)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
-		t.Fatalf("Timeout expired when expecting an LDS request")
-	}
-	t.Log("FakeServer received request...")
-
-	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
-	t.Log("Good LDS response pushed to fakeServer...")
-
-	if _, err := callbackCh.Receive(ctx); err != nil {
-		t.Fatal("Timeout when expecting LDS update")
-	}
-
-	// Read the ack, so the next request is sent after stream re-creation.
-	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
-		t.Fatalf("Timeout expired when expecting an LDS ACK")
-	}
-
-	fakeServer.XDSResponseChan <- &fakeserver.Response{Err: errors.New("RPC error")}
-	t.Log("Bad LDS response pushed to fakeServer...")
-
-	val, err := fakeServer.XDSRequestChan.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Timeout expired when expecting LDS update")
-	}
-	gotRequest := val.(*fakeserver.Request)
-	if !proto.Equal(gotRequest.Req, goodLDSRequest) {
-		t.Fatalf("gotRequest: %+v, wantRequest: %+v", gotRequest.Req, goodLDSRequest)
-	}
-}
-
-// TestV2ClientWatchWithoutStream verifies the case where a watch is started
-// when the xds stream is not created. The watcher should not receive any update
-// (because there won't be any xds response, and timeout is done at a upper
-// level). And when the stream is re-created, the watcher should get future
-// updates.
-func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
-	fakeServer, sCleanup, err := fakeserver.StartServer()
-	if err != nil {
-		t.Fatalf("Failed to start fake xDS server: %v", err)
-	}
-	defer sCleanup()
-
-	const scheme = "xds_client_test_whatever"
-	rb := manual.NewBuilderWithScheme(scheme)
-	rb.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: "no.such.server"}}})
-
-	cc, err := grpc.Dial(scheme+":///whatever", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(rb))
-	if err != nil {
-		t.Fatalf("Failed to dial ClientConn: %v", err)
-	}
-	defer cc.Close()
-
-	callbackCh := testutils.NewChannel()
-	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(rType xdsclient.ResourceType, d map[string]interface{}) {
-			if rType == xdsclient.ListenerResource {
-				if u, ok := d[goodLDSTarget1]; ok {
-					t.Logf("Received LDS callback with ldsUpdate {%+v}", u)
-					callbackCh.Send(u)
-				}
-			}
-		},
-	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer v2c.Close()
-	t.Log("Started xds v2Client...")
-
-	// This watch is started when the xds-ClientConn is in Transient Failure,
-	// and no xds stream is created.
-	v2c.AddWatch(xdsclient.ListenerResource, goodLDSTarget1)
-
-	// The watcher should receive an update, with a timeout error in it.
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if v, err := callbackCh.Receive(sCtx); err == nil {
-		t.Fatalf("Expect an timeout error from watcher, got %v", v)
-	}
-
-	// Send the real server address to the ClientConn, the stream should be
-	// created, and the previous watch should be sent.
-	rb.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: fakeServer.Address}},
-	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
-		t.Fatalf("Timeout expired when expecting an LDS request")
-	}
-	t.Log("FakeServer received request...")
-
-	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
-	t.Log("Good LDS response pushed to fakeServer...")
-
-	if v, err := callbackCh.Receive(ctx); err != nil {
-		t.Fatal("Timeout when expecting LDS update")
-	} else if _, ok := v.(xdsclient.ListenerUpdate); !ok {
-		t.Fatalf("Expect an LDS update from watcher, got %v", v)
-	}
-}
-
 func newStringP(s string) *string {
 	return &s
 }

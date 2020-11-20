@@ -44,7 +44,7 @@ var (
 	badResourceTypeInEDSResponse = &v2xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
-				TypeUrl: httpConnManagerURL,
+				TypeUrl: version.V2HTTPConnManagerURL,
 				Value:   marshaledConnMgr1,
 			},
 		},
