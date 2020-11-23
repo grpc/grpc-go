@@ -28,6 +28,7 @@ import (
 // buildGetCertificates returns the certificate that matches the SNI field
 // for the given ClientHelloInfo, defaulting to the first element of o.GetCertificates.
 func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
+	fmt.Println("sni.go is called")
 	if o.IdentityOptions.GetIdentityCertificatesForServer == nil {
 		return nil, fmt.Errorf("function GetCertificates must be specified")
 	}
@@ -47,7 +48,9 @@ func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*
 		if err := clientHello.SupportsCertificate(cert); err == nil {
 			return cert, nil
 		}
+		fmt.Printf("clientHello.SupportsCertificate(cert) error: %v\n", err)
 	}
 	// If nothing matches, return the first certificate.
+	fmt.Println("Nothing choosed. Return the first certificate")
 	return certificates[0], nil
 }

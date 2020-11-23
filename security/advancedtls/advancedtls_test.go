@@ -823,25 +823,25 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 		// Use Common Name on the certificate to differentiate if we choose the right cert. The common name on all of the three certs are different.
 		wantCommonName string
 	}{
-		{
-			desc: "Select ServerCert1",
-			// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
-			serverName:     "foo.bar.com",
-			wantCommonName: "foo.bar.com",
-		},
+		//{
+		//	desc: "Select ServerCert1",
+		//	// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
+		//	serverName:     "foo.bar.com",
+		//	wantCommonName: "foo.bar.com",
+		//},
 		{
 			desc: "Select ServerCert2",
 			// "foo.bar.server2.com" is the common name on server certificate server_cert_2.pem.
 			serverName:     "foo.bar.server2.com",
 			wantCommonName: "foo.bar.server2.com",
 		},
-		{
-			desc: "Select serverCert3",
-			// "foo.bar.server3.com" is the common name on server certificate server_cert_3.pem.
-			// "google.com" is one of the DNS names on server certificate server_cert_3.pem.
-			serverName:     "google.com",
-			wantCommonName: "foo.bar.server3.com",
-		},
+		//{
+		//	desc: "Select serverCert3",
+		//	// "foo.bar.server3.com" is the common name on server certificate server_cert_3.pem.
+		//	// "google.com" is one of the DNS names on server certificate server_cert_3.pem.
+		//	serverName:     "google.com",
+		//	wantCommonName: "foo.bar.server3.com",
+		//},
 	}
 	for _, test := range tests {
 		test := test
