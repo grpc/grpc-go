@@ -45,7 +45,7 @@ func (c *echoClient) UnaryEcho(ctx context.Context, in *EchoRequest, opts ...grp
 }
 
 func (c *echoClient) ServerStreamingEcho(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (Echo_ServerStreamingEchoClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Echo_serviceDesc.Streams[0], "/grpc.examples.echo.Echo/ServerStreamingEcho", opts...)
+	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[0], "/grpc.examples.echo.Echo/ServerStreamingEcho", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (x *echoServerStreamingEchoClient) Recv() (*EchoResponse, error) {
 }
 
 func (c *echoClient) ClientStreamingEcho(ctx context.Context, opts ...grpc.CallOption) (Echo_ClientStreamingEchoClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Echo_serviceDesc.Streams[1], "/grpc.examples.echo.Echo/ClientStreamingEcho", opts...)
+	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[1], "/grpc.examples.echo.Echo/ClientStreamingEcho", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func (x *echoClientStreamingEchoClient) CloseAndRecv() (*EchoResponse, error) {
 }
 
 func (c *echoClient) BidirectionalStreamingEcho(ctx context.Context, opts ...grpc.CallOption) (Echo_BidirectionalStreamingEchoClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Echo_serviceDesc.Streams[2], "/grpc.examples.echo.Echo/BidirectionalStreamingEcho", opts...)
+	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[2], "/grpc.examples.echo.Echo/BidirectionalStreamingEcho", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +182,7 @@ type UnsafeEchoServer interface {
 }
 
 func RegisterEchoServer(s grpc.ServiceRegistrar, srv EchoServer) {
-	s.RegisterService(&_Echo_serviceDesc, srv)
+	s.RegisterService(&Echo_ServiceDesc, srv)
 }
 
 func _Echo_UnaryEcho_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -276,7 +276,10 @@ func (x *echoBidirectionalStreamingEchoServer) Recv() (*EchoRequest, error) {
 	return m, nil
 }
 
-var _Echo_serviceDesc = grpc.ServiceDesc{
+// Echo_ServiceDesc is the grpc.ServiceDesc for Echo service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var Echo_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "grpc.examples.echo.Echo",
 	HandlerType: (*EchoServer)(nil),
 	Methods: []grpc.MethodDesc{

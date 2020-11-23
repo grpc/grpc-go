@@ -46,7 +46,7 @@ func (c *benchmarkServiceClient) UnaryCall(ctx context.Context, in *SimpleReques
 }
 
 func (c *benchmarkServiceClient) StreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_BenchmarkService_serviceDesc.Streams[0], "/grpc.testing.BenchmarkService/StreamingCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[0], "/grpc.testing.BenchmarkService/StreamingCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (x *benchmarkServiceStreamingCallClient) Recv() (*SimpleResponse, error) {
 }
 
 func (c *benchmarkServiceClient) UnconstrainedStreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_UnconstrainedStreamingCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_BenchmarkService_serviceDesc.Streams[1], "/grpc.testing.BenchmarkService/UnconstrainedStreamingCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[1], "/grpc.testing.BenchmarkService/UnconstrainedStreamingCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ type UnsafeBenchmarkServiceServer interface {
 }
 
 func RegisterBenchmarkServiceServer(s grpc.ServiceRegistrar, srv BenchmarkServiceServer) {
-	s.RegisterService(&_BenchmarkService_serviceDesc, srv)
+	s.RegisterService(&BenchmarkService_ServiceDesc, srv)
 }
 
 func _BenchmarkService_UnaryCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -219,7 +219,10 @@ func (x *benchmarkServiceUnconstrainedStreamingCallServer) Recv() (*SimpleReques
 	return m, nil
 }
 
-var _BenchmarkService_serviceDesc = grpc.ServiceDesc{
+// BenchmarkService_ServiceDesc is the grpc.ServiceDesc for BenchmarkService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var BenchmarkService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "grpc.testing.BenchmarkService",
 	HandlerType: (*BenchmarkServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
@@ -278,7 +281,7 @@ func NewWorkerServiceClient(cc grpc.ClientConnInterface) WorkerServiceClient {
 }
 
 func (c *workerServiceClient) RunServer(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunServerClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_WorkerService_serviceDesc.Streams[0], "/grpc.testing.WorkerService/RunServer", opts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[0], "/grpc.testing.WorkerService/RunServer", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +312,7 @@ func (x *workerServiceRunServerClient) Recv() (*ServerStatus, error) {
 }
 
 func (c *workerServiceClient) RunClient(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunClientClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_WorkerService_serviceDesc.Streams[1], "/grpc.testing.WorkerService/RunClient", opts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[1], "/grpc.testing.WorkerService/RunClient", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -408,7 +411,7 @@ type UnsafeWorkerServiceServer interface {
 }
 
 func RegisterWorkerServiceServer(s grpc.ServiceRegistrar, srv WorkerServiceServer) {
-	s.RegisterService(&_WorkerService_serviceDesc, srv)
+	s.RegisterService(&WorkerService_ServiceDesc, srv)
 }
 
 func _WorkerService_RunServer_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -499,7 +502,10 @@ func _WorkerService_QuitWorker_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
-var _WorkerService_serviceDesc = grpc.ServiceDesc{
+// WorkerService_ServiceDesc is the grpc.ServiceDesc for WorkerService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var WorkerService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "grpc.testing.WorkerService",
 	HandlerType: (*WorkerServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
