@@ -22,15 +22,13 @@ package meshca
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
-
-	"github.com/golang/protobuf/proto"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/tls/certprovider"
-	configpb "google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/meshca_experimental"
 	"google.golang.org/grpc/internal/testutils"
 )
 
@@ -69,11 +67,10 @@ func (s) TestBuildSameConfig(t *testing.T) {
 
 	// Parse a good config to generate a stable config which will be passed to
 	// invocations of Build().
-	inputConfig := makeJSONConfig(t, goodConfigFullySpecified)
 	builder := newPluginBuilder()
-	buildableConfig, err := builder.ParseConfig(inputConfig)
+	buildableConfig, err := builder.ParseConfig(goodConfigFullySpecified)
 	if err != nil {
-		t.Fatalf("builder.ParseConfig(%q) failed: %v", inputConfig, err)
+		t.Fatalf("builder.ParseConfig(%q) failed: %v", goodConfigFullySpecified, err)
 	}
 
 	// Create multiple providers with the same config. All these providers must
@@ -143,9 +140,7 @@ func (s) TestBuildDifferentConfig(t *testing.T) {
 	for i := 0; i < cnt; i++ {
 		// Copy the good test config and modify the serverURI to make sure that
 		// a new provider is created for the config.
-		cfg := proto.Clone(goodConfigFullySpecified).(*configpb.GoogleMeshCaConfig)
-		cfg.Server.GrpcServices[0].GetGoogleGrpc().TargetUri = fmt.Sprintf("test-mesh-ca:%d", i)
-		inputConfig := makeJSONConfig(t, cfg)
+		inputConfig := json.RawMessage(fmt.Sprintf(goodConfigFormatStr, fmt.Sprintf("test-mesh-ca:%d", i)))
 		buildableConfig, err := builder.ParseConfig(inputConfig)
 		if err != nil {
 			t.Fatalf("builder.ParseConfig(%q) failed: %v", inputConfig, err)
