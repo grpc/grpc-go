@@ -28,7 +28,6 @@ import (
 // buildGetCertificates returns the first cert contained in ServerOptions for
 // non-appengine builds before version 1.4.
 func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
-	fmt.Println("sni_befoergo114.go is called")
 	if o.IdentityOptions.GetIdentityCertificatesForServer == nil {
 		return nil, fmt.Errorf("function GetCertificates must be specified")
 	}
