@@ -32,21 +32,13 @@ import (
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
-const (
-	serverPrefix = "[xds-server %p] "
-
-	// The resource_name in the LDS request sent by the xDS-enabled gRPC server
-	// is of this format where the formatting directive at the end is replaced
-	// with the IP:Port specified by the user application.
-	listenerResourceNameFormat = "grpc/server?udpa.resource.listening_address=%s"
-)
+const serverPrefix = "[xds-server %p] "
 
 var (
 	// These new functions will be overridden in unit tests.
 	newXDSClient = func() (xdsClientInterface, error) {
 		return xdsclient.New()
 	}
-	newXDSConfig  = bootstrap.NewConfig
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServerInterface {
 		return grpc.NewServer(opts...)
 	}
@@ -62,6 +54,7 @@ func prefixLogger(p *GRPCServer) *internalgrpclog.PrefixLogger {
 // the server. This is useful for overriding in unit tests.
 type xdsClientInterface interface {
 	WatchListener(string, func(xdsclient.ListenerUpdate, error)) func()
+	BootstrapConfig() *bootstrap.Config
 	Close()
 }
 
@@ -187,10 +180,20 @@ func (s *GRPCServer) newListenerWrapper(lis net.Listener) (*listenerWrapper, err
 	// or not.
 	goodUpdate := grpcsync.NewEvent()
 
+	// The resource_name in the LDS request sent by the xDS-enabled gRPC server
+	// is of the following format:
+	// "/path/to/resource?udpa.resource.listening_address=IP:Port". The
+	// `/path/to/resource` part of the name is sourced from the bootstrap config
+	// field `grpc_server_resource_name_id`. If this field is not specified in
+	// the bootstrap file, we will use a default of `grpc/server`.
+	path := "grpc/server"
+	if cfg := s.xdsC.BootstrapConfig(); cfg != nil && cfg.ServerResourceNameID != "" {
+		path = cfg.ServerResourceNameID
+	}
+	name := fmt.Sprintf("%s?udpa.resource.listening_address=%s", path, lis.Addr().String())
+
 	// Register an LDS watch using our xdsClient, and specify the listening
 	// address as the resource name.
-	// TODO(easwars): Check if literal IPv6 addresses need an enclosing [].
-	name := fmt.Sprintf(listenerResourceNameFormat, lis.Addr().String())
 	cancelWatch := s.xdsC.WatchListener(name, func(update xdsclient.ListenerUpdate, err error) {
 		if err != nil {
 			// We simply log an error here and hope we get a successful update
