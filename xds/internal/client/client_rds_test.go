@@ -24,167 +24,16 @@ import (
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	v2routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"google.golang.org/grpc/xds/internal/version"
 )
-
-func (s) TestProcessClientSideListener(t *testing.T) {
-	const (
-		goodLDSTarget       = "lds.target.good:1111"
-		goodRouteConfigName = "GoodRouteConfig"
-	)
-
-	tests := []struct {
-		name      string
-		lis       *v3listenerpb.Listener
-		wantRoute string
-		wantErr   bool
-	}{
-		{
-			name:      "no-apiListener-field",
-			lis:       &v3listenerpb.Listener{},
-			wantRoute: "",
-			wantErr:   true,
-		},
-		{
-			name: "badly-marshaled-apiListener",
-			lis: &v3listenerpb.Listener{
-				Name: goodLDSTarget,
-				ApiListener: &v3listenerpb.ApiListener{
-					ApiListener: &anypb.Any{
-						TypeUrl: version.V3HTTPConnManagerURL,
-						Value:   []byte{1, 2, 3, 4},
-					},
-				},
-			},
-			wantRoute: "",
-			wantErr:   true,
-		},
-		{
-			name: "wrong-type-in-apiListener",
-			lis: &v3listenerpb.Listener{
-				Name: goodLDSTarget,
-				ApiListener: &v3listenerpb.ApiListener{
-					ApiListener: &anypb.Any{
-						TypeUrl: version.V2ListenerURL,
-						Value: func() []byte {
-							cm := &v3httppb.HttpConnectionManager{
-								RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
-									Rds: &v3httppb.Rds{
-										ConfigSource: &v3corepb.ConfigSource{
-											ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
-										},
-										RouteConfigName: goodRouteConfigName}}}
-							mcm, _ := proto.Marshal(cm)
-							return mcm
-						}()}}},
-			wantRoute: "",
-			wantErr:   true,
-		},
-		{
-			name: "empty-httpConnMgr-in-apiListener",
-			lis: &v3listenerpb.Listener{
-				Name: goodLDSTarget,
-				ApiListener: &v3listenerpb.ApiListener{
-					ApiListener: &anypb.Any{
-						TypeUrl: version.V3HTTPConnManagerURL,
-						Value: func() []byte {
-							cm := &v3httppb.HttpConnectionManager{
-								RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
-									Rds: &v3httppb.Rds{},
-								},
-							}
-							mcm, _ := proto.Marshal(cm)
-							return mcm
-						}()}}},
-			wantRoute: "",
-			wantErr:   true,
-		},
-		{
-			name: "scopedRoutes-routeConfig-in-apiListener",
-			lis: &v3listenerpb.Listener{
-				Name: goodLDSTarget,
-				ApiListener: &v3listenerpb.ApiListener{
-					ApiListener: &anypb.Any{
-						TypeUrl: version.V3HTTPConnManagerURL,
-						Value: func() []byte {
-							cm := &v3httppb.HttpConnectionManager{
-								RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
-							}
-							mcm, _ := proto.Marshal(cm)
-							return mcm
-						}()}}},
-			wantRoute: "",
-			wantErr:   true,
-		},
-		{
-			name: "rds.ConfigSource-in-apiListener-is-not-ADS",
-			lis: &v3listenerpb.Listener{
-				Name: goodLDSTarget,
-				ApiListener: &v3listenerpb.ApiListener{
-					ApiListener: &anypb.Any{
-						TypeUrl: version.V3HTTPConnManagerURL,
-						Value: func() []byte {
-							cm := &v3httppb.HttpConnectionManager{
-								RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
-									Rds: &v3httppb.Rds{
-										ConfigSource: &v3corepb.ConfigSource{
-											ConfigSourceSpecifier: &v3corepb.ConfigSource_Path{
-												Path: "/some/path",
-											},
-										},
-										RouteConfigName: goodRouteConfigName}}}
-							mcm, _ := proto.Marshal(cm)
-							return mcm
-						}()}}},
-			wantRoute: "",
-			wantErr:   true,
-		},
-		{
-			name: "goodListener",
-			lis: &v3listenerpb.Listener{
-				Name: goodLDSTarget,
-				ApiListener: &v3listenerpb.ApiListener{
-					ApiListener: &anypb.Any{
-						TypeUrl: version.V3HTTPConnManagerURL,
-						Value: func() []byte {
-							cm := &v3httppb.HttpConnectionManager{
-								RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
-									Rds: &v3httppb.Rds{
-										ConfigSource: &v3corepb.ConfigSource{
-											ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
-										},
-										RouteConfigName: goodRouteConfigName}}}
-							mcm, _ := proto.Marshal(cm)
-							return mcm
-						}()}}},
-			wantRoute: goodRouteConfigName,
-			wantErr:   false,
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			update, err := processClientSideListener(test.lis, nil)
-			if (err != nil) != test.wantErr {
-				t.Errorf("processClientSideListener(%+v) = %v, wantErr %v", test.lis, err, test.wantErr)
-			}
-			if test.wantErr {
-				return
-			}
-			if update.RouteConfigName != test.wantRoute {
-				t.Errorf("processClientSideListener(%+v) = %q want %q", test.lis, update.RouteConfigName, test.wantRoute)
-			}
-		})
-	}
-}
 
 func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 	const (

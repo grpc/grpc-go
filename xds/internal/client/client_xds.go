@@ -59,15 +59,17 @@ func UnmarshalListener(resources []*anypb.Any, logger *grpclog.PrefixLogger) (ma
 		}
 		logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, lis)
 
-		var (
-			lu  *ListenerUpdate
-			err error
-		)
-		if lis.GetApiListener() != nil {
-			lu, err = processClientSideListener(lis, logger)
-		} else {
-			lu, err = processServerSideListener(lis, logger)
-		}
+		/*
+			var (
+				lu  *ListenerUpdate
+				err error
+			)
+			if lis.GetApiListener() != nil {
+				lu, err = processClientSideListener(lis, logger)
+			} else {
+				lu, err = processServerSideListener(lis, logger)
+			}*/
+		lu, err := processListener(lis)
 		if err != nil {
 			return nil, err
 		}
@@ -76,12 +78,16 @@ func UnmarshalListener(resources []*anypb.Any, logger *grpclog.PrefixLogger) (ma
 	return update, nil
 }
 
+func processListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
+	if lis.GetApiListener() != nil {
+		return processClientSideListener(lis)
+	}
+	return processServerSideListener(lis)
+}
+
 // processClientSideListener checks if the provided Listener proto meets
 // the expected criteria. If so, it returns a non-empty routeConfigName.
-func processClientSideListener(lis *v3listenerpb.Listener, logger *grpclog.PrefixLogger) (*ListenerUpdate, error) {
-	if lis.GetApiListener() == nil {
-		return nil, fmt.Errorf("xds: no api_listener field in LDS response %+v", lis)
-	}
+func processClientSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
 	apiLisAny := lis.GetApiListener().GetApiListener()
 	if !IsHTTPConnManagerResource(apiLisAny.GetTypeUrl()) {
 		return nil, fmt.Errorf("xds: unexpected resource type: %q in LDS response", apiLisAny.GetTypeUrl())
@@ -91,7 +97,6 @@ func processClientSideListener(lis *v3listenerpb.Listener, logger *grpclog.Prefi
 		return nil, fmt.Errorf("xds: failed to unmarshal api_listner in LDS response: %v", err)
 	}
 
-	logger.Infof("Resource with type %T, contains %v", apiLis, apiLis)
 	switch apiLis.RouteSpecifier.(type) {
 	case *v3httppb.HttpConnectionManager_Rds:
 		if apiLis.GetRds().GetConfigSource().GetAds() == nil {
@@ -113,7 +118,7 @@ func processClientSideListener(lis *v3listenerpb.Listener, logger *grpclog.Prefi
 	}
 }
 
-func processServerSideListener(lis *v3listenerpb.Listener, logger *grpclog.PrefixLogger) (*ListenerUpdate, error) {
+func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
 	// Make sure that an address encoded in the received listener resource, and
 	// that it matches the one specified in the name. Listener names on the
 	// server-side as in the following format:

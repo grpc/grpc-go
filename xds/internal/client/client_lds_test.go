@@ -136,6 +136,136 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "wrong type in apiListener",
+			resources: []*anypb.Any{
+				{
+					TypeUrl: version.V3ListenerURL,
+					Value: func() []byte {
+						lis := &v3listenerpb.Listener{
+							Name: v3LDSTarget,
+							ApiListener: &v3listenerpb.ApiListener{
+								ApiListener: &anypb.Any{
+									TypeUrl: version.V2ListenerURL,
+									Value: func() []byte {
+										cm := &v3httppb.HttpConnectionManager{
+											RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+												Rds: &v3httppb.Rds{
+													ConfigSource: &v3corepb.ConfigSource{
+														ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+													},
+													RouteConfigName: v3RouteConfigName,
+												},
+											},
+										}
+										mcm, _ := proto.Marshal(cm)
+										return mcm
+									}(),
+								},
+							},
+						}
+						mLis, _ := proto.Marshal(lis)
+						return mLis
+					}(),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty httpConnMgr in apiListener",
+			resources: []*anypb.Any{
+				{
+					TypeUrl: version.V3ListenerURL,
+					Value: func() []byte {
+						lis := &v3listenerpb.Listener{
+							Name: v3LDSTarget,
+							ApiListener: &v3listenerpb.ApiListener{
+								ApiListener: &anypb.Any{
+									TypeUrl: version.V2ListenerURL,
+									Value: func() []byte {
+										cm := &v3httppb.HttpConnectionManager{
+											RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+												Rds: &v3httppb.Rds{},
+											},
+										}
+										mcm, _ := proto.Marshal(cm)
+										return mcm
+									}(),
+								},
+							},
+						}
+						mLis, _ := proto.Marshal(lis)
+						return mLis
+					}(),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "scopedRoutes routeConfig in apiListener",
+			resources: []*anypb.Any{
+				{
+					TypeUrl: version.V3ListenerURL,
+					Value: func() []byte {
+						lis := &v3listenerpb.Listener{
+							Name: v3LDSTarget,
+							ApiListener: &v3listenerpb.ApiListener{
+								ApiListener: &anypb.Any{
+									TypeUrl: version.V2ListenerURL,
+									Value: func() []byte {
+										cm := &v3httppb.HttpConnectionManager{
+											RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
+										}
+										mcm, _ := proto.Marshal(cm)
+										return mcm
+									}(),
+								},
+							},
+						}
+						mLis, _ := proto.Marshal(lis)
+						return mLis
+					}(),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "rds.ConfigSource in apiListener is not ADS",
+			resources: []*anypb.Any{
+				{
+					TypeUrl: version.V3ListenerURL,
+					Value: func() []byte {
+						lis := &v3listenerpb.Listener{
+							Name: v3LDSTarget,
+							ApiListener: &v3listenerpb.ApiListener{
+								ApiListener: &anypb.Any{
+									TypeUrl: version.V2ListenerURL,
+									Value: func() []byte {
+										cm := &v3httppb.HttpConnectionManager{
+											RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+												Rds: &v3httppb.Rds{
+													ConfigSource: &v3corepb.ConfigSource{
+														ConfigSourceSpecifier: &v3corepb.ConfigSource_Path{
+															Path: "/some/path",
+														},
+													},
+													RouteConfigName: v3RouteConfigName,
+												},
+											},
+										}
+										mcm, _ := proto.Marshal(cm)
+										return mcm
+									}(),
+								},
+							},
+						}
+						mLis, _ := proto.Marshal(lis)
+						return mLis
+					}(),
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "empty resource list",
 		},
 		{
