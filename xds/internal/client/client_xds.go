@@ -60,16 +60,6 @@ func UnmarshalListener(resources []*anypb.Any, logger *grpclog.PrefixLogger) (ma
 		}
 		logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, lis)
 
-		/*
-			var (
-				lu  *ListenerUpdate
-				err error
-			)
-			if lis.GetApiListener() != nil {
-				lu, err = processClientSideListener(lis, logger)
-			} else {
-				lu, err = processServerSideListener(lis, logger)
-			}*/
 		lu, err := processListener(lis)
 		if err != nil {
 			return nil, err
