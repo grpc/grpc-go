@@ -77,12 +77,12 @@ jobs:
       # Main tests run for everything except when testing "extras" and the race detector.
       - name: Run tests
         if: ${{ matrix.type != 'extras' && matrix.type != 'race' }}
-        run: make test
+        run: go test -cpu 1,4 -timeout 7m google.golang.org/grpc/...
 
       # Race detector tests
       - name: Run test race
         if: ${{ matrix.TYPE == 'race' }}
-        run: make testrace
+        run: go test -race -cpu 1,4 -timeout 7m google.golang.org/grpc/...
 
       # Non-core gRPC tests (examples, interop, etc)
       - name: Run extras tests
@@ -91,4 +91,5 @@ jobs:
           examples/examples_test.sh
           security/advancedtls/examples/examples_test.sh
           interop/interop_test.sh
-          make testsubmodule
+          cd security/advancedtls && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/advancedtls/...
+          cd security/authorization && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/authorization/...
