@@ -187,10 +187,8 @@ func (s *GRPCServer) newListenerWrapper(lis net.Listener) (*listenerWrapper, err
 	// field `grpc_server_resource_name_id`. If this field is not specified in
 	// the bootstrap file, we will use a default of `grpc/server`.
 	path := "grpc/server"
-	if cfg := s.xdsC.BootstrapConfig(); cfg != nil {
-		if cfg.ServerResourceNameID != "" {
-			path = cfg.ServerResourceNameID
-		}
+	if cfg := s.xdsC.BootstrapConfig(); cfg != nil && cfg.ServerResourceNameID != "" {
+		path = cfg.ServerResourceNameID
 	}
 	name := fmt.Sprintf("%s?udpa.resource.listening_address=%s", path, lis.Addr().String())
 
