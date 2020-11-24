@@ -44,7 +44,6 @@ const (
 )
 
 func main() {
-
 	tmpKeyFile := flag.String("key", "", "temporary key file path")
 	tmpCertFile := flag.String("cert", "", "temporary cert file path")
 	flag.Parse()
@@ -101,19 +100,19 @@ func main() {
 			case <-done:
 				return
 			case <-ticker.C:
-				// Make a connection using the old credentials.
+				// Make a connection using the credentials.
 				ctx, cancel := context.WithTimeout(context.Background(), defaultConnTimeout)
-				oldConn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
+				conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
 				if err != nil {
 					log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
 				}
-				oldClient := pb.NewGreeterClient(oldConn)
-				_, err = oldClient.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
+				client := pb.NewGreeterClient(conn)
+				_, err = client.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
 				if err != nil {
-					log.Fatalf("oldClient.SayHello failed: %v", err)
+					log.Fatalf("client.SayHello failed: %v", err)
 				}
 				cancel()
-				oldConn.Close()
+				conn.Close()
 			}
 		}
 	}()

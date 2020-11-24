@@ -123,6 +123,10 @@ for example in ${EXAMPLES[@]}; do
           pass "client log contains expected output: $output"
       fi
     done
+
+    # Wait for the client to stop.
+    sleep 2s
+
     clean
     echo ""
 done
