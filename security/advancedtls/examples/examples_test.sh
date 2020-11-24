@@ -32,6 +32,10 @@ clean () {
   echo "$(tput setaf 1) clean failed to kill tests $(tput sgr 0)"
   jobs
   pstree
+  rm ${CLIENT_LOG}
+  rm ${SERVER_LOG}
+  rm ${KEY_FILE_PATH}
+  rm ${CERT_FILE_PATH}
   exit 1
 }
 
@@ -49,78 +53,76 @@ EXAMPLES=(
     "credential_reloading_from_files"
 )
 
-declare -A EXPECTED_SERVER_OUTPUT=(
-    ["credential_reloading_from_files"]="Client common name: foo.bar.hoo.com.Client common name: foo.bar.another.client.com."
-)
+declare -a EXPECTED_SERVER_OUTPUT=("Client common name: foo.bar.hoo.com" "Client common name: foo.bar.another.client.com")
 
-declare -A EXPECTED_CLIENT_OUTPUT=(
-    ["credential_reloading_from_files"]=""
-)
+declare -a EXPECTED_CLIENT_OUTPUT=("Client stops sending requests")
 
 cd ./security/advancedtls/examples
 
 for example in ${EXAMPLES[@]}; do
     echo "$(tput setaf 4) testing: ${example} $(tput sgr 0)"
 
-    # Build server
+    KEY_FILE_PATH=$(mktemp)
+    cat ../testdata/client_key_1.pem > ${KEY_FILE_PATH}
+
+    CERT_FILE_PATH=$(mktemp)
+    cat ../testdata/client_cert_1.pem > ${CERT_FILE_PATH}
+
+    # Build server.
     if ! go build -o /dev/null ./${example}/*server/*.go; then
         fail "failed to build server"
     else
         pass "successfully built server"
     fi
 
-    # Build client
+    # Build client.
     if ! go build -o /dev/null ./${example}/*client/*.go; then
         fail "failed to build client"
     else
         pass "successfully built client"
     fi
 
-    # Start server
+    # Start server.
     SERVER_LOG="$(mktemp)"
     go run ./$example/*server/*.go &> $SERVER_LOG  &
 
+    # Run client binary.
     CLIENT_LOG="$(mktemp)"
-    if ! timeout 20 go run ${example}/*client/*.go &> $CLIENT_LOG; then
-        fail "client failed to communicate with server
-        got server log:
-        $(cat $SERVER_LOG)
-        got client log:
-        $(cat $CLIENT_LOG)
-        "
-    else
-        pass "client successfully communitcated with server"
-    fi
+    go run ${example}/*client/*.go -key=${KEY_FILE_PATH} -cert=${CERT_FILE_PATH} &> $CLIENT_LOG  &
 
-    # Check server log for expected output if expecting an
-    # output
-    if [ -n "${EXPECTED_SERVER_OUTPUT[$example]}" ]; then
-        if ! grep -q "${EXPECTED_SERVER_OUTPUT[$example]}" $SERVER_LOG; then
-            fail "server log missing output: ${EXPECTED_SERVER_OUTPUT[$example]}
-            got server log:
-            $(cat $SERVER_LOG)
-            got client log:
-            $(cat $CLIENT_LOG)
-            "
-        else
-            pass "server log contains expected output: ${EXPECTED_SERVER_OUTPUT[$example]}"
-        fi
-    fi
+    # Wait for the client to send some requests using old credentials.
+    sleep 2s
 
-    # Check client log for expected output if expecting an
-    # output
-    if [ -n "${EXPECTED_CLIENT_OUTPUT[$example]}" ]; then
-        if ! grep -q "${EXPECTED_CLIENT_OUTPUT[$example]}" $CLIENT_LOG; then
-            fail "client log missing output: ${EXPECTED_CLIENT_OUTPUT[$example]}
-            got server log:
-            $(cat $SERVER_LOG)
-            got client log:
-            $(cat $CLIENT_LOG)
-            "
-        else
-            pass "client log contains expected output: ${EXPECTED_CLIENT_OUTPUT[$example]}"
-        fi
-    fi
+    # Switch to the new credentials.
+    cat ../testdata/another_client_key_1.pem > ${KEY_FILE_PATH}
+    cat ../testdata/another_client_cert_1.pem > ${CERT_FILE_PATH}
+
+    # Wait for the client to send some requests using new credentials.
+    sleep 2s
+
+    # Check server log for expected output.
+    for output in "${EXPECTED_SERVER_OUTPUT[@]}"; do
+      if ! grep -q "$output" $SERVER_LOG; then
+          fail "server log missing output: $output
+          got server log:
+          $(cat $SERVER_LOG)
+          "
+      else
+          pass "server log contains expected output: $output"
+      fi
+    done
+
+    # Check client log for expected output.
+    for output in "${EXPECTED_CLIENT_OUTPUT[@]}"; do
+      if ! grep -q "$output" $CLIENT_LOG; then
+          fail "client log missing output: $output
+          got client log:
+          $(cat $CLIENT_LOG)
+          "
+      else
+          pass "client log contains expected output: $output"
+      fi
+    done
     clean
     echo ""
 done

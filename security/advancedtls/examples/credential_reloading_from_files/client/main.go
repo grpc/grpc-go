@@ -23,9 +23,8 @@ package main
 import (
 	"context"
 	"flag"
-	"io/ioutil"
+	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"google.golang.org/grpc"
@@ -45,28 +44,22 @@ const (
 )
 
 func main() {
+
+	tmpKeyFile := flag.String("key", "", "temporary key file path")
+	tmpCertFile := flag.String("cert", "", "temporary cert file path")
 	flag.Parse()
 
-	// Create temporary files holding old credential contents.
-	certTmpFile, err := ioutil.TempFile(os.TempDir(), "pre-")
-	if err != nil {
-		log.Fatalf("ioutil.TempFile(%s, %s) failed: %v", os.TempDir(), "pre-", err)
+	if tmpKeyFile == nil || *tmpKeyFile == "" {
+		log.Fatalf("tmpKeyFile is nil or empty.")
 	}
-	if err := copyFileContents(testdata.Path("client_cert_1.pem"), certTmpFile.Name()); err != nil {
-		log.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_cert_1.pem"), certTmpFile.Name(), err)
-	}
-	keyTmpFile, err := ioutil.TempFile(os.TempDir(), "pre-")
-	if err != nil {
-		log.Fatalf("ioutil.TempFile(%s, %s) failed: %v", os.TempDir(), "pre-", err)
-	}
-	if err := copyFileContents(testdata.Path("client_key_1.pem"), keyTmpFile.Name()); err != nil {
-		log.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_key_1.pem"), keyTmpFile.Name(), err)
+	if tmpCertFile == nil || *tmpCertFile == "" {
+		log.Fatalf("tmpCertFile is nil or empty.")
 	}
 
 	// Initialize credential struct using reloading API.
 	identityOptions := pemfile.Options{
-		CertFile:        certTmpFile.Name(),
-		KeyFile:         keyTmpFile.Name(),
+		CertFile:        *tmpCertFile,
+		KeyFile:         *tmpKeyFile,
 		RefreshDuration: credRefreshingInterval,
 	}
 	identityProvider, err := pemfile.NewProvider(identityOptions)
@@ -81,7 +74,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("pemfile.NewProvider(%v) failed: %v", rootOptions, err)
 	}
-
 	options := &advancedtls.ClientOptions{
 		IdentityOptions: advancedtls.IdentityCertificateOptions{
 			IdentityProvider: identityProvider,
@@ -99,55 +91,36 @@ func main() {
 		log.Fatalf("advancedtls.NewClientCreds(%v) failed: %v", options, err)
 	}
 
-	// Make a connection using the old credentials.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultConnTimeout)
-	defer cancel()
-	oldConn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
-	if err != nil {
-		log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
-	}
-	oldClient := pb.NewGreeterClient(oldConn)
-	_, err = oldClient.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
-	if err != nil {
-		log.Fatalf("oldClient.SayHello failed: %v", err)
-	}
-	defer oldConn.Close()
+	// Send the requests every 0.5s. The credential is expected to be changed in
+	// the bash script.
+	ticker := time.NewTicker(500 * time.Millisecond)
+	done := make(chan bool)
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				// Make a connection using the old credentials.
+				ctx, cancel := context.WithTimeout(context.Background(), defaultConnTimeout)
+				oldConn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
+				if err != nil {
+					log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
+				}
+				oldClient := pb.NewGreeterClient(oldConn)
+				_, err = oldClient.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
+				if err != nil {
+					log.Fatalf("oldClient.SayHello failed: %v", err)
+				}
+				cancel()
+				oldConn.Close()
+			}
+		}
+	}()
 
-	// Change the contents of the credential files.
-	// Cert "another_client_cert_1.pem" is also trusted by "server_cert_1.pem".
-	if err := copyFileContents(testdata.Path("another_client_cert_1.pem"), certTmpFile.Name()); err != nil {
-		log.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("another_client_cert_1.pem"), certTmpFile.Name(), err)
-	}
-	if err := copyFileContents(testdata.Path("another_client_key_1.pem"), keyTmpFile.Name()); err != nil {
-		log.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("another_client_key_1.pem"), keyTmpFile.Name(), err)
-	}
-
-	// Wait for 1 second for the provider to load the new contents.
-	time.Sleep(time.Second)
-
-	// Make a connection using the new credential contents, while the credential
-	// struct remains the same.
-	// The common name of the old and new certificate will be logged on the
-	// server side.
-	newConn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
-	if err != nil {
-		log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
-	}
-	newClient := pb.NewGreeterClient(newConn)
-	_, err = newClient.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
-	if err != nil {
-		log.Fatalf("newClient.SayHello failed: %v", err)
-	}
-}
-
-func copyFileContents(sourceFile, destinationFile string) error {
-	input, err := ioutil.ReadFile(sourceFile)
-	if err != nil {
-		return err
-	}
-	err = ioutil.WriteFile(destinationFile, input, 0644)
-	if err != nil {
-		return err
-	}
-	return nil
+	// Stop the ticker after 3s.
+	time.Sleep(3000 * time.Millisecond)
+	ticker.Stop()
+	done <- true
+	fmt.Printf("Client stops sending requests. \n")
 }
