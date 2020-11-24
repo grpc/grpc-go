@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -133,7 +134,7 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	}
 	host, port, err := getAddressFromName(lis.GetName())
 	if err != nil {
-		return nil, fmt.Errorf("xds: no host:port in name field of LDS response: %+v", lis)
+		return nil, fmt.Errorf("xds: no host:port in name field of LDS response: %+v, error: %v", lis, err)
 	}
 	if h := sockAddr.GetAddress(); host != h {
 		return nil, fmt.Errorf("xds: socket_address host does not match the one in name. Got %q, want %q", h, host)
@@ -186,8 +187,14 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 }
 
 func getAddressFromName(name string) (host string, port string, err error) {
+	index := strings.Index(name, "udpa.resource.listening_address=")
+	if index == -1 {
+		return "", "", fmt.Errorf("udpa.resource_listening_address not found in name: %v", name)
+	}
+	lisAddr := name[index:]
+
 	var addr string
-	_, err = fmt.Sscanf(name, "grpc/server?udpa.resource.listening_address=%s", &addr)
+	_, err = fmt.Sscanf(lisAddr, "udpa.resource.listening_address=%s", &addr)
 	if err != nil {
 		return "", "", err
 	}
