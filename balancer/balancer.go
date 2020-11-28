@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -182,6 +183,8 @@ type BuildOptions struct {
 	// passed to the resolver.
 	// See the documentation for the resolver.Target type for details about what it contains.
 	Target resolver.Target
+	// Strategy is the custom strategy for backoff
+	Strategy backoff.Strategy
 }
 
 // Builder creates a balancer.

@@ -144,7 +144,12 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		scStates:       make(map[balancer.SubConn]connectivity.State),
 		picker:         &errPicker{err: balancer.ErrNoSubConnAvailable},
 		clientStats:    newRPCStats(),
-		backoff:        backoff.DefaultExponential, // TODO: make backoff configurable.
+	}
+
+	if opt.Strategy != nil {
+		lb.backoff = opt.Strategy
+	} else {
+		lb.backoff = backoff.DefaultExponential
 	}
 
 	var err error
