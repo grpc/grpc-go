@@ -26,19 +26,15 @@ import (
 )
 
 type counterTest struct {
-	name            string
-	circuitBreaking bool
-	maxRequests     uint32
-	numRequests     uint32
-	errorExpected   bool
+	name          string
+	maxRequests   uint32
+	numRequests   uint32
+	errorExpected bool
 }
 
 func testCounter(t *testing.T, test counterTest) {
-	counter := client.ServiceRequestsCounter{ServiceName: test.name}
-	counter.UpdateCounter(&test.maxRequests)
-	if !test.circuitBreaking {
-		counter.UpdateCounter(nil)
-	}
+	counter := client.NewServiceRequestsCounter(test.name)
+	counter.SetMaxRequests(test.maxRequests)
 	requestsStartedWg := sync.WaitGroup{}
 	requestsStartedWg.Add(1)
 	requestsSent := sync.WaitGroup{}
@@ -47,26 +43,21 @@ func testCounter(t *testing.T, test counterTest) {
 	requestsDoneWg.Add(int(test.numRequests))
 	var firstError error = nil
 	errorMu := sync.Mutex{}
-	fail := func(err error) {
-		errorMu.Lock()
-		defer errorMu.Unlock()
-		if firstError == nil {
-			firstError = err
-		}
-	}
 	for i := 0; i < int(test.numRequests); i++ {
 		go func() {
 			defer requestsDoneWg.Done()
 			if err := counter.StartRequest(); err != nil {
-				fail(err)
+				errorMu.Lock()
+				defer errorMu.Unlock()
+				if firstError == nil {
+					firstError = err
+				}
 				requestsSent.Done()
 				return
 			}
 			requestsSent.Done()
 			requestsStartedWg.Wait()
-			if err := counter.EndRequest(); err != nil {
-				fail(err)
-			}
+			counter.EndRequest()
 		}()
 	}
 	requestsSent.Wait()
@@ -83,25 +74,16 @@ func testCounter(t *testing.T, test counterTest) {
 func (s) TestRequestsCounter(t *testing.T) {
 	tests := []counterTest{
 		{
-			name:            "cb-on-no-exceed",
-			circuitBreaking: true,
-			maxRequests:     1024,
-			numRequests:     1024,
-			errorExpected:   false,
+			name:          "does-not-exceed-max-requests",
+			maxRequests:   1024,
+			numRequests:   1024,
+			errorExpected: false,
 		},
 		{
-			name:            "cb-off-exceeds",
-			circuitBreaking: false,
-			maxRequests:     32,
-			numRequests:     64,
-			errorExpected:   false,
-		},
-		{
-			name:            "cb-on-exceeds",
-			circuitBreaking: true,
-			maxRequests:     32,
-			numRequests:     64,
-			errorExpected:   true,
+			name:          "exceeds-max-requests",
+			maxRequests:   32,
+			numRequests:   64,
+			errorExpected: true,
 		},
 	}
 	for _, test := range tests {

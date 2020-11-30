@@ -24,18 +24,12 @@ import (
 )
 
 func init() {
-	src.services = make(map[string]serviceInfo)
+	src.services = make(map[string]*ServiceRequestsCounter)
 }
 
 type servicesRequestsCounter struct {
 	mu       sync.Mutex
-	services map[string]serviceInfo
-}
-
-type serviceInfo struct {
-	circuitBreaking bool
-	maxRequests     uint32
-	numRequests     uint32
+	services map[string]*ServiceRequestsCounter
 }
 
 var src servicesRequestsCounter
@@ -43,55 +37,49 @@ var src servicesRequestsCounter
 // ServiceRequestsCounter is used to track the total inflight requests for a
 // service with the provided name.
 type ServiceRequestsCounter struct {
+	mu          sync.Mutex
 	ServiceName string
+	maxRequests uint32
+	numRequests uint32
 }
 
-// UpdateCounter updates the configuration for a service, or creates it if it
-// doesn't exist. Pass nil to disable circuit breaking for a service.
-func (c *ServiceRequestsCounter) UpdateCounter(maxRequests *uint32) {
+// NewServiceRequestsCounter creates a new ServiceRequestsCounter that is
+// internally tracked by this package and returns a pointer to it. If one with
+// the serviceName already exists, returns a pointer to it.
+func NewServiceRequestsCounter(serviceName string) *ServiceRequestsCounter {
 	src.mu.Lock()
 	defer src.mu.Unlock()
-	sInfo, ok := src.services[c.ServiceName]
+	c, ok := src.services[serviceName]
 	if !ok {
-		sInfo = serviceInfo{numRequests: 0}
+		c = &ServiceRequestsCounter{ServiceName: serviceName}
+		src.services[serviceName] = c
 	}
-	sInfo.circuitBreaking = maxRequests != nil
-	if maxRequests != nil {
-		sInfo.maxRequests = *maxRequests
-	}
-	src.services[c.ServiceName] = sInfo
+	return c
+}
+
+// SetMax updates the max requests for a service's counter.
+func (c *ServiceRequestsCounter) SetMaxRequests(maxRequests uint32) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.maxRequests = maxRequests
 }
 
 // StartRequest starts a request for a service, incrementing its number of
-// requests by 1. Returns an error if circuit breaking is on and the max number
-// of requests is exceeded.
+// requests by 1. Returns an error if the max number of requests is exceeded.
 func (c *ServiceRequestsCounter) StartRequest() error {
-	src.mu.Lock()
-	defer src.mu.Unlock()
-	sInfo, ok := src.services[c.ServiceName]
-	if !ok {
-		return fmt.Errorf("service name %v not identified", c.ServiceName)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.numRequests+1 > c.maxRequests {
+		return fmt.Errorf("max requests %v exceeded on service %v", c.maxRequests, c.ServiceName)
 	}
-	sInfo.numRequests++
-	fmt.Println("StartRequest:", c.ServiceName, sInfo.circuitBreaking, sInfo.maxRequests, sInfo.numRequests)
-	if sInfo.circuitBreaking && sInfo.numRequests > sInfo.maxRequests {
-		return fmt.Errorf("max requests %v exceeded on service %v", sInfo.maxRequests, c.ServiceName)
-	}
-	src.services[c.ServiceName] = sInfo
+	c.numRequests++
 	return nil
 }
 
 // EndRequest ends a request for a service, decrementing its number of requests
 // by 1.
-func (c *ServiceRequestsCounter) EndRequest() error {
-	src.mu.Lock()
-	defer src.mu.Unlock()
-	sInfo, ok := src.services[c.ServiceName]
-	if !ok {
-		return fmt.Errorf("service name %v not identified", c.ServiceName)
-	}
-	sInfo.numRequests--
-	fmt.Println("EndRequest:", c.ServiceName, sInfo.maxRequests, sInfo.numRequests)
-	src.services[c.ServiceName] = sInfo
-	return nil
+func (c *ServiceRequestsCounter) EndRequest() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.numRequests--
 }

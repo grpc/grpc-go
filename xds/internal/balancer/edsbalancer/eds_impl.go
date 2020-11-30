@@ -398,10 +398,11 @@ func (edsImpl *edsBalancerImpl) updateConfig(edsConfig *EDSConfig) {
 		return
 	}
 	if edsImpl.counter == nil || edsImpl.counter.ServiceName != edsConfig.EDSServiceName {
-		edsImpl.counter = &client.ServiceRequestsCounter{ServiceName: edsConfig.EDSServiceName}
+		edsImpl.counter = client.NewServiceRequestsCounter(edsConfig.EDSServiceName)
 	}
-	edsImpl.counter.UpdateCounter(edsConfig.MaxRequests)
-	if edsConfig.MaxRequests == nil {
+	if edsConfig.MaxRequests != nil {
+		edsImpl.counter.SetMaxRequests(*edsConfig.MaxRequests)
+	} else {
 		// counter should be nil to prevent overhead in dropPicker.
 		edsImpl.counter = nil
 	}
