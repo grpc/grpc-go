@@ -209,8 +209,7 @@ func edsCCS(service string, enableLRS bool, xdsClient interface{}) balancer.Clie
 func edsCCScb(service string, enableLRS bool, xdsClient interface{}, maxRequests uint32) balancer.ClientConnState {
 	ccs := edsCCS(service, enableLRS, xdsClient)
 	if edsConfig, ok := ccs.BalancerConfig.(*edsbalancer.EDSConfig); ok {
-		edsConfig.CircuitBreaking = true
-		edsConfig.MaxRequests = maxRequests
+		edsConfig.MaxRequests = func() *uint32 { i := uint32(maxRequests); return &i }()
 	}
 	return ccs
 }
@@ -388,22 +387,9 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 			wantCCS:   edsCCS(serviceName, false, xdsC),
 		},
 		{
-			name: "happy-case-with-circuit-breakers",
-			cdsUpdate: xdsclient.ClusterUpdate{ServiceName: serviceName, Thresholds: []xdsclient.CircuitBreakerThreshold{
-				{
-					RoutingPriority: "HIGH",
-					MaxRequests:     1024,
-				},
-				{
-					RoutingPriority: "DEFAULT",
-					MaxRequests:     512,
-				},
-				{
-					RoutingPriority: "DEFAULT",
-					MaxRequests:     256,
-				},
-			}},
-			wantCCS: edsCCScb(serviceName, false, xdsC, 512),
+			name:      "happy-case-with-circuit-breakers",
+			cdsUpdate: xdsclient.ClusterUpdate{ServiceName: serviceName, MaxRequests: func() *uint32 { i := uint32(512); return &i }()},
+			wantCCS:   edsCCScb(serviceName, false, xdsC, 512),
 		},
 	}
 

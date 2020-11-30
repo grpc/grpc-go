@@ -309,7 +309,7 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	if err != nil {
 		return emptyUpdate, err
 	}
-	cbt, err := circuitBreakersFromCluster(cluster)
+	mr, err := circuitBreakersFromCluster(cluster)
 	if err != nil {
 		return emptyUpdate, err
 	}
@@ -317,7 +317,7 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
 		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
 		SecurityCfg: sc,
-		Thresholds:  cbt,
+		MaxRequests: mr,
 	}, nil
 }
 
@@ -390,7 +390,7 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 // circuitBreakersFromCluster extracts the circuit breakers configuration from
 // the received cluster resource. Returns nil if no CircuitBreakers or no
 // Thresholds in CircuitBreakers.
-func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) ([]CircuitBreakerThreshold, error) {
+func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) (*uint32, error) {
 	circuitBreakers := cluster.GetCircuitBreakers()
 	if circuitBreakers == nil {
 		return nil, nil
@@ -399,22 +399,18 @@ func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) ([]CircuitBreakerT
 	if thresholds == nil {
 		return nil, nil
 	}
-	cbt := make([]CircuitBreakerThreshold, 0)
 	for _, threshold := range thresholds {
+		if threshold.GetPriority().String() != "DEFAULT" {
+			continue
+		}
 		maxRequestsPb := threshold.GetMaxRequests()
 		var maxRequests uint32 = 1024
 		if maxRequestsPb != nil {
 			maxRequests = maxRequestsPb.GetValue()
 		}
-		cbt = append(cbt, CircuitBreakerThreshold{
-			RoutingPriority: threshold.GetPriority().String(),
-			MaxRequests:     maxRequests,
-		})
+		return &maxRequests, nil
 	}
-	if len(cbt) == 0 {
-		return nil, nil
-	}
-	return cbt, nil
+	return nil, nil
 }
 
 // UnmarshalEndpoints processes resources received in an EDS response,

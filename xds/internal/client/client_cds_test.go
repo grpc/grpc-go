@@ -202,16 +202,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: ClusterUpdate{ServiceName: serviceName, EnableLRS: true, Thresholds: []CircuitBreakerThreshold{
-				{
-					RoutingPriority: "DEFAULT",
-					MaxRequests:     512,
-				},
-				{
-					RoutingPriority: "HIGH",
-					MaxRequests:     1024,
-				},
-			}},
+			wantUpdate: ClusterUpdate{ServiceName: serviceName, EnableLRS: true, MaxRequests: func() *uint32 { i := uint32(512); return &i }()},
 		},
 	}
 

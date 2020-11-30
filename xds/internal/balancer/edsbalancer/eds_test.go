@@ -576,8 +576,7 @@ func (s) TestXDSBalancerConfigParsing(t *testing.T) {
   "maxRequests": 1024
 }`),
 			want: &EDSConfig{
-				CircuitBreaking: true,
-				MaxRequests:     1024,
+				MaxRequests: newUint32(1024),
 			},
 			wantErr: false,
 		},

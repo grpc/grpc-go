@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/load"
+	"google.golang.org/grpc/xds/internal/env"
 )
 
 // TODO: make this a environment variable?
@@ -393,11 +394,14 @@ func (edsImpl *edsBalancerImpl) handleSubConnStateChange(sc balancer.SubConn, s 
 
 // updateConfig handles changes to the circuit breaking configuration.
 func (edsImpl *edsBalancerImpl) updateConfig(edsConfig *EDSConfig) {
+	if !env.CircuitBreakingSupport {
+		return
+	}
 	if edsImpl.counter == nil || edsImpl.counter.ServiceName != edsConfig.EDSServiceName {
 		edsImpl.counter = &client.ServiceRequestsCounter{ServiceName: edsConfig.EDSServiceName}
 	}
-	edsImpl.counter.UpdateService(edsConfig.CircuitBreaking, edsConfig.MaxRequests)
-	if !edsConfig.CircuitBreaking {
+	edsImpl.counter.UpdateCounter(edsConfig.MaxRequests)
+	if edsConfig.MaxRequests == nil {
 		// counter should be nil to prevent overhead in dropPicker.
 		edsImpl.counter = nil
 	}
@@ -499,12 +503,13 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		}
 		return balancer.PickResult{}, status.Errorf(codes.Unavailable, "RPC is dropped")
 	}
-	// TODO: (eds) don't drop unless the inner picker is READY. Similar to
-	// https://github.com/grpc/grpc-go/issues/2622.
-	pr, err := d.p.Pick(info)
-	if d.counter != nil && err == nil {
+	if d.counter != nil {
 		if err := d.counter.StartRequest(); err != nil {
 			return balancer.PickResult{}, status.Errorf(codes.Unavailable, err.Error())
+		}
+		pr, err := d.p.Pick(info)
+		if err != nil {
+			return pr, err
 		}
 		oldDone := pr.Done
 		pr.Done = func(doneInfo balancer.DoneInfo) {
@@ -513,6 +518,9 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 				oldDone(doneInfo)
 			}
 		}
+		return pr, err
 	}
-	return pr, err
+	// TODO: (eds) don't drop unless the inner picker is READY. Similar to
+	// https://github.com/grpc/grpc-go/issues/2622.
+	return d.p.Pick(info)
 }

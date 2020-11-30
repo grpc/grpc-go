@@ -35,7 +35,10 @@ type counterTest struct {
 
 func testCounter(t *testing.T, test counterTest) {
 	counter := client.ServiceRequestsCounter{ServiceName: test.name}
-	counter.UpdateService(test.circuitBreaking, test.maxRequests)
+	counter.UpdateCounter(&test.maxRequests)
+	if !test.circuitBreaking {
+		counter.UpdateCounter(nil)
+	}
 	requestsStartedWg := sync.WaitGroup{}
 	requestsStartedWg.Add(1)
 	requestsSent := sync.WaitGroup{}

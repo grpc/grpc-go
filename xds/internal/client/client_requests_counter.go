@@ -46,17 +46,19 @@ type ServiceRequestsCounter struct {
 	ServiceName string
 }
 
-// UpdateService updates the configuration for a service, or creates it if it
-// doesn't exist.
-func (c *ServiceRequestsCounter) UpdateService(circuitBreaking bool, maxRequests uint32) {
+// UpdateCounter updates the configuration for a service, or creates it if it
+// doesn't exist. Pass nil to disable circuit breaking for a service.
+func (c *ServiceRequestsCounter) UpdateCounter(maxRequests *uint32) {
 	src.mu.Lock()
 	defer src.mu.Unlock()
 	sInfo, ok := src.services[c.ServiceName]
 	if !ok {
 		sInfo = serviceInfo{numRequests: 0}
 	}
-	sInfo.circuitBreaking = circuitBreaking
-	sInfo.maxRequests = maxRequests
+	sInfo.circuitBreaking = maxRequests != nil
+	if maxRequests != nil {
+		sInfo.maxRequests = *maxRequests
+	}
 	src.services[c.ServiceName] = sInfo
 }
 
@@ -71,7 +73,7 @@ func (c *ServiceRequestsCounter) StartRequest() error {
 		return fmt.Errorf("service name %v not identified", c.ServiceName)
 	}
 	sInfo.numRequests++
-	fmt.Println("StartRequest:", c.ServiceName, sInfo.maxRequests, sInfo.numRequests)
+	fmt.Println("StartRequest:", c.ServiceName, sInfo.circuitBreaking, sInfo.maxRequests, sInfo.numRequests)
 	if sInfo.circuitBreaking && sInfo.numRequests > sInfo.maxRequests {
 		return fmt.Errorf("max requests %v exceeded on service %v", sInfo.maxRequests, c.ServiceName)
 	}

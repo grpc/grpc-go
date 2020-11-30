@@ -42,3 +42,8 @@ func newDropper(c xdsclient.OverloadDropConfig) *dropper {
 func (d *dropper) drop() (ret bool) {
 	return d.w.Next().(bool)
 }
+
+func newUint32(value uint32) *uint32 {
+	i := uint32(value)
+	return &i
+}
