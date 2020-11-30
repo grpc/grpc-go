@@ -390,14 +390,14 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 // circuitBreakersFromCluster extracts the circuit breakers configuration from
 // the received cluster resource. Returns nil if no CircuitBreakers or no
 // Thresholds in CircuitBreakers.
-func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) (*uint32, error) {
+func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) *uint32 {
 	circuitBreakers := cluster.GetCircuitBreakers()
 	if circuitBreakers == nil {
-		return nil, nil
+		return nil
 	}
 	thresholds := circuitBreakers.GetThresholds()
 	if thresholds == nil {
-		return nil, nil
+		return nil
 	}
 	for _, threshold := range thresholds {
 		if threshold.GetPriority().String() != "DEFAULT" {
@@ -408,9 +408,9 @@ func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) (*uint32, error) {
 		if maxRequestsPb != nil {
 			maxRequests = maxRequestsPb.GetValue()
 		}
-		return &maxRequests, nil
+		return &maxRequests
 	}
-	return nil, nil
+	return nil
 }
 
 // UnmarshalEndpoints processes resources received in an EDS response,
