@@ -309,10 +309,7 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	if err != nil {
 		return emptyUpdate, err
 	}
-	mr, err := circuitBreakersFromCluster(cluster)
-	if err != nil {
-		return emptyUpdate, err
-	}
+	mr := circuitBreakersFromCluster(cluster)
 	return ClusterUpdate{
 		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
 		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
