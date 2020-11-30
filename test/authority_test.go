@@ -80,35 +80,46 @@ func runUnixTest(t *testing.T, address, target, expectedAuthority string, dialer
 	}
 }
 
+type authorityTest struct {
+	name           string
+	address        string
+	target         string
+	authority      string
+	dialTargetWant string
+}
+
+var authorityTests = []authorityTest{
+	{
+		name:      "UnixRelative",
+		address:   "sock.sock",
+		target:    "unix:sock.sock",
+		authority: "localhost",
+	},
+	{
+		name:      "UnixAbsolute",
+		address:   "/tmp/sock.sock",
+		target:    "unix:/tmp/sock.sock",
+		authority: "localhost",
+	},
+	{
+		name:      "UnixAbsoluteAlternate",
+		address:   "/tmp/sock.sock",
+		target:    "unix:///tmp/sock.sock",
+		authority: "localhost",
+	},
+	{
+		name:           "UnixPassthrough",
+		address:        "/tmp/sock.sock",
+		target:         "passthrough:///unix:///tmp/sock.sock",
+		authority:      "unix:///tmp/sock.sock",
+		dialTargetWant: "unix:///tmp/sock.sock",
+	},
+}
+
 // TestUnix does end to end tests with the various supported unix target
-// formats, ensuring that the authority is set to localhost in every case.
+// formats, ensuring that the authority is set as expected.
 func (s) TestUnix(t *testing.T) {
-	tests := []struct {
-		name      string
-		address   string
-		target    string
-		authority string
-	}{
-		{
-			name:      "UnixRelative",
-			address:   "sock.sock",
-			target:    "unix:sock.sock",
-			authority: "localhost",
-		},
-		{
-			name:      "UnixAbsolute",
-			address:   "/tmp/sock.sock",
-			target:    "unix:/tmp/sock.sock",
-			authority: "localhost",
-		},
-		{
-			name:      "UnixAbsoluteAlternate",
-			address:   "/tmp/sock.sock",
-			target:    "unix:///tmp/sock.sock",
-			authority: "localhost",
-		},
-	}
-	for _, test := range tests {
+	for _, test := range authorityTests {
 		t.Run(test.name, func(t *testing.T) {
 			runUnixTest(t, test.address, test.target, test.authority, nil)
 		})
@@ -119,30 +130,14 @@ func (s) TestUnix(t *testing.T) {
 // formats, ensuring that the target sent to the dialer does NOT have the
 // "unix:" prefix stripped.
 func (s) TestUnixCustomDialer(t *testing.T) {
-	tests := []struct {
-		name      string
-		address   string
-		target    string
-		authority string
-	}{
-		{
-			name:      "UnixRelative",
-			address:   "sock.sock",
-			target:    "unix:sock.sock",
-			authority: "localhost",
-		},
-		{
-			name:      "UnixAbsolute",
-			address:   "/tmp/sock.sock",
-			target:    "unix:/tmp/sock.sock",
-			authority: "localhost",
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range authorityTests {
+		t.Run(test.name+"WithDialer", func(t *testing.T) {
+			if test.dialTargetWant == "" {
+				test.dialTargetWant = test.target
+			}
 			dialer := func(ctx context.Context, address string) (net.Conn, error) {
-				if address != test.target {
-					return nil, fmt.Errorf("expected target %v in custom dialer, instead got %v", test.target, address)
+				if address != test.dialTargetWant {
+					return nil, fmt.Errorf("expected target %v in custom dialer, instead got %v", test.dialTargetWant, address)
 				}
 				address = address[len("unix:"):]
 				return (&net.Dialer{}).DialContext(ctx, "unix", address)
@@ -152,6 +147,8 @@ func (s) TestUnixCustomDialer(t *testing.T) {
 	}
 }
 
+// TestColonPortAuthority does an end to end test with the target for grpc.Dial
+// being ":[port]". Ensures authority is "localhost:[port]".
 func (s) TestColonPortAuthority(t *testing.T) {
 	expectedAuthority := ""
 	var authorityMu sync.Mutex

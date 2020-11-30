@@ -48,9 +48,10 @@ func ParseTarget(target string, skipUnixColonParsing bool) (ret resolver.Target)
 	ret.Scheme, ret.Endpoint, ok = split2(target, "://")
 	if !ok {
 		if strings.HasPrefix(target, "unix:") && !skipUnixColonParsing {
-			// Handle the "unix:[path]" case, because splitting on :// only
-			// handles the "unix://[/absolute/path]" case. Only handle if the
-			// dialer is nil, to avoid a behavior change with custom dialers.
+			// Handle the "unix:[local/path]" and "unix:[/absolute/path]" cases,
+			// because splitting on :// only handles the
+			// "unix://[/absolute/path]" case. Only handle if the dialer is nil,
+			// to avoid a behavior change with custom dialers.
 			return resolver.Target{Scheme: "unix", Endpoint: target[len("unix:"):]}
 		}
 		return resolver.Target{Endpoint: target}
@@ -61,7 +62,7 @@ func ParseTarget(target string, skipUnixColonParsing bool) (ret resolver.Target)
 	}
 	if ret.Scheme == "unix" {
 		// Add the "/" back in the unix case, so the unix resolver receives the
-		// actual endpoint.
+		// actual endpoint in the "unix://[/absolute/path]" case.
 		ret.Endpoint = "/" + ret.Endpoint
 	}
 	return ret

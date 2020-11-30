@@ -139,17 +139,26 @@ type http2Client struct {
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr resolver.Address, useProxy bool, grpcUA string) (net.Conn, error) {
+	address := addr.Addr
+	networkType, ok := networktype.Get(addr)
 	if fn != nil {
-		return fn(ctx, addr.Addr)
+		if networkType == "unix" {
+			// For backward compatibility, if the user dialed "unix:///path",
+			// the passthrough resolver would be used and the user's custom
+			// dialer would see "unix:///path". Since the unix resolver is used
+			// and the address is now "/path", prepend "unix://" so the user's
+			// custom dialer sees the same address.
+			return fn(ctx, "unix://"+address)
+		}
+		return fn(ctx, address)
 	}
-	networkType := "tcp"
-	if n, ok := networktype.Get(addr); ok {
-		networkType = n
+	if !ok {
+		networkType, address = parseDialTarget(address)
 	}
 	if networkType == "tcp" && useProxy {
-		return proxyDial(ctx, addr.Addr, grpcUA)
+		return proxyDial(ctx, address, grpcUA)
 	}
-	return (&net.Dialer{}).DialContext(ctx, networkType, addr.Addr)
+	return (&net.Dialer{}).DialContext(ctx, networkType, address)
 }
 
 func isTemporary(err error) bool {
