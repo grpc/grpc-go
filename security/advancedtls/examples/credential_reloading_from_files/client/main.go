@@ -47,17 +47,17 @@ func main() {
 	flag.Parse()
 
 	identityOptions := pemfile.Options{
-		CertFile:            testdata.Path("client_cert_1.pem"),
-		KeyFile:             testdata.Path("client_key_1.pem"),
-		CertRefreshDuration: credRefreshingInterval,
+		CertFile:        testdata.Path("client_cert_1.pem"),
+		KeyFile:         testdata.Path("client_key_1.pem"),
+		RefreshDuration: credRefreshingInterval,
 	}
 	identityProvider, err := pemfile.NewProvider(identityOptions)
 	if err != nil {
 		log.Fatalf("pemfile.NewProvider(%v) failed: %v", identityOptions, err)
 	}
 	rootOptions := pemfile.Options{
-		RootFile:            testdata.Path("client_trust_cert_1.pem"),
-		RootRefreshDuration: credRefreshingInterval,
+		RootFile:        testdata.Path("client_trust_cert_1.pem"),
+		RefreshDuration: credRefreshingInterval,
 	}
 	rootProvider, err := pemfile.NewProvider(rootOptions)
 	if err != nil {

@@ -160,7 +160,7 @@ type UnsafeChannelzServer interface {
 }
 
 func RegisterChannelzServer(s grpc.ServiceRegistrar, srv ChannelzServer) {
-	s.RegisterService(&_Channelz_serviceDesc, srv)
+	s.RegisterService(&Channelz_ServiceDesc, srv)
 }
 
 func _Channelz_GetTopChannels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -289,7 +289,10 @@ func _Channelz_GetSocket_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-var _Channelz_serviceDesc = grpc.ServiceDesc{
+// Channelz_ServiceDesc is the grpc.ServiceDesc for Channelz service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var Channelz_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "grpc.channelz.v1.Channelz",
 	HandlerType: (*ChannelzServer)(nil),
 	Methods: []grpc.MethodDesc{

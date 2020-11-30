@@ -64,7 +64,7 @@ type UnsafeRouteLookupServiceServer interface {
 }
 
 func RegisterRouteLookupServiceServer(s grpc.ServiceRegistrar, srv RouteLookupServiceServer) {
-	s.RegisterService(&_RouteLookupService_serviceDesc, srv)
+	s.RegisterService(&RouteLookupService_ServiceDesc, srv)
 }
 
 func _RouteLookupService_RouteLookup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -85,7 +85,10 @@ func _RouteLookupService_RouteLookup_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
-var _RouteLookupService_serviceDesc = grpc.ServiceDesc{
+// RouteLookupService_ServiceDesc is the grpc.ServiceDesc for RouteLookupService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var RouteLookupService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "grpc.lookup.v1.RouteLookupService",
 	HandlerType: (*RouteLookupServiceServer)(nil),
 	Methods: []grpc.MethodDesc{

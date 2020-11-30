@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
@@ -53,16 +52,19 @@ var (
 // stream when the lbConfig passed to it contains a valid value for the LRS
 // server (empty string).
 func TestLoadReporting(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	defer func() { newXDSClient = oldNewXDSClient }()
+
 	builder := balancer.Get(lrsBalancerName)
 	cc := testutils.NewTestClientConn(t)
 	lrsB := builder.Build(cc, balancer.BuildOptions{})
 	defer lrsB.Close()
 
-	xdsC := fakeclient.NewClient()
 	if err := lrsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
-			Addresses:  testBackendAddrs,
-			Attributes: attributes.New(xdsinternal.XDSClientID, xdsC),
+			Addresses: testBackendAddrs,
 		},
 		BalancerConfig: &lbConfig{
 			ClusterName:                testClusterName,

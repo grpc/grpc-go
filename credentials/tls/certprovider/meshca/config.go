@@ -21,7 +21,6 @@
 package meshca
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,11 +32,11 @@ import (
 	"time"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	"google.golang.org/grpc/credentials/sts"
-	configpb "google.golang.org/grpc/credentials/tls/certprovider/meshca/internal/meshca_experimental"
 )
 
 const (
@@ -46,12 +45,12 @@ const (
 	mdsRequestTimeout = 5 * time.Second
 
 	// The following are default values used in the interaction with MeshCA.
-	defaultMeshCaEndpoint = "meshca.googleapis.com"
-	defaultCallTimeout    = 10 * time.Second
-	defaultCertLifetime   = 24 * time.Hour
-	defaultCertGraceTime  = 12 * time.Hour
-	defaultKeyTypeRSA     = "RSA"
-	defaultKeySize        = 2048
+	defaultMeshCaEndpoint    = "meshca.googleapis.com"
+	defaultCallTimeout       = 10 * time.Second
+	defaultCertLifetimeSecs  = 86400 // 24h in seconds
+	defaultCertGraceTimeSecs = 43200 // 12h in seconds
+	defaultKeyTypeRSA        = "RSA"
+	defaultKeySize           = 2048
 
 	// The following are default values used in the interaction with STS or
 	// Secure Token Service, which is used to exchange the JWT token for an
@@ -69,7 +68,6 @@ var (
 	readAudienceFunc = readAudience
 )
 
-// Implements the certprovider.StableConfig interface.
 type pluginConfig struct {
 	serverURI     string
 	stsOpts       sts.Options
@@ -81,6 +79,12 @@ type pluginConfig struct {
 	location      string
 }
 
+// Type of key to be embedded in CSRs sent to the MeshCA.
+const (
+	keyTypeUnknown = 0
+	keyTypeRSA     = 1
+)
+
 // pluginConfigFromJSON parses the provided config in JSON.
 //
 // For certain values missing in the config, we use default values defined at
@@ -90,18 +94,49 @@ type pluginConfig struct {
 // GKE Metadata server and try to infer these values. If this attempt does not
 // succeed, we let those fields have empty values.
 func pluginConfigFromJSON(data json.RawMessage) (*pluginConfig, error) {
-	cfgProto := &configpb.GoogleMeshCaConfig{}
-	m := jsonpb.Unmarshaler{AllowUnknownFields: true}
-	if err := m.Unmarshal(bytes.NewReader(data), cfgProto); err != nil {
+	// This anonymous struct corresponds to the expected JSON config.
+	cfgJSON := &struct {
+		Server              json.RawMessage `json:"server,omitempty"`               // Expect a v3corepb.ApiConfigSource
+		CertificateLifetime json.RawMessage `json:"certificate_lifetime,omitempty"` // Expect a durationpb.Duration
+		RenewalGracePeriod  json.RawMessage `json:"renewal_grace_period,omitempty"` // Expect a durationpb.Duration
+		KeyType             int             `json:"key_type,omitempty"`
+		KeySize             int             `json:"key_size,omitempty"`
+		Location            string          `json:"location,omitempty"`
+	}{}
+	if err := json.Unmarshal(data, cfgJSON); err != nil {
 		return nil, fmt.Errorf("meshca: failed to unmarshal config: %v", err)
 	}
 
-	if api := cfgProto.GetServer().GetApiType(); api != v3corepb.ApiConfigSource_GRPC {
+	// Further unmarshal fields represented as json.RawMessage in the above
+	// anonymous struct, and use default values if not specified.
+	server := &v3corepb.ApiConfigSource{}
+	if cfgJSON.Server != nil {
+		if err := protojson.Unmarshal(cfgJSON.Server, server); err != nil {
+			return nil, fmt.Errorf("meshca: protojson.Unmarshal(%+v) failed: %v", cfgJSON.Server, err)
+		}
+	}
+	certLifetime := &durationpb.Duration{Seconds: defaultCertLifetimeSecs}
+	if cfgJSON.CertificateLifetime != nil {
+		if err := protojson.Unmarshal(cfgJSON.CertificateLifetime, certLifetime); err != nil {
+			return nil, fmt.Errorf("meshca: protojson.Unmarshal(%+v) failed: %v", cfgJSON.CertificateLifetime, err)
+		}
+	}
+	certGraceTime := &durationpb.Duration{Seconds: defaultCertGraceTimeSecs}
+	if cfgJSON.RenewalGracePeriod != nil {
+		if err := protojson.Unmarshal(cfgJSON.RenewalGracePeriod, certGraceTime); err != nil {
+			return nil, fmt.Errorf("meshca: protojson.Unmarshal(%+v) failed: %v", cfgJSON.RenewalGracePeriod, err)
+		}
+	}
+
+	if api := server.GetApiType(); api != v3corepb.ApiConfigSource_GRPC {
 		return nil, fmt.Errorf("meshca: server has apiType %s, want %s", api, v3corepb.ApiConfigSource_GRPC)
 	}
 
-	pc := &pluginConfig{}
-	gs := cfgProto.GetServer().GetGrpcServices()
+	pc := &pluginConfig{
+		certLifetime:  certLifetime.AsDuration(),
+		certGraceTime: certGraceTime.AsDuration(),
+	}
+	gs := server.GetGrpcServices()
 	if l := len(gs); l != 1 {
 		return nil, fmt.Errorf("meshca: number of gRPC services in config is %d, expected 1", l)
 	}
@@ -137,23 +172,17 @@ func pluginConfigFromJSON(data json.RawMessage) (*pluginConfig, error) {
 	if pc.callTimeout, err = ptypes.Duration(grpcService.GetTimeout()); err != nil {
 		pc.callTimeout = defaultCallTimeout
 	}
-	if pc.certLifetime, err = ptypes.Duration(cfgProto.GetCertificateLifetime()); err != nil {
-		pc.certLifetime = defaultCertLifetime
-	}
-	if pc.certGraceTime, err = ptypes.Duration(cfgProto.GetRenewalGracePeriod()); err != nil {
-		pc.certGraceTime = defaultCertGraceTime
-	}
-	switch cfgProto.GetKeyType() {
-	case configpb.GoogleMeshCaConfig_KEY_TYPE_UNKNOWN, configpb.GoogleMeshCaConfig_KEY_TYPE_RSA:
+	switch cfgJSON.KeyType {
+	case keyTypeUnknown, keyTypeRSA:
 		pc.keyType = defaultKeyTypeRSA
 	default:
 		return nil, fmt.Errorf("meshca: unsupported key type: %s, only support RSA keys", pc.keyType)
 	}
-	pc.keySize = int(cfgProto.GetKeySize())
+	pc.keySize = cfgJSON.KeySize
 	if pc.keySize == 0 {
 		pc.keySize = defaultKeySize
 	}
-	pc.location = cfgProto.GetLocation()
+	pc.location = cfgJSON.Location
 	if pc.location == "" {
 		pc.location = readZoneFunc(makeHTTPDoer())
 	}

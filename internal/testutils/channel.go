@@ -30,17 +30,50 @@ type Channel struct {
 }
 
 // Send sends value on the underlying channel.
-func (cwt *Channel) Send(value interface{}) {
-	cwt.ch <- value
+func (c *Channel) Send(value interface{}) {
+	c.ch <- value
+}
+
+// SendContext sends value on the underlying channel, or returns an error if
+// the context expires.
+func (c *Channel) SendContext(ctx context.Context, value interface{}) error {
+	select {
+	case c.ch <- value:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// SendOrFail attempts to send value on the underlying channel.  Returns true
+// if successful or false if the channel was full.
+func (c *Channel) SendOrFail(value interface{}) bool {
+	select {
+	case c.ch <- value:
+		return true
+	default:
+		return false
+	}
+}
+
+// ReceiveOrFail returns the value on the underlying channel and true, or nil
+// and false if the channel was empty.
+func (c *Channel) ReceiveOrFail() (interface{}, bool) {
+	select {
+	case got := <-c.ch:
+		return got, true
+	default:
+		return nil, false
+	}
 }
 
 // Receive returns the value received on the underlying channel, or the error
 // returned by ctx if it is closed or cancelled.
-func (cwt *Channel) Receive(ctx context.Context) (interface{}, error) {
+func (c *Channel) Receive(ctx context.Context) (interface{}, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case got := <-cwt.ch:
+	case got := <-c.ch:
 		return got, nil
 	}
 }
@@ -50,12 +83,12 @@ func (cwt *Channel) Receive(ctx context.Context) (interface{}, error) {
 // It's expected to be used with a size-1 channel, to only keep the most
 // up-to-date item. This method is inherently racy when invoked concurrently
 // from multiple goroutines.
-func (cwt *Channel) Replace(value interface{}) {
+func (c *Channel) Replace(value interface{}) {
 	for {
 		select {
-		case cwt.ch <- value:
+		case c.ch <- value:
 			return
-		case <-cwt.ch:
+		case <-c.ch:
 		}
 	}
 }

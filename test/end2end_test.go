@@ -5784,10 +5784,9 @@ func testGetMethodConfigTD(t *testing.T, e env) {
 	ch <- sc
 	// Wait for the new service config to propagate.
 	for {
-		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) == codes.DeadlineExceeded {
-			continue
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
+			break
 		}
-		break
 	}
 	// The following RPCs are expected to become fail-fast.
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {

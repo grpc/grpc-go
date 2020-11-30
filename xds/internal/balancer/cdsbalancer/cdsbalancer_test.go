@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
@@ -172,7 +171,7 @@ func (tb *testEDSBalancer) waitForClose(ctx context.Context) error {
 
 // cdsCCS is a helper function to construct a good update passed from the
 // xdsResolver to the cdsBalancer.
-func cdsCCS(cluster string, xdsClient interface{}) balancer.ClientConnState {
+func cdsCCS(cluster string) balancer.ClientConnState {
 	const cdsLBConfig = `{
       "loadBalancingConfig":[
         {
@@ -186,7 +185,6 @@ func cdsCCS(cluster string, xdsClient interface{}) balancer.ClientConnState {
 	return balancer.ClientConnState{
 		ResolverState: resolver.State{
 			ServiceConfig: internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(jsonSC),
-			Attributes:    attributes.New(xdsinternal.XDSClientID, xdsClient),
 		},
 		BalancerConfig: &lbConfig{ClusterName: clusterName},
 	}
@@ -194,21 +192,24 @@ func cdsCCS(cluster string, xdsClient interface{}) balancer.ClientConnState {
 
 // edsCCS is a helper function to construct a good update passed from the
 // cdsBalancer to the edsBalancer.
-func edsCCS(service string, enableLRS bool, xdsClient interface{}) balancer.ClientConnState {
+func edsCCS(service string, enableLRS bool) balancer.ClientConnState {
 	lbCfg := &edsbalancer.EDSConfig{EDSServiceName: service}
 	if enableLRS {
 		lbCfg.LrsLoadReportingServerName = new(string)
 	}
 	return balancer.ClientConnState{
-		ResolverState:  resolver.State{Attributes: attributes.New(xdsinternal.XDSClientID, xdsClient)},
 		BalancerConfig: lbCfg,
 	}
 }
 
 // setup creates a cdsBalancer and an edsBalancer (and overrides the
 // newEDSBalancer function to return it), and also returns a cleanup function.
-func setup(t *testing.T) (*cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, func()) {
+func setup(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, func()) {
 	t.Helper()
+
+	xdsC := fakeclient.NewClient()
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
 
 	builder := balancer.Get(cdsName)
 	if builder == nil {
@@ -224,8 +225,9 @@ func setup(t *testing.T) (*cdsBalancer, *testEDSBalancer, *xdstestutils.TestClie
 		return edsB, nil
 	}
 
-	return cdsB.(*cdsBalancer), edsB, tcc, func() {
+	return xdsC, cdsB.(*cdsBalancer), edsB, tcc, func() {
 		newEDSBalancer = oldEDSBalancerBuilder
+		newXDSClient = oldNewXDSClient
 	}
 }
 
@@ -234,9 +236,8 @@ func setup(t *testing.T) (*cdsBalancer, *testEDSBalancer, *xdstestutils.TestClie
 func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, func()) {
 	t.Helper()
 
-	xdsC := fakeclient.NewClient()
-	cdsB, edsB, tcc, cancel := setup(t)
-	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != nil {
+	xdsC, cdsB, edsB, tcc, cancel := setup(t)
+	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName)); err != nil {
 		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
 	}
 
@@ -256,8 +257,6 @@ func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBal
 // cdsBalancer with different inputs and verifies that the CDS watch API on the
 // provided xdsClient is invoked appropriately.
 func (s) TestUpdateClientConnState(t *testing.T) {
-	xdsC := fakeclient.NewClient()
-
 	tests := []struct {
 		name        string
 		ccs         balancer.ClientConnState
@@ -275,35 +274,15 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 			wantErr: balancer.ErrBadResolverState,
 		},
 		{
-			name: "no-xdsClient-in-attributes",
-			ccs: balancer.ClientConnState{
-				ResolverState: resolver.State{
-					Attributes: attributes.New("key", "value"),
-				},
-				BalancerConfig: &lbConfig{ClusterName: clusterName},
-			},
-			wantErr: balancer.ErrBadResolverState,
-		},
-		{
-			name: "bad-xdsClient-in-attributes",
-			ccs: balancer.ClientConnState{
-				ResolverState: resolver.State{
-					Attributes: attributes.New(xdsinternal.XDSClientID, "value"),
-				},
-				BalancerConfig: &lbConfig{ClusterName: clusterName},
-			},
-			wantErr: balancer.ErrBadResolverState,
-		},
-		{
 			name:        "happy-good-case",
-			ccs:         cdsCCS(clusterName, xdsC),
+			ccs:         cdsCCS(clusterName),
 			wantCluster: clusterName,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cdsB, _, _, cancel := setup(t)
+			xdsC, cdsB, _, _, cancel := setup(t)
 			defer func() {
 				cancel()
 				cdsB.Close()
@@ -340,7 +319,7 @@ func (s) TestUpdateClientConnStateWithSameState(t *testing.T) {
 	}()
 
 	// This is the same clientConn update sent in setupWithWatch().
-	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != nil {
+	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName)); err != nil {
 		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
 	}
 	// The above update should not result in a new watch being registered.
@@ -370,12 +349,12 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 		{
 			name:      "happy-case-with-lrs",
 			cdsUpdate: xdsclient.ClusterUpdate{ServiceName: serviceName, EnableLRS: true},
-			wantCCS:   edsCCS(serviceName, true, xdsC),
+			wantCCS:   edsCCS(serviceName, true),
 		},
 		{
 			name:      "happy-case-without-lrs",
 			cdsUpdate: xdsclient.ClusterUpdate{ServiceName: serviceName},
-			wantCCS:   edsCCS(serviceName, false, xdsC),
+			wantCCS:   edsCCS(serviceName, false),
 		},
 	}
 
@@ -443,7 +422,7 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
-	wantCCS := edsCCS(serviceName, false, xdsC)
+	wantCCS := edsCCS(serviceName, false)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -528,7 +507,7 @@ func (s) TestResolverError(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
-	wantCCS := edsCCS(serviceName, false, xdsC)
+	wantCCS := edsCCS(serviceName, false)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -577,7 +556,7 @@ func (s) TestUpdateSubConnState(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
-	wantCCS := edsCCS(serviceName, false, xdsC)
+	wantCCS := edsCCS(serviceName, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -609,7 +588,7 @@ func (s) TestClose(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
-	wantCCS := edsCCS(serviceName, false, xdsC)
+	wantCCS := edsCCS(serviceName, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -640,7 +619,7 @@ func (s) TestClose(t *testing.T) {
 
 	// Make sure that the UpdateClientConnState() method on the CDS balancer
 	// returns error.
-	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, fakeclient.NewClient())); err != errBalancerClosed {
+	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName)); err != errBalancerClosed {
 		t.Fatalf("UpdateClientConnState() after close returned %v, want %v", err, errBalancerClosed)
 	}
 

@@ -19,12 +19,9 @@
 package edsbalancer
 
 import (
-	"fmt"
 	"sync"
 
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/internal/grpclog"
-	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/load"
 )
@@ -126,48 +123,13 @@ type xdsClientWrapper struct {
 //
 // The given callbacks won't be called until the underlying xds_client is
 // working and sends updates.
-func newXDSClientWrapper(newEDSUpdate func(xdsclient.EndpointsUpdate, error), logger *grpclog.PrefixLogger) *xdsClientWrapper {
+func newXDSClientWrapper(xdsClient xdsClientInterface, newEDSUpdate func(xdsclient.EndpointsUpdate, error), logger *grpclog.PrefixLogger) *xdsClientWrapper {
 	return &xdsClientWrapper{
 		logger:       logger,
 		newEDSUpdate: newEDSUpdate,
+		xdsClient:    xdsClient,
 		loadWrapper:  &loadStoreWrapper{},
 	}
-}
-
-// updateXDSClient sets xdsClient in wrapper to the correct one based on the
-// attributes and service config.
-//
-// If client is found in attributes, it will be used, but we also need to decide
-// whether to close the old client.
-// - if old client was created locally (balancerName is not ""), close it and
-// replace it
-// - if old client was from previous attributes, only replace it, but don't
-// close it
-//
-// If client is not found in attributes, will need to create a new one only if
-// the balancerName (from bootstrap file or from service config) changed.
-// - if balancer names are the same, do nothing, and return false
-// - if balancer names are different, create new one, and return true
-func (c *xdsClientWrapper) updateXDSClient(attr *attributes.Attributes) (bool, error) {
-	if attr == nil {
-		return false, fmt.Errorf("unexported nil attributes, want attributes with xdsClient")
-	}
-	// TODO: change the way xdsClient is retrieved from attributes. One option
-	// is to add helper functions.
-	//
-	// Or, since xdsClient will become a singleton, this can just call
-	// xdsclient.New() instead. And if we decide to do this, do it in Build
-	// instead of when handling updates.
-	clientFromAttr, _ := attr.Value(xdsinternal.XDSClientID).(xdsClientInterface)
-	if clientFromAttr == nil {
-		return false, fmt.Errorf("no xdsClient found in attributes")
-	}
-
-	if c.xdsClient == clientFromAttr {
-		return false, nil
-	}
-	c.xdsClient = clientFromAttr
-	return true, nil
 }
 
 // startEndpointsWatch starts the EDS watch. Caller can call this when the
@@ -221,16 +183,9 @@ func (c *xdsClientWrapper) loadStore() load.PerClusterReporter {
 
 // handleUpdate applies the service config and attributes updates to the client,
 // including updating the xds_client to use, and updating the EDS name to watch.
-func (c *xdsClientWrapper) handleUpdate(config *EDSConfig, attr *attributes.Attributes) error {
-	clientChanged, err := c.updateXDSClient(attr)
-	if err != nil {
-		return err
-	}
-
-	// Need to restart EDS watch when one of the following happens:
-	// - the xds_client is updated
-	// - the xds_client didn't change, but the edsServiceName changed
-	if clientChanged || c.edsServiceName != config.EDSServiceName {
+func (c *xdsClientWrapper) handleUpdate(config *EDSConfig) error {
+	// Need to restart EDS watch when the edsServiceName changed
+	if c.edsServiceName != config.EDSServiceName {
 		c.edsServiceName = config.EDSServiceName
 		c.startEndpointsWatch()
 		// TODO: this update for the LRS service name is too early. It should
@@ -266,6 +221,7 @@ func (c *xdsClientWrapper) cancelWatch() {
 
 func (c *xdsClientWrapper) close() {
 	c.cancelWatch()
+	c.xdsClient.Close()
 }
 
 // equalStringPointers returns true if

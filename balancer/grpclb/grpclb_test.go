@@ -303,7 +303,7 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 	if !ok {
 		return nil, status.Error(codes.Internal, "failed to receive metadata")
 	}
-	if !s.fallback && (md == nil || md["lb-token"][0] != lbToken) {
+	if !s.fallback && (md == nil || len(md["lb-token"]) == 0 || md["lb-token"][0] != lbToken) {
 		return nil, status.Errorf(codes.Internal, "received unexpected metadata: %v", md)
 	}
 	grpc.SetTrailer(ctx, metadata.Pairs(testmdkey, s.addr))
@@ -452,7 +452,7 @@ func (s) TestGRPCLB(t *testing.T) {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 	}
 }

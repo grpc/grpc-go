@@ -22,23 +22,17 @@ package resolver
 import (
 	"fmt"
 
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 
-	xdsinternal "google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
 const xdsScheme = "xds"
 
 // For overriding in unittests.
-var (
-	newXDSClient = func() (xdsClientInterface, error) {
-		return xdsclient.New()
-	}
-)
+var newXDSClient = func() (xdsClientInterface, error) { return xdsclient.New() }
 
 func init() {
 	resolver.Register(&xdsResolverBuilder{})
@@ -163,7 +157,6 @@ func (r *xdsResolver) run() {
 			r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.client, sc)
 			r.cc.UpdateState(resolver.State{
 				ServiceConfig: r.cc.ParseServiceConfig(sc),
-				Attributes:    attributes.New(xdsinternal.XDSClientID, r.client),
 			})
 		}
 	}

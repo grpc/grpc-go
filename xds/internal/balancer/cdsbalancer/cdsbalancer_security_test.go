@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
@@ -43,7 +44,7 @@ const (
 
 var (
 	fpb1, fpb2                   *fakeProviderBuilder
-	bootstrapCertProviderConfigs map[string]*certprovider.BuildableConfig
+	bootstrapConfig              *bootstrap.Config
 	cdsUpdateWithGoodSecurityCfg = xdsclient.ClusterUpdate{
 		ServiceName: serviceName,
 		SecurityCfg: &xdsclient.SecurityConfig{
@@ -64,9 +65,11 @@ func init() {
 	fpb2 = &fakeProviderBuilder{name: fakeProvider2Name}
 	cfg1, _ := fpb1.ParseConfig(fakeConfig + "1111")
 	cfg2, _ := fpb2.ParseConfig(fakeConfig + "2222")
-	bootstrapCertProviderConfigs = map[string]*certprovider.BuildableConfig{
-		"default1": cfg1,
-		"default2": cfg2,
+	bootstrapConfig = &bootstrap.Config{
+		CertProviderConfigs: map[string]*certprovider.BuildableConfig{
+			"default1": cfg1,
+			"default2": cfg2,
+		},
 	}
 	certprovider.Register(fpb1)
 	certprovider.Register(fpb2)
@@ -112,6 +115,10 @@ func (p *fakeProvider) Close() {
 func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, func()) {
 	t.Helper()
 
+	xdsC := fakeclient.NewClient()
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+
 	builder := balancer.Get(cdsName)
 	if builder == nil {
 		t.Fatalf("balancer.Get(%q) returned nil", cdsName)
@@ -137,10 +144,8 @@ func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDS
 		return edsB, nil
 	}
 
-	// Create a fake xDS client and push a ClientConnState update to the CDS
-	// balancer with a cluster name and the fake xDS client in the attributes.
-	xdsC := fakeclient.NewClient()
-	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != nil {
+	// Push a ClientConnState update to the CDS balancer with a cluster name.
+	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName)); err != nil {
 		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
 	}
 
@@ -157,6 +162,7 @@ func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDS
 	}
 
 	return xdsC, cdsB.(*cdsBalancer), edsB, tcc, func() {
+		newXDSClient = oldNewXDSClient
 		newEDSBalancer = oldEDSBalancerBuilder
 	}
 }
@@ -226,7 +232,7 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
-	wantCCS := edsCCS(serviceName, false, xdsC)
+	wantCCS := edsCCS(serviceName, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -282,7 +288,7 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 	// newEDSBalancer function as part of test setup. No security config is
 	// passed to the CDS balancer as part of this update.
 	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
-	wantCCS := edsCCS(serviceName, false, xdsC)
+	wantCCS := edsCCS(serviceName, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -326,7 +332,7 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 
 		if i == 0 {
 			// Set the bootstrap config used by the fake client.
-			xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+			xdsC.SetBootstrapConfig(bootstrapConfig)
 		}
 
 		// Here we invoke the watch callback registered on the fake xdsClient. A bad
@@ -373,7 +379,7 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 	defer func() { buildProvider = origBuildProvider }()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. Even
 	// though the received update is good, the certprovider.Store is configured
@@ -409,7 +415,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	}()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. A bad
 	// security config is passed here. So, we expect the CDS balancer to not
@@ -438,7 +444,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, false, xdsC)
+	wantCCS := edsCCS(serviceName, false)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -465,14 +471,14 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 	}()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, false, xdsC)
+	wantCCS := edsCCS(serviceName, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
@@ -496,14 +502,14 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	}()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, false, xdsC)
+	wantCCS := edsCCS(serviceName, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
@@ -546,14 +552,14 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	}()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, false, xdsC)
+	wantCCS := edsCCS(serviceName, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
@@ -617,7 +623,7 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 	defer func() { buildProvider = origBuildProvider }()
 
 	// Set the bootstrap config used by the fake client.
-	xdsC.SetCertProviderConfigs(bootstrapCertProviderConfigs)
+	xdsC.SetBootstrapConfig(bootstrapConfig)
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
@@ -630,7 +636,7 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 			RootInstanceName: "default1",
 		},
 	}
-	wantCCS := edsCCS(serviceName, false, xdsC)
+	wantCCS := edsCCS(serviceName, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {

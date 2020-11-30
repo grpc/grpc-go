@@ -55,9 +55,9 @@ func main() {
 	fmt.Printf("server starting on port %s...\n", port)
 
 	identityOptions := pemfile.Options{
-		CertFile:            testdata.Path("server_cert_1.pem"),
-		KeyFile:             testdata.Path("server_key_1.pem"),
-		CertRefreshDuration: credRefreshingInterval,
+		CertFile:        testdata.Path("server_cert_1.pem"),
+		KeyFile:         testdata.Path("server_key_1.pem"),
+		RefreshDuration: credRefreshingInterval,
 	}
 	identityProvider, err := pemfile.NewProvider(identityOptions)
 	if err != nil {
@@ -65,8 +65,8 @@ func main() {
 	}
 	defer identityProvider.Close()
 	rootOptions := pemfile.Options{
-		RootFile:            testdata.Path("server_trust_cert_1.pem"),
-		RootRefreshDuration: credRefreshingInterval,
+		RootFile:        testdata.Path("server_trust_cert_1.pem"),
+		RefreshDuration: credRefreshingInterval,
 	}
 	rootProvider, err := pemfile.NewProvider(rootOptions)
 	if err != nil {

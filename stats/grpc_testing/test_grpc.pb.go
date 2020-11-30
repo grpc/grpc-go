@@ -48,7 +48,7 @@ func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, op
 }
 
 func (c *testServiceClient) FullDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_FullDuplexCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_TestService_serviceDesc.Streams[0], "/grpc.testing.TestService/FullDuplexCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[0], "/grpc.testing.TestService/FullDuplexCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (x *testServiceFullDuplexCallClient) Recv() (*SimpleResponse, error) {
 }
 
 func (c *testServiceClient) ClientStreamCall(ctx context.Context, opts ...grpc.CallOption) (TestService_ClientStreamCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_TestService_serviceDesc.Streams[1], "/grpc.testing.TestService/ClientStreamCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[1], "/grpc.testing.TestService/ClientStreamCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func (x *testServiceClientStreamCallClient) CloseAndRecv() (*SimpleResponse, err
 }
 
 func (c *testServiceClient) ServerStreamCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (TestService_ServerStreamCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_TestService_serviceDesc.Streams[2], "/grpc.testing.TestService/ServerStreamCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[2], "/grpc.testing.TestService/ServerStreamCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +188,7 @@ type UnsafeTestServiceServer interface {
 }
 
 func RegisterTestServiceServer(s grpc.ServiceRegistrar, srv TestServiceServer) {
-	s.RegisterService(&_TestService_serviceDesc, srv)
+	s.RegisterService(&TestService_ServiceDesc, srv)
 }
 
 func _TestService_UnaryCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -282,7 +282,10 @@ func (x *testServiceServerStreamCallServer) Send(m *SimpleResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-var _TestService_serviceDesc = grpc.ServiceDesc{
+// TestService_ServiceDesc is the grpc.ServiceDesc for TestService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var TestService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "grpc.testing.TestService",
 	HandlerType: (*TestServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
