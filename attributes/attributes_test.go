@@ -20,6 +20,8 @@ package attributes_test
 
 import (
 	"fmt"
+	"reflect"
+	"testing"
 
 	"google.golang.org/grpc/attributes"
 )
@@ -45,4 +47,14 @@ func ExampleAttributes_WithValues() {
 	// Output:
 	// Key one: 1
 	// Key two: two
+}
+
+// Test that two attributes with the same content are `reflect.DeepEqual`.
+func TestDeepEqual(t *testing.T) {
+	type keyOne struct{}
+	a1 := attributes.New(keyOne{}, 1)
+	a2 := attributes.New(keyOne{}, 1)
+	if !reflect.DeepEqual(a1, a2) {
+		t.Fatalf("reflect.DeepEqual(%+v, %+v), want true, got false", a1, a2)
+	}
 }
