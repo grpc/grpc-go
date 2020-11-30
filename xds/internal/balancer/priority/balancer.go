@@ -116,6 +116,7 @@ func (pb *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) er
 			// priority. If necessary, it will be built when handling
 			// priorities.
 			cb := newChildBalancer(name, pb, bb)
+			fmt.Printf(" ********** original err picker in child: %p\n", cb.state.Picker)
 			cb.updateConfig(newSubConfig.Config.Config, resolver.State{
 				Addresses:     addressesSplit[name],
 				ServiceConfig: s.ResolverState.ServiceConfig,
@@ -182,6 +183,7 @@ func (pb *priorityBalancer) Close() {
 // UpdateState implements balancergroup.BalancerStateAggregator interface. The
 // balancer group sends new connectivity state and picker here.
 func (pb *priorityBalancer) UpdateState(childName string, state balancer.State) {
+	fmt.Printf(" +++ child state update from %q, %+v\n", childName, state)
 	pb.childStateUpdate.Put(&balancerStateWithPriority{
 		name: childName,
 		s:    state,

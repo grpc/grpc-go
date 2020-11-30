@@ -148,7 +148,7 @@ func (pb *priorityBalancer) switchToChild(child *childBalancer, priority int) {
 	// so we don't stop the init timer.
 	// - a high priority is READY, an config update always triggers switch to
 	// it.
-	if pb.childInUse == child.name {
+	if pb.childInUse == child.name && child.started {
 		return
 	}
 	pb.childInUse = child.name

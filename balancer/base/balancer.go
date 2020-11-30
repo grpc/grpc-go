@@ -50,6 +50,7 @@ func (bb *baseBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) 
 	// ErrNoSubConnAvailable, because when state of a SubConn changes, we
 	// may call UpdateState with this picker.
 	bal.picker = NewErrPicker(balancer.ErrNoSubConnAvailable)
+	fmt.Printf(" ********** original err picker in RR: %p\n", bal.picker)
 	return bal
 }
 
