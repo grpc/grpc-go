@@ -347,6 +347,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		clientGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		clientVerifyFunc           CustomVerificationFunc
 		clientVType                VerificationType
+		serverNameOverride         string
 		clientRootProvider         certprovider.Provider
 		clientIdentityProvider     certprovider.Provider
 		clientExpectHandshakeError bool
@@ -402,6 +403,22 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverCert:                 []tls.Certificate{cs.ServerCert1},
 			serverVType:                CertAndHostVerification,
 			serverExpectError:          true,
+		},
+		// Client: only set clientRoot
+		// Server: only set serverCert with mutual TLS off
+		// Expected Behavior: success
+		// Reason: client side sets vType to CertAndHostVerification, and will do
+		// default hostname check. But we use serverNameOverride to override the
+		// the host name, and will pass the default host name check.
+		{
+			desc:                       "Client has root cert; server sends peer cert",
+			clientRoot:                 cs.ClientTrust1,
+			clientVType:                CertAndHostVerification,
+			serverNameOverride:         "foo.bar.com",
+			clientExpectHandshakeError: false,
+			serverCert:                 []tls.Certificate{cs.ServerCert1},
+			serverVType:                CertAndHostVerification,
+			serverExpectError:          false,
 		},
 		// Client: set clientGetRoot and clientVerifyFunc
 		// Server: only set serverCert with mutual TLS off
@@ -736,7 +753,8 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					GetRootCertificates: test.clientGetRoot,
 					RootProvider:        test.clientRootProvider,
 				},
-				VType: test.clientVType,
+				VType:              test.clientVType,
+				ServerNameOverride: test.serverNameOverride,
 			}
 			clientTLS, err := NewClientCreds(clientOptions)
 			if err != nil {
