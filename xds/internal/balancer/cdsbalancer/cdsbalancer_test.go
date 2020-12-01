@@ -204,7 +204,7 @@ func edsCCS(service string, enableLRS bool) balancer.ClientConnState {
 
 // edsCCScb is edsCCS except it also adds circuit breaking configuration.
 func edsCCScb(service string, enableLRS bool, xdsClient interface{}, maxRequests uint32) balancer.ClientConnState {
-	ccs := edsCCS(service, enableLRS, xdsClient)
+	ccs := edsCCS(service, enableLRS)
 	if edsConfig, ok := ccs.BalancerConfig.(*edsbalancer.EDSConfig); ok {
 		edsConfig.MaxRequests = func() *uint32 { i := uint32(maxRequests); return &i }()
 	}
