@@ -57,7 +57,7 @@ func NewServiceRequestsCounter(serviceName string) *ServiceRequestsCounter {
 	return c
 }
 
-// SetMax updates the max requests for a service's counter.
+// SetMaxRequests updates the max requests for a service's counter.
 func (c *ServiceRequestsCounter) SetMaxRequests(maxRequests uint32) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
