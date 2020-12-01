@@ -38,15 +38,15 @@ type childBalancer struct {
 	state   balancer.State
 }
 
-// newChildBalancer creates a child balancer place holder, but doesn't build the
-// child balance.
+// newChildBalancer creates a child balancer place holder, but doesn't
+// build/start the child balancer.
 func newChildBalancer(name string, parent *priorityBalancer, bb balancer.Builder) *childBalancer {
 	return &childBalancer{
 		name:    name,
 		parent:  parent,
 		bb:      bb,
 		started: false,
-		// Start child balancer with connecting state.
+		// Start with the connecting state.
 		state: balancer.State{
 			ConnectivityState: connectivity.Connecting,
 			Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
@@ -79,6 +79,9 @@ func (cb *childBalancer) sendUpdate() {
 	})
 }
 
+// stop stops the child balancer and reset the state.
+//
+// Note that the underlying balancer group could keep the child in a cache.
 func (cb *childBalancer) stop() {
 	if !cb.started {
 		return

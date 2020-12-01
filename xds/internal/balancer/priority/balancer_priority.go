@@ -27,9 +27,7 @@ import (
 )
 
 var (
-	errAllPrioritiesRemoved = errors.New("no locality is provided, all priorities are removed")
-	// errPriorityConnecting   = status.Errorf(codes.Unavailable, "priority sub-balancer is connecting")
-
+	errAllPrioritiesRemoved    = errors.New("no locality is provided, all priorities are removed")
 	defaultPriorityInitTimeout = 10 * time.Second
 )
 
@@ -37,25 +35,28 @@ var (
 // balancer state (started or not) is in sync with the priorities (even in
 // tricky cases where a child is moved from a priority to another).
 //
-// Invariant after this function returns:
-// - If some child is READY, it should be childInUse, and all lower priorities
-// should be closed.
-// - If some child is first time connecting, it should be childInUse, and all
-// lower priorities should be closed.
-// - Otherwise, the lowest priority should be childInUse (and the overall state
-// is not ready).
+// It's guaranteed that after this function returns:
+// - If some child is READY, it is childInUse, and all lower priorities are
+// closed.
+// - If some child is newly started(in Connecting for the first time), it is
+// childInUse, and all lower priorities are closed.
+// - Otherwise, the lowest priority is childInUse (none of the children is
+// ready, and the overall state is not ready).
 //
+// Steps:
 // - If all priorities were deleted, unset childInUse (to an empty string), and
 // set parent ClientConn to TransientFailure
 // - Otherwise, Scan all children from p0, and check balancer stats:
-//   - If balancer is not started (not built), this is either a new child with
-//   high priority, or a new builder for an existing child.
-//     - switch to it
-//   - If balancer is READY
-//     - switch to it
-//   - If this is the lowest priority
-//     - switch to it
-//   - Forward the new addresses and config for all the cases.
+//   - For any of the following cases:
+// 	   - If balancer is not started (not built), this is either a new child
+//       with high priority, or a new builder for an existing child.
+// 	   - If balancer is READY
+// 	   - If this is the lowest priority
+//   - do the following:
+//     - if this is not the old childInUse, override picker so old picker is no
+//       longer used.
+//     - switch to it (because all higher priorities are neither new or Ready)
+//     - forward the new addresses and config
 //
 // Caller must hold pb.mu.
 func (pb *priorityBalancer) syncPriority() {
@@ -88,8 +89,8 @@ func (pb *priorityBalancer) syncPriority() {
 			p == len(pb.priorities)-1 {
 			if pb.childInUse != "" && pb.childInUse != child.name {
 				// childInUse was set and is different from this child, will
-				// change childInUse, update picker so parent stops using the
-				// old picker.
+				// change childInUse later. We need to update picker here
+				// immediately so parent stops using the old picker.
 				pb.cc.UpdateState(child.state)
 			}
 			pb.logger.Warningf("switching to (%q, %v) in syncPriority", child.name, p)
@@ -169,6 +170,7 @@ func (pb *priorityBalancer) switchToChild(child *childBalancer, priority int) {
 				return
 			}
 			pb.priorityInitTimer = nil
+			// Switch to the next priority if there's any.
 			if pNext := priority + 1; pNext < len(pb.priorities) {
 				nameNext := pb.priorities[pNext]
 				if childNext, ok := pb.children[nameNext]; ok {
@@ -224,7 +226,6 @@ func (pb *priorityBalancer) handleChildStateUpdate(childName string, s balancer.
 		pb.handlePriorityWithNewStateConnecting(child, priority, oldState)
 	default:
 		// New state is Idle, should never happen. Don't forward.
-		// return false
 	}
 }
 
@@ -233,11 +234,10 @@ func (pb *priorityBalancer) handleChildStateUpdate(childName string, s balancer.
 //
 // An update with state Ready:
 // - If it's from higher priority:
+//   - Switch to this priority
 //   - Forward the update
-//   - Set the priority as priorityInUse
-//   - Close all priorities lower than this one
 // - If it's from priorityInUse:
-//   - Forward and do nothing else
+//   - Forward only
 //
 // Caller must make sure priorityInUse is not higher than priority.
 //
@@ -270,9 +270,9 @@ func (pb *priorityBalancer) handlePriorityWithNewStateReady(child *childBalancer
 //   - If there's no lower:
 //     - Forward and do nothing else
 //   - If there's a lower priority:
+//     - Switch to the lower
+//     - Forward the lower child's state
 //     - Do NOT forward this update
-//     - Set lower as priorityInUse and send it's state
-//     - Start lower
 //
 // Caller must make sure priorityInUse is not higher than priority.
 //
@@ -313,7 +313,7 @@ func (pb *priorityBalancer) handlePriorityWithNewStateTransientFailure(child *ch
 // previous state was Ready, this is a transition out from Ready to Connecting.
 // Assuming there are multiple backends in the same priority, this mean we are
 // in a bad situation and we should failover to the next priority (Side note:
-// the current connectivity state aggregating algorhtim (e.g. round-robin) is
+// the current connectivity state aggregating algorithm (e.g. round-robin) is
 // not handling this right, because if many backends all go from Ready to
 // Connecting, the overall situation is more like TransientFailure, not
 // Connecting).
@@ -340,7 +340,6 @@ func (pb *priorityBalancer) handlePriorityWithNewStateConnecting(child *childBal
 			childNext := pb.children[nameNext]
 			pb.switchToChild(childNext, priorityNext)
 			// FIXME: test should cover this
-			// child.sendUpdate()
 		}
 		pb.cc.UpdateState(child.state)
 	case connectivity.Idle:

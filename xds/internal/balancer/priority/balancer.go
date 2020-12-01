@@ -113,8 +113,7 @@ func (pb *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) er
 		if !ok {
 			// This is a new child, add it to the children list. But note that
 			// the balancer isn't built, because this child can be a low
-			// priority. If necessary, it will be built when handling
-			// priorities.
+			// priority. If necessary, it will be built when syncing priorities.
 			cb := newChildBalancer(name, pb, bb)
 			cb.updateConfig(newSubConfig.Config.Config, resolver.State{
 				Addresses:     addressesSplit[name],
@@ -128,14 +127,15 @@ func (pb *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) er
 		// This is not a new child. But the config/addresses could change.
 
 		// The balancing policy name is changed, close the old child. But don't
-		// rebuild, rebuild will happen when handling priorities.
+		// rebuild, rebuild will happen when syncing priorities.
 		if currentChild.bb.Name() != bb.Name() {
 			currentChild.stop()
 			currentChild.bb = bb
 		}
 
-		// Update config and address, but don't send to child balancer (the
-		// child balancer might not exist, if it's a low priority).
+		// Update config and address, but note that this doesn't send the
+		// updates to child balancer (the child balancer might not be built, if
+		// it's a low priority).
 		currentChild.updateConfig(newSubConfig.Config.Config, resolver.State{
 			Addresses:     addressesSplit[name],
 			ServiceConfig: s.ResolverState.ServiceConfig,
@@ -156,7 +156,6 @@ func (pb *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) er
 		pb.priorities = append(pb.priorities, pName)
 		pb.childToPriority[pName] = pi
 	}
-
 	// Sync the states of all children to the new updated priorities. This
 	// include starting/stopping child balancers when necessary.
 	pb.syncPriority()
@@ -174,9 +173,18 @@ func (pb *priorityBalancer) UpdateSubConnState(sc balancer.SubConn, state balanc
 }
 
 func (pb *priorityBalancer) Close() {
-	// FIXME: check other things
 	pb.cancel()
 	pb.bg.Close()
+
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
+	// Clear states of the current child in use, so if there's a race in picker
+	// update, it will be dropped.
+	pb.childInUse = ""
+	if timer := pb.priorityInitTimer; timer != nil {
+		timer.Stop()
+		pb.priorityInitTimer = nil
+	}
 }
 
 // UpdateState implements balancergroup.BalancerStateAggregator interface. The
@@ -193,6 +201,9 @@ type balancerStateWithPriority struct {
 	s    balancer.State
 }
 
+// run handles child update in a separate goroutine, so if the child sends
+// updates inline (when called by parent), it won't cause deadlocks (by trying
+// to hold the same mutex).
 func (pb *priorityBalancer) run() {
 	for {
 		select {
