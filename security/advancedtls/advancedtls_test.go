@@ -411,7 +411,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// default hostname check. But we use serverNameOverride to override the
 		// the host name, and will pass the default host name check.
 		{
-			desc:                       "Client has root cert; server sends peer cert",
+			desc:                       "Client uses CertAndHostVerification and serverNameOverride",
 			clientRoot:                 cs.ClientTrust1,
 			clientVType:                CertAndHostVerification,
 			serverNameOverride:         "foo.bar.com",
