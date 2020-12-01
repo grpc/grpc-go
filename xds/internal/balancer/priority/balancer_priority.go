@@ -334,18 +334,24 @@ func (pb *priorityBalancer) handlePriorityWithNewStateConnecting(child *childBal
 
 	switch oldState {
 	case connectivity.Ready:
-		if priorityNext := priority + 1; priorityNext < len(pb.priorities) {
-			pb.logger.Infof("Switching priority from %v to %v, because former became Connecting from Ready", priority, priorityNext)
-			nameNext := pb.priorities[priorityNext]
-			childNext := pb.children[nameNext]
-			pb.switchToChild(childNext, priorityNext)
-			// FIXME: test should cover this
+		// Handling transition from Ready to Connecting, is same as handling
+		// TransientFailure. There's no need to stop the init timer, because it
+		// should have been stopped when state turned Ready.
+		priorityNext := priority + 1
+		if priorityNext >= len(pb.priorities) {
+			// Forward this update.
+			pb.cc.UpdateState(child.state)
+			return
 		}
-		pb.cc.UpdateState(child.state)
+		pb.logger.Infof("Switching priority from %v to %v, because former became TransientFailure", priority, priorityNext)
+		nameNext := pb.priorities[priorityNext]
+		childNext := pb.children[nameNext]
+		pb.switchToChild(childNext, priorityNext)
+		pb.cc.UpdateState(childNext.state)
+		childNext.sendUpdate()
 	case connectivity.Idle:
 		pb.cc.UpdateState(child.state)
 	default:
 		// Old state is Connecting, TransientFailure or Shutdown. Don't forward.
-		return
 	}
 }

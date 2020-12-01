@@ -352,6 +352,101 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	}
 }
 
+// Lower priority is used when higher priority turns Connecting from Ready.
+// Because changing from Ready to Connecting is a failure.
+//
+// Init 0 and 1; 0 is up, use 0; 0 is connecting, 1 is up, use 1; 0 is ready,
+// use 0.
+func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
+	cc := testutils.NewTestClientConn(t)
+	bb := balancer.Get(priorityBalancerName)
+	pb := bb.Build(cc, balancer.BuildOptions{})
+	defer pb.Close()
+
+	// Two localities, with priorities [0, 1], each with one backend.
+	pb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Addresses: []resolver.Address{
+				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
+				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[1]}, []string{"child-1"}),
+			},
+		},
+		BalancerConfig: &lbConfig{
+			Children: map[string]*child{
+				"child-0": {&internalserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+				"child-1": {&internalserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+			},
+			Priorities: []string{"child-0", "child-1"},
+		},
+	})
+
+	addrs0 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc0 := <-cc.NewSubConnCh
+
+	// p0 is ready.
+	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+
+	// Test roundrobin with only p0 subconns.
+	p0 := <-cc.NewPickerCh
+	want := []balancer.SubConn{sc0}
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p0)); err != nil {
+		t.Fatalf("want %v, got %v", want, err)
+	}
+
+	// Turn 0 to Connecting, will start and use 1. Because 0 changing from Ready
+	// to Connecting is a failure.
+	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+
+	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
+	// will retry.
+	p1 := <-cc.NewPickerCh
+	for i := 0; i < 5; i++ {
+		if _, err := p1.Pick(balancer.PickInfo{}); err != balancer.ErrNoSubConnAvailable {
+			t.Fatalf("want pick error %v, got %v", balancer.ErrNoSubConnAvailable, err)
+		}
+	}
+
+	// Handle SubConn creation from 1.
+	addrs1 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs1[0].Addr, testBackendAddrStrs[1]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc1 := <-cc.NewSubConnCh
+	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+
+	// Test pick with 1.
+	p2 := <-cc.NewPickerCh
+	for i := 0; i < 5; i++ {
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{})
+		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
+		}
+	}
+
+	// Turn 0 back to Ready.
+	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+
+	// p1 subconn should be removed.
+	scToRemove := <-cc.RemoveSubConnCh
+	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+		t.Fatalf("RemoveSubConn, want %v, got %v", sc0, scToRemove)
+	}
+
+	p3 := <-cc.NewPickerCh
+	for i := 0; i < 5; i++ {
+		gotSCSt, _ := p3.Pick(balancer.PickInfo{})
+		if !cmp.Equal(gotSCSt.SubConn, sc0, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
+		}
+	}
+}
+
 // Add a lower priority while the higher priority is down.
 //
 // Init 0 and 1; 0 and 1 both down; add 2, use 2.
