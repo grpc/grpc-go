@@ -92,15 +92,14 @@ func (s) TestServerSideXDS(t *testing.T) {
 	testpb.RegisterTestServiceServer(server, &testService{})
 	defer server.Stop()
 
-	localAddr, err := testutils.AvailableHostPort()
+	lis, err := testutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("testutils.AvailableHostPort() failed: %v", err)
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 
 	go func() {
-		opts := xds.ServeOptions{Address: localAddr}
-		if err := server.Serve(opts); err != nil {
-			t.Errorf("Serve(%+v) failed: %v", opts, err)
+		if err := server.Serve(lis); err != nil {
+			t.Errorf("Serve() failed: %v", err)
 		}
 	}()
 
@@ -108,7 +107,7 @@ func (s) TestServerSideXDS(t *testing.T) {
 	go func() {
 		listener := &v3listenerpb.Listener{
 			// This needs to match the name we are querying for.
-			Name: fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", localAddr),
+			Name: fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", lis.Addr().String()),
 			ApiListener: &v3listenerpb.ApiListener{
 				ApiListener: &anypb.Any{
 					TypeUrl: version.V2HTTPConnManagerURL,
@@ -138,7 +137,7 @@ func (s) TestServerSideXDS(t *testing.T) {
 	}()
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.DialContext(ctx, localAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}

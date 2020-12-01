@@ -20,7 +20,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.14
+          go-version: 1.15
       - name: Checkout repo
         uses: actions/checkout@v2
 
@@ -38,19 +38,19 @@ jobs:
       matrix:
         include:
           - type: vet
-            goversion: 1.14
+            goversion: 1.15
           - type: race
-            goversion: 1.14
+            goversion: 1.15
           - type: 386
-            goversion: 1.14
+            goversion: 1.15
           - type: retry
-            goversion: 1.14
+            goversion: 1.15
           - type: extras
+            goversion: 1.15
+          - type: tests
             goversion: 1.14
           - type: tests
             goversion: 1.13
-          - type: tests
-            goversion: 1.12
           - type: tests
             goversion: 1.11  # Keep until interop tests no longer require Go1.11
 
@@ -77,12 +77,12 @@ jobs:
       # Main tests run for everything except when testing "extras" and the race detector.
       - name: Run tests
         if: ${{ matrix.type != 'extras' && matrix.type != 'race' }}
-        run: make test
+        run: go test -cpu 1,4 -timeout 7m google.golang.org/grpc/...
 
       # Race detector tests
       - name: Run test race
         if: ${{ matrix.TYPE == 'race' }}
-        run: make testrace
+        run: go test -race -cpu 1,4 -timeout 7m google.golang.org/grpc/...
 
       # Non-core gRPC tests (examples, interop, etc)
       - name: Run extras tests
@@ -91,4 +91,5 @@ jobs:
           examples/examples_test.sh
           security/advancedtls/examples/examples_test.sh
           interop/interop_test.sh
-          make testsubmodule
+          cd ${GITHUB_WORKSPACE}/security/advancedtls && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/advancedtls/...
+          cd ${GITHUB_WORKSPACE}/security/authorization && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/authorization/...

@@ -38,8 +38,9 @@ import (
 )
 
 const (
-	defaultTestTimeout      = 5 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond
+	defaultTestTimeout       = 5 * time.Second
+	defaultTestShortTimeout  = 10 * time.Millisecond
+	testServerResourceNameID = "/path/to/resource"
 )
 
 type s struct {
@@ -48,57 +49,6 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
-}
-
-func (s) TestServeOptions_Validate(t *testing.T) {
-	tests := []struct {
-		desc    string
-		opts    ServeOptions
-		wantErr bool
-	}{
-		{
-			desc:    "empty options",
-			opts:    ServeOptions{},
-			wantErr: true,
-		},
-		{
-			desc:    "bad address",
-			opts:    ServeOptions{Address: "I'm a bad IP address"},
-			wantErr: true,
-		},
-		{
-			desc:    "no port",
-			opts:    ServeOptions{Address: "1.2.3.4"},
-			wantErr: true,
-		},
-		{
-			desc:    "empty hostname",
-			opts:    ServeOptions{Address: ":1234"},
-			wantErr: true,
-		},
-		{
-			desc:    "localhost",
-			opts:    ServeOptions{Address: "localhost:1234"},
-			wantErr: true,
-		},
-		{
-			desc: "ipv4",
-			opts: ServeOptions{Address: "1.2.3.4:1234"},
-		},
-		{
-			desc: "ipv6",
-			opts: ServeOptions{Address: "[1:2::3:4]:1234"},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.desc, func(t *testing.T) {
-			err := test.opts.validate()
-			if (err != nil) != test.wantErr {
-				t.Errorf("ServeOptions.validate(%+v) returned err %v, wantErr: %v", test.opts, err, test.wantErr)
-			}
-		})
-	}
 }
 
 type fakeGRPCServer struct {
@@ -186,19 +136,16 @@ func (s) TestRegisterService(t *testing.T) {
 func setupOverrides(t *testing.T) (*fakeGRPCServer, *testutils.Channel, func()) {
 	t.Helper()
 
-	origNewXDSConfig := newXDSConfig
-	newXDSConfig = func() (*bootstrap.Config, error) {
-		return &bootstrap.Config{
-			BalancerName: "dummyBalancer",
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto:    xdstestutils.EmptyNodeProtoV3,
-		}, nil
-	}
-
 	clientCh := testutils.NewChannel()
 	origNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) {
 		c := fakeclient.NewClient()
+		c.SetBootstrapConfig(&bootstrap.Config{
+			BalancerName:         "dummyBalancer",
+			Creds:                grpc.WithTransportCredentials(insecure.NewCredentials()),
+			NodeProto:            xdstestutils.EmptyNodeProtoV3,
+			ServerResourceNameID: testServerResourceNameID,
+		})
 		clientCh.Send(c)
 		return c, nil
 	}
@@ -208,7 +155,6 @@ func setupOverrides(t *testing.T) (*fakeGRPCServer, *testutils.Channel, func()) 
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServerInterface { return fs }
 
 	return fs, clientCh, func() {
-		newXDSConfig = origNewXDSConfig
 		newXDSClient = origNewXDSClient
 		newGRPCServer = origNewGRPCServer
 	}
@@ -229,15 +175,15 @@ func (s) TestServeSuccess(t *testing.T) {
 	server := NewGRPCServer()
 	defer server.Stop()
 
-	localAddr, err := xdstestutils.AvailableHostPort()
+	lis, err := xdstestutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("testutils.AvailableHostPort() failed: %v", err)
+		t.Fatalf("xdstestutils.LocalTCPListener() failed: %v", err)
 	}
 
 	// Call Serve() in a goroutine, and push on a channel when Serve returns.
 	serveDone := testutils.NewChannel()
 	go func() {
-		if err := server.Serve(ServeOptions{Address: localAddr}); err != nil {
+		if err := server.Serve(lis); err != nil {
 			t.Error(err)
 		}
 		serveDone.Send(nil)
@@ -257,7 +203,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", localAddr)
+	wantName := fmt.Sprintf("%s?udpa.resource.listening_address=%s", client.BootstrapConfig().ServerResourceNameID, lis.Addr().String())
 	if name != wantName {
 		t.Fatalf("LDS watch registered for name %q, want %q", name, wantName)
 	}
@@ -290,15 +236,15 @@ func (s) TestServeWithStop(t *testing.T) {
 	// it after the LDS watch has been registered.
 	server := NewGRPCServer()
 
-	localAddr, err := xdstestutils.AvailableHostPort()
+	lis, err := xdstestutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("testutils.AvailableHostPort() failed: %v", err)
+		t.Fatalf("xdstestutils.LocalTCPListener() failed: %v", err)
 	}
 
 	// Call Serve() in a goroutine, and push on a channel when Serve returns.
 	serveDone := testutils.NewChannel()
 	go func() {
-		if err := server.Serve(ServeOptions{Address: localAddr}); err != nil {
+		if err := server.Serve(lis); err != nil {
 			t.Error(err)
 		}
 		serveDone.Send(nil)
@@ -319,7 +265,7 @@ func (s) TestServeWithStop(t *testing.T) {
 		server.Stop()
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", localAddr)
+	wantName := fmt.Sprintf("%s?udpa.resource.listening_address=%s", client.BootstrapConfig().ServerResourceNameID, lis.Addr().String())
 	if name != wantName {
 		server.Stop()
 		t.Fatalf("LDS watch registered for name %q, wantPrefix %q", name, wantName)
@@ -349,14 +295,14 @@ func (s) TestServeBootstrapFailure(t *testing.T) {
 	server := NewGRPCServer()
 	defer server.Stop()
 
-	localAddr, err := xdstestutils.AvailableHostPort()
+	lis, err := xdstestutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("testutils.AvailableHostPort() failed: %v", err)
+		t.Fatalf("xdstestutils.LocalTCPListener() failed: %v", err)
 	}
 
 	serveDone := testutils.NewChannel()
 	go func() {
-		err := server.Serve(ServeOptions{Address: localAddr})
+		err := server.Serve(lis)
 		serveDone.Send(err)
 	}()
 
@@ -374,16 +320,6 @@ func (s) TestServeBootstrapFailure(t *testing.T) {
 // TestServeNewClientFailure tests the case where xds client creation fails and
 // verifies that Server() exits with a non-nil error.
 func (s) TestServeNewClientFailure(t *testing.T) {
-	origNewXDSConfig := newXDSConfig
-	newXDSConfig = func() (*bootstrap.Config, error) {
-		return &bootstrap.Config{
-			BalancerName: "dummyBalancer",
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto:    xdstestutils.EmptyNodeProtoV3,
-		}, nil
-	}
-	defer func() { newXDSConfig = origNewXDSConfig }()
-
 	origNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) {
 		return nil, errors.New("xdsClient creation failed")
@@ -393,14 +329,14 @@ func (s) TestServeNewClientFailure(t *testing.T) {
 	server := NewGRPCServer()
 	defer server.Stop()
 
-	localAddr, err := xdstestutils.AvailableHostPort()
+	lis, err := xdstestutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("testutils.AvailableHostPort() failed: %v", err)
+		t.Fatalf("xdstestutils.LocalTCPListener() failed: %v", err)
 	}
 
 	serveDone := testutils.NewChannel()
 	go func() {
-		err := server.Serve(ServeOptions{Address: localAddr})
+		err := server.Serve(lis)
 		serveDone.Send(err)
 	}()
 

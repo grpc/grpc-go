@@ -24,18 +24,19 @@ import (
 	"fmt"
 	"sync"
 
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal"
-	xdsinternal "google.golang.org/grpc/xds/internal"
+	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/load"
 )
 
 func init() {
 	balancer.Register(&lrsBB{})
 }
+
+var newXDSClient = func() (xdsClientInterface, error) { return xdsclient.New() }
 
 const lrsBalancerName = "lrs_experimental"
 
@@ -46,9 +47,16 @@ func (l *lrsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balanc
 		cc:        cc,
 		buildOpts: opts,
 	}
-	b.client = newXDSClientWrapper()
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
+
+	client, err := newXDSClient()
+	if err != nil {
+		b.logger.Errorf("failed to create xds-client: %v", err)
+		return nil
+	}
+	b.client = newXDSClientWrapper(client)
+
 	return b
 }
 
@@ -80,7 +88,7 @@ func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	// Update load reporting config or xds client. This needs to be done before
 	// updating the child policy because we need the loadStore from the updated
 	// client to be passed to the ccWrapper.
-	if err := b.client.update(newConfig, s.ResolverState.Attributes); err != nil {
+	if err := b.client.update(newConfig); err != nil {
 		return err
 	}
 
@@ -219,33 +227,20 @@ type xdsClientWrapper struct {
 	loadWrapper *loadStoreWrapper
 }
 
-func newXDSClientWrapper() *xdsClientWrapper {
+func newXDSClientWrapper(c xdsClientInterface) *xdsClientWrapper {
 	return &xdsClientWrapper{
+		c:           c,
 		loadWrapper: &loadStoreWrapper{},
 	}
 }
 
 // update checks the config and xdsclient, and decides whether it needs to
 // restart the load reporting stream.
-func (w *xdsClientWrapper) update(newConfig *lbConfig, attr *attributes.Attributes) error {
+func (w *xdsClientWrapper) update(newConfig *lbConfig) error {
 	var (
 		restartLoadReport           bool
 		updateLoadClusterAndService bool
 	)
-
-	if attr == nil {
-		return fmt.Errorf("lrs: failed to get xdsClient from attributes: attributes is nil")
-	}
-	clientFromAttr, _ := attr.Value(xdsinternal.XDSClientID).(xdsClientInterface)
-	if clientFromAttr == nil {
-		return fmt.Errorf("lrs: failed to get xdsClient from attributes: xdsClient not found in attributes")
-	}
-
-	if w.c != clientFromAttr {
-		// xds client is different, restart.
-		restartLoadReport = true
-		w.c = clientFromAttr
-	}
 
 	// ClusterName is different, restart. ClusterName is from ClusterName and
 	// EdsServiceName.
@@ -301,4 +296,5 @@ func (w *xdsClientWrapper) close() {
 		w.cancelLoadReport()
 		w.cancelLoadReport = nil
 	}
+	w.c.Close()
 }
