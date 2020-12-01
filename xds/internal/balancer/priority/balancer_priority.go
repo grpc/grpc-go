@@ -19,7 +19,6 @@ package priority
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"google.golang.org/grpc/balancer"
@@ -135,7 +134,6 @@ func (pb *priorityBalancer) stopSubBalancersLowerThanPriority(p int) {
 //
 // caller must hold pb.mu.
 func (pb *priorityBalancer) switchToChild(child *childBalancer, priority int) {
-	fmt.Printf(" +++ switching to %q, %v\n", child.name, priority)
 	// Stop lower priorities even if childInUse is same as this child. It's
 	// possible this child was moved from a priority to another.
 	pb.stopSubBalancersLowerThanPriority(priority)
@@ -186,7 +184,6 @@ func (pb *priorityBalancer) switchToChild(child *childBalancer, priority int) {
 // handleChildStateUpdate start/close priorities based on the connectivity
 // state.
 func (pb *priorityBalancer) handleChildStateUpdate(childName string, s balancer.State) {
-	fmt.Println(" +++ handle child state update ", childName, s)
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
@@ -246,7 +243,6 @@ func (pb *priorityBalancer) handleChildStateUpdate(childName string, s balancer.
 //
 // Caller must hold mu.
 func (pb *priorityBalancer) handlePriorityWithNewStateReady(child *childBalancer, priority int) {
-	fmt.Printf(" +++ handle ready from %q %v, in use: %v\n", child.name, priority, pb.priorityInUse)
 	// If one priority higher or equal to priorityInUse goes Ready, stop the
 	// init timer. If update is from higher than priorityInUse, priorityInUse
 	// will be closed, and the init timer will become useless.
@@ -282,7 +278,6 @@ func (pb *priorityBalancer) handlePriorityWithNewStateReady(child *childBalancer
 //
 // Caller must hold mu.
 func (pb *priorityBalancer) handlePriorityWithNewStateTransientFailure(child *childBalancer, priority int) {
-	fmt.Printf(" +++ handle transient failure from %q %v, in use: %v\n", child.name, priority, pb.priorityInUse)
 	// priorityInUse is lower than this priority, do nothing.
 	if pb.priorityInUse > priority {
 		return
@@ -332,7 +327,6 @@ func (pb *priorityBalancer) handlePriorityWithNewStateTransientFailure(child *ch
 //
 // Caller must hold mu.
 func (pb *priorityBalancer) handlePriorityWithNewStateConnecting(child *childBalancer, priority int, oldState connectivity.State) {
-	fmt.Printf(" +++ handle connecting from %q %v, in use: %v, oldstate: %v\n", child.name, priority, pb.priorityInUse, oldState)
 	// priorityInUse is lower than this priority, do nothing.
 	if pb.priorityInUse > priority {
 		return

@@ -70,8 +70,7 @@ func init() {
 
 func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	return func() balancer.SubConn {
-		scst, err := p.Pick(balancer.PickInfo{})
-		fmt.Printf(" --- pick %p returned error: %v\n", p, err)
+		scst, _ := p.Pick(balancer.PickInfo{})
 		return scst.SubConn
 	}
 }

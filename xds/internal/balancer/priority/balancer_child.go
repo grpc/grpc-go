@@ -19,8 +19,6 @@
 package priority
 
 import (
-	"fmt"
-
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
@@ -74,7 +72,6 @@ func (cb *childBalancer) start() {
 
 // sendUpdate sends the addresses and config to the child balancer.
 func (cb *childBalancer) sendUpdate() {
-	fmt.Println(" +++ sending addresses to ", cb.name)
 	// TODO: handle aggregate returned error.
 	cb.parent.bg.UpdateClientConnState(cb.name, balancer.ClientConnState{
 		ResolverState:  cb.rState,
