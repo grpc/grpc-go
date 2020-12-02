@@ -105,6 +105,6 @@ func main() {
 		}
 		cancel()
 		conn.Close()
-		time.Sleep(500*time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 }
