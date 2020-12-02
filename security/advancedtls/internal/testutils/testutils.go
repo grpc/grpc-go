@@ -43,6 +43,10 @@ type CertStore struct {
 	ServerCert2 tls.Certificate
 	// ServerPeer3 is the certificate sent by server to prove its identity.
 	ServerPeer3 tls.Certificate
+	// ServerPeerLocalhost1 is the certificate sent by server to prove its
+	// identity. It has "localhost" as its common name, and is trusted by
+	// ClientTrust1.
+	ServerPeerLocalhost1 tls.Certificate
 	// ClientTrust1 is the root certificate used on the client side.
 	ClientTrust1 *x509.CertPool
 	// ClientTrust2 is the root certificate used on the client side.
@@ -82,6 +86,9 @@ func (cs *CertStore) LoadCerts() error {
 		return err
 	}
 	if cs.ServerPeer3, err = tls.LoadX509KeyPair(testdata.Path("server_cert_3.pem"), testdata.Path("server_key_3.pem")); err != nil {
+		return err
+	}
+	if cs.ServerPeerLocalhost1, err = tls.LoadX509KeyPair(testdata.Path("server_cert_localhost_1.pem"), testdata.Path("server_key_localhost_1.pem")); err != nil {
 		return err
 	}
 	if cs.ClientTrust1, err = readTrustCert(testdata.Path("client_trust_cert_1.pem")); err != nil {
