@@ -561,18 +561,6 @@ func (s) TestXDSBalancerConfigParsing(t *testing.T) {
 			},
 			wantErr: false,
 		},
-		{
-			name: "circuit-breaking",
-			js: json.RawMessage(`
-{
-  "circuitBreaking": true,
-  "maxRequests": 1024
-}`),
-			want: &EDSConfig{
-				MaxRequests: newUint32(1024),
-			},
-			wantErr: false,
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -400,12 +400,6 @@ func (edsImpl *edsBalancerImpl) updateConfig(edsConfig *EDSConfig) {
 	if edsImpl.counter == nil || edsImpl.counter.ServiceName != edsConfig.EDSServiceName {
 		edsImpl.counter = client.NewServiceRequestsCounter(edsConfig.EDSServiceName)
 	}
-	if edsConfig.MaxRequests != nil {
-		edsImpl.counter.SetMaxRequests(*edsConfig.MaxRequests)
-	} else {
-		// counter should be nil to prevent overhead in dropPicker.
-		edsImpl.counter = nil
-	}
 }
 
 // updateState first handles priority, and then wraps picker in a drop picker

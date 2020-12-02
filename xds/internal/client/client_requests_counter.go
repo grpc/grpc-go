@@ -41,6 +41,7 @@ type ServiceRequestsCounter struct {
 	ServiceName string
 	maxRequests uint32
 	numRequests uint32
+	enableMax   bool
 }
 
 // NewServiceRequestsCounter creates a new ServiceRequestsCounter that is
@@ -58,10 +59,21 @@ func NewServiceRequestsCounter(serviceName string) *ServiceRequestsCounter {
 }
 
 // SetMaxRequests updates the max requests for a service's counter.
-func (c *ServiceRequestsCounter) SetMaxRequests(maxRequests uint32) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.maxRequests = maxRequests
+func SetMaxRequests(serviceName string, maxRequests *uint32) *ServiceRequestsCounter {
+	src.mu.Lock()
+	defer src.mu.Unlock()
+	c, ok := src.services[serviceName]
+	if !ok {
+		c = &ServiceRequestsCounter{ServiceName: serviceName}
+		src.services[serviceName] = c
+	}
+	if maxRequests != nil {
+		c.enableMax = true
+		c.maxRequests = *maxRequests
+	} else {
+		c.enableMax = false
+	}
+	return c
 }
 
 // StartRequest starts a request for a service, incrementing its number of
@@ -69,7 +81,7 @@ func (c *ServiceRequestsCounter) SetMaxRequests(maxRequests uint32) {
 func (c *ServiceRequestsCounter) StartRequest() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.numRequests+1 > c.maxRequests {
+	if c.enableMax && c.numRequests+1 > c.maxRequests {
 		return fmt.Errorf("max requests %v exceeded on service %v", c.maxRequests, c.ServiceName)
 	}
 	c.numRequests++

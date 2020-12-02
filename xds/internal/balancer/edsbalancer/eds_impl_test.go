@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
+	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/env"
@@ -559,7 +560,9 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
-	edsb.updateConfig(&EDSConfig{EDSServiceName: "test", MaxRequests: newUint32(50)})
+	edsb.updateConfig(&EDSConfig{EDSServiceName: "test"})
+	var maxRequests uint32 = 50
+	client.SetMaxRequests("test", &maxRequests)
 
 	// One locality with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)

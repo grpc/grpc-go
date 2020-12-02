@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
+	"google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -340,15 +341,19 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 		b.edsLB = edsLB
 		b.logger.Infof("Created child policy %p of type %s", b.edsLB, edsName)
 	}
-	lbCfg := &edsbalancer.EDSConfig{EDSServiceName: update.cds.ServiceName, MaxRequests: update.cds.MaxRequests}
+	lbCfg := &edsbalancer.EDSConfig{EDSServiceName: update.cds.ServiceName}
 	if update.cds.EnableLRS {
 		// An empty string here indicates that the edsBalancer should use the
 		// same xDS server for load reporting as it does for EDS
 		// requests/responses.
 		lbCfg.LrsLoadReportingServerName = new(string)
+
 	}
 	ccState := balancer.ClientConnState{
 		BalancerConfig: lbCfg,
+	}
+	if update.cds.MaxRequests != nil {
+		client.SetMaxRequests(update.cds.ServiceName, update.cds.MaxRequests)
 	}
 	if err := b.edsLB.UpdateClientConnState(ccState); err != nil {
 		b.logger.Errorf("xds: edsBalancer.UpdateClientConnState(%+v) returned error: %v", ccState, err)

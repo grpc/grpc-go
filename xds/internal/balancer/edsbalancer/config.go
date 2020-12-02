@@ -42,8 +42,6 @@ type EDSConfig struct {
 	// will be disabled.  If set to the empty string, load reporting will
 	// be sent to the same server that we obtained CDS data from.
 	LrsLoadReportingServerName *string
-	// Max requests when circuit breaking, if any (otherwise nil).
-	MaxRequests *uint32
 }
 
 // edsConfigJSON is the intermediate unmarshal result of EDSConfig. ChildPolicy
@@ -54,8 +52,6 @@ type edsConfigJSON struct {
 	FallbackPolicy             []*loadBalancingConfig
 	EDSServiceName             string
 	LRSLoadReportingServerName *string
-	CircuitBreaking            bool
-	MaxRequests                uint32
 }
 
 // UnmarshalJSON parses the JSON-encoded byte slice in data and stores it in l.
@@ -69,10 +65,6 @@ func (l *EDSConfig) UnmarshalJSON(data []byte) error {
 
 	l.EDSServiceName = configJSON.EDSServiceName
 	l.LrsLoadReportingServerName = configJSON.LRSLoadReportingServerName
-	l.MaxRequests = nil
-	if configJSON.CircuitBreaking {
-		l.MaxRequests = &configJSON.MaxRequests
-	}
 
 	for _, lbcfg := range configJSON.ChildPolicy {
 		if balancer.Get(lbcfg.Name) != nil {
