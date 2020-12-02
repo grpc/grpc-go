@@ -177,18 +177,11 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 }
 
 func getAddressFromName(name string) (host string, port string, err error) {
-	index := strings.Index(name, "udpa.resource.listening_address=")
-	if index == -1 {
+	parts := strings.SplitN(name, "udpa.resource.listening_address=", 2)
+	if len(parts) != 2 {
 		return "", "", fmt.Errorf("udpa.resource_listening_address not found in name: %v", name)
 	}
-	lisAddr := name[index:]
-
-	var addr string
-	_, err = fmt.Sscanf(lisAddr, "udpa.resource.listening_address=%s", &addr)
-	if err != nil {
-		return "", "", err
-	}
-	return net.SplitHostPort(addr)
+	return net.SplitHostPort(parts[1])
 }
 
 // UnmarshalRouteConfig processes resources received in an RDS response,
