@@ -36,7 +36,6 @@ var src = &servicesRequestsCounter{
 // ServiceRequestsCounter is used to track the total inflight requests for a
 // service with the provided name.
 type ServiceRequestsCounter struct {
-	mu          sync.Mutex
 	ServiceName string
 	maxRequests uint32
 	numRequests uint32
@@ -85,7 +84,5 @@ func (c *ServiceRequestsCounter) StartRequest() error {
 // EndRequest ends a request for a service, decrementing its number of requests
 // by 1.
 func (c *ServiceRequestsCounter) EndRequest() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.numRequests--
+	atomic.AddUint32(&c.numRequests, ^uint32(0))
 }
