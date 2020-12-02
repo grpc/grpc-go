@@ -18,6 +18,7 @@
 package edsbalancer
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -74,7 +75,7 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 		t.Fatalf("got unexpected new SubConn")
 	case <-cc.RemoveSubConnCh:
 		t.Fatalf("got unexpected remove SubConn")
-	case <-time.After(time.Millisecond * 100):
+	case <-time.After(defaultTestShortTimeout):
 	}
 
 	// Remove p2, no updates.
@@ -90,7 +91,7 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 		t.Fatalf("got unexpected new SubConn")
 	case <-cc.RemoveSubConnCh:
 		t.Fatalf("got unexpected remove SubConn")
-	case <-time.After(time.Millisecond * 100):
+	case <-time.After(defaultTestShortTimeout):
 	}
 }
 
@@ -159,7 +160,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 		t.Fatalf("got unexpected new SubConn")
 	case <-cc.RemoveSubConnCh:
 		t.Fatalf("got unexpected remove SubConn")
-	case <-time.After(time.Millisecond * 100):
+	case <-time.After(defaultTestShortTimeout):
 	}
 
 	// Turn down 1, use 2
@@ -269,8 +270,6 @@ func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 //
 // Init 0,1,2; 0 and 1 down, use 2; 0 up, close 1 and 2.
 func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
-	defer time.Sleep(10 * time.Millisecond)
-
 	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
@@ -627,7 +626,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 		t.Fatalf("got unexpected new SubConn")
 	case <-cc.RemoveSubConnCh:
 		t.Fatalf("got unexpected remove SubConn")
-	case <-time.After(time.Millisecond * 100):
+	case <-time.After(defaultTestShortTimeout):
 	}
 }
 
@@ -836,6 +835,9 @@ func (s) TestEDSPriority_FirstPriorityUnavailable(t *testing.T) {
 	clab2 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	edsb.handleEDSResponse(parseEDSRespProtoForTesting(clab2.Build()))
 
-	// Wait after double the init timer timeout, to ensure it doesn't fail.
-	time.Sleep(testPriorityInitTimeout * 2)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := cc.WaitForErrPicker(ctx); err != nil {
+		t.Fatal(err)
+	}
 }
