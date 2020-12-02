@@ -33,7 +33,7 @@ type counterTest struct {
 }
 
 func testCounter(t *testing.T, test counterTest) {
-	counter := client.NewServiceRequestsCounter(test.name)
+	counter := client.GetServiceRequestsCounter(test.name)
 	client.SetMaxRequests(test.name, &test.maxRequests)
 	requestsStartedWg := sync.WaitGroup{}
 	requestsStartedWg.Add(1)

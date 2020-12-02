@@ -43,5 +43,5 @@ var (
 	// CircuitBreakingSupport indicates whether circuit breaking support is
 	// enabled, which can be done by setting the environment variable
 	// "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING" to "true".
-	CircuitBreakingSupport = strings.EqualFold(os.Getenv(xdsV3SupportEnv), "true")
+	CircuitBreakingSupport = strings.EqualFold(os.Getenv(circuitBreakingSupportEnv), "true")
 )

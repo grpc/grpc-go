@@ -94,11 +94,11 @@ type edsBalancerImpl struct {
 	subConnMu         sync.Mutex
 	subConnToPriority map[balancer.SubConn]priorityType
 
-	pickerMu   sync.Mutex
-	dropConfig []xdsclient.OverloadDropConfig
-	drops      []*dropper
-	innerState balancer.State // The state of the picker without drop support.
-	counter    *client.ServiceRequestsCounter
+	pickerMu               sync.Mutex
+	dropConfig             []xdsclient.OverloadDropConfig
+	drops                  []*dropper
+	innerState             balancer.State // The state of the picker without drop support.
+	serviceRequestsCounter *client.ServiceRequestsCounter
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
@@ -173,7 +173,7 @@ func (edsImpl *edsBalancerImpl) updateDrops(dropConfig []xdsclient.OverloadDropC
 		// Update picker with old inner picker, new drops.
 		edsImpl.cc.UpdateState(balancer.State{
 			ConnectivityState: edsImpl.innerState.ConnectivityState,
-			Picker:            newDropPicker(edsImpl.innerState.Picker, newDrops, edsImpl.xdsClient.loadStore(), edsImpl.counter)},
+			Picker:            newDropPicker(edsImpl.innerState.Picker, newDrops, edsImpl.xdsClient.loadStore(), edsImpl.serviceRequestsCounter)},
 		)
 	}
 	edsImpl.pickerMu.Unlock()
@@ -393,12 +393,12 @@ func (edsImpl *edsBalancerImpl) handleSubConnStateChange(sc balancer.SubConn, s 
 }
 
 // updateConfig handles changes to the circuit breaking configuration.
-func (edsImpl *edsBalancerImpl) updateConfig(edsConfig *EDSConfig) {
+func (edsImpl *edsBalancerImpl) updateServiceRequestsCounter(serviceName string) {
 	if !env.CircuitBreakingSupport {
 		return
 	}
-	if edsImpl.counter == nil || edsImpl.counter.ServiceName != edsConfig.EDSServiceName {
-		edsImpl.counter = client.NewServiceRequestsCounter(edsConfig.EDSServiceName)
+	if edsImpl.serviceRequestsCounter == nil || edsImpl.serviceRequestsCounter.ServiceName != serviceName {
+		edsImpl.serviceRequestsCounter = client.GetServiceRequestsCounter(serviceName)
 	}
 }
 
@@ -416,7 +416,7 @@ func (edsImpl *edsBalancerImpl) updateState(priority priorityType, s balancer.St
 		defer edsImpl.pickerMu.Unlock()
 		edsImpl.innerState = s
 		// Don't reset drops when it's a state change.
-		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: newDropPicker(s.Picker, edsImpl.drops, edsImpl.xdsClient.loadStore(), edsImpl.counter)})
+		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: newDropPicker(s.Picker, edsImpl.drops, edsImpl.xdsClient.loadStore(), edsImpl.serviceRequestsCounter)})
 	}
 }
 

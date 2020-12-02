@@ -329,6 +329,8 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 		return
 	}
 
+	client.SetMaxRequests(update.cds.ServiceName, update.cds.MaxRequests)
+
 	// The first good update from the watch API leads to the instantiation of an
 	// edsBalancer. Further updates/errors are propagated to the existing
 	// edsBalancer.
@@ -352,7 +354,6 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 	ccState := balancer.ClientConnState{
 		BalancerConfig: lbCfg,
 	}
-	client.SetMaxRequests(update.cds.ServiceName, update.cds.MaxRequests)
 	if err := b.edsLB.UpdateClientConnState(ccState); err != nil {
 		b.logger.Errorf("xds: edsBalancer.UpdateClientConnState(%+v) returned error: %v", ccState, err)
 	}

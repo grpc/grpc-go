@@ -560,7 +560,7 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
-	edsb.updateConfig(&EDSConfig{EDSServiceName: "test"})
+	edsb.updateServiceRequestsCounter("test")
 	var maxRequests uint32 = 50
 	client.SetMaxRequests("test", &maxRequests)
 

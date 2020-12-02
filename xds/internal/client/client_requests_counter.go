@@ -21,18 +21,17 @@ package client
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 )
-
-func init() {
-	src.services = make(map[string]*ServiceRequestsCounter)
-}
 
 type servicesRequestsCounter struct {
 	mu       sync.Mutex
 	services map[string]*ServiceRequestsCounter
 }
 
-var src servicesRequestsCounter
+var src = &servicesRequestsCounter{
+	services: make(map[string]*ServiceRequestsCounter),
+}
 
 // ServiceRequestsCounter is used to track the total inflight requests for a
 // service with the provided name.
@@ -41,18 +40,16 @@ type ServiceRequestsCounter struct {
 	ServiceName string
 	maxRequests uint32
 	numRequests uint32
-	enableMax   bool
 }
 
-// NewServiceRequestsCounter creates a new ServiceRequestsCounter that is
-// internally tracked by this package and returns a pointer to it. If one with
-// the serviceName already exists, returns a pointer to it.
-func NewServiceRequestsCounter(serviceName string) *ServiceRequestsCounter {
+// GetServiceRequestsCounter returns the ServiceRequestsCounter with the
+// provided serviceName. If one does not exist, it creates it.
+func GetServiceRequestsCounter(serviceName string) *ServiceRequestsCounter {
 	src.mu.Lock()
 	defer src.mu.Unlock()
 	c, ok := src.services[serviceName]
 	if !ok {
-		c = &ServiceRequestsCounter{ServiceName: serviceName}
+		c = &ServiceRequestsCounter{ServiceName: serviceName, maxRequests: 1024}
 		src.services[serviceName] = c
 	}
 	return c
@@ -68,10 +65,9 @@ func SetMaxRequests(serviceName string, maxRequests *uint32) *ServiceRequestsCou
 		src.services[serviceName] = c
 	}
 	if maxRequests != nil {
-		c.enableMax = true
 		c.maxRequests = *maxRequests
 	} else {
-		c.enableMax = false
+		c.maxRequests = 1024
 	}
 	return c
 }
@@ -79,12 +75,10 @@ func SetMaxRequests(serviceName string, maxRequests *uint32) *ServiceRequestsCou
 // StartRequest starts a request for a service, incrementing its number of
 // requests by 1. Returns an error if the max number of requests is exceeded.
 func (c *ServiceRequestsCounter) StartRequest() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.enableMax && c.numRequests+1 > c.maxRequests {
+	if atomic.LoadUint32(&c.numRequests)+1 > atomic.LoadUint32(&c.maxRequests) {
 		return fmt.Errorf("max requests %v exceeded on service %v", c.maxRequests, c.ServiceName)
 	}
-	c.numRequests++
+	atomic.AddUint32(&c.numRequests, 1)
 	return nil
 }
 
