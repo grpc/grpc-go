@@ -22,9 +22,9 @@ package fakeclient
 import (
 	"context"
 
-	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/testutils"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/client/load"
 )
 
@@ -43,7 +43,7 @@ type Client struct {
 	loadReportCh *testutils.Channel
 	closeCh      *testutils.Channel
 	loadStore    *load.Store
-	certConfigs  map[string]*certprovider.BuildableConfig
+	bootstrapCfg *bootstrap.Config
 
 	ldsCb func(xdsclient.ListenerUpdate, error)
 	rdsCb func(xdsclient.RouteConfigUpdate, error)
@@ -223,14 +223,14 @@ func (xdsC *Client) WaitForClose(ctx context.Context) error {
 	return err
 }
 
-// CertProviderConfigs returns the configured certificate provider configs.
-func (xdsC *Client) CertProviderConfigs() map[string]*certprovider.BuildableConfig {
-	return xdsC.certConfigs
+// BootstrapConfig returns the bootstrap config.
+func (xdsC *Client) BootstrapConfig() *bootstrap.Config {
+	return xdsC.bootstrapCfg
 }
 
-// SetCertProviderConfigs updates the certificate provider configs.
-func (xdsC *Client) SetCertProviderConfigs(configs map[string]*certprovider.BuildableConfig) {
-	xdsC.certConfigs = configs
+// SetBootstrapConfig updates the bootstrap config.
+func (xdsC *Client) SetBootstrapConfig(cfg *bootstrap.Config) {
+	xdsC.bootstrapCfg = cfg
 }
 
 // Name returns the name of the xds client.
