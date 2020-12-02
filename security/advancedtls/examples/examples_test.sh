@@ -92,14 +92,14 @@ for example in ${EXAMPLES[@]}; do
     go run ${example}/*client/*.go -key=${KEY_FILE_PATH} -cert=${CERT_FILE_PATH} &> $CLIENT_LOG  &
 
     # Wait for the client to send some requests using old credentials.
-    sleep 2s
+    sleep 4s
 
     # Switch to the new credentials.
     cat ../testdata/another_client_key_1.pem > ${KEY_FILE_PATH}
     cat ../testdata/another_client_cert_1.pem > ${CERT_FILE_PATH}
 
     # Wait for the client to send some requests using new credentials.
-    sleep 2s
+    sleep 4s
 
     # Check server log for expected output.
     for output in "${EXPECTED_SERVER_OUTPUT[@]}"; do
@@ -109,6 +109,7 @@ for example in ${EXAMPLES[@]}; do
           $(cat $SERVER_LOG)
           "
       else
+          cat $SERVER_LOG
           pass "server log contains expected output: $output"
       fi
     done
