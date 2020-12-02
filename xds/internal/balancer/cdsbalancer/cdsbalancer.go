@@ -352,9 +352,7 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 	ccState := balancer.ClientConnState{
 		BalancerConfig: lbCfg,
 	}
-	if update.cds.MaxRequests != nil {
-		client.SetMaxRequests(update.cds.ServiceName, update.cds.MaxRequests)
-	}
+	client.SetMaxRequests(update.cds.ServiceName, update.cds.MaxRequests)
 	if err := b.edsLB.UpdateClientConnState(ccState); err != nil {
 		b.logger.Errorf("xds: edsBalancer.UpdateClientConnState(%+v) returned error: %v", ccState, err)
 	}
