@@ -23,7 +23,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"time"
 
@@ -92,34 +91,20 @@ func main() {
 
 	// Send the requests every 0.5s. The credential is expected to be changed in
 	// the bash script.
-	ticker := time.NewTicker(500 * time.Millisecond)
-	done := make(chan bool)
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			case <-ticker.C:
-				// Make a connection using the credentials.
-				ctx, cancel := context.WithTimeout(context.Background(), defaultConnTimeout)
-				conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
-				if err != nil {
-					log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
-				}
-				client := pb.NewGreeterClient(conn)
-				_, err = client.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
-				if err != nil {
-					log.Fatalf("client.SayHello failed: %v", err)
-				}
-				cancel()
-				conn.Close()
-			}
+	for {
+		// Make a connection using the credentials.
+		ctx, cancel := context.WithTimeout(context.Background(), defaultConnTimeout)
+		conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
+		if err != nil {
+			log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
 		}
-	}()
-
-	// Stop the ticker after 3s.
-	time.Sleep(3000 * time.Millisecond)
-	ticker.Stop()
-	done <- true
-	fmt.Printf("Client stops sending requests. \n")
+		client := pb.NewGreeterClient(conn)
+		_, err = client.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
+		if err != nil {
+			log.Fatalf("client.SayHello failed: %v", err)
+		}
+		cancel()
+		conn.Close()
+		time.Sleep(500*time.Millisecond)
+	}
 }

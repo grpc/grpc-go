@@ -55,7 +55,8 @@ EXAMPLES=(
 
 declare -a EXPECTED_SERVER_OUTPUT=("Client common name: foo.bar.hoo.com" "Client common name: foo.bar.another.client.com")
 
-declare -a EXPECTED_CLIENT_OUTPUT=("Client stops sending requests")
+declare -a EXPECTED_SERVER_EXIT_OUTPUT=("signal: terminated")
+declare -a EXPECTED_CLIENT_EXIT_OUTPUT=("signal: terminated")
 
 cd ./security/advancedtls/examples
 
@@ -112,8 +113,21 @@ for example in ${EXAMPLES[@]}; do
       fi
     done
 
-    # Check client log for expected output.
-    for output in "${EXPECTED_CLIENT_OUTPUT[@]}"; do
+    clean
+
+    # Check server log to see if it is stopped.
+    for output in "${EXPECTED_SERVER_EXIT_OUTPUT[@]}"; do
+      if ! grep -q "$output" $SERVER_LOG; then
+          fail "server log missing output: $output
+          got server log:
+          $(cat $CLIENT_LOG)
+          "
+      else
+          pass "server log contains expected output: $output"
+      fi
+    done
+    # Check client log to see if it is stopped.
+    for output in "${EXPECTED_CLIENT_EXIT_OUTPUT[@]}"; do
       if ! grep -q "$output" $CLIENT_LOG; then
           fail "client log missing output: $output
           got client log:
@@ -124,9 +138,4 @@ for example in ${EXAMPLES[@]}; do
       fi
     done
 
-    # Wait for the client to stop.
-    sleep 2s
-
-    clean
-    echo ""
 done
