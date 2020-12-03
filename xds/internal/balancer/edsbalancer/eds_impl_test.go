@@ -690,12 +690,9 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	lsWrapper := &loadStoreWrapper{}
 	lsWrapper.updateServiceName(testClusterNames[0])
 	lsWrapper.updateLoadStore(loadStore)
-	cw := &xdsClientWrapper{
-		loadWrapper: lsWrapper,
-	}
 
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, cw, nil)
+	edsb := newEDSBalancerImpl(cc, nil, lsWrapper, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityID)

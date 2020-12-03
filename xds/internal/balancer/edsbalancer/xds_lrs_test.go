@@ -36,10 +36,9 @@ func (s) TestXDSLoadReporting(t *testing.T) {
 	defer func() { newXDSClient = oldNewXDSClient }()
 
 	builder := balancer.Get(edsName)
-	cc := newNoopTestClientConn()
-	edsB, ok := builder.Build(cc, balancer.BuildOptions{}).(*edsBalancer)
-	if !ok {
-		t.Fatalf("builder.Build(%s) returned type {%T}, want {*edsBalancer}", edsName, edsB)
+	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{})
+	if edsB == nil {
+		t.Fatalf("builder.Build(%s) failed and returned nil", edsName)
 	}
 	defer edsB.Close()
 
