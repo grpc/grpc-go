@@ -492,7 +492,13 @@ func buildVerifyFunc(c *advancedTLSCreds,
 			}
 			// Perform default hostname check if specified.
 			if c.isClient && c.vType == CertAndHostVerification && serverName != "" {
-				opts.DNSName = serverName
+				parsedName, _, err := net.SplitHostPort(serverName)
+				if err != nil {
+					// If the serverName had no host port or if the serverName cannot be
+					// parsed, use it as-is.
+					parsedName = serverName
+				}
+				opts.DNSName = parsedName
 			}
 			var err error
 			chains, err = certs[0].Verify(opts)

@@ -377,8 +377,8 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: server side failure and client handshake failure
 		// Reason: client side sets vType to CertAndHostVerification, and will do
-		// default hostname check. All the default hostname checks will fail in
-		// this test suites.
+		// default hostname check. Server uses a cert without "localhost" or
+		// "127.0.0.1" as common name or SAN names, and will hence fail.
 		{
 			desc:                       "Client has root cert; server sends peer cert",
 			clientRoot:                 cs.ClientTrust1,
@@ -392,8 +392,8 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// Server: only set serverCert with mutual TLS off
 		// Expected Behavior: server side failure and client handshake failure
 		// Reason: client side sets vType to CertAndHostVerification, and will do
-		// default hostname check. All the default hostname checks will fail in
-		// this test suites.
+		// default hostname check. Server uses a cert without "localhost" or
+		// "127.0.0.1" as common name or SAN names, and will hence fail.
 		{
 			desc:                       "Client sets reload root function; server sends peer cert",
 			clientGetRoot:              getRootCAsForClient,
@@ -402,6 +402,21 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverCert:                 []tls.Certificate{cs.ServerCert1},
 			serverVType:                CertAndHostVerification,
 			serverExpectError:          true,
+		},
+		// Client: only set clientGetRoot and CertAndHostVerification
+		// Server: only set serverCert with mutual TLS off
+		// Expected Behavior: success
+		// Reason: client side sets vType to CertAndHostVerification, and will do
+		// default hostname check. Server uses a certificate with "localhost" as
+		// common name, and will hence pass the default hostname check.
+		{
+			desc:                       "Client sets CertAndHostVerification; server uses localhost certs",
+			clientRoot:                 cs.ClientTrust1,
+			clientVType:                CertAndHostVerification,
+			clientExpectHandshakeError: false,
+			serverCert:                 []tls.Certificate{cs.ServerPeerLocalhost1},
+			serverVType:                CertAndHostVerification,
+			serverExpectError:          false,
 		},
 		// Client: set clientGetRoot and clientVerifyFunc
 		// Server: only set serverCert with mutual TLS off

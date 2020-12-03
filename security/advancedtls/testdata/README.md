@@ -19,6 +19,11 @@ commands we run:
    ```
    $ openssl req -new -key subject_key.pem -out csr.pem
    ```
+   For some cases, we might want to add some extra SAN fields in `subject_cert.pem`.
+   In those cases, we can create a configuration file(for example, localhost-openssl.cnf), and do the following:
+   ```
+   $ openssl req -new -key subject_key.pem -out csr.pem -config $CONFIG_FILE_NAME
+   ```
 
 3. Generate a private key `subject_key.pem` for the subject: 
    
@@ -28,11 +33,12 @@ commands we run:
 
 4. Use `ca_key.pem` and `ca_cert.pem` to sign `csr.pem`, and get a certificate, `subject_cert.pem`, for the subject:
    
-   This step requires some additional files and please check out [this answer from StackOverflow](https://stackoverflow.com/a/21340898) for more.
+   This step requires some additional configuration steps and please check out [this answer from StackOverflow](https://stackoverflow.com/a/21340898) for more.
 
    ```
    $ openssl ca -config openssl-ca.cnf -policy signing_policy -extensions signing_req -out subject_cert.pem -in csr.pem -keyfile ca_key.pem -cert ca_cert.pem
    ```
+   Please see an example configuration template at `openssl-ca.cnf`.
 5. Verify the `subject_cert.pem` is trusted by `ca_cert.pem`:
    
 
