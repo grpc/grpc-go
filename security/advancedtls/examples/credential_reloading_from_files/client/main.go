@@ -89,22 +89,22 @@ func main() {
 		log.Fatalf("advancedtls.NewClientCreds(%v) failed: %v", options, err)
 	}
 
+	// Make a connection using the credentials.
+	ctx, _ := context.WithTimeout(context.Background(), defaultConnTimeout)
+	conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
+	if err != nil {
+		log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
+	}
+	client := pb.NewGreeterClient(conn)
+
 	// Send the requests every 0.5s. The credential is expected to be changed in
-	// the bash script.
+	// the bash script. We don't cancel the context nor call conn.Close() here,
+	// since the bash script is expeceted to close the client goroutine.
 	for {
-		// Make a connection using the credentials.
-		ctx, cancel := context.WithTimeout(context.Background(), defaultConnTimeout)
-		conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
-		if err != nil {
-			log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
-		}
-		client := pb.NewGreeterClient(conn)
 		_, err = client.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
 		if err != nil {
 			log.Fatalf("client.SayHello failed: %v", err)
 		}
-		cancel()
-		conn.Close()
 		time.Sleep(500 * time.Millisecond)
 	}
 }

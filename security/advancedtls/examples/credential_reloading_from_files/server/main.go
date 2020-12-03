@@ -30,6 +30,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/security/advancedtls"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 
@@ -94,7 +95,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("advancedtls.NewServerCreds(%v) failed: %v", options, err)
 	}
-	s := grpc.NewServer(grpc.Creds(serverTLSCreds))
+	s := grpc.NewServer(grpc.Creds(serverTLSCreds), grpc.KeepaliveParams(keepalive.ServerParameters{
+		// Set the max connection time to be 0.5 s to force the client to
+		// re-establish the connection, and hence re-invoke the verification
+		// callback.
+		MaxConnectionAge:      500 * time.Millisecond,
+	}))
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
