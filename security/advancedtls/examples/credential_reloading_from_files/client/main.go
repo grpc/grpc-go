@@ -36,8 +36,6 @@ import (
 var address = "localhost:50051"
 
 const (
-	// Default timeout for normal connections.
-	defaultConnTimeout = 10 * time.Second
 	// Intervals that set to monitor the credential updates.
 	credRefreshingInterval = 500 * time.Millisecond
 )
@@ -90,8 +88,7 @@ func main() {
 	}
 
 	// Make a connection using the credentials.
-	ctx, _ := context.WithTimeout(context.Background(), defaultConnTimeout)
-	conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(clientTLSCreds))
 	if err != nil {
 		log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
 	}
@@ -101,7 +98,7 @@ func main() {
 	// the bash script. We don't cancel the context nor call conn.Close() here,
 	// since the bash script is expeceted to close the client goroutine.
 	for {
-		_, err = client.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
+		_, err = client.SayHello(context.Background(), &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
 		if err != nil {
 			log.Fatalf("client.SayHello failed: %v", err)
 		}
