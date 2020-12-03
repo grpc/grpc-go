@@ -99,7 +99,7 @@ func main() {
 		// Set the max connection time to be 0.5 s to force the client to
 		// re-establish the connection, and hence re-invoke the verification
 		// callback.
-		MaxConnectionAge:      500 * time.Millisecond,
+		MaxConnectionAge: 500 * time.Millisecond,
 	}))
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
