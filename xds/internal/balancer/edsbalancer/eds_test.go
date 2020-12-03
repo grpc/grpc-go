@@ -122,7 +122,6 @@ func (f *fakeEDSBalancer) handleSubConnStateChange(sc balancer.SubConn, state co
 }
 
 func (f *fakeEDSBalancer) handleChildPolicy(name string, config json.RawMessage) {
-	logger.Infof("easwars: in fakeEDSBalancer handleChildPolicy: %v", name)
 	f.childPolicy.Send(&loadBalancingConfig{Name: name, Config: config})
 }
 

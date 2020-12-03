@@ -139,12 +139,6 @@ type edsBalancer struct {
 
 	// edsServiceName is the edsServiceName currently being watched, not
 	// necessary the edsServiceName from service config.
-	//
-	// If edsServiceName from service config is an empty, this will be user's
-	// dial target (because that's what we use to watch EDS).
-	//
-	// TODO: remove the empty string related behavior, when we switch to always
-	// do CDS.
 	edsServiceName       string
 	cancelEndpointsWatch func()
 	loadReportServer     *string // LRS is disabled if loadReporterServer is nil.
