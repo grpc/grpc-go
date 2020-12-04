@@ -126,7 +126,7 @@ func startRequests(t *testing.T, n uint32, max uint32, counter *ServiceRequestsC
 	}
 	for i := uint32(0); i < n; i++ {
 		if err := counter.StartRequest(); err != nil {
-			t.Fatalf("error starting intial request: %v", err)
+			t.Fatalf("error starting initial request: %v", err)
 		}
 	}
 }
