@@ -212,7 +212,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 
 		if err := x.handleServiceConfigUpdate(cfg); err != nil {
 			x.logger.Warningf("failed to update xDS client: %v", err)
-    }
+		}
 
 		x.edsImpl.updateServiceRequestsCounter(cfg.EDSServiceName)
 
