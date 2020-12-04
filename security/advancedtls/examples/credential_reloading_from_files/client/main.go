@@ -98,9 +98,9 @@ func main() {
 
 	// Send the requests every 0.5s. The credential is expected to be changed in
 	// the bash script. We don't cancel the context nor call conn.Close() here,
-	// since the bash script is expeceted to close the client goroutine.
+	// since the bash script is expected to close the client goroutine.
 	for {
-		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(defaultTimeout))
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 		_, err = client.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
 		if err != nil {
 			log.Fatalf("client.SayHello failed: %v", err)
