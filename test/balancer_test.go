@@ -629,7 +629,7 @@ func (s) TestServersSwap(t *testing.T) {
 		}
 		s := grpc.NewServer()
 		ts := &funcServer{
-			UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return &testpb.SimpleResponse{Username: username}, nil
 			},
 		}
@@ -689,7 +689,7 @@ func (s) TestEmptyAddrs(t *testing.T) {
 	defer s.Stop()
 	const one = "1"
 	ts := &funcServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Username: one}, nil
 		},
 	}
@@ -778,7 +778,7 @@ func (s) TestWaitForReady(t *testing.T) {
 	defer s.Stop()
 	const one = "1"
 	ts := &funcServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Username: one}, nil
 		},
 	}

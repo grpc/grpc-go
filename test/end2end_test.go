@@ -3584,7 +3584,7 @@ func (s) TestCancel(t *testing.T) {
 func testCancel(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.declareLogNoise("grpc: the client connection is closing; please retry")
-	te.startServer(&testServer{security: e.security, naryCallSleepTime: time.Second})
+	te.startServer(&testServer{security: e.security, unaryCallSleepTime: time.Second})
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -4562,7 +4562,7 @@ type funcServer struct {
 }
 
 func (s *funcServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	return s.UnaryCallF(ctx, in)
+	return s.unaryCall(ctx, in)
 }
 
 func (s *funcServer) StreamingInputCall(stream testpb.TestService_StreamingInputCallServer) error {
@@ -4570,7 +4570,7 @@ func (s *funcServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 }
 
 func (s *funcServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
-	return s.FullDuplexCallF(stream)
+	return s.fullDuplexCall(stream)
 }
 
 func (s) TestClientRequestBodyErrorUnexpectedEOF(t *testing.T) {
@@ -6700,7 +6700,7 @@ func testLargeTimeout(t *testing.T, e env) {
 	}
 
 	for i, maxTimeout := range timeouts {
-		ts.UnaryCallF = func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		ts.unaryCall = func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			deadline, ok := ctx.Deadline()
 			timeout := time.Until(deadline)
 			minTimeout := maxTimeout - 5*time.Second
