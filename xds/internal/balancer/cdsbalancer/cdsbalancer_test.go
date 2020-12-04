@@ -608,6 +608,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	if err := counter.StartRequest(); err == nil {
 		t.Fatal("unexpected success on start request over max")
 	}
+	counter.EndRequest()
 }
 
 // TestClose verifies the Close() method in the the CDS balancer.
