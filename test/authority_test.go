@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -53,8 +54,10 @@ func authorityChecker(ctx context.Context, expectedAuthority string) (*testpb.Em
 }
 
 func runUnixTest(t *testing.T, address, target, expectedAuthority string, dialer func(context.Context, string) (net.Conn, error)) {
-	if err := os.RemoveAll(address); err != nil {
-		t.Fatalf("Error removing socket file %v: %v\n", address, err)
+	if !strings.HasPrefix(target, "unix-abstract:") {
+		if err := os.RemoveAll(address); err != nil {
+			t.Fatalf("Error removing socket file %v: %v\n", address, err)
+		}
 	}
 	ss := &stubServer{
 		emptyCall: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
@@ -114,6 +117,13 @@ var authorityTests = []authorityTest{
 		authority:      "unix:///tmp/sock.sock",
 		dialTargetWant: "unix:///tmp/sock.sock",
 	},
+	{
+		name:      "UnixAbstract",
+		address:   "\x00abc efg",
+		target:    "unix-abstract:abc efg",
+		authority: "localhost",
+		dialTargetWant: "\x00abc efg",
+	},
 }
 
 // TestUnix does end to end tests with the various supported unix target
@@ -139,7 +149,9 @@ func (s) TestUnixCustomDialer(t *testing.T) {
 				if address != test.dialTargetWant {
 					return nil, fmt.Errorf("expected target %v in custom dialer, instead got %v", test.dialTargetWant, address)
 				}
-				address = address[len("unix:"):]
+				if !strings.HasPrefix(test.target, "unix-abstract:") {
+					address = address[len("unix:"):]
+				}
 				return (&net.Dialer{}).DialContext(ctx, "unix", address)
 			}
 			runUnixTest(t, test.address, test.target, test.authority, dialer)

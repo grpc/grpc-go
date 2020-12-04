@@ -270,7 +270,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.authority = creds.Info().ServerName
 	} else if cc.dopts.insecure && cc.dopts.authority != "" {
 		cc.authority = cc.dopts.authority
-	} else if strings.HasPrefix(cc.target, "unix:") {
+	} else if strings.HasPrefix(cc.target, "unix:") || strings.HasPrefix(cc.target, "unix-abstract:") {
 		cc.authority = "localhost"
 	} else if strings.HasPrefix(cc.parsedTarget.Endpoint, ":") {
 		cc.authority = "localhost" + cc.parsedTarget.Endpoint
