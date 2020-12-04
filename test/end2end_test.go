@@ -58,6 +58,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
@@ -128,12 +129,12 @@ var raceMode bool // set by race.go in race mode
 type testServer struct {
 	testpb.UnimplementedTestServiceServer
 
-	security           string // indicate the authentication protocol used by this server.
-	earlyFail          bool   // whether to error out the execution of a service handler prematurely.
-	setAndSendHeader   bool   // whether to call setHeader and sendHeader.
-	setHeaderOnly      bool   // whether to only call setHeader, not sendHeader.
-	multipleSetTrailer bool   // whether to call setTrailer multiple times.
-	unaryCallSleepTime time.Duration
+	security            string // indicate the authentication protocol used by this server.
+	earlyFail           bool   // whether to error out the execution of a service handler prematurely.
+	setAndSendHeader    bool   // whether to call setHeader and sendHeader.
+	setHeaderOnly       bool   // whether to only call setHeader, not sendHeader.
+	multipleSetTrailer  bool   // whether to call setTrailer multiple times.
+	UnaryCallFSleepTime time.Duration
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
@@ -229,7 +230,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 		}
 	}
 	// Simulate some service delay.
-	time.Sleep(s.unaryCallSleepTime)
+	time.Sleep(s.UnaryCallFSleepTime)
 
 	payload, err := newPayload(in.GetResponseType(), in.GetResponseSize())
 	if err != nil {
@@ -3583,7 +3584,7 @@ func (s) TestCancel(t *testing.T) {
 func testCancel(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.declareLogNoise("grpc: the client connection is closing; please retry")
-	te.startServer(&testServer{security: e.security, unaryCallSleepTime: time.Second})
+	te.startServer(&testServer{security: e.security, UnaryCallFSleepTime: time.Second})
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -4555,13 +4556,13 @@ func testStreamServerInterceptor(t *testing.T, e env) {
 // they need.
 type funcServer struct {
 	testpb.TestServiceServer
-	unaryCall          func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
+	UnaryCallF         func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
 	streamingInputCall func(stream testpb.TestService_StreamingInputCallServer) error
-	fullDuplexCall     func(stream testpb.TestService_FullDuplexCallServer) error
+	FullDuplexCallF    func(stream testpb.TestService_FullDuplexCallServer) error
 }
 
 func (s *funcServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	return s.unaryCall(ctx, in)
+	return s.UnaryCallF(ctx, in)
 }
 
 func (s *funcServer) StreamingInputCall(stream testpb.TestService_StreamingInputCallServer) error {
@@ -4569,7 +4570,7 @@ func (s *funcServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 }
 
 func (s *funcServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
-	return s.fullDuplexCall(stream)
+	return s.FullDuplexCallF(stream)
 }
 
 func (s) TestClientRequestBodyErrorUnexpectedEOF(t *testing.T) {
@@ -4580,7 +4581,7 @@ func (s) TestClientRequestBodyErrorUnexpectedEOF(t *testing.T) {
 
 func testClientRequestBodyErrorUnexpectedEOF(t *testing.T, e env) {
 	te := newTest(t, e)
-	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ts := &funcServer{UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 		errUnexpectedCall := errors.New("unexpected call func server method")
 		t.Error(errUnexpectedCall)
 		return nil, errUnexpectedCall
@@ -4604,7 +4605,7 @@ func (s) TestClientRequestBodyErrorCloseAfterLength(t *testing.T) {
 func testClientRequestBodyErrorCloseAfterLength(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.declareLogNoise("Server.processUnaryRPC failed to write status")
-	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ts := &funcServer{UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 		errUnexpectedCall := errors.New("unexpected call func server method")
 		t.Error(errUnexpectedCall)
 		return nil, errUnexpectedCall
@@ -4628,7 +4629,7 @@ func (s) TestClientRequestBodyErrorCancel(t *testing.T) {
 func testClientRequestBodyErrorCancel(t *testing.T, e env) {
 	te := newTest(t, e)
 	gotCall := make(chan bool, 1)
-	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ts := &funcServer{UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 		gotCall <- true
 		return new(testpb.SimpleResponse), nil
 	}}
@@ -4802,7 +4803,7 @@ func (s) TestClientResourceExhaustedCancelFullDuplex(t *testing.T) {
 func testClientResourceExhaustedCancelFullDuplex(t *testing.T, e env) {
 	te := newTest(t, e)
 	recvErr := make(chan error, 1)
-	ts := &funcServer{fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+	ts := &funcServer{FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 		defer close(recvErr)
 		_, err := stream.Recv()
 		if err != nil {
@@ -5129,127 +5130,12 @@ func (fw *filterWriter) Write(p []byte) (n int, err error) {
 	return fw.dst.Write(p)
 }
 
-// stubServer is a server that is easy to customize within individual test
-// cases.
-type stubServer struct {
-	// Guarantees we satisfy this interface; panics if unimplemented methods are called.
-	testpb.TestServiceServer
-
-	// Customizable implementations of server handlers.
-	emptyCall      func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error)
-	unaryCall      func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
-	fullDuplexCall func(stream testpb.TestService_FullDuplexCallServer) error
-
-	// A client connected to this service the test may use.  Created in Start().
-	client testpb.TestServiceClient
-	cc     *grpc.ClientConn
-	s      *grpc.Server
-
-	// Parameters for Listen and Dial. Defaults will be used if these are empty
-	// before Start.
-	network string
-	address string
-	target  string
-
-	cleanups []func() // Lambdas executed in Stop(); populated by Start().
-
-	r *manual.Resolver
-}
-
-func (ss *stubServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-	return ss.emptyCall(ctx, in)
-}
-
-func (ss *stubServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	return ss.unaryCall(ctx, in)
-}
-
-func (ss *stubServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
-	return ss.fullDuplexCall(stream)
-}
-
-// Start starts the server and creates a client connected to it.
-func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption) error {
-	if ss.network == "" {
-		ss.network = "tcp"
-	}
-	if ss.address == "" {
-		ss.address = "localhost:0"
-	}
-	if ss.target == "" {
-		ss.r = manual.NewBuilderWithScheme("whatever")
-	}
-
-	lis, err := net.Listen(ss.network, ss.address)
-	if err != nil {
-		return fmt.Errorf("net.Listen(%q, %q) = %v", ss.network, ss.address, err)
-	}
-	ss.address = lis.Addr().String()
-	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
-
-	s := grpc.NewServer(sopts...)
-	testpb.RegisterTestServiceServer(s, ss)
-	go s.Serve(lis)
-	ss.cleanups = append(ss.cleanups, s.Stop)
-	ss.s = s
-
-	opts := append([]grpc.DialOption{grpc.WithInsecure()}, dopts...)
-	if ss.r != nil {
-		ss.target = ss.r.Scheme() + ":///" + ss.address
-		opts = append(opts, grpc.WithResolvers(ss.r))
-	}
-
-	cc, err := grpc.Dial(ss.target, opts...)
-	if err != nil {
-		return fmt.Errorf("grpc.Dial(%q) = %v", ss.target, err)
-	}
-	ss.cc = cc
-	if ss.r != nil {
-		ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.address}}})
-	}
-	if err := ss.waitForReady(cc); err != nil {
-		return err
-	}
-
-	ss.cleanups = append(ss.cleanups, func() { cc.Close() })
-
-	ss.client = testpb.NewTestServiceClient(cc)
-	return nil
-}
-
-func (ss *stubServer) newServiceConfig(sc string) {
-	if ss.r != nil {
-		ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.address}}, ServiceConfig: parseCfg(ss.r, sc)})
-	}
-}
-
-func (ss *stubServer) waitForReady(cc *grpc.ClientConn) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	for {
-		s := cc.GetState()
-		if s == connectivity.Ready {
-			return nil
-		}
-		if !cc.WaitForStateChange(ctx, s) {
-			// ctx got timeout or canceled.
-			return ctx.Err()
-		}
-	}
-}
-
-func (ss *stubServer) Stop() {
-	for i := len(ss.cleanups) - 1; i >= 0; i-- {
-		ss.cleanups[i]()
-	}
-}
-
 func (s) TestGRPCMethod(t *testing.T) {
 	var method string
 	var ok bool
 
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			method, ok = grpc.Method(ctx)
 			return &testpb.Empty{}, nil
 		},
@@ -5262,8 +5148,8 @@ func (s) TestGRPCMethod(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("ss.client.EmptyCall(_, _) = _, %v; want _, nil", err)
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
 	}
 
 	if want := "/grpc.testing.TestService/EmptyCall"; !ok || method != want {
@@ -5275,8 +5161,8 @@ func (s) TestUnaryProxyDoesNotForwardMetadata(t *testing.T) {
 	const mdkey = "somedata"
 
 	// endpoint ensures mdkey is NOT in metadata and returns an error if it is.
-	endpoint := &stubServer{
-		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	endpoint := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			if md, ok := metadata.FromIncomingContext(ctx); !ok || md[mdkey] != nil {
 				return nil, status.Errorf(codes.Internal, "endpoint: md=%v; want !contains(%q)", md, mdkey)
 			}
@@ -5290,12 +5176,12 @@ func (s) TestUnaryProxyDoesNotForwardMetadata(t *testing.T) {
 
 	// proxy ensures mdkey IS in metadata, then forwards the RPC to endpoint
 	// without explicitly copying the metadata.
-	proxy := &stubServer{
-		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	proxy := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			if md, ok := metadata.FromIncomingContext(ctx); !ok || md[mdkey] == nil {
 				return nil, status.Errorf(codes.Internal, "proxy: md=%v; want contains(%q)", md, mdkey)
 			}
-			return endpoint.client.EmptyCall(ctx, in)
+			return endpoint.Client.EmptyCall(ctx, in)
 		},
 	}
 	if err := proxy.Start(nil); err != nil {
@@ -5309,12 +5195,12 @@ func (s) TestUnaryProxyDoesNotForwardMetadata(t *testing.T) {
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Sanity check that endpoint properly errors when it sees mdkey.
-	_, err := endpoint.client.EmptyCall(ctx, &testpb.Empty{})
+	_, err := endpoint.Client.EmptyCall(ctx, &testpb.Empty{})
 	if s, ok := status.FromError(err); !ok || s.Code() != codes.Internal {
-		t.Fatalf("endpoint.client.EmptyCall(_, _) = _, %v; want _, <status with Code()=Internal>", err)
+		t.Fatalf("endpoint.Client.EmptyCall(_, _) = _, %v; want _, <status with Code()=Internal>", err)
 	}
 
-	if _, err := proxy.client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+	if _, err := proxy.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatal(err.Error())
 	}
 }
@@ -5337,8 +5223,8 @@ func (s) TestStreamingProxyDoesNotForwardMetadata(t *testing.T) {
 	}
 
 	// endpoint ensures mdkey is NOT in metadata and returns an error if it is.
-	endpoint := &stubServer{
-		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+	endpoint := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			ctx := stream.Context()
 			if md, ok := metadata.FromIncomingContext(ctx); !ok || md[mdkey] != nil {
 				return status.Errorf(codes.Internal, "endpoint: md=%v; want !contains(%q)", md, mdkey)
@@ -5353,13 +5239,13 @@ func (s) TestStreamingProxyDoesNotForwardMetadata(t *testing.T) {
 
 	// proxy ensures mdkey IS in metadata, then forwards the RPC to endpoint
 	// without explicitly copying the metadata.
-	proxy := &stubServer{
-		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+	proxy := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			ctx := stream.Context()
 			if md, ok := metadata.FromIncomingContext(ctx); !ok || md[mdkey] == nil {
 				return status.Errorf(codes.Internal, "endpoint: md=%v; want !contains(%q)", md, mdkey)
 			}
-			return doFDC(ctx, endpoint.client)
+			return doFDC(ctx, endpoint.Client)
 		},
 	}
 	if err := proxy.Start(nil); err != nil {
@@ -5373,13 +5259,13 @@ func (s) TestStreamingProxyDoesNotForwardMetadata(t *testing.T) {
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Sanity check that endpoint properly errors when it sees mdkey in ctx.
-	err := doFDC(ctx, endpoint.client)
+	err := doFDC(ctx, endpoint.Client)
 	if s, ok := status.FromError(err); !ok || s.Code() != codes.Internal {
 		t.Fatalf("stream.Recv() = _, %v; want _, <status with Code()=Internal>", err)
 	}
 
-	if err := doFDC(ctx, proxy.client); err != nil {
-		t.Fatalf("doFDC(_, proxy.client) = %v; want nil", err)
+	if err := doFDC(ctx, proxy.Client); err != nil {
+		t.Fatalf("doFDC(_, proxy.Client) = %v; want nil", err)
 	}
 }
 
@@ -5390,8 +5276,8 @@ func (s) TestStatsTagsAndTrace(t *testing.T) {
 
 	// endpoint ensures Tags() and Trace() in context match those that were added
 	// by the client and returns an error if not.
-	endpoint := &stubServer{
-		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	endpoint := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			md, _ := metadata.FromIncomingContext(ctx)
 			if tg := stats.Tags(ctx); !reflect.DeepEqual(tg, tags) {
 				return nil, status.Errorf(codes.Internal, "stats.Tags(%v)=%v; want %v", ctx, tg, tags)
@@ -5428,12 +5314,12 @@ func (s) TestStatsTagsAndTrace(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		_, err := endpoint.client.EmptyCall(tc.ctx, &testpb.Empty{})
+		_, err := endpoint.Client.EmptyCall(tc.ctx, &testpb.Empty{})
 		if tc.want == codes.OK && err != nil {
-			t.Fatalf("endpoint.client.EmptyCall(%v, _) = _, %v; want _, nil", tc.ctx, err)
+			t.Fatalf("endpoint.Client.EmptyCall(%v, _) = _, %v; want _, nil", tc.ctx, err)
 		}
 		if s, ok := status.FromError(err); !ok || s.Code() != tc.want {
-			t.Fatalf("endpoint.client.EmptyCall(%v, _) = _, %v; want _, <status with Code()=%v>", tc.ctx, err, tc.want)
+			t.Fatalf("endpoint.Client.EmptyCall(%v, _) = _, %v; want _, <status with Code()=%v>", tc.ctx, err, tc.want)
 		}
 	}
 }
@@ -5450,8 +5336,8 @@ func (s) TestTapTimeout(t *testing.T) {
 		}),
 	}
 
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			<-ctx.Done()
 			return nil, status.Errorf(codes.Canceled, ctx.Err().Error())
 		},
@@ -5465,18 +5351,18 @@ func (s) TestTapTimeout(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		// Set our own deadline in case the server hangs.
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		res, err := ss.client.EmptyCall(ctx, &testpb.Empty{})
+		res, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
 		if s, ok := status.FromError(err); !ok || s.Code() != codes.Canceled {
-			t.Fatalf("ss.client.EmptyCall(ctx, _) = %v, %v; want nil, <status with Code()=Canceled>", res, err)
+			t.Fatalf("ss.Client.EmptyCall(ctx, _) = %v, %v; want nil, <status with Code()=Canceled>", res, err)
 		}
 	}
 
 }
 
 func (s) TestClientWriteFailsAfterServerClosesStream(t *testing.T) {
-	ss := &stubServer{
-		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			return status.Errorf(codes.Internal, "")
 		},
 	}
@@ -5487,7 +5373,7 @@ func (s) TestClientWriteFailsAfterServerClosesStream(t *testing.T) {
 	defer ss.Stop()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	stream, err := ss.client.FullDuplexCall(ctx)
+	stream, err := ss.Client.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("Error while creating stream: %v", err)
 	}
@@ -6337,8 +6223,8 @@ func testCompressorRegister(t *testing.T, e env) {
 }
 
 func (s) TestServeExitsWhenListenerClosed(t *testing.T) {
-	ss := &stubServer{
-		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -6390,8 +6276,8 @@ func (s) TestStatusInvalidUTF8Message(t *testing.T) {
 		wantMsg = "���"
 	)
 
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return nil, status.Errorf(codes.Internal, origMsg)
 		},
 	}
@@ -6403,8 +6289,8 @@ func (s) TestStatusInvalidUTF8Message(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); status.Convert(err).Message() != wantMsg {
-		t.Fatalf("ss.client.EmptyCall(_, _) = _, %v (msg %q); want _, err with msg %q", err, status.Convert(err).Message(), wantMsg)
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); status.Convert(err).Message() != wantMsg {
+		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v (msg %q); want _, err with msg %q", err, status.Convert(err).Message(), wantMsg)
 	}
 }
 
@@ -6419,8 +6305,8 @@ func (s) TestStatusInvalidUTF8Details(t *testing.T) {
 		wantMsg = "���"
 	)
 
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			st := status.New(codes.Internal, origMsg)
 			st, err := st.WithDetails(&testpb.Empty{})
 			if err != nil {
@@ -6437,10 +6323,10 @@ func (s) TestStatusInvalidUTF8Details(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, err := ss.client.EmptyCall(ctx, &testpb.Empty{})
+	_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 	st := status.Convert(err)
 	if st.Message() != wantMsg {
-		t.Fatalf("ss.client.EmptyCall(_, _) = _, %v (msg %q); want _, err with msg %q", err, st.Message(), wantMsg)
+		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v (msg %q); want _, err with msg %q", err, st.Message(), wantMsg)
 	}
 	if len(st.Details()) != 0 {
 		// Details should be dropped on the server side.
@@ -6499,7 +6385,7 @@ func (s) TestRPCTimeout(t *testing.T) {
 
 func testRPCTimeout(t *testing.T, e env) {
 	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security, unaryCallSleepTime: 500 * time.Millisecond})
+	te.startServer(&testServer{security: e.security, UnaryCallFSleepTime: 500 * time.Millisecond})
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -6539,8 +6425,8 @@ func (s) TestDisabledIOBuffers(t *testing.T) {
 		Payload: payload,
 	}
 
-	ss := &stubServer{
-		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			for {
 				in, err := stream.Recv()
 				if err == io.EOF {
@@ -6774,7 +6660,7 @@ func (s) TestNetPipeConn(t *testing.T) {
 	pl := testutils.NewPipeListener()
 	s := grpc.NewServer()
 	defer s.Stop()
-	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ts := &funcServer{UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 		return &testpb.SimpleResponse{}, nil
 	}}
 	testpb.RegisterTestServiceServer(s, ts)
@@ -6814,7 +6700,7 @@ func testLargeTimeout(t *testing.T, e env) {
 	}
 
 	for i, maxTimeout := range timeouts {
-		ts.unaryCall = func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		ts.UnaryCallF = func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			deadline, ok := ctx.Deadline()
 			timeout := time.Until(deadline)
 			minTimeout := maxTimeout - 5*time.Second
@@ -6848,10 +6734,10 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	s1 := grpc.NewServer()
 	defer s1.Stop()
 	ts := &funcServer{
-		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
-		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			// Wait forever.
 			_, err := stream.Recv()
 			if err == nil {
@@ -7220,8 +7106,8 @@ func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
 func (s) TestClientCancellationPropagatesUnary(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	called, done := make(chan struct{}), make(chan struct{})
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			close(called)
 			<-ctx.Done()
 			err := ctx.Err()
@@ -7241,8 +7127,8 @@ func (s) TestClientCancellationPropagatesUnary(t *testing.T) {
 
 	wg.Add(1)
 	go func() {
-		if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Canceled {
-			t.Errorf("ss.client.EmptyCall() = _, %v; want _, Code()=codes.Canceled", err)
+		if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Canceled {
+			t.Errorf("ss.Client.EmptyCall() = _, %v; want _, Code()=codes.Canceled", err)
 		}
 		wg.Done()
 	}()
@@ -7283,8 +7169,8 @@ func (badGzipCompressor) Type() string {
 }
 
 func (s) TestGzipBadChecksum(t *testing.T) {
-	ss := &stubServer{
-		unaryCall: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
@@ -7300,18 +7186,18 @@ func (s) TestGzipBadChecksum(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error from newPayload: %v", err)
 	}
-	if _, err := ss.client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: p}); err == nil ||
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: p}); err == nil ||
 		status.Code(err) != codes.Internal ||
 		!strings.Contains(status.Convert(err).Message(), gzip.ErrChecksum.Error()) {
-		t.Errorf("ss.client.UnaryCall(_) = _, %v\n\twant: _, status(codes.Internal, contains %q)", err, gzip.ErrChecksum)
+		t.Errorf("ss.Client.UnaryCall(_) = _, %v\n\twant: _, status(codes.Internal, contains %q)", err, gzip.ErrChecksum)
 	}
 }
 
 // When an RPC is canceled, it's possible that the last Recv() returns before
 // all call options' after are executed.
 func (s) TestCanceledRPCCallOptionRace(t *testing.T) {
-	ss := &stubServer{
-		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			err := stream.Send(&testpb.StreamingOutputCallResponse{})
 			if err != nil {
 				return err
@@ -7337,7 +7223,7 @@ func (s) TestCanceledRPCCallOptionRace(t *testing.T) {
 			var p peer.Peer
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
-			stream, err := ss.client.FullDuplexCall(ctx, grpc.Peer(&p))
+			stream, err := ss.Client.FullDuplexCall(ctx, grpc.Peer(&p))
 			if err != nil {
 				t.Errorf("_.FullDuplexCall(_) = _, %v", err)
 				return

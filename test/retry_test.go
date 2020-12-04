@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
@@ -46,8 +47,8 @@ func enableRetry() func() {
 func (s) TestRetryUnary(t *testing.T) {
 	defer enableRetry()()
 	i := -1
-	ss := &stubServer{
-		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			i++
 			switch i {
 			case 0, 2, 5:
@@ -62,7 +63,7 @@ func (s) TestRetryUnary(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ss.newServiceConfig(`{
+	ss.NewServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,
@@ -79,7 +80,7 @@ func (s) TestRetryUnary(t *testing.T) {
 		if ctx.Err() != nil {
 			t.Fatalf("Timed out waiting for service config update")
 		}
-		if ss.cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
+		if ss.CC.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -100,7 +101,7 @@ func (s) TestRetryUnary(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_, err := ss.client.EmptyCall(ctx, &testpb.Empty{})
+		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
 		if status.Code(err) != tc.code {
 			t.Fatalf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.code)
@@ -116,8 +117,8 @@ func (s) TestRetryDisabledByDefault(t *testing.T) {
 		return
 	}
 	i := -1
-	ss := &stubServer{
-		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			i++
 			switch i {
 			case 0:
@@ -130,7 +131,7 @@ func (s) TestRetryDisabledByDefault(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ss.newServiceConfig(`{
+	ss.NewServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,
@@ -147,7 +148,7 @@ func (s) TestRetryDisabledByDefault(t *testing.T) {
 		if ctx.Err() != nil {
 			t.Fatalf("Timed out waiting for service config update")
 		}
-		if ss.cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
+		if ss.CC.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -162,7 +163,7 @@ func (s) TestRetryDisabledByDefault(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_, err := ss.client.EmptyCall(ctx, &testpb.Empty{})
+		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
 		if status.Code(err) != tc.code {
 			t.Fatalf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.code)
@@ -176,8 +177,8 @@ func (s) TestRetryDisabledByDefault(t *testing.T) {
 func (s) TestRetryThrottling(t *testing.T) {
 	defer enableRetry()()
 	i := -1
-	ss := &stubServer{
-		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			i++
 			switch i {
 			case 0, 3, 6, 10, 11, 12, 13, 14, 16, 18:
@@ -190,7 +191,7 @@ func (s) TestRetryThrottling(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ss.newServiceConfig(`{
+	ss.NewServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,
@@ -212,7 +213,7 @@ func (s) TestRetryThrottling(t *testing.T) {
 		if ctx.Err() != nil {
 			t.Fatalf("Timed out waiting for service config update")
 		}
-		if ss.cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
+		if ss.CC.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -238,7 +239,7 @@ func (s) TestRetryThrottling(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_, err := ss.client.EmptyCall(ctx, &testpb.Empty{})
+		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
 		if status.Code(err) != tc.code {
 			t.Errorf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.code)
@@ -485,8 +486,8 @@ func (s) TestRetryStreaming(t *testing.T) {
 
 	var serverOpIter int
 	var serverOps []serverOp
-	ss := &stubServer{
-		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			for serverOpIter < len(serverOps) {
 				op := serverOps[serverOpIter]
 				serverOpIter++
@@ -501,7 +502,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ss.newServiceConfig(`{
+	ss.NewServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,
@@ -518,7 +519,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		if ctx.Err() != nil {
 			t.Fatalf("Timed out waiting for service config update")
 		}
-		if ss.cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").WaitForReady != nil {
+		if ss.CC.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").WaitForReady != nil {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -532,7 +533,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			stream, err := ss.client.FullDuplexCall(ctx)
+			stream, err := ss.Client.FullDuplexCall(ctx)
 			if err != nil {
 				t.Fatalf("%v: Error while creating stream: %v", tc.desc, err)
 			}

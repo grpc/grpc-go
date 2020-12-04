@@ -27,6 +27,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -45,13 +46,13 @@ func (f funcConfigSelector) SelectConfig(i iresolver.RPCInfo) *iresolver.RPCConf
 func (s) TestConfigSelector(t *testing.T) {
 	gotContextChan := testutils.NewChannelWithSize(1)
 
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			gotContextChan.SendContext(ctx, ctx)
 			return &testpb.Empty{}, nil
 		},
 	}
-	ss.r = manual.NewBuilderWithScheme("confSel")
+	ss.R = manual.NewBuilderWithScheme("confSel")
 
 	if err := ss.Start(nil); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
@@ -134,8 +135,8 @@ func (s) TestConfigSelector(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var gotInfo *iresolver.RPCInfo
 			state := iresolver.SetConfigSelector(resolver.State{
-				Addresses:     []resolver.Address{{Addr: ss.address}},
-				ServiceConfig: parseCfg(ss.r, "{}"),
+				Addresses:     []resolver.Address{{Addr: ss.Address}},
+				ServiceConfig: parseCfg(ss.R, "{}"),
 			}, funcConfigSelector{
 				f: func(i iresolver.RPCInfo) *iresolver.RPCConfig {
 					gotInfo = &i
@@ -146,12 +147,12 @@ func (s) TestConfigSelector(t *testing.T) {
 					return cfg
 				},
 			})
-			ss.r.UpdateState(state) // Blocks until config selector is applied
+			ss.R.UpdateState(state) // Blocks until config selector is applied
 
 			onCommittedCalled = false
 			ctx := metadata.NewOutgoingContext(ctx, tc.md)
 			startTime := time.Now()
-			if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 				t.Fatalf("client.EmptyCall(_, _) = _, %v; want _, nil", err)
 			}
 

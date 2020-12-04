@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/local"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
@@ -37,8 +38,8 @@ import (
 )
 
 func testLocalCredsE2ESucceed(network, address string) error {
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			pr, ok := peer.FromContext(ctx)
 			if !ok {
 				return nil, status.Error(codes.DataLoss, "Failed to get peer from ctx")
@@ -159,8 +160,8 @@ func spoofDialer(addr net.Addr) func(target string, t time.Duration) (net.Conn, 
 }
 
 func testLocalCredsE2EFail(dopts []grpc.DialOption) error {
-	ss := &stubServer{
-		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
