@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 )
 
+const defaultMaxRequests uint32 = 1024
+
 type servicesRequestsCounter struct {
 	mu       sync.Mutex
 	services map[string]*ServiceRequestsCounter
@@ -48,14 +50,14 @@ func GetServiceRequestsCounter(serviceName string) *ServiceRequestsCounter {
 	defer src.mu.Unlock()
 	c, ok := src.services[serviceName]
 	if !ok {
-		c = &ServiceRequestsCounter{ServiceName: serviceName, maxRequests: 1024}
+		c = &ServiceRequestsCounter{ServiceName: serviceName, maxRequests: defaultMaxRequests}
 		src.services[serviceName] = c
 	}
 	return c
 }
 
 // SetMaxRequests updates the max requests for a service's counter.
-func SetMaxRequests(serviceName string, maxRequests *uint32) *ServiceRequestsCounter {
+func SetMaxRequests(serviceName string, maxRequests *uint32) {
 	src.mu.Lock()
 	defer src.mu.Unlock()
 	c, ok := src.services[serviceName]
@@ -66,9 +68,8 @@ func SetMaxRequests(serviceName string, maxRequests *uint32) *ServiceRequestsCou
 	if maxRequests != nil {
 		c.maxRequests = *maxRequests
 	} else {
-		c.maxRequests = 1024
+		c.maxRequests = defaultMaxRequests
 	}
-	return c
 }
 
 // StartRequest starts a request for a service, incrementing its number of

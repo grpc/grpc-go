@@ -174,6 +174,18 @@ func (f *fakeEDSBalancer) waitForEDSResponse(ctx context.Context, wantUpdate xds
 	return nil
 }
 
+func (f *fakeEDSBalancer) waitForCounterUpdate(ctx context.Context, wantServiceName string) error {
+	val, err := f.serviceName.Receive(ctx)
+	if err != nil {
+		return err
+	}
+	gotServiceName := val.(string)
+	if gotServiceName != wantServiceName {
+		return fmt.Errorf("got serviceName %v, want %v", gotServiceName, wantServiceName)
+	}
+	return nil
+}
+
 func newFakeEDSBalancer(cc balancer.ClientConn) edsBalancerImplInterface {
 	return &fakeEDSBalancer{
 		cc:                 cc,
@@ -313,6 +325,9 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 	if err := edsLB.waitForChildPolicy(ctx, lbCfgA); err != nil {
 		t.Fatal(err)
 	}
+	if err := edsLB.waitForCounterUpdate(ctx, testServiceName); err != nil {
+		t.Fatal(err)
+	}
 
 	lbCfgB := &loadBalancingConfig{
 		Name:   fakeBalancerB,
@@ -327,6 +342,9 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 		t.Fatalf("edsB.UpdateClientConnState() failed: %v", err)
 	}
 	if err := edsLB.waitForChildPolicy(ctx, lbCfgB); err != nil {
+		t.Fatal(err)
+	}
+	if err := edsLB.waitForCounterUpdate(ctx, testServiceName); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -19,34 +19,38 @@
 package client
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
 )
 
 type counterTest struct {
-	name          string
-	maxRequests   uint32
-	numRequests   uint32
-	errorExpected bool
+	name              string
+	maxRequests       uint32
+	numRequests       uint32
+	expectedSuccesses uint32
+	expectedErrors    uint32
 }
 
 var tests = []counterTest{
 	{
-		name:          "does-not-exceed-max-requests",
-		maxRequests:   1024,
-		numRequests:   1024,
-		errorExpected: false,
+		name:              "does-not-exceed-max-requests",
+		maxRequests:       1024,
+		numRequests:       1024,
+		expectedSuccesses: 1024,
+		expectedErrors:    0,
 	},
 	{
-		name:          "exceeds-max-requests",
-		maxRequests:   32,
-		numRequests:   64,
-		errorExpected: true,
+		name:              "exceeds-max-requests",
+		maxRequests:       32,
+		numRequests:       64,
+		expectedSuccesses: 32,
+		expectedErrors:    32,
 	},
 }
 
-func counterTestInit() {
+func resetServiceRequestsCounter() {
 	src = &servicesRequestsCounter{
 		services: make(map[string]*ServiceRequestsCounter),
 	}
@@ -83,25 +87,22 @@ func testCounter(t *testing.T, test counterTest) {
 	close(requestsStarted)
 	requestsDone.Wait()
 	loadedError := lastError.Load()
-	if test.errorExpected && loadedError == nil {
+	if test.expectedErrors > 0 && loadedError == nil {
 		t.Error("no error when error expected")
 	}
-	if !test.errorExpected && loadedError != nil {
+	if loadedError != nil {
+		fmt.Println(loadedError.(error))
+	}
+	if test.expectedErrors == 0 && loadedError != nil {
 		t.Errorf("error starting request: %v", loadedError.(error))
 	}
-	expectedSuccesses := test.numRequests
-	var expectedErrors uint32
-	if test.maxRequests < test.numRequests {
-		expectedSuccesses = test.maxRequests
-		expectedErrors = test.numRequests - test.maxRequests
-	}
-	if successes != expectedSuccesses || errors != expectedErrors {
-		t.Errorf("unexpected number of (successes, errors), expected (%v, %v), encountered (%v, %v)", expectedSuccesses, expectedErrors, successes, errors)
+	if successes != test.expectedSuccesses || errors != test.expectedErrors {
+		t.Errorf("unexpected number of (successes, errors), expected (%v, %v), encountered (%v, %v)", test.expectedSuccesses, test.expectedErrors, successes, errors)
 	}
 }
 
 func (s) TestRequestsCounter(t *testing.T) {
-	counterTestInit()
+	resetServiceRequestsCounter()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testCounter(t, test)
@@ -110,7 +111,7 @@ func (s) TestRequestsCounter(t *testing.T) {
 }
 
 func (s) TestGetServiceRequestsCounter(t *testing.T) {
-	counterTestInit()
+	resetServiceRequestsCounter()
 	for _, test := range tests {
 		counterA := GetServiceRequestsCounter(test.name)
 		counterB := GetServiceRequestsCounter(test.name)
@@ -121,9 +122,7 @@ func (s) TestGetServiceRequestsCounter(t *testing.T) {
 }
 
 func startRequests(t *testing.T, n uint32, max uint32, counter *ServiceRequestsCounter) {
-	if counterB := SetMaxRequests(counter.ServiceName, &max); counterB != counter {
-		t.Fatalf("counter %v %v != counter %v %v", counter, *counter, counterB, *counterB)
-	}
+	SetMaxRequests(counter.ServiceName, &max)
 	for i := uint32(0); i < n; i++ {
 		if err := counter.StartRequest(); err != nil {
 			t.Fatalf("error starting initial request: %v", err)
@@ -132,7 +131,7 @@ func startRequests(t *testing.T, n uint32, max uint32, counter *ServiceRequestsC
 }
 
 func (s) TestSetMaxRequestsIncreased(t *testing.T) {
-	counterTestInit()
+	resetServiceRequestsCounter()
 	const serviceName string = "set-max-requests-increased"
 	var initialMax uint32 = 16
 	counter := GetServiceRequestsCounter(serviceName)
@@ -148,7 +147,7 @@ func (s) TestSetMaxRequestsIncreased(t *testing.T) {
 }
 
 func (s) TestSetMaxRequestsDecreased(t *testing.T) {
-	counterTestInit()
+	resetServiceRequestsCounter()
 	const serviceName string = "set-max-requests-decreased"
 	var initialMax uint32 = 16
 	counter := GetServiceRequestsCounter(serviceName)
