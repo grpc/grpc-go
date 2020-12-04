@@ -123,12 +123,6 @@ func (tcc *TestClientConn) RemoveSubConn(sc balancer.SubConn) {
 	}
 }
 
-// UpdateBalancerState implements balancer.Balancer API. It will be removed when
-// switching to the new balancer interface.
-func (tcc *TestClientConn) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
-	panic("not implemented")
-}
-
 // UpdateState updates connectivity state and picker.
 func (tcc *TestClientConn) UpdateState(bs balancer.State) {
 	tcc.logger.Logf("testClientConn: UpdateState(%v)", bs)

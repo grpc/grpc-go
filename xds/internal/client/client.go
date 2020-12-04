@@ -69,9 +69,9 @@ func getAPIClientBuilder(version version.TransportAPI) APIClientBuilder {
 
 // BuildOptions contains options to be passed to client builders.
 type BuildOptions struct {
-	// Parent is a top-level xDS client or server which has the intelligence to
-	// take appropriate action based on xDS responses received from the
-	// management server.
+	// Parent is a top-level xDS client which has the intelligence to take
+	// appropriate action based on xDS responses received from the management
+	// server.
 	Parent UpdateHandler
 	// NodeProto contains the Node proto to be used in xDS requests. The actual
 	// type depends on the transport protocol version used.
@@ -145,6 +145,8 @@ type ListenerUpdate struct {
 	// RouteConfigName is the route configuration name corresponding to the
 	// target which is being watched through LDS.
 	RouteConfigName string
+	// SecurityCfg contains security configuration sent by the control plane.
+	SecurityCfg *SecurityConfig
 }
 
 // RouteConfigUpdate contains information received in an RDS response, which is
@@ -195,7 +197,8 @@ type Int64Range struct {
 }
 
 // SecurityConfig contains the security configuration received as part of the
-// Cluster resource.
+// Cluster resource on the client-side, and as part of the Listener resource on
+// the server-side.
 type SecurityConfig struct {
 	// RootInstanceName identifies the certProvider plugin to be used to fetch
 	// root certificates. This instance name will be resolved to the plugin name
@@ -215,7 +218,8 @@ type SecurityConfig struct {
 	IdentityCertName string
 	// AcceptedSANs is a list of Subject Alternative Names. During the TLS
 	// handshake, the SAN present in the peer certificate is compared against
-	// this list, and the handshake succeeds only if a match is found.
+	// this list, and the handshake succeeds only if a match is found. Used only
+	// on the client-side.
 	AcceptedSANs []string
 }
 
@@ -227,7 +231,7 @@ type ClusterUpdate struct {
 	ServiceName string
 	// EnableLRS indicates whether or not load should be reported through LRS.
 	EnableLRS bool
-	// SecurityCfg contains security configuration sent by the xDS server.
+	// SecurityCfg contains security configuration sent by the control plane.
 	SecurityCfg *SecurityConfig
 	// MaxRequests for circuit breaking, if any (otherwise nil).
 	MaxRequests *uint32
