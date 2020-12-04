@@ -93,6 +93,7 @@ type fakeEDSBalancer struct {
 	childPolicy        *testutils.Channel
 	subconnStateChange *testutils.Channel
 	edsUpdate          *testutils.Channel
+	serviceName        *testutils.Channel
 }
 
 func (f *fakeEDSBalancer) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
@@ -109,7 +110,9 @@ func (f *fakeEDSBalancer) handleEDSResponse(edsResp xdsclient.EndpointsUpdate) {
 
 func (f *fakeEDSBalancer) updateState(priority priorityType, s balancer.State) {}
 
-func (f *fakeEDSBalancer) updateServiceRequestsCounter(serviceName string) {}
+func (f *fakeEDSBalancer) updateServiceRequestsCounter(serviceName string) {
+	f.serviceName.Send(serviceName)
+}
 
 func (f *fakeEDSBalancer) close() {}
 
@@ -164,6 +167,7 @@ func newFakeEDSBalancer(cc balancer.ClientConn) edsBalancerImplInterface {
 		childPolicy:        testutils.NewChannelWithSize(10),
 		subconnStateChange: testutils.NewChannelWithSize(10),
 		edsUpdate:          testutils.NewChannelWithSize(10),
+		serviceName:        testutils.NewChannelWithSize(10),
 	}
 }
 

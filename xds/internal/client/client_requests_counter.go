@@ -74,7 +74,7 @@ func SetMaxRequests(serviceName string, maxRequests *uint32) *ServiceRequestsCou
 // StartRequest starts a request for a service, incrementing its number of
 // requests by 1. Returns an error if the max number of requests is exceeded.
 func (c *ServiceRequestsCounter) StartRequest() error {
-	if atomic.LoadUint32(&c.numRequests)+1 > atomic.LoadUint32(&c.maxRequests) {
+	if atomic.LoadUint32(&c.numRequests) >= atomic.LoadUint32(&c.maxRequests) {
 		return fmt.Errorf("max requests %v exceeded on service %v", c.maxRequests, c.ServiceName)
 	}
 	atomic.AddUint32(&c.numRequests, 1)

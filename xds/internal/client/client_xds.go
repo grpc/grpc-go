@@ -36,6 +36,7 @@ import (
 
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -387,15 +388,19 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 // the received cluster resource. Returns nil if no CircuitBreakers or no
 // Thresholds in CircuitBreakers.
 func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) *uint32 {
+	if !env.CircuitBreakingSupport {
+		return nil
+	}
 	for _, threshold := range cluster.GetCircuitBreakers().GetThresholds() {
-		if threshold.GetPriority().String() != v3corepb.RoutingPriority_DEFAULT.String() {
+		if threshold.GetPriority() != v3corepb.RoutingPriority_DEFAULT {
 			continue
 		}
 		maxRequestsPb := threshold.GetMaxRequests()
-		if maxRequestsPb != nil {
-			maxRequests := maxRequestsPb.GetValue()
-			return &maxRequests
+		if maxRequestsPb == nil {
+			return nil
 		}
+		maxRequests := maxRequestsPb.GetValue()
+		return &maxRequests
 	}
 	return nil
 }

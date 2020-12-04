@@ -31,6 +31,7 @@ import (
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -206,6 +207,9 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		},
 	}
 
+	origCircuitBreakingSupport := env.CircuitBreakingSupport
+	env.CircuitBreakingSupport = true
+	defer func() { env.CircuitBreakingSupport = origCircuitBreakingSupport }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			update, err := validateCluster(test.cluster)

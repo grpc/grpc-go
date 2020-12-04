@@ -577,8 +577,6 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	p := <-cc.NewPickerCh
 	for i := 0; i < 100; i++ {
 		pr, err := p.Pick(balancer.PickInfo{})
-		// TODO: the dropping algorithm needs a design. When the dropping algorithm
-		// is fixed, this test also needs fix.
 		if i < 50 && err != nil {
 			t.Errorf("The first 50%% picks should be non-drops, got error %v", err)
 		} else if i > 50 && err == nil {
