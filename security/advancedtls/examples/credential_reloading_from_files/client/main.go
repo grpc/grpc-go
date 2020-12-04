@@ -36,6 +36,8 @@ import (
 var address = "localhost:50051"
 
 const (
+	// Default deadline for normal connections.
+	defaultDeadline = 2 * time.Second
 	// Intervals that set to monitor the credential updates.
 	credRefreshingInterval = 500 * time.Millisecond
 )
@@ -98,10 +100,12 @@ func main() {
 	// the bash script. We don't cancel the context nor call conn.Close() here,
 	// since the bash script is expeceted to close the client goroutine.
 	for {
-		_, err = client.SayHello(context.Background(), &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
+		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(defaultDeadline))
+		_, err = client.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
 		if err != nil {
 			log.Fatalf("client.SayHello failed: %v", err)
 		}
+		cancel()
 		time.Sleep(500 * time.Millisecond)
 	}
 }
