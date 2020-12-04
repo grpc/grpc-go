@@ -606,11 +606,11 @@ func parseDialTarget(target string) (string, string) {
 	if strings.HasPrefix(target, "unix-abstract:") {
 		// handle unix-abstract:addr which will fail with url.Parse
 		// and need prepend "\x00" to the parsed address
-		return "unix", "\x00" + strings.SplitN(target, ":",2)[1]
+		return "unix", "\x00" + strings.SplitN(target, ":", 2)[1]
 	}
 	m1 := strings.Index(target, ":")
 	m2 := strings.Index(target, ":/")
- 	// handle unix:addr which will fail with url.Parse
+	// handle unix:addr which will fail with url.Parse
 	if m1 >= 0 && m2 < 0 {
 		if n := target[0:m1]; n == "unix" {
 			return n, target[m1+1:]
