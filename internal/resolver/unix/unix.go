@@ -29,7 +29,7 @@ import (
 const unixScheme = "unix"
 const unixAbstractScheme = "unix-abstract"
 
-type builder struct{
+type builder struct {
 	scheme string
 }
 

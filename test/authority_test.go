@@ -118,10 +118,10 @@ var authorityTests = []authorityTest{
 		dialTargetWant: "unix:///tmp/sock.sock",
 	},
 	{
-		name:      "UnixAbstract",
-		address:   "\x00abc efg",
-		target:    "unix-abstract:abc efg",
-		authority: "localhost",
+		name:           "UnixAbstract",
+		address:        "\x00abc efg",
+		target:         "unix-abstract:abc efg",
+		authority:      "localhost",
 		dialTargetWant: "\x00abc efg",
 	},
 }
