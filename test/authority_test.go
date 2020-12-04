@@ -29,6 +29,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
@@ -56,13 +57,13 @@ func runUnixTest(t *testing.T, address, target, expectedAuthority string, dialer
 	if err := os.RemoveAll(address); err != nil {
 		t.Fatalf("Error removing socket file %v: %v\n", address, err)
 	}
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			return authorityChecker(ctx, expectedAuthority)
 		},
-		network: "unix",
-		address: address,
-		target:  target,
+		Network: "unix",
+		Address: address,
+		Target:  target,
 	}
 	opts := []grpc.DialOption{}
 	if dialer != nil {
@@ -74,7 +75,7 @@ func runUnixTest(t *testing.T, address, target, expectedAuthority string, dialer
 	defer ss.Stop()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_, err := ss.client.EmptyCall(ctx, &testpb.Empty{})
+	_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 	if err != nil {
 		t.Errorf("us.client.EmptyCall(_, _) = _, %v; want _, nil", err)
 	}
@@ -152,19 +153,19 @@ func (s) TestUnixCustomDialer(t *testing.T) {
 func (s) TestColonPortAuthority(t *testing.T) {
 	expectedAuthority := ""
 	var authorityMu sync.Mutex
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			authorityMu.Lock()
 			defer authorityMu.Unlock()
 			return authorityChecker(ctx, expectedAuthority)
 		},
-		network: "tcp",
+		Network: "tcp",
 	}
 	if err := ss.Start(nil); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	_, port, err := net.SplitHostPort(ss.address)
+	_, port, err := net.SplitHostPort(ss.Address)
 	if err != nil {
 		t.Fatalf("Failed splitting host from post: %v", err)
 	}
@@ -180,7 +181,7 @@ func (s) TestColonPortAuthority(t *testing.T) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", "localhost"+addr)
 	}))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%q) = %v", ss.target, err)
+		t.Fatalf("grpc.Dial(%q) = %v", ss.Target, err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

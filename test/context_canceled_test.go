@@ -26,14 +26,15 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
 func (s) TestContextCanceled(t *testing.T) {
-	ss := &stubServer{
-		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			stream.SetTrailer(metadata.New(map[string]string{"a": "b"}))
 			return status.Error(codes.PermissionDenied, "perm denied")
 		},
@@ -51,7 +52,7 @@ func (s) TestContextCanceled(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), delay)
 			defer cancel()
 
-			str, err := ss.client.FullDuplexCall(ctx)
+			str, err := ss.Client.FullDuplexCall(ctx)
 			if err != nil {
 				continue
 			}
@@ -121,8 +122,8 @@ func (s) TestContextCanceled(t *testing.T) {
 // first one, but `case ctx.Done()` wins the second one, the compression info
 // will be inconsistent, and it causes internal error.
 func (s) TestCancelWhileRecvingWithCompression(t *testing.T) {
-	ss := &stubServer{
-		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			for {
 				if err := stream.Send(&testpb.StreamingOutputCallResponse{
 					Payload: nil,
@@ -139,7 +140,7 @@ func (s) TestCancelWhileRecvingWithCompression(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-		s, err := ss.client.FullDuplexCall(ctx, grpc.UseCompressor(gzip.Name))
+		s, err := ss.Client.FullDuplexCall(ctx, grpc.UseCompressor(gzip.Name))
 		if err != nil {
 			t.Fatalf("failed to start bidi streaming RPC: %v", err)
 		}

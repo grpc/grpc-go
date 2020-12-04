@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
@@ -84,8 +85,8 @@ func (s) TestInsecureCreds(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			ss := &stubServer{
-				emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			ss := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 					if !test.serverInsecureCreds {
 						return &testpb.Empty{}, nil
 					}
@@ -167,8 +168,8 @@ func (s) TestInsecureCredsWithPerRPCCredentials(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			ss := &stubServer{
-				emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			ss := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 					return &testpb.Empty{}, nil
 				},
 			}

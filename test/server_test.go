@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -118,8 +119,8 @@ func (s) TestChainUnaryServerInterceptor(t *testing.T) {
 		grpc.ChainUnaryInterceptor(firstInt, secondInt, lastInt),
 	}
 
-	ss := &stubServer{
-		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 0)
 			if err != nil {
 				return nil, status.Errorf(codes.Aborted, "failed to make payload: %v", err)
@@ -137,9 +138,9 @@ func (s) TestChainUnaryServerInterceptor(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	resp, err := ss.client.UnaryCall(ctx, &testpb.SimpleRequest{})
+	resp, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{})
 	if s, ok := status.FromError(err); !ok || s.Code() != codes.OK {
-		t.Fatalf("ss.client.UnaryCall(ctx, _) = %v, %v; want nil, <status with Code()=OK>", resp, err)
+		t.Fatalf("ss.Client.UnaryCall(ctx, _) = %v, %v; want nil, <status with Code()=OK>", resp, err)
 	}
 
 	respBytes := resp.Payload.GetBody()
@@ -173,8 +174,8 @@ func (s) TestChainOnBaseUnaryServerInterceptor(t *testing.T) {
 		grpc.ChainUnaryInterceptor(chainInt),
 	}
 
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -185,9 +186,9 @@ func (s) TestChainOnBaseUnaryServerInterceptor(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	resp, err := ss.client.EmptyCall(ctx, &testpb.Empty{})
+	resp, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 	if s, ok := status.FromError(err); !ok || s.Code() != codes.OK {
-		t.Fatalf("ss.client.EmptyCall(ctx, _) = %v, %v; want nil, <status with Code()=OK>", resp, err)
+		t.Fatalf("ss.Client.EmptyCall(ctx, _) = %v, %v; want nil, <status with Code()=OK>", resp, err)
 	}
 }
 
@@ -249,8 +250,8 @@ func (s) TestChainStreamServerInterceptor(t *testing.T) {
 		grpc.ChainStreamInterceptor(firstInt, secondInt, lastInt),
 	}
 
-	ss := &stubServer{
-		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			if callCounts[0] != 1 {
 				return status.Errorf(codes.Internal, "callCounts[0] should be 1, but got=%d", callCounts[0])
 			}
@@ -274,7 +275,7 @@ func (s) TestChainStreamServerInterceptor(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	stream, err := ss.client.FullDuplexCall(ctx)
+	stream, err := ss.Client.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("failed to FullDuplexCall: %v", err)
 	}
