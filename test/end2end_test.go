@@ -129,12 +129,12 @@ var raceMode bool // set by race.go in race mode
 type testServer struct {
 	testpb.UnimplementedTestServiceServer
 
-	security            string // indicate the authentication protocol used by this server.
-	earlyFail           bool   // whether to error out the execution of a service handler prematurely.
-	setAndSendHeader    bool   // whether to call setHeader and sendHeader.
-	setHeaderOnly       bool   // whether to only call setHeader, not sendHeader.
-	multipleSetTrailer  bool   // whether to call setTrailer multiple times.
-	UnaryCallFSleepTime time.Duration
+	security           string // indicate the authentication protocol used by this server.
+	earlyFail          bool   // whether to error out the execution of a service handler prematurely.
+	setAndSendHeader   bool   // whether to call setHeader and sendHeader.
+	setHeaderOnly      bool   // whether to only call setHeader, not sendHeader.
+	multipleSetTrailer bool   // whether to call setTrailer multiple times.
+	unaryCallSleepTime time.Duration
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
@@ -230,7 +230,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 		}
 	}
 	// Simulate some service delay.
-	time.Sleep(s.UnaryCallFSleepTime)
+	time.Sleep(s.unaryCallSleepTime)
 
 	payload, err := newPayload(in.GetResponseType(), in.GetResponseSize())
 	if err != nil {
@@ -3584,7 +3584,7 @@ func (s) TestCancel(t *testing.T) {
 func testCancel(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.declareLogNoise("grpc: the client connection is closing; please retry")
-	te.startServer(&testServer{security: e.security, UnaryCallFSleepTime: time.Second})
+	te.startServer(&testServer{security: e.security, naryCallSleepTime: time.Second})
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -6385,7 +6385,7 @@ func (s) TestRPCTimeout(t *testing.T) {
 
 func testRPCTimeout(t *testing.T, e env) {
 	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security, UnaryCallFSleepTime: 500 * time.Millisecond})
+	te.startServer(&testServer{security: e.security, unaryCallSleepTime: 500 * time.Millisecond})
 	defer te.tearDown()
 
 	cc := te.clientConn()
