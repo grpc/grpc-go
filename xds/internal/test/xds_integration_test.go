@@ -1,3 +1,5 @@
+// +build !386
+
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -16,5 +18,34 @@
  *
  */
 
-// Package xdsrouting implements the routing balancer for xds.
-package xdsrouting
+// Package xds_test contains e2e tests for xDS use.
+package xds_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"google.golang.org/grpc/internal/grpctest"
+	testpb "google.golang.org/grpc/test/grpc_testing"
+)
+
+const (
+	defaultTestTimeout = 10 * time.Second
+)
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+type testService struct {
+	testpb.TestServiceServer
+}
+
+func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+	return &testpb.Empty{}, nil
+}

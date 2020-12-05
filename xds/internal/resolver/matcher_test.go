@@ -16,15 +16,15 @@
  *
  */
 
-package xdsrouting
+package resolver
 
 import (
 	"context"
 	"testing"
 
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcutil"
+	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -33,16 +33,16 @@ func TestAndMatcherMatch(t *testing.T) {
 		name string
 		pm   pathMatcherInterface
 		hm   headerMatcherInterface
-		info balancer.PickInfo
+		info iresolver.RPCInfo
 		want bool
 	}{
 		{
 			name: "both match",
 			pm:   newPathExactMatcher("/a/b", false),
 			hm:   newHeaderExactMatcher("th", "tv"),
-			info: balancer.PickInfo{
-				FullMethodName: "/a/b",
-				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
+			info: iresolver.RPCInfo{
+				Method:  "/a/b",
+				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
 			},
 			want: true,
 		},
@@ -50,9 +50,9 @@ func TestAndMatcherMatch(t *testing.T) {
 			name: "both match with path case insensitive",
 			pm:   newPathExactMatcher("/A/B", true),
 			hm:   newHeaderExactMatcher("th", "tv"),
-			info: balancer.PickInfo{
-				FullMethodName: "/a/b",
-				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
+			info: iresolver.RPCInfo{
+				Method:  "/a/b",
+				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
 			},
 			want: true,
 		},
@@ -60,9 +60,9 @@ func TestAndMatcherMatch(t *testing.T) {
 			name: "only one match",
 			pm:   newPathExactMatcher("/a/b", false),
 			hm:   newHeaderExactMatcher("th", "tv"),
-			info: balancer.PickInfo{
-				FullMethodName: "/z/y",
-				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
+			info: iresolver.RPCInfo{
+				Method:  "/z/y",
+				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
 			},
 			want: false,
 		},
@@ -70,9 +70,9 @@ func TestAndMatcherMatch(t *testing.T) {
 			name: "both not match",
 			pm:   newPathExactMatcher("/z/y", false),
 			hm:   newHeaderExactMatcher("th", "abc"),
-			info: balancer.PickInfo{
-				FullMethodName: "/a/b",
-				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
+			info: iresolver.RPCInfo{
+				Method:  "/a/b",
+				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
 			},
 			want: false,
 		},
@@ -80,9 +80,9 @@ func TestAndMatcherMatch(t *testing.T) {
 			name: "fake header",
 			pm:   newPathPrefixMatcher("/", false),
 			hm:   newHeaderExactMatcher("content-type", "fake"),
-			info: balancer.PickInfo{
-				FullMethodName: "/a/b",
-				Ctx: grpcutil.WithExtraMetadata(context.Background(), metadata.Pairs(
+			info: iresolver.RPCInfo{
+				Method: "/a/b",
+				Context: grpcutil.WithExtraMetadata(context.Background(), metadata.Pairs(
 					"content-type", "fake",
 				)),
 			},
@@ -92,9 +92,9 @@ func TestAndMatcherMatch(t *testing.T) {
 			name: "binary header",
 			pm:   newPathPrefixMatcher("/", false),
 			hm:   newHeaderPresentMatcher("t-bin", true),
-			info: balancer.PickInfo{
-				FullMethodName: "/a/b",
-				Ctx: grpcutil.WithExtraMetadata(
+			info: iresolver.RPCInfo{
+				Method: "/a/b",
+				Context: grpcutil.WithExtraMetadata(
 					metadata.NewOutgoingContext(context.Background(), metadata.Pairs("t-bin", "123")), metadata.Pairs(
 						"content-type", "fake",
 					)),
@@ -143,6 +143,46 @@ func TestFractionMatcherMatch(t *testing.T) {
 	if matched := fm.match(); !matched {
 		t.Errorf("match() = %v, want match", matched)
 	}
+}
+
+func (a *compositeMatcher) equal(mm *compositeMatcher) bool {
+	if a == mm {
+		return true
+	}
+
+	if a == nil || mm == nil {
+		return false
+	}
+
+	if (a.pm != nil || mm.pm != nil) && (a.pm == nil || !a.pm.equal(mm.pm)) {
+		return false
+	}
+
+	if len(a.hms) != len(mm.hms) {
+		return false
+	}
+	for i := range a.hms {
+		if !a.hms[i].equal(mm.hms[i]) {
+			return false
+		}
+	}
+
+	if (a.fm != nil || mm.fm != nil) && (a.fm == nil || !a.fm.equal(mm.fm)) {
+		return false
+	}
+
+	return true
+}
+
+func (fm *fractionMatcher) equal(m *fractionMatcher) bool {
+	if fm == m {
+		return true
+	}
+	if fm == nil || m == nil {
+		return false
+	}
+
+	return fm.fraction == m.fraction
 }
 
 func TestCompositeMatcherEqual(t *testing.T) {

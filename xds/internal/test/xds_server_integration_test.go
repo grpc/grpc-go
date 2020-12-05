@@ -18,14 +18,13 @@
  *
  */
 
-// Package xds_test contains e2e tests for xDS use on the server.
+// Package xds_test contains e2e tests for xDS use.
 package xds_test
 
 import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
@@ -37,7 +36,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/grpctest"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/xds"
 	"google.golang.org/grpc/xds/internal/env"
@@ -45,18 +43,6 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/version"
 )
-
-const (
-	defaultTestTimeout = 10 * time.Second
-)
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
 
 // TestServerSideXDS is an e2e tests for xDS use on the server. This does not
 // use any xDS features because we have not implemented any on the server side.
@@ -147,12 +133,4 @@ func (s) TestServerSideXDS(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
-}
-
-type testService struct {
-	testpb.TestServiceServer
-}
-
-func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-	return &testpb.Empty{}, nil
 }

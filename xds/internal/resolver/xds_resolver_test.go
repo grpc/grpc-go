@@ -21,6 +21,7 @@ package resolver
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -28,10 +29,12 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpctest"
+	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
+	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
@@ -276,19 +279,66 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	defer replaceRandNumGenerator(0)()
 
 	for _, tt := range []struct {
-		routes   []*xdsclient.Route
-		wantJSON string
+		routes       []*xdsclient.Route
+		wantJSON     string
+		wantClusters map[string]bool
 	}{
 		{
-			routes:   []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{testCluster1: 1}}},
-			wantJSON: testOneClusterOnlyJSON,
+			routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{"test-cluster-1": 1}}},
+			wantJSON: `{"loadBalancingConfig":[{
+    "xds_cluster_manager_experimental":{
+      "children":{
+        "test-cluster-1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+        }
+      }
+    }}]}`,
+			wantClusters: map[string]bool{"test-cluster-1": true},
 		},
 		{
 			routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{
 				"cluster_1": 75,
 				"cluster_2": 25,
 			}}},
-			wantJSON: testWeightedCDSJSON,
+			// This update contains the cluster from the previous update as
+			// well as this update, as the previous config selector still
+			// references the old cluster when the new one is pushed.
+			wantJSON: `{"loadBalancingConfig":[{
+    "xds_cluster_manager_experimental":{
+      "children":{
+        "test-cluster-1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+        },
+        "cluster_1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster_1"}}]
+        },
+        "cluster_2":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster_2"}}]
+        }
+      }
+    }}]}`,
+			wantClusters: map[string]bool{"cluster_1": true, "cluster_2": true},
+		},
+		{
+			routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{
+				"cluster_1": 75,
+				"cluster_2": 25,
+			}}},
+			// With this redundant update, the old config selector has been
+			// stopped, so there are no more references to the first cluster.
+			// Only the second update's clusters should remain.
+			wantJSON: `{"loadBalancingConfig":[{
+    "xds_cluster_manager_experimental":{
+      "children":{
+        "cluster_1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster_1"}}]
+        },
+        "cluster_2":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster_2"}}]
+        }
+      }
+    }}]}`,
+			wantClusters: map[string]bool{"cluster_1": true, "cluster_2": true},
 		},
 	} {
 		// Invoke the watchAPI callback with a good service update and wait for the
@@ -318,6 +368,26 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			t.Errorf("ClientConn.UpdateState received different service config")
 			t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
 			t.Error("want: ", cmp.Diff(nil, wantSCParsed.Config))
+		}
+
+		cs := iresolver.GetConfigSelector(rState)
+		if cs == nil {
+			t.Error("received nil config selector")
+			continue
+		}
+
+		pickedClusters := make(map[string]bool)
+		for i := 0; i < 100; i++ { // Odds of picking 75% cluster 100 times in a row: 1 in 3E-13.
+			res, err := cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()})
+			if err != nil {
+				t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
+			}
+			cluster := clustermanager.GetPickedClusterForTesting(res.Context)
+			pickedClusters[cluster] = true
+			res.OnCommitted()
+		}
+		if !reflect.DeepEqual(pickedClusters, tt.wantClusters) {
+			t.Errorf("Picked clusters: %v; want: %v", pickedClusters, tt.wantClusters)
 		}
 	}
 }
