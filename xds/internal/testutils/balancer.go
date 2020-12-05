@@ -116,7 +116,7 @@ func (tcc *TestClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubCon
 
 // RemoveSubConn removes the SubConn.
 func (tcc *TestClientConn) RemoveSubConn(sc balancer.SubConn) {
-	tcc.logger.Logf("testClientCOnn: RemoveSubConn(%p)", sc)
+	tcc.logger.Logf("testClientConn: RemoveSubConn(%p)", sc)
 	select {
 	case tcc.RemoveSubConnCh <- sc:
 	default:
