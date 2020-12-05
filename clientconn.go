@@ -109,11 +109,11 @@ type defaultConfigSelector struct {
 	sc *ServiceConfig
 }
 
-func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) *iresolver.RPCConfig {
+func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
 	return &iresolver.RPCConfig{
 		Context:      rpcInfo.Context,
 		MethodConfig: getMethodConfig(dcs.sc, rpcInfo.Method),
-	}
+	}, nil
 }
 
 // DialContext creates a client connection to the given target. By default, it's
