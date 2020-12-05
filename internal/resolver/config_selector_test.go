@@ -36,10 +36,10 @@ func Test(t *testing.T) {
 }
 
 type fakeConfigSelector struct {
-	selectConfig func(RPCInfo) *RPCConfig
+	selectConfig func(RPCInfo) (*RPCConfig, error)
 }
 
-func (f *fakeConfigSelector) SelectConfig(r RPCInfo) *RPCConfig {
+func (f *fakeConfigSelector) SelectConfig(r RPCInfo) (*RPCConfig, error) {
 	return f.selectConfig(r)
 }
 
@@ -59,21 +59,21 @@ func (s) TestSafeConfigSelector(t *testing.T) {
 	cs2Called := make(chan struct{})
 
 	cs1 := &fakeConfigSelector{
-		selectConfig: func(r RPCInfo) *RPCConfig {
+		selectConfig: func(r RPCInfo) (*RPCConfig, error) {
 			cs1Called <- struct{}{}
 			if diff := cmp.Diff(r, testRPCInfo); diff != "" {
 				t.Errorf("SelectConfig(%v) called; want %v\n  Diffs:\n%s", r, testRPCInfo, diff)
 			}
-			return <-retChan1
+			return <-retChan1, nil
 		},
 	}
 	cs2 := &fakeConfigSelector{
-		selectConfig: func(r RPCInfo) *RPCConfig {
+		selectConfig: func(r RPCInfo) (*RPCConfig, error) {
 			cs2Called <- struct{}{}
 			if diff := cmp.Diff(r, testRPCInfo); diff != "" {
 				t.Errorf("SelectConfig(%v) called; want %v\n  Diffs:\n%s", r, testRPCInfo, diff)
 			}
-			return <-retChan2
+			return <-retChan2, nil
 		},
 	}
 
@@ -82,9 +82,9 @@ func (s) TestSafeConfigSelector(t *testing.T) {
 
 	cs1Returned := make(chan struct{})
 	go func() {
-		got := scs.SelectConfig(testRPCInfo) // blocks until send to retChan1
-		if got != resp1 {
-			t.Errorf("SelectConfig(%v) = %v; want %v", testRPCInfo, got, resp1)
+		got, err := scs.SelectConfig(testRPCInfo) // blocks until send to retChan1
+		if err != nil || got != resp1 {
+			t.Errorf("SelectConfig(%v) = %v, %v; want %v, nil", testRPCInfo, got, err, resp1)
 		}
 		close(cs1Returned)
 	}()
@@ -112,7 +112,8 @@ func (s) TestSafeConfigSelector(t *testing.T) {
 	for dl := time.Now().Add(150 * time.Millisecond); !time.Now().After(dl); {
 		gotConfigChan := make(chan *RPCConfig)
 		go func() {
-			gotConfigChan <- scs.SelectConfig(testRPCInfo)
+			cfg, _ := scs.SelectConfig(testRPCInfo)
+			gotConfigChan <- cfg
 		}()
 		select {
 		case <-time.After(500 * time.Millisecond):
