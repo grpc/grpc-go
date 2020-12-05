@@ -16,45 +16,55 @@
  *
  */
 
-package xdsrouting
+package clustermanager
 
 import (
+	"context"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// pickerGroup contains a list of route matchers and their corresponding
-// pickers. For each pick, the first matched picker is used. If the picker isn't
-// ready, the pick will be queued.
+// pickerGroup contains a list of pickers. If the picker isn't ready, the pick
+// will be queued.
 type pickerGroup struct {
-	routes  []route
 	pickers map[string]balancer.Picker
 }
 
-func newPickerGroup(routes []route, idToPickerState map[string]*subBalancerState) *pickerGroup {
+func newPickerGroup(idToPickerState map[string]*subBalancerState) *pickerGroup {
 	pickers := make(map[string]balancer.Picker)
 	for id, st := range idToPickerState {
 		pickers[id] = st.state.Picker
 	}
 	return &pickerGroup{
-		routes:  routes,
 		pickers: pickers,
 	}
 }
 
-var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
-
 func (pg *pickerGroup) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	for _, rt := range pg.routes {
-		if rt.m.match(info) {
-			// action from route is the ID for the sub-balancer to use.
-			p, ok := pg.pickers[rt.action]
-			if !ok {
-				return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
-			}
-			return p.Pick(info)
-		}
+	cluster := getPickedCluster(info.Ctx)
+	if p := pg.pickers[cluster]; p != nil {
+		return p.Pick(info)
 	}
-	return balancer.PickResult{}, errNoMatchedRouteFound
+	return balancer.PickResult{}, status.Errorf(codes.Unavailable, "unknown cluster selected for RPC: %q", cluster)
+}
+
+type clusterKey struct{}
+
+func getPickedCluster(ctx context.Context) string {
+	cluster, _ := ctx.Value(clusterKey{}).(string)
+	return cluster
+}
+
+// GetPickedClusterForTesting returns the cluster in the context; to be used
+// for testing only.
+func GetPickedClusterForTesting(ctx context.Context) string {
+	return getPickedCluster(ctx)
+}
+
+// SetPickedCluster adds the selected cluster to the context for the
+// xds_cluster_manager LB policy to pick.
+func SetPickedCluster(ctx context.Context, cluster string) context.Context {
+	return context.WithValue(ctx, clusterKey{}, cluster)
 }

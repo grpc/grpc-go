@@ -16,19 +16,31 @@
  *
  */
 
-package xdsrouting
+package clustermanager
 
 import (
-	"fmt"
+	"encoding/json"
 
-	"google.golang.org/grpc/grpclog"
-	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/serviceconfig"
 )
 
-const prefix = "[xds-routing-lb %p] "
+type childConfig struct {
+	// ChildPolicy is the child policy and it's config.
+	ChildPolicy *internalserviceconfig.BalancerConfig
+}
 
-var logger = grpclog.Component("xds")
+// lbConfig is the balancer config for xds routing policy.
+type lbConfig struct {
+	serviceconfig.LoadBalancingConfig
+	Children map[string]childConfig
+}
 
-func prefixLogger(p *routingBalancer) *internalgrpclog.PrefixLogger {
-	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
+func parseConfig(c json.RawMessage) (*lbConfig, error) {
+	cfg := &lbConfig{}
+	if err := json.Unmarshal(c, cfg); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
 }

@@ -16,7 +16,7 @@
  *
  */
 
-package xdsrouting
+package resolver
 
 import (
 	"regexp"

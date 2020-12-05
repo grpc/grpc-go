@@ -144,6 +144,10 @@ func verifyServiceUpdate(ctx context.Context, updateCh *testutils.Channel, wantU
 	return nil
 }
 
+func newStringP(s string) *string {
+	return &s
+}
+
 // TestServiceWatch covers the cases:
 // - an update is received after a watch()
 // - an update with routes received
