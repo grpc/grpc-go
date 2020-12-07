@@ -68,25 +68,33 @@ func (lsw *loadStoreWrapper) update(store *load.Store, service string) {
 func (lsw *loadStoreWrapper) CallStarted(locality string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	lsw.perCluster.CallStarted(locality)
+	if lsw.perCluster != nil {
+		lsw.perCluster.CallStarted(locality)
+	}
 }
 
 func (lsw *loadStoreWrapper) CallFinished(locality string, err error) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	lsw.perCluster.CallFinished(locality, err)
+	if lsw.perCluster != nil {
+		lsw.perCluster.CallFinished(locality, err)
+	}
 }
 
 func (lsw *loadStoreWrapper) CallServerLoad(locality, name string, val float64) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	lsw.perCluster.CallServerLoad(locality, name, val)
+	if lsw.perCluster != nil {
+		lsw.perCluster.CallServerLoad(locality, name, val)
+	}
 }
 
 func (lsw *loadStoreWrapper) CallDropped(category string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
-	lsw.perCluster.CallDropped(category)
+	if lsw.perCluster != nil {
+		lsw.perCluster.CallDropped(category)
+	}
 }
 
 // xdsclientWrapper is responsible for getting the xds client from attributes or
