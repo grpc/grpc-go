@@ -163,9 +163,9 @@ var (
 				"server_uri": "trafficdirector.googleapis.com:443",
 				"channel_creds": [
 					{ "type": "google_default" }
-				]
-			}],
-			"server_features" : ["foo", "bar"]
+				],
+				"server_features" : ["foo", "bar"]
+			}]
 		}`,
 		"serverSupportsV3": `
 		{
@@ -179,9 +179,9 @@ var (
 				"server_uri": "trafficdirector.googleapis.com:443",
 				"channel_creds": [
 					{ "type": "google_default" }
-				]
-			}],
-			"server_features" : ["foo", "bar", "xds_v3"]
+				],
+				"server_features" : ["foo", "bar", "xds_v3"]
+			}]
 		}`,
 	}
 	metadata = &structpb.Struct{
@@ -548,9 +548,9 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 				"server_uri": "trafficdirector.googleapis.com:443",
 				"channel_creds": [
 					{ "type": "google_default" }
-				]
+				],
+				"server_features" : ["foo", "bar", "xds_v3"],
 			}],
-			"server_features" : ["foo", "bar", "xds_v3"],
 			"certificate_providers": "bad JSON"
 		}`,
 		"allUnknownCertProviders": `
@@ -565,9 +565,9 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 				"server_uri": "trafficdirector.googleapis.com:443",
 				"channel_creds": [
 					{ "type": "google_default" }
-				]
+				],
+				"server_features" : ["foo", "bar", "xds_v3"]
 			}],
-			"server_features" : ["foo", "bar", "xds_v3"],
 			"certificate_providers": {
 				"unknownProviderInstance1": {
 					"plugin_name": "foo",
@@ -591,9 +591,9 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 				"server_uri": "trafficdirector.googleapis.com:443",
 				"channel_creds": [
 					{ "type": "google_default" }
-				]
+				],
+				"server_features" : ["foo", "bar", "xds_v3"],
 			}],
-			"server_features" : ["foo", "bar", "xds_v3"],
 			"certificate_providers": {
 				"unknownProviderInstance": {
 					"plugin_name": "foo",
@@ -617,9 +617,9 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 				"server_uri": "trafficdirector.googleapis.com:443",
 				"channel_creds": [
 					{ "type": "google_default" }
-				]
+				],
+				"server_features" : ["foo", "bar", "xds_v3"]
 			}],
-			"server_features" : ["foo", "bar", "xds_v3"],
 			"certificate_providers": {
 				"unknownProviderInstance": {
 					"plugin_name": "foo",
@@ -692,7 +692,7 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 
 			c, err := NewConfig()
 			if (err != nil) != test.wantErr {
-				t.Fatalf("NewConfig() returned: (%+v, %v), wantErr: %v", c.CertProviderConfigs, err, test.wantErr)
+				t.Fatalf("NewConfig() returned: %v, wantErr: %v", err, test.wantErr)
 			}
 			if test.wantErr {
 				return
