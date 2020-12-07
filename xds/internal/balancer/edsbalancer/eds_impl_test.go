@@ -743,3 +743,60 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
+
+// TestEDS_LoadReportDisabled covers the case that LRS is disabled. It makes
+// sure the EDS implementation isn't broken (doesn't panic).
+func (s) TestEDS_LoadReportDisabled(t *testing.T) {
+	// We create an xdsClientWrapper with a dummy xdsClientInterface which only
+	// implements the LoadStore() method to return the underlying load.Store to
+	// be used.
+	loadStore := load.NewStore()
+	lsWrapper := &loadStoreWrapper{}
+	lsWrapper.updateServiceName(testClusterNames[0])
+	// Not calling lsWrapper.updateLoadStore(loadStore) because LRS is disabled.
+
+	cc := testutils.NewTestClientConn(t)
+	edsb := newEDSBalancerImpl(cc, nil, lsWrapper, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+
+	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityID)
+
+	// Two localities, each with one backend.
+	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
+	edsb.handleEDSResponse(parseEDSRespProtoForTesting(clab1.Build()))
+	sc1 := <-cc.NewSubConnCh
+	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
+	locality1 := internal.LocalityID{SubZone: testSubZones[0]}
+	backendToBalancerID[sc1] = locality1
+
+	// Add the second locality later to make sure sc2 belongs to the second
+	// locality. Otherwise the test is flaky because of a map is used in EDS to
+	// keep localities.
+	clab1.AddLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2], nil)
+	edsb.handleEDSResponse(parseEDSRespProtoForTesting(clab1.Build()))
+	sc2 := <-cc.NewSubConnCh
+	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
+	locality2 := internal.LocalityID{SubZone: testSubZones[1]}
+	backendToBalancerID[sc2] = locality2
+
+	// Test roundrobin with two subconns.
+	p1 := <-cc.NewPickerCh
+	// We expect the 10 picks to be split between the localities since they are
+	// of equal weight. And since we only mark the picks routed to sc2 as done,
+	// the picks on sc1 should show up as inProgress.
+	for i := 0; i < 10; i++ {
+		scst, _ := p1.Pick(balancer.PickInfo{})
+		if scst.Done != nil && scst.SubConn != sc1 {
+			scst.Done(balancer.DoneInfo{})
+		}
+	}
+
+	var wantStoreData []*load.Data
+	gotStoreData := loadStore.Stats(testClusterNames[0:1])
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(load.Data{}, "ReportInterval")); diff != "" {
+		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	}
+}
