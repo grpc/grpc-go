@@ -747,9 +747,6 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 // TestEDS_LoadReportDisabled covers the case that LRS is disabled. It makes
 // sure the EDS implementation isn't broken (doesn't panic).
 func (s) TestEDS_LoadReportDisabled(t *testing.T) {
-	// We create an xdsClientWrapper with a dummy xdsClientInterface which only
-	// implements the LoadStore() method to return the underlying load.Store to
-	// be used.
 	lsWrapper := &loadStoreWrapper{}
 	lsWrapper.updateServiceName(testClusterNames[0])
 	// Not calling lsWrapper.updateLoadStore(loadStore) because LRS is disabled.
@@ -758,7 +755,7 @@ func (s) TestEDS_LoadReportDisabled(t *testing.T) {
 	edsb := newEDSBalancerImpl(cc, nil, lsWrapper, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
-	// Two localities, each with one backend.
+	// One localities, with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	edsb.handleEDSResponse(parseEDSRespProtoForTesting(clab1.Build()))
