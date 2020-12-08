@@ -176,10 +176,11 @@ type Route struct {
 	Path, Prefix, Regex *string
 	// Indicates if prefix/path matching should be case insensitive. The default
 	// is false (case sensitive).
-	CaseInsensitive bool
-	Headers         []*HeaderMatcher
-	Fraction        *uint32
-	Action          map[string]uint32 // action is weighted clusters.
+	CaseInsensitive   bool
+	Headers           []*HeaderMatcher
+	Fraction          *uint32
+	Action            map[string]uint32 // action is weighted clusters.
+	MaxStreamDuration time.Duration
 }
 
 // HeaderMatcher represents header matchers.

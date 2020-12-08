@@ -21,6 +21,7 @@ package resolver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -41,6 +42,7 @@ import (
 	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/env"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
@@ -493,6 +495,113 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 	want := map[string]int{"A": 10, "B": 20}
 	if !reflect.DeepEqual(picks, want) {
 		t.Errorf("picked clusters = %v; want %v", picks, want)
+	}
+}
+
+func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
+	defer func(old bool) { env.TimeoutSupport = old }(env.TimeoutSupport)
+	xdsC := fakeclient.NewClient()
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
+		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+	})
+	defer func() {
+		cancel()
+		xdsR.Close()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	waitForWatchListener(ctx, t, xdsC, targetStr)
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
+
+	defer func(oldNewWRR func() wrr.WRR) { newWRR = oldNewWRR }(newWRR)
+	newWRR = xdstestutils.NewTestWRR
+
+	// Invoke the watchAPI callback with a good service update and wait for the
+	// UpdateState method to be called on the ClientConn.
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
+		VirtualHosts: []*xdsclient.VirtualHost{
+			{
+				Domains: []string{targetStr},
+				Routes: []*client.Route{{
+					Prefix:            newStringP("/foo"),
+					Action:            map[string]uint32{"A": 1},
+					MaxStreamDuration: 5 * time.Second,
+				}, {
+					Prefix:            newStringP("/bar"),
+					Action:            map[string]uint32{"B": 1},
+					MaxStreamDuration: time.Duration(0),
+				}, {
+					Prefix: newStringP(""),
+					Action: map[string]uint32{"C": 1},
+				}},
+			},
+		},
+	}, nil)
+
+	gotState, err := tcc.stateCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+	rState := gotState.(resolver.State)
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+
+	cs := iresolver.GetConfigSelector(rState)
+	if cs == nil {
+		t.Fatal("received nil config selector")
+	}
+
+	testCases := []struct {
+		method         string
+		timeoutSupport bool
+		want           time.Duration
+	}{{
+		method:         "/foo/method",
+		timeoutSupport: true,
+		want:           5 * time.Second,
+	}, {
+		method:         "/foo/method",
+		timeoutSupport: false,
+		// zero (nil)
+	}, {
+		method:         "/bar/method",
+		timeoutSupport: true,
+		// zero (nil)
+	}, {
+		method:         "/baz/method",
+		timeoutSupport: true,
+		// zero (nil)
+	}}
+
+	for _, tc := range testCases {
+		env.TimeoutSupport = tc.timeoutSupport
+		req := iresolver.RPCInfo{
+			Method:  tc.method,
+			Context: context.Background(),
+		}
+		res, err := cs.SelectConfig(req)
+		if err != nil {
+			t.Errorf("Unexpected error from cs.SelectConfig(%v): %v", req, err)
+			continue
+		}
+		res.OnCommitted()
+		got := res.MethodConfig.Timeout
+		if got == nil {
+			if tc.want != 0 {
+				t.Errorf("For method %q: res.MethodConfig.Timeout = <nil>; want %v", tc.method, tc.want)
+			}
+			continue
+		}
+		if tc.want == 0 || *got != tc.want {
+			want := "<nil>" // we never want a duration of zero to be returned.
+			if tc.want != 0 {
+				want = fmt.Sprint(tc.want)
+			}
+			t.Errorf("For method %q: res.MethodConfig.Timeout = %v; want %v", tc.method, *got, want)
+		}
 	}
 }
 
