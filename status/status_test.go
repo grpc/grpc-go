@@ -136,6 +136,15 @@ func (s) TestFromError(t *testing.T) {
 	}
 }
 
+func (s) TestFromErrorWrappedError(t *testing.T) {
+	code, message := codes.Internal, "test description"
+	err := fmt.Errorf("wrapped: %w", Error(code, message))
+	s, ok := FromError(err)
+	if !ok || s.Code() != code || s.Message() != message || s.Err() == nil {
+		t.Fatalf("FromError(%v) = %v, %v; want <Code()=%s, Message()=%q, Err()!=nil>, true", err, s, ok, code, message)
+	}
+}
+
 func (s) TestFromErrorOK(t *testing.T) {
 	code, message := codes.OK, ""
 	s, ok := FromError(nil)
@@ -189,6 +198,33 @@ func (s) TestFromErrorUnknownError(t *testing.T) {
 	s, ok := FromError(err)
 	if ok || s.Code() != code || s.Message() != message {
 		t.Fatalf("FromError(%v) = %v, %v; want <Code()=%s, Message()=%q>, false", err, s, ok, code, message)
+	}
+}
+
+func (s) TestCode(t *testing.T) {
+	code, message := codes.Internal, "test description"
+	err := Error(code, message)
+	if c := Code(err); c != code {
+		t.Fatalf("Code(%v) = %v; want %v", err, c, code)
+	}
+}
+
+func (s) TestCodeImplementsInterface(t *testing.T) {
+	code := codes.Internal
+	err := customError{
+		Code:    code,
+		Message: "test message",
+	}
+	if c := Code(err); c != code {
+		t.Fatalf("Code(%v) = %v; want %v", err, c, code)
+	}
+}
+
+func (s) TestCodeWrappedError(t *testing.T) {
+	code, message := codes.Internal, "test description"
+	err := fmt.Errorf("wrapped: %w", Error(code, message))
+	if c := Code(err); c != code {
+		t.Fatalf("Code(%v) = %v; want %v", err, c, code)
 	}
 }
 

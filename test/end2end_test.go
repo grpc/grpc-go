@@ -7251,3 +7251,24 @@ func (s) TestCanceledRPCCallOptionRace(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func (s) TestWrappedError(t *testing.T) {
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return nil, fmt.Errorf("wrapped: %w", status.Error(codes.OutOfRange, "out of range"))
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err == nil ||
+		status.Code(err) != codes.OutOfRange ||
+		!strings.Contains(err.Error(), "out of range") {
+		t.Errorf("ss.Client.UnaryCall(_) = _, %v\n\twant: _, status(codes.OutOfRange, contains \"out of range\")", err)
+	}
+}

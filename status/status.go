@@ -29,6 +29,7 @@ package status
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	spb "google.golang.org/genproto/googleapis/rpc/status"
@@ -74,15 +75,17 @@ func FromProto(s *spb.Status) *Status {
 }
 
 // FromError returns a Status representing err if it was produced from this
-// package or has a method `GRPCStatus() *Status`. Otherwise, ok is false and a
-// Status is returned with codes.Unknown and the original error message.
+// package, has a method `GRPCStatus() *Status`, or wraps an error with that
+// method. Otherwise, ok is false and a Status is returned with codes.Unknown
+// and the original error message.
 func FromError(err error) (s *Status, ok bool) {
 	if err == nil {
 		return nil, true
 	}
-	if se, ok := err.(interface {
+	var se (interface {
 		GRPCStatus() *Status
-	}); ok {
+	})
+	if errors.As(err, &se) {
 		return se.GRPCStatus(), true
 	}
 	return New(codes.Unknown, err.Error()), false
@@ -95,16 +98,17 @@ func Convert(err error) *Status {
 	return s
 }
 
-// Code returns the Code of the error if it is a Status error, codes.OK if err
-// is nil, or codes.Unknown otherwise.
+// Code returns the Code of the error if it is, or wraps, a Status error,
+// codes.OK if err is nil, or codes.Unknown otherwise.
 func Code(err error) codes.Code {
 	// Don't use FromError to avoid allocation of OK status.
 	if err == nil {
 		return codes.OK
 	}
-	if se, ok := err.(interface {
+	var se (interface {
 		GRPCStatus() *Status
-	}); ok {
+	})
+	if errors.As(err, &se) {
 		return se.GRPCStatus().Code()
 	}
 	return codes.Unknown
