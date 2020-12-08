@@ -171,29 +171,19 @@ func TestClusterPicks(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/a/0",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
 			},
 			wantSC: m1[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/a/1",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_1"),
-			},
-			wantSC: m1[wantAddrs[0]],
-		},
-		{
-			pickInfo: balancer.PickInfo{
-				FullMethodName: "/z/y",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
 			},
 			wantSC: m1[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/z/y",
-				Ctx:            SetPickedCluster(context.Background(), "notacluster"),
+				Ctx: SetPickedCluster(context.Background(), "notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "notacluster"`),
 		},
@@ -259,29 +249,19 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/a/0",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
 			},
 			wantSC: m1[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/a/1",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_1"),
-			},
-			wantSC: m1[wantAddrs[0]],
-		},
-		{
-			pickInfo: balancer.PickInfo{
-				FullMethodName: "/z/y",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
 			},
 			wantSC: m1[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/c/d",
-				Ctx:            SetPickedCluster(context.Background(), "cds:notacluster"),
+				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
@@ -342,36 +322,25 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/a/0",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
 			},
 			wantSC: m1[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/a/1",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_1"),
-			},
-			wantSC: m1[wantAddrs[0]],
-		},
-		{
-			pickInfo: balancer.PickInfo{
-				FullMethodName: "/z/y",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
 			},
 			wantSC: m1[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/a/z",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_3"),
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_3"),
 			},
 			wantSC: m1[wantAddrs[2]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/c/d",
-				Ctx:            SetPickedCluster(context.Background(), "cds:notacluster"),
+				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
@@ -437,29 +406,19 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/a/0",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
 			},
 			wantSC: m1[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/a/1",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_1"),
-			},
-			wantSC: m1[wantAddrs[0]],
-		},
-		{
-			pickInfo: balancer.PickInfo{
-				FullMethodName: "/z/y",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
 			},
 			wantSC: m1[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/c/d",
-				Ctx:            SetPickedCluster(context.Background(), "cds:notacluster"),
+				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
@@ -531,29 +490,19 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/a/0",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
 			},
 			wantSC: m2[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/a/1",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_1"),
-			},
-			wantSC: m2[wantAddrs[0]],
-		},
-		{
-			pickInfo: balancer.PickInfo{
-				FullMethodName: "/z/y",
-				Ctx:            SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
 			},
 			wantSC: m2[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/c/d",
-				Ctx:            SetPickedCluster(context.Background(), "cds:notacluster"),
+				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
