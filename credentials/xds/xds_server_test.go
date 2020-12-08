@@ -405,31 +405,31 @@ func (s) TestServerCredsProviderSwitch(t *testing.T) {
 				return handshakeResult{err: errors.New("ServerHandshake() succeeded when expected to fail")}
 			}
 			return handshakeResult{}
-		} else {
-			hi = NewHandshakeInfo(makeRootProvider(t, "x509/client_ca_cert.pem"), makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"))
-			hi.SetRequireClientCert(true)
-
-			// Create a wrapped conn which can return the HandshakeInfo and
-			// configured deadline to the xDS credentials' ServerHandshake()
-			// method.
-			conn := newWrappedConn(rawConn, hi, time.Now().Add(defaultTestTimeout))
-
-			// Invoke the ServerHandshake() method on the xDS credentials
-			// and make some sanity checks before pushing the result for
-			// inspection by the main test body.
-			_, ai, err := creds.ServerHandshake(conn)
-			if err != nil {
-				return handshakeResult{err: fmt.Errorf("ServerHandshake() failed: %v", err)}
-			}
-			if ai.AuthType() != "tls" {
-				return handshakeResult{err: fmt.Errorf("ServerHandshake returned authType %q, want %q", ai.AuthType(), "tls")}
-			}
-			info, ok := ai.(credentials.TLSInfo)
-			if !ok {
-				return handshakeResult{err: fmt.Errorf("ServerHandshake returned authInfo of type %T, want %T", ai, credentials.TLSInfo{})}
-			}
-			return handshakeResult{connState: info.State}
 		}
+
+		hi = NewHandshakeInfo(makeRootProvider(t, "x509/client_ca_cert.pem"), makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"))
+		hi.SetRequireClientCert(true)
+
+		// Create a wrapped conn which can return the HandshakeInfo and
+		// configured deadline to the xDS credentials' ServerHandshake()
+		// method.
+		conn := newWrappedConn(rawConn, hi, time.Now().Add(defaultTestTimeout))
+
+		// Invoke the ServerHandshake() method on the xDS credentials
+		// and make some sanity checks before pushing the result for
+		// inspection by the main test body.
+		_, ai, err := creds.ServerHandshake(conn)
+		if err != nil {
+			return handshakeResult{err: fmt.Errorf("ServerHandshake() failed: %v", err)}
+		}
+		if ai.AuthType() != "tls" {
+			return handshakeResult{err: fmt.Errorf("ServerHandshake returned authType %q, want %q", ai.AuthType(), "tls")}
+		}
+		info, ok := ai.(credentials.TLSInfo)
+		if !ok {
+			return handshakeResult{err: fmt.Errorf("ServerHandshake returned authInfo of type %T, want %T", ai, credentials.TLSInfo{})}
+		}
+		return handshakeResult{connState: info.State}
 	})
 	defer ts.stop()
 
