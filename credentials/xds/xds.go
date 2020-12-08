@@ -33,6 +33,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/credentials"
@@ -50,9 +51,9 @@ func init() {
 // credentials implementation.
 type ClientOptions struct {
 	// FallbackCreds specifies the fallback credentials to be used when either
-	// the `xds` scheme is not used in the user's dial target or when the xDS
-	// server does not return any security configuration. Attempts to create
-	// client credentials without a fallback credentials will fail.
+	// the `xds` scheme is not used in the user's dial target or when the
+	// management server does not return any security configuration. Attempts to
+	// create client credentials without a fallback credentials will fail.
 	FallbackCreds credentials.TransportCredentials
 }
 
@@ -64,6 +65,27 @@ func NewClientCredentials(opts ClientOptions) (credentials.TransportCredentials,
 	}
 	return &credsImpl{
 		isClient: true,
+		fallback: opts.FallbackCreds,
+	}, nil
+}
+
+// ServerOptions contains parameters to configure a new server-side xDS
+// credentials implementation.
+type ServerOptions struct {
+	// FallbackCreds specifies the fallback credentials to be used when the
+	// management server does not return any security configuration. Attempts to
+	// create server credentials without a fallback credentials will fail.
+	FallbackCreds credentials.TransportCredentials
+}
+
+// NewServerCredentials returns a new server-side transport credentials
+// implementation which uses xDS APIs to fetch its security configuration.
+func NewServerCredentials(opts ServerOptions) (credentials.TransportCredentials, error) {
+	if opts.FallbackCreds == nil {
+		return nil, errors.New("missing fallback credentials")
+	}
+	return &credsImpl{
+		isClient: false,
 		fallback: opts.FallbackCreds,
 	}, nil
 }
@@ -99,10 +121,11 @@ func getHandshakeInfo(attr *attributes.Attributes) *HandshakeInfo {
 //
 // Safe for concurrent access.
 type HandshakeInfo struct {
-	mu               sync.Mutex
-	rootProvider     certprovider.Provider
-	identityProvider certprovider.Provider
-	acceptedSANs     map[string]bool // Only on the client side.
+	mu                sync.Mutex
+	rootProvider      certprovider.Provider
+	identityProvider  certprovider.Provider
+	acceptedSANs      map[string]bool // Only on the client side.
+	requireClientCert bool            // Only on server side.
 }
 
 // SetRootCertProvider updates the root certificate provider.
@@ -126,6 +149,14 @@ func (hi *HandshakeInfo) SetAcceptedSANs(sans []string) {
 	for _, san := range sans {
 		hi.acceptedSANs[san] = true
 	}
+	hi.mu.Unlock()
+}
+
+// SetRequireClientCert updates whether a client cert is required during the
+// ServerHandshake(). A value of true indicates that we are performing mTLS.
+func (hi *HandshakeInfo) SetRequireClientCert(require bool) {
+	hi.mu.Lock()
+	hi.requireClientCert = require
 	hi.mu.Unlock()
 }
 
@@ -160,7 +191,7 @@ func (hi *HandshakeInfo) validate(isClient bool) error {
 	return nil
 }
 
-func (hi *HandshakeInfo) makeTLSConfig(ctx context.Context) (*tls.Config, error) {
+func (hi *HandshakeInfo) makeClientSideTLSConfig(ctx context.Context) (*tls.Config, error) {
 	hi.mu.Lock()
 	// Since the call to KeyMaterial() can block, we read the providers under
 	// the lock but call the actual function after releasing the lock.
@@ -173,19 +204,51 @@ func (hi *HandshakeInfo) makeTLSConfig(ctx context.Context) (*tls.Config, error)
 	// includes hostname verification) or none. We are forced to go with the
 	// latter and perform the normal cert validation ourselves.
 	cfg := &tls.Config{InsecureSkipVerify: true}
-	if rootProv != nil {
-		km, err := rootProv.KeyMaterial(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("xds: fetching trusted roots from CertificateProvider failed: %v", err)
-		}
-		cfg.RootCAs = km.Roots
+
+	// rootProvider is mandatory on the client side.
+	km, err := rootProv.KeyMaterial(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("xds: fetching trusted roots from CertificateProvider failed: %v", err)
 	}
+	cfg.RootCAs = km.Roots
+
 	if idProv != nil {
 		km, err := idProv.KeyMaterial(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("xds: fetching identity certificates from CertificateProvider failed: %v", err)
 		}
 		cfg.Certificates = km.Certs
+	}
+	return cfg, nil
+}
+
+func (hi *HandshakeInfo) makeServerSideTLSConfig(ctx context.Context) (*tls.Config, error) {
+	hi.mu.Lock()
+	// Since the call to KeyMaterial() can block, we read the providers under
+	// the lock but call the actual function after releasing the lock.
+	rootProv, idProv := hi.rootProvider, hi.identityProvider
+	requireClientCert := hi.requireClientCert
+	hi.mu.Unlock()
+
+	clientAuth := tls.NoClientCert
+	if requireClientCert {
+		clientAuth = tls.RequireAndVerifyClientCert
+	}
+	cfg := &tls.Config{ClientAuth: clientAuth}
+
+	// identityProvider is mandatory on the server side.
+	km, err := idProv.KeyMaterial(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("xds: fetching identity certificates from CertificateProvider failed: %v", err)
+	}
+	cfg.Certificates = km.Certs
+
+	if rootProv != nil {
+		km, err := rootProv.KeyMaterial(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("xds: fetching trusted roots from CertificateProvider failed: %v", err)
+		}
+		cfg.ClientCAs = km.Roots
 	}
 	return cfg, nil
 }
@@ -265,7 +328,7 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 	if hi.UseFallbackCreds() {
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
-	if err := hi.validate(c.isClient); err != nil {
+	if err := hi.validate(true); err != nil {
 		return nil, nil, err
 	}
 
@@ -281,7 +344,7 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 	// 4. Key usage to match whether client/server usage.
 	// 5. A `VerifyPeerCertificate` function which performs normal peer
 	// 	  cert verification using configured roots, and the custom SAN checks.
-	cfg, err := hi.makeTLSConfig(ctx)
+	cfg, err := hi.makeClientSideTLSConfig(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -349,12 +412,58 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 }
 
 // ServerHandshake performs the TLS handshake on the server-side.
-func (c *credsImpl) ServerHandshake(net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (c *credsImpl) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	if c.isClient {
 		return nil, nil, errors.New("ServerHandshake is not supported for client credentials")
 	}
-	// TODO(easwars): Implement along with server side xDS implementation.
-	return nil, nil, errors.New("not implemented")
+
+	// An xds-enabled gRPC server wraps the underlying raw net.Conn in a type
+	// that provides a way to retrieve `HandshakeInfo`, which contains the
+	// certificate providers to be used during the handshake. If the net.Conn
+	// passed to this function does not implement this interface, or if the
+	// `HandshakeInfo` does not contain the information we are looking for, we
+	// delegate the handshake to the fallback credentials.
+	hiConn, ok := rawConn.(interface{ XDSHandshakeInfo() *HandshakeInfo })
+	if !ok {
+		return c.fallback.ServerHandshake(rawConn)
+	}
+	hi := hiConn.XDSHandshakeInfo()
+	if hi.UseFallbackCreds() {
+		return c.fallback.ServerHandshake(rawConn)
+	}
+	if err := hi.validate(false); err != nil {
+		return nil, nil, err
+	}
+
+	// An xds-enabled gRPC server is expected to wrap the underlying raw
+	// net.Conn in a type which provides a way to retrieve the deadline set on
+	// it. If we cannot retrieve the deadline here, we fail (by setting deadline
+	// to time.Now()), instead of using a default deadline and possibly taking
+	// longer to eventually fail.
+	deadline := time.Now()
+	if dConn, ok := rawConn.(interface{ GetDeadline() time.Time }); ok {
+		deadline = dConn.GetDeadline()
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+	cfg, err := hi.makeServerSideTLSConfig(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	conn := tls.Server(rawConn, cfg)
+	if err := conn.Handshake(); err != nil {
+		conn.Close()
+		return nil, nil, err
+	}
+	info := credentials.TLSInfo{
+		State: conn.ConnectionState(),
+		CommonAuthInfo: credentials.CommonAuthInfo{
+			SecurityLevel: credentials.PrivacyAndIntegrity,
+		},
+	}
+	info.SPIFFEID = credinternal.SPIFFEIDFromState(conn.ConnectionState())
+	return credinternal.WrapSyscallConn(rawConn, conn), info, nil
 }
 
 // Info provides the ProtocolInfo of this TransportCredentials.
