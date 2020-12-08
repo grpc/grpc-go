@@ -20,38 +20,42 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/codes"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
 type funcConfigSelector struct {
-	f func(iresolver.RPCInfo) *iresolver.RPCConfig
+	f func(iresolver.RPCInfo) (*iresolver.RPCConfig, error)
 }
 
-func (f funcConfigSelector) SelectConfig(i iresolver.RPCInfo) *iresolver.RPCConfig {
+func (f funcConfigSelector) SelectConfig(i iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
 	return f.f(i)
 }
 
 func (s) TestConfigSelector(t *testing.T) {
 	gotContextChan := testutils.NewChannelWithSize(1)
 
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			gotContextChan.SendContext(ctx, ctx)
 			return &testpb.Empty{}, nil
 		},
 	}
-	ss.r = manual.NewBuilderWithScheme("confSel")
+	ss.R = manual.NewBuilderWithScheme("confSel")
 
 	if err := ss.Start(nil); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
@@ -74,12 +78,14 @@ func (s) TestConfigSelector(t *testing.T) {
 
 	testCases := []struct {
 		name   string
-		md     metadata.MD
-		config *iresolver.RPCConfig
+		md     metadata.MD          // MD sent with RPC
+		config *iresolver.RPCConfig // config returned by config selector
+		csErr  error                // error returned by config selector
 
 		wantMD       metadata.MD
 		wantDeadline time.Time
 		wantTimeout  time.Duration
+		wantErr      error
 	}{{
 		name:         "basic",
 		md:           testMD,
@@ -94,6 +100,10 @@ func (s) TestConfigSelector(t *testing.T) {
 		},
 		wantMD:       mdOut,
 		wantDeadline: ctxDeadline,
+	}, {
+		name:    "erroring SelectConfig",
+		csErr:   status.Errorf(codes.Unavailable, "cannot send RPC"),
+		wantErr: status.Errorf(codes.Unavailable, "cannot send RPC"),
 	}, {
 		name: "alter timeout; remove MD",
 		md:   testMD,
@@ -134,25 +144,27 @@ func (s) TestConfigSelector(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var gotInfo *iresolver.RPCInfo
 			state := iresolver.SetConfigSelector(resolver.State{
-				Addresses:     []resolver.Address{{Addr: ss.address}},
-				ServiceConfig: parseCfg(ss.r, "{}"),
+				Addresses:     []resolver.Address{{Addr: ss.Address}},
+				ServiceConfig: parseCfg(ss.R, "{}"),
 			}, funcConfigSelector{
-				f: func(i iresolver.RPCInfo) *iresolver.RPCConfig {
+				f: func(i iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
 					gotInfo = &i
 					cfg := tc.config
 					if cfg != nil && cfg.Context == nil {
 						cfg.Context = i.Context
 					}
-					return cfg
+					return cfg, tc.csErr
 				},
 			})
-			ss.r.UpdateState(state) // Blocks until config selector is applied
+			ss.R.UpdateState(state) // Blocks until config selector is applied
 
 			onCommittedCalled = false
 			ctx := metadata.NewOutgoingContext(ctx, tc.md)
 			startTime := time.Now()
-			if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-				t.Fatalf("client.EmptyCall(_, _) = _, %v; want _, nil", err)
+			if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); fmt.Sprint(err) != fmt.Sprint(tc.wantErr) {
+				t.Fatalf("client.EmptyCall(_, _) = _, %v; want _, %v", err, tc.wantErr)
+			} else if err != nil {
+				return // remaining checks are invalid
 			}
 
 			if gotInfo == nil {

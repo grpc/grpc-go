@@ -174,6 +174,7 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	if err != nil {
 		return nil, err
 	}
+	sc.RequireClientCert = downstreamCtx.GetRequireClientCertificate().GetValue()
 	return &ListenerUpdate{SecurityCfg: sc}, nil
 }
 

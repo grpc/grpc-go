@@ -806,3 +806,30 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
+
+// TestEDS_LoadReportDisabled covers the case that LRS is disabled. It makes
+// sure the EDS implementation isn't broken (doesn't panic).
+func (s) TestEDS_LoadReportDisabled(t *testing.T) {
+	lsWrapper := &loadStoreWrapper{}
+	lsWrapper.updateServiceName(testClusterNames[0])
+	// Not calling lsWrapper.updateLoadStore(loadStore) because LRS is disabled.
+
+	cc := testutils.NewTestClientConn(t)
+	edsb := newEDSBalancerImpl(cc, nil, lsWrapper, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+
+	// One localities, with one backend.
+	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
+	edsb.handleEDSResponse(parseEDSRespProtoForTesting(clab1.Build()))
+	sc1 := <-cc.NewSubConnCh
+	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
+
+	// Test roundrobin with two subconns.
+	p1 := <-cc.NewPickerCh
+	// We call picks to make sure they don't panic.
+	for i := 0; i < 10; i++ {
+		p1.Pick(balancer.PickInfo{})
+	}
+}

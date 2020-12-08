@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
 	imetadata "google.golang.org/grpc/internal/metadata"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -301,8 +302,8 @@ func testDoneLoads(t *testing.T, e env) {
 
 	const testLoad = "test-load-,-should-be-orca"
 
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			grpc.SetTrailer(ctx, metadata.Pairs(loadMDKey, testLoad))
 			return &testpb.Empty{}, nil
 		},
@@ -312,7 +313,7 @@ func testDoneLoads(t *testing.T, e env) {
 	}
 	defer ss.Stop()
 
-	tc := testpb.NewTestServiceClient(ss.cc)
+	tc := testpb.NewTestServiceClient(ss.CC)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -579,8 +580,8 @@ func (s) TestMetadataInAddressAttributes(t *testing.T) {
 	t.Logf("Registered balancer %s...", mdBalancerName)
 
 	testMDChan := make(chan []string, 1)
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			md, ok := metadata.FromIncomingContext(ctx)
 			if ok {
 				select {
@@ -602,7 +603,7 @@ func (s) TestMetadataInAddressAttributes(t *testing.T) {
 	// The RPC should succeed with the expected md.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 	}
 	t.Log("Made an RPC which succeeded...")

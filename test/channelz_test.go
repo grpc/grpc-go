@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -969,7 +970,7 @@ func (s) TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *t
 	// Avoid overflowing connection level flow control window, which will lead to
 	// transport being closed.
 	te.serverInitialConnWindowSize = 65536 * 2
-	ts := &stubServer{fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+	ts := &stubserver.StubServer{FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 		stream.Send(&testpb.StreamingOutputCallResponse{})
 		<-stream.Context().Done()
 		return status.Errorf(codes.DeadlineExceeded, "deadline exceeded or cancelled")

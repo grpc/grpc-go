@@ -91,8 +91,9 @@ type channelCreds struct {
 }
 
 type xdsServer struct {
-	ServerURI    string         `json:"server_uri"`
-	ChannelCreds []channelCreds `json:"channel_creds"`
+	ServerURI      string         `json:"server_uri"`
+	ChannelCreds   []channelCreds `json:"channel_creds"`
+	ServerFeatures []string       `json:"server_features"`
 }
 
 // NewConfig returns a new instance of Config initialized by reading the
@@ -108,9 +109,9 @@ type xdsServer struct {
 //          "config": <JSON object containing config for the type>
 //        }
 //      ],
+//      "server_features": [ ... ],
 //    },
 //    "node": <JSON form of Node proto>,
-//    "server_features": [ ... ],
 //    "certificate_providers" : {
 //      "default": {
 //        "plugin_name": "default-plugin-name",
@@ -188,12 +189,7 @@ func NewConfig() (*Config, error) {
 					break
 				}
 			}
-		case "server_features":
-			var features []string
-			if err := json.Unmarshal(v, &features); err != nil {
-				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
-			}
-			for _, f := range features {
+			for _, f := range xs.ServerFeatures {
 				switch f {
 				case serverFeaturesV3:
 					serverSupportsV3 = true

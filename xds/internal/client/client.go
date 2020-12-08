@@ -221,6 +221,10 @@ type SecurityConfig struct {
 	// this list, and the handshake succeeds only if a match is found. Used only
 	// on the client-side.
 	AcceptedSANs []string
+	// RequireClientCert indicates if the server handshake process expects the
+	// client to present a certificate. Set to true when performing mTLS. Used
+	// only on the server-side.
+	RequireClientCert bool
 }
 
 // ClusterUpdate contains information from a received CDS response, which is of

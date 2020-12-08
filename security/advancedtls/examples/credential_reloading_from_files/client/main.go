@@ -23,7 +23,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"time"
 
@@ -38,17 +37,27 @@ var address = "localhost:50051"
 
 const (
 	// Default timeout for normal connections.
-	defaultConnTimeout = 10 * time.Second
+	defaultTimeout = 2 * time.Second
 	// Intervals that set to monitor the credential updates.
-	credRefreshingInterval = 1 * time.Minute
+	credRefreshingInterval = 500 * time.Millisecond
 )
 
 func main() {
+	tmpKeyFile := flag.String("key", "", "temporary key file path")
+	tmpCertFile := flag.String("cert", "", "temporary cert file path")
 	flag.Parse()
 
+	if tmpKeyFile == nil || *tmpKeyFile == "" {
+		log.Fatalf("tmpKeyFile is nil or empty.")
+	}
+	if tmpCertFile == nil || *tmpCertFile == "" {
+		log.Fatalf("tmpCertFile is nil or empty.")
+	}
+
+	// Initialize credential struct using reloading API.
 	identityOptions := pemfile.Options{
-		CertFile:        testdata.Path("client_cert_1.pem"),
-		KeyFile:         testdata.Path("client_key_1.pem"),
+		CertFile:        *tmpCertFile,
+		KeyFile:         *tmpKeyFile,
 		RefreshDuration: credRefreshingInterval,
 	}
 	identityProvider, err := pemfile.NewProvider(identityOptions)
@@ -63,7 +72,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("pemfile.NewProvider(%v) failed: %v", rootOptions, err)
 	}
-
 	options := &advancedtls.ClientOptions{
 		IdentityOptions: advancedtls.IdentityCertificateOptions{
 			IdentityProvider: identityProvider,
@@ -81,18 +89,23 @@ func main() {
 		log.Fatalf("advancedtls.NewClientCreds(%v) failed: %v", options, err)
 	}
 
-	// At initialization, the connection should be good.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultConnTimeout)
-	defer cancel()
-	conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(clientTLSCreds))
+	// Make a connection using the credentials.
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(clientTLSCreds))
 	if err != nil {
 		log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
 	}
-	greetClient := pb.NewGreeterClient(conn)
-	reply, err := greetClient.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
-	if err != nil {
-		log.Fatalf("greetClient.SayHello failed: %v", err)
+	client := pb.NewGreeterClient(conn)
+
+	// Send the requests every 0.5s. The credential is expected to be changed in
+	// the bash script. We don't cancel the context nor call conn.Close() here,
+	// since the bash script is expected to close the client goroutine.
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+		_, err = client.SayHello(ctx, &pb.HelloRequest{Name: "gRPC"}, grpc.WaitForReady(true))
+		if err != nil {
+			log.Fatalf("client.SayHello failed: %v", err)
+		}
+		cancel()
+		time.Sleep(500 * time.Millisecond)
 	}
-	defer conn.Close()
-	fmt.Printf("Getting message from server: %s...\n", reply.Message)
 }
