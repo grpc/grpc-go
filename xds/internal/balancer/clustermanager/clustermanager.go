@@ -88,7 +88,7 @@ func (b *bal) updateChildren(s balancer.ClientConnState, newConfig *lbConfig) {
 	// - forward the address/balancer config update.
 	for name, newT := range newConfig.Children {
 		if _, ok := b.children[name]; !ok {
-			// If this is a new sub-balancer, add weights to the picker map.
+			// If this is a new sub-balancer, add it to the picker map.
 			b.stateAggregator.add(name)
 			// Then add to the balancer group.
 			b.bg.Add(name, balancer.Get(newT.ChildPolicy.Name))

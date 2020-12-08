@@ -41,12 +41,10 @@ func routeToMatcher(r *xdsclient.Route) (*compositeMatcher, error) {
 		pathMatcher = newPathRegexMatcher(re)
 	case r.Path != nil && *r.Path != "":
 		pathMatcher = newPathExactMatcher(*r.Path, r.CaseInsensitive)
+	case r.Prefix != nil:
+		pathMatcher = newPathPrefixMatcher(*r.Prefix, r.CaseInsensitive)
 	default:
-		prefix := ""
-		if r.Prefix != nil {
-			prefix = *r.Prefix
-		}
-		pathMatcher = newPathPrefixMatcher(prefix, r.CaseInsensitive)
+		return nil, fmt.Errorf("illegal route: missing path_matcher")
 	}
 
 	var headerMatchers []headerMatcherInterface
@@ -67,12 +65,10 @@ func routeToMatcher(r *xdsclient.Route) (*compositeMatcher, error) {
 			matcherT = newHeaderSuffixMatcher(h.Name, *h.SuffixMatch)
 		case h.RangeMatch != nil:
 			matcherT = newHeaderRangeMatcher(h.Name, h.RangeMatch.Start, h.RangeMatch.End)
+		case h.PresentMatch != nil:
+			matcherT = newHeaderPresentMatcher(h.Name, *h.PresentMatch)
 		default:
-			presentMatch := false
-			if h.PresentMatch != nil {
-				presentMatch = *h.PresentMatch
-			}
-			matcherT = newHeaderPresentMatcher(h.Name, presentMatch)
+			return nil, fmt.Errorf("illegal route: missing header_match_specifier")
 		}
 		if h.InvertMatch != nil && *h.InvertMatch {
 			matcherT = newInvertMatcher(matcherT)
