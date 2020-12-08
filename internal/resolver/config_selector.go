@@ -29,8 +29,9 @@ import (
 
 // ConfigSelector controls what configuration to use for every RPC.
 type ConfigSelector interface {
-	// Selects the configuration for the RPC, or terminates it using the error
-	// (converted to a status error if necessary).
+	// Selects the configuration for the RPC, or terminates it using the error.
+	// This error will be converted by the gRPC library to a status error with
+	// code UNKNOWN if it is not returned as a status error.
 	SelectConfig(RPCInfo) (*RPCConfig, error)
 }
 
