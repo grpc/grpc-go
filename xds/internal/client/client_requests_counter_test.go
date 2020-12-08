@@ -19,7 +19,6 @@
 package client
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -89,9 +88,6 @@ func testCounter(t *testing.T, test counterTest) {
 	loadedError := lastError.Load()
 	if test.expectedErrors > 0 && loadedError == nil {
 		t.Error("no error when error expected")
-	}
-	if loadedError != nil {
-		fmt.Println(loadedError.(error))
 	}
 	if test.expectedErrors == 0 && loadedError != nil {
 		t.Errorf("error starting request: %v", loadedError.(error))

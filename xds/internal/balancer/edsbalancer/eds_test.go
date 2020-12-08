@@ -345,6 +345,8 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := edsLB.waitForCounterUpdate(ctx, testServiceName); err != nil {
+		// Counter is updated even though the service name didn't change. The
+		// eds_impl will compare the service names, and skip if it didn't change.
 		t.Fatal(err)
 	}
 }
@@ -586,6 +588,33 @@ func (s) TestClientWatchEDS(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := verifyExpectedRequests(ctx, xdsC, "", "foobar-2"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestCounterUpdate verifies that the counter update is triggered with the
+// service name from an update's config.
+func (s) TestCounterUpdate(t *testing.T) {
+	edsLBCh := testutils.NewChannel()
+	_, cleanup := setup(edsLBCh)
+	defer cleanup()
+
+	builder := balancer.Get(edsName)
+	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
+	if edsB == nil {
+		t.Fatalf("builder.Build(%s) failed and returned nil", edsName)
+	}
+	defer edsB.Close()
+
+	// Update should trigger counter update with provided service name.
+	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		BalancerConfig: &EDSConfig{EDSServiceName: "foobar-1"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := edsB.(*edsBalancer).edsImpl.(*fakeEDSBalancer).waitForCounterUpdate(ctx, "foobar-1"); err != nil {
 		t.Fatal(err)
 	}
 }
