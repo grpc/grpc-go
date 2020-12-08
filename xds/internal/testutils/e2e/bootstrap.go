@@ -80,7 +80,7 @@ func SetupBootstrapFile(opts BootstrapOptions) (func(), error) {
 	case TransportV2:
 		// TODO: Add any v2 specific fields.
 	case TransportV3:
-		cfg.ServerFeatures = append(cfg.ServerFeatures, "xds_v3")
+		cfg.XdsServers[0].ServerFeatures = append(cfg.XdsServers[0].ServerFeatures, "xds_v3")
 	default:
 		return nil, fmt.Errorf("unsupported xDS transport protocol version: %v", opts.Version)
 	}
@@ -103,14 +103,14 @@ func SetupBootstrapFile(opts BootstrapOptions) (func(), error) {
 }
 
 type bootstrapConfig struct {
-	XdsServers     []server `json:"xds_servers,omitempty"`
-	Node           node     `json:"node,omitempty"`
-	ServerFeatures []string `json:"server_features,omitempty"`
+	XdsServers []server `json:"xds_servers,omitempty"`
+	Node       node     `json:"node,omitempty"`
 }
 
 type server struct {
-	ServerURI    string  `json:"server_uri,omitempty"`
-	ChannelCreds []creds `json:"channel_creds,omitempty"`
+	ServerURI      string   `json:"server_uri,omitempty"`
+	ChannelCreds   []creds  `json:"channel_creds,omitempty"`
+	ServerFeatures []string `json:"server_features,omitempty"`
 }
 
 type creds struct {
