@@ -32,6 +32,7 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
+	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/xds/internal/version"
@@ -777,6 +778,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 												TypeUrl: version.V3DownstreamTLSContextURL,
 												Value: func() []byte {
 													tls := &v3tlspb.DownstreamTlsContext{
+														RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
 														CommonTlsContext: &v3tlspb.CommonTlsContext{
 															ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
 																ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
@@ -803,8 +805,9 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
 					SecurityCfg: &SecurityConfig{
-						RootInstanceName: "rootPluginInstance",
-						RootCertName:     "rootCertName",
+						RootInstanceName:  "rootPluginInstance",
+						RootCertName:      "rootCertName",
+						RequireClientCert: true,
 					},
 				},
 			},
@@ -840,6 +843,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 												TypeUrl: version.V3DownstreamTLSContextURL,
 												Value: func() []byte {
 													tls := &v3tlspb.DownstreamTlsContext{
+														RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
 														CommonTlsContext: &v3tlspb.CommonTlsContext{
 															TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
 																InstanceName:    "identityPluginInstance",
@@ -874,6 +878,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						RootCertName:         "rootCertName",
 						IdentityInstanceName: "identityPluginInstance",
 						IdentityCertName:     "identityCertName",
+						RequireClientCert:    true,
 					},
 				},
 			},
