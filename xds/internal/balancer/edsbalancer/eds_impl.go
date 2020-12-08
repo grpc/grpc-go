@@ -35,8 +35,10 @@ import (
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
+	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/load"
+	"google.golang.org/grpc/xds/internal/env"
 )
 
 // TODO: make this a environment variable?
@@ -92,10 +94,11 @@ type edsBalancerImpl struct {
 	subConnMu         sync.Mutex
 	subConnToPriority map[balancer.SubConn]priorityType
 
-	pickerMu   sync.Mutex
-	dropConfig []xdsclient.OverloadDropConfig
-	drops      []*dropper
-	innerState balancer.State // The state of the picker without drop support.
+	pickerMu               sync.Mutex
+	dropConfig             []xdsclient.OverloadDropConfig
+	drops                  []*dropper
+	innerState             balancer.State // The state of the picker without drop support.
+	serviceRequestsCounter *client.ServiceRequestsCounter
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
@@ -170,7 +173,7 @@ func (edsImpl *edsBalancerImpl) updateDrops(dropConfig []xdsclient.OverloadDropC
 		// Update picker with old inner picker, new drops.
 		edsImpl.cc.UpdateState(balancer.State{
 			ConnectivityState: edsImpl.innerState.ConnectivityState,
-			Picker:            newDropPicker(edsImpl.innerState.Picker, newDrops, edsImpl.loadReporter)},
+			Picker:            newDropPicker(edsImpl.innerState.Picker, newDrops, edsImpl.loadReporter, edsImpl.serviceRequestsCounter)},
 		)
 	}
 	edsImpl.pickerMu.Unlock()
@@ -389,6 +392,16 @@ func (edsImpl *edsBalancerImpl) handleSubConnStateChange(sc balancer.SubConn, s 
 	}
 }
 
+// updateConfig handles changes to the circuit breaking configuration.
+func (edsImpl *edsBalancerImpl) updateServiceRequestsCounter(serviceName string) {
+	if !env.CircuitBreakingSupport {
+		return
+	}
+	if edsImpl.serviceRequestsCounter == nil || edsImpl.serviceRequestsCounter.ServiceName != serviceName {
+		edsImpl.serviceRequestsCounter = client.GetServiceRequestsCounter(serviceName)
+	}
+}
+
 // updateState first handles priority, and then wraps picker in a drop picker
 // before forwarding the update.
 func (edsImpl *edsBalancerImpl) updateState(priority priorityType, s balancer.State) {
@@ -403,7 +416,7 @@ func (edsImpl *edsBalancerImpl) updateState(priority priorityType, s balancer.St
 		defer edsImpl.pickerMu.Unlock()
 		edsImpl.innerState = s
 		// Don't reset drops when it's a state change.
-		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: newDropPicker(s.Picker, edsImpl.drops, edsImpl.loadReporter)})
+		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: newDropPicker(s.Picker, edsImpl.drops, edsImpl.loadReporter, edsImpl.serviceRequestsCounter)})
 	}
 }
 
@@ -455,13 +468,15 @@ type dropPicker struct {
 	drops     []*dropper
 	p         balancer.Picker
 	loadStore load.PerClusterReporter
+	counter   *client.ServiceRequestsCounter
 }
 
-func newDropPicker(p balancer.Picker, drops []*dropper, loadStore load.PerClusterReporter) *dropPicker {
+func newDropPicker(p balancer.Picker, drops []*dropper, loadStore load.PerClusterReporter, counter *client.ServiceRequestsCounter) *dropPicker {
 	return &dropPicker{
 		drops:     drops,
 		p:         p,
 		loadStore: loadStore,
+		counter:   counter,
 	}
 }
 
@@ -482,6 +497,24 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			d.loadStore.CallDropped(category)
 		}
 		return balancer.PickResult{}, status.Errorf(codes.Unavailable, "RPC is dropped")
+	}
+	if d.counter != nil {
+		if err := d.counter.StartRequest(); err != nil {
+			return balancer.PickResult{}, status.Errorf(codes.Unavailable, err.Error())
+		}
+		pr, err := d.p.Pick(info)
+		if err != nil {
+			d.counter.EndRequest()
+			return pr, err
+		}
+		oldDone := pr.Done
+		pr.Done = func(doneInfo balancer.DoneInfo) {
+			d.counter.EndRequest()
+			if oldDone != nil {
+				oldDone(doneInfo)
+			}
+		}
+		return pr, err
 	}
 	// TODO: (eds) don't drop unless the inner picker is READY. Similar to
 	// https://github.com/grpc/grpc-go/issues/2622.

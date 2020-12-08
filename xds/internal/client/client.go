@@ -237,6 +237,8 @@ type ClusterUpdate struct {
 	EnableLRS bool
 	// SecurityCfg contains security configuration sent by the control plane.
 	SecurityCfg *SecurityConfig
+	// MaxRequests for circuit breaking, if any (otherwise nil).
+	MaxRequests *uint32
 }
 
 // OverloadDropConfig contains the config to drop overloads.

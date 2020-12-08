@@ -32,8 +32,10 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
+	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/load"
+	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
 
@@ -550,6 +552,67 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	}
 }
 
+func (s) TestEDS_CircuitBreaking(t *testing.T) {
+	origCircuitBreakingSupport := env.CircuitBreakingSupport
+	env.CircuitBreakingSupport = true
+	defer func() { env.CircuitBreakingSupport = origCircuitBreakingSupport }()
+
+	cc := testutils.NewTestClientConn(t)
+	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+	edsb.updateServiceRequestsCounter("test")
+	var maxRequests uint32 = 50
+	client.SetMaxRequests("test", &maxRequests)
+
+	// One locality with one backend.
+	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
+	edsb.handleEDSResponse(parseEDSRespProtoForTesting(clab1.Build()))
+	sc1 := <-cc.NewSubConnCh
+	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
+
+	// Picks with drops.
+	dones := []func(){}
+	p := <-cc.NewPickerCh
+	for i := 0; i < 100; i++ {
+		pr, err := p.Pick(balancer.PickInfo{})
+		if i < 50 && err != nil {
+			t.Errorf("The first 50%% picks should be non-drops, got error %v", err)
+		} else if i > 50 && err == nil {
+			t.Errorf("The second 50%% picks should be drops, got error <nil>")
+		}
+		dones = append(dones, func() {
+			if pr.Done != nil {
+				pr.Done(balancer.DoneInfo{})
+			}
+		})
+	}
+
+	for _, done := range dones {
+		done()
+	}
+	dones = []func(){}
+
+	// Pick without drops.
+	for i := 0; i < 50; i++ {
+		pr, err := p.Pick(balancer.PickInfo{})
+		if err != nil {
+			t.Errorf("The third 50%% picks should be non-drops, got error %v", err)
+		}
+		dones = append(dones, func() {
+			if pr.Done != nil {
+				pr.Done(balancer.DoneInfo{})
+			}
+		})
+	}
+
+	// Without this, future tests with the same service name will fail.
+	for _, done := range dones {
+		done()
+	}
+}
+
 func init() {
 	balancer.Register(&testInlineUpdateBalancerBuilder{})
 }
@@ -656,7 +719,7 @@ func (s) TestDropPicker(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			p := newDropPicker(constPicker, tt.drops, nil)
+			p := newDropPicker(constPicker, tt.drops, nil, nil)
 
 			// scCount is the number of sc's returned by pick. The opposite of
 			// drop-count.

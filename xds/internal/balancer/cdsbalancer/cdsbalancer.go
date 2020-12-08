@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
+	"google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -327,6 +328,8 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 		b.handleErrorFromUpdate(err, false)
 		return
 	}
+
+	client.SetMaxRequests(update.cds.ServiceName, update.cds.MaxRequests)
 
 	// The first good update from the watch API leads to the instantiation of an
 	// edsBalancer. Further updates/errors are propagated to the existing

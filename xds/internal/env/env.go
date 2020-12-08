@@ -26,8 +26,9 @@ import (
 )
 
 const (
-	bootstrapFileNameEnv = "GRPC_XDS_BOOTSTRAP"
-	xdsV3SupportEnv      = "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT"
+	bootstrapFileNameEnv      = "GRPC_XDS_BOOTSTRAP"
+	xdsV3SupportEnv           = "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT"
+	circuitBreakingSupportEnv = "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING"
 )
 
 var (
@@ -39,4 +40,8 @@ var (
 	// done by setting the environment variable
 	// "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT" to "true".
 	V3Support = strings.EqualFold(os.Getenv(xdsV3SupportEnv), "true")
+	// CircuitBreakingSupport indicates whether circuit breaking support is
+	// enabled, which can be done by setting the environment variable
+	// "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING" to "true".
+	CircuitBreakingSupport = strings.EqualFold(os.Getenv(circuitBreakingSupportEnv), "true")
 )

@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
+	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
@@ -572,6 +573,42 @@ func (s) TestUpdateSubConnState(t *testing.T) {
 	if err := edsB.waitForSubConnUpdate(ctx, subConnWithState{sc: sc, state: state}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// TestCircuitBreaking verifies that the CDS balancer correctly updates a
+// service's counter on watch updates.
+func (s) TestCircuitBreaking(t *testing.T) {
+	// This creates a CDS balancer, pushes a ClientConnState update with a fake
+	// xdsClient, and makes sure that the CDS balancer registers a watch on the
+	// provided xdsClient.
+	xdsC, cdsB, edsB, _, cancel := setupWithXDSCreds(t)
+	defer func() {
+		cancel()
+		cdsB.Close()
+	}()
+
+	// Here we invoke the watch callback registered on the fake xdsClient. This
+	// will trigger the watch handler on the CDS balancer, which will update
+	// the service's counter with the new max requests.
+	var maxRequests uint32 = 1
+	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName, MaxRequests: &maxRequests}
+	wantCCS := edsCCS(serviceName, false)
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
+		t.Fatal(err)
+	}
+
+	// Since the counter's max requests was set to 1, the first request should
+	// succeed and the second should fail.
+	counter := client.GetServiceRequestsCounter(serviceName)
+	if err := counter.StartRequest(); err != nil {
+		t.Fatal(err)
+	}
+	if err := counter.StartRequest(); err == nil {
+		t.Fatal("unexpected success on start request over max")
+	}
+	counter.EndRequest()
 }
 
 // TestClose verifies the Close() method in the the CDS balancer.

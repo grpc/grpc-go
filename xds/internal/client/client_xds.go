@@ -38,6 +38,7 @@ import (
 
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -395,6 +396,7 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
 		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
 		SecurityCfg: sc,
+		MaxRequests: circuitBreakersFromCluster(cluster),
 	}, nil
 }
 
@@ -470,6 +472,27 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext) (*Secu
 		return nil, fmt.Errorf("xds: validation context contains unexpected type: %T", t)
 	}
 	return sc, nil
+}
+
+// circuitBreakersFromCluster extracts the circuit breakers configuration from
+// the received cluster resource. Returns nil if no CircuitBreakers or no
+// Thresholds in CircuitBreakers.
+func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) *uint32 {
+	if !env.CircuitBreakingSupport {
+		return nil
+	}
+	for _, threshold := range cluster.GetCircuitBreakers().GetThresholds() {
+		if threshold.GetPriority() != v3corepb.RoutingPriority_DEFAULT {
+			continue
+		}
+		maxRequestsPb := threshold.GetMaxRequests()
+		if maxRequestsPb == nil {
+			return nil
+		}
+		maxRequests := maxRequestsPb.GetValue()
+		return &maxRequests
+	}
+	return nil
 }
 
 // UnmarshalEndpoints processes resources received in an EDS response,
