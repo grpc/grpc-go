@@ -57,16 +57,23 @@ type xdsClusterManagerConfig struct {
 	Children map[string]xdsChildConfig `json:"children"`
 }
 
-// serviceConfigJSON produces a service config in JSON format representing all
-// the clusters currently referenced by RPCs and the latest config selector.
-func (r *xdsResolver) serviceConfigJSON() (string, error) {
-	// Generate children.
-	children := make(map[string]xdsChildConfig)
+// pruneActiveClusters deletes entries in r.activeClusters with zero
+// references.
+func (r *xdsResolver) pruneActiveClusters() {
 	for cluster, ci := range r.activeClusters {
 		if atomic.LoadInt32(&ci.refCount) == 0 {
 			delete(r.activeClusters, cluster)
-			continue
 		}
+	}
+}
+
+// serviceConfigJSON produces a service config in JSON format representing all
+// the clusters referenced in activeClusters.  This includes clusters with zero
+// references, so they must be pruned first.
+func serviceConfigJSON(activeClusters map[string]*clusterInfo) (string, error) {
+	// Generate children.
+	children := make(map[string]xdsChildConfig)
+	for cluster := range activeClusters {
 		children[cluster] = xdsChildConfig{
 			ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: cluster}),
 		}
@@ -161,7 +168,9 @@ func (cs *configSelector) decRefs() {
 	}
 }
 
-func (r *xdsResolver) serviceUpdateToCS(su serviceUpdate) (*configSelector, error) {
+// newConfigSelector creates the config selector for su; may add entries to
+// r.activeClusters for previously-unseen clusters.
+func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, error) {
 	cs := &configSelector{
 		r:        r,
 		routes:   make([]route, len(su.Routes)),
@@ -181,6 +190,8 @@ func (r *xdsResolver) serviceUpdateToCS(su serviceUpdate) (*configSelector, erro
 			return nil, err
 		}
 
+		// Initialize cs.clusters map, creating entries in r.activeClusters as
+		// necessary.
 		for cluster := range rt.Action {
 			ci := r.activeClusters[cluster]
 			if ci == nil {
