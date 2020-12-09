@@ -140,39 +140,53 @@ func (r *xdsResolver) run() {
 					r.cc.UpdateState(resolver.State{
 						ServiceConfig: r.cc.ParseServiceConfig("{}"),
 					})
+					// Dereference the active config selector, if one exists.
 					r.curConfigSelector.decRefs()
 					r.curConfigSelector = nil
 					continue
 				}
 				// Send error to ClientConn, and balancers, if error is not
-				// resource not found.
+				// resource not found.  No need to update resolver state if we
+				// can keep using the old config.
 				r.cc.ReportError(update.err)
 				continue
 			}
 			var cs *configSelector
 			if !update.emptyUpdate {
+				// Create the config selector for this update.
 				var err error
-				if cs, err = r.serviceUpdateToCS(update.su); err != nil {
+				if cs, err = r.newConfigSelector(update.su); err != nil {
 					r.logger.Warningf("%v", err)
 					r.cc.ReportError(err)
 					continue
 				}
 			} else {
+				// Empty update; use the existing config selector.
 				cs = r.curConfigSelector
 			}
+			// Account for this config selector's clusters.
 			cs.incRefs()
-			sc, err := r.serviceConfigJSON()
+			// Delete entries from r.activeClusters with zero references;
+			// otherwise serviceConfigJSON will generate a config including
+			// them.
+			r.pruneActiveClusters()
+			// Produce the service config.
+			sc, err := serviceConfigJSON(r.activeClusters)
 			if err != nil {
-				r.logger.Warningf("%v", err)
+				// JSON marshal error; should never happen.
+				r.logger.Errorf("%v", err)
 				r.cc.ReportError(err)
 				cs.decRefs()
 				continue
 			}
 			r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.client, sc)
+			// Send the update to the ClientConn.
 			state := iresolver.SetConfigSelector(resolver.State{
 				ServiceConfig: r.cc.ParseServiceConfig(sc),
 			}, cs)
 			r.cc.UpdateState(state)
+			// Decrement references to the old config selector and assign the
+			// new one as the current one.
 			r.curConfigSelector.decRefs()
 			r.curConfigSelector = cs
 		}
