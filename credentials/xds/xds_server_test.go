@@ -255,9 +255,13 @@ func (s) TestServerCredsHandshakeFailure(t *testing.T) {
 	defer rawConn.Close()
 	tlsConn := tls.Client(rawConn, makeClientTLSConfig(t, true))
 	tlsConn.SetDeadline(time.Now().Add(defaultTestTimeout))
-	if err := tlsConn.Handshake(); err != nil {
-		t.Fatal(err)
-	}
+	// There seems to be a discrepancy in the return value of this function
+	// between Go versions before and after 1.13. It returns an error in earlier
+	// versions while it returns nil in more recent versions. This could be
+	// because of the switch to TLS1.3 in recent version.
+	// TODO(easwars): Check the return value and call t.Fatalf() for non-nil
+	// errors once we drop support for versions older than Go1.13.
+	tlsConn.Handshake()
 
 	// Read handshake result from the testServer which will return an error if
 	// the handshake succeeded.
@@ -444,9 +448,13 @@ func (s) TestServerCredsProviderSwitch(t *testing.T) {
 		defer rawConn.Close()
 		tlsConn := tls.Client(rawConn, makeClientTLSConfig(t, true))
 		tlsConn.SetDeadline(time.Now().Add(defaultTestTimeout))
-		if err := tlsConn.Handshake(); err != nil {
-			t.Fatal(err)
-		}
+		// There seems to be a discrepancy in the return value of this function
+		// between Go versions before and after 1.13. It returns an error in earlier
+		// versions while it returns nil in more recent versions. This could be
+		// because of the switch to TLS1.3 in recent version.
+		// TODO(easwars): Check the return value and call t.Fatalf() for non-nil
+		// errors once we drop support for versions older than Go1.13.
+		tlsConn.Handshake()
 
 		// Read the handshake result from the testServer which contains the
 		// TLS connection state on the server-side and compare it with the
