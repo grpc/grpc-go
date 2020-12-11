@@ -255,8 +255,9 @@ func (s) TestServerCredsHandshakeFailure(t *testing.T) {
 	defer rawConn.Close()
 	tlsConn := tls.Client(rawConn, makeClientTLSConfig(t, true))
 	tlsConn.SetDeadline(time.Now().Add(defaultTestTimeout))
-	// See comment in makeClientTLSConfig() on why we ignore this error.
-	tlsConn.Handshake()
+	if err := tlsConn.Handshake(); err != nil {
+		t.Fatal(err)
+	}
 
 	// Read handshake result from the testServer which will return an error if
 	// the handshake succeeded.
@@ -346,8 +347,9 @@ func (s) TestServerCredsHandshakeSuccess(t *testing.T) {
 			defer rawConn.Close()
 			tlsConn := tls.Client(rawConn, makeClientTLSConfig(t, test.requireClientCert))
 			tlsConn.SetDeadline(time.Now().Add(defaultTestTimeout))
-			// See comment in makeClientTLSConfig() on why we ignore this error.
-			tlsConn.Handshake()
+			if err := tlsConn.Handshake(); err != nil {
+				t.Fatal(err)
+			}
 
 			// Read the handshake result from the testServer which contains the
 			// TLS connection state on the server-side and compare it with the
@@ -442,8 +444,9 @@ func (s) TestServerCredsProviderSwitch(t *testing.T) {
 		defer rawConn.Close()
 		tlsConn := tls.Client(rawConn, makeClientTLSConfig(t, true))
 		tlsConn.SetDeadline(time.Now().Add(defaultTestTimeout))
-		// See comment in makeClientTLSConfig() on why we ignore this error.
-		tlsConn.Handshake()
+		if err := tlsConn.Handshake(); err != nil {
+			t.Fatal(err)
+		}
 
 		// Read the handshake result from the testServer which contains the
 		// TLS connection state on the server-side and compare it with the
