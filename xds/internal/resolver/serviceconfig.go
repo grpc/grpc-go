@@ -71,7 +71,7 @@ func (r *xdsResolver) pruneActiveClusters() {
 // the clusters referenced in activeClusters.  This includes clusters with zero
 // references, so they must be pruned first.
 func serviceConfigJSON(activeClusters map[string]*clusterInfo) (string, error) {
-	// Generate children.
+	// Generate children (all entries in activeClusters).
 	children := make(map[string]xdsChildConfig)
 	for cluster := range activeClusters {
 		children[cluster] = xdsChildConfig{
@@ -111,6 +111,7 @@ var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route 
 
 func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
 	var action wrr.WRR
+	// Loop through routes in order and select first match.
 	for _, rt := range cs.routes {
 		if rt.m.match(rpcInfo) {
 			action = rt.action
@@ -124,11 +125,16 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", cluster, cluster)
 	}
+	// Add a ref to the selected cluster, as this RPC needs this cluster until
+	// it is committed.
 	ref := &cs.clusters[cluster].refCount
 	atomic.AddInt32(ref, 1)
 	return &iresolver.RPCConfig{
+		// Communicate to the LB policy the chosen cluster.
 		Context: clustermanager.SetPickedCluster(rpcInfo.Context, cluster),
 		OnCommitted: func() {
+			// When the RPC is committed, the cluster is no longer required.
+			// Decrease its ref.
 			if v := atomic.AddInt32(ref, -1); v == 0 {
 				// This entry will be removed from activeClusters when
 				// producing the service config for the empty update.
@@ -141,17 +147,26 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}, nil
 }
 
+// incRefs increments refs of all clusters referenced by this config selector.
 func (cs *configSelector) incRefs() {
+	// Loops over cs.clusters, but these are pointers to entries in
+	// activeClusters.
 	for _, ci := range cs.clusters {
 		atomic.AddInt32(&ci.refCount, 1)
 	}
 }
 
+// decRefs decrements refs of all clusters referenced by this config selector.
 func (cs *configSelector) decRefs() {
+	// The resolver's old configSelector may be nil.  Handle that here.
 	if cs == nil {
 		return
 	}
+	// If any refs drop to zero, we'll need a service config update to delete
+	// the cluster.
 	needUpdate := false
+	// Loops over cs.clusters, but these are pointers to entries in
+	// activeClusters.
 	for _, ci := range cs.clusters {
 		if v := atomic.AddInt32(&ci.refCount, -1); v == 0 {
 			needUpdate = true
@@ -179,8 +194,18 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 
 	for i, rt := range su.Routes {
 		action := wrr.NewRandom()
-		for c, w := range rt.Action {
-			action.Add(c, int64(w))
+		for cluster, weight := range rt.Action {
+			action.Add(cluster, int64(weight))
+
+			// Initialize entries in cs.clusters map, creating entries in
+			// r.activeClusters as necessary.  Set to zero as they will be
+			// incremented by incRefs.
+			ci := r.activeClusters[cluster]
+			if ci == nil {
+				ci = &clusterInfo{refCount: 0}
+				r.activeClusters[cluster] = ci
+			}
+			cs.clusters[cluster] = ci
 		}
 		cs.routes[i].action = action
 
@@ -188,17 +213,6 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 		cs.routes[i].m, err = routeToMatcher(rt)
 		if err != nil {
 			return nil, err
-		}
-
-		// Initialize cs.clusters map, creating entries in r.activeClusters as
-		// necessary.
-		for cluster := range rt.Action {
-			ci := r.activeClusters[cluster]
-			if ci == nil {
-				ci = &clusterInfo{refCount: 0}
-				r.activeClusters[cluster] = ci
-			}
-			cs.clusters[cluster] = ci
 		}
 	}
 	return cs, nil
