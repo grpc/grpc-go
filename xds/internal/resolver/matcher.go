@@ -33,13 +33,13 @@ import (
 func routeToMatcher(r *xdsclient.Route) (*compositeMatcher, error) {
 	var pathMatcher pathMatcherInterface
 	switch {
-	case r.Regex != nil && *r.Regex != "":
+	case r.Regex != nil:
 		re, err := regexp.Compile(*r.Regex)
 		if err != nil {
 			return nil, fmt.Errorf("failed to compile regex %q", *r.Regex)
 		}
 		pathMatcher = newPathRegexMatcher(re)
-	case r.Path != nil && *r.Path != "":
+	case r.Path != nil:
 		pathMatcher = newPathExactMatcher(*r.Path, r.CaseInsensitive)
 	case r.Prefix != nil:
 		pathMatcher = newPathPrefixMatcher(*r.Prefix, r.CaseInsensitive)

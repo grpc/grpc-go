@@ -156,7 +156,7 @@ func (r *xdsResolver) run() {
 				// Create the config selector for this update.
 				var err error
 				if cs, err = r.newConfigSelector(update.su); err != nil {
-					r.logger.Warningf("%v", err)
+					r.logger.Warningf("Error parsing update on resource %v from xds-client %p: %v", r.target.Endpoint, r.client, err)
 					r.cc.ReportError(err)
 					continue
 				}
