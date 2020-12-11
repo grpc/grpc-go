@@ -172,27 +172,13 @@ func (hi *HandshakeInfo) UseFallbackCreds() bool {
 	return hi.identityProvider == nil && hi.rootProvider == nil
 }
 
-func (hi *HandshakeInfo) validate(isClient bool) error {
-	hi.mu.Lock()
-	defer hi.mu.Unlock()
-
-	// On the client side, rootProvider is mandatory. IdentityProvider is
-	// optional based on whether the client is doing TLS or mTLS.
-	if isClient && hi.rootProvider == nil {
-		return errors.New("xds: CertificateProvider to fetch trusted roots is missing, cannot perform TLS handshake. Please check configuration on the management server")
-	}
-
-	// On the server side, identityProvider is mandatory. RootProvider is
-	// optional based on whether the server is doing TLS or mTLS.
-	if !isClient && hi.identityProvider == nil {
-		return errors.New("xds: CertificateProvider to fetch identity certificate is missing, cannot perform TLS handshake. Please check configuration on the management server")
-	}
-
-	return nil
-}
-
 func (hi *HandshakeInfo) makeClientSideTLSConfig(ctx context.Context) (*tls.Config, error) {
 	hi.mu.Lock()
+	// On the client side, rootProvider is mandatory. IdentityProvider is
+	// optional based on whether the client is doing TLS or mTLS.
+	if hi.rootProvider == nil {
+		return nil, errors.New("xds: CertificateProvider to fetch trusted roots is missing, cannot perform TLS handshake. Please check configuration on the management server")
+	}
 	// Since the call to KeyMaterial() can block, we read the providers under
 	// the lock but call the actual function after releasing the lock.
 	rootProv, idProv := hi.rootProvider, hi.identityProvider
@@ -205,7 +191,6 @@ func (hi *HandshakeInfo) makeClientSideTLSConfig(ctx context.Context) (*tls.Conf
 	// latter and perform the normal cert validation ourselves.
 	cfg := &tls.Config{InsecureSkipVerify: true}
 
-	// rootProvider is mandatory on the client side.
 	km, err := rootProv.KeyMaterial(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("xds: fetching trusted roots from CertificateProvider failed: %v", err)
@@ -224,6 +209,11 @@ func (hi *HandshakeInfo) makeClientSideTLSConfig(ctx context.Context) (*tls.Conf
 
 func (hi *HandshakeInfo) makeServerSideTLSConfig(ctx context.Context) (*tls.Config, error) {
 	hi.mu.Lock()
+	// On the server side, identityProvider is mandatory. RootProvider is
+	// optional based on whether the server is doing TLS or mTLS.
+	if hi.identityProvider == nil {
+		return nil, errors.New("xds: CertificateProvider to fetch identity certificate is missing, cannot perform TLS handshake. Please check configuration on the management server")
+	}
 	// Since the call to KeyMaterial() can block, we read the providers under
 	// the lock but call the actual function after releasing the lock.
 	rootProv, idProv := hi.rootProvider, hi.identityProvider
@@ -328,9 +318,6 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 	if hi.UseFallbackCreds() {
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
-	if err := hi.validate(true); err != nil {
-		return nil, nil, err
-	}
 
 	// We build the tls.Config with the following values
 	// 1. Root certificate as returned by the root provider.
@@ -430,9 +417,6 @@ func (c *credsImpl) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.Aut
 	hi := hiConn.XDSHandshakeInfo()
 	if hi.UseFallbackCreds() {
 		return c.fallback.ServerHandshake(rawConn)
-	}
-	if err := hi.validate(false); err != nil {
-		return nil, nil, err
 	}
 
 	// An xds-enabled gRPC server is expected to wrap the underlying raw
