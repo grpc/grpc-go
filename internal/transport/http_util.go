@@ -603,11 +603,6 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderList
 // parseDialTarget returns the network and address to pass to dialer.
 func parseDialTarget(target string) (string, string) {
 	net := "tcp"
-	if strings.HasPrefix(target, "unix-abstract:") {
-		// handle unix-abstract:addr which will fail with url.Parse
-		// and need prepend "\x00" to the parsed address
-		return "unix", "\x00" + strings.SplitN(target, ":", 2)[1]
-	}
 	m1 := strings.Index(target, ":")
 	m2 := strings.Index(target, ":/")
 	// handle unix:addr which will fail with url.Parse
