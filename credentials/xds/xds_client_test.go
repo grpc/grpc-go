@@ -432,7 +432,7 @@ func (s) TestClientCredsHandshakeTimeout(t *testing.T) {
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
 	ctx := newTestContextWithHandshakeInfo(sCtx, makeRootProvider(t, "x509/server_ca_cert.pem"), nil, defaultTestCertSAN)
-	if _, _, err := creds.ClientHandshake(sCtx, authority, conn); err == nil {
+	if _, _, err := creds.ClientHandshake(ctx, authority, conn); err == nil {
 		t.Fatal("ClientHandshake() succeeded when expected to timeout")
 	}
 	close(clientDone)
