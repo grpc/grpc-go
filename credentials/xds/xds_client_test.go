@@ -406,14 +406,14 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 }
 
 func (s) TestClientCredsHandshakeTimeout(t *testing.T) {
+	clientDone := make(chan struct{})
 	// A handshake function which simulates a handshake timeout from the
-	// server-side by not writing any handshake data. We block the function on
-	// the Read() which will error out once the client closes the connection
-	// because the handshake timeout expired.
+	// server-side by simply blocking on the client-side handshake to timeout
+	// and not writing any handshake data.
+	hErr := errors.New("server handshake error")
 	ts := newTestServerWithHandshakeFunc(func(rawConn net.Conn) handshakeResult {
-		var b []byte
-		_, err := rawConn.Read(b)
-		return handshakeResult{err: err}
+		<-clientDone
+		return handshakeResult{err: hErr}
 	})
 	defer ts.stop()
 
@@ -429,11 +429,25 @@ func (s) TestClientCredsHandshakeTimeout(t *testing.T) {
 	}
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer cancel()
-	ctx = newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), nil, defaultTestCertSAN)
-	if _, _, err := creds.ClientHandshake(ctx, authority, conn); err == nil {
+	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	ctx := newTestContextWithHandshakeInfo(sCtx, makeRootProvider(t, "x509/server_ca_cert.pem"), nil, defaultTestCertSAN)
+	if _, _, err := creds.ClientHandshake(sCtx, authority, conn); err == nil {
 		t.Fatal("ClientHandshake() succeeded when expected to timeout")
+	}
+	close(clientDone)
+
+	// Read the handshake result from the testServer and make sure the expected
+	// error is returned.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	val, err := ts.hsResult.Receive(ctx)
+	if err != nil {
+		t.Fatalf("testServer failed to return handshake result: %v", err)
+	}
+	hsr := val.(handshakeResult)
+	if hsr.err != hErr {
+		t.Fatalf("testServer handshake returned error: %v, want: %v", hsr.err, hErr)
 	}
 }
 

@@ -53,7 +53,7 @@ type ClientOptions struct {
 	// FallbackCreds specifies the fallback credentials to be used when either
 	// the `xds` scheme is not used in the user's dial target or when the
 	// management server does not return any security configuration. Attempts to
-	// create client credentials without a fallback credentials will fail.
+	// create client credentials without fallback credentials will fail.
 	FallbackCreds credentials.TransportCredentials
 }
 
@@ -74,7 +74,7 @@ func NewClientCredentials(opts ClientOptions) (credentials.TransportCredentials,
 type ServerOptions struct {
 	// FallbackCreds specifies the fallback credentials to be used when the
 	// management server does not return any security configuration. Attempts to
-	// create server credentials without a fallback credentials will fail.
+	// create server credentials without fallback credentials will fail.
 	FallbackCreds credentials.TransportCredentials
 }
 
@@ -120,6 +120,9 @@ func getHandshakeInfo(attr *attributes.Attributes) *HandshakeInfo {
 // responsible for populating these fields.
 //
 // Safe for concurrent access.
+//
+// TODO(easwars): Move this type and any other non-user functionality to an
+// internal package.
 type HandshakeInfo struct {
 	mu                sync.Mutex
 	rootProvider      certprovider.Provider
@@ -208,6 +211,7 @@ func (hi *HandshakeInfo) makeClientSideTLSConfig(ctx context.Context) (*tls.Conf
 }
 
 func (hi *HandshakeInfo) makeServerSideTLSConfig(ctx context.Context) (*tls.Config, error) {
+	cfg := &tls.Config{ClientAuth: tls.NoClientCert}
 	hi.mu.Lock()
 	// On the server side, identityProvider is mandatory. RootProvider is
 	// optional based on whether the server is doing TLS or mTLS.
@@ -217,14 +221,10 @@ func (hi *HandshakeInfo) makeServerSideTLSConfig(ctx context.Context) (*tls.Conf
 	// Since the call to KeyMaterial() can block, we read the providers under
 	// the lock but call the actual function after releasing the lock.
 	rootProv, idProv := hi.rootProvider, hi.identityProvider
-	requireClientCert := hi.requireClientCert
-	hi.mu.Unlock()
-
-	clientAuth := tls.NoClientCert
-	if requireClientCert {
-		clientAuth = tls.RequireAndVerifyClientCert
+	if hi.requireClientCert {
+		cfg.ClientAuth = tls.RequireAndVerifyClientCert
 	}
-	cfg := &tls.Config{ClientAuth: clientAuth}
+	hi.mu.Unlock()
 
 	// identityProvider is mandatory on the server side.
 	km, err := idProv.KeyMaterial(ctx)
