@@ -77,7 +77,7 @@ jobs:
       # Main tests run for everything except when testing "extras", the race
       # detector and Go1.11 (where we run a reduced set of tests).
       - name: Run tests
-        if: ${{ matrix.type != 'extras' && matrix.type != 'race' && matrix.type != 'test111' }}
+        if: ${{ matrix.type != 'extras' && matrix.type != 'race' && matrix.type != 'tests111' }}
         run: go test -cpu 1,4 -timeout 7m google.golang.org/grpc/...
 
       # Race detector tests
@@ -99,5 +99,6 @@ jobs:
       - name: Run Go1.11 tests
         if: ${{ matrix.type == 'tests111' }}
         run: |
-          tests=$(find ${GITHUB_WORKSPACE} -name '*_test.go' | xargs -n1 dirname | sort -u | sed "s:^${GITHUB_WORKSPACE}:.:" | sed "s:\/$::" | grep -v ^./security | grep -v ^./credentials/sts | grep -v ^./credentials/tls/certprovider | grep -v ^./credentials/xds | grep -v ^./xds | grep -v ^./security)
+          tests=$(find ${GITHUB_WORKSPACE} -name '*_test.go' | xargs -n1 dirname | sort -u | sed "s:^${GITHUB_WORKSPACE}:.:" | sed "s:\/$::" | grep -v ^./security | grep -v ^./credentials/sts | grep -v ^./credentials/tls/certprovider | grep -v ^./credentials/xds | grep -v ^./xds )
+          echo "Running tests for " ${tests}
           go test -cpu 1,4 -timeout 7m ${tests}
