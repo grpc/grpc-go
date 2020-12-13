@@ -727,3 +727,89 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 		})
 	}
 }
+
+func (s) TestDefaultHostNameCheck(t *testing.T) {
+	cs := &testutils.CertStore{}
+	if err := cs.LoadCerts(); err != nil {
+		t.Fatalf("cs.LoadCerts() failed, err: %v", err)
+	}
+	for _, test := range []struct {
+		desc                       string
+		clientRoot                 *x509.CertPool
+		clientVerifyFunc           CustomVerificationFunc
+		clientVType                VerificationType
+		serverCert                 []tls.Certificate
+		serverVType                VerificationType
+		expectError          bool
+	}{
+		// Client side sets vType to CertAndHostVerification, and will do
+		// default hostname check. Server uses a cert without "localhost" or
+		// "127.0.0.1" as common name or SAN names, and will hence fail.
+		{
+			desc:                       "Bad default hostname check",
+			clientRoot:                 cs.ClientTrust1,
+			clientVType:                CertAndHostVerification,
+			serverCert:                 []tls.Certificate{cs.ServerCert1},
+			serverVType:                CertAndHostVerification,
+			expectError:          true,
+		},
+		// Client side sets vType to CertAndHostVerification, and will do
+		// default hostname check. Server uses a certificate with "localhost" as
+		// common name, and will hence pass the default hostname check.
+		{
+			desc:                       "Good default hostname check",
+			clientRoot:                 cs.ClientTrust1,
+			clientVType:                CertAndHostVerification,
+			serverCert:                 []tls.Certificate{cs.ServerPeerLocalhost1},
+			serverVType:                CertAndHostVerification,
+			expectError:          false,
+		},
+	} {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			// Start a server using ServerOptions in another goroutine.
+			serverOptions := &ServerOptions{
+				IdentityOptions: IdentityCertificateOptions{
+					Certificates:                     test.serverCert,
+				},
+				RequireClientCert: false,
+				VType:             test.serverVType,
+			}
+			serverTLSCreds, err := NewServerCreds(serverOptions)
+			if err != nil {
+				t.Fatalf("failed to create server creds: %v", err)
+			}
+			s := grpc.NewServer(grpc.Creds(serverTLSCreds))
+			defer s.Stop()
+			lis, err := net.Listen("tcp", port)
+			if err != nil {
+				t.Fatalf("failed to listen: %v", err)
+			}
+			defer lis.Close()
+			pb.RegisterGreeterServer(s, greeterServer{})
+			go s.Serve(lis)
+			clientOptions := &ClientOptions{
+				VerifyPeer: test.clientVerifyFunc,
+				RootOptions: RootCertificateOptions{
+					RootCACerts:         test.clientRoot,
+				},
+				VType: test.clientVType,
+			}
+			clientTLSCreds, err := NewClientCreds(clientOptions)
+			if err != nil {
+				t.Fatalf("clientTLSCreds failed to create")
+			}
+			shouldFail := false
+			if test.expectError {
+				shouldFail = true
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			conn, _, err := callAndVerifyWithClientConn(ctx, "rpc call 1", clientTLSCreds, shouldFail)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+		})
+	}
+}
