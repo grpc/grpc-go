@@ -734,35 +734,35 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 		t.Fatalf("cs.LoadCerts() failed, err: %v", err)
 	}
 	for _, test := range []struct {
-		desc                       string
-		clientRoot                 *x509.CertPool
-		clientVerifyFunc           CustomVerificationFunc
-		clientVType                VerificationType
-		serverCert                 []tls.Certificate
-		serverVType                VerificationType
-		expectError          bool
+		desc             string
+		clientRoot       *x509.CertPool
+		clientVerifyFunc CustomVerificationFunc
+		clientVType      VerificationType
+		serverCert       []tls.Certificate
+		serverVType      VerificationType
+		expectError      bool
 	}{
 		// Client side sets vType to CertAndHostVerification, and will do
 		// default hostname check. Server uses a cert without "localhost" or
 		// "127.0.0.1" as common name or SAN names, and will hence fail.
 		{
-			desc:                       "Bad default hostname check",
-			clientRoot:                 cs.ClientTrust1,
-			clientVType:                CertAndHostVerification,
-			serverCert:                 []tls.Certificate{cs.ServerCert1},
-			serverVType:                CertAndHostVerification,
-			expectError:          true,
+			desc:        "Bad default hostname check",
+			clientRoot:  cs.ClientTrust1,
+			clientVType: CertAndHostVerification,
+			serverCert:  []tls.Certificate{cs.ServerCert1},
+			serverVType: CertAndHostVerification,
+			expectError: true,
 		},
 		// Client side sets vType to CertAndHostVerification, and will do
 		// default hostname check. Server uses a certificate with "localhost" as
 		// common name, and will hence pass the default hostname check.
 		{
-			desc:                       "Good default hostname check",
-			clientRoot:                 cs.ClientTrust1,
-			clientVType:                CertAndHostVerification,
-			serverCert:                 []tls.Certificate{cs.ServerPeerLocalhost1},
-			serverVType:                CertAndHostVerification,
-			expectError:          false,
+			desc:        "Good default hostname check",
+			clientRoot:  cs.ClientTrust1,
+			clientVType: CertAndHostVerification,
+			serverCert:  []tls.Certificate{cs.ServerPeerLocalhost1},
+			serverVType: CertAndHostVerification,
+			expectError: false,
 		},
 	} {
 		test := test
@@ -770,7 +770,7 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 			// Start a server using ServerOptions in another goroutine.
 			serverOptions := &ServerOptions{
 				IdentityOptions: IdentityCertificateOptions{
-					Certificates:                     test.serverCert,
+					Certificates: test.serverCert,
 				},
 				RequireClientCert: false,
 				VType:             test.serverVType,
@@ -791,7 +791,7 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 			clientOptions := &ClientOptions{
 				VerifyPeer: test.clientVerifyFunc,
 				RootOptions: RootCertificateOptions{
-					RootCACerts:         test.clientRoot,
+					RootCACerts: test.clientRoot,
 				},
 				VType: test.clientVType,
 			}
