@@ -79,7 +79,7 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, op
 	if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
 		bc := client.BootstrapConfig()
 		if len(bc.CertProviderConfigs) == 0 {
-			return nil, errors.New("xds: certificate_providers config missing in bootstrap file")
+			return nil, errors.New("xds: xdsCreds specified but certificate_providers config missing in bootstrap file")
 		}
 	}
 
