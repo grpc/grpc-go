@@ -22,5 +22,5 @@ import "net"
 
 // LocalTCPListener returns a net.Listener listening on local address and port.
 func LocalTCPListener() (net.Listener, error) {
-	return net.Listen("tcp", ":0")
+	return net.Listen("tcp", "localhost:0")
 }

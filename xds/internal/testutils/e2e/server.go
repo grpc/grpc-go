@@ -71,7 +71,7 @@ func StartManagementServer() (*ManagementServer, error) {
 	cache := v3cache.NewSnapshotCache(true, v3cache.IDHash{}, serverLogger{})
 	logger.Infof("Created new snapshot cache...")
 
-	lis, err := net.Listen("tcp", ":0")
+	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		return nil, fmt.Errorf("failed to start xDS management server: %v", err)
 	}
