@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
 
@@ -396,25 +397,6 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	}
 }
 
-type fakeWRR struct {
-	t       *testing.T
-	weights map[string]int64
-	ch      chan string
-}
-
-func (f *fakeWRR) Add(item interface{}, weight int64) {
-	// Called when clusters are added.  "item" is the cluster name.
-	cluster := item.(string)
-	if f.weights[cluster] != weight {
-		f.t.Errorf("unexpected item or weight added to WRR: %q, %v", cluster, weight)
-	}
-	delete(f.weights, cluster)
-}
-
-func (f *fakeWRR) Next() interface{} {
-	return <-f.ch
-}
-
 func (s) TestXDSResolverWRR(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
@@ -431,9 +413,8 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
-	fakePick := &fakeWRR{t: t, weights: map[string]int64{"A": 75, "B": 25}, ch: make(chan string, 1)}
 	defer func(oldNewWRR func() wrr.WRR) { newWRR = oldNewWRR }(newWRR)
-	newWRR = func() wrr.WRR { return fakePick }
+	newWRR = xdstestutils.NewTestWRR
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
@@ -442,8 +423,8 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 			{
 				Domains: []string{targetStr},
 				Routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{
-					"A": 75,
-					"B": 25,
+					"A": 5,
+					"B": 10,
 				}}},
 			},
 		},
@@ -458,20 +439,16 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
 	}
 
-	if len(fakePick.weights) != 0 {
-		t.Fatalf("Not all expected clusters added to WRR. Remaining: %v", fakePick.weights)
-	}
 	cs := iresolver.GetConfigSelector(rState)
 	if cs == nil {
 		t.Fatal("received nil config selector")
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 30; i++ {
 		want := "A"
-		if i%2 == 1 {
+		if (i >= 5 && i < 15) || (i >= 20) {
 			want = "B"
 		}
-		fakePick.ch <- want
 		res, err := cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()})
 		if err != nil {
 			t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
