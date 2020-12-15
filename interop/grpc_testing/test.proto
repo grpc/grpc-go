@@ -227,9 +227,55 @@ message LoadBalancerStatsResponse {
   map<string, RpcsByPeer> rpcs_by_method = 3;
 }
 
+// Request for retrieving a test client's accumulated stats.
+message LoadBalancerAccumulatedStatsRequest {}
+
+// Accumulated stats for RPCs sent by a test client.
+message LoadBalancerAccumulatedStatsResponse {
+  // The total number of RPCs have ever issued for each type.
+  map<string, int32> num_rpcs_started_by_method = 1;
+  // The total number of RPCs have ever completed successfully for each type.
+  map<string, int32> num_rpcs_succeeded_by_method = 2;
+  // The total number of RPCs have ever failed for each type.
+  map<string, int32> num_rpcs_failed_by_method = 3;
+}
+
 // A service used to obtain stats for verifying LB behavior.
 service LoadBalancerStatsService {
   // Gets the backend distribution for RPCs sent by a test client.
   rpc GetClientStats(LoadBalancerStatsRequest)
       returns (LoadBalancerStatsResponse) {}
+  // Gets the accumulated stats for RPCs sent by a test client.
+  rpc GetClientAccumulatedStats(LoadBalancerAccumulatedStatsRequest)
+    returns (LoadBalancerAccumulatedStatsResponse) {}
+}
+
+// Configurations for a test client.
+message ClientConfigureRequest {
+  // Type of RPCs to send.
+  enum RpcType {
+    EMPTY_CALL = 0;
+    UNARY_CALL = 1;
+  }
+
+  // Metadata to be attached for the given type of RPCs.
+  message Metadata {
+    RpcType type = 1;
+    string key = 2;
+    string value = 3;
+  }
+
+  // The types of RPCs the client sends.
+  repeated RpcType types = 1;
+  // The collection of custom metadata to be attached to RPCs sent by the client.
+  repeated Metadata metadata = 2;
+}
+
+// Response for updating a test client's configuration.
+message ClientConfigureResponse {}
+
+// A service to dynamically update the configuration of an xDS test client.
+service XdsUpdateClientConfigureService {
+  // Update the tes client's configuration.
+  rpc Configure(ClientConfigureRequest) returns (ClientConfigureResponse);
 }
