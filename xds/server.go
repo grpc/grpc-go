@@ -48,8 +48,11 @@ var (
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServerInterface {
 		return grpc.NewServer(opts...)
 	}
-	buildProvider = buildProviderFunc
-	logger        = grpclog.Component("xds")
+
+	// Unexported function to retrieve transport credentials from a gRPC server.
+	grpcGetServerCreds = internal.GetServerCredentials.(func(interface{}) credentials.TransportCredentials)
+	buildProvider      = buildProviderFunc
+	logger             = grpclog.Component("xds")
 )
 
 func prefixLogger(p *GRPCServer) *internalgrpclog.PrefixLogger {
@@ -116,7 +119,7 @@ func NewGRPCServer(opts ...grpc.ServerOption) *GRPCServer {
 	s.logger = prefixLogger(s)
 	s.logger.Infof("Created xds.GRPCServer")
 
-	creds := internal.GetServerCredentials.(func(interface{}) credentials.TransportCredentials)(s.gs)
+	creds := grpcGetServerCreds(s.gs)
 	if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
 		s.xdsCredsInUse = true
 	}
@@ -174,7 +177,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 	// providers after receiving an LDS response with security configuration.
 	if s.xdsCredsInUse {
 		bc := s.xdsC.BootstrapConfig()
-		if bc == nil || bc.CertProviderConfigs == nil {
+		if len(bc.CertProviderConfigs) == 0 {
 			return errors.New("xds: certificate_providers config missing in bootstrap file")
 		}
 	}
@@ -224,7 +227,7 @@ func (s *GRPCServer) newListenerWrapper(lis net.Listener) (*listenerWrapper, err
 	// Register an LDS watch using our xdsClient, and specify the listening
 	// address as the resource name.
 	cancelWatch := s.xdsC.WatchListener(name, func(update xdsclient.ListenerUpdate, err error) {
-		s.handleListenerUpdate(watchUpdate{
+		s.handleListenerUpdate(listenerUpdate{
 			lw:         lw,
 			name:       name,
 			lds:        update,
@@ -251,8 +254,8 @@ func (s *GRPCServer) newListenerWrapper(lis net.Listener) (*listenerWrapper, err
 	return lw, nil
 }
 
-// watchUpdate wraps the information received from a registered LDS watcher.
-type watchUpdate struct {
+// listenerUpdate wraps the information received from a registered LDS watcher.
+type listenerUpdate struct {
 	lw         *listenerWrapper         // listener associated with this watch
 	name       string                   // resource name being watched
 	lds        xdsclient.ListenerUpdate // received update
@@ -260,7 +263,7 @@ type watchUpdate struct {
 	goodUpdate *grpcsync.Event          // event to fire upon a good update
 }
 
-func (s *GRPCServer) handleListenerUpdate(update watchUpdate) {
+func (s *GRPCServer) handleListenerUpdate(update listenerUpdate) {
 	if update.lw.closed.HasFired() {
 		s.logger.Warningf("Resource %q received update: %v with error: %v, after for listener was closed", update.name, update.lds, update.err)
 		return
@@ -324,6 +327,7 @@ func (s *GRPCServer) handleSecurityConfig(config *xdsclient.SecurityConfig, lw *
 	}
 
 	// Close the old providers and cache the new ones.
+	lw.providerMu.Lock()
 	if lw.cachedIdentity != nil {
 		lw.cachedIdentity.Close()
 	}
@@ -338,13 +342,15 @@ func (s *GRPCServer) handleSecurityConfig(config *xdsclient.SecurityConfig, lw *
 	lw.xdsHI.SetRootCertProvider(rootProvider)
 	lw.xdsHI.SetIdentityCertProvider(identityProvider)
 	lw.xdsHI.SetRequireClientCert(config.RequireClientCert)
+	lw.providerMu.Unlock()
+
 	return nil
 }
 
 func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanceName, certName string, wantIdentity, wantRoot bool) (certprovider.Provider, error) {
 	cfg, ok := configs[instanceName]
 	if !ok {
-		return nil, fmt.Errorf("certificate provider instance %q not found in bootstrap file", instanceName)
+		return nil, fmt.Errorf("xds: certificate provider instance %q not found in bootstrap file", instanceName)
 	}
 	provider, err := cfg.Build(certprovider.BuildOptions{
 		CertName:     certName,
@@ -409,14 +415,20 @@ type listenerWrapper struct {
 
 	// A small race exists in the xdsClient code where an xDS response is
 	// received while the user is calling cancel(). In this small window the
-	// registered callback can be called after the watcher is canceled.
+	// registered callback can be called after the watcher is canceled. We avoid
+	// processing updates received in callbacks once the listener is closed, to
+	// make sure that we do not process updates received during this race
+	// window.
 	closed *grpcsync.Event
 
 	// The certificate providers are cached here to that they can be closed when
 	// a new provider is to be created.
+	providerMu     sync.Mutex
 	cachedRoot     certprovider.Provider
 	cachedIdentity certprovider.Provider
-	xdsHI          *xds.HandshakeInfo
+
+	// Wraps all information required by the xds handshaker.
+	xdsHI *xds.HandshakeInfo
 }
 
 // Accept blocks on an Accept() on the underlying listener, and wraps the
@@ -438,14 +450,18 @@ func (l *listenerWrapper) Close() error {
 	if l.cancelWatch != nil {
 		l.cancelWatch()
 	}
+
+	l.providerMu.Lock()
 	if l.cachedIdentity != nil {
 		l.cachedIdentity.Close()
+		l.cachedIdentity = nil
 	}
 	if l.cachedRoot != nil {
 		l.cachedRoot.Close()
+		l.cachedRoot = nil
 	}
-	l.cachedRoot = nil
-	l.cachedIdentity = nil
+	l.providerMu.Unlock()
+
 	return nil
 }
 
