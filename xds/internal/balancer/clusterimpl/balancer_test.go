@@ -53,6 +53,10 @@ var (
 	}
 )
 
+func init() {
+	newRandomWRR = testutils.NewTestWRR
+}
+
 // TestLoadReporting verifies that the lrs balancer starts the loadReport
 // stream when the lbConfig passed to it contains a valid value for the LRS
 // server (empty string).
@@ -75,6 +79,10 @@ func TestLoadReporting(t *testing.T) {
 			Cluster:                    testClusterName,
 			EDSServiceName:             testServiceName,
 			LRSLoadReportingServerName: newString(testLRSServerName),
+			DropCategories: []dropCategory{{
+				Category:           "aaa",
+				RequestsPerMillion: 500000,
+			}},
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
 			},
@@ -96,15 +104,24 @@ func TestLoadReporting(t *testing.T) {
 
 	sc1 := <-cc.NewSubConnCh
 	lrsB.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	lrsB.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	// This should get the connecting picker.
+	p0 := <-cc.NewPickerCh
+	for i := 0; i < 5; i++ {
+		_, err := p0.Pick(balancer.PickInfo{})
+		if err != balancer.ErrNoSubConnAvailable {
+			t.Fatalf("picker.Pick, got _,%v, want Err=%v", err, balancer.ErrNoSubConnAvailable)
+		}
+	}
 
+	lrsB.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
 	p1 := <-cc.NewPickerCh
 	const successCount = 5
 	for i := 0; i < successCount; i++ {
 		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
 		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
+			// t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
+			t.Errorf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 		gotSCSt.Done(balancer.DoneInfo{})
 	}

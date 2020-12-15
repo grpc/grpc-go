@@ -67,6 +67,7 @@ func (wt *clusterImplBB) Build(cc balancer.ClientConn, _ balancer.BuildOptions) 
 		return nil
 	}
 	b.c = client
+	go b.run()
 
 	return b
 }
@@ -289,6 +290,7 @@ func (cib *clusterImplBalancer) run() {
 			switch u := update.(type) {
 			case balancer.State:
 				cib.childState = u
+				fmt.Printf(" updating picker because of new picker\n")
 				cib.cc.UpdateState(balancer.State{
 					ConnectivityState: cib.childState.ConnectivityState,
 					Picker:            newDropPicker(cib.childState.Picker, cib.drops, cib.loadWrapper, cib.requestCounter),
@@ -296,10 +298,14 @@ func (cib *clusterImplBalancer) run() {
 			case *dropConfigs:
 				cib.drops = u.drops
 				cib.requestCounter = u.requestCounter
-				cib.cc.UpdateState(balancer.State{
-					ConnectivityState: cib.childState.ConnectivityState,
-					Picker:            newDropPicker(cib.childState.Picker, cib.drops, cib.loadWrapper, cib.requestCounter),
-				})
+				fmt.Printf(" updating picker because of new config\n")
+				if cib.childState.Picker != nil {
+					fmt.Printf(" updating picker because of new config for real\n")
+					cib.cc.UpdateState(balancer.State{
+						ConnectivityState: cib.childState.ConnectivityState,
+						Picker:            newDropPicker(cib.childState.Picker, cib.drops, cib.loadWrapper, cib.requestCounter),
+					})
+				}
 			}
 		case <-cib.closed.Done():
 			return
