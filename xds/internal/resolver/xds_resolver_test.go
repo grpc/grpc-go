@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
@@ -377,7 +378,10 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 		}
 
 		pickedClusters := make(map[string]bool)
-		for i := 0; i < 100; i++ { // Odds of picking 75% cluster 100 times in a row: 1 in 3E-13.
+		// Odds of picking 75% cluster 100 times in a row: 1 in 3E-13.  And
+		// with the random number generator stubbed out, we can rely on this
+		// to be 100% reproducible.
+		for i := 0; i < 100; i++ {
 			res, err := cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()})
 			if err != nil {
 				t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
@@ -389,6 +393,94 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 		if !reflect.DeepEqual(pickedClusters, tt.wantClusters) {
 			t.Errorf("Picked clusters: %v; want: %v", pickedClusters, tt.wantClusters)
 		}
+	}
+}
+
+type fakeWRR struct {
+	t       *testing.T
+	weights map[string]int64
+	ch      chan string
+}
+
+func (f *fakeWRR) Add(item interface{}, weight int64) {
+	// Called when clusters are added.  "item" is the cluster name.
+	cluster := item.(string)
+	if f.weights[cluster] != weight {
+		f.t.Errorf("unexpected item or weight added to WRR: %q, %v", cluster, weight)
+	}
+	delete(f.weights, cluster)
+}
+
+func (f *fakeWRR) Next() interface{} {
+	return <-f.ch
+}
+
+func (s) TestXDSResolverWRR(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
+		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+	})
+	defer func() {
+		cancel()
+		xdsR.Close()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	waitForWatchListener(ctx, t, xdsC, targetStr)
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
+
+	fakePick := &fakeWRR{t: t, weights: map[string]int64{"A": 75, "B": 25}, ch: make(chan string, 1)}
+	defer func(oldNewWRR func() wrr.WRR) { newWRR = oldNewWRR }(newWRR)
+	newWRR = func() wrr.WRR { return fakePick }
+
+	// Invoke the watchAPI callback with a good service update and wait for the
+	// UpdateState method to be called on the ClientConn.
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
+		VirtualHosts: []*xdsclient.VirtualHost{
+			{
+				Domains: []string{targetStr},
+				Routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{
+					"A": 75,
+					"B": 25,
+				}}},
+			},
+		},
+	}, nil)
+
+	gotState, err := tcc.stateCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+	rState := gotState.(resolver.State)
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+
+	if len(fakePick.weights) != 0 {
+		t.Fatalf("Not all expected clusters added to WRR. Remaining: %v", fakePick.weights)
+	}
+	cs := iresolver.GetConfigSelector(rState)
+	if cs == nil {
+		t.Fatal("received nil config selector")
+	}
+
+	for i := 0; i < 100; i++ {
+		want := "A"
+		if i%2 == 1 {
+			want = "B"
+		}
+		fakePick.ch <- want
+		res, err := cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()})
+		if err != nil {
+			t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
+		}
+		got := clustermanager.GetPickedClusterForTesting(res.Context)
+		if got != want {
+			t.Fatalf("Picked cluster %q; want %q", got, want)
+		}
+		res.OnCommitted()
 	}
 }
 
@@ -409,7 +501,6 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 	waitForWatchListener(ctx, t, xdsC, targetStr)
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
-	defer replaceRandNumGenerator(0)()
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
