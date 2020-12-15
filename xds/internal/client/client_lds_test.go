@@ -748,7 +748,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			},
 		},
 		{
-			name: "happy case with no identity certs",
+			name: "no identity and root certificate providers",
 			resources: []*anypb.Any{
 				{
 					TypeUrl: version.V3ListenerURL,
@@ -780,11 +780,112 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 													tls := &v3tlspb.DownstreamTlsContext{
 														RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
 														CommonTlsContext: &v3tlspb.CommonTlsContext{
-															ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-																ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-																	InstanceName:    "rootPluginInstance",
-																	CertificateName: "rootCertName",
-																},
+															TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+																InstanceName:    "identityPluginInstance",
+																CertificateName: "identityCertName",
+															},
+														},
+													}
+													mtls, _ := proto.Marshal(tls)
+													return mtls
+												}(),
+											},
+										},
+									},
+								},
+							},
+						}
+						mLis, _ := proto.Marshal(lis)
+						return mLis
+					}(),
+				},
+			},
+			wantErr: "security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set",
+		},
+		{
+			name: "no identity certificate provider with require_client_cert",
+			resources: []*anypb.Any{
+				{
+					TypeUrl: version.V3ListenerURL,
+					Value: func() []byte {
+						lis := &v3listenerpb.Listener{
+							Name: v3LDSTarget,
+							Address: &v3corepb.Address{
+								Address: &v3corepb.Address_SocketAddress{
+									SocketAddress: &v3corepb.SocketAddress{
+										Address: "0.0.0.0",
+										PortSpecifier: &v3corepb.SocketAddress_PortValue{
+											PortValue: 9999,
+										},
+									},
+								},
+							},
+							FilterChains: []*v3listenerpb.FilterChain{
+								{
+									Name: "filter-chain-1",
+									FilterChainMatch: &v3listenerpb.FilterChainMatch{
+										ApplicationProtocols: []string{"managed-mtls"},
+									},
+									TransportSocket: &v3corepb.TransportSocket{
+										Name: "envoy.transport_sockets.tls",
+										ConfigType: &v3corepb.TransportSocket_TypedConfig{
+											TypedConfig: &anypb.Any{
+												TypeUrl: version.V3DownstreamTLSContextURL,
+												Value: func() []byte {
+													tls := &v3tlspb.DownstreamTlsContext{
+														CommonTlsContext: &v3tlspb.CommonTlsContext{},
+													}
+													mtls, _ := proto.Marshal(tls)
+													return mtls
+												}(),
+											},
+										},
+									},
+								},
+							},
+						}
+						mLis, _ := proto.Marshal(lis)
+						return mLis
+					}(),
+				},
+			},
+			wantErr: "security configuration on the server-side does not contain identity certificate provider instance name",
+		},
+		{
+			name: "happy case with no validation context",
+			resources: []*anypb.Any{
+				{
+					TypeUrl: version.V3ListenerURL,
+					Value: func() []byte {
+						lis := &v3listenerpb.Listener{
+							Name: v3LDSTarget,
+							Address: &v3corepb.Address{
+								Address: &v3corepb.Address_SocketAddress{
+									SocketAddress: &v3corepb.SocketAddress{
+										Address: "0.0.0.0",
+										PortSpecifier: &v3corepb.SocketAddress_PortValue{
+											PortValue: 9999,
+										},
+									},
+								},
+							},
+							FilterChains: []*v3listenerpb.FilterChain{
+								{
+									Name: "filter-chain-1",
+									FilterChainMatch: &v3listenerpb.FilterChainMatch{
+										ApplicationProtocols: []string{"managed-mtls"},
+									},
+									TransportSocket: &v3corepb.TransportSocket{
+										Name: "envoy.transport_sockets.tls",
+										ConfigType: &v3corepb.TransportSocket_TypedConfig{
+											TypedConfig: &anypb.Any{
+												TypeUrl: version.V3DownstreamTLSContextURL,
+												Value: func() []byte {
+													tls := &v3tlspb.DownstreamTlsContext{
+														CommonTlsContext: &v3tlspb.CommonTlsContext{
+															TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+																InstanceName:    "identityPluginInstance",
+																CertificateName: "identityCertName",
 															},
 														},
 													}
@@ -805,9 +906,8 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
 					SecurityCfg: &SecurityConfig{
-						RootInstanceName:  "rootPluginInstance",
-						RootCertName:      "rootCertName",
-						RequireClientCert: true,
+						IdentityInstanceName: "identityPluginInstance",
+						IdentityCertName:     "identityCertName",
 					},
 				},
 			},
