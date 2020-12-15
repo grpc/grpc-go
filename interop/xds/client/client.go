@@ -73,20 +73,70 @@ func (watcher *statsWatcher) buildResp() *testpb.LoadBalancerStatsResponse {
 	}
 }
 
+type accumulatedStats struct {
+	mu                       sync.Mutex
+	numRpcsStartedByMethod   map[string]int32
+	numRpcsSucceededByMethod map[string]int32
+	numRpcsFailedByMethod    map[string]int32
+}
+
+func copyStatsMap(originalMap map[string]int32) (newMap map[string]int32) {
+	newMap = make(map[string]int32)
+	for k, v := range originalMap {
+		newMap[k] = v
+	}
+	return newMap
+}
+
+func (as *accumulatedStats) buildResp() *testpb.LoadBalancerAccumulatedStatsResponse {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+	return &testpb.LoadBalancerAccumulatedStatsResponse{
+		NumRpcsStartedByMethod:   copyStatsMap(as.numRpcsStartedByMethod),
+		NumRpcsSucceededByMethod: copyStatsMap(as.numRpcsSucceededByMethod),
+		NumRpcsFailedByMethod:    copyStatsMap(as.numRpcsFailedByMethod),
+	}
+}
+
+func (as *accumulatedStats) startRPC(rpcType string) {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+	as.numRpcsStartedByMethod[rpcType]++
+}
+
+func (as *accumulatedStats) finishRPC(rpcType string, failed bool) {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+	if failed {
+		as.numRpcsFailedByMethod[rpcType]++
+		return
+	}
+	as.numRpcsSucceededByMethod[rpcType]++
+}
+
 var (
 	failOnFailedRPC = flag.Bool("fail_on_failed_rpc", false, "Fail client if any RPCs fail after first success")
 	numChannels     = flag.Int("num_channels", 1, "Num of channels")
 	printResponse   = flag.Bool("print_response", false, "Write RPC response to stdout")
 	qps             = flag.Int("qps", 1, "QPS per channel, for each type of RPC")
-	rpc             = flag.String("rpc", "UnaryCall", "Types of RPCs to make, ',' separated string. RPCs can be EmptyCall or UnaryCall")
-	rpcMetadata     = flag.String("metadata", "", "The metadata to send with RPC, in format EmptyCall:key1:value1,UnaryCall:key2:value2")
+	rpc             = flag.String("rpc", "UnaryCall", "Types of RPCs to make, ',' separated string. RPCs can be EmptyCall or UnaryCall. Deprecated: Use Configure RPC to XdsUpdateClientConfigureServiceServer instead.")
+	rpcMetadata     = flag.String("metadata", "", "The metadata to send with RPC, in format EmptyCall:key1:value1,UnaryCall:key2:value2. Deprecated: Use Configure RPC to XdsUpdateClientConfigureServiceServer instead.")
 	rpcTimeout      = flag.Duration("rpc_timeout", 20*time.Second, "Per RPC timeout")
 	server          = flag.String("server", "localhost:8080", "Address of server to connect to")
 	statsPort       = flag.Int("stats_port", 8081, "Port to expose peer distribution stats service")
 
+	rpcCfgsMu sync.Mutex
+	rpcCfgs   = []*rpcConfig{{typ: unaryCall}}
+
 	mu               sync.Mutex
 	currentRequestID int32
 	watchers         = make(map[statsWatcherKey]*statsWatcher)
+
+	accStats = accumulatedStats{
+		numRpcsStartedByMethod:   make(map[string]int32),
+		numRpcsSucceededByMethod: make(map[string]int32),
+		numRpcsFailedByMethod:    make(map[string]int32),
+	}
 
 	// 0 or 1 representing an RPC has succeeded. Use hasRPCSucceeded and
 	// setRPCSucceeded to access in a safe manner.
@@ -163,6 +213,49 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 	}
 }
 
+func (s *statsService) GetClientAccumulatedStats(ctx context.Context, in *testpb.LoadBalancerAccumulatedStatsRequest) (*testpb.LoadBalancerAccumulatedStatsResponse, error) {
+	return accStats.buildResp(), nil
+}
+
+type configureService struct {
+	testpb.UnimplementedXdsUpdateClientConfigureServiceServer
+}
+
+func (s *configureService) Configure(ctx context.Context, in *testpb.ClientConfigureRequest) (*testpb.ClientConfigureResponse, error) {
+	types := make(map[string]bool)
+	for _, typ := range in.GetTypes() {
+		types[typ.String()] = true
+	}
+	rpcsToMD := make(map[string][]string)
+	for _, md := range in.GetMetadata() {
+		enumType := md.GetType().String()
+		if !types[enumType] {
+			continue
+		}
+		var rpcType string
+		switch enumType {
+		case testpb.ClientConfigureRequest_UNARY_CALL.String():
+			rpcType = unaryCall
+		case testpb.ClientConfigureRequest_EMPTY_CALL.String():
+			rpcType = emptyCall
+		default:
+			return nil, fmt.Errorf("unsupported RPC type: %v", enumType)
+		}
+		rpcsToMD[rpcType] = append(rpcsToMD[rpcType], md.GetKey(), md.GetValue())
+	}
+	cfgs := make([]*rpcConfig, 0)
+	for typ, md := range rpcsToMD {
+		cfgs = append(cfgs, &rpcConfig{
+			typ: typ,
+			md:  metadata.Pairs(md...),
+		})
+	}
+	rpcCfgsMu.Lock()
+	rpcCfgs = cfgs
+	rpcCfgsMu.Unlock()
+	return &testpb.ClientConfigureResponse{}, nil
+}
+
 const (
 	unaryCall string = "UnaryCall"
 	emptyCall string = "EmptyCall"
@@ -218,7 +311,7 @@ func parseRPCMetadata(rpcMetadataStr string, rpcs []string) []*rpcConfig {
 
 func main() {
 	flag.Parse()
-	rpcCfgs := parseRPCMetadata(*rpcMetadata, parseRPCTypes(*rpc))
+	rpcCfgs = parseRPCMetadata(*rpcMetadata, parseRPCTypes(*rpc))
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *statsPort))
 	if err != nil {
@@ -227,6 +320,7 @@ func main() {
 	s := grpc.NewServer()
 	defer s.Stop()
 	testpb.RegisterLoadBalancerStatsServiceServer(s, &statsService{})
+	testpb.RegisterXdsUpdateClientConfigureServiceServer(s, &configureService{})
 	go s.Serve(lis)
 
 	clients := make([]testpb.TestServiceClient, *numChannels)
@@ -240,7 +334,7 @@ func main() {
 	}
 	ticker := time.NewTicker(time.Second / time.Duration(*qps**numChannels))
 	defer ticker.Stop()
-	sendRPCs(clients, rpcCfgs, ticker)
+	sendRPCs(clients, ticker)
 }
 
 func makeOneRPC(c testpb.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcInfo, error) {
@@ -257,6 +351,7 @@ func makeOneRPC(c testpb.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcInf
 		header metadata.MD
 		err    error
 	)
+	accStats.startRPC(cfg.typ)
 	switch cfg.typ {
 	case unaryCall:
 		var resp *testpb.SimpleResponse
@@ -270,8 +365,10 @@ func makeOneRPC(c testpb.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcInf
 		_, err = c.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p), grpc.Header(&header))
 	}
 	if err != nil {
+		accStats.finishRPC(cfg.typ, true)
 		return nil, nil, err
 	}
+	accStats.finishRPC(cfg.typ, false)
 
 	hosts := header["hostname"]
 	if len(hosts) > 0 {
@@ -280,26 +377,32 @@ func makeOneRPC(c testpb.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcInf
 	return &p, &info, err
 }
 
-func sendRPCs(clients []testpb.TestServiceClient, cfgs []*rpcConfig, ticker *time.Ticker) {
+func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 	var i int
 	for range ticker.C {
-		go func(i int) {
-			// Get and increment request ID, and save a list of watchers that
-			// are interested in this RPC.
-			mu.Lock()
-			savedRequestID := currentRequestID
-			currentRequestID++
-			savedWatchers := []*statsWatcher{}
-			for key, value := range watchers {
-				if key.startID <= savedRequestID && savedRequestID < key.endID {
-					savedWatchers = append(savedWatchers, value)
-				}
+		// Get and increment request ID, and save a list of watchers that are
+		// interested in this RPC.
+		mu.Lock()
+		savedRequestID := currentRequestID
+		currentRequestID++
+		savedWatchers := []*statsWatcher{}
+		for key, value := range watchers {
+			if key.startID <= savedRequestID && savedRequestID < key.endID {
+				savedWatchers = append(savedWatchers, value)
 			}
-			mu.Unlock()
+		}
+		mu.Unlock()
 
-			c := clients[i]
+		// Get the RPC metadata configurations from the Configure RPC.
+		rpcCfgsMu.Lock()
+		cfgs := make([]*rpcConfig, len(rpcCfgs))
+		copy(cfgs, rpcCfgs)
+		rpcCfgsMu.Unlock()
 
-			for _, cfg := range cfgs {
+		for _, cfg := range cfgs {
+			go func(i int, cfg *rpcConfig) {
+				c := clients[i]
+
 				p, info, err := makeOneRPC(c, cfg)
 
 				for _, watcher := range savedWatchers {
@@ -325,8 +428,8 @@ func sendRPCs(clients []testpb.TestServiceClient, cfgs []*rpcConfig, ticker *tim
 						fmt.Printf("RPC %q, failed with %v\n", cfg.typ, err)
 					}
 				}
-			}
-		}(i)
+			}(i, cfg)
+		}
 		i = (i + 1) % len(clients)
 	}
 }
