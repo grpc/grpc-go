@@ -41,7 +41,6 @@ import (
 
 var (
 	address = "localhost:50051"
-	port    = ":50051"
 )
 
 const (
@@ -363,7 +362,7 @@ func (s) TestEnd2End(t *testing.T) {
 			}
 			s := grpc.NewServer(grpc.Creds(serverTLSCreds))
 			defer s.Stop()
-			lis, err := net.Listen("tcp", port)
+			lis, err := net.Listen("tcp", address)
 			if err != nil {
 				t.Fatalf("failed to listen: %v", err)
 			}
@@ -652,7 +651,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			}
 			s := grpc.NewServer(grpc.Creds(serverTLSCreds))
 			defer s.Stop()
-			lis, err := net.Listen("tcp", port)
+			lis, err := net.Listen("tcp", address)
 			if err != nil {
 				t.Fatalf("failed to listen: %v", err)
 			}
