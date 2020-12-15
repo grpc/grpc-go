@@ -444,20 +444,18 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 		t.Fatal("received nil config selector")
 	}
 
+	picks := map[string]int{}
 	for i := 0; i < 30; i++ {
-		want := "A"
-		if (i >= 5 && i < 15) || (i >= 20) {
-			want = "B"
-		}
 		res, err := cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()})
 		if err != nil {
 			t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
 		}
-		got := clustermanager.GetPickedClusterForTesting(res.Context)
-		if got != want {
-			t.Fatalf("Picked cluster %q; want %q", got, want)
-		}
+		picks[clustermanager.GetPickedClusterForTesting(res.Context)]++
 		res.OnCommitted()
+	}
+	want := map[string]int{"A": 10, "B": 20}
+	if !reflect.DeepEqual(picks, want) {
+		t.Errorf("picked clusters = %v; want %v", picks, want)
 	}
 }
 
