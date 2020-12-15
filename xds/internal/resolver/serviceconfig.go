@@ -183,6 +183,9 @@ func (cs *configSelector) decRefs() {
 	}
 }
 
+// A global for testing.
+var newWRR = wrr.NewRandom
+
 // newConfigSelector creates the config selector for su; may add entries to
 // r.activeClusters for previously-unseen clusters.
 func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, error) {
@@ -193,7 +196,7 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 	}
 
 	for i, rt := range su.Routes {
-		action := wrr.NewRandom()
+		action := newWRR()
 		for cluster, weight := range rt.Action {
 			action.Add(cluster, int64(weight))
 
