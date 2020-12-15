@@ -26,6 +26,8 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/credentials/insecure"
+	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpctest"
@@ -38,6 +40,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
@@ -142,6 +145,40 @@ func (s) TestResolverBuilder(t *testing.T) {
 			}
 			r.Close()
 		})
+	}
+}
+
+// TestResolverBuilder_xdsCredsBootstrapMismatch tests the case where an xds
+// resolver is built with xds credentials being specified by the user. The
+// bootstrap file does not contain any certificate provider configuration
+// though, and therefore we expect the resolver build to fail.
+func (s) TestResolverBuilder_xdsCredsBootstrapMismatch(t *testing.T) {
+	// Fake out the xdsClient creation process by providing a fake, which does
+	// not have any certificate provider configuration.
+	oldClientMaker := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) {
+		fc := fakeclient.NewClient()
+		fc.SetBootstrapConfig(&bootstrap.Config{})
+		return fc, nil
+	}
+	defer func() { newXDSClient = oldClientMaker }()
+
+	builder := resolver.Get(xdsScheme)
+	if builder == nil {
+		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
+	}
+
+	// Create xds credentials to be passed to resolver.Build().
+	creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
+	if err != nil {
+		t.Fatalf("xds.NewClientCredentials() failed: %v", err)
+	}
+
+	// Since the fake xds client is not configured with any certificate provider
+	// configs, and we are specifying xds credentials in the call to
+	// resolver.Build(), we expect it to fail.
+	if _, err := builder.Build(target, newTestClientConn(), resolver.BuildOptions{DialCreds: creds}); err == nil {
+		t.Fatal("builder.Build() succeeded when expected to fail")
 	}
 }
 
