@@ -21,6 +21,7 @@ package resolver
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -28,12 +29,16 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpctest"
+	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
+	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
 
@@ -276,19 +281,66 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	defer replaceRandNumGenerator(0)()
 
 	for _, tt := range []struct {
-		routes   []*xdsclient.Route
-		wantJSON string
+		routes       []*xdsclient.Route
+		wantJSON     string
+		wantClusters map[string]bool
 	}{
 		{
-			routes:   []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{testCluster1: 1}}},
-			wantJSON: testOneClusterOnlyJSON,
+			routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{"test-cluster-1": 1}}},
+			wantJSON: `{"loadBalancingConfig":[{
+    "xds_cluster_manager_experimental":{
+      "children":{
+        "test-cluster-1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+        }
+      }
+    }}]}`,
+			wantClusters: map[string]bool{"test-cluster-1": true},
 		},
 		{
 			routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{
 				"cluster_1": 75,
 				"cluster_2": 25,
 			}}},
-			wantJSON: testWeightedCDSJSON,
+			// This update contains the cluster from the previous update as
+			// well as this update, as the previous config selector still
+			// references the old cluster when the new one is pushed.
+			wantJSON: `{"loadBalancingConfig":[{
+    "xds_cluster_manager_experimental":{
+      "children":{
+        "test-cluster-1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+        },
+        "cluster_1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster_1"}}]
+        },
+        "cluster_2":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster_2"}}]
+        }
+      }
+    }}]}`,
+			wantClusters: map[string]bool{"cluster_1": true, "cluster_2": true},
+		},
+		{
+			routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{
+				"cluster_1": 75,
+				"cluster_2": 25,
+			}}},
+			// With this redundant update, the old config selector has been
+			// stopped, so there are no more references to the first cluster.
+			// Only the second update's clusters should remain.
+			wantJSON: `{"loadBalancingConfig":[{
+    "xds_cluster_manager_experimental":{
+      "children":{
+        "cluster_1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster_1"}}]
+        },
+        "cluster_2":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster_2"}}]
+        }
+      }
+    }}]}`,
+			wantClusters: map[string]bool{"cluster_1": true, "cluster_2": true},
 		},
 	} {
 		// Invoke the watchAPI callback with a good service update and wait for the
@@ -319,6 +371,241 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
 			t.Error("want: ", cmp.Diff(nil, wantSCParsed.Config))
 		}
+
+		cs := iresolver.GetConfigSelector(rState)
+		if cs == nil {
+			t.Error("received nil config selector")
+			continue
+		}
+
+		pickedClusters := make(map[string]bool)
+		// Odds of picking 75% cluster 100 times in a row: 1 in 3E-13.  And
+		// with the random number generator stubbed out, we can rely on this
+		// to be 100% reproducible.
+		for i := 0; i < 100; i++ {
+			res, err := cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()})
+			if err != nil {
+				t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
+			}
+			cluster := clustermanager.GetPickedClusterForTesting(res.Context)
+			pickedClusters[cluster] = true
+			res.OnCommitted()
+		}
+		if !reflect.DeepEqual(pickedClusters, tt.wantClusters) {
+			t.Errorf("Picked clusters: %v; want: %v", pickedClusters, tt.wantClusters)
+		}
+	}
+}
+
+func (s) TestXDSResolverWRR(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
+		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+	})
+	defer func() {
+		cancel()
+		xdsR.Close()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	waitForWatchListener(ctx, t, xdsC, targetStr)
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
+
+	defer func(oldNewWRR func() wrr.WRR) { newWRR = oldNewWRR }(newWRR)
+	newWRR = xdstestutils.NewTestWRR
+
+	// Invoke the watchAPI callback with a good service update and wait for the
+	// UpdateState method to be called on the ClientConn.
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
+		VirtualHosts: []*xdsclient.VirtualHost{
+			{
+				Domains: []string{targetStr},
+				Routes: []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{
+					"A": 5,
+					"B": 10,
+				}}},
+			},
+		},
+	}, nil)
+
+	gotState, err := tcc.stateCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+	rState := gotState.(resolver.State)
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+
+	cs := iresolver.GetConfigSelector(rState)
+	if cs == nil {
+		t.Fatal("received nil config selector")
+	}
+
+	picks := map[string]int{}
+	for i := 0; i < 30; i++ {
+		res, err := cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()})
+		if err != nil {
+			t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
+		}
+		picks[clustermanager.GetPickedClusterForTesting(res.Context)]++
+		res.OnCommitted()
+	}
+	want := map[string]int{"A": 10, "B": 20}
+	if !reflect.DeepEqual(picks, want) {
+		t.Errorf("picked clusters = %v; want %v", picks, want)
+	}
+}
+
+// TestXDSResolverDelayedOnCommitted tests that clusters remain in service
+// config if RPCs are in flight.
+func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
+		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+	})
+	defer func() {
+		cancel()
+		xdsR.Close()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	waitForWatchListener(ctx, t, xdsC, targetStr)
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
+
+	// Invoke the watchAPI callback with a good service update and wait for the
+	// UpdateState method to be called on the ClientConn.
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
+		VirtualHosts: []*xdsclient.VirtualHost{
+			{
+				Domains: []string{targetStr},
+				Routes:  []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{"test-cluster-1": 1}}},
+			},
+		},
+	}, nil)
+
+	gotState, err := tcc.stateCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+	rState := gotState.(resolver.State)
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+
+	wantJSON := `{"loadBalancingConfig":[{
+    "xds_cluster_manager_experimental":{
+      "children":{
+        "test-cluster-1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+        }
+      }
+    }}]}`
+	wantSCParsed := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON)
+	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
+		t.Errorf("ClientConn.UpdateState received different service config")
+		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
+		t.Fatal("want: ", cmp.Diff(nil, wantSCParsed.Config))
+	}
+
+	cs := iresolver.GetConfigSelector(rState)
+	if cs == nil {
+		t.Fatal("received nil config selector")
+	}
+
+	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()})
+	if err != nil {
+		t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
+	}
+	cluster := clustermanager.GetPickedClusterForTesting(res.Context)
+	if cluster != "test-cluster-1" {
+		t.Fatalf("")
+	}
+	// delay res.OnCommitted()
+
+	// Perform TWO updates to ensure the old config selector does not hold a
+	// reference to test-cluster-1.
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
+		VirtualHosts: []*xdsclient.VirtualHost{
+			{
+				Domains: []string{targetStr},
+				Routes:  []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{"NEW": 1}}},
+			},
+		},
+	}, nil)
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
+		VirtualHosts: []*xdsclient.VirtualHost{
+			{
+				Domains: []string{targetStr},
+				Routes:  []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{"NEW": 1}}},
+			},
+		},
+	}, nil)
+
+	tcc.stateCh.Receive(ctx) // Ignore the first update
+	gotState, err = tcc.stateCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+	rState = gotState.(resolver.State)
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+	wantJSON2 := `{"loadBalancingConfig":[{
+    "xds_cluster_manager_experimental":{
+      "children":{
+        "test-cluster-1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+        },
+        "NEW":{
+          "childPolicy":[{"cds_experimental":{"cluster":"NEW"}}]
+        }
+      }
+    }}]}`
+	wantSCParsed2 := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON2)
+	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed2.Config) {
+		t.Errorf("ClientConn.UpdateState received different service config")
+		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
+		t.Fatal("want: ", cmp.Diff(nil, wantSCParsed2.Config))
+	}
+
+	// Invoke OnCommitted; should lead to a service config update that deletes
+	// test-cluster-1.
+	res.OnCommitted()
+
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
+		VirtualHosts: []*xdsclient.VirtualHost{
+			{
+				Domains: []string{targetStr},
+				Routes:  []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{"NEW": 1}}},
+			},
+		},
+	}, nil)
+	gotState, err = tcc.stateCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+	rState = gotState.(resolver.State)
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+	wantJSON3 := `{"loadBalancingConfig":[{
+    "xds_cluster_manager_experimental":{
+      "children":{
+        "NEW":{
+          "childPolicy":[{"cds_experimental":{"cluster":"NEW"}}]
+        }
+      }
+    }}]}`
+	wantSCParsed3 := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON3)
+	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed3.Config) {
+		t.Errorf("ClientConn.UpdateState received different service config")
+		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
+		t.Fatal("want: ", cmp.Diff(nil, wantSCParsed3.Config))
 	}
 }
 

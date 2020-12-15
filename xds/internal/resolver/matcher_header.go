@@ -16,7 +16,7 @@
  *
  */
 
-package xdsrouting
+package resolver
 
 import (
 	"fmt"
@@ -29,7 +29,6 @@ import (
 
 type headerMatcherInterface interface {
 	match(metadata.MD) bool
-	equal(headerMatcherInterface) bool
 	String() string
 }
 
@@ -62,14 +61,6 @@ func (hem *headerExactMatcher) match(md metadata.MD) bool {
 	return v == hem.exact
 }
 
-func (hem *headerExactMatcher) equal(m headerMatcherInterface) bool {
-	mm, ok := m.(*headerExactMatcher)
-	if !ok {
-		return false
-	}
-	return hem.key == mm.key && hem.exact == mm.exact
-}
-
 func (hem *headerExactMatcher) String() string {
 	return fmt.Sprintf("headerExact:%v:%v", hem.key, hem.exact)
 }
@@ -89,14 +80,6 @@ func (hrm *headerRegexMatcher) match(md metadata.MD) bool {
 		return false
 	}
 	return hrm.re.MatchString(v)
-}
-
-func (hrm *headerRegexMatcher) equal(m headerMatcherInterface) bool {
-	mm, ok := m.(*headerRegexMatcher)
-	if !ok {
-		return false
-	}
-	return hrm.key == mm.key && hrm.re.String() == mm.re.String()
 }
 
 func (hrm *headerRegexMatcher) String() string {
@@ -123,14 +106,6 @@ func (hrm *headerRangeMatcher) match(md metadata.MD) bool {
 	return false
 }
 
-func (hrm *headerRangeMatcher) equal(m headerMatcherInterface) bool {
-	mm, ok := m.(*headerRangeMatcher)
-	if !ok {
-		return false
-	}
-	return hrm.key == mm.key && hrm.start == mm.start && hrm.end == mm.end
-}
-
 func (hrm *headerRangeMatcher) String() string {
 	return fmt.Sprintf("headerRange:%v:[%d,%d)", hrm.key, hrm.start, hrm.end)
 }
@@ -148,14 +123,6 @@ func (hpm *headerPresentMatcher) match(md metadata.MD) bool {
 	vs, ok := mdValuesFromOutgoingCtx(md, hpm.key)
 	present := ok && len(vs) > 0
 	return present == hpm.present
-}
-
-func (hpm *headerPresentMatcher) equal(m headerMatcherInterface) bool {
-	mm, ok := m.(*headerPresentMatcher)
-	if !ok {
-		return false
-	}
-	return hpm.key == mm.key && hpm.present == mm.present
 }
 
 func (hpm *headerPresentMatcher) String() string {
@@ -179,14 +146,6 @@ func (hpm *headerPrefixMatcher) match(md metadata.MD) bool {
 	return strings.HasPrefix(v, hpm.prefix)
 }
 
-func (hpm *headerPrefixMatcher) equal(m headerMatcherInterface) bool {
-	mm, ok := m.(*headerPrefixMatcher)
-	if !ok {
-		return false
-	}
-	return hpm.key == mm.key && hpm.prefix == mm.prefix
-}
-
 func (hpm *headerPrefixMatcher) String() string {
 	return fmt.Sprintf("headerPrefix:%v:%v", hpm.key, hpm.prefix)
 }
@@ -208,14 +167,6 @@ func (hsm *headerSuffixMatcher) match(md metadata.MD) bool {
 	return strings.HasSuffix(v, hsm.suffix)
 }
 
-func (hsm *headerSuffixMatcher) equal(m headerMatcherInterface) bool {
-	mm, ok := m.(*headerSuffixMatcher)
-	if !ok {
-		return false
-	}
-	return hsm.key == mm.key && hsm.suffix == mm.suffix
-}
-
 func (hsm *headerSuffixMatcher) String() string {
 	return fmt.Sprintf("headerSuffix:%v:%v", hsm.key, hsm.suffix)
 }
@@ -230,14 +181,6 @@ func newInvertMatcher(m headerMatcherInterface) *invertMatcher {
 
 func (i *invertMatcher) match(md metadata.MD) bool {
 	return !i.m.match(md)
-}
-
-func (i *invertMatcher) equal(m headerMatcherInterface) bool {
-	mm, ok := m.(*invertMatcher)
-	if !ok {
-		return false
-	}
-	return i.m.equal(mm.m)
 }
 
 func (i *invertMatcher) String() string {

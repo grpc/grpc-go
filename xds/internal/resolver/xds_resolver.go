@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 
+	iresolver "google.golang.org/grpc/internal/resolver"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
@@ -46,10 +47,11 @@ type xdsResolverBuilder struct{}
 // time an xds resolver is built.
 func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
 	r := &xdsResolver{
-		target:   t,
-		cc:       cc,
-		closed:   grpcsync.NewEvent(),
-		updateCh: make(chan suWithError, 1),
+		target:         t,
+		cc:             cc,
+		closed:         grpcsync.NewEvent(),
+		updateCh:       make(chan suWithError, 1),
+		activeClusters: make(map[string]*clusterInfo),
 	}
 	r.logger = prefixLogger((r))
 	r.logger.Infof("Creating resolver for target: %+v", t)
@@ -88,8 +90,9 @@ type xdsClientInterface interface {
 // suWithError wraps the ServiceUpdate and error received through a watch API
 // callback, so that it can pushed onto the update channel as a single entity.
 type suWithError struct {
-	su  serviceUpdate
-	err error
+	su          serviceUpdate
+	emptyUpdate bool
+	err         error
 }
 
 // xdsResolver implements the resolver.Resolver interface.
@@ -112,15 +115,11 @@ type xdsResolver struct {
 	// cancelWatch is the function to cancel the watcher.
 	cancelWatch func()
 
-	// actions is a map from hash of weighted cluster, to the weighted cluster
-	// map, and it's assigned name. E.g.
-	//   "A40_B60_": {{A:40, B:60}, "A_B_", "A_B_0"}
-	//   "A30_B70_": {{A:30, B:70}, "A_B_", "A_B_1"}
-	//   "B90_C10_": {{B:90, C:10}, "B_C_", "B_C_0"}
-	actions map[string]actionWithAssignedName
-	// usedActionNameRandomNumber contains random numbers that have been used in
-	// assigned names, to avoid collision.
-	usedActionNameRandomNumber map[int64]bool
+	// activeClusters is a map from cluster name to a ref count.  Only read or
+	// written during a service update (synchronous).
+	activeClusters map[string]*clusterInfo
+
+	curConfigSelector *configSelector
 }
 
 // run is a long running goroutine which blocks on receiving service updates
@@ -141,23 +140,55 @@ func (r *xdsResolver) run() {
 					r.cc.UpdateState(resolver.State{
 						ServiceConfig: r.cc.ParseServiceConfig("{}"),
 					})
+					// Dereference the active config selector, if one exists.
+					r.curConfigSelector.decRefs()
+					r.curConfigSelector = nil
 					continue
 				}
 				// Send error to ClientConn, and balancers, if error is not
-				// resource not found.
+				// resource not found.  No need to update resolver state if we
+				// can keep using the old config.
 				r.cc.ReportError(update.err)
 				continue
 			}
-			sc, err := r.serviceUpdateToJSON(update.su)
+			var cs *configSelector
+			if !update.emptyUpdate {
+				// Create the config selector for this update.
+				var err error
+				if cs, err = r.newConfigSelector(update.su); err != nil {
+					r.logger.Warningf("Error parsing update on resource %v from xds-client %p: %v", r.target.Endpoint, r.client, err)
+					r.cc.ReportError(err)
+					continue
+				}
+			} else {
+				// Empty update; use the existing config selector.
+				cs = r.curConfigSelector
+			}
+			// Account for this config selector's clusters.
+			cs.incRefs()
+			// Delete entries from r.activeClusters with zero references;
+			// otherwise serviceConfigJSON will generate a config including
+			// them.
+			r.pruneActiveClusters()
+			// Produce the service config.
+			sc, err := serviceConfigJSON(r.activeClusters)
 			if err != nil {
-				r.logger.Warningf("failed to convert update to service config: %v", err)
+				// JSON marshal error; should never happen.
+				r.logger.Errorf("%v", err)
 				r.cc.ReportError(err)
+				cs.decRefs()
 				continue
 			}
 			r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.client, sc)
-			r.cc.UpdateState(resolver.State{
+			// Send the update to the ClientConn.
+			state := iresolver.SetConfigSelector(resolver.State{
 				ServiceConfig: r.cc.ParseServiceConfig(sc),
-			})
+			}, cs)
+			r.cc.UpdateState(state)
+			// Decrement references to the old config selector and assign the
+			// new one as the current one.
+			r.curConfigSelector.decRefs()
+			r.curConfigSelector = cs
 		}
 	}
 }
@@ -170,7 +201,7 @@ func (r *xdsResolver) handleServiceUpdate(su serviceUpdate, err error) {
 		// Do not pass updates to the ClientConn once the resolver is closed.
 		return
 	}
-	r.updateCh <- suWithError{su, err}
+	r.updateCh <- suWithError{su: su, err: err}
 }
 
 // ResolveNow is a no-op at this point.

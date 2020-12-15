@@ -16,7 +16,7 @@
  *
  */
 
-package xdsrouting
+package clustermanager
 
 import (
 	"context"
@@ -27,11 +27,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
@@ -94,7 +95,7 @@ func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
 		testBackendAddrStrs = append(testBackendAddrStrs, fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i))
 	}
-	rtBuilder = balancer.Get(xdsRoutingName)
+	rtBuilder = balancer.Get(balancerName)
 	rtParser = rtBuilder.(balancer.ConfigParser)
 
 	balancer.Register(&ignoreAttrsRRBuilder{balancer.Get(roundrobin.Name)})
@@ -106,7 +107,7 @@ func testPick(t *testing.T, p balancer.Picker, info balancer.PickInfo, wantSC ba
 	t.Helper()
 	for i := 0; i < 5; i++ {
 		gotSCSt, err := p.Pick(info)
-		if err != wantErr {
+		if fmt.Sprint(err) != fmt.Sprint(wantErr) {
 			t.Fatalf("picker.Pick(%+v), got error %v, want %v", info, err, wantErr)
 		}
 		if !cmp.Equal(gotSCSt.SubConn, wantSC, cmp.AllowUnexported(testutils.TestSubConn{})) {
@@ -115,19 +116,15 @@ func testPick(t *testing.T, p balancer.Picker, info balancer.PickInfo, wantSC ba
 	}
 }
 
-func TestRouting(t *testing.T) {
+func TestClusterPicks(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	rtb := rtBuilder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
-"Action": {
+"children": {
 	"cds:cluster_1":{ "childPolicy": [{"ignore_attrs_round_robin":""}] },
 	"cds:cluster_2":{ "childPolicy": [{"ignore_attrs_round_robin":""}] }
-},
-"Route": [
-	{"prefix":"/a/", "action":"cds:cluster_1"},
-	{"prefix":"", "headers":[{"name":"header-1", "exactMatch":"value-1"}], "action":"cds:cluster_2"}
-]
+}
 }`
 
 	config1, err := rtParser.ParseConfig([]byte(configJSON1))
@@ -173,212 +170,39 @@ func TestRouting(t *testing.T) {
 		wantErr  error
 	}{
 		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/a/0"},
-			wantSC:   m1[wantAddrs[0]],
-			wantErr:  nil,
-		},
-		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/a/1"},
-			wantSC:   m1[wantAddrs[0]],
-			wantErr:  nil,
+			pickInfo: balancer.PickInfo{
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+			},
+			wantSC: m1[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/z/y",
-				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("header-1", "value-1")),
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
 			},
-			wantSC:  m1[wantAddrs[1]],
-			wantErr: nil,
+			wantSC: m1[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/z/y",
-				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("h", "v")),
+				Ctx: SetPickedCluster(context.Background(), "notacluster"),
 			},
-			wantSC:  nil,
-			wantErr: errNoMatchedRouteFound,
+			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "notacluster"`),
 		},
 	} {
 		testPick(t, p1, tt.pickInfo, tt.wantSC, tt.wantErr)
 	}
 }
 
-// TestRoutingConfigUpdateAddRoute covers the cases the routing balancer
-// receives config update with extra route, but the same actions.
-func TestRoutingConfigUpdateAddRoute(t *testing.T) {
+// TestConfigUpdateAddCluster covers the cases the balancer receives config
+// update with extra clusters.
+func TestConfigUpdateAddCluster(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	rtb := rtBuilder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
-"Action": {
+"children": {
 	"cds:cluster_1":{ "childPolicy": [{"ignore_attrs_round_robin":""}] },
 	"cds:cluster_2":{ "childPolicy": [{"ignore_attrs_round_robin":""}] }
-},
-"Route": [
-	{"prefix":"/a/", "action":"cds:cluster_1"},
-	{"path":"/z/y", "action":"cds:cluster_2"}
-]
-}`
-
-	config1, err := rtParser.ParseConfig([]byte(configJSON1))
-	if err != nil {
-		t.Fatalf("failed to parse balancer config: %v", err)
-	}
-
-	// Send the config, and an address with hierarchy path ["cluster_1"].
-	wantAddrs := []resolver.Address{
-		{Addr: testBackendAddrStrs[0], Attributes: nil},
-		{Addr: testBackendAddrStrs[1], Attributes: nil},
-	}
-	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
-			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
-		}},
-		BalancerConfig: config1,
-	}); err != nil {
-		t.Fatalf("failed to update ClientConn state: %v", err)
-	}
-
-	m1 := make(map[resolver.Address]balancer.SubConn)
-	// Verify that a subconn is created with the address, and the hierarchy path
-	// in the address is cleared.
-	for range wantAddrs {
-		addrs := <-cc.NewSubConnAddrsCh
-		if len(hierarchy.Get(addrs[0])) != 0 {
-			t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].Attributes)
-		}
-		sc := <-cc.NewSubConnCh
-		// Clear the attributes before adding to map.
-		addrs[0].Attributes = nil
-		m1[addrs[0]] = sc
-		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	}
-
-	p1 := <-cc.NewPickerCh
-	for _, tt := range []struct {
-		pickInfo balancer.PickInfo
-		wantSC   balancer.SubConn
-		wantErr  error
-	}{
-		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/a/0"},
-			wantSC:   m1[wantAddrs[0]],
-			wantErr:  nil,
-		},
-		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/a/1"},
-			wantSC:   m1[wantAddrs[0]],
-			wantErr:  nil,
-		},
-		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/z/y"},
-			wantSC:   m1[wantAddrs[1]],
-			wantErr:  nil,
-		},
-		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/c/d"},
-			wantSC:   nil,
-			wantErr:  errNoMatchedRouteFound,
-		},
-	} {
-		testPick(t, p1, tt.pickInfo, tt.wantSC, tt.wantErr)
-	}
-
-	// A config update with different routes, but the same actions. Expect a
-	// picker update, but no subconn changes.
-	configJSON2 := `{
-"Action": {
-	"cds:cluster_1":{ "childPolicy": [{"ignore_attrs_round_robin":""}] },
-	"cds:cluster_2":{ "childPolicy": [{"ignore_attrs_round_robin":""}] }
-},
-"Route": [
-	{"prefix":"", "headers":[{"name":"header-1", "presentMatch":true}], "action":"cds:cluster_2"},
-	{"prefix":"/a/", "action":"cds:cluster_1"},
-	{"path":"/z/y", "action":"cds:cluster_2"}
-]
-}`
-	config2, err := rtParser.ParseConfig([]byte(configJSON2))
-	if err != nil {
-		t.Fatalf("failed to parse balancer config: %v", err)
-	}
-	// Send update with the same addresses.
-	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
-			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
-		}},
-		BalancerConfig: config2,
-	}); err != nil {
-		t.Fatalf("failed to update ClientConn state: %v", err)
-	}
-
-	// New change to actions, expect no newSubConn.
-	select {
-	case <-time.After(time.Millisecond * 500):
-	case <-cc.NewSubConnCh:
-		addrs := <-cc.NewSubConnAddrsCh
-		t.Fatalf("unexpected NewSubConn with address %v", addrs)
-	}
-
-	p2 := <-cc.NewPickerCh
-	for _, tt := range []struct {
-		pickInfo balancer.PickInfo
-		wantSC   balancer.SubConn
-		wantErr  error
-	}{
-		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/a/0"},
-			wantSC:   m1[wantAddrs[0]],
-			wantErr:  nil,
-		},
-		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/a/1"},
-			wantSC:   m1[wantAddrs[0]],
-			wantErr:  nil,
-		},
-		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/z/y"},
-			wantSC:   m1[wantAddrs[1]],
-			wantErr:  nil,
-		},
-		{
-			pickInfo: balancer.PickInfo{
-				FullMethodName: "/a/z",
-				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("header-1", "value-1")),
-			},
-			wantSC:  m1[wantAddrs[1]],
-			wantErr: nil,
-		},
-		{
-			pickInfo: balancer.PickInfo{
-				FullMethodName: "/c/d",
-				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("h", "v")),
-			},
-			wantSC:  nil,
-			wantErr: errNoMatchedRouteFound,
-		},
-	} {
-		testPick(t, p2, tt.pickInfo, tt.wantSC, tt.wantErr)
-	}
 }
-
-// TestRoutingConfigUpdateAddRouteAndAction covers the cases the routing
-// balancer receives config update with extra route and actions.
-func TestRoutingConfigUpdateAddRouteAndAction(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
-	rtb := rtBuilder.Build(cc, balancer.BuildOptions{})
-
-	configJSON1 := `{
-"Action": {
-	"cds:cluster_1":{ "childPolicy": [{"ignore_attrs_round_robin":""}] },
-	"cds:cluster_2":{ "childPolicy": [{"ignore_attrs_round_robin":""}] }
-},
-"Route": [
-	{"prefix":"/a/", "action":"cds:cluster_1"},
-	{"path":"/z/y", "action":"cds:cluster_2"}
-]
 }`
 
 	config1, err := rtParser.ParseConfig([]byte(configJSON1))
@@ -424,24 +248,22 @@ func TestRoutingConfigUpdateAddRouteAndAction(t *testing.T) {
 		wantErr  error
 	}{
 		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/a/0"},
-			wantSC:   m1[wantAddrs[0]],
-			wantErr:  nil,
+			pickInfo: balancer.PickInfo{
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+			},
+			wantSC: m1[wantAddrs[0]],
 		},
 		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/a/1"},
-			wantSC:   m1[wantAddrs[0]],
-			wantErr:  nil,
+			pickInfo: balancer.PickInfo{
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
+			},
+			wantSC: m1[wantAddrs[1]],
 		},
 		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/z/y"},
-			wantSC:   m1[wantAddrs[1]],
-			wantErr:  nil,
-		},
-		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/c/d"},
-			wantSC:   nil,
-			wantErr:  errNoMatchedRouteFound,
+			pickInfo: balancer.PickInfo{
+				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
+			},
+			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
 	} {
 		testPick(t, p1, tt.pickInfo, tt.wantSC, tt.wantErr)
@@ -450,16 +272,11 @@ func TestRoutingConfigUpdateAddRouteAndAction(t *testing.T) {
 	// A config update with different routes, and different actions. Expect a
 	// new subconn and a picker update.
 	configJSON2 := `{
-"Action": {
+"children": {
 	"cds:cluster_1":{ "childPolicy": [{"ignore_attrs_round_robin":""}] },
 	"cds:cluster_2":{ "childPolicy": [{"ignore_attrs_round_robin":""}] },
 	"cds:cluster_3":{ "childPolicy": [{"ignore_attrs_round_robin":""}] }
-},
-"Route": [
-	{"prefix":"", "headers":[{"name":"header-1", "presentMatch":false, "invertMatch":true}], "action":"cds:cluster_3"},
-	{"prefix":"/a/", "action":"cds:cluster_1"},
-	{"path":"/z/y", "action":"cds:cluster_2"}
-]
+}
 }`
 	config2, err := rtParser.ParseConfig([]byte(configJSON2))
 	if err != nil {
@@ -504,56 +321,45 @@ func TestRoutingConfigUpdateAddRouteAndAction(t *testing.T) {
 		wantErr  error
 	}{
 		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/a/0"},
-			wantSC:   m1[wantAddrs[0]],
-			wantErr:  nil,
-		},
-		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/a/1"},
-			wantSC:   m1[wantAddrs[0]],
-			wantErr:  nil,
-		},
-		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/z/y"},
-			wantSC:   m1[wantAddrs[1]],
-			wantErr:  nil,
+			pickInfo: balancer.PickInfo{
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+			},
+			wantSC: m1[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/a/z",
-				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("header-1", "value-1")),
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
 			},
-			wantSC:  m1[wantAddrs[2]],
-			wantErr: nil,
+			wantSC: m1[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				FullMethodName: "/c/d",
-				Ctx:            metadata.NewOutgoingContext(context.Background(), metadata.Pairs("h", "v")),
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_3"),
 			},
-			wantSC:  nil,
-			wantErr: errNoMatchedRouteFound,
+			wantSC: m1[wantAddrs[2]],
+		},
+		{
+			pickInfo: balancer.PickInfo{
+				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
+			},
+			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
 	} {
 		testPick(t, p2, tt.pickInfo, tt.wantSC, tt.wantErr)
 	}
 }
 
-// TestRoutingConfigUpdateDeleteAll covers the cases the routing balancer receives config
-// update with no routes. Pick should fail with details in error.
+// TestRoutingConfigUpdateDeleteAll covers the cases the balancer receives
+// config update with no clusters. Pick should fail with details in error.
 func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	rtb := rtBuilder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
-"Action": {
+"children": {
 	"cds:cluster_1":{ "childPolicy": [{"ignore_attrs_round_robin":""}] },
 	"cds:cluster_2":{ "childPolicy": [{"ignore_attrs_round_robin":""}] }
-},
-"Route": [
-	{"prefix":"/a/", "action":"cds:cluster_1"},
-	{"path":"/z/y", "action":"cds:cluster_2"}
-]
+}
 }`
 
 	config1, err := rtParser.ParseConfig([]byte(configJSON1))
@@ -599,30 +405,28 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		wantErr  error
 	}{
 		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/a/0"},
-			wantSC:   m1[wantAddrs[0]],
-			wantErr:  nil,
+			pickInfo: balancer.PickInfo{
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+			},
+			wantSC: m1[wantAddrs[0]],
 		},
 		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/a/1"},
-			wantSC:   m1[wantAddrs[0]],
-			wantErr:  nil,
+			pickInfo: balancer.PickInfo{
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
+			},
+			wantSC: m1[wantAddrs[1]],
 		},
 		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/z/y"},
-			wantSC:   m1[wantAddrs[1]],
-			wantErr:  nil,
-		},
-		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/c/d"},
-			wantSC:   nil,
-			wantErr:  errNoMatchedRouteFound,
+			pickInfo: balancer.PickInfo{
+				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
+			},
+			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
 	} {
 		testPick(t, p1, tt.pickInfo, tt.wantSC, tt.wantErr)
 	}
 
-	// A config update with no routes.
+	// A config update with no clusters.
 	configJSON2 := `{}`
 	config2, err := rtParser.ParseConfig([]byte(configJSON2))
 	if err != nil {
@@ -634,7 +438,7 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// Expect two remove subconn.
+	// Expect two removed subconns.
 	for range wantAddrs {
 		select {
 		case <-time.After(time.Millisecond * 500):
@@ -645,13 +449,13 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 
 	p2 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, err := p2.Pick(balancer.PickInfo{})
-		if err != errNoMatchedRouteFound {
-			t.Fatalf("picker.Pick, got %v, %v, want error %v", gotSCSt, err, errNoMatchedRouteFound)
+		gotSCSt, err := p2.Pick(balancer.PickInfo{Ctx: SetPickedCluster(context.Background(), "cds:notacluster")})
+		if fmt.Sprint(err) != status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`).Error() {
+			t.Fatalf("picker.Pick, got %v, %v, want error %v", gotSCSt, err, `unknown cluster selected for RPC: "cds:notacluster"`)
 		}
 	}
 
-	// Resend the previous config with routes and actions.
+	// Resend the previous config with clusters
 	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
@@ -685,24 +489,22 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		wantErr  error
 	}{
 		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/a/0"},
-			wantSC:   m2[wantAddrs[0]],
-			wantErr:  nil,
+			pickInfo: balancer.PickInfo{
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+			},
+			wantSC: m2[wantAddrs[0]],
 		},
 		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/a/1"},
-			wantSC:   m2[wantAddrs[0]],
-			wantErr:  nil,
+			pickInfo: balancer.PickInfo{
+				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
+			},
+			wantSC: m2[wantAddrs[1]],
 		},
 		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/z/y"},
-			wantSC:   m2[wantAddrs[1]],
-			wantErr:  nil,
-		},
-		{
-			pickInfo: balancer.PickInfo{FullMethodName: "/c/d"},
-			wantSC:   nil,
-			wantErr:  errNoMatchedRouteFound,
+			pickInfo: balancer.PickInfo{
+				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
+			},
+			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
 	} {
 		testPick(t, p3, tt.pickInfo, tt.wantSC, tt.wantErr)

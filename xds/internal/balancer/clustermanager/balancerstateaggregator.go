@@ -16,7 +16,7 @@
  *
  */
 
-package xdsrouting
+package clustermanager
 
 import (
 	"fmt"
@@ -47,8 +47,6 @@ type balancerStateAggregator struct {
 	logger *grpclog.PrefixLogger
 
 	mu sync.Mutex
-	// routes, one for each matcher.
-	routes []route
 	// If started is false, no updates should be sent to the parent cc. A closed
 	// sub-balancer could still send pickers to this aggregator. This makes sure
 	// that no updates will be forwarded to parent when the whole balancer group
@@ -71,29 +69,29 @@ func newBalancerStateAggregator(cc balancer.ClientConn, logger *grpclog.PrefixLo
 
 // Start starts the aggregator. It can be called after Close to restart the
 // aggretator.
-func (rbsa *balancerStateAggregator) start() {
-	rbsa.mu.Lock()
-	defer rbsa.mu.Unlock()
-	rbsa.started = true
+func (bsa *balancerStateAggregator) start() {
+	bsa.mu.Lock()
+	defer bsa.mu.Unlock()
+	bsa.started = true
 }
 
 // Close closes the aggregator. When the aggregator is closed, it won't call
 // parent ClientConn to update balancer state.
-func (rbsa *balancerStateAggregator) close() {
-	rbsa.mu.Lock()
-	defer rbsa.mu.Unlock()
-	rbsa.started = false
-	rbsa.clearStates()
+func (bsa *balancerStateAggregator) close() {
+	bsa.mu.Lock()
+	defer bsa.mu.Unlock()
+	bsa.started = false
+	bsa.clearStates()
 }
 
 // add adds a sub-balancer state with weight. It adds a place holder, and waits
 // for the real sub-balancer to update state.
 //
-// This is called when there's a new action.
-func (rbsa *balancerStateAggregator) add(id string) {
-	rbsa.mu.Lock()
-	defer rbsa.mu.Unlock()
-	rbsa.idToPickerState[id] = &subBalancerState{
+// This is called when there's a new child.
+func (bsa *balancerStateAggregator) add(id string) {
+	bsa.mu.Lock()
+	defer bsa.mu.Unlock()
+	bsa.idToPickerState[id] = &subBalancerState{
 		// Start everything in CONNECTING, so if one of the sub-balancers
 		// reports TransientFailure, the RPCs will still wait for the other
 		// sub-balancers.
@@ -108,35 +106,26 @@ func (rbsa *balancerStateAggregator) add(id string) {
 // remove removes the sub-balancer state. Future updates from this sub-balancer,
 // if any, will be ignored.
 //
-// This is called when an action is removed.
-func (rbsa *balancerStateAggregator) remove(id string) {
-	rbsa.mu.Lock()
-	defer rbsa.mu.Unlock()
-	if _, ok := rbsa.idToPickerState[id]; !ok {
+// This is called when a child is removed.
+func (bsa *balancerStateAggregator) remove(id string) {
+	bsa.mu.Lock()
+	defer bsa.mu.Unlock()
+	if _, ok := bsa.idToPickerState[id]; !ok {
 		return
 	}
 	// Remove id and picker from picker map. This also results in future updates
 	// for this ID to be ignored.
-	delete(rbsa.idToPickerState, id)
-}
-
-// updateRoutes updates the routes. Note that it doesn't trigger an update to
-// the parent ClientConn. The caller should decide when it's necessary, and call
-// buildAndUpdate.
-func (rbsa *balancerStateAggregator) updateRoutes(newRoutes []route) {
-	rbsa.mu.Lock()
-	defer rbsa.mu.Unlock()
-	rbsa.routes = newRoutes
+	delete(bsa.idToPickerState, id)
 }
 
 // UpdateState is called to report a balancer state change from sub-balancer.
 // It's usually called by the balancer group.
 //
 // It calls parent ClientConn's UpdateState with the new aggregated state.
-func (rbsa *balancerStateAggregator) UpdateState(id string, state balancer.State) {
-	rbsa.mu.Lock()
-	defer rbsa.mu.Unlock()
-	pickerSt, ok := rbsa.idToPickerState[id]
+func (bsa *balancerStateAggregator) UpdateState(id string, state balancer.State) {
+	bsa.mu.Lock()
+	defer bsa.mu.Unlock()
+	pickerSt, ok := bsa.idToPickerState[id]
 	if !ok {
 		// All state starts with an entry in pickStateMap. If ID is not in map,
 		// it's either removed, or never existed.
@@ -151,18 +140,18 @@ func (rbsa *balancerStateAggregator) UpdateState(id string, state balancer.State
 	}
 	pickerSt.state = state
 
-	if !rbsa.started {
+	if !bsa.started {
 		return
 	}
-	rbsa.cc.UpdateState(rbsa.build())
+	bsa.cc.UpdateState(bsa.build())
 }
 
 // clearState Reset everything to init state (Connecting) but keep the entry in
 // map (to keep the weight).
 //
-// Caller must hold rbsa.mu.
-func (rbsa *balancerStateAggregator) clearStates() {
-	for _, pState := range rbsa.idToPickerState {
+// Caller must hold bsa.mu.
+func (bsa *balancerStateAggregator) clearStates() {
+	for _, pState := range bsa.idToPickerState {
 		pState.state = balancer.State{
 			ConnectivityState: connectivity.Connecting,
 			Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
@@ -173,19 +162,19 @@ func (rbsa *balancerStateAggregator) clearStates() {
 
 // buildAndUpdate combines the sub-state from each sub-balancer into one state,
 // and update it to parent ClientConn.
-func (rbsa *balancerStateAggregator) buildAndUpdate() {
-	rbsa.mu.Lock()
-	defer rbsa.mu.Unlock()
-	if !rbsa.started {
+func (bsa *balancerStateAggregator) buildAndUpdate() {
+	bsa.mu.Lock()
+	defer bsa.mu.Unlock()
+	if !bsa.started {
 		return
 	}
-	rbsa.cc.UpdateState(rbsa.build())
+	bsa.cc.UpdateState(bsa.build())
 }
 
-// build combines sub-states into one. The picker will do routing pick.
+// build combines sub-states into one. The picker will do a child pick.
 //
-// Caller must hold rbsa.mu.
-func (rbsa *balancerStateAggregator) build() balancer.State {
+// Caller must hold bsa.mu.
+func (bsa *balancerStateAggregator) build() balancer.State {
 	// TODO: the majority of this function (and UpdateState) is exactly the same
 	// as weighted_target's state aggregator. Try to make a general utility
 	// function/struct to handle the logic.
@@ -195,7 +184,7 @@ func (rbsa *balancerStateAggregator) build() balancer.State {
 	// function to calculate the aggregated connectivity state as in this
 	// function.
 	var readyN, connectingN int
-	for _, ps := range rbsa.idToPickerState {
+	for _, ps := range bsa.idToPickerState {
 		switch ps.stateToAggregate {
 		case connectivity.Ready:
 			readyN++
@@ -214,13 +203,13 @@ func (rbsa *balancerStateAggregator) build() balancer.State {
 	}
 
 	// The picker's return error might not be consistent with the
-	// aggregatedState. Because for routing, we want to always build picker with
-	// all sub-pickers (not even ready sub-pickers), so even if the overall
-	// state is Ready, pick for certain RPCs can behave like Connecting or
-	// TransientFailure.
-	rbsa.logger.Infof("Child pickers with routes: %s, actions: %+v", rbsa.routes, rbsa.idToPickerState)
+	// aggregatedState. Because for this LB policy, we want to always build
+	// picker with all sub-pickers (not only ready sub-pickers), so even if the
+	// overall state is Ready, pick for certain RPCs can behave like Connecting
+	// or TransientFailure.
+	bsa.logger.Infof("Child pickers: %+v", bsa.idToPickerState)
 	return balancer.State{
 		ConnectivityState: aggregatedState,
-		Picker:            newPickerGroup(rbsa.routes, rbsa.idToPickerState),
+		Picker:            newPickerGroup(bsa.idToPickerState),
 	}
 }

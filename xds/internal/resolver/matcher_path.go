@@ -16,7 +16,7 @@
  *
  */
 
-package xdsrouting
+package resolver
 
 import (
 	"regexp"
@@ -25,7 +25,6 @@ import (
 
 type pathMatcherInterface interface {
 	match(path string) bool
-	equal(pathMatcherInterface) bool
 	String() string
 }
 
@@ -51,14 +50,6 @@ func (pem *pathExactMatcher) match(path string) bool {
 		return pem.fullPath == strings.ToUpper(path)
 	}
 	return pem.fullPath == path
-}
-
-func (pem *pathExactMatcher) equal(m pathMatcherInterface) bool {
-	mm, ok := m.(*pathExactMatcher)
-	if !ok {
-		return false
-	}
-	return pem.fullPath == mm.fullPath && pem.caseInsensitive == mm.caseInsensitive
 }
 
 func (pem *pathExactMatcher) String() string {
@@ -89,14 +80,6 @@ func (ppm *pathPrefixMatcher) match(path string) bool {
 	return strings.HasPrefix(path, ppm.prefix)
 }
 
-func (ppm *pathPrefixMatcher) equal(m pathMatcherInterface) bool {
-	mm, ok := m.(*pathPrefixMatcher)
-	if !ok {
-		return false
-	}
-	return ppm.prefix == mm.prefix && ppm.caseInsensitive == mm.caseInsensitive
-}
-
 func (ppm *pathPrefixMatcher) String() string {
 	return "pathPrefix:" + ppm.prefix
 }
@@ -111,14 +94,6 @@ func newPathRegexMatcher(re *regexp.Regexp) *pathRegexMatcher {
 
 func (prm *pathRegexMatcher) match(path string) bool {
 	return prm.re.MatchString(path)
-}
-
-func (prm *pathRegexMatcher) equal(m pathMatcherInterface) bool {
-	mm, ok := m.(*pathRegexMatcher)
-	if !ok {
-		return false
-	}
-	return prm.re.String() == mm.re.String()
 }
 
 func (prm *pathRegexMatcher) String() string {
