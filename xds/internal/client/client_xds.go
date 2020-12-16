@@ -134,19 +134,13 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 		return nil, fmt.Errorf("xds: socket_address port does not match the one in name. Got %q, want %q", p, port)
 	}
 
-	// Make sure that the listener resource contains a single filter chain with
-	// the application_protocols field set to "managed-mtls", and the
-	// "transport_socket" field containing the appropriate security
-	// configuration.
+	// Make sure the listener resource contains a single filter chain. We do not
+	// support multiple filter chains and picking the best match from the list.
 	fcs := lis.GetFilterChains()
 	if n := len(fcs); n != 1 {
 		return nil, fmt.Errorf("xds: filter chains count in LDS response does not match expected. Got %d, want 1", n)
 	}
 	fc := fcs[0]
-	aps := fc.GetFilterChainMatch().GetApplicationProtocols()
-	if len(aps) != 1 || aps[0] != "managed-mtls" {
-		return nil, fmt.Errorf("xds: application_protocols in LDS response does not match expected. Got %v, want %q", aps, "managed-mtls")
-	}
 
 	// If the transport_socket field is not specified, it means that the control
 	// plane has not sent us any security config. This is fine and the server
