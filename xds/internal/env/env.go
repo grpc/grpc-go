@@ -29,7 +29,7 @@ const (
 	bootstrapFileNameEnv      = "GRPC_XDS_BOOTSTRAP"
 	xdsV3SupportEnv           = "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT"
 	circuitBreakingSupportEnv = "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING"
-	timeoutSupportEnv         = "GRPC_XDS_EXPERIMENTAL_TIMEOUT"
+	timeoutSupportEnv         = "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT"
 )
 
 var (
@@ -47,6 +47,6 @@ var (
 	CircuitBreakingSupport = strings.EqualFold(os.Getenv(circuitBreakingSupportEnv), "true")
 	// TimeoutSupport indicates whether support for max_stream_duration in
 	// route actions is enabled.  This can be enabled by setting the
-	// environment variable "GRPC_XDS_EXPERIMENTAL_TIMEOUT" to "true".
+	// environment variable "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT" to "true".
 	TimeoutSupport = strings.EqualFold(os.Getenv(timeoutSupportEnv), "true")
 )
