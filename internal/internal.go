@@ -64,7 +64,7 @@ var (
 	// GetServerCredentials returns the transport credentials configured on a
 	// gRPC server. An xDS-enabled server needs to know what type of credentials
 	// is configured on the underlying gRPC server. This is set by server.go.
-	GetServerCredentials interface{} // func (interface{}) credentials.TransportCredentials
+	GetServerCredentials interface{} // func (*grpc.Server) credentials.TransportCredentials
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.

@@ -177,7 +177,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 	// providers after receiving an LDS response with security configuration.
 	if s.xdsCredsInUse {
 		bc := s.xdsC.BootstrapConfig()
-		if len(bc.CertProviderConfigs) == 0 {
+		if bc == nil || len(bc.CertProviderConfigs) == 0 {
 			return errors.New("xds: certificate_providers config missing in bootstrap file")
 		}
 	}

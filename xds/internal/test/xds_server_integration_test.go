@@ -39,9 +39,15 @@ import (
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
+<<<<<<< HEAD
+=======
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/status"
+>>>>>>> beced0ad (review comments)
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
 	"google.golang.org/grpc/xds"
@@ -387,7 +393,7 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 
 	// We don't set 'waitForReady` here since we want this call to failfast.
 	client := testpb.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Convert(err).Code() != codes.Unavailable {
 		t.Fatal("rpc EmptyCall() succeeded when expected to fail")
 	}
 
