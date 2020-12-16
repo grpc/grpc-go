@@ -214,11 +214,6 @@ func (w *watcher) updateRootDistributor() {
 // changes, and pushes new key material into the appropriate distributors which
 // is returned from calls to KeyMaterial().
 func (w *watcher) run(ctx context.Context) {
-	// Update both root and identity certs at the beginning. Subsequently,
-	// update only the appropriate file whose ticker has fired.
-	w.updateIdentityDistributor()
-	w.updateRootDistributor()
-
 	ticker := time.NewTicker(w.opts.RefreshDuration)
 	for {
 		w.updateIdentityDistributor()
