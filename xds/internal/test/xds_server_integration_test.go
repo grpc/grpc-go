@@ -232,9 +232,6 @@ func listenerResourceWithoutSecurityConfig(t *testing.T, lis net.Listener) *v3li
 		FilterChains: []*v3listenerpb.FilterChain{
 			{
 				Name: "filter-chain-1",
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					ApplicationProtocols: []string{"managed-mtls"},
-				},
 			},
 		},
 	}
@@ -258,9 +255,6 @@ func listenerResourceWithSecurityConfig(t *testing.T, lis net.Listener) *v3liste
 		FilterChains: []*v3listenerpb.FilterChain{
 			{
 				Name: "filter-chain-1",
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					ApplicationProtocols: []string{"managed-mtls"},
-				},
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
