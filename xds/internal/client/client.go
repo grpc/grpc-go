@@ -149,6 +149,10 @@ type ListenerUpdate struct {
 	SecurityCfg *SecurityConfig
 }
 
+func (lu *ListenerUpdate) String() string {
+	return fmt.Sprintf("{RouteConfigName: %q, SecurityConfig: %+v", lu.RouteConfigName, lu.SecurityCfg)
+}
+
 // RouteConfigUpdate contains information received in an RDS response, which is
 // of interest to the registered RDS watcher.
 type RouteConfigUpdate struct {
