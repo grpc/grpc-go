@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
+	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
@@ -217,8 +218,8 @@ func newTestContextWithHandshakeInfo(parent context.Context, root, identity cert
 	// Creating the HandshakeInfo and adding it to the attributes is very
 	// similar to what the CDS balancer would do when it intercepts calls to
 	// NewSubConn().
-	info := NewHandshakeInfo(root, identity, sans...)
-	addr := SetHandshakeInfo(resolver.Address{}, info)
+	info := xdsinternal.NewHandshakeInfo(root, identity, sans...)
+	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, info)
 
 	// Moving the attributes from the resolver.Address to the context passed to
 	// the handshaker is done in the transport layer. Since we directly call the
@@ -529,12 +530,12 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	// Create a root provider which will fail the handshake because it does not
 	// use the correct trust roots.
 	root1 := makeRootProvider(t, "x509/client_ca_cert.pem")
-	handshakeInfo := NewHandshakeInfo(root1, nil, defaultTestCertSAN)
+	handshakeInfo := xdsinternal.NewHandshakeInfo(root1, nil, defaultTestCertSAN)
 
 	// We need to repeat most of what newTestContextWithHandshakeInfo() does
 	// here because we need access to the underlying HandshakeInfo so that we
 	// can update it before the next call to ClientHandshake().
-	addr := SetHandshakeInfo(resolver.Address{}, handshakeInfo)
+	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, handshakeInfo)
 	contextWithHandshakeInfo := internal.NewClientHandshakeInfoContext.(func(context.Context, credentials.ClientHandshakeInfo) context.Context)
 	ctx = contextWithHandshakeInfo(ctx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
 	if _, _, err := creds.ClientHandshake(ctx, authority, conn); err == nil {

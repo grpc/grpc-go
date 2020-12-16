@@ -29,9 +29,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
-	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -210,7 +210,7 @@ func (s *GRPCServer) newListenerWrapper(lis net.Listener) (*listenerWrapper, err
 	lw := &listenerWrapper{
 		Listener: lis,
 		closed:   grpcsync.NewEvent(),
-		xdsHI:    xds.NewHandshakeInfo(nil, nil),
+		xdsHI:    xdsinternal.NewHandshakeInfo(nil, nil),
 	}
 
 	// This is used to notify that a good update has been received and that
@@ -436,7 +436,7 @@ type listenerWrapper struct {
 	cachedIdentity certprovider.Provider
 
 	// Wraps all information required by the xds handshaker.
-	xdsHI *xds.HandshakeInfo
+	xdsHI *xdsinternal.HandshakeInfo
 }
 
 // Accept blocks on an Accept() on the underlying listener, and wraps the
@@ -480,7 +480,7 @@ type conn struct {
 	// This is the same HandshakeInfo as stored in the listenerWrapper that
 	// created this conn. The former updates the HandshakeInfo whenever it
 	// receives new security configuration.
-	xdsHI *xds.HandshakeInfo
+	xdsHI *xdsinternal.HandshakeInfo
 
 	// The connection deadline as configured by the grpc.Server on the rawConn
 	// that is returned by a call to Accept(). This is set to the connection
@@ -512,6 +512,6 @@ func (c *conn) GetDeadline() time.Time {
 
 // XDSHandshakeInfo returns a pointer to the HandshakeInfo stored in conn. This
 // will be invoked by the ServerHandshake() method of the XdsCredentials.
-func (c *conn) XDSHandshakeInfo() *xds.HandshakeInfo {
+func (c *conn) XDSHandshakeInfo() *xdsinternal.HandshakeInfo {
 	return c.xdsHI
 }
