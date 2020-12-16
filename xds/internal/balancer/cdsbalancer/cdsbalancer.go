@@ -27,17 +27,16 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
-	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/buffer"
+	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
 	"google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
-
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
 const (
@@ -81,7 +80,7 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 		updateCh:    buffer.NewUnbounded(),
 		closed:      grpcsync.NewEvent(),
 		cancelWatch: func() {}, // No-op at this point.
-		xdsHI:       xds.NewHandshakeInfo(nil, nil),
+		xdsHI:       xdsinternal.NewHandshakeInfo(nil, nil),
 	}
 	b.logger = prefixLogger((b))
 	b.logger.Infof("Created")
@@ -188,7 +187,7 @@ type cdsBalancer struct {
 	// a new provider is to be created.
 	cachedRoot     certprovider.Provider
 	cachedIdentity certprovider.Provider
-	xdsHI          *xds.HandshakeInfo
+	xdsHI          *xdsinternal.HandshakeInfo
 	xdsCredsInUse  bool
 }
 
@@ -506,7 +505,7 @@ type ccWrapper struct {
 
 	// The certificate providers in this HandshakeInfo are updated based on the
 	// received security configuration in the Cluster resource.
-	xdsHI *xds.HandshakeInfo
+	xdsHI *xdsinternal.HandshakeInfo
 }
 
 // NewSubConn intercepts NewSubConn() calls from the child policy and adds an
@@ -515,7 +514,7 @@ type ccWrapper struct {
 func (ccw *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
-		newAddrs[i] = xds.SetHandshakeInfo(addr, ccw.xdsHI)
+		newAddrs[i] = xdsinternal.SetHandshakeInfo(addr, ccw.xdsHI)
 	}
 	return ccw.ClientConn.NewSubConn(newAddrs, opts)
 }
