@@ -174,7 +174,13 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	if err != nil {
 		return nil, err
 	}
+	if sc.IdentityInstanceName == "" {
+		return nil, errors.New("security configuration on the server-side does not contain identity certificate provider instance name")
+	}
 	sc.RequireClientCert = downstreamCtx.GetRequireClientCertificate().GetValue()
+	if sc.RequireClientCert && sc.RootInstanceName == "" {
+		return nil, errors.New("security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set")
+	}
 	return &ListenerUpdate{SecurityCfg: sc}, nil
 }
 
@@ -425,7 +431,14 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 		return nil, errors.New("xds: UpstreamTlsContext in CDS response does not contain a CommonTlsContext")
 	}
 
-	return securityConfigFromCommonTLSContext(upstreamCtx.GetCommonTlsContext())
+	sc, err := securityConfigFromCommonTLSContext(upstreamCtx.GetCommonTlsContext())
+	if err != nil {
+		return nil, err
+	}
+	if sc.RootInstanceName == "" {
+		return nil, errors.New("security configuration on the client-side does not contain root certificate provider instance name")
+	}
+	return sc, nil
 }
 
 // common is expected to be not nil.
@@ -468,6 +481,8 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext) (*Secu
 		pi := common.GetValidationContextCertificateProviderInstance()
 		sc.RootInstanceName = pi.GetInstanceName()
 		sc.RootCertName = pi.GetCertificateName()
+	case nil:
+		// It is valid for the validation context to be nil on the server side.
 	default:
 		return nil, fmt.Errorf("xds: validation context contains unexpected type: %T", t)
 	}
