@@ -350,7 +350,7 @@ func (s *GRPCServer) handleSecurityConfig(config *xdsclient.SecurityConfig, lw *
 func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanceName, certName string, wantIdentity, wantRoot bool) (certprovider.Provider, error) {
 	cfg, ok := configs[instanceName]
 	if !ok {
-		return nil, fmt.Errorf("xds: certificate provider instance %q not found in bootstrap file", instanceName)
+		return nil, fmt.Errorf("certificate provider instance %q not found in bootstrap file", instanceName)
 	}
 	provider, err := cfg.Build(certprovider.BuildOptions{
 		CertName:     certName,
@@ -362,7 +362,7 @@ func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanc
 		// config and makes sure that it is acceptable to the plugin. Still, it
 		// is possible that the plugin parses the config successfully, but its
 		// Build() method errors out.
-		return nil, fmt.Errorf("xds: failed to get security plugin instance (%+v): %v", cfg, err)
+		return nil, fmt.Errorf("failed to get security plugin instance (%+v): %v", cfg, err)
 	}
 	return provider, nil
 }
