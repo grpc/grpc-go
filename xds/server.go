@@ -50,7 +50,7 @@ var (
 	}
 
 	// Unexported function to retrieve transport credentials from a gRPC server.
-	grpcGetServerCreds = internal.GetServerCredentials.(func(interface{}) credentials.TransportCredentials)
+	grpcGetServerCreds = internal.GetServerCredentials.(func(*grpc.Server) credentials.TransportCredentials)
 	buildProvider      = buildProviderFunc
 	logger             = grpclog.Component("xds")
 )
@@ -119,10 +119,18 @@ func NewGRPCServer(opts ...grpc.ServerOption) *GRPCServer {
 	s.logger = prefixLogger(s)
 	s.logger.Infof("Created xds.GRPCServer")
 
-	creds := grpcGetServerCreds(s.gs)
-	if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
-		s.xdsCredsInUse = true
+	// We type assert our underlying gRPC server to the real grpc.Server here
+	// before trying to retrieve the configured credentials. This approach
+	// avoids performing the same type assertion in the grpc package which
+	// provides the implementation for internal.GetServerCredentials, and allows
+	// us to use a fake gRPC server in tests.
+	if gs, ok := s.gs.(*grpc.Server); ok {
+		creds := grpcGetServerCreds(gs)
+		if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
+			s.xdsCredsInUse = true
+		}
 	}
+
 	s.logger.Infof("xDS credentials in use: %v", s.xdsCredsInUse)
 	return s
 }

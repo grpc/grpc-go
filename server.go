@@ -60,12 +60,8 @@ const (
 )
 
 func init() {
-	internal.GetServerCredentials = func(srv interface{}) credentials.TransportCredentials {
-		s, ok := srv.(*Server)
-		if !ok {
-			return nil
-		}
-		return s.opts.creds
+	internal.GetServerCredentials = func(srv *Server) credentials.TransportCredentials {
+		return srv.opts.creds
 	}
 }
 
