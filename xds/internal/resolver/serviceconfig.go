@@ -101,7 +101,7 @@ type route struct {
 }
 
 func (r route) String() string {
-	return r.m.String() + "->" + fmt.Sprint(r.clusters)
+	return fmt.Sprintf("%s -> { clusters: %v, maxStreamDuration: %v }", r.m.String(), r.clusters, r.maxStreamDuration)
 }
 
 type configSelector struct {

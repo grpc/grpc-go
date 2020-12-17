@@ -18,6 +18,7 @@
 package wrr
 
 import (
+	"fmt"
 	"sync"
 
 	"google.golang.org/grpc/internal/grpcrand"
@@ -27,6 +28,10 @@ import (
 type weightedItem struct {
 	Item   interface{}
 	Weight int64
+}
+
+func (w *weightedItem) String() string {
+	return fmt.Sprint(*w)
 }
 
 // randomWRR is a struct that contains weighted items implement weighted random algorithm.
@@ -67,4 +72,8 @@ func (rw *randomWRR) Add(item interface{}, weight int64) {
 	rItem := &weightedItem{Item: item, Weight: weight}
 	rw.items = append(rw.items, rItem)
 	rw.sumOfWeights += weight
+}
+
+func (rw *randomWRR) String() string {
+	return fmt.Sprint(rw.items)
 }

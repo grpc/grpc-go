@@ -19,6 +19,7 @@
 package testutils
 
 import (
+	"fmt"
 	"sync"
 
 	"google.golang.org/grpc/internal/wrr"
@@ -65,4 +66,8 @@ func (twrr *testWRR) Next() interface{} {
 	}
 	twrr.mu.Unlock()
 	return iww.item
+}
+
+func (twrr *testWRR) String() string {
+	return fmt.Sprint(twrr.itemsWithWeight)
 }
