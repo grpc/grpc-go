@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -791,7 +792,7 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 				t.Fatalf("failed to listen: %v", err)
 			}
 			defer lis.Close()
-			addr := lis.Addr().String()
+			addr := strings.Replace(lis.Addr().String(), "127.0.0.1", "localhost", 1)
 			pb.RegisterGreeterServer(s, greeterServer{})
 			go s.Serve(lis)
 			clientOptions := &ClientOptions{
