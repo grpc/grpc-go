@@ -236,7 +236,7 @@ func (s) TestParseHeaderMessageLengthConfigInvalid(t *testing.T) {
 	}
 }
 
-func (s) TestFillMethodLoggerWithConfigStringBlacklist(t *testing.T) {
+func (s) TestFillMethodLoggerWithConfigStringDenylist(t *testing.T) {
 	testCases := []string{
 		"p.s/m",
 		"service/method",
@@ -249,9 +249,9 @@ func (s) TestFillMethodLoggerWithConfigStringBlacklist(t *testing.T) {
 			t.Errorf("returned err %v, want nil", err)
 			continue
 		}
-		_, ok := l.blacklist[tc]
+		_, ok := l.denylist[tc]
 		if !ok {
-			t.Errorf("blacklist[%q] is not set", tc)
+			t.Errorf("denylist[%q] is not set", tc)
 		}
 	}
 }

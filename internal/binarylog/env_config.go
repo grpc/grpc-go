@@ -65,19 +65,19 @@ func (l *logger) fillMethodLoggerWithConfigString(config string) error {
 		return errors.New("empty string is not a valid method binary logging config")
 	}
 
-	// "-service/method", blacklist, no * or {} allowed.
+	// "-service/method", denylist, no * or {} allowed.
 	if config[0] == '-' {
 		s, m, suffix, err := parseMethodConfigAndSuffix(config[1:])
 		if err != nil {
 			return fmt.Errorf("invalid config: %q, %v", config, err)
 		}
 		if m == "*" {
-			return fmt.Errorf("invalid config: %q, %v", config, "* not allowed in blacklist config")
+			return fmt.Errorf("invalid config: %q, %v", config, "* not allowed in denylist config")
 		}
 		if suffix != "" {
-			return fmt.Errorf("invalid config: %q, %v", config, "header/message limit not allowed in blacklist config")
+			return fmt.Errorf("invalid config: %q, %v", config, "header/message limit not allowed in denylist config")
 		}
-		if err := l.setBlacklist(s + "/" + m); err != nil {
+		if err := l.setDenylist(s + "/" + m); err != nil {
 			return fmt.Errorf("invalid config: %v", err)
 		}
 		return nil

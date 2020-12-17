@@ -78,7 +78,7 @@ type logger struct {
 	services map[string]*methodLoggerConfig
 	methods  map[string]*methodLoggerConfig
 
-	blacklist map[string]struct{}
+	denylist map[string]struct{}
 }
 
 // newEmptyLogger creates an empty logger. The map fields need to be filled in
@@ -114,8 +114,8 @@ func (l *logger) setServiceMethodLogger(service string, ml *methodLoggerConfig) 
 //
 // New methodLogger with same method overrides the old one.
 func (l *logger) setMethodMethodLogger(method string, ml *methodLoggerConfig) error {
-	if _, ok := l.blacklist[method]; ok {
-		return fmt.Errorf("conflicting blacklist rules for method %v found", method)
+	if _, ok := l.denylist[method]; ok {
+		return fmt.Errorf("conflicting denylist rules for method %v found", method)
 	}
 	if _, ok := l.methods[method]; ok {
 		return fmt.Errorf("conflicting method rules for method %v found", method)
@@ -127,18 +127,18 @@ func (l *logger) setMethodMethodLogger(method string, ml *methodLoggerConfig) er
 	return nil
 }
 
-// Set blacklist method for "-service/method".
-func (l *logger) setBlacklist(method string) error {
-	if _, ok := l.blacklist[method]; ok {
-		return fmt.Errorf("conflicting blacklist rules for method %v found", method)
+// Set denylist method for "-service/method".
+func (l *logger) setDenylist(method string) error {
+	if _, ok := l.denylist[method]; ok {
+		return fmt.Errorf("conflicting denylist rules for method %v found", method)
 	}
 	if _, ok := l.methods[method]; ok {
 		return fmt.Errorf("conflicting method rules for method %v found", method)
 	}
-	if l.blacklist == nil {
-		l.blacklist = make(map[string]struct{})
+	if l.denylist == nil {
+		l.denylist = make(map[string]struct{})
 	}
-	l.blacklist[method] = struct{}{}
+	l.denylist[method] = struct{}{}
 	return nil
 }
 
@@ -157,7 +157,7 @@ func (l *logger) getMethodLogger(methodName string) *MethodLogger {
 	if ml, ok := l.methods[s+"/"+m]; ok {
 		return newMethodLogger(ml.hdr, ml.msg)
 	}
-	if _, ok := l.blacklist[s+"/"+m]; ok {
+	if _, ok := l.denylist[s+"/"+m]; ok {
 		return nil
 	}
 	if ml, ok := l.services[s]; ok {

@@ -168,9 +168,9 @@ func isReservedHeader(hdr string) bool {
 	}
 }
 
-// isWhitelistedHeader checks whether hdr should be propagated into metadata
+// isAllowedHeader checks whether hdr should be propagated into metadata
 // visible to users, even though it is classified as "reserved", above.
-func isWhitelistedHeader(hdr string) bool {
+func isAllowedHeader(hdr string) bool {
 	switch hdr {
 	case ":authority", "user-agent":
 		return true
@@ -364,7 +364,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 		d.data.statsTrace = v
 		d.addMetadata(f.Name, string(v))
 	default:
-		if isReservedHeader(f.Name) && !isWhitelistedHeader(f.Name) {
+		if isReservedHeader(f.Name) && !isAllowedHeader(f.Name) {
 			break
 		}
 		v, err := decodeMetadataHeader(f.Name, f.Value)

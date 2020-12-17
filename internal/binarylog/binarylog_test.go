@@ -129,7 +129,7 @@ func (s) TestGetMethodLoggerOff(t *testing.T) {
 			method: "/s/m",
 		},
 
-		// blacklisted.
+		// denylisted.
 		{
 			in:     "*,-s/m",
 			method: "/s/m",
