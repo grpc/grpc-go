@@ -21,7 +21,6 @@ package resolver
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -557,23 +556,23 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 	testCases := []struct {
 		method         string
 		timeoutSupport bool
-		want           time.Duration
+		want           *time.Duration
 	}{{
 		method:         "/foo/method",
 		timeoutSupport: true,
-		want:           5 * time.Second,
+		want:           func() *time.Duration { x := 5 * time.Second; return &x }(),
 	}, {
 		method:         "/foo/method",
 		timeoutSupport: false,
-		// zero (nil)
+		want:           nil,
 	}, {
 		method:         "/bar/method",
 		timeoutSupport: true,
-		// zero (nil)
+		want:           nil,
 	}, {
 		method:         "/baz/method",
 		timeoutSupport: true,
-		// zero (nil)
+		want:           nil,
 	}}
 
 	for _, tc := range testCases {
@@ -589,18 +588,8 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 		}
 		res.OnCommitted()
 		got := res.MethodConfig.Timeout
-		if got == nil {
-			if tc.want != 0 {
-				t.Errorf("For method %q: res.MethodConfig.Timeout = <nil>; want %v", tc.method, tc.want)
-			}
-			continue
-		}
-		if tc.want == 0 || *got != tc.want {
-			want := "<nil>" // we never want a duration of zero to be returned.
-			if tc.want != 0 {
-				want = fmt.Sprint(tc.want)
-			}
-			t.Errorf("For method %q: res.MethodConfig.Timeout = %v; want %v", tc.method, *got, want)
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("For method %q: res.MethodConfig.Timeout = %v; want %v", tc.method, got, tc.want)
 		}
 	}
 }
