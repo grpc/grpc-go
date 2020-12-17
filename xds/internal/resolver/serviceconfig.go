@@ -22,12 +22,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
+	"google.golang.org/grpc/xds/internal/env"
 )
 
 const (
@@ -93,12 +95,13 @@ func serviceConfigJSON(activeClusters map[string]*clusterInfo) (string, error) {
 }
 
 type route struct {
-	action wrr.WRR
-	m      *compositeMatcher // converted from route matchers
+	m                 *compositeMatcher // converted from route matchers
+	clusters          wrr.WRR
+	maxStreamDuration time.Duration
 }
 
 func (r route) String() string {
-	return r.m.String() + "->" + fmt.Sprint(r.action)
+	return fmt.Sprintf("%s -> { clusters: %v, maxStreamDuration: %v }", r.m.String(), r.clusters, r.maxStreamDuration)
 }
 
 type configSelector struct {
@@ -110,18 +113,18 @@ type configSelector struct {
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
 
 func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
-	var action wrr.WRR
+	var rt *route
 	// Loop through routes in order and select first match.
-	for _, rt := range cs.routes {
-		if rt.m.match(rpcInfo) {
-			action = rt.action
+	for _, r := range cs.routes {
+		if r.m.match(rpcInfo) {
+			rt = &r
 			break
 		}
 	}
-	if action == nil {
+	if rt == nil || rt.clusters == nil {
 		return nil, errNoMatchedRouteFound
 	}
-	cluster, ok := action.Next().(string)
+	cluster, ok := rt.clusters.Next().(string)
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", cluster, cluster)
 	}
@@ -129,7 +132,8 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	// it is committed.
 	ref := &cs.clusters[cluster].refCount
 	atomic.AddInt32(ref, 1)
-	return &iresolver.RPCConfig{
+
+	config := &iresolver.RPCConfig{
 		// Communicate to the LB policy the chosen cluster.
 		Context: clustermanager.SetPickedCluster(rpcInfo.Context, cluster),
 		OnCommitted: func() {
@@ -144,7 +148,13 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 				}
 			}
 		},
-	}, nil
+	}
+
+	if env.TimeoutSupport && rt.maxStreamDuration != 0 {
+		config.MethodConfig.Timeout = &rt.maxStreamDuration
+	}
+
+	return config, nil
 }
 
 // incRefs increments refs of all clusters referenced by this config selector.
@@ -196,9 +206,9 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 	}
 
 	for i, rt := range su.Routes {
-		action := newWRR()
+		clusters := newWRR()
 		for cluster, weight := range rt.Action {
-			action.Add(cluster, int64(weight))
+			clusters.Add(cluster, int64(weight))
 
 			// Initialize entries in cs.clusters map, creating entries in
 			// r.activeClusters as necessary.  Set to zero as they will be
@@ -210,14 +220,16 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 			}
 			cs.clusters[cluster] = ci
 		}
-		cs.routes[i].action = action
+		cs.routes[i].clusters = clusters
 
 		var err error
 		cs.routes[i].m, err = routeToMatcher(rt)
 		if err != nil {
 			return nil, err
 		}
+		cs.routes[i].maxStreamDuration = rt.MaxStreamDuration
 	}
+
 	return cs, nil
 }
 

@@ -322,7 +322,8 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 		}
 
 		clusters := make(map[string]uint32)
-		switch a := r.GetRoute().GetClusterSpecifier().(type) {
+		action := r.GetRoute()
+		switch a := action.GetClusterSpecifier().(type) {
 		case *v3routepb.RouteAction_Cluster:
 			clusters[a.Cluster] = 1
 		case *v3routepb.RouteAction_WeightedClusters:
@@ -341,6 +342,13 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 		}
 
 		route.Action = clusters
+		msd := action.GetMaxStreamDuration()
+		// Prefer grpc_timeout_header_max, if set.
+		if dur := msd.GetGrpcTimeoutHeaderMax(); dur != nil {
+			route.MaxStreamDuration = dur.AsDuration()
+		} else {
+			route.MaxStreamDuration = msd.GetMaxStreamDuration().AsDuration()
+		}
 		routesRet = append(routesRet, &route)
 	}
 	return routesRet, nil

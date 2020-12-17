@@ -179,7 +179,10 @@ type Route struct {
 	CaseInsensitive bool
 	Headers         []*HeaderMatcher
 	Fraction        *uint32
-	Action          map[string]uint32 // action is weighted clusters.
+
+	// If the matchers above indicate a match, the below configuration is used.
+	Action            map[string]uint32 // action is weighted clusters.
+	MaxStreamDuration time.Duration
 }
 
 // HeaderMatcher represents header matchers.
