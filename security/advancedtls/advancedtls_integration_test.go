@@ -26,7 +26,6 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -40,13 +39,6 @@ import (
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
-<<<<<<< HEAD
-var (
-	address = "localhost:50051"
-)
-
-=======
->>>>>>> 5f707ab8 (change to use port 0 instead of 50051)
 const (
 	// Default timeout for normal connections.
 	defaultTestTimeout = 5 * time.Second
@@ -366,12 +358,12 @@ func (s) TestEnd2End(t *testing.T) {
 			}
 			s := grpc.NewServer(grpc.Creds(serverTLSCreds))
 			defer s.Stop()
-			lis, err := net.Listen("tcp", address)
+			lis, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
 				t.Fatalf("failed to listen: %v", err)
 			}
 			defer lis.Close()
-			addr := lis.Addr().String()
+			addr := fmt.Sprintf("localhost:%v", lis.Addr().(*net.TCPAddr).Port)
 			pb.RegisterGreeterServer(s, greeterServer{})
 			go s.Serve(lis)
 			clientOptions := &ClientOptions{
@@ -656,12 +648,12 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			}
 			s := grpc.NewServer(grpc.Creds(serverTLSCreds))
 			defer s.Stop()
-			lis, err := net.Listen("tcp", address)
+			lis, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
 				t.Fatalf("failed to listen: %v", err)
 			}
 			defer lis.Close()
-			addr := lis.Addr().String()
+			addr := fmt.Sprintf("localhost:%v", lis.Addr().(*net.TCPAddr).Port)
 			pb.RegisterGreeterServer(s, greeterServer{})
 			go s.Serve(lis)
 			clientOptions := &ClientOptions{
@@ -792,7 +784,7 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 				t.Fatalf("failed to listen: %v", err)
 			}
 			defer lis.Close()
-			addr := strings.Replace(lis.Addr().String(), "127.0.0.1", "localhost", 1)
+			addr := fmt.Sprintf("localhost:%v", lis.Addr().(*net.TCPAddr).Port)
 			pb.RegisterGreeterServer(s, greeterServer{})
 			go s.Serve(lis)
 			clientOptions := &ClientOptions{
