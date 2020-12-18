@@ -21,6 +21,7 @@ package client
 import (
 	"strings"
 	"testing"
+	"time"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -36,6 +37,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
@@ -85,6 +87,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 							},
 							RouteConfigName: v3RouteConfigName,
 						},
+					},
+					CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
+						MaxStreamDuration: durationpb.New(time.Second),
 					},
 				}
 				mcm, _ := proto.Marshal(cm)
@@ -280,7 +285,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			name:      "v3 listener resource",
 			resources: []*anypb.Any{v3Lis},
 			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {RouteConfigName: v3RouteConfigName},
+				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second},
 			},
 		},
 		{
@@ -288,7 +293,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resources: []*anypb.Any{v2Lis, v3Lis},
 			wantUpdate: map[string]ListenerUpdate{
 				v2LDSTarget: {RouteConfigName: v2RouteConfigName},
-				v3LDSTarget: {RouteConfigName: v3RouteConfigName},
+				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second},
 			},
 		},
 	}

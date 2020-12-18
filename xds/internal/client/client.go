@@ -147,6 +147,10 @@ type ListenerUpdate struct {
 	RouteConfigName string
 	// SecurityCfg contains security configuration sent by the control plane.
 	SecurityCfg *SecurityConfig
+	// MaxStreamDuration contains the HTTP connection manager's
+	// common_http_protocol_options.max_stream_duration field, or zero if
+	// unset.
+	MaxStreamDuration time.Duration
 }
 
 func (lu *ListenerUpdate) String() string {
@@ -181,8 +185,11 @@ type Route struct {
 	Fraction        *uint32
 
 	// If the matchers above indicate a match, the below configuration is used.
-	Action            map[string]uint32 // action is weighted clusters.
-	MaxStreamDuration time.Duration
+	Action map[string]uint32 // action is weighted clusters.
+	// If MaxStreamDuration is nil, it indicates neither of the route action's
+	// max_stream_duration fields (grpc_timeout_header_max nor
+	// max_stream_duration) were set.
+	MaxStreamDuration *time.Duration
 }
 
 // HeaderMatcher represents header matchers.

@@ -511,7 +511,7 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr, MaxStreamDuration: time.Second}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	defer func(oldNewWRR func() wrr.WRR) { newWRR = oldNewWRR }(newWRR)
@@ -526,11 +526,11 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 				Routes: []*client.Route{{
 					Prefix:            newStringP("/foo"),
 					Action:            map[string]uint32{"A": 1},
-					MaxStreamDuration: 5 * time.Second,
+					MaxStreamDuration: newDurationP(5 * time.Second),
 				}, {
 					Prefix:            newStringP("/bar"),
 					Action:            map[string]uint32{"B": 1},
-					MaxStreamDuration: time.Duration(0),
+					MaxStreamDuration: newDurationP(0),
 				}, {
 					Prefix: newStringP(""),
 					Action: map[string]uint32{"C": 1},
@@ -554,43 +554,50 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 	}
 
 	testCases := []struct {
+		name           string
 		method         string
 		timeoutSupport bool
 		want           *time.Duration
 	}{{
+		name:           "RDS setting",
 		method:         "/foo/method",
 		timeoutSupport: true,
-		want:           func() *time.Duration { x := 5 * time.Second; return &x }(),
+		want:           newDurationP(5 * time.Second),
 	}, {
+		name:           "timeout support disabled",
 		method:         "/foo/method",
 		timeoutSupport: false,
 		want:           nil,
 	}, {
+		name:           "explicit zero in RDS; ignore LDS",
 		method:         "/bar/method",
 		timeoutSupport: true,
 		want:           nil,
 	}, {
+		name:           "no config in RDS; fallback to LDS",
 		method:         "/baz/method",
 		timeoutSupport: true,
-		want:           nil,
+		want:           newDurationP(time.Second),
 	}}
 
 	for _, tc := range testCases {
-		env.TimeoutSupport = tc.timeoutSupport
-		req := iresolver.RPCInfo{
-			Method:  tc.method,
-			Context: context.Background(),
-		}
-		res, err := cs.SelectConfig(req)
-		if err != nil {
-			t.Errorf("Unexpected error from cs.SelectConfig(%v): %v", req, err)
-			continue
-		}
-		res.OnCommitted()
-		got := res.MethodConfig.Timeout
-		if !reflect.DeepEqual(got, tc.want) {
-			t.Errorf("For method %q: res.MethodConfig.Timeout = %v; want %v", tc.method, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			env.TimeoutSupport = tc.timeoutSupport
+			req := iresolver.RPCInfo{
+				Method:  tc.method,
+				Context: context.Background(),
+			}
+			res, err := cs.SelectConfig(req)
+			if err != nil {
+				t.Errorf("Unexpected error from cs.SelectConfig(%v): %v", req, err)
+				return
+			}
+			res.OnCommitted()
+			got := res.MethodConfig.Timeout
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("For method %q: res.MethodConfig.Timeout = %v; want %v", tc.method, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -855,4 +862,8 @@ func replaceRandNumGenerator(start int64) func() {
 	return func() {
 		grpcrandInt63n = grpcrand.Int63n
 	}
+}
+
+func newDurationP(d time.Duration) *time.Duration {
+	return &d
 }

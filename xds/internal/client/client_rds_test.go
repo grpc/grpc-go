@@ -317,7 +317,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
-						Routes:  []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{clusterName: 1}, MaxStreamDuration: time.Second}},
+						Routes:  []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{clusterName: 1}, MaxStreamDuration: newDurationP(time.Second)}},
 					},
 				},
 			},
@@ -347,7 +347,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
-						Routes:  []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{clusterName: 1}, MaxStreamDuration: time.Second}},
+						Routes:  []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{clusterName: 1}, MaxStreamDuration: newDurationP(time.Second)}},
 					},
 				},
 			},
@@ -377,7 +377,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
-						Routes:  []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{clusterName: 1}, MaxStreamDuration: 0}},
+						Routes:  []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{clusterName: 1}, MaxStreamDuration: newDurationP(0)}},
 					},
 				},
 			},
@@ -738,4 +738,8 @@ func newUInt32P(i uint32) *uint32 {
 
 func newBoolP(b bool) *bool {
 	return &b
+}
+
+func newDurationP(d time.Duration) *time.Duration {
+	return &d
 }

@@ -201,11 +201,11 @@ var newWRR = wrr.NewRandom
 func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, error) {
 	cs := &configSelector{
 		r:        r,
-		routes:   make([]route, len(su.Routes)),
+		routes:   make([]route, len(su.routes)),
 		clusters: make(map[string]*clusterInfo),
 	}
 
-	for i, rt := range su.Routes {
+	for i, rt := range su.routes {
 		clusters := newWRR()
 		for cluster, weight := range rt.Action {
 			clusters.Add(cluster, int64(weight))
@@ -227,7 +227,11 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 		if err != nil {
 			return nil, err
 		}
-		cs.routes[i].maxStreamDuration = rt.MaxStreamDuration
+		if rt.MaxStreamDuration == nil {
+			cs.routes[i].maxStreamDuration = su.ldsConfig.maxStreamDuration
+		} else {
+			cs.routes[i].maxStreamDuration = *rt.MaxStreamDuration
+		}
 	}
 
 	return cs, nil
