@@ -328,6 +328,9 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 			var totalWeight uint32
 			for _, c := range wcs.Clusters {
 				w := c.GetWeight().GetValue()
+				if w == 0 {
+					continue
+				}
 				clusters[c.GetName()] = w
 				totalWeight += w
 			}
@@ -335,7 +338,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 				return nil, fmt.Errorf("route %+v, action %+v, weights of clusters do not add up to total total weight, got: %v, want %v", r, a, wcs.GetTotalWeight().GetValue(), totalWeight)
 			}
 			if totalWeight == 0 {
-				return nil, fmt.Errorf("route %+v, action %+v, has no cluster in WeightedCluster action", r, a)
+				return nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
 			}
 		case *v3routepb.RouteAction_ClusterHeader:
 			continue
