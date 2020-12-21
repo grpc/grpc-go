@@ -23,6 +23,7 @@ package codes // import "google.golang.org/grpc/codes"
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // A Code is an unsigned 32-bit error code as defined in the gRPC spec.
@@ -213,6 +214,12 @@ var strToCode = map[string]Code{
 	`"UNAVAILABLE"`:         Unavailable,
 	`"DATA_LOSS"`:           DataLoss,
 	`"UNAUTHENTICATED"`:     Unauthenticated,
+}
+
+// FromString is used to get code from string
+func FromString(s string) (Code, bool) {
+	code, ok := strToCode[`"` + strings.ToUpper(s) + `"`]
+	return code, ok
 }
 
 // UnmarshalJSON unmarshals b into the Code.
