@@ -57,8 +57,6 @@ func ClientNewPayload(t testpb.PayloadType, size int) *testpb.Payload {
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
-	case testpb.PayloadType_UNCOMPRESSABLE:
-		logger.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
 	default:
 		logger.Fatalf("Unsupported payload type: %d", t)
 	}
@@ -693,8 +691,6 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
-	case testpb.PayloadType_UNCOMPRESSABLE:
-		return nil, fmt.Errorf("payloadType UNCOMPRESSABLE is not supported")
 	default:
 		return nil, fmt.Errorf("unsupported payload type: %d", t)
 	}
