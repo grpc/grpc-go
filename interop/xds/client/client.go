@@ -227,7 +227,7 @@ type configureService struct {
 func (s *configureService) Configure(ctx context.Context, in *testpb.ClientConfigureRequest) (*testpb.ClientConfigureResponse, error) {
 	rpcsToMD := make(map[testpb.ClientConfigureRequest_RpcType][]string)
 	for _, typ := range in.GetTypes() {
-		rpcsToMD[typ] = make([]string, 0)
+		rpcsToMD[typ] = nil
 	}
 	for _, md := range in.GetMetadata() {
 		typ := md.GetType()
@@ -333,7 +333,7 @@ func main() {
 		defer conn.Close()
 		clients[i] = testpb.NewTestServiceClient(conn)
 	}
-	ticker := time.NewTicker(time.Second / time.Duration(*qps**numChannels))
+	ticker := time.NewTicker(time.Second / time.Duration(*qps))
 	defer ticker.Stop()
 	sendRPCs(clients, ticker)
 }
@@ -397,10 +397,9 @@ func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 			// Get the RPC metadata configurations from the Configure RPC.
 			cfgs := rpcCfgs.Load().([]*rpcConfig)
 
+			c := clients[i]
 			for _, cfg := range cfgs {
-				go func(i int, cfg *rpcConfig) {
-					c := clients[i]
-
+				go func(cfg *rpcConfig) {
 					p, info, err := makeOneRPC(c, cfg)
 
 					for _, watcher := range savedWatchers {
@@ -426,7 +425,7 @@ func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
 							fmt.Printf("RPC %q, failed with %v\n", cfg.typ, err)
 						}
 					}
-				}(i, cfg)
+				}(cfg)
 			}
 		}
 	}
