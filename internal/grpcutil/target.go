@@ -45,31 +45,48 @@ func split2(s, sep string) (string, string, bool) {
 // https://github.com/grpc/grpc/blob/master/doc/naming.md,
 // it returns {Endpoint: target}.
 func ParseTarget(target string, skipUnixColonParsing bool) (ret resolver.Target) {
-	if strings.HasPrefix(target, "unix-abstract:") {
-		// Handle unix-abstract case, split the target by ":"
-		scheme, endpoint, _ := split2(target, ":")
-		return resolver.Target{Scheme: scheme, Endpoint: endpoint}
-	}
 	var ok bool
-	ret.Scheme, ret.Endpoint, ok = split2(target, "://")
-	if !ok {
-		if strings.HasPrefix(target, "unix:") && !skipUnixColonParsing {
-			// Handle the "unix:[local/path]" and "unix:[/absolute/path]" cases,
-			// because splitting on :// only handles the
-			// "unix://[/absolute/path]" case. Only handle if the dialer is nil,
-			// to avoid a behavior change with custom dialers.
-			return resolver.Target{Scheme: "unix", Endpoint: target[len("unix:"):]}
+	switch {
+	case strings.HasPrefix(target, "unix-abstract:"):
+		// unix-abstract schema
+		var remain string
+		if strings.HasPrefix(target, "unix-abstract://") {
+			// Maybe, with Authority specified, try to parse it
+			ret.Scheme, remain, _ = split2(target, "://")
+			ret.Authority, ret.Endpoint, ok = split2(remain, "/")
+			if !ok {
+				// No Authority, add the "//" back as Endpoint
+				ret.Endpoint = "//" + remain
+			} else {
+				// Found Authority, add the "/" back
+				ret.Endpoint = "/" + ret.Endpoint
+			}
+		} else {
+			// Without Authority specified, split target on ":"
+			ret.Scheme, ret.Endpoint, _ = split2(target, ":")
 		}
-		return resolver.Target{Endpoint: target}
-	}
-	ret.Authority, ret.Endpoint, ok = split2(ret.Endpoint, "/")
-	if !ok {
-		return resolver.Target{Endpoint: target}
-	}
-	if ret.Scheme == "unix" {
-		// Add the "/" back in the unix case, so the unix resolver receives the
-		// actual endpoint in the "unix://[/absolute/path]" case.
-		ret.Endpoint = "/" + ret.Endpoint
+	default:
+		// unix/dns schema
+		ret.Scheme, ret.Endpoint, ok = split2(target, "://")
+		if !ok {
+			if strings.HasPrefix(target, "unix:") && !skipUnixColonParsing {
+				// Handle the "unix:[local/path]" and "unix:[/absolute/path]" cases,
+				// because splitting on :// only handles the
+				// "unix://[/absolute/path]" case. Only handle if the dialer is nil,
+				// to avoid a behavior change with custom dialers.
+				return resolver.Target{Scheme: "unix", Endpoint: target[len("unix:"):]}
+			}
+			return resolver.Target{Endpoint: target}
+		}
+		ret.Authority, ret.Endpoint, ok = split2(ret.Endpoint, "/")
+		if !ok {
+			return resolver.Target{Endpoint: target}
+		}
+		if ret.Scheme == "unix" {
+			// Add the "/" back in the unix case, so the unix resolver receives the
+			// actual endpoint in the "unix://[/absolute/path]" case.
+			ret.Endpoint = "/" + ret.Endpoint
+		}
 	}
 	return ret
 }
