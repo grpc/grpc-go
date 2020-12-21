@@ -333,7 +333,7 @@ func main() {
 		defer conn.Close()
 		clients[i] = testpb.NewTestServiceClient(conn)
 	}
-	ticker := time.NewTicker(time.Second / time.Duration(*qps))
+	ticker := time.NewTicker(time.Second / time.Duration(*qps**numChannels))
 	defer ticker.Stop()
 	sendRPCs(clients, ticker)
 }
@@ -379,54 +379,54 @@ func makeOneRPC(c testpb.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcInf
 }
 
 func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
+	var i int
 	for range ticker.C {
-		for i := 0; i < len(clients); i++ {
-			// Get and increment request ID, and save a list of watchers that are
-			// interested in this RPC.
-			mu.Lock()
-			savedRequestID := currentRequestID
-			currentRequestID++
-			savedWatchers := []*statsWatcher{}
-			for key, value := range watchers {
-				if key.startID <= savedRequestID && savedRequestID < key.endID {
-					savedWatchers = append(savedWatchers, value)
-				}
-			}
-			mu.Unlock()
-
-			// Get the RPC metadata configurations from the Configure RPC.
-			cfgs := rpcCfgs.Load().([]*rpcConfig)
-
-			c := clients[i]
-			for _, cfg := range cfgs {
-				go func(cfg *rpcConfig) {
-					p, info, err := makeOneRPC(c, cfg)
-
-					for _, watcher := range savedWatchers {
-						// This sends an empty string if the RPC failed.
-						watcher.chanHosts <- info
-					}
-					if err != nil && *failOnFailedRPC && hasRPCSucceeded() {
-						logger.Fatalf("RPC failed: %v", err)
-					}
-					if err == nil {
-						setRPCSucceeded()
-					}
-					if *printResponse {
-						if err == nil {
-							if cfg.typ == unaryCall {
-								// Need to keep this format, because some tests are
-								// relying on stdout.
-								fmt.Printf("Greeting: Hello world, this is %s, from %v\n", info.hostname, p.Addr)
-							} else {
-								fmt.Printf("RPC %q, from host %s, addr %v\n", cfg.typ, info.hostname, p.Addr)
-							}
-						} else {
-							fmt.Printf("RPC %q, failed with %v\n", cfg.typ, err)
-						}
-					}
-				}(cfg)
+		// Get and increment request ID, and save a list of watchers that are
+		// interested in this RPC.
+		mu.Lock()
+		savedRequestID := currentRequestID
+		currentRequestID++
+		savedWatchers := []*statsWatcher{}
+		for key, value := range watchers {
+			if key.startID <= savedRequestID && savedRequestID < key.endID {
+				savedWatchers = append(savedWatchers, value)
 			}
 		}
+		mu.Unlock()
+
+		// Get the RPC metadata configurations from the Configure RPC.
+		cfgs := rpcCfgs.Load().([]*rpcConfig)
+
+		c := clients[i]
+		for _, cfg := range cfgs {
+			go func(cfg *rpcConfig) {
+				p, info, err := makeOneRPC(c, cfg)
+
+				for _, watcher := range savedWatchers {
+					// This sends an empty string if the RPC failed.
+					watcher.chanHosts <- info
+				}
+				if err != nil && *failOnFailedRPC && hasRPCSucceeded() {
+					logger.Fatalf("RPC failed: %v", err)
+				}
+				if err == nil {
+					setRPCSucceeded()
+				}
+				if *printResponse {
+					if err == nil {
+						if cfg.typ == unaryCall {
+							// Need to keep this format, because some tests are
+							// relying on stdout.
+							fmt.Printf("Greeting: Hello world, this is %s, from %v\n", info.hostname, p.Addr)
+						} else {
+							fmt.Printf("RPC %q, from host %s, addr %v\n", cfg.typ, info.hostname, p.Addr)
+						}
+					} else {
+						fmt.Printf("RPC %q, failed with %v\n", cfg.typ, err)
+					}
+				}
+			}(cfg)
+		}
+		i = (i + 1) % len(clients)
 	}
 }
