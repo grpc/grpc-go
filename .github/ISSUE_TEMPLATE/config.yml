@@ -1,5 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: "Potentional security vulnerability"
-    url: https://github.com/grpc/proposal/blob/master/P4-grpc-cve-process.md
-    about: "Please file any potentional security vulnerability with grpc-security@googlegroups.com."
