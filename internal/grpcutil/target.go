@@ -41,10 +41,30 @@ func split2(s, sep string) (string, string, bool) {
 // not parse "unix:[path]" cases. This should be true in cases where a custom
 // dialer is present, to prevent a behavior change.
 //
-// If target is not a valid scheme://authority/endpoint, it returns {Endpoint:
-// target}.
+// If target is not a valid scheme://authority/endpoint as specified in
+// https://github.com/grpc/grpc/blob/master/doc/naming.md,
+// it returns {Endpoint: target}.
 func ParseTarget(target string, skipUnixColonParsing bool) (ret resolver.Target) {
 	var ok bool
+	if strings.HasPrefix(target, "unix-abstract:") {
+		if strings.HasPrefix(target, "unix-abstract://") {
+			// Maybe, with Authority specified, try to parse it
+			var remain string
+			ret.Scheme, remain, _ = split2(target, "://")
+			ret.Authority, ret.Endpoint, ok = split2(remain, "/")
+			if !ok {
+				// No Authority, add the "//" back
+				ret.Endpoint = "//" + remain
+			} else {
+				// Found Authority, add the "/" back
+				ret.Endpoint = "/" + ret.Endpoint
+			}
+		} else {
+			// Without Authority specified, split target on ":"
+			ret.Scheme, ret.Endpoint, _ = split2(target, ":")
+		}
+		return ret
+	}
 	ret.Scheme, ret.Endpoint, ok = split2(target, "://")
 	if !ok {
 		if strings.HasPrefix(target, "unix:") && !skipUnixColonParsing {

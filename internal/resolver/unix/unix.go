@@ -26,20 +26,28 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-const scheme = "unix"
+const unixScheme = "unix"
+const unixAbstractScheme = "unix-abstract"
 
-type builder struct{}
+type builder struct {
+	scheme string
+}
 
-func (*builder) Build(target resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
+func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
 	if target.Authority != "" {
 		return nil, fmt.Errorf("invalid (non-empty) authority: %v", target.Authority)
 	}
-	cc.UpdateState(resolver.State{Addresses: []resolver.Address{networktype.Set(resolver.Address{Addr: target.Endpoint}, "unix")}})
+	addr := resolver.Address{Addr: target.Endpoint}
+	if b.scheme == unixAbstractScheme {
+		// prepend "\x00" to address for unix-abstract
+		addr.Addr = "\x00" + addr.Addr
+	}
+	cc.UpdateState(resolver.State{Addresses: []resolver.Address{networktype.Set(addr, "unix")}})
 	return &nopResolver{}, nil
 }
 
-func (*builder) Scheme() string {
-	return scheme
+func (b *builder) Scheme() string {
+	return b.scheme
 }
 
 type nopResolver struct {
@@ -50,5 +58,6 @@ func (*nopResolver) ResolveNow(resolver.ResolveNowOptions) {}
 func (*nopResolver) Close() {}
 
 func init() {
-	resolver.Register(&builder{})
+	resolver.Register(&builder{scheme: unixScheme})
+	resolver.Register(&builder{scheme: unixAbstractScheme})
 }

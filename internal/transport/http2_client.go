@@ -143,7 +143,7 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 	address := addr.Addr
 	networkType, ok := networktype.Get(addr)
 	if fn != nil {
-		if networkType == "unix" {
+		if networkType == "unix" && !strings.HasPrefix(address, "\x00") {
 			// For backward compatibility, if the user dialed "unix:///path",
 			// the passthrough resolver would be used and the user's custom
 			// dialer would see "unix:///path". Since the unix resolver is used
