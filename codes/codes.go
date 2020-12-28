@@ -21,6 +21,7 @@
 package codes // import "google.golang.org/grpc/codes"
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 )
@@ -196,23 +197,23 @@ const (
 )
 
 var strToCode = map[string]Code{
-	`"OK"`: OK,
-	`"CANCELLED"`:/* [sic] */ Canceled,
-	`"UNKNOWN"`:             Unknown,
-	`"INVALID_ARGUMENT"`:    InvalidArgument,
-	`"DEADLINE_EXCEEDED"`:   DeadlineExceeded,
-	`"NOT_FOUND"`:           NotFound,
-	`"ALREADY_EXISTS"`:      AlreadyExists,
-	`"PERMISSION_DENIED"`:   PermissionDenied,
-	`"RESOURCE_EXHAUSTED"`:  ResourceExhausted,
-	`"FAILED_PRECONDITION"`: FailedPrecondition,
-	`"ABORTED"`:             Aborted,
-	`"OUT_OF_RANGE"`:        OutOfRange,
-	`"UNIMPLEMENTED"`:       Unimplemented,
-	`"INTERNAL"`:            Internal,
-	`"UNAVAILABLE"`:         Unavailable,
-	`"DATA_LOSS"`:           DataLoss,
-	`"UNAUTHENTICATED"`:     Unauthenticated,
+	`OK`: OK,
+	`CANCELLED`:/* [sic] */ Canceled,
+	`UNKNOWN`:             Unknown,
+	`INVALID_ARGUMENT`:    InvalidArgument,
+	`DEADLINE_EXCEEDED`:   DeadlineExceeded,
+	`NOT_FOUND`:           NotFound,
+	`ALREADY_EXISTS`:      AlreadyExists,
+	`PERMISSION_DENIED`:   PermissionDenied,
+	`RESOURCE_EXHAUSTED`:  ResourceExhausted,
+	`FAILED_PRECONDITION`: FailedPrecondition,
+	`ABORTED`:             Aborted,
+	`OUT_OF_RANGE`:        OutOfRange,
+	`UNIMPLEMENTED`:       Unimplemented,
+	`INTERNAL`:            Internal,
+	`UNAVAILABLE`:         Unavailable,
+	`DATA_LOSS`:           DataLoss,
+	`UNAUTHENTICATED`:     Unauthenticated,
 }
 
 // UnmarshalJSON unmarshals b into the Code.
@@ -226,7 +227,11 @@ func (c *Code) UnmarshalJSON(b []byte) error {
 	if c == nil {
 		return fmt.Errorf("nil receiver passed to UnmarshalJSON")
 	}
+	return c.UnmarshalText(bytes.Trim(b, `"`))
+}
 
+// UnmarshalText unmarshals b into the Code.
+func (c *Code) UnmarshalText(b []byte) error {
 	if ci, err := strconv.ParseUint(string(b), 10, 32); err == nil {
 		if ci >= _maxCode {
 			return fmt.Errorf("invalid code: %q", ci)

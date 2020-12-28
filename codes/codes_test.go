@@ -35,6 +35,16 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+func (s) TestUnmarshalText(t *testing.T) {
+	for s, v := range cpb.Code_value {
+		want := Code(v)
+		var got Code
+		if err := got.UnmarshalText([]byte(s)); err != nil || got != want {
+			t.Errorf("got.UnmarshalText(%q) = %v; want <nil>.  got=%v; want %v", s, err, got, want)
+		}
+	}
+}
+
 func (s) TestUnmarshalJSON(t *testing.T) {
 	for s, v := range cpb.Code_value {
 		want := Code(v)
