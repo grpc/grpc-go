@@ -707,6 +707,70 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			}},
 			wantErr: false,
 		},
+		{
+			name: "unrecognized path specifier",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_ConnectMatcher_{},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "unrecognized header match specifier",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+						Headers: []*v3routepb.HeaderMatcher{
+							{
+								Name:                 "th",
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_HiddenEnvoyDeprecatedRegexMatch{},
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "no cluster in weighted clusters action",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{
+							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+								WeightedClusters: &v3routepb.WeightedCluster{}}}},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "all 0-weight clusters in weighted clusters action",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{
+							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+								WeightedClusters: &v3routepb.WeightedCluster{
+									Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 0}},
+										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 0}},
+									},
+									TotalWeight: &wrapperspb.UInt32Value{Value: 0},
+								}}}},
+				},
+			},
+			wantErr: true,
+		},
 	}
 
 	cmpOpts := []cmp.Option{

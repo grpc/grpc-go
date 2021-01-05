@@ -272,8 +272,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 		case *v3routepb.RouteMatch_SafeRegex:
 			route.Regex = &pt.SafeRegex.Regex
 		default:
-			logger.Warningf("route %+v has an unrecognized path specifier: %+v", r, pt)
-			continue
+			return nil, fmt.Errorf("route %+v has an unrecognized path specifier: %+v", r, pt)
 		}
 
 		if caseSensitive := match.GetCaseSensitive(); caseSensitive != nil {
@@ -299,8 +298,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 			case *v3routepb.HeaderMatcher_SuffixMatch:
 				header.SuffixMatch = &ht.SuffixMatch
 			default:
-				logger.Warningf("route %+v has an unrecognized header matcher: %+v", r, ht)
-				continue
+				return nil, fmt.Errorf("route %+v has an unrecognized header matcher: %+v", r, ht)
 			}
 			header.Name = h.GetName()
 			invert := h.GetInvertMatch()
@@ -331,11 +329,17 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 			var totalWeight uint32
 			for _, c := range wcs.Clusters {
 				w := c.GetWeight().GetValue()
+				if w == 0 {
+					continue
+				}
 				clusters[c.GetName()] = w
 				totalWeight += w
 			}
 			if totalWeight != wcs.GetTotalWeight().GetValue() {
 				return nil, fmt.Errorf("route %+v, action %+v, weights of clusters do not add up to total total weight, got: %v, want %v", r, a, wcs.GetTotalWeight().GetValue(), totalWeight)
+			}
+			if totalWeight == 0 {
+				return nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
 			}
 		case *v3routepb.RouteAction_ClusterHeader:
 			continue
