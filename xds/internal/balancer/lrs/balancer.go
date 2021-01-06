@@ -102,7 +102,7 @@ func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		}
 		lidJSON, err := newConfig.Locality.ToJSON()
 		if err != nil {
-			return fmt.Errorf("failed to marshal LocalityID: %#v, skipping this locality", newConfig.Locality)
+			return fmt.Errorf("failed to marshal LocalityID: %#v", newConfig.Locality)
 		}
 		ccWrapper := newCCWrapper(b.cc, b.client.loadStore(), lidJSON)
 		b.lb = bb.Build(ccWrapper, b.buildOpts)
