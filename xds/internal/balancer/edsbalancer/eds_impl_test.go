@@ -790,8 +790,8 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 		Cluster: testClusterNames[0],
 		Service: "",
 		LocalityStats: map[string]load.LocalityData{
-			locality1.String(): {RequestStats: load.RequestData{InProgress: 5}},
-			locality2.String(): {RequestStats: load.RequestData{Succeeded: 5}},
+			locality1.ToJSON(): {RequestStats: load.RequestData{InProgress: 5}},
+			locality2.ToJSON(): {RequestStats: load.RequestData{Succeeded: 5}},
 		},
 	}}
 	for i := 0; i < 10; i++ {

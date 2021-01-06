@@ -46,7 +46,7 @@ type loadReportPicker struct {
 func newLoadReportPicker(p balancer.Picker, id internal.LocalityID, loadStore loadReporter) *loadReportPicker {
 	return &loadReportPicker{
 		p:         p,
-		locality:  id.String(),
+		locality:  id.ToJSON(),
 		loadStore: loadStore,
 	}
 }

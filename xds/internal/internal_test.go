@@ -71,7 +71,7 @@ func (s) TestLocalityMatchProtoMessage(t *testing.T) {
 	}
 }
 
-func TestLocalityToAndFromString(t *testing.T) {
+func TestLocalityToAndFromJSON(t *testing.T) {
 	tests := []struct {
 		name       string
 		localityID LocalityID
@@ -96,12 +96,12 @@ func TestLocalityToAndFromString(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotStr := tt.localityID.String()
+			gotStr := tt.localityID.ToJSON()
 			if gotStr != tt.str {
 				t.Errorf("%#v.String() = %q, want %q", tt.localityID, gotStr, tt.str)
 			}
 
-			gotID, err := LocalityIDFromString(tt.str)
+			gotID, err := LocalityIDFromJSON(tt.str)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("LocalityIDFromString(%q) error = %v, wantErr %v", tt.str, err, tt.wantErr)
 				return

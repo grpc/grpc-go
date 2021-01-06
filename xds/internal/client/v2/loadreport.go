@@ -111,7 +111,7 @@ func (v2c *client) SendLoadStatsRequest(s grpc.ClientStream, loads []*load.Data)
 			})
 		}
 		for l, localityData := range sd.LocalityStats {
-			lid, err := internal.LocalityIDFromString(l)
+			lid, err := internal.LocalityIDFromJSON(l)
 			if err != nil {
 				return err
 			}
