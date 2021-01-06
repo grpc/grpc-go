@@ -19,7 +19,6 @@
 package priority
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -27,6 +26,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/hierarchy"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
@@ -41,7 +41,21 @@ func init() {
 type priorityBB struct{}
 
 func (pbb *priorityBB) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
-	return newPriorityBalancer(cc)
+	b := &priorityBalancer{
+		cc:               cc,
+		done:             grpcsync.NewEvent(),
+		childToPriority:  make(map[string]int),
+		children:         make(map[string]*childBalancer),
+		childStateUpdate: buffer.NewUnbounded(),
+	}
+
+	b.logger = prefixLogger(b)
+	b.bg = balancergroup.New(cc, b, nil, b.logger)
+	b.bg.Start()
+	go b.run()
+	b.logger.Infof("Created")
+	return b
+
 }
 
 func (pbb *priorityBB) Name() string {
@@ -52,11 +66,8 @@ type priorityBalancer struct {
 	logger           *grpclog.PrefixLogger
 	cc               balancer.ClientConn
 	bg               *balancergroup.BalancerGroup
-	ctx              context.Context
-	cancel           context.CancelFunc
+	done             *grpcsync.Event
 	childStateUpdate *buffer.Unbounded
-
-	config *lbConfig
 
 	mu            sync.Mutex
 	childInUse    string
@@ -66,29 +77,12 @@ type priorityBalancer struct {
 	childToPriority map[string]int
 	// children is a map from child name to sub-balancers.
 	children map[string]*childBalancer
-	// The timer to give a priority 10 seconds to connect. And if the priority
-	// doesn't go into Ready/Failure, start the next priority.
+	// The timer to give a priority some time to connect. And if the priority
+	// doesn't go into Ready/Failure, the next priority will be started.
 	//
 	// One timer is enough because there can be at most one priority in init
 	// state.
 	priorityInitTimer *time.Timer
-}
-
-func newPriorityBalancer(cc balancer.ClientConn) *priorityBalancer {
-	b := &priorityBalancer{
-		cc:               cc,
-		childToPriority:  make(map[string]int),
-		children:         make(map[string]*childBalancer),
-		childStateUpdate: buffer.NewUnbounded(),
-	}
-	b.ctx, b.cancel = context.WithCancel(context.Background())
-
-	b.logger = prefixLogger(b)
-	b.bg = balancergroup.New(cc, b, nil, b.logger)
-	b.bg.Start()
-	go b.run()
-	b.logger.Infof("Created")
-	return b
 }
 
 func (pb *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
@@ -142,6 +136,7 @@ func (pb *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) er
 			Attributes:    s.ResolverState.Attributes,
 		})
 	}
+
 	// Remove child from children if it's not in new config.
 	for name, oldChild := range pb.children {
 		if _, ok := newConfig.Children[name]; !ok {
@@ -150,17 +145,15 @@ func (pb *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) er
 	}
 
 	// Update priorities and handle priority changes.
-	pb.priorities = make([]string, 0, len(newConfig.Priorities))
+	pb.priorities = newConfig.Priorities
 	pb.childToPriority = make(map[string]int)
 	for pi, pName := range newConfig.Priorities {
-		pb.priorities = append(pb.priorities, pName)
 		pb.childToPriority[pName] = pi
 	}
 	// Sync the states of all children to the new updated priorities. This
 	// include starting/stopping child balancers when necessary.
 	pb.syncPriority()
 
-	pb.config = newConfig
 	return nil
 }
 
@@ -173,7 +166,7 @@ func (pb *priorityBalancer) UpdateSubConnState(sc balancer.SubConn, state balanc
 }
 
 func (pb *priorityBalancer) Close() {
-	pb.cancel()
+	pb.done.Fire()
 	pb.bg.Close()
 
 	pb.mu.Lock()
@@ -214,7 +207,7 @@ func (pb *priorityBalancer) run() {
 			// update needs to start/close child policy, could result in
 			// deadlock.
 			pb.handleChildStateUpdate(s.name, s.s)
-		case <-pb.ctx.Done():
+		case <-pb.done.Done():
 			return
 		}
 	}

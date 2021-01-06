@@ -180,30 +180,33 @@ func (pb *priorityBalancer) switchToChild(child *childBalancer, priority int) {
 			}
 		})
 	}
-
 }
 
 // handleChildStateUpdate start/close priorities based on the connectivity
 // state.
 func (pb *priorityBalancer) handleChildStateUpdate(childName string, s balancer.State) {
+	if pb.done.HasFired() {
+		return
+	}
+
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
 	priority, ok := pb.childToPriority[childName]
 	if !ok {
-		pb.logger.Infof("priority: received picker update with unknown child")
+		pb.logger.Warningf("priority: received picker update with unknown child %v", childName)
 		return
 	}
 
 	if pb.childInUse == "" {
-		pb.logger.Infof("priority: no childInUse when picker update is received", pb.childInUse)
+		pb.logger.Warningf("priority: no child is in use when picker update is received")
 		return
 	}
 
 	// priorityInUse is higher than this priority.
 	if pb.priorityInUse < priority {
 		// Lower priorities should all be closed, this is an unexpected update.
-		pb.logger.Infof("priority: received picker update from priority lower then priorityInUse")
+		pb.logger.Warningf("priority: received picker update from priority %v,  lower then priority in use %v", priority, pb.priorityInUse)
 		return
 	}
 
@@ -211,7 +214,7 @@ func (pb *priorityBalancer) handleChildStateUpdate(childName string, s balancer.
 	// necessary.
 	child, ok := pb.children[childName]
 	if !ok {
-		pb.logger.Infof("priority: child balancer not found for this priority")
+		pb.logger.Warningf("priority: child balancer not found for child %v, priority %v", childName, priority)
 		return
 	}
 	oldState := child.state.ConnectivityState

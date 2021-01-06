@@ -64,19 +64,23 @@ func (cb *childBalancer) updateConfig(config serviceconfig.LoadBalancingConfig, 
 
 // start build the child balancer if it's not already started.
 func (cb *childBalancer) start() {
-	if !cb.started {
-		cb.started = true
-		cb.parent.bg.Add(cb.name, cb.bb)
+	if cb.started {
+		return
 	}
+	cb.started = true
+	cb.parent.bg.Add(cb.name, cb.bb)
 }
 
 // sendUpdate sends the addresses and config to the child balancer.
 func (cb *childBalancer) sendUpdate() {
-	// TODO: handle aggregate returned error.
-	cb.parent.bg.UpdateClientConnState(cb.name, balancer.ClientConnState{
+	// TODO: return and aggregate the returned error in the parent.
+	err := cb.parent.bg.UpdateClientConnState(cb.name, balancer.ClientConnState{
 		ResolverState:  cb.rState,
 		BalancerConfig: cb.config,
 	})
+	if err != nil {
+		cb.parent.logger.Warningf("failed to update ClientConn state for child %v: %v", cb.name, err)
+	}
 }
 
 // stop stops the child balancer and reset the state.
