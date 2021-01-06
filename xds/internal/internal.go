@@ -22,8 +22,6 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-
-	"google.golang.org/grpc/grpclog"
 )
 
 // LocalityID is xds.Locality without XXX fields, so it can be used as map
@@ -38,13 +36,12 @@ type LocalityID struct {
 
 // ToJSON generates a string representation of LocalityID by marshalling it into
 // json.
-func (l LocalityID) ToJSON() string {
+func (l LocalityID) ToJSON() (string, error) {
 	b, err := json.Marshal(l)
 	if err != nil {
-		grpclog.Errorf("failed to marshal LocalityID: %#v", l)
-		return ""
+		return "", err
 	}
-	return string(b)
+	return string(b), nil
 }
 
 // LocalityIDFromJSON converts a string representation of locality, of the form

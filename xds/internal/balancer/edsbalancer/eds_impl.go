@@ -142,7 +142,11 @@ func (edsImpl *edsBalancerImpl) handleChildPolicy(name string, config json.RawMe
 			continue
 		}
 		for lid, config := range bgwc.configs {
-			lidJSON := lid.ToJSON()
+			lidJSON, err := lid.ToJSON()
+			if err != nil {
+				edsImpl.logger.Errorf("failed to marshal LocalityID: %#v, skipping this locality", lid)
+				continue
+			}
 			// TODO: (eds) add support to balancer group to support smoothly
 			//  switching sub-balancers (keep old balancer around until new
 			//  balancer becomes ready).
@@ -286,7 +290,11 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 		// One balancer for each locality.
 
 		lid := locality.ID
-		lidJSON := lid.ToJSON()
+		lidJSON, err := lid.ToJSON()
+		if err != nil {
+			edsImpl.logger.Errorf("failed to marshal LocalityID: %#v, skipping this locality", lid)
+			continue
+		}
 		newLocalitiesSet[lid] = struct{}{}
 
 		newWeight := locality.Weight
@@ -359,7 +367,11 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 
 	// Delete localities that are removed in the latest response.
 	for lid := range bgwc.configs {
-		lidJSON := lid.ToJSON()
+		lidJSON, err := lid.ToJSON()
+		if err != nil {
+			edsImpl.logger.Errorf("failed to marshal LocalityID: %#v, skipping this locality", lid)
+			continue
+		}
 		if _, ok := newLocalitiesSet[lid]; !ok {
 			bgwc.stateAggregator.Remove(lidJSON)
 			bgwc.bg.Remove(lidJSON)
