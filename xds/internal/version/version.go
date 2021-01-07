@@ -45,5 +45,5 @@ const (
 	V3RouteConfigURL     = "type.googleapis.com/envoy.config.route.v3.RouteConfiguration"
 	V3ClusterURL         = "type.googleapis.com/envoy.config.cluster.v3.Cluster"
 	V3EndpointsURL       = "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment"
-	V3HTTPConnManagerURL = "type.googleapis.com/envoy.config.filter.network.http_connection_manager.v2.HttpConnectionManager"
+	V3HTTPConnManagerURL = "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager"
 )
