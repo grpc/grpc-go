@@ -188,7 +188,9 @@ type Route struct {
 	Action map[string]uint32 // action is weighted clusters.
 	// If MaxStreamDuration is nil, it indicates neither of the route action's
 	// max_stream_duration fields (grpc_timeout_header_max nor
-	// max_stream_duration) were set.
+	// max_stream_duration) were set.  In this case, the ListenerUpdate's
+	// MaxStreamDuration field should be used.  If MaxStreamDuration is set to
+	// an explicit zero duration, the application's deadline should be used.
 	MaxStreamDuration *time.Duration
 }
 

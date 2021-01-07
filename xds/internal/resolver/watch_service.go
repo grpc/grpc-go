@@ -104,17 +104,13 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsclient.ListenerUpdate, er
 		return
 	}
 
-	sendUpdate := false
-	ldsUpdate := ldsConfig{maxStreamDuration: update.MaxStreamDuration}
-	if w.lastUpdate.ldsConfig != ldsUpdate {
-		w.lastUpdate.ldsConfig = ldsUpdate
-		sendUpdate = true
-	}
+	oldLDSConfig := w.lastUpdate.ldsConfig
+	w.lastUpdate.ldsConfig = ldsConfig{maxStreamDuration: update.MaxStreamDuration}
 
 	if w.rdsName == update.RouteConfigName {
 		// If the new RouteConfigName is same as the previous, don't cancel and
 		// restart the RDS watch.
-		if sendUpdate {
+		if w.lastUpdate.ldsConfig != oldLDSConfig {
 			// The route name didn't change but the LDS data did; send it now.
 			// If the route name did change, then we will wait until the first
 			// RDS update before reporting this LDS config.
