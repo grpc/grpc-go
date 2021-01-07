@@ -142,7 +142,7 @@ func (edsImpl *edsBalancerImpl) handleChildPolicy(name string, config json.RawMe
 			continue
 		}
 		for lid, config := range bgwc.configs {
-			lidJSON, err := lid.ToJSON()
+			lidJSON, err := lid.ToString()
 			if err != nil {
 				edsImpl.logger.Errorf("failed to marshal LocalityID: %#v, skipping this locality", lid)
 				continue
@@ -290,7 +290,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 		// One balancer for each locality.
 
 		lid := locality.ID
-		lidJSON, err := lid.ToJSON()
+		lidJSON, err := lid.ToString()
 		if err != nil {
 			edsImpl.logger.Errorf("failed to marshal LocalityID: %#v, skipping this locality", lid)
 			continue
@@ -367,7 +367,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 
 	// Delete localities that are removed in the latest response.
 	for lid := range bgwc.configs {
-		lidJSON, err := lid.ToJSON()
+		lidJSON, err := lid.ToString()
 		if err != nil {
 			edsImpl.logger.Errorf("failed to marshal LocalityID: %#v, skipping this locality", lid)
 			continue

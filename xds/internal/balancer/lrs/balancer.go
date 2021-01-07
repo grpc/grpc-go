@@ -100,7 +100,7 @@ func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		if b.lb != nil {
 			b.lb.Close()
 		}
-		lidJSON, err := newConfig.Locality.ToJSON()
+		lidJSON, err := newConfig.Locality.ToString()
 		if err != nil {
 			return fmt.Errorf("failed to marshal LocalityID: %#v", newConfig.Locality)
 		}

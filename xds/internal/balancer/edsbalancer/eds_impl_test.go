@@ -786,8 +786,8 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	// We expect the 10 picks to be split between the localities since they are
 	// of equal weight. And since we only mark the picks routed to sc2 as done,
 	// the picks on sc1 should show up as inProgress.
-	locality1JSON, _ := locality1.ToJSON()
-	locality2JSON, _ := locality2.ToJSON()
+	locality1JSON, _ := locality1.ToString()
+	locality2JSON, _ := locality2.ToString()
 	wantStoreData := []*load.Data{{
 		Cluster: testClusterNames[0],
 		Service: "",

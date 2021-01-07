@@ -126,7 +126,7 @@ func TestLoadReporting(t *testing.T) {
 	if sd.Cluster != testClusterName || sd.Service != testServiceName {
 		t.Fatalf("got unexpected load for %q, %q, want %q, %q", sd.Cluster, sd.Service, testClusterName, testServiceName)
 	}
-	testLocalityJSON, _ := testLocality.ToJSON()
+	testLocalityJSON, _ := testLocality.ToString()
 	localityData, ok := sd.LocalityStats[testLocalityJSON]
 	if !ok {
 		t.Fatalf("loads for %v not found in store", testLocality)

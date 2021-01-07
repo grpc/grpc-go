@@ -34,9 +34,9 @@ type LocalityID struct {
 	SubZone string `json:"subZone,omitempty"`
 }
 
-// ToJSON generates a string representation of LocalityID by marshalling it into
-// json.
-func (l LocalityID) ToJSON() (string, error) {
+// ToString generates a string representation of LocalityID by marshalling it into
+// json. Not calling it String() so printf won't call it.
+func (l LocalityID) ToString() (string, error) {
 	b, err := json.Marshal(l)
 	if err != nil {
 		return "", err
@@ -44,9 +44,9 @@ func (l LocalityID) ToJSON() (string, error) {
 	return string(b), nil
 }
 
-// LocalityIDFromJSON converts a json representation of locality, into a
+// LocalityIDFromString converts a json representation of locality, into a
 // LocalityID struct.
-func LocalityIDFromJSON(s string) (ret LocalityID, _ error) {
+func LocalityIDFromString(s string) (ret LocalityID, _ error) {
 	err := json.Unmarshal([]byte(s), &ret)
 	if err != nil {
 		return LocalityID{}, fmt.Errorf("%s is not a well formatted locality ID, error: %v", s, err)

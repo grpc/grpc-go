@@ -96,7 +96,7 @@ func TestLocalityToAndFromJSON(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotStr, err := tt.localityID.ToJSON()
+			gotStr, err := tt.localityID.ToString()
 			if err != nil {
 				t.Errorf("failed to marshal LocalityID: %#v", tt.localityID)
 			}
@@ -104,7 +104,7 @@ func TestLocalityToAndFromJSON(t *testing.T) {
 				t.Errorf("%#v.String() = %q, want %q", tt.localityID, gotStr, tt.str)
 			}
 
-			gotID, err := LocalityIDFromJSON(tt.str)
+			gotID, err := LocalityIDFromString(tt.str)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("LocalityIDFromString(%q) error = %v, wantErr %v", tt.str, err, tt.wantErr)
 				return
