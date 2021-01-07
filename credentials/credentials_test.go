@@ -21,7 +21,6 @@ package credentials
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -183,10 +182,8 @@ func (s) TestServerHandshakeReturnsAuthInfo(t *testing.T) {
 	if !compare(clientAuthInfo, serverAuthInfo) {
 		t.Fatalf("ServerHandshake(_) = %v, want %v.", serverAuthInfo, clientAuthInfo)
 	}
-	BadNamingVar := "bad naming"
-	ctx, _ := context.WithCancel(context.Background())
-	fmt.Println(BadNamingVar)
-	fmt.Println(ctx)
+	//ctx, _ := context.WithCancel(context.Background())
+	//fmt.Println(ctx)
 }
 
 func (s) TestServerAndClientHandshake(t *testing.T) {
