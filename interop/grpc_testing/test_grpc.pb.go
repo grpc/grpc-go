@@ -20,8 +20,11 @@ type TestServiceClient interface {
 	// One empty request followed by one empty response.
 	EmptyCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
 	// One request followed by one response.
-	// The server returns the client payload as-is.
 	UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error)
+	// One request followed by one response. Response has cache control
+	// headers set such that a caching HTTP proxy (such as GFE) can
+	// satisfy subsequent requests.
+	CacheableUnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error)
 	// One request followed by a sequence of responses (streamed download).
 	// The server returns the payload with client desired type and sizes.
 	StreamingOutputCall(ctx context.Context, in *StreamingOutputCallRequest, opts ...grpc.CallOption) (TestService_StreamingOutputCallClient, error)
@@ -37,6 +40,9 @@ type TestServiceClient interface {
 	// stream of responses are returned to the client when the server starts with
 	// first request.
 	HalfDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_HalfDuplexCallClient, error)
+	// The test server will not implement this method. It will be used
+	// to test the behavior when clients call unimplemented methods.
+	UnimplementedCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type testServiceClient struct {
@@ -59,6 +65,15 @@ func (c *testServiceClient) EmptyCall(ctx context.Context, in *Empty, opts ...gr
 func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
 	out := new(SimpleResponse)
 	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/UnaryCall", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *testServiceClient) CacheableUnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
+	out := new(SimpleResponse)
+	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/CacheableUnaryCall", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -193,6 +208,15 @@ func (x *testServiceHalfDuplexCallClient) Recv() (*StreamingOutputCallResponse, 
 	return m, nil
 }
 
+func (c *testServiceClient) UnimplementedCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/UnimplementedCall", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TestServiceServer is the server API for TestService service.
 // All implementations must embed UnimplementedTestServiceServer
 // for forward compatibility
@@ -200,8 +224,11 @@ type TestServiceServer interface {
 	// One empty request followed by one empty response.
 	EmptyCall(context.Context, *Empty) (*Empty, error)
 	// One request followed by one response.
-	// The server returns the client payload as-is.
 	UnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error)
+	// One request followed by one response. Response has cache control
+	// headers set such that a caching HTTP proxy (such as GFE) can
+	// satisfy subsequent requests.
+	CacheableUnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error)
 	// One request followed by a sequence of responses (streamed download).
 	// The server returns the payload with client desired type and sizes.
 	StreamingOutputCall(*StreamingOutputCallRequest, TestService_StreamingOutputCallServer) error
@@ -217,6 +244,9 @@ type TestServiceServer interface {
 	// stream of responses are returned to the client when the server starts with
 	// first request.
 	HalfDuplexCall(TestService_HalfDuplexCallServer) error
+	// The test server will not implement this method. It will be used
+	// to test the behavior when clients call unimplemented methods.
+	UnimplementedCall(context.Context, *Empty) (*Empty, error)
 	mustEmbedUnimplementedTestServiceServer()
 }
 
@@ -230,6 +260,9 @@ func (UnimplementedTestServiceServer) EmptyCall(context.Context, *Empty) (*Empty
 func (UnimplementedTestServiceServer) UnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
 }
+func (UnimplementedTestServiceServer) CacheableUnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CacheableUnaryCall not implemented")
+}
 func (UnimplementedTestServiceServer) StreamingOutputCall(*StreamingOutputCallRequest, TestService_StreamingOutputCallServer) error {
 	return status.Errorf(codes.Unimplemented, "method StreamingOutputCall not implemented")
 }
@@ -241,6 +274,9 @@ func (UnimplementedTestServiceServer) FullDuplexCall(TestService_FullDuplexCallS
 }
 func (UnimplementedTestServiceServer) HalfDuplexCall(TestService_HalfDuplexCallServer) error {
 	return status.Errorf(codes.Unimplemented, "method HalfDuplexCall not implemented")
+}
+func (UnimplementedTestServiceServer) UnimplementedCall(context.Context, *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnimplementedCall not implemented")
 }
 func (UnimplementedTestServiceServer) mustEmbedUnimplementedTestServiceServer() {}
 
@@ -287,6 +323,24 @@ func _TestService_UnaryCall_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TestServiceServer).UnaryCall(ctx, req.(*SimpleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TestService_CacheableUnaryCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SimpleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TestServiceServer).CacheableUnaryCall(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.testing.TestService/CacheableUnaryCall",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TestServiceServer).CacheableUnaryCall(ctx, req.(*SimpleRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -390,6 +444,24 @@ func (x *testServiceHalfDuplexCallServer) Recv() (*StreamingOutputCallRequest, e
 	return m, nil
 }
 
+func _TestService_UnimplementedCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TestServiceServer).UnimplementedCall(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.testing.TestService/UnimplementedCall",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TestServiceServer).UnimplementedCall(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TestService_ServiceDesc is the grpc.ServiceDesc for TestService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -404,6 +476,14 @@ var TestService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UnaryCall",
 			Handler:    _TestService_UnaryCall_Handler,
+		},
+		{
+			MethodName: "CacheableUnaryCall",
+			Handler:    _TestService_CacheableUnaryCall_Handler,
+		},
+		{
+			MethodName: "UnimplementedCall",
+			Handler:    _TestService_UnimplementedCall_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
@@ -430,7 +510,7 @@ var TestService_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "interop/grpc_testing/test.proto",
+	Metadata: "grpc/testing/test.proto",
 }
 
 // UnimplementedServiceClient is the client API for UnimplementedService service.
@@ -518,7 +598,129 @@ var UnimplementedService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "interop/grpc_testing/test.proto",
+	Metadata: "grpc/testing/test.proto",
+}
+
+// ReconnectServiceClient is the client API for ReconnectService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type ReconnectServiceClient interface {
+	Start(ctx context.Context, in *ReconnectParams, opts ...grpc.CallOption) (*Empty, error)
+	Stop(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ReconnectInfo, error)
+}
+
+type reconnectServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewReconnectServiceClient(cc grpc.ClientConnInterface) ReconnectServiceClient {
+	return &reconnectServiceClient{cc}
+}
+
+func (c *reconnectServiceClient) Start(ctx context.Context, in *ReconnectParams, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, "/grpc.testing.ReconnectService/Start", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *reconnectServiceClient) Stop(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ReconnectInfo, error) {
+	out := new(ReconnectInfo)
+	err := c.cc.Invoke(ctx, "/grpc.testing.ReconnectService/Stop", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ReconnectServiceServer is the server API for ReconnectService service.
+// All implementations must embed UnimplementedReconnectServiceServer
+// for forward compatibility
+type ReconnectServiceServer interface {
+	Start(context.Context, *ReconnectParams) (*Empty, error)
+	Stop(context.Context, *Empty) (*ReconnectInfo, error)
+	mustEmbedUnimplementedReconnectServiceServer()
+}
+
+// UnimplementedReconnectServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedReconnectServiceServer struct {
+}
+
+func (UnimplementedReconnectServiceServer) Start(context.Context, *ReconnectParams) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Start not implemented")
+}
+func (UnimplementedReconnectServiceServer) Stop(context.Context, *Empty) (*ReconnectInfo, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Stop not implemented")
+}
+func (UnimplementedReconnectServiceServer) mustEmbedUnimplementedReconnectServiceServer() {}
+
+// UnsafeReconnectServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ReconnectServiceServer will
+// result in compilation errors.
+type UnsafeReconnectServiceServer interface {
+	mustEmbedUnimplementedReconnectServiceServer()
+}
+
+func RegisterReconnectServiceServer(s grpc.ServiceRegistrar, srv ReconnectServiceServer) {
+	s.RegisterService(&ReconnectService_ServiceDesc, srv)
+}
+
+func _ReconnectService_Start_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReconnectParams)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReconnectServiceServer).Start(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.testing.ReconnectService/Start",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReconnectServiceServer).Start(ctx, req.(*ReconnectParams))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReconnectService_Stop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReconnectServiceServer).Stop(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.testing.ReconnectService/Stop",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReconnectServiceServer).Stop(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ReconnectService_ServiceDesc is the grpc.ServiceDesc for ReconnectService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ReconnectService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "grpc.testing.ReconnectService",
+	HandlerType: (*ReconnectServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Start",
+			Handler:    _ReconnectService_Start_Handler,
+		},
+		{
+			MethodName: "Stop",
+			Handler:    _ReconnectService_Stop_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "grpc/testing/test.proto",
 }
 
 // LoadBalancerStatsServiceClient is the client API for LoadBalancerStatsService service.
@@ -645,7 +847,130 @@ var LoadBalancerStatsService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "interop/grpc_testing/test.proto",
+	Metadata: "grpc/testing/test.proto",
+}
+
+// XdsUpdateHealthServiceClient is the client API for XdsUpdateHealthService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type XdsUpdateHealthServiceClient interface {
+	SetServing(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
+	SetNotServing(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
+}
+
+type xdsUpdateHealthServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewXdsUpdateHealthServiceClient(cc grpc.ClientConnInterface) XdsUpdateHealthServiceClient {
+	return &xdsUpdateHealthServiceClient{cc}
+}
+
+func (c *xdsUpdateHealthServiceClient) SetServing(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, "/grpc.testing.XdsUpdateHealthService/SetServing", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *xdsUpdateHealthServiceClient) SetNotServing(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, "/grpc.testing.XdsUpdateHealthService/SetNotServing", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// XdsUpdateHealthServiceServer is the server API for XdsUpdateHealthService service.
+// All implementations must embed UnimplementedXdsUpdateHealthServiceServer
+// for forward compatibility
+type XdsUpdateHealthServiceServer interface {
+	SetServing(context.Context, *Empty) (*Empty, error)
+	SetNotServing(context.Context, *Empty) (*Empty, error)
+	mustEmbedUnimplementedXdsUpdateHealthServiceServer()
+}
+
+// UnimplementedXdsUpdateHealthServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedXdsUpdateHealthServiceServer struct {
+}
+
+func (UnimplementedXdsUpdateHealthServiceServer) SetServing(context.Context, *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetServing not implemented")
+}
+func (UnimplementedXdsUpdateHealthServiceServer) SetNotServing(context.Context, *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetNotServing not implemented")
+}
+func (UnimplementedXdsUpdateHealthServiceServer) mustEmbedUnimplementedXdsUpdateHealthServiceServer() {
+}
+
+// UnsafeXdsUpdateHealthServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to XdsUpdateHealthServiceServer will
+// result in compilation errors.
+type UnsafeXdsUpdateHealthServiceServer interface {
+	mustEmbedUnimplementedXdsUpdateHealthServiceServer()
+}
+
+func RegisterXdsUpdateHealthServiceServer(s grpc.ServiceRegistrar, srv XdsUpdateHealthServiceServer) {
+	s.RegisterService(&XdsUpdateHealthService_ServiceDesc, srv)
+}
+
+func _XdsUpdateHealthService_SetServing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(XdsUpdateHealthServiceServer).SetServing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.testing.XdsUpdateHealthService/SetServing",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(XdsUpdateHealthServiceServer).SetServing(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _XdsUpdateHealthService_SetNotServing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(XdsUpdateHealthServiceServer).SetNotServing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.testing.XdsUpdateHealthService/SetNotServing",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(XdsUpdateHealthServiceServer).SetNotServing(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// XdsUpdateHealthService_ServiceDesc is the grpc.ServiceDesc for XdsUpdateHealthService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var XdsUpdateHealthService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "grpc.testing.XdsUpdateHealthService",
+	HandlerType: (*XdsUpdateHealthServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SetServing",
+			Handler:    _XdsUpdateHealthService_SetServing_Handler,
+		},
+		{
+			MethodName: "SetNotServing",
+			Handler:    _XdsUpdateHealthService_SetNotServing_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "grpc/testing/test.proto",
 }
 
 // XdsUpdateClientConfigureServiceClient is the client API for XdsUpdateClientConfigureService service.
@@ -734,5 +1059,5 @@ var XdsUpdateClientConfigureService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "interop/grpc_testing/test.proto",
+	Metadata: "grpc/testing/test.proto",
 }

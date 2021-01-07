@@ -29,9 +29,10 @@ import (
 	"net"
 
 	"google.golang.org/grpc"
-	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -45,8 +46,6 @@ func setPayload(p *testpb.Payload, t testpb.PayloadType, size int) {
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
-	case testpb.PayloadType_UNCOMPRESSABLE:
-		logger.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
 	default:
 		logger.Fatalf("Unsupported payload type: %d", t)
 	}
@@ -71,7 +70,15 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	}, nil
 }
 
+// UnconstrainedStreamingHeader indicates to the StreamingCall handler that its
+// behavior should be unconstrained (constant send/receive in parallel) instead
+// of ping-pong.
+const UnconstrainedStreamingHeader = "unconstrained-streaming"
+
 func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
+	if md, ok := metadata.FromIncomingContext(stream.Context()); ok && len(md[UnconstrainedStreamingHeader]) != 0 {
+		return s.UnconstrainedStreamingCall(stream)
+	}
 	response := &testpb.SimpleResponse{
 		Payload: new(testpb.Payload),
 	}
@@ -93,7 +100,7 @@ func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallS
 	}
 }
 
-func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_UnconstrainedStreamingCallServer) error {
+func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
 	in := new(testpb.SimpleRequest)
 	// Receive a message to learn response type and size.
 	err := stream.RecvMsg(in)
@@ -155,23 +162,6 @@ func (s *byteBufServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest)
 }
 
 func (s *byteBufServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
-	for {
-		var in []byte
-		err := stream.(grpc.ServerStream).RecvMsg(&in)
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		out := make([]byte, s.respSize)
-		if err := stream.(grpc.ServerStream).SendMsg(&out); err != nil {
-			return err
-		}
-	}
-}
-
-func (s *byteBufServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_UnconstrainedStreamingCallServer) error {
 	for {
 		var in []byte
 		err := stream.(grpc.ServerStream).RecvMsg(&in)

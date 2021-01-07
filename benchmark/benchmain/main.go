@@ -58,14 +58,16 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/benchmark"
 	bm "google.golang.org/grpc/benchmark"
 	"google.golang.org/grpc/benchmark/flags"
-	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/bufconn"
 )
 
@@ -404,10 +406,12 @@ func setupUnconstrainedStream(bf stats.Features) ([]testpb.BenchmarkService_Stre
 	tc, cleanup := makeClient(bf)
 
 	streams := make([]testpb.BenchmarkService_StreamingCallClient, bf.MaxConcurrentCalls)
+	md := metadata.Pairs(benchmark.UnconstrainedStreamingHeader, "1")
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	for i := 0; i < bf.MaxConcurrentCalls; i++ {
-		stream, err := tc.UnconstrainedStreamingCall(context.Background())
+		stream, err := tc.StreamingCall(ctx)
 		if err != nil {
-			logger.Fatalf("%v.UnconstrainedStreamingCall(_) = _, %v", tc, err)
+			logger.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 		}
 		streams[i] = stream
 	}
