@@ -29,6 +29,7 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -84,14 +85,11 @@ func (s) TestUnmarshalListener(t *testing.T) {
 						},
 					},
 				}
-				mcm, _ := proto.Marshal(cm)
+				mcm, _ := ptypes.MarshalAny(cm)
 				lis := &v3listenerpb.Listener{
 					Name: v3LDSTarget,
 					ApiListener: &v3listenerpb.ApiListener{
-						ApiListener: &anypb.Any{
-							TypeUrl: version.V3HTTPConnManagerURL,
-							Value:   mcm,
-						},
+						ApiListener: mcm,
 					},
 				}
 				mLis, _ := proto.Marshal(lis)
