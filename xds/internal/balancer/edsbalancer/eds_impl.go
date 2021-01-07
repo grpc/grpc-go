@@ -139,12 +139,17 @@ func (edsImpl *edsBalancerImpl) handleChildPolicy(name string, config json.RawMe
 			continue
 		}
 		for lid, config := range bgwc.configs {
+			lidJSON, err := lid.ToString()
+			if err != nil {
+				edsImpl.logger.Errorf("failed to marshal LocalityID: %#v, skipping this locality", lid)
+				continue
+			}
 			// TODO: (eds) add support to balancer group to support smoothly
 			//  switching sub-balancers (keep old balancer around until new
 			//  balancer becomes ready).
-			bgwc.bg.Remove(lid.String())
-			bgwc.bg.Add(lid.String(), edsImpl.subBalancerBuilder)
-			bgwc.bg.UpdateClientConnState(lid.String(), balancer.ClientConnState{
+			bgwc.bg.Remove(lidJSON)
+			bgwc.bg.Add(lidJSON, edsImpl.subBalancerBuilder)
+			bgwc.bg.UpdateClientConnState(lidJSON, balancer.ClientConnState{
 				ResolverState: resolver.State{Addresses: config.addrs},
 			})
 			// This doesn't need to manually update picker, because the new
@@ -282,6 +287,11 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 		// One balancer for each locality.
 
 		lid := locality.ID
+		lidJSON, err := lid.ToString()
+		if err != nil {
+			edsImpl.logger.Errorf("failed to marshal LocalityID: %#v, skipping this locality", lid)
+			continue
+		}
 		newLocalitiesSet[lid] = struct{}{}
 
 		newWeight := locality.Weight
@@ -316,8 +326,8 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 		config, ok := bgwc.configs[lid]
 		if !ok {
 			// A new balancer, add it to balancer group and balancer map.
-			bgwc.stateAggregator.Add(lid.String(), newWeight)
-			bgwc.bg.Add(lid.String(), edsImpl.subBalancerBuilder)
+			bgwc.stateAggregator.Add(lidJSON, newWeight)
+			bgwc.bg.Add(lidJSON, edsImpl.subBalancerBuilder)
 			config = &localityConfig{
 				weight: newWeight,
 			}
@@ -340,13 +350,13 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 
 		if weightChanged {
 			config.weight = newWeight
-			bgwc.stateAggregator.UpdateWeight(lid.String(), newWeight)
+			bgwc.stateAggregator.UpdateWeight(lidJSON, newWeight)
 			rebuildStateAndPicker = true
 		}
 
 		if addrsChanged {
 			config.addrs = newAddrs
-			bgwc.bg.UpdateClientConnState(lid.String(), balancer.ClientConnState{
+			bgwc.bg.UpdateClientConnState(lidJSON, balancer.ClientConnState{
 				ResolverState: resolver.State{Addresses: newAddrs},
 			})
 		}
@@ -354,9 +364,14 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 
 	// Delete localities that are removed in the latest response.
 	for lid := range bgwc.configs {
+		lidJSON, err := lid.ToString()
+		if err != nil {
+			edsImpl.logger.Errorf("failed to marshal LocalityID: %#v, skipping this locality", lid)
+			continue
+		}
 		if _, ok := newLocalitiesSet[lid]; !ok {
-			bgwc.stateAggregator.Remove(lid.String())
-			bgwc.bg.Remove(lid.String())
+			bgwc.stateAggregator.Remove(lidJSON)
+			bgwc.bg.Remove(lidJSON)
 			delete(bgwc.configs, lid)
 			edsImpl.logger.Infof("Locality %v deleted", lid)
 			rebuildStateAndPicker = true

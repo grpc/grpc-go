@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/xds/internal"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/client/load"
 )
@@ -93,7 +92,12 @@ func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		if b.lb != nil {
 			b.lb.Close()
 		}
-		b.lb = bb.Build(newCCWrapper(b.cc, b.client.loadStore(), newConfig.Locality), b.buildOpts)
+		lidJSON, err := newConfig.Locality.ToString()
+		if err != nil {
+			return fmt.Errorf("failed to marshal LocalityID: %#v", newConfig.Locality)
+		}
+		ccWrapper := newCCWrapper(b.cc, b.client.loadStore(), lidJSON)
+		b.lb = bb.Build(ccWrapper, b.buildOpts)
 	}
 	b.config = newConfig
 
@@ -126,20 +130,20 @@ func (b *lrsBalancer) Close() {
 
 type ccWrapper struct {
 	balancer.ClientConn
-	loadStore  load.PerClusterReporter
-	localityID *internal.LocalityID
+	loadStore      load.PerClusterReporter
+	localityIDJSON string
 }
 
-func newCCWrapper(cc balancer.ClientConn, loadStore load.PerClusterReporter, localityID *internal.LocalityID) *ccWrapper {
+func newCCWrapper(cc balancer.ClientConn, loadStore load.PerClusterReporter, localityIDJSON string) *ccWrapper {
 	return &ccWrapper{
-		ClientConn: cc,
-		loadStore:  loadStore,
-		localityID: localityID,
+		ClientConn:     cc,
+		loadStore:      loadStore,
+		localityIDJSON: localityIDJSON,
 	}
 }
 
 func (ccw *ccWrapper) UpdateState(s balancer.State) {
-	s.Picker = newLoadReportPicker(s.Picker, *ccw.localityID, ccw.loadStore)
+	s.Picker = newLoadReportPicker(s.Picker, ccw.localityIDJSON, ccw.loadStore)
 	ccw.ClientConn.UpdateState(s)
 }
 

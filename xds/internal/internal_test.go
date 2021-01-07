@@ -70,3 +70,48 @@ func (s) TestLocalityMatchProtoMessage(t *testing.T) {
 		t.Fatalf("internal type and proto message have different fields: (-got +want):\n%+v", diff)
 	}
 }
+
+func TestLocalityToAndFromJSON(t *testing.T) {
+	tests := []struct {
+		name       string
+		localityID LocalityID
+		str        string
+		wantErr    bool
+	}{
+		{
+			name:       "3 fields",
+			localityID: LocalityID{Region: "r:r", Zone: "z#z", SubZone: "s^s"},
+			str:        `{"region":"r:r","zone":"z#z","subZone":"s^s"}`,
+		},
+		{
+			name:       "2 fields",
+			localityID: LocalityID{Region: "r:r", Zone: "z#z"},
+			str:        `{"region":"r:r","zone":"z#z"}`,
+		},
+		{
+			name:       "1 field",
+			localityID: LocalityID{Region: "r:r"},
+			str:        `{"region":"r:r"}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotStr, err := tt.localityID.ToString()
+			if err != nil {
+				t.Errorf("failed to marshal LocalityID: %#v", tt.localityID)
+			}
+			if gotStr != tt.str {
+				t.Errorf("%#v.String() = %q, want %q", tt.localityID, gotStr, tt.str)
+			}
+
+			gotID, err := LocalityIDFromString(tt.str)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("LocalityIDFromString(%q) error = %v, wantErr %v", tt.str, err, tt.wantErr)
+				return
+			}
+			if diff := cmp.Diff(gotID, tt.localityID); diff != "" {
+				t.Errorf("LocalityIDFromString() got = %v, want %v, diff: %s", gotID, tt.localityID, diff)
+			}
+		})
+	}
+}
