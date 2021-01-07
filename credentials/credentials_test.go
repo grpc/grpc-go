@@ -184,8 +184,9 @@ func (s) TestServerHandshakeReturnsAuthInfo(t *testing.T) {
 		t.Fatalf("ServerHandshake(_) = %v, want %v.", serverAuthInfo, clientAuthInfo)
 	}
 	BadNamingVar := "bad naming"
-	BadNamingVar2 := "bad naming"
+	ctx, _ := context.WithCancel(context.Background())
 	fmt.Println(BadNamingVar)
+	fmt.Println(ctx)
 }
 
 func (s) TestServerAndClientHandshake(t *testing.T) {
