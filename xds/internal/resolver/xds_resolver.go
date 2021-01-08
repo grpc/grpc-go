@@ -189,8 +189,8 @@ func (r *xdsResolver) run() {
 					r.cc.UpdateState(resolver.State{
 						ServiceConfig: r.cc.ParseServiceConfig("{}"),
 					})
-					// Dereference the active config selector, if one exists.
-					r.curConfigSelector.decRefs()
+					// Stop and dereference the active config selector, if one exists.
+					r.curConfigSelector.stop()
 					r.curConfigSelector = nil
 					continue
 				}
@@ -219,20 +219,17 @@ func (r *xdsResolver) run() {
 				continue
 			}
 
-			// Account for this config selector's clusters.
-			cs.incRefs()
-
 			if !r.sendNewServiceConfig(cs) {
 				// JSON error creating the service config (unexpected); erase
 				// this config selector and ignore this update, continuing with
 				// the previous config selector.
-				cs.decRefs()
+				cs.stop()
 				continue
 			}
 
 			// Decrement references to the old config selector and assign the
 			// new one as the current one.
-			r.curConfigSelector.decRefs()
+			r.curConfigSelector.stop()
 			r.curConfigSelector = cs
 		}
 	}
