@@ -84,10 +84,24 @@ type accumulatedStats struct {
 	numRpcsFailedByMethod    map[string]int32
 }
 
+// copyStatsMap makes a copy of the map, and also replaces the RPC type string
+// to the proto string. E.g. "UnaryCall" -> "UNARY_CALL".
 func copyStatsMap(originalMap map[string]int32) (newMap map[string]int32) {
 	newMap = make(map[string]int32)
 	for k, v := range originalMap {
-		newMap[k] = v
+		var kk string
+		switch k {
+		case unaryCall:
+			kk = testpb.ClientConfigureRequest_UNARY_CALL.String()
+		case emptyCall:
+			kk = testpb.ClientConfigureRequest_EMPTY_CALL.String()
+		default:
+			logger.Warningf("unrecognized rpc type: %s", k)
+		}
+		if kk == "" {
+			continue
+		}
+		newMap[kk] = v
 	}
 	return newMap
 }
