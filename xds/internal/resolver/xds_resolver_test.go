@@ -435,6 +435,66 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	}
 }
 
+// TestXDSResolverRemovedWithRPCs tests the case where a config selector sends
+// an empty update to the resolver after the resource is removed.
+func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
+		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+	})
+	defer cancel()
+	defer xdsR.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	waitForWatchListener(ctx, t, xdsC, targetStr)
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
+
+	// Invoke the watchAPI callback with a good service update and wait for the
+	// UpdateState method to be called on the ClientConn.
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
+		VirtualHosts: []*xdsclient.VirtualHost{
+			{
+				Domains: []string{targetStr},
+				Routes:  []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{"test-cluster-1": 1}}},
+			},
+		},
+	}, nil)
+
+	gotState, err := tcc.stateCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+	rState := gotState.(resolver.State)
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+
+	// "Make an RPC" by invoking the config selector.
+	cs := iresolver.GetConfigSelector(rState)
+	if cs == nil {
+		t.Fatalf("received nil config selector")
+	}
+
+	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()})
+	if err != nil {
+		t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
+	}
+
+	// Delete the resource
+	suErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "resource removed error")
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{}, suErr)
+
+	if _, err = tcc.stateCh.Receive(ctx); err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+
+	// "Finish the RPC"; this could cause a panic if the resolver doesn't
+	// handle it correctly.
+	res.OnCommitted()
+}
+
 func (s) TestXDSResolverWRR(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
