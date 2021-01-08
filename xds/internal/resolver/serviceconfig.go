@@ -113,6 +113,9 @@ type configSelector struct {
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
 
 func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
+	if cs == nil {
+		return nil, status.Errorf(codes.Unavailable, "no valid clusters")
+	}
 	var rt *route
 	// Loop through routes in order and select first match.
 	for _, r := range cs.routes {

@@ -154,6 +154,15 @@ func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
 	// otherwise serviceConfigJSON will generate a config including
 	// them.
 	r.pruneActiveClusters()
+
+	if cs == nil && len(r.activeClusters) == 0 {
+		// There are no clusters and we are sending a failing configSelector.
+		// Send an empty config, which picks pick-first, with no address, and
+		// puts the ClientConn into transient failure.
+		r.cc.UpdateState(resolver.State{ServiceConfig: r.cc.ParseServiceConfig("{}")})
+		return true
+	}
+
 	// Produce the service config.
 	sc, err := serviceConfigJSON(r.activeClusters)
 	if err != nil {
@@ -163,6 +172,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
 		return false
 	}
 	r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.client, sc)
+
 	// Send the update to the ClientConn.
 	state := iresolver.SetConfigSelector(resolver.State{
 		ServiceConfig: r.cc.ParseServiceConfig(sc),
@@ -182,13 +192,13 @@ func (r *xdsResolver) run() {
 			if update.err != nil {
 				r.logger.Warningf("Watch error on resource %v from xds-client %p, %v", r.target.Endpoint, r.client, update.err)
 				if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
-					// If error is resource-not-found, it means the LDS resource
-					// was removed. Send an empty service config, which picks
-					// pick-first, with no address, and puts the ClientConn into
-					// transient failure..
-					r.cc.UpdateState(resolver.State{
-						ServiceConfig: r.cc.ParseServiceConfig("{}"),
-					})
+					// If error is resource-not-found, it means the LDS
+					// resource was removed. Ultimately send an empty service
+					// config, which picks pick-first, with no address, and
+					// puts the ClientConn into transient failure.  Before we
+					// can do that, we may need to send a normal service config
+					// along with an erroring (nil) config selector.
+					r.sendNewServiceConfig(nil)
 					// Stop and dereference the active config selector, if one exists.
 					r.curConfigSelector.stop()
 					r.curConfigSelector = nil
@@ -201,13 +211,7 @@ func (r *xdsResolver) run() {
 				continue
 			}
 			if update.emptyUpdate {
-				if r.curConfigSelector != nil {
-					// As an optimization: if an empty update comes with no
-					// current config selector, there's no need to send a new
-					// service config; the channel has already received the
-					// empty service config update.
-					r.sendNewServiceConfig(r.curConfigSelector)
-				}
+				r.sendNewServiceConfig(r.curConfigSelector)
 				continue
 			}
 
