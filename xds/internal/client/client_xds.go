@@ -80,6 +80,8 @@ func processListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
 // processClientSideListener checks if the provided Listener proto meets
 // the expected criteria. If so, it returns a non-empty routeConfigName.
 func processClientSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
+	update := &ListenerUpdate{}
+
 	apiLisAny := lis.GetApiListener().GetApiListener()
 	if !IsHTTPConnManagerResource(apiLisAny.GetTypeUrl()) {
 		return nil, fmt.Errorf("xds: unexpected resource type: %q in LDS response", apiLisAny.GetTypeUrl())
@@ -98,7 +100,7 @@ func processClientSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 		if name == "" {
 			return nil, fmt.Errorf("xds: empty route_config_name in LDS response: %+v", lis)
 		}
-		return &ListenerUpdate{RouteConfigName: name}, nil
+		update.RouteConfigName = name
 	case *v3httppb.HttpConnectionManager_RouteConfig:
 		// TODO: Add support for specifying the RouteConfiguration inline
 		// in the LDS response.
@@ -108,6 +110,10 @@ func processClientSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	default:
 		return nil, fmt.Errorf("xds: unsupported type %T for RouteSpecifier in received LDS response", apiLis.RouteSpecifier)
 	}
+
+	update.MaxStreamDuration = apiLis.GetCommonHttpProtocolOptions().GetMaxStreamDuration().AsDuration()
+
+	return update, nil
 }
 
 func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
@@ -346,12 +352,16 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 		}
 
 		route.Action = clusters
+
 		msd := action.GetMaxStreamDuration()
 		// Prefer grpc_timeout_header_max, if set.
-		if dur := msd.GetGrpcTimeoutHeaderMax(); dur != nil {
-			route.MaxStreamDuration = dur.AsDuration()
-		} else {
-			route.MaxStreamDuration = msd.GetMaxStreamDuration().AsDuration()
+		dur := msd.GetGrpcTimeoutHeaderMax()
+		if dur == nil {
+			dur = msd.GetMaxStreamDuration()
+		}
+		if dur != nil {
+			d := dur.AsDuration()
+			route.MaxStreamDuration = &d
 		}
 		routesRet = append(routesRet, &route)
 	}

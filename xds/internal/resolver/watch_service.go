@@ -22,17 +22,28 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc/internal/grpclog"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
-// serviceUpdate contains information received from the RDS responses which is
-// of interested to the xds resolver. The RDS request is built by first making a
-// LDS to get the RouteConfig name.
+// serviceUpdate contains information received from the LDS/RDS responses which
+// are of interest to the xds resolver. The RDS request is built by first
+// making a LDS to get the RouteConfig name.
 type serviceUpdate struct {
-	// Routes contain matchers+actions to route RPCs.
-	Routes []*xdsclient.Route
+	// routes contain matchers+actions to route RPCs.
+	routes []*xdsclient.Route
+	// ldsConfig contains configuration that applies to all routes.
+	ldsConfig ldsConfig
+}
+
+// ldsConfig contains information received from the LDS responses which are of
+// interest to the xds resolver.
+type ldsConfig struct {
+	// maxStreamDuration is from the HTTP connection manager's
+	// common_http_protocol_options field.
+	maxStreamDuration time.Duration
 }
 
 // watchService uses LDS and RDS to discover information about the provided
@@ -61,6 +72,7 @@ type serviceUpdateWatcher struct {
 	serviceName string
 	ldsCancel   func()
 	serviceCb   func(serviceUpdate, error)
+	lastUpdate  serviceUpdate
 
 	mu        sync.Mutex
 	closed    bool
@@ -84,6 +96,7 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsclient.ListenerUpdate, er
 			w.rdsCancel()
 			w.rdsName = ""
 			w.rdsCancel = nil
+			w.lastUpdate = serviceUpdate{}
 		}
 		// The other error cases still return early without canceling the
 		// existing RDS watch.
@@ -91,9 +104,18 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsclient.ListenerUpdate, er
 		return
 	}
 
+	oldLDSConfig := w.lastUpdate.ldsConfig
+	w.lastUpdate.ldsConfig = ldsConfig{maxStreamDuration: update.MaxStreamDuration}
+
 	if w.rdsName == update.RouteConfigName {
 		// If the new RouteConfigName is same as the previous, don't cancel and
 		// restart the RDS watch.
+		if w.lastUpdate.ldsConfig != oldLDSConfig {
+			// The route name didn't change but the LDS data did; send it now.
+			// If the route name did change, then we will wait until the first
+			// RDS update before reporting this LDS config.
+			w.serviceCb(w.lastUpdate, nil)
+		}
 		return
 	}
 	w.rdsName = update.RouteConfigName
@@ -127,7 +149,8 @@ func (w *serviceUpdateWatcher) handleRDSResp(update xdsclient.RouteConfigUpdate,
 		return
 	}
 
-	w.serviceCb(serviceUpdate{Routes: matchVh.Routes}, nil)
+	w.lastUpdate.routes = matchVh.Routes
+	w.serviceCb(w.lastUpdate, nil)
 }
 
 func (w *serviceUpdateWatcher) close() {
