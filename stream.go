@@ -1544,6 +1544,88 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 	return nil
 }
 
+type ServerStreamRedirect interface {
+	Redirect(conn *ClientConn, fullMethodName string) error
+}
+
+func (ss *serverStream) Redirect(conn *ClientConn, fullMethodName string) error {
+	redirectTo, err := NewClientStream(ss.ctx, &StreamDesc{
+		ServerStreams: true,
+		ClientStreams: true,
+	}, conn, fullMethodName)
+	if err != nil {
+		return status.Errorf(codes.Canceled, "the ClientConn may has been closed")
+	}
+	ErrChanA2B := redirectA2B(ss, redirectTo.(*clientStream))
+	ErrChanB2A := redirectB2A(redirectTo.(*clientStream), ss)
+	for i := 0; i < 2; i++ {
+		select {
+		case err = <-ErrChanA2B:
+			if err == io.EOF {
+				// success
+				_ = redirectTo.CloseSend()
+				break
+			} else {
+				return status.Errorf(codes.Internal, "failed proxying s2c: %v", err)
+			}
+		case err = <-ErrChanB2A:
+			ss.SetTrailer(redirectTo.Trailer())
+			if err != io.EOF {
+				return err
+			}
+			return nil
+		}
+	}
+	return status.Errorf(codes.Internal, "should never reach this stage.")
+}
+
+func redirectA2B(src *serverStream, dst *clientStream) chan error {
+	ret := make(chan error, 1)
+	go func() {
+		for {
+			if _, data, err := src.p.recvMsg(src.maxReceiveMessageSize); err != nil{
+				ret <- err
+				break
+			}else{
+				if err := dst.attempt.t.Write(dst.attempt.s, src.p.header[:], data, &transport.Options{Last: false}); err != nil {
+					ret <- err
+					break
+				}
+			}
+		}
+	}()
+	return ret
+}
+
+func redirectB2A(src *clientStream, dst *serverStream) chan error {
+	ret := make(chan error, 1)
+	go func() {
+		for i := 0;;i++{
+			if _, data, err := src.attempt.p.recvMsg(*src.callInfo.maxReceiveMessageSize); err != nil{
+				ret <- err
+				break
+			}else{
+				if i == 0{
+					md, err := src.Header()
+					if err != nil {
+						ret <- err
+						break
+					}
+					if err := dst.SendHeader(md); err != nil {
+						ret <- err
+						break
+					}
+				}
+				if err := dst.t.Write(dst.s, src.attempt.p.header[:], data,&transport.Options{Last: false}); err != nil {
+					ret <- err
+					break
+				}
+			}
+		}
+	}()
+	return ret
+}
+
 // MethodFromServerStream returns the method string for the input stream.
 // The returned string is in the format of "/service/method".
 func MethodFromServerStream(stream ServerStream) (string, bool) {
