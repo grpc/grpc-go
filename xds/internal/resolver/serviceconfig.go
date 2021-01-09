@@ -113,6 +113,9 @@ type configSelector struct {
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
 
 func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
+	if cs == nil {
+		return nil, status.Errorf(codes.Unavailable, "no valid clusters")
+	}
 	var rt *route
 	// Loop through routes in order and select first match.
 	for _, r := range cs.routes {
@@ -157,17 +160,8 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	return config, nil
 }
 
-// incRefs increments refs of all clusters referenced by this config selector.
-func (cs *configSelector) incRefs() {
-	// Loops over cs.clusters, but these are pointers to entries in
-	// activeClusters.
-	for _, ci := range cs.clusters {
-		atomic.AddInt32(&ci.refCount, 1)
-	}
-}
-
-// decRefs decrements refs of all clusters referenced by this config selector.
-func (cs *configSelector) decRefs() {
+// stop decrements refs of all clusters referenced by this config selector.
+func (cs *configSelector) stop() {
 	// The resolver's old configSelector may be nil.  Handle that here.
 	if cs == nil {
 		return
@@ -232,6 +226,13 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 		} else {
 			cs.routes[i].maxStreamDuration = *rt.MaxStreamDuration
 		}
+	}
+
+	// Account for this config selector's clusters.  Do this after no further
+	// errors may occur.  Note: cs.clusters are pointers to entries in
+	// activeClusters.
+	for _, ci := range cs.clusters {
+		atomic.AddInt32(&ci.refCount, 1)
 	}
 
 	return cs, nil
