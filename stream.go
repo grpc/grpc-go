@@ -1560,12 +1560,13 @@ func (ss *serverStream) Redirect(conn *ClientConn, fullMethodName string) error 
 	ErrChanA2B := redirectA2B(ss, redirectTo.(*clientStream))
 	ErrChanB2A := redirectB2A(redirectTo.(*clientStream), ss)
 	for i := 0; i < 2; i++ {
+	L:
 		select {
 		case err = <-ErrChanA2B:
 			if err == io.EOF {
 				// success
 				_ = redirectTo.CloseSend()
-				break
+				break L
 			} else {
 				return status.Errorf(codes.Internal, "failed proxying s2c: %v", err)
 			}
