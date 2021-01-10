@@ -1544,6 +1544,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 	return nil
 }
 
+// ServerStreamRedirect export the Redirect method for *serverStream
 type ServerStreamRedirect interface {
 	Redirect(conn *ClientConn, fullMethodName string) error
 }
@@ -1583,10 +1584,10 @@ func redirectA2B(src *serverStream, dst *clientStream) chan error {
 	ret := make(chan error, 1)
 	go func() {
 		for {
-			if _, data, err := src.p.recvMsg(src.maxReceiveMessageSize); err != nil{
+			if _, data, err := src.p.recvMsg(src.maxReceiveMessageSize); err != nil {
 				ret <- err
 				break
-			}else{
+			} else {
 				if err := dst.attempt.t.Write(dst.attempt.s, src.p.header[:], data, &transport.Options{Last: false}); err != nil {
 					ret <- err
 					break
@@ -1600,12 +1601,12 @@ func redirectA2B(src *serverStream, dst *clientStream) chan error {
 func redirectB2A(src *clientStream, dst *serverStream) chan error {
 	ret := make(chan error, 1)
 	go func() {
-		for i := 0;;i++{
-			if _, data, err := src.attempt.p.recvMsg(*src.callInfo.maxReceiveMessageSize); err != nil{
+		for i := 0; ; i++ {
+			if _, data, err := src.attempt.p.recvMsg(*src.callInfo.maxReceiveMessageSize); err != nil {
 				ret <- err
 				break
-			}else{
-				if i == 0{
+			} else {
+				if i == 0 {
 					md, err := src.Header()
 					if err != nil {
 						ret <- err
@@ -1616,7 +1617,7 @@ func redirectB2A(src *clientStream, dst *serverStream) chan error {
 						break
 					}
 				}
-				if err := dst.t.Write(dst.s, src.attempt.p.header[:], data,&transport.Options{Last: false}); err != nil {
+				if err := dst.t.Write(dst.s, src.attempt.p.header[:], data, &transport.Options{Last: false}); err != nil {
 					ret <- err
 					break
 				}
