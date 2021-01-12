@@ -29,8 +29,9 @@ import (
 	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/testdata"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var (
@@ -76,6 +77,6 @@ func main() {
 		opts = append(opts, grpc.Creds(altsTC))
 	}
 	server := grpc.NewServer(opts...)
-	testpb.RegisterTestServiceServer(server, interop.NewTestServer())
+	testgrpc.RegisterTestServiceServer(server, interop.NewTestServer())
 	server.Serve(lis)
 }

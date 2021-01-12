@@ -32,9 +32,10 @@ import (
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const (
@@ -188,7 +189,7 @@ func main() {
 		logger.Fatalf("Fail to dial: %v", err)
 	}
 	defer conn.Close()
-	tc := testpb.NewTestServiceClient(conn)
+	tc := testgrpc.NewTestServiceClient(conn)
 	switch *testCase {
 	case "empty_unary":
 		interop.DoEmptyUnaryCall(tc)
@@ -272,7 +273,7 @@ func main() {
 		interop.DoUnimplementedMethod(conn)
 		logger.Infoln("UnimplementedMethod done")
 	case "unimplemented_service":
-		interop.DoUnimplementedService(testpb.NewUnimplementedServiceClient(conn))
+		interop.DoUnimplementedService(testgrpc.NewUnimplementedServiceClient(conn))
 		logger.Infoln("UnimplementedService done")
 	case "pick_first_unary":
 		interop.DoPickFirstUnary(tc)

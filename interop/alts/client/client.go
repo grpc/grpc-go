@@ -27,6 +27,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/grpclog"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
@@ -51,7 +53,7 @@ func main() {
 		logger.Fatalf("gRPC Client: failed to dial the server at %v: %v", *serverAddr, err)
 	}
 	defer conn.Close()
-	grpcClient := testpb.NewTestServiceClient(conn)
+	grpcClient := testgrpc.NewTestServiceClient(conn)
 
 	// Call the EmptyCall API.
 	ctx := context.Background()
