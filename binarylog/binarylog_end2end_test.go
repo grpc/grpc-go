@@ -31,13 +31,15 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/binarylog"
-	pb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
 	"google.golang.org/grpc/grpclog"
 	iblog "google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/grpctest"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	pb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var grpclogLogger = grpclog.Component("binarylog")
@@ -126,7 +128,7 @@ func payloadToID(p *testpb.Payload) int32 {
 }
 
 type testServer struct {
-	testpb.UnimplementedTestServiceServer
+	testgrpc.UnimplementedTestServiceServer
 	te *test
 }
 
@@ -148,7 +150,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	return &testpb.SimpleResponse{Payload: in.Payload}, nil
 }
 
-func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
+func (s *testServer) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallServer) error {
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if ok {
 		if err := stream.SendHeader(md); err != nil {
@@ -176,7 +178,7 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 	}
 }
 
-func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInputCallServer) error {
+func (s *testServer) StreamingInputCall(stream testgrpc.TestService_StreamingInputCallServer) error {
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if ok {
 		if err := stream.SendHeader(md); err != nil {
@@ -200,7 +202,7 @@ func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 	}
 }
 
-func (s *testServer) StreamingOutputCall(in *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
+func (s *testServer) StreamingOutputCall(in *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if ok {
 		if err := stream.SendHeader(md); err != nil {
@@ -227,7 +229,7 @@ func (s *testServer) StreamingOutputCall(in *testpb.StreamingOutputCallRequest, 
 type test struct {
 	t *testing.T
 
-	testService testpb.TestServiceServer // nil means none
+	testService testgrpc.TestServiceServer // nil means none
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
 	srvAddr string // Server IP without port.
@@ -282,7 +284,7 @@ func (lw *listenerWrapper) Accept() (net.Conn, error) {
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
-func (te *test) startServer(ts testpb.TestServiceServer) {
+func (te *test) startServer(ts testgrpc.TestServiceServer) {
 	te.testService = ts
 	lis, err := net.Listen("tcp", "localhost:0")
 
@@ -298,7 +300,7 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	s := grpc.NewServer(opts...)
 	te.srv = s
 	if te.testService != nil {
-		testpb.RegisterTestServiceServer(s, te.testService)
+		testgrpc.RegisterTestServiceServer(s, te.testService)
 	}
 
 	go s.Serve(lis)
@@ -343,7 +345,7 @@ func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.Simple
 		req  *testpb.SimpleRequest
 		err  error
 	)
-	tc := testpb.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
 	if c.success {
 		req = &testpb.SimpleRequest{Payload: idToPayload(errorID + 1)}
 	} else {
@@ -363,7 +365,7 @@ func (te *test) doFullDuplexCallRoundtrip(c *rpcConfig) ([]proto.Message, []prot
 		resps []proto.Message
 		err   error
 	)
-	tc := testpb.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	ctx = metadata.NewOutgoingContext(ctx, testMetadata)
@@ -412,7 +414,7 @@ func (te *test) doClientStreamCall(c *rpcConfig) ([]proto.Message, proto.Message
 		resp *testpb.StreamingInputCallResponse
 		err  error
 	)
-	tc := testpb.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	ctx = metadata.NewOutgoingContext(ctx, testMetadata)
@@ -445,7 +447,7 @@ func (te *test) doServerStreamCall(c *rpcConfig) (proto.Message, []proto.Message
 		err   error
 	)
 
-	tc := testpb.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	ctx = metadata.NewOutgoingContext(ctx, testMetadata)

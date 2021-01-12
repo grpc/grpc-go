@@ -35,8 +35,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/status"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var (
@@ -66,7 +68,7 @@ func largeSimpleRequest() *testpb.SimpleRequest {
 }
 
 // sends two unary calls. The server asserts that the calls use different connections.
-func goaway(tc testpb.TestServiceClient) {
+func goaway(tc testgrpc.TestServiceClient) {
 	interop.DoLargeUnaryCall(tc)
 	// sleep to ensure that the client has time to recv the GOAWAY.
 	// TODO(ncteisen): make this less hacky.
@@ -74,7 +76,7 @@ func goaway(tc testpb.TestServiceClient) {
 	interop.DoLargeUnaryCall(tc)
 }
 
-func rstAfterHeader(tc testpb.TestServiceClient) {
+func rstAfterHeader(tc testgrpc.TestServiceClient) {
 	req := largeSimpleRequest()
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if reply != nil {
@@ -85,7 +87,7 @@ func rstAfterHeader(tc testpb.TestServiceClient) {
 	}
 }
 
-func rstDuringData(tc testpb.TestServiceClient) {
+func rstDuringData(tc testgrpc.TestServiceClient) {
 	req := largeSimpleRequest()
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if reply != nil {
@@ -96,7 +98,7 @@ func rstDuringData(tc testpb.TestServiceClient) {
 	}
 }
 
-func rstAfterData(tc testpb.TestServiceClient) {
+func rstAfterData(tc testgrpc.TestServiceClient) {
 	req := largeSimpleRequest()
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if reply != nil {
@@ -107,12 +109,12 @@ func rstAfterData(tc testpb.TestServiceClient) {
 	}
 }
 
-func ping(tc testpb.TestServiceClient) {
+func ping(tc testgrpc.TestServiceClient) {
 	// The server will assert that every ping it sends was ACK-ed by the client.
 	interop.DoLargeUnaryCall(tc)
 }
 
-func maxStreams(tc testpb.TestServiceClient) {
+func maxStreams(tc testgrpc.TestServiceClient) {
 	interop.DoLargeUnaryCall(tc)
 	var wg sync.WaitGroup
 	for i := 0; i < 15; i++ {
@@ -135,7 +137,7 @@ func main() {
 		logger.Fatalf("Fail to dial: %v", err)
 	}
 	defer conn.Close()
-	tc := testpb.NewTestServiceClient(conn)
+	tc := testgrpc.NewTestServiceClient(conn)
 	switch *testCase {
 	case "goaway":
 		goaway(tc)

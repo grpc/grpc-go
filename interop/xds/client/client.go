@@ -32,10 +32,12 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	_ "google.golang.org/grpc/xds"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 func init() {
@@ -163,7 +165,7 @@ var (
 )
 
 type statsService struct {
-	testpb.UnimplementedLoadBalancerStatsServiceServer
+	testgrpc.UnimplementedLoadBalancerStatsServiceServer
 }
 
 func hasRPCSucceeded() bool {
@@ -235,7 +237,7 @@ func (s *statsService) GetClientAccumulatedStats(ctx context.Context, in *testpb
 }
 
 type configureService struct {
-	testpb.UnimplementedXdsUpdateClientConfigureServiceServer
+	testgrpc.UnimplementedXdsUpdateClientConfigureServiceServer
 }
 
 func (s *configureService) Configure(ctx context.Context, in *testpb.ClientConfigureRequest) (*testpb.ClientConfigureResponse, error) {
@@ -334,25 +336,25 @@ func main() {
 	}
 	s := grpc.NewServer()
 	defer s.Stop()
-	testpb.RegisterLoadBalancerStatsServiceServer(s, &statsService{})
-	testpb.RegisterXdsUpdateClientConfigureServiceServer(s, &configureService{})
+	testgrpc.RegisterLoadBalancerStatsServiceServer(s, &statsService{})
+	testgrpc.RegisterXdsUpdateClientConfigureServiceServer(s, &configureService{})
 	go s.Serve(lis)
 
-	clients := make([]testpb.TestServiceClient, *numChannels)
+	clients := make([]testgrpc.TestServiceClient, *numChannels)
 	for i := 0; i < *numChannels; i++ {
 		conn, err := grpc.DialContext(context.Background(), *server, grpc.WithInsecure())
 		if err != nil {
 			logger.Fatalf("Fail to dial: %v", err)
 		}
 		defer conn.Close()
-		clients[i] = testpb.NewTestServiceClient(conn)
+		clients[i] = testgrpc.NewTestServiceClient(conn)
 	}
 	ticker := time.NewTicker(time.Second / time.Duration(*qps**numChannels))
 	defer ticker.Stop()
 	sendRPCs(clients, ticker)
 }
 
-func makeOneRPC(c testpb.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcInfo, error) {
+func makeOneRPC(c testgrpc.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), *rpcTimeout)
 	defer cancel()
 
@@ -392,7 +394,7 @@ func makeOneRPC(c testpb.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcInf
 	return &p, &info, err
 }
 
-func sendRPCs(clients []testpb.TestServiceClient, ticker *time.Ticker) {
+func sendRPCs(clients []testgrpc.TestServiceClient, ticker *time.Ticker) {
 	var i int
 	for range ticker.C {
 		// Get and increment request ID, and save a list of watchers that are

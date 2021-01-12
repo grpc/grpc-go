@@ -35,10 +35,11 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/status"
-	metricspb "google.golang.org/grpc/stress/grpc_testing"
 	"google.golang.org/grpc/testdata"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	metricspb "google.golang.org/grpc/stress/grpc_testing"
 )
 
 var (
@@ -209,7 +210,7 @@ func startServer(server *server, port int) {
 
 // performRPCs uses weightedRandomTestSelector to select test case and runs the tests.
 func performRPCs(gauge *gauge, conn *grpc.ClientConn, selector *weightedRandomTestSelector, stop <-chan bool) {
-	client := testpb.NewTestServiceClient(conn)
+	client := testgrpc.NewTestServiceClient(conn)
 	var numCalls int64
 	startTime := time.Now()
 	for {

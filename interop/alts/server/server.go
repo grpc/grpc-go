@@ -29,8 +29,9 @@ import (
 	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/tap"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const (
@@ -64,7 +65,7 @@ func main() {
 	}
 	altsTC := alts.NewServerCreds(opts)
 	grpcServer := grpc.NewServer(grpc.Creds(altsTC), grpc.InTapHandle(authz))
-	testpb.RegisterTestServiceServer(grpcServer, interop.NewTestServer())
+	testgrpc.RegisterTestServiceServer(grpcServer, interop.NewTestServer())
 	grpcServer.Serve(lis)
 }
 

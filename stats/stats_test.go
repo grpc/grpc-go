@@ -31,10 +31,12 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpctest"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const defaultTestTimeout = 10 * time.Second
@@ -87,7 +89,7 @@ func payloadToID(p *testpb.Payload) int32 {
 }
 
 type testServer struct {
-	testpb.UnimplementedTestServiceServer
+	testgrpc.UnimplementedTestServiceServer
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -105,7 +107,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	return &testpb.SimpleResponse{Payload: in.Payload}, nil
 }
 
-func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
+func (s *testServer) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallServer) error {
 	if err := stream.SendHeader(testHeaderMetadata); err != nil {
 		return status.Errorf(status.Code(err), "%v.SendHeader(%v) = %v, want %v", stream, testHeaderMetadata, err, nil)
 	}
@@ -130,7 +132,7 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 	}
 }
 
-func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInputCallServer) error {
+func (s *testServer) StreamingInputCall(stream testgrpc.TestService_StreamingInputCallServer) error {
 	if err := stream.SendHeader(testHeaderMetadata); err != nil {
 		return status.Errorf(status.Code(err), "%v.SendHeader(%v) = %v, want %v", stream, testHeaderMetadata, err, nil)
 	}
@@ -151,7 +153,7 @@ func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 	}
 }
 
-func (s *testServer) StreamingOutputCall(in *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
+func (s *testServer) StreamingOutputCall(in *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
 	if err := stream.SendHeader(testHeaderMetadata); err != nil {
 		return status.Errorf(status.Code(err), "%v.SendHeader(%v) = %v, want %v", stream, testHeaderMetadata, err, nil)
 	}
@@ -178,7 +180,7 @@ type test struct {
 	clientStatsHandler stats.Handler
 	serverStatsHandler stats.Handler
 
-	testServer testpb.TestServiceServer // nil means none
+	testServer testgrpc.TestServiceServer // nil means none
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
 	srvAddr string
@@ -213,7 +215,7 @@ func newTest(t *testing.T, tc *testConfig, ch stats.Handler, sh stats.Handler) *
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
-func (te *test) startServer(ts testpb.TestServiceServer) {
+func (te *test) startServer(ts testgrpc.TestServiceServer) {
 	te.testServer = ts
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -232,7 +234,7 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	s := grpc.NewServer(opts...)
 	te.srv = s
 	if te.testServer != nil {
-		testpb.RegisterTestServiceServer(s, te.testServer)
+		testgrpc.RegisterTestServiceServer(s, te.testServer)
 	}
 
 	go s.Serve(lis)
@@ -288,7 +290,7 @@ func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.Simple
 		req  *testpb.SimpleRequest
 		err  error
 	)
-	tc := testpb.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
 	if c.success {
 		req = &testpb.SimpleRequest{Payload: idToPayload(errorID + 1)}
 	} else {
@@ -307,7 +309,7 @@ func (te *test) doFullDuplexCallRoundtrip(c *rpcConfig) ([]proto.Message, []prot
 		resps []proto.Message
 		err   error
 	)
-	tc := testpb.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	stream, err := tc.FullDuplexCall(metadata.NewOutgoingContext(tCtx, testMetadata), grpc.WaitForReady(!c.failfast))
@@ -348,7 +350,7 @@ func (te *test) doClientStreamCall(c *rpcConfig) ([]proto.Message, *testpb.Strea
 		resp *testpb.StreamingInputCallResponse
 		err  error
 	)
-	tc := testpb.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	stream, err := tc.StreamingInputCall(metadata.NewOutgoingContext(tCtx, testMetadata), grpc.WaitForReady(!c.failfast))
@@ -379,7 +381,7 @@ func (te *test) doServerStreamCall(c *rpcConfig) (*testpb.StreamingOutputCallReq
 		err   error
 	)
 
-	tc := testpb.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
 	var startID int32
 	if !c.success {

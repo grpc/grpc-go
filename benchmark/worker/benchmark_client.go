@@ -32,9 +32,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/syscall"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var caFile = flag.String("ca_file", "", "The file containing the CA root cert file")
@@ -243,7 +245,7 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 
 func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int) {
 	for ic, conn := range conns {
-		client := testpb.NewBenchmarkServiceClient(conn)
+		client := testgrpc.NewBenchmarkServiceClient(conn)
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
 		for j := 0; j < rpcCountPerConn; j++ {
 			// Create histogram for each goroutine.
@@ -285,7 +287,7 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 }
 
 func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, payloadType string) {
-	var doRPC func(testpb.BenchmarkService_StreamingCallClient, int, int) error
+	var doRPC func(testgrpc.BenchmarkService_StreamingCallClient, int, int) error
 	if payloadType == "bytebuf" {
 		doRPC = benchmark.DoByteBufStreamingRoundTrip
 	} else {
@@ -294,7 +296,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 	for ic, conn := range conns {
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
 		for j := 0; j < rpcCountPerConn; j++ {
-			c := testpb.NewBenchmarkServiceClient(conn)
+			c := testgrpc.NewBenchmarkServiceClient(conn)
 			stream, err := c.StreamingCall(context.Background())
 			if err != nil {
 				logger.Fatalf("%v.StreamingCall(_) = _, %v", c, err)

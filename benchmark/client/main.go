@@ -53,6 +53,8 @@ import (
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/syscall"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
@@ -164,7 +166,7 @@ func runWithConn(cc *grpc.ClientConn, req *testpb.SimpleRequest, warmDeadline, e
 }
 
 func makeCaller(cc *grpc.ClientConn, req *testpb.SimpleRequest) func() {
-	client := testpb.NewBenchmarkServiceClient(cc)
+	client := testgrpc.NewBenchmarkServiceClient(cc)
 	if *rpcType == "unary" {
 		return func() {
 			if _, err := client.UnaryCall(context.Background(), req); err != nil {
