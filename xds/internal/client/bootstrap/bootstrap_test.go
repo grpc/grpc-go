@@ -486,16 +486,59 @@ func TestNewConfigV3SupportEnabledOnClient(t *testing.T) {
 	}
 }
 
-// TestNewConfigBootstrapEnvNotSet tests the case where the bootstrap file
+// TestNewConfigBootstrapEnvPriority tests that the two env variables are read in correct priority
+//
+// the case where the bootstrap file
 // environment variable is not set.
-func TestNewConfigBootstrapEnvNotSet(t *testing.T) {
-	// FIXME: also test the other env vairable, and priority
+func TestNewConfigBootstrapEnvPriority(t *testing.T) {
+	origV3Support := env.V3Support
+	env.V3Support = true
+	defer func() { env.V3Support = origV3Support }()
+
+	oldFileReadFunc := bootstrapFileReadFunc
+	bootstrapFileReadFunc = func(filename string) ([]byte, error) {
+		return fileReadFromFileMap(v2BootstrapFileMap, filename)
+	}
+	defer func() { bootstrapFileReadFunc = oldFileReadFunc }()
+
+	goodFileName1 := "goodBootstrap"
+	goodConfig1 := nonNilCredsConfigV2
+
+	goodFileName2 := "serverSupportsV3"
+	goodFileContent2 := v3BootstrapFileMap[goodFileName2]
+	goodConfig2 := nonNilCredsConfigV3
+
 	origBootstrapFileName := env.BootstrapFileName
 	env.BootstrapFileName = ""
 	defer func() { env.BootstrapFileName = origBootstrapFileName }()
 
+	origBootstrapContent := env.BootstrapFileContent
+	env.BootstrapFileContent = ""
+	defer func() { env.BootstrapFileContent = origBootstrapContent }()
+
+	// When both env variables are empty, NewConfig should fail.
 	if _, err := NewConfig(); err == nil {
 		t.Errorf("NewConfig() returned nil error, expected to fail")
+	}
+
+	// When one of them is set, it should be used.
+	env.BootstrapFileName = goodFileName1
+	env.BootstrapFileContent = ""
+	if c, err := NewConfig(); err != nil || c.compare(goodConfig1) != nil {
+		t.Errorf("NewConfig() = %v, %v, want: %v, %v", c, err, goodConfig1, nil)
+	}
+
+	env.BootstrapFileName = ""
+	env.BootstrapFileContent = goodFileContent2
+	if c, err := NewConfig(); err != nil || c.compare(goodConfig2) != nil {
+		t.Errorf("NewConfig() = %v, %v, want: %v, %v", c, err, goodConfig1, nil)
+	}
+
+	// Set both, file name should be read.
+	env.BootstrapFileName = goodFileName1
+	env.BootstrapFileContent = goodFileContent2
+	if c, err := NewConfig(); err != nil || c.compare(goodConfig1) != nil {
+		t.Errorf("NewConfig() = %v, %v, want: %v, %v", c, err, goodConfig1, nil)
 	}
 }
 
