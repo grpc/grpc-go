@@ -293,7 +293,7 @@ func (cib *clusterImplBalancer) run() {
 				fmt.Printf(" updating picker because of new picker\n")
 				cib.cc.UpdateState(balancer.State{
 					ConnectivityState: cib.childState.ConnectivityState,
-					Picker:            newDropPicker(cib.childState.Picker, cib.drops, cib.loadWrapper, cib.requestCounter),
+					Picker:            newDropPicker(cib.childState, cib.drops, cib.loadWrapper, cib.requestCounter),
 				})
 			case *dropConfigs:
 				cib.drops = u.drops
@@ -303,7 +303,7 @@ func (cib *clusterImplBalancer) run() {
 					fmt.Printf(" updating picker because of new config for real\n")
 					cib.cc.UpdateState(balancer.State{
 						ConnectivityState: cib.childState.ConnectivityState,
-						Picker:            newDropPicker(cib.childState.Picker, cib.drops, cib.loadWrapper, cib.requestCounter),
+						Picker:            newDropPicker(cib.childState, cib.drops, cib.loadWrapper, cib.requestCounter),
 					})
 				}
 			}

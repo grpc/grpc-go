@@ -20,7 +20,7 @@ package clusterimpl
 
 import (
 	"context"
-	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
-	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
@@ -46,21 +45,15 @@ var (
 	testBackendAddrs = []resolver.Address{
 		{Addr: "1.1.1.1:1"},
 	}
-	testLocality = &xdsinternal.LocalityID{
-		Region:  "test-region",
-		Zone:    "test-zone",
-		SubZone: "test-sub-zone",
-	}
 )
 
 func init() {
 	newRandomWRR = testutils.NewTestWRR
 }
 
-// TestLoadReporting verifies that the lrs balancer starts the loadReport
-// stream when the lbConfig passed to it contains a valid value for the LRS
-// server (empty string).
-func TestLoadReporting(t *testing.T) {
+// TestDrop verifies that the balancer correctly drops the picks, and that
+// the drops are reported.
+func TestDrop(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
@@ -68,10 +61,15 @@ func TestLoadReporting(t *testing.T) {
 
 	builder := balancer.Get(clusterImplName)
 	cc := testutils.NewTestClientConn(t)
-	lrsB := builder.Build(cc, balancer.BuildOptions{})
-	defer lrsB.Close()
+	b := builder.Build(cc, balancer.BuildOptions{})
+	defer b.Close()
 
-	if err := lrsB.UpdateClientConnState(balancer.ClientConnState{
+	const (
+		dropReason      = "test-dropping-category"
+		dropNumerator   = 1
+		dropDenominator = 2
+	)
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: testBackendAddrs,
 		},
@@ -80,8 +78,8 @@ func TestLoadReporting(t *testing.T) {
 			EDSServiceName:             testServiceName,
 			LRSLoadReportingServerName: newString(testLRSServerName),
 			DropCategories: []dropCategory{{
-				Category:           "aaa",
-				RequestsPerMillion: 500000,
+				Category:           dropReason,
+				RequestsPerMillion: million * dropNumerator / dropDenominator,
 			}},
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
@@ -103,35 +101,33 @@ func TestLoadReporting(t *testing.T) {
 	}
 
 	sc1 := <-cc.NewSubConnCh
-	lrsB.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	// This should get the connecting picker.
 	p0 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 10; i++ {
 		_, err := p0.Pick(balancer.PickInfo{})
 		if err != balancer.ErrNoSubConnAvailable {
 			t.Fatalf("picker.Pick, got _,%v, want Err=%v", err, balancer.ErrNoSubConnAvailable)
 		}
 	}
 
-	lrsB.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
 	p1 := <-cc.NewPickerCh
-	const successCount = 5
-	for i := 0; i < successCount; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
-			// t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
-			t.Errorf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
+	const rpcCount = 10
+	for i := 0; i < rpcCount; i++ {
+		gotSCSt, err := p1.Pick(balancer.PickInfo{})
+		// Even RPCs are dropped.
+		if i%2 == 0 {
+			if !strings.Contains(err.Error(), "dropped") {
+				t.Fatalf("pick.Pick, got %v, %v, want error RPC dropped", gotSCSt, err)
+			}
+			continue
+		}
+		if err != nil || !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			t.Fatalf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
 		}
 		gotSCSt.Done(balancer.DoneInfo{})
-	}
-	const errorCount = 5
-	for i := 0; i < errorCount; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
-		}
-		gotSCSt.Done(balancer.DoneInfo{Err: fmt.Errorf("error")})
 	}
 
 	// Dump load data from the store and compare with expected counts.
@@ -147,18 +143,8 @@ func TestLoadReporting(t *testing.T) {
 	if sd.Cluster != testClusterName || sd.Service != testServiceName {
 		t.Fatalf("got unexpected load for %q, %q, want %q, %q", sd.Cluster, sd.Service, testClusterName, testServiceName)
 	}
-	localityData, ok := sd.LocalityStats[testLocality.String()]
-	if !ok {
-		t.Fatalf("loads for %v not found in store", testLocality)
-	}
-	reqStats := localityData.RequestStats
-	if reqStats.Succeeded != successCount {
-		t.Errorf("got succeeded %v, want %v", reqStats.Succeeded, successCount)
-	}
-	if reqStats.Errored != errorCount {
-		t.Errorf("got errord %v, want %v", reqStats.Errored, errorCount)
-	}
-	if reqStats.InProgress != 0 {
-		t.Errorf("got inProgress %v, want %v", reqStats.InProgress, 0)
+	const dropCount = rpcCount * dropNumerator / dropDenominator
+	if diff := cmp.Diff(sd.Drops, map[string]uint64{dropReason: dropCount}); diff != "" {
+		t.Fatalf("got unexpected drop reports, diff (-got, +want): %v", diff)
 	}
 }

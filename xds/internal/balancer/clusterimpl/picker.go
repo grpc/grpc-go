@@ -21,6 +21,7 @@ package clusterimpl
 import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/client"
@@ -36,11 +37,22 @@ type dropper struct {
 	w        wrr.WRR
 }
 
+// greatest common divisor (GCD) via Euclidean algorithm
+func gcd(a, b uint32) uint32 {
+	for b != 0 {
+		t := b
+		b = a % b
+		a = t
+	}
+	return a
+}
+
 func newDropper(c dropCategory) *dropper {
 	w := newRandomWRR()
+	gcdv := gcd(c.RequestsPerMillion, million)
 	// Return true for RequestPerMillion, false for the rest.
-	w.Add(true, int64(c.RequestsPerMillion))
-	w.Add(false, int64(million-c.RequestsPerMillion))
+	w.Add(true, int64(c.RequestsPerMillion/gcdv))
+	w.Add(false, int64((million-c.RequestsPerMillion)/gcdv))
 
 	return &dropper{
 		category: c.Category,
@@ -59,21 +71,27 @@ type loadReporter interface {
 
 type dropPicker struct {
 	drops     []*dropper
-	p         balancer.Picker
+	s         balancer.State
 	loadStore loadReporter
 	counter   *client.ServiceRequestsCounter
 }
 
-func newDropPicker(p balancer.Picker, drops []*dropper, loadStore load.PerClusterReporter, counter *client.ServiceRequestsCounter) *dropPicker {
+func newDropPicker(s balancer.State, drops []*dropper, loadStore load.PerClusterReporter, counter *client.ServiceRequestsCounter) *dropPicker {
 	return &dropPicker{
 		drops:     drops,
-		p:         p,
+		s:         s,
 		loadStore: loadStore,
 		counter:   counter,
 	}
 }
 
 func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	// Don't drop unless the inner picker is READY. Similar to
+	// https://github.com/grpc/grpc-go/issues/2622.
+	if d.s.ConnectivityState != connectivity.Ready {
+		return d.s.Picker.Pick(info)
+	}
+
 	var (
 		drop     bool
 		category string
@@ -98,7 +116,7 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			}
 			return balancer.PickResult{}, status.Errorf(codes.Unavailable, err.Error())
 		}
-		pr, err := d.p.Pick(info)
+		pr, err := d.s.Picker.Pick(info)
 		if err != nil {
 			d.counter.EndRequest()
 			return pr, err
@@ -112,7 +130,5 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		}
 		return pr, err
 	}
-	// TODO: (eds) don't drop unless the inner picker is READY. Similar to
-	// https://github.com/grpc/grpc-go/issues/2622.
-	return d.p.Pick(info)
+	return d.s.Picker.Pick(info)
 }
