@@ -40,7 +40,7 @@ func newDropper(c dropCategory) *dropper {
 	w := newRandomWRR()
 	// Return true for RequestPerMillion, false for the rest.
 	w.Add(true, int64(c.RequestsPerMillion))
-	w.Add(false, int64(1000000-c.RequestsPerMillion))
+	w.Add(false, int64(million-c.RequestsPerMillion))
 
 	return &dropper{
 		category: c.Category,

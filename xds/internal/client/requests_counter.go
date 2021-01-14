@@ -87,7 +87,7 @@ func (c *ServiceRequestsCounter) StartRequest() error {
 //
 // TODO: this has duplicate functionality with StartRequest. We should delete
 // StartRequest() and SetMaxRequest(), and keep max inside the picker instead of
-// inside the counter. This is a big difference between eds_policy and
+// inside the counter. This is a difference between eds_policy and
 // xds_cluster_impl policy.
 func (c *ServiceRequestsCounter) StartRequestWithMax(max uint32) error {
 	if atomic.LoadUint32(&c.numRequests) >= max {
