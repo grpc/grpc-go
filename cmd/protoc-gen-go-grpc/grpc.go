@@ -58,7 +58,8 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 
 	g.P("// This is a compile-time assertion to ensure that this generated file")
 	g.P("// is compatible with the grpc package it is being compiled against.")
-	g.P("const _ = ", grpcPackage.Ident("SupportPackageIsVersion7"))
+	g.P("// Requires gRPC-Go v1.32.0 or later.")
+	g.P("const _ = ", grpcPackage.Ident("SupportPackageIsVersion7")) // When changing, update version number above.
 	g.P()
 	for _, service := range file.Services {
 		genService(gen, file, g, service)
