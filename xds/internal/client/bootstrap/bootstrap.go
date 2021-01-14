@@ -108,6 +108,7 @@ func bootstrapConfigFromEnvVariable() ([]byte, error) {
 		//
 		// Note that even if the content is invalid, we don't failover to the
 		// file content env variable.
+		logger.Debugf("xds: using bootstrap file with name %q", fName)
 		return bootstrapFileReadFunc(fName)
 	}
 
@@ -115,7 +116,7 @@ func bootstrapConfigFromEnvVariable() ([]byte, error) {
 		return []byte(fContent), nil
 	}
 
-	return nil, fmt.Errorf("xds: bootstrap environment variable (%q, or %q) not defined", "GRPC_XDS_BOOTSTRAP", "GRPC_XDS_BOOTSTRAP_CONFIG")
+	return nil, fmt.Errorf("none of the bootstrap environment variables (%q or %q) defined", "GRPC_XDS_BOOTSTRAP", "GRPC_XDS_BOOTSTRAP_CONFIG")
 }
 
 // NewConfig returns a new instance of Config initialized by reading the
@@ -160,13 +161,13 @@ func NewConfig() (*Config, error) {
 
 	data, err := bootstrapConfigFromEnvVariable()
 	if err != nil {
-		return nil, fmt.Errorf("xds: Failed to get bootstrap config, error %v", err)
+		return nil, fmt.Errorf("xds: Failed to read bootstrap config: %v", err)
 	}
 	logger.Debugf("Bootstrap content: %s", data)
 
 	var jsonData map[string]json.RawMessage
 	if err := json.Unmarshal(data, &jsonData); err != nil {
-		return nil, fmt.Errorf("xds: Failed to parse bootstrap config (content %v) with error: %v", string(data), err)
+		return nil, fmt.Errorf("xds: Failed to parse bootstrap config: %v", err)
 	}
 
 	serverSupportsV3 := false
