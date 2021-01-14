@@ -264,19 +264,40 @@ func (c *Config) compare(want *Config) error {
 	return nil
 }
 
+func fileReadFromFileMap(bootstrapFileMap map[string]string, name string) ([]byte, error) {
+	if b, ok := bootstrapFileMap[name]; ok {
+		return []byte(b), nil
+	}
+	return nil, os.ErrNotExist
+}
+
 func setupBootstrapOverride(bootstrapFileMap map[string]string) func() {
 	oldFileReadFunc := bootstrapFileReadFunc
-	bootstrapFileReadFunc = func(name string) ([]byte, error) {
-		if b, ok := bootstrapFileMap[name]; ok {
-			return []byte(b), nil
-		}
-		return nil, os.ErrNotExist
+	bootstrapFileReadFunc = func(filename string) ([]byte, error) {
+		return fileReadFromFileMap(bootstrapFileMap, filename)
 	}
 	return func() { bootstrapFileReadFunc = oldFileReadFunc }
 }
 
 // TODO: enable leak check for this package when
 // https://github.com/googleapis/google-cloud-go/issues/2417 is fixed.
+
+func testNewConfigWithFileNameEnv(t *testing.T, fileName string, wantError bool, wantConfig *Config) {
+	origBootstrapFileName := env.BootstrapFileName
+	env.BootstrapFileName = fileName
+	defer func() { env.BootstrapFileName = origBootstrapFileName }()
+
+	c, err := NewConfig()
+	if (err != nil) != wantError {
+		t.Fatalf("NewConfig() returned error %v, wantError: %v", err, wantError)
+	}
+	if wantError {
+		return
+	}
+	if err := c.compare(wantConfig); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // TestNewConfigV2ProtoFailure exercises the functionality in NewConfig with
 // different bootstrap file contents which are expected to fail.
@@ -338,13 +359,7 @@ func TestNewConfigV2ProtoFailure(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			origBootstrapFileName := env.BootstrapFileName
-			env.BootstrapFileName = test.name
-			defer func() { env.BootstrapFileName = origBootstrapFileName }()
-
-			if _, err := NewConfig(); err == nil {
-				t.Fatalf("NewConfig() returned nil error, expected to fail")
-			}
+			testNewConfigWithFileNameEnv(t, test.name, true, nil)
 		})
 	}
 }
@@ -382,17 +397,7 @@ func TestNewConfigV2ProtoSuccess(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			origBootstrapFileName := env.BootstrapFileName
-			env.BootstrapFileName = test.name
-			defer func() { env.BootstrapFileName = origBootstrapFileName }()
-
-			c, err := NewConfig()
-			if err != nil {
-				t.Fatalf("NewConfig() failed: %v", err)
-			}
-			if err := c.compare(test.wantConfig); err != nil {
-				t.Fatal(err)
-			}
+			testNewConfigWithFileNameEnv(t, test.name, false, test.wantConfig)
 		})
 	}
 }
@@ -419,17 +424,7 @@ func TestNewConfigV3SupportNotEnabledOnClient(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			origBootstrapFileName := env.BootstrapFileName
-			env.BootstrapFileName = test.name
-			defer func() { env.BootstrapFileName = origBootstrapFileName }()
-
-			c, err := NewConfig()
-			if err != nil {
-				t.Fatalf("NewConfig() failed: %v", err)
-			}
-			if err := c.compare(test.wantConfig); err != nil {
-				t.Fatal(err)
-			}
+			testNewConfigWithFileNameEnv(t, test.name, false, test.wantConfig)
 		})
 	}
 }
@@ -456,24 +451,15 @@ func TestNewConfigV3SupportEnabledOnClient(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			origBootstrapFileName := env.BootstrapFileName
-			env.BootstrapFileName = test.name
-			defer func() { env.BootstrapFileName = origBootstrapFileName }()
-
-			c, err := NewConfig()
-			if err != nil {
-				t.Fatalf("NewConfig() failed: %v", err)
-			}
-			if err := c.compare(test.wantConfig); err != nil {
-				t.Fatal(err)
-			}
+			testNewConfigWithFileNameEnv(t, test.name, false, test.wantConfig)
 		})
 	}
 }
 
-// TestNewConfigBootstrapFileEnvNotSet tests the case where the bootstrap file
+// TestNewConfigBootstrapEnvNotSet tests the case where the bootstrap file
 // environment variable is not set.
-func TestNewConfigBootstrapFileEnvNotSet(t *testing.T) {
+func TestNewConfigBootstrapEnvNotSet(t *testing.T) {
+	// FIXME: also test the other env vairable, and priority
 	origBootstrapFileName := env.BootstrapFileName
 	env.BootstrapFileName = ""
 	defer func() { env.BootstrapFileName = origBootstrapFileName }()
@@ -686,20 +672,7 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			origBootstrapFileName := env.BootstrapFileName
-			env.BootstrapFileName = test.name
-			defer func() { env.BootstrapFileName = origBootstrapFileName }()
-
-			c, err := NewConfig()
-			if (err != nil) != test.wantErr {
-				t.Fatalf("NewConfig() returned: %v, wantErr: %v", err, test.wantErr)
-			}
-			if test.wantErr {
-				return
-			}
-			if err := c.compare(test.wantConfig); err != nil {
-				t.Fatal(err)
-			}
+			testNewConfigWithFileNameEnv(t, test.name, test.wantErr, test.wantConfig)
 		})
 	}
 }
@@ -764,20 +737,7 @@ func TestNewConfigWithServerResourceNameID(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			origBootstrapFileName := env.BootstrapFileName
-			env.BootstrapFileName = test.name
-			defer func() { env.BootstrapFileName = origBootstrapFileName }()
-
-			c, err := NewConfig()
-			if (err != nil) != test.wantErr {
-				t.Fatalf("NewConfig() returned (%+v, %v), wantErr: %v", c, err, test.wantErr)
-			}
-			if test.wantErr {
-				return
-			}
-			if err := c.compare(test.wantConfig); err != nil {
-				t.Fatal(err)
-			}
+			testNewConfigWithFileNameEnv(t, test.name, test.wantErr, test.wantConfig)
 		})
 	}
 }
