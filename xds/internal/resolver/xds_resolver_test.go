@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
@@ -36,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/status"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/client"
@@ -435,6 +437,176 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	}
 }
 
+// TestXDSResolverRemovedWithRPCs tests the case where a config selector sends
+// an empty update to the resolver after the resource is removed.
+func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
+		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+	})
+	defer cancel()
+	defer xdsR.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	waitForWatchListener(ctx, t, xdsC, targetStr)
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
+
+	// Invoke the watchAPI callback with a good service update and wait for the
+	// UpdateState method to be called on the ClientConn.
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
+		VirtualHosts: []*xdsclient.VirtualHost{
+			{
+				Domains: []string{targetStr},
+				Routes:  []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{"test-cluster-1": 1}}},
+			},
+		},
+	}, nil)
+
+	gotState, err := tcc.stateCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+	rState := gotState.(resolver.State)
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+
+	// "Make an RPC" by invoking the config selector.
+	cs := iresolver.GetConfigSelector(rState)
+	if cs == nil {
+		t.Fatalf("received nil config selector")
+	}
+
+	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()})
+	if err != nil {
+		t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
+	}
+
+	// Delete the resource
+	suErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "resource removed error")
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{}, suErr)
+
+	if _, err = tcc.stateCh.Receive(ctx); err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+
+	// "Finish the RPC"; this could cause a panic if the resolver doesn't
+	// handle it correctly.
+	res.OnCommitted()
+}
+
+// TestXDSResolverRemovedResource tests for proper behavior after a resource is
+// removed.
+func (s) TestXDSResolverRemovedResource(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
+		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+	})
+	defer cancel()
+	defer xdsR.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	waitForWatchListener(ctx, t, xdsC, targetStr)
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
+
+	// Invoke the watchAPI callback with a good service update and wait for the
+	// UpdateState method to be called on the ClientConn.
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
+		VirtualHosts: []*xdsclient.VirtualHost{
+			{
+				Domains: []string{targetStr},
+				Routes:  []*client.Route{{Prefix: newStringP(""), Action: map[string]uint32{"test-cluster-1": 1}}},
+			},
+		},
+	}, nil)
+	wantJSON := `{"loadBalancingConfig":[{
+    "xds_cluster_manager_experimental":{
+      "children":{
+        "test-cluster-1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+        }
+      }
+    }}]}`
+	wantSCParsed := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON)
+
+	gotState, err := tcc.stateCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+	rState := gotState.(resolver.State)
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
+		t.Errorf("ClientConn.UpdateState received different service config")
+		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
+		t.Error("want: ", cmp.Diff(nil, wantSCParsed.Config))
+	}
+
+	// "Make an RPC" by invoking the config selector.
+	cs := iresolver.GetConfigSelector(rState)
+	if cs == nil {
+		t.Fatalf("received nil config selector")
+	}
+
+	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()})
+	if err != nil {
+		t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
+	}
+
+	// "Finish the RPC"; this could cause a panic if the resolver doesn't
+	// handle it correctly.
+	res.OnCommitted()
+
+	// Delete the resource.  The channel should receive a service config with the
+	// original cluster but with an erroring config selector.
+	suErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "resource removed error")
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{}, suErr)
+
+	if gotState, err = tcc.stateCh.Receive(ctx); err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+	rState = gotState.(resolver.State)
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
+		t.Errorf("ClientConn.UpdateState received different service config")
+		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
+		t.Error("want: ", cmp.Diff(nil, wantSCParsed.Config))
+	}
+
+	// "Make another RPC" by invoking the config selector.
+	cs = iresolver.GetConfigSelector(rState)
+	if cs == nil {
+		t.Fatalf("received nil config selector")
+	}
+
+	res, err = cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()})
+	if err == nil || status.Code(err) != codes.Unavailable {
+		t.Fatalf("Expected UNAVAILABLE error from cs.SelectConfig(_); got %v, %v", res, err)
+	}
+
+	// In the meantime, an empty ServiceConfig update should have been sent.
+	if gotState, err = tcc.stateCh.Receive(ctx); err != nil {
+		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+	}
+	rState = gotState.(resolver.State)
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+	wantSCParsed = internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)("{}")
+	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
+		t.Errorf("ClientConn.UpdateState received different service config")
+		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
+		t.Error("want: ", cmp.Diff(nil, wantSCParsed.Config))
+	}
+}
+
 func (s) TestXDSResolverWRR(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
@@ -511,7 +683,7 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr, MaxStreamDuration: time.Second}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	defer func(oldNewWRR func() wrr.WRR) { newWRR = oldNewWRR }(newWRR)
@@ -526,11 +698,11 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 				Routes: []*client.Route{{
 					Prefix:            newStringP("/foo"),
 					Action:            map[string]uint32{"A": 1},
-					MaxStreamDuration: 5 * time.Second,
+					MaxStreamDuration: newDurationP(5 * time.Second),
 				}, {
 					Prefix:            newStringP("/bar"),
 					Action:            map[string]uint32{"B": 1},
-					MaxStreamDuration: time.Duration(0),
+					MaxStreamDuration: newDurationP(0),
 				}, {
 					Prefix: newStringP(""),
 					Action: map[string]uint32{"C": 1},
@@ -554,43 +726,50 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 	}
 
 	testCases := []struct {
+		name           string
 		method         string
 		timeoutSupport bool
 		want           *time.Duration
 	}{{
+		name:           "RDS setting",
 		method:         "/foo/method",
 		timeoutSupport: true,
-		want:           func() *time.Duration { x := 5 * time.Second; return &x }(),
+		want:           newDurationP(5 * time.Second),
 	}, {
+		name:           "timeout support disabled",
 		method:         "/foo/method",
 		timeoutSupport: false,
 		want:           nil,
 	}, {
+		name:           "explicit zero in RDS; ignore LDS",
 		method:         "/bar/method",
 		timeoutSupport: true,
 		want:           nil,
 	}, {
+		name:           "no config in RDS; fallback to LDS",
 		method:         "/baz/method",
 		timeoutSupport: true,
-		want:           nil,
+		want:           newDurationP(time.Second),
 	}}
 
 	for _, tc := range testCases {
-		env.TimeoutSupport = tc.timeoutSupport
-		req := iresolver.RPCInfo{
-			Method:  tc.method,
-			Context: context.Background(),
-		}
-		res, err := cs.SelectConfig(req)
-		if err != nil {
-			t.Errorf("Unexpected error from cs.SelectConfig(%v): %v", req, err)
-			continue
-		}
-		res.OnCommitted()
-		got := res.MethodConfig.Timeout
-		if !reflect.DeepEqual(got, tc.want) {
-			t.Errorf("For method %q: res.MethodConfig.Timeout = %v; want %v", tc.method, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			env.TimeoutSupport = tc.timeoutSupport
+			req := iresolver.RPCInfo{
+				Method:  tc.method,
+				Context: context.Background(),
+			}
+			res, err := cs.SelectConfig(req)
+			if err != nil {
+				t.Errorf("Unexpected error from cs.SelectConfig(%v): %v", req, err)
+				return
+			}
+			res.OnCommitted()
+			got := res.MethodConfig.Timeout
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("For method %q: res.MethodConfig.Timeout = %v; want %v", tc.method, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -855,4 +1034,8 @@ func replaceRandNumGenerator(start int64) func() {
 	return func() {
 		grpcrandInt63n = grpcrand.Int63n
 	}
+}
+
+func newDurationP(d time.Duration) *time.Duration {
+	return &d
 }

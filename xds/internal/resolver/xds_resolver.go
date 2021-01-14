@@ -144,6 +144,43 @@ type xdsResolver struct {
 	curConfigSelector *configSelector
 }
 
+// sendNewServiceConfig prunes active clusters, generates a new service config
+// based on the current set of active clusters, and sends an update to the
+// channel with that service config and the provided config selector.  Returns
+// false if an error occurs while generating the service config and the update
+// cannot be sent.
+func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
+	// Delete entries from r.activeClusters with zero references;
+	// otherwise serviceConfigJSON will generate a config including
+	// them.
+	r.pruneActiveClusters()
+
+	if cs == nil && len(r.activeClusters) == 0 {
+		// There are no clusters and we are sending a failing configSelector.
+		// Send an empty config, which picks pick-first, with no address, and
+		// puts the ClientConn into transient failure.
+		r.cc.UpdateState(resolver.State{ServiceConfig: r.cc.ParseServiceConfig("{}")})
+		return true
+	}
+
+	// Produce the service config.
+	sc, err := serviceConfigJSON(r.activeClusters)
+	if err != nil {
+		// JSON marshal error; should never happen.
+		r.logger.Errorf("%v", err)
+		r.cc.ReportError(err)
+		return false
+	}
+	r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.client, sc)
+
+	// Send the update to the ClientConn.
+	state := iresolver.SetConfigSelector(resolver.State{
+		ServiceConfig: r.cc.ParseServiceConfig(sc),
+	}, cs)
+	r.cc.UpdateState(state)
+	return true
+}
+
 // run is a long running goroutine which blocks on receiving service updates
 // and passes it on the ClientConn.
 func (r *xdsResolver) run() {
@@ -155,15 +192,15 @@ func (r *xdsResolver) run() {
 			if update.err != nil {
 				r.logger.Warningf("Watch error on resource %v from xds-client %p, %v", r.target.Endpoint, r.client, update.err)
 				if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
-					// If error is resource-not-found, it means the LDS resource
-					// was removed. Send an empty service config, which picks
-					// pick-first, with no address, and puts the ClientConn into
-					// transient failure..
-					r.cc.UpdateState(resolver.State{
-						ServiceConfig: r.cc.ParseServiceConfig("{}"),
-					})
-					// Dereference the active config selector, if one exists.
-					r.curConfigSelector.decRefs()
+					// If error is resource-not-found, it means the LDS
+					// resource was removed. Ultimately send an empty service
+					// config, which picks pick-first, with no address, and
+					// puts the ClientConn into transient failure.  Before we
+					// can do that, we may need to send a normal service config
+					// along with an erroring (nil) config selector.
+					r.sendNewServiceConfig(nil)
+					// Stop and dereference the active config selector, if one exists.
+					r.curConfigSelector.stop()
 					r.curConfigSelector = nil
 					continue
 				}
@@ -173,43 +210,30 @@ func (r *xdsResolver) run() {
 				r.cc.ReportError(update.err)
 				continue
 			}
-			var cs *configSelector
-			if !update.emptyUpdate {
-				// Create the config selector for this update.
-				var err error
-				if cs, err = r.newConfigSelector(update.su); err != nil {
-					r.logger.Warningf("Error parsing update on resource %v from xds-client %p: %v", r.target.Endpoint, r.client, err)
-					r.cc.ReportError(err)
-					continue
-				}
-			} else {
-				// Empty update; use the existing config selector.
-				cs = r.curConfigSelector
-			}
-			// Account for this config selector's clusters.
-			cs.incRefs()
-			// Delete entries from r.activeClusters with zero references;
-			// otherwise serviceConfigJSON will generate a config including
-			// them.
-			r.pruneActiveClusters()
-			// Produce the service config.
-			sc, err := serviceConfigJSON(r.activeClusters)
-			if err != nil {
-				// JSON marshal error; should never happen.
-				r.logger.Errorf("%v", err)
-				r.cc.ReportError(err)
-				cs.decRefs()
+			if update.emptyUpdate {
+				r.sendNewServiceConfig(r.curConfigSelector)
 				continue
 			}
-			r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.client, sc)
-			// Send the update to the ClientConn.
-			state := iresolver.SetConfigSelector(resolver.State{
-				ServiceConfig: r.cc.ParseServiceConfig(sc),
-			}, cs)
-			r.cc.UpdateState(state)
+
+			// Create the config selector for this update.
+			cs, err := r.newConfigSelector(update.su)
+			if err != nil {
+				r.logger.Warningf("Error parsing update on resource %v from xds-client %p: %v", r.target.Endpoint, r.client, err)
+				r.cc.ReportError(err)
+				continue
+			}
+
+			if !r.sendNewServiceConfig(cs) {
+				// JSON error creating the service config (unexpected); erase
+				// this config selector and ignore this update, continuing with
+				// the previous config selector.
+				cs.stop()
+				continue
+			}
+
 			// Decrement references to the old config selector and assign the
 			// new one as the current one.
-			r.curConfigSelector.decRefs()
+			r.curConfigSelector.stop()
 			r.curConfigSelector = cs
 		}
 	}

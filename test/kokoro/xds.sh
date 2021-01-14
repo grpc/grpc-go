@@ -27,9 +27,9 @@ grpc/tools/run_tests/helper_scripts/prep_xds.sh
 # they are added into "all".
 GRPC_GO_LOG_VERBOSITY_LEVEL=99 GRPC_GO_LOG_SEVERITY_LEVEL=info \
   python3 grpc/tools/run_tests/run_xds_tests.py \
-    --test_case="all,path_matching,header_matching" \
+    --test_case="all,path_matching,header_matching,circuit_breaking" \
     --project_id=grpc-testing \
-    --source_image=projects/grpc-testing/global/images/xds-test-server-2 \
+    --source_image=projects/grpc-testing/global/images/xds-test-server-3 \
     --path_to_server_binary=/java_server/grpc-java/interop-testing/build/install/grpc-interop-testing/bin/xds-test-server \
     --gcp_suffix=$(date '+%s') \
     --verbose \

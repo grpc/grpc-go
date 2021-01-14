@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -138,7 +139,7 @@ func verifyServiceUpdate(ctx context.Context, updateCh *testutils.Channel, wantU
 		return fmt.Errorf("timeout when waiting for service update: %v", err)
 	}
 	gotUpdate := u.(serviceUpdateErr)
-	if gotUpdate.err != nil || !cmp.Equal(gotUpdate.u, wantUpdate, cmpopts.EquateEmpty()) {
+	if gotUpdate.err != nil || !cmp.Equal(gotUpdate.u, wantUpdate, cmpopts.EquateEmpty(), cmp.AllowUnexported(serviceUpdate{}, ldsConfig{})) {
 		return fmt.Errorf("unexpected service update: (%v, %v), want: (%v, nil),  diff (-want +got):\n%s", gotUpdate.u, gotUpdate.err, wantUpdate, cmp.Diff(gotUpdate.u, wantUpdate, cmpopts.EquateEmpty()))
 	}
 	return nil
@@ -165,7 +166,7 @@ func (s) TestServiceWatch(t *testing.T) {
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
-	wantUpdate := serviceUpdate{Routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}
+	wantUpdate := serviceUpdate{routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
@@ -179,7 +180,7 @@ func (s) TestServiceWatch(t *testing.T) {
 	}
 
 	wantUpdate2 := serviceUpdate{
-		Routes: []*xdsclient.Route{{
+		routes: []*xdsclient.Route{{
 			Path:   newStringP(""),
 			Action: map[string]uint32{cluster: 1},
 		}},
@@ -219,7 +220,7 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
-	wantUpdate := serviceUpdate{Routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}
+	wantUpdate := serviceUpdate{routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
@@ -240,7 +241,7 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr+"2")
 
 	// RDS update for the new name.
-	wantUpdate2 := serviceUpdate{Routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster + "2": 1}}}}
+	wantUpdate2 := serviceUpdate{routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster + "2": 1}}}}
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
@@ -250,6 +251,58 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 		},
 	}, nil)
 	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate2); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestServiceWatchLDSUpdate covers the case that after first LDS and first RDS
+// response, the second LDS response includes a new MaxStreamDuration.  It also
+// verifies this is reported in subsequent RDS updates.
+func (s) TestServiceWatchLDSUpdateMaxStreamDuration(t *testing.T) {
+	serviceUpdateCh := testutils.NewChannel()
+	xdsC := fakeclient.NewClient()
+	cancelWatch := watchService(xdsC, targetStr, func(update serviceUpdate, err error) {
+		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
+	}, nil)
+	defer cancelWatch()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	waitForWatchListener(ctx, t, xdsC, targetStr)
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr, MaxStreamDuration: time.Second}, nil)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
+
+	wantUpdate := serviceUpdate{routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}, ldsConfig: ldsConfig{maxStreamDuration: time.Second}}
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
+		VirtualHosts: []*xdsclient.VirtualHost{
+			{
+				Domains: []string{targetStr},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}},
+			},
+		},
+	}, nil)
+	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate); err != nil {
+		t.Fatal(err)
+	}
+
+	// Another LDS update with the same RDS_name but different MaxStreamDuration (zero in this case).
+	wantUpdate2 := serviceUpdate{routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
+	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate2); err != nil {
+		t.Fatal(err)
+	}
+
+	// RDS update.
+	wantUpdate3 := serviceUpdate{routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster + "2": 1}}}}
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
+		VirtualHosts: []*xdsclient.VirtualHost{
+			{
+				Domains: []string{targetStr},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster + "2": 1}}},
+			},
+		},
+	}, nil)
+	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate3); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -271,7 +324,7 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
-	wantUpdate := serviceUpdate{Routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}
+	wantUpdate := serviceUpdate{routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
