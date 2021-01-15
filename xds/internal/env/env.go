@@ -26,7 +26,18 @@ import (
 )
 
 const (
-	bootstrapFileNameEnv      = "GRPC_XDS_BOOTSTRAP"
+	// BootstrapFileNameEnv is the env variable to set bootstrap file name.
+	// Do not use this and read from env directly. Its value is read and kept in
+	// variable BootstrapFileName.
+	//
+	// When both bootstrap FileName and FileContent are set, FileName is used.
+	BootstrapFileNameEnv = "GRPC_XDS_BOOTSTRAP"
+	// BootstrapFileContentEnv is the env variable to set bootstrapp file
+	// content. Do not use this and read from env directly. Its value is read
+	// and kept in variable BootstrapFileName.
+	//
+	// When both bootstrap FileName and FileContent are set, FileName is used.
+	BootstrapFileContentEnv   = "GRPC_XDS_BOOTSTRAP_CONFIG"
 	xdsV3SupportEnv           = "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT"
 	circuitBreakingSupportEnv = "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING"
 	timeoutSupportEnv         = "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT"
@@ -36,7 +47,15 @@ var (
 	// BootstrapFileName holds the name of the file which contains xDS bootstrap
 	// configuration. Users can specify the location of the bootstrap file by
 	// setting the environment variable "GRPC_XDS_BOOSTRAP".
-	BootstrapFileName = os.Getenv(bootstrapFileNameEnv)
+	//
+	// When both bootstrap FileName and FileContent are set, FileName is used.
+	BootstrapFileName = os.Getenv(BootstrapFileNameEnv)
+	// BootstrapFileContent holds the content of the xDS bootstrap
+	// configuration. Users can specify the bootstrap config by
+	// setting the environment variable "GRPC_XDS_BOOSTRAP_CONFIG".
+	//
+	// When both bootstrap FileName and FileContent are set, FileName is used.
+	BootstrapFileContent = os.Getenv(BootstrapFileContentEnv)
 	// V3Support indicates whether xDS v3 API support is enabled, which can be
 	// done by setting the environment variable
 	// "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT" to "true".

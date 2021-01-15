@@ -96,6 +96,29 @@ type xdsServer struct {
 	ServerFeatures []string       `json:"server_features"`
 }
 
+func bootstrapConfigFromEnvVariable() ([]byte, error) {
+	fName := env.BootstrapFileName
+	fContent := env.BootstrapFileContent
+
+	// Bootstrap file name has higher priority than bootstrap content.
+	if fName != "" {
+		// If file name is set
+		// - If file not found (or other errors), fail
+		// - Otherwise, use the content.
+		//
+		// Note that even if the content is invalid, we don't failover to the
+		// file content env variable.
+		logger.Debugf("xds: using bootstrap file with name %q", fName)
+		return bootstrapFileReadFunc(fName)
+	}
+
+	if fContent != "" {
+		return []byte(fContent), nil
+	}
+
+	return nil, fmt.Errorf("none of the bootstrap environment variables (%q or %q) defined", env.BootstrapFileNameEnv, env.BootstrapFileContentEnv)
+}
+
 // NewConfig returns a new instance of Config initialized by reading the
 // bootstrap file found at ${GRPC_XDS_BOOTSTRAP}.
 //
@@ -136,21 +159,15 @@ type xdsServer struct {
 func NewConfig() (*Config, error) {
 	config := &Config{}
 
-	fName := env.BootstrapFileName
-	if fName == "" {
-		return nil, fmt.Errorf("xds: Environment variable %q not defined", "GRPC_XDS_BOOTSTRAP")
-	}
-	logger.Infof("Got bootstrap file location %q", fName)
-
-	data, err := bootstrapFileReadFunc(fName)
+	data, err := bootstrapConfigFromEnvVariable()
 	if err != nil {
-		return nil, fmt.Errorf("xds: Failed to read bootstrap file %s with error %v", fName, err)
+		return nil, fmt.Errorf("xds: Failed to read bootstrap config: %v", err)
 	}
 	logger.Debugf("Bootstrap content: %s", data)
 
 	var jsonData map[string]json.RawMessage
 	if err := json.Unmarshal(data, &jsonData); err != nil {
-		return nil, fmt.Errorf("xds: Failed to parse file %s (content %v) with error: %v", fName, string(data), err)
+		return nil, fmt.Errorf("xds: Failed to parse bootstrap config: %v", err)
 	}
 
 	serverSupportsV3 := false
