@@ -85,7 +85,7 @@ type accumulatedStats struct {
 	numRPCsStartedByMethod   map[string]int32
 	numRPCsSucceededByMethod map[string]int32
 	numRPCsFailedByMethod    map[string]int32
-	RPCStatusByMethod        map[string]map[int32]int32
+	rpcStatusByMethod        map[string]map[int32]int32
 }
 
 func convertRPCName(in string) string {
@@ -99,16 +99,34 @@ func convertRPCName(in string) string {
 	return in
 }
 
+// copyStatsMap makes a copy of the map.
+func copyStatsMap(originalMap map[string]int32) map[string]int32 {
+	newMap := make(map[string]int32, len(originalMap))
+	for k, v := range originalMap {
+		newMap[k] = v
+	}
+	return newMap
+}
+
+// copyStatsIntMap makes a copy of the map.
+func copyStatsIntMap(originalMap map[int32]int32) map[int32]int32 {
+	newMap := make(map[int32]int32, len(originalMap))
+	for k, v := range originalMap {
+		newMap[k] = v
+	}
+	return newMap
+}
+
 func (as *accumulatedStats) makeStatsMap() map[string]*testpb.LoadBalancerAccumulatedStatsResponse_MethodStats {
 	m := make(map[string]*testpb.LoadBalancerAccumulatedStatsResponse_MethodStats)
 	for k, v := range as.numRPCsStartedByMethod {
 		m[k] = &testpb.LoadBalancerAccumulatedStatsResponse_MethodStats{RpcsStarted: v}
 	}
-	for k, v := range as.RPCStatusByMethod {
+	for k, v := range as.rpcStatusByMethod {
 		if m[k] == nil {
 			m[k] = &testpb.LoadBalancerAccumulatedStatsResponse_MethodStats{}
 		}
-		m[k].Result = v
+		m[k].Result = copyStatsIntMap(v)
 	}
 	return m
 }
@@ -117,9 +135,9 @@ func (as *accumulatedStats) buildResp() *testpb.LoadBalancerAccumulatedStatsResp
 	as.mu.Lock()
 	defer as.mu.Unlock()
 	return &testpb.LoadBalancerAccumulatedStatsResponse{
-		NumRpcsStartedByMethod:   as.numRPCsStartedByMethod,
-		NumRpcsSucceededByMethod: as.numRPCsSucceededByMethod,
-		NumRpcsFailedByMethod:    as.numRPCsFailedByMethod,
+		NumRpcsStartedByMethod:   copyStatsMap(as.numRPCsStartedByMethod),
+		NumRpcsSucceededByMethod: copyStatsMap(as.numRPCsSucceededByMethod),
+		NumRpcsFailedByMethod:    copyStatsMap(as.numRPCsFailedByMethod),
 		StatsPerMethod:           as.makeStatsMap(),
 	}
 }
@@ -134,10 +152,10 @@ func (as *accumulatedStats) finishRPC(rpcType string, err error) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 	name := convertRPCName(rpcType)
-	if as.RPCStatusByMethod[name] == nil {
-		as.RPCStatusByMethod[name] = make(map[int32]int32)
+	if as.rpcStatusByMethod[name] == nil {
+		as.rpcStatusByMethod[name] = make(map[int32]int32)
 	}
-	as.RPCStatusByMethod[name][int32(status.Convert(err).Code())]++
+	as.rpcStatusByMethod[name][int32(status.Convert(err).Code())]++
 	if err != nil {
 		as.numRPCsFailedByMethod[name]++
 		return
@@ -166,7 +184,7 @@ var (
 		numRPCsStartedByMethod:   make(map[string]int32),
 		numRPCsSucceededByMethod: make(map[string]int32),
 		numRPCsFailedByMethod:    make(map[string]int32),
-		RPCStatusByMethod:        make(map[string]map[int32]int32),
+		rpcStatusByMethod:        make(map[string]map[int32]int32),
 	}
 
 	// 0 or 1 representing an RPC has succeeded. Use hasRPCSucceeded and
@@ -188,7 +206,7 @@ func setRPCSucceeded() {
 	atomic.StoreUint32(&rpcSucceeded, 1)
 }
 
-// Wait for the next LoadBalancerStatsRequest.GetNumRPCs to start and complete,
+// Wait for the next LoadBalancerStatsRequest.GetNumRpcs to start and complete,
 // and return the distribution of remote peers. This is essentially a clientside
 // LB reporting mechanism that is designed to be queried by an external test
 // driver when verifying that the client is distributing RPCs as expected.
