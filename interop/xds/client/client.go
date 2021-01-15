@@ -265,8 +265,9 @@ func (s *configureService) Configure(ctx context.Context, in *testpb.ClientConfi
 			return nil, fmt.Errorf("unsupported RPC type: %v", typ)
 		}
 		cfgs = append(cfgs, &rpcConfig{
-			typ: rpcType,
-			md:  metadata.Pairs(md...),
+			typ:     rpcType,
+			md:      metadata.Pairs(md...),
+			timeout: in.GetTimeoutSec(),
 		})
 	}
 	rpcCfgs.Store(cfgs)
@@ -297,8 +298,9 @@ func parseRPCTypes(rpcStr string) (ret []string) {
 }
 
 type rpcConfig struct {
-	typ string
-	md  metadata.MD
+	typ     string
+	md      metadata.MD
+	timeout int32
 }
 
 // parseRPCMetadata turns EmptyCall:key1:value1 into
@@ -355,7 +357,11 @@ func main() {
 }
 
 func makeOneRPC(c testgrpc.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), *rpcTimeout)
+	timeout := *rpcTimeout
+	if cfg.timeout != 0 {
+		timeout = time.Duration(cfg.timeout) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if len(cfg.md) != 0 {
