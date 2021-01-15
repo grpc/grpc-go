@@ -74,6 +74,7 @@ type dropPicker struct {
 	s         balancer.State
 	loadStore loadReporter
 	counter   *client.ServiceRequestsCounter
+	// TODO: add maxRequestCount for circuit breaking.
 }
 
 func newDropPicker(s balancer.State, drops []*dropper, loadStore load.PerClusterReporter, counter *client.ServiceRequestsCounter) *dropPicker {
@@ -109,6 +110,7 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		}
 		return balancer.PickResult{}, status.Errorf(codes.Unavailable, "RPC is dropped")
 	}
-	// TODO: support circuit breaking, d.counter.StartRequestWithMax().
+	// TODO: support circuit breaking, check if d.maxRequestCount >=
+	// d.counter.StartRequestWithMax().
 	return d.s.Picker.Pick(info)
 }
