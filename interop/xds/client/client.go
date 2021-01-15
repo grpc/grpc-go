@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 	_ "google.golang.org/grpc/xds"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -60,7 +61,7 @@ type statsWatcher struct {
 	rpcsByPeer    map[string]int32
 	rpcsByType    map[string]map[string]int32
 	numFailures   int32
-	remainingRpcs int32
+	remainingRPCs int32
 	chanHosts     chan *rpcInfo
 }
 
@@ -73,7 +74,7 @@ func (watcher *statsWatcher) buildResp() *testpb.LoadBalancerStatsResponse {
 	}
 
 	return &testpb.LoadBalancerStatsResponse{
-		NumFailures:  watcher.numFailures + watcher.remainingRpcs,
+		NumFailures:  watcher.numFailures + watcher.remainingRPCs,
 		RpcsByPeer:   watcher.rpcsByPeer,
 		RpcsByMethod: rpcsByType,
 	}
@@ -81,57 +82,67 @@ func (watcher *statsWatcher) buildResp() *testpb.LoadBalancerStatsResponse {
 
 type accumulatedStats struct {
 	mu                       sync.Mutex
-	numRpcsStartedByMethod   map[string]int32
-	numRpcsSucceededByMethod map[string]int32
-	numRpcsFailedByMethod    map[string]int32
+	numRPCsStartedByMethod   map[string]int32
+	numRPCsSucceededByMethod map[string]int32
+	numRPCsFailedByMethod    map[string]int32
+	RPCStatusByMethod        map[string]map[int32]int32
 }
 
-// copyStatsMap makes a copy of the map, and also replaces the RPC type string
-// to the proto string. E.g. "UnaryCall" -> "UNARY_CALL".
-func copyStatsMap(originalMap map[string]int32) (newMap map[string]int32) {
-	newMap = make(map[string]int32)
-	for k, v := range originalMap {
-		var kk string
-		switch k {
-		case unaryCall:
-			kk = testpb.ClientConfigureRequest_UNARY_CALL.String()
-		case emptyCall:
-			kk = testpb.ClientConfigureRequest_EMPTY_CALL.String()
-		default:
-			logger.Warningf("unrecognized rpc type: %s", k)
-		}
-		if kk == "" {
-			continue
-		}
-		newMap[kk] = v
+func convertRPCName(in string) string {
+	switch in {
+	case unaryCall:
+		return testpb.ClientConfigureRequest_UNARY_CALL.String()
+	case emptyCall:
+		return testpb.ClientConfigureRequest_EMPTY_CALL.String()
 	}
-	return newMap
+	logger.Warningf("unrecognized rpc type: %s", in)
+	return in
+}
+
+func (as *accumulatedStats) makeStatsMap() map[string]*testpb.LoadBalancerAccumulatedStatsResponse_MethodStats {
+	m := make(map[string]*testpb.LoadBalancerAccumulatedStatsResponse_MethodStats)
+	for k, v := range as.numRPCsStartedByMethod {
+		m[k] = &testpb.LoadBalancerAccumulatedStatsResponse_MethodStats{RpcsStarted: v}
+	}
+	for k, v := range as.RPCStatusByMethod {
+		if m[k] == nil {
+			m[k] = &testpb.LoadBalancerAccumulatedStatsResponse_MethodStats{}
+		}
+		m[k].Result = v
+	}
+	return m
 }
 
 func (as *accumulatedStats) buildResp() *testpb.LoadBalancerAccumulatedStatsResponse {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 	return &testpb.LoadBalancerAccumulatedStatsResponse{
-		NumRpcsStartedByMethod:   copyStatsMap(as.numRpcsStartedByMethod),
-		NumRpcsSucceededByMethod: copyStatsMap(as.numRpcsSucceededByMethod),
-		NumRpcsFailedByMethod:    copyStatsMap(as.numRpcsFailedByMethod),
+		NumRpcsStartedByMethod:   as.numRPCsStartedByMethod,
+		NumRpcsSucceededByMethod: as.numRPCsSucceededByMethod,
+		NumRpcsFailedByMethod:    as.numRPCsFailedByMethod,
+		StatsPerMethod:           as.makeStatsMap(),
 	}
 }
 
 func (as *accumulatedStats) startRPC(rpcType string) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
-	as.numRpcsStartedByMethod[rpcType]++
+	as.numRPCsStartedByMethod[convertRPCName(rpcType)]++
 }
 
-func (as *accumulatedStats) finishRPC(rpcType string, failed bool) {
+func (as *accumulatedStats) finishRPC(rpcType string, err error) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
-	if failed {
-		as.numRpcsFailedByMethod[rpcType]++
+	name := convertRPCName(rpcType)
+	if as.RPCStatusByMethod[name] == nil {
+		as.RPCStatusByMethod[name] = make(map[int32]int32)
+	}
+	as.RPCStatusByMethod[name][int32(status.Convert(err).Code())]++
+	if err != nil {
+		as.numRPCsFailedByMethod[name]++
 		return
 	}
-	as.numRpcsSucceededByMethod[rpcType]++
+	as.numRPCsSucceededByMethod[name]++
 }
 
 var (
@@ -152,9 +163,10 @@ var (
 	watchers         = make(map[statsWatcherKey]*statsWatcher)
 
 	accStats = accumulatedStats{
-		numRpcsStartedByMethod:   make(map[string]int32),
-		numRpcsSucceededByMethod: make(map[string]int32),
-		numRpcsFailedByMethod:    make(map[string]int32),
+		numRPCsStartedByMethod:   make(map[string]int32),
+		numRPCsSucceededByMethod: make(map[string]int32),
+		numRPCsFailedByMethod:    make(map[string]int32),
+		RPCStatusByMethod:        make(map[string]map[int32]int32),
 	}
 
 	// 0 or 1 representing an RPC has succeeded. Use hasRPCSucceeded and
@@ -176,7 +188,7 @@ func setRPCSucceeded() {
 	atomic.StoreUint32(&rpcSucceeded, 1)
 }
 
-// Wait for the next LoadBalancerStatsRequest.GetNumRpcs to start and complete,
+// Wait for the next LoadBalancerStatsRequest.GetNumRPCs to start and complete,
 // and return the distribution of remote peers. This is essentially a clientside
 // LB reporting mechanism that is designed to be queried by an external test
 // driver when verifying that the client is distributing RPCs as expected.
@@ -189,7 +201,7 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 			rpcsByPeer:    make(map[string]int32),
 			rpcsByType:    make(map[string]map[string]int32),
 			numFailures:   0,
-			remainingRpcs: in.GetNumRpcs(),
+			remainingRPCs: in.GetNumRpcs(),
 			chanHosts:     make(chan *rpcInfo),
 		}
 		watchers[watcherKey] = watcher
@@ -221,8 +233,8 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 			} else {
 				watcher.numFailures++
 			}
-			watcher.remainingRpcs--
-			if watcher.remainingRpcs == 0 {
+			watcher.remainingRPCs--
+			if watcher.remainingRPCs == 0 {
 				return watcher.buildResp(), nil
 			}
 		case <-ctx.Done():
@@ -342,7 +354,7 @@ func main() {
 
 	clients := make([]testgrpc.TestServiceClient, *numChannels)
 	for i := 0; i < *numChannels; i++ {
-		conn, err := grpc.DialContext(context.Background(), *server, grpc.WithInsecure())
+		conn, err := grpc.Dial(*server, grpc.WithInsecure())
 		if err != nil {
 			logger.Fatalf("Fail to dial: %v", err)
 		}
@@ -381,11 +393,10 @@ func makeOneRPC(c testgrpc.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcI
 	case emptyCall:
 		_, err = c.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p), grpc.Header(&header))
 	}
+	accStats.finishRPC(cfg.typ, err)
 	if err != nil {
-		accStats.finishRPC(cfg.typ, true)
 		return nil, nil, err
 	}
-	accStats.finishRPC(cfg.typ, false)
 
 	hosts := header["hostname"]
 	if len(hosts) > 0 {
