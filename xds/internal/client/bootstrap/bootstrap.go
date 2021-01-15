@@ -116,7 +116,7 @@ func bootstrapConfigFromEnvVariable() ([]byte, error) {
 		return []byte(fContent), nil
 	}
 
-	return nil, fmt.Errorf("none of the bootstrap environment variables (%q or %q) defined", "GRPC_XDS_BOOTSTRAP", "GRPC_XDS_BOOTSTRAP_CONFIG")
+	return nil, fmt.Errorf("none of the bootstrap environment variables (%q or %q) defined", env.BootstrapFileNameEnv, env.BootstrapFileContentEnv)
 }
 
 // NewConfig returns a new instance of Config initialized by reading the
