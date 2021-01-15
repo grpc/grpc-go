@@ -286,7 +286,6 @@ func (cib *clusterImplBalancer) run() {
 		select {
 		case update := <-cib.pickerUpdateCh.Get():
 			cib.pickerUpdateCh.Load()
-			// x.handleGRPCUpdate(update)
 			switch u := update.(type) {
 			case balancer.State:
 				cib.childState = u

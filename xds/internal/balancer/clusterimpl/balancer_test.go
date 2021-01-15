@@ -114,12 +114,12 @@ func TestDrop(t *testing.T) {
 	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
 	p1 := <-cc.NewPickerCh
-	const rpcCount = 10
+	const rpcCount = 20
 	for i := 0; i < rpcCount; i++ {
 		gotSCSt, err := p1.Pick(balancer.PickInfo{})
 		// Even RPCs are dropped.
 		if i%2 == 0 {
-			if !strings.Contains(err.Error(), "dropped") {
+			if err == nil || !strings.Contains(err.Error(), "dropped") {
 				t.Fatalf("pick.Pick, got %v, %v, want error RPC dropped", gotSCSt, err)
 			}
 			continue
@@ -127,7 +127,9 @@ func TestDrop(t *testing.T) {
 		if err != nil || !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
 		}
-		gotSCSt.Done(balancer.DoneInfo{})
+		if gotSCSt.Done != nil {
+			gotSCSt.Done(balancer.DoneInfo{})
+		}
 	}
 
 	// Dump load data from the store and compare with expected counts.
@@ -147,4 +149,62 @@ func TestDrop(t *testing.T) {
 	if diff := cmp.Diff(sd.Drops, map[string]uint64{dropReason: dropCount}); diff != "" {
 		t.Fatalf("got unexpected drop reports, diff (-got, +want): %v", diff)
 	}
+
+	// Send an update with new drop configs.
+	const (
+		dropReason2      = "test-dropping-category-2"
+		dropNumerator2   = 1
+		dropDenominator2 = 4
+	)
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Addresses: testBackendAddrs,
+		},
+		BalancerConfig: &lbConfig{
+			Cluster:                    testClusterName,
+			EDSServiceName:             testServiceName,
+			LRSLoadReportingServerName: newString(testLRSServerName),
+			DropCategories: []dropCategory{{
+				Category:           dropReason2,
+				RequestsPerMillion: million * dropNumerator2 / dropDenominator2,
+			}},
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
+	}
+
+	p2 := <-cc.NewPickerCh
+	for i := 0; i < rpcCount; i++ {
+		gotSCSt, err := p2.Pick(balancer.PickInfo{})
+		// Even RPCs are dropped.
+		if i%4 == 0 {
+			if err == nil || !strings.Contains(err.Error(), "dropped") {
+				t.Fatalf("pick.Pick, got %v, %v, want error RPC dropped", gotSCSt, err)
+			}
+			continue
+		}
+		if err != nil || !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			t.Fatalf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
+		}
+		if gotSCSt.Done != nil {
+			gotSCSt.Done(balancer.DoneInfo{})
+		}
+	}
+
+	sds2 := loadStore.Stats([]string{testClusterName})
+	if len(sds2) == 0 {
+		t.Fatalf("loads for cluster %v not found in store", testClusterName)
+	}
+	sd2 := sds2[0]
+	if sd2.Cluster != testClusterName || sd2.Service != testServiceName {
+		t.Fatalf("got unexpected load for %q, %q, want %q, %q", sd.Cluster, sd.Service, testClusterName, testServiceName)
+	}
+	const dropCount2 = rpcCount * dropNumerator2 / dropDenominator2
+	if diff := cmp.Diff(sd2.Drops, map[string]uint64{dropReason2: dropCount2}); diff != "" {
+		t.Fatalf("got unexpected drop reports, diff (-got, +want): %v", diff)
+	}
+
 }

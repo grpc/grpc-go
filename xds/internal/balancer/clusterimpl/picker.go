@@ -109,26 +109,6 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		}
 		return balancer.PickResult{}, status.Errorf(codes.Unavailable, "RPC is dropped")
 	}
-	if d.counter != nil {
-		if err := d.counter.StartRequest(); err != nil {
-			if d.loadStore != nil {
-				d.loadStore.CallDropped(category)
-			}
-			return balancer.PickResult{}, status.Errorf(codes.Unavailable, err.Error())
-		}
-		pr, err := d.s.Picker.Pick(info)
-		if err != nil {
-			d.counter.EndRequest()
-			return pr, err
-		}
-		oldDone := pr.Done
-		pr.Done = func(doneInfo balancer.DoneInfo) {
-			d.counter.EndRequest()
-			if oldDone != nil {
-				oldDone(doneInfo)
-			}
-		}
-		return pr, err
-	}
+	// TODO: support circuit breaking, d.counter.StartRequestWithMax().
 	return d.s.Picker.Pick(info)
 }
