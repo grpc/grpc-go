@@ -73,9 +73,11 @@ func FromProto(s *spb.Status) *Status {
 	return status.FromProto(s)
 }
 
-// FromError returns a Status representing err if it was produced from this
-// package or has a method `GRPCStatus() *Status`. Otherwise, ok is false and a
-// Status is returned with codes.Unknown and the original error message.
+// FromError returns a Status representing err.
+// If err is nil, ok is true and a Status with codes.OK is returned.
+// If it has a method `GRPCStatus() *Status`, ok is true and this value is returned.
+// Otherwise, ok is false and a Status is returned with
+// codes.Unknown and the original error message.
 func FromError(err error) (s *Status, ok bool) {
 	if err == nil {
 		return nil, true
