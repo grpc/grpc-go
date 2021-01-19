@@ -82,21 +82,6 @@ func (c *ServiceRequestsCounter) StartRequest() error {
 	return nil
 }
 
-// StartRequest starts a request for a service, increment count by 1, if the
-// count doesn't exceed the max after this new request.
-//
-// TODO: this has duplicate functionality with StartRequest. We should delete
-// StartRequest() and SetMaxRequest(), and keep max inside the picker instead of
-// inside the counter. This is a difference between eds_policy and
-// xds_cluster_impl policy.
-func (c *ServiceRequestsCounter) StartRequestWithMax(max uint32) error {
-	if atomic.LoadUint32(&c.numRequests) >= max {
-		return fmt.Errorf("max requests %v exceeded on service %v", c.maxRequests, c.ServiceName)
-	}
-	atomic.AddUint32(&c.numRequests, 1)
-	return nil
-}
-
 // EndRequest ends a request for a service, decrementing its number of requests
 // by 1.
 func (c *ServiceRequestsCounter) EndRequest() {

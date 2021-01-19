@@ -16,6 +16,7 @@
  *
  */
 
+// Package utils contains utility structs shared by the balancers.
 package utils
 
 import (
@@ -57,6 +58,9 @@ type LoadStoreWrapper struct {
 	perCluster load.PerClusterReporter
 }
 
+// UpdateClusterAndService updates the cluster name and eds service for this
+// wrapper. If any one of them is changed from before, the perCluster store in
+// this wrapper will also be updated.
 func (lsw *LoadStoreWrapper) UpdateClusterAndService(cluster, edsService string) {
 	lsw.mu.Lock()
 	defer lsw.mu.Unlock()
@@ -68,6 +72,8 @@ func (lsw *LoadStoreWrapper) UpdateClusterAndService(cluster, edsService string)
 	lsw.perCluster = lsw.store.PerCluster(lsw.cluster, lsw.edsService)
 }
 
+// UpdateLoadStore updates the load store for this wrapper. If it is changed
+// from before, the perCluster store in this wrapper will also be updated.
 func (lsw *LoadStoreWrapper) UpdateLoadStore(store *load.Store) {
 	lsw.mu.Lock()
 	defer lsw.mu.Unlock()
@@ -79,6 +85,7 @@ func (lsw *LoadStoreWrapper) UpdateLoadStore(store *load.Store) {
 	lsw.perCluster = lsw.store.PerCluster(lsw.cluster, lsw.edsService)
 }
 
+// CallStarted records a call started in the store.
 func (lsw *LoadStoreWrapper) CallStarted(locality string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
@@ -87,6 +94,7 @@ func (lsw *LoadStoreWrapper) CallStarted(locality string) {
 	}
 }
 
+// CallFinished records a call finished in the store.
 func (lsw *LoadStoreWrapper) CallFinished(locality string, err error) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
@@ -95,6 +103,7 @@ func (lsw *LoadStoreWrapper) CallFinished(locality string, err error) {
 	}
 }
 
+// CallServerLoad records the server load in the store.
 func (lsw *LoadStoreWrapper) CallServerLoad(locality, name string, val float64) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
@@ -103,6 +112,7 @@ func (lsw *LoadStoreWrapper) CallServerLoad(locality, name string, val float64) 
 	}
 }
 
+// CallDropped records a call dropped in the store.
 func (lsw *LoadStoreWrapper) CallDropped(category string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
