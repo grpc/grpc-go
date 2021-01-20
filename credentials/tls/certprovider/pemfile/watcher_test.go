@@ -74,7 +74,7 @@ func compareKeyMaterial(got, want *certprovider.KeyMaterial) error {
 	// subjects field of the certs in the CertPool seems like a reasonable
 	// approach.
 	if gotR, wantR := got.Roots.Subjects(), want.Roots.Subjects(); !cmp.Equal(gotR, wantR, cmpopts.EquateEmpty()) {
-		return fmt.Errorf("KeyMaterial roots = %v, want %v", string(gotR[0]), string(wantR[0]))
+		return fmt.Errorf("KeyMaterial roots = %v, want %v", gotR, wantR)
 	}
 	return nil
 }
