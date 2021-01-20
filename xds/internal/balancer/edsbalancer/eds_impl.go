@@ -515,6 +515,9 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}
 	if d.counter != nil {
 		if err := d.counter.StartRequest(); err != nil {
+			if d.loadStore != nil {
+				d.loadStore.CallDropped("")
+			}
 			return balancer.PickResult{}, status.Errorf(codes.Unavailable, err.Error())
 		}
 		pr, err := d.p.Pick(info)
