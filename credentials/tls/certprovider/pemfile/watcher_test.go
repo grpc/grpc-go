@@ -22,9 +22,9 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"path"
-	"reflect"
 	"testing"
 	"time"
 
@@ -57,15 +57,16 @@ func Test(t *testing.T) {
 }
 
 func compareKeyMaterial(got, want *certprovider.KeyMaterial) error {
-	// TODO(easwars): Remove all references to reflect.DeepEqual and use
-	// cmp.Equal instead. Currently, the later panics because x509.Certificate
-	// type defines an Equal method, but does not check for nil. This has been
-	// fixed in
+	// x509.Certificate type defines an Equal() method, but does not check for
+	// nil. This has been fixed in
 	// https://github.com/golang/go/commit/89865f8ba64ccb27f439cce6daaa37c9aa38f351,
-	// but this is only available starting go1.14. So, once we remove support
-	// for go1.13, we can make the switch.
-	if !reflect.DeepEqual(got.Certs, want.Certs) {
-		return fmt.Errorf("KeyMaterial certs = %+v, want %+v", got, want)
+	// but this is only available starting go1.14.
+	// TODO(easwars): Remove this check once we remove support for go1.13.
+	if (got.Certs == nil && want.Certs != nil) || (want.Certs == nil && got.Certs != nil) {
+		return fmt.Errorf("keyMaterial certs = %+v, want %+v", got, want)
+	}
+	if !cmp.Equal(got.Certs, want.Certs, cmp.AllowUnexported(big.Int{})) {
+		return fmt.Errorf("keyMaterial certs = %+v, want %+v", got, want)
 	}
 	// x509.CertPool contains only unexported fields some of which contain other
 	// unexported fields. So usage of cmp.AllowUnexported() or
@@ -74,7 +75,7 @@ func compareKeyMaterial(got, want *certprovider.KeyMaterial) error {
 	// subjects field of the certs in the CertPool seems like a reasonable
 	// approach.
 	if gotR, wantR := got.Roots.Subjects(), want.Roots.Subjects(); !cmp.Equal(gotR, wantR, cmpopts.EquateEmpty()) {
-		return fmt.Errorf("KeyMaterial roots = %v, want %v", gotR, wantR)
+		return fmt.Errorf("keyMaterial roots = %v, want %v", gotR, wantR)
 	}
 	return nil
 }
