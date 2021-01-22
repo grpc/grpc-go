@@ -68,9 +68,12 @@ func init() {
 	balancer.Register(&anotherRR{Builder: balancer.Get(roundrobin.Name)})
 }
 
-func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
+func subConnFromPicker(t *testing.T, p balancer.Picker) func() balancer.SubConn {
 	return func() balancer.SubConn {
-		scst, _ := p.Pick(balancer.PickInfo{})
+		scst, err := p.Pick(balancer.PickInfo{})
+		if err != nil {
+			t.Fatalf("unexpected error from picker.Pick: %v", err)
+		}
 		return scst.SubConn
 	}
 }
@@ -86,7 +89,7 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 	defer pb.Close()
 
 	// Two children, with priorities [0, 1], each with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -100,7 +103,9 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testBackendAddrStrs[0]; got != want {
@@ -115,12 +120,12 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p1 := <-cc.NewPickerCh
 	want := []balancer.SubConn{sc1}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(t, p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
 	// Add p2, it shouldn't cause any updates.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -136,7 +141,9 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1", "child-2"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	select {
 	case <-cc.NewPickerCh:
@@ -149,7 +156,7 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 	}
 
 	// Remove p2, no updates.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -163,7 +170,9 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	select {
 	case <-cc.NewPickerCh:
@@ -187,7 +196,7 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	defer pb.Close()
 
 	// Two localities, with priorities [0, 1], each with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -201,7 +210,9 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	addrs0 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
@@ -216,7 +227,7 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p0 := <-cc.NewPickerCh
 	want := []balancer.SubConn{sc0}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p0)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(t, p0)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -251,7 +262,7 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	}
 
 	// Add p2, it shouldn't cause any udpates.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -267,7 +278,9 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1", "child-2"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	select {
 	case <-cc.NewPickerCh:
@@ -309,7 +322,7 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	}
 
 	// Remove 2, use 1.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -323,7 +336,9 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	// p2 SubConns are removed.
 	scToRemove := <-cc.RemoveSubConnCh
@@ -364,7 +379,7 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 	defer pb.Close()
 
 	// Two localities, with priorities [0, 1], each with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -378,7 +393,9 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	addrs0 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
@@ -393,7 +410,7 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p0 := <-cc.NewPickerCh
 	want := []balancer.SubConn{sc0}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p0)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(t, p0)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -457,7 +474,7 @@ func (s) TestPriority_HigherDownWhileAddingLower(t *testing.T) {
 	defer pb.Close()
 
 	// Two localities, with different priorities, each with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -471,7 +488,9 @@ func (s) TestPriority_HigherDownWhileAddingLower(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	addrs0 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
@@ -508,7 +527,7 @@ func (s) TestPriority_HigherDownWhileAddingLower(t *testing.T) {
 	}
 
 	// Add p2, it should create a new SubConn.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -524,7 +543,9 @@ func (s) TestPriority_HigherDownWhileAddingLower(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1", "child-2"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	// A new connecting picker should be updated for the new priority.
 	p0 := <-cc.NewPickerCh
@@ -564,7 +585,7 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 	defer pb.Close()
 
 	// Three localities, with priorities [0,1,2], each with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -580,7 +601,9 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1", "child-2"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	addrs0 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
@@ -678,7 +701,7 @@ func (s) TestPriority_InitTimeout(t *testing.T) {
 	defer pb.Close()
 
 	// Two localities, with different priorities, each with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -692,7 +715,9 @@ func (s) TestPriority_InitTimeout(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	addrs0 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
@@ -746,7 +771,7 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 	defer pb.Close()
 
 	// Two localities, with different priorities, each with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -760,7 +785,9 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	addrs0 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
@@ -773,12 +800,12 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p0 := <-cc.NewPickerCh
 	want := []balancer.SubConn{sc0}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p0)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(t, p0)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
 	// Remove all priorities.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: nil,
 		},
@@ -786,7 +813,9 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 			Children:   nil,
 			Priorities: nil,
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	// p0 subconn should be removed.
 	scToRemove := <-cc.RemoveSubConnCh
@@ -803,7 +832,7 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 	}
 
 	// Re-add two localities, with previous priorities, but different backends.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[2]}, []string{"child-0"}),
@@ -817,7 +846,9 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	addrs01 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs01[0].Addr, testBackendAddrStrs[2]; got != want {
@@ -841,12 +872,12 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 	// Test roundrobin with only p1 subconns.
 	p1 := <-cc.NewPickerCh
 	want = []balancer.SubConn{sc11}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(t, p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
 	// Remove p1, to fallback to p0.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[2]}, []string{"child-0"}),
@@ -858,7 +889,9 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 			},
 			Priorities: []string{"child-0"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	// p1 subconn should be removed.
 	scToRemove1 := <-cc.RemoveSubConnCh
@@ -882,7 +915,7 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p2 := <-cc.NewPickerCh
 	want = []balancer.SubConn{sc01}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p2)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(t, p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -906,7 +939,7 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 	defer pb.Close()
 
 	// Two localities, with priorities [0, 1], each with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -920,7 +953,9 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testBackendAddrStrs[0]; got != want {
@@ -935,12 +970,12 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p1 := <-cc.NewPickerCh
 	want := []balancer.SubConn{sc1}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(t, p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
 	// Remove addresses from priority 0, should use p1.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[1]}, []string{"child-1"}),
@@ -953,7 +988,9 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	// p0 will remove the subconn, and ClientConn will send a sc update to
 	// shutdown.
@@ -982,7 +1019,7 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 	// Test roundrobin with only p1 subconns.
 	p2 := <-cc.NewPickerCh
 	want = []balancer.SubConn{sc2}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p2)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(t, p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -1001,7 +1038,7 @@ func (s) TestPriority_FirstPriorityUnavailable(t *testing.T) {
 	defer pb.Close()
 
 	// One localities, with priorities [0], each with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -1013,10 +1050,12 @@ func (s) TestPriority_FirstPriorityUnavailable(t *testing.T) {
 			},
 			Priorities: []string{"child-0"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	// Remove the only localities.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: nil,
 		},
@@ -1024,7 +1063,9 @@ func (s) TestPriority_FirstPriorityUnavailable(t *testing.T) {
 			Children:   nil,
 			Priorities: nil,
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	// Wait after double the init timer timeout, to ensure it doesn't panic.
 	time.Sleep(testPriorityInitTimeout * 2)
@@ -1040,7 +1081,7 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 	defer pb.Close()
 
 	// Two children, with priorities [0, 1], each with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -1054,7 +1095,9 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testBackendAddrStrs[0]; got != want {
@@ -1069,13 +1112,13 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p1 := <-cc.NewPickerCh
 	want := []balancer.SubConn{sc1}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(t, p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
 	// Swap child with p0 and p1, the child at lower priority should now be the
 	// higher priority, and be used. The old SubConn should be closed.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -1089,7 +1132,9 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 			},
 			Priorities: []string{"child-1", "child-0"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	// When the new child for p0 is changed from the previous child, the
 	// balancer should immediately update the picker so the picker from old
@@ -1121,7 +1166,7 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 	// Test roundrobin with only new subconns.
 	p2 := <-cc.NewPickerCh
 	want2 := []balancer.SubConn{sc2}
-	if err := testutils.IsRoundRobin(want2, subConnFromPicker(p2)); err != nil {
+	if err := testutils.IsRoundRobin(want2, subConnFromPicker(t, p2)); err != nil {
 		t.Fatalf("want %v, got %v", want2, err)
 	}
 }
@@ -1137,7 +1182,7 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 	defer pb.Close()
 
 	// Two children, with priorities [0, 1], each with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -1151,7 +1196,9 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	addrs0 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
@@ -1181,13 +1228,13 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 	// Test roundrobin with only p1 subconns.
 	p0 := <-cc.NewPickerCh
 	want := []balancer.SubConn{sc1}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p0)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(t, p0)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
 	// Swap child with p0 and p1, the child at lower priority should now be the
 	// higher priority, and be used. The old SubConn should be closed.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -1201,7 +1248,9 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 			},
 			Priorities: []string{"child-1", "child-0"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	// Old subconn from child-0 should be removed.
 	scToRemove := <-cc.RemoveSubConnCh
@@ -1233,7 +1282,7 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 	defer pb.Close()
 
 	// Two children, with priorities [0, 1], each with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -1247,7 +1296,9 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	addrs0 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
@@ -1277,12 +1328,12 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 	// Test roundrobin with only p1 subconns.
 	p0 := <-cc.NewPickerCh
 	want := []balancer.SubConn{sc1}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p0)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(t, p0)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
 	// Remove child with p1, the child at higher priority should now be used.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -1294,7 +1345,9 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 			},
 			Priorities: []string{"child-0"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	// Old subconn from child-1 should be removed.
 	scToRemove := <-cc.RemoveSubConnCh
@@ -1337,7 +1390,7 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 	defer pb.Close()
 
 	// One children, with priorities [0], with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -1349,7 +1402,9 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 			},
 			Priorities: []string{"child-0"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testBackendAddrStrs[0]; got != want {
@@ -1364,16 +1419,18 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p1 := <-cc.NewPickerCh
 	want := []balancer.SubConn{sc1}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(t, p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
 	// Remove the child, it shouldn't cause any conn changed, but picker should
 	// be different.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{},
 		BalancerConfig: &lbConfig{},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	pFail := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
@@ -1392,7 +1449,7 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 	}
 
 	// Re-add the child, shouldn't create new connections.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -1404,12 +1461,14 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 			},
 			Priorities: []string{"child-0"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	// Test roundrobin with only p0 subconns.
 	p2 := <-cc.NewPickerCh
 	want2 := []balancer.SubConn{sc1}
-	if err := testutils.IsRoundRobin(want2, subConnFromPicker(p2)); err != nil {
+	if err := testutils.IsRoundRobin(want2, subConnFromPicker(t, p2)); err != nil {
 		t.Fatalf("want %v, got %v", want2, err)
 	}
 
@@ -1434,7 +1493,7 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 	defer pb.Close()
 
 	// One children, with priorities [0], with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -1446,7 +1505,9 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 			},
 			Priorities: []string{"child-0"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testBackendAddrStrs[0]; got != want {
@@ -1461,13 +1522,13 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 	// Test roundrobin with only p0 subconns.
 	p1 := <-cc.NewPickerCh
 	want := []balancer.SubConn{sc1}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(t, p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
 	// Change the policy for the child (still roundrobin, but with a different
 	// name).
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -1479,7 +1540,9 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 			},
 			Priorities: []string{"child-0"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	// Old subconn should be removed.
 	scToRemove := <-cc.RemoveSubConnCh
@@ -1499,7 +1562,7 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 	// Test pickfirst with the new subconns.
 	p2 := <-cc.NewPickerCh
 	want2 := []balancer.SubConn{sc2}
-	if err := testutils.IsRoundRobin(want2, subConnFromPicker(p2)); err != nil {
+	if err := testutils.IsRoundRobin(want2, subConnFromPicker(t, p2)); err != nil {
 		t.Fatalf("want %v, got %v", want2, err)
 	}
 }
@@ -1554,7 +1617,7 @@ func (s) TestPriority_ChildPolicyUpdatePickerInline(t *testing.T) {
 	defer pb.Close()
 
 	// One children, with priorities [0], with one backend.
-	pb.UpdateClientConnState(balancer.ClientConnState{
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
@@ -1566,7 +1629,9 @@ func (s) TestPriority_ChildPolicyUpdatePickerInline(t *testing.T) {
 			},
 			Priorities: []string{"child-0"},
 		},
-	})
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
 
 	p0 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
