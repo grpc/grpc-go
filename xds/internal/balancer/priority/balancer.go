@@ -62,6 +62,13 @@ func (priorityBB) Name() string {
 	return priorityBalancerName
 }
 
+// timerWrapper wraps a timer with a boolean. So that when a race happens
+// between AfterFunc and Stop, the func is guaranteed to not execute.
+type timerWrapper struct {
+	stopped bool
+	timer   *time.Timer
+}
+
 type priorityBalancer struct {
 	logger           *grpclog.PrefixLogger
 	cc               balancer.ClientConn
@@ -86,7 +93,7 @@ type priorityBalancer struct {
 	//
 	// One timer is enough because there can be at most one priority in init
 	// state.
-	priorityInitTimer *time.Timer
+	priorityInitTimer *timerWrapper
 }
 
 func (b *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
@@ -183,11 +190,16 @@ func (b *priorityBalancer) Close() {
 
 // stopPriorityInitTimer stops the priorityInitTimer if it's not nil, and set it
 // to nil.
+//
+// Caller must hold b.mu.
 func (b *priorityBalancer) stopPriorityInitTimer() {
-	if timer := b.priorityInitTimer; timer != nil {
-		timer.Stop()
-		b.priorityInitTimer = nil
+	timerW := b.priorityInitTimer
+	if timerW == nil {
+		return
 	}
+	b.priorityInitTimer = nil
+	timerW.stopped = true
+	timerW.timer.Stop()
 }
 
 // UpdateState implements balancergroup.BalancerStateAggregator interface. The

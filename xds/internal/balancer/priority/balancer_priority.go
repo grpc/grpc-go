@@ -158,13 +158,17 @@ func (b *priorityBalancer) switchToChild(child *childBalancer, priority int) {
 
 	if !child.started {
 		child.start()
-		b.priorityInitTimer = time.AfterFunc(defaultPriorityInitTimeout, func() {
+		// Need this local variable to capture timerW in the AfterFunc closure
+		// to check the stopped boolean.
+		timerW := &timerWrapper{}
+		b.priorityInitTimer = timerW
+		timerW.timer = time.AfterFunc(defaultPriorityInitTimeout, func() {
 			b.mu.Lock()
 			defer b.mu.Unlock()
 			// FIXME: it would be wrong if p is switching from 1 to 0 then to 1.
 			// This childInUse is 1, but it's the old 1 before the switch. And
 			// this func() should abort.
-			if b.childInUse != child.name {
+			if timerW.stopped {
 				return
 			}
 			b.priorityInitTimer = nil
