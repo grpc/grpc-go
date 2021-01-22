@@ -768,6 +768,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	)
 	var maxRequestsTemp uint32 = cbMaxRequests
 	client.SetMaxRequests(testServiceName, &maxRequestsTemp)
+	defer client.ClearCounterForTesting(testServiceName)
 	edsb.updateServiceRequestsCounter(testServiceName)
 
 	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityID)
