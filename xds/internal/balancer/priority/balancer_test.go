@@ -1576,8 +1576,3 @@ func (s) TestPriority_ChildPolicyUpdatePickerInline(t *testing.T) {
 		}
 	}
 }
-
-/*
-Special test cases:
- - child sends update inline, no deadlock
-*/

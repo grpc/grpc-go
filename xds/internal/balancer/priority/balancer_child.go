@@ -46,7 +46,9 @@ func newChildBalancer(name string, parent *priorityBalancer, bb balancer.Builder
 		parent:  parent,
 		bb:      bb,
 		started: false,
-		// Start with the connecting state.
+		// Start with the connecting state and picker with re-pick error, so
+		// that when a priority switch causes this child picked before it's
+		// balancing policy is created, a re-pick will happen.
 		state: balancer.State{
 			ConnectivityState: connectivity.Connecting,
 			Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
@@ -59,10 +61,11 @@ func newChildBalancer(name string, parent *priorityBalancer, bb balancer.Builder
 func (cb *childBalancer) updateConfig(config serviceconfig.LoadBalancingConfig, rState resolver.State) {
 	cb.config = config
 	cb.rState = rState
-
 }
 
-// start build the child balancer if it's not already started.
+// start builds the child balancer if it's not already started.
+//
+// It doesn't do it directly. It asks the balancer group to build it.
 func (cb *childBalancer) start() {
 	if cb.started {
 		return
@@ -83,7 +86,9 @@ func (cb *childBalancer) sendUpdate() {
 	}
 }
 
-// stop stops the child balancer and reset the state.
+// stop stops the child balancer and resets the state.
+//
+// It doesn't do it directly. It asks the balancer group to remove it.
 //
 // Note that the underlying balancer group could keep the child in a cache.
 func (cb *childBalancer) stop() {

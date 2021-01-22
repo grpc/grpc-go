@@ -22,8 +22,8 @@ func equalStringSlice(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for i, v := range a {
-		if v != b[i] {
+	for i := range a {
+		if a[i] != b[i] {
 			return false
 		}
 	}

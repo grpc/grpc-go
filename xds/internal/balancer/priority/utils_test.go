@@ -55,7 +55,7 @@ func TestCompareStringSlice(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := equalStringSlice(tt.a, tt.b); got != tt.want {
-				t.Errorf("equalStringSlice() = %v, want %v", got, tt.want)
+				t.Errorf("equalStringSlice(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
 			}
 		})
 	}

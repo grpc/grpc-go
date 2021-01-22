@@ -59,43 +59,40 @@ var (
 //     - switch to it (because all higher priorities are neither new or Ready)
 //     - forward the new addresses and config
 //
-// Caller must hold pb.mu.
-func (pb *priorityBalancer) syncPriority() {
+// Caller must hold b.mu.
+func (b *priorityBalancer) syncPriority() {
 	// Everything was removed by the update.
-	if len(pb.priorities) == 0 {
-		pb.childInUse = ""
-		pb.priorityInUse = 0
+	if len(b.priorities) == 0 {
+		b.childInUse = ""
+		b.priorityInUse = 0
 		// Stop the init timer. This can happen if the only priority is removed
 		// shortly after it's added.
-		if timer := pb.priorityInitTimer; timer != nil {
-			timer.Stop()
-			pb.priorityInitTimer = nil
-		}
-		pb.cc.UpdateState(balancer.State{
+		b.stopPriorityInitTimer()
+		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.TransientFailure,
 			Picker:            base.NewErrPicker(errAllPrioritiesRemoved),
 		})
 		return
 	}
 
-	for p, name := range pb.priorities {
-		child, ok := pb.children[name]
+	for p, name := range b.priorities {
+		child, ok := b.children[name]
 		if !ok {
-			pb.logger.Warningf("child with name %q is not found in children", name)
+			b.logger.Errorf("child with name %q is not found in children", name)
 			continue
 		}
 
 		if !child.started ||
 			child.state.ConnectivityState == connectivity.Ready ||
-			p == len(pb.priorities)-1 {
-			if pb.childInUse != "" && pb.childInUse != child.name {
+			p == len(b.priorities)-1 {
+			if b.childInUse != "" && b.childInUse != child.name {
 				// childInUse was set and is different from this child, will
 				// change childInUse later. We need to update picker here
 				// immediately so parent stops using the old picker.
-				pb.cc.UpdateState(child.state)
+				b.cc.UpdateState(child.state)
 			}
-			pb.logger.Warningf("switching to (%q, %v) in syncPriority", child.name, p)
-			pb.switchToChild(child, p)
+			b.logger.Infof("switching to (%q, %v) in syncPriority", child.name, p)
+			b.switchToChild(child, p)
 			child.sendUpdate()
 			break
 		}
@@ -104,13 +101,13 @@ func (pb *priorityBalancer) syncPriority() {
 
 // Stop priorities [p+1, lowest].
 //
-// caller must hold pb.mu.
-func (pb *priorityBalancer) stopSubBalancersLowerThanPriority(p int) {
-	for i := p + 1; i < len(pb.priorities); i++ {
-		name := pb.priorities[i]
-		child, ok := pb.children[name]
+// Caller must hold b.mu.
+func (b *priorityBalancer) stopSubBalancersLowerThanPriority(p int) {
+	for i := p + 1; i < len(b.priorities); i++ {
+		name := b.priorities[i]
+		child, ok := b.children[name]
 		if !ok {
-			pb.logger.Warningf("child with name %q is not found in children", name)
+			b.logger.Errorf("child with name %q is not found in children", name)
 			continue
 		}
 		child.stop()
@@ -134,11 +131,11 @@ func (pb *priorityBalancer) stopSubBalancersLowerThanPriority(p int) {
 // 3. a high priority goes Failure, start next
 // 4. a high priority init timeout, start next
 //
-// caller must hold pb.mu.
-func (pb *priorityBalancer) switchToChild(child *childBalancer, priority int) {
+// Caller must hold b.mu.
+func (b *priorityBalancer) switchToChild(child *childBalancer, priority int) {
 	// Stop lower priorities even if childInUse is same as this child. It's
 	// possible this child was moved from a priority to another.
-	pb.stopSubBalancersLowerThanPriority(priority)
+	b.stopSubBalancersLowerThanPriority(priority)
 
 	// If this child is already in use, do nothing.
 	//
@@ -148,34 +145,34 @@ func (pb *priorityBalancer) switchToChild(child *childBalancer, priority int) {
 	// so we don't stop the init timer.
 	// - a high priority is READY, an config update always triggers switch to
 	// it.
-	if pb.childInUse == child.name && child.started {
+	if b.childInUse == child.name && child.started {
 		return
 	}
-	pb.childInUse = child.name
-	pb.priorityInUse = priority
+	b.childInUse = child.name
+	b.priorityInUse = priority
 
 	// Init timer is always for childInUse. Since we are switching to a
 	// different child, we will stop the init timer no matter what. If this
 	// child is not started, we will start the init timer later.
-	if pb.priorityInitTimer != nil {
-		pb.priorityInitTimer.Stop()
-		pb.priorityInitTimer = nil
-	}
+	b.stopPriorityInitTimer()
 
 	if !child.started {
 		child.start()
-		pb.priorityInitTimer = time.AfterFunc(defaultPriorityInitTimeout, func() {
-			pb.mu.Lock()
-			defer pb.mu.Unlock()
-			if pb.childInUse != child.name {
+		b.priorityInitTimer = time.AfterFunc(defaultPriorityInitTimeout, func() {
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			// FIXME: it would be wrong if p is switching from 1 to 0 then to 1.
+			// This childInUse is 1, but it's the old 1 before the switch. And
+			// this func() should abort.
+			if b.childInUse != child.name {
 				return
 			}
-			pb.priorityInitTimer = nil
+			b.priorityInitTimer = nil
 			// Switch to the next priority if there's any.
-			if pNext := priority + 1; pNext < len(pb.priorities) {
-				nameNext := pb.priorities[pNext]
-				if childNext, ok := pb.children[nameNext]; ok {
-					pb.switchToChild(childNext, pNext)
+			if pNext := priority + 1; pNext < len(b.priorities) {
+				nameNext := b.priorities[pNext]
+				if childNext, ok := b.children[nameNext]; ok {
+					b.switchToChild(childNext, pNext)
 					childNext.sendUpdate()
 				}
 			}
@@ -185,37 +182,38 @@ func (pb *priorityBalancer) switchToChild(child *childBalancer, priority int) {
 
 // handleChildStateUpdate start/close priorities based on the connectivity
 // state.
-func (pb *priorityBalancer) handleChildStateUpdate(childName string, s balancer.State) {
-	if pb.done.HasFired() {
+func (b *priorityBalancer) handleChildStateUpdate(childName string, s balancer.State) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.done.HasFired() {
 		return
 	}
 
-	pb.mu.Lock()
-	defer pb.mu.Unlock()
-
-	priority, ok := pb.childToPriority[childName]
+	priority, ok := b.childToPriority[childName]
 	if !ok {
-		pb.logger.Warningf("priority: received picker update with unknown child %v", childName)
+		b.logger.Warningf("priority: received picker update with unknown child %v", childName)
 		return
 	}
 
-	if pb.childInUse == "" {
-		pb.logger.Warningf("priority: no child is in use when picker update is received")
+	if b.childInUse == "" {
+		b.logger.Warningf("priority: no child is in use when picker update is received")
 		return
 	}
 
 	// priorityInUse is higher than this priority.
-	if pb.priorityInUse < priority {
+	if b.priorityInUse < priority {
 		// Lower priorities should all be closed, this is an unexpected update.
-		pb.logger.Warningf("priority: received picker update from priority %v,  lower then priority in use %v", priority, pb.priorityInUse)
+		// Can happen if the child policy sends an update after we tell it to
+		// close.
+		b.logger.Warningf("priority: received picker update from priority %v,  lower than priority in use %v", priority, b.priorityInUse)
 		return
 	}
 
 	// Update state in child. The updated picker will be sent to parent later if
 	// necessary.
-	child, ok := pb.children[childName]
+	child, ok := b.children[childName]
 	if !ok {
-		pb.logger.Warningf("priority: child balancer not found for child %v, priority %v", childName, priority)
+		b.logger.Errorf("priority: child balancer not found for child %v, priority %v", childName, priority)
 		return
 	}
 	oldState := child.state.ConnectivityState
@@ -223,11 +221,11 @@ func (pb *priorityBalancer) handleChildStateUpdate(childName string, s balancer.
 
 	switch s.ConnectivityState {
 	case connectivity.Ready:
-		pb.handlePriorityWithNewStateReady(child, priority)
+		b.handlePriorityWithNewStateReady(child, priority)
 	case connectivity.TransientFailure:
-		pb.handlePriorityWithNewStateTransientFailure(child, priority)
+		b.handlePriorityWithNewStateTransientFailure(child, priority)
 	case connectivity.Connecting:
-		pb.handlePriorityWithNewStateConnecting(child, priority, oldState)
+		b.handlePriorityWithNewStateConnecting(child, priority, oldState)
 	default:
 		// New state is Idle, should never happen. Don't forward.
 	}
@@ -246,22 +244,19 @@ func (pb *priorityBalancer) handleChildStateUpdate(childName string, s balancer.
 // Caller must make sure priorityInUse is not higher than priority.
 //
 // Caller must hold mu.
-func (pb *priorityBalancer) handlePriorityWithNewStateReady(child *childBalancer, priority int) {
+func (b *priorityBalancer) handlePriorityWithNewStateReady(child *childBalancer, priority int) {
 	// If one priority higher or equal to priorityInUse goes Ready, stop the
 	// init timer. If update is from higher than priorityInUse, priorityInUse
 	// will be closed, and the init timer will become useless.
-	if timer := pb.priorityInitTimer; timer != nil {
-		timer.Stop()
-		pb.priorityInitTimer = nil
-	}
+	b.stopPriorityInitTimer()
 
 	// priorityInUse is lower than this priority, switch to this.
-	if pb.priorityInUse > priority {
-		pb.logger.Infof("Switching priority from %v to %v, because latter became Ready", pb.priorityInUse, priority)
-		pb.switchToChild(child, priority)
+	if b.priorityInUse > priority {
+		b.logger.Infof("Switching priority from %v to %v, because latter became Ready", b.priorityInUse, priority)
+		b.switchToChild(child, priority)
 	}
 	// Forward the update since it's READY.
-	pb.cc.UpdateState(child.state)
+	b.cc.UpdateState(child.state)
 }
 
 // handlePriorityWithNewStateTransientFailure handles state TransientFailure
@@ -281,27 +276,24 @@ func (pb *priorityBalancer) handlePriorityWithNewStateReady(child *childBalancer
 // Caller must make sure priorityInUse is not higher than priority.
 //
 // Caller must hold mu.
-func (pb *priorityBalancer) handlePriorityWithNewStateTransientFailure(child *childBalancer, priority int) {
+func (b *priorityBalancer) handlePriorityWithNewStateTransientFailure(child *childBalancer, priority int) {
 	// priorityInUse is lower than this priority, do nothing.
-	if pb.priorityInUse > priority {
+	if b.priorityInUse > priority {
 		return
 	}
 	// priorityInUse sends a failure. Stop its init timer.
-	if timer := pb.priorityInitTimer; timer != nil {
-		timer.Stop()
-		pb.priorityInitTimer = nil
-	}
+	b.stopPriorityInitTimer()
 	priorityNext := priority + 1
-	if priorityNext >= len(pb.priorities) {
+	if priorityNext >= len(b.priorities) {
 		// Forward this update.
-		pb.cc.UpdateState(child.state)
+		b.cc.UpdateState(child.state)
 		return
 	}
-	pb.logger.Infof("Switching priority from %v to %v, because former became TransientFailure", priority, priorityNext)
-	nameNext := pb.priorities[priorityNext]
-	childNext := pb.children[nameNext]
-	pb.switchToChild(childNext, priorityNext)
-	pb.cc.UpdateState(childNext.state)
+	b.logger.Infof("Switching priority from %v to %v, because former became TransientFailure", priority, priorityNext)
+	nameNext := b.priorities[priorityNext]
+	childNext := b.children[nameNext]
+	b.switchToChild(childNext, priorityNext)
+	b.cc.UpdateState(childNext.state)
 	childNext.sendUpdate()
 }
 
@@ -330,9 +322,9 @@ func (pb *priorityBalancer) handlePriorityWithNewStateTransientFailure(child *ch
 // Caller must make sure priorityInUse is not higher than priority.
 //
 // Caller must hold mu.
-func (pb *priorityBalancer) handlePriorityWithNewStateConnecting(child *childBalancer, priority int, oldState connectivity.State) {
+func (b *priorityBalancer) handlePriorityWithNewStateConnecting(child *childBalancer, priority int, oldState connectivity.State) {
 	// priorityInUse is lower than this priority, do nothing.
-	if pb.priorityInUse > priority {
+	if b.priorityInUse > priority {
 		return
 	}
 
@@ -342,19 +334,19 @@ func (pb *priorityBalancer) handlePriorityWithNewStateConnecting(child *childBal
 		// TransientFailure. There's no need to stop the init timer, because it
 		// should have been stopped when state turned Ready.
 		priorityNext := priority + 1
-		if priorityNext >= len(pb.priorities) {
+		if priorityNext >= len(b.priorities) {
 			// Forward this update.
-			pb.cc.UpdateState(child.state)
+			b.cc.UpdateState(child.state)
 			return
 		}
-		pb.logger.Infof("Switching priority from %v to %v, because former became TransientFailure", priority, priorityNext)
-		nameNext := pb.priorities[priorityNext]
-		childNext := pb.children[nameNext]
-		pb.switchToChild(childNext, priorityNext)
-		pb.cc.UpdateState(childNext.state)
+		b.logger.Infof("Switching priority from %v to %v, because former became TransientFailure", priority, priorityNext)
+		nameNext := b.priorities[priorityNext]
+		childNext := b.children[nameNext]
+		b.switchToChild(childNext, priorityNext)
+		b.cc.UpdateState(childNext.state)
 		childNext.sendUpdate()
 	case connectivity.Idle:
-		pb.cc.UpdateState(child.state)
+		b.cc.UpdateState(child.state)
 	default:
 		// Old state is Connecting, TransientFailure or Shutdown. Don't forward.
 	}
