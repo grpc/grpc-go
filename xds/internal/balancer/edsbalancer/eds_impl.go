@@ -515,6 +515,11 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}
 	if d.counter != nil {
 		if err := d.counter.StartRequest(); err != nil {
+			// Drops by circuit breaking are reported with empty category. They
+			// will be reported only in total drops, but not in per category.
+			if d.loadStore != nil {
+				d.loadStore.CallDropped("")
+			}
 			return balancer.PickResult{}, status.Errorf(codes.Unavailable, err.Error())
 		}
 		pr, err := d.p.Pick(info)
