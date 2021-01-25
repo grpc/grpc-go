@@ -1801,7 +1801,7 @@ func (c *channelzServer) ChannelzMetric() *channelz.ServerInternalMetric {
 	return c.s.channelzMetric()
 }
 
-// base64Writer wraps a request body to abstract away base64 decoding on read
+// base64Reader wraps a request body to abstract away base64 decoding on read
 type base64Reader struct {
 	// ensure on close the entire object is closed by pointer reference
 	nested *io.ReadCloser
@@ -1856,6 +1856,8 @@ func (w *base64Writer) WriteHeader(code int) {
 }
 
 func (w *base64Writer) Flush() {
+	// In streams we need to make sure the Content-Type is right for.
+	w.convertHeader()
 	// encoder handles current frame flushing. Since http.Flusher doesn't return an error, we silently ignore them.
 	w.encoder.Close()
 	w.encoder = base64.NewEncoder(base64.StdEncoding, w.nested)
@@ -1892,7 +1894,6 @@ func (w *base64Writer) AppendTrailer() error {
 	if err != nil {
 		return err
 	}
-	_, err = w.Write(nil)
 	w.Flush()
 	return nil
 }
