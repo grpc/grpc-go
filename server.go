@@ -19,7 +19,10 @@
 package grpc
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -57,6 +60,7 @@ import (
 const (
 	defaultServerMaxReceiveMessageSize = 1024 * 1024 * 4
 	defaultServerMaxSendMessageSize    = math.MaxInt32
+	base64ContentType = "application/grpc-web-text"
 )
 
 func init() {
@@ -919,6 +923,12 @@ var _ http.Handler = (*Server)(nil)
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	wasBase64 := false
+	if r.Header.Get("Content-Type") == base64ContentType {
+		w, r.Body = newBase64Writer(w), newBase64Reader(r.Body)
+		r.Header.Set("Content-Type", "application/grpc+proto")
+		wasBase64 = true
+	}
 	st, err := transport.NewServerHandlerTransport(w, r, s.opts.statsHandler)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -929,6 +939,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer s.removeConn(st)
 	s.serveStreams(st)
+	if wasBase64 {
+		if err := w.(*base64Writer).AppendTrailer(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}
 }
 
 // traceInfo returns a traceInfo and associates it with stream, if tracing is enabled.
@@ -1784,4 +1799,100 @@ type channelzServer struct {
 
 func (c *channelzServer) ChannelzMetric() *channelz.ServerInternalMetric {
 	return c.s.channelzMetric()
+}
+
+// base64Writer wraps a request body to abstract away base64 decoding on read
+type base64Reader struct {
+	// ensure on close the entire object is closed by pointer reference
+	nested *io.ReadCloser
+	// lazily inherit non-overridden default methods
+	io.ReadCloser
+}
+
+func newBase64Reader(nested io.ReadCloser) *base64Reader {
+	return &base64Reader{
+		&nested,
+		nested,
+	}
+}
+
+func (r *base64Reader) Read(dest []byte) (int, error) {
+	return base64.NewDecoder(base64.StdEncoding, *r.nested).Read(dest)
+}
+
+// base64Writer wraps a request writer to abstract away base64 encoding on write
+type base64Writer struct {
+	nested http.ResponseWriter
+	// lazily inherit non-overridden default methods
+	http.ResponseWriter
+	encoder io.WriteCloser
+}
+
+func newBase64Writer(nested http.ResponseWriter) *base64Writer {
+	return &base64Writer{
+		nested,
+		nested,
+		base64.NewEncoder(base64.StdEncoding, nested),
+	}
+}
+
+// convertHeader restores the hijacked encoding
+func (w *base64Writer) convertHeader() {
+	w.Header().Set("Content-Type", base64ContentType)
+	// As per protocol documentation for streams e.g. in XHR use.
+	w.Header().Set("Accept", base64ContentType)
+}
+
+func (w *base64Writer) Write(src []byte) (int, error) {
+	// WriteHeader can be triggered implicitly as documented by the interface on the first write. Make sure our headers
+	// are alright.
+	w.convertHeader()
+	return w.encoder.Write(src)
+}
+
+func (w *base64Writer) WriteHeader(code int) {
+	w.convertHeader()
+	w.nested.WriteHeader(code)
+}
+
+func (w *base64Writer) Flush() {
+	// encoder handles current frame flushing. Since http.Flusher doesn't return an error, we silently ignore them.
+	w.encoder.Close()
+	w.encoder = base64.NewEncoder(base64.StdEncoding, w.nested)
+	// In case our nested writer was already a Flusher.
+	if f, ok := w.nested.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// AppendTrailer converts the trailers present in our header to satisfy grpc-web requirements.
+// Follows spec https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-WEB.md#protocol-differences-vs-grpc-over-http2.
+func (w *base64Writer) AppendTrailer() error {
+	// It's possible we didn't have a body hence make sure the header encoding is right.
+	w.convertHeader()
+	trailers := make(http.Header)
+	for _, key := range w.Header().Values("trailer") {
+		if values := w.Header().Values(key); len(values) > 0 {
+			trailers[strings.ToLower(key)] = values
+		}
+	}
+	buffer := new(bytes.Buffer)
+	err := trailers.Write(buffer)
+	if err != nil {
+		return err
+	}
+	// MSB(Most Significant Byte)=1 indicates this is an encoded trailer data frame.
+	size := []byte{1 << 7, 0, 0, 0, 0}
+	binary.BigEndian.PutUint32(size[1:5], uint32(buffer.Len()))
+	_, err = w.Write(size)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(buffer.Bytes())
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(nil)
+	w.Flush()
+	return nil
 }
