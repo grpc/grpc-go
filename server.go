@@ -1803,34 +1803,27 @@ func (c *channelzServer) ChannelzMetric() *channelz.ServerInternalMetric {
 
 // base64Reader wraps a request body to abstract away base64 decoding on read
 type base64Reader struct {
-	// ensure on close the entire object is closed by pointer reference
-	nested *io.ReadCloser
-	// lazily inherit non-overridden default methods
 	io.ReadCloser
 }
 
 func newBase64Reader(nested io.ReadCloser) *base64Reader {
 	return &base64Reader{
-		&nested,
 		nested,
 	}
 }
 
 func (r *base64Reader) Read(dest []byte) (int, error) {
-	return base64.NewDecoder(base64.StdEncoding, *r.nested).Read(dest)
+	return base64.NewDecoder(base64.StdEncoding, r.ReadCloser).Read(dest)
 }
 
 // base64Writer wraps a request writer to abstract away base64 encoding on write
 type base64Writer struct {
-	nested http.ResponseWriter
-	// lazily inherit non-overridden default methods
 	http.ResponseWriter
 	encoder io.WriteCloser
 }
 
 func newBase64Writer(nested http.ResponseWriter) *base64Writer {
 	return &base64Writer{
-		nested,
 		nested,
 		base64.NewEncoder(base64.StdEncoding, nested),
 	}
@@ -1852,17 +1845,17 @@ func (w *base64Writer) Write(src []byte) (int, error) {
 
 func (w *base64Writer) WriteHeader(code int) {
 	w.convertHeader()
-	w.nested.WriteHeader(code)
+	w.ResponseWriter.WriteHeader(code)
 }
 
 func (w *base64Writer) Flush() {
-	// In streams we need to make sure the Content-Type is right for.
+	// In streams we need to make sure the Content-Type is right per block.
 	w.convertHeader()
-	// encoder handles current frame flushing. Since http.Flusher doesn't return an error, we silently ignore them.
+	// w.encoder handles current frame flushing. Since http.Flusher doesn't return an error, we silently ignore them.
 	w.encoder.Close()
-	w.encoder = base64.NewEncoder(base64.StdEncoding, w.nested)
+	w.encoder = base64.NewEncoder(base64.StdEncoding, w.ResponseWriter)
 	// In case our nested writer was already a Flusher.
-	if f, ok := w.nested.(http.Flusher); ok {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
 }
@@ -1873,9 +1866,11 @@ func (w *base64Writer) AppendTrailer() error {
 	// It's possible we didn't have a body hence make sure the header encoding is right.
 	w.convertHeader()
 	trailers := make(http.Header)
-	for _, key := range w.Header().Values("trailer") {
-		if values := w.Header().Values(key); len(values) > 0 {
-			trailers[strings.ToLower(key)] = values
+	if w.Header() != nil {
+		for _, key := range w.Header().Values("trailer") {
+			if values := w.Header().Values(key); len(values) > 0 {
+				trailers[strings.ToLower(key)] = values
+			}
 		}
 	}
 	buffer := new(bytes.Buffer)
