@@ -454,7 +454,7 @@ func TestNewConfigV3Support(t *testing.T) {
 }
 
 // TestNewConfigBootstrapEnvPriority tests that the two env variables are read
-// in correct priority
+// in correct priority.
 //
 // the case where the bootstrap file
 // environment variable is not set.
