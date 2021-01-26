@@ -50,7 +50,6 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
 	"google.golang.org/grpc/xds"
-	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/version"
@@ -136,10 +135,6 @@ func createClientTLSCredentials(t *testing.T) credentials.TransportCredentials {
 func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, func()) {
 	t.Helper()
 
-	// Turn on xDS V3 support.
-	origV3Support := env.V3Support
-	env.V3Support = true
-
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
 	fs, err := e2e.StartManagementServer()
@@ -189,7 +184,6 @@ func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, fun
 	}()
 
 	return fs, nodeID, lis, func() {
-		env.V3Support = origV3Support
 		fs.Stop()
 		bootstrapCleanup()
 		server.Stop()
