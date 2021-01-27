@@ -135,7 +135,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 		g.P(deprecationComment)
 	}
 	g.Annotate(serverType, service.Location)
-	g.P("type ", serverType, " interface {")
+	g.P(service.Comments.Leading, "type ", serverType, " interface {")
 	for _, method := range service.Methods {
 		g.Annotate(serverType+"."+method.GoName, method.Location)
 		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
