@@ -1185,8 +1185,8 @@ type LoadBalancerAccumulatedStatsResponse struct {
 	//
 	// Deprecated: Do not use.
 	NumRpcsFailedByMethod map[string]int32 `protobuf:"bytes,3,rep,name=num_rpcs_failed_by_method,json=numRpcsFailedByMethod,proto3" json:"num_rpcs_failed_by_method,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
-	// Per-method RPC statistics.  The key is the full method path; i.e.
-	// "/proto.package.ServiceName/MethodName".
+	// Per-method RPC statistics.  The key is the RpcType in string form; e.g.
+	// 'EMPTY_CALL' or 'UNARY_CALL'
 	StatsPerMethod map[string]*LoadBalancerAccumulatedStatsResponse_MethodStats `protobuf:"bytes,4,rep,name=stats_per_method,json=statsPerMethod,proto3" json:"stats_per_method,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
