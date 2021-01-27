@@ -287,7 +287,7 @@ func (ls *perClusterStore) stats() *Data {
 		if keyStr != "" {
 			// Skip drops without category. They are counted in total_drops, but
 			// not in per category. One example is drops by circuit breaking.
-			sd.Drops[key.(string)] = d
+			sd.Drops[keyStr] = d
 		}
 		return true
 	})
