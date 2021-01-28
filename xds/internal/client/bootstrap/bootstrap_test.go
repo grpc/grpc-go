@@ -430,43 +430,10 @@ func TestNewConfigV2ProtoSuccess(t *testing.T) {
 	}
 }
 
-// TestNewConfigV3SupportNotEnabledOnClient verifies bootstrap functionality
-// when the GRPC_XDS_EXPERIMENTAL_V3_SUPPORT environment variable is not enabled
-// on the client. In this case, whether the server supports v3 or not, the
-// client will end up using v2.
-func TestNewConfigV3SupportNotEnabledOnClient(t *testing.T) {
-	origV3Support := env.V3Support
-	env.V3Support = false
-	defer func() { env.V3Support = origV3Support }()
-
-	cancel := setupBootstrapOverride(v3BootstrapFileMap)
-	defer cancel()
-
-	tests := []struct {
-		name       string
-		wantConfig *Config
-	}{
-		{"serverDoesNotSupportsV3", nonNilCredsConfigV2},
-		{"serverSupportsV3", nonNilCredsConfigV2},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			testNewConfigWithFileNameEnv(t, test.name, false, test.wantConfig)
-			testNewConfigWithFileContentEnv(t, test.name, false, test.wantConfig)
-		})
-	}
-}
-
-// TestNewConfigV3SupportEnabledOnClient verifies bootstrap functionality when
-// the GRPC_XDS_EXPERIMENTAL_V3_SUPPORT environment variable is enabled on the
-// client. Here the client ends up using v2 or v3 based on what the server
-// supports.
-func TestNewConfigV3SupportEnabledOnClient(t *testing.T) {
-	origV3Support := env.V3Support
-	env.V3Support = true
-	defer func() { env.V3Support = origV3Support }()
-
+// TestNewConfigV3Support verifies bootstrap functionality involving support for
+// the xDS v3 transport protocol. Here the client ends up using v2 or v3 based
+// on what the server supports.
+func TestNewConfigV3Support(t *testing.T) {
 	cancel := setupBootstrapOverride(v3BootstrapFileMap)
 	defer cancel()
 
@@ -486,15 +453,12 @@ func TestNewConfigV3SupportEnabledOnClient(t *testing.T) {
 	}
 }
 
-// TestNewConfigBootstrapEnvPriority tests that the two env variables are read in correct priority
+// TestNewConfigBootstrapEnvPriority tests that the two env variables are read
+// in correct priority.
 //
 // the case where the bootstrap file
 // environment variable is not set.
 func TestNewConfigBootstrapEnvPriority(t *testing.T) {
-	origV3Support := env.V3Support
-	env.V3Support = true
-	defer func() { env.V3Support = origV3Support }()
-
 	oldFileReadFunc := bootstrapFileReadFunc
 	bootstrapFileReadFunc = func(filename string) ([]byte, error) {
 		return fileReadFromFileMap(v2BootstrapFileMap, filename)
@@ -701,10 +665,6 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config parsing for plugin %q failed: %v", fakeCertProviderName, err)
 	}
-
-	origV3Support := env.V3Support
-	env.V3Support = true
-	defer func() { env.V3Support = origV3Support }()
 
 	cancel := setupBootstrapOverride(bootstrapFileMap)
 	defer cancel()

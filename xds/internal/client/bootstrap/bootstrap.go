@@ -258,14 +258,10 @@ func NewConfig() (*Config, error) {
 		return nil, fmt.Errorf("xds: Required field %q doesn't contain valid value in bootstrap %s", "xds_servers.channel_creds", jsonData["xds_servers"])
 	}
 
-	// We end up using v3 transport protocol version only if the following
-	// conditions are met:
-	// 1. Server supports v3, indicated by the presence of "xds_v3" in
-	//    server_features.
-	// 2. Environment variable "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT" is set to
-	//    true.
-	// The default value of the enum type "version.TransportAPI" is v2.
-	if env.V3Support && serverSupportsV3 {
+	// We end up using v3 transport protocol version only if the server supports
+	// v3, indicated by the presence of "xds_v3" in server_features. The default
+	// value of the enum type "version.TransportAPI" is v2.
+	if serverSupportsV3 {
 		config.TransportAPI = version.TransportV3
 	}
 

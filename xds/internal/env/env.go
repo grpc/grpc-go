@@ -38,7 +38,6 @@ const (
 	//
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	BootstrapFileContentEnv   = "GRPC_XDS_BOOTSTRAP_CONFIG"
-	xdsV3SupportEnv           = "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT"
 	circuitBreakingSupportEnv = "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING"
 	timeoutSupportEnv         = "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT"
 )
@@ -56,10 +55,6 @@ var (
 	//
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	BootstrapFileContent = os.Getenv(BootstrapFileContentEnv)
-	// V3Support indicates whether xDS v3 API support is enabled, which can be
-	// done by setting the environment variable
-	// "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT" to "true".
-	V3Support = strings.EqualFold(os.Getenv(xdsV3SupportEnv), "true")
 	// CircuitBreakingSupport indicates whether circuit breaking support is
 	// enabled, which can be done by setting the environment variable
 	// "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING" to "true".
