@@ -47,9 +47,10 @@ func TestDrops(t *testing.T) {
 		drops = map[string]int{
 			dropCategories[0]: 30,
 			dropCategories[1]: 40,
+			"":                10,
 		}
 		wantStoreData = &Data{
-			TotalDrops: 70,
+			TotalDrops: 80,
 			Drops: map[string]uint64{
 				dropCategories[0]: 30,
 				dropCategories[1]: 40,

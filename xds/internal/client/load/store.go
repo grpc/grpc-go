@@ -283,7 +283,12 @@ func (ls *perClusterStore) stats() *Data {
 			return true
 		}
 		sd.TotalDrops += d
-		sd.Drops[key.(string)] = d
+		keyStr := key.(string)
+		if keyStr != "" {
+			// Skip drops without category. They are counted in total_drops, but
+			// not in per category. One example is drops by circuit breaking.
+			sd.Drops[keyStr] = d
+		}
 		return true
 	})
 	ls.localityRPCCount.Range(func(key, val interface{}) bool {

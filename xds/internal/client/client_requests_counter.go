@@ -87,3 +87,16 @@ func (c *ServiceRequestsCounter) StartRequest() error {
 func (c *ServiceRequestsCounter) EndRequest() {
 	atomic.AddUint32(&c.numRequests, ^uint32(0))
 }
+
+// ClearCounterForTesting clears the counter for the service. Should be only
+// used in tests.
+func ClearCounterForTesting(serviceName string) {
+	src.mu.Lock()
+	defer src.mu.Unlock()
+	c, ok := src.services[serviceName]
+	if !ok {
+		return
+	}
+	c.maxRequests = defaultMaxRequests
+	c.numRequests = 0
+}
