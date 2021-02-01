@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -65,6 +66,7 @@ type balancerGroupWithConfig struct {
 // policy is used to manage endpoints in each locality.
 type edsBalancerImpl struct {
 	cc           balancer.ClientConn
+	buildOpts    balancer.BuildOptions
 	logger       *grpclog.PrefixLogger
 	loadReporter load.PerClusterReporter
 
@@ -102,9 +104,10 @@ type edsBalancerImpl struct {
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
-func newEDSBalancerImpl(cc balancer.ClientConn, enqueueState func(priorityType, balancer.State), lr load.PerClusterReporter, logger *grpclog.PrefixLogger) *edsBalancerImpl {
+func newEDSBalancerImpl(cc balancer.ClientConn, bOpts balancer.BuildOptions, enqueueState func(priorityType, balancer.State), lr load.PerClusterReporter, logger *grpclog.PrefixLogger) *edsBalancerImpl {
 	edsImpl := &edsBalancerImpl{
 		cc:                 cc,
+		buildOpts:          bOpts,
 		logger:             logger,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
 		loadReporter:       lr,
@@ -248,7 +251,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponse(edsResp xdsclient.EndpointsUpd
 			ccPriorityWrapper := edsImpl.ccWrapperWithPriority(priority)
 			stateAggregator := weightedaggregator.New(ccPriorityWrapper, edsImpl.logger, newRandomWRR)
 			bgwc = &balancerGroupWithConfig{
-				bg:              balancergroup.New(ccPriorityWrapper, stateAggregator, edsImpl.loadReporter, edsImpl.logger),
+				bg:              balancergroup.New(ccPriorityWrapper, edsImpl.buildOpts, stateAggregator, edsImpl.loadReporter, edsImpl.logger),
 				stateAggregator: stateAggregator,
 				configs:         make(map[internal.LocalityID]*localityConfig),
 			}

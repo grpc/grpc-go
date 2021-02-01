@@ -40,12 +40,12 @@ func init() {
 
 type builder struct{}
 
-func (builder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
+func (builder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b := &bal{}
 	b.logger = prefixLogger(b)
 	b.stateAggregator = newBalancerStateAggregator(cc, b.logger)
 	b.stateAggregator.start()
-	b.bg = balancergroup.New(cc, b.stateAggregator, nil, b.logger)
+	b.bg = balancergroup.New(cc, opts, b.stateAggregator, nil, b.logger)
 	b.bg.Start()
 	b.logger.Infof("Created")
 	return b
