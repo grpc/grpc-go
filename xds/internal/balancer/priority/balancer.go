@@ -16,6 +16,11 @@
  *
  */
 
+// Package priority implements the priority balancer.
+//
+// This balancer will be kept in internal until we use it in the xds balancers,
+// and are confident its functionalities are stable. It will then be exported
+// for more users.
 package priority
 
 import (
@@ -42,11 +47,11 @@ type priorityBB struct{}
 
 func (priorityBB) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	b := &priorityBalancer{
-		cc:               cc,
-		done:             grpcsync.NewEvent(),
-		childToPriority:  make(map[string]int),
-		children:         make(map[string]*childBalancer),
-		childStateUpdate: buffer.NewUnbounded(),
+		cc:                       cc,
+		done:                     grpcsync.NewEvent(),
+		childToPriority:          make(map[string]int),
+		children:                 make(map[string]*childBalancer),
+		childBalancerStateUpdate: buffer.NewUnbounded(),
 	}
 
 	b.logger = prefixLogger(b)
@@ -70,11 +75,11 @@ type timerWrapper struct {
 }
 
 type priorityBalancer struct {
-	logger           *grpclog.PrefixLogger
-	cc               balancer.ClientConn
-	bg               *balancergroup.BalancerGroup
-	done             *grpcsync.Event
-	childStateUpdate *buffer.Unbounded
+	logger                   *grpclog.PrefixLogger
+	cc                       balancer.ClientConn
+	bg                       *balancergroup.BalancerGroup
+	done                     *grpcsync.Event
+	childBalancerStateUpdate *buffer.Unbounded
 
 	mu         sync.Mutex
 	childInUse string
@@ -205,13 +210,13 @@ func (b *priorityBalancer) stopPriorityInitTimer() {
 // UpdateState implements balancergroup.BalancerStateAggregator interface. The
 // balancer group sends new connectivity state and picker here.
 func (b *priorityBalancer) UpdateState(childName string, state balancer.State) {
-	b.childStateUpdate.Put(&balancerStateWithChildName{
+	b.childBalancerStateUpdate.Put(&childBalancerState{
 		name: childName,
 		s:    state,
 	})
 }
 
-type balancerStateWithChildName struct {
+type childBalancerState struct {
 	name string
 	s    balancer.State
 }
@@ -222,9 +227,9 @@ type balancerStateWithChildName struct {
 func (b *priorityBalancer) run() {
 	for {
 		select {
-		case u := <-b.childStateUpdate.Get():
-			b.childStateUpdate.Load()
-			s := u.(*balancerStateWithChildName)
+		case u := <-b.childBalancerStateUpdate.Get():
+			b.childBalancerStateUpdate.Load()
+			s := u.(*childBalancerState)
 			// Needs to handle state update in a goroutine, because each state
 			// update needs to start/close child policy, could result in
 			// deadlock.

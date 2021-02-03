@@ -165,9 +165,6 @@ func (b *priorityBalancer) switchToChild(child *childBalancer, priority int) {
 		timerW.timer = time.AfterFunc(defaultPriorityInitTimeout, func() {
 			b.mu.Lock()
 			defer b.mu.Unlock()
-			// FIXME: it would be wrong if p is switching from 1 to 0 then to 1.
-			// This childInUse is 1, but it's the old 1 before the switch. And
-			// this func() should abort.
 			if timerW.stopped {
 				return
 			}
