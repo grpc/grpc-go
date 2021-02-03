@@ -30,6 +30,7 @@ import (
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/proto"
+	anypb "github.com/golang/protobuf/ptypes/any"
 
 	"google.golang.org/grpc/xds/internal/client/load"
 
@@ -129,14 +130,48 @@ type loadReportingOptions struct {
 // resource updates from an APIClient for a specific version.
 type UpdateHandler interface {
 	// NewListeners handles updates to xDS listener resources.
-	NewListeners(map[string]ListenerUpdate)
+	NewListeners(map[string]ListenerUpdate, UpdateMetadata)
 	// NewRouteConfigs handles updates to xDS RouteConfiguration resources.
-	NewRouteConfigs(map[string]RouteConfigUpdate)
+	NewRouteConfigs(map[string]RouteConfigUpdate, UpdateMetadata)
 	// NewClusters handles updates to xDS Cluster resources.
-	NewClusters(map[string]ClusterUpdate)
+	NewClusters(map[string]ClusterUpdate, UpdateMetadata)
 	// NewEndpoints handles updates to xDS ClusterLoadAssignment (or tersely
 	// referred to as Endpoints) resources.
-	NewEndpoints(map[string]EndpointsUpdate)
+	NewEndpoints(map[string]EndpointsUpdate, UpdateMetadata)
+}
+
+// ServiceStatus is the status of the update.
+type ServiceStatus int
+
+// Version agnostic resource type constants.
+const (
+	ServiceStatusUnknown ServiceStatus = iota
+	ServiceStatusRequested
+	ServiceStatusACKed
+	ServiceStatusNACKed
+)
+
+// UpdateErrorMetadata is part of UpdateMetadata. It contains the error state
+// when a response is NACKed.
+type UpdateErrorMetadata struct {
+	// Version is the version of the NACKed response.
+	Version string
+	// Err contains why the response was NACKed.
+	Err error
+	// Timestamp is when the NACKed response was received.
+	Timestamp time.Time
+}
+
+// UpdateMetadata contains the metadata for each update, including timestamp,
+// version, and so on.
+type UpdateMetadata struct {
+	// Version is the version of the xds response. In the future, we may add a
+	// field for different versions of each resource in the same xds response.
+	Version string
+	// Timestamp is when the response is received.
+	Timestamp time.Time
+	// ErrState is set when the update is NACKed.
+	ErrState *UpdateErrorMetadata
 }
 
 // ListenerUpdate contains information received in an LDS response, which is of
@@ -151,6 +186,9 @@ type ListenerUpdate struct {
 	// common_http_protocol_options.max_stream_duration field, or zero if
 	// unset.
 	MaxStreamDuration time.Duration
+
+	// Raw is the resource from the xds response.
+	Raw *anypb.Any
 }
 
 func (lu *ListenerUpdate) String() string {
@@ -161,6 +199,9 @@ func (lu *ListenerUpdate) String() string {
 // of interest to the registered RDS watcher.
 type RouteConfigUpdate struct {
 	VirtualHosts []*VirtualHost
+
+	// Raw is the resource from the xds response.
+	Raw *anypb.Any
 }
 
 // VirtualHost contains the routes for a list of Domains.
@@ -255,6 +296,9 @@ type ClusterUpdate struct {
 	SecurityCfg *SecurityConfig
 	// MaxRequests for circuit breaking, if any (otherwise nil).
 	MaxRequests *uint32
+
+	// Raw is the resource from the xds response.
+	Raw *anypb.Any
 }
 
 // OverloadDropConfig contains the config to drop overloads.
@@ -301,6 +345,9 @@ type Locality struct {
 type EndpointsUpdate struct {
 	Drops      []OverloadDropConfig
 	Localities []Locality
+
+	// Raw is the resource from the xds response.
+	Raw *anypb.Any
 }
 
 // Function to be overridden in tests.
@@ -310,6 +357,46 @@ var newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, op
 		return nil, fmt.Errorf("no client builder for xDS API version: %v", apiVersion)
 	}
 	return cb.Build(cc, opts)
+}
+
+// LDSUpdateWithMD contains the LDSUpdate and metadata, including version, raw
+// message, timestamp.
+//
+// This is to be used for config dump and CSDS, not directly by users (like
+// resolvers/balancers).
+type LDSUpdateWithMD struct {
+	Update ListenerUpdate
+	MD     UpdateMetadata
+}
+
+// RDSUpdateWithMD contains the RDSUpdate and metadata, including version, raw
+// message, timestamp.
+//
+// This is to be used for config dump and CSDS, not directly by users (like
+// resolvers/balancers).
+type RDSUpdateWithMD struct {
+	Update RouteConfigUpdate
+	MD     UpdateMetadata
+}
+
+// CDSUpdateWithMD contains the CDSUpdate and metadata, including version, raw
+// message, timestamp.
+//
+// This is to be used for config dump and CSDS, not directly by users (like
+// resolvers/balancers).
+type CDSUpdateWithMD struct {
+	Update ClusterUpdate
+	MD     UpdateMetadata
+}
+
+// EDSUpdateWithMD contains the EDSUpdate and metadata, including version, raw
+// message, timestamp.
+//
+// This is to be used for config dump and CSDS, not directly by users (like
+// resolvers/balancers).
+type EDSUpdateWithMD struct {
+	Update EndpointsUpdate
+	MD     UpdateMetadata
 }
 
 // clientImpl is the real implementation of the xds client. The exported Client
@@ -331,13 +418,21 @@ type clientImpl struct {
 	updateCh    *buffer.Unbounded // chan *watcherInfoWithUpdate
 	mu          sync.Mutex
 	ldsWatchers map[string]map[*watchInfo]bool
-	ldsCache    map[string]ListenerUpdate
+	ldsVersion  string
+	ldsStatus   ServiceStatus
+	ldsCache    map[string]LDSUpdateWithMD
 	rdsWatchers map[string]map[*watchInfo]bool
-	rdsCache    map[string]RouteConfigUpdate
+	rdsVersion  string
+	rdsStatus   ServiceStatus
+	rdsCache    map[string]RDSUpdateWithMD
 	cdsWatchers map[string]map[*watchInfo]bool
-	cdsCache    map[string]ClusterUpdate
+	cdsVersion  string
+	cdsStatus   ServiceStatus
+	cdsCache    map[string]CDSUpdateWithMD
 	edsWatchers map[string]map[*watchInfo]bool
-	edsCache    map[string]EndpointsUpdate
+	edsVersion  string
+	edsStatus   ServiceStatus
+	edsCache    map[string]EDSUpdateWithMD
 
 	// Changes to map lrsClients and the lrsClient inside the map need to be
 	// protected by lrsMu.
@@ -382,13 +477,13 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 
 		updateCh:    buffer.NewUnbounded(),
 		ldsWatchers: make(map[string]map[*watchInfo]bool),
-		ldsCache:    make(map[string]ListenerUpdate),
+		ldsCache:    make(map[string]LDSUpdateWithMD),
 		rdsWatchers: make(map[string]map[*watchInfo]bool),
-		rdsCache:    make(map[string]RouteConfigUpdate),
+		rdsCache:    make(map[string]RDSUpdateWithMD),
 		cdsWatchers: make(map[string]map[*watchInfo]bool),
-		cdsCache:    make(map[string]ClusterUpdate),
+		cdsCache:    make(map[string]CDSUpdateWithMD),
 		edsWatchers: make(map[string]map[*watchInfo]bool),
-		edsCache:    make(map[string]EndpointsUpdate),
+		edsCache:    make(map[string]EDSUpdateWithMD),
 		lrsClients:  make(map[string]*lrsClient),
 	}
 

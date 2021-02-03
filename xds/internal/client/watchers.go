@@ -117,16 +117,26 @@ func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger.Debugf("new watch for type %v, resource name %v", wi.rType, wi.target)
-	var watchers map[string]map[*watchInfo]bool
+	var (
+		watchers map[string]map[*watchInfo]bool
+		statusP  *ServiceStatus
+	)
 	switch wi.rType {
 	case ListenerResource:
 		watchers = c.ldsWatchers
+		statusP = &c.ldsStatus
 	case RouteConfigResource:
 		watchers = c.rdsWatchers
+		statusP = &c.rdsStatus
 	case ClusterResource:
 		watchers = c.cdsWatchers
+		statusP = &c.cdsStatus
 	case EndpointsResource:
 		watchers = c.edsWatchers
+		statusP = &c.edsStatus
+	default:
+		c.logger.Errorf("unknown watch type: %v", wi.rType)
+		return nil
 	}
 
 	resourceName := wi.target
@@ -140,6 +150,7 @@ func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 		c.logger.Debugf("first watch for type %v, resource name %v, will send a new xDS request", wi.rType, wi.target)
 		s = make(map[*watchInfo]bool)
 		watchers[resourceName] = s
+		*statusP = ServiceStatusRequested
 		c.apiClient.AddWatch(wi.rType, resourceName)
 	}
 	// No matter what, add the new watcher to the set, so it's callback will be
@@ -151,22 +162,22 @@ func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 	case ListenerResource:
 		if v, ok := c.ldsCache[resourceName]; ok {
 			c.logger.Debugf("LDS resource with name %v found in cache: %+v", wi.target, v)
-			wi.newUpdate(v)
+			wi.newUpdate(v.Update)
 		}
 	case RouteConfigResource:
 		if v, ok := c.rdsCache[resourceName]; ok {
 			c.logger.Debugf("RDS resource with name %v found in cache: %+v", wi.target, v)
-			wi.newUpdate(v)
+			wi.newUpdate(v.Update)
 		}
 	case ClusterResource:
 		if v, ok := c.cdsCache[resourceName]; ok {
 			c.logger.Debugf("CDS resource with name %v found in cache: %+v", wi.target, v)
-			wi.newUpdate(v)
+			wi.newUpdate(v.Update)
 		}
 	case EndpointsResource:
 		if v, ok := c.edsCache[resourceName]; ok {
 			c.logger.Debugf("EDS resource with name %v found in cache: %+v", wi.target, v)
-			wi.newUpdate(v)
+			wi.newUpdate(v.Update)
 		}
 	}
 

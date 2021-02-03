@@ -31,7 +31,6 @@ import (
 	anypb "github.com/golang/protobuf/ptypes/any"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/version"
 )
@@ -121,10 +120,30 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 }
 
 func (s) TestUnmarshalEndpoints(t *testing.T) {
+	var v3EndpointsAny = &anypb.Any{
+		TypeUrl: version.V3EndpointsURL,
+		Value: func() []byte {
+			clab0 := newClaBuilder("test", nil)
+			clab0.addLocality("locality-1", 1, 1, []string{"addr1:314"}, &addLocalityOptions{
+				Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},
+				Weight: []uint32{271},
+			})
+			clab0.addLocality("locality-2", 1, 0, []string{"addr2:159"}, &addLocalityOptions{
+				Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_DRAINING},
+				Weight: []uint32{828},
+			})
+			e := clab0.Build()
+			me, _ := proto.Marshal(e)
+			return me
+		}(),
+	}
+	const testVersion = "test-version-eds"
+
 	tests := []struct {
 		name       string
 		resources  []*anypb.Any
 		wantUpdate map[string]EndpointsUpdate
+		wantMD     UpdateMetadata
 		wantErr    bool
 	}{
 		{
@@ -160,26 +179,8 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "v3 endpoints",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3EndpointsURL,
-					Value: func() []byte {
-						clab0 := newClaBuilder("test", nil)
-						clab0.addLocality("locality-1", 1, 1, []string{"addr1:314"}, &addLocalityOptions{
-							Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},
-							Weight: []uint32{271},
-						})
-						clab0.addLocality("locality-2", 1, 0, []string{"addr2:159"}, &addLocalityOptions{
-							Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_DRAINING},
-							Weight: []uint32{828},
-						})
-						e := clab0.Build()
-						me, _ := proto.Marshal(e)
-						return me
-					}(),
-				},
-			},
+			name:      "v3 endpoints",
+			resources: []*anypb.Any{v3EndpointsAny},
 			wantUpdate: map[string]EndpointsUpdate{
 				"test": {
 					Drops: nil,
@@ -205,16 +206,32 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 							Weight:   1,
 						},
 					},
+					Raw: v3EndpointsAny,
 				},
+			},
+			wantMD: UpdateMetadata{
+				Version: testVersion,
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, err := UnmarshalEndpoints(test.resources, nil)
-			if ((err != nil) != test.wantErr) || !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
-				t.Errorf("UnmarshalEndpoints(%v) = (%+v, %v) want (%+v, %v)", test.resources, update, err, test.wantUpdate, test.wantErr)
+			update, md, err := UnmarshalEndpoints(testVersion, test.resources, nil)
+			if (err != nil) != test.wantErr {
+				t.Errorf("UnmarshalEndpoints(%v) = got err: %v, wantErr: %v", test.resources, err, test.wantErr)
 			}
+			if test.wantErr {
+				return
+			}
+			if !cmp.Equal(update, test.wantUpdate, cmpOpts) {
+				t.Errorf("UnmarshalEndpoints(%v) = %v want %v", test.resources, update, test.wantUpdate)
+				t.Errorf(cmp.Diff(update, test.wantUpdate, cmpOpts))
+			}
+			if !cmp.Equal(md, test.wantMD, cmpOpts) {
+				t.Errorf("UnmarshalEndpoints(%v) = %v want %v", test.resources, md, test.wantMD)
+				t.Errorf(cmp.Diff(md, test.wantMD, cmpOpts))
+			}
+
 		})
 	}
 }

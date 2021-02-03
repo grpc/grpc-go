@@ -74,25 +74,51 @@ func (c *clientImpl) callCallback(wiu *watcherInfoWithUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewListeners(updates map[string]ListenerUpdate) {
+func (c *clientImpl) NewListeners(updates map[string]ListenerUpdate, metadata UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if metadata.ErrState != nil {
+		// On NACK, update overall version and status to the NACKed resp.
+		c.ldsVersion = metadata.ErrState.Version
+		c.ldsStatus = ServiceStatusNACKed
+		for name := range updates {
+			if _, ok := c.ldsWatchers[name]; ok {
+				// On error, keep previous version and status. Only update error.
+				updateCopy := c.ldsCache[name]
+				updateCopy.MD.ErrState = metadata.ErrState
+				c.ldsCache[name] = updateCopy
+				// TODO: send the NACK error to the watcher.
+			}
+		}
+		return
+	}
+
+	// If no error received, the status is ACK.
+	c.ldsVersion = metadata.Version
+	c.ldsStatus = ServiceStatusACKed
 	for name, update := range updates {
 		if s, ok := c.ldsWatchers[name]; ok {
+			// Only send the update if this is not an error.
 			for wi := range s {
 				wi.newUpdate(update)
 			}
 			// Sync cache.
 			c.logger.Debugf("LDS resource with name %v, value %+v added to cache", name, update)
-			c.ldsCache[name] = update
+			c.ldsCache[name] = LDSUpdateWithMD{
+				Update: update,
+				MD:     metadata,
+			}
 		}
 	}
+	// Resources not in the new update were removed by the server, so delete
+	// them.
 	for name := range c.ldsCache {
 		if _, ok := updates[name]; !ok {
 			// If resource exists in cache, but not in the new update, delete it
 			// from cache, and also send an resource not found error to indicate
 			// resource removed.
+			// FIXME: keep metadata in cache, but update state to REMOVED.
 			delete(c.ldsCache, name)
 			for wi := range c.ldsWatchers[name] {
 				wi.resourceNotFound()
@@ -109,18 +135,41 @@ func (c *clientImpl) NewListeners(updates map[string]ListenerUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdate) {
+func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdate, metadata UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if metadata.ErrState != nil {
+		// On NACK, update overall version and status to the NACKed resp.
+		c.rdsVersion = metadata.ErrState.Version
+		c.rdsStatus = ServiceStatusNACKed
+		for name := range updates {
+			if _, ok := c.rdsWatchers[name]; ok {
+				// On error, keep previous version and status. Only update error.
+				updateCopy := c.rdsCache[name]
+				updateCopy.MD.ErrState = metadata.ErrState
+				c.rdsCache[name] = updateCopy
+				// TODO: send the NACK error to the watcher.
+			}
+		}
+		return
+	}
+
+	// If no error received, the status is ACK.
+	c.rdsVersion = metadata.Version
+	c.rdsStatus = ServiceStatusACKed
 	for name, update := range updates {
 		if s, ok := c.rdsWatchers[name]; ok {
+			// Only send the update if this is not an error.
 			for wi := range s {
 				wi.newUpdate(update)
 			}
 			// Sync cache.
 			c.logger.Debugf("RDS resource with name %v, value %+v added to cache", name, update)
-			c.rdsCache[name] = update
+			c.rdsCache[name] = RDSUpdateWithMD{
+				Update: update,
+				MD:     metadata,
+			}
 		}
 	}
 }
@@ -130,25 +179,52 @@ func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewClusters(updates map[string]ClusterUpdate) {
+func (c *clientImpl) NewClusters(updates map[string]ClusterUpdate, metadata UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if metadata.ErrState != nil {
+		// On NACK, update overall version and status to the NACKed resp.
+		c.cdsVersion = metadata.ErrState.Version
+		c.cdsStatus = ServiceStatusNACKed
+		for name := range updates {
+			if _, ok := c.cdsWatchers[name]; ok {
+				// On error, keep previous version and status. Only update error.
+				updateCopy := c.cdsCache[name]
+				updateCopy.MD.ErrState = metadata.ErrState
+				c.cdsCache[name] = updateCopy
+				// TODO: send the NACK error to the watcher.
+			}
+		}
+		return
+	}
+
+	// If no error received, the status is ACK.
+	c.cdsVersion = metadata.Version
+	c.cdsStatus = ServiceStatusACKed
 	for name, update := range updates {
 		if s, ok := c.cdsWatchers[name]; ok {
+			// Only send the update if this is not an error.
 			for wi := range s {
 				wi.newUpdate(update)
 			}
 			// Sync cache.
 			c.logger.Debugf("CDS resource with name %v, value %+v added to cache", name, update)
-			c.cdsCache[name] = update
+			c.cdsCache[name] = CDSUpdateWithMD{
+				Update: update,
+				MD:     metadata,
+			}
 		}
 	}
+	// Resources not in the new update were removed by the server, so delete
+	// them.
+	c.cdsStatus = ServiceStatusACKed
 	for name := range c.cdsCache {
 		if _, ok := updates[name]; !ok {
 			// If resource exists in cache, but not in the new update, delete it
 			// from cache, and also send an resource not found error to indicate
 			// resource removed.
+			// FIXME: keep metadata in cache, but update state to REMOVED.
 			delete(c.cdsCache, name)
 			for wi := range c.cdsWatchers[name] {
 				wi.resourceNotFound()
@@ -165,18 +241,41 @@ func (c *clientImpl) NewClusters(updates map[string]ClusterUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdate) {
+func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdate, metadata UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if metadata.ErrState != nil {
+		// On NACK, update overall version and status to the NACKed resp.
+		c.edsVersion = metadata.ErrState.Version
+		c.edsStatus = ServiceStatusNACKed
+		for name := range updates {
+			if _, ok := c.edsWatchers[name]; ok {
+				// On error, keep previous version and status. Only update error.
+				updateCopy := c.edsCache[name]
+				updateCopy.MD.ErrState = metadata.ErrState
+				c.edsCache[name] = updateCopy
+				// TODO: send the NACK error to the watcher.
+			}
+		}
+		return
+	}
+
+	// If no error received, the status is ACK.
+	c.edsVersion = metadata.Version
+	c.edsStatus = ServiceStatusACKed
 	for name, update := range updates {
 		if s, ok := c.edsWatchers[name]; ok {
+			// Only send the update if this is not an error.
 			for wi := range s {
 				wi.newUpdate(update)
 			}
 			// Sync cache.
 			c.logger.Debugf("EDS resource with name %v, value %+v added to cache", name, update)
-			c.edsCache[name] = update
+			c.edsCache[name] = EDSUpdateWithMD{
+				Update: update,
+				MD:     metadata,
+			}
 		}
 	}
 }

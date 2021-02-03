@@ -485,11 +485,13 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 			}(),
 		}
 	)
+	const testVersion = "test-version-rds"
 
 	tests := []struct {
 		name       string
 		resources  []*anypb.Any
 		wantUpdate map[string]RouteConfigUpdate
+		wantMD     UpdateMetadata
 		wantErr    bool
 	}{
 		{
@@ -509,6 +511,9 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 		},
 		{
 			name: "empty resource list",
+			wantMD: UpdateMetadata{
+				Version: testVersion,
+			},
 		},
 		{
 			name:      "v2 routeConfig resource",
@@ -525,7 +530,11 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}},
 						},
 					},
+					Raw: v2RouteConfig,
 				},
+			},
+			wantMD: UpdateMetadata{
+				Version: testVersion,
 			},
 		},
 		{
@@ -543,7 +552,11 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}},
 						},
 					},
+					Raw: v3RouteConfig,
 				},
+			},
+			wantMD: UpdateMetadata{
+				Version: testVersion,
 			},
 		},
 		{
@@ -561,6 +574,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}},
 						},
 					},
+					Raw: v3RouteConfig,
 				},
 				v2RouteConfigName: {
 					VirtualHosts: []*VirtualHost{
@@ -573,15 +587,30 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}},
 						},
 					},
+					Raw: v2RouteConfig,
 				},
+			},
+			wantMD: UpdateMetadata{
+				Version: testVersion,
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, err := UnmarshalRouteConfig(test.resources, nil)
-			if ((err != nil) != test.wantErr) || !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
-				t.Errorf("UnmarshalRouteConfig(%v, %v) = (%v, %v) want (%v, %v)", test.resources, ldsTarget, update, err, test.wantUpdate, test.wantErr)
+			update, md, err := UnmarshalRouteConfig(testVersion, test.resources, nil)
+			if (err != nil) != test.wantErr {
+				t.Errorf("UnmarshalRouteConfig(%v) = got err: %v, wantErr: %v", test.resources, err, test.wantErr)
+			}
+			if test.wantErr {
+				return
+			}
+			if !cmp.Equal(update, test.wantUpdate, cmpOpts) {
+				t.Errorf("UnmarshalRouteConfig(%v) = %v want %v", test.resources, update, test.wantUpdate)
+				t.Errorf(cmp.Diff(update, test.wantUpdate, cmpOpts))
+			}
+			if !cmp.Equal(md, test.wantMD, cmpOpts) {
+				t.Errorf("UnmarshalRouteConfig(%v) = %v want %v", test.resources, md, test.wantMD)
+				t.Errorf(cmp.Diff(md, test.wantMD, cmpOpts))
 			}
 		})
 	}
