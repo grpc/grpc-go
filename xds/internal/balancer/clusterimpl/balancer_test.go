@@ -58,9 +58,9 @@ func init() {
 	newRandomWRR = testutils.NewTestWRR
 }
 
-// TestDrop verifies that the balancer correctly drops the picks, and that
-// the drops are reported.
-func TestDrop(t *testing.T) {
+// TestDropByCategory verifies that the balancer correctly drops the picks, and
+// that the drops are reported.
+func TestDropByCategory(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
@@ -212,5 +212,115 @@ func TestDrop(t *testing.T) {
 	gotStatsData1 := loadStore.Stats([]string{testClusterName})
 	if diff := cmp.Diff(gotStatsData1, wantStatsData1, cmpOpts); diff != "" {
 		t.Fatalf("got unexpected reports, diff (-got, +want): %v", diff)
+	}
+}
+
+// TestDropCircuitBreaking verifies that the balancer correctly drops the picks
+// due to circuit breaking, and that the drops are reported.
+func TestDropCircuitBreaking(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	defer func() { newXDSClient = oldNewXDSClient }()
+
+	builder := balancer.Get(clusterImplName)
+	cc := testutils.NewTestClientConn(t)
+	b := builder.Build(cc, balancer.BuildOptions{})
+	defer b.Close()
+
+	var maxRequest uint32 = 50
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Addresses: testBackendAddrs,
+		},
+		BalancerConfig: &lbConfig{
+			Cluster:                    testClusterName,
+			EDSServiceName:             testServiceName,
+			LRSLoadReportingServerName: newString(testLRSServerName),
+			MaxConcurrentRequests:      &maxRequest,
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	got, err := xdsC.WaitForReportLoad(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err)
+	}
+	if got.Server != testLRSServerName {
+		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got.Server, testLRSServerName)
+	}
+
+	sc1 := <-cc.NewSubConnCh
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	// This should get the connecting picker.
+	p0 := <-cc.NewPickerCh
+	for i := 0; i < 10; i++ {
+		_, err := p0.Pick(balancer.PickInfo{})
+		if err != balancer.ErrNoSubConnAvailable {
+			t.Fatalf("picker.Pick, got _,%v, want Err=%v", err, balancer.ErrNoSubConnAvailable)
+		}
+	}
+
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	// Test pick with one backend.
+	dones := []func(){}
+	p1 := <-cc.NewPickerCh
+	const rpcCount = 100
+	for i := 0; i < rpcCount; i++ {
+		gotSCSt, err := p1.Pick(balancer.PickInfo{})
+		if i < 50 && err != nil {
+			t.Errorf("The first 50%% picks should be non-drops, got error %v", err)
+		} else if i > 50 && err == nil {
+			t.Errorf("The second 50%% picks should be drops, got error <nil>")
+		}
+		dones = append(dones, func() {
+			if gotSCSt.Done != nil {
+				gotSCSt.Done(balancer.DoneInfo{})
+			}
+		})
+	}
+	for _, done := range dones {
+		done()
+	}
+
+	dones = []func(){}
+	// Pick without drops.
+	for i := 0; i < 50; i++ {
+		gotSCSt, err := p1.Pick(balancer.PickInfo{})
+		if err != nil {
+			t.Errorf("The third 50%% picks should be non-drops, got error %v", err)
+		}
+		dones = append(dones, func() {
+			if gotSCSt.Done != nil {
+				gotSCSt.Done(balancer.DoneInfo{})
+			}
+		})
+	}
+	for _, done := range dones {
+		done()
+	}
+
+	// Dump load data from the store and compare with expected counts.
+	loadStore := xdsC.LoadStore()
+	if loadStore == nil {
+		t.Fatal("loadStore is nil in xdsClient")
+	}
+
+	wantStatsData0 := []*load.Data{{
+		Cluster:    testClusterName,
+		Service:    testServiceName,
+		TotalDrops: uint64(maxRequest),
+	}}
+
+	gotStatsData0 := loadStore.Stats([]string{testClusterName})
+	if diff := cmp.Diff(gotStatsData0, wantStatsData0, cmpOpts); diff != "" {
+		t.Fatalf("got unexpected drop reports, diff (-got, +want): %v", diff)
 	}
 }

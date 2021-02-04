@@ -579,9 +579,8 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
-	edsb.updateServiceRequestsCounter("test")
 	var maxRequests uint32 = 50
-	client.SetMaxRequests("test", &maxRequests)
+	edsb.updateServiceRequestsConfig("test", &maxRequests)
 
 	// One locality with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -738,7 +737,7 @@ func (s) TestDropPicker(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			p := newDropPicker(constPicker, tt.drops, nil, nil)
+			p := newDropPicker(constPicker, tt.drops, nil, nil, defaultServiceRequestCountMax)
 
 			// scCount is the number of sc's returned by pick. The opposite of
 			// drop-count.
@@ -786,9 +785,8 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 		cbMaxRequests   = 20
 	)
 	var maxRequestsTemp uint32 = cbMaxRequests
-	client.SetMaxRequests(testServiceName, &maxRequestsTemp)
+	edsb.updateServiceRequestsConfig(testServiceName, &maxRequestsTemp)
 	defer client.ClearCounterForTesting(testServiceName)
-	edsb.updateServiceRequestsCounter(testServiceName)
 
 	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityID)
 

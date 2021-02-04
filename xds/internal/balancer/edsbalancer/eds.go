@@ -113,9 +113,9 @@ type edsBalancerImplInterface interface {
 	handleSubConnStateChange(sc balancer.SubConn, state connectivity.State)
 	// updateState handle a balancer state update from the priority.
 	updateState(priority priorityType, s balancer.State)
-	// updateServiceRequestsCounter updates the service requests counter to the
+	// updateServiceRequestsConfig updates the service requests counter to the
 	// one for the given service name.
-	updateServiceRequestsCounter(serviceName string)
+	updateServiceRequestsConfig(serviceName string, max *uint32)
 	// close closes the eds balancer.
 	close()
 }
@@ -215,7 +215,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 			x.logger.Warningf("failed to update xDS client: %v", err)
 		}
 
-		x.edsImpl.updateServiceRequestsCounter(cfg.EDSServiceName)
+		x.edsImpl.updateServiceRequestsConfig(cfg.EDSServiceName, cfg.MaxConcurrentRequests)
 
 		// We will update the edsImpl with the new child policy, if we got a
 		// different one.

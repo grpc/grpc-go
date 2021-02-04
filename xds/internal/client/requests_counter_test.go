@@ -56,7 +56,6 @@ func resetServiceRequestsCounter() {
 }
 
 func testCounter(t *testing.T, test counterTest) {
-	SetMaxRequests(test.name, &test.maxRequests)
 	requestsStarted := make(chan struct{})
 	requestsSent := sync.WaitGroup{}
 	requestsSent.Add(int(test.numRequests))
@@ -68,7 +67,7 @@ func testCounter(t *testing.T, test counterTest) {
 		go func() {
 			counter := GetServiceRequestsCounter(test.name)
 			defer requestsDone.Done()
-			err := counter.StartRequest()
+			err := counter.StartRequest(test.maxRequests)
 			if err == nil {
 				atomic.AddUint32(&successes, 1)
 			} else {
@@ -98,7 +97,7 @@ func testCounter(t *testing.T, test counterTest) {
 }
 
 func (s) TestRequestsCounter(t *testing.T) {
-	resetServiceRequestsCounter()
+	defer resetServiceRequestsCounter()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testCounter(t, test)
@@ -107,7 +106,7 @@ func (s) TestRequestsCounter(t *testing.T) {
 }
 
 func (s) TestGetServiceRequestsCounter(t *testing.T) {
-	resetServiceRequestsCounter()
+	defer resetServiceRequestsCounter()
 	for _, test := range tests {
 		counterA := GetServiceRequestsCounter(test.name)
 		counterB := GetServiceRequestsCounter(test.name)
@@ -118,39 +117,40 @@ func (s) TestGetServiceRequestsCounter(t *testing.T) {
 }
 
 func startRequests(t *testing.T, n uint32, max uint32, counter *ServiceRequestsCounter) {
-	SetMaxRequests(counter.ServiceName, &max)
 	for i := uint32(0); i < n; i++ {
-		if err := counter.StartRequest(); err != nil {
+		if err := counter.StartRequest(max); err != nil {
 			t.Fatalf("error starting initial request: %v", err)
 		}
 	}
 }
 
 func (s) TestSetMaxRequestsIncreased(t *testing.T) {
-	resetServiceRequestsCounter()
+	defer resetServiceRequestsCounter()
 	const serviceName string = "set-max-requests-increased"
 	var initialMax uint32 = 16
+
 	counter := GetServiceRequestsCounter(serviceName)
 	startRequests(t, initialMax, initialMax, counter)
-	if err := counter.StartRequest(); err == nil {
+	if err := counter.StartRequest(initialMax); err == nil {
 		t.Fatal("unexpected success on start request after max met")
 	}
+
 	newMax := initialMax + 1
-	SetMaxRequests(counter.ServiceName, &newMax)
-	if err := counter.StartRequest(); err != nil {
+	if err := counter.StartRequest(newMax); err != nil {
 		t.Fatalf("unexpected error on start request after max increased: %v", err)
 	}
 }
 
 func (s) TestSetMaxRequestsDecreased(t *testing.T) {
-	resetServiceRequestsCounter()
+	defer resetServiceRequestsCounter()
 	const serviceName string = "set-max-requests-decreased"
 	var initialMax uint32 = 16
+
 	counter := GetServiceRequestsCounter(serviceName)
 	startRequests(t, initialMax-1, initialMax, counter)
+
 	newMax := initialMax - 1
-	SetMaxRequests(counter.ServiceName, &newMax)
-	if err := counter.StartRequest(); err == nil {
+	if err := counter.StartRequest(newMax); err == nil {
 		t.Fatalf("unexpected success on start request after max decreased: %v", err)
 	}
 }

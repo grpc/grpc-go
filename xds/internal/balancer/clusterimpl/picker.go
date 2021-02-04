@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/load"
 )
 
@@ -72,14 +73,17 @@ type dropPicker struct {
 	drops     []*dropper
 	s         balancer.State
 	loadStore loadReporter
-	// TODO: add serviceRequestCount and maxRequestCount for circuit breaking.
+	counter   *client.ServiceRequestsCounter
+	countMax  uint32
 }
 
-func newDropPicker(s balancer.State, drops []*dropper, loadStore load.PerClusterReporter) *dropPicker {
+func newDropPicker(s balancer.State, config *dropConfigs, loadStore load.PerClusterReporter) *dropPicker {
 	return &dropPicker{
-		drops:     drops,
+		drops:     config.drops,
 		s:         s,
 		loadStore: loadStore,
+		counter:   config.requestCounter,
+		countMax:  config.requestCountMax,
 	}
 }
 
@@ -98,7 +102,30 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			return balancer.PickResult{}, status.Errorf(codes.Unavailable, "RPC is dropped")
 		}
 	}
-	// TODO: support circuit breaking, check if d.maxRequestCount >=
-	// d.counter.StartRequestWithMax().
+
+	if d.counter != nil {
+		if err := d.counter.StartRequest(d.countMax); err != nil {
+			// Drops by circuit breaking are reported with empty category. They
+			// will be reported only in total drops, but not in per category.
+			if d.loadStore != nil {
+				d.loadStore.CallDropped("")
+			}
+			return balancer.PickResult{}, status.Errorf(codes.Unavailable, err.Error())
+		}
+		pr, err := d.s.Picker.Pick(info)
+		if err != nil {
+			d.counter.EndRequest()
+			return pr, err
+		}
+		oldDone := pr.Done
+		pr.Done = func(doneInfo balancer.DoneInfo) {
+			d.counter.EndRequest()
+			if oldDone != nil {
+				oldDone(doneInfo)
+			}
+		}
+		return pr, err
+	}
+
 	return d.s.Picker.Pick(info)
 }
