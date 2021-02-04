@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -1565,44 +1566,20 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 	}
 }
 
-func init() {
-	balancer.Register(&testInlineUpdateBalancerBuilder{})
-}
-
-// A test balancer that updates balancer.State inline when handling ClientConn
-// state.
-type testInlineUpdateBalancerBuilder struct{}
-
-func (*testInlineUpdateBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &testInlineUpdateBalancer{cc: cc}
-}
-
-func (*testInlineUpdateBalancerBuilder) Name() string {
-	return "test-inline-update-balancer"
-}
-
-type testInlineUpdateBalancer struct {
-	cc balancer.ClientConn
-}
-
-func (tb *testInlineUpdateBalancer) ResolverError(error) {
-	panic("not implemented")
-}
-
-func (tb *testInlineUpdateBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
-}
+const inlineUpdateBalancerName = "test-inline-update-balancer"
 
 var errTestInlineStateUpdate = fmt.Errorf("don't like addresses, empty or not")
 
-func (tb *testInlineUpdateBalancer) UpdateClientConnState(balancer.ClientConnState) error {
-	tb.cc.UpdateState(balancer.State{
-		ConnectivityState: connectivity.Ready,
-		Picker:            &testutils.TestConstPicker{Err: errTestInlineStateUpdate},
+func init() {
+	stub.Register(inlineUpdateBalancerName, stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, opts balancer.ClientConnState) error {
+			bd.ClientConn.UpdateState(balancer.State{
+				ConnectivityState: connectivity.Ready,
+				Picker:            &testutils.TestConstPicker{Err: errTestInlineStateUpdate},
+			})
+			return nil
+		},
 	})
-	return nil
-}
-
-func (*testInlineUpdateBalancer) Close() {
 }
 
 // When the child policy update picker inline in a handleClientUpdate call
@@ -1623,7 +1600,7 @@ func (s) TestPriority_ChildPolicyUpdatePickerInline(t *testing.T) {
 		},
 		BalancerConfig: &lbConfig{
 			Children: map[string]*child{
-				"child-0": {&internalserviceconfig.BalancerConfig{Name: "test-inline-update-balancer"}},
+				"child-0": {&internalserviceconfig.BalancerConfig{Name: inlineUpdateBalancerName}},
 			},
 			Priorities: []string{"child-0"},
 		},
