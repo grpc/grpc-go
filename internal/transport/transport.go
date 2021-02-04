@@ -664,6 +664,9 @@ type ClientTransport interface {
 
 	// IncrMsgRecv increments the number of message received through this transport.
 	IncrMsgRecv()
+
+	// LastConnectionError returns the last recorded connection error.
+	LastConnectionError() error
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport

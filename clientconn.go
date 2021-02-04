@@ -1336,6 +1336,9 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		// We got the preface - huzzah! things are good.
 	case <-onCloseCalled:
 		// The transport has already closed - noop.
+		if newTr.LastConnectionError() != nil {
+			return nil, nil, newTr.LastConnectionError()
+		}
 		return nil, nil, errors.New("connection closed")
 		// TODO(deklerk) this should bail on ac.ctx.Done(). Add a test and fix.
 	}

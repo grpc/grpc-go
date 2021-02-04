@@ -137,6 +137,9 @@ type http2Client struct {
 	bufferPool *bufferPool
 
 	connectionID uint64
+
+	lceMu               sync.Mutex // protects lastConnectionError
+	lastConnectionError error
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr resolver.Address, useProxy bool, grpcUA string) (net.Conn, error) {
@@ -1309,6 +1312,7 @@ func (t *http2Client) reader() {
 	// Check the validity of server preface.
 	frame, err := t.framer.fr.ReadFrame()
 	if err != nil {
+		t.updateConnectionError(err)
 		t.Close() // this kicks off resetTransport, so must be last before return
 		return
 	}
@@ -1353,6 +1357,7 @@ func (t *http2Client) reader() {
 				}
 				continue
 			} else {
+				t.updateConnectionError(err)
 				// Transport error.
 				t.Close()
 				return
@@ -1524,4 +1529,16 @@ func (t *http2Client) getOutFlowWindow() int64 {
 	case <-timer.C:
 		return -2
 	}
+}
+
+func (t *http2Client) LastConnectionError() error {
+	t.lceMu.Lock()
+	defer t.lceMu.Unlock()
+	return t.lastConnectionError
+}
+
+func (t *http2Client) updateConnectionError(err error) {
+	t.lceMu.Lock()
+	t.lastConnectionError = err
+	t.lceMu.Unlock()
 }

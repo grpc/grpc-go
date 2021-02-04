@@ -20,8 +20,15 @@ package test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"math/big"
 	"net"
 	"strings"
 	"testing"
@@ -543,5 +550,178 @@ func (s) TestServerCredsDispatch(t *testing.T) {
 	// Check rawConn is not closed.
 	if n, err := rawConn.Write([]byte{0}); n <= 0 || err != nil {
 		t.Errorf("Read() = %v, %v; want n>0, <nil>", n, err)
+	}
+}
+
+type clientCertificates struct {
+	validCert      *tls.Certificate
+	selfSignedCert *tls.Certificate
+	expiredCert    *tls.Certificate
+}
+
+func (c *clientCertificates) generateCertificates(ca *tls.Certificate) error {
+	var err error
+
+	c.validCert, err = c.generateCert(ca, time.Now().Add(time.Hour))
+	if err != nil {
+		return fmt.Errorf("failed to generate valid cert: %v", err)
+	}
+
+	c.expiredCert, err = c.generateCert(ca, time.Now().Add(-time.Hour))
+	if err != nil {
+		return fmt.Errorf("failed to generate expired cert: %v", err)
+	}
+
+	c.selfSignedCert, err = c.generateCert(nil, time.Now().Add(time.Hour))
+	if err != nil {
+		return fmt.Errorf("failed to generate self-signed cert: %v", err)
+	}
+
+	return nil
+}
+
+func (c *clientCertificates) generateCert(ca *tls.Certificate, notAfter time.Time) (*tls.Certificate, error) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, fmt.Errorf("RSA key generation failed: %v", err)
+	}
+
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate serial number: %v", err)
+	}
+
+	template := &x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName: "Test Cert",
+		},
+		NotBefore: time.Now(),
+		NotAfter:  notAfter,
+
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+	}
+
+	// if ca is nil, self-sign the certificate
+	var (
+		parentCert *x509.Certificate = template
+		parentKey  interface{}       = key
+	)
+	if ca != nil {
+		parentCert, err = x509.ParseCertificate(ca.Certificate[0])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse CA certificate: %v", err)
+		}
+		parentKey = ca.PrivateKey
+	}
+
+	certData, err := x509.CreateCertificate(rand.Reader, template, parentCert, &key.PublicKey, parentKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create certificate: %v", err)
+	}
+
+	keyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(key),
+	})
+	certPem := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certData,
+	})
+
+	cert, err := tls.X509KeyPair(certPem, keyPEM)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse public/private certs: %v", err)
+	}
+
+	return &cert, nil
+}
+
+func (s) TestClientCredsHandshakeFailure(t *testing.T) {
+	// load server certificate
+	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// load server CA certificate
+	ca, err := tls.LoadX509KeyPair(testdata.Path("x509/server_ca_cert.pem"), testdata.Path("x509/server_ca_key.pem"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create server tls config
+	roots := x509.NewCertPool()
+	roots.AppendCertsFromPEM(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: ca.Certificate[0],
+	}))
+
+	tlsCfg := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		ClientCAs:    roots,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+	}
+
+	// start server listener
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lis.Close()
+
+	// start the test server using the credentials
+	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsCfg)))
+	go s.Serve(lis)
+	defer s.Stop()
+
+	// pre-generate client certificates
+	clientCerts := clientCertificates{}
+	if err := clientCerts.generateCertificates(&ca); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		cert          *tls.Certificate
+		shouldFail    bool
+		expectedError string
+	}{
+		{&tls.Certificate{}, true, "remote error: tls: bad certificate"},
+		{clientCerts.expiredCert, true, "remote error: tls: bad certificate"},
+		{clientCerts.selfSignedCert, true, "remote error: tls: bad certificate"},
+		{clientCerts.validCert, false, ""},
+	}
+
+	for i, test := range tests {
+		cfg := &tls.Config{
+			Certificates:       []tls.Certificate{*test.cert},
+			InsecureSkipVerify: true, // not intrested in server certificates
+		}
+		creds := credentials.NewTLS(cfg)
+
+		dialCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cc, err := grpc.DialContext(
+			dialCtx,
+			lis.Addr().String(),
+			grpc.WithTransportCredentials(creds),
+			grpc.WithReturnConnectionError(),
+		)
+		if err != nil {
+			if !test.shouldFail {
+				t.Fatalf("Failed test #%d with error %v", i, err)
+			} else if !strings.Contains(err.Error(), test.expectedError) {
+				t.Fatalf("Failed test #%d: error %q does not contain %q", i, err, test.expectedError)
+			}
+		} else if err == nil && test.shouldFail {
+			t.Fatalf("Tesh #%d should have failed, but it ran successfully.", i)
+		}
+
+		if cc != nil {
+			cc.Close()
+		}
+		cancel()
 	}
 }
