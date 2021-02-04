@@ -24,7 +24,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/load"
 )
 
@@ -73,17 +72,14 @@ type dropPicker struct {
 	drops     []*dropper
 	s         balancer.State
 	loadStore loadReporter
-	// FIXME: remove this and add in the next PR.
-	counter *client.ServiceRequestsCounter
-	// TODO: add maxRequestCount for circuit breaking.
+	// TODO: add serviceRequestCount and maxRequestCount for circuit breaking.
 }
 
-func newDropPicker(s balancer.State, drops []*dropper, loadStore load.PerClusterReporter, counter *client.ServiceRequestsCounter) *dropPicker {
+func newDropPicker(s balancer.State, drops []*dropper, loadStore load.PerClusterReporter) *dropPicker {
 	return &dropPicker{
 		drops:     drops,
 		s:         s,
 		loadStore: loadStore,
-		counter:   counter,
 	}
 }
 
