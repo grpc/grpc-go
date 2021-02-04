@@ -26,7 +26,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/xds/internal/balancer/utils"
+	"google.golang.org/grpc/xds/internal/balancer/loadstore"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/load"
 )
@@ -170,13 +170,13 @@ type xdsClientWrapper struct {
 	lrsServerName    string
 	// loadWrapper is a wrapper with loadOriginal, with clusterName and
 	// edsServiceName. It's used children to report loads.
-	loadWrapper *utils.LoadStoreWrapper
+	loadWrapper *loadstore.Wrapper
 }
 
 func newXDSClientWrapper(c xdsClientInterface) *xdsClientWrapper {
 	return &xdsClientWrapper{
 		c:           c,
-		loadWrapper: utils.NewLoadStoreWrapper(),
+		loadWrapper: loadstore.NewLoadStoreWrapper(),
 	}
 }
 

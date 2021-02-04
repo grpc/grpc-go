@@ -83,7 +83,7 @@ var (
 	wtConfig, _ = wtConfigParser.ParseConfig([]byte(wtConfigJSON))
 )
 
-func Test_parseConfig(t *testing.T) {
+func TestParseConfig(t *testing.T) {
 	tests := []struct {
 		name    string
 		js      string
@@ -93,6 +93,12 @@ func Test_parseConfig(t *testing.T) {
 		{
 			name:    "empty json",
 			js:      "",
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "bad json",
+			js:      "{",
 			want:    nil,
 			wantErr: true,
 		},
@@ -120,8 +126,7 @@ func Test_parseConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := parseConfig([]byte(tt.js))
 			if (err != nil) != tt.wantErr {
-				t.Errorf("parseConfig() error = %v, wantErr %v", err, tt.wantErr)
-				return
+				t.Fatalf("parseConfig() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !cmp.Equal(got, tt.want) {
 				t.Errorf("parseConfig() got unexpected result, diff: %v", cmp.Diff(got, tt.want))

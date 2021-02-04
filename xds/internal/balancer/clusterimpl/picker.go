@@ -73,7 +73,8 @@ type dropPicker struct {
 	drops     []*dropper
 	s         balancer.State
 	loadStore loadReporter
-	counter   *client.ServiceRequestsCounter
+	// FIXME: remove this and add in the next PR.
+	counter *client.ServiceRequestsCounter
 	// TODO: add maxRequestCount for circuit breaking.
 }
 
@@ -93,22 +94,13 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		return d.s.Picker.Pick(info)
 	}
 
-	var (
-		drop     bool
-		category string
-	)
 	for _, dp := range d.drops {
 		if dp.drop() {
-			drop = true
-			category = dp.category
-			break
+			if d.loadStore != nil {
+				d.loadStore.CallDropped(dp.category)
+			}
+			return balancer.PickResult{}, status.Errorf(codes.Unavailable, "RPC is dropped")
 		}
-	}
-	if drop {
-		if d.loadStore != nil {
-			d.loadStore.CallDropped(category)
-		}
-		return balancer.PickResult{}, status.Errorf(codes.Unavailable, "RPC is dropped")
 	}
 	// TODO: support circuit breaking, check if d.maxRequestCount >=
 	// d.counter.StartRequestWithMax().

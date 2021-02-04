@@ -16,8 +16,8 @@
  *
  */
 
-// Package utils contains utility structs shared by the balancers.
-package utils
+// Package loadstore contains the loadStoreWrapper shared by the balancers.
+package loadstore
 
 import (
 	"sync"
@@ -25,12 +25,12 @@ import (
 	"google.golang.org/grpc/xds/internal/client/load"
 )
 
-// NewLoadStoreWrapper creates a LoadStoreWrapper.
-func NewLoadStoreWrapper() *LoadStoreWrapper {
-	return &LoadStoreWrapper{}
+// NewLoadStoreWrapper creates a Wrapper.
+func NewLoadStoreWrapper() *Wrapper {
+	return &Wrapper{}
 }
 
-// LoadStoreWrapper wraps a load store with cluster and edsService.
+// Wrapper wraps a load store with cluster and edsService.
 //
 // It's store and cluster/edsService can be updated separately. And it will
 // update its internal perCluster store so that new stats will be added to the
@@ -46,14 +46,13 @@ func NewLoadStoreWrapper() *LoadStoreWrapper {
 // struct. The policies that record/report load shouldn't need to handle update
 // of lrsServerName/cluster/edsService. Its parent should do a graceful switch
 // of the whole tree when one of that changes.
-type LoadStoreWrapper struct {
+type Wrapper struct {
 	mu         sync.RWMutex
 	cluster    string
 	edsService string
-	// Both store and perCluster will be nil if load reporting is disabled (EDS
-	// response doesn't have LRS server name). Note that methods on Store and
-	// perCluster all handle nil, so there's no need to check nil before calling
-	// them.
+	// store and perCluster are initialized as nil. They are only set by the
+	// balancer when LRS is enabled. Before that, all functions to record loads
+	// are no-op.
 	store      *load.Store
 	perCluster load.PerClusterReporter
 }
@@ -61,7 +60,7 @@ type LoadStoreWrapper struct {
 // UpdateClusterAndService updates the cluster name and eds service for this
 // wrapper. If any one of them is changed from before, the perCluster store in
 // this wrapper will also be updated.
-func (lsw *LoadStoreWrapper) UpdateClusterAndService(cluster, edsService string) {
+func (lsw *Wrapper) UpdateClusterAndService(cluster, edsService string) {
 	lsw.mu.Lock()
 	defer lsw.mu.Unlock()
 	if cluster == lsw.cluster && edsService == lsw.edsService {
@@ -74,19 +73,18 @@ func (lsw *LoadStoreWrapper) UpdateClusterAndService(cluster, edsService string)
 
 // UpdateLoadStore updates the load store for this wrapper. If it is changed
 // from before, the perCluster store in this wrapper will also be updated.
-func (lsw *LoadStoreWrapper) UpdateLoadStore(store *load.Store) {
+func (lsw *Wrapper) UpdateLoadStore(store *load.Store) {
 	lsw.mu.Lock()
 	defer lsw.mu.Unlock()
 	if store == lsw.store {
 		return
 	}
 	lsw.store = store
-	lsw.perCluster = nil
 	lsw.perCluster = lsw.store.PerCluster(lsw.cluster, lsw.edsService)
 }
 
 // CallStarted records a call started in the store.
-func (lsw *LoadStoreWrapper) CallStarted(locality string) {
+func (lsw *Wrapper) CallStarted(locality string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
 	if lsw.perCluster != nil {
@@ -95,7 +93,7 @@ func (lsw *LoadStoreWrapper) CallStarted(locality string) {
 }
 
 // CallFinished records a call finished in the store.
-func (lsw *LoadStoreWrapper) CallFinished(locality string, err error) {
+func (lsw *Wrapper) CallFinished(locality string, err error) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
 	if lsw.perCluster != nil {
@@ -104,7 +102,7 @@ func (lsw *LoadStoreWrapper) CallFinished(locality string, err error) {
 }
 
 // CallServerLoad records the server load in the store.
-func (lsw *LoadStoreWrapper) CallServerLoad(locality, name string, val float64) {
+func (lsw *Wrapper) CallServerLoad(locality, name string, val float64) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
 	if lsw.perCluster != nil {
@@ -113,7 +111,7 @@ func (lsw *LoadStoreWrapper) CallServerLoad(locality, name string, val float64) 
 }
 
 // CallDropped records a call dropped in the store.
-func (lsw *LoadStoreWrapper) CallDropped(category string) {
+func (lsw *Wrapper) CallDropped(category string) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
 	if lsw.perCluster != nil {
