@@ -97,11 +97,11 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 				VirtualHosts: []*xdsclient.VirtualHost{
 					{
 						Domains: []string{uninterestingDomain},
-						Routes:  []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{uninterestingClusterName: 1}}},
+						Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
 					},
 					{
 						Domains: []string{goodLDSTarget1},
-						Routes:  []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{goodClusterName1: 1}}},
+						Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{goodClusterName1: {Weight: 1}}}},
 					},
 				},
 			},

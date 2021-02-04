@@ -16,8 +16,8 @@
  *
  */
 
-// Package client implementation a full fledged gRPC client for the xDS API
-// used by the xds resolver and balancer implementations.
+// Package client implements a full fledged gRPC client for the xDS API used by
+// the xds resolver and balancer implementations.
 package client
 
 import (
@@ -32,6 +32,7 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	"google.golang.org/grpc/xds/internal/client/load"
+	"google.golang.org/grpc/xds/internal/httpfilter"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/backoff"
@@ -151,6 +152,22 @@ type ListenerUpdate struct {
 	// common_http_protocol_options.max_stream_duration field, or zero if
 	// unset.
 	MaxStreamDuration time.Duration
+	// HTTPFilters is a list of HTTP filters (name, config) from the LDS
+	// response.
+	HTTPFilters []HTTPFilter
+}
+
+// HTTPFilter represents one HTTP filter from an LDS response's HTTP connection
+// manager field.
+type HTTPFilter struct {
+	// Name is an arbitrary name of the filter.  Used for applying override
+	// settings in virtual host / route / weighted cluster configuration (not
+	// yet supported).
+	Name string
+	// Filter is the HTTP filter found in the registry for the config type.
+	Filter httpfilter.Filter
+	// Config contains the filter's configuration
+	Config httpfilter.FilterConfig
 }
 
 func (lu *ListenerUpdate) String() string {
@@ -172,6 +189,11 @@ type VirtualHost struct {
 	// Routes contains a list of routes, each containing matchers and
 	// corresponding action.
 	Routes []*Route
+	// HTTPFilterConfigOverride contains any HTTP filter config overrides for
+	// the virtual host which may be present.  An individual filter's override
+	// may be unused if the matching Route contains an override for that
+	// filter.
+	HTTPFilterConfigOverride map[string]httpfilter.FilterConfig
 }
 
 // Route is both a specification of how to match a request as well as an
@@ -185,13 +207,27 @@ type Route struct {
 	Fraction        *uint32
 
 	// If the matchers above indicate a match, the below configuration is used.
-	Action map[string]uint32 // action is weighted clusters.
+	WeightedClusters map[string]WeightedCluster
 	// If MaxStreamDuration is nil, it indicates neither of the route action's
 	// max_stream_duration fields (grpc_timeout_header_max nor
 	// max_stream_duration) were set.  In this case, the ListenerUpdate's
 	// MaxStreamDuration field should be used.  If MaxStreamDuration is set to
 	// an explicit zero duration, the application's deadline should be used.
 	MaxStreamDuration *time.Duration
+	// HTTPFilterConfigOverride contains any HTTP filter config overrides for
+	// the route which may be present.  An individual filter's override may be
+	// unused if the matching WeightedCluster contains an override for that
+	// filter.
+	HTTPFilterConfigOverride map[string]httpfilter.FilterConfig
+}
+
+// WeightedCluster contains settings for an xds RouteAction.WeightedCluster.
+type WeightedCluster struct {
+	// Weight is the relative weight of the cluster.  It will never be zero.
+	Weight uint32
+	// HTTPFilterConfigOverride contains any HTTP filter config overrides for
+	// the weighted cluster which may be present.
+	HTTPFilterConfigOverride map[string]httpfilter.FilterConfig
 }
 
 // HeaderMatcher represents header matchers.

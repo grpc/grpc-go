@@ -19,6 +19,7 @@
 package resolver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sync/atomic"
@@ -29,7 +30,10 @@ import (
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
+	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/env"
+	"google.golang.org/grpc/xds/internal/httpfilter"
+	"google.golang.org/grpc/xds/internal/httpfilter/router"
 )
 
 const (
@@ -94,10 +98,19 @@ func serviceConfigJSON(activeClusters map[string]*clusterInfo) (string, error) {
 	return string(bs), nil
 }
 
+type virtualHost struct {
+	// map from filter name to its config
+	httpFilterConfigOverride map[string]httpfilter.FilterConfig
+}
+
 type route struct {
 	m                 *compositeMatcher // converted from route matchers
 	clusters          wrr.WRR
 	maxStreamDuration time.Duration
+	// map from filter name to its config
+	httpFilterConfigOverride map[string]httpfilter.FilterConfig
+	// map from cluster to its httpFilterConfigOverride
+	clusterHFCO map[string]map[string]httpfilter.FilterConfig
 }
 
 func (r route) String() string {
@@ -105,9 +118,11 @@ func (r route) String() string {
 }
 
 type configSelector struct {
-	r        *xdsResolver
-	routes   []route
-	clusters map[string]*clusterInfo
+	r                *xdsResolver
+	virtualHost      virtualHost
+	routes           []route
+	clusters         map[string]*clusterInfo
+	httpFilterConfig []xdsclient.HTTPFilter
 }
 
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
@@ -136,6 +151,11 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	ref := &cs.clusters[cluster].refCount
 	atomic.AddInt32(ref, 1)
 
+	interceptor, err := cs.newInterceptor(rt, cluster)
+	if err != nil {
+		return nil, err
+	}
+
 	config := &iresolver.RPCConfig{
 		// Communicate to the LB policy the chosen cluster.
 		Context: clustermanager.SetPickedCluster(rpcInfo.Context, cluster),
@@ -151,6 +171,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 				}
 			}
 		},
+		Interceptor: interceptor,
 	}
 
 	if env.TimeoutSupport && rt.maxStreamDuration != 0 {
@@ -158,6 +179,42 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	return config, nil
+}
+
+func (cs *configSelector) newInterceptor(rt *route, cluster string) (iresolver.ClientInterceptor, error) {
+	if len(cs.httpFilterConfig) == 0 {
+		return nil, nil
+	}
+	interceptors := make([]iresolver.ClientInterceptor, 0, len(cs.httpFilterConfig))
+	for _, filter := range cs.httpFilterConfig {
+		if router.IsRouterFilter(filter.Filter) {
+			// Ignore any filters after the router filter.  The router itself
+			// is currently a nop.
+			break
+		}
+		override := cs.virtualHost.httpFilterConfigOverride[filter.Name] // VH overrides listener
+		if o := rt.httpFilterConfigOverride[filter.Name]; o != nil {
+			override = o // route overrides VH
+			if m := rt.clusterHFCO[cluster]; m != nil {
+				if o := m[filter.Name]; o != nil {
+					override = o // cluster overrides route
+				}
+			}
+		}
+		ib, ok := filter.Filter.(httpfilter.ClientInterceptorBuilder)
+		if !ok {
+			// Should not happen if it passed xdsClient validation.
+			return nil, fmt.Errorf("filter does not support use in client")
+		}
+		i, err := ib.BuildClientInterceptor(filter.Config, override)
+		if err != nil {
+			return nil, fmt.Errorf("error constructing filter: %v", err)
+		}
+		if i != nil {
+			interceptors = append(interceptors, i)
+		}
+	}
+	return &interceptorList{interceptors: interceptors}, nil
 }
 
 // stop decrements refs of all clusters referenced by this config selector.
@@ -194,15 +251,18 @@ var newWRR = wrr.NewRandom
 // r.activeClusters for previously-unseen clusters.
 func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, error) {
 	cs := &configSelector{
-		r:        r,
-		routes:   make([]route, len(su.routes)),
-		clusters: make(map[string]*clusterInfo),
+		r:                r,
+		virtualHost:      virtualHost{httpFilterConfigOverride: su.virtualHost.HTTPFilterConfigOverride},
+		routes:           make([]route, len(su.virtualHost.Routes)),
+		clusters:         make(map[string]*clusterInfo),
+		httpFilterConfig: append(su.ldsConfig.httpFilterConfig, xdsclient.HTTPFilter{Filter: failingFilter{}}),
 	}
 
-	for i, rt := range su.routes {
+	for i, rt := range su.virtualHost.Routes {
+		cs.routes[i].clusterHFCO = make(map[string]map[string]httpfilter.FilterConfig, len(rt.WeightedClusters))
 		clusters := newWRR()
-		for cluster, weight := range rt.Action {
-			clusters.Add(cluster, int64(weight))
+		for cluster, wc := range rt.WeightedClusters {
+			clusters.Add(cluster, int64(wc.Weight))
 
 			// Initialize entries in cs.clusters map, creating entries in
 			// r.activeClusters as necessary.  Set to zero as they will be
@@ -213,6 +273,7 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 				r.activeClusters[cluster] = ci
 			}
 			cs.clusters[cluster] = ci
+			cs.routes[i].clusterHFCO[cluster] = wc.HTTPFilterConfigOverride
 		}
 		cs.routes[i].clusters = clusters
 
@@ -226,6 +287,8 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 		} else {
 			cs.routes[i].maxStreamDuration = *rt.MaxStreamDuration
 		}
+
+		cs.routes[i].httpFilterConfigOverride = rt.HTTPFilterConfigOverride
 	}
 
 	// Account for this config selector's clusters.  Do this after no further
@@ -241,4 +304,37 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 type clusterInfo struct {
 	// number of references to this cluster; accessed atomically
 	refCount int32
+}
+
+type interceptorList struct {
+	interceptors []iresolver.ClientInterceptor
+	done         func()
+}
+
+func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, cs iresolver.ClientStream) (context.Context, iresolver.ClientStream, error) {
+	for _, i := range il.interceptors {
+		var err error
+		newCTX, newCS, err := i.NewStream(ctx, ri, cs)
+		if err != nil {
+			cs.Done()
+			return nil, nil, err
+		}
+		cs = newCS
+		ctx = newCTX
+	}
+	il.done = cs.Done
+	return ctx, cs, nil
+}
+
+func (il *interceptorList) Done() {
+	il.done()
+}
+
+// failingFilter always fails at construction.
+type failingFilter struct {
+	httpfilter.Filter
+}
+
+func (failingFilter) BuildClientInterceptor(config, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
+	return nil, fmt.Errorf("error in xds config: no router filter present")
 }

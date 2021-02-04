@@ -247,6 +247,11 @@ func (r *xdsResolver) handleServiceUpdate(su serviceUpdate, err error) {
 		// Do not pass updates to the ClientConn once the resolver is closed.
 		return
 	}
+	// Remove any existing entry in updateCh and replace with the new one.
+	select {
+	case <-r.updateCh:
+	default:
+	}
 	r.updateCh <- suWithError{su: su, err: err}
 }
 
