@@ -51,6 +51,38 @@ type RPCConfig struct {
 	Context      context.Context
 	MethodConfig serviceconfig.MethodConfig // configuration to use for this RPC
 	OnCommitted  func()                     // Called when the RPC has been committed (retries no longer possible)
+	Interceptor  ClientInterceptor
+}
+
+// ClientStream will ultimately be a superset of grpc.ClientStream as
+// operations become necessary to support.
+type ClientStream interface {
+	// Done is invoked when the RPC is finished using its connection, or could
+	// not be assigned a connection.  RPC operations may still occur on
+	// ClientStream after done is called, since the interceptor is invoked by
+	// application-layer operations.
+	Done()
+}
+
+// NOPClientStream is a ClientStream that does nothing
+type NOPClientStream struct{}
+
+// Done is a nop.
+func (NOPClientStream) Done() {}
+
+var _ ClientStream = NOPClientStream{}
+
+// ClientInterceptor is an interceptor for gRPC client streams.
+type ClientInterceptor interface {
+	// NewStream can intercept ClientStream calls.  The provided ClientStream
+	// should not be used during NewStream.  RPCInfo.Context should not be used
+	// (will be nil).
+	NewStream(context.Context, RPCInfo, ClientStream) (context.Context, ClientStream, error)
+}
+
+// ServerInterceptor is unimplementable; do not use.
+type ServerInterceptor interface {
+	notDefined()
 }
 
 type csKeyType string

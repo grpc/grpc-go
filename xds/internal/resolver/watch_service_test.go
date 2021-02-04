@@ -140,7 +140,7 @@ func verifyServiceUpdate(ctx context.Context, updateCh *testutils.Channel, wantU
 	}
 	gotUpdate := u.(serviceUpdateErr)
 	if gotUpdate.err != nil || !cmp.Equal(gotUpdate.u, wantUpdate, cmpopts.EquateEmpty(), cmp.AllowUnexported(serviceUpdate{}, ldsConfig{})) {
-		return fmt.Errorf("unexpected service update: (%v, %v), want: (%v, nil),  diff (-want +got):\n%s", gotUpdate.u, gotUpdate.err, wantUpdate, cmp.Diff(gotUpdate.u, wantUpdate, cmpopts.EquateEmpty()))
+		return fmt.Errorf("unexpected service update: (%v, %v), want: (%v, nil),  diff (-want +got):\n%s", gotUpdate.u, gotUpdate.err, wantUpdate, cmp.Diff(gotUpdate.u, wantUpdate, cmpopts.EquateEmpty(), cmp.AllowUnexported(serviceUpdate{}, ldsConfig{})))
 	}
 	return nil
 }
@@ -166,12 +166,12 @@ func (s) TestServiceWatch(t *testing.T) {
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
-	wantUpdate := serviceUpdate{routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}
+	wantUpdate := serviceUpdate{virtualHost: &xdsclient.VirtualHost{Domains: []string{"target"}, Routes: []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}}}}
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -179,22 +179,22 @@ func (s) TestServiceWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wantUpdate2 := serviceUpdate{
-		routes: []*xdsclient.Route{{
-			Path:   newStringP(""),
-			Action: map[string]uint32{cluster: 1},
+	wantUpdate2 := serviceUpdate{virtualHost: &xdsclient.VirtualHost{Domains: []string{"target"},
+		Routes: []*xdsclient.Route{{
+			Path:             newStringP(""),
+			WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}},
 		}},
-	}
+	}}
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*xdsclient.Route{{Path: newStringP(""), Action: map[string]uint32{cluster: 1}}},
+				Routes:  []*xdsclient.Route{{Path: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
 			},
 			{
 				// Another virtual host, with different domains.
 				Domains: []string{"random"},
-				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -220,12 +220,12 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
-	wantUpdate := serviceUpdate{routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}
+	wantUpdate := serviceUpdate{virtualHost: &xdsclient.VirtualHost{Domains: []string{"target"}, Routes: []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}}}}
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -241,12 +241,12 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr+"2")
 
 	// RDS update for the new name.
-	wantUpdate2 := serviceUpdate{routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster + "2": 1}}}}
+	wantUpdate2 := serviceUpdate{virtualHost: &xdsclient.VirtualHost{Domains: []string{"target"}, Routes: []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster + "2": {Weight: 1}}}}}}
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster + "2": 1}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster + "2": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -272,12 +272,16 @@ func (s) TestServiceWatchLDSUpdateMaxStreamDuration(t *testing.T) {
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr, MaxStreamDuration: time.Second}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
-	wantUpdate := serviceUpdate{routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}, ldsConfig: ldsConfig{maxStreamDuration: time.Second}}
+	wantUpdate := serviceUpdate{virtualHost: &xdsclient.VirtualHost{Domains: []string{"target"}, Routes: []*xdsclient.Route{{
+		Prefix:           newStringP(""),
+		WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}}},
+		ldsConfig: ldsConfig{maxStreamDuration: time.Second},
+	}
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -286,19 +290,22 @@ func (s) TestServiceWatchLDSUpdateMaxStreamDuration(t *testing.T) {
 	}
 
 	// Another LDS update with the same RDS_name but different MaxStreamDuration (zero in this case).
-	wantUpdate2 := serviceUpdate{routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}
+	wantUpdate2 := serviceUpdate{virtualHost: &xdsclient.VirtualHost{Domains: []string{"target"}, Routes: []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}}}}
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
 	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate2); err != nil {
 		t.Fatal(err)
 	}
 
 	// RDS update.
-	wantUpdate3 := serviceUpdate{routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster + "2": 1}}}}
+	wantUpdate3 := serviceUpdate{virtualHost: &xdsclient.VirtualHost{Domains: []string{"target"}, Routes: []*xdsclient.Route{{
+		Prefix:           newStringP(""),
+		WeightedClusters: map[string]xdsclient.WeightedCluster{cluster + "2": {Weight: 1}}}},
+	}}
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster + "2": 1}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster + "2": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -324,12 +331,15 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
-	wantUpdate := serviceUpdate{routes: []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}}}
+	wantUpdate := serviceUpdate{virtualHost: &xdsclient.VirtualHost{Domains: []string{"target"}, Routes: []*xdsclient.Route{{
+		Prefix:           newStringP(""),
+		WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
+	}}
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), Action: map[string]uint32{cluster: 1}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
 			},
 		},
 	}, nil)

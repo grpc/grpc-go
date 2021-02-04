@@ -40,6 +40,7 @@ const (
 	BootstrapFileContentEnv   = "GRPC_XDS_BOOTSTRAP_CONFIG"
 	circuitBreakingSupportEnv = "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING"
 	timeoutSupportEnv         = "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT"
+	faultInjectionSupportEnv  = "GRPC_XDS_EXPERIMENTAL_FAULT_INJECTION"
 )
 
 var (
@@ -63,4 +64,7 @@ var (
 	// route actions is enabled.  This can be enabled by setting the
 	// environment variable "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT" to "true".
 	TimeoutSupport = strings.EqualFold(os.Getenv(timeoutSupportEnv), "true")
+	// FaultInjectionSupport is used to control both fault injection and HTTP
+	// filter support.
+	FaultInjectionSupport = strings.EqualFold(os.Getenv(faultInjectionSupportEnv), "true")
 )

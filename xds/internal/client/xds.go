@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 
+	v1typepb "github.com/cncf/udpa/go/udpa/type/v1"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
@@ -34,11 +35,13 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/golang/protobuf/proto"
-	anypb "github.com/golang/protobuf/ptypes/any"
+	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/env"
+	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -55,13 +58,14 @@ func UnmarshalListener(version string, resources []*anypb.Any, logger *grpclog.P
 		if !IsListenerResource(r.GetTypeUrl()) {
 			return nil, UpdateMetadata{}, fmt.Errorf("xds: unexpected resource type: %q in LDS response", r.GetTypeUrl())
 		}
+		v2 := r.GetTypeUrl() == version.V2ListenerURL
 		lis := &v3listenerpb.Listener{}
 		if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
 			return nil, UpdateMetadata{}, fmt.Errorf("xds: failed to unmarshal resource in LDS response: %v", err)
 		}
 		logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, lis)
 
-		lu, err := processListener(lis)
+		lu, err := processListener(lis, v2)
 		if err != nil {
 			return nil, UpdateMetadata{}, err
 		}
@@ -70,16 +74,16 @@ func UnmarshalListener(version string, resources []*anypb.Any, logger *grpclog.P
 	return update, UpdateMetadata{}, nil
 }
 
-func processListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
+func processListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUpdate, error) {
 	if lis.GetApiListener() != nil {
-		return processClientSideListener(lis)
+		return processClientSideListener(lis, v2)
 	}
 	return processServerSideListener(lis)
 }
 
 // processClientSideListener checks if the provided Listener proto meets
 // the expected criteria. If so, it returns a non-empty routeConfigName.
-func processClientSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
+func processClientSideListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUpdate, error) {
 	update := &ListenerUpdate{}
 
 	apiLisAny := lis.GetApiListener().GetApiListener()
@@ -111,9 +115,104 @@ func processClientSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 		return nil, fmt.Errorf("xds: unsupported type %T for RouteSpecifier in received LDS response", apiLis.RouteSpecifier)
 	}
 
+	if v2 {
+		return update, nil
+	}
+
+	// The following checks and fields only apply to xDS protocol versions v3+.
+
 	update.MaxStreamDuration = apiLis.GetCommonHttpProtocolOptions().GetMaxStreamDuration().AsDuration()
 
+	var err error
+	if update.HTTPFilters, err = processHTTPFilters(apiLis.GetHttpFilters(), false); err != nil {
+		return nil, fmt.Errorf("xds: %v", err)
+	}
+
 	return update, nil
+}
+
+func unwrapHTTPFilterConfig(config *anypb.Any) (proto.Message, string, error) {
+	if typeURL := config.GetTypeUrl(); typeURL != "udpa.type.v1.TypedStruct" {
+		return config, typeURL, nil
+	}
+	// The real type name is inside the TypedStruct.
+	s := new(v1typepb.TypedStruct)
+	if err := ptypes.UnmarshalAny(config, s); err != nil {
+		return nil, "", fmt.Errorf("error unmarshalling TypedStruct filter config: %v", err)
+	}
+	return s, s.GetTypeUrl(), nil
+}
+
+func validateHTTPFilterConfig(cfg *anypb.Any, lds bool) (httpfilter.Filter, httpfilter.FilterConfig, error) {
+	config, typeURL, err := unwrapHTTPFilterConfig(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	filterBuilder := httpfilter.Get(typeURL)
+	if filterBuilder == nil {
+		return nil, nil, fmt.Errorf("no filter implementation found for %q", typeURL)
+	}
+	parseFunc := filterBuilder.ParseFilterConfig
+	if !lds {
+		parseFunc = filterBuilder.ParseFilterConfigOverride
+	}
+	filterConfig, err := parseFunc(config)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error parsing config for filter %q: %v", typeURL, err)
+	}
+	return filterBuilder, filterConfig, nil
+}
+
+func processHTTPFilterOverrides(cfgs map[string]*anypb.Any) (map[string]httpfilter.FilterConfig, error) {
+	if !env.FaultInjectionSupport || len(cfgs) == 0 {
+		return nil, nil
+	}
+	m := make(map[string]httpfilter.FilterConfig)
+	for name, cfg := range cfgs {
+		_, config, err := validateHTTPFilterConfig(cfg, false)
+		if err != nil {
+			return nil, err
+		}
+		m[name] = config
+	}
+	return m, nil
+}
+
+func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilter, error) {
+	if !env.FaultInjectionSupport {
+		return nil, nil
+	}
+
+	ret := make([]HTTPFilter, 0, len(filters))
+	seenNames := make(map[string]bool, len(filters))
+	for _, filter := range filters {
+		name := filter.GetName()
+		if name == "" {
+			return nil, errors.New("filter missing name field")
+		}
+		if seenNames[name] {
+			return nil, fmt.Errorf("duplicate filter name %q", name)
+		}
+		seenNames[name] = true
+
+		httpFilter, config, err := validateHTTPFilterConfig(filter.GetTypedConfig(), true)
+		if err != nil {
+			return nil, err
+		}
+		if server {
+			if _, ok := httpFilter.(httpfilter.ServerInterceptorBuilder); !ok {
+				return nil, fmt.Errorf("httpFilter %q not supported server-side", name)
+			}
+		} else {
+			if _, ok := httpFilter.(httpfilter.ClientInterceptorBuilder); !ok {
+				return nil, fmt.Errorf("httpFilter %q not supported client-side", name)
+			}
+		}
+
+		// Save name/config
+		ret = append(ret, HTTPFilter{Name: name, Filter: httpFilter, Config: config})
+	}
+	return ret, nil
 }
 
 func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
@@ -241,9 +340,14 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, l
 		if err != nil {
 			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
 		}
+		cfgs, err := processHTTPFilterOverrides(vh.GetTypedPerFilterConfig())
+		if err != nil {
+			return RouteConfigUpdate{}, fmt.Errorf("virtual host %+v: %v", vh, err)
+		}
 		vhs = append(vhs, &VirtualHost{
-			Domains: vh.GetDomains(),
-			Routes:  routes,
+			Domains:                  vh.GetDomains(),
+			Routes:                   routes,
+			HTTPFilterConfigOverride: cfgs,
 		})
 	}
 	return RouteConfigUpdate{VirtualHosts: vhs}, nil
@@ -325,11 +429,11 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 			route.Fraction = &n
 		}
 
-		clusters := make(map[string]uint32)
+		route.WeightedClusters = make(map[string]WeightedCluster)
 		action := r.GetRoute()
 		switch a := action.GetClusterSpecifier().(type) {
 		case *v3routepb.RouteAction_Cluster:
-			clusters[a.Cluster] = 1
+			route.WeightedClusters[a.Cluster] = WeightedCluster{Weight: 1}
 		case *v3routepb.RouteAction_WeightedClusters:
 			wcs := a.WeightedClusters
 			var totalWeight uint32
@@ -338,7 +442,14 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 				if w == 0 {
 					continue
 				}
-				clusters[c.GetName()] = w
+				cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
+				if err != nil {
+					return nil, fmt.Errorf("route %+v, action %+v: %v", r, a, err)
+				}
+				route.WeightedClusters[c.GetName()] = WeightedCluster{
+					Weight:                   w,
+					HTTPFilterConfigOverride: cfgs,
+				}
 				totalWeight += w
 			}
 			if totalWeight != wcs.GetTotalWeight().GetValue() {
@@ -351,8 +462,6 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 			continue
 		}
 
-		route.Action = clusters
-
 		msd := action.GetMaxStreamDuration()
 		// Prefer grpc_timeout_header_max, if set.
 		dur := msd.GetGrpcTimeoutHeaderMax()
@@ -363,6 +472,12 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 			d := dur.AsDuration()
 			route.MaxStreamDuration = &d
 		}
+
+		cfgs, err := processHTTPFilterOverrides(r.GetTypedPerFilterConfig())
+		if err != nil {
+			return nil, fmt.Errorf("route %+v: %v", r, err)
+		}
+		route.HTTPFilterConfigOverride = cfgs
 		routesRet = append(routesRet, &route)
 	}
 	return routesRet, nil
