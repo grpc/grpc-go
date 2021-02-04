@@ -43,9 +43,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-var (
-	testBackendAddrStrs []string
-)
+var testBackendAddrStrs []string
 
 const (
 	testBackendAddrsCount = 12

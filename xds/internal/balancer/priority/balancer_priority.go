@@ -192,12 +192,12 @@ func (b *priorityBalancer) handleChildStateUpdate(childName string, s balancer.S
 
 	priority, ok := b.childToPriority[childName]
 	if !ok {
-		b.logger.Warningf("priority: received picker update with unknown child %v", childName)
+		b.logger.Errorf("priority: received picker update with unknown child %v", childName)
 		return
 	}
 
 	if b.childInUse == "" {
-		b.logger.Warningf("priority: no child is in use when picker update is received")
+		b.logger.Errorf("priority: no child is in use when picker update is received")
 		return
 	}
 
