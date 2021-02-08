@@ -147,6 +147,7 @@ type ServiceStatus int
 const (
 	ServiceStatusUnknown ServiceStatus = iota
 	ServiceStatusRequested
+	ServiceStatusNotExist // Resource is removed in the server, in LDS/CDS.
 	ServiceStatusACKed
 	ServiceStatusNACKed
 )
@@ -165,6 +166,9 @@ type UpdateErrorMetadata struct {
 // UpdateMetadata contains the metadata for each update, including timestamp,
 // version, and so on.
 type UpdateMetadata struct {
+	// Status is the status of this resource, e.g. ACKed, NACKed, or
+	// Not_exist(removed).
+	Status ServiceStatus
 	// Version is the version of the xds response. In the future, we may add a
 	// field for different versions of each resource in the same xds response.
 	Version string
@@ -419,20 +423,20 @@ type clientImpl struct {
 	mu          sync.Mutex
 	ldsWatchers map[string]map[*watchInfo]bool
 	ldsVersion  string
-	ldsStatus   ServiceStatus
-	ldsCache    map[string]LDSUpdateWithMD
+	ldsCache    map[string]ListenerUpdate
+	ldsMD       map[string]UpdateMetadata
 	rdsWatchers map[string]map[*watchInfo]bool
 	rdsVersion  string
-	rdsStatus   ServiceStatus
-	rdsCache    map[string]RDSUpdateWithMD
+	rdsCache    map[string]RouteConfigUpdate
+	rdsMD       map[string]UpdateMetadata
 	cdsWatchers map[string]map[*watchInfo]bool
 	cdsVersion  string
-	cdsStatus   ServiceStatus
-	cdsCache    map[string]CDSUpdateWithMD
+	cdsCache    map[string]ClusterUpdate
+	cdsMD       map[string]UpdateMetadata
 	edsWatchers map[string]map[*watchInfo]bool
 	edsVersion  string
-	edsStatus   ServiceStatus
-	edsCache    map[string]EDSUpdateWithMD
+	edsCache    map[string]EndpointsUpdate
+	edsMD       map[string]UpdateMetadata
 
 	// Changes to map lrsClients and the lrsClient inside the map need to be
 	// protected by lrsMu.
@@ -477,13 +481,17 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 
 		updateCh:    buffer.NewUnbounded(),
 		ldsWatchers: make(map[string]map[*watchInfo]bool),
-		ldsCache:    make(map[string]LDSUpdateWithMD),
+		ldsCache:    make(map[string]ListenerUpdate),
+		ldsMD:       make(map[string]UpdateMetadata),
 		rdsWatchers: make(map[string]map[*watchInfo]bool),
-		rdsCache:    make(map[string]RDSUpdateWithMD),
+		rdsCache:    make(map[string]RouteConfigUpdate),
+		rdsMD:       make(map[string]UpdateMetadata),
 		cdsWatchers: make(map[string]map[*watchInfo]bool),
-		cdsCache:    make(map[string]CDSUpdateWithMD),
+		cdsCache:    make(map[string]ClusterUpdate),
+		cdsMD:       make(map[string]UpdateMetadata),
 		edsWatchers: make(map[string]map[*watchInfo]bool),
-		edsCache:    make(map[string]EDSUpdateWithMD),
+		edsCache:    make(map[string]EndpointsUpdate),
+		edsMD:       make(map[string]UpdateMetadata),
 		lrsClients:  make(map[string]*lrsClient),
 	}
 

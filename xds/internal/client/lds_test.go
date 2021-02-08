@@ -116,7 +116,15 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		{
 			name:      "non-listener resource",
 			resources: []*anypb.Any{{TypeUrl: version.V3HTTPConnManagerURL}},
-			wantErr:   true,
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
+			wantErr: true,
 		},
 		{
 			name: "badly marshaled listener resource",
@@ -136,6 +144,15 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						mLis, _ := proto.Marshal(lis)
 						return mLis
 					}(),
+				},
+			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
 				},
 			},
 			wantErr: true,
@@ -173,6 +190,15 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					}(),
 				},
 			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
 			wantErr: true,
 		},
 		{
@@ -203,6 +229,15 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					}(),
 				},
 			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
 			wantErr: true,
 		},
 		{
@@ -229,6 +264,15 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						mLis, _ := proto.Marshal(lis)
 						return mLis
 					}(),
+				},
+			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
 				},
 			},
 			wantErr: true,
@@ -268,11 +312,21 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					}(),
 				},
 			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
 			wantErr: true,
 		},
 		{
 			name: "empty resource list",
 			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
 				Version: testVersion,
 			},
 		},
@@ -283,6 +337,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				v2LDSTarget: {RouteConfigName: v2RouteConfigName, Raw: v2Lis},
 			},
 			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
 				Version: testVersion,
 			},
 		},
@@ -293,6 +348,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3Lis},
 			},
 			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
 				Version: testVersion,
 			},
 		},
@@ -304,6 +360,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3Lis},
 			},
 			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
 				Version: testVersion,
 			},
 		},
@@ -315,16 +372,13 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			if (err != nil) != test.wantErr {
 				t.Errorf("UnmarshalListener(%v) = got err: %v, wantErr: %v", test.resources, err, test.wantErr)
 			}
-			if test.wantErr {
-				return
-			}
-			if !cmp.Equal(update, test.wantUpdate, cmpOpts) {
+			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
 				t.Errorf("UnmarshalListener(%v) = %v want %v", test.resources, update, test.wantUpdate)
-				t.Errorf(cmp.Diff(update, test.wantUpdate, cmpOpts))
+				t.Errorf(diff)
 			}
-			if !cmp.Equal(md, test.wantMD, cmpOpts) {
+			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreErrorDetails); diff != "" {
 				t.Errorf("UnmarshalListener(%v) = %v want %v", test.resources, md, test.wantMD)
-				t.Errorf(cmp.Diff(md, test.wantMD, cmpOpts))
+				t.Errorf(diff)
 			}
 		})
 	}
@@ -480,6 +534,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					}(),
 				},
 			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
 			wantErr: "no address field in LDS response",
 		},
 		{
@@ -495,6 +558,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						mLis, _ := proto.Marshal(lis)
 						return mLis
 					}(),
+				},
+			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
 				},
 			},
 			wantErr: "no socket_address field in LDS response",
@@ -523,6 +595,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					}(),
 				},
 			},
+			wantUpdate: map[string]ListenerUpdate{"foo": {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
 			wantErr: "no host:port in name field of LDS response",
 		},
 		{
@@ -549,6 +630,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					}(),
 				},
 			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
 			wantErr: "socket_address host does not match the one in name",
 		},
 		{
@@ -573,6 +663,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						mLis, _ := proto.Marshal(lis)
 						return mLis
 					}(),
+				},
+			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
 				},
 			},
 			wantErr: "socket_address port does not match the one in name",
@@ -603,6 +702,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						mLis, _ := proto.Marshal(lis)
 						return mLis
 					}(),
+				},
+			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
 				},
 			},
 			wantErr: "filter chains count in LDS response does not match expected",
@@ -637,6 +745,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						mLis, _ := proto.Marshal(lis)
 						return mLis
 					}(),
+				},
+			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
 				},
 			},
 			wantErr: "transport_socket field has unexpected name",
@@ -678,6 +795,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					}(),
 				},
 			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
 			wantErr: "transport_socket field has unexpected typeURL",
 		},
 		{
@@ -716,6 +842,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						mLis, _ := proto.Marshal(lis)
 						return mLis
 					}(),
+				},
+			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
 				},
 			},
 			wantErr: "failed to unmarshal DownstreamTlsContext in LDS response",
@@ -760,6 +895,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						mLis, _ := proto.Marshal(lis)
 						return mLis
 					}(),
+				},
+			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
 				},
 			},
 			wantErr: "DownstreamTlsContext in LDS response does not contain a CommonTlsContext",
@@ -814,6 +958,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					}(),
 				},
 			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
 			wantErr: "validation context contains unexpected type",
 		},
 		{
@@ -823,6 +976,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				v3LDSTarget: {Raw: listenerEmptyTransportSocket},
 			},
 			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
 				Version: testVersion,
 			},
 		},
@@ -876,6 +1030,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					}(),
 				},
 			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
 			wantErr: "security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set",
 		},
 		{
@@ -922,6 +1085,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					}(),
 				},
 			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
 			wantErr: "security configuration on the server-side does not contain identity certificate provider instance name",
 		},
 		{
@@ -937,6 +1109,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			},
 			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
 				Version: testVersion,
 			},
 		},
@@ -956,6 +1129,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			},
 			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
 				Version: testVersion,
 			},
 		},
@@ -970,16 +1144,13 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			if err != nil && !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("UnmarshalListener(%v) = %v wantErr: %q", test.resources, err, test.wantErr)
 			}
-			if test.wantErr != "" {
-				return
-			}
-			if !cmp.Equal(gotUpdate, test.wantUpdate, cmpOpts) {
+			if diff := cmp.Diff(gotUpdate, test.wantUpdate, cmpOpts); diff != "" {
 				t.Errorf("UnmarshalListener(%v) = %v want %v", test.resources, gotUpdate, test.wantUpdate)
-				t.Errorf(cmp.Diff(gotUpdate, test.wantUpdate, cmpOpts))
+				t.Errorf(diff)
 			}
-			if !cmp.Equal(md, test.wantMD, cmpOpts) {
+			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreErrorDetails); diff != "" {
 				t.Errorf("UnmarshalListener(%v) = %v want %v", test.resources, md, test.wantMD)
-				t.Errorf(cmp.Diff(md, test.wantMD, cmpOpts))
+				t.Errorf(diff)
 			}
 		})
 	}

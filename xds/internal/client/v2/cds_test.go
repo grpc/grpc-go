@@ -111,6 +111,7 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			wantErr:     true,
 			wantUpdate:  nil,
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
 					Err: errPlaceHolder,
 				},
@@ -124,6 +125,7 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			wantErr:     true,
 			wantUpdate:  nil,
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
 					Err: errPlaceHolder,
 				},
@@ -137,6 +139,7 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			wantErr:     false,
 			wantUpdate:  nil,
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status:   xdsclient.ServiceStatusACKed,
 				ErrState: nil,
 			},
 			wantUpdateErr: false,
@@ -150,6 +153,7 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 				goodClusterName2: {ServiceName: serviceName2, Raw: marshaledCluster2},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status:   xdsclient.ServiceStatusACKed,
 				ErrState: nil,
 			},
 			wantUpdateErr: false,
@@ -163,6 +167,7 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 				goodClusterName1: {ServiceName: serviceName1, EnableLRS: true, Raw: marshaledCluster1},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status:   xdsclient.ServiceStatusACKed,
 				ErrState: nil,
 			},
 			wantUpdateErr: false,

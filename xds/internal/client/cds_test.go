@@ -617,7 +617,15 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		{
 			name:      "non-cluster resource type",
 			resources: []*anypb.Any{{TypeUrl: version.V3HTTPConnManagerURL}},
-			wantErr:   true,
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
+			wantErr: true,
 		},
 		{
 			name: "badly marshaled cluster resource",
@@ -625,6 +633,14 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				{
 					TypeUrl: version.V3ClusterURL,
 					Value:   []byte{1, 2, 3, 4},
+				},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
 				},
 			},
 			wantErr: true,
@@ -636,11 +652,21 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 					TypeUrl: version.V3ClusterURL,
 					Value: func() []byte {
 						cl := &v3clusterpb.Cluster{
+							Name:                 "test",
 							ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
 						}
 						mcl, _ := proto.Marshal(cl)
 						return mcl
 					}(),
+				},
+			},
+			wantUpdate: map[string]ClusterUpdate{"test": {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
 				},
 			},
 			wantErr: true,
@@ -655,6 +681,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				},
 			},
 			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
 				Version: testVersion,
 			},
 		},
@@ -668,6 +695,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				},
 			},
 			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
 				Version: testVersion,
 			},
 		},
@@ -685,6 +713,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				},
 			},
 			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
 				Version: testVersion,
 			},
 		},
@@ -695,16 +724,13 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			if (err != nil) != test.wantErr {
 				t.Errorf("UnmarshalCluster(%v) = got err: %v, wantErr: %v", test.resources, err, test.wantErr)
 			}
-			if test.wantErr {
-				return
-			}
-			if !cmp.Equal(update, test.wantUpdate, cmpOpts) {
+			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
 				t.Errorf("UnmarshalCluster(%v) = %v want %v", test.resources, update, test.wantUpdate)
-				t.Errorf(cmp.Diff(update, test.wantUpdate, cmpOpts))
+				t.Errorf(diff)
 			}
-			if !cmp.Equal(md, test.wantMD, cmpOpts) {
+			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreErrorDetails); diff != "" {
 				t.Errorf("UnmarshalCluster(%v) = %v want %v", test.resources, md, test.wantMD)
-				t.Errorf(cmp.Diff(md, test.wantMD, cmpOpts))
+				t.Errorf(diff)
 			}
 		})
 	}

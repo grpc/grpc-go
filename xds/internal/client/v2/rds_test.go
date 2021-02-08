@@ -60,6 +60,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			wantErr:     true,
 			wantUpdate:  nil,
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
 					Err: errPlaceHolder,
 				},
@@ -73,6 +74,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			wantErr:     true,
 			wantUpdate:  nil,
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
 					Err: errPlaceHolder,
 				},
@@ -93,6 +95,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 				},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status:   xdsclient.ServiceStatusACKed,
 				ErrState: nil,
 			},
 			wantUpdateErr: false,
@@ -118,6 +121,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 				},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status:   xdsclient.ServiceStatusACKed,
 				ErrState: nil,
 			},
 			wantUpdateErr: false,
@@ -143,6 +147,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 				},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status:   xdsclient.ServiceStatusACKed,
 				ErrState: nil,
 			},
 			wantUpdateErr: false,

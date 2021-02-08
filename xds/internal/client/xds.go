@@ -84,9 +84,11 @@ func UnmarshalListener(version string, resources []*anypb.Any, logger *grpclog.P
 	}
 
 	if len(topLevelErrors) == 0 && len(perResourceErrors) == 0 {
+		md.Status = ServiceStatusACKed
 		return update, md, nil
 	}
 
+	md.Status = ServiceStatusNACKed
 	errRet := combineErrors("LDS", topLevelErrors, perResourceErrors)
 	md.ErrState = &UpdateErrorMetadata{
 		Version:   version,
@@ -256,9 +258,11 @@ func UnmarshalRouteConfig(version string, resources []*anypb.Any, logger *grpclo
 	}
 
 	if len(topLevelErrors) == 0 && len(perResourceErrors) == 0 {
+		md.Status = ServiceStatusACKed
 		return update, md, nil
 	}
 
+	md.Status = ServiceStatusNACKed
 	errRet := combineErrors("RDS", topLevelErrors, perResourceErrors)
 	md.ErrState = &UpdateErrorMetadata{
 		Version:   version,
@@ -462,9 +466,11 @@ func UnmarshalCluster(version string, resources []*anypb.Any, logger *grpclog.Pr
 	}
 
 	if len(topLevelErrors) == 0 && len(perResourceErrors) == 0 {
+		md.Status = ServiceStatusACKed
 		return update, md, nil
 	}
 
+	md.Status = ServiceStatusNACKed
 	errRet := combineErrors("CDS", topLevelErrors, perResourceErrors)
 	md.ErrState = &UpdateErrorMetadata{
 		Version:   version,
@@ -639,9 +645,11 @@ func UnmarshalEndpoints(version string, resources []*anypb.Any, logger *grpclog.
 	}
 
 	if len(topLevelErrors) == 0 && len(perResourceErrors) == 0 {
+		md.Status = ServiceStatusACKed
 		return update, md, nil
 	}
 
+	md.Status = ServiceStatusNACKed
 	errRet := combineErrors("EDS", topLevelErrors, perResourceErrors)
 	md.ErrState = &UpdateErrorMetadata{
 		Version:   version,

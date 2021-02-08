@@ -59,17 +59,29 @@ const (
 	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
 )
 
-var cmpOpts = cmp.Options{
-	cmpopts.EquateEmpty(),
-	cmp.Comparer(func(a, b time.Time) bool { return true }),
-	cmp.Comparer(func(x, y error) bool {
-		if x == nil || y == nil {
-			return x == nil && y == nil
-		}
-		return x.Error() == y.Error()
-	}),
-	protocmp.Transform(),
-}
+var (
+	cmpOpts = cmp.Options{
+		cmpopts.EquateEmpty(),
+		cmp.Comparer(func(a, b time.Time) bool { return true }),
+		cmp.Comparer(func(x, y error) bool {
+			if x == nil || y == nil {
+				return x == nil && y == nil
+			}
+			return x.Error() == y.Error()
+		}),
+		protocmp.Transform(),
+	}
+
+	// When comparing NACK UpdateMetadata, we only care if error is nil, but not
+	// the details in error.
+	errPlaceHolder            = fmt.Errorf("error whose details don't matter")
+	cmpOptsIgnoreErrorDetails = cmp.Options{
+		cmp.Comparer(func(a, b time.Time) bool { return true }),
+		cmp.Comparer(func(x, y error) bool {
+			return (x == nil) == (y == nil)
+		}),
+	}
+)
 
 func clientOpts(balancerName string, overrideWatchExpiryTimeout bool) (*bootstrap.Config, time.Duration) {
 	watchExpiryTimeout := defaultWatchExpiryTimeout

@@ -119,21 +119,21 @@ func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 	c.logger.Debugf("new watch for type %v, resource name %v", wi.rType, wi.target)
 	var (
 		watchers map[string]map[*watchInfo]bool
-		statusP  *ServiceStatus
+		mds      map[string]UpdateMetadata
 	)
 	switch wi.rType {
 	case ListenerResource:
 		watchers = c.ldsWatchers
-		statusP = &c.ldsStatus
+		mds = c.ldsMD
 	case RouteConfigResource:
 		watchers = c.rdsWatchers
-		statusP = &c.rdsStatus
+		mds = c.rdsMD
 	case ClusterResource:
 		watchers = c.cdsWatchers
-		statusP = &c.cdsStatus
+		mds = c.cdsMD
 	case EndpointsResource:
 		watchers = c.edsWatchers
-		statusP = &c.edsStatus
+		mds = c.edsMD
 	default:
 		c.logger.Errorf("unknown watch type: %v", wi.rType)
 		return nil
@@ -150,7 +150,7 @@ func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 		c.logger.Debugf("first watch for type %v, resource name %v, will send a new xDS request", wi.rType, wi.target)
 		s = make(map[*watchInfo]bool)
 		watchers[resourceName] = s
-		*statusP = ServiceStatusRequested
+		mds[resourceName] = UpdateMetadata{Status: ServiceStatusRequested}
 		c.apiClient.AddWatch(wi.rType, resourceName)
 	}
 	// No matter what, add the new watcher to the set, so it's callback will be
@@ -162,22 +162,22 @@ func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 	case ListenerResource:
 		if v, ok := c.ldsCache[resourceName]; ok {
 			c.logger.Debugf("LDS resource with name %v found in cache: %+v", wi.target, v)
-			wi.newUpdate(v.Update)
+			wi.newUpdate(v)
 		}
 	case RouteConfigResource:
 		if v, ok := c.rdsCache[resourceName]; ok {
 			c.logger.Debugf("RDS resource with name %v found in cache: %+v", wi.target, v)
-			wi.newUpdate(v.Update)
+			wi.newUpdate(v)
 		}
 	case ClusterResource:
 		if v, ok := c.cdsCache[resourceName]; ok {
 			c.logger.Debugf("CDS resource with name %v found in cache: %+v", wi.target, v)
-			wi.newUpdate(v.Update)
+			wi.newUpdate(v)
 		}
 	case EndpointsResource:
 		if v, ok := c.edsCache[resourceName]; ok {
 			c.logger.Debugf("EDS resource with name %v found in cache: %+v", wi.target, v)
-			wi.newUpdate(v.Update)
+			wi.newUpdate(v)
 		}
 	}
 
@@ -195,6 +195,7 @@ func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 				// If this was the last watcher, also tell xdsv2Client to stop
 				// watching this resource.
 				delete(watchers, resourceName)
+				delete(mds, resourceName)
 				c.apiClient.RemoveWatch(wi.rType, resourceName)
 				// Remove the resource from cache. When a watch for this
 				// resource is added later, it will trigger a xDS request with

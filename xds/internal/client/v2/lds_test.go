@@ -46,6 +46,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			wantErr:     true,
 			wantUpdate:  nil,
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
 					Err: errPlaceHolder,
 				},
@@ -59,6 +60,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			wantErr:     true,
 			wantUpdate:  nil,
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
 					Err: errPlaceHolder,
 				},
@@ -76,6 +78,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 				goodLDSTarget1: {},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
 					Err: errPlaceHolder,
 				},
@@ -91,6 +94,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 				goodLDSTarget1: {RouteConfigName: goodRouteName1, Raw: marshaledListener1},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status:   xdsclient.ServiceStatusACKed,
 				ErrState: nil,
 			},
 			wantUpdateErr: false,
@@ -106,6 +110,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 				goodLDSTarget2: {RouteConfigName: goodRouteName1, Raw: marshaledListener2},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status:   xdsclient.ServiceStatusACKed,
 				ErrState: nil,
 			},
 			wantUpdateErr: false,
@@ -122,6 +127,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 				goodLDSTarget2: {},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
 					Err: errPlaceHolder,
 				},
@@ -137,6 +143,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 				goodLDSTarget2: {RouteConfigName: goodRouteName1, Raw: marshaledListener2},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status:   xdsclient.ServiceStatusACKed,
 				ErrState: nil,
 			},
 			wantUpdateErr: false,
@@ -149,6 +156,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			wantErr:     false,
 			wantUpdate:  nil,
 			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status:   xdsclient.ServiceStatusACKed,
 				ErrState: nil,
 			},
 			wantUpdateErr: false,
