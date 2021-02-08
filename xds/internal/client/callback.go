@@ -79,11 +79,12 @@ func (c *clientImpl) NewListeners(updates map[string]ListenerUpdate, metadata Up
 	defer c.mu.Unlock()
 
 	if metadata.ErrState != nil {
-		// On NACK, update overall version and status to the NACKed resp.
+		// On NACK, update overall version to the NACKed resp.
 		c.ldsVersion = metadata.ErrState.Version
 		for name := range updates {
 			if _, ok := c.ldsWatchers[name]; ok {
-				// On error, keep previous version and status. Only update error.
+				// On error, keep previous version for each resource. But update
+				// status and error.
 				mdCopy := c.ldsMD[name]
 				mdCopy.ErrState = metadata.ErrState
 				mdCopy.Status = metadata.Status
@@ -137,11 +138,12 @@ func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdate, metad
 	defer c.mu.Unlock()
 
 	if metadata.ErrState != nil {
-		// On NACK, update overall version and status to the NACKed resp.
+		// On NACK, update overall version to the NACKed resp.
 		c.rdsVersion = metadata.ErrState.Version
 		for name := range updates {
 			if _, ok := c.rdsWatchers[name]; ok {
-				// On error, keep previous version and status. Only update error.
+				// On error, keep previous version for each resource. But update
+				// status and error.
 				mdCopy := c.rdsMD[name]
 				mdCopy.ErrState = metadata.ErrState
 				mdCopy.Status = metadata.Status
@@ -178,11 +180,12 @@ func (c *clientImpl) NewClusters(updates map[string]ClusterUpdate, metadata Upda
 	defer c.mu.Unlock()
 
 	if metadata.ErrState != nil {
-		// On NACK, update overall version and status to the NACKed resp.
+		// On NACK, update overall version to the NACKed resp.
 		c.cdsVersion = metadata.ErrState.Version
 		for name := range updates {
 			if _, ok := c.cdsWatchers[name]; ok {
-				// On error, keep previous version and status. Only update error.
+				// On error, keep previous version for each resource. But update
+				// status and error.
 				mdCopy := c.cdsMD[name]
 				mdCopy.ErrState = metadata.ErrState
 				mdCopy.Status = metadata.Status
@@ -236,11 +239,12 @@ func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdate, metadata U
 	defer c.mu.Unlock()
 
 	if metadata.ErrState != nil {
-		// On NACK, update overall version and status to the NACKed resp.
+		// On NACK, update overall version to the NACKed resp.
 		c.edsVersion = metadata.ErrState.Version
 		for name := range updates {
 			if _, ok := c.edsWatchers[name]; ok {
-				// On error, keep previous version and status. Only update error.
+				// On error, keep previous version for each resource. But update
+				// status and error.
 				mdCopy := c.edsMD[name]
 				mdCopy.ErrState = metadata.ErrState
 				mdCopy.Status = metadata.Status
