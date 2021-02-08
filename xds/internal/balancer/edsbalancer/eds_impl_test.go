@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/client"
@@ -61,7 +62,7 @@ func init() {
 //  - change drop rate
 func (s) TestEDS_OneLocality(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// One locality with one backend.
@@ -182,7 +183,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 //  - update locality weight
 func (s) TestEDS_TwoLocalities(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, each with one backend.
@@ -313,7 +314,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 // healthy ones are used.
 func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, each 3 backend, one Healthy, one Unhealthy, one Unknown.
@@ -385,7 +386,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 }
 
 func (s) TestClose(t *testing.T) {
-	edsb := newEDSBalancerImpl(nil, nil, nil, nil)
+	edsb := newEDSBalancerImpl(nil, balancer.BuildOptions{}, nil, nil, nil)
 	// This is what could happen when switching between fallback and eds. This
 	// make sure it doesn't panic.
 	edsb.close()
@@ -396,7 +397,7 @@ func (s) TestClose(t *testing.T) {
 // It should send an error picker with transient failure to the parent.
 func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// The first update is an empty update.
@@ -456,15 +457,33 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 }
 
 // Create XDS balancer, and update sub-balancer before handling eds responses.
-// Then switch between round-robin and test-const-balancer after handling first
+// Then switch between round-robin and a test stub-balancer after handling first
 // eds response.
 func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
+	const balancerName = "stubBalancer-TestEDS_UpdateSubBalancerName"
+
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	stub.Register(balancerName, stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, s balancer.ClientConnState) error {
+			if len(s.ResolverState.Addresses) == 0 {
+				return nil
+			}
+			bd.ClientConn.NewSubConn(s.ResolverState.Addresses, balancer.NewSubConnOptions{})
+			return nil
+		},
+		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
+			bd.ClientConn.UpdateState(balancer.State{
+				ConnectivityState: state.ConnectivityState,
+				Picker:            &testutils.TestConstPicker{Err: testutils.ErrTestConstPicker},
+			})
+		},
+	})
+
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
-	t.Logf("update sub-balancer to test-const-balancer")
-	edsb.handleChildPolicy("test-const-balancer", nil)
+	t.Logf("update sub-balancer to stub-balancer")
+	edsb.handleChildPolicy(balancerName, nil)
 
 	// Two localities, each with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -506,8 +525,8 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
-	t.Logf("update sub-balancer to test-const-balancer")
-	edsb.handleChildPolicy("test-const-balancer", nil)
+	t.Logf("update sub-balancer to stub-balancer")
+	edsb.handleChildPolicy(balancerName, nil)
 
 	for i := 0; i < 2; i++ {
 		scToRemove := <-cc.RemoveSubConnCh
@@ -558,7 +577,7 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	defer func() { env.CircuitBreakingSupport = origCircuitBreakingSupport }()
 
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 	edsb.updateServiceRequestsCounter("test")
 	var maxRequests uint32 = 50
@@ -658,7 +677,7 @@ func (*testInlineUpdateBalancer) Close() {
 // by acquiring a locked mutex.
 func (s) TestEDS_ChildPolicyUpdatePickerInline(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = func(p priorityType, state balancer.State) {
 		// For this test, euqueue needs to happen asynchronously (like in the
 		// real implementation).
@@ -759,7 +778,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	lsWrapper.updateLoadStore(loadStore)
 
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, lsWrapper, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, lsWrapper, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	const (
@@ -853,7 +872,7 @@ func (s) TestEDS_LoadReportDisabled(t *testing.T) {
 	// Not calling lsWrapper.updateLoadStore(loadStore) because LRS is disabled.
 
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, lsWrapper, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, lsWrapper, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// One localities, with one backend.

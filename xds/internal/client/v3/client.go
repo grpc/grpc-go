@@ -143,7 +143,7 @@ func (v3c *client) RecvResponse(s grpc.ClientStream) (proto.Message, error) {
 		return nil, fmt.Errorf("xds: stream.Recv() failed: %v", err)
 	}
 	v3c.logger.Infof("ADS response received, type: %v", resp.GetTypeUrl())
-	v3c.logger.Debugf("ADS response received: %v", resp)
+	v3c.logger.Debugf("ADS response received: %+v", resp)
 	return resp, nil
 }
 

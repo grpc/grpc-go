@@ -35,7 +35,7 @@ import (
 // Init 0 and 1; 0 is up, use 0; add 2, use 0; remove 2, use 0.
 func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, with priorities [0, 1], each with one backend.
@@ -101,7 +101,7 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 // down, use 2; remove 2, use 1.
 func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, with priorities [0, 1], each with one backend.
@@ -208,7 +208,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 // Init 0 and 1; 0 and 1 both down; add 2, use 2.
 func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, with different priorities, each with one backend.
@@ -271,7 +271,7 @@ func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 // Init 0,1,2; 0 and 1 down, use 2; 0 up, close 1 and 2.
 func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, with priorities [0,1,2], each with one backend.
@@ -353,7 +353,7 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 	}()()
 
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, with different priorities, each with one backend.
@@ -403,7 +403,7 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 //  - add localities to existing p0 and p1
 func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, with different priorities, each with one backend.
@@ -514,7 +514,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	}()()
 
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, with different priorities, each with one backend.
@@ -698,7 +698,7 @@ func (s) TestPriorityTypeEqual(t *testing.T) {
 // will be used.
 func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, with priorities [0, 1], each with one backend.
@@ -757,7 +757,7 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 // priority will be used.
 func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// Two localities, with priorities [0, 1], each with one backend.
@@ -823,7 +823,7 @@ func (s) TestEDSPriority_FirstPriorityUnavailable(t *testing.T) {
 	defaultPriorityInitTimeout = testPriorityInitTimeout
 
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
 	// One localities, with priorities [0], each with one backend.

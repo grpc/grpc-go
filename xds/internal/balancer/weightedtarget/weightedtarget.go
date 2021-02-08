@@ -45,12 +45,12 @@ func init() {
 
 type weightedTargetBB struct{}
 
-func (wt *weightedTargetBB) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
+func (wt *weightedTargetBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &weightedTargetBalancer{}
 	b.logger = prefixLogger(b)
 	b.stateAggregator = weightedaggregator.New(cc, b.logger, newRandomWRR)
 	b.stateAggregator.Start()
-	b.bg = balancergroup.New(cc, b.stateAggregator, nil, b.logger)
+	b.bg = balancergroup.New(cc, bOpts, b.stateAggregator, nil, b.logger)
 	b.bg.Start()
 	b.logger.Infof("Created")
 	return b
