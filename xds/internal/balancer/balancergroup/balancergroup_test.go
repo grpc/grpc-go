@@ -26,7 +26,6 @@
 package balancergroup
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -41,7 +40,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
-	itestutils "google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 	"google.golang.org/grpc/xds/internal/client/load"
@@ -952,7 +950,6 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 
 	// Setup the stub balancer such that we can read the build options passed to
 	// it in the UpdateClientConnState method.
-	ccsCh := itestutils.NewChannel()
 	bOpts := balancer.BuildOptions{
 		DialCreds:        insecure.NewCredentials(),
 		ChannelzParentID: parent,
@@ -961,11 +958,8 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 	stub.Register(balancerName, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
 			if !cmp.Equal(bd.BuildOptions, bOpts) {
-				err := fmt.Errorf("buildOptions in child balancer: %v, want %v", bd, bOpts)
-				ccsCh.Send(err)
-				return err
+				return fmt.Errorf("buildOptions in child balancer: %v, want %v", bd, bOpts)
 			}
-			ccsCh.Send(nil)
 			return nil
 		},
 	})
@@ -979,11 +973,7 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 
 	// Send an empty clientConn state change. This should trigger the
 	// verification of the buildOptions being passed to the child policy.
-	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{})
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if v, err := ccsCh.Receive(ctx); err != nil {
-		err2 := v.(error)
-		t.Fatal(err2)
+	if err := bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{}); err != nil {
+		t.Fatal(err)
 	}
 }
