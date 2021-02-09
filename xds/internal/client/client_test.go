@@ -26,16 +26,15 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/protobuf/testing/protocmp"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 type s struct {
@@ -62,13 +61,6 @@ const (
 var (
 	cmpOpts = cmp.Options{
 		cmpopts.EquateEmpty(),
-		cmp.Comparer(func(a, b time.Time) bool { return true }),
-		cmp.Comparer(func(x, y error) bool {
-			if x == nil || y == nil {
-				return x == nil && y == nil
-			}
-			return x.Error() == y.Error()
-		}),
 		protocmp.Transform(),
 	}
 

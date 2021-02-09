@@ -455,7 +455,8 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	wantUpdate := test.wantUpdate
 	cmpOpts := cmp.Options{
 		cmpopts.EquateEmpty(), protocmp.Transform(),
-		cmp.Comparer(func(a, b time.Time) bool { return true }),
+		cmpopts.IgnoreFields(xdsclient.UpdateMetadata{}, "Timestamp"),
+		cmpopts.IgnoreFields(xdsclient.UpdateErrorMetadata{}, "Timestamp"),
 		cmp.Comparer(func(x, y error) bool { return (x == nil) == (y == nil) }),
 	}
 	uErr, err := gotUpdateCh.Receive(ctx)
