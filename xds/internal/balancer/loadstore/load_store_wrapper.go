@@ -25,8 +25,8 @@ import (
 	"google.golang.org/grpc/xds/internal/client/load"
 )
 
-// NewLoadStoreWrapper creates a Wrapper.
-func NewLoadStoreWrapper() *Wrapper {
+// NewWrapper creates a Wrapper.
+func NewWrapper() *Wrapper {
 	return &Wrapper{}
 }
 

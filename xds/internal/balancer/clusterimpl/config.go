@@ -25,38 +25,6 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-/*
-message XdsClusterImplLoadBalancingPolicyConfig {
-  // Cluster name.  Required.
-  string cluster = 1;
-
-  // EDS service name.
-  // Not set if cluster is not an EDS cluster or if it does not
-  // specify an EDS service name.
-  string eds_service_name = 2;
-
-  // Server to send load reports to.
-  // If unset, no load reporting is done.
-  // If set to empty string, load reporting will be sent to the same
-  // server as we are getting xds data from.
-  google.protobuf.String lrs_load_reporting_server_name = 3;
-
-  // Maximum number of outstanding requests can be made to the upstream cluster.
-  // Default is 1024.
-  google.protobuf.UInt32Value max_concurrent_requests = 4;
-
-  // Drop configuration.
-  message DropCategory {
-    string category = 1;
-    uint32 requests_per_million = 2;
-  }
-  repeated DropCategory drop_categories = 5;
-
-  // Child policy.
-  repeated LoadBalancingConfig child_policy = 6;
-}
-*/
-
 type dropCategory struct {
 	Category           string
 	RequestsPerMillion uint32

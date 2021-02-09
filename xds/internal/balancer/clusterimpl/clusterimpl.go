@@ -50,11 +50,12 @@ var newXDSClient = func() (xdsClientInterface, error) { return xdsclient.New() }
 
 type clusterImplBB struct{}
 
-func (clusterImplBB) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
+func (clusterImplBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &clusterImplBalancer{
 		ClientConn:     cc,
+		bOpts:          bOpts,
 		closed:         grpcsync.NewEvent(),
-		loadWrapper:    loadstore.NewLoadStoreWrapper(),
+		loadWrapper:    loadstore.NewWrapper(),
 		pickerUpdateCh: buffer.NewUnbounded(),
 	}
 	b.logger = prefixLogger(b)
@@ -88,15 +89,13 @@ type xdsClientInterface interface {
 
 type clusterImplBalancer struct {
 	balancer.ClientConn
-
+	bOpts  balancer.BuildOptions
 	closed *grpcsync.Event
-
 	logger *grpclog.PrefixLogger
 	xdsC   xdsClientInterface
 
-	config  *lbConfig
-	childLB balancer.Balancer
-
+	config           *lbConfig
+	childLB          balancer.Balancer
 	cancelLoadReport func()
 	clusterName      string
 	edsServiceName   string
@@ -128,14 +127,14 @@ func (cib *clusterImplBalancer) updateLoadStore(newConfig *lbConfig) error {
 		cib.edsServiceName = newConfig.EDSServiceName
 	}
 	if updateLoadClusterAndService {
-		// This updates the clusterName and serviceName that will reported for the
-		// loads. The update here is too early, the perfect timing is when the
-		// picker is updated with the new connection. But from this balancer's point
-		// of view, it's impossible to tell.
+		// This updates the clusterName and serviceName that will be reported
+		// for the loads. The update here is too early, the perfect timing is
+		// when the picker is updated with the new connection. But from this
+		// balancer's point of view, it's impossible to tell.
 		//
 		// On the other hand, this will almost never happen. Each LRS policy
-		// shouldn't get updated config. The parent should do a graceful switch when
-		// the clusterName or serviceName is changed.
+		// shouldn't get updated config. The parent should do a graceful switch
+		// when the clusterName or serviceName is changed.
 		cib.loadWrapper.UpdateClusterAndService(cib.clusterName, cib.edsServiceName)
 	}
 
@@ -220,7 +219,7 @@ func (cib *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState
 		if cib.childLB != nil {
 			cib.childLB.Close()
 		}
-		cib.childLB = bb.Build(cib, balancer.BuildOptions{})
+		cib.childLB = bb.Build(cib, cib.bOpts)
 	}
 	cib.config = newConfig
 

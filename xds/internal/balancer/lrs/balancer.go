@@ -176,7 +176,7 @@ type xdsClientWrapper struct {
 func newXDSClientWrapper(c xdsClientInterface) *xdsClientWrapper {
 	return &xdsClientWrapper{
 		c:           c,
-		loadWrapper: loadstore.NewLoadStoreWrapper(),
+		loadWrapper: loadstore.NewWrapper(),
 	}
 }
 

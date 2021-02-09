@@ -47,6 +47,11 @@ var (
 	testBackendAddrs = []resolver.Address{
 		{Addr: "1.1.1.1:1"},
 	}
+
+	cmpOpts = cmp.Options{
+		cmpopts.EquateEmpty(),
+		cmpopts.IgnoreFields(load.Data{}, "ReportInterval"),
+	}
 )
 
 func init() {
@@ -146,11 +151,6 @@ func TestDrop(t *testing.T) {
 		TotalDrops: dropCount,
 		Drops:      map[string]uint64{dropReason: dropCount},
 	}}
-
-	var cmpOpts = cmp.Options{
-		cmpopts.EquateEmpty(),
-		cmpopts.IgnoreFields(load.Data{}, "ReportInterval"),
-	}
 
 	gotStatsData0 := loadStore.Stats([]string{testClusterName})
 	if diff := cmp.Diff(gotStatsData0, wantStatsData0, cmpOpts); diff != "" {
