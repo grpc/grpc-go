@@ -25,11 +25,13 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 )
@@ -137,17 +139,22 @@ func TestDrop(t *testing.T) {
 	if loadStore == nil {
 		t.Fatal("loadStore is nil in xdsClient")
 	}
-	sds := loadStore.Stats([]string{testClusterName})
-	if len(sds) == 0 {
-		t.Fatalf("loads for cluster %v not found in store", testClusterName)
-	}
-	sd := sds[0]
-	if sd.Cluster != testClusterName || sd.Service != testServiceName {
-		t.Fatalf("got unexpected load for %q, %q, want %q, %q", sd.Cluster, sd.Service, testClusterName, testServiceName)
-	}
 	const dropCount = rpcCount * dropNumerator / dropDenominator
-	if diff := cmp.Diff(sd.Drops, map[string]uint64{dropReason: dropCount}); diff != "" {
-		t.Fatalf("got unexpected drop reports, diff (-got, +want): %v", diff)
+	wantStatsData0 := []*load.Data{{
+		Cluster:    testClusterName,
+		Service:    testServiceName,
+		TotalDrops: dropCount,
+		Drops:      map[string]uint64{dropReason: dropCount},
+	}}
+
+	var cmpOpts = cmp.Options{
+		cmpopts.EquateEmpty(),
+		cmpopts.IgnoreFields(load.Data{}, "ReportInterval"),
+	}
+
+	gotStatsData0 := loadStore.Stats([]string{testClusterName})
+	if diff := cmp.Diff(gotStatsData0, wantStatsData0, cmpOpts); diff != "" {
+		t.Fatalf("got unexpected reports, diff (-got, +want): %v", diff)
 	}
 
 	// Send an update with new drop configs.
@@ -194,17 +201,16 @@ func TestDrop(t *testing.T) {
 		}
 	}
 
-	sds2 := loadStore.Stats([]string{testClusterName})
-	if len(sds2) == 0 {
-		t.Fatalf("loads for cluster %v not found in store", testClusterName)
-	}
-	sd2 := sds2[0]
-	if sd2.Cluster != testClusterName || sd2.Service != testServiceName {
-		t.Fatalf("got unexpected load for %q, %q, want %q, %q", sd.Cluster, sd.Service, testClusterName, testServiceName)
-	}
 	const dropCount2 = rpcCount * dropNumerator2 / dropDenominator2
-	if diff := cmp.Diff(sd2.Drops, map[string]uint64{dropReason2: dropCount2}); diff != "" {
-		t.Fatalf("got unexpected drop reports, diff (-got, +want): %v", diff)
-	}
+	wantStatsData1 := []*load.Data{{
+		Cluster:    testClusterName,
+		Service:    testServiceName,
+		TotalDrops: dropCount2,
+		Drops:      map[string]uint64{dropReason2: dropCount2},
+	}}
 
+	gotStatsData1 := loadStore.Stats([]string{testClusterName})
+	if diff := cmp.Diff(gotStatsData1, wantStatsData1, cmpOpts); diff != "" {
+		t.Fatalf("got unexpected reports, diff (-got, +want): %v", diff)
+	}
 }
