@@ -59,7 +59,6 @@ func (clusterImplBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) 
 		pickerUpdateCh: buffer.NewUnbounded(),
 	}
 	b.logger = prefixLogger(b)
-	b.logger.Infof("Created")
 
 	client, err := newXDSClient()
 	if err != nil {
@@ -69,6 +68,7 @@ func (clusterImplBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) 
 	b.xdsC = client
 	go b.run()
 
+	b.logger.Infof("Created")
 	return b
 }
 
