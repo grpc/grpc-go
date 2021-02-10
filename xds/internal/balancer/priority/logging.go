@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,19 @@
  *
  */
 
-// Package priority implements the priority balancer.
-//
-// This balancer will be kept in internal until we use it in the xds balancers,
-// and are confident its functionalities are stable. It will then be exported
-// for more users.
 package priority
+
+import (
+	"fmt"
+
+	"google.golang.org/grpc/grpclog"
+	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+)
+
+const prefix = "[priority-lb %p] "
+
+var logger = grpclog.Component("xds")
+
+func prefixLogger(p *priorityBalancer) *internalgrpclog.PrefixLogger {
+	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
+}
