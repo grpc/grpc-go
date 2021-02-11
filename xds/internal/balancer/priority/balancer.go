@@ -45,7 +45,7 @@ func init() {
 
 type priorityBB struct{}
 
-func (priorityBB) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
+func (priorityBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &priorityBalancer{
 		cc:                       cc,
 		done:                     grpcsync.NewEvent(),
@@ -55,7 +55,7 @@ func (priorityBB) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balance
 	}
 
 	b.logger = prefixLogger(b)
-	b.bg = balancergroup.New(cc, b, nil, b.logger)
+	b.bg = balancergroup.New(cc, bOpts, b, nil, b.logger)
 	b.bg.Start()
 	go b.run()
 	b.logger.Infof("Created")
