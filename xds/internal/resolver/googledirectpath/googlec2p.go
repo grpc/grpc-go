@@ -34,11 +34,11 @@ import (
 	"sync"
 	"time"
 
-	"cloud.google.com/go/compute/metadata"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/googlecloud"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
 	_ "google.golang.org/grpc/xds"
@@ -68,7 +68,7 @@ const (
 // For overriding in unittests.
 var (
 	onGCE = func() bool {
-		return metadata.OnGCE()
+		return googlecloud.OnGCE()
 	}
 	newClientWithConfig = func(config *bootstrap.Config) error {
 		_, err := xdsclient.NewWithConfig(config)
