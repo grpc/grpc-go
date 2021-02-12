@@ -50,7 +50,14 @@ type Client struct {
 }
 
 // New returns a new xdsClient configured by the bootstrap file specified in env
-// variable GRPC_XDS_BOOTSTRAP.
+// variable GRPC_XDS_BOOTSTRAP or GRPC_XDS_BOOTSTRAP_CONFIG.
+//
+// The returned xdsClient is a singleton. This function creates the xds client
+// if it doesn't already exist.
+//
+// Note that the first invocation of New() or NewWithConfig() sets the client
+// singleton. The following calls will return the singleton xds client without
+// checking or using the config.
 func New() (*Client, error) {
 	singletonClient.mu.Lock()
 	defer singletonClient.mu.Unlock()
@@ -66,6 +73,38 @@ func New() (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("xds: failed to read bootstrap file: %v", err)
 	}
+	c, err := newWithConfig(config, defaultWatchExpiryTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	singletonClient.clientImpl = c
+	singletonClient.refCount++
+	return singletonClient, nil
+}
+
+// NewWithConfig returns a new xdsClient configured by the given config.
+//
+// The returned xdsClient is a singleton. This function creates the xds client
+// if it doesn't already exist.
+//
+// Note that the first invocation of New() or NewWithConfig() sets the client
+// singleton. The following calls will return the singleton xds client without
+// checking or using the config.
+//
+// This function is internal only, for c2p resolver to use. DO NOT use this
+// elsewhere. Use New() instead.
+func NewWithConfig(config *bootstrap.Config) (*Client, error) {
+	singletonClient.mu.Lock()
+	defer singletonClient.mu.Unlock()
+	// If the client implementation was created, increment ref count and return
+	// the client.
+	if singletonClient.clientImpl != nil {
+		singletonClient.refCount++
+		return singletonClient, nil
+	}
+
+	// Create the new client implementation.
 	c, err := newWithConfig(config, defaultWatchExpiryTimeout)
 	if err != nil {
 		return nil, err
@@ -92,6 +131,9 @@ func (c *Client) Close() {
 }
 
 // NewWithConfigForTesting is exported for testing only.
+//
+// Note that this function doesn't set the singleton, so that the testing states
+// don't leak.
 func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout time.Duration) (*Client, error) {
 	cl, err := newWithConfig(config, watchExpiryTimeout)
 	if err != nil {
