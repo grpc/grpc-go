@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2020 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,19 @@
  *
  */
 
-package grpc
+package clusterimpl
 
-// Version is the current grpc version.
-const Version = "1.37.0-dev"
+import (
+	"fmt"
+
+	"google.golang.org/grpc/grpclog"
+	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+)
+
+const prefix = "[xds-cluster-impl-lb %p] "
+
+var logger = grpclog.Component("xds")
+
+func prefixLogger(p *clusterImplBalancer) *internalgrpclog.PrefixLogger {
+	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
+}

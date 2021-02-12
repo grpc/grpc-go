@@ -38,6 +38,8 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 	"google.golang.org/grpc/xds/internal/client/load"
@@ -74,7 +76,7 @@ func newTestBalancerGroup(t *testing.T, loadStore load.PerClusterReporter) (*tes
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, gator, loadStore, nil)
+	bg := New(cc, balancer.BuildOptions{}, gator, loadStore, nil)
 	bg.Start()
 	return cc, gator, bg
 }
@@ -501,7 +503,7 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, gator, nil, nil)
+	bg := New(cc, balancer.BuildOptions{}, gator, nil, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -590,16 +592,20 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 // whenever it gets an address update. It's expected that start() doesn't block
 // because of deadlock.
 func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
+	const balancerName = "stub-TestBalancerGroup_start_close_deadlock"
+	stub.Register(balancerName, stub.BalancerFuncs{})
+	builder := balancer.Get(balancerName)
+
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, gator, nil, nil)
+	bg := New(cc, balancer.BuildOptions{}, gator, nil, nil)
 
 	gator.Add(testBalancerIDs[0], 2)
-	bg.Add(testBalancerIDs[0], &testutils.TestConstBalancerBuilder{})
+	bg.Add(testBalancerIDs[0], builder)
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 	gator.Add(testBalancerIDs[1], 1)
-	bg.Add(testBalancerIDs[1], &testutils.TestConstBalancerBuilder{})
+	bg.Add(testBalancerIDs[1], builder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 
 	bg.Start()
@@ -695,7 +701,7 @@ func initBalancerGroupForCachingTest(t *testing.T) (*weightedaggregator.Aggregat
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, gator, nil, nil)
+	bg := New(cc, balancer.BuildOptions{}, gator, nil, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -929,5 +935,45 @@ func (s) TestBalancerGroup_locality_caching_readd_with_different_builder(t *test
 	}
 	if err := testutils.IsRoundRobin(want, subConnFromPicker(p3)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
+	}
+}
+
+// TestBalancerGroupBuildOptions verifies that the balancer.BuildOptions passed
+// to the balancergroup at creation time is passed to child policies.
+func (s) TestBalancerGroupBuildOptions(t *testing.T) {
+	const (
+		balancerName       = "stubBalancer-TestBalancerGroupBuildOptions"
+		parent             = int64(1234)
+		userAgent          = "ua"
+		defaultTestTimeout = 1 * time.Second
+	)
+
+	// Setup the stub balancer such that we can read the build options passed to
+	// it in the UpdateClientConnState method.
+	bOpts := balancer.BuildOptions{
+		DialCreds:        insecure.NewCredentials(),
+		ChannelzParentID: parent,
+		CustomUserAgent:  userAgent,
+	}
+	stub.Register(balancerName, stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
+			if !cmp.Equal(bd.BuildOptions, bOpts) {
+				return fmt.Errorf("buildOptions in child balancer: %v, want %v", bd, bOpts)
+			}
+			return nil
+		},
+	})
+	cc := testutils.NewTestClientConn(t)
+	bg := New(cc, bOpts, nil, nil, nil)
+	bg.Start()
+
+	// Add the stub balancer build above as a child policy.
+	balancerBuilder := balancer.Get(balancerName)
+	bg.Add(testBalancerIDs[0], balancerBuilder)
+
+	// Send an empty clientConn state change. This should trigger the
+	// verification of the buildOptions being passed to the child policy.
+	if err := bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{}); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -29,8 +29,11 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
+	itestutils "google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
@@ -508,5 +511,57 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		},
 	} {
 		testPick(t, p3, tt.pickInfo, tt.wantSC, tt.wantErr)
+	}
+}
+
+func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
+	const (
+		balancerName       = "stubBalancer-TestClusterManagerForwardsBalancerBuildOptions"
+		parent             = int64(1234)
+		userAgent          = "ua"
+		defaultTestTimeout = 1 * time.Second
+	)
+
+	// Setup the stub balancer such that we can read the build options passed to
+	// it in the UpdateClientConnState method.
+	ccsCh := itestutils.NewChannel()
+	bOpts := balancer.BuildOptions{
+		DialCreds:        insecure.NewCredentials(),
+		ChannelzParentID: parent,
+		CustomUserAgent:  userAgent,
+	}
+	stub.Register(balancerName, stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
+			if !cmp.Equal(bd.BuildOptions, bOpts) {
+				err := fmt.Errorf("buildOptions in child balancer: %v, want %v", bd, bOpts)
+				ccsCh.Send(err)
+				return err
+			}
+			ccsCh.Send(nil)
+			return nil
+		},
+	})
+
+	cc := testutils.NewTestClientConn(t)
+	rtb := rtBuilder.Build(cc, bOpts)
+
+	configJSON1 := fmt.Sprintf(`{
+"children": {
+	"cds:cluster_1":{ "childPolicy": [{"%s":""}] }
+}
+}`, balancerName)
+	config1, err := rtParser.ParseConfig([]byte(configJSON1))
+	if err != nil {
+		t.Fatalf("failed to parse balancer config: %v", err)
+	}
+
+	if err := rtb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: config1}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if v, err := ccsCh.Receive(ctx); err != nil {
+		err2 := v.(error)
+		t.Fatal(err2)
 	}
 }

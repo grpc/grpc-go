@@ -22,11 +22,11 @@ package lrs
 import (
 	"encoding/json"
 	"fmt"
-	"sync"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/xds/internal/balancer/loadstore"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/load"
 )
@@ -162,72 +162,6 @@ type xdsClientInterface interface {
 	Close()
 }
 
-type loadStoreWrapper struct {
-	mu         sync.RWMutex
-	cluster    string
-	edsService string
-	// Both store and perCluster will be nil if load reporting is disabled (EDS
-	// response doesn't have LRS server name). Note that methods on Store and
-	// perCluster all handle nil, so there's no need to check nil before calling
-	// them.
-	store      *load.Store
-	perCluster load.PerClusterReporter
-}
-
-func (lsw *loadStoreWrapper) updateClusterAndService(cluster, edsService string) {
-	lsw.mu.Lock()
-	defer lsw.mu.Unlock()
-	if cluster == lsw.cluster && edsService == lsw.edsService {
-		return
-	}
-	lsw.cluster = cluster
-	lsw.edsService = edsService
-	lsw.perCluster = lsw.store.PerCluster(lsw.cluster, lsw.edsService)
-}
-
-func (lsw *loadStoreWrapper) updateLoadStore(store *load.Store) {
-	lsw.mu.Lock()
-	defer lsw.mu.Unlock()
-	if store == lsw.store {
-		return
-	}
-	lsw.store = store
-	lsw.perCluster = nil
-	lsw.perCluster = lsw.store.PerCluster(lsw.cluster, lsw.edsService)
-}
-
-func (lsw *loadStoreWrapper) CallStarted(locality string) {
-	lsw.mu.RLock()
-	defer lsw.mu.RUnlock()
-	if lsw.perCluster != nil {
-		lsw.perCluster.CallStarted(locality)
-	}
-}
-
-func (lsw *loadStoreWrapper) CallFinished(locality string, err error) {
-	lsw.mu.RLock()
-	defer lsw.mu.RUnlock()
-	if lsw.perCluster != nil {
-		lsw.perCluster.CallFinished(locality, err)
-	}
-}
-
-func (lsw *loadStoreWrapper) CallServerLoad(locality, name string, val float64) {
-	lsw.mu.RLock()
-	defer lsw.mu.RUnlock()
-	if lsw.perCluster != nil {
-		lsw.perCluster.CallServerLoad(locality, name, val)
-	}
-}
-
-func (lsw *loadStoreWrapper) CallDropped(category string) {
-	lsw.mu.RLock()
-	defer lsw.mu.RUnlock()
-	if lsw.perCluster != nil {
-		lsw.perCluster.CallDropped(category)
-	}
-}
-
 type xdsClientWrapper struct {
 	c                xdsClientInterface
 	cancelLoadReport func()
@@ -236,13 +170,13 @@ type xdsClientWrapper struct {
 	lrsServerName    string
 	// loadWrapper is a wrapper with loadOriginal, with clusterName and
 	// edsServiceName. It's used children to report loads.
-	loadWrapper *loadStoreWrapper
+	loadWrapper *loadstore.Wrapper
 }
 
 func newXDSClientWrapper(c xdsClientInterface) *xdsClientWrapper {
 	return &xdsClientWrapper{
 		c:           c,
-		loadWrapper: &loadStoreWrapper{},
+		loadWrapper: loadstore.NewWrapper(),
 	}
 }
 
@@ -274,7 +208,7 @@ func (w *xdsClientWrapper) update(newConfig *lbConfig) error {
 		// On the other hand, this will almost never happen. Each LRS policy
 		// shouldn't get updated config. The parent should do a graceful switch when
 		// the clusterName or serviceName is changed.
-		w.loadWrapper.updateClusterAndService(w.clusterName, w.edsServiceName)
+		w.loadWrapper.UpdateClusterAndService(w.clusterName, w.edsServiceName)
 	}
 
 	if w.lrsServerName != newConfig.LrsLoadReportingServerName {
@@ -293,7 +227,7 @@ func (w *xdsClientWrapper) update(newConfig *lbConfig) error {
 		if w.c != nil {
 			loadStore, w.cancelLoadReport = w.c.ReportLoad(w.lrsServerName)
 		}
-		w.loadWrapper.updateLoadStore(loadStore)
+		w.loadWrapper.UpdateLoadStore(loadStore)
 	}
 
 	return nil

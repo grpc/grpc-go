@@ -116,7 +116,7 @@ func (tcc *TestClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubCon
 
 // RemoveSubConn removes the SubConn.
 func (tcc *TestClientConn) RemoveSubConn(sc balancer.SubConn) {
-	tcc.logger.Logf("testClientConn: RemoveSubConn(%p)", sc)
+	tcc.logger.Logf("testClientConn: RemoveSubConn(%s)", sc)
 	select {
 	case tcc.RemoveSubConnCh <- sc:
 	default:
@@ -232,48 +232,8 @@ func (tc *testClosure) next() balancer.SubConn {
 	return ret
 }
 
-func init() {
-	balancer.Register(&TestConstBalancerBuilder{})
-}
-
 // ErrTestConstPicker is error returned by test const picker.
 var ErrTestConstPicker = fmt.Errorf("const picker error")
-
-// TestConstBalancerBuilder is a balancer builder for tests.
-type TestConstBalancerBuilder struct{}
-
-// Build builds a test const balancer.
-func (*TestConstBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &testConstBalancer{cc: cc}
-}
-
-// Name returns test-const-balancer name.
-func (*TestConstBalancerBuilder) Name() string {
-	return "test-const-balancer"
-}
-
-type testConstBalancer struct {
-	cc balancer.ClientConn
-}
-
-func (tb *testConstBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	tb.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &TestConstPicker{Err: ErrTestConstPicker}})
-}
-
-func (tb *testConstBalancer) ResolverError(error) {
-	panic("not implemented")
-}
-
-func (tb *testConstBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	if len(s.ResolverState.Addresses) == 0 {
-		return nil
-	}
-	tb.cc.NewSubConn(s.ResolverState.Addresses, balancer.NewSubConnOptions{})
-	return nil
-}
-
-func (*testConstBalancer) Close() {
-}
 
 // TestConstPicker is a const picker for tests.
 type TestConstPicker struct {
