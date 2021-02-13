@@ -37,13 +37,14 @@ import (
 	"google.golang.org/grpc/internal/googlecloud"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
-	_ "google.golang.org/grpc/xds"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
+
+	_ "google.golang.org/grpc/xds" // To register xds resolvers and balancers.
 )
 
 const (
@@ -181,7 +182,6 @@ func (r *c2pResolver) startChild(scheme string) {
 		return
 	}
 	r.child = child
-	return
 }
 
 func (r *c2pResolver) ResolveNow(opts resolver.ResolveNowOptions) {

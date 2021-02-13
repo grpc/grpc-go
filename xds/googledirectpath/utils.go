@@ -28,14 +28,14 @@ import (
 )
 
 func getFromMetadata(urlStr string) ([]byte, error) {
-	parsedUrl, err := url.Parse(urlStr)
+	parsedURL, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, err
 	}
 	client := &http.Client{Timeout: httpReqTimeout}
 	req := &http.Request{
 		Method: http.MethodGet,
-		URL:    parsedUrl,
+		URL:    parsedURL,
 		Header: http.Header{"Metadata-Flavor": {"Google"}},
 	}
 	resp, err := client.Do(req)

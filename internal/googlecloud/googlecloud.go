@@ -78,6 +78,10 @@ var (
 	logger = internalgrpclog.NewPrefixLogger(grpclog.Component("googlecloud"), logPrefix)
 )
 
+// OnGCE returns whether the client is running on GCE.
+//
+// It provides similar functionality as metadata.OnGCE from the cloud library
+// package. We keep this to avoid depending on the cloud library module.
 func OnGCE() bool {
 	vmOnGCEOnce.Do(func() {
 		vmOnGCE = isRunningOnGCE()
