@@ -184,8 +184,12 @@ func (r *c2pResolver) startChild(scheme string) {
 	return
 }
 
-func (r *c2pResolver) ResolveNow(options resolver.ResolveNowOptions) {
-	panic("implement me")
+func (r *c2pResolver) ResolveNow(opts resolver.ResolveNowOptions) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.child != nil {
+		r.child.ResolveNow(opts)
+	}
 }
 
 func (r *c2pResolver) Close() {
