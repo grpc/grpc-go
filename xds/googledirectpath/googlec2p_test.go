@@ -65,6 +65,18 @@ func replaceResolvers() func() {
 	}
 }
 
+func runWithRetry(f func() error) error {
+	var err error
+	for i := 0; i < 10; i++ {
+		err = f()
+		if err == nil {
+			return nil
+		}
+		time.Sleep(time.Millisecond * 100)
+	}
+	return err
+}
+
 // Test that when bootstrap env is set, fallback to DNS.
 func TestBuildWithBootstrapEnvSet(t *testing.T) {
 	defer replaceResolvers()()
@@ -82,8 +94,14 @@ func TestBuildWithBootstrapEnvSet(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to build resolver: %v", err)
 			}
-			if r != testDNSResolver {
-				t.Fatalf("got resolver %#v, want dns resolver", r)
+			rr := r.(*c2pResolver)
+			if err := runWithRetry(func() error {
+				if rr.child != testDNSResolver {
+					return fmt.Errorf("got resolver %#v, want dns resolver", rr.child)
+				}
+				return nil
+			}); err != nil {
+				t.Fatalf("%v", err)
 			}
 		})
 	}
@@ -103,8 +121,14 @@ func TestBuildNotOnGCE(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build resolver: %v", err)
 	}
-	if r != testDNSResolver {
-		t.Fatalf("got resolver %#v, want dns resolver", r)
+	rr := r.(*c2pResolver)
+	if err := runWithRetry(func() error {
+		if rr.child != testDNSResolver {
+			return fmt.Errorf("got resolver %#v, want dns resolver", rr.child)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("%v", err)
 	}
 }
 
@@ -141,8 +165,14 @@ func TestBuildXDS(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to build resolver: %v", err)
 			}
-			if r != testXDSResolver {
-				t.Fatalf("got resolver %#v, want dns resolver", r)
+			rr := r.(*c2pResolver)
+			if err := runWithRetry(func() error {
+				if rr.child != testXDSResolver {
+					return fmt.Errorf("got resolver %#v, want dns resolver", rr.child)
+				}
+				return nil
+			}); err != nil {
+				t.Fatalf("%v", err)
 			}
 
 			wantNode := &v3corepb.Node{

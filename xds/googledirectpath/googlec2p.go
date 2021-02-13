@@ -26,11 +26,7 @@
 package googledirectpath
 
 import (
-	"bytes"
 	"fmt"
-	"io/ioutil"
-	"net/http"
-	"net/url"
 	"sync"
 	"time"
 
@@ -106,13 +102,36 @@ type c2pResolverBuilder struct{}
 
 // Build helps implement the resolver.Builder interface.
 func (b *c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
-	if !runDirectPath() {
-		// If not xDS, fallback to DNS.
-		t.Scheme = "dns"
-		return dnsBuilder.Build(t, cc, opts)
+	ret := &c2pResolver{
+		target: t,
+		cc:     cc,
+		opts:   opts,
 	}
+	// start does I/O. Run it in a goroutine.
+	go ret.start()
+	return ret, nil
+}
 
-	// build and call xds resolver
+// Name helps implement the resolver.Builder interface.
+func (*c2pResolverBuilder) Scheme() string {
+	return c2pScheme
+}
+
+type c2pResolver struct {
+	target resolver.Target
+	cc     resolver.ClientConn
+	opts   resolver.BuildOptions
+
+	mu    sync.Mutex
+	done  bool
+	child resolver.Resolver
+}
+
+func (r *c2pResolver) start() {
+	if !runDirectPath() {
+		r.startChild("dns")
+		return
+	}
 
 	nodeCopy := proto.Clone(defaultNode).(*v3corepb.Node)
 	nodeCopy.Locality = &v3corepb.Locality{Zone: getZone()}
@@ -130,17 +149,56 @@ func (b *c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, op
 	// used by the xds resolver later.
 	err := newClientWithConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to start xDS client: %v", err)
+		r.cc.ReportError(fmt.Errorf("failed to start xDS client: %v", err))
+		return
 	}
 
-	// Create and return an xDS resolver.
-	t.Scheme = "xds"
-	return xdsBuilder.Build(t, cc, opts)
+	r.startChild("xds")
 }
 
-// Name helps implement the resolver.Builder interface.
-func (*c2pResolverBuilder) Scheme() string {
-	return c2pScheme
+func (r *c2pResolver) startChild(scheme string) {
+	t := r.target
+	t.Scheme = scheme
+	var b resolver.Builder
+	switch scheme {
+	case "dns":
+		b = dnsBuilder
+	case "xds":
+		b = xdsBuilder
+	default:
+		logger.Errorf("unknown child scheme: %q", scheme)
+		return
+	}
+	child, err := b.Build(t, r.cc, r.opts)
+	if err != nil {
+		r.cc.ReportError(err)
+		return
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.done {
+		child.Close()
+		return
+	}
+	r.child = child
+	return
+}
+
+func (r *c2pResolver) ResolveNow(options resolver.ResolveNowOptions) {
+	panic("implement me")
+}
+
+func (r *c2pResolver) Close() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.done {
+		return
+	}
+	r.done = true
+	if r.child != nil {
+		r.child.Close()
+	}
 }
 
 // runDirectPath returns whether this resolver should use direct path.
@@ -155,71 +213,4 @@ func runDirectPath() bool {
 		return false
 	}
 	return true
-}
-
-func getFromMetadata(urlStr string) ([]byte, error) {
-	parsedUrl, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, err
-	}
-	client := &http.Client{Timeout: httpReqTimeout}
-	req := &http.Request{
-		Method: http.MethodGet,
-		URL:    parsedUrl,
-		Header: http.Header{"Metadata-Flavor": {"Google"}},
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed communicating with metadata server: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("metadata server returned resp with non-OK: %v", resp)
-	}
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed reading from metadata server: %w", err)
-	}
-	return body, nil
-}
-
-var (
-	zone     string
-	zoneOnce sync.Once
-)
-
-// Defined as var to be overridden in tests.
-var getZone = func() string {
-	zoneOnce.Do(func() {
-		qualifiedZone, err := getFromMetadata(zoneURL)
-		if err != nil {
-			logger.Warningf("could not discover instance zone: %v", err)
-			return
-		}
-		i := bytes.LastIndexByte(qualifiedZone, '/')
-		if i == -1 {
-			logger.Warningf("could not parse zone from metadata server: %s", qualifiedZone)
-			return
-		}
-		zone = string(qualifiedZone[i+1:])
-	})
-	return zone
-}
-
-var (
-	ipv6Capable     bool
-	ipv6CapableOnce sync.Once
-)
-
-// Defined as var to be overridden in tests.
-var getIPv6Capable = func() bool {
-	ipv6CapableOnce.Do(func() {
-		_, err := getFromMetadata(ipv6URL)
-		if err != nil {
-			logger.Warningf("could not discover ipv6 capability: %v", err)
-			return
-		}
-		ipv6Capable = true
-	})
-	return ipv6Capable
 }
