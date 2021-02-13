@@ -71,8 +71,10 @@ var (
 		return err
 	}
 
-	dnsBuilder = resolver.Get("dns")
-	xdsBuilder = resolver.Get("xds")
+	childBuilders = map[string]resolver.Builder{
+		"dns": resolver.Get("dns"),
+		"xds": resolver.Get("xds"),
+	}
 
 	logger = internalgrpclog.NewPrefixLogger(grpclog.Component("directpath"), logPrefix)
 
@@ -159,14 +161,11 @@ func (r *c2pResolver) start() {
 func (r *c2pResolver) startChild(scheme string) {
 	t := r.target
 	t.Scheme = scheme
-	var b resolver.Builder
-	switch scheme {
-	case "dns":
-		b = dnsBuilder
-	case "xds":
-		b = xdsBuilder
-	default:
+
+	b, ok := childBuilders[scheme]
+	if !ok {
 		logger.Errorf("unknown child scheme: %q", scheme)
+		r.cc.ReportError(fmt.Errorf("unknown child scheme in c2p resolver: %q", scheme))
 		return
 	}
 	child, err := b.Build(t, r.cc, r.opts)

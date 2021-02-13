@@ -55,13 +55,13 @@ var (
 )
 
 func replaceResolvers() func() {
-	oldDNS := dnsBuilder
-	dnsBuilder = testDNSResolver
-	oldXDS := xdsBuilder
-	xdsBuilder = testXDSResolver
+	oldChildB := childBuilders
+	childBuilders = map[string]resolver.Builder{
+		"dns": testDNSResolver,
+		"xds": testXDSResolver,
+	}
 	return func() {
-		dnsBuilder = oldDNS
-		xdsBuilder = oldXDS
+		childBuilders = oldChildB
 	}
 }
 
