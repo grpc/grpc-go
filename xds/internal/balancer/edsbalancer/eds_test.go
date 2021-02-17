@@ -116,6 +116,7 @@ type fakeEDSBalancer struct {
 	subconnStateChange *testutils.Channel
 	edsUpdate          *testutils.Channel
 	serviceName        *testutils.Channel
+	serviceRequestMax  *testutils.Channel
 }
 
 func (f *fakeEDSBalancer) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
@@ -132,8 +133,9 @@ func (f *fakeEDSBalancer) handleEDSResponse(edsResp xdsclient.EndpointsUpdate) {
 
 func (f *fakeEDSBalancer) updateState(priority priorityType, s balancer.State) {}
 
-func (f *fakeEDSBalancer) updateServiceRequestsCounter(serviceName string) {
+func (f *fakeEDSBalancer) updateServiceRequestsConfig(serviceName string, max *uint32) {
 	f.serviceName.Send(serviceName)
+	f.serviceRequestMax.Send(max)
 }
 
 func (f *fakeEDSBalancer) close() {}
@@ -186,6 +188,25 @@ func (f *fakeEDSBalancer) waitForCounterUpdate(ctx context.Context, wantServiceN
 	return nil
 }
 
+func (f *fakeEDSBalancer) waitForCountMaxUpdate(ctx context.Context, want *uint32) error {
+	val, err := f.serviceRequestMax.Receive(ctx)
+	if err != nil {
+		return err
+	}
+	got := val.(*uint32)
+
+	if got == nil && want == nil {
+		return nil
+	}
+	if got != nil && want != nil {
+		if *got != *want {
+			return fmt.Errorf("got countMax %v, want %v", *got, *want)
+		}
+		return nil
+	}
+	return fmt.Errorf("got countMax %+v, want %+v", got, want)
+}
+
 func newFakeEDSBalancer(cc balancer.ClientConn) edsBalancerImplInterface {
 	return &fakeEDSBalancer{
 		cc:                 cc,
@@ -193,6 +214,7 @@ func newFakeEDSBalancer(cc balancer.ClientConn) edsBalancerImplInterface {
 		subconnStateChange: testutils.NewChannelWithSize(10),
 		edsUpdate:          testutils.NewChannelWithSize(10),
 		serviceName:        testutils.NewChannelWithSize(10),
+		serviceRequestMax:  testutils.NewChannelWithSize(10),
 	}
 }
 
@@ -328,15 +350,20 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 	if err := edsLB.waitForCounterUpdate(ctx, testServiceName); err != nil {
 		t.Fatal(err)
 	}
+	if err := edsLB.waitForCountMaxUpdate(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
 
+	var testCountMax uint32 = 100
 	lbCfgB := &loadBalancingConfig{
 		Name:   fakeBalancerB,
 		Config: json.RawMessage("{}"),
 	}
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
-			ChildPolicy:    lbCfgB,
-			EDSServiceName: testServiceName,
+			ChildPolicy:           lbCfgB,
+			EDSServiceName:        testServiceName,
+			MaxConcurrentRequests: &testCountMax,
 		},
 	}); err != nil {
 		t.Fatalf("edsB.UpdateClientConnState() failed: %v", err)
@@ -347,6 +374,9 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 	if err := edsLB.waitForCounterUpdate(ctx, testServiceName); err != nil {
 		// Counter is updated even though the service name didn't change. The
 		// eds_impl will compare the service names, and skip if it didn't change.
+		t.Fatal(err)
+	}
+	if err := edsLB.waitForCountMaxUpdate(ctx, &testCountMax); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -606,15 +636,23 @@ func (s) TestCounterUpdate(t *testing.T) {
 	}
 	defer edsB.Close()
 
+	var testCountMax uint32 = 100
 	// Update should trigger counter update with provided service name.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{EDSServiceName: "foobar-1"},
+		BalancerConfig: &EDSConfig{
+			EDSServiceName:        "foobar-1",
+			MaxConcurrentRequests: &testCountMax,
+		},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := edsB.(*edsBalancer).edsImpl.(*fakeEDSBalancer).waitForCounterUpdate(ctx, "foobar-1"); err != nil {
+	edsI := edsB.(*edsBalancer).edsImpl.(*fakeEDSBalancer)
+	if err := edsI.waitForCounterUpdate(ctx, "foobar-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := edsI.waitForCountMaxUpdate(ctx, &testCountMax); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -642,6 +680,7 @@ func (s) TestBalancerConfigParsing(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 
+	var testMaxConcurrentRequests uint32 = 123
 	tests := []struct {
 		name    string
 		js      json.RawMessage
@@ -690,6 +729,7 @@ func (s) TestBalancerConfigParsing(t *testing.T) {
     {"fake_balancer_A": {}}
   ],
   "edsServiceName": "eds.service",
+  "maxConcurrentRequests": 123,
   "lrsLoadReportingServerName": "lrs.server"
 }`),
 			want: &EDSConfig{
@@ -702,6 +742,7 @@ func (s) TestBalancerConfigParsing(t *testing.T) {
 					Config: json.RawMessage("{}"),
 				},
 				EDSServiceName:             testEDSName,
+				MaxConcurrentRequests:      &testMaxConcurrentRequests,
 				LrsLoadReportingServerName: &testLRSName,
 			},
 		},

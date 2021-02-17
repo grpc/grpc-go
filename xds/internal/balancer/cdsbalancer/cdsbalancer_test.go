@@ -193,8 +193,11 @@ func cdsCCS(cluster string) balancer.ClientConnState {
 
 // edsCCS is a helper function to construct a good update passed from the
 // cdsBalancer to the edsBalancer.
-func edsCCS(service string, enableLRS bool) balancer.ClientConnState {
-	lbCfg := &edsbalancer.EDSConfig{EDSServiceName: service}
+func edsCCS(service string, countMax *uint32, enableLRS bool) balancer.ClientConnState {
+	lbCfg := &edsbalancer.EDSConfig{
+		EDSServiceName:        service,
+		MaxConcurrentRequests: countMax,
+	}
 	if enableLRS {
 		lbCfg.LrsLoadReportingServerName = new(string)
 	}
@@ -350,12 +353,12 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 		{
 			name:      "happy-case-with-lrs",
 			cdsUpdate: xdsclient.ClusterUpdate{ServiceName: serviceName, EnableLRS: true},
-			wantCCS:   edsCCS(serviceName, true),
+			wantCCS:   edsCCS(serviceName, nil, true),
 		},
 		{
 			name:      "happy-case-without-lrs",
 			cdsUpdate: xdsclient.ClusterUpdate{ServiceName: serviceName},
-			wantCCS:   edsCCS(serviceName, false),
+			wantCCS:   edsCCS(serviceName, nil, false),
 		},
 	}
 
@@ -423,7 +426,7 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
-	wantCCS := edsCCS(serviceName, false)
+	wantCCS := edsCCS(serviceName, nil, false)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -508,7 +511,7 @@ func (s) TestResolverError(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
-	wantCCS := edsCCS(serviceName, false)
+	wantCCS := edsCCS(serviceName, nil, false)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -557,7 +560,7 @@ func (s) TestUpdateSubConnState(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
-	wantCCS := edsCCS(serviceName, false)
+	wantCCS := edsCCS(serviceName, nil, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -592,7 +595,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	// the service's counter with the new max requests.
 	var maxRequests uint32 = 1
 	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName, MaxRequests: &maxRequests}
-	wantCCS := edsCCS(serviceName, false)
+	wantCCS := edsCCS(serviceName, &maxRequests, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -602,10 +605,10 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	// Since the counter's max requests was set to 1, the first request should
 	// succeed and the second should fail.
 	counter := client.GetServiceRequestsCounter(serviceName)
-	if err := counter.StartRequest(); err != nil {
+	if err := counter.StartRequest(maxRequests); err != nil {
 		t.Fatal(err)
 	}
-	if err := counter.StartRequest(); err == nil {
+	if err := counter.StartRequest(maxRequests); err == nil {
 		t.Fatal("unexpected success on start request over max")
 	}
 	counter.EndRequest()
@@ -625,7 +628,7 @@ func (s) TestClose(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
-	wantCCS := edsCCS(serviceName, false)
+	wantCCS := edsCCS(serviceName, nil, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {

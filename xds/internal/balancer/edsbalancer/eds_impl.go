@@ -45,6 +45,8 @@ import (
 // TODO: make this a environment variable?
 var defaultPriorityInitTimeout = 10 * time.Second
 
+const defaultServiceRequestCountMax = 1024
+
 type localityConfig struct {
 	weight uint32
 	addrs  []resolver.Address
@@ -101,6 +103,7 @@ type edsBalancerImpl struct {
 	drops                  []*dropper
 	innerState             balancer.State // The state of the picker without drop support.
 	serviceRequestsCounter *client.ServiceRequestsCounter
+	serviceRequestCountMax uint32
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
@@ -114,9 +117,10 @@ func newEDSBalancerImpl(cc balancer.ClientConn, bOpts balancer.BuildOptions, enq
 
 		enqueueChildBalancerStateUpdate: enqueueState,
 
-		priorityToLocalities: make(map[priorityType]*balancerGroupWithConfig),
-		priorityToState:      make(map[priorityType]*balancer.State),
-		subConnToPriority:    make(map[balancer.SubConn]priorityType),
+		priorityToLocalities:   make(map[priorityType]*balancerGroupWithConfig),
+		priorityToState:        make(map[priorityType]*balancer.State),
+		subConnToPriority:      make(map[balancer.SubConn]priorityType),
+		serviceRequestCountMax: defaultServiceRequestCountMax,
 	}
 	// Don't start balancer group here. Start it when handling the first EDS
 	// response. Otherwise the balancer group will be started with round-robin,
@@ -181,7 +185,7 @@ func (edsImpl *edsBalancerImpl) updateDrops(dropConfig []xdsclient.OverloadDropC
 		// Update picker with old inner picker, new drops.
 		edsImpl.cc.UpdateState(balancer.State{
 			ConnectivityState: edsImpl.innerState.ConnectivityState,
-			Picker:            newDropPicker(edsImpl.innerState.Picker, newDrops, edsImpl.loadReporter, edsImpl.serviceRequestsCounter)},
+			Picker:            newDropPicker(edsImpl.innerState.Picker, newDrops, edsImpl.loadReporter, edsImpl.serviceRequestsCounter, edsImpl.serviceRequestCountMax)},
 		)
 	}
 	edsImpl.pickerMu.Unlock()
@@ -410,13 +414,16 @@ func (edsImpl *edsBalancerImpl) handleSubConnStateChange(sc balancer.SubConn, s 
 	}
 }
 
-// updateConfig handles changes to the circuit breaking configuration.
-func (edsImpl *edsBalancerImpl) updateServiceRequestsCounter(serviceName string) {
+// updateServiceRequestsConfig handles changes to the circuit breaking configuration.
+func (edsImpl *edsBalancerImpl) updateServiceRequestsConfig(serviceName string, max *uint32) {
 	if !env.CircuitBreakingSupport {
 		return
 	}
 	if edsImpl.serviceRequestsCounter == nil || edsImpl.serviceRequestsCounter.ServiceName != serviceName {
 		edsImpl.serviceRequestsCounter = client.GetServiceRequestsCounter(serviceName)
+	}
+	if max != nil {
+		edsImpl.serviceRequestCountMax = *max
 	}
 }
 
@@ -434,7 +441,7 @@ func (edsImpl *edsBalancerImpl) updateState(priority priorityType, s balancer.St
 		defer edsImpl.pickerMu.Unlock()
 		edsImpl.innerState = s
 		// Don't reset drops when it's a state change.
-		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: newDropPicker(s.Picker, edsImpl.drops, edsImpl.loadReporter, edsImpl.serviceRequestsCounter)})
+		edsImpl.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: newDropPicker(s.Picker, edsImpl.drops, edsImpl.loadReporter, edsImpl.serviceRequestsCounter, edsImpl.serviceRequestCountMax)})
 	}
 }
 
@@ -487,14 +494,16 @@ type dropPicker struct {
 	p         balancer.Picker
 	loadStore load.PerClusterReporter
 	counter   *client.ServiceRequestsCounter
+	countMax  uint32
 }
 
-func newDropPicker(p balancer.Picker, drops []*dropper, loadStore load.PerClusterReporter, counter *client.ServiceRequestsCounter) *dropPicker {
+func newDropPicker(p balancer.Picker, drops []*dropper, loadStore load.PerClusterReporter, counter *client.ServiceRequestsCounter, countMax uint32) *dropPicker {
 	return &dropPicker{
 		drops:     drops,
 		p:         p,
 		loadStore: loadStore,
 		counter:   counter,
+		countMax:  countMax,
 	}
 }
 
@@ -517,7 +526,7 @@ func (d *dropPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		return balancer.PickResult{}, status.Errorf(codes.Unavailable, "RPC is dropped")
 	}
 	if d.counter != nil {
-		if err := d.counter.StartRequest(); err != nil {
+		if err := d.counter.StartRequest(d.countMax); err != nil {
 			// Drops by circuit breaking are reported with empty category. They
 			// will be reported only in total drops, but not in per category.
 			if d.loadStore != nil {

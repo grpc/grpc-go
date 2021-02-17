@@ -24,8 +24,6 @@ import (
 	"sync/atomic"
 )
 
-const defaultMaxRequests uint32 = 1024
-
 type servicesRequestsCounter struct {
 	mu       sync.Mutex
 	services map[string]*ServiceRequestsCounter
@@ -39,7 +37,6 @@ var src = &servicesRequestsCounter{
 // service with the provided name.
 type ServiceRequestsCounter struct {
 	ServiceName string
-	maxRequests uint32
 	numRequests uint32
 }
 
@@ -50,33 +47,17 @@ func GetServiceRequestsCounter(serviceName string) *ServiceRequestsCounter {
 	defer src.mu.Unlock()
 	c, ok := src.services[serviceName]
 	if !ok {
-		c = &ServiceRequestsCounter{ServiceName: serviceName, maxRequests: defaultMaxRequests}
+		c = &ServiceRequestsCounter{ServiceName: serviceName}
 		src.services[serviceName] = c
 	}
 	return c
 }
 
-// SetMaxRequests updates the max requests for a service's counter.
-func SetMaxRequests(serviceName string, maxRequests *uint32) {
-	src.mu.Lock()
-	defer src.mu.Unlock()
-	c, ok := src.services[serviceName]
-	if !ok {
-		c = &ServiceRequestsCounter{ServiceName: serviceName}
-		src.services[serviceName] = c
-	}
-	if maxRequests != nil {
-		c.maxRequests = *maxRequests
-	} else {
-		c.maxRequests = defaultMaxRequests
-	}
-}
-
 // StartRequest starts a request for a service, incrementing its number of
 // requests by 1. Returns an error if the max number of requests is exceeded.
-func (c *ServiceRequestsCounter) StartRequest() error {
-	if atomic.LoadUint32(&c.numRequests) >= atomic.LoadUint32(&c.maxRequests) {
-		return fmt.Errorf("max requests %v exceeded on service %v", c.maxRequests, c.ServiceName)
+func (c *ServiceRequestsCounter) StartRequest(max uint32) error {
+	if atomic.LoadUint32(&c.numRequests) >= max {
+		return fmt.Errorf("max requests %v exceeded on service %v", max, c.ServiceName)
 	}
 	atomic.AddUint32(&c.numRequests, 1)
 	return nil
@@ -97,6 +78,5 @@ func ClearCounterForTesting(serviceName string) {
 	if !ok {
 		return
 	}
-	c.maxRequests = defaultMaxRequests
 	c.numRequests = 0
 }

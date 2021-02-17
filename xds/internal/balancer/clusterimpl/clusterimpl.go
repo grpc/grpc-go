@@ -38,8 +38,8 @@ import (
 )
 
 const (
-	clusterImplName = "xds_cluster_impl_experimental"
-	// TODO: define defaultRequestCountMax = 1024
+	clusterImplName        = "xds_cluster_impl_experimental"
+	defaultRequestCountMax = 1024
 )
 
 func init() {
@@ -52,11 +52,12 @@ type clusterImplBB struct{}
 
 func (clusterImplBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &clusterImplBalancer{
-		ClientConn:     cc,
-		bOpts:          bOpts,
-		closed:         grpcsync.NewEvent(),
-		loadWrapper:    loadstore.NewWrapper(),
-		pickerUpdateCh: buffer.NewUnbounded(),
+		ClientConn:      cc,
+		bOpts:           bOpts,
+		closed:          grpcsync.NewEvent(),
+		loadWrapper:     loadstore.NewWrapper(),
+		pickerUpdateCh:  buffer.NewUnbounded(),
+		requestCountMax: defaultRequestCountMax,
 	}
 	b.logger = prefixLogger(b)
 
@@ -105,10 +106,11 @@ type clusterImplBalancer struct {
 	// childState/drops/requestCounter can only be accessed in run(). And run()
 	// is the only goroutine that sends picker to the parent ClientConn. All
 	// requests to update picker need to be sent to pickerUpdateCh.
-	childState balancer.State
-	drops      []*dropper
-	// TODO: add serviceRequestCount and maxRequestCount for circuit breaking.
-	pickerUpdateCh *buffer.Unbounded
+	childState      balancer.State
+	drops           []*dropper
+	requestCounter  *xdsclient.ServiceRequestsCounter
+	requestCountMax uint32
+	pickerUpdateCh  *buffer.Unbounded
 }
 
 // updateLoadStore checks the config for load store, and decides whether it
@@ -198,19 +200,28 @@ func (cib *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState
 		updatePicker = true
 	}
 
-	// TODO: compare cluster name. And update picker if it's changed, because
-	// circuit breaking's stream counter will be different.
-	//
-	// Set `updatePicker` to manually update the picker.
-
-	// TODO: compare upper bound of stream count. And update picker if it's
-	// changed. This is also for circuit breaking.
-	//
-	// Set `updatePicker` to manually update the picker.
+	// Compare cluster name. And update picker if it's changed, because circuit
+	// breaking's stream counter will be different.
+	if cib.config == nil || cib.config.Cluster != newConfig.Cluster {
+		cib.requestCounter = xdsclient.GetServiceRequestsCounter(newConfig.Cluster)
+		updatePicker = true
+	}
+	// Compare upper bound of stream count. And update picker if it's changed.
+	// This is also for circuit breaking.
+	var newRequestCountMax uint32 = 1024
+	if newConfig.MaxConcurrentRequests != nil {
+		newRequestCountMax = *newConfig.MaxConcurrentRequests
+	}
+	if cib.requestCountMax != newRequestCountMax {
+		cib.requestCountMax = newRequestCountMax
+		updatePicker = true
+	}
 
 	if updatePicker {
 		cib.pickerUpdateCh.Put(&dropConfigs{
-			drops: cib.drops,
+			drops:           cib.drops,
+			requestCounter:  cib.requestCounter,
+			requestCountMax: cib.requestCountMax,
 		})
 	}
 
@@ -280,7 +291,9 @@ func (cib *clusterImplBalancer) UpdateState(state balancer.State) {
 }
 
 type dropConfigs struct {
-	drops []*dropper
+	drops           []*dropper
+	requestCounter  *xdsclient.ServiceRequestsCounter
+	requestCountMax uint32
 }
 
 func (cib *clusterImplBalancer) run() {
@@ -293,15 +306,19 @@ func (cib *clusterImplBalancer) run() {
 				cib.childState = u
 				cib.ClientConn.UpdateState(balancer.State{
 					ConnectivityState: cib.childState.ConnectivityState,
-					Picker:            newDropPicker(cib.childState, cib.drops, cib.loadWrapper),
+					Picker: newDropPicker(cib.childState, &dropConfigs{
+						drops:           cib.drops,
+						requestCounter:  cib.requestCounter,
+						requestCountMax: cib.requestCountMax,
+					}, cib.loadWrapper),
 				})
 			case *dropConfigs:
 				cib.drops = u.drops
-				// cib.requestCounter = u.requestCounter
+				cib.requestCounter = u.requestCounter
 				if cib.childState.Picker != nil {
 					cib.ClientConn.UpdateState(balancer.State{
 						ConnectivityState: cib.childState.ConnectivityState,
-						Picker:            newDropPicker(cib.childState, cib.drops, cib.loadWrapper),
+						Picker:            newDropPicker(cib.childState, u, cib.loadWrapper),
 					})
 				}
 			}
