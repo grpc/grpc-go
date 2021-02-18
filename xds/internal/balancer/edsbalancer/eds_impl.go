@@ -419,12 +419,24 @@ func (edsImpl *edsBalancerImpl) updateServiceRequestsConfig(serviceName string, 
 	if !env.CircuitBreakingSupport {
 		return
 	}
+	edsImpl.pickerMu.Lock()
+	var updatePicker bool
 	if edsImpl.serviceRequestsCounter == nil || edsImpl.serviceRequestsCounter.ServiceName != serviceName {
 		edsImpl.serviceRequestsCounter = client.GetServiceRequestsCounter(serviceName)
+		updatePicker = true
 	}
 	if max != nil {
 		edsImpl.serviceRequestCountMax = *max
+		updatePicker = true
 	}
+	if updatePicker && edsImpl.innerState.Picker != nil {
+		// Update picker with old inner picker, new counter and counterMax.
+		edsImpl.cc.UpdateState(balancer.State{
+			ConnectivityState: edsImpl.innerState.ConnectivityState,
+			Picker:            newDropPicker(edsImpl.innerState.Picker, edsImpl.drops, edsImpl.loadReporter, edsImpl.serviceRequestsCounter, edsImpl.serviceRequestCountMax)},
+		)
+	}
+	edsImpl.pickerMu.Unlock()
 }
 
 // updateState first handles priority, and then wraps picker in a drop picker
