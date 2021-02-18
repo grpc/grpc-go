@@ -135,7 +135,7 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 			// The SubConn does a reflect.DeepEqual of the new and old
 			// addresses. So this is a noop if the current address is the same
 			// as the old one (including attributes).
-			sc.UpdateAddresses([]resolver.Address{a})
+			b.cc.UpdateAddresses(sc, []resolver.Address{a})
 		}
 	}
 	for a, sc := range b.subConns {
