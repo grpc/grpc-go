@@ -21,6 +21,7 @@ package handshaker
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -163,7 +164,8 @@ func (s) TestClientHandshake(t *testing.T) {
 			go func() {
 				_, context, err := chs.ClientHandshake(ctx)
 				if err == nil && context == nil {
-					panic("expected non-nil ALTS context")
+					errc <- errors.New("expected non-nil ALTS context")
+					return
 				}
 				errc <- err
 				chs.Close()
@@ -219,7 +221,8 @@ func (s) TestServerHandshake(t *testing.T) {
 			go func() {
 				_, context, err := shs.ServerHandshake(ctx)
 				if err == nil && context == nil {
-					panic("expected non-nil ALTS context")
+					errc <- errors.New("expected non-nil ALTS context")
+					return
 				}
 				errc <- err
 				shs.Close()

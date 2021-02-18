@@ -119,7 +119,7 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 
 	msg := []byte{4, 3, 5, 2}
 	recvBuf := make([]byte, len(msg))
-	done := make(chan error)
+	done := make(chan error, 1)
 	go func() {
 		in, err := blis.Accept()
 		if err != nil {
