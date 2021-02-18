@@ -186,11 +186,8 @@ func (v3c *client) HandleResponse(r proto.Message) (xdsclient.ResourceType, stri
 // callback.
 func (v3c *client) handleLDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
 	update, md, err := xdsclient.UnmarshalListener(resp.GetVersionInfo(), resp.GetResources(), v3c.logger)
-	if err != nil {
-		return err
-	}
 	v3c.parent.NewListeners(update, md)
-	return nil
+	return err
 }
 
 // handleRDSResponse processes an RDS response received from the management
@@ -198,11 +195,8 @@ func (v3c *client) handleLDSResponse(resp *v3discoverypb.DiscoveryResponse) erro
 // invokes the registered watcher callback.
 func (v3c *client) handleRDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
 	update, md, err := xdsclient.UnmarshalRouteConfig(resp.GetVersionInfo(), resp.GetResources(), v3c.logger)
-	if err != nil {
-		return err
-	}
 	v3c.parent.NewRouteConfigs(update, md)
-	return nil
+	return err
 }
 
 // handleCDSResponse processes an CDS response received from the management
@@ -210,18 +204,12 @@ func (v3c *client) handleRDSResponse(resp *v3discoverypb.DiscoveryResponse) erro
 // callback.
 func (v3c *client) handleCDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
 	update, md, err := xdsclient.UnmarshalCluster(resp.GetVersionInfo(), resp.GetResources(), v3c.logger)
-	if err != nil {
-		return err
-	}
 	v3c.parent.NewClusters(update, md)
-	return nil
+	return err
 }
 
 func (v3c *client) handleEDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
 	update, md, err := xdsclient.UnmarshalEndpoints(resp.GetVersionInfo(), resp.GetResources(), v3c.logger)
-	if err != nil {
-		return err
-	}
 	v3c.parent.NewEndpoints(update, md)
-	return nil
+	return err
 }

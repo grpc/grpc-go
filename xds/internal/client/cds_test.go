@@ -571,6 +571,13 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				},
 			},
 		}
+		v2ClusterAny = &anypb.Any{
+			TypeUrl: version.V2ClusterURL,
+			Value: func() []byte {
+				mcl, _ := proto.Marshal(v2Cluster)
+				return mcl
+			}(),
+		}
 
 		v3Cluster = &v3clusterpb.Cluster{
 			Name:                 v3ClusterName,
@@ -590,18 +597,35 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				},
 			},
 		}
+		v3ClusterAny = &anypb.Any{
+			TypeUrl: version.V3ClusterURL,
+			Value: func() []byte {
+				mcl, _ := proto.Marshal(v3Cluster)
+				return mcl
+			}(),
+		}
 	)
+	const testVersion = "test-version-cds"
 
 	tests := []struct {
 		name       string
 		resources  []*anypb.Any
 		wantUpdate map[string]ClusterUpdate
+		wantMD     UpdateMetadata
 		wantErr    bool
 	}{
 		{
 			name:      "non-cluster resource type",
 			resources: []*anypb.Any{{TypeUrl: version.V3HTTPConnManagerURL}},
-			wantErr:   true,
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
+			wantErr: true,
 		},
 		{
 			name: "badly marshaled cluster resource",
@@ -609,6 +633,14 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				{
 					TypeUrl: version.V3ClusterURL,
 					Value:   []byte{1, 2, 3, 4},
+				},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
 				},
 			},
 			wantErr: true,
@@ -620,6 +652,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 					TypeUrl: version.V3ClusterURL,
 					Value: func() []byte {
 						cl := &v3clusterpb.Cluster{
+							Name:                 "test",
 							ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
 						}
 						mcl, _ := proto.Marshal(cl)
@@ -627,67 +660,77 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 					}(),
 				},
 			},
+			wantUpdate: map[string]ClusterUpdate{"test": {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
 			wantErr: true,
 		},
 		{
-			name: "v2 cluster",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ClusterURL,
-					Value: func() []byte {
-						mcl, _ := proto.Marshal(v2Cluster)
-						return mcl
-					}(),
+			name:      "v2 cluster",
+			resources: []*anypb.Any{v2ClusterAny},
+			wantUpdate: map[string]ClusterUpdate{
+				v2ClusterName: {
+					ServiceName: v2Service, EnableLRS: true,
+					Raw: v2ClusterAny,
 				},
 			},
-			wantUpdate: map[string]ClusterUpdate{
-				v2ClusterName: {ServiceName: v2Service, EnableLRS: true},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
 			},
 		},
 		{
-			name: "v3 cluster",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ClusterURL,
-					Value: func() []byte {
-						mcl, _ := proto.Marshal(v3Cluster)
-						return mcl
-					}(),
+			name:      "v3 cluster",
+			resources: []*anypb.Any{v3ClusterAny},
+			wantUpdate: map[string]ClusterUpdate{
+				v3ClusterName: {
+					ServiceName: v3Service, EnableLRS: true,
+					Raw: v3ClusterAny,
 				},
 			},
-			wantUpdate: map[string]ClusterUpdate{
-				v3ClusterName: {ServiceName: v3Service, EnableLRS: true},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
 			},
 		},
 		{
-			name: "multiple clusters",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ClusterURL,
-					Value: func() []byte {
-						mcl, _ := proto.Marshal(v2Cluster)
-						return mcl
-					}(),
+			name:      "multiple clusters",
+			resources: []*anypb.Any{v2ClusterAny, v3ClusterAny},
+			wantUpdate: map[string]ClusterUpdate{
+				v2ClusterName: {
+					ServiceName: v2Service, EnableLRS: true,
+					Raw: v2ClusterAny,
 				},
-				{
-					TypeUrl: version.V3ClusterURL,
-					Value: func() []byte {
-						mcl, _ := proto.Marshal(v3Cluster)
-						return mcl
-					}(),
+				v3ClusterName: {
+					ServiceName: v3Service, EnableLRS: true,
+					Raw: v3ClusterAny,
 				},
 			},
-			wantUpdate: map[string]ClusterUpdate{
-				v2ClusterName: {ServiceName: v2Service, EnableLRS: true},
-				v3ClusterName: {ServiceName: v3Service, EnableLRS: true},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, _, err := UnmarshalCluster("", test.resources, nil)
-			if ((err != nil) != test.wantErr) || !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
-				t.Errorf("UnmarshalCluster(%v) = (%+v, %v) want (%+v, %v)", test.resources, update, err, test.wantUpdate, test.wantErr)
+			update, md, err := UnmarshalCluster(testVersion, test.resources, nil)
+			if (err != nil) != test.wantErr {
+				t.Errorf("UnmarshalCluster(%v) = got err: %v, wantErr: %v", test.resources, err, test.wantErr)
+			}
+			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
+				t.Errorf("UnmarshalCluster(%v) = %v want %v", test.resources, update, test.wantUpdate)
+				t.Errorf(diff)
+			}
+			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreErrorDetails); diff != "" {
+				t.Errorf("UnmarshalCluster(%v) = %v want %v", test.resources, md, test.wantMD)
+				t.Errorf(diff)
 			}
 		})
 	}
