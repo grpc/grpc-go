@@ -61,7 +61,7 @@ func (s) TestLDSWatch(t *testing.T) {
 	}
 
 	wantUpdate := ListenerUpdate{RouteConfigName: testRDSName}
-	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate})
+	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate}, UpdateMetadata{})
 	if err := verifyListenerUpdate(ctx, ldsUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
@@ -70,14 +70,14 @@ func (s) TestLDSWatch(t *testing.T) {
 	client.NewListeners(map[string]ListenerUpdate{
 		testLDSName:  wantUpdate,
 		"randomName": {},
-	})
+	}, UpdateMetadata{})
 	if err := verifyListenerUpdate(ctx, ldsUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
 	// Cancel watch, and send update again.
 	cancelWatch()
-	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate})
+	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate}, UpdateMetadata{})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := ldsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
@@ -128,7 +128,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 	}
 
 	wantUpdate := ListenerUpdate{RouteConfigName: testRDSName}
-	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate})
+	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate}, UpdateMetadata{})
 	for i := 0; i < count; i++ {
 		if err := verifyListenerUpdate(ctx, ldsUpdateChs[i], wantUpdate); err != nil {
 			t.Fatal(err)
@@ -137,7 +137,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 
 	// Cancel the last watch, and send update again.
 	cancelLastWatch()
-	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate})
+	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate}, UpdateMetadata{})
 	for i := 0; i < count-1; i++ {
 		if err := verifyListenerUpdate(ctx, ldsUpdateChs[i], wantUpdate); err != nil {
 			t.Fatal(err)
@@ -205,7 +205,7 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 	client.NewListeners(map[string]ListenerUpdate{
 		testLDSName + "1": wantUpdate1,
 		testLDSName + "2": wantUpdate2,
-	})
+	}, UpdateMetadata{})
 
 	for i := 0; i < count; i++ {
 		if err := verifyListenerUpdate(ctx, ldsUpdateChs[i], wantUpdate1); err != nil {
@@ -246,7 +246,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	}
 
 	wantUpdate := ListenerUpdate{RouteConfigName: testRDSName}
-	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate})
+	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate}, UpdateMetadata{})
 	if err := verifyListenerUpdate(ctx, ldsUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +320,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	client.NewListeners(map[string]ListenerUpdate{
 		testLDSName + "1": wantUpdate1,
 		testLDSName + "2": wantUpdate2,
-	})
+	}, UpdateMetadata{})
 	if err := verifyListenerUpdate(ctx, ldsUpdateCh1, wantUpdate1); err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	}
 
 	// Send another update to remove resource 1.
-	client.NewListeners(map[string]ListenerUpdate{testLDSName + "2": wantUpdate2})
+	client.NewListeners(map[string]ListenerUpdate{testLDSName + "2": wantUpdate2}, UpdateMetadata{})
 
 	// Watcher 1 should get an error.
 	if u, err := ldsUpdateCh1.Receive(ctx); err != nil || ErrType(u.(ldsUpdateErr).err) != ErrorTypeResourceNotFound {
@@ -342,7 +342,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	}
 
 	// Send one more update without resource 1.
-	client.NewListeners(map[string]ListenerUpdate{testLDSName + "2": wantUpdate2})
+	client.NewListeners(map[string]ListenerUpdate{testLDSName + "2": wantUpdate2}, UpdateMetadata{})
 
 	// Watcher 1 should not see an update.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)

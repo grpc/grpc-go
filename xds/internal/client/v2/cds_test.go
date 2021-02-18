@@ -172,7 +172,7 @@ func (s) TestCDSHandleResponseWithoutWatch(t *testing.T) {
 	defer cleanup()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(xdsclient.ResourceType, map[string]interface{}) {},
+		f: func(xdsclient.ResourceType, map[string]interface{}, xdsclient.UpdateMetadata) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)

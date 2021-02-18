@@ -185,11 +185,11 @@ func (v3c *client) HandleResponse(r proto.Message) (xdsclient.ResourceType, stri
 // server. On receipt of a good response, it also invokes the registered watcher
 // callback.
 func (v3c *client) handleLDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
-	update, err := xdsclient.UnmarshalListener(resp.GetResources(), v3c.logger)
+	update, md, err := xdsclient.UnmarshalListener(resp.GetVersionInfo(), resp.GetResources(), v3c.logger)
 	if err != nil {
 		return err
 	}
-	v3c.parent.NewListeners(update)
+	v3c.parent.NewListeners(update, md)
 	return nil
 }
 
@@ -197,11 +197,11 @@ func (v3c *client) handleLDSResponse(resp *v3discoverypb.DiscoveryResponse) erro
 // server. On receipt of a good response, it caches validated resources and also
 // invokes the registered watcher callback.
 func (v3c *client) handleRDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
-	update, err := xdsclient.UnmarshalRouteConfig(resp.GetResources(), v3c.logger)
+	update, md, err := xdsclient.UnmarshalRouteConfig(resp.GetVersionInfo(), resp.GetResources(), v3c.logger)
 	if err != nil {
 		return err
 	}
-	v3c.parent.NewRouteConfigs(update)
+	v3c.parent.NewRouteConfigs(update, md)
 	return nil
 }
 
@@ -209,19 +209,19 @@ func (v3c *client) handleRDSResponse(resp *v3discoverypb.DiscoveryResponse) erro
 // server. On receipt of a good response, it also invokes the registered watcher
 // callback.
 func (v3c *client) handleCDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
-	update, err := xdsclient.UnmarshalCluster(resp.GetResources(), v3c.logger)
+	update, md, err := xdsclient.UnmarshalCluster(resp.GetVersionInfo(), resp.GetResources(), v3c.logger)
 	if err != nil {
 		return err
 	}
-	v3c.parent.NewClusters(update)
+	v3c.parent.NewClusters(update, md)
 	return nil
 }
 
 func (v3c *client) handleEDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
-	update, err := xdsclient.UnmarshalEndpoints(resp.GetResources(), v3c.logger)
+	update, md, err := xdsclient.UnmarshalEndpoints(resp.GetVersionInfo(), resp.GetResources(), v3c.logger)
 	if err != nil {
 		return err
 	}
-	v3c.parent.NewEndpoints(update)
+	v3c.parent.NewEndpoints(update, md)
 	return nil
 }

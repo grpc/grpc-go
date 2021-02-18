@@ -298,7 +298,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, err := UnmarshalListener(test.resources, nil)
+			update, _, err := UnmarshalListener("", test.resources, nil)
 			if ((err != nil) != test.wantErr) || !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
 				t.Errorf("UnmarshalListener(%v) = (%v, %v) want (%v, %v)", test.resources, update, err, test.wantUpdate, test.wantErr)
 			}
@@ -926,7 +926,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotUpdate, err := UnmarshalListener(test.resources, nil)
+			gotUpdate, _, err := UnmarshalListener("", test.resources, nil)
 			if (err != nil) != (test.wantErr != "") {
 				t.Fatalf("UnmarshalListener(%v) = %v wantErr: %q", test.resources, err, test.wantErr)
 			}

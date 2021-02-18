@@ -21,11 +21,19 @@ package v2
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
 
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+	httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
+	listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v2"
 	"github.com/golang/protobuf/proto"
+	anypb "github.com/golang/protobuf/ptypes/any"
+	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -37,14 +45,6 @@ import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/version"
-
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
-	httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
-	listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v2"
-	anypb "github.com/golang/protobuf/ptypes/any"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 )
 
 type s struct {
@@ -331,6 +331,9 @@ var (
 		},
 		TypeUrl: version.V2RouteConfigURL,
 	}
+	// An place holder error. When comparing UpdateErrorMetadata, we only check
+	// if error is nil, and don't compare error content.
+	errPlaceHolder = fmt.Errorf("err place holder")
 )
 
 type watchHandleTestcase struct {
@@ -344,43 +347,43 @@ type watchHandleTestcase struct {
 }
 
 type testUpdateReceiver struct {
-	f func(rType xdsclient.ResourceType, d map[string]interface{})
+	f func(rType xdsclient.ResourceType, d map[string]interface{}, md xdsclient.UpdateMetadata)
 }
 
-func (t *testUpdateReceiver) NewListeners(d map[string]xdsclient.ListenerUpdate) {
+func (t *testUpdateReceiver) NewListeners(d map[string]xdsclient.ListenerUpdate, metadata xdsclient.UpdateMetadata) {
 	dd := make(map[string]interface{})
 	for k, v := range d {
 		dd[k] = v
 	}
-	t.newUpdate(xdsclient.ListenerResource, dd)
+	t.newUpdate(xdsclient.ListenerResource, dd, metadata)
 }
 
-func (t *testUpdateReceiver) NewRouteConfigs(d map[string]xdsclient.RouteConfigUpdate) {
+func (t *testUpdateReceiver) NewRouteConfigs(d map[string]xdsclient.RouteConfigUpdate, metadata xdsclient.UpdateMetadata) {
 	dd := make(map[string]interface{})
 	for k, v := range d {
 		dd[k] = v
 	}
-	t.newUpdate(xdsclient.RouteConfigResource, dd)
+	t.newUpdate(xdsclient.RouteConfigResource, dd, metadata)
 }
 
-func (t *testUpdateReceiver) NewClusters(d map[string]xdsclient.ClusterUpdate) {
+func (t *testUpdateReceiver) NewClusters(d map[string]xdsclient.ClusterUpdate, metadata xdsclient.UpdateMetadata) {
 	dd := make(map[string]interface{})
 	for k, v := range d {
 		dd[k] = v
 	}
-	t.newUpdate(xdsclient.ClusterResource, dd)
+	t.newUpdate(xdsclient.ClusterResource, dd, metadata)
 }
 
-func (t *testUpdateReceiver) NewEndpoints(d map[string]xdsclient.EndpointsUpdate) {
+func (t *testUpdateReceiver) NewEndpoints(d map[string]xdsclient.EndpointsUpdate, metadata xdsclient.UpdateMetadata) {
 	dd := make(map[string]interface{})
 	for k, v := range d {
 		dd[k] = v
 	}
-	t.newUpdate(xdsclient.EndpointsResource, dd)
+	t.newUpdate(xdsclient.EndpointsResource, dd, metadata)
 }
 
-func (t *testUpdateReceiver) newUpdate(rType xdsclient.ResourceType, d map[string]interface{}) {
-	t.f(rType, d)
+func (t *testUpdateReceiver) newUpdate(rType xdsclient.ResourceType, d map[string]interface{}, metadata xdsclient.UpdateMetadata) {
+	t.f(rType, d, metadata)
 }
 
 // testWatchHandle is called to test response handling for each xDS.
@@ -390,6 +393,8 @@ func (t *testUpdateReceiver) newUpdate(rType xdsclient.ResourceType, d map[strin
 // handleXDSResp with responseToHandle (if it's set). It then compares the
 // update received by watch callback with the expected results.
 func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
+	t.Helper()
+
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
@@ -400,7 +405,7 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	gotUpdateCh := testutils.NewChannel()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(rType xdsclient.ResourceType, d map[string]interface{}) {
+		f: func(rType xdsclient.ResourceType, d map[string]interface{}, _ xdsclient.UpdateMetadata) {
 			if rType == test.rType {
 				if u, ok := d[test.resourceName]; ok {
 					gotUpdateCh.Send(updateErr{u, nil})
@@ -526,7 +531,7 @@ func (s) TestV2ClientBackoffAfterRecvError(t *testing.T) {
 
 	callbackCh := make(chan struct{})
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(xdsclient.ResourceType, map[string]interface{}) { close(callbackCh) },
+		f: func(xdsclient.ResourceType, map[string]interface{}, xdsclient.UpdateMetadata) { close(callbackCh) },
 	}, cc, goodNodeProto, clientBackoff, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -571,7 +576,7 @@ func (s) TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 
 	callbackCh := testutils.NewChannel()
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(rType xdsclient.ResourceType, d map[string]interface{}) {
+		f: func(rType xdsclient.ResourceType, d map[string]interface{}, md xdsclient.UpdateMetadata) {
 			if rType == xdsclient.ListenerResource {
 				if u, ok := d[goodLDSTarget1]; ok {
 					t.Logf("Received LDS callback with ldsUpdate {%+v}", u)
@@ -643,7 +648,7 @@ func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 
 	callbackCh := testutils.NewChannel()
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(rType xdsclient.ResourceType, d map[string]interface{}) {
+		f: func(rType xdsclient.ResourceType, d map[string]interface{}, md xdsclient.UpdateMetadata) {
 			if rType == xdsclient.ListenerResource {
 				if u, ok := d[goodLDSTarget1]; ok {
 					t.Logf("Received LDS callback with ldsUpdate {%+v}", u)
