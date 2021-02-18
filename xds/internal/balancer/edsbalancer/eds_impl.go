@@ -425,8 +425,13 @@ func (edsImpl *edsBalancerImpl) updateServiceRequestsConfig(serviceName string, 
 		edsImpl.serviceRequestsCounter = client.GetServiceRequestsCounter(serviceName)
 		updatePicker = true
 	}
+
+	var newMax uint32 = defaultServiceRequestCountMax
 	if max != nil {
-		edsImpl.serviceRequestCountMax = *max
+		newMax = *max
+	}
+	if edsImpl.serviceRequestCountMax != newMax {
+		edsImpl.serviceRequestCountMax = newMax
 		updatePicker = true
 	}
 	if updatePicker && edsImpl.innerState.Picker != nil {
