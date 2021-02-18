@@ -36,6 +36,12 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+func (r *c2pResolver) readChildForTesting() resolver.Resolver {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.child
+}
+
 type emptyResolver struct {
 	resolver.Resolver
 	scheme string
@@ -96,8 +102,8 @@ func TestBuildWithBootstrapEnvSet(t *testing.T) {
 			}
 			rr := r.(*c2pResolver)
 			if err := runWithRetry(func() error {
-				if rr.child != testDNSResolver {
-					return fmt.Errorf("got resolver %#v, want dns resolver", rr.child)
+				if c := rr.readChildForTesting(); c != testDNSResolver {
+					return fmt.Errorf("got resolver %#v, want dns resolver", c)
 				}
 				return nil
 			}); err != nil {
@@ -123,8 +129,8 @@ func TestBuildNotOnGCE(t *testing.T) {
 	}
 	rr := r.(*c2pResolver)
 	if err := runWithRetry(func() error {
-		if rr.child != testDNSResolver {
-			return fmt.Errorf("got resolver %#v, want dns resolver", rr.child)
+		if c := rr.readChildForTesting(); c != testDNSResolver {
+			return fmt.Errorf("got resolver %#v, want dns resolver", c)
 		}
 		return nil
 	}); err != nil {
@@ -167,8 +173,8 @@ func TestBuildXDS(t *testing.T) {
 			}
 			rr := r.(*c2pResolver)
 			if err := runWithRetry(func() error {
-				if rr.child != testXDSResolver {
-					return fmt.Errorf("got resolver %#v, want dns resolver", rr.child)
+				if c := rr.readChildForTesting(); c != testXDSResolver {
+					return fmt.Errorf("got resolver %#v, want xds resolver", c)
 				}
 				return nil
 			}); err != nil {
