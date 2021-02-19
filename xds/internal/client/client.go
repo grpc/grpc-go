@@ -30,7 +30,7 @@ import (
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/proto"
-	anypb "github.com/golang/protobuf/ptypes/any"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc/xds/internal/client/load"
 
@@ -143,7 +143,6 @@ type UpdateHandler interface {
 // ServiceStatus is the status of the update.
 type ServiceStatus int
 
-// Version agnostic resource type constants.
 const (
 	ServiceStatusUnknown ServiceStatus = iota
 	ServiceStatusRequested
@@ -169,8 +168,9 @@ type UpdateMetadata struct {
 	// Status is the status of this resource, e.g. ACKed, NACKed, or
 	// Not_exist(removed).
 	Status ServiceStatus
-	// Version is the version of the xds response. In the future, we may add a
-	// field for different versions of each resource in the same xds response.
+	// Version is the version of the xds response. Note that this is the version
+	// of the resource in use (previous ACKed). If a response is NACKed, the
+	// NACKed version is in ErrState.
 	Version string
 	// Timestamp is when the response is received.
 	Timestamp time.Time
