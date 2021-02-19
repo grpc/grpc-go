@@ -21,7 +21,6 @@ package v2
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -331,9 +330,6 @@ var (
 		},
 		TypeUrl: version.V2RouteConfigURL,
 	}
-	// An place holder error. When comparing UpdateErrorMetadata, we only check
-	// if error is nil, and don't compare error content.
-	errPlaceHolder = fmt.Errorf("err place holder")
 )
 
 type watchHandleTestcase struct {

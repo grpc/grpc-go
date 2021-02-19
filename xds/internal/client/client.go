@@ -164,7 +164,7 @@ type UpdateErrorMetadata struct {
 }
 
 // UpdateMetadata contains the metadata for each update, including timestamp,
-// version, and so on.
+// raw message, and so on.
 type UpdateMetadata struct {
 	// Status is the status of this resource, e.g. ACKed, NACKed, or
 	// Not_exist(removed).
@@ -361,6 +361,46 @@ var newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, op
 		return nil, fmt.Errorf("no client builder for xDS API version: %v", apiVersion)
 	}
 	return cb.Build(cc, opts)
+}
+
+// LDSUpdateWithMD contains the LDSUpdate and metadata, including version, raw
+// message, timestamp.
+//
+// This is to be used for config dump and CSDS, not directly by users (like
+// resolvers/balancers).
+type LDSUpdateWithMD struct {
+	Update ListenerUpdate
+	MD     UpdateMetadata
+}
+
+// RDSUpdateWithMD contains the RDSUpdate and metadata, including version, raw
+// message, timestamp.
+//
+// This is to be used for config dump and CSDS, not directly by users (like
+// resolvers/balancers).
+type RDSUpdateWithMD struct {
+	Update RouteConfigUpdate
+	MD     UpdateMetadata
+}
+
+// CDSUpdateWithMD contains the CDSUpdate and metadata, including version, raw
+// message, timestamp.
+//
+// This is to be used for config dump and CSDS, not directly by users (like
+// resolvers/balancers).
+type CDSUpdateWithMD struct {
+	Update ClusterUpdate
+	MD     UpdateMetadata
+}
+
+// EDSUpdateWithMD contains the EDSUpdate and metadata, including version, raw
+// message, timestamp.
+//
+// This is to be used for config dump and CSDS, not directly by users (like
+// resolvers/balancers).
+type EDSUpdateWithMD struct {
+	Update EndpointsUpdate
+	MD     UpdateMetadata
 }
 
 // clientImpl is the real implementation of the xds client. The exported Client
