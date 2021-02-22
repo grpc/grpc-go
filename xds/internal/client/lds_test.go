@@ -41,6 +41,7 @@ import (
 	v2httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
 	v2listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v2"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	anypb "github.com/golang/protobuf/ptypes/any"
@@ -92,6 +93,11 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			Name:       "customFilter",
 			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: wrappedCustomFilterTypedStructConfig},
 		}
+		customOptionalFilter = &v3httppb.HttpFilter{
+			Name:       "customFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: customFilterConfig},
+			IsOptional: true,
+		}
 		customFilter2 = &v3httppb.HttpFilter{
 			Name:       "customFilter2",
 			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: customFilterConfig},
@@ -100,6 +106,11 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			Name:       "errFilter",
 			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: errFilterConfig},
 		}
+		errOptionalFilter = &v3httppb.HttpFilter{
+			Name:       "errFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: errFilterConfig},
+			IsOptional: true,
+		}
 		clientOnlyCustomFilter = &v3httppb.HttpFilter{
 			Name:       "clientOnlyCustomFilter",
 			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: clientOnlyCustomFilterConfig},
@@ -107,6 +118,15 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		serverOnlyCustomFilter = &v3httppb.HttpFilter{
 			Name:       "serverOnlyCustomFilter",
 			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
+		}
+		unknownFilter = &v3httppb.HttpFilter{
+			Name:       "unknownFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: unknownFilterConfig},
+		}
+		unknownOptionalFilter = &v3httppb.HttpFilter{
+			Name:       "unknownFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: unknownFilterConfig},
+			IsOptional: true,
 		}
 		v3LisWithFilters = func(fs ...*v3httppb.HttpFilter) *anypb.Any {
 			hcm := &v3httppb.HttpConnectionManager{
@@ -343,6 +363,20 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
+			name:      "v3 with optional custom filter",
+			resources: []*anypb.Any{v3LisWithFilters(customOptionalFilter)},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {
+					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
+					HTTPFilters: []HTTPFilter{{
+						Name:   "customFilter",
+						Filter: httpFilter{},
+						Config: filterConfig{Cfg: customFilterConfig},
+					}},
+				},
+			},
+		},
+		{
 			name:      "v3 with custom filter, fault injection disabled",
 			resources: []*anypb.Any{v3LisWithFilters(customFilter)},
 			wantUpdate: map[string]ListenerUpdate{
@@ -396,6 +430,23 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			name:      "v3 with err filter",
 			resources: []*anypb.Any{v3LisWithFilters(errFilter)},
 			wantErr:   true,
+		},
+		{
+			name:      "v3 with optional err filter",
+			resources: []*anypb.Any{v3LisWithFilters(errOptionalFilter)},
+			wantErr:   true,
+		},
+		{
+			name:      "v3 with unknown filter",
+			resources: []*anypb.Any{v3LisWithFilters(unknownFilter)},
+			wantErr:   true,
+		},
+		{
+			name:      "v3 with unknown filter (optional)",
+			resources: []*anypb.Any{v3LisWithFilters(unknownOptionalFilter)},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second},
+			},
 		},
 		{
 			name:      "v3 with error filter, fault injection disabled",
@@ -1189,4 +1240,24 @@ func init() {
 	if err != nil {
 		panic(err.Error())
 	}
+}
+
+var unknownFilterConfig = &anypb.Any{
+	TypeUrl: "unknown.custom.filter",
+	Value:   []byte{1, 2, 3},
+}
+
+func wrappedOptionalFilter(name string) *anypb.Any {
+	filter := &v3routepb.FilterConfig{
+		IsOptional: true,
+		Config: &anypb.Any{
+			TypeUrl: name,
+			Value:   []byte{1, 2, 3},
+		},
+	}
+	w, err := ptypes.MarshalAny(filter)
+	if err != nil {
+		panic("error marshalling any: " + err.Error())
+	}
+	return w
 }

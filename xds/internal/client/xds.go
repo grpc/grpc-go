@@ -144,14 +144,31 @@ func unwrapHTTPFilterConfig(config *anypb.Any) (proto.Message, string, error) {
 	return s, s.GetTypeUrl(), nil
 }
 
-func validateHTTPFilterConfig(cfg *anypb.Any, lds bool) (httpfilter.Filter, httpfilter.FilterConfig, error) {
+func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional, validateServer, validateClient bool) (httpfilter.Filter, httpfilter.FilterConfig, error) {
 	config, typeURL, err := unwrapHTTPFilterConfig(cfg)
 	if err != nil {
 		return nil, nil, err
 	}
 	filterBuilder := httpfilter.Get(typeURL)
 	if filterBuilder == nil {
-		return nil, nil, fmt.Errorf("no filter implementation found for %q", typeURL)
+		err = fmt.Errorf("no filter implementation found for %q", typeURL)
+	} else {
+		if validateServer {
+			if _, ok := filterBuilder.(httpfilter.ServerInterceptorBuilder); !ok {
+				err = fmt.Errorf("not supported server-side")
+			}
+		}
+		if validateClient {
+			if _, ok := filterBuilder.(httpfilter.ClientInterceptorBuilder); !ok {
+				err = fmt.Errorf("not supported client-side")
+			}
+		}
+	}
+	if err != nil {
+		if optional {
+			return nil, nil, nil
+		}
+		return nil, nil, err
 	}
 	parseFunc := filterBuilder.ParseFilterConfig
 	if !lds {
@@ -170,9 +187,23 @@ func processHTTPFilterOverrides(cfgs map[string]*anypb.Any) (map[string]httpfilt
 	}
 	m := make(map[string]httpfilter.FilterConfig)
 	for name, cfg := range cfgs {
-		_, config, err := validateHTTPFilterConfig(cfg, false)
+		optional := false
+		if typeURL := cfg.GetTypeUrl(); typeURL == "type.googleapis.com/envoy.config.route.v3.FilterConfig" {
+			s := new(v3routepb.FilterConfig)
+			if err := ptypes.UnmarshalAny(cfg, s); err != nil {
+				return nil, fmt.Errorf("filter override %q: error unmarshalling FilterConfig: %v", name, err)
+			}
+			cfg = s.GetConfig()
+			optional = s.GetIsOptional()
+		}
+
+		httpFilter, config, err := validateHTTPFilterConfig(cfg, false, optional, false, false)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("filter override %q: %v", name, err)
+		}
+		if httpFilter == nil {
+			// Optional configs are ignored.
+			continue
 		}
 		m[name] = config
 	}
@@ -196,18 +227,13 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 		}
 		seenNames[name] = true
 
-		httpFilter, config, err := validateHTTPFilterConfig(filter.GetTypedConfig(), true)
+		httpFilter, config, err := validateHTTPFilterConfig(filter.GetTypedConfig(), true, filter.GetIsOptional(), server, !server)
 		if err != nil {
 			return nil, err
 		}
-		if server {
-			if _, ok := httpFilter.(httpfilter.ServerInterceptorBuilder); !ok {
-				return nil, fmt.Errorf("httpFilter %q not supported server-side", name)
-			}
-		} else {
-			if _, ok := httpFilter.(httpfilter.ClientInterceptorBuilder); !ok {
-				return nil, fmt.Errorf("httpFilter %q not supported client-side", name)
-			}
+		if httpFilter == nil {
+			// Optional configs are ignored.
+			continue
 		}
 
 		// Save name/config
