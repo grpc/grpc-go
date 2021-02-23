@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/types/known/durationpb"
 
+	v1typepb "github.com/cncf/udpa/go/udpa/type/v1"
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -42,6 +43,7 @@ import (
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	anypb "github.com/golang/protobuf/ptypes/any"
+	spb "github.com/golang/protobuf/ptypes/struct"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 )
 
@@ -84,6 +86,10 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		customFilter = &v3httppb.HttpFilter{
 			Name:       "customFilter",
 			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: customFilterConfig},
+		}
+		typedStructFilter = &v3httppb.HttpFilter{
+			Name:       "customFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: wrappedCustomFilterTypedStructConfig},
 		}
 		customFilter2 = &v3httppb.HttpFilter{
 			Name:       "customFilter2",
@@ -322,6 +328,20 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
+			name:      "v3 with custom filter in typed struct",
+			resources: []*anypb.Any{v3LisWithFilters(typedStructFilter)},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {
+					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
+					HTTPFilters: []HTTPFilter{{
+						Name:   "customFilter",
+						Filter: httpFilter{},
+						Config: filterConfig{Cfg: customFilterTypedStructConfig},
+					}},
+				},
+			},
+		},
+		{
 			name:      "v3 with custom filter, fault injection disabled",
 			resources: []*anypb.Any{v3LisWithFilters(customFilter)},
 			wantUpdate: map[string]ListenerUpdate{
@@ -418,7 +438,11 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				!cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty(),
 					cmp.Transformer("any", func(a *anypb.Any) string {
 						return fmt.Sprintf("%s: %v", a.GetTypeUrl(), a.GetValue())
-					})) {
+					}),
+					cmp.Transformer("typedStruct", func(s *v1typepb.TypedStruct) string {
+						return fmt.Sprintf("%s: %v", s.GetTypeUrl(), s.GetValue())
+					}),
+				) {
 				t.Errorf("UnmarshalListener(%v) = (%v, %v) want (%v, %v)", test.resources, update, err, test.wantUpdate, test.wantErr)
 			}
 
@@ -1153,4 +1177,22 @@ var serverOnlyCustomFilterConfig = &anypb.Any{
 var clientOnlyCustomFilterConfig = &anypb.Any{
 	TypeUrl: "clientOnly.custom.filter",
 	Value:   []byte{1, 2, 3},
+}
+
+var customFilterTypedStructConfig = &v1typepb.TypedStruct{
+	TypeUrl: "custom.filter",
+	Value: &spb.Struct{
+		Fields: map[string]*spb.Value{
+			"foo": {Kind: &spb.Value_StringValue{StringValue: "bar"}},
+		},
+	},
+}
+var wrappedCustomFilterTypedStructConfig *anypb.Any
+
+func init() {
+	var err error
+	wrappedCustomFilterTypedStructConfig, err = ptypes.MarshalAny(customFilterTypedStructConfig)
+	if err != nil {
+		panic(err.Error())
+	}
 }
