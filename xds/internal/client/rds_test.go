@@ -441,6 +441,11 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterConfig}}),
 		},
 		{
+			name:       "good-route-config-with-http-filter-config-typed-struct",
+			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedCustomFilterTypedStructConfig}),
+			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterTypedStructConfig}}),
+		},
+		{
 			name:      "good-route-config-with-http-err-filter-config",
 			rc:        goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": errFilterConfig}),
 			wantError: true,
@@ -886,6 +891,11 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			name:       "with custom HTTP filter config",
 			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": customFilterConfig}),
 			wantRoutes: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterConfig}}),
+		},
+		{
+			name:       "with custom HTTP filter config in typed struct",
+			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedCustomFilterTypedStructConfig}),
+			wantRoutes: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterTypedStructConfig}}),
 		},
 		{
 			name:       "with custom HTTP filter config, FI disabled",

@@ -132,7 +132,7 @@ func processClientSideListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUp
 }
 
 func unwrapHTTPFilterConfig(config *anypb.Any) (proto.Message, string, error) {
-	if typeURL := config.GetTypeUrl(); typeURL != "udpa.type.v1.TypedStruct" {
+	if typeURL := config.GetTypeUrl(); typeURL != "type.googleapis.com/udpa.type.v1.TypedStruct" {
 		return config, typeURL, nil
 	}
 	// The real type name is inside the TypedStruct.
