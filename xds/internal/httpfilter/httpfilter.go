@@ -36,17 +36,19 @@ type FilterConfig interface {
 // ServerInterceptorBuilder or both, indicating it is capable of working on the
 // client side or server side or both, respectively.
 type Filter interface {
-	// TypeURLs are the registered proto message types supported by this filter.
+	// TypeURLs are the proto message types supported by this filter.  A filter
+	// will be registered by each of its supported message types.
 	TypeURLs() []string
-	// ParseFilterConfig parses the provided configuration proto.Message.  This
+	// ParseFilterConfig parses the provided configuration proto.Message from
+	// the LDS configuration of this filter.  This may be an anypb.Any or a
+	// udpa.type.v1.TypedStruct for filters that do not accept a custom type.
+	// The resulting FilterConfig will later be passed to Build.
+	ParseFilterConfig(proto.Message) (FilterConfig, error)
+	// ParseFilterConfigOverride parses the provided override configuration
+	// proto.Message from the RDS override configuration of this filter.  This
 	// may be an anypb.Any or a udpa.type.v1.TypedStruct for filters that do
 	// not accept a custom type.  The resulting FilterConfig will later be
 	// passed to Build.
-	ParseFilterConfig(proto.Message) (FilterConfig, error)
-	// ParseFilterConfigOverrid parses the provided override configuration
-	// proto.Message.  This may be an anypb.Any or a udpa.type.v1.TypedStruct
-	// for filters that do not accept a custom type.  The resulting
-	// FilterConfig will later be passed to Build.
 	ParseFilterConfigOverride(proto.Message) (FilterConfig, error)
 }
 
