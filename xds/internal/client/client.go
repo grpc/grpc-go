@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -194,8 +195,6 @@ type ListenerUpdate struct {
 	// RouteConfigName is the route configuration name corresponding to the
 	// target which is being watched through LDS.
 	RouteConfigName string
-	// SecurityCfg contains security configuration sent by the control plane.
-	SecurityCfg *SecurityConfig
 	// MaxStreamDuration contains the HTTP connection manager's
 	// common_http_protocol_options.max_stream_duration field, or zero if
 	// unset.
@@ -232,10 +231,61 @@ type InboundListenerConfig struct {
 	// Port is the local port on which the inbound listener is expected to
 	// accept incoming connections.
 	Port string
+	// FilterChains is the list of filter chains associated with this listener.
+	FilterChains []*FilterChain
+	// DefaultFilterChain is the filter chain to be used when none of the above
+	// filter chains matches an incoming connection.
+	DefaultFilterChain *FilterChain
 }
 
-func (lu *ListenerUpdate) String() string {
-	return fmt.Sprintf("{RouteConfigName: %q, SecurityConfig: %+v", lu.RouteConfigName, lu.SecurityCfg)
+// FilterChain wraps a set of match criteria and associated security
+// configuration.
+//
+// The actual set filters associated with this filter chain are not captured
+// here, since we do not support these filters on the server yet.
+type FilterChain struct {
+	// Match contains the criteria to use when matching a connection to this
+	// filter chain.
+	Match *FilterChainMatch
+	// SecurityCfg contains transport socket security configuration.
+	SecurityCfg *SecurityConfig
+}
+
+// SourceType specifies the connection source IP match type.
+type SourceType int
+
+const (
+	// SourceTypeAny matches connection attempts from any source.
+	SourceTypeAny SourceType = iota
+	// SourceTypeSameOrLoopback matches connections attempts from the same host.
+	SourceTypeSameOrLoopback
+	// SourceTypeExternal matches connections attempts from a different host.
+	SourceTypeExternal
+)
+
+// FilterChainMatch specifies the match criteria for selecting a specific filter
+// chain of a listener, for an incoming connection.
+//
+// The xDS FilterChainMatch proto specifies 8 match criteria. But we only have a
+// subset of those fields here because we explicitly ignore filter chains whose
+// match criteria specifies values for fields like destination_port,
+// server_names, application_protocols, transport_protocol.
+type FilterChainMatch struct {
+	// DestPrefixRanges specifies a set of IP addresses and prefix lengths to
+	// match the destination address of the incoming connection when the
+	// listener is bound to 0.0.0.0/[::]. If this field is empty, the
+	// destination address is ignored.
+	DestPrefixRanges []net.IP
+	// SourceType specifies the connection source IP match type. Can be any,
+	// local or external network.
+	SourceType SourceType
+	// SourcePrefixRanges specifies a set of IP addresses and prefix lengths to
+	// match the source address of the incoming connection. If this field is
+	// empty, the source address is ignored.
+	SourcePrefixRanges []net.IP
+	// SourcePorts specifies a set of ports to match the source port of the
+	// incoming connection. If this field is empty, the source port is ignored.
+	SourcePorts []uint32
 }
 
 // RouteConfigUpdate contains information received in an RDS response, which is

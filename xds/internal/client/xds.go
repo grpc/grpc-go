@@ -261,13 +261,80 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 		},
 	}
 
-	// Make sure the listener resource contains a single filter chain. We do not
-	// support multiple filter chains and picking the best match from the list.
-	fcs := lis.GetFilterChains()
-	if n := len(fcs); n != 1 {
-		return nil, fmt.Errorf("filter chains count in LDS response does not match expected. Got %d, want 1", n)
+	var filterChains []*FilterChain
+	for _, fc := range lis.GetFilterChains() {
+		filterChain, err := getFilterChain(fc)
+		if err != nil {
+			return nil, err
+		}
+		filterChains = append(filterChains, filterChain)
 	}
-	fc := fcs[0]
+	defaultFilterChain, err := getFilterChain(lis.GetDefaultFilterChain())
+	if err != nil {
+		return nil, err
+	}
+	if len(filterChains) == 0 && defaultFilterChain == nil {
+		return nil, fmt.Errorf("xds: no supported filter chains and no default filter chain")
+	}
+	lu.InboundListenerCfg.FilterChains = filterChains
+	lu.InboundListenerCfg.DefaultFilterChain = defaultFilterChain
+	return lu, nil
+}
+
+// getFilterChain parses the filter chain proto and converts it into the local
+// representation. If fc contains unsupported filter chain match fields, a nil
+// FilterChain object and a nil error are returned. If fc does not parse or
+// contains other invalid data, an non-nil error is returned.
+func getFilterChain(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
+	if fc == nil {
+		return nil, nil
+	}
+
+	// If the match criteria contains unsupported fields, skip the filter chain.
+	fcm := fc.GetFilterChainMatch()
+	if fcm.GetDestinationPort().GetValue() != 0 ||
+		fcm.GetServerNames() != nil ||
+		(fcm.GetTransportProtocol() != "" && fcm.TransportProtocol != "raw_buffer") ||
+		fcm.GetApplicationProtocols() != nil {
+		return nil, nil
+	}
+
+	// Extract the supported match criteria.
+	var dstPrefixRanges []net.IP
+	for _, pr := range fcm.GetPrefixRanges() {
+		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
+		ip, _, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return nil, fmt.Errorf("xds: failed to parse destination prefix range: %+v", pr)
+		}
+		dstPrefixRanges = append(dstPrefixRanges, ip)
+	}
+	var srcType SourceType
+	switch fcm.GetSourceType().String() {
+	case "SAME_IP_OR_LOOPBACK":
+		srcType = SourceTypeSameOrLoopback
+	case "EXTERNAL":
+		srcType = SourceTypeExternal
+	default:
+		srcType = SourceTypeAny
+	}
+	var srcPrefixRanges []net.IP
+	for _, pr := range fcm.GetSourcePrefixRanges() {
+		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
+		ip, _, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return nil, fmt.Errorf("xds: failed to parse source prefix range: %+v", pr)
+		}
+		srcPrefixRanges = append(srcPrefixRanges, ip)
+	}
+	filterChain := &FilterChain{
+		Match: &FilterChainMatch{
+			DestPrefixRanges:   dstPrefixRanges,
+			SourceType:         srcType,
+			SourcePrefixRanges: srcPrefixRanges,
+			SourcePorts:        fcm.GetSourcePorts(),
+		},
+	}
 
 	// If the transport_socket field is not specified, it means that the control
 	// plane has not sent us any security config. This is fine and the server
@@ -275,7 +342,7 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	// xdsCredentials.
 	ts := fc.GetTransportSocket()
 	if ts == nil {
-		return lu, nil
+		return filterChain, nil
 	}
 	if name := ts.GetName(); name != transportSocketName {
 		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
@@ -302,9 +369,8 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	if sc.RequireClientCert && sc.RootInstanceName == "" {
 		return nil, errors.New("security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set")
 	}
-	lu.SecurityCfg = sc
-
-	return lu, nil
+	filterChain.SecurityCfg = sc
+	return filterChain, nil
 }
 
 // UnmarshalRouteConfig processes resources received in an RDS response,
