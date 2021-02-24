@@ -61,6 +61,13 @@ var (
 )
 
 func replaceResolvers() func() {
+	var registerForTesting bool
+	if resolver.Get(c2pScheme) == nil {
+		// If env var to enable c2p is not set, the resolver isn't registered.
+		// Need to register and unregister in defer.
+		registerForTesting = true
+		resolver.Register(&c2pResolverBuilder{})
+	}
 	oldChildB := childBuilders
 	childBuilders = map[string]resolver.Builder{
 		"dns": testDNSResolver,
@@ -68,6 +75,9 @@ func replaceResolvers() func() {
 	}
 	return func() {
 		childBuilders = oldChildB
+		if registerForTesting {
+			resolver.UnregisterForTesting(c2pScheme)
+		}
 	}
 }
 

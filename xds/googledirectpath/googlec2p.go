@@ -98,7 +98,10 @@ var (
 )
 
 func init() {
-	resolver.Register(&c2pResolverBuilder{})
+	// TODO: remove this env var check when c2p resolver is proven stable.
+	if env.C2PResolverSupport {
+		resolver.Register(&c2pResolverBuilder{})
+	}
 }
 
 type c2pResolverBuilder struct{}

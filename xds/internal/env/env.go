@@ -41,6 +41,7 @@ const (
 	circuitBreakingSupportEnv    = "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING"
 	timeoutSupportEnv            = "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT"
 	faultInjectionSupportEnv     = "GRPC_XDS_EXPERIMENTAL_FAULT_INJECTION"
+	c2pResolverSupportEnv        = "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER"
 	clientSideSecuritySupportEnv = "GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT"
 )
 
@@ -68,6 +69,10 @@ var (
 	// FaultInjectionSupport is used to control both fault injection and HTTP
 	// filter support.
 	FaultInjectionSupport = strings.EqualFold(os.Getenv(faultInjectionSupportEnv), "true")
+	// C2PResolverSupport indicates whether support for C2P resolver is enabled.
+	// This can be enabled by setting the environment variable
+	// "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER" to "true".
+	C2PResolverSupport = strings.EqualFold(os.Getenv(c2pResolverSupportEnv), "true")
 	// ClientSideSecuritySupport is used to control processing of security
 	// configuration on the client-side.
 	//
