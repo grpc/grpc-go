@@ -64,17 +64,11 @@ const (
 
 // For overriding in unittests.
 var (
-	onGCE = func() bool {
-		return googlecloud.OnGCE()
-	}
+	onGCE = googlecloud.OnGCE
+
 	newClientWithConfig = func(config *bootstrap.Config) error {
 		_, err := xdsclient.NewWithConfig(config)
 		return err
-	}
-
-	childBuilders = map[string]resolver.Builder{
-		"dns": resolver.Get("dns"),
-		"xds": resolver.Get("xds"),
 	}
 
 	logger = internalgrpclog.NewPrefixLogger(grpclog.Component("directpath"), logPrefix)
@@ -95,6 +89,8 @@ var (
 			},
 		},
 	}
+
+	dnsName, xdsName = "dns", "xds"
 )
 
 func init() {
@@ -106,19 +102,28 @@ func init() {
 
 type c2pResolverBuilder struct{}
 
-// Build helps implement the resolver.Builder interface.
-func (b *c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+func (*c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+	dnsB := resolver.Get(dnsName)
+	if dnsB == nil {
+		return nil, fmt.Errorf("balancer for %q is not registered", dnsName)
+	}
+	xdsB := resolver.Get(xdsName)
+	if xdsB == nil {
+		return nil, fmt.Errorf("balancer for %q is not registered", xdsName)
+	}
 	ret := &c2pResolver{
 		target: t,
 		cc:     cc,
 		opts:   opts,
+
+		dnsB: dnsB,
+		xdsB: xdsB,
 	}
 	// start does I/O. Run it in a goroutine.
 	go ret.start()
 	return ret, nil
 }
 
-// Name helps implement the resolver.Builder interface.
 func (*c2pResolverBuilder) Scheme() string {
 	return c2pScheme
 }
@@ -128,6 +133,9 @@ type c2pResolver struct {
 	cc     resolver.ClientConn
 	opts   resolver.BuildOptions
 
+	dnsB resolver.Builder
+	xdsB resolver.Builder
+
 	mu    sync.Mutex
 	done  bool
 	child resolver.Resolver
@@ -135,7 +143,7 @@ type c2pResolver struct {
 
 func (r *c2pResolver) start() {
 	if !runDirectPath() {
-		r.startChild("dns")
+		r.startChild(r.dnsB)
 		return
 	}
 
@@ -159,19 +167,13 @@ func (r *c2pResolver) start() {
 		return
 	}
 
-	r.startChild("xds")
+	r.startChild(r.xdsB)
 }
 
-func (r *c2pResolver) startChild(scheme string) {
+func (r *c2pResolver) startChild(b resolver.Builder) {
 	t := r.target
-	t.Scheme = scheme
+	t.Scheme = b.Scheme()
 
-	b, ok := childBuilders[scheme]
-	if !ok {
-		logger.Errorf("unknown child scheme: %q", scheme)
-		r.cc.ReportError(fmt.Errorf("unknown child scheme in c2p resolver: %q", scheme))
-		return
-	}
 	child, err := b.Build(t, r.cc, r.opts)
 	if err != nil {
 		r.cc.ReportError(err)
@@ -212,11 +214,5 @@ func (r *c2pResolver) Close() {
 // direct path is enabled if this client is running on GCE, and the normal xDS
 // is not used (bootstrap env vars are not set).
 func runDirectPath() bool {
-	if env.BootstrapFileName != "" || env.BootstrapFileContent != "" {
-		return false
-	}
-	if !onGCE() {
-		return false
-	}
-	return true
+	return env.BootstrapFileName == "" && env.BootstrapFileContent == "" && onGCE()
 }

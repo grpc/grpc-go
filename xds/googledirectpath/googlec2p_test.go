@@ -68,13 +68,21 @@ func replaceResolvers() func() {
 		registerForTesting = true
 		resolver.Register(&c2pResolverBuilder{})
 	}
-	oldChildB := childBuilders
-	childBuilders = map[string]resolver.Builder{
-		"dns": testDNSResolver,
-		"xds": testXDSResolver,
-	}
+	oldDNS := resolver.Get("dns")
+	resolver.Register(testDNSResolver)
+	oldXDS := resolver.Get("xds")
+	resolver.Register(testXDSResolver)
 	return func() {
-		childBuilders = oldChildB
+		if oldDNS != nil {
+			resolver.Register(oldDNS)
+		} else {
+			resolver.UnregisterForTesting("dns")
+		}
+		if oldXDS != nil {
+			resolver.Register(oldXDS)
+		} else {
+			resolver.UnregisterForTesting("xds")
+		}
 		if registerForTesting {
 			resolver.UnregisterForTesting(c2pScheme)
 		}
