@@ -372,46 +372,6 @@ var newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, op
 	return cb.Build(cc, opts)
 }
 
-// LDSUpdateWithMD contains the LDSUpdate and metadata, including version, raw
-// message, timestamp.
-//
-// This is to be used for config dump and CSDS, not directly by users (like
-// resolvers/balancers).
-type LDSUpdateWithMD struct {
-	MD  UpdateMetadata
-	Raw *anypb.Any
-}
-
-// RDSUpdateWithMD contains the RDSUpdate and metadata, including version, raw
-// message, timestamp.
-//
-// This is to be used for config dump and CSDS, not directly by users (like
-// resolvers/balancers).
-type RDSUpdateWithMD struct {
-	MD  UpdateMetadata
-	Raw *anypb.Any
-}
-
-// CDSUpdateWithMD contains the CDSUpdate and metadata, including version, raw
-// message, timestamp.
-//
-// This is to be used for config dump and CSDS, not directly by users (like
-// resolvers/balancers).
-type CDSUpdateWithMD struct {
-	MD  UpdateMetadata
-	Raw *anypb.Any
-}
-
-// EDSUpdateWithMD contains the EDSUpdate and metadata, including version, raw
-// message, timestamp.
-//
-// This is to be used for config dump and CSDS, not directly by users (like
-// resolvers/balancers).
-type EDSUpdateWithMD struct {
-	MD  UpdateMetadata
-	Raw *anypb.Any
-}
-
 // clientImpl is the real implementation of the xds client. The exported Client
 // is a wrapper of this struct with a ref count.
 //

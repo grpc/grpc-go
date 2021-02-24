@@ -78,22 +78,22 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	defer client.Close()
 
 	// Expected unknown.
-	compareDump(t, client.DumpLDS, "", map[string]LDSUpdateWithMD{})
+	compareDump(t, client.DumpLDS, "", map[string]UpdateWithMD{})
 
-	wantRequested := make(map[string]LDSUpdateWithMD)
+	wantRequested := make(map[string]UpdateWithMD)
 	for _, n := range ldsTargets {
 		cancel := client.WatchListener(n, func(update ListenerUpdate, err error) {})
 		defer cancel()
-		wantRequested[n] = LDSUpdateWithMD{MD: UpdateMetadata{Status: ServiceStatusRequested}}
+		wantRequested[n] = UpdateWithMD{MD: UpdateMetadata{Status: ServiceStatusRequested}}
 	}
 	// Expected requested.
 	compareDump(t, client.DumpLDS, "", wantRequested)
 
 	update0 := make(map[string]ListenerUpdate)
-	want0 := make(map[string]LDSUpdateWithMD)
+	want0 := make(map[string]UpdateWithMD)
 	for n, r := range listenerRaws {
 		update0[n] = ListenerUpdate{Raw: r}
-		want0[n] = LDSUpdateWithMD{
+		want0[n] = UpdateWithMD{
 			MD:  UpdateMetadata{Version: testVersion},
 			Raw: r,
 		}
@@ -118,10 +118,10 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	)
 
 	// Expect NACK for [0], but old ACK for [1].
-	wantDump := make(map[string]LDSUpdateWithMD)
+	wantDump := make(map[string]UpdateWithMD)
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
-	wantDump[ldsTargets[0]] = LDSUpdateWithMD{
+	wantDump[ldsTargets[0]] = UpdateWithMD{
 		MD: UpdateMetadata{
 			Version: testVersion,
 			ErrState: &UpdateErrorMetadata{
@@ -132,7 +132,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		Raw: listenerRaws[ldsTargets[0]],
 	}
 
-	wantDump[ldsTargets[1]] = LDSUpdateWithMD{
+	wantDump[ldsTargets[1]] = UpdateWithMD{
 		MD:  UpdateMetadata{Version: testVersion},
 		Raw: listenerRaws[ldsTargets[1]],
 	}
@@ -180,22 +180,22 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	defer client.Close()
 
 	// Expected unknown.
-	compareDump(t, client.DumpRDS, "", map[string]RDSUpdateWithMD{})
+	compareDump(t, client.DumpRDS, "", map[string]UpdateWithMD{})
 
-	wantRequested := make(map[string]RDSUpdateWithMD)
+	wantRequested := make(map[string]UpdateWithMD)
 	for _, n := range rdsTargets {
 		cancel := client.WatchRouteConfig(n, func(update RouteConfigUpdate, err error) {})
 		defer cancel()
-		wantRequested[n] = RDSUpdateWithMD{MD: UpdateMetadata{Status: ServiceStatusRequested}}
+		wantRequested[n] = UpdateWithMD{MD: UpdateMetadata{Status: ServiceStatusRequested}}
 	}
 	// Expected requested.
 	compareDump(t, client.DumpRDS, "", wantRequested)
 
 	update0 := make(map[string]RouteConfigUpdate)
-	want0 := make(map[string]RDSUpdateWithMD)
+	want0 := make(map[string]UpdateWithMD)
 	for n, r := range routeRaws {
 		update0[n] = RouteConfigUpdate{Raw: r}
-		want0[n] = RDSUpdateWithMD{
+		want0[n] = UpdateWithMD{
 			MD:  UpdateMetadata{Version: testVersion},
 			Raw: r,
 		}
@@ -220,10 +220,10 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	)
 
 	// Expect NACK for [0], but old ACK for [1].
-	wantDump := make(map[string]RDSUpdateWithMD)
+	wantDump := make(map[string]UpdateWithMD)
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
-	wantDump[rdsTargets[0]] = RDSUpdateWithMD{
+	wantDump[rdsTargets[0]] = UpdateWithMD{
 		MD: UpdateMetadata{
 			Version: testVersion,
 			ErrState: &UpdateErrorMetadata{
@@ -233,7 +233,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		},
 		Raw: routeRaws[rdsTargets[0]],
 	}
-	wantDump[rdsTargets[1]] = RDSUpdateWithMD{
+	wantDump[rdsTargets[1]] = UpdateWithMD{
 		MD:  UpdateMetadata{Version: testVersion},
 		Raw: routeRaws[rdsTargets[1]],
 	}
@@ -282,22 +282,22 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	defer client.Close()
 
 	// Expected unknown.
-	compareDump(t, client.DumpCDS, "", map[string]CDSUpdateWithMD{})
+	compareDump(t, client.DumpCDS, "", map[string]UpdateWithMD{})
 
-	wantRequested := make(map[string]CDSUpdateWithMD)
+	wantRequested := make(map[string]UpdateWithMD)
 	for _, n := range cdsTargets {
 		cancel := client.WatchCluster(n, func(update ClusterUpdate, err error) {})
 		defer cancel()
-		wantRequested[n] = CDSUpdateWithMD{MD: UpdateMetadata{Status: ServiceStatusRequested}}
+		wantRequested[n] = UpdateWithMD{MD: UpdateMetadata{Status: ServiceStatusRequested}}
 	}
 	// Expected requested.
 	compareDump(t, client.DumpCDS, "", wantRequested)
 
 	update0 := make(map[string]ClusterUpdate)
-	want0 := make(map[string]CDSUpdateWithMD)
+	want0 := make(map[string]UpdateWithMD)
 	for n, r := range clusterRaws {
 		update0[n] = ClusterUpdate{Raw: r}
-		want0[n] = CDSUpdateWithMD{
+		want0[n] = UpdateWithMD{
 			MD:  UpdateMetadata{Version: testVersion},
 			Raw: r,
 		}
@@ -322,10 +322,10 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	)
 
 	// Expect NACK for [0], but old ACK for [1].
-	wantDump := make(map[string]CDSUpdateWithMD)
+	wantDump := make(map[string]UpdateWithMD)
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
-	wantDump[cdsTargets[0]] = CDSUpdateWithMD{
+	wantDump[cdsTargets[0]] = UpdateWithMD{
 		MD: UpdateMetadata{
 			Version: testVersion,
 			ErrState: &UpdateErrorMetadata{
@@ -335,7 +335,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		},
 		Raw: clusterRaws[cdsTargets[0]],
 	}
-	wantDump[cdsTargets[1]] = CDSUpdateWithMD{
+	wantDump[cdsTargets[1]] = UpdateWithMD{
 		MD:  UpdateMetadata{Version: testVersion},
 		Raw: clusterRaws[cdsTargets[1]],
 	}
@@ -370,22 +370,22 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	defer client.Close()
 
 	// Expected unknown.
-	compareDump(t, client.DumpEDS, "", map[string]EDSUpdateWithMD{})
+	compareDump(t, client.DumpEDS, "", map[string]UpdateWithMD{})
 
-	wantRequested := make(map[string]EDSUpdateWithMD)
+	wantRequested := make(map[string]UpdateWithMD)
 	for _, n := range edsTargets {
 		cancel := client.WatchEndpoints(n, func(update EndpointsUpdate, err error) {})
 		defer cancel()
-		wantRequested[n] = EDSUpdateWithMD{MD: UpdateMetadata{Status: ServiceStatusRequested}}
+		wantRequested[n] = UpdateWithMD{MD: UpdateMetadata{Status: ServiceStatusRequested}}
 	}
 	// Expected requested.
 	compareDump(t, client.DumpEDS, "", wantRequested)
 
 	update0 := make(map[string]EndpointsUpdate)
-	want0 := make(map[string]EDSUpdateWithMD)
+	want0 := make(map[string]UpdateWithMD)
 	for n, r := range endpointRaws {
 		update0[n] = EndpointsUpdate{Raw: r}
-		want0[n] = EDSUpdateWithMD{
+		want0[n] = UpdateWithMD{
 			MD:  UpdateMetadata{Version: testVersion},
 			Raw: r,
 		}
@@ -410,10 +410,10 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	)
 
 	// Expect NACK for [0], but old ACK for [1].
-	wantDump := make(map[string]EDSUpdateWithMD)
+	wantDump := make(map[string]UpdateWithMD)
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
-	wantDump[edsTargets[0]] = EDSUpdateWithMD{
+	wantDump[edsTargets[0]] = UpdateWithMD{
 		MD: UpdateMetadata{
 			Version: testVersion,
 			ErrState: &UpdateErrorMetadata{
@@ -423,30 +423,17 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		},
 		Raw: endpointRaws[edsTargets[0]],
 	}
-	wantDump[edsTargets[1]] = EDSUpdateWithMD{
+	wantDump[edsTargets[1]] = UpdateWithMD{
 		MD:  UpdateMetadata{Version: testVersion},
 		Raw: endpointRaws[edsTargets[1]],
 	}
 	compareDump(t, client.DumpEDS, nackVersion, wantDump)
 }
 
-func compareDump(t *testing.T, dumpFunc interface{}, wantVersion string, wantDump interface{}) {
+func compareDump(t *testing.T, dumpFunc func() (string, map[string]UpdateWithMD), wantVersion string, wantDump interface{}) {
 	t.Helper()
 
-	var (
-		v    string
-		dump interface{}
-	)
-	switch dumpFuncT := dumpFunc.(type) {
-	case func() (string, map[string]LDSUpdateWithMD):
-		v, dump = dumpFuncT()
-	case func() (string, map[string]RDSUpdateWithMD):
-		v, dump = dumpFuncT()
-	case func() (string, map[string]CDSUpdateWithMD):
-		v, dump = dumpFuncT()
-	case func() (string, map[string]EDSUpdateWithMD):
-		v, dump = dumpFuncT()
-	}
+	v, dump := dumpFunc()
 	if v != wantVersion {
 		t.Fatalf("Dump returned version %q, want %q", v, wantVersion)
 	}
