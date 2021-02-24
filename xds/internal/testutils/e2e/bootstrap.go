@@ -46,8 +46,8 @@ type BootstrapOptions struct {
 	NodeID string
 	// ServerURI is the address of the management server.
 	ServerURI string
-	// ServerResourceNameID is the Listener resource name to fetch.
-	ServerResourceNameID string
+	// ServerListenerResourceNameTemplate is the Listener resource name to fetch.
+	ServerListenerResourceNameTemplate string
 	// CertificateProviders is the certificate providers configuration.
 	CertificateProviders map[string]json.RawMessage
 }
@@ -79,8 +79,8 @@ func SetupBootstrapFile(opts BootstrapOptions) (func(), error) {
 		Node: node{
 			ID: opts.NodeID,
 		},
-		CertificateProviders:     opts.CertificateProviders,
-		GRPCServerResourceNameID: opts.ServerResourceNameID,
+		CertificateProviders:               opts.CertificateProviders,
+		ServerListenerResourceNameTemplate: opts.ServerListenerResourceNameTemplate,
 	}
 	switch opts.Version {
 	case TransportV2:
@@ -127,10 +127,10 @@ func DefaultFileWatcherConfig(certPath, keyPath, caPath string) map[string]json.
 }
 
 type bootstrapConfig struct {
-	XdsServers               []server                   `json:"xds_servers,omitempty"`
-	Node                     node                       `json:"node,omitempty"`
-	CertificateProviders     map[string]json.RawMessage `json:"certificate_providers,omitempty"`
-	GRPCServerResourceNameID string                     `json:"grpc_server_resource_name_id,omitempty"`
+	XdsServers                         []server                   `json:"xds_servers,omitempty"`
+	Node                               node                       `json:"node,omitempty"`
+	CertificateProviders               map[string]json.RawMessage `json:"certificate_providers,omitempty"`
+	ServerListenerResourceNameTemplate string                     `json:"server_listener_resource_name_template,omitempty"`
 }
 
 type server struct {

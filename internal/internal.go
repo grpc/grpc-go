@@ -65,6 +65,10 @@ var (
 	// gRPC server. An xDS-enabled server needs to know what type of credentials
 	// is configured on the underlying gRPC server. This is set by server.go.
 	GetServerCredentials interface{} // func (*grpc.Server) credentials.TransportCredentials
+	// AddressFromListenerResourceName extracts the listening address encoded in
+	// the Listener resource name on the server side. This is implemented by the
+	// xdsClient code.
+	AddressFromListenerResourceName func(string) (string, string, error)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.

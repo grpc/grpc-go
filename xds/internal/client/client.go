@@ -24,31 +24,44 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"strings"
 	"sync"
 	"time"
 
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
-
-	"google.golang.org/grpc/xds/internal/client/load"
-	"google.golang.org/grpc/xds/internal/httpfilter"
-
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/xds/internal"
+	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/client/load"
+	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 var (
 	m = make(map[version.TransportAPI]APIClientBuilder)
 )
+
+func init() {
+	internal.AddressFromListenerResourceName = func(listenerName string) (string, string, error) {
+		client, err := New()
+		if err != nil {
+			// This should never really happen.
+			return "", "", err
+		}
+		defer client.Close()
+		return client.addressFromListenerResourceName(listenerName)
+	}
+}
 
 // RegisterAPIClientBuilder registers a client builder for xDS transport protocol
 // version specified by b.Version().
@@ -196,6 +209,8 @@ type ListenerUpdate struct {
 	RouteConfigName string
 	// SecurityCfg contains security configuration sent by the control plane.
 	SecurityCfg *SecurityConfig
+	// InboundListenerCfg contains inbound listener configuration.
+	InboundListenerCfg *InboundListenerConfig
 	// MaxStreamDuration contains the HTTP connection manager's
 	// common_http_protocol_options.max_stream_duration field, or zero if
 	// unset.
@@ -219,6 +234,28 @@ type HTTPFilter struct {
 	Filter httpfilter.Filter
 	// Config contains the filter's configuration
 	Config httpfilter.FilterConfig
+}
+
+// InboundListenerConfig contains information about the inbound listener, i.e
+// the server-side listener.
+type InboundListenerConfig struct {
+	// Address is the local address on which the inbound listener is expected to
+	// accept incoming connections.
+	Address string
+	// Port is the local port on which the inbound listener is expected to
+	// accept incoming connections.
+	Port string
+}
+
+// InboundListenerConfig contains information about the inbound listener, i.e
+// the server-side listener.
+type InboundListenerConfig struct {
+	// Address is the local address on which the inbound listener is expected to
+	// accept incoming connections.
+	Address string
+	// Port is the local port on which the inbound listener is expected to
+	// accept incoming connections.
+	Port string
 }
 
 func (lu *ListenerUpdate) String() string {
@@ -385,7 +422,7 @@ type Endpoint struct {
 // Locality contains information of a locality.
 type Locality struct {
 	Endpoints []Endpoint
-	ID        internal.LocalityID
+	ID        xdsinternal.LocalityID
 	Priority  uint32
 	Weight    uint32
 }
@@ -531,6 +568,28 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 // Callers must treat the return value as read-only.
 func (c *Client) BootstrapConfig() *bootstrap.Config {
 	return c.config
+}
+
+func (c *clientImpl) addressFromListenerResourceName(name string) (string, string, error) {
+	template := c.config.ServerListenerResourceNameTemplate
+	if !strings.Contains(template, "%s") {
+		return net.SplitHostPort(template)
+	}
+
+	// This method is only invoked while processing Listener resources on the
+	// server-side, and if we do get to the point where the xDS-enabled gRPC
+	// server has registered a watch for a Listener resource, we know for a fact
+	// that the bootstrap config contains the template for the server listener
+	// resource name. So, we can safely access it here.
+	var hostPort string
+	n, err := fmt.Sscanf(name, template, &hostPort)
+	if err != nil {
+		return "", "", err
+	}
+	if n != 1 {
+		return "", "", fmt.Errorf("failed to extract listening address from listener resource name %q", name)
+	}
+	return net.SplitHostPort(hostPort)
 }
 
 // run is a goroutine for all the callbacks.

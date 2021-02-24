@@ -334,3 +334,68 @@ func (s) TestClientNewSingleton(t *testing.T) {
 		t.Fatalf("New() after Close() should return different API client, got the same %p", apiClient2)
 	}
 }
+
+func (s) TestAddressFromListenerResourceName(t *testing.T) {
+	tests := []struct {
+		desc            string
+		bootstrapConfig *bootstrap.Config
+		lisName         string
+		wantHost        string
+		wantPort        string
+		wantErr         bool
+	}{
+		{
+			desc: "template without token",
+			bootstrapConfig: &bootstrap.Config{
+				BalancerName:                       testXDSServer,
+				Creds:                              grpc.WithInsecure(),
+				NodeProto:                          xdstestutils.EmptyNodeProtoV2,
+				ServerListenerResourceNameTemplate: "[::]:80",
+			},
+			wantHost: "::",
+			wantPort: "80",
+		},
+		{
+			desc: "error case",
+			bootstrapConfig: &bootstrap.Config{
+				BalancerName:                       testXDSServer,
+				Creds:                              grpc.WithInsecure(),
+				NodeProto:                          xdstestutils.EmptyNodeProtoV2,
+				ServerListenerResourceNameTemplate: "grpc/server?xds.resource.listening_address=%s",
+			},
+			lisName: "grpc/server?xds.resource.listening_address=127.0.0.1",
+			wantErr: true,
+		},
+		{
+			desc: "happy case",
+			bootstrapConfig: &bootstrap.Config{
+				BalancerName:                       testXDSServer,
+				Creds:                              grpc.WithInsecure(),
+				NodeProto:                          xdstestutils.EmptyNodeProtoV2,
+				ServerListenerResourceNameTemplate: "grpc/server?xds.resource.listening_address=%s",
+			},
+			lisName:  "grpc/server?xds.resource.listening_address=127.0.0.1:8080",
+			wantHost: "127.0.0.1",
+			wantPort: "8080",
+		},
+	}
+
+	for _, test := range tests {
+		client, err := newWithConfig(test.bootstrapConfig, 0)
+		if err != nil {
+			t.Fatalf("failed to create client: %v", err)
+		}
+		defer client.Close()
+
+		host, port, err := client.addressFromListenerResourceName(test.lisName)
+		if (err != nil) != test.wantErr {
+			t.Fatalf("addressFromListenerResourceName(%q) returned err: %v, wantErr: %v", test.lisName, err, test.wantErr)
+		}
+		if err != nil {
+			return
+		}
+		if host != test.wantHost || port != test.wantPort {
+			t.Fatalf("addressFromListenerResourceName(%q) = (%s, %s), want: (%s, %s)", test.lisName, host, port, test.wantHost, test.wantPort)
+		}
+	}
+}
