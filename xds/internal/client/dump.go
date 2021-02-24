@@ -25,8 +25,8 @@ func (c *clientImpl) DumpLDS() (version string, _ map[string]LDSUpdateWithMD) {
 	ret := make(map[string]LDSUpdateWithMD, len(c.ldsMD))
 	for s, md := range c.ldsMD {
 		ret[s] = LDSUpdateWithMD{
-			Update: c.ldsCache[s],
-			MD:     md,
+			MD:  md,
+			Raw: c.ldsCache[s].Raw,
 		}
 	}
 	return c.ldsVersion, ret
@@ -39,8 +39,8 @@ func (c *clientImpl) DumpRDS() (version string, _ map[string]RDSUpdateWithMD) {
 	ret := make(map[string]RDSUpdateWithMD, len(c.rdsMD))
 	for s, md := range c.rdsMD {
 		ret[s] = RDSUpdateWithMD{
-			Update: c.rdsCache[s],
-			MD:     md,
+			MD:  md,
+			Raw: c.rdsCache[s].Raw,
 		}
 	}
 	return c.rdsVersion, ret
@@ -53,8 +53,8 @@ func (c *clientImpl) DumpCDS() (version string, _ map[string]CDSUpdateWithMD) {
 	ret := make(map[string]CDSUpdateWithMD, len(c.cdsMD))
 	for s, md := range c.cdsMD {
 		ret[s] = CDSUpdateWithMD{
-			Update: c.cdsCache[s],
-			MD:     md,
+			MD:  md,
+			Raw: c.cdsCache[s].Raw,
 		}
 	}
 	return c.cdsVersion, ret
@@ -67,8 +67,8 @@ func (c *clientImpl) DumpEDS() (version string, _ map[string]EDSUpdateWithMD) {
 	ret := make(map[string]EDSUpdateWithMD, len(c.edsMD))
 	for s, md := range c.edsMD {
 		ret[s] = EDSUpdateWithMD{
-			Update: c.edsCache[s],
-			MD:     md,
+			MD:  md,
+			Raw: c.edsCache[s].Raw,
 		}
 	}
 	return c.edsVersion, ret

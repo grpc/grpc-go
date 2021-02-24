@@ -144,10 +144,19 @@ type UpdateHandler interface {
 type ServiceStatus int
 
 const (
+	// ServiceStatusUnknown is the default state, before a watch is started for
+	// the resource.
 	ServiceStatusUnknown ServiceStatus = iota
+	// ServiceStatusRequested is when the watch is started, but before and
+	// response is received.
 	ServiceStatusRequested
+	// ServiceStatusNotExist is when the resource doesn't exist in
+	// state-of-the-world responses (e.g. LDS and CDS), which means the resource
+	// is removed by the management server.
 	ServiceStatusNotExist // Resource is removed in the server, in LDS/CDS.
+	// ServiceStatusACKed is when the resource is ACKed.
 	ServiceStatusACKed
+	// ServiceStatusNACKed is when the resource is NACKed.
 	ServiceStatusNACKed
 )
 
@@ -369,8 +378,8 @@ var newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, op
 // This is to be used for config dump and CSDS, not directly by users (like
 // resolvers/balancers).
 type LDSUpdateWithMD struct {
-	Update ListenerUpdate
-	MD     UpdateMetadata
+	MD  UpdateMetadata
+	Raw *anypb.Any
 }
 
 // RDSUpdateWithMD contains the RDSUpdate and metadata, including version, raw
@@ -379,8 +388,8 @@ type LDSUpdateWithMD struct {
 // This is to be used for config dump and CSDS, not directly by users (like
 // resolvers/balancers).
 type RDSUpdateWithMD struct {
-	Update RouteConfigUpdate
-	MD     UpdateMetadata
+	MD  UpdateMetadata
+	Raw *anypb.Any
 }
 
 // CDSUpdateWithMD contains the CDSUpdate and metadata, including version, raw
@@ -389,8 +398,8 @@ type RDSUpdateWithMD struct {
 // This is to be used for config dump and CSDS, not directly by users (like
 // resolvers/balancers).
 type CDSUpdateWithMD struct {
-	Update ClusterUpdate
-	MD     UpdateMetadata
+	MD  UpdateMetadata
+	Raw *anypb.Any
 }
 
 // EDSUpdateWithMD contains the EDSUpdate and metadata, including version, raw
@@ -399,8 +408,8 @@ type CDSUpdateWithMD struct {
 // This is to be used for config dump and CSDS, not directly by users (like
 // resolvers/balancers).
 type EDSUpdateWithMD struct {
-	Update EndpointsUpdate
-	MD     UpdateMetadata
+	MD  UpdateMetadata
+	Raw *anypb.Any
 }
 
 // clientImpl is the real implementation of the xds client. The exported Client
@@ -419,7 +428,10 @@ type clientImpl struct {
 
 	logger *grpclog.PrefixLogger
 
-	updateCh    *buffer.Unbounded // chan *watcherInfoWithUpdate
+	updateCh *buffer.Unbounded // chan *watcherInfoWithUpdate
+	// All the following maps are to keep the updates/metadata in a cache.
+	// TODO: move them to a separate struct/package, to cleanup the xds_client.
+	// And CSDS handler can be implemented directly by the cache.
 	mu          sync.Mutex
 	ldsWatchers map[string]map[*watchInfo]bool
 	ldsVersion  string

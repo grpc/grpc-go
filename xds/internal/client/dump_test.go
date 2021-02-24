@@ -94,8 +94,8 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	for n, r := range listenerRaws {
 		update0[n] = ListenerUpdate{Raw: r}
 		want0[n] = LDSUpdateWithMD{
-			Update: ListenerUpdate{Raw: r},
-			MD:     UpdateMetadata{Version: testVersion},
+			MD:  UpdateMetadata{Version: testVersion},
+			Raw: r,
 		}
 	}
 	client.NewListeners(update0, UpdateMetadata{Version: testVersion})
@@ -122,7 +122,6 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
 	wantDump[ldsTargets[0]] = LDSUpdateWithMD{
-		Update: ListenerUpdate{Raw: listenerRaws[ldsTargets[0]]},
 		MD: UpdateMetadata{
 			Version: testVersion,
 			ErrState: &UpdateErrorMetadata{
@@ -130,11 +129,12 @@ func (s) TestLDSConfigDump(t *testing.T) {
 				Err:     nackErr,
 			},
 		},
+		Raw: listenerRaws[ldsTargets[0]],
 	}
 
 	wantDump[ldsTargets[1]] = LDSUpdateWithMD{
-		Update: ListenerUpdate{Raw: listenerRaws[ldsTargets[1]]},
-		MD:     UpdateMetadata{Version: testVersion},
+		MD:  UpdateMetadata{Version: testVersion},
+		Raw: listenerRaws[ldsTargets[1]],
 	}
 	compareDump(t, client.DumpLDS, nackVersion, wantDump)
 }
@@ -196,8 +196,8 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	for n, r := range routeRaws {
 		update0[n] = RouteConfigUpdate{Raw: r}
 		want0[n] = RDSUpdateWithMD{
-			Update: RouteConfigUpdate{Raw: r},
-			MD:     UpdateMetadata{Version: testVersion},
+			MD:  UpdateMetadata{Version: testVersion},
+			Raw: r,
 		}
 	}
 	client.NewRouteConfigs(update0, UpdateMetadata{Version: testVersion})
@@ -224,7 +224,6 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
 	wantDump[rdsTargets[0]] = RDSUpdateWithMD{
-		Update: RouteConfigUpdate{Raw: routeRaws[rdsTargets[0]]},
 		MD: UpdateMetadata{
 			Version: testVersion,
 			ErrState: &UpdateErrorMetadata{
@@ -232,10 +231,11 @@ func (s) TestRDSConfigDump(t *testing.T) {
 				Err:     nackErr,
 			},
 		},
+		Raw: routeRaws[rdsTargets[0]],
 	}
 	wantDump[rdsTargets[1]] = RDSUpdateWithMD{
-		Update: RouteConfigUpdate{Raw: routeRaws[rdsTargets[1]]},
-		MD:     UpdateMetadata{Version: testVersion},
+		MD:  UpdateMetadata{Version: testVersion},
+		Raw: routeRaws[rdsTargets[1]],
 	}
 	compareDump(t, client.DumpRDS, nackVersion, wantDump)
 }
@@ -298,8 +298,8 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	for n, r := range clusterRaws {
 		update0[n] = ClusterUpdate{Raw: r}
 		want0[n] = CDSUpdateWithMD{
-			Update: ClusterUpdate{Raw: r},
-			MD:     UpdateMetadata{Version: testVersion},
+			MD:  UpdateMetadata{Version: testVersion},
+			Raw: r,
 		}
 	}
 	client.NewClusters(update0, UpdateMetadata{Version: testVersion})
@@ -326,7 +326,6 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
 	wantDump[cdsTargets[0]] = CDSUpdateWithMD{
-		Update: ClusterUpdate{Raw: clusterRaws[cdsTargets[0]]},
 		MD: UpdateMetadata{
 			Version: testVersion,
 			ErrState: &UpdateErrorMetadata{
@@ -334,10 +333,11 @@ func (s) TestCDSConfigDump(t *testing.T) {
 				Err:     nackErr,
 			},
 		},
+		Raw: clusterRaws[cdsTargets[0]],
 	}
 	wantDump[cdsTargets[1]] = CDSUpdateWithMD{
-		Update: ClusterUpdate{Raw: clusterRaws[cdsTargets[1]]},
-		MD:     UpdateMetadata{Version: testVersion},
+		MD:  UpdateMetadata{Version: testVersion},
+		Raw: clusterRaws[cdsTargets[1]],
 	}
 	compareDump(t, client.DumpCDS, nackVersion, wantDump)
 }
@@ -386,8 +386,8 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	for n, r := range endpointRaws {
 		update0[n] = EndpointsUpdate{Raw: r}
 		want0[n] = EDSUpdateWithMD{
-			Update: EndpointsUpdate{Raw: r},
-			MD:     UpdateMetadata{Version: testVersion},
+			MD:  UpdateMetadata{Version: testVersion},
+			Raw: r,
 		}
 	}
 	client.NewEndpoints(update0, UpdateMetadata{Version: testVersion})
@@ -414,7 +414,6 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
 	wantDump[edsTargets[0]] = EDSUpdateWithMD{
-		Update: EndpointsUpdate{Raw: endpointRaws[edsTargets[0]]},
 		MD: UpdateMetadata{
 			Version: testVersion,
 			ErrState: &UpdateErrorMetadata{
@@ -422,10 +421,11 @@ func (s) TestEDSConfigDump(t *testing.T) {
 				Err:     nackErr,
 			},
 		},
+		Raw: endpointRaws[edsTargets[0]],
 	}
 	wantDump[edsTargets[1]] = EDSUpdateWithMD{
-		Update: EndpointsUpdate{Raw: endpointRaws[edsTargets[1]]},
-		MD:     UpdateMetadata{Version: testVersion},
+		MD:  UpdateMetadata{Version: testVersion},
+		Raw: endpointRaws[edsTargets[1]],
 	}
 	compareDump(t, client.DumpEDS, nackVersion, wantDump)
 }
