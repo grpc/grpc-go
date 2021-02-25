@@ -394,19 +394,19 @@ type clientImpl struct {
 	// And CSDS handler can be implemented directly by the cache.
 	mu          sync.Mutex
 	ldsWatchers map[string]map[*watchInfo]bool
-	ldsVersion  string
+	ldsVersion  string // Only used in CSDS.
 	ldsCache    map[string]ListenerUpdate
 	ldsMD       map[string]UpdateMetadata
 	rdsWatchers map[string]map[*watchInfo]bool
-	rdsVersion  string
+	rdsVersion  string // Only used in CSDS.
 	rdsCache    map[string]RouteConfigUpdate
 	rdsMD       map[string]UpdateMetadata
 	cdsWatchers map[string]map[*watchInfo]bool
-	cdsVersion  string
+	cdsVersion  string // Only used in CSDS.
 	cdsCache    map[string]ClusterUpdate
 	cdsMD       map[string]UpdateMetadata
 	edsWatchers map[string]map[*watchInfo]bool
-	edsVersion  string
+	edsVersion  string // Only used in CSDS.
 	edsCache    map[string]EndpointsUpdate
 	edsMD       map[string]UpdateMetadata
 

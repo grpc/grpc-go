@@ -61,13 +61,14 @@ func rawFromCache(s string, cache interface{}) *anypb.Any {
 	}
 }
 
-func (c *clientImpl) dump(t ResourceType) (version string, _ map[string]UpdateWithMD) {
+func (c *clientImpl) dump(t ResourceType) (string, map[string]UpdateWithMD) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	var (
-		md    map[string]UpdateMetadata
-		cache interface{}
+		version string
+		md      map[string]UpdateMetadata
+		cache   interface{}
 	)
 	switch t {
 	case ListenerResource:
@@ -102,21 +103,21 @@ func (c *clientImpl) dump(t ResourceType) (version string, _ map[string]UpdateWi
 }
 
 // DumpLDS returns the status and contents of LDS.
-func (c *clientImpl) DumpLDS() (version string, _ map[string]UpdateWithMD) {
+func (c *clientImpl) DumpLDS() (string, map[string]UpdateWithMD) {
 	return c.dump(ListenerResource)
 }
 
 // DumpRDS returns the status and contents of RDS.
-func (c *clientImpl) DumpRDS() (version string, _ map[string]UpdateWithMD) {
+func (c *clientImpl) DumpRDS() (string, map[string]UpdateWithMD) {
 	return c.dump(RouteConfigResource)
 }
 
 // DumpCDS returns the status and contents of CDS.
-func (c *clientImpl) DumpCDS() (version string, _ map[string]UpdateWithMD) {
+func (c *clientImpl) DumpCDS() (string, map[string]UpdateWithMD) {
 	return c.dump(ClusterResource)
 }
 
 // DumpEDS returns the status and contents of EDS.
-func (c *clientImpl) DumpEDS() (version string, _ map[string]UpdateWithMD) {
+func (c *clientImpl) DumpEDS() (string, map[string]UpdateWithMD) {
 	return c.dump(EndpointsResource)
 }
