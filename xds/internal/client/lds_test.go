@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	v1typepb "github.com/cncf/udpa/go/udpa/type/v1"
@@ -435,14 +436,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 
 			update, _, err := UnmarshalListener("", test.resources, nil)
 			if ((err != nil) != test.wantErr) ||
-				!cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty(),
-					cmp.Transformer("any", func(a *anypb.Any) string {
-						return fmt.Sprintf("%s: %v", a.GetTypeUrl(), a.GetValue())
-					}),
-					cmp.Transformer("typedStruct", func(s *v1typepb.TypedStruct) string {
-						return fmt.Sprintf("%s: %v", s.GetTypeUrl(), s.GetValue())
-					}),
-				) {
+				!cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty(), protocmp.Transform()) {
 				t.Errorf("UnmarshalListener(%v) = (%v, %v) want (%v, %v)", test.resources, update, err, test.wantUpdate, test.wantErr)
 			}
 
