@@ -19,10 +19,22 @@
 package client
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/xds/internal/env"
+	"google.golang.org/grpc/xds/internal/httpfilter"
+	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/durationpb"
+
+	v1typepb "github.com/cncf/udpa/go/udpa/type/v1"
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -31,14 +43,9 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	anypb "github.com/golang/protobuf/ptypes/any"
+	spb "github.com/golang/protobuf/ptypes/struct"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/grpc/xds/internal/version"
-	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
@@ -77,32 +84,59 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				return mLis
 			}(),
 		}
-		v3Lis = &anypb.Any{
-			TypeUrl: version.V3ListenerURL,
-			Value: func() []byte {
-				cm := &v3httppb.HttpConnectionManager{
-					RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
-						Rds: &v3httppb.Rds{
-							ConfigSource: &v3corepb.ConfigSource{
-								ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
-							},
-							RouteConfigName: v3RouteConfigName,
+		customFilter = &v3httppb.HttpFilter{
+			Name:       "customFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: customFilterConfig},
+		}
+		typedStructFilter = &v3httppb.HttpFilter{
+			Name:       "customFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: wrappedCustomFilterTypedStructConfig},
+		}
+		customFilter2 = &v3httppb.HttpFilter{
+			Name:       "customFilter2",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: customFilterConfig},
+		}
+		errFilter = &v3httppb.HttpFilter{
+			Name:       "errFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: errFilterConfig},
+		}
+		clientOnlyCustomFilter = &v3httppb.HttpFilter{
+			Name:       "clientOnlyCustomFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: clientOnlyCustomFilterConfig},
+		}
+		serverOnlyCustomFilter = &v3httppb.HttpFilter{
+			Name:       "serverOnlyCustomFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
+		}
+		v3LisWithFilters = func(fs ...*v3httppb.HttpFilter) *anypb.Any {
+			hcm := &v3httppb.HttpConnectionManager{
+				RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+					Rds: &v3httppb.Rds{
+						ConfigSource: &v3corepb.ConfigSource{
+							ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
 						},
+						RouteConfigName: v3RouteConfigName,
 					},
-					CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
-						MaxStreamDuration: durationpb.New(time.Second),
-					},
-				}
-				mcm, _ := ptypes.MarshalAny(cm)
-				lis := &v3listenerpb.Listener{
-					Name: v3LDSTarget,
-					ApiListener: &v3listenerpb.ApiListener{
-						ApiListener: mcm,
-					},
-				}
-				mLis, _ := proto.Marshal(lis)
-				return mLis
-			}(),
+				},
+				CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
+					MaxStreamDuration: durationpb.New(time.Second),
+				},
+				HttpFilters: fs,
+			}
+			return &anypb.Any{
+				TypeUrl: version.V3ListenerURL,
+				Value: func() []byte {
+					mcm, _ := ptypes.MarshalAny(hcm)
+					lis := &v3listenerpb.Listener{
+						Name: v3LDSTarget,
+						ApiListener: &v3listenerpb.ApiListener{
+							ApiListener: mcm,
+						},
+					}
+					mLis, _ := proto.Marshal(lis)
+					return mLis
+				}(),
+			}
 		}
 	)
 
@@ -111,6 +145,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		resources  []*anypb.Any
 		wantUpdate map[string]ListenerUpdate
 		wantErr    bool
+		disableFI  bool // disable fault injection
 	}{
 		{
 			name:      "non-listener resource",
@@ -273,6 +308,104 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			name: "empty resource list",
 		},
 		{
+			name:      "v3 with no filters",
+			resources: []*anypb.Any{v3LisWithFilters()},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second},
+			},
+		},
+		{
+			name:      "v3 with custom filter",
+			resources: []*anypb.Any{v3LisWithFilters(customFilter)},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {
+					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
+					HTTPFilters: []HTTPFilter{{
+						Name:   "customFilter",
+						Filter: httpFilter{},
+						Config: filterConfig{Cfg: customFilterConfig},
+					}},
+				},
+			},
+		},
+		{
+			name:      "v3 with custom filter in typed struct",
+			resources: []*anypb.Any{v3LisWithFilters(typedStructFilter)},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {
+					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
+					HTTPFilters: []HTTPFilter{{
+						Name:   "customFilter",
+						Filter: httpFilter{},
+						Config: filterConfig{Cfg: customFilterTypedStructConfig},
+					}},
+				},
+			},
+		},
+		{
+			name:      "v3 with custom filter, fault injection disabled",
+			resources: []*anypb.Any{v3LisWithFilters(customFilter)},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second},
+			},
+			disableFI: true,
+		},
+		{
+			name:      "v3 with two filters with same name",
+			resources: []*anypb.Any{v3LisWithFilters(customFilter, customFilter)},
+			wantErr:   true,
+		},
+		{
+			name:      "v3 with two filters - same type different name",
+			resources: []*anypb.Any{v3LisWithFilters(customFilter, customFilter2)},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {
+					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
+					HTTPFilters: []HTTPFilter{{
+						Name:   "customFilter",
+						Filter: httpFilter{},
+						Config: filterConfig{Cfg: customFilterConfig},
+					}, {
+						Name:   "customFilter2",
+						Filter: httpFilter{},
+						Config: filterConfig{Cfg: customFilterConfig},
+					}},
+				},
+			},
+		},
+		{
+			name:      "v3 with server-only filter",
+			resources: []*anypb.Any{v3LisWithFilters(serverOnlyCustomFilter)},
+			wantErr:   true,
+		},
+		{
+			name:      "v3 with client-only filter",
+			resources: []*anypb.Any{v3LisWithFilters(clientOnlyCustomFilter)},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {
+					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
+					HTTPFilters: []HTTPFilter{{
+						Name:   "clientOnlyCustomFilter",
+						Filter: clientOnlyHTTPFilter{},
+						Config: filterConfig{Cfg: clientOnlyCustomFilterConfig},
+					}},
+				},
+			},
+		},
+		{
+			name:      "v3 with err filter",
+			resources: []*anypb.Any{v3LisWithFilters(errFilter)},
+			wantErr:   true,
+		},
+		{
+			name:      "v3 with error filter, fault injection disabled",
+			resources: []*anypb.Any{v3LisWithFilters(errFilter)},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second},
+			},
+			disableFI: true,
+		},
+		{
 			name:      "v2 listener resource",
 			resources: []*anypb.Any{v2Lis},
 			wantUpdate: map[string]ListenerUpdate{
@@ -281,14 +414,14 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		},
 		{
 			name:      "v3 listener resource",
-			resources: []*anypb.Any{v3Lis},
+			resources: []*anypb.Any{v3LisWithFilters()},
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second},
 			},
 		},
 		{
 			name:      "multiple listener resources",
-			resources: []*anypb.Any{v2Lis, v3Lis},
+			resources: []*anypb.Any{v2Lis, v3LisWithFilters()},
 			wantUpdate: map[string]ListenerUpdate{
 				v2LDSTarget: {RouteConfigName: v2RouteConfigName},
 				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second},
@@ -298,10 +431,16 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			oldFI := env.FaultInjectionSupport
+			env.FaultInjectionSupport = !test.disableFI
+
 			update, _, err := UnmarshalListener("", test.resources, nil)
-			if ((err != nil) != test.wantErr) || !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
+			if ((err != nil) != test.wantErr) ||
+				!cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty(), protocmp.Transform()) {
 				t.Errorf("UnmarshalListener(%v) = (%v, %v) want (%v, %v)", test.resources, update, err, test.wantUpdate, test.wantErr)
 			}
+
+			env.FaultInjectionSupport = oldFI
 		})
 	}
 }
@@ -937,5 +1076,117 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				t.Errorf("UnmarshalListener(%v) = %v want %v", test.resources, gotUpdate, test.wantUpdate)
 			}
 		})
+	}
+}
+
+type filterConfig struct {
+	httpfilter.FilterConfig
+	Cfg      proto.Message
+	Override proto.Message
+}
+
+// httpFilter allows testing the http filter registry and parsing functionality.
+type httpFilter struct {
+	httpfilter.ClientInterceptorBuilder
+	httpfilter.ServerInterceptorBuilder
+}
+
+func (httpFilter) TypeURLs() []string { return []string{"custom.filter"} }
+
+func (httpFilter) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+	return filterConfig{Cfg: cfg}, nil
+}
+
+func (httpFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+	return filterConfig{Override: override}, nil
+}
+
+// errHTTPFilter returns errors no matter what is passed to ParseFilterConfig.
+type errHTTPFilter struct {
+	httpfilter.ClientInterceptorBuilder
+}
+
+func (errHTTPFilter) TypeURLs() []string { return []string{"err.custom.filter"} }
+
+func (errHTTPFilter) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+	return nil, fmt.Errorf("error from ParseFilterConfig")
+}
+
+func (errHTTPFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+	return nil, fmt.Errorf("error from ParseFilterConfigOverride")
+}
+
+func init() {
+	httpfilter.Register(httpFilter{})
+	httpfilter.Register(errHTTPFilter{})
+	httpfilter.Register(serverOnlyHTTPFilter{})
+	httpfilter.Register(clientOnlyHTTPFilter{})
+}
+
+// serverOnlyHTTPFilter does not implement ClientInterceptorBuilder
+type serverOnlyHTTPFilter struct {
+	httpfilter.ServerInterceptorBuilder
+}
+
+func (serverOnlyHTTPFilter) TypeURLs() []string { return []string{"serverOnly.custom.filter"} }
+
+func (serverOnlyHTTPFilter) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+	return filterConfig{Cfg: cfg}, nil
+}
+
+func (serverOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+	return filterConfig{Override: override}, nil
+}
+
+// clientOnlyHTTPFilter does not implement ServerInterceptorBuilder
+type clientOnlyHTTPFilter struct {
+	httpfilter.ClientInterceptorBuilder
+}
+
+func (clientOnlyHTTPFilter) TypeURLs() []string { return []string{"clientOnly.custom.filter"} }
+
+func (clientOnlyHTTPFilter) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+	return filterConfig{Cfg: cfg}, nil
+}
+
+func (clientOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+	return filterConfig{Override: override}, nil
+}
+
+var customFilterConfig = &anypb.Any{
+	TypeUrl: "custom.filter",
+	Value:   []byte{1, 2, 3},
+}
+
+var errFilterConfig = &anypb.Any{
+	TypeUrl: "err.custom.filter",
+	Value:   []byte{1, 2, 3},
+}
+
+var serverOnlyCustomFilterConfig = &anypb.Any{
+	TypeUrl: "serverOnly.custom.filter",
+	Value:   []byte{1, 2, 3},
+}
+
+var clientOnlyCustomFilterConfig = &anypb.Any{
+	TypeUrl: "clientOnly.custom.filter",
+	Value:   []byte{1, 2, 3},
+}
+
+var customFilterTypedStructConfig = &v1typepb.TypedStruct{
+	TypeUrl: "custom.filter",
+	Value: &spb.Struct{
+		Fields: map[string]*spb.Value{
+			"foo": {Kind: &spb.Value_StringValue{StringValue: "bar"}},
+		},
+	},
+}
+var wrappedCustomFilterTypedStructConfig *anypb.Any
+
+func init() {
+	var err error
+	wrappedCustomFilterTypedStructConfig, err = ptypes.MarshalAny(customFilterTypedStructConfig)
+	if err != nil {
+		panic(err.Error())
 	}
 }

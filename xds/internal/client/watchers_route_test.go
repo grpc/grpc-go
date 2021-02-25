@@ -66,7 +66,7 @@ func (s) TestRDSWatch(t *testing.T) {
 		VirtualHosts: []*VirtualHost{
 			{
 				Domains: []string{testLDSName},
-				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+				Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{testCDSName: {Weight: 1}}}},
 			},
 		},
 	}
@@ -138,7 +138,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 		VirtualHosts: []*VirtualHost{
 			{
 				Domains: []string{testLDSName},
-				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+				Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{testCDSName: {Weight: 1}}}},
 			},
 		},
 	}
@@ -217,7 +217,7 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 		VirtualHosts: []*VirtualHost{
 			{
 				Domains: []string{testLDSName},
-				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "1": 1}}},
+				Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{testCDSName + "1": {Weight: 1}}}},
 			},
 		},
 	}
@@ -225,7 +225,7 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 		VirtualHosts: []*VirtualHost{
 			{
 				Domains: []string{testLDSName},
-				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "2": 1}}},
+				Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{testCDSName + "2": {Weight: 1}}}},
 			},
 		},
 	}
@@ -276,7 +276,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 		VirtualHosts: []*VirtualHost{
 			{
 				Domains: []string{testLDSName},
-				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+				Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{testCDSName: {Weight: 1}}}},
 			},
 		},
 	}

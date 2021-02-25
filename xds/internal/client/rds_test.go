@@ -19,6 +19,7 @@
 package client
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -33,6 +34,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"google.golang.org/grpc/xds/internal/env"
+	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
@@ -46,11 +49,42 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		clusterName              = "clusterName"
 	)
 
+	var (
+		goodRouteConfigWithFilterConfigs = func(cfgs map[string]*anypb.Any) *v3routepb.RouteConfiguration {
+			return &v3routepb.RouteConfiguration{
+				Name: routeName,
+				VirtualHosts: []*v3routepb.VirtualHost{{
+					Domains: []string{ldsTarget},
+					Routes: []*v3routepb.Route{{
+						Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
+						Action: &v3routepb.Route_Route{
+							Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+						},
+					}},
+					TypedPerFilterConfig: cfgs,
+				}},
+			}
+		}
+		goodUpdateWithFilterConfigs = func(cfgs map[string]httpfilter.FilterConfig) RouteConfigUpdate {
+			return RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{{
+					Domains: []string{ldsTarget},
+					Routes: []*Route{{
+						Prefix:           newStringP("/"),
+						WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}},
+					}},
+					HTTPFilterConfigOverride: cfgs,
+				}},
+			}
+		}
+	)
+
 	tests := []struct {
 		name       string
 		rc         *v3routepb.RouteConfiguration
 		wantUpdate RouteConfigUpdate
 		wantError  bool
+		disableFI  bool // disable fault injection
 	}{
 		{
 			name: "default-route-match-field-is-nil",
@@ -141,7 +175,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
-						Routes:  []*Route{{Prefix: newStringP("/"), CaseInsensitive: true, Action: map[string]uint32{clusterName: 1}}},
+						Routes:  []*Route{{Prefix: newStringP("/"), CaseInsensitive: true, WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}}},
 					},
 				},
 			},
@@ -183,11 +217,11 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{uninterestingDomain},
-						Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{uninterestingClusterName: 1}}},
+						Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
 					},
 					{
 						Domains: []string{ldsTarget},
-						Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{clusterName: 1}}},
+						Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}}},
 					},
 				},
 			},
@@ -217,7 +251,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
-						Routes:  []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{clusterName: 1}}},
+						Routes:  []*Route{{Prefix: newStringP("/"), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}}},
 					},
 				},
 			},
@@ -287,7 +321,14 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
-						Routes:  []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{"a": 2, "b": 3, "c": 5}}},
+						Routes: []*Route{{
+							Prefix: newStringP("/"),
+							WeightedClusters: map[string]WeightedCluster{
+								"a": {Weight: 2},
+								"b": {Weight: 3},
+								"c": {Weight: 5},
+							},
+						}},
 					},
 				},
 			},
@@ -317,7 +358,11 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
-						Routes:  []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{clusterName: 1}, MaxStreamDuration: newDurationP(time.Second)}},
+						Routes: []*Route{{
+							Prefix:            newStringP("/"),
+							WeightedClusters:  map[string]WeightedCluster{clusterName: {Weight: 1}},
+							MaxStreamDuration: newDurationP(time.Second),
+						}},
 					},
 				},
 			},
@@ -347,7 +392,11 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
-						Routes:  []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{clusterName: 1}, MaxStreamDuration: newDurationP(time.Second)}},
+						Routes: []*Route{{
+							Prefix:            newStringP("/"),
+							WeightedClusters:  map[string]WeightedCluster{clusterName: {Weight: 1}},
+							MaxStreamDuration: newDurationP(time.Second),
+						}},
 					},
 				},
 			},
@@ -377,18 +426,52 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
-						Routes:  []*Route{{Prefix: newStringP("/"), Action: map[string]uint32{clusterName: 1}, MaxStreamDuration: newDurationP(0)}},
+						Routes: []*Route{{
+							Prefix:            newStringP("/"),
+							WeightedClusters:  map[string]WeightedCluster{clusterName: {Weight: 1}},
+							MaxStreamDuration: newDurationP(0),
+						}},
 					},
 				},
 			},
+		},
+		{
+			name:       "good-route-config-with-http-filter-config",
+			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": customFilterConfig}),
+			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterConfig}}),
+		},
+		{
+			name:       "good-route-config-with-http-filter-config-typed-struct",
+			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedCustomFilterTypedStructConfig}),
+			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterTypedStructConfig}}),
+		},
+		{
+			name:      "good-route-config-with-http-err-filter-config",
+			rc:        goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": errFilterConfig}),
+			wantError: true,
+		},
+		{
+			name:       "good-route-config-with-http-err-filter-config-fi-disabled",
+			disableFI:  true,
+			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": errFilterConfig}),
+			wantUpdate: goodUpdateWithFilterConfigs(nil),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil)
-			if (gotError != nil) != test.wantError || !cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty()) {
+			oldFI := env.FaultInjectionSupport
+			env.FaultInjectionSupport = !test.disableFI
+
+			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil, false)
+			if (gotError != nil) != test.wantError ||
+				!cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty(),
+					cmp.Transformer("FilterConfig", func(fc httpfilter.FilterConfig) string {
+						return fmt.Sprint(fc)
+					})) {
 				t.Errorf("generateRDSUpdateFromRouteConfiguration(%+v, %v) returned unexpected, diff (-want +got):\\n%s", test.rc, ldsTarget, cmp.Diff(test.wantUpdate, gotUpdate, cmpopts.EquateEmpty()))
+
+				env.FaultInjectionSupport = oldFI
 			}
 		})
 	}
@@ -518,11 +601,11 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
-							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{uninterestingClusterName: 1}}},
+							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
 						},
 						{
 							Domains: []string{ldsTarget},
-							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}},
+							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}}}},
 						},
 					},
 				},
@@ -536,11 +619,11 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
-							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{uninterestingClusterName: 1}}},
+							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
 						},
 						{
 							Domains: []string{ldsTarget},
-							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}},
+							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}}}},
 						},
 					},
 				},
@@ -554,11 +637,11 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
-							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{uninterestingClusterName: 1}}},
+							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
 						},
 						{
 							Domains: []string{ldsTarget},
-							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}},
+							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}}}},
 						},
 					},
 				},
@@ -566,11 +649,11 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
-							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{uninterestingClusterName: 1}}},
+							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
 						},
 						{
 							Domains: []string{ldsTarget},
-							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}},
+							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}}}},
 						},
 					},
 				},
@@ -588,11 +671,44 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 }
 
 func (s) TestRoutesProtoToSlice(t *testing.T) {
+	var (
+		goodRouteWithFilterConfigs = func(cfgs map[string]*anypb.Any) []*v3routepb.Route {
+			// Sets per-filter config in cluster "B" and in the route.
+			return []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+					CaseSensitive: &wrapperspb.BoolValue{Value: false},
+				},
+				Action: &v3routepb.Route_Route{
+					Route: &v3routepb.RouteAction{
+						ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+							WeightedClusters: &v3routepb.WeightedCluster{
+								Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+									{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}, TypedPerFilterConfig: cfgs},
+									{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
+								},
+								TotalWeight: &wrapperspb.UInt32Value{Value: 100},
+							}}}},
+				TypedPerFilterConfig: cfgs,
+			}}
+		}
+		goodUpdateWithFilterConfigs = func(cfgs map[string]httpfilter.FilterConfig) []*Route {
+			// Sets per-filter config in cluster "B" and in the route.
+			return []*Route{{
+				Prefix:                   newStringP("/"),
+				CaseInsensitive:          true,
+				WeightedClusters:         map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60, HTTPFilterConfigOverride: cfgs}},
+				HTTPFilterConfigOverride: cfgs,
+			}}
+		}
+	)
+
 	tests := []struct {
 		name       string
 		routes     []*v3routepb.Route
 		wantRoutes []*Route
 		wantErr    bool
+		disableFI  bool // disable fault injection
 	}{
 		{
 			name: "no path",
@@ -620,9 +736,9 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 							}}}},
 			}},
 			wantRoutes: []*Route{{
-				Prefix:          newStringP("/"),
-				CaseInsensitive: true,
-				Action:          map[string]uint32{"A": 40, "B": 60},
+				Prefix:           newStringP("/"),
+				CaseInsensitive:  true,
+				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60}},
 			}},
 		},
 		{
@@ -668,8 +784,8 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 						PrefixMatch: newStringP("tv"),
 					},
 				},
-				Fraction: newUInt32P(10000),
-				Action:   map[string]uint32{"A": 40, "B": 60},
+				Fraction:         newUInt32P(10000),
+				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60}},
 			}},
 			wantErr: false,
 		},
@@ -702,8 +818,8 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			// Only one route in the result, because the second one with query
 			// parameters is ignored.
 			wantRoutes: []*Route{{
-				Prefix: newStringP("/a/"),
-				Action: map[string]uint32{"A": 40, "B": 60},
+				Prefix:           newStringP("/a/"),
+				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60}},
 			}},
 			wantErr: false,
 		},
@@ -771,16 +887,49 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name:       "with custom HTTP filter config",
+			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": customFilterConfig}),
+			wantRoutes: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterConfig}}),
+		},
+		{
+			name:       "with custom HTTP filter config in typed struct",
+			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedCustomFilterTypedStructConfig}),
+			wantRoutes: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterTypedStructConfig}}),
+		},
+		{
+			name:       "with custom HTTP filter config, FI disabled",
+			disableFI:  true,
+			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": customFilterConfig}),
+			wantRoutes: goodUpdateWithFilterConfigs(nil),
+		},
+		{
+			name:    "with erroring custom HTTP filter config",
+			routes:  goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": errFilterConfig}),
+			wantErr: true,
+		},
+		{
+			name:       "with erroring custom HTTP filter config, FI disabled",
+			disableFI:  true,
+			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": errFilterConfig}),
+			wantRoutes: goodUpdateWithFilterConfigs(nil),
+		},
 	}
 
 	cmpOpts := []cmp.Option{
 		cmp.AllowUnexported(Route{}, HeaderMatcher{}, Int64Range{}),
 		cmpopts.EquateEmpty(),
+		cmp.Transformer("FilterConfig", func(fc httpfilter.FilterConfig) string {
+			return fmt.Sprint(fc)
+		}),
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := routesProtoToSlice(tt.routes, nil)
+			oldFI := env.FaultInjectionSupport
+			env.FaultInjectionSupport = !tt.disableFI
+
+			got, err := routesProtoToSlice(tt.routes, nil, false)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -788,6 +937,8 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			if !cmp.Equal(got, tt.wantRoutes, cmpOpts...) {
 				t.Errorf("routesProtoToSlice() got = %v, want %v, diff: %v", got, tt.wantRoutes, cmp.Diff(got, tt.wantRoutes, cmpOpts...))
 			}
+
+			env.FaultInjectionSupport = oldFI
 		})
 	}
 }

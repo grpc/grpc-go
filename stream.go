@@ -175,16 +175,27 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 	var mc serviceconfig.MethodConfig
 	var onCommit func()
-	rpcConfig, err := cc.safeConfigSelector.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: method})
+	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method}
+	rpcConfig, err := cc.safeConfigSelector.SelectConfig(rpcInfo)
 	if err != nil {
 		return nil, status.Convert(err).Err()
 	}
+	var doneFunc func()
 	if rpcConfig != nil {
 		if rpcConfig.Context != nil {
 			ctx = rpcConfig.Context
 		}
 		mc = rpcConfig.MethodConfig
 		onCommit = rpcConfig.OnCommitted
+		if rpcConfig.Interceptor != nil {
+			rpcInfo.Context = nil
+			newCtx, cs, err := rpcConfig.Interceptor.NewStream(ctx, rpcInfo, iresolver.NOPClientStream{})
+			if err != nil {
+				return nil, status.Convert(err).Err()
+			}
+			ctx = newCtx
+			doneFunc = cs.Done
+		}
 	}
 
 	if mc.WaitForReady != nil {
@@ -223,6 +234,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		Host:           cc.authority,
 		Method:         method,
 		ContentSubtype: c.contentSubtype,
+		DoneFunc:       doneFunc,
 	}
 
 	// Set our outgoing compression according to the UseCompressor CallOption, if
