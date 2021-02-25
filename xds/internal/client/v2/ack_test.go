@@ -47,7 +47,7 @@ func startXDSV2Client(t *testing.T, cc *grpc.ClientConn) (v2c *client, cbLDS, cb
 	cbCDS = testutils.NewChannel()
 	cbEDS = testutils.NewChannel()
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(rType xdsclient.ResourceType, d map[string]interface{}) {
+		f: func(rType xdsclient.ResourceType, d map[string]interface{}, md xdsclient.UpdateMetadata) {
 			t.Logf("Received %v callback with {%+v}", rType, d)
 			switch rType {
 			case xdsclient.ListenerResource:

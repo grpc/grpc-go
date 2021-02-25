@@ -685,7 +685,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, err := UnmarshalCluster(test.resources, nil)
+			update, _, err := UnmarshalCluster("", test.resources, nil)
 			if ((err != nil) != test.wantErr) || !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
 				t.Errorf("UnmarshalCluster(%v) = (%+v, %v) want (%+v, %v)", test.resources, update, err, test.wantUpdate, test.wantErr)
 			}

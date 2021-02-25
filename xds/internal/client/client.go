@@ -30,6 +30,7 @@ import (
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc/xds/internal/client/load"
 
@@ -129,14 +130,61 @@ type loadReportingOptions struct {
 // resource updates from an APIClient for a specific version.
 type UpdateHandler interface {
 	// NewListeners handles updates to xDS listener resources.
-	NewListeners(map[string]ListenerUpdate)
+	NewListeners(map[string]ListenerUpdate, UpdateMetadata)
 	// NewRouteConfigs handles updates to xDS RouteConfiguration resources.
-	NewRouteConfigs(map[string]RouteConfigUpdate)
+	NewRouteConfigs(map[string]RouteConfigUpdate, UpdateMetadata)
 	// NewClusters handles updates to xDS Cluster resources.
-	NewClusters(map[string]ClusterUpdate)
+	NewClusters(map[string]ClusterUpdate, UpdateMetadata)
 	// NewEndpoints handles updates to xDS ClusterLoadAssignment (or tersely
 	// referred to as Endpoints) resources.
-	NewEndpoints(map[string]EndpointsUpdate)
+	NewEndpoints(map[string]EndpointsUpdate, UpdateMetadata)
+}
+
+// ServiceStatus is the status of the update.
+type ServiceStatus int
+
+const (
+	// ServiceStatusUnknown is the default state, before a watch is started for
+	// the resource.
+	ServiceStatusUnknown ServiceStatus = iota
+	// ServiceStatusRequested is when the watch is started, but before and
+	// response is received.
+	ServiceStatusRequested
+	// ServiceStatusNotExist is when the resource doesn't exist in
+	// state-of-the-world responses (e.g. LDS and CDS), which means the resource
+	// is removed by the management server.
+	ServiceStatusNotExist // Resource is removed in the server, in LDS/CDS.
+	// ServiceStatusACKed is when the resource is ACKed.
+	ServiceStatusACKed
+	// ServiceStatusNACKed is when the resource is NACKed.
+	ServiceStatusNACKed
+)
+
+// UpdateErrorMetadata is part of UpdateMetadata. It contains the error state
+// when a response is NACKed.
+type UpdateErrorMetadata struct {
+	// Version is the version of the NACKed response.
+	Version string
+	// Err contains why the response was NACKed.
+	Err error
+	// Timestamp is when the NACKed response was received.
+	Timestamp time.Time
+}
+
+// UpdateMetadata contains the metadata for each update, including timestamp,
+// raw message, and so on.
+type UpdateMetadata struct {
+	// Status is the status of this resource, e.g. ACKed, NACKed, or
+	// Not_exist(removed).
+	Status ServiceStatus
+	// Version is the version of the xds response. Note that this is the version
+	// of the resource in use (previous ACKed). If a response is NACKed, the
+	// NACKed version is in ErrState.
+	Version string
+	// Timestamp is when the response is received.
+	Timestamp time.Time
+	// ErrState is set when the update is NACKed.
+	ErrState *UpdateErrorMetadata
 }
 
 // ListenerUpdate contains information received in an LDS response, which is of
@@ -151,6 +199,9 @@ type ListenerUpdate struct {
 	// common_http_protocol_options.max_stream_duration field, or zero if
 	// unset.
 	MaxStreamDuration time.Duration
+
+	// Raw is the resource from the xds response.
+	Raw *anypb.Any
 }
 
 func (lu *ListenerUpdate) String() string {
@@ -161,6 +212,9 @@ func (lu *ListenerUpdate) String() string {
 // of interest to the registered RDS watcher.
 type RouteConfigUpdate struct {
 	VirtualHosts []*VirtualHost
+
+	// Raw is the resource from the xds response.
+	Raw *anypb.Any
 }
 
 // VirtualHost contains the routes for a list of Domains.
@@ -255,6 +309,9 @@ type ClusterUpdate struct {
 	SecurityCfg *SecurityConfig
 	// MaxRequests for circuit breaking, if any (otherwise nil).
 	MaxRequests *uint32
+
+	// Raw is the resource from the xds response.
+	Raw *anypb.Any
 }
 
 // OverloadDropConfig contains the config to drop overloads.
@@ -301,6 +358,9 @@ type Locality struct {
 type EndpointsUpdate struct {
 	Drops      []OverloadDropConfig
 	Localities []Locality
+
+	// Raw is the resource from the xds response.
+	Raw *anypb.Any
 }
 
 // Function to be overridden in tests.
@@ -328,16 +388,27 @@ type clientImpl struct {
 
 	logger *grpclog.PrefixLogger
 
-	updateCh    *buffer.Unbounded // chan *watcherInfoWithUpdate
+	updateCh *buffer.Unbounded // chan *watcherInfoWithUpdate
+	// All the following maps are to keep the updates/metadata in a cache.
+	// TODO: move them to a separate struct/package, to cleanup the xds_client.
+	// And CSDS handler can be implemented directly by the cache.
 	mu          sync.Mutex
 	ldsWatchers map[string]map[*watchInfo]bool
+	ldsVersion  string // Only used in CSDS.
 	ldsCache    map[string]ListenerUpdate
+	ldsMD       map[string]UpdateMetadata
 	rdsWatchers map[string]map[*watchInfo]bool
+	rdsVersion  string // Only used in CSDS.
 	rdsCache    map[string]RouteConfigUpdate
+	rdsMD       map[string]UpdateMetadata
 	cdsWatchers map[string]map[*watchInfo]bool
+	cdsVersion  string // Only used in CSDS.
 	cdsCache    map[string]ClusterUpdate
+	cdsMD       map[string]UpdateMetadata
 	edsWatchers map[string]map[*watchInfo]bool
+	edsVersion  string // Only used in CSDS.
 	edsCache    map[string]EndpointsUpdate
+	edsMD       map[string]UpdateMetadata
 
 	// Changes to map lrsClients and the lrsClient inside the map need to be
 	// protected by lrsMu.
@@ -383,12 +454,16 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 		updateCh:    buffer.NewUnbounded(),
 		ldsWatchers: make(map[string]map[*watchInfo]bool),
 		ldsCache:    make(map[string]ListenerUpdate),
+		ldsMD:       make(map[string]UpdateMetadata),
 		rdsWatchers: make(map[string]map[*watchInfo]bool),
 		rdsCache:    make(map[string]RouteConfigUpdate),
+		rdsMD:       make(map[string]UpdateMetadata),
 		cdsWatchers: make(map[string]map[*watchInfo]bool),
 		cdsCache:    make(map[string]ClusterUpdate),
+		cdsMD:       make(map[string]UpdateMetadata),
 		edsWatchers: make(map[string]map[*watchInfo]bool),
 		edsCache:    make(map[string]EndpointsUpdate),
+		edsMD:       make(map[string]UpdateMetadata),
 		lrsClients:  make(map[string]*lrsClient),
 	}
 

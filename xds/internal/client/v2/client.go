@@ -185,11 +185,11 @@ func (v2c *client) HandleResponse(r proto.Message) (xdsclient.ResourceType, stri
 // server. On receipt of a good response, it also invokes the registered watcher
 // callback.
 func (v2c *client) handleLDSResponse(resp *v2xdspb.DiscoveryResponse) error {
-	update, err := xdsclient.UnmarshalListener(resp.GetResources(), v2c.logger)
+	update, md, err := xdsclient.UnmarshalListener(resp.GetVersionInfo(), resp.GetResources(), v2c.logger)
 	if err != nil {
 		return err
 	}
-	v2c.parent.NewListeners(update)
+	v2c.parent.NewListeners(update, md)
 	return nil
 }
 
@@ -197,11 +197,11 @@ func (v2c *client) handleLDSResponse(resp *v2xdspb.DiscoveryResponse) error {
 // server. On receipt of a good response, it caches validated resources and also
 // invokes the registered watcher callback.
 func (v2c *client) handleRDSResponse(resp *v2xdspb.DiscoveryResponse) error {
-	update, err := xdsclient.UnmarshalRouteConfig(resp.GetResources(), v2c.logger)
+	update, md, err := xdsclient.UnmarshalRouteConfig(resp.GetVersionInfo(), resp.GetResources(), v2c.logger)
 	if err != nil {
 		return err
 	}
-	v2c.parent.NewRouteConfigs(update)
+	v2c.parent.NewRouteConfigs(update, md)
 	return nil
 }
 
@@ -209,19 +209,19 @@ func (v2c *client) handleRDSResponse(resp *v2xdspb.DiscoveryResponse) error {
 // server. On receipt of a good response, it also invokes the registered watcher
 // callback.
 func (v2c *client) handleCDSResponse(resp *v2xdspb.DiscoveryResponse) error {
-	update, err := xdsclient.UnmarshalCluster(resp.GetResources(), v2c.logger)
+	update, md, err := xdsclient.UnmarshalCluster(resp.GetVersionInfo(), resp.GetResources(), v2c.logger)
 	if err != nil {
 		return err
 	}
-	v2c.parent.NewClusters(update)
+	v2c.parent.NewClusters(update, md)
 	return nil
 }
 
 func (v2c *client) handleEDSResponse(resp *v2xdspb.DiscoveryResponse) error {
-	update, err := xdsclient.UnmarshalEndpoints(resp.GetResources(), v2c.logger)
+	update, md, err := xdsclient.UnmarshalEndpoints(resp.GetVersionInfo(), resp.GetResources(), v2c.logger)
 	if err != nil {
 		return err
 	}
-	v2c.parent.NewEndpoints(update)
+	v2c.parent.NewEndpoints(update, md)
 	return nil
 }
