@@ -58,6 +58,7 @@ func UnmarshalListener(_ string, resources []*anypb.Any, logger *grpclog.PrefixL
 		if !IsListenerResource(r.GetTypeUrl()) {
 			return nil, UpdateMetadata{}, fmt.Errorf("xds: unexpected resource type: %q in LDS response", r.GetTypeUrl())
 		}
+		// TODO: Pass version.TransportAPI instead of relying upon the type URL
 		v2 := r.GetTypeUrl() == version.V2ListenerURL
 		lis := &v3listenerpb.Listener{}
 		if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
@@ -295,7 +296,7 @@ func getAddressFromName(name string) (host string, port string, err error) {
 // validates them, and transforms them into a native struct which contains only
 // fields we are interested in. The provided hostname determines the route
 // configuration resources of interest.
-func UnmarshalRouteConfig(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdate, UpdateMetadata, error) {
+func UnmarshalRouteConfig(_ string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdate, UpdateMetadata, error) {
 	update := make(map[string]RouteConfigUpdate)
 	for _, r := range resources {
 		if !IsRouteConfigResource(r.GetTypeUrl()) {
@@ -307,8 +308,10 @@ func UnmarshalRouteConfig(version string, resources []*anypb.Any, logger *grpclo
 		}
 		logger.Infof("Resource with name: %v, type: %T, contains: %v.", rc.GetName(), rc, rc)
 
+		// TODO: Pass version.TransportAPI instead of relying upon the type URL
+		v2 := r.GetTypeUrl() == version.V2RouteConfigURL
 		// Use the hostname (resourceName for LDS) to find the routes.
-		u, err := generateRDSUpdateFromRouteConfiguration(rc, logger)
+		u, err := generateRDSUpdateFromRouteConfiguration(rc, logger, v2)
 		if err != nil {
 			return nil, UpdateMetadata{}, fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v with err: %v", rc, err)
 		}
@@ -333,27 +336,30 @@ func UnmarshalRouteConfig(version string, resources []*anypb.Any, logger *grpclo
 // field must be empty and whose route field must be set.  Inside that route
 // message, the cluster field will contain the clusterName or weighted clusters
 // we are looking for.
-func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, logger *grpclog.PrefixLogger) (RouteConfigUpdate, error) {
+func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, logger *grpclog.PrefixLogger, v2 bool) (RouteConfigUpdate, error) {
 	var vhs []*VirtualHost
 	for _, vh := range rc.GetVirtualHosts() {
-		routes, err := routesProtoToSlice(vh.Routes, logger)
+		routes, err := routesProtoToSlice(vh.Routes, logger, v2)
 		if err != nil {
 			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
 		}
-		cfgs, err := processHTTPFilterOverrides(vh.GetTypedPerFilterConfig())
-		if err != nil {
-			return RouteConfigUpdate{}, fmt.Errorf("virtual host %+v: %v", vh, err)
+		vhOut := &VirtualHost{
+			Domains: vh.GetDomains(),
+			Routes:  routes,
 		}
-		vhs = append(vhs, &VirtualHost{
-			Domains:                  vh.GetDomains(),
-			Routes:                   routes,
-			HTTPFilterConfigOverride: cfgs,
-		})
+		if !v2 {
+			cfgs, err := processHTTPFilterOverrides(vh.GetTypedPerFilterConfig())
+			if err != nil {
+				return RouteConfigUpdate{}, fmt.Errorf("virtual host %+v: %v", vh, err)
+			}
+			vhOut.HTTPFilterConfigOverride = cfgs
+		}
+		vhs = append(vhs, vhOut)
 	}
 	return RouteConfigUpdate{VirtualHosts: vhs}, nil
 }
 
-func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger) ([]*Route, error) {
+func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger, v2 bool) ([]*Route, error) {
 	var routesRet []*Route
 
 	for _, r := range routes {
@@ -442,14 +448,15 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 				if w == 0 {
 					continue
 				}
-				cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
-				if err != nil {
-					return nil, fmt.Errorf("route %+v, action %+v: %v", r, a, err)
+				wc := WeightedCluster{Weight: w}
+				if !v2 {
+					cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
+					if err != nil {
+						return nil, fmt.Errorf("route %+v, action %+v: %v", r, a, err)
+					}
+					wc.HTTPFilterConfigOverride = cfgs
 				}
-				route.WeightedClusters[c.GetName()] = WeightedCluster{
-					Weight:                   w,
-					HTTPFilterConfigOverride: cfgs,
-				}
+				route.WeightedClusters[c.GetName()] = wc
 				totalWeight += w
 			}
 			if totalWeight != wcs.GetTotalWeight().GetValue() {
@@ -473,11 +480,13 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger)
 			route.MaxStreamDuration = &d
 		}
 
-		cfgs, err := processHTTPFilterOverrides(r.GetTypedPerFilterConfig())
-		if err != nil {
-			return nil, fmt.Errorf("route %+v: %v", r, err)
+		if !v2 {
+			cfgs, err := processHTTPFilterOverrides(r.GetTypedPerFilterConfig())
+			if err != nil {
+				return nil, fmt.Errorf("route %+v: %v", r, err)
+			}
+			route.HTTPFilterConfigOverride = cfgs
 		}
-		route.HTTPFilterConfigOverride = cfgs
 		routesRet = append(routesRet, &route)
 	}
 	return routesRet, nil

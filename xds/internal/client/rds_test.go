@@ -463,7 +463,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			oldFI := env.FaultInjectionSupport
 			env.FaultInjectionSupport = !test.disableFI
 
-			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil)
+			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil, false)
 			if (gotError != nil) != test.wantError ||
 				!cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty(),
 					cmp.Transformer("FilterConfig", func(fc httpfilter.FilterConfig) string {
@@ -929,7 +929,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			oldFI := env.FaultInjectionSupport
 			env.FaultInjectionSupport = !tt.disableFI
 
-			got, err := routesProtoToSlice(tt.routes, nil)
+			got, err := routesProtoToSlice(tt.routes, nil, false)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 				return
