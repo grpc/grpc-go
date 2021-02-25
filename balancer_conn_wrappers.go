@@ -168,14 +168,6 @@ func (ccb *ccBalancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resol
 	if !ok {
 		return
 	}
-
-	ccb.mu.Lock()
-	if ccb.subConns == nil {
-		ccb.mu.Unlock()
-		return
-	}
-	ccb.mu.Unlock()
-
 	acbw.UpdateAddresses(addrs)
 }
 
