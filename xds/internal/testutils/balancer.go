@@ -123,6 +123,9 @@ func (tcc *TestClientConn) RemoveSubConn(sc balancer.SubConn) {
 	}
 }
 
+// UpdateAddresses updates the addresses on the SubConn.
+func (tcc *TestClientConn) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {}
+
 // UpdateState updates connectivity state and picker.
 func (tcc *TestClientConn) UpdateState(bs balancer.State) {
 	tcc.logger.Logf("testClientConn: UpdateState(%v)", bs)
