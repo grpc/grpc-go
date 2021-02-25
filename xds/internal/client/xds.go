@@ -52,7 +52,7 @@ const transportSocketName = "envoy.transport_sockets.tls"
 // UnmarshalListener processes resources received in an LDS response, validates
 // them, and transforms them into a native struct which contains only fields we
 // are interested in.
-func UnmarshalListener(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ListenerUpdate, UpdateMetadata, error) {
+func UnmarshalListener(_ string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ListenerUpdate, UpdateMetadata, error) {
 	update := make(map[string]ListenerUpdate)
 	for _, r := range resources {
 		if !IsListenerResource(r.GetTypeUrl()) {
