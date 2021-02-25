@@ -78,7 +78,9 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	defer client.Close()
 
 	// Expected unknown.
-	compareDump(t, client.DumpLDS, "", map[string]UpdateWithMD{})
+	if err := compareDump(client.DumpLDS, "", map[string]UpdateWithMD{}); err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	wantRequested := make(map[string]UpdateWithMD)
 	for _, n := range ldsTargets {
@@ -87,7 +89,9 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		wantRequested[n] = UpdateWithMD{MD: UpdateMetadata{Status: ServiceStatusRequested}}
 	}
 	// Expected requested.
-	compareDump(t, client.DumpLDS, "", wantRequested)
+	if err := compareDump(client.DumpLDS, "", wantRequested); err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	update0 := make(map[string]ListenerUpdate)
 	want0 := make(map[string]UpdateWithMD)
@@ -101,7 +105,9 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	client.NewListeners(update0, UpdateMetadata{Version: testVersion})
 
 	// Expect ACK.
-	compareDump(t, client.DumpLDS, testVersion, want0)
+	if err := compareDump(client.DumpLDS, testVersion, want0); err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	const nackVersion = "lds-version-nack"
 	var nackErr = fmt.Errorf("lds nack error")
@@ -136,7 +142,9 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		MD:  UpdateMetadata{Version: testVersion},
 		Raw: listenerRaws[ldsTargets[1]],
 	}
-	compareDump(t, client.DumpLDS, nackVersion, wantDump)
+	if err := compareDump(client.DumpLDS, nackVersion, wantDump); err != nil {
+		t.Fatalf(err.Error())
+	}
 }
 
 func (s) TestRDSConfigDump(t *testing.T) {
@@ -180,7 +188,9 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	defer client.Close()
 
 	// Expected unknown.
-	compareDump(t, client.DumpRDS, "", map[string]UpdateWithMD{})
+	if err := compareDump(client.DumpRDS, "", map[string]UpdateWithMD{}); err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	wantRequested := make(map[string]UpdateWithMD)
 	for _, n := range rdsTargets {
@@ -189,7 +199,9 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		wantRequested[n] = UpdateWithMD{MD: UpdateMetadata{Status: ServiceStatusRequested}}
 	}
 	// Expected requested.
-	compareDump(t, client.DumpRDS, "", wantRequested)
+	if err := compareDump(client.DumpRDS, "", wantRequested); err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	update0 := make(map[string]RouteConfigUpdate)
 	want0 := make(map[string]UpdateWithMD)
@@ -203,7 +215,9 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	client.NewRouteConfigs(update0, UpdateMetadata{Version: testVersion})
 
 	// Expect ACK.
-	compareDump(t, client.DumpRDS, testVersion, want0)
+	if err := compareDump(client.DumpRDS, testVersion, want0); err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	const nackVersion = "rds-version-nack"
 	var nackErr = fmt.Errorf("rds nack error")
@@ -237,7 +251,9 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		MD:  UpdateMetadata{Version: testVersion},
 		Raw: routeRaws[rdsTargets[1]],
 	}
-	compareDump(t, client.DumpRDS, nackVersion, wantDump)
+	if err := compareDump(client.DumpRDS, nackVersion, wantDump); err != nil {
+		t.Fatalf(err.Error())
+	}
 }
 
 func (s) TestCDSConfigDump(t *testing.T) {
@@ -282,7 +298,9 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	defer client.Close()
 
 	// Expected unknown.
-	compareDump(t, client.DumpCDS, "", map[string]UpdateWithMD{})
+	if err := compareDump(client.DumpCDS, "", map[string]UpdateWithMD{}); err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	wantRequested := make(map[string]UpdateWithMD)
 	for _, n := range cdsTargets {
@@ -291,7 +309,9 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		wantRequested[n] = UpdateWithMD{MD: UpdateMetadata{Status: ServiceStatusRequested}}
 	}
 	// Expected requested.
-	compareDump(t, client.DumpCDS, "", wantRequested)
+	if err := compareDump(client.DumpCDS, "", wantRequested); err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	update0 := make(map[string]ClusterUpdate)
 	want0 := make(map[string]UpdateWithMD)
@@ -305,7 +325,9 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	client.NewClusters(update0, UpdateMetadata{Version: testVersion})
 
 	// Expect ACK.
-	compareDump(t, client.DumpCDS, testVersion, want0)
+	if err := compareDump(client.DumpCDS, testVersion, want0); err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	const nackVersion = "cds-version-nack"
 	var nackErr = fmt.Errorf("cds nack error")
@@ -339,7 +361,9 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		MD:  UpdateMetadata{Version: testVersion},
 		Raw: clusterRaws[cdsTargets[1]],
 	}
-	compareDump(t, client.DumpCDS, nackVersion, wantDump)
+	if err := compareDump(client.DumpCDS, nackVersion, wantDump); err != nil {
+		t.Fatalf(err.Error())
+	}
 }
 
 func (s) TestEDSConfigDump(t *testing.T) {
@@ -370,7 +394,9 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	defer client.Close()
 
 	// Expected unknown.
-	compareDump(t, client.DumpEDS, "", map[string]UpdateWithMD{})
+	if err := compareDump(client.DumpEDS, "", map[string]UpdateWithMD{}); err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	wantRequested := make(map[string]UpdateWithMD)
 	for _, n := range edsTargets {
@@ -379,7 +405,9 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		wantRequested[n] = UpdateWithMD{MD: UpdateMetadata{Status: ServiceStatusRequested}}
 	}
 	// Expected requested.
-	compareDump(t, client.DumpEDS, "", wantRequested)
+	if err := compareDump(client.DumpEDS, "", wantRequested); err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	update0 := make(map[string]EndpointsUpdate)
 	want0 := make(map[string]UpdateWithMD)
@@ -393,7 +421,9 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	client.NewEndpoints(update0, UpdateMetadata{Version: testVersion})
 
 	// Expect ACK.
-	compareDump(t, client.DumpEDS, testVersion, want0)
+	if err := compareDump(client.DumpEDS, testVersion, want0); err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	const nackVersion = "eds-version-nack"
 	var nackErr = fmt.Errorf("eds nack error")
@@ -427,17 +457,18 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		MD:  UpdateMetadata{Version: testVersion},
 		Raw: endpointRaws[edsTargets[1]],
 	}
-	compareDump(t, client.DumpEDS, nackVersion, wantDump)
+	if err := compareDump(client.DumpEDS, nackVersion, wantDump); err != nil {
+		t.Fatalf(err.Error())
+	}
 }
 
-func compareDump(t *testing.T, dumpFunc func() (string, map[string]UpdateWithMD), wantVersion string, wantDump interface{}) {
-	t.Helper()
-
+func compareDump(dumpFunc func() (string, map[string]UpdateWithMD), wantVersion string, wantDump interface{}) error {
 	v, dump := dumpFunc()
 	if v != wantVersion {
-		t.Fatalf("Dump returned version %q, want %q", v, wantVersion)
+		return fmt.Errorf("Dump returned version %q, want %q", v, wantVersion)
 	}
 	if diff := cmp.Diff(dump, wantDump, cmpOpts); diff != "" {
-		t.Fatalf("Dump returned unexpected dump, diff (-got +want): %s", diff)
+		return fmt.Errorf("Dump returned unexpected dump, diff (-got +want): %s", diff)
 	}
+	return nil
 }
