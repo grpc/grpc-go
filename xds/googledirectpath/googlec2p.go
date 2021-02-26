@@ -152,8 +152,12 @@ func (r *c2pResolver) start() {
 	if getIPv6Capable() {
 		nodeCopy.Metadata = ipv6EnabledMetadata
 	}
+	balancerName := env.C2PResolverTestOnlyTrafficDirectorURI
+	if balancerName == "" {
+		balancerName = tdURL
+	}
 	config := &bootstrap.Config{
-		BalancerName: tdURL,
+		BalancerName: balancerName,
 		Creds:        grpc.WithCredentialsBundle(google.NewDefaultCredentials()),
 		TransportAPI: version.TransportV3,
 		NodeProto:    nodeCopy,

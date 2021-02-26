@@ -170,11 +170,27 @@ func TestBuildXDS(t *testing.T) {
 	getZone = func() string { return testZone }
 	defer func() { getZone = oldGetZone }()
 
-	for _, ipv6 := range []bool{true, false} {
-		t.Run(fmt.Sprintf("ipv6 capable %v", ipv6), func(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		ipv6  bool
+		tdURI string // traffic director URI will be overridden if this is set.
+	}{
+		{name: "ipv6 true", ipv6: true},
+		{name: "ipv6 false", ipv6: false},
+		{name: "override TD URI", ipv6: true, tdURI: "test-uri"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
 			oldGetIPv6Capability := getIPv6Capable
-			getIPv6Capable = func() bool { return ipv6 }
+			getIPv6Capable = func() bool { return tt.ipv6 }
 			defer func() { getIPv6Capable = oldGetIPv6Capability }()
+
+			if tt.tdURI != "" {
+				oldURI := env.C2PResolverTestOnlyTrafficDirectorURI
+				env.C2PResolverTestOnlyTrafficDirectorURI = tt.tdURI
+				defer func() {
+					env.C2PResolverTestOnlyTrafficDirectorURI = oldURI
+				}()
+			}
 
 			configCh := make(chan *bootstrap.Config, 1)
 			oldNewClient := newClientWithConfig
@@ -207,7 +223,7 @@ func TestBuildXDS(t *testing.T) {
 				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
 				ClientFeatures:       []string{clientFeatureNoOverprovisioning},
 			}
-			if ipv6 {
+			if tt.ipv6 {
 				wantNode.Metadata = &structpb.Struct{
 					Fields: map[string]*structpb.Value{
 						ipv6CapableMetadataName: {
@@ -220,6 +236,9 @@ func TestBuildXDS(t *testing.T) {
 				BalancerName: tdURL,
 				TransportAPI: version.TransportV3,
 				NodeProto:    wantNode,
+			}
+			if tt.tdURI != "" {
+				wantConfig.BalancerName = tt.tdURI
 			}
 			cmpOpts := cmp.Options{
 				cmpopts.IgnoreFields(bootstrap.Config{}, "Creds"),
