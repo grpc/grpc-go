@@ -496,10 +496,12 @@ func (b *cdsBalancer) Close() {
 	b.xdsClient.Close()
 }
 
-// ccWrapper wraps the balancer.ClientConn that was passed in to the CDS
-// balancer during creation and intercepts the NewSubConn() call from the child
-// policy. Other methods of the balancer.ClientConn interface are not overridden
-// and hence get the original implementation.
+// ccWrapper wraps the balancer.ClientConn passed to the CDS balancer at
+// creation and intercepts the NewSubConn() and UpdateAddresses() call from the
+// child policy to add security configuration required by xDS credentials.
+//
+// Other methods of the balancer.ClientConn interface are not overridden and
+// hence get the original implementation.
 type ccWrapper struct {
 	balancer.ClientConn
 
@@ -517,4 +519,12 @@ func (ccw *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubC
 		newAddrs[i] = xdsinternal.SetHandshakeInfo(addr, ccw.xdsHI)
 	}
 	return ccw.ClientConn.NewSubConn(newAddrs, opts)
+}
+
+func (ccw *ccWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
+	newAddrs := make([]resolver.Address, len(addrs))
+	for i, addr := range addrs {
+		newAddrs[i] = xdsinternal.SetHandshakeInfo(addr, ccw.xdsHI)
+	}
+	ccw.ClientConn.UpdateAddresses(sc, newAddrs)
 }

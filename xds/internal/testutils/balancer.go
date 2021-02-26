@@ -71,9 +71,10 @@ func (tsc *TestSubConn) String() string {
 type TestClientConn struct {
 	logger testingLogger
 
-	NewSubConnAddrsCh chan []resolver.Address // the last 10 []Address to create subconn.
-	NewSubConnCh      chan balancer.SubConn   // the last 10 subconn created.
-	RemoveSubConnCh   chan balancer.SubConn   // the last 10 subconn removed.
+	NewSubConnAddrsCh      chan []resolver.Address // the last 10 []Address to create subconn.
+	NewSubConnCh           chan balancer.SubConn   // the last 10 subconn created.
+	RemoveSubConnCh        chan balancer.SubConn   // the last 10 subconn removed.
+	UpdateAddressesAddrsCh chan []resolver.Address // last updated address via UpdateAddresses().
 
 	NewPickerCh chan balancer.Picker    // the last picker updated.
 	NewStateCh  chan connectivity.State // the last state.
@@ -86,9 +87,10 @@ func NewTestClientConn(t *testing.T) *TestClientConn {
 	return &TestClientConn{
 		logger: t,
 
-		NewSubConnAddrsCh: make(chan []resolver.Address, 10),
-		NewSubConnCh:      make(chan balancer.SubConn, 10),
-		RemoveSubConnCh:   make(chan balancer.SubConn, 10),
+		NewSubConnAddrsCh:      make(chan []resolver.Address, 10),
+		NewSubConnCh:           make(chan balancer.SubConn, 10),
+		RemoveSubConnCh:        make(chan balancer.SubConn, 10),
+		UpdateAddressesAddrsCh: make(chan []resolver.Address, 1),
 
 		NewPickerCh: make(chan balancer.Picker, 1),
 		NewStateCh:  make(chan connectivity.State, 1),
@@ -124,7 +126,13 @@ func (tcc *TestClientConn) RemoveSubConn(sc balancer.SubConn) {
 }
 
 // UpdateAddresses updates the addresses on the SubConn.
-func (tcc *TestClientConn) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {}
+func (tcc *TestClientConn) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
+	tcc.logger.Logf("testClientConn: UpdateAddresses(%v, %+v)", sc, addrs)
+	select {
+	case tcc.UpdateAddressesAddrsCh <- addrs:
+	default:
+	}
+}
 
 // UpdateState updates connectivity state and picker.
 func (tcc *TestClientConn) UpdateState(bs balancer.State) {
