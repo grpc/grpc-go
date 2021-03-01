@@ -55,6 +55,8 @@ func (er *emptyResolver) Scheme() string {
 	return er.scheme
 }
 
+func (er *emptyResolver) Close() {}
+
 var (
 	testDNSResolver = &emptyResolver{scheme: "dns"}
 	testXDSResolver = &emptyResolver{scheme: "xds"}
@@ -156,6 +158,14 @@ func TestBuildNotOnGCE(t *testing.T) {
 	}
 }
 
+type testXDSClient struct {
+	closed chan struct{}
+}
+
+func (c *testXDSClient) Close() {
+	c.closed <- struct{}{}
+}
+
 // Test that when xDS is built, the client is built with the correct config.
 func TestBuildXDS(t *testing.T) {
 	defer replaceResolvers()()
@@ -192,11 +202,13 @@ func TestBuildXDS(t *testing.T) {
 				}()
 			}
 
+			tXDSClient := &testXDSClient{closed: make(chan struct{}, 1)}
+
 			configCh := make(chan *bootstrap.Config, 1)
 			oldNewClient := newClientWithConfig
-			newClientWithConfig = func(config *bootstrap.Config) error {
+			newClientWithConfig = func(config *bootstrap.Config) (xdsClientInterface, error) {
 				configCh <- config
-				return nil
+				return tXDSClient, nil
 			}
 			defer func() { newClientWithConfig = oldNewClient }()
 
@@ -251,6 +263,13 @@ func TestBuildXDS(t *testing.T) {
 				}
 			case <-time.After(time.Second):
 				t.Fatalf("timeout waiting for client config")
+			}
+
+			r.Close()
+			select {
+			case <-tXDSClient.closed:
+			case <-time.After(time.Second):
+				t.Fatalf("timeout waiting for client close")
 			}
 		})
 	}

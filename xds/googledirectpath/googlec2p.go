@@ -62,13 +62,17 @@ const (
 	logPrefix = "[google-c2p-resolver]"
 )
 
+type xdsClientInterface interface {
+	Close()
+}
+
 // For overriding in unittests.
 var (
 	onGCE = googlecloud.OnGCE
 
-	newClientWithConfig = func(config *bootstrap.Config) error {
-		_, err := xdsclient.NewWithConfig(config)
-		return err
+	newClientWithConfig = func(config *bootstrap.Config) (xdsClientInterface, error) {
+		c, err := xdsclient.NewWithConfig(config)
+		return c, err
 	}
 
 	logger = internalgrpclog.NewPrefixLogger(grpclog.Component("directpath"), logPrefix)
@@ -136,9 +140,10 @@ type c2pResolver struct {
 	dnsB resolver.Builder
 	xdsB resolver.Builder
 
-	mu    sync.Mutex
-	done  bool
-	child resolver.Resolver
+	mu     sync.Mutex
+	done   bool
+	client xdsClientInterface
+	child  resolver.Resolver
 }
 
 func (r *c2pResolver) start() {
@@ -165,11 +170,19 @@ func (r *c2pResolver) start() {
 
 	// Create singleton xds client with this config. The xds client will be
 	// used by the xds resolver later.
-	err := newClientWithConfig(config)
+	c, err := newClientWithConfig(config)
 	if err != nil {
 		r.cc.ReportError(fmt.Errorf("failed to start xDS client: %v", err))
 		return
 	}
+	r.mu.Lock()
+	if r.done {
+		c.Close()
+		r.mu.Unlock()
+		return
+	}
+	r.client = c
+	r.mu.Unlock()
 
 	r.startChild(r.xdsB)
 }
@@ -208,6 +221,9 @@ func (r *c2pResolver) Close() {
 		return
 	}
 	r.done = true
+	if r.client != nil {
+		r.client.Close()
+	}
 	if r.child != nil {
 		r.child.Close()
 	}
