@@ -223,9 +223,15 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 		}
 		if server {
 			if _, ok := httpFilter.(httpfilter.ServerInterceptorBuilder); !ok {
+				if filter.GetIsOptional() {
+					continue
+				}
 				return nil, fmt.Errorf("HTTP filter %q not supported server-side", name)
 			}
 		} else if _, ok := httpFilter.(httpfilter.ClientInterceptorBuilder); !ok {
+			if filter.GetIsOptional() {
+				continue
+			}
 			return nil, fmt.Errorf("HTTP filter %q not supported client-side", name)
 		}
 

@@ -119,6 +119,11 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			Name:       "serverOnlyCustomFilter",
 			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
 		}
+		serverOnlyOptionalCustomFilter = &v3httppb.HttpFilter{
+			Name:       "serverOnlyOptionalCustomFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
+			IsOptional: true,
+		}
 		unknownFilter = &v3httppb.HttpFilter{
 			Name:       "unknownFilter",
 			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: unknownFilterConfig},
@@ -411,6 +416,15 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			name:      "v3 with server-only filter",
 			resources: []*anypb.Any{v3LisWithFilters(serverOnlyCustomFilter)},
 			wantErr:   true,
+		},
+		{
+			name:      "v3 with optional server-only filter",
+			resources: []*anypb.Any{v3LisWithFilters(serverOnlyOptionalCustomFilter)},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {
+					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
+				},
+			},
 		},
 		{
 			name:      "v3 with client-only filter",
