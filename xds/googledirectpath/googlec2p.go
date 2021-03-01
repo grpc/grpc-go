@@ -27,7 +27,6 @@ package googledirectpath
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -60,6 +59,8 @@ const (
 	ipv6CapableMetadataName         = "TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE"
 
 	logPrefix = "[google-c2p-resolver]"
+
+	dnsName, xdsName = "dns", "xds"
 )
 
 type xdsClientInterface interface {
@@ -93,65 +94,29 @@ var (
 			},
 		},
 	}
-
-	dnsName, xdsName = "dns", "xds"
 )
 
 func init() {
 	// TODO: remove this env var check when c2p resolver is proven stable.
 	if env.C2PResolverSupport {
-		resolver.Register(&c2pResolverBuilder{})
+		resolver.Register(c2pResolverBuilder{})
 	}
 }
 
 type c2pResolverBuilder struct{}
 
-func (*c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
-	dnsB := resolver.Get(dnsName)
-	if dnsB == nil {
-		return nil, fmt.Errorf("balancer for %q is not registered", dnsName)
-	}
-	xdsB := resolver.Get(xdsName)
-	if xdsB == nil {
-		return nil, fmt.Errorf("balancer for %q is not registered", xdsName)
-	}
-	ret := &c2pResolver{
-		target: t,
-		cc:     cc,
-		opts:   opts,
-
-		dnsB: dnsB,
-		xdsB: xdsB,
-	}
-	// start does I/O. Run it in a goroutine.
-	go ret.start()
-	return ret, nil
-}
-
-func (*c2pResolverBuilder) Scheme() string {
-	return c2pScheme
-}
-
-type c2pResolver struct {
-	target resolver.Target
-	cc     resolver.ClientConn
-	opts   resolver.BuildOptions
-
-	dnsB resolver.Builder
-	xdsB resolver.Builder
-
-	mu     sync.Mutex
-	done   bool
-	client xdsClientInterface
-	child  resolver.Resolver
-}
-
-func (r *c2pResolver) start() {
+func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	if !runDirectPath() {
-		r.startChild(r.dnsB)
-		return
+		// If not xDS, fallback to DNS.
+		t.Scheme = dnsName
+		return resolver.Get(dnsName).Build(t, cc, opts)
 	}
 
+	// Note that the following calls to getZone() and getIPv6Capable() does I/O,
+	// and has 10 seconds timeout.
+	//
+	// This should be fine in most of the cases. In certain error cases, this
+	// could block Dial() for up to 20 seconds.
 	nodeCopy := proto.Clone(defaultNode).(*v3corepb.Node)
 	nodeCopy.Locality = &v3corepb.Locality{Zone: getZone()}
 	if getIPv6Capable() {
@@ -170,63 +135,35 @@ func (r *c2pResolver) start() {
 
 	// Create singleton xds client with this config. The xds client will be
 	// used by the xds resolver later.
-	c, err := newClientWithConfig(config)
+	xdsC, err := newClientWithConfig(config)
 	if err != nil {
-		r.cc.ReportError(fmt.Errorf("failed to start xDS client: %v", err))
-		return
+		return nil, fmt.Errorf("failed to start xDS client: %v", err)
 	}
-	r.mu.Lock()
-	if r.done {
-		c.Close()
-		r.mu.Unlock()
-		return
-	}
-	r.client = c
-	r.mu.Unlock()
 
-	r.startChild(r.xdsB)
+	// Create and return an xDS resolver.
+	t.Scheme = xdsName
+	xdsR, err := resolver.Get(xdsName).Build(t, cc, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &c2pResolver{
+		Resolver: xdsR,
+		client:   xdsC,
+	}, nil
 }
 
-func (r *c2pResolver) startChild(b resolver.Builder) {
-	t := r.target
-	t.Scheme = b.Scheme()
-
-	child, err := b.Build(t, r.cc, r.opts)
-	if err != nil {
-		r.cc.ReportError(err)
-		return
-	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.done {
-		child.Close()
-		return
-	}
-	r.child = child
+func (c2pResolverBuilder) Scheme() string {
+	return c2pScheme
 }
 
-func (r *c2pResolver) ResolveNow(opts resolver.ResolveNowOptions) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.child != nil {
-		r.child.ResolveNow(opts)
-	}
+type c2pResolver struct {
+	resolver.Resolver
+	client xdsClientInterface
 }
 
 func (r *c2pResolver) Close() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.done {
-		return
-	}
-	r.done = true
-	if r.client != nil {
-		r.client.Close()
-	}
-	if r.child != nil {
-		r.child.Close()
-	}
+	r.Resolver.Close()
+	r.client.Close()
 }
 
 // runDirectPath returns whether this resolver should use direct path.

@@ -19,7 +19,6 @@
 package googledirectpath
 
 import (
-	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -35,12 +34,6 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
 )
-
-func (r *c2pResolver) readChildForTesting() resolver.Resolver {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.child
-}
 
 type emptyResolver struct {
 	resolver.Resolver
@@ -91,18 +84,6 @@ func replaceResolvers() func() {
 	}
 }
 
-func runWithRetry(f func() error) error {
-	var err error
-	for i := 0; i < 10; i++ {
-		err = f()
-		if err == nil {
-			return nil
-		}
-		time.Sleep(time.Millisecond * 100)
-	}
-	return err
-}
-
 // Test that when bootstrap env is set, fallback to DNS.
 func TestBuildWithBootstrapEnvSet(t *testing.T) {
 	defer replaceResolvers()()
@@ -120,20 +101,14 @@ func TestBuildWithBootstrapEnvSet(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to build resolver: %v", err)
 			}
-			rr := r.(*c2pResolver)
-			if err := runWithRetry(func() error {
-				if c := rr.readChildForTesting(); c != testDNSResolver {
-					return fmt.Errorf("got resolver %#v, want dns resolver", c)
-				}
-				return nil
-			}); err != nil {
-				t.Fatalf("%v", err)
+			if r != testDNSResolver {
+				t.Fatalf("want dns resolver, got %#v", r)
 			}
 		})
 	}
 }
 
-// Test that when bootstrap env is set, fallback to DNS.
+// Test that when not on GCE, fallback to DNS.
 func TestBuildNotOnGCE(t *testing.T) {
 	defer replaceResolvers()()
 	builder := resolver.Get(c2pScheme)
@@ -147,14 +122,8 @@ func TestBuildNotOnGCE(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build resolver: %v", err)
 	}
-	rr := r.(*c2pResolver)
-	if err := runWithRetry(func() error {
-		if c := rr.readChildForTesting(); c != testDNSResolver {
-			return fmt.Errorf("got resolver %#v, want dns resolver", c)
-		}
-		return nil
-	}); err != nil {
-		t.Fatalf("%v", err)
+	if r != testDNSResolver {
+		t.Fatalf("want dns resolver, got %#v", r)
 	}
 }
 
@@ -218,13 +187,8 @@ func TestBuildXDS(t *testing.T) {
 				t.Fatalf("failed to build resolver: %v", err)
 			}
 			rr := r.(*c2pResolver)
-			if err := runWithRetry(func() error {
-				if c := rr.readChildForTesting(); c != testXDSResolver {
-					return fmt.Errorf("got resolver %#v, want xds resolver", c)
-				}
-				return nil
-			}); err != nil {
-				t.Fatalf("%v", err)
+			if rrr := rr.Resolver; rrr != testXDSResolver {
+				t.Fatalf("want xds resolver, got %#v, ", rrr)
 			}
 
 			wantNode := &v3corepb.Node{
