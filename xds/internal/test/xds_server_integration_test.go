@@ -119,7 +119,6 @@ func createClientTLSCredentials(t *testing.T) credentials.TransportCredentials {
 }
 
 // commonSetup performs a bunch of steps common to all xDS server tests here:
-// - turn on V3 support by setting the environment variable
 // - spin up an xDS management server on a local port
 // - set up certificates for consumption by the file_watcher plugin
 // - spin up an xDS-enabled gRPC server, configure it with xdsCredentials and
