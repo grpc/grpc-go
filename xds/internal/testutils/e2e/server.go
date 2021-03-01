@@ -113,7 +113,6 @@ type UpdateOptions struct {
 	Clusters  []*v3clusterpb.Cluster
 	Routes    []*v3routepb.RouteConfiguration
 	Listeners []*v3listenerpb.Listener
-	// TODO(easwars): Add support for other resource types.
 }
 
 // Update changes the resource snapshot held by the management server, which
