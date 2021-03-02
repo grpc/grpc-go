@@ -203,6 +203,8 @@ type ListenerUpdate struct {
 	// HTTPFilters is a list of HTTP filters (name, config) from the LDS
 	// response.
 	HTTPFilters []HTTPFilter
+	// InboundListenerCfg contains inbound listener configuration.
+	InboundListenerCfg *InboundListenerConfig
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
@@ -219,6 +221,17 @@ type HTTPFilter struct {
 	Filter httpfilter.Filter
 	// Config contains the filter's configuration
 	Config httpfilter.FilterConfig
+}
+
+// InboundListenerConfig contains information about the inbound listener, i.e
+// the server-side listener.
+type InboundListenerConfig struct {
+	// Address is the local address on which the inbound listener is expected to
+	// accept incoming connections.
+	Address string
+	// Port is the local port on which the inbound listener is expected to
+	// accept incoming connections.
+	Port string
 }
 
 func (lu *ListenerUpdate) String() string {

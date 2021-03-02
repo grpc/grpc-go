@@ -246,10 +246,6 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 }
 
 func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
-	// Make sure that an address encoded in the received listener resource, and
-	// that it matches the one specified in the name. Listener names on the
-	// server-side as in the following format:
-	// grpc/server?udpa.resource.listening_address=IP:Port.
 	addr := lis.GetAddress()
 	if addr == nil {
 		return nil, fmt.Errorf("no address field in LDS response: %+v", lis)
@@ -258,15 +254,11 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	if sockAddr == nil {
 		return nil, fmt.Errorf("no socket_address field in LDS response: %+v", lis)
 	}
-	host, port, err := getAddressFromName(lis.GetName())
-	if err != nil {
-		return nil, fmt.Errorf("no host:port in name field of LDS response: %+v, error: %v", lis, err)
-	}
-	if h := sockAddr.GetAddress(); host != h {
-		return nil, fmt.Errorf("socket_address host does not match the one in name. Got %q, want %q", h, host)
-	}
-	if p := strconv.Itoa(int(sockAddr.GetPortValue())); port != p {
-		return nil, fmt.Errorf("socket_address port does not match the one in name. Got %q, want %q", p, port)
+	lu := &ListenerUpdate{
+		InboundListenerCfg: &InboundListenerConfig{
+			Address: sockAddr.GetAddress(),
+			Port:    strconv.Itoa(int(sockAddr.GetPortValue())),
+		},
 	}
 
 	// Make sure the listener resource contains a single filter chain. We do not
@@ -283,7 +275,7 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	// xdsCredentials.
 	ts := fc.GetTransportSocket()
 	if ts == nil {
-		return &ListenerUpdate{}, nil
+		return lu, nil
 	}
 	if name := ts.GetName(); name != transportSocketName {
 		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
@@ -310,15 +302,9 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	if sc.RequireClientCert && sc.RootInstanceName == "" {
 		return nil, errors.New("security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set")
 	}
-	return &ListenerUpdate{SecurityCfg: sc}, nil
-}
+	lu.SecurityCfg = sc
 
-func getAddressFromName(name string) (host string, port string, err error) {
-	parts := strings.SplitN(name, "udpa.resource.listening_address=", 2)
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("udpa.resource_listening_address not found in name: %v", name)
-	}
-	return net.SplitHostPort(parts[1])
+	return lu, nil
 }
 
 // UnmarshalRouteConfig processes resources received in an RDS response,

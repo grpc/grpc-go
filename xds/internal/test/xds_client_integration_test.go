@@ -55,10 +55,9 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 
 	// Create a bootstrap file in a temporary directory.
 	bootstrapCleanup, err := e2e.SetupBootstrapFile(e2e.BootstrapOptions{
-		Version:              e2e.TransportV3,
-		NodeID:               nodeID,
-		ServerURI:            fs.Address,
-		ServerResourceNameID: "grpc/server",
+		Version:   e2e.TransportV3,
+		NodeID:    nodeID,
+		ServerURI: fs.Address,
 	})
 	if err != nil {
 		t.Fatal(err)
