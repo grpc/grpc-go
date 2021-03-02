@@ -130,7 +130,7 @@ func processClientSideListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUp
 
 	var err error
 	if update.HTTPFilters, err = processHTTPFilters(apiLis.GetHttpFilters(), false); err != nil {
-		return nil, fmt.Errorf("xds: %v", err)
+		return nil, err
 	}
 
 	return update, nil
