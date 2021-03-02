@@ -228,11 +228,11 @@ func setupOverrides() (*fakeGRPCServer, *testutils.Channel, *testutils.Channel, 
 	newXDSClient = func() (xdsClientInterface, error) {
 		c := fakeclient.NewClient()
 		c.SetBootstrapConfig(&bootstrap.Config{
-			BalancerName:         "dummyBalancer",
-			Creds:                grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto:            xdstestutils.EmptyNodeProtoV3,
-			ServerResourceNameID: testServerResourceNameID,
-			CertProviderConfigs:  certProviderConfigs,
+			BalancerName:                       "dummyBalancer",
+			Creds:                              grpc.WithTransportCredentials(insecure.NewCredentials()),
+			NodeProto:                          xdstestutils.EmptyNodeProtoV3,
+			ServerListenerResourceNameTemplate: testServerResourceNameID,
+			CertProviderConfigs:                certProviderConfigs,
 		})
 		clientCh.Send(c)
 		return c, nil
@@ -267,10 +267,10 @@ func setupOverridesForXDSCreds(includeCertProviderCfg bool) (*testutils.Channel,
 	newXDSClient = func() (xdsClientInterface, error) {
 		c := fakeclient.NewClient()
 		bc := &bootstrap.Config{
-			BalancerName:         "dummyBalancer",
-			Creds:                grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto:            xdstestutils.EmptyNodeProtoV3,
-			ServerResourceNameID: testServerResourceNameID,
+			BalancerName:                       "dummyBalancer",
+			Creds:                              grpc.WithTransportCredentials(insecure.NewCredentials()),
+			NodeProto:                          xdstestutils.EmptyNodeProtoV3,
+			ServerListenerResourceNameTemplate: testServerResourceNameID,
 		}
 		if includeCertProviderCfg {
 			bc.CertProviderConfigs = certProviderConfigs
@@ -337,7 +337,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := fmt.Sprintf("%s?udpa.resource.listening_address=%s", client.BootstrapConfig().ServerResourceNameID, lis.Addr().String())
+	wantName := fmt.Sprintf("%s?udpa.resource.listening_address=%s", client.BootstrapConfig().ServerListenerResourceNameTemplate, lis.Addr().String())
 	if name != wantName {
 		t.Fatalf("LDS watch registered for name %q, want %q", name, wantName)
 	}
@@ -399,7 +399,7 @@ func (s) TestServeWithStop(t *testing.T) {
 		server.Stop()
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := fmt.Sprintf("%s?udpa.resource.listening_address=%s", client.BootstrapConfig().ServerResourceNameID, lis.Addr().String())
+	wantName := fmt.Sprintf("%s?udpa.resource.listening_address=%s", client.BootstrapConfig().ServerListenerResourceNameTemplate, lis.Addr().String())
 	if name != wantName {
 		server.Stop()
 		t.Fatalf("LDS watch registered for name %q, wantPrefix %q", name, wantName)
@@ -556,7 +556,7 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := fmt.Sprintf("%s?udpa.resource.listening_address=%s", client.BootstrapConfig().ServerResourceNameID, lis.Addr().String())
+	wantName := fmt.Sprintf("%s?udpa.resource.listening_address=%s", client.BootstrapConfig().ServerListenerResourceNameTemplate, lis.Addr().String())
 	if name != wantName {
 		t.Fatalf("LDS watch registered for name %q, want %q", name, wantName)
 	}
@@ -627,7 +627,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := fmt.Sprintf("%s?udpa.resource.listening_address=%s", client.BootstrapConfig().ServerResourceNameID, lis.Addr().String())
+	wantName := fmt.Sprintf("%s?udpa.resource.listening_address=%s", client.BootstrapConfig().ServerListenerResourceNameTemplate, lis.Addr().String())
 	if name != wantName {
 		t.Fatalf("LDS watch registered for name %q, want %q", name, wantName)
 	}
@@ -691,7 +691,7 @@ func (s) TestHandleListenerUpdate_ClosedListener(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := fmt.Sprintf("%s?udpa.resource.listening_address=%s", client.BootstrapConfig().ServerResourceNameID, lis.Addr().String())
+	wantName := fmt.Sprintf("%s?udpa.resource.listening_address=%s", client.BootstrapConfig().ServerListenerResourceNameTemplate, lis.Addr().String())
 	if name != wantName {
 		t.Fatalf("LDS watch registered for name %q, want %q", name, wantName)
 	}

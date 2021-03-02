@@ -46,7 +46,7 @@ type BootstrapOptions struct {
 	NodeID string
 	// ServerURI is the address of the management server.
 	ServerURI string
-	// ServerResourceNameID is the Listener resource name to fetch.
+	// ServerListenerResourceNameTemplate is the Listener resource name to fetch.
 	ServerResourceNameID string
 	// CertificateProviders is the certificate providers configuration.
 	CertificateProviders map[string]json.RawMessage
