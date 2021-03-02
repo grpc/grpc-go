@@ -781,8 +781,8 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 	return ret, nil
 }
 
-// processAllResources unmarshal and validate the resources, populate the
-// provided ret (a map), and return metadata and error.
+// processAllResources unmarshals and validates the resources, populates the
+// provided ret (a map), and returns metadata and error.
 //
 // The type of the resource is determined by the type of ret. E.g.
 // map[string]ListenerUpdate means this is for LDS.
