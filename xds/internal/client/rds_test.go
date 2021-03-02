@@ -446,9 +446,29 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterTypedStructConfig}}),
 		},
 		{
+			name:       "good-route-config-with-optional-http-filter-config",
+			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("custom.filter")}),
+			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterConfig}}),
+		},
+		{
 			name:      "good-route-config-with-http-err-filter-config",
 			rc:        goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": errFilterConfig}),
 			wantError: true,
+		},
+		{
+			name:      "good-route-config-with-http-optional-err-filter-config",
+			rc:        goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("err.custom.filter")}),
+			wantError: true,
+		},
+		{
+			name:      "good-route-config-with-http-unknown-filter-config",
+			rc:        goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": unknownFilterConfig}),
+			wantError: true,
+		},
+		{
+			name:       "good-route-config-with-http-optional-unknown-filter-config",
+			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("unknown.custom.filter")}),
+			wantUpdate: goodUpdateWithFilterConfigs(nil),
 		},
 		{
 			name:       "good-route-config-with-http-err-filter-config-fi-disabled",
@@ -898,6 +918,11 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantRoutes: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterTypedStructConfig}}),
 		},
 		{
+			name:       "with optional custom HTTP filter config",
+			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("custom.filter")}),
+			wantRoutes: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterConfig}}),
+		},
+		{
 			name:       "with custom HTTP filter config, FI disabled",
 			disableFI:  true,
 			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": customFilterConfig}),
@@ -909,9 +934,24 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:    "with optional erroring custom HTTP filter config",
+			routes:  goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("err.custom.filter")}),
+			wantErr: true,
+		},
+		{
 			name:       "with erroring custom HTTP filter config, FI disabled",
 			disableFI:  true,
 			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": errFilterConfig}),
+			wantRoutes: goodUpdateWithFilterConfigs(nil),
+		},
+		{
+			name:    "with unknown custom HTTP filter config",
+			routes:  goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": unknownFilterConfig}),
+			wantErr: true,
+		},
+		{
+			name:       "with optional unknown custom HTTP filter config",
+			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("unknown.custom.filter")}),
 			wantRoutes: goodUpdateWithFilterConfigs(nil),
 		},
 	}
