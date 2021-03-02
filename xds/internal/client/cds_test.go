@@ -762,7 +762,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			update, md, err := UnmarshalCluster(testVersion, test.resources, nil)
 			if (err != nil) != test.wantErr {
-				t.Errorf("UnmarshalCluster(), got err: %v, wantErr: %v", err, test.wantErr)
+				t.Fatalf("UnmarshalCluster(), got err: %v, wantErr: %v", err, test.wantErr)
 			}
 			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
 				t.Errorf("got unexpected update, diff (-got +want): %v", diff)

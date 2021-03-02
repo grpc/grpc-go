@@ -301,7 +301,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			update, md, err := UnmarshalEndpoints(testVersion, test.resources, nil)
 			if (err != nil) != test.wantErr {
-				t.Errorf("UnmarshalEndpoints(), got err: %v, wantErr: %v", err, test.wantErr)
+				t.Fatalf("UnmarshalEndpoints(), got err: %v, wantErr: %v", err, test.wantErr)
 			}
 			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
 				t.Errorf("got unexpected update, diff (-got +want): %v", diff)
