@@ -276,28 +276,28 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	// grpc/server?udpa.resource.listening_address=IP:Port.
 	addr := lis.GetAddress()
 	if addr == nil {
-		return nil, fmt.Errorf("xds: no address field in LDS response: %+v", lis)
+		return nil, fmt.Errorf("no address field in LDS response: %+v", lis)
 	}
 	sockAddr := addr.GetSocketAddress()
 	if sockAddr == nil {
-		return nil, fmt.Errorf("xds: no socket_address field in LDS response: %+v", lis)
+		return nil, fmt.Errorf("no socket_address field in LDS response: %+v", lis)
 	}
 	host, port, err := getAddressFromName(lis.GetName())
 	if err != nil {
-		return nil, fmt.Errorf("xds: no host:port in name field of LDS response: %+v, error: %v", lis, err)
+		return nil, fmt.Errorf("no host:port in name field of LDS response: %+v, error: %v", lis, err)
 	}
 	if h := sockAddr.GetAddress(); host != h {
-		return nil, fmt.Errorf("xds: socket_address host does not match the one in name. Got %q, want %q", h, host)
+		return nil, fmt.Errorf("socket_address host does not match the one in name. Got %q, want %q", h, host)
 	}
 	if p := strconv.Itoa(int(sockAddr.GetPortValue())); port != p {
-		return nil, fmt.Errorf("xds: socket_address port does not match the one in name. Got %q, want %q", p, port)
+		return nil, fmt.Errorf("socket_address port does not match the one in name. Got %q, want %q", p, port)
 	}
 
 	// Make sure the listener resource contains a single filter chain. We do not
 	// support multiple filter chains and picking the best match from the list.
 	fcs := lis.GetFilterChains()
 	if n := len(fcs); n != 1 {
-		return nil, fmt.Errorf("xds: filter chains count in LDS response does not match expected. Got %d, want 1", n)
+		return nil, fmt.Errorf("filter chains count in LDS response does not match expected. Got %d, want 1", n)
 	}
 	fc := fcs[0]
 
@@ -310,18 +310,18 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 		return &ListenerUpdate{}, nil
 	}
 	if name := ts.GetName(); name != transportSocketName {
-		return nil, fmt.Errorf("xds: transport_socket field has unexpected name: %s", name)
+		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
 	}
 	any := ts.GetTypedConfig()
 	if any == nil || any.TypeUrl != version.V3DownstreamTLSContextURL {
-		return nil, fmt.Errorf("xds: transport_socket field has unexpected typeURL: %s", any.TypeUrl)
+		return nil, fmt.Errorf("transport_socket field has unexpected typeURL: %s", any.TypeUrl)
 	}
 	downstreamCtx := &v3tlspb.DownstreamTlsContext{}
 	if err := proto.Unmarshal(any.GetValue(), downstreamCtx); err != nil {
-		return nil, fmt.Errorf("xds: failed to unmarshal DownstreamTlsContext in LDS response: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal DownstreamTlsContext in LDS response: %v", err)
 	}
 	if downstreamCtx.GetCommonTlsContext() == nil {
-		return nil, errors.New("xds: DownstreamTlsContext in LDS response does not contain a CommonTlsContext")
+		return nil, errors.New("DownstreamTlsContext in LDS response does not contain a CommonTlsContext")
 	}
 	sc, err := securityConfigFromCommonTLSContext(downstreamCtx.GetCommonTlsContext())
 	if err != nil {
@@ -634,11 +634,11 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	emptyUpdate := ClusterUpdate{ServiceName: "", EnableLRS: false}
 	switch {
 	case cluster.GetType() != v3clusterpb.Cluster_EDS:
-		return emptyUpdate, fmt.Errorf("xds: unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
+		return emptyUpdate, fmt.Errorf("unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
 	case cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil:
-		return emptyUpdate, fmt.Errorf("xds: unexpected edsConfig in response: %+v", cluster)
+		return emptyUpdate, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
 	case cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN:
-		return emptyUpdate, fmt.Errorf("xds: unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
+		return emptyUpdate, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
 
 	sc, err := securityConfigFromCluster(cluster)
@@ -664,18 +664,18 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 		return nil, nil
 	}
 	if name := ts.GetName(); name != transportSocketName {
-		return nil, fmt.Errorf("xds: transport_socket field has unexpected name: %s", name)
+		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
 	}
 	any := ts.GetTypedConfig()
 	if any == nil || any.TypeUrl != version.V3UpstreamTLSContextURL {
-		return nil, fmt.Errorf("xds: transport_socket field has unexpected typeURL: %s", any.TypeUrl)
+		return nil, fmt.Errorf("transport_socket field has unexpected typeURL: %s", any.TypeUrl)
 	}
 	upstreamCtx := &v3tlspb.UpstreamTlsContext{}
 	if err := proto.Unmarshal(any.GetValue(), upstreamCtx); err != nil {
-		return nil, fmt.Errorf("xds: failed to unmarshal UpstreamTlsContext in CDS response: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal UpstreamTlsContext in CDS response: %v", err)
 	}
 	if upstreamCtx.GetCommonTlsContext() == nil {
-		return nil, errors.New("xds: UpstreamTlsContext in CDS response does not contain a CommonTlsContext")
+		return nil, errors.New("UpstreamTlsContext in CDS response does not contain a CommonTlsContext")
 	}
 
 	sc, err := securityConfigFromCommonTLSContext(upstreamCtx.GetCommonTlsContext())
@@ -731,7 +731,7 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext) (*Secu
 	case nil:
 		// It is valid for the validation context to be nil on the server side.
 	default:
-		return nil, fmt.Errorf("xds: validation context contains unexpected type: %T", t)
+		return nil, fmt.Errorf("validation context contains unexpected type: %T", t)
 	}
 	return sc, nil
 }
@@ -886,7 +886,7 @@ func combineErrors(rType string, topLevelErrors []error, perResourceErrors map[s
 		errStrB.WriteString("top level errors: ")
 		for i, err := range topLevelErrors {
 			if i != 0 {
-				errStrB.WriteString("; ")
+				errStrB.WriteString(";\n")
 			}
 			errStrB.WriteString(err.Error())
 		}
@@ -895,8 +895,9 @@ func combineErrors(rType string, topLevelErrors []error, perResourceErrors map[s
 		var i int
 		for name, err := range perResourceErrors {
 			if i != 0 {
-				errStrB.WriteString("; ")
+				errStrB.WriteString(";\n")
 			}
+			i++
 			errStrB.WriteString(fmt.Sprintf("resource %q: %v", name, err.Error()))
 		}
 	}
