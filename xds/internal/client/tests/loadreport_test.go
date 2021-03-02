@@ -16,7 +16,7 @@
  *
  */
 
-package client_test
+package tests_test
 
 import (
 	"context"
@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
@@ -43,19 +42,10 @@ import (
 )
 
 const (
-	defaultTestTimeout      = 5 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
-
+	defaultTestTimeout              = 5 * time.Second
+	defaultTestShortTimeout         = 10 * time.Millisecond // For events expected to *not* happen.
 	defaultClientWatchExpiryTimeout = 15 * time.Second
 )
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
 
 func (s) TestLRSClient(t *testing.T) {
 	fs, sCleanup, err := fakeserver.StartServer()
