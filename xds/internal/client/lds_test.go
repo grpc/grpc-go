@@ -685,11 +685,11 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						return mLis
 					}(),
 				},
-				v3Lis,
+				v3LisWithFilters(),
 			},
 			wantUpdate: map[string]ListenerUpdate{
 				v2LDSTarget: {RouteConfigName: v2RouteConfigName, Raw: v2Lis},
-				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3Lis},
+				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3LisWithFilters()},
 				"bad":       {},
 			},
 			wantMD: UpdateMetadata{

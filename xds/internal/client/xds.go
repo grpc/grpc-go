@@ -53,54 +53,30 @@ const transportSocketName = "envoy.transport_sockets.tls"
 // UnmarshalListener processes resources received in an LDS response, validates
 // them, and transforms them into a native struct which contains only fields we
 // are interested in.
-func UnmarshalListener(versionStr string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ListenerUpdate, UpdateMetadata, error) {
-	timestamp := time.Now()
+func UnmarshalListener(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ListenerUpdate, UpdateMetadata, error) {
 	update := make(map[string]ListenerUpdate)
-	md := UpdateMetadata{
-		Version:   versionStr,
-		Timestamp: timestamp,
-	}
-	var topLevelErrors []error
-	perResourceErrors := make(map[string]error)
-	for _, r := range resources {
-		if !IsListenerResource(r.GetTypeUrl()) {
-			topLevelErrors = append(topLevelErrors, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl()))
-			continue
-		}
-		// TODO: Pass version.TransportAPI instead of relying upon the type URL
-		v2 := r.GetTypeUrl() == version.V2ListenerURL
-		lis := &v3listenerpb.Listener{}
-		if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
-			topLevelErrors = append(topLevelErrors, fmt.Errorf("failed to unmarshal resource: %v", err))
-			continue
-		}
-		logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, lis)
+	md, err := processAllResources(version, resources, logger, update)
+	return update, md, err
+}
 
-		lu, err := processListener(lis, v2)
-		if err != nil {
-			perResourceErrors[lis.GetName()] = err
-			// Add place holder in the map so we know this resource name was in
-			// the response.
-			update[lis.GetName()] = ListenerUpdate{}
-			continue
-		}
-		lu.Raw = r
-		update[lis.GetName()] = *lu
+func unmarshalListenerResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, ListenerUpdate, error) {
+	if !IsListenerResource(r.GetTypeUrl()) {
+		return "", ListenerUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
 	}
+	// TODO: Pass version.TransportAPI instead of relying upon the type URL
+	v2 := r.GetTypeUrl() == version.V2ListenerURL
+	lis := &v3listenerpb.Listener{}
+	if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
+		return "", ListenerUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
+	}
+	logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, lis)
 
-	if len(topLevelErrors) == 0 && len(perResourceErrors) == 0 {
-		md.Status = ServiceStatusACKed
-		return update, md, nil
+	lu, err := processListener(lis, v2)
+	if err != nil {
+		return lis.GetName(), ListenerUpdate{}, err
 	}
-
-	md.Status = ServiceStatusNACKed
-	errRet := combineErrors("LDS", topLevelErrors, perResourceErrors)
-	md.ErrState = &UpdateErrorMetadata{
-		Version:   versionStr,
-		Err:       errRet,
-		Timestamp: timestamp,
-	}
-	return update, md, errRet
+	lu.Raw = r
+	return lis.GetName(), *lu, nil
 }
 
 func processListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUpdate, error) {
@@ -349,55 +325,30 @@ func getAddressFromName(name string) (host string, port string, err error) {
 // validates them, and transforms them into a native struct which contains only
 // fields we are interested in. The provided hostname determines the route
 // configuration resources of interest.
-func UnmarshalRouteConfig(versionStr string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdate, UpdateMetadata, error) {
-	timestamp := time.Now()
+func UnmarshalRouteConfig(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdate, UpdateMetadata, error) {
 	update := make(map[string]RouteConfigUpdate)
-	md := UpdateMetadata{
-		Version:   versionStr,
-		Timestamp: timestamp,
-	}
-	var topLevelErrors []error
-	perResourceErrors := make(map[string]error)
-	for _, r := range resources {
-		if !IsRouteConfigResource(r.GetTypeUrl()) {
-			topLevelErrors = append(topLevelErrors, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl()))
-			continue
-		}
-		rc := &v3routepb.RouteConfiguration{}
-		if err := proto.Unmarshal(r.GetValue(), rc); err != nil {
-			topLevelErrors = append(topLevelErrors, fmt.Errorf("failed to unmarshal resource: %v", err))
-			continue
-		}
-		logger.Infof("Resource with name: %v, type: %T, contains: %v.", rc.GetName(), rc, rc)
+	md, err := processAllResources(version, resources, logger, update)
+	return update, md, err
+}
 
-		// TODO: Pass version.TransportAPI instead of relying upon the type URL
-		v2 := r.GetTypeUrl() == version.V2RouteConfigURL
-		// Use the hostname (resourceName for LDS) to find the routes.
-		u, err := generateRDSUpdateFromRouteConfiguration(rc, logger, v2)
-		if err != nil {
-			perResourceErrors[rc.GetName()] = err
-			// Add place holder in the map so we know this resource name was in
-			// the response.
-			update[rc.GetName()] = RouteConfigUpdate{}
-			continue
-		}
-		u.Raw = r
-		update[rc.GetName()] = u
+func unmarshalRouteConfigResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, RouteConfigUpdate, error) {
+	if !IsRouteConfigResource(r.GetTypeUrl()) {
+		return "", RouteConfigUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
 	}
+	rc := &v3routepb.RouteConfiguration{}
+	if err := proto.Unmarshal(r.GetValue(), rc); err != nil {
+		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
+	}
+	logger.Infof("Resource with name: %v, type: %T, contains: %v.", rc.GetName(), rc, rc)
 
-	if len(topLevelErrors) == 0 && len(perResourceErrors) == 0 {
-		md.Status = ServiceStatusACKed
-		return update, md, nil
+	// TODO: Pass version.TransportAPI instead of relying upon the type URL
+	v2 := r.GetTypeUrl() == version.V2RouteConfigURL
+	u, err := generateRDSUpdateFromRouteConfiguration(rc, logger, v2)
+	if err != nil {
+		return rc.GetName(), RouteConfigUpdate{}, err
 	}
-
-	md.Status = ServiceStatusNACKed
-	errRet := combineErrors("RDS", topLevelErrors, perResourceErrors)
-	md.ErrState = &UpdateErrorMetadata{
-		Version:   versionStr,
-		Err:       errRet,
-		Timestamp: timestamp,
-	}
-	return update, md, errRet
+	u.Raw = r
+	return rc.GetName(), u, nil
 }
 
 // generateRDSUpdateFromRouteConfiguration checks if the provided
@@ -575,59 +526,34 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 // UnmarshalCluster processes resources received in an CDS response, validates
 // them, and transforms them into a native struct which contains only fields we
 // are interested in.
-func UnmarshalCluster(versionStr string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ClusterUpdate, UpdateMetadata, error) {
-	timestamp := time.Now()
+func UnmarshalCluster(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ClusterUpdate, UpdateMetadata, error) {
 	update := make(map[string]ClusterUpdate)
-	md := UpdateMetadata{
-		Version:   versionStr,
-		Timestamp: timestamp,
-	}
-	var topLevelErrors []error
-	perResourceErrors := make(map[string]error)
-	for _, r := range resources {
-		if !IsClusterResource(r.GetTypeUrl()) {
-			topLevelErrors = append(topLevelErrors, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl()))
-			continue
-		}
+	md, err := processAllResources(version, resources, logger, update)
+	return update, md, err
+}
 
-		cluster := &v3clusterpb.Cluster{}
-		if err := proto.Unmarshal(r.GetValue(), cluster); err != nil {
-			topLevelErrors = append(topLevelErrors, fmt.Errorf("failed to unmarshal resource: %v", err))
-			continue
-		}
-		logger.Infof("Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, cluster)
-
-		cu, err := validateCluster(cluster)
-		if err != nil {
-			perResourceErrors[cluster.GetName()] = err
-			// Add place holder in the map so we know this resource name was in
-			// the response.
-			update[cluster.GetName()] = ClusterUpdate{}
-			continue
-		}
-		cu.Raw = r
-		// If the Cluster message in the CDS response did not contain a
-		// serviceName, we will just use the clusterName for EDS.
-		if cu.ServiceName == "" {
-			cu.ServiceName = cluster.GetName()
-		}
-		logger.Debugf("Resource with name %v, value %+v added to cache", cluster.GetName(), cu)
-		update[cluster.GetName()] = cu
+func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, ClusterUpdate, error) {
+	if !IsClusterResource(r.GetTypeUrl()) {
+		return "", ClusterUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
 	}
 
-	if len(topLevelErrors) == 0 && len(perResourceErrors) == 0 {
-		md.Status = ServiceStatusACKed
-		return update, md, nil
+	cluster := &v3clusterpb.Cluster{}
+	if err := proto.Unmarshal(r.GetValue(), cluster); err != nil {
+		return "", ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
+	logger.Infof("Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, cluster)
 
-	md.Status = ServiceStatusNACKed
-	errRet := combineErrors("CDS", topLevelErrors, perResourceErrors)
-	md.ErrState = &UpdateErrorMetadata{
-		Version:   versionStr,
-		Err:       errRet,
-		Timestamp: timestamp,
+	cu, err := validateCluster(cluster)
+	if err != nil {
+		return cluster.GetName(), ClusterUpdate{}, err
 	}
-	return update, md, errRet
+	cu.Raw = r
+	// If the Cluster message in the CDS response did not contain a
+	// serviceName, we will just use the clusterName for EDS.
+	if cu.ServiceName == "" {
+		cu.ServiceName = cluster.GetName()
+	}
+	return cluster.GetName(), cu, nil
 }
 
 func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
@@ -760,53 +686,29 @@ func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) *uint32 {
 // UnmarshalEndpoints processes resources received in an EDS response,
 // validates them, and transforms them into a native struct which contains only
 // fields we are interested in.
-func UnmarshalEndpoints(versionStr string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]EndpointsUpdate, UpdateMetadata, error) {
-	timestamp := time.Now()
+func UnmarshalEndpoints(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]EndpointsUpdate, UpdateMetadata, error) {
 	update := make(map[string]EndpointsUpdate)
-	md := UpdateMetadata{
-		Version:   versionStr,
-		Timestamp: timestamp,
-	}
-	var topLevelErrors []error
-	perResourceErrors := make(map[string]error)
-	for _, r := range resources {
-		if !IsEndpointsResource(r.GetTypeUrl()) {
-			topLevelErrors = append(topLevelErrors, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl()))
-			continue
-		}
+	md, err := processAllResources(version, resources, logger, update)
+	return update, md, err
+}
 
-		cla := &v3endpointpb.ClusterLoadAssignment{}
-		if err := proto.Unmarshal(r.GetValue(), cla); err != nil {
-			topLevelErrors = append(topLevelErrors, fmt.Errorf("failed to unmarshal resource: %v", err))
-			continue
-		}
-		logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, cla)
-
-		u, err := parseEDSRespProto(cla)
-		if err != nil {
-			perResourceErrors[cla.GetClusterName()] = err
-			// Add place holder in the map so we know this resource name was in
-			// the response.
-			update[cla.GetClusterName()] = EndpointsUpdate{}
-			continue
-		}
-		u.Raw = r
-		update[cla.GetClusterName()] = u
+func unmarshalEndpointsResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, EndpointsUpdate, error) {
+	if !IsEndpointsResource(r.GetTypeUrl()) {
+		return "", EndpointsUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
 	}
 
-	if len(topLevelErrors) == 0 && len(perResourceErrors) == 0 {
-		md.Status = ServiceStatusACKed
-		return update, md, nil
+	cla := &v3endpointpb.ClusterLoadAssignment{}
+	if err := proto.Unmarshal(r.GetValue(), cla); err != nil {
+		return "", EndpointsUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
+	logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, cla)
 
-	md.Status = ServiceStatusNACKed
-	errRet := combineErrors("EDS", topLevelErrors, perResourceErrors)
-	md.ErrState = &UpdateErrorMetadata{
-		Version:   versionStr,
-		Err:       errRet,
-		Timestamp: timestamp,
+	u, err := parseEDSRespProto(cla)
+	if err != nil {
+		return cla.GetClusterName(), EndpointsUpdate{}, err
 	}
-	return update, md, errRet
+	u.Raw = r
+	return cla.GetClusterName(), u, nil
 }
 
 func parseAddress(socketAddress *v3corepb.SocketAddress) string {
@@ -877,6 +779,108 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		}
 	}
 	return ret, nil
+}
+
+// processAllResources unmarshal and validate the resources, populate the
+// provided ret (a map), and return metadata and error.
+//
+// The type of the resource is determined by the type of ret. E.g.
+// map[string]ListenerUpdate means this is for LDS.
+func processAllResources(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger, ret interface{}) (UpdateMetadata, error) {
+	timestamp := time.Now()
+	md := UpdateMetadata{
+		Version:   version,
+		Timestamp: timestamp,
+	}
+	var topLevelErrors []error
+	perResourceErrors := make(map[string]error)
+
+	for _, r := range resources {
+		switch ret2 := ret.(type) {
+		case map[string]ListenerUpdate:
+			name, update, err := unmarshalListenerResource(r, logger)
+			if err == nil {
+				ret2[name] = update
+				continue
+			}
+			if name == "" {
+				topLevelErrors = append(topLevelErrors, err)
+				continue
+			}
+			perResourceErrors[name] = err
+			// Add place holder in the map so we know this resource name was in
+			// the response.
+			ret2[name] = ListenerUpdate{}
+		case map[string]RouteConfigUpdate:
+			name, update, err := unmarshalRouteConfigResource(r, logger)
+			if err == nil {
+				ret2[name] = update
+				continue
+			}
+			if name == "" {
+				topLevelErrors = append(topLevelErrors, err)
+				continue
+			}
+			perResourceErrors[name] = err
+			// Add place holder in the map so we know this resource name was in
+			// the response.
+			ret2[name] = RouteConfigUpdate{}
+		case map[string]ClusterUpdate:
+			name, update, err := unmarshalClusterResource(r, logger)
+			if err == nil {
+				ret2[name] = update
+				continue
+			}
+			if name == "" {
+				topLevelErrors = append(topLevelErrors, err)
+				continue
+			}
+			perResourceErrors[name] = err
+			// Add place holder in the map so we know this resource name was in
+			// the response.
+			ret2[name] = ClusterUpdate{}
+		case map[string]EndpointsUpdate:
+			name, update, err := unmarshalEndpointsResource(r, logger)
+			if err == nil {
+				ret2[name] = update
+				continue
+			}
+			if name == "" {
+				topLevelErrors = append(topLevelErrors, err)
+				continue
+			}
+			perResourceErrors[name] = err
+			// Add place holder in the map so we know this resource name was in
+			// the response.
+			ret2[name] = EndpointsUpdate{}
+		}
+	}
+
+	if len(topLevelErrors) == 0 && len(perResourceErrors) == 0 {
+		md.Status = ServiceStatusACKed
+		return md, nil
+	}
+
+	var typeStr string
+	switch ret.(type) {
+	case map[string]ListenerUpdate:
+		typeStr = "LDS"
+	case map[string]RouteConfigUpdate:
+		typeStr = "RDS"
+	case map[string]ClusterUpdate:
+		typeStr = "CDS"
+	case map[string]EndpointsUpdate:
+		typeStr = "EDS"
+	}
+
+	md.Status = ServiceStatusNACKed
+	errRet := combineErrors(typeStr, topLevelErrors, perResourceErrors)
+	md.ErrState = &UpdateErrorMetadata{
+		Version:   version,
+		Err:       errRet,
+		Timestamp: timestamp,
+	}
+	return md, errRet
 }
 
 func combineErrors(rType string, topLevelErrors []error, perResourceErrors map[string]error) error {
