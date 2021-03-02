@@ -717,20 +717,78 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 				Version: testVersion,
 			},
 		},
+		{
+			// To test that unmarshal keeps processing on errors.
+			name: "good and bad routeConfig resources",
+			resources: []*anypb.Any{
+				v2RouteConfig,
+				{
+					TypeUrl: version.V2RouteConfigURL,
+					Value: func() []byte {
+						rc := &v3routepb.RouteConfiguration{
+							Name: "bad",
+							VirtualHosts: []*v3routepb.VirtualHost{
+								{Domains: []string{ldsTarget},
+									Routes: []*v3routepb.Route{{
+										Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_ConnectMatcher_{}},
+									}}}}}
+						m, _ := proto.Marshal(rc)
+						return m
+					}(),
+				},
+				v3RouteConfig,
+			},
+			wantUpdate: map[string]RouteConfigUpdate{
+				v3RouteConfigName: {
+					VirtualHosts: []*VirtualHost{
+						{
+							Domains: []string{uninterestingDomain},
+							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{uninterestingClusterName: 1}}},
+						},
+						{
+							Domains: []string{ldsTarget},
+							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v3ClusterName: 1}}},
+						},
+					},
+					Raw: v3RouteConfig,
+				},
+				v2RouteConfigName: {
+					VirtualHosts: []*VirtualHost{
+						{
+							Domains: []string{uninterestingDomain},
+							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{uninterestingClusterName: 1}}},
+						},
+						{
+							Domains: []string{ldsTarget},
+							Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{v2ClusterName: 1}}},
+						},
+					},
+					Raw: v2RouteConfig,
+				},
+				"bad": {},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
+			wantErr: true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			update, md, err := UnmarshalRouteConfig(testVersion, test.resources, nil)
 			if (err != nil) != test.wantErr {
-				t.Errorf("UnmarshalRouteConfig(%v) = got err: %v, wantErr: %v", test.resources, err, test.wantErr)
+				t.Errorf("UnmarshalRouteConfig(), got err: %v, wantErr: %v", err, test.wantErr)
 			}
 			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
-				t.Errorf("UnmarshalRouteConfig(%v) = %v want %v", test.resources, update, test.wantUpdate)
-				t.Errorf(diff)
+				t.Errorf("got unexpected update, diff (-got +want): %v", diff)
 			}
-			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreErrorDetails); diff != "" {
-				t.Errorf("UnmarshalRouteConfig(%v) = %v want %v", test.resources, md, test.wantMD)
-				t.Errorf(diff)
+			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreDetails); diff != "" {
+				t.Errorf("got unexpected metadata, diff (-got +want): %v", diff)
 			}
 		})
 	}

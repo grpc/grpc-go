@@ -239,20 +239,75 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 				Version: testVersion,
 			},
 		},
+		{
+			// To test that unmarshal keeps processing on errors.
+			name: "good and bad endpoints",
+			resources: []*anypb.Any{
+				v3EndpointsAny,
+				{
+					// bad endpoints resource
+					TypeUrl: version.V3EndpointsURL,
+					Value: func() []byte {
+						clab0 := newClaBuilder("bad", nil)
+						clab0.addLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
+						clab0.addLocality("locality-2", 1, 2, []string{"addr2:159"}, nil)
+						e := clab0.Build()
+						me, _ := proto.Marshal(e)
+						return me
+					}(),
+				},
+			},
+			wantUpdate: map[string]EndpointsUpdate{
+				"test": {
+					Drops: nil,
+					Localities: []Locality{
+						{
+							Endpoints: []Endpoint{{
+								Address:      "addr1:314",
+								HealthStatus: EndpointHealthStatusUnhealthy,
+								Weight:       271,
+							}},
+							ID:       internal.LocalityID{SubZone: "locality-1"},
+							Priority: 1,
+							Weight:   1,
+						},
+						{
+							Endpoints: []Endpoint{{
+								Address:      "addr2:159",
+								HealthStatus: EndpointHealthStatusDraining,
+								Weight:       828,
+							}},
+							ID:       internal.LocalityID{SubZone: "locality-2"},
+							Priority: 0,
+							Weight:   1,
+						},
+					},
+					Raw: v3EndpointsAny,
+				},
+				"bad": {},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
+			wantErr: true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			update, md, err := UnmarshalEndpoints(testVersion, test.resources, nil)
 			if (err != nil) != test.wantErr {
-				t.Errorf("UnmarshalEndpoints(%v) = got err: %v, wantErr: %v", test.resources, err, test.wantErr)
+				t.Errorf("UnmarshalEndpoints(), got err: %v, wantErr: %v", err, test.wantErr)
 			}
 			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
-				t.Errorf("UnmarshalEndpoints(%v) = %v want %v", test.resources, update, test.wantUpdate)
-				t.Errorf(diff)
+				t.Errorf("got unexpected update, diff (-got +want): %v", diff)
 			}
-			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreErrorDetails); diff != "" {
-				t.Errorf("UnmarshalEndpoints(%v) = %v want %v", test.resources, md, test.wantMD)
-				t.Errorf(diff)
+			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreDetails); diff != "" {
+				t.Errorf("got unexpected metadata, diff (-got +want): %v", diff)
 			}
 		})
 	}

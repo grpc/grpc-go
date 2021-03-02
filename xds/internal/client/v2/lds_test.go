@@ -94,8 +94,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 				goodLDSTarget1: {RouteConfigName: goodRouteName1, Raw: marshaledListener1},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status:   xdsclient.ServiceStatusACKed,
-				ErrState: nil,
+				Status: xdsclient.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -110,8 +109,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 				goodLDSTarget2: {RouteConfigName: goodRouteName1, Raw: marshaledListener2},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status:   xdsclient.ServiceStatusACKed,
-				ErrState: nil,
+				Status: xdsclient.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -143,8 +141,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 				goodLDSTarget2: {RouteConfigName: goodRouteName1, Raw: marshaledListener2},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status:   xdsclient.ServiceStatusACKed,
-				ErrState: nil,
+				Status: xdsclient.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -156,8 +153,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			wantErr:     false,
 			wantUpdate:  nil,
 			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status:   xdsclient.ServiceStatusACKed,
-				ErrState: nil,
+				Status: xdsclient.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},

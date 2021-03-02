@@ -717,20 +717,58 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				Version: testVersion,
 			},
 		},
+		{
+			// To test that unmarshal keeps processing on errors.
+			name: "good and bad clusters",
+			resources: []*anypb.Any{
+				v2ClusterAny,
+				{
+					// bad cluster resource
+					TypeUrl: version.V3ClusterURL,
+					Value: func() []byte {
+						cl := &v3clusterpb.Cluster{
+							Name:                 "bad",
+							ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
+						}
+						mcl, _ := proto.Marshal(cl)
+						return mcl
+					}(),
+				},
+				v3ClusterAny,
+			},
+			wantUpdate: map[string]ClusterUpdate{
+				v2ClusterName: {
+					ServiceName: v2Service, EnableLRS: true,
+					Raw: v2ClusterAny,
+				},
+				v3ClusterName: {
+					ServiceName: v3Service, EnableLRS: true,
+					Raw: v3ClusterAny,
+				},
+				"bad": {},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
+			wantErr: true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			update, md, err := UnmarshalCluster(testVersion, test.resources, nil)
 			if (err != nil) != test.wantErr {
-				t.Errorf("UnmarshalCluster(%v) = got err: %v, wantErr: %v", test.resources, err, test.wantErr)
+				t.Errorf("UnmarshalCluster(), got err: %v, wantErr: %v", err, test.wantErr)
 			}
 			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
-				t.Errorf("UnmarshalCluster(%v) = %v want %v", test.resources, update, test.wantUpdate)
-				t.Errorf(diff)
+				t.Errorf("got unexpected update, diff (-got +want): %v", diff)
 			}
-			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreErrorDetails); diff != "" {
-				t.Errorf("UnmarshalCluster(%v) = %v want %v", test.resources, md, test.wantMD)
-				t.Errorf(diff)
+			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreDetails); diff != "" {
+				t.Errorf("got unexpected metadata, diff (-got +want): %v", diff)
 			}
 		})
 	}

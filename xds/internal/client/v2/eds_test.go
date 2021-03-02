@@ -133,8 +133,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 				},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status:   xdsclient.ServiceStatusACKed,
-				ErrState: nil,
+				Status: xdsclient.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -163,8 +162,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 				},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status:   xdsclient.ServiceStatusACKed,
-				ErrState: nil,
+				Status: xdsclient.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},

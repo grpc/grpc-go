@@ -661,6 +661,47 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				Version: testVersion,
 			},
 		},
+		{
+			// To test that unmarshal keeps processing on errors.
+			name: "good and bad listener resources",
+			resources: []*anypb.Any{
+				v2Lis,
+				{
+					TypeUrl: version.V3ListenerURL,
+					Value: func() []byte {
+						lis := &v3listenerpb.Listener{
+							Name: "bad",
+							ApiListener: &v3listenerpb.ApiListener{
+								ApiListener: &anypb.Any{
+									TypeUrl: version.V2ListenerURL,
+									Value: func() []byte {
+										cm := &v3httppb.HttpConnectionManager{
+											RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
+										}
+										mcm, _ := proto.Marshal(cm)
+										return mcm
+									}()}}}
+						mLis, _ := proto.Marshal(lis)
+						return mLis
+					}(),
+				},
+				v3Lis,
+			},
+			wantUpdate: map[string]ListenerUpdate{
+				v2LDSTarget: {RouteConfigName: v2RouteConfigName, Raw: v2Lis},
+				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3Lis},
+				"bad":       {},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, test := range tests {
@@ -670,15 +711,13 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 
 			update, md, err := UnmarshalListener(testVersion, test.resources, nil)
 			if (err != nil) != test.wantErr {
-				t.Errorf("UnmarshalListener(%v) = got err: %v, wantErr: %v", test.resources, err, test.wantErr)
+				t.Errorf("UnmarshalListener(), got err: %v, wantErr: %v", err, test.wantErr)
 			}
 			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
-				t.Errorf("UnmarshalListener(%v) = %v want %v", test.resources, update, test.wantUpdate)
-				t.Errorf(diff)
+				t.Errorf("got unexpected update, diff (-got +want): %v", diff)
 			}
-			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreErrorDetails); diff != "" {
-				t.Errorf("UnmarshalListener(%v) = %v want %v", test.resources, md, test.wantMD)
-				t.Errorf(diff)
+			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreDetails); diff != "" {
+				t.Errorf("got unexpected metadata, diff (-got +want): %v", diff)
 			}
 			env.FaultInjectionSupport = oldFI
 		})
@@ -1441,18 +1480,16 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			gotUpdate, md, err := UnmarshalListener(testVersion, test.resources, nil)
 			if (err != nil) != (test.wantErr != "") {
-				t.Fatalf("UnmarshalListener(%v) = %v wantErr: %q", test.resources, err, test.wantErr)
+				t.Errorf("UnmarshalListener(), got err: %v, wantErr: %v", err, test.wantErr)
 			}
 			if err != nil && !strings.Contains(err.Error(), test.wantErr) {
-				t.Fatalf("UnmarshalListener(%v) = %v wantErr: %q", test.resources, err, test.wantErr)
+				t.Fatalf("UnmarshalListener() = %v wantErr: %q", err, test.wantErr)
 			}
 			if diff := cmp.Diff(gotUpdate, test.wantUpdate, cmpOpts); diff != "" {
-				t.Errorf("UnmarshalListener(%v) = %v want %v", test.resources, gotUpdate, test.wantUpdate)
-				t.Errorf(diff)
+				t.Errorf("got unexpected update, diff (-got +want): %v", diff)
 			}
-			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreErrorDetails); diff != "" {
-				t.Errorf("UnmarshalListener(%v) = %v want %v", test.resources, md, test.wantMD)
-				t.Errorf(diff)
+			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreDetails); diff != "" {
+				t.Errorf("got unexpected metadata, diff (-got +want): %v", diff)
 			}
 		})
 	}
