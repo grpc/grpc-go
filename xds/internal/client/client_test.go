@@ -26,11 +26,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/protobuf/testing/protocmp"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
@@ -57,20 +56,6 @@ const (
 	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
 	defaultTestTimeout            = 5 * time.Second
 	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
-)
-
-var (
-	cmpOpts = cmp.Options{
-		cmpopts.EquateEmpty(),
-		cmp.Comparer(func(a, b time.Time) bool { return true }),
-		cmp.Comparer(func(x, y error) bool {
-			if x == nil || y == nil {
-				return x == nil && y == nil
-			}
-			return x.Error() == y.Error()
-		}),
-		protocmp.Transform(),
-	}
 )
 
 func clientOpts(balancerName string, overrideWatchExpiryTimeout bool) (*bootstrap.Config, time.Duration) {
