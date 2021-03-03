@@ -235,7 +235,7 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) err
 		// one where fallback credentials are to be used.
 		b.xdsHI.SetRootCertProvider(nil)
 		b.xdsHI.SetIdentityCertProvider(nil)
-		b.xdsHI.SetAcceptedSANs(nil)
+		b.xdsHI.SetSANMatchers(nil)
 		return nil
 	}
 
@@ -278,7 +278,7 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) err
 	// could have been non-nil earlier.
 	b.xdsHI.SetRootCertProvider(rootProvider)
 	b.xdsHI.SetIdentityCertProvider(identityProvider)
-	b.xdsHI.SetAcceptedSANs(config.AcceptedSANs)
+	b.xdsHI.SetSANMatchers(config.SubjectAltNameMatchers)
 	return nil
 }
 

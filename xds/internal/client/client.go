@@ -33,6 +33,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 
@@ -385,11 +386,15 @@ type SecurityConfig struct {
 	// IdentityCertName is the certificate name to be passed to the plugin
 	// (looked up from the bootstrap file) while fetching identity certificates.
 	IdentityCertName string
-	// AcceptedSANs is a list of Subject Alternative Names. During the TLS
-	// handshake, the SAN present in the peer certificate is compared against
-	// this list, and the handshake succeeds only if a match is found. Used only
-	// on the client-side.
-	AcceptedSANs []string
+	// SubjectAltNameMatchers is an optional list of match criteria for SANs
+	// specified on the peer certificate. Used only on the client-side.
+	//
+	// Some intricacies:
+	// - If this field is empty, then any peer certificate is accepted.
+	// - If the peer certificate contains a wildcard DNS SAN, and an `exact`
+	//   matcher is configured, a wildcard DNS match is performed instead of a
+	//   regular string comparison.
+	SubjectAltNameMatchers []xds.StringMatcher
 	// RequireClientCert indicates if the server handshake process expects the
 	// client to present a certificate. Set to true when performing mTLS. Used
 	// only on the server-side.

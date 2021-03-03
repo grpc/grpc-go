@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -34,12 +35,14 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
@@ -697,21 +700,50 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext) (*Secu
 	// those possible values:
 	//  - combined validation context:
 	//    - contains a default validation context which holds the list of
-	//      accepted SANs.
+	//      matchers for accepted SANs.
 	//    - contains certificate provider instance configuration
 	//  - certificate provider instance configuration
 	//    - in this case, we do not get a list of accepted SANs.
 	switch t := common.GetValidationContextType().(type) {
 	case *v3tlspb.CommonTlsContext_CombinedValidationContext:
 		combined := common.GetCombinedValidationContext()
+		var matchers []xds.StringMatcher
 		if def := combined.GetDefaultValidationContext(); def != nil {
-			for _, matcher := range def.GetMatchSubjectAltNames() {
-				// We only support exact matches for now.
-				if exact := matcher.GetExact(); exact != "" {
-					sc.AcceptedSANs = append(sc.AcceptedSANs, exact)
+			for _, m := range def.GetMatchSubjectAltNames() {
+				matcher := xds.StringMatcher{}
+				switch mt := m.GetMatchPattern().(type) {
+				case *v3matcherpb.StringMatcher_Exact:
+					matcher.ExactMatch = &mt.Exact
+				case *v3matcherpb.StringMatcher_Prefix:
+					if m.GetPrefix() == "" {
+						return nil, errors.New("empty prefix is not allowed in StringMatcher")
+					}
+					matcher.PrefixMatch = &mt.Prefix
+				case *v3matcherpb.StringMatcher_Suffix:
+					if m.GetSuffix() == "" {
+						return nil, errors.New("empty suffix is not allowed in StringMatcher")
+					}
+					matcher.SuffixMatch = &mt.Suffix
+				case *v3matcherpb.StringMatcher_SafeRegex:
+					regex := m.GetSafeRegex().GetRegex()
+					re, err := regexp.Compile(regex)
+					if err != nil {
+						return nil, fmt.Errorf("safe_regex matcher %q is invalid", regex)
+					}
+					matcher.RegexMatch = re
+				case *v3matcherpb.StringMatcher_Contains:
+					if m.GetContains() == "" {
+						return nil, errors.New("empty contains is not allowed in StringMatcher")
+					}
+					matcher.ContainsMatch = &mt.Contains
+				default:
+					return nil, fmt.Errorf("combined validation context has unrecognized string matcher: %+v", m)
 				}
+				matcher.IgnoreCase = m.GetIgnoreCase()
+				matchers = append(matchers, matcher)
 			}
 		}
+		sc.SubjectAltNameMatchers = matchers
 		if pi := combined.GetValidationContextCertificateProviderInstance(); pi != nil {
 			sc.RootInstanceName = pi.GetInstanceName()
 			sc.RootCertName = pi.GetCertificateName()
