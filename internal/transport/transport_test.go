@@ -71,7 +71,7 @@ var (
 	expectedRequestLarge           = make([]byte, initialWindowSize*2)
 	expectedResponseLarge          = make([]byte, initialWindowSize*2)
 	expectedInvalidHeaderField     = "invalid/content-type"
-	expectedInvalidHttpMethodField = "PUT"
+	expectedInvalidHTTPMethodField = "PUT"
 )
 
 func init() {
@@ -98,7 +98,7 @@ const (
 	invalidHeaderField
 	delayRead
 	pingpong
-	invalidHttpMethod
+	invalidHTTPMethod
 )
 
 func (h *testStreamHandler) handleStreamAndNotify(s *Stream) {
@@ -211,9 +211,9 @@ func (h *testStreamHandler) handleStreamInvalidHeaderField(t *testing.T, s *Stre
 	})
 }
 
-func (h *testStreamHandler) handleStreamInvalidHttpMethod(t *testing.T, s *Stream) {
+func (h *testStreamHandler) handleStreamInvalidHTTPMethod(t *testing.T, s *Stream) {
 	headerFields := []hpack.HeaderField{}
-	headerFields = append(headerFields, hpack.HeaderField{Name: ":method", Value: expectedInvalidHttpMethodField})
+	headerFields = append(headerFields, hpack.HeaderField{Name: ":method", Value: expectedInvalidHTTPMethodField})
 	h.t.controlBuf.put(&headerFrame{
 		streamID:  s.id,
 		hf:        headerFields,
@@ -378,9 +378,9 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 			}, func(ctx context.Context, method string) context.Context {
 				return ctx
 			})
-		case invalidHttpMethod:
+		case invalidHTTPMethod:
 			go transport.HandleStreams(func(s *Stream) {
-				go h.handleStreamInvalidHttpMethod(t, s)
+				go h.handleStreamInvalidHTTPMethod(t, s)
 			}, func(ctx context.Context, method string) context.Context {
 				return ctx
 			})
@@ -1753,8 +1753,8 @@ func runPingPongTest(t *testing.T, msgSize int) {
 	}
 }
 
-func (s) TestInvalidHttpMethod(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, math.MaxUint32, invalidHttpMethod)
+func (s) TestInvalidHTTPMethod(t *testing.T) {
+	server, ct, cancel := setUp(t, 0, math.MaxUint32, invalidHTTPMethod)
 	defer cancel()
 	callHdr := &CallHdr{
 		Host:   "localhost",
