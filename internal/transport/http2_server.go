@@ -402,6 +402,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		s.cancel()
 		return true
 	}
+	t.maxStreamID = streamID
 	if state.data.httpMethod != http.MethodPost {
 		t.mu.Unlock()
 		if logger.V(logLevel) {
@@ -416,7 +417,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		s.cancel()
 		return false
 	}
-	t.maxStreamID = streamID
 	t.activeStreams[streamID] = s
 	if len(t.activeStreams) == 1 {
 		t.idle = time.Time{}

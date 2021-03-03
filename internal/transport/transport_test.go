@@ -71,6 +71,7 @@ var (
 	expectedRequestLarge       = make([]byte, initialWindowSize*2)
 	expectedResponseLarge      = make([]byte, initialWindowSize*2)
 	expectedInvalidHeaderField = "invalid/content-type"
+	expectedInvalidHttpMethodField = "PUT"
 )
 
 func init() {
@@ -97,6 +98,7 @@ const (
 	invalidHeaderField
 	delayRead
 	pingpong
+	invalidHttpMethod
 )
 
 func (h *testStreamHandler) handleStreamAndNotify(s *Stream) {
@@ -205,6 +207,16 @@ func (h *testStreamHandler) handleStreamInvalidHeaderField(t *testing.T, s *Stre
 	h.t.controlBuf.put(&headerFrame{
 		streamID:  s.id,
 		hf:        headerFields,
+		endStream: false,
+	})
+}
+
+func (h *testStreamHandler) handleStreamInvalidHttpMethod(t *testing.T, s *Stream) {
+	headerFields := []hpack.HeaderField{}
+	headerFields = append(headerFields, hpack.HeaderField{Name: ":method", Value: expectedInvalidHttpMethodField})
+	h.t.controlBuf.put(&headerFrame{
+		streamID: s.id,
+		hf: headerFields,
 		endStream: false,
 	})
 }
@@ -363,6 +375,12 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		case invalidHeaderField:
 			go transport.HandleStreams(func(s *Stream) {
 				go h.handleStreamInvalidHeaderField(t, s)
+			}, func(ctx context.Context, method string) context.Context {
+				return ctx
+			})
+		case invalidHttpMethod:
+			go transport.HandleStreams(func(s *Stream) {
+				go h.handleStreamInvalidHttpMethod(t, s)
 			}, func(ctx context.Context, method string) context.Context {
 				return ctx
 			})
@@ -1733,6 +1751,28 @@ func runPingPongTest(t *testing.T, msgSize int) {
 			}
 		}
 	}
+}
+
+func (s) TestInvalidHttpMethod(t *testing.T) {
+	server, ct, cancel := setUp(t, 0, math.MaxUint32, invalidHttpMethod)
+	defer cancel()
+	callHdr := &CallHdr{
+		Host: "localhost",
+		Method: "foo",
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	s, err := ct.NewStream(ctx, callHdr)
+	if err != nil {
+		return
+	}
+	p := make([]byte, http2MaxFrameLen)
+	_, err = s.trReader.(*transportReader).Read(p)
+	if se, ok := status.FromError(err); !ok || se.Code() != codes.Internal {
+		t.Fatalf("Read got error %v, want error with code %s", err, codes.Internal)
+	}
+	ct.Close()
+	server.stop()
 }
 
 type tableSizeLimit struct {
