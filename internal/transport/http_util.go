@@ -130,6 +130,8 @@ type parsedHeaderData struct {
 	grpcErr        error
 	httpErr        error
 	contentTypeErr string
+
+	httpMethod string
 }
 
 // decodeState configures decoding criteria and records the decoded data.
@@ -363,6 +365,8 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 		}
 		d.data.statsTrace = v
 		d.addMetadata(f.Name, string(v))
+	case ":method":
+		d.data.httpMethod = f.Value
 	default:
 		if isReservedHeader(f.Name) && !isWhitelistedHeader(f.Name) {
 			break

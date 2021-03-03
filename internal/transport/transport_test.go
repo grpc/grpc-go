@@ -1663,6 +1663,82 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	}
 }
 
+func (s) TestServerWithClientSendingWrongMethod(t *testing.T) {
+	server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
+	defer server.stop()
+	// Create a client directly to not couple what you can send to API of http2_client.go
+	mconn, err := net.Dial("tcp", server.lis.Addr().String())
+	if err != nil {
+		t.Fatalf("Client failed to dial: %v", err)
+	}
+	defer mconn.Close()
+
+	if n, err := mconn.Write(clientPreface); err != nil || n != len(clientPreface) {
+		t.Fatalf("mconn.Write(clientPreface) = %d, %v, want %d, <nil>", n, err, len(clientPreface))
+	}
+	// success chan indicates that reader received a RSTStream from server
+	success := make(chan struct{})
+	var mu sync.Mutex
+	framer := http2.NewFramer(mconn, mconn)
+	if err := framer.WriteSettings(); err != nil {
+		t.Fatalf("Error while writing settings: %v", err)
+	}
+
+	go func() { // Launch a reader goroutine
+		for {
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				return
+			}
+			switch frame := frame.(type) {
+			case *http2.RSTStreamFrame:
+				if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != http2.ErrCodeProtocol {
+					// Client only created a single stream, so RST Stream should be for that stream
+					t.Errorf("RST stream received with streamID: %d and code %v, want streamID: 1 and code: http.ErrCodeFlowControl", frame.Header().StreamID, http2.ErrCode(frame.ErrCode))
+				}
+				close(success) // Records  that client successfully received RST Stream frame
+				return
+			default:
+				// Do nothing. No other frame is of interest to this test
+			}
+		}
+	}()
+
+	// Done with HTTP/2 setup - now create a stream with a bad method header
+	var buf bytes.Buffer
+	henc := hpack.NewEncoder(&buf)
+	if err := henc.WriteField(hpack.HeaderField{Name: ":method", Value: "PUT"}); err != nil { // Method is required to be POST in a gRPC call
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	// Have the rest of the headers be ok and within the gRPC over HTTP/2 spec
+	if err := henc.WriteField(hpack.HeaderField{Name: ":path", Value: "foo"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: ":authority", Value: "localhost"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+
+	mu.Lock()
+	if err := framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
+		mu.Unlock()
+		t.Fatalf("Error while writing headers: %v", err)
+	}
+	mu.Unlock()
+	// Test server behavior of closing stream successfully through success channel
+	timer := time.NewTimer(time.Second * 5)
+	for {
+		select {
+		case <-timer.C:
+			t.Fatalf("Test timed out.")
+		case <-success:
+			return
+		}
+	}
+}
+
 func (s) TestPingPong1B(t *testing.T) {
 	runPingPongTest(t, 1)
 }
