@@ -66,11 +66,11 @@ type server struct {
 }
 
 var (
-	expectedRequest            = []byte("ping")
-	expectedResponse           = []byte("pong")
-	expectedRequestLarge       = make([]byte, initialWindowSize*2)
-	expectedResponseLarge      = make([]byte, initialWindowSize*2)
-	expectedInvalidHeaderField = "invalid/content-type"
+	expectedRequest                = []byte("ping")
+	expectedResponse               = []byte("pong")
+	expectedRequestLarge           = make([]byte, initialWindowSize*2)
+	expectedResponseLarge          = make([]byte, initialWindowSize*2)
+	expectedInvalidHeaderField     = "invalid/content-type"
 	expectedInvalidHttpMethodField = "PUT"
 )
 
@@ -215,8 +215,8 @@ func (h *testStreamHandler) handleStreamInvalidHttpMethod(t *testing.T, s *Strea
 	headerFields := []hpack.HeaderField{}
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":method", Value: expectedInvalidHttpMethodField})
 	h.t.controlBuf.put(&headerFrame{
-		streamID: s.id,
-		hf: headerFields,
+		streamID:  s.id,
+		hf:        headerFields,
 		endStream: false,
 	})
 }
@@ -1757,7 +1757,7 @@ func (s) TestInvalidHttpMethod(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, invalidHttpMethod)
 	defer cancel()
 	callHdr := &CallHdr{
-		Host: "localhost",
+		Host:   "localhost",
 		Method: "foo",
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
