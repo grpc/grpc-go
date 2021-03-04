@@ -38,7 +38,6 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/xds/internal/client"
-	_ "google.golang.org/grpc/xds/internal/client/v3"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -70,10 +69,10 @@ var cmpOpts = cmp.Options{
 		}
 		var at, bt v3routepb.RouteConfiguration
 		if err := ptypes.UnmarshalAny(a.RouteConfig, &at); err != nil {
-			panic("1" + err.Error())
+			panic("failed to unmarshal RouteConfig" + err.Error())
 		}
 		if err := ptypes.UnmarshalAny(b.RouteConfig, &bt); err != nil {
-			panic("2" + err.Error())
+			panic("failed to unmarshal RouteConfig" + err.Error())
 		}
 		return strings.Compare(at.Name, bt.Name) < 0
 	}),
@@ -86,10 +85,10 @@ var cmpOpts = cmp.Options{
 		}
 		var at, bt v3clusterpb.Cluster
 		if err := ptypes.UnmarshalAny(a.Cluster, &at); err != nil {
-			panic("3" + err.Error())
+			panic("failed to unmarshal Cluster" + err.Error())
 		}
 		if err := ptypes.UnmarshalAny(b.Cluster, &bt); err != nil {
-			panic("4" + err.Error())
+			panic("failed to unmarshal Cluster" + err.Error())
 		}
 		return strings.Compare(at.Name, bt.Name) < 0
 	}),
@@ -102,10 +101,10 @@ var cmpOpts = cmp.Options{
 		}
 		var at, bt v3endpointpb.ClusterLoadAssignment
 		if err := ptypes.UnmarshalAny(a.EndpointConfig, &at); err != nil {
-			panic("5" + err.Error())
+			panic("failed to unmarshal Endpoints" + err.Error())
 		}
 		if err := ptypes.UnmarshalAny(b.EndpointConfig, &bt); err != nil {
-			panic("6" + err.Error())
+			panic("failed to unmarshal Endpoints" + err.Error())
 		}
 		return strings.Compare(at.ClusterName, bt.ClusterName) < 0
 	}),
@@ -156,12 +155,10 @@ func init() {
 }
 
 func TestCSDS(t *testing.T) {
+	const retryCount = 10
+
 	xdsC, mgmServer, nodeID, stream, cleanup := commonSetup(t)
 	defer cleanup()
-
-	const (
-		retryCount = 10
-	)
 
 	for _, target := range ldsTargets {
 		xdsC.WatchListener(target, func(client.ListenerUpdate, error) {})
@@ -196,7 +193,6 @@ func TestCSDS(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 	for i := 0; i < retryCount; i++ {
 		err := checkForACKed(stream)
 		if err == nil {
@@ -229,7 +225,6 @@ func TestCSDS(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 	for i := 0; i < retryCount; i++ {
 		err := checkForNACKed(nackResourceIdx, stream)
 		if err == nil {

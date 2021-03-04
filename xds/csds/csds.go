@@ -39,6 +39,9 @@ import (
 	"google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	_ "google.golang.org/grpc/xds/internal/client/v2" // Register v2 xds_client.
+	_ "google.golang.org/grpc/xds/internal/client/v3" // Register v3 xds_client.
 )
 
 // xdsClientInterface contains methods from xdsClient.Client which are used by
@@ -235,7 +238,6 @@ func (s *clientStatusServer) buildCDSPerXDSConfig() *v3statuspb.PerXdsConfig {
 		}
 		if errState := d.MD.ErrState; errState != nil {
 			configDump.ErrorState = &v3adminpb.UpdateFailureState{
-				// FailedConfiguration: nil,
 				LastUpdateAttempt: timestamppb.New(errState.Timestamp),
 				Details:           errState.Err.Error(),
 				VersionInfo:       errState.Version,
