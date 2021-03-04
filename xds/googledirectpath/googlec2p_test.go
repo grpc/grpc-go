@@ -146,7 +146,7 @@ func TestBuildXDS(t *testing.T) {
 
 	const testZone = "test-zone"
 	oldGetZone := getZone
-	getZone = func() string { return testZone }
+	getZone = func(time.Duration) string { return testZone }
 	defer func() { getZone = oldGetZone }()
 
 	for _, tt := range []struct {
@@ -160,7 +160,7 @@ func TestBuildXDS(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			oldGetIPv6Capability := getIPv6Capable
-			getIPv6Capable = func() bool { return tt.ipv6 }
+			getIPv6Capable = func(time.Duration) bool { return tt.ipv6 }
 			defer func() { getIPv6Capable = oldGetIPv6Capability }()
 
 			if tt.tdURI != "" {

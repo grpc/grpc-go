@@ -36,14 +36,13 @@ import (
 	"google.golang.org/grpc/internal/googlecloud"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
+	_ "google.golang.org/grpc/xds" // To register xds resolvers and balancers.
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
-
-	_ "google.golang.org/grpc/xds" // To register xds resolvers and balancers.
 )
 
 const (
@@ -72,32 +71,13 @@ var (
 	onGCE = googlecloud.OnGCE
 
 	newClientWithConfig = func(config *bootstrap.Config) (xdsClientInterface, error) {
-		c, err := xdsclient.NewWithConfig(config)
-		return c, err
+		return xdsclient.NewWithConfig(config)
 	}
 
 	logger = internalgrpclog.NewPrefixLogger(grpclog.Component("directpath"), logPrefix)
-
-	defaultNode = &v3corepb.Node{
-		Id:                   "C2P",
-		Metadata:             nil, // To be set if ipv6 is enabled.
-		Locality:             nil, // To be set to the value from metadata.
-		UserAgentName:        gRPCUserAgentName,
-		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-		ClientFeatures:       []string{clientFeatureNoOverprovisioning},
-	}
-
-	ipv6EnabledMetadata = &structpb.Struct{
-		Fields: map[string]*structpb.Value{
-			ipv6CapableMetadataName: {
-				Kind: &structpb.Value_BoolValue{BoolValue: true},
-			},
-		},
-	}
 )
 
 func init() {
-	// TODO: remove this env var check when c2p resolver is proven stable.
 	if env.C2PResolverSupport {
 		resolver.Register(c2pResolverBuilder{})
 	}
@@ -113,15 +93,15 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	}
 
 	// Note that the following calls to getZone() and getIPv6Capable() does I/O,
-	// and has 10 seconds timeout.
+	// and has 10 seconds timeout each.
 	//
 	// This should be fine in most of the cases. In certain error cases, this
-	// could block Dial() for up to 20 seconds.
-	nodeCopy := proto.Clone(defaultNode).(*v3corepb.Node)
-	nodeCopy.Locality = &v3corepb.Locality{Zone: getZone()}
-	if getIPv6Capable() {
-		nodeCopy.Metadata = ipv6EnabledMetadata
-	}
+	// could block Dial() for up to 10 seconds (each blocking call has its own
+	// goroutine).
+	zoneCh, ipv6CapableCh := make(chan string), make(chan bool)
+	go func() { zoneCh <- getZone(httpReqTimeout) }()
+	go func() { ipv6CapableCh <- getIPv6Capable(httpReqTimeout) }()
+
 	balancerName := env.C2PResolverTestOnlyTrafficDirectorURI
 	if balancerName == "" {
 		balancerName = tdURL
@@ -130,7 +110,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 		BalancerName: balancerName,
 		Creds:        grpc.WithCredentialsBundle(google.NewDefaultCredentials()),
 		TransportAPI: version.TransportV3,
-		NodeProto:    nodeCopy,
+		NodeProto:    cloneNode(<-zoneCh, <-ipv6CapableCh),
 	}
 
 	// Create singleton xds client with this config. The xds client will be
@@ -144,6 +124,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	t.Scheme = xdsName
 	xdsR, err := resolver.Get(xdsName).Build(t, cc, opts)
 	if err != nil {
+		xdsC.Close()
 		return nil, err
 	}
 	return &c2pResolver{
@@ -164,6 +145,33 @@ type c2pResolver struct {
 func (r *c2pResolver) Close() {
 	r.Resolver.Close()
 	r.client.Close()
+}
+
+var (
+	defaultNode = &v3corepb.Node{
+		// Not all required fields are set in defaultNote. Metadata will be set
+		// if ipv6 is enabled. Locality will be set to the value from metadata.
+		Id:                   "C2P",
+		UserAgentName:        gRPCUserAgentName,
+		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+		ClientFeatures:       []string{clientFeatureNoOverprovisioning},
+	}
+	ipv6EnabledMetadata = &structpb.Struct{
+		Fields: map[string]*structpb.Value{
+			ipv6CapableMetadataName: structpb.NewBoolValue(true),
+		},
+	}
+)
+
+// cloneNode makes a copy of defaultNode, and populate it's Metadata and
+// Locality fields.
+func cloneNode(zone string, ipv6Capable bool) *v3corepb.Node {
+	nodeCopy := proto.Clone(defaultNode).(*v3corepb.Node)
+	nodeCopy.Locality = &v3corepb.Locality{Zone: zone}
+	if ipv6Capable {
+		nodeCopy.Metadata = ipv6EnabledMetadata
+	}
+	return nodeCopy
 }
 
 // runDirectPath returns whether this resolver should use direct path.

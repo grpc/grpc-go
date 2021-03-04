@@ -25,14 +25,15 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"time"
 )
 
-func getFromMetadata(urlStr string) ([]byte, error) {
+func getFromMetadata(timeout time.Duration, urlStr string) ([]byte, error) {
 	parsedURL, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: httpReqTimeout}
+	client := &http.Client{Timeout: timeout}
 	req := &http.Request{
 		Method: http.MethodGet,
 		URL:    parsedURL,
@@ -59,9 +60,9 @@ var (
 )
 
 // Defined as var to be overridden in tests.
-var getZone = func() string {
+var getZone = func(timeout time.Duration) string {
 	zoneOnce.Do(func() {
-		qualifiedZone, err := getFromMetadata(zoneURL)
+		qualifiedZone, err := getFromMetadata(timeout, zoneURL)
 		if err != nil {
 			logger.Warningf("could not discover instance zone: %v", err)
 			return
@@ -82,9 +83,9 @@ var (
 )
 
 // Defined as var to be overridden in tests.
-var getIPv6Capable = func() bool {
+var getIPv6Capable = func(timeout time.Duration) bool {
 	ipv6CapableOnce.Do(func() {
-		_, err := getFromMetadata(ipv6URL)
+		_, err := getFromMetadata(timeout, ipv6URL)
 		if err != nil {
 			logger.Warningf("could not discover ipv6 capability: %v", err)
 			return
