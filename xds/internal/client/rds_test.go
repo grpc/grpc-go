@@ -588,17 +588,27 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 			}(),
 		}
 	)
+	const testVersion = "test-version-rds"
 
 	tests := []struct {
 		name       string
 		resources  []*anypb.Any
 		wantUpdate map[string]RouteConfigUpdate
+		wantMD     UpdateMetadata
 		wantErr    bool
 	}{
 		{
 			name:      "non-routeConfig resource type",
 			resources: []*anypb.Any{{TypeUrl: version.V3HTTPConnManagerURL}},
-			wantErr:   true,
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
+			wantErr: true,
 		},
 		{
 			name: "badly marshaled routeconfig resource",
@@ -608,10 +618,22 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 					Value:   []byte{1, 2, 3, 4},
 				},
 			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
 			wantErr: true,
 		},
 		{
 			name: "empty resource list",
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
 		},
 		{
 			name:      "v2 routeConfig resource",
@@ -628,7 +650,12 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}}}},
 						},
 					},
+					Raw: v2RouteConfig,
 				},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
 			},
 		},
 		{
@@ -646,7 +673,12 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}}}},
 						},
 					},
+					Raw: v3RouteConfig,
 				},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
 			},
 		},
 		{
@@ -664,6 +696,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}}}},
 						},
 					},
+					Raw: v3RouteConfig,
 				},
 				v2RouteConfigName: {
 					VirtualHosts: []*VirtualHost{
@@ -676,15 +709,86 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}}}},
 						},
 					},
+					Raw: v2RouteConfig,
 				},
 			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
+			// To test that unmarshal keeps processing on errors.
+			name: "good and bad routeConfig resources",
+			resources: []*anypb.Any{
+				v2RouteConfig,
+				{
+					TypeUrl: version.V2RouteConfigURL,
+					Value: func() []byte {
+						rc := &v3routepb.RouteConfiguration{
+							Name: "bad",
+							VirtualHosts: []*v3routepb.VirtualHost{
+								{Domains: []string{ldsTarget},
+									Routes: []*v3routepb.Route{{
+										Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_ConnectMatcher_{}},
+									}}}}}
+						m, _ := proto.Marshal(rc)
+						return m
+					}(),
+				},
+				v3RouteConfig,
+			},
+			wantUpdate: map[string]RouteConfigUpdate{
+				v3RouteConfigName: {
+					VirtualHosts: []*VirtualHost{
+						{
+							Domains: []string{uninterestingDomain},
+							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
+						},
+						{
+							Domains: []string{ldsTarget},
+							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}}}},
+						},
+					},
+					Raw: v3RouteConfig,
+				},
+				v2RouteConfigName: {
+					VirtualHosts: []*VirtualHost{
+						{
+							Domains: []string{uninterestingDomain},
+							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
+						},
+						{
+							Domains: []string{ldsTarget},
+							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}}}},
+						},
+					},
+					Raw: v2RouteConfig,
+				},
+				"bad": {},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
+			wantErr: true,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, _, err := UnmarshalRouteConfig("", test.resources, nil)
-			if ((err != nil) != test.wantErr) || !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
-				t.Errorf("UnmarshalRouteConfig(%v, %v) = (%v, %v) want (%v, %v)", test.resources, ldsTarget, update, err, test.wantUpdate, test.wantErr)
+			update, md, err := UnmarshalRouteConfig(testVersion, test.resources, nil)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("UnmarshalRouteConfig(), got err: %v, wantErr: %v", err, test.wantErr)
+			}
+			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
+				t.Errorf("got unexpected update, diff (-got +want): %v", diff)
+			}
+			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreDetails); diff != "" {
+				t.Errorf("got unexpected metadata, diff (-got +want): %v", diff)
 			}
 		})
 	}

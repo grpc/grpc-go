@@ -31,7 +31,6 @@ import (
 	anypb "github.com/golang/protobuf/ptypes/any"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/version"
 )
@@ -121,16 +120,44 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 }
 
 func (s) TestUnmarshalEndpoints(t *testing.T) {
+	var v3EndpointsAny = &anypb.Any{
+		TypeUrl: version.V3EndpointsURL,
+		Value: func() []byte {
+			clab0 := newClaBuilder("test", nil)
+			clab0.addLocality("locality-1", 1, 1, []string{"addr1:314"}, &addLocalityOptions{
+				Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},
+				Weight: []uint32{271},
+			})
+			clab0.addLocality("locality-2", 1, 0, []string{"addr2:159"}, &addLocalityOptions{
+				Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_DRAINING},
+				Weight: []uint32{828},
+			})
+			e := clab0.Build()
+			me, _ := proto.Marshal(e)
+			return me
+		}(),
+	}
+	const testVersion = "test-version-eds"
+
 	tests := []struct {
 		name       string
 		resources  []*anypb.Any
 		wantUpdate map[string]EndpointsUpdate
+		wantMD     UpdateMetadata
 		wantErr    bool
 	}{
 		{
 			name:      "non-clusterLoadAssignment resource type",
 			resources: []*anypb.Any{{TypeUrl: version.V3HTTPConnManagerURL}},
-			wantErr:   true,
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
+			wantErr: true,
 		},
 		{
 			name: "badly marshaled clusterLoadAssignment resource",
@@ -138,6 +165,14 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 				{
 					TypeUrl: version.V3EndpointsURL,
 					Value:   []byte{1, 2, 3, 4},
+				},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
 				},
 			},
 			wantErr: true,
@@ -157,23 +192,65 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 					}(),
 				},
 			},
+			wantUpdate: map[string]EndpointsUpdate{"test": {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
 			wantErr: true,
 		},
 		{
-			name: "v3 endpoints",
+			name:      "v3 endpoints",
+			resources: []*anypb.Any{v3EndpointsAny},
+			wantUpdate: map[string]EndpointsUpdate{
+				"test": {
+					Drops: nil,
+					Localities: []Locality{
+						{
+							Endpoints: []Endpoint{{
+								Address:      "addr1:314",
+								HealthStatus: EndpointHealthStatusUnhealthy,
+								Weight:       271,
+							}},
+							ID:       internal.LocalityID{SubZone: "locality-1"},
+							Priority: 1,
+							Weight:   1,
+						},
+						{
+							Endpoints: []Endpoint{{
+								Address:      "addr2:159",
+								HealthStatus: EndpointHealthStatusDraining,
+								Weight:       828,
+							}},
+							ID:       internal.LocalityID{SubZone: "locality-2"},
+							Priority: 0,
+							Weight:   1,
+						},
+					},
+					Raw: v3EndpointsAny,
+				},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
+			// To test that unmarshal keeps processing on errors.
+			name: "good and bad endpoints",
 			resources: []*anypb.Any{
+				v3EndpointsAny,
 				{
+					// bad endpoints resource
 					TypeUrl: version.V3EndpointsURL,
 					Value: func() []byte {
-						clab0 := newClaBuilder("test", nil)
-						clab0.addLocality("locality-1", 1, 1, []string{"addr1:314"}, &addLocalityOptions{
-							Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},
-							Weight: []uint32{271},
-						})
-						clab0.addLocality("locality-2", 1, 0, []string{"addr2:159"}, &addLocalityOptions{
-							Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_DRAINING},
-							Weight: []uint32{828},
-						})
+						clab0 := newClaBuilder("bad", nil)
+						clab0.addLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
+						clab0.addLocality("locality-2", 1, 2, []string{"addr2:159"}, nil)
 						e := clab0.Build()
 						me, _ := proto.Marshal(e)
 						return me
@@ -205,15 +282,32 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 							Weight:   1,
 						},
 					},
+					Raw: v3EndpointsAny,
+				},
+				"bad": {},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
 				},
 			},
+			wantErr: true,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, _, err := UnmarshalEndpoints("", test.resources, nil)
-			if ((err != nil) != test.wantErr) || !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
-				t.Errorf("UnmarshalEndpoints(%v) = (%+v, %v) want (%+v, %v)", test.resources, update, err, test.wantUpdate, test.wantErr)
+			update, md, err := UnmarshalEndpoints(testVersion, test.resources, nil)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("UnmarshalEndpoints(), got err: %v, wantErr: %v", err, test.wantErr)
+			}
+			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
+				t.Errorf("got unexpected update, diff (-got +want): %v", diff)
+			}
+			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreDetails); diff != "" {
+				t.Errorf("got unexpected metadata, diff (-got +want): %v", diff)
 			}
 		})
 	}

@@ -50,27 +50,28 @@ var (
 		},
 		TypeUrl: version.V2EndpointsURL,
 	}
+	marshaledGoodCLA1 = func() *anypb.Any {
+		clab0 := testutils.NewClusterLoadAssignmentBuilder(goodEDSName, nil)
+		clab0.AddLocality("locality-1", 1, 1, []string{"addr1:314"}, nil)
+		clab0.AddLocality("locality-2", 1, 0, []string{"addr2:159"}, nil)
+		a, _ := ptypes.MarshalAny(clab0.Build())
+		return a
+	}()
 	goodEDSResponse1 = &v2xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
-			func() *anypb.Any {
-				clab0 := testutils.NewClusterLoadAssignmentBuilder(goodEDSName, nil)
-				clab0.AddLocality("locality-1", 1, 1, []string{"addr1:314"}, nil)
-				clab0.AddLocality("locality-2", 1, 0, []string{"addr2:159"}, nil)
-				a, _ := ptypes.MarshalAny(clab0.Build())
-				return a
-			}(),
+			marshaledGoodCLA1,
 		},
 		TypeUrl: version.V2EndpointsURL,
 	}
+	marshaledGoodCLA2 = func() *anypb.Any {
+		clab0 := testutils.NewClusterLoadAssignmentBuilder("not-goodEDSName", nil)
+		clab0.AddLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
+		a, _ := ptypes.MarshalAny(clab0.Build())
+		return a
+	}()
 	goodEDSResponse2 = &v2xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
-			func() *anypb.Any {
-				clab0 := testutils.NewClusterLoadAssignmentBuilder("not-goodEDSName", nil)
-				clab0.AddLocality("locality-1", 1, 1, []string{"addr1:314"}, nil)
-				clab0.AddLocality("locality-2", 1, 0, []string{"addr2:159"}, nil)
-				a, _ := ptypes.MarshalAny(clab0.Build())
-				return a
-			}(),
+			marshaledGoodCLA2,
 		},
 		TypeUrl: version.V2EndpointsURL,
 	}
@@ -81,31 +82,59 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 		name          string
 		edsResponse   *v2xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    *xdsclient.EndpointsUpdate
+		wantUpdate    map[string]xdsclient.EndpointsUpdate
+		wantUpdateMD  xdsclient.UpdateMetadata
 		wantUpdateErr bool
 	}{
 		// Any in resource is badly marshaled.
 		{
-			name:          "badly-marshaled_response",
-			edsResponse:   badlyMarshaledEDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
+			name:        "badly-marshaled_response",
+			edsResponse: badlyMarshaledEDSResponse,
+			wantErr:     true,
+			wantUpdate:  nil,
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
+				ErrState: &xdsclient.UpdateErrorMetadata{
+					Err: errPlaceHolder,
+				},
+			},
 			wantUpdateErr: false,
 		},
 		// Response doesn't contain resource with the right type.
 		{
-			name:          "no-config-in-response",
-			edsResponse:   badResourceTypeInEDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
+			name:        "no-config-in-response",
+			edsResponse: badResourceTypeInEDSResponse,
+			wantErr:     true,
+			wantUpdate:  nil,
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
+				ErrState: &xdsclient.UpdateErrorMetadata{
+					Err: errPlaceHolder,
+				},
+			},
 			wantUpdateErr: false,
 		},
 		// Response contains one uninteresting ClusterLoadAssignment.
 		{
-			name:          "one-uninterestring-assignment",
-			edsResponse:   goodEDSResponse2,
-			wantErr:       false,
-			wantUpdate:    nil,
+			name:        "one-uninterestring-assignment",
+			edsResponse: goodEDSResponse2,
+			wantErr:     false,
+			wantUpdate: map[string]xdsclient.EndpointsUpdate{
+				"not-goodEDSName": {
+					Localities: []xdsclient.Locality{
+						{
+							Endpoints: []xdsclient.Endpoint{{Address: "addr1:314"}},
+							ID:        internal.LocalityID{SubZone: "locality-1"},
+							Priority:  0,
+							Weight:    1,
+						},
+					},
+					Raw: marshaledGoodCLA2,
+				},
+			},
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusACKed,
+			},
 			wantUpdateErr: false,
 		},
 		// Response contains one good ClusterLoadAssignment.
@@ -113,21 +142,27 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			name:        "one-good-assignment",
 			edsResponse: goodEDSResponse1,
 			wantErr:     false,
-			wantUpdate: &xdsclient.EndpointsUpdate{
-				Localities: []xdsclient.Locality{
-					{
-						Endpoints: []xdsclient.Endpoint{{Address: "addr1:314"}},
-						ID:        internal.LocalityID{SubZone: "locality-1"},
-						Priority:  1,
-						Weight:    1,
+			wantUpdate: map[string]xdsclient.EndpointsUpdate{
+				goodEDSName: {
+					Localities: []xdsclient.Locality{
+						{
+							Endpoints: []xdsclient.Endpoint{{Address: "addr1:314"}},
+							ID:        internal.LocalityID{SubZone: "locality-1"},
+							Priority:  1,
+							Weight:    1,
+						},
+						{
+							Endpoints: []xdsclient.Endpoint{{Address: "addr2:159"}},
+							ID:        internal.LocalityID{SubZone: "locality-2"},
+							Priority:  0,
+							Weight:    1,
+						},
 					},
-					{
-						Endpoints: []xdsclient.Endpoint{{Address: "addr2:159"}},
-						ID:        internal.LocalityID{SubZone: "locality-2"},
-						Priority:  0,
-						Weight:    1,
-					},
+					Raw: marshaledGoodCLA1,
 				},
+			},
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -140,6 +175,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 				responseToHandle: test.edsResponse,
 				wantHandleErr:    test.wantErr,
 				wantUpdate:       test.wantUpdate,
+				wantUpdateMD:     test.wantUpdateMD,
 				wantUpdateErr:    test.wantUpdateErr,
 			})
 		})

@@ -21,19 +21,14 @@ package v2
 import (
 	"context"
 	"errors"
-	"reflect"
+	"fmt"
 	"testing"
 	"time"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
-	httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
-	listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v2"
 	"github.com/golang/protobuf/proto"
-	anypb "github.com/golang/protobuf/ptypes/any"
-	structpb "github.com/golang/protobuf/ptypes/struct"
+	"github.com/golang/protobuf/ptypes"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpclog"
@@ -44,6 +39,15 @@ import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/protobuf/testing/protocmp"
+
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	basepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+	httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
+	listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v2"
+	anypb "github.com/golang/protobuf/ptypes/any"
+	structpb "github.com/golang/protobuf/ptypes/struct"
 )
 
 type s struct {
@@ -118,7 +122,7 @@ var (
 			},
 		},
 	}
-	marshaledListener1, _ = proto.Marshal(goodListener1)
+	marshaledListener1, _ = ptypes.MarshalAny(goodListener1)
 	goodListener2         = &xdspb.Listener{
 		Name: goodLDSTarget2,
 		ApiListener: &listenerpb.ApiListener{
@@ -128,7 +132,7 @@ var (
 			},
 		},
 	}
-	marshaledListener2, _     = proto.Marshal(goodListener2)
+	marshaledListener2, _     = ptypes.MarshalAny(goodListener2)
 	noAPIListener             = &xdspb.Listener{Name: goodLDSTarget1}
 	marshaledNoAPIListener, _ = proto.Marshal(noAPIListener)
 	badAPIListener2           = &xdspb.Listener{
@@ -143,19 +147,13 @@ var (
 	badlyMarshaledAPIListener2, _ = proto.Marshal(badAPIListener2)
 	goodLDSResponse1              = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
-			{
-				TypeUrl: version.V2ListenerURL,
-				Value:   marshaledListener1,
-			},
+			marshaledListener1,
 		},
 		TypeUrl: version.V2ListenerURL,
 	}
 	goodLDSResponse2 = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
-			{
-				TypeUrl: version.V2ListenerURL,
-				Value:   marshaledListener2,
-			},
+			marshaledListener2,
 		},
 		TypeUrl: version.V2ListenerURL,
 	}
@@ -180,14 +178,8 @@ var (
 	}
 	ldsResponseWithMultipleResources = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
-			{
-				TypeUrl: version.V2ListenerURL,
-				Value:   marshaledListener2,
-			},
-			{
-				TypeUrl: version.V2ListenerURL,
-				Value:   marshaledListener1,
-			},
+			marshaledListener2,
+			marshaledListener1,
 		},
 		TypeUrl: version.V2ListenerURL,
 	}
@@ -202,14 +194,8 @@ var (
 	}
 	goodBadUglyLDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
-			{
-				TypeUrl: version.V2ListenerURL,
-				Value:   marshaledListener2,
-			},
-			{
-				TypeUrl: version.V2ListenerURL,
-				Value:   marshaledListener1,
-			},
+			marshaledListener2,
+			marshaledListener1,
 			{
 				TypeUrl: version.V2ListenerURL,
 				Value:   badlyMarshaledAPIListener2,
@@ -238,13 +224,10 @@ var (
 	noVirtualHostsRouteConfig = &xdspb.RouteConfiguration{
 		Name: goodRouteName1,
 	}
-	marshaledNoVirtualHostsRouteConfig, _ = proto.Marshal(noVirtualHostsRouteConfig)
+	marshaledNoVirtualHostsRouteConfig, _ = ptypes.MarshalAny(noVirtualHostsRouteConfig)
 	noVirtualHostsInRDSResponse           = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
-			{
-				TypeUrl: version.V2RouteConfigURL,
-				Value:   marshaledNoVirtualHostsRouteConfig,
-			},
+			marshaledNoVirtualHostsRouteConfig,
 		},
 		TypeUrl: version.V2RouteConfigURL,
 	}
@@ -279,7 +262,7 @@ var (
 			},
 		},
 	}
-	marshaledGoodRouteConfig1, _ = proto.Marshal(goodRouteConfig1)
+	marshaledGoodRouteConfig1, _ = ptypes.MarshalAny(goodRouteConfig1)
 	goodRouteConfig2             = &xdspb.RouteConfiguration{
 		Name: goodRouteName2,
 		VirtualHosts: []*routepb.VirtualHost{
@@ -311,25 +294,22 @@ var (
 			},
 		},
 	}
-	marshaledGoodRouteConfig2, _ = proto.Marshal(goodRouteConfig2)
+	marshaledGoodRouteConfig2, _ = ptypes.MarshalAny(goodRouteConfig2)
 	goodRDSResponse1             = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
-			{
-				TypeUrl: version.V2RouteConfigURL,
-				Value:   marshaledGoodRouteConfig1,
-			},
+			marshaledGoodRouteConfig1,
 		},
 		TypeUrl: version.V2RouteConfigURL,
 	}
 	goodRDSResponse2 = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
-			{
-				TypeUrl: version.V2RouteConfigURL,
-				Value:   marshaledGoodRouteConfig2,
-			},
+			marshaledGoodRouteConfig2,
 		},
 		TypeUrl: version.V2RouteConfigURL,
 	}
+	// An place holder error. When comparing UpdateErrorMetadata, we only check
+	// if error is nil, and don't compare error content.
+	errPlaceHolder = fmt.Errorf("err place holder")
 )
 
 type watchHandleTestcase struct {
@@ -339,6 +319,7 @@ type watchHandleTestcase struct {
 	responseToHandle *xdspb.DiscoveryResponse
 	wantHandleErr    bool
 	wantUpdate       interface{}
+	wantUpdateMD     xdsclient.UpdateMetadata
 	wantUpdateErr    bool
 }
 
@@ -396,15 +377,39 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 
 	type updateErr struct {
 		u   interface{}
+		md  xdsclient.UpdateMetadata
 		err error
 	}
 	gotUpdateCh := testutils.NewChannel()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(rType xdsclient.ResourceType, d map[string]interface{}, _ xdsclient.UpdateMetadata) {
+		f: func(rType xdsclient.ResourceType, d map[string]interface{}, md xdsclient.UpdateMetadata) {
 			if rType == test.rType {
-				if u, ok := d[test.resourceName]; ok {
-					gotUpdateCh.Send(updateErr{u, nil})
+				switch test.rType {
+				case xdsclient.ListenerResource:
+					dd := make(map[string]xdsclient.ListenerUpdate)
+					for n, u := range d {
+						dd[n] = u.(xdsclient.ListenerUpdate)
+					}
+					gotUpdateCh.Send(updateErr{dd, md, nil})
+				case xdsclient.RouteConfigResource:
+					dd := make(map[string]xdsclient.RouteConfigUpdate)
+					for n, u := range d {
+						dd[n] = u.(xdsclient.RouteConfigUpdate)
+					}
+					gotUpdateCh.Send(updateErr{dd, md, nil})
+				case xdsclient.ClusterResource:
+					dd := make(map[string]xdsclient.ClusterUpdate)
+					for n, u := range d {
+						dd[n] = u.(xdsclient.ClusterUpdate)
+					}
+					gotUpdateCh.Send(updateErr{dd, md, nil})
+				case xdsclient.EndpointsResource:
+					dd := make(map[string]xdsclient.EndpointsUpdate)
+					for n, u := range d {
+						dd[n] = u.(xdsclient.EndpointsUpdate)
+					}
+					gotUpdateCh.Send(updateErr{dd, md, nil})
 				}
 			}
 		},
@@ -447,29 +452,24 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 		t.Fatalf("v2c.handleRDSResponse() returned err: %v, wantErr: %v", err, test.wantHandleErr)
 	}
 
-	// If the test doesn't expect the callback to be invoked, verify that no
-	// update or error is pushed to the callback.
-	//
-	// Cannot directly compare test.wantUpdate with nil (typed vs non-typed nil:
-	// https://golang.org/doc/faq#nil_error).
-	if c := test.wantUpdate; c == nil || (reflect.ValueOf(c).Kind() == reflect.Ptr && reflect.ValueOf(c).IsNil()) {
-		sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-		defer sCancel()
-		update, err := gotUpdateCh.Receive(sCtx)
-		if err == context.DeadlineExceeded {
-			return
-		}
-		t.Fatalf("Unexpected update: +%v", update)
+	wantUpdate := test.wantUpdate
+	cmpOpts := cmp.Options{
+		cmpopts.EquateEmpty(), protocmp.Transform(),
+		cmpopts.IgnoreFields(xdsclient.UpdateMetadata{}, "Timestamp"),
+		cmpopts.IgnoreFields(xdsclient.UpdateErrorMetadata{}, "Timestamp"),
+		cmp.Comparer(func(x, y error) bool { return (x == nil) == (y == nil) }),
 	}
-
-	wantUpdate := reflect.ValueOf(test.wantUpdate).Elem().Interface()
 	uErr, err := gotUpdateCh.Receive(ctx)
 	if err == context.DeadlineExceeded {
 		t.Fatal("Timeout expecting xDS update")
 	}
 	gotUpdate := uErr.(updateErr).u
-	if diff := cmp.Diff(gotUpdate, wantUpdate); diff != "" {
+	if diff := cmp.Diff(gotUpdate, wantUpdate, cmpOpts); diff != "" {
 		t.Fatalf("got update : %+v, want %+v, diff: %s", gotUpdate, wantUpdate, diff)
+	}
+	gotUpdateMD := uErr.(updateErr).md
+	if diff := cmp.Diff(gotUpdateMD, test.wantUpdateMD, cmpOpts); diff != "" {
+		t.Fatalf("got update : %+v, want %+v, diff: %s", gotUpdateMD, test.wantUpdateMD, diff)
 	}
 	gotUpdateErr := uErr.(updateErr).err
 	if (gotUpdateErr != nil) != test.wantUpdateErr {

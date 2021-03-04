@@ -49,23 +49,36 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 		name          string
 		rdsResponse   *xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    *xdsclient.RouteConfigUpdate
+		wantUpdate    map[string]xdsclient.RouteConfigUpdate
+		wantUpdateMD  xdsclient.UpdateMetadata
 		wantUpdateErr bool
 	}{
 		// Badly marshaled RDS response.
 		{
-			name:          "badly-marshaled-response",
-			rdsResponse:   badlyMarshaledRDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
+			name:        "badly-marshaled-response",
+			rdsResponse: badlyMarshaledRDSResponse,
+			wantErr:     true,
+			wantUpdate:  nil,
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
+				ErrState: &xdsclient.UpdateErrorMetadata{
+					Err: errPlaceHolder,
+				},
+			},
 			wantUpdateErr: false,
 		},
 		// Response does not contain RouteConfiguration proto.
 		{
-			name:          "no-route-config-in-response",
-			rdsResponse:   badResourceTypeInRDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
+			name:        "no-route-config-in-response",
+			rdsResponse: badResourceTypeInRDSResponse,
+			wantErr:     true,
+			wantUpdate:  nil,
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
+				ErrState: &xdsclient.UpdateErrorMetadata{
+					Err: errPlaceHolder,
+				},
+			},
 			wantUpdateErr: false,
 		},
 		// No VirtualHosts in the response. Just one test case here for a bad
@@ -75,17 +88,40 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			name:        "no-virtual-hosts-in-response",
 			rdsResponse: noVirtualHostsInRDSResponse,
 			wantErr:     false,
-			wantUpdate: &xdsclient.RouteConfigUpdate{
-				VirtualHosts: nil,
+			wantUpdate: map[string]xdsclient.RouteConfigUpdate{
+				goodRouteName1: {
+					VirtualHosts: nil,
+					Raw:          marshaledNoVirtualHostsRouteConfig,
+				},
+			},
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
 		// Response contains one good RouteConfiguration, uninteresting though.
 		{
-			name:          "one-uninteresting-route-config",
-			rdsResponse:   goodRDSResponse2,
-			wantErr:       false,
-			wantUpdate:    nil,
+			name:        "one-uninteresting-route-config",
+			rdsResponse: goodRDSResponse2,
+			wantErr:     false,
+			wantUpdate: map[string]xdsclient.RouteConfigUpdate{
+				goodRouteName2: {
+					VirtualHosts: []*xdsclient.VirtualHost{
+						{
+							Domains: []string{uninterestingDomain},
+							Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
+						},
+						{
+							Domains: []string{goodLDSTarget1},
+							Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{goodClusterName2: {Weight: 1}}}},
+						},
+					},
+					Raw: marshaledGoodRouteConfig2,
+				},
+			},
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusACKed,
+			},
 			wantUpdateErr: false,
 		},
 		// Response contains one good interesting RouteConfiguration.
@@ -93,17 +129,23 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			name:        "one-good-route-config",
 			rdsResponse: goodRDSResponse1,
 			wantErr:     false,
-			wantUpdate: &xdsclient.RouteConfigUpdate{
-				VirtualHosts: []*xdsclient.VirtualHost{
-					{
-						Domains: []string{uninterestingDomain},
-						Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
+			wantUpdate: map[string]xdsclient.RouteConfigUpdate{
+				goodRouteName1: {
+					VirtualHosts: []*xdsclient.VirtualHost{
+						{
+							Domains: []string{uninterestingDomain},
+							Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
+						},
+						{
+							Domains: []string{goodLDSTarget1},
+							Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{goodClusterName1: {Weight: 1}}}},
+						},
 					},
-					{
-						Domains: []string{goodLDSTarget1},
-						Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{goodClusterName1: {Weight: 1}}}},
-					},
+					Raw: marshaledGoodRouteConfig1,
 				},
+			},
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -116,6 +158,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 				responseToHandle: test.rdsResponse,
 				wantHandleErr:    test.wantErr,
 				wantUpdate:       test.wantUpdate,
+				wantUpdateMD:     test.wantUpdateMD,
 				wantUpdateErr:    test.wantUpdateErr,
 			})
 		})

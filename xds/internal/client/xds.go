@@ -24,6 +24,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	v1typepb "github.com/cncf/udpa/go/udpa/type/v1"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -52,27 +53,30 @@ const transportSocketName = "envoy.transport_sockets.tls"
 // UnmarshalListener processes resources received in an LDS response, validates
 // them, and transforms them into a native struct which contains only fields we
 // are interested in.
-func UnmarshalListener(_ string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ListenerUpdate, UpdateMetadata, error) {
+func UnmarshalListener(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ListenerUpdate, UpdateMetadata, error) {
 	update := make(map[string]ListenerUpdate)
-	for _, r := range resources {
-		if !IsListenerResource(r.GetTypeUrl()) {
-			return nil, UpdateMetadata{}, fmt.Errorf("xds: unexpected resource type: %q in LDS response", r.GetTypeUrl())
-		}
-		// TODO: Pass version.TransportAPI instead of relying upon the type URL
-		v2 := r.GetTypeUrl() == version.V2ListenerURL
-		lis := &v3listenerpb.Listener{}
-		if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
-			return nil, UpdateMetadata{}, fmt.Errorf("xds: failed to unmarshal resource in LDS response: %v", err)
-		}
-		logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, lis)
+	md, err := processAllResources(version, resources, logger, update)
+	return update, md, err
+}
 
-		lu, err := processListener(lis, v2)
-		if err != nil {
-			return nil, UpdateMetadata{}, err
-		}
-		update[lis.GetName()] = *lu
+func unmarshalListenerResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, ListenerUpdate, error) {
+	if !IsListenerResource(r.GetTypeUrl()) {
+		return "", ListenerUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
 	}
-	return update, UpdateMetadata{}, nil
+	// TODO: Pass version.TransportAPI instead of relying upon the type URL
+	v2 := r.GetTypeUrl() == version.V2ListenerURL
+	lis := &v3listenerpb.Listener{}
+	if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
+		return "", ListenerUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
+	}
+	logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, lis)
+
+	lu, err := processListener(lis, v2)
+	if err != nil {
+		return lis.GetName(), ListenerUpdate{}, err
+	}
+	lu.Raw = r
+	return lis.GetName(), *lu, nil
 }
 
 func processListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUpdate, error) {
@@ -89,31 +93,31 @@ func processClientSideListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUp
 
 	apiLisAny := lis.GetApiListener().GetApiListener()
 	if !IsHTTPConnManagerResource(apiLisAny.GetTypeUrl()) {
-		return nil, fmt.Errorf("xds: unexpected resource type: %q in LDS response", apiLisAny.GetTypeUrl())
+		return nil, fmt.Errorf("unexpected resource type: %q", apiLisAny.GetTypeUrl())
 	}
 	apiLis := &v3httppb.HttpConnectionManager{}
 	if err := proto.Unmarshal(apiLisAny.GetValue(), apiLis); err != nil {
-		return nil, fmt.Errorf("xds: failed to unmarshal api_listner in LDS response: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal api_listner: %v", err)
 	}
 
 	switch apiLis.RouteSpecifier.(type) {
 	case *v3httppb.HttpConnectionManager_Rds:
 		if apiLis.GetRds().GetConfigSource().GetAds() == nil {
-			return nil, fmt.Errorf("xds: ConfigSource is not ADS in LDS response: %+v", lis)
+			return nil, fmt.Errorf("ConfigSource is not ADS: %+v", lis)
 		}
 		name := apiLis.GetRds().GetRouteConfigName()
 		if name == "" {
-			return nil, fmt.Errorf("xds: empty route_config_name in LDS response: %+v", lis)
+			return nil, fmt.Errorf("empty route_config_name: %+v", lis)
 		}
 		update.RouteConfigName = name
 	case *v3httppb.HttpConnectionManager_RouteConfig:
 		// TODO: Add support for specifying the RouteConfiguration inline
 		// in the LDS response.
-		return nil, fmt.Errorf("xds: LDS response contains RDS config inline. Not supported for now: %+v", apiLis)
+		return nil, fmt.Errorf("LDS response contains RDS config inline. Not supported for now: %+v", apiLis)
 	case nil:
-		return nil, fmt.Errorf("xds: no RouteSpecifier in received LDS response: %+v", apiLis)
+		return nil, fmt.Errorf("no RouteSpecifier: %+v", apiLis)
 	default:
-		return nil, fmt.Errorf("xds: unsupported type %T for RouteSpecifier in received LDS response", apiLis.RouteSpecifier)
+		return nil, fmt.Errorf("unsupported type %T for RouteSpecifier", apiLis.RouteSpecifier)
 	}
 
 	if v2 {
@@ -126,7 +130,7 @@ func processClientSideListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUp
 
 	var err error
 	if update.HTTPFilters, err = processHTTPFilters(apiLis.GetHttpFilters(), false); err != nil {
-		return nil, fmt.Errorf("xds: %v", err)
+		return nil, err
 	}
 
 	return update, nil
@@ -248,28 +252,28 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	// grpc/server?udpa.resource.listening_address=IP:Port.
 	addr := lis.GetAddress()
 	if addr == nil {
-		return nil, fmt.Errorf("xds: no address field in LDS response: %+v", lis)
+		return nil, fmt.Errorf("no address field in LDS response: %+v", lis)
 	}
 	sockAddr := addr.GetSocketAddress()
 	if sockAddr == nil {
-		return nil, fmt.Errorf("xds: no socket_address field in LDS response: %+v", lis)
+		return nil, fmt.Errorf("no socket_address field in LDS response: %+v", lis)
 	}
 	host, port, err := getAddressFromName(lis.GetName())
 	if err != nil {
-		return nil, fmt.Errorf("xds: no host:port in name field of LDS response: %+v, error: %v", lis, err)
+		return nil, fmt.Errorf("no host:port in name field of LDS response: %+v, error: %v", lis, err)
 	}
 	if h := sockAddr.GetAddress(); host != h {
-		return nil, fmt.Errorf("xds: socket_address host does not match the one in name. Got %q, want %q", h, host)
+		return nil, fmt.Errorf("socket_address host does not match the one in name. Got %q, want %q", h, host)
 	}
 	if p := strconv.Itoa(int(sockAddr.GetPortValue())); port != p {
-		return nil, fmt.Errorf("xds: socket_address port does not match the one in name. Got %q, want %q", p, port)
+		return nil, fmt.Errorf("socket_address port does not match the one in name. Got %q, want %q", p, port)
 	}
 
 	// Make sure the listener resource contains a single filter chain. We do not
 	// support multiple filter chains and picking the best match from the list.
 	fcs := lis.GetFilterChains()
 	if n := len(fcs); n != 1 {
-		return nil, fmt.Errorf("xds: filter chains count in LDS response does not match expected. Got %d, want 1", n)
+		return nil, fmt.Errorf("filter chains count in LDS response does not match expected. Got %d, want 1", n)
 	}
 	fc := fcs[0]
 
@@ -282,18 +286,18 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 		return &ListenerUpdate{}, nil
 	}
 	if name := ts.GetName(); name != transportSocketName {
-		return nil, fmt.Errorf("xds: transport_socket field has unexpected name: %s", name)
+		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
 	}
 	any := ts.GetTypedConfig()
 	if any == nil || any.TypeUrl != version.V3DownstreamTLSContextURL {
-		return nil, fmt.Errorf("xds: transport_socket field has unexpected typeURL: %s", any.TypeUrl)
+		return nil, fmt.Errorf("transport_socket field has unexpected typeURL: %s", any.TypeUrl)
 	}
 	downstreamCtx := &v3tlspb.DownstreamTlsContext{}
 	if err := proto.Unmarshal(any.GetValue(), downstreamCtx); err != nil {
-		return nil, fmt.Errorf("xds: failed to unmarshal DownstreamTlsContext in LDS response: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal DownstreamTlsContext in LDS response: %v", err)
 	}
 	if downstreamCtx.GetCommonTlsContext() == nil {
-		return nil, errors.New("xds: DownstreamTlsContext in LDS response does not contain a CommonTlsContext")
+		return nil, errors.New("DownstreamTlsContext in LDS response does not contain a CommonTlsContext")
 	}
 	sc, err := securityConfigFromCommonTLSContext(downstreamCtx.GetCommonTlsContext())
 	if err != nil {
@@ -321,28 +325,30 @@ func getAddressFromName(name string) (host string, port string, err error) {
 // validates them, and transforms them into a native struct which contains only
 // fields we are interested in. The provided hostname determines the route
 // configuration resources of interest.
-func UnmarshalRouteConfig(_ string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdate, UpdateMetadata, error) {
+func UnmarshalRouteConfig(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdate, UpdateMetadata, error) {
 	update := make(map[string]RouteConfigUpdate)
-	for _, r := range resources {
-		if !IsRouteConfigResource(r.GetTypeUrl()) {
-			return nil, UpdateMetadata{}, fmt.Errorf("xds: unexpected resource type: %q in RDS response", r.GetTypeUrl())
-		}
-		rc := &v3routepb.RouteConfiguration{}
-		if err := proto.Unmarshal(r.GetValue(), rc); err != nil {
-			return nil, UpdateMetadata{}, fmt.Errorf("xds: failed to unmarshal resource in RDS response: %v", err)
-		}
-		logger.Infof("Resource with name: %v, type: %T, contains: %v.", rc.GetName(), rc, rc)
+	md, err := processAllResources(version, resources, logger, update)
+	return update, md, err
+}
 
-		// TODO: Pass version.TransportAPI instead of relying upon the type URL
-		v2 := r.GetTypeUrl() == version.V2RouteConfigURL
-		// Use the hostname (resourceName for LDS) to find the routes.
-		u, err := generateRDSUpdateFromRouteConfiguration(rc, logger, v2)
-		if err != nil {
-			return nil, UpdateMetadata{}, fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v with err: %v", rc, err)
-		}
-		update[rc.GetName()] = u
+func unmarshalRouteConfigResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, RouteConfigUpdate, error) {
+	if !IsRouteConfigResource(r.GetTypeUrl()) {
+		return "", RouteConfigUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
 	}
-	return update, UpdateMetadata{}, nil
+	rc := &v3routepb.RouteConfiguration{}
+	if err := proto.Unmarshal(r.GetValue(), rc); err != nil {
+		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
+	}
+	logger.Infof("Resource with name: %v, type: %T, contains: %v.", rc.GetName(), rc, rc)
+
+	// TODO: Pass version.TransportAPI instead of relying upon the type URL
+	v2 := r.GetTypeUrl() == version.V2RouteConfigURL
+	u, err := generateRDSUpdateFromRouteConfiguration(rc, logger, v2)
+	if err != nil {
+		return rc.GetName(), RouteConfigUpdate{}, err
+	}
+	u.Raw = r
+	return rc.GetName(), u, nil
 }
 
 // generateRDSUpdateFromRouteConfiguration checks if the provided
@@ -522,41 +528,43 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 // are interested in.
 func UnmarshalCluster(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ClusterUpdate, UpdateMetadata, error) {
 	update := make(map[string]ClusterUpdate)
-	for _, r := range resources {
-		if !IsClusterResource(r.GetTypeUrl()) {
-			return nil, UpdateMetadata{}, fmt.Errorf("xds: unexpected resource type: %q in CDS response", r.GetTypeUrl())
-		}
+	md, err := processAllResources(version, resources, logger, update)
+	return update, md, err
+}
 
-		cluster := &v3clusterpb.Cluster{}
-		if err := proto.Unmarshal(r.GetValue(), cluster); err != nil {
-			return nil, UpdateMetadata{}, fmt.Errorf("xds: failed to unmarshal resource in CDS response: %v", err)
-		}
-		logger.Infof("Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, cluster)
-		cu, err := validateCluster(cluster)
-		if err != nil {
-			return nil, UpdateMetadata{}, err
-		}
-
-		// If the Cluster message in the CDS response did not contain a
-		// serviceName, we will just use the clusterName for EDS.
-		if cu.ServiceName == "" {
-			cu.ServiceName = cluster.GetName()
-		}
-		logger.Debugf("Resource with name %v, value %+v added to cache", cluster.GetName(), cu)
-		update[cluster.GetName()] = cu
+func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, ClusterUpdate, error) {
+	if !IsClusterResource(r.GetTypeUrl()) {
+		return "", ClusterUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
 	}
-	return update, UpdateMetadata{}, nil
+
+	cluster := &v3clusterpb.Cluster{}
+	if err := proto.Unmarshal(r.GetValue(), cluster); err != nil {
+		return "", ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
+	}
+	logger.Infof("Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, cluster)
+
+	cu, err := validateCluster(cluster)
+	if err != nil {
+		return cluster.GetName(), ClusterUpdate{}, err
+	}
+	cu.Raw = r
+	// If the Cluster message in the CDS response did not contain a
+	// serviceName, we will just use the clusterName for EDS.
+	if cu.ServiceName == "" {
+		cu.ServiceName = cluster.GetName()
+	}
+	return cluster.GetName(), cu, nil
 }
 
 func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	emptyUpdate := ClusterUpdate{ServiceName: "", EnableLRS: false}
 	switch {
 	case cluster.GetType() != v3clusterpb.Cluster_EDS:
-		return emptyUpdate, fmt.Errorf("xds: unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
+		return emptyUpdate, fmt.Errorf("unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
 	case cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil:
-		return emptyUpdate, fmt.Errorf("xds: unexpected edsConfig in response: %+v", cluster)
+		return emptyUpdate, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
 	case cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN:
-		return emptyUpdate, fmt.Errorf("xds: unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
+		return emptyUpdate, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
 
 	sc, err := securityConfigFromCluster(cluster)
@@ -582,18 +590,18 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 		return nil, nil
 	}
 	if name := ts.GetName(); name != transportSocketName {
-		return nil, fmt.Errorf("xds: transport_socket field has unexpected name: %s", name)
+		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
 	}
 	any := ts.GetTypedConfig()
 	if any == nil || any.TypeUrl != version.V3UpstreamTLSContextURL {
-		return nil, fmt.Errorf("xds: transport_socket field has unexpected typeURL: %s", any.TypeUrl)
+		return nil, fmt.Errorf("transport_socket field has unexpected typeURL: %s", any.TypeUrl)
 	}
 	upstreamCtx := &v3tlspb.UpstreamTlsContext{}
 	if err := proto.Unmarshal(any.GetValue(), upstreamCtx); err != nil {
-		return nil, fmt.Errorf("xds: failed to unmarshal UpstreamTlsContext in CDS response: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal UpstreamTlsContext in CDS response: %v", err)
 	}
 	if upstreamCtx.GetCommonTlsContext() == nil {
-		return nil, errors.New("xds: UpstreamTlsContext in CDS response does not contain a CommonTlsContext")
+		return nil, errors.New("UpstreamTlsContext in CDS response does not contain a CommonTlsContext")
 	}
 
 	sc, err := securityConfigFromCommonTLSContext(upstreamCtx.GetCommonTlsContext())
@@ -649,7 +657,7 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext) (*Secu
 	case nil:
 		// It is valid for the validation context to be nil on the server side.
 	default:
-		return nil, fmt.Errorf("xds: validation context contains unexpected type: %T", t)
+		return nil, fmt.Errorf("validation context contains unexpected type: %T", t)
 	}
 	return sc, nil
 }
@@ -680,24 +688,27 @@ func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) *uint32 {
 // fields we are interested in.
 func UnmarshalEndpoints(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]EndpointsUpdate, UpdateMetadata, error) {
 	update := make(map[string]EndpointsUpdate)
-	for _, r := range resources {
-		if !IsEndpointsResource(r.GetTypeUrl()) {
-			return nil, UpdateMetadata{}, fmt.Errorf("xds: unexpected resource type: %q in EDS response", r.GetTypeUrl())
-		}
+	md, err := processAllResources(version, resources, logger, update)
+	return update, md, err
+}
 
-		cla := &v3endpointpb.ClusterLoadAssignment{}
-		if err := proto.Unmarshal(r.GetValue(), cla); err != nil {
-			return nil, UpdateMetadata{}, fmt.Errorf("xds: failed to unmarshal resource in EDS response: %v", err)
-		}
-		logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, cla)
-
-		u, err := parseEDSRespProto(cla)
-		if err != nil {
-			return nil, UpdateMetadata{}, err
-		}
-		update[cla.GetClusterName()] = u
+func unmarshalEndpointsResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, EndpointsUpdate, error) {
+	if !IsEndpointsResource(r.GetTypeUrl()) {
+		return "", EndpointsUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
 	}
-	return update, UpdateMetadata{}, nil
+
+	cla := &v3endpointpb.ClusterLoadAssignment{}
+	if err := proto.Unmarshal(r.GetValue(), cla); err != nil {
+		return "", EndpointsUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
+	}
+	logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, cla)
+
+	u, err := parseEDSRespProto(cla)
+	if err != nil {
+		return cla.GetClusterName(), EndpointsUpdate{}, err
+	}
+	u.Raw = r
+	return cla.GetClusterName(), u, nil
 }
 
 func parseAddress(socketAddress *v3corepb.SocketAddress) string {
@@ -768,4 +779,131 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		}
 	}
 	return ret, nil
+}
+
+// processAllResources unmarshals and validates the resources, populates the
+// provided ret (a map), and returns metadata and error.
+//
+// The type of the resource is determined by the type of ret. E.g.
+// map[string]ListenerUpdate means this is for LDS.
+func processAllResources(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger, ret interface{}) (UpdateMetadata, error) {
+	timestamp := time.Now()
+	md := UpdateMetadata{
+		Version:   version,
+		Timestamp: timestamp,
+	}
+	var topLevelErrors []error
+	perResourceErrors := make(map[string]error)
+
+	for _, r := range resources {
+		switch ret2 := ret.(type) {
+		case map[string]ListenerUpdate:
+			name, update, err := unmarshalListenerResource(r, logger)
+			if err == nil {
+				ret2[name] = update
+				continue
+			}
+			if name == "" {
+				topLevelErrors = append(topLevelErrors, err)
+				continue
+			}
+			perResourceErrors[name] = err
+			// Add place holder in the map so we know this resource name was in
+			// the response.
+			ret2[name] = ListenerUpdate{}
+		case map[string]RouteConfigUpdate:
+			name, update, err := unmarshalRouteConfigResource(r, logger)
+			if err == nil {
+				ret2[name] = update
+				continue
+			}
+			if name == "" {
+				topLevelErrors = append(topLevelErrors, err)
+				continue
+			}
+			perResourceErrors[name] = err
+			// Add place holder in the map so we know this resource name was in
+			// the response.
+			ret2[name] = RouteConfigUpdate{}
+		case map[string]ClusterUpdate:
+			name, update, err := unmarshalClusterResource(r, logger)
+			if err == nil {
+				ret2[name] = update
+				continue
+			}
+			if name == "" {
+				topLevelErrors = append(topLevelErrors, err)
+				continue
+			}
+			perResourceErrors[name] = err
+			// Add place holder in the map so we know this resource name was in
+			// the response.
+			ret2[name] = ClusterUpdate{}
+		case map[string]EndpointsUpdate:
+			name, update, err := unmarshalEndpointsResource(r, logger)
+			if err == nil {
+				ret2[name] = update
+				continue
+			}
+			if name == "" {
+				topLevelErrors = append(topLevelErrors, err)
+				continue
+			}
+			perResourceErrors[name] = err
+			// Add place holder in the map so we know this resource name was in
+			// the response.
+			ret2[name] = EndpointsUpdate{}
+		}
+	}
+
+	if len(topLevelErrors) == 0 && len(perResourceErrors) == 0 {
+		md.Status = ServiceStatusACKed
+		return md, nil
+	}
+
+	var typeStr string
+	switch ret.(type) {
+	case map[string]ListenerUpdate:
+		typeStr = "LDS"
+	case map[string]RouteConfigUpdate:
+		typeStr = "RDS"
+	case map[string]ClusterUpdate:
+		typeStr = "CDS"
+	case map[string]EndpointsUpdate:
+		typeStr = "EDS"
+	}
+
+	md.Status = ServiceStatusNACKed
+	errRet := combineErrors(typeStr, topLevelErrors, perResourceErrors)
+	md.ErrState = &UpdateErrorMetadata{
+		Version:   version,
+		Err:       errRet,
+		Timestamp: timestamp,
+	}
+	return md, errRet
+}
+
+func combineErrors(rType string, topLevelErrors []error, perResourceErrors map[string]error) error {
+	var errStrB strings.Builder
+	errStrB.WriteString(fmt.Sprintf("error parsing %q response: ", rType))
+	if len(topLevelErrors) > 0 {
+		errStrB.WriteString("top level errors: ")
+		for i, err := range topLevelErrors {
+			if i != 0 {
+				errStrB.WriteString(";\n")
+			}
+			errStrB.WriteString(err.Error())
+		}
+	}
+	if len(perResourceErrors) > 0 {
+		var i int
+		for name, err := range perResourceErrors {
+			if i != 0 {
+				errStrB.WriteString(";\n")
+			}
+			i++
+			errStrB.WriteString(fmt.Sprintf("resource %q: %v", name, err.Error()))
+		}
+	}
+	return errors.New(errStrB.String())
 }
