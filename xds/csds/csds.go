@@ -1,0 +1,279 @@
+/*
+ *
+ * Copyright 2021 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// Package csds implements features to dump the status (mostly xDS
+// responses) the xds_client is using.
+//
+// Notice: This package is EXPERIMENTAL and may be changed or removed in a later
+// release..
+package csds
+
+import (
+	"context"
+	"io"
+	"time"
+
+	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+// xdsClientInterface contains methods from xdsClient.Client which are used by
+// the server. This is useful for overriding in unit tests.
+type xdsClientInterface interface {
+	WatchListener(string, func(client.ListenerUpdate, error)) func()
+	WatchRouteConfig(string, func(client.RouteConfigUpdate, error)) func()
+	WatchCluster(string, func(client.ClusterUpdate, error)) func()
+	WatchEndpoints(string, func(client.EndpointsUpdate, error)) func()
+	DumpLDS() (string, map[string]client.UpdateWithMD)
+	DumpRDS() (string, map[string]client.UpdateWithMD)
+	DumpCDS() (string, map[string]client.UpdateWithMD)
+	DumpEDS() (string, map[string]client.UpdateWithMD)
+	BootstrapConfig() *bootstrap.Config
+	Close()
+}
+
+var (
+	logger       = grpclog.Component("xds")
+	newXDSClient = func() (xdsClientInterface, error) {
+		return client.New()
+	}
+)
+
+type clientStatusServer struct {
+	// xdsClient will always be the same in real world. But we keep a copy in
+	// each server instance for testing purpose.
+	xdsClient    xdsClientInterface
+	xdsClientErr error
+}
+
+// NewClientStatusDiscoveryServer returns an implementation of the CSDS server that can be
+// registered on a gRPC server.
+func NewClientStatusDiscoveryServer() v3statuspb.ClientStatusDiscoveryServiceServer {
+	ret := &clientStatusServer{}
+	ret.xdsClient, ret.xdsClientErr = newXDSClient()
+	if ret.xdsClientErr != nil {
+		logger.Errorf("failed to create xds client: %v", ret.xdsClientErr)
+	}
+	return ret
+}
+
+func (s *clientStatusServer) StreamClientStatus(stream v3statuspb.ClientStatusDiscoveryService_StreamClientStatusServer) error {
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		resp, errResp := s.buildClientStatusRespForReq(req)
+		if errResp != nil {
+			return errResp
+		}
+		if err := stream.Send(resp); err != nil {
+			return err
+		}
+	}
+}
+
+func (s *clientStatusServer) FetchClientStatus(_ context.Context, req *v3statuspb.ClientStatusRequest) (*v3statuspb.ClientStatusResponse, error) {
+	return s.buildClientStatusRespForReq(req)
+}
+
+// buildClientStatusRespForReq fetches the status from the client, and returns
+// the response to be sent back to client.
+//
+// If it returns an error, the error is a status error.
+func (s *clientStatusServer) buildClientStatusRespForReq(req *v3statuspb.ClientStatusRequest) (*v3statuspb.ClientStatusResponse, error) {
+	if len(req.NodeMatchers) != 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "NodeMatchers are not supported, request contains %v", req.NodeMatchers)
+	}
+	if s.xdsClient == nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "xds client creation failed with error: %v", s.xdsClientErr)
+	}
+
+	var node *v3corepb.Node
+	if n, ok := s.xdsClient.BootstrapConfig().NodeProto.(*v3corepb.Node); ok {
+		node = n
+	}
+
+	ret := &v3statuspb.ClientStatusResponse{
+		Config: []*v3statuspb.ClientConfig{
+			{
+				Node: node,
+				XdsConfig: []*v3statuspb.PerXdsConfig{
+					s.buildLDSPerXDSConfig(),
+					s.buildRDSPerXDSConfig(),
+					s.buildCDSPerXDSConfig(),
+					s.buildEDSPerXDSConfig(),
+				},
+			},
+		},
+	}
+
+	return ret, nil
+}
+
+func (s *clientStatusServer) buildLDSPerXDSConfig() *v3statuspb.PerXdsConfig {
+	version, dump := s.xdsClient.DumpLDS()
+	var resources []*v3adminpb.ListenersConfigDump_DynamicListener
+	for name, d := range dump {
+		configDump := &v3adminpb.ListenersConfigDump_DynamicListener{
+			Name:         name,
+			ClientStatus: serviceStatusToProto(d.MD.Status),
+		}
+		if (d.MD.Timestamp != time.Time{}) {
+			configDump.ActiveState = &v3adminpb.ListenersConfigDump_DynamicListenerState{
+				VersionInfo: d.MD.Version,
+				Listener:    d.Raw,
+				LastUpdated: timestamppb.New(d.MD.Timestamp),
+			}
+		}
+		if errState := d.MD.ErrState; errState != nil {
+			configDump.ErrorState = &v3adminpb.UpdateFailureState{
+				LastUpdateAttempt: timestamppb.New(errState.Timestamp),
+				Details:           errState.Err.Error(),
+				VersionInfo:       errState.Version,
+			}
+		}
+		resources = append(resources, configDump)
+	}
+	return &v3statuspb.PerXdsConfig{
+		PerXdsConfig: &v3statuspb.PerXdsConfig_ListenerConfig{
+			ListenerConfig: &v3adminpb.ListenersConfigDump{
+				VersionInfo:      version,
+				DynamicListeners: resources,
+			},
+		},
+	}
+}
+
+func (s *clientStatusServer) buildRDSPerXDSConfig() *v3statuspb.PerXdsConfig {
+	_, dump := s.xdsClient.DumpRDS()
+	var resources []*v3adminpb.RoutesConfigDump_DynamicRouteConfig
+	for _, d := range dump {
+		configDump := &v3adminpb.RoutesConfigDump_DynamicRouteConfig{
+			VersionInfo:  d.MD.Version,
+			ClientStatus: serviceStatusToProto(d.MD.Status),
+		}
+		if (d.MD.Timestamp != time.Time{}) {
+			configDump.RouteConfig = d.Raw
+			configDump.LastUpdated = timestamppb.New(d.MD.Timestamp)
+		}
+		if errState := d.MD.ErrState; errState != nil {
+			configDump.ErrorState = &v3adminpb.UpdateFailureState{
+				LastUpdateAttempt: timestamppb.New(errState.Timestamp),
+				Details:           errState.Err.Error(),
+				VersionInfo:       errState.Version,
+			}
+		}
+		resources = append(resources, configDump)
+	}
+	return &v3statuspb.PerXdsConfig{
+		PerXdsConfig: &v3statuspb.PerXdsConfig_RouteConfig{
+			RouteConfig: &v3adminpb.RoutesConfigDump{
+				DynamicRouteConfigs: resources,
+			},
+		},
+	}
+}
+
+func (s *clientStatusServer) buildCDSPerXDSConfig() *v3statuspb.PerXdsConfig {
+	version, dump := s.xdsClient.DumpCDS()
+	var resources []*v3adminpb.ClustersConfigDump_DynamicCluster
+	for _, d := range dump {
+		configDump := &v3adminpb.ClustersConfigDump_DynamicCluster{
+			VersionInfo:  d.MD.Version,
+			ClientStatus: serviceStatusToProto(d.MD.Status),
+		}
+		if (d.MD.Timestamp != time.Time{}) {
+			configDump.Cluster = d.Raw
+			configDump.LastUpdated = timestamppb.New(d.MD.Timestamp)
+		}
+		if errState := d.MD.ErrState; errState != nil {
+			configDump.ErrorState = &v3adminpb.UpdateFailureState{
+				// FailedConfiguration: nil,
+				LastUpdateAttempt: timestamppb.New(errState.Timestamp),
+				Details:           errState.Err.Error(),
+				VersionInfo:       errState.Version,
+			}
+		}
+		resources = append(resources, configDump)
+	}
+	return &v3statuspb.PerXdsConfig{
+		PerXdsConfig: &v3statuspb.PerXdsConfig_ClusterConfig{
+			ClusterConfig: &v3adminpb.ClustersConfigDump{
+				VersionInfo:           version,
+				DynamicActiveClusters: resources,
+			},
+		},
+	}
+}
+
+func (s *clientStatusServer) buildEDSPerXDSConfig() *v3statuspb.PerXdsConfig {
+	_, dump := s.xdsClient.DumpEDS()
+	var resources []*v3adminpb.EndpointsConfigDump_DynamicEndpointConfig
+	for _, d := range dump {
+		configDump := &v3adminpb.EndpointsConfigDump_DynamicEndpointConfig{
+			VersionInfo:  d.MD.Version,
+			ClientStatus: serviceStatusToProto(d.MD.Status),
+		}
+		if (d.MD.Timestamp != time.Time{}) {
+			configDump.EndpointConfig = d.Raw
+			configDump.LastUpdated = timestamppb.New(d.MD.Timestamp)
+		}
+		if errState := d.MD.ErrState; errState != nil {
+			configDump.ErrorState = &v3adminpb.UpdateFailureState{
+				LastUpdateAttempt: timestamppb.New(errState.Timestamp),
+				Details:           errState.Err.Error(),
+				VersionInfo:       errState.Version,
+			}
+		}
+		resources = append(resources, configDump)
+	}
+	return &v3statuspb.PerXdsConfig{
+		PerXdsConfig: &v3statuspb.PerXdsConfig_EndpointConfig{
+			EndpointConfig: &v3adminpb.EndpointsConfigDump{
+				DynamicEndpointConfigs: resources,
+			},
+		},
+	}
+}
+
+func serviceStatusToProto(serviceStatus client.ServiceStatus) v3adminpb.ClientResourceStatus {
+	switch serviceStatus {
+	case client.ServiceStatusUnknown:
+		return v3adminpb.ClientResourceStatus_UNKNOWN
+	case client.ServiceStatusRequested:
+		return v3adminpb.ClientResourceStatus_REQUESTED
+	case client.ServiceStatusNotExist:
+		return v3adminpb.ClientResourceStatus_DOES_NOT_EXIST
+	case client.ServiceStatusACKed:
+		return v3adminpb.ClientResourceStatus_ACKED
+	case client.ServiceStatusNACKed:
+		return v3adminpb.ClientResourceStatus_NACKED
+	}
+	return v3adminpb.ClientResourceStatus_UNKNOWN
+}
