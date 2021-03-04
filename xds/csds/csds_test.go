@@ -26,6 +26,7 @@ import (
 	"time"
 
 	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
+	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -37,6 +38,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/xds/internal/client"
+	_ "google.golang.org/grpc/xds/internal/client/v3"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -48,8 +50,6 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
-
-	_ "google.golang.org/grpc/xds/internal/client/v3"
 )
 
 const (
@@ -711,4 +711,57 @@ func protoToJSON(p proto.Message) string {
 	}
 	ret, _ := mm.MarshalToString(p)
 	return ret
+}
+
+func Test_nodeProtoToV3(t *testing.T) {
+	const (
+		testID      = "test-id"
+		testCluster = "test-cluster"
+		testZone    = "test-zone"
+	)
+	tests := []struct {
+		name string
+		n    proto.Message
+		want *v3corepb.Node
+	}{
+		{
+			name: "v3",
+			n: &v3corepb.Node{
+				Id:       testID,
+				Cluster:  testCluster,
+				Locality: &v3corepb.Locality{Zone: testZone},
+			},
+			want: &v3corepb.Node{
+				Id:       testID,
+				Cluster:  testCluster,
+				Locality: &v3corepb.Locality{Zone: testZone},
+			},
+		},
+		{
+			name: "v2",
+			n: &v2corepb.Node{
+				Id:       testID,
+				Cluster:  testCluster,
+				Locality: &v2corepb.Locality{Zone: testZone},
+			},
+			want: &v3corepb.Node{
+				Id:       testID,
+				Cluster:  testCluster,
+				Locality: &v3corepb.Locality{Zone: testZone},
+			},
+		},
+		{
+			name: "not node",
+			n:    &v2corepb.Locality{Zone: testZone},
+			want: nil, // Input is not a node, should return nil.
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := nodeProtoToV3(tt.n)
+			if diff := cmp.Diff(got, tt.want, protocmp.Transform()); diff != "" {
+				t.Errorf("nodeProtoToV3() got unexpected result, diff (-got, +want): %v", diff)
+			}
+		})
+	}
 }

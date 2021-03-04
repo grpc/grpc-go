@@ -16,11 +16,11 @@
  *
  */
 
-// Package csds implements features to dump the status (mostly xDS
-// responses) the xds_client is using.
+// Package csds implements features to dump the status (xDS responses) the
+// xds_client is using.
 //
 // Notice: This package is EXPERIMENTAL and may be changed or removed in a later
-// release..
+// release.
 package csds
 
 import (
@@ -29,8 +29,10 @@ import (
 	"time"
 
 	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
+	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/status"
@@ -62,8 +64,8 @@ var (
 )
 
 type clientStatusServer struct {
-	// xdsClient will always be the same in real world. But we keep a copy in
-	// each server instance for testing purpose.
+	// xdsClient will always be the same in practise. But we keep a copy in each
+	// server instance for testing.
 	xdsClient    xdsClientInterface
 	xdsClientErr error
 }
@@ -108,21 +110,16 @@ func (s *clientStatusServer) FetchClientStatus(_ context.Context, req *v3statusp
 // If it returns an error, the error is a status error.
 func (s *clientStatusServer) buildClientStatusRespForReq(req *v3statuspb.ClientStatusRequest) (*v3statuspb.ClientStatusResponse, error) {
 	if len(req.NodeMatchers) != 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "NodeMatchers are not supported, request contains %v", req.NodeMatchers)
+		return nil, status.Errorf(codes.InvalidArgument, "NodeMatchers are not supported, request contains NodeMatchers: %v", req.NodeMatchers)
 	}
 	if s.xdsClient == nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "xds client creation failed with error: %v", s.xdsClientErr)
 	}
 
-	var node *v3corepb.Node
-	if n, ok := s.xdsClient.BootstrapConfig().NodeProto.(*v3corepb.Node); ok {
-		node = n
-	}
-
 	ret := &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
 			{
-				Node: node,
+				Node: nodeProtoToV3(s.xdsClient.BootstrapConfig().NodeProto),
 				XdsConfig: []*v3statuspb.PerXdsConfig{
 					s.buildLDSPerXDSConfig(),
 					s.buildRDSPerXDSConfig(),
@@ -132,8 +129,32 @@ func (s *clientStatusServer) buildClientStatusRespForReq(req *v3statuspb.ClientS
 			},
 		},
 	}
-
 	return ret, nil
+}
+
+// nodeProtoToV3 converts the given proto into a v3.Node. n is from bootstrap
+// config, it can be either v2.Node or v3.Node.
+//
+// If n is already a v3.Node, return it.
+// If n is v2.Node, marshal and unmarshal it to v3.
+// Otherwise, return nil.
+func nodeProtoToV3(n proto.Message) *v3corepb.Node {
+	var node *v3corepb.Node
+	switch nn := n.(type) {
+	case *v3corepb.Node:
+		node = nn
+	case *v2corepb.Node:
+		node = new(v3corepb.Node)
+		v2, err := proto.Marshal(nn)
+		if err != nil {
+			logger.Warningf("Failed to marshal node (%v): %v", n, err)
+			break
+		}
+		if err := proto.Unmarshal(v2, node); err != nil {
+			logger.Warningf("Failed to unmarshal node (%v): %v", v2, err)
+		}
+	}
+	return node
 }
 
 func (s *clientStatusServer) buildLDSPerXDSConfig() *v3statuspb.PerXdsConfig {
