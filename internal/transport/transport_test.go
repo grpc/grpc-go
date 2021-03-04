@@ -1663,10 +1663,12 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	}
 }
 
+// If the client sends an HTTP/2 request with a :method header with a value other than POST, as specified in
+// the gRPC over HTTP/2 specification, the server should close the stream.
 func (s) TestServerWithClientSendingWrongMethod(t *testing.T) {
 	server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
 	defer server.stop()
-	// Create a client directly to not couple what you can send to API of http2_client.go
+	// Create a client directly to not couple what you can send to API of http2_client.go.
 	mconn, err := net.Dial("tcp", server.lis.Addr().String())
 	if err != nil {
 		t.Fatalf("Client failed to dial: %v", err)
@@ -1676,41 +1678,49 @@ func (s) TestServerWithClientSendingWrongMethod(t *testing.T) {
 	if n, err := mconn.Write(clientPreface); err != nil || n != len(clientPreface) {
 		t.Fatalf("mconn.Write(clientPreface) = %d, %v, want %d, <nil>", n, err, len(clientPreface))
 	}
-	// success chan indicates that reader received a RSTStream from server
-	success := make(chan struct{})
-	var mu sync.Mutex
+
 	framer := http2.NewFramer(mconn, mconn)
 	if err := framer.WriteSettings(); err != nil {
 		t.Fatalf("Error while writing settings: %v", err)
 	}
 
-	go func() { // Launch a reader goroutine
+	// success chan indicates that reader received a RSTStream from server.
+	// An error will be passed on it if any other frame is received.
+	success := testutils.NewChannel()
+
+	// Launch a reader goroutine.
+	go func() {
 		for {
 			frame, err := framer.ReadFrame()
 			if err != nil {
 				return
 			}
 			switch frame := frame.(type) {
+			case *http2.SettingsFrame:
+				// Do nothing. A settings frame is expected from server preface.
 			case *http2.RSTStreamFrame:
 				if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != http2.ErrCodeProtocol {
-					// Client only created a single stream, so RST Stream should be for that stream
+					// Client only created a single stream, so RST Stream should be for that single stream.
 					t.Errorf("RST stream received with streamID: %d and code %v, want streamID: 1 and code: http.ErrCodeFlowControl", frame.Header().StreamID, http2.ErrCode(frame.ErrCode))
 				}
-				close(success) // Records  that client successfully received RST Stream frame
+				// Records that client successfully received RST Stream frame.
+				success.Send(nil)
 				return
 			default:
-				// Do nothing. No other frame is of interest to this test
+				// The server should send nothing but a single RST Stream frame.
+				success.Send(errors.New("The client received a frame other than RST Stream"))
 			}
 		}
 	}()
 
-	// Done with HTTP/2 setup - now create a stream with a bad method header
+	// Done with HTTP/2 setup - now create a stream with a bad method header.
 	var buf bytes.Buffer
 	henc := hpack.NewEncoder(&buf)
-	if err := henc.WriteField(hpack.HeaderField{Name: ":method", Value: "PUT"}); err != nil { // Method is required to be POST in a gRPC call
+	// Method is required to be POST in a gRPC call.
+	if err := henc.WriteField(hpack.HeaderField{Name: ":method", Value: "PUT"}); err != nil {
 		t.Fatalf("Error while encoding header: %v", err)
 	}
-	// Have the rest of the headers be ok and within the gRPC over HTTP/2 spec
+	// Have the rest of the headers be ok and within the gRPC over HTTP/2 spec.
 	if err := henc.WriteField(hpack.HeaderField{Name: ":path", Value: "foo"}); err != nil {
 		t.Fatalf("Error while encoding header: %v", err)
 	}
@@ -1721,21 +1731,13 @@ func (s) TestServerWithClientSendingWrongMethod(t *testing.T) {
 		t.Fatalf("Error while encoding header: %v", err)
 	}
 
-	mu.Lock()
 	if err := framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
-		mu.Unlock()
 		t.Fatalf("Error while writing headers: %v", err)
 	}
-	mu.Unlock()
-	// Test server behavior of closing stream successfully through success channel
-	timer := time.NewTimer(time.Second * 5)
-	for {
-		select {
-		case <-timer.C:
-			t.Fatalf("Test timed out.")
-		case <-success:
-			return
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if e, err := success.Receive(ctx); e != nil || err != nil {
+		t.Fatalf("Error in frame server should send: %v. Error receiving from channel: %v", e, err)
 	}
 }
 

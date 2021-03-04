@@ -111,6 +111,7 @@ type parsedHeaderData struct {
 	timeoutSet bool
 	timeout    time.Duration
 	method     string
+	httpMethod string
 	// key-value metadata map from the peer.
 	mdata          map[string][]string
 	statsTags      []byte
@@ -130,8 +131,6 @@ type parsedHeaderData struct {
 	grpcErr        error
 	httpErr        error
 	contentTypeErr string
-
-	httpMethod string
 }
 
 // decodeState configures decoding criteria and records the decoded data.
