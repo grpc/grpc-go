@@ -113,6 +113,10 @@ type UpdateOptions struct {
 	Clusters  []*v3clusterpb.Cluster
 	Routes    []*v3routepb.RouteConfiguration
 	Listeners []*v3listenerpb.Listener
+	// SkipValidation indicates whether we want to skip validation (by not
+	// calling snapshot.Consistent()). It can be useful for negative tests,
+	// where we send updates that the client will NACK.
+	SkipValidation bool
 }
 
 // Update changes the resource snapshot held by the management server, which
@@ -122,8 +126,10 @@ func (s *ManagementServer) Update(opts UpdateOptions) error {
 
 	// Create a snapshot with the passed in resources.
 	snapshot := v3cache.NewSnapshot(strconv.Itoa(s.version), resourceSlice(opts.Endpoints), resourceSlice(opts.Clusters), resourceSlice(opts.Routes), resourceSlice(opts.Listeners), nil /*runtimes*/, nil /*secrets*/)
-	if err := snapshot.Consistent(); err != nil {
-		return fmt.Errorf("failed to create new resource snapshot: %v", err)
+	if !opts.SkipValidation {
+		if err := snapshot.Consistent(); err != nil {
+			return fmt.Errorf("failed to create new resource snapshot: %v", err)
+		}
 	}
 	logger.Infof("Created new resource snapshot...")
 

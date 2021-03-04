@@ -144,12 +144,12 @@ func nodeProtoToV3(n proto.Message) *v3corepb.Node {
 	case *v3corepb.Node:
 		node = nn
 	case *v2corepb.Node:
-		node = new(v3corepb.Node)
 		v2, err := proto.Marshal(nn)
 		if err != nil {
 			logger.Warningf("Failed to marshal node (%v): %v", n, err)
 			break
 		}
+		node = new(v3corepb.Node)
 		if err := proto.Unmarshal(v2, node); err != nil {
 			logger.Warningf("Failed to unmarshal node (%v): %v", v2, err)
 		}

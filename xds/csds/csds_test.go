@@ -43,12 +43,10 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
-	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
 
@@ -140,81 +138,19 @@ var (
 
 func init() {
 	for i := range ldsTargets {
-		listeners[i] = &v3listenerpb.Listener{
-			Name: ldsTargets[i],
-			ApiListener: &v3listenerpb.ApiListener{
-				ApiListener: func() *anypb.Any {
-					mcm, _ := ptypes.MarshalAny(&v3httppb.HttpConnectionManager{
-						RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
-							Rds: &v3httppb.Rds{
-								ConfigSource: &v3corepb.ConfigSource{
-									ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
-								},
-								RouteConfigName: rdsTargets[i],
-							},
-						},
-						CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
-							MaxStreamDuration: durationpb.New(time.Second),
-						},
-					})
-					return mcm
-				}(),
-			},
-		}
+		listeners[i] = e2e.DefaultListener(ldsTargets[i], rdsTargets[i])
 		listenerAnys[i], _ = ptypes.MarshalAny(listeners[i])
 	}
 	for i := range rdsTargets {
-		routes[i] = &v3routepb.RouteConfiguration{
-			Name: rdsTargets[i],
-			VirtualHosts: []*v3routepb.VirtualHost{{
-				Domains: []string{ldsTargets[i]},
-				Routes: []*v3routepb.Route{{
-					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""}},
-					Action: &v3routepb.Route_Route{
-						Route: &v3routepb.RouteAction{
-							ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: cdsTargets[i]},
-						},
-					},
-				}},
-			}},
-		}
+		routes[i] = e2e.DefaultRouteConfig(rdsTargets[i], ldsTargets[i], cdsTargets[i])
 		routeAnys[i], _ = ptypes.MarshalAny(routes[i])
 	}
 	for i := range cdsTargets {
-		clusters[i] = &v3clusterpb.Cluster{
-			Name:                 cdsTargets[i],
-			ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-			EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-				EdsConfig: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-						Ads: &v3corepb.AggregatedConfigSource{},
-					},
-				},
-				ServiceName: edsTargets[i],
-			},
-			LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-		}
+		clusters[i] = e2e.DefaultCluster(cdsTargets[i], edsTargets[i])
 		clusterAnys[i], _ = ptypes.MarshalAny(clusters[i])
 	}
 	for i := range edsTargets {
-		endpoints[i] = &v3endpointpb.ClusterLoadAssignment{
-			ClusterName: edsTargets[i],
-			Endpoints: []*v3endpointpb.LocalityLbEndpoints{{
-				Locality: &v3corepb.Locality{Region: edsTargets[i]},
-				LbEndpoints: []*v3endpointpb.LbEndpoint{{
-					HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{Endpoint: &v3endpointpb.Endpoint{
-						Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
-							SocketAddress: &v3corepb.SocketAddress{
-								Protocol:      v3corepb.SocketAddress_TCP,
-								Address:       ips[i],
-								PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: ports[i]},
-							},
-						}},
-					}},
-				}},
-				Priority: 0,
-			}},
-		}
+		endpoints[i] = e2e.DefaultEndpoint(edsTargets[i], ips[i], ports[i])
 		endpointAnys[i], _ = ptypes.MarshalAny(endpoints[i])
 	}
 }
@@ -239,10 +175,8 @@ func TestCSDS(t *testing.T) {
 	for _, target := range edsTargets {
 		xdsC.WatchEndpoints(target, func(client.EndpointsUpdate, error) {})
 	}
-	// time.Sleep(time.Second)
 
 	for i := 0; i < retryCount; i++ {
-		// Verify that status is REQUESTED.
 		err := checkForRequested(stream)
 		if err == nil {
 			break
@@ -260,14 +194,10 @@ func TestCSDS(t *testing.T) {
 		Clusters:  clusters,
 		Endpoints: endpoints,
 	}); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
-	// FIXME: how to not sleep? Loop?
-	// time.Sleep(time.Second)
-
 	for i := 0; i < retryCount; i++ {
-		// Verify that status is REQUESTED.
 		err := checkForACKed(stream)
 		if err == nil {
 			break
@@ -295,12 +225,12 @@ func TestCSDS(t *testing.T) {
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
 			{ClusterName: edsTargets[nackResourceIdx], Endpoints: []*v3endpointpb.LocalityLbEndpoints{{}}},
 		},
+		SkipValidation: true,
 	}); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	for i := 0; i < retryCount; i++ {
-		// Verify that status is REQUESTED.
 		err := checkForNACKed(nackResourceIdx, stream)
 		if err == nil {
 			break
@@ -310,12 +240,6 @@ func TestCSDS(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond * 100)
 	}
-
-	// err := checkForNACKed(nackResourceIdx, stream)
-	// if err != nil {
-	// 	t.Fatalf("%v", err)
-	// }
-
 }
 
 func commonSetup(t *testing.T) (xdsClientInterface, *e2e.ManagementServer, string, v3statuspb.ClientStatusDiscoveryService_StreamClientStatusClient, func()) {
@@ -338,12 +262,11 @@ func commonSetup(t *testing.T) (xdsClientInterface, *e2e.ManagementServer, strin
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	// Create xds_client.
 	xdsC, err := client.New()
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}
-
 	oldNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) {
 		return xdsC, nil
@@ -352,7 +275,6 @@ func commonSetup(t *testing.T) (xdsClientInterface, *e2e.ManagementServer, strin
 	// Initialize an gRPC server and register CSDS on it.
 	server := grpc.NewServer()
 	v3statuspb.RegisterClientStatusDiscoveryServiceServer(server, NewClientStatusDiscoveryServer())
-
 	// Create a local listener and pass it to Serve().
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -364,12 +286,11 @@ func commonSetup(t *testing.T) (xdsClientInterface, *e2e.ManagementServer, strin
 		}
 	}()
 
-	// Create client.
+	// Create CSDS client.
 	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("cannot connect to server: %v", err)
 	}
-
 	c := v3statuspb.NewClientStatusDiscoveryServiceClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	stream, err := c.StreamClientStatus(ctx, grpc.WaitForReady(true))
@@ -397,8 +318,6 @@ func checkForRequested(stream v3statuspb.ClientStatusDiscoveryService_StreamClie
 		// io.EOF is not ok.
 		return fmt.Errorf("failed to recv response: %v", err)
 	}
-	fmt.Println(protoToJSON(r))
-	fmt.Println(" ------- ")
 
 	if n := len(r.Config); n != 1 {
 		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(r))
@@ -469,9 +388,7 @@ func checkForRequested(stream v3statuspb.ClientStatusDiscoveryService_StreamClie
 }
 
 func checkForACKed(stream v3statuspb.ClientStatusDiscoveryService_StreamClientStatusClient) error {
-	const (
-		wantVersion = "1"
-	)
+	const wantVersion = "1"
 
 	if err := stream.Send(&v3statuspb.ClientStatusRequest{Node: nil}); err != nil {
 		return fmt.Errorf("failed to send: %v", err)
@@ -481,8 +398,6 @@ func checkForACKed(stream v3statuspb.ClientStatusDiscoveryService_StreamClientSt
 		// io.EOF is not ok.
 		return fmt.Errorf("failed to recv response: %v", err)
 	}
-	fmt.Println(protoToJSON(r))
-	fmt.Println(" ------- ")
 
 	if n := len(r.Config); n != 1 {
 		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(r))
@@ -491,7 +406,6 @@ func checkForACKed(stream v3statuspb.ClientStatusDiscoveryService_StreamClientSt
 		return fmt.Errorf("got %d xds configs (one for each type), want 4: %v", n, proto.MarshalTextString(r))
 	}
 	for _, cfg := range r.Config[0].XdsConfig {
-
 		switch config := cfg.PerXdsConfig.(type) {
 		case *v3statuspb.PerXdsConfig_ListenerConfig:
 			var wantLis []*v3adminpb.ListenersConfigDump_DynamicListener
@@ -571,7 +485,6 @@ func checkForACKed(stream v3statuspb.ClientStatusDiscoveryService_StreamClientSt
 }
 
 func checkForNACKed(nackResourceIdx int, stream v3statuspb.ClientStatusDiscoveryService_StreamClientStatusClient) error {
-
 	const (
 		ackVersion  = "1"
 		nackVersion = "2"
@@ -585,8 +498,6 @@ func checkForNACKed(nackResourceIdx int, stream v3statuspb.ClientStatusDiscovery
 		// io.EOF is not ok.
 		return fmt.Errorf("failed to recv response: %v", err)
 	}
-	fmt.Println(protoToJSON(r))
-	fmt.Println(" ------- ")
 
 	if n := len(r.Config); n != 1 {
 		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(r))
@@ -700,7 +611,6 @@ func checkForNACKed(nackResourceIdx int, stream v3statuspb.ClientStatusDiscovery
 		default:
 			return fmt.Errorf("unexpected PerXdsConfig: %+v; %v", cfg.PerXdsConfig, protoToJSON(r))
 		}
-
 	}
 	return nil
 }
