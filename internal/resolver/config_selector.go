@@ -113,7 +113,7 @@ type ClientInterceptor interface {
 	// done is invoked when the RPC is finished using its connection, or could
 	// not be assigned a connection.  RPC operations may still occur on
 	// ClientStream after done is called, since the interceptor is invoked by
-	// application-layer operations.
+	// application-layer operations.  done must never be nil when called.
 	NewStream(ctx context.Context, ri RPCInfo, done func(), newStream func(ctx context.Context, done func()) (ClientStream, error)) (ClientStream, error)
 }
 
