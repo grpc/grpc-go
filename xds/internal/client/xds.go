@@ -567,10 +567,17 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 		return emptyUpdate, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
 
-	sc, err := securityConfigFromCluster(cluster)
-	if err != nil {
-		return emptyUpdate, err
+	// Process security configuration received from the control plane iff the
+	// corresponding environment variable is set.
+	var sc *SecurityConfig
+	if env.ClientSideSecuritySupport {
+		var err error
+		sc, err = securityConfigFromCluster(cluster)
+		if err != nil {
+			return emptyUpdate, err
+		}
 	}
+
 	return ClusterUpdate{
 		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
 		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
