@@ -314,16 +314,13 @@ type interceptorList struct {
 	interceptors []iresolver.ClientInterceptor
 }
 
-func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, cs iresolver.ClientStream) (context.Context, iresolver.ClientStream, error) {
-	for _, i := range il.interceptors {
-		var err error
-		newCTX, newCS, err := i.NewStream(ctx, ri, cs)
-		if err != nil {
-			cs.Done()
-			return nil, nil, err
+func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+	for i := len(il.interceptors) - 1; i >= 0; i-- {
+		ns := newStream
+		interceptor := il.interceptors[i]
+		newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
+			return interceptor.NewStream(ctx, ri, done, ns)
 		}
-		cs = newCS
-		ctx = newCTX
 	}
-	return ctx, cs, nil
+	return newStream(ctx, func() {})
 }

@@ -1057,23 +1057,26 @@ type filterInterceptor struct {
 	err  error
 }
 
-func (fi *filterInterceptor) NewStream(ctx context.Context, i iresolver.RPCInfo, cs iresolver.ClientStream) (context.Context, iresolver.ClientStream, error) {
+func (fi *filterInterceptor) NewStream(ctx context.Context, ri iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
 	*fi.path = append(*fi.path, "newstream:"+fi.s)
 	if fi.err != nil {
-		return nil, nil, fi.err
+		return nil, fi.err
 	}
-	return ctx, &clientStream{cs: cs, path: fi.path, s: fi.s}, nil
+	d := func() {
+		*fi.path = append(*fi.path, "done:"+fi.s)
+		done()
+	}
+	cs, err := newStream(ctx, d)
+	if err != nil {
+		return nil, err
+	}
+	return &clientStream{ClientStream: cs, path: fi.path, s: fi.s}, nil
 }
 
 type clientStream struct {
-	cs   iresolver.ClientStream
+	iresolver.ClientStream
 	path *[]string
 	s    string
-}
-
-func (cs *clientStream) Done() {
-	*cs.path = append(*cs.path, "done:"+cs.s)
-	cs.cs.Done()
 }
 
 type filterCfg struct {
@@ -1249,14 +1252,18 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 					if err != nil {
 						t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
 					}
-					_, cs, err := res.Interceptor.NewStream(context.Background(), iresolver.RPCInfo{}, iresolver.NOPClientStream{})
+					var doneFunc func()
+					_, err = res.Interceptor.NewStream(context.Background(), iresolver.RPCInfo{}, func() {}, func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
+						doneFunc = done
+						return nil, nil
+					})
 					if tc.newStreamErr != "" {
 						if err == nil || !strings.Contains(err.Error(), tc.newStreamErr) {
 							t.Errorf("NewStream(...) = _, %v; want _, Contains(%v)", err, tc.newStreamErr)
 						}
 						if err == nil {
 							res.OnCommitted()
-							cs.Done()
+							doneFunc()
 						}
 						continue
 					}
@@ -1265,7 +1272,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 
 					}
 					res.OnCommitted()
-					cs.Done()
+					doneFunc()
 
 					// Confirm the desired path is found in remainingWant, and remove it.
 					pass := false
