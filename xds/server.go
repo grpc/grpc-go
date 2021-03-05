@@ -231,26 +231,26 @@ func (s *GRPCServer) newListenerWrapper(lis net.Listener) (*listenerWrapper, err
 	if cfg == nil || cfg.ServerListenerResourceNameTemplate == "" {
 		return nil, errors.New("missing server_listener_resource_name_template in the bootstrap configuration")
 	}
-	listenerName := cfg.ServerListenerResourceNameTemplate
+	name := cfg.ServerListenerResourceNameTemplate
 	if strings.Contains(cfg.ServerListenerResourceNameTemplate, "%s") {
-		listenerName = fmt.Sprintf(cfg.ServerListenerResourceNameTemplate, lis.Addr().String())
+		name = fmt.Sprintf(cfg.ServerListenerResourceNameTemplate, lis.Addr().String())
 	}
 
 	// Register an LDS watch using our xdsClient, and specify the listening
 	// address as the resource name.
-	cancelWatch := s.xdsC.WatchListener(listenerName, func(update xdsclient.ListenerUpdate, err error) {
+	cancelWatch := s.xdsC.WatchListener(name, func(update xdsclient.ListenerUpdate, err error) {
 		s.handleListenerUpdate(listenerUpdate{
 			lw:         lw,
-			name:       listenerName,
+			name:       name,
 			lds:        update,
 			err:        err,
 			goodUpdate: goodUpdate,
 		})
 	})
-	s.logger.Infof("Watch started on resource name %v", listenerName)
+	s.logger.Infof("Watch started on resource name %v", name)
 	lw.cancelWatch = func() {
 		cancelWatch()
-		s.logger.Infof("Watch cancelled on resource name %v", listenerName)
+		s.logger.Infof("Watch cancelled on resource name %v", name)
 	}
 
 	// Block until a good LDS response is received or the server is stopped.
