@@ -233,7 +233,7 @@ func (s *GRPCServer) newListenerWrapper(lis net.Listener) (*listenerWrapper, err
 	}
 	name := cfg.ServerListenerResourceNameTemplate
 	if strings.Contains(cfg.ServerListenerResourceNameTemplate, "%s") {
-		name = fmt.Sprintf(cfg.ServerListenerResourceNameTemplate, lis.Addr().String())
+		name = strings.Replace(cfg.ServerListenerResourceNameTemplate, "%s", lis.Addr().String(), 1)
 	}
 
 	// Register an LDS watch using our xdsClient, and specify the listening
