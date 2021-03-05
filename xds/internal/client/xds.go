@@ -572,8 +572,7 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	var sc *SecurityConfig
 	if env.ClientSideSecuritySupport {
 		var err error
-		sc, err = securityConfigFromCluster(cluster)
-		if err != nil {
+		if sc, err = securityConfigFromCluster(cluster); err != nil {
 			return emptyUpdate, err
 		}
 	}
