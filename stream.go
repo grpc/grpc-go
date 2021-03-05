@@ -181,7 +181,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method}
 	rpcConfig, err := cc.safeConfigSelector.SelectConfig(rpcInfo)
 	if err != nil {
-		return nil, status.Convert(err).Err()
+		return nil, toRPCErr(err)
 	}
 
 	if rpcConfig != nil {
@@ -196,7 +196,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
 				cs, err := rpcConfig.Interceptor.NewStream(ctx, rpcInfo, done, ns)
 				if err != nil {
-					return nil, status.Convert(err).Err()
+					return nil, toRPCErr(err)
 				}
 				return cs, nil
 			}
