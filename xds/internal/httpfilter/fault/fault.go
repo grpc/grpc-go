@@ -80,7 +80,8 @@ func (builder) TypeURLs() []string {
 	return []string{"type.googleapis.com/envoy.extensions.filters.http.fault.v3.HTTPFault"}
 }
 
-func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+// Parsing is the same for the base config and the override config.
+func parseConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("fault: nil configuration message provided")
 	}
@@ -95,9 +96,12 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	return config{config: msg}, nil
 }
 
+func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+	return parseConfig(cfg)
+}
+
 func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
-	// Parsing is the same for the override config.
-	return builder{}.ParseFilterConfig(override)
+	return parseConfig(override)
 }
 
 var _ httpfilter.ClientInterceptorBuilder = builder{}
@@ -153,7 +157,7 @@ func (i *interceptor) NewStream(ctx context.Context, ri iresolver.RPCInfo, done 
 }
 
 // For overriding in tests
-var intn = grpcrand.Intn
+var randIntn = grpcrand.Intn
 var newTimer = time.NewTimer
 
 func injectDelay(ctx context.Context, delayCfg *cpb.FaultDelay) error {
@@ -164,23 +168,24 @@ func injectDelay(ctx context.Context, delayCfg *cpb.FaultDelay) error {
 		delay = delayType.FixedDelay.AsDuration()
 	case *cpb.FaultDelay_HeaderDelay_:
 		md, _ := metadata.FromOutgoingContext(ctx)
-		if v := md[headerDelayDuration]; v != nil {
-			if ms, ok := parseIntFromMD(v); ok {
-				delay = time.Duration(time.Duration(ms) * time.Millisecond)
-			} else {
-				return nil
-			}
-		} else {
+		v := md[headerDelayDuration]
+		if v == nil {
 			// No delay configured for this RPC.
 			return nil
 		}
+		ms, ok := parseIntFromMD(v)
+		if !ok {
+			// Malformed header; no delay.
+			return nil
+		}
+		delay = time.Duration(ms) * time.Millisecond
 		if v := md[headerDelayPercentage]; v != nil {
 			if num, ok := parseIntFromMD(v); ok && num < numerator {
 				numerator = num
 			}
 		}
 	}
-	if delay == 0 || intn(denominator) >= numerator {
+	if delay == 0 || randIntn(denominator) >= numerator {
 		return nil
 	}
 	t := newTimer(delay)
@@ -205,6 +210,7 @@ func injectAbort(ctx context.Context, abortCfg *fpb.FaultAbort) error {
 	case *fpb.FaultAbort_HeaderAbort_:
 		md, _ := metadata.FromOutgoingContext(ctx)
 		if v := md[headerAbortHTTPStatus]; v != nil {
+			// HTTP status has priority over gRPC status.
 			if httpStatus, ok := parseIntFromMD(v); ok {
 				code, okCode = grpcFromHTTP(httpStatus)
 			}
@@ -219,7 +225,7 @@ func injectAbort(ctx context.Context, abortCfg *fpb.FaultAbort) error {
 			}
 		}
 	}
-	if !okCode || intn(denominator) >= numerator {
+	if !okCode || randIntn(denominator) >= numerator {
 		return nil
 	}
 	if code == codes.OK {

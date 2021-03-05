@@ -473,11 +473,11 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			defer func() { intn = grpcrand.Intn; newTimer = time.NewTimer }()
+			defer func() { randIntn = grpcrand.Intn; newTimer = time.NewTimer }()
 			var intnCalls []int
 			var newTimerCalls []time.Duration
 			randOut := 0
-			intn = func(n int) int {
+			randIntn = func(n int) int {
 				intnCalls = append(intnCalls, n)
 				return randOut % n
 			}
