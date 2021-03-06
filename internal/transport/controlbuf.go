@@ -760,6 +760,7 @@ func (l *loopyWriter) incomingGoAwayHandler(*incomingGoAway) error {
 }
 
 func (l *loopyWriter) goAwayHandler(g *goAway) error {
+	// Handling of outgoing GoAway is very specific to side.
 	if l.ssGoAwayHandler != nil {
 		draining, err := l.ssGoAwayHandler(g)
 		if err != nil {
