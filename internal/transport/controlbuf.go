@@ -460,7 +460,6 @@ type loopyWriter struct {
 	draining      bool
 
 	// Side-specific handlers
-	csGoAwayHandler func(*goAway) error
 	ssGoAwayHandler func(*goAway) (bool, error)
 }
 
@@ -761,10 +760,6 @@ func (l *loopyWriter) incomingGoAwayHandler(*incomingGoAway) error {
 }
 
 func (l *loopyWriter) goAwayHandler(g *goAway) error {
-	// Handling of outgoing GoAway is very specific to side.
-	if l.csGoAwayHandler != nil {
-		return l.csGoAwayHandler(g)
-	}
 	if l.ssGoAwayHandler != nil {
 		draining, err := l.ssGoAwayHandler(g)
 		if err != nil {

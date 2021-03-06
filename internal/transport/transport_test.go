@@ -1232,6 +1232,68 @@ func (s) TestServerWithMisbehavedClient(t *testing.T) {
 	}
 }
 
+// Test that a transport level client shutdown successfully sends a GOAWAY frame to underlying connection.
+func (s) TestClientCloseSendsAGoAwayFrame(t *testing.T) {
+	// Create a server.
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening: #{err}")
+	}
+	defer lis.Close()
+	// The success channel indicates that the server's reader goroutine received a GOAWAY frame
+	// from the client.
+	success := testutils.NewChannel()
+	// Launch the server.
+	go func() {
+		sconn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Error while accepting: #{err}")
+		}
+		defer sconn.Close()
+		if _, err := io.ReadFull(sconn, make([]byte, len(clientPreface))); err != nil {
+			t.Errorf("Error while reading client preface: %v", err)
+			return
+		}
+		sfr := http2.NewFramer(sconn, sconn)
+		if err := sfr.WriteSettingsAck(); err != nil {
+			t.Errorf("Error while writing settings ack: %v", err)
+			return
+		}
+		// Read frames off the wire. Should expect to see a GOAWAY frame after the client closes.
+		for {
+			frame, err := sfr.ReadFrame()
+			if err != nil {
+				return
+			}
+			switch frame.(type) {
+			case *http2.SettingsFrame:
+				// Do nothing. A settings frame is expected from client preface.
+			case *http2.GoAwayFrame:
+				// Records that server successfully received a GOAWAY frame.
+				success.Send(nil)
+				return
+			default:
+				// The client should send have sent nothing but settings and GOAWAY frame.
+				success.Send(errors.New("The client received a frame other than settings or GOAWAY frame"))
+				return
+			}
+		}
+	}()
+	// Construct a client transport here to server and immediately close it to test if successfully sent GOAWAY frame.
+	connectCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ct, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{}, func() {}, func(GoAwayReason) {}, func() {})
+	if err != nil {
+		t.Fatalf("Error while creating client transport: #{err}")
+	}
+	ct.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if e, err := success.Receive(ctx); e != nil || err != nil {
+		t.Fatalf("Error in frame received: %v. Error receiving from channel: %v", e, err)
+	}
+}
+
 func (s) TestClientWithMisbehavedServer(t *testing.T) {
 	// Create a misbehaving server.
 	lis, err := net.Listen("tcp", "localhost:0")
