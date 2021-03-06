@@ -171,34 +171,35 @@ func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDS
 // makeNewSubConn invokes the NewSubConn() call on the balancer.ClientConn
 // passed to the EDS balancer, and verifies that the CDS balancer forwards the
 // call appropriately to its parent balancer.ClientConn with or without
-// attributes bases on the value of wantAttributes.
-func makeNewSubConn(ctx context.Context, edsCC balancer.ClientConn, parentCC *xdstestutils.TestClientConn, wantFallback bool) error {
+// attributes bases on the value of wantFallback.
+func makeNewSubConn(ctx context.Context, edsCC balancer.ClientConn, parentCC *xdstestutils.TestClientConn, wantFallback bool) (balancer.SubConn, error) {
 	dummyAddr := "foo-address"
 	addrs := []resolver.Address{{Addr: dummyAddr}}
-	if _, err := edsCC.NewSubConn(addrs, balancer.NewSubConnOptions{}); err != nil {
-		return fmt.Errorf("NewSubConn(%+v) on parent ClientConn failed: %v", addrs, err)
+	sc, err := edsCC.NewSubConn(addrs, balancer.NewSubConnOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("NewSubConn(%+v) on parent ClientConn failed: %v", addrs, err)
 	}
 
 	select {
 	case <-ctx.Done():
-		return errors.New("timeout when waiting for new SubConn")
+		return nil, errors.New("timeout when waiting for new SubConn")
 	case gotAddrs := <-parentCC.NewSubConnAddrsCh:
 		if len(gotAddrs) != 1 {
-			return fmt.Errorf("NewSubConn expected 1 address, got %d", len(gotAddrs))
+			return nil, fmt.Errorf("NewSubConn expected 1 address, got %d", len(gotAddrs))
 		}
 		if got, want := gotAddrs[0].Addr, addrs[0].Addr; got != want {
-			return fmt.Errorf("resolver.Address passed to parent ClientConn has address %q, want %q", got, want)
+			return nil, fmt.Errorf("resolver.Address passed to parent ClientConn has address %q, want %q", got, want)
 		}
 		getHI := internal.GetXDSHandshakeInfoForTesting.(func(attr *attributes.Attributes) *xdsinternal.HandshakeInfo)
 		hi := getHI(gotAddrs[0].Attributes)
 		if hi == nil {
-			return errors.New("resolver.Address passed to parent ClientConn doesn't contain attributes")
+			return nil, errors.New("resolver.Address passed to parent ClientConn doesn't contain attributes")
 		}
 		if gotFallback := hi.UseFallbackCreds(); gotFallback != wantFallback {
-			return fmt.Errorf("resolver.Address HandshakeInfo uses fallback creds? %v, want %v", gotFallback, wantFallback)
+			return nil, fmt.Errorf("resolver.Address HandshakeInfo uses fallback creds? %v, want %v", gotFallback, wantFallback)
 		}
 	}
-	return nil
+	return sc, nil
 }
 
 // TestSecurityConfigWithoutXDSCreds tests the case where xdsCredentials are not
@@ -243,7 +244,7 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 	// Make a NewSubConn and verify that the HandshakeInfo does not contain any
 	// certificate providers, forcing the credentials implementation to use
 	// fallback creds.
-	if err := makeNewSubConn(ctx, edsB.parentCC, tcc, true); err != nil {
+	if _, err := makeNewSubConn(ctx, edsB.parentCC, tcc, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -299,7 +300,7 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 	// Make a NewSubConn and verify that the HandshakeInfo does not contain any
 	// certificate providers, forcing the credentials implementation to use
 	// fallback creds.
-	if err := makeNewSubConn(ctx, edsB.parentCC, tcc, true); err != nil {
+	if _, err := makeNewSubConn(ctx, edsB.parentCC, tcc, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -451,7 +452,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	}
 
 	// Make a NewSubConn and verify that attributes are added.
-	if err := makeNewSubConn(ctx, edsB.parentCC, tcc, false); err != nil {
+	if _, err := makeNewSubConn(ctx, edsB.parentCC, tcc, false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -487,8 +488,30 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 	}
 
 	// Make a NewSubConn and verify that attributes are added.
-	if err := makeNewSubConn(ctx, edsB.parentCC, tcc, false); err != nil {
+	sc, err := makeNewSubConn(ctx, edsB.parentCC, tcc, false)
+	if err != nil {
 		t.Fatal(err)
+	}
+
+	// Invoke UpdateAddresses and verify that attributes are added.
+	dummyAddr := "bar-address"
+	addrs := []resolver.Address{{Addr: dummyAddr}}
+	edsB.parentCC.UpdateAddresses(sc, addrs)
+	select {
+	case <-ctx.Done():
+		t.Fatal("timeout when waiting for addresses to be updated on the subConn")
+	case gotAddrs := <-tcc.UpdateAddressesAddrsCh:
+		if len(gotAddrs) != 1 {
+			t.Fatalf("UpdateAddresses expected 1 address, got %d", len(gotAddrs))
+		}
+		if got, want := gotAddrs[0].Addr, addrs[0].Addr; got != want {
+			t.Fatalf("resolver.Address passed to parent ClientConn through UpdateAddresses() has address %q, want %q", got, want)
+		}
+		getHI := internal.GetXDSHandshakeInfoForTesting.(func(attr *attributes.Attributes) *xdsinternal.HandshakeInfo)
+		hi := getHI(gotAddrs[0].Attributes)
+		if hi == nil {
+			t.Fatal("resolver.Address passed to parent ClientConn through UpdateAddresses() doesn't contain attributes")
+		}
 	}
 }
 
@@ -518,7 +541,7 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	}
 
 	// Make a NewSubConn and verify that attributes are added.
-	if err := makeNewSubConn(ctx, edsB.parentCC, tcc, false); err != nil {
+	if _, err := makeNewSubConn(ctx, edsB.parentCC, tcc, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -532,7 +555,7 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	}
 
 	// Make a NewSubConn and verify that fallback creds are used.
-	if err := makeNewSubConn(ctx, edsB.parentCC, tcc, true); err != nil {
+	if _, err := makeNewSubConn(ctx, edsB.parentCC, tcc, true); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -568,7 +591,7 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	}
 
 	// Make a NewSubConn and verify that attributes are added.
-	if err := makeNewSubConn(ctx, edsB.parentCC, tcc, false); err != nil {
+	if _, err := makeNewSubConn(ctx, edsB.parentCC, tcc, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -650,7 +673,7 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 	}
 
 	// Make a NewSubConn and verify that attributes are added.
-	if err := makeNewSubConn(ctx, edsB.parentCC, tcc, false); err != nil {
+	if _, err := makeNewSubConn(ctx, edsB.parentCC, tcc, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -671,7 +694,7 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 	}
 
 	// Make a NewSubConn and verify that attributes are added.
-	if err := makeNewSubConn(ctx, edsB.parentCC, tcc, false); err != nil {
+	if _, err := makeNewSubConn(ctx, edsB.parentCC, tcc, false); err != nil {
 		t.Fatal(err)
 	}
 

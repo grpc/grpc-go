@@ -107,7 +107,7 @@ go list -f {{.Dir}} ./... | xargs go run test/go_vet/vet.go
 # - gofmt, goimports, golint (with exceptions for generated code), go vet.
 gofmt -s -d -l . 2>&1 | fail_on_output
 goimports -l . 2>&1 | not grep -vE "\.pb\.go"
-golint ./... 2>&1 | not grep -vE "\.pb\.go:"
+golint ./... 2>&1 | not grep -vE "/testv3\.pb\.go:"
 go vet -all ./...
 
 misspell -error .

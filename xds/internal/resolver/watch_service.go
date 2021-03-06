@@ -32,8 +32,8 @@ import (
 // are of interest to the xds resolver. The RDS request is built by first
 // making a LDS to get the RouteConfig name.
 type serviceUpdate struct {
-	// routes contain matchers+actions to route RPCs.
-	routes []*xdsclient.Route
+	// virtualHost contains routes and other configuration to route RPCs.
+	virtualHost *xdsclient.VirtualHost
 	// ldsConfig contains configuration that applies to all routes.
 	ldsConfig ldsConfig
 }
@@ -44,6 +44,7 @@ type ldsConfig struct {
 	// maxStreamDuration is from the HTTP connection manager's
 	// common_http_protocol_options field.
 	maxStreamDuration time.Duration
+	httpFilterConfig  []xdsclient.HTTPFilter
 }
 
 // watchService uses LDS and RDS to discover information about the provided
@@ -104,18 +105,18 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsclient.ListenerUpdate, er
 		return
 	}
 
-	oldLDSConfig := w.lastUpdate.ldsConfig
-	w.lastUpdate.ldsConfig = ldsConfig{maxStreamDuration: update.MaxStreamDuration}
+	w.lastUpdate.ldsConfig = ldsConfig{
+		maxStreamDuration: update.MaxStreamDuration,
+		httpFilterConfig:  update.HTTPFilters,
+	}
 
 	if w.rdsName == update.RouteConfigName {
 		// If the new RouteConfigName is same as the previous, don't cancel and
 		// restart the RDS watch.
-		if w.lastUpdate.ldsConfig != oldLDSConfig {
-			// The route name didn't change but the LDS data did; send it now.
-			// If the route name did change, then we will wait until the first
-			// RDS update before reporting this LDS config.
-			w.serviceCb(w.lastUpdate, nil)
-		}
+		//
+		// If the route name did change, then we must wait until the first RDS
+		// update before reporting this LDS config.
+		w.serviceCb(w.lastUpdate, nil)
 		return
 	}
 	w.rdsName = update.RouteConfigName
@@ -149,7 +150,7 @@ func (w *serviceUpdateWatcher) handleRDSResp(update xdsclient.RouteConfigUpdate,
 		return
 	}
 
-	w.lastUpdate.routes = matchVh.Routes
+	w.lastUpdate.virtualHost = matchVh
 	w.serviceCb(w.lastUpdate, nil)
 }
 

@@ -629,6 +629,51 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	for _, done := range dones {
 		done()
 	}
+
+	// Send another update, with only circuit breaking update (and no picker
+	// update afterwards). Make sure the new picker uses the new configs.
+	var maxRequests2 uint32 = 10
+	edsb.updateServiceRequestsConfig("test", &maxRequests2)
+
+	// Picks with drops.
+	dones = []func(){}
+	p2 := <-cc.NewPickerCh
+	for i := 0; i < 100; i++ {
+		pr, err := p2.Pick(balancer.PickInfo{})
+		if i < 10 && err != nil {
+			t.Errorf("The first 10%% picks should be non-drops, got error %v", err)
+		} else if i > 10 && err == nil {
+			t.Errorf("The next 90%% picks should be drops, got error <nil>")
+		}
+		dones = append(dones, func() {
+			if pr.Done != nil {
+				pr.Done(balancer.DoneInfo{})
+			}
+		})
+	}
+
+	for _, done := range dones {
+		done()
+	}
+	dones = []func(){}
+
+	// Pick without drops.
+	for i := 0; i < 10; i++ {
+		pr, err := p2.Pick(balancer.PickInfo{})
+		if err != nil {
+			t.Errorf("The next 10%% picks should be non-drops, got error %v", err)
+		}
+		dones = append(dones, func() {
+			if pr.Done != nil {
+				pr.Done(balancer.DoneInfo{})
+			}
+		})
+	}
+
+	// Without this, future tests with the same service name will fail.
+	for _, done := range dones {
+		done()
+	}
 }
 
 func init() {

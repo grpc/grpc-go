@@ -117,16 +117,26 @@ func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger.Debugf("new watch for type %v, resource name %v", wi.rType, wi.target)
-	var watchers map[string]map[*watchInfo]bool
+	var (
+		watchers map[string]map[*watchInfo]bool
+		mds      map[string]UpdateMetadata
+	)
 	switch wi.rType {
 	case ListenerResource:
 		watchers = c.ldsWatchers
+		mds = c.ldsMD
 	case RouteConfigResource:
 		watchers = c.rdsWatchers
+		mds = c.rdsMD
 	case ClusterResource:
 		watchers = c.cdsWatchers
+		mds = c.cdsMD
 	case EndpointsResource:
 		watchers = c.edsWatchers
+		mds = c.edsMD
+	default:
+		c.logger.Errorf("unknown watch type: %v", wi.rType)
+		return nil
 	}
 
 	resourceName := wi.target
@@ -140,6 +150,7 @@ func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 		c.logger.Debugf("first watch for type %v, resource name %v, will send a new xDS request", wi.rType, wi.target)
 		s = make(map[*watchInfo]bool)
 		watchers[resourceName] = s
+		mds[resourceName] = UpdateMetadata{Status: ServiceStatusRequested}
 		c.apiClient.AddWatch(wi.rType, resourceName)
 	}
 	// No matter what, add the new watcher to the set, so it's callback will be
@@ -184,6 +195,7 @@ func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 				// If this was the last watcher, also tell xdsv2Client to stop
 				// watching this resource.
 				delete(watchers, resourceName)
+				delete(mds, resourceName)
 				c.apiClient.RemoveWatch(wi.rType, resourceName)
 				// Remove the resource from cache. When a watch for this
 				// resource is added later, it will trigger a xDS request with

@@ -66,17 +66,17 @@ func (s) TestRDSWatch(t *testing.T) {
 		VirtualHosts: []*VirtualHost{
 			{
 				Domains: []string{testLDSName},
-				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+				Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{testCDSName: {Weight: 1}}}},
 			},
 		},
 	}
-	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate})
+	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate}, UpdateMetadata{})
 	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
 	// Another update for a different resource name.
-	client.NewRouteConfigs(map[string]RouteConfigUpdate{"randomName": {}})
+	client.NewRouteConfigs(map[string]RouteConfigUpdate{"randomName": {}}, UpdateMetadata{})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := rdsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
@@ -85,7 +85,7 @@ func (s) TestRDSWatch(t *testing.T) {
 
 	// Cancel watch, and send update again.
 	cancelWatch()
-	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate})
+	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate}, UpdateMetadata{})
 	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := rdsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
@@ -138,11 +138,11 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 		VirtualHosts: []*VirtualHost{
 			{
 				Domains: []string{testLDSName},
-				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+				Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{testCDSName: {Weight: 1}}}},
 			},
 		},
 	}
-	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate})
+	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate}, UpdateMetadata{})
 	for i := 0; i < count; i++ {
 		if err := verifyRouteConfigUpdate(ctx, rdsUpdateChs[i], wantUpdate); err != nil {
 			t.Fatal(err)
@@ -151,7 +151,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 
 	// Cancel the last watch, and send update again.
 	cancelLastWatch()
-	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate})
+	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate}, UpdateMetadata{})
 	for i := 0; i < count-1; i++ {
 		if err := verifyRouteConfigUpdate(ctx, rdsUpdateChs[i], wantUpdate); err != nil {
 			t.Fatal(err)
@@ -217,7 +217,7 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 		VirtualHosts: []*VirtualHost{
 			{
 				Domains: []string{testLDSName},
-				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "1": 1}}},
+				Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{testCDSName + "1": {Weight: 1}}}},
 			},
 		},
 	}
@@ -225,14 +225,14 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 		VirtualHosts: []*VirtualHost{
 			{
 				Domains: []string{testLDSName},
-				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName + "2": 1}}},
+				Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{testCDSName + "2": {Weight: 1}}}},
 			},
 		},
 	}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{
 		testRDSName + "1": wantUpdate1,
 		testRDSName + "2": wantUpdate2,
-	})
+	}, UpdateMetadata{})
 
 	for i := 0; i < count; i++ {
 		if err := verifyRouteConfigUpdate(ctx, rdsUpdateChs[i], wantUpdate1); err != nil {
@@ -276,11 +276,11 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 		VirtualHosts: []*VirtualHost{
 			{
 				Domains: []string{testLDSName},
-				Routes:  []*Route{{Prefix: newStringP(""), Action: map[string]uint32{testCDSName: 1}}},
+				Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{testCDSName: {Weight: 1}}}},
 			},
 		},
 	}
-	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate})
+	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate}, UpdateMetadata{})
 	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}

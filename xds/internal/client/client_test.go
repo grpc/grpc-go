@@ -26,15 +26,16 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/grpc/internal/grpcsync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 type s struct {
@@ -56,6 +57,30 @@ const (
 	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
 	defaultTestTimeout            = 5 * time.Second
 	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
+)
+
+var (
+	cmpOpts = cmp.Options{
+		cmpopts.EquateEmpty(),
+		cmp.Comparer(func(a, b time.Time) bool { return true }),
+		cmp.Comparer(func(x, y error) bool {
+			if x == nil || y == nil {
+				return x == nil && y == nil
+			}
+			return x.Error() == y.Error()
+		}),
+		protocmp.Transform(),
+	}
+
+	// When comparing NACK UpdateMetadata, we only care if error is nil, but not
+	// the details in error.
+	errPlaceHolder       = fmt.Errorf("error whose details don't matter")
+	cmpOptsIgnoreDetails = cmp.Options{
+		cmp.Comparer(func(a, b time.Time) bool { return true }),
+		cmp.Comparer(func(x, y error) bool {
+			return (x == nil) == (y == nil)
+		}),
+	}
 )
 
 func clientOpts(balancerName string, overrideWatchExpiryTimeout bool) (*bootstrap.Config, time.Duration) {
@@ -159,13 +184,13 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	}
 
 	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
-	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate})
+	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
 	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
 	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}
-	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate2})
+	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate2}, UpdateMetadata{})
 	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate2); err != nil {
 		t.Fatal(err)
 	}

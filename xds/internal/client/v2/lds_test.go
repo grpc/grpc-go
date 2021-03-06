@@ -35,77 +35,126 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 		name          string
 		ldsResponse   *v2xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    *xdsclient.ListenerUpdate
+		wantUpdate    map[string]xdsclient.ListenerUpdate
+		wantUpdateMD  xdsclient.UpdateMetadata
 		wantUpdateErr bool
 	}{
 		// Badly marshaled LDS response.
 		{
-			name:          "badly-marshaled-response",
-			ldsResponse:   badlyMarshaledLDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
+			name:        "badly-marshaled-response",
+			ldsResponse: badlyMarshaledLDSResponse,
+			wantErr:     true,
+			wantUpdate:  nil,
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
+				ErrState: &xdsclient.UpdateErrorMetadata{
+					Err: errPlaceHolder,
+				},
+			},
 			wantUpdateErr: false,
 		},
 		// Response does not contain Listener proto.
 		{
-			name:          "no-listener-proto-in-response",
-			ldsResponse:   badResourceTypeInLDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
+			name:        "no-listener-proto-in-response",
+			ldsResponse: badResourceTypeInLDSResponse,
+			wantErr:     true,
+			wantUpdate:  nil,
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
+				ErrState: &xdsclient.UpdateErrorMetadata{
+					Err: errPlaceHolder,
+				},
+			},
 			wantUpdateErr: false,
 		},
 		// No APIListener in the response. Just one test case here for a bad
 		// ApiListener, since the others are covered in
 		// TestGetRouteConfigNameFromListener.
 		{
-			name:          "no-apiListener-in-response",
-			ldsResponse:   noAPIListenerLDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
+			name:        "no-apiListener-in-response",
+			ldsResponse: noAPIListenerLDSResponse,
+			wantErr:     true,
+			wantUpdate: map[string]xdsclient.ListenerUpdate{
+				goodLDSTarget1: {},
+			},
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
+				ErrState: &xdsclient.UpdateErrorMetadata{
+					Err: errPlaceHolder,
+				},
+			},
 			wantUpdateErr: false,
 		},
 		// Response contains one listener and it is good.
 		{
-			name:          "one-good-listener",
-			ldsResponse:   goodLDSResponse1,
-			wantErr:       false,
-			wantUpdate:    &xdsclient.ListenerUpdate{RouteConfigName: goodRouteName1},
+			name:        "one-good-listener",
+			ldsResponse: goodLDSResponse1,
+			wantErr:     false,
+			wantUpdate: map[string]xdsclient.ListenerUpdate{
+				goodLDSTarget1: {RouteConfigName: goodRouteName1, Raw: marshaledListener1},
+			},
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusACKed,
+			},
 			wantUpdateErr: false,
 		},
 		// Response contains multiple good listeners, including the one we are
 		// interested in.
 		{
-			name:          "multiple-good-listener",
-			ldsResponse:   ldsResponseWithMultipleResources,
-			wantErr:       false,
-			wantUpdate:    &xdsclient.ListenerUpdate{RouteConfigName: goodRouteName1},
+			name:        "multiple-good-listener",
+			ldsResponse: ldsResponseWithMultipleResources,
+			wantErr:     false,
+			wantUpdate: map[string]xdsclient.ListenerUpdate{
+				goodLDSTarget1: {RouteConfigName: goodRouteName1, Raw: marshaledListener1},
+				goodLDSTarget2: {RouteConfigName: goodRouteName1, Raw: marshaledListener2},
+			},
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusACKed,
+			},
 			wantUpdateErr: false,
 		},
 		// Response contains two good listeners (one interesting and one
 		// uninteresting), and one badly marshaled listener. This will cause a
 		// nack because the uninteresting listener will still be parsed.
 		{
-			name:          "good-bad-ugly-listeners",
-			ldsResponse:   goodBadUglyLDSResponse,
-			wantErr:       true,
-			wantUpdate:    nil,
+			name:        "good-bad-ugly-listeners",
+			ldsResponse: goodBadUglyLDSResponse,
+			wantErr:     true,
+			wantUpdate: map[string]xdsclient.ListenerUpdate{
+				goodLDSTarget1: {RouteConfigName: goodRouteName1, Raw: marshaledListener1},
+				goodLDSTarget2: {},
+			},
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusNACKed,
+				ErrState: &xdsclient.UpdateErrorMetadata{
+					Err: errPlaceHolder,
+				},
+			},
 			wantUpdateErr: false,
 		},
 		// Response contains one listener, but we are not interested in it.
 		{
-			name:          "one-uninteresting-listener",
-			ldsResponse:   goodLDSResponse2,
-			wantErr:       false,
-			wantUpdate:    nil,
+			name:        "one-uninteresting-listener",
+			ldsResponse: goodLDSResponse2,
+			wantErr:     false,
+			wantUpdate: map[string]xdsclient.ListenerUpdate{
+				goodLDSTarget2: {RouteConfigName: goodRouteName1, Raw: marshaledListener2},
+			},
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusACKed,
+			},
 			wantUpdateErr: false,
 		},
 		// Response constains no resources. This is the case where the server
 		// does not know about the target we are interested in.
 		{
-			name:          "empty-response",
-			ldsResponse:   emptyLDSResponse,
-			wantErr:       false,
-			wantUpdate:    nil,
+			name:        "empty-response",
+			ldsResponse: emptyLDSResponse,
+			wantErr:     false,
+			wantUpdate:  nil,
+			wantUpdateMD: xdsclient.UpdateMetadata{
+				Status: xdsclient.ServiceStatusACKed,
+			},
 			wantUpdateErr: false,
 		},
 	}
@@ -118,6 +167,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 				responseToHandle: test.ldsResponse,
 				wantHandleErr:    test.wantErr,
 				wantUpdate:       test.wantUpdate,
+				wantUpdateMD:     test.wantUpdateMD,
 				wantUpdateErr:    test.wantUpdateErr,
 			})
 		})
@@ -131,7 +181,7 @@ func (s) TestLDSHandleResponseWithoutWatch(t *testing.T) {
 	defer cleanup()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(xdsclient.ResourceType, map[string]interface{}) {},
+		f: func(xdsclient.ResourceType, map[string]interface{}, xdsclient.UpdateMetadata) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)
