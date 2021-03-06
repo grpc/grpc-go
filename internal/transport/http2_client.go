@@ -388,6 +388,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	}
 	go func() {
 		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst)
+		t.loopy.csGoAwayHandler = t.outgoingGoAwayHandler
 		err := t.loopy.run()
 		if err != nil {
 			if logger.V(logLevel) {
@@ -838,6 +839,14 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 	}
 }
 
+func (t *http2Client) outgoingGoAwayHandler(g *goAway) error {
+	// Keep this as error code from goAway struct in case httpClient.Close() starts to take an HTTP/2 error.
+	if err := t.framer.fr.WriteGoAway(math.MaxUint32, g.code, g.debugData); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Close kicks off the shutdown process of the transport. This should be called
 // only once on a transport. Once it is called, the transport should not be
 // accessed any more.
@@ -864,6 +873,10 @@ func (t *http2Client) Close() error {
 		t.kpDormancyCond.Signal()
 	}
 	t.mu.Unlock()
+	// The HTTP/2 spec mentions that a GOAWAY frame should be sent before a connection close. If this close() function
+	// ever starts to take in an HTTP/2 error code the peer will be able to get more information about the reason
+	// behind the connection close.
+	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte{}})
 	t.controlBuf.finish()
 	t.cancel()
 	err := t.conn.Close()
