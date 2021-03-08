@@ -310,10 +310,10 @@ func getFilterChain(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
 		dstPrefixRanges = append(dstPrefixRanges, ip)
 	}
 	var srcType SourceType
-	switch fcm.GetSourceType().String() {
-	case "SAME_IP_OR_LOOPBACK":
+	switch fcm.GetSourceType() {
+	case v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK:
 		srcType = SourceTypeSameOrLoopback
-	case "EXTERNAL":
+	case v3listenerpb.FilterChainMatch_EXTERNAL:
 		srcType = SourceTypeExternal
 	default:
 		srcType = SourceTypeAny

@@ -16,6 +16,8 @@
  *
  */
 
+// Package server contains server-side functionality used by the public facing
+// xds package.
 package server
 
 import (
@@ -137,13 +139,6 @@ func (l *listenerWrapper) Close() error {
 		l.cancelWatch()
 	}
 	return nil
-}
-
-// listenerUpdate wraps the information received from a registered LDS watcher.
-type listenerUpdate struct {
-	lds        xdsclient.ListenerUpdate // received update
-	err        error                    // received error
-	goodUpdate *grpcsync.Event          // event to fire upon a good update
 }
 
 func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, err error) {

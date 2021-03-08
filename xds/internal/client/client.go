@@ -257,9 +257,9 @@ type SourceType int
 const (
 	// SourceTypeAny matches connection attempts from any source.
 	SourceTypeAny SourceType = iota
-	// SourceTypeSameOrLoopback matches connections attempts from the same host.
+	// SourceTypeSameOrLoopback matches connection attempts from the same host.
 	SourceTypeSameOrLoopback
-	// SourceTypeExternal matches connections attempts from a different host.
+	// SourceTypeExternal matches connection attempts from a different host.
 	SourceTypeExternal
 )
 

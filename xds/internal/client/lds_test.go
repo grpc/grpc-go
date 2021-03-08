@@ -1772,9 +1772,10 @@ func (s) TestGetFilterChain(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3UpstreamTLSContextURL,
-						},
+						TypedConfig: func() *anypb.Any {
+							a, _ := ptypes.MarshalAny(&v3tlspb.UpstreamTlsContext{})
+							return a
+						}(),
 					},
 				},
 			},
@@ -1801,14 +1802,10 @@ func (s) TestGetFilterChain(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3DownstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.DownstreamTlsContext{}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						},
+						TypedConfig: func() *anypb.Any {
+							a, _ := ptypes.MarshalAny(&v3tlspb.DownstreamTlsContext{})
+							return a
+						}(),
 					},
 				},
 			},
@@ -1820,22 +1817,18 @@ func (s) TestGetFilterChain(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3DownstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.DownstreamTlsContext{
-									CommonTlsContext: &v3tlspb.CommonTlsContext{
-										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
-											ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
-												Name: "foo-sds-secret",
-											},
+						TypedConfig: func() *anypb.Any {
+							a, _ := ptypes.MarshalAny(&v3tlspb.DownstreamTlsContext{
+								CommonTlsContext: &v3tlspb.CommonTlsContext{
+									ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
+										ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
+											Name: "foo-sds-secret",
 										},
 									},
-								}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						},
+								},
+							})
+							return a
+						}(),
 					},
 				},
 			},
@@ -1847,22 +1840,18 @@ func (s) TestGetFilterChain(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3DownstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.DownstreamTlsContext{
-									RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
-									CommonTlsContext: &v3tlspb.CommonTlsContext{
-										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-											InstanceName:    "identityPluginInstance",
-											CertificateName: "identityCertName",
-										},
+						TypedConfig: func() *anypb.Any {
+							a, _ := ptypes.MarshalAny(&v3tlspb.DownstreamTlsContext{
+								RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+								CommonTlsContext: &v3tlspb.CommonTlsContext{
+									TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+										InstanceName:    "identityPluginInstance",
+										CertificateName: "identityCertName",
 									},
-								}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						},
+								},
+							})
+							return a
+						}(),
 					},
 				},
 			},
@@ -1874,16 +1863,12 @@ func (s) TestGetFilterChain(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3DownstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.DownstreamTlsContext{
-									CommonTlsContext: &v3tlspb.CommonTlsContext{},
-								}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						},
+						TypedConfig: func() *anypb.Any {
+							a, _ := ptypes.MarshalAny(&v3tlspb.DownstreamTlsContext{
+								CommonTlsContext: &v3tlspb.CommonTlsContext{},
+							})
+							return a
+						}(),
 					},
 				},
 			},
@@ -1916,28 +1901,24 @@ func (s) TestGetFilterChain(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3DownstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.DownstreamTlsContext{
-									RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
-									CommonTlsContext: &v3tlspb.CommonTlsContext{
-										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-											InstanceName:    "identityPluginInstance",
-											CertificateName: "identityCertName",
-										},
-										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-											ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-												InstanceName:    "rootPluginInstance",
-												CertificateName: "rootCertName",
-											},
+						TypedConfig: func() *anypb.Any {
+							a, _ := ptypes.MarshalAny(&v3tlspb.DownstreamTlsContext{
+								RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+								CommonTlsContext: &v3tlspb.CommonTlsContext{
+									TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+										InstanceName:    "identityPluginInstance",
+										CertificateName: "identityCertName",
+									},
+									ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+										ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+											InstanceName:    "rootPluginInstance",
+											CertificateName: "rootCertName",
 										},
 									},
-								}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						},
+								},
+							})
+							return a
+						}(),
 					},
 				},
 			},
