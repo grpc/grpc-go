@@ -37,10 +37,11 @@ const (
 	// and kept in variable BootstrapFileName.
 	//
 	// When both bootstrap FileName and FileContent are set, FileName is used.
-	BootstrapFileContentEnv   = "GRPC_XDS_BOOTSTRAP_CONFIG"
-	circuitBreakingSupportEnv = "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING"
-	timeoutSupportEnv         = "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT"
-	faultInjectionSupportEnv  = "GRPC_XDS_EXPERIMENTAL_FAULT_INJECTION"
+	BootstrapFileContentEnv      = "GRPC_XDS_BOOTSTRAP_CONFIG"
+	circuitBreakingSupportEnv    = "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING"
+	timeoutSupportEnv            = "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT"
+	faultInjectionSupportEnv     = "GRPC_XDS_EXPERIMENTAL_FAULT_INJECTION"
+	clientSideSecuritySupportEnv = "GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT"
 )
 
 var (
@@ -67,4 +68,11 @@ var (
 	// FaultInjectionSupport is used to control both fault injection and HTTP
 	// filter support.
 	FaultInjectionSupport = strings.EqualFold(os.Getenv(faultInjectionSupportEnv), "true")
+	// ClientSideSecuritySupport is used to control processing of security
+	// configuration on the client-side.
+	//
+	// Note that there is no env var protection for the server-side because we
+	// have a brand new API on the server-side and users explicitly need to use
+	// the new API to get security integration on the server.
+	ClientSideSecuritySupport = strings.EqualFold(os.Getenv(clientSideSecuritySupportEnv), "true")
 )
