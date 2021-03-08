@@ -41,7 +41,6 @@ import (
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/version"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -110,7 +109,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 		BalancerName: balancerName,
 		Creds:        grpc.WithCredentialsBundle(google.NewDefaultCredentials()),
 		TransportAPI: version.TransportV3,
-		NodeProto:    cloneNode(<-zoneCh, <-ipv6CapableCh),
+		NodeProto:    newNode(<-zoneCh, <-ipv6CapableCh),
 	}
 
 	// Create singleton xds client with this config. The xds client will be
@@ -147,8 +146,16 @@ func (r *c2pResolver) Close() {
 	r.client.Close()
 }
 
-var (
-	defaultNode = &v3corepb.Node{
+var ipv6EnabledMetadata = &structpb.Struct{
+	Fields: map[string]*structpb.Value{
+		ipv6CapableMetadataName: structpb.NewBoolValue(true),
+	},
+}
+
+// newNode makes a copy of defaultNode, and populate it's Metadata and
+// Locality fields.
+func newNode(zone string, ipv6Capable bool) *v3corepb.Node {
+	ret := &v3corepb.Node{
 		// Not all required fields are set in defaultNote. Metadata will be set
 		// if ipv6 is enabled. Locality will be set to the value from metadata.
 		Id:                   "C2P",
@@ -156,22 +163,11 @@ var (
 		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
 		ClientFeatures:       []string{clientFeatureNoOverprovisioning},
 	}
-	ipv6EnabledMetadata = &structpb.Struct{
-		Fields: map[string]*structpb.Value{
-			ipv6CapableMetadataName: structpb.NewBoolValue(true),
-		},
-	}
-)
-
-// cloneNode makes a copy of defaultNode, and populate it's Metadata and
-// Locality fields.
-func cloneNode(zone string, ipv6Capable bool) *v3corepb.Node {
-	nodeCopy := proto.Clone(defaultNode).(*v3corepb.Node)
-	nodeCopy.Locality = &v3corepb.Locality{Zone: zone}
+	ret.Locality = &v3corepb.Locality{Zone: zone}
 	if ipv6Capable {
-		nodeCopy.Metadata = ipv6EnabledMetadata
+		ret.Metadata = ipv6EnabledMetadata
 	}
-	return nodeCopy
+	return ret
 }
 
 // runDirectPath returns whether this resolver should use direct path.
