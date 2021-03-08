@@ -28,12 +28,14 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/server"
 )
 
 const serverPrefix = "[xds-server %p] "
@@ -46,6 +48,7 @@ var (
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServerInterface {
 		return grpc.NewServer(opts...)
 	}
+	buildProvider = buildProviderFunc
 
 	// Unexported function to retrieve transport credentials from a gRPC server.
 	grpcGetServerCreds = internal.GetServerCredentials.(func(*grpc.Server) credentials.TransportCredentials)
@@ -214,6 +217,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 		XDSCredsInUse:        s.xdsCredsInUse,
 		XDSClient:            s.xdsC,
 	})
+
 	// Block until a good LDS response is received or the server is stopped.
 	select {
 	case <-s.quit.Done():
@@ -298,4 +302,24 @@ func xdsUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServ
 // This is a no-op at this point.
 func xdsStreamInterceptor(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	return handler(srv, ss)
+}
+
+func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanceName, certName string, wantIdentity, wantRoot bool) (certprovider.Provider, error) {
+	cfg, ok := configs[instanceName]
+	if !ok {
+		return nil, fmt.Errorf("certificate provider instance %q not found in bootstrap file", instanceName)
+	}
+	provider, err := cfg.Build(certprovider.BuildOptions{
+		CertName:     certName,
+		WantIdentity: wantIdentity,
+		WantRoot:     wantRoot,
+	})
+	if err != nil {
+		// This error is not expected since the bootstrap process parses the
+		// config and makes sure that it is acceptable to the plugin. Still, it
+		// is possible that the plugin parses the config successfully, but its
+		// Build() method errors out.
+		return nil, fmt.Errorf("failed to get security plugin instance (%+v): %v", cfg, err)
+	}
+	return provider, nil
 }

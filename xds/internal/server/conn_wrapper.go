@@ -16,11 +16,10 @@
  *
  */
 
-package xds
+package server
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -30,10 +29,7 @@ import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
-// For overriding in unit tests.
-var buildProvider = buildProviderFunc
-
-// conn is a thin wrapper around a net.Conn returned by Accept(). It provides
+// connWrapper is a thin wrapper around a net.connWrapper returned by Accept(). It provides
 // the following additional functionality:
 // 1. A way to retrieve the configured deadline. This is required by the
 //    ServerHandshake() method of the xdsCredentials when it attempts to read
@@ -42,7 +38,7 @@ var buildProvider = buildProviderFunc
 //    retrieve the configured certificate providers.
 // 3. xDS filter_chain matching logic to select appropriate security
 //    configuration for the incoming connection.
-type conn struct {
+type connWrapper struct {
 	net.Conn
 
 	// A reference fo the listenerWrapper on which this connection was accepted.
@@ -63,7 +59,7 @@ type conn struct {
 
 // SetDeadline makes a copy of the passed in deadline and forwards the call to
 // the underlying rawConn.
-func (c *conn) SetDeadline(t time.Time) error {
+func (c *connWrapper) SetDeadline(t time.Time) error {
 	c.deadlineMu.Lock()
 	c.deadline = t
 	c.deadlineMu.Unlock()
@@ -73,16 +69,16 @@ func (c *conn) SetDeadline(t time.Time) error {
 // GetDeadline returns the configured deadline. This will be invoked by the
 // ServerHandshake() method of the XdsCredentials, which needs a deadline to
 // pass to the certificate provider.
-func (c *conn) GetDeadline() time.Time {
+func (c *connWrapper) GetDeadline() time.Time {
 	c.deadlineMu.Lock()
 	t := c.deadline
 	c.deadlineMu.Unlock()
 	return t
 }
 
-// XDSHandshakeInfo returns a pointer to the HandshakeInfo stored in conn. This
+// XDSHandshakeInfo returns a pointer to the HandshakeInfo stored in connWrapper. This
 // will be invoked by the ServerHandshake() method of the XdsCredentials.
-func (c *conn) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
+func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	// Ideally this should never happen, since xdsCredentials are the only ones
 	// which will invoke this method at handshake time. But to be on the safe
 	// side, we avoid acting on the security configuration received from the
@@ -109,14 +105,14 @@ func (c *conn) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	cpc := c.parent.certProviderConfigs
 	// Identity provider name is mandatory on the server-side, and this is
 	// enforced when the resource is received at the xdsClient layer.
-	ip, err := buildProvider(cpc, fc.SecurityCfg.IdentityInstanceName, fc.SecurityCfg.IdentityCertName, true, false)
+	ip, err := c.parent.buildProviderFunc(cpc, fc.SecurityCfg.IdentityInstanceName, fc.SecurityCfg.IdentityCertName, true, false)
 	if err != nil {
 		return nil, err
 	}
 	// Root provider name is optional and required only when doing mTLS.
 	var rp certprovider.Provider
 	if instance, cert := fc.SecurityCfg.RootInstanceName, fc.SecurityCfg.RootCertName; instance != "" {
-		rp, err = buildProvider(cpc, instance, cert, false, true)
+		rp, err = c.parent.buildProviderFunc(cpc, instance, cert, false, true)
 		if err != nil {
 			return nil, err
 		}
@@ -135,7 +131,7 @@ func (c *conn) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 // hence we got rid of them at the time of parsing the received Listener
 // resource. Here we use the remaining 4 criteria to find a matching filter
 // chain: Destination IP address, Source type, Source IP address, Source port.
-func (c *conn) getMatchingFilterChain() *xdsclient.FilterChain {
+func (c *connWrapper) getMatchingFilterChain() *xdsclient.FilterChain {
 	c.parent.mu.RLock()
 	defer c.parent.mu.RUnlock()
 
@@ -148,7 +144,7 @@ func (c *conn) getMatchingFilterChain() *xdsclient.FilterChain {
 	return c.parent.filterChains[0]
 }
 
-func (c *conn) Close() error {
+func (c *connWrapper) Close() error {
 	if c.identityProvider != nil {
 		c.identityProvider.Close()
 	}
@@ -156,24 +152,4 @@ func (c *conn) Close() error {
 		c.rootProvider.Close()
 	}
 	return c.Conn.Close()
-}
-
-func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanceName, certName string, wantIdentity, wantRoot bool) (certprovider.Provider, error) {
-	cfg, ok := configs[instanceName]
-	if !ok {
-		return nil, fmt.Errorf("certificate provider instance %q not found in bootstrap file", instanceName)
-	}
-	provider, err := cfg.Build(certprovider.BuildOptions{
-		CertName:     certName,
-		WantIdentity: wantIdentity,
-		WantRoot:     wantRoot,
-	})
-	if err != nil {
-		// This error is not expected since the bootstrap process parses the
-		// config and makes sure that it is acceptable to the plugin. Still, it
-		// is possible that the plugin parses the config successfully, but its
-		// Build() method errors out.
-		return nil, fmt.Errorf("failed to get security plugin instance (%+v): %v", cfg, err)
-	}
-	return provider, nil
 }
