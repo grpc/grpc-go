@@ -233,7 +233,7 @@ func (s *GRPCServer) newListenerWrapper(lis net.Listener) (*listenerWrapper, err
 	}
 	name := cfg.ServerListenerResourceNameTemplate
 	if strings.Contains(cfg.ServerListenerResourceNameTemplate, "%s") {
-		name = strings.Replace(cfg.ServerListenerResourceNameTemplate, "%s", lis.Addr().String(), 1)
+		name = strings.ReplaceAll(cfg.ServerListenerResourceNameTemplate, "%s", lis.Addr().String())
 	}
 
 	// Register an LDS watch using our xdsClient, and specify the listening
@@ -308,6 +308,9 @@ func (s *GRPCServer) handleListenerUpdate(update listenerUpdate) {
 	lisAddr := update.lw.Listener.Addr().String()
 	addr, port, err := net.SplitHostPort(lisAddr)
 	if err != nil {
+		// This is never expected to return a non-nil error since we have made
+		// sure that the listener is a TCP listener at the beginning of Serve().
+		// This is simply paranoia.
 		s.logger.Warningf("Local listener address %q failed to parse as IP:port: %v", lisAddr, err)
 		return
 	}
