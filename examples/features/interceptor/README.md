@@ -113,6 +113,6 @@ handler StreamHandler) error`.
 Refer to client-side stream interceptor section for detailed implementation
 explanation.
 
-To install the unary interceptor for a Server, configure `NewServer` with
+To install the stream interceptor for a Server, configure `NewServer` with
 `ServerOption`
 [`StreamInterceptor`](https://godoc.org/google.golang.org/grpc#StreamInterceptor).
