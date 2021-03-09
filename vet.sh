@@ -28,7 +28,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-PATH="${GOPATH}/bin:${GOROOT}/bin:${PATH}"
+PATH="${HOME}/go/bin:${GOROOT}/bin:${PATH}"
+go version
 
 if [[ "$1" = "-install" ]]; then
   # Check for module support
