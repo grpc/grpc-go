@@ -16,8 +16,8 @@
  *
  */
 
-// Package server contains server-side functionality used by the public facing
-// xds package.
+// Package server contains internal server-side functionality used by the public
+// facing xds package.
 package server
 
 import (
@@ -25,17 +25,24 @@ import (
 	"net"
 	"sync"
 
-	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
 var logger = grpclog.Component("xds")
 
 func prefixLogger(p *listenerWrapper) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[xds-server-listener %p]", p))
+}
+
+// XDSClientInterface wraps the methods on the xdsClient which are required by
+// the listenerWrapper.
+type XDSClientInterface interface {
+	WatchListener(string, func(xdsclient.ListenerUpdate, error)) func()
+	BootstrapConfig() *bootstrap.Config
 }
 
 // ListenerWrapperParams wraps parameters required to create a listenerWrapper.
@@ -47,37 +54,26 @@ type ListenerWrapperParams struct {
 	// XDSCredsInUse specifies whether or not the user expressed interest to
 	// receive security configuration from the control plane.
 	XDSCredsInUse bool
-	// CertProviderConfigs contains the parsed certificate provider
-	// configuration from the bootstrap file.
-	CertProviderConfigs map[string]*certprovider.BuildableConfig
-	// WatchFunc is the function to be used to register a Listener watch. It
-	// returns a function that is to be to used to cancel the watch, when this
-	// listenerWrapper is no longer interested in the resource being watched.
-	WatchFunc func(string, func(xdsclient.ListenerUpdate, error)) func()
-	// BuildProvider is the function to be used to build certificate provider
-	// instances. The arguments passed to it are the certificate provider
-	// configs from bootstrap, certificate provider instance name, certificate
-	// name, whether an identity certificate is requested and whether a root
-	// certificate is requested.
-	BuildProviderFunc func(map[string]*certprovider.BuildableConfig, string, string, bool, bool) (certprovider.Provider, error)
+	// XDSClient provides the functionality from the xdsClient required here.
+	XDSClient XDSClientInterface
 }
 
-// NewListenerWrapper creates a new listenerWrapper with params.
+// NewListenerWrapper creates a new listenerWrapper with params. It returns a
+// net.Listener and a channel which is written to, indicating that the former is
+// ready to be passed to grpc.Serve().
 func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan struct{}) {
 	lw := &listenerWrapper{
-		Listener:            params.Listener,
-		name:                params.ListenerResourceName,
-		xdsCredsInUse:       params.XDSCredsInUse,
-		certProviderConfigs: params.CertProviderConfigs,
-		watchFunc:           params.WatchFunc,
-		buildProviderFunc:   params.BuildProviderFunc,
+		Listener:      params.Listener,
+		name:          params.ListenerResourceName,
+		xdsCredsInUse: params.XDSCredsInUse,
+		xdsC:          params.XDSClient,
 
 		closed:     grpcsync.NewEvent(),
 		goodUpdate: grpcsync.NewEvent(),
 	}
 	lw.logger = prefixLogger(lw)
 
-	cancelWatch := lw.watchFunc(lw.name, lw.handleListenerUpdate)
+	cancelWatch := lw.xdsC.WatchListener(lw.name, lw.handleListenerUpdate)
 	lw.logger.Infof("Watch started on resource name %v", lw.name)
 	lw.cancelWatch = func() {
 		cancelWatch()
@@ -95,12 +91,10 @@ type listenerWrapper struct {
 
 	// TODO: Maintain serving state of this listener.
 
-	name                string
-	xdsCredsInUse       bool
-	certProviderConfigs map[string]*certprovider.BuildableConfig
-	watchFunc           func(string, func(xdsclient.ListenerUpdate, error)) func()
-	cancelWatch         func()
-	buildProviderFunc   func(map[string]*certprovider.BuildableConfig, string, string, bool, bool) (certprovider.Provider, error)
+	name          string
+	xdsCredsInUse bool
+	xdsC          XDSClientInterface
+	cancelWatch   func()
 
 	// This is used to notify that a good update has been received and that
 	// Serve() can be invoked on the underlying gRPC server. Using an event

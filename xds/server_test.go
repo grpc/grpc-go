@@ -182,8 +182,14 @@ var (
 )
 
 func init() {
-	fpb1 = &fakeProviderBuilder{name: fakeProvider1Name}
-	fpb2 = &fakeProviderBuilder{name: fakeProvider2Name}
+	fpb1 = &fakeProviderBuilder{
+		name:    fakeProvider1Name,
+		buildCh: testutils.NewChannel(),
+	}
+	fpb2 = &fakeProviderBuilder{
+		name:    fakeProvider2Name,
+		buildCh: testutils.NewChannel(),
+	}
 	cfg1, _ := fpb1.ParseConfig(fakeConfig + "1111")
 	cfg2, _ := fpb2.ParseConfig(fakeConfig + "2222")
 	certProviderConfigs = map[string]*certprovider.BuildableConfig{
@@ -197,7 +203,8 @@ func init() {
 // fakeProviderBuilder builds new instances of fakeProvider and interprets the
 // config provided to it as a string.
 type fakeProviderBuilder struct {
-	name string
+	name    string
+	buildCh *testutils.Channel
 }
 
 func (b *fakeProviderBuilder) ParseConfig(config interface{}) (*certprovider.BuildableConfig, error) {
@@ -206,6 +213,7 @@ func (b *fakeProviderBuilder) ParseConfig(config interface{}) (*certprovider.Bui
 		return nil, fmt.Errorf("providerBuilder %s received config of type %T, want string", b.name, config)
 	}
 	return certprovider.NewBuildableConfig(b.name, []byte(s), func(certprovider.BuildOptions) certprovider.Provider {
+		b.buildCh.Send(nil)
 		return &fakeProvider{
 			Distributor: certprovider.NewDistributor(),
 			config:      s,
@@ -229,9 +237,9 @@ func (p *fakeProvider) Close() {
 	p.Distributor.Stop()
 }
 
-// setupOverrides sets up overrides for bootstrap config, new xdsClient creation,
-// new gRPC.Server creation, and certificate provider creation.
-func setupOverrides() (*fakeGRPCServer, *testutils.Channel, *testutils.Channel, func()) {
+// setupOverrides sets up overrides for bootstrap config, new xdsClient creation
+// and new gRPC.Server creation.
+func setupOverrides() (*fakeGRPCServer, *testutils.Channel, func()) {
 	clientCh := testutils.NewChannel()
 	origNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) {
@@ -251,18 +259,9 @@ func setupOverrides() (*fakeGRPCServer, *testutils.Channel, *testutils.Channel, 
 	origNewGRPCServer := newGRPCServer
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServerInterface { return fs }
 
-	providerCh := testutils.NewChannel()
-	origBuildProvider := buildProvider
-	buildProvider = func(c map[string]*certprovider.BuildableConfig, id, cert string, wi, wr bool) (certprovider.Provider, error) {
-		p, err := origBuildProvider(c, id, cert, wi, wr)
-		providerCh.Send(nil)
-		return p, err
-	}
-
-	return fs, clientCh, providerCh, func() {
+	return fs, clientCh, func() {
 		newXDSClient = origNewXDSClient
 		newGRPCServer = origNewGRPCServer
-		buildProvider = origBuildProvider
 	}
 }
 
@@ -270,7 +269,7 @@ func setupOverrides() (*fakeGRPCServer, *testutils.Channel, *testutils.Channel, 
 // one. Tests that use xdsCredentials need a real grpc.Server instead of a fake
 // one, because the xDS-enabled server needs to read configured creds from the
 // underlying grpc.Server to confirm whether xdsCreds were configured.
-func setupOverridesForXDSCreds(includeCertProviderCfg bool) (*testutils.Channel, *testutils.Channel, func()) {
+func setupOverridesForXDSCreds(includeCertProviderCfg bool) (*testutils.Channel, func()) {
 	clientCh := testutils.NewChannel()
 	origNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) {
@@ -289,18 +288,7 @@ func setupOverridesForXDSCreds(includeCertProviderCfg bool) (*testutils.Channel,
 		return c, nil
 	}
 
-	providerCh := testutils.NewChannel()
-	origBuildProvider := buildProvider
-	buildProvider = func(c map[string]*certprovider.BuildableConfig, id, cert string, wi, wr bool) (certprovider.Provider, error) {
-		p, err := origBuildProvider(c, id, cert, wi, wr)
-		providerCh.Send(nil)
-		return p, err
-	}
-
-	return clientCh, providerCh, func() {
-		newXDSClient = origNewXDSClient
-		buildProvider = origBuildProvider
-	}
+	return clientCh, func() { newXDSClient = origNewXDSClient }
 }
 
 // TestServeSuccess tests the successful case of calling Serve().
@@ -312,7 +300,7 @@ func setupOverridesForXDSCreds(includeCertProviderCfg bool) (*testutils.Channel,
 // 4. Push a good response from the xdsClient, and make sure that Serve() on the
 // 	  underlying grpc.Server is called.
 func (s) TestServeSuccess(t *testing.T) {
-	fs, clientCh, _, cleanup := setupOverrides()
+	fs, clientCh, cleanup := setupOverrides()
 	defer cleanup()
 
 	server := NewGRPCServer()
@@ -397,7 +385,7 @@ func (s) TestServeSuccess(t *testing.T) {
 // is received. This should cause Serve() to exit before calling Serve() on the
 // underlying grpc.Server.
 func (s) TestServeWithStop(t *testing.T) {
-	fs, clientCh, _, cleanup := setupOverrides()
+	fs, clientCh, cleanup := setupOverrides()
 	defer cleanup()
 
 	// Note that we are not deferring the Stop() here since we explicitly call
@@ -596,7 +584,7 @@ func (s) TestServeNewClientFailure(t *testing.T) {
 // server is not configured with xDS credentials. Verifies that the security
 // config received as part of a Listener update is not acted upon.
 func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
-	fs, clientCh, providerCh, cleanup := setupOverrides()
+	fs, clientCh, cleanup := setupOverrides()
 	defer cleanup()
 
 	server := NewGRPCServer()
@@ -660,10 +648,8 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 	}
 
 	// Make sure the security configuration is not acted upon.
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := providerCh.Receive(sCtx); err != context.DeadlineExceeded {
-		t.Fatalf("certificate provider created when no xDS creds were specified")
+	if err := verifyCertProviderNotCreated(); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -671,7 +657,7 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 // server is configured with xDS credentials, but receives a Listener update
 // with an error. Verifies that no certificate providers are created.
 func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
-	clientCh, providerCh, cleanup := setupOverridesForXDSCreds(true)
+	clientCh, cleanup := setupOverridesForXDSCreds(true)
 	defer cleanup()
 
 	xdsCreds, err := xds.NewServerCredentials(xds.ServerOptions{FallbackCreds: insecure.NewCredentials()})

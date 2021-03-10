@@ -20,6 +20,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -29,8 +30,8 @@ import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
-// connWrapper is a thin wrapper around a net.connWrapper returned by Accept(). It provides
-// the following additional functionality:
+// connWrapper is a thin wrapper around a net.Conn returned by Accept(). It
+// provides the following additional functionality:
 // 1. A way to retrieve the configured deadline. This is required by the
 //    ServerHandshake() method of the xdsCredentials when it attempts to read
 //    key material from the certificate providers.
@@ -76,8 +77,9 @@ func (c *connWrapper) GetDeadline() time.Time {
 	return t
 }
 
-// XDSHandshakeInfo returns a pointer to the HandshakeInfo stored in connWrapper. This
-// will be invoked by the ServerHandshake() method of the XdsCredentials.
+// XDSHandshakeInfo returns a HandshakeInfo with appropriate security
+// configuration for this connection. This method is invoked by the
+// ServerHandshake() method of the XdsCredentials.
 func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	// Ideally this should never happen, since xdsCredentials are the only ones
 	// which will invoke this method at handshake time. But to be on the safe
@@ -99,20 +101,19 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 		// return an empty HandshakeInfo here so that the xdsCreds can use the
 		// configured fallback credentials.
 		return xdsinternal.NewHandshakeInfo(nil, nil), nil
-
 	}
 
-	cpc := c.parent.certProviderConfigs
+	cpc := c.parent.xdsC.BootstrapConfig().CertProviderConfigs
 	// Identity provider name is mandatory on the server-side, and this is
 	// enforced when the resource is received at the xdsClient layer.
-	ip, err := c.parent.buildProviderFunc(cpc, fc.SecurityCfg.IdentityInstanceName, fc.SecurityCfg.IdentityCertName, true, false)
+	ip, err := buildProviderFunc(cpc, fc.SecurityCfg.IdentityInstanceName, fc.SecurityCfg.IdentityCertName, true, false)
 	if err != nil {
 		return nil, err
 	}
 	// Root provider name is optional and required only when doing mTLS.
 	var rp certprovider.Provider
 	if instance, cert := fc.SecurityCfg.RootInstanceName, fc.SecurityCfg.RootCertName; instance != "" {
-		rp, err = c.parent.buildProviderFunc(cpc, instance, cert, false, true)
+		rp, err = buildProviderFunc(cpc, instance, cert, false, true)
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +123,6 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 
 	xdsHI := xdsinternal.NewHandshakeInfo(c.identityProvider, c.rootProvider)
 	xdsHI.SetRequireClientCert(fc.SecurityCfg.RequireClientCert)
-	xdsHI.SetAcceptedSANs(fc.SecurityCfg.AcceptedSANs)
 	return xdsHI, nil
 }
 
@@ -152,4 +152,24 @@ func (c *connWrapper) Close() error {
 		c.rootProvider.Close()
 	}
 	return c.Conn.Close()
+}
+
+func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanceName, certName string, wantIdentity, wantRoot bool) (certprovider.Provider, error) {
+	cfg, ok := configs[instanceName]
+	if !ok {
+		return nil, fmt.Errorf("certificate provider instance %q not found in bootstrap file", instanceName)
+	}
+	provider, err := cfg.Build(certprovider.BuildOptions{
+		CertName:     certName,
+		WantIdentity: wantIdentity,
+		WantRoot:     wantRoot,
+	})
+	if err != nil {
+		// This error is not expected since the bootstrap process parses the
+		// config and makes sure that it is acceptable to the plugin. Still, it
+		// is possible that the plugin parses the config successfully, but its
+		// Build() method errors out.
+		return nil, fmt.Errorf("failed to get security plugin instance (%+v): %v", cfg, err)
+	}
+	return provider, nil
 }
