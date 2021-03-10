@@ -150,7 +150,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			return &anypb.Any{
 				TypeUrl: version.V3ListenerURL,
 				Value: func() []byte {
-					mcm, _ := ptypes.MarshalAny(hcm)
+					mcm := marshalAny(hcm)
 					lis := &v3listenerpb.Listener{
 						Name: v3LDSTarget,
 						ApiListener: &v3listenerpb.ApiListener{
@@ -1772,10 +1772,7 @@ func (s) TestGetFilterChain(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: func() *anypb.Any {
-							a, _ := ptypes.MarshalAny(&v3tlspb.UpstreamTlsContext{})
-							return a
-						}(),
+						TypedConfig: marshalAny(&v3tlspb.UpstreamTlsContext{}),
 					},
 				},
 			},
@@ -1802,10 +1799,7 @@ func (s) TestGetFilterChain(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: func() *anypb.Any {
-							a, _ := ptypes.MarshalAny(&v3tlspb.DownstreamTlsContext{})
-							return a
-						}(),
+						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{}),
 					},
 				},
 			},
@@ -1817,18 +1811,15 @@ func (s) TestGetFilterChain(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: func() *anypb.Any {
-							a, _ := ptypes.MarshalAny(&v3tlspb.DownstreamTlsContext{
-								CommonTlsContext: &v3tlspb.CommonTlsContext{
-									ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
-										ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
-											Name: "foo-sds-secret",
-										},
+						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
+									ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
+										Name: "foo-sds-secret",
 									},
 								},
-							})
-							return a
-						}(),
+							},
+						}),
 					},
 				},
 			},
@@ -1840,18 +1831,15 @@ func (s) TestGetFilterChain(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: func() *anypb.Any {
-							a, _ := ptypes.MarshalAny(&v3tlspb.DownstreamTlsContext{
-								RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
-								CommonTlsContext: &v3tlspb.CommonTlsContext{
-									TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-										InstanceName:    "identityPluginInstance",
-										CertificateName: "identityCertName",
-									},
+						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+							RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+									InstanceName:    "identityPluginInstance",
+									CertificateName: "identityCertName",
 								},
-							})
-							return a
-						}(),
+							},
+						}),
 					},
 				},
 			},
@@ -1863,12 +1851,9 @@ func (s) TestGetFilterChain(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: func() *anypb.Any {
-							a, _ := ptypes.MarshalAny(&v3tlspb.DownstreamTlsContext{
-								CommonTlsContext: &v3tlspb.CommonTlsContext{},
-							})
-							return a
-						}(),
+						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{},
+						}),
 					},
 				},
 			},
@@ -1901,24 +1886,21 @@ func (s) TestGetFilterChain(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: func() *anypb.Any {
-							a, _ := ptypes.MarshalAny(&v3tlspb.DownstreamTlsContext{
-								RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
-								CommonTlsContext: &v3tlspb.CommonTlsContext{
-									TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-										InstanceName:    "identityPluginInstance",
-										CertificateName: "identityCertName",
-									},
-									ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-										ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-											InstanceName:    "rootPluginInstance",
-											CertificateName: "rootCertName",
-										},
+						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+							RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+									InstanceName:    "identityPluginInstance",
+									CertificateName: "identityCertName",
+								},
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+									ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+										InstanceName:    "rootPluginInstance",
+										CertificateName: "rootCertName",
 									},
 								},
-							})
-							return a
-						}(),
+							},
+						}),
 					},
 				},
 			},
@@ -2058,11 +2040,7 @@ var customFilterTypedStructConfig = &v1typepb.TypedStruct{
 var wrappedCustomFilterTypedStructConfig *anypb.Any
 
 func init() {
-	var err error
-	wrappedCustomFilterTypedStructConfig, err = ptypes.MarshalAny(customFilterTypedStructConfig)
-	if err != nil {
-		panic(err.Error())
-	}
+	wrappedCustomFilterTypedStructConfig = marshalAny(customFilterTypedStructConfig)
 }
 
 var unknownFilterConfig = &anypb.Any{
@@ -2071,16 +2049,19 @@ var unknownFilterConfig = &anypb.Any{
 }
 
 func wrappedOptionalFilter(name string) *anypb.Any {
-	filter := &v3routepb.FilterConfig{
+	return marshalAny(&v3routepb.FilterConfig{
 		IsOptional: true,
 		Config: &anypb.Any{
 			TypeUrl: name,
 			Value:   []byte{1, 2, 3},
 		},
-	}
-	w, err := ptypes.MarshalAny(filter)
+	})
+}
+
+func marshalAny(m proto.Message) *anypb.Any {
+	a, err := ptypes.MarshalAny(m)
 	if err != nil {
-		panic("error marshalling any: " + err.Error())
+		panic(fmt.Sprintf("ptypes.MarshalAny(%+v) failed: %v", m, err))
 	}
-	return w
+	return a
 }
