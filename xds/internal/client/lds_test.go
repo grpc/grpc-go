@@ -725,7 +725,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 }
 
 func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
-	const v3LDSTarget = "grpc/server?udpa.resource.listening_address=0.0.0.0:9999"
+	const v3LDSTarget = "grpc/server?xds.resource.listening_address=0.0.0.0:9999"
 
 	var (
 		listenerEmptyTransportSocket = &anypb.Any{
@@ -911,111 +911,6 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			},
 			wantErr: "no socket_address field in LDS response",
-		},
-		{
-			name: "listener name does not match expected format",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: "foo",
-							Address: &v3corepb.Address{
-								Address: &v3corepb.Address_SocketAddress{
-									SocketAddress: &v3corepb.SocketAddress{
-										Address: "0.0.0.0",
-										PortSpecifier: &v3corepb.SocketAddress_PortValue{
-											PortValue: 9999,
-										},
-									},
-								},
-							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
-				},
-			},
-			wantUpdate: map[string]ListenerUpdate{"foo": {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: "no host:port in name field of LDS response",
-		},
-		{
-			name: "host mismatch",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							Address: &v3corepb.Address{
-								Address: &v3corepb.Address_SocketAddress{
-									SocketAddress: &v3corepb.SocketAddress{
-										Address: "1.2.3.4",
-										PortSpecifier: &v3corepb.SocketAddress_PortValue{
-											PortValue: 9999,
-										},
-									},
-								},
-							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
-				},
-			},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: "socket_address host does not match the one in name",
-		},
-		{
-			name: "port mismatch",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							Address: &v3corepb.Address{
-								Address: &v3corepb.Address_SocketAddress{
-									SocketAddress: &v3corepb.SocketAddress{
-										Address: "0.0.0.0",
-										PortSpecifier: &v3corepb.SocketAddress_PortValue{
-											PortValue: 1234,
-										},
-									},
-								},
-							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
-				},
-			},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: "socket_address port does not match the one in name",
 		},
 		{
 			name: "unexpected number of filter chains",
@@ -1314,7 +1209,13 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			name:      "empty transport socket",
 			resources: []*anypb.Any{listenerEmptyTransportSocket},
 			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {Raw: listenerEmptyTransportSocket},
+				v3LDSTarget: {
+					InboundListenerCfg: &InboundListenerConfig{
+						Address: "0.0.0.0",
+						Port:    "9999",
+					},
+					Raw: listenerEmptyTransportSocket,
+				},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -1446,6 +1347,10 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						IdentityInstanceName: "identityPluginInstance",
 						IdentityCertName:     "identityCertName",
 					},
+					InboundListenerCfg: &InboundListenerConfig{
+						Address: "0.0.0.0",
+						Port:    "9999",
+					},
 					Raw: listenerNoValidationContext,
 				},
 			},
@@ -1465,6 +1370,10 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						IdentityInstanceName: "identityPluginInstance",
 						IdentityCertName:     "identityCertName",
 						RequireClientCert:    true,
+					},
+					InboundListenerCfg: &InboundListenerConfig{
+						Address: "0.0.0.0",
+						Port:    "9999",
 					},
 					Raw: listenerWithValidationContext,
 				},

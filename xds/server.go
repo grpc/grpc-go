@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -220,17 +221,20 @@ func (s *GRPCServer) newListenerWrapper(lis net.Listener) (*listenerWrapper, err
 	// or not.
 	goodUpdate := grpcsync.NewEvent()
 
-	// The resource_name in the LDS request sent by the xDS-enabled gRPC server
-	// is of the following format:
-	// "/path/to/resource?udpa.resource.listening_address=IP:Port". The
-	// `/path/to/resource` part of the name is sourced from the bootstrap config
-	// field `grpc_server_resource_name_id`. If this field is not specified in
-	// the bootstrap file, we will use a default of `grpc/server`.
-	path := "grpc/server"
-	if cfg := s.xdsC.BootstrapConfig(); cfg != nil && cfg.ServerResourceNameID != "" {
-		path = cfg.ServerResourceNameID
+	// The server listener resource name template from the bootstrap
+	// configuration contains a template for the name of the Listener resource
+	// to subscribe to for a gRPC server. If the token `%s` is present in the
+	// string, it will be replaced with the server's listening "IP:port" (e.g.,
+	// "0.0.0.0:8080", "[::]:8080"). The absence of a template will be treated
+	// as an error since we do not have any default value for this.
+	cfg := s.xdsC.BootstrapConfig()
+	if cfg == nil || cfg.ServerListenerResourceNameTemplate == "" {
+		return nil, errors.New("missing server_listener_resource_name_template in the bootstrap configuration")
 	}
-	name := fmt.Sprintf("%s?udpa.resource.listening_address=%s", path, lis.Addr().String())
+	name := cfg.ServerListenerResourceNameTemplate
+	if strings.Contains(cfg.ServerListenerResourceNameTemplate, "%s") {
+		name = strings.ReplaceAll(cfg.ServerListenerResourceNameTemplate, "%s", lis.Addr().String())
+	}
 
 	// Register an LDS watch using our xdsClient, and specify the listening
 	// address as the resource name.
@@ -287,6 +291,38 @@ func (s *GRPCServer) handleListenerUpdate(update listenerUpdate) {
 		return
 	}
 	s.logger.Infof("Received update for resource %q: %+v", update.name, update.lds.String())
+
+	// Make sure that the socket address on the received Listener resource
+	// matches the address of the net.Listener passed to us by the user. This
+	// check is done here instead of at the xdsClient layer because of the
+	// following couple of reasons:
+	// - xdsClient cannot know the listening address of every listener in the
+	//   system, and hence cannot perform this check.
+	// - this is a very context-dependent check and only the server has the
+	//   appropriate context to perform this check.
+	//
+	// What this means is that the xdsClient has ACKed a resource which is going
+	// to push the server into a "not serving" state. This is not ideal, but
+	// this is what we have decided to do. See gRPC A36 for more details.
+	// TODO(easwars): Switch to "not serving" if the host:port does not match.
+	lisAddr := update.lw.Listener.Addr().String()
+	addr, port, err := net.SplitHostPort(lisAddr)
+	if err != nil {
+		// This is never expected to return a non-nil error since we have made
+		// sure that the listener is a TCP listener at the beginning of Serve().
+		// This is simply paranoia.
+		s.logger.Warningf("Local listener address %q failed to parse as IP:port: %v", lisAddr, err)
+		return
+	}
+	ilc := update.lds.InboundListenerCfg
+	if ilc == nil {
+		s.logger.Warningf("Missing host:port in Listener updates")
+		return
+	}
+	if ilc.Address != addr || ilc.Port != port {
+		s.logger.Warningf("Received host:port (%s:%d) in Listener update does not match local listening address: %s", ilc.Address, ilc.Port, lisAddr)
+		return
+	}
 
 	if err := s.handleSecurityConfig(update.lds.SecurityCfg, update.lw); err != nil {
 		s.logger.Warningf("Invalid security config update: %v", err)
