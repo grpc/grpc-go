@@ -311,12 +311,14 @@ func getFilterChain(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
 	}
 	var srcType SourceType
 	switch fcm.GetSourceType() {
+	case v3listenerpb.FilterChainMatch_ANY:
+		srcType = SourceTypeAny
 	case v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK:
 		srcType = SourceTypeSameOrLoopback
 	case v3listenerpb.FilterChainMatch_EXTERNAL:
 		srcType = SourceTypeExternal
 	default:
-		srcType = SourceTypeAny
+		return nil, fmt.Errorf("xds: unsupported source type: %v", fcm.GetSourceType())
 	}
 	var srcPrefixRanges []net.IP
 	for _, pr := range fcm.GetSourcePrefixRanges() {
