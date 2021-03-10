@@ -16,7 +16,8 @@
  *
  */
 
-// Package main starts Greeter service that will response with the hostname.
+// Binary server demonstrated gRPC's support for xDS APIs on the server-side. It
+// exposes the Greeter service that will response with the hostname.
 package main
 
 import (
@@ -27,36 +28,29 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"strconv"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	xdscreds "google.golang.org/grpc/credentials/xds"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/xds"
 )
 
-var help = flag.Bool("help", false, "Print usage information")
-
-const (
-	defaultPort = 50051
+var (
+	port     = flag.Int("port", 50051, "the port to serve Greeter service requests on. Health service will be served on `port+1`")
+	xdsCreds = flag.Bool("xds_creds", false, "whether the server should use xDS APIs to receive security configuration")
 )
 
-// server is used to implement helloworld.GreeterServer.
+// server implements helloworld.GreeterServer interface.
 type server struct {
 	pb.UnimplementedGreeterServer
-
 	serverName string
 }
 
-func newServer(serverName string) *server {
-	return &server{
-		serverName: serverName,
-	}
-}
-
-// SayHello implements helloworld.GreeterServer
+// SayHello implements helloworld.GreeterServer interface.
 func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	log.Printf("Received: %v", in.GetName())
 	return &pb.HelloReply{Message: "Hello " + in.GetName() + ", from " + s.serverName}, nil
@@ -72,65 +66,40 @@ func determineHostname() string {
 	return hostname
 }
 
-func init() {
-	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), `
-Usage: server [port [hostname]]
-
-  port
-        The listen port. Defaults to %d
-  hostname
-        The name clients will see in greet responses. Defaults to the machine's hostname
-`, defaultPort)
-
-		flag.PrintDefaults()
-	}
-}
-
 func main() {
 	flag.Parse()
-	if *help {
-		flag.Usage()
-		return
-	}
-	args := flag.Args()
 
-	if len(args) > 2 {
-		flag.Usage()
-		return
+	greeterPort := fmt.Sprintf(":%d", *port)
+	greeterLis, err := net.Listen("tcp4", greeterPort)
+	if err != nil {
+		log.Fatalf("net.Listen(tcp4, %q) failed: %v", greeterPort, err)
 	}
 
-	port := defaultPort
-	if len(args) > 0 {
+	creds := insecure.NewCredentials()
+	if *xdsCreds {
+		log.Println("Using xDS credentials...")
 		var err error
-		port, err = strconv.Atoi(args[0])
-		if err != nil {
-			log.Printf("Invalid port number: %v", err)
-			flag.Usage()
-			return
+		if creds, err = xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()}); err != nil {
+			log.Fatalf("failed to create server-side xDS credentials: %v", err)
 		}
 	}
 
-	var hostname string
-	if len(args) > 1 {
-		hostname = args[1]
-	}
-	if hostname == "" {
-		hostname = determineHostname()
-	}
+	greeterServer := xds.NewGRPCServer(grpc.Creds(creds))
+	pb.RegisterGreeterServer(greeterServer, &server{serverName: determineHostname()})
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+	healthPort := fmt.Sprintf(":%d", *port+1)
+	healthLis, err := net.Listen("tcp4", healthPort)
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Fatalf("net.Listen(tcp4, %q) failed: %v", healthPort, err)
 	}
-	s := grpc.NewServer()
-	pb.RegisterGreeterServer(s, newServer(hostname))
-
-	reflection.Register(s)
+	grpcServer := grpc.NewServer()
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
-	healthpb.RegisterHealthServer(s, healthServer)
+	healthpb.RegisterHealthServer(grpcServer, healthServer)
 
-	log.Printf("serving on %s, hostname %s", lis.Addr(), hostname)
-	s.Serve(lis)
+	log.Printf("Serving GreeterService on %s and HealthService on %s", greeterLis.Addr().String(), healthLis.Addr().String())
+	go func() {
+		greeterServer.Serve(greeterLis)
+	}()
+	grpcServer.Serve(healthLis)
 }
