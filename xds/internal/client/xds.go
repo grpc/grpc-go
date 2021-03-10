@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -35,7 +34,6 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
-	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
@@ -710,36 +708,10 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext) (*Secu
 		var matchers []xds.StringMatcher
 		if def := combined.GetDefaultValidationContext(); def != nil {
 			for _, m := range def.GetMatchSubjectAltNames() {
-				matcher := xds.StringMatcher{}
-				switch mt := m.GetMatchPattern().(type) {
-				case *v3matcherpb.StringMatcher_Exact:
-					matcher.ExactMatch = &mt.Exact
-				case *v3matcherpb.StringMatcher_Prefix:
-					if m.GetPrefix() == "" {
-						return nil, errors.New("empty prefix is not allowed in StringMatcher")
-					}
-					matcher.PrefixMatch = &mt.Prefix
-				case *v3matcherpb.StringMatcher_Suffix:
-					if m.GetSuffix() == "" {
-						return nil, errors.New("empty suffix is not allowed in StringMatcher")
-					}
-					matcher.SuffixMatch = &mt.Suffix
-				case *v3matcherpb.StringMatcher_SafeRegex:
-					regex := m.GetSafeRegex().GetRegex()
-					re, err := regexp.Compile(regex)
-					if err != nil {
-						return nil, fmt.Errorf("safe_regex matcher %q is invalid", regex)
-					}
-					matcher.RegexMatch = re
-				case *v3matcherpb.StringMatcher_Contains:
-					if m.GetContains() == "" {
-						return nil, errors.New("empty contains is not allowed in StringMatcher")
-					}
-					matcher.ContainsMatch = &mt.Contains
-				default:
-					return nil, fmt.Errorf("combined validation context has unrecognized string matcher: %+v", m)
+				matcher, err := xds.StringMatcherFromProto(m)
+				if err != nil {
+					return nil, err
 				}
-				matcher.IgnoreCase = m.GetIgnoreCase()
 				matchers = append(matchers, matcher)
 			}
 		}

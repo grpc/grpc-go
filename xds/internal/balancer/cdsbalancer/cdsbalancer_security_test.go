@@ -50,14 +50,11 @@ const (
 
 var (
 	testSANMatchers = []xdsinternal.StringMatcher{
-		{
-			ExactMatch: newStringP(testSAN),
-			IgnoreCase: true,
-		},
-		{PrefixMatch: newStringP(testSAN)},
-		{SuffixMatch: newStringP(testSAN)},
-		{RegexMatch: regexp.MustCompile(testSAN)},
-		{ContainsMatch: newStringP(testSAN)},
+		xdsinternal.StringMatcherForTesting(newStringP(testSAN), nil, nil, nil, nil, true),
+		xdsinternal.StringMatcherForTesting(nil, newStringP(testSAN), nil, nil, nil, false),
+		xdsinternal.StringMatcherForTesting(nil, nil, newStringP(testSAN), nil, nil, false),
+		xdsinternal.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(testSAN), false),
+		xdsinternal.StringMatcherForTesting(nil, nil, nil, newStringP(testSAN), nil, false),
 	}
 	fpb1, fpb2                   *fakeProviderBuilder
 	bootstrapConfig              *bootstrap.Config

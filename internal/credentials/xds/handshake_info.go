@@ -230,57 +230,18 @@ func (hi *HandshakeInfo) MatchingSANExists(cert *x509.Certificate) bool {
 // Caller must hold mu.
 func (hi *HandshakeInfo) matchSAN(san string, isDNS bool) bool {
 	for _, matcher := range hi.sanMatchers {
-		if matcher.IgnoreCase {
-			san = strings.ToLower(san)
+		if em := matcher.ExactMatch(); em != "" && isDNS {
+			// This is a special case which is documented in the xDS protos.
+			// If the DNS SAN is a wildcard entry, and the match criteria is
+			// `exact`, then we need to perform DNS wildcard matching
+			// instead of regular string comparison.
+			if dnsMatch(em, san) {
+				return true
+			}
+			continue
 		}
-		switch {
-		case matcher.ExactMatch != nil:
-			if isDNS {
-				// This is a special case which is documented in the xDS protos.
-				// If the DNS SAN is a wildcard entry, and the match criteria is
-				// `exact`, then we need to perform DNS wildcard matching
-				// instead of regular string comparison.
-				if dnsMatch(*matcher.ExactMatch, san) {
-					return true
-				}
-				continue
-			}
-
-			pattern := *matcher.ExactMatch
-			if matcher.IgnoreCase {
-				pattern = strings.ToLower(pattern)
-			}
-			if san == pattern {
-				return true
-			}
-		case matcher.PrefixMatch != nil:
-			pattern := *matcher.PrefixMatch
-			if matcher.IgnoreCase {
-				pattern = strings.ToLower(pattern)
-			}
-			if strings.HasPrefix(san, pattern) {
-				return true
-			}
-		case matcher.SuffixMatch != nil:
-			pattern := *matcher.SuffixMatch
-			if matcher.IgnoreCase {
-				pattern = strings.ToLower(pattern)
-			}
-			if strings.HasSuffix(san, pattern) {
-				return true
-			}
-		case matcher.RegexMatch != nil:
-			if matcher.RegexMatch.MatchString(san) {
-				return true
-			}
-		case matcher.ContainsMatch != nil:
-			pattern := *matcher.ContainsMatch
-			if matcher.IgnoreCase {
-				pattern = strings.ToLower(pattern)
-			}
-			if strings.Contains(san, pattern) {
-				return true
-			}
+		if matcher.Match(san) {
+			return true
 		}
 	}
 	return false
@@ -288,24 +249,28 @@ func (hi *HandshakeInfo) matchSAN(san string, isDNS bool) bool {
 
 // dnsMatch implements a DNS wildcard matching algorithm based on RFC2828 and
 // grpc-java's implementation in `OkHostnameVerifier` class.
-func dnsMatch(host, pattern string) bool {
+//
+// NOTE: Here the `host` argument is the one from the set of string matchers in
+// the xDS proto and the `san` argument is a DNS SAN from the certificate, and
+// this is the one which can potentially contain a wildcard pattern.
+func dnsMatch(host, san string) bool {
 	// Add trailing "." and turn them into absolute domain names.
 	if !strings.HasSuffix(host, ".") {
 		host += "."
 	}
-	if !strings.HasSuffix(pattern, ".") {
-		pattern += "."
+	if !strings.HasSuffix(san, ".") {
+		san += "."
 	}
 	// Domain names are case-insensitive.
 	host = strings.ToLower(host)
-	pattern = strings.ToLower(pattern)
+	san = strings.ToLower(san)
 
-	// If pattern does not contain a wildcard pattern, do exact match.
-	if !strings.Contains(pattern, "*") {
-		return host == pattern
+	// If san does not contain a wildcard, do exact match.
+	if !strings.Contains(san, "*") {
+		return host == san
 	}
 
-	// Wildcard pattern rules
+	// Wildcard dns matching rules
 	// - '*' is only permitted in the left-most label and must be the only
 	//   character in that label. For example, *.example.com is permitted, while
 	//   *a.example.com, a*.example.com, a*b.example.com, a.*.example.com are
@@ -313,23 +278,23 @@ func dnsMatch(host, pattern string) bool {
 	// - '*' matches a single domain name component. For example, *.example.com
 	//   matches test.example.com but does not match sub.test.example.com.
 	// - Wildcard patterns for single-label domain names are not permitted.
-	if pattern == "*." || !strings.HasPrefix(pattern, "*.") || strings.Contains(pattern[1:], "*") {
+	if san == "*." || !strings.HasPrefix(san, "*.") || strings.Contains(san[1:], "*") {
 		return false
 	}
-	// Optimization: at this point, we know that the pattern contains a '*' and
-	// is the first domain component of pattern. So, the host name must be at
-	// least as long as the pattern to be able to match.
-	if len(host) < len(pattern) {
+	// Optimization: at this point, we know that the san contains a '*' and
+	// is the first domain component of san. So, the host name must be at
+	// least as long as the san to be able to match.
+	if len(host) < len(san) {
 		return false
 	}
-	// Hostname must end with the non-wildcard portion of pattern.
-	if !strings.HasSuffix(host, pattern[1:]) {
+	// Hostname must end with the non-wildcard portion of san.
+	if !strings.HasSuffix(host, san[1:]) {
 		return false
 	}
-	// At this point we know that the hostName and pattern share the same suffix
-	// (the non-wildcard portion of pattern). Now, we just need to make sure
+	// At this point we know that the hostName and san share the same suffix
+	// (the non-wildcard portion of san). Now, we just need to make sure
 	// that the '*' does not match across domain components.
-	hostPrefix := strings.TrimSuffix(host, pattern[1:])
+	hostPrefix := strings.TrimSuffix(host, san[1:])
 	return !strings.Contains(hostPrefix, ".")
 }
 
