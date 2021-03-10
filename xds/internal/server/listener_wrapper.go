@@ -21,21 +21,27 @@
 package server
 
 import (
+	"fmt"
 	"net"
 	"sync"
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
+var logger = grpclog.Component("xds")
+
+func prefixLogger(p *listenerWrapper) *internalgrpclog.PrefixLogger {
+	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[xds-server-listener %p]", p))
+}
+
 // ListenerWrapperParams wraps parameters required to create a listenerWrapper.
 type ListenerWrapperParams struct {
 	// Listener is the net.Listener passed by the user that is to be wrapped.
 	Listener net.Listener
-	// Logger is used to log messages with a configured prefix.
-	Logger *internalgrpclog.PrefixLogger
 	// ListenerResourceName is the xDS Listener resource to request.
 	ListenerResourceName string
 	// XDSCredsInUse specifies whether or not the user expressed interest to
@@ -60,7 +66,6 @@ type ListenerWrapperParams struct {
 func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan struct{}) {
 	lw := &listenerWrapper{
 		Listener:            params.Listener,
-		logger:              params.Logger,
 		name:                params.ListenerResourceName,
 		xdsCredsInUse:       params.XDSCredsInUse,
 		certProviderConfigs: params.CertProviderConfigs,
@@ -70,6 +75,7 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 		closed:     grpcsync.NewEvent(),
 		goodUpdate: grpcsync.NewEvent(),
 	}
+	lw.logger = prefixLogger(lw)
 
 	cancelWatch := lw.watchFunc(lw.name, lw.handleListenerUpdate)
 	lw.logger.Infof("Watch started on resource name %v", lw.name)
