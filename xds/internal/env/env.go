@@ -26,8 +26,9 @@ import (
 )
 
 const (
-	bootstrapFileNameEnv = "GRPC_XDS_BOOTSTRAP"
-	xdsV3SupportEnv      = "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT"
+	bootstrapFileNameEnv         = "GRPC_XDS_BOOTSTRAP"
+	xdsV3SupportEnv              = "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT"
+	clientSideSecuritySupportEnv = "GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT"
 )
 
 var (
@@ -39,4 +40,11 @@ var (
 	// done by setting the environment variable
 	// "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT" to "true".
 	V3Support = strings.EqualFold(os.Getenv(xdsV3SupportEnv), "true")
+	// ClientSideSecuritySupport is used to control processing of security
+	// configuration on the client-side.
+	//
+	// Note that there is no env var protection for the server-side because we
+	// have a brand new API on the server-side and users explicitly need to use
+	// the new API to get security integration on the server.
+	ClientSideSecuritySupport = strings.EqualFold(os.Getenv(clientSideSecuritySupportEnv), "true")
 )
