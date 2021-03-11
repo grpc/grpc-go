@@ -246,6 +246,12 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 }
 
 func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
+	if n := len(lis.ListenerFilters); n != 0 {
+		return nil, fmt.Errorf("unsupported field 'listener_filters' contains %d entries", n)
+	}
+	if useOrigDst := lis.GetUseOriginalDst(); useOrigDst != nil && useOrigDst.GetValue() {
+		return nil, errors.New("unsupported field 'use_original_dst' is present and set to true")
+	}
 	addr := lis.GetAddress()
 	if addr == nil {
 		return nil, fmt.Errorf("no address field in LDS response: %+v", lis)

@@ -916,6 +916,60 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		wantErr    string
 	}{
 		{
+			name: "non-empty listener filters",
+			resources: []*anypb.Any{
+				{
+					TypeUrl: version.V3ListenerURL,
+					Value: func() []byte {
+						lis := &v3listenerpb.Listener{
+							Name: v3LDSTarget,
+							ListenerFilters: []*v3listenerpb.ListenerFilter{
+								{Name: "listener-filter-1"},
+							},
+						}
+						mLis, _ := proto.Marshal(lis)
+						return mLis
+					}(),
+				},
+			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
+			wantErr: "unsupported field 'listener_filters'",
+		},
+		{
+			name: "use_original_dst is set",
+			resources: []*anypb.Any{
+				{
+					TypeUrl: version.V3ListenerURL,
+					Value: func() []byte {
+						lis := &v3listenerpb.Listener{
+							Name:           v3LDSTarget,
+							UseOriginalDst: &wrapperspb.BoolValue{Value: true},
+						}
+						mLis, _ := proto.Marshal(lis)
+						return mLis
+					}(),
+				},
+			},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     errPlaceHolder,
+				},
+			},
+			wantErr: "unsupported field 'use_original_dst'",
+		},
+		{
 			name: "no address field",
 			resources: []*anypb.Any{
 				{
