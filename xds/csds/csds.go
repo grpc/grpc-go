@@ -26,6 +26,7 @@ package csds
 import (
 	"context"
 	"io"
+	"runtime"
 	"time"
 
 	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
@@ -73,10 +74,6 @@ type clientStatusServer struct {
 // registered on a gRPC server.
 func NewClientStatusDiscoveryServer() v3statuspb.ClientStatusDiscoveryServiceServer {
 	ret := &clientStatusServer{}
-	// TODO: this created client is never Closed. We don't want to return a
-	// function for users to call.
-	//
-	// Another option is to set a finalizer.
 	ret.xdsClient, ret.xdsClientErr = newXDSClient()
 	if ret.xdsClientErr != nil {
 		// Log error instead of returning an error, so that
@@ -85,6 +82,13 @@ func NewClientStatusDiscoveryServer() v3statuspb.ClientStatusDiscoveryServiceSer
 		// Besides, if client cannot be created, the users should have received
 		// the error, because their client/server cannot work, either.
 		logger.Errorf("failed to create xds client: %v", ret.xdsClientErr)
+	} else {
+		// We don't want to return a function for users to call (in defer). So
+		// we set a finalizer to close the xDS client. This will be called when
+		// user's gRPC server where this CSDS implementation is GC'ed.
+		runtime.SetFinalizer(ret, func(s *clientStatusServer) {
+			s.xdsClient.Close()
+		})
 	}
 	return ret
 }
