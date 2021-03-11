@@ -229,40 +229,6 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 	return s.gs.Serve(lw)
 }
 
-/*
-	// Make sure that the socket address on the received Listener resource
-	// matches the address of the net.Listener passed to us by the user. This
-	// check is done here instead of at the xdsClient layer because of the
-	// following couple of reasons:
-	// - xdsClient cannot know the listening address of every listener in the
-	//   system, and hence cannot perform this check.
-	// - this is a very context-dependent check and only the server has the
-	//   appropriate context to perform this check.
-	//
-	// What this means is that the xdsClient has ACKed a resource which is going
-	// to push the server into a "not serving" state. This is not ideal, but
-	// this is what we have decided to do. See gRPC A36 for more details.
-	// TODO(easwars): Switch to "not serving" if the host:port does not match.
-	lisAddr := update.lw.Listener.Addr().String()
-	addr, port, err := net.SplitHostPort(lisAddr)
-	if err != nil {
-		// This is never expected to return a non-nil error since we have made
-		// sure that the listener is a TCP listener at the beginning of Serve().
-		// This is simply paranoia.
-		s.logger.Warningf("Local listener address %q failed to parse as IP:port: %v", lisAddr, err)
-		return
-	}
-	ilc := update.lds.InboundListenerCfg
-	if ilc == nil {
-		s.logger.Warningf("Missing host:port in Listener updates")
-		return
-	}
-	if ilc.Address != addr || ilc.Port != port {
-		s.logger.Warningf("Received host:port (%s:%d) in Listener update does not match local listening address: %s", ilc.Address, ilc.Port, lisAddr)
-		return
-	}
-*/
-
 // Stop stops the underlying gRPC server. It immediately closes all open
 // connections. It cancels all active RPCs on the server side and the
 // corresponding pending RPCs on the client side will get notified by connection

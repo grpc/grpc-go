@@ -159,9 +159,41 @@ func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, 
 	}
 	l.logger.Infof("Received update for resource %q: %+v", l.name, update)
 
+	// Make sure that the socket address on the received Listener resource
+	// matches the address of the net.Listener passed to us by the user. This
+	// check is done here instead of at the xdsClient layer because of the
+	// following couple of reasons:
+	// - xdsClient cannot know the listening address of every listener in the
+	//   system, and hence cannot perform this check.
+	// - this is a very context-dependent check and only the server has the
+	//   appropriate context to perform this check.
+	//
+	// What this means is that the xdsClient has ACKed a resource which is going
+	// to push the server into a "not serving" state. This is not ideal, but
+	// this is what we have decided to do. See gRPC A36 for more details.
+	// TODO(easwars): Switch to "not serving" if the host:port does not match.
+	lisAddr := l.Listener.Addr().String()
+	addr, port, err := net.SplitHostPort(lisAddr)
+	if err != nil {
+		// This is never expected to return a non-nil error since we have made
+		// sure that the listener is a TCP listener at the beginning of Serve().
+		// This is simply paranoia.
+		l.logger.Warningf("Local listener address %q failed to parse as IP:port: %v", lisAddr, err)
+		return
+	}
+	ilc := update.InboundListenerCfg
+	if ilc == nil {
+		l.logger.Warningf("Missing host:port in Listener updates")
+		return
+	}
+	if ilc.Address != addr || ilc.Port != port {
+		l.logger.Warningf("Received host:port (%s:%d) in Listener update does not match local listening address: %s", ilc.Address, ilc.Port, lisAddr)
+		return
+	}
+
 	l.mu.Lock()
-	l.filterChains = update.FilterChains
-	l.defaultFilterChain = update.DefaultFilterChain
+	l.filterChains = ilc.FilterChains
+	l.defaultFilterChain = ilc.DefaultFilterChain
 	l.mu.Unlock()
 	l.goodUpdate.Fire()
 	// TODO: Move to serving state on receipt of a good response.
