@@ -50,8 +50,15 @@ import (
 )
 
 const (
-	defaultTestTimeout = 60 * time.Second
+	defaultTestTimeout = 10 * time.Second
 )
+
+type xdsClientInterfaceWithWatch interface {
+	WatchListener(string, func(client.ListenerUpdate, error)) func()
+	WatchRouteConfig(string, func(client.RouteConfigUpdate, error)) func()
+	WatchCluster(string, func(client.ClusterUpdate, error)) func()
+	WatchEndpoints(string, func(client.EndpointsUpdate, error)) func()
+}
 
 var cmpOpts = cmp.Options{
 	cmpopts.EquateEmpty(),
@@ -237,7 +244,7 @@ func TestCSDS(t *testing.T) {
 	}
 }
 
-func commonSetup(t *testing.T) (xdsClientInterface, *e2e.ManagementServer, string, v3statuspb.ClientStatusDiscoveryService_StreamClientStatusClient, func()) {
+func commonSetup(t *testing.T) (xdsClientInterfaceWithWatch, *e2e.ManagementServer, string, v3statuspb.ClientStatusDiscoveryService_StreamClientStatusClient, func()) {
 	t.Helper()
 
 	// Spin up a xDS management server on a local port.
@@ -249,10 +256,9 @@ func commonSetup(t *testing.T) (xdsClientInterface, *e2e.ManagementServer, strin
 
 	// Create a bootstrap file in a temporary directory.
 	bootstrapCleanup, err := e2e.SetupBootstrapFile(e2e.BootstrapOptions{
-		Version:              e2e.TransportV3,
-		NodeID:               nodeID,
-		ServerURI:            fs.Address,
-		ServerResourceNameID: "grpc/server",
+		Version:   e2e.TransportV3,
+		NodeID:    nodeID,
+		ServerURI: fs.Address,
 	})
 	if err != nil {
 		t.Fatal(err)

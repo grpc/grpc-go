@@ -47,10 +47,6 @@ import (
 // xdsClientInterface contains methods from xdsClient.Client which are used by
 // the server. This is useful for overriding in unit tests.
 type xdsClientInterface interface {
-	WatchListener(string, func(client.ListenerUpdate, error)) func()
-	WatchRouteConfig(string, func(client.RouteConfigUpdate, error)) func()
-	WatchCluster(string, func(client.ClusterUpdate, error)) func()
-	WatchEndpoints(string, func(client.EndpointsUpdate, error)) func()
 	DumpLDS() (string, map[string]client.UpdateWithMD)
 	DumpRDS() (string, map[string]client.UpdateWithMD)
 	DumpCDS() (string, map[string]client.UpdateWithMD)
@@ -77,8 +73,17 @@ type clientStatusServer struct {
 // registered on a gRPC server.
 func NewClientStatusDiscoveryServer() v3statuspb.ClientStatusDiscoveryServiceServer {
 	ret := &clientStatusServer{}
+	// TODO: this created client is never Closed. We don't want to return a
+	// function for users to call.
+	//
+	// Another option is to set a finalizer.
 	ret.xdsClient, ret.xdsClientErr = newXDSClient()
 	if ret.xdsClientErr != nil {
+		// Log error instead of returning an error, so that
+		// `NewClientStatusDiscoveryServer` is easier to use.
+		//
+		// Besides, if client cannot be created, the users should have received
+		// the error, because their client/server cannot work, either.
 		logger.Errorf("failed to create xds client: %v", ret.xdsClientErr)
 	}
 	return ret
@@ -93,9 +98,9 @@ func (s *clientStatusServer) StreamClientStatus(stream v3statuspb.ClientStatusDi
 		if err != nil {
 			return err
 		}
-		resp, errResp := s.buildClientStatusRespForReq(req)
-		if errResp != nil {
-			return errResp
+		resp, err := s.buildClientStatusRespForReq(req)
+		if err != nil {
+			return err
 		}
 		if err := stream.Send(resp); err != nil {
 			return err
@@ -112,8 +117,10 @@ func (s *clientStatusServer) FetchClientStatus(_ context.Context, req *v3statusp
 //
 // If it returns an error, the error is a status error.
 func (s *clientStatusServer) buildClientStatusRespForReq(req *v3statuspb.ClientStatusRequest) (*v3statuspb.ClientStatusResponse, error) {
+	// Field NodeMatchers is unsupported, by design
+	// https://github.com/grpc/proposal/blob/master/A40-csds-support.md#detail-node-matching.
 	if len(req.NodeMatchers) != 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "NodeMatchers are not supported, request contains NodeMatchers: %v", req.NodeMatchers)
+		return nil, status.Errorf(codes.InvalidArgument, "node_matchers are not supported, request contains node_matchers: %v", req.NodeMatchers)
 	}
 	if s.xdsClient == nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "xds client creation failed with error: %v", s.xdsClientErr)
@@ -141,6 +148,10 @@ func (s *clientStatusServer) buildClientStatusRespForReq(req *v3statuspb.ClientS
 // If n is already a v3.Node, return it.
 // If n is v2.Node, marshal and unmarshal it to v3.
 // Otherwise, return nil.
+//
+// The default case (not v2 or v3) is nil, instead of error, because the
+// resources in the response are more important than the node. The worst case is
+// that the user will receive no Node info, but will still get resources.
 func nodeProtoToV3(n proto.Message) *v3corepb.Node {
 	var node *v3corepb.Node
 	switch nn := n.(type) {
@@ -156,6 +167,8 @@ func nodeProtoToV3(n proto.Message) *v3corepb.Node {
 		if err := proto.Unmarshal(v2, node); err != nil {
 			logger.Warningf("Failed to unmarshal node (%v): %v", v2, err)
 		}
+	default:
+		logger.Warningf("node from bootstrap is %#v, only v2.Node and v3.Node are supported", nn)
 	}
 	return node
 }
