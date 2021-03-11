@@ -20,6 +20,7 @@ package client
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -149,7 +150,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			return &anypb.Any{
 				TypeUrl: version.V3ListenerURL,
 				Value: func() []byte {
-					mcm, _ := ptypes.MarshalAny(hcm)
+					mcm := marshalAny(hcm)
 					lis := &v3listenerpb.Listener{
 						Name: v3LDSTarget,
 						ApiListener: &v3listenerpb.ApiListener{
@@ -793,6 +794,29 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							},
 						},
 					},
+					DefaultFilterChain: &v3listenerpb.FilterChain{
+						Name: "default-filter-chain-1",
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: &anypb.Any{
+									TypeUrl: version.V3DownstreamTLSContextURL,
+									Value: func() []byte {
+										tls := &v3tlspb.DownstreamTlsContext{
+											CommonTlsContext: &v3tlspb.CommonTlsContext{
+												TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+													InstanceName:    "defaultIdentityPluginInstance",
+													CertificateName: "defaultIdentityCertName",
+												},
+											},
+										}
+										mtls, _ := proto.Marshal(tls)
+										return mtls
+									}(),
+								},
+							},
+						},
+					},
 				}
 				mLis, _ := proto.Marshal(lis)
 				return mLis
@@ -841,6 +865,36 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 											return mtls
 										}(),
 									},
+								},
+							},
+						},
+					},
+					DefaultFilterChain: &v3listenerpb.FilterChain{
+						Name: "default-filter-chain-1",
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: &anypb.Any{
+									TypeUrl: version.V3DownstreamTLSContextURL,
+									Value: func() []byte {
+										tls := &v3tlspb.DownstreamTlsContext{
+											RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+											CommonTlsContext: &v3tlspb.CommonTlsContext{
+												TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+													InstanceName:    "defaultIdentityPluginInstance",
+													CertificateName: "defaultIdentityCertName",
+												},
+												ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+													ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+														InstanceName:    "defaultRootPluginInstance",
+														CertificateName: "defaultRootCertName",
+													},
+												},
+											},
+										}
+										mtls, _ := proto.Marshal(tls)
+										return mtls
+									}(),
 								},
 							},
 						},
@@ -911,45 +965,6 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			},
 			wantErr: "no socket_address field in LDS response",
-		},
-		{
-			name: "unexpected number of filter chains",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							Address: &v3corepb.Address{
-								Address: &v3corepb.Address_SocketAddress{
-									SocketAddress: &v3corepb.SocketAddress{
-										Address: "0.0.0.0",
-										PortSpecifier: &v3corepb.SocketAddress_PortValue{
-											PortValue: 9999,
-										},
-									},
-								},
-							},
-							FilterChains: []*v3listenerpb.FilterChain{
-								{Name: "filter-chain-1"},
-								{Name: "filter-chain-2"},
-							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
-				},
-			},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: "filter chains count in LDS response does not match expected",
 		},
 		{
 			name: "unexpected transport socket name",
@@ -1211,8 +1226,9 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
 					InboundListenerCfg: &InboundListenerConfig{
-						Address: "0.0.0.0",
-						Port:    "9999",
+						Address:      "0.0.0.0",
+						Port:         "9999",
+						FilterChains: []*FilterChain{{Match: &FilterChainMatch{}}},
 					},
 					Raw: listenerEmptyTransportSocket,
 				},
@@ -1343,13 +1359,25 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			resources: []*anypb.Any{listenerNoValidationContext},
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
-					SecurityCfg: &SecurityConfig{
-						IdentityInstanceName: "identityPluginInstance",
-						IdentityCertName:     "identityCertName",
-					},
 					InboundListenerCfg: &InboundListenerConfig{
 						Address: "0.0.0.0",
 						Port:    "9999",
+						FilterChains: []*FilterChain{
+							{
+								Match: &FilterChainMatch{},
+								SecurityCfg: &SecurityConfig{
+									IdentityInstanceName: "identityPluginInstance",
+									IdentityCertName:     "identityCertName",
+								},
+							},
+						},
+						DefaultFilterChain: &FilterChain{
+							Match: &FilterChainMatch{},
+							SecurityCfg: &SecurityConfig{
+								IdentityInstanceName: "defaultIdentityPluginInstance",
+								IdentityCertName:     "defaultIdentityCertName",
+							},
+						},
 					},
 					Raw: listenerNoValidationContext,
 				},
@@ -1364,16 +1392,31 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			resources: []*anypb.Any{listenerWithValidationContext},
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
-					SecurityCfg: &SecurityConfig{
-						RootInstanceName:     "rootPluginInstance",
-						RootCertName:         "rootCertName",
-						IdentityInstanceName: "identityPluginInstance",
-						IdentityCertName:     "identityCertName",
-						RequireClientCert:    true,
-					},
 					InboundListenerCfg: &InboundListenerConfig{
 						Address: "0.0.0.0",
 						Port:    "9999",
+						FilterChains: []*FilterChain{
+							{
+								Match: &FilterChainMatch{},
+								SecurityCfg: &SecurityConfig{
+									RootInstanceName:     "rootPluginInstance",
+									RootCertName:         "rootCertName",
+									IdentityInstanceName: "identityPluginInstance",
+									IdentityCertName:     "identityCertName",
+									RequireClientCert:    true,
+								},
+							},
+						},
+						DefaultFilterChain: &FilterChain{
+							Match: &FilterChainMatch{},
+							SecurityCfg: &SecurityConfig{
+								RootInstanceName:     "defaultRootPluginInstance",
+								RootCertName:         "defaultRootCertName",
+								IdentityInstanceName: "defaultIdentityPluginInstance",
+								IdentityCertName:     "defaultIdentityCertName",
+								RequireClientCert:    true,
+							},
+						},
 					},
 					Raw: listenerWithValidationContext,
 				},
@@ -1399,6 +1442,389 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			}
 			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreDetails); diff != "" {
 				t.Errorf("got unexpected metadata, diff (-got +want): %v", diff)
+			}
+		})
+	}
+}
+
+func (s) TestGetFilterChain(t *testing.T) {
+	tests := []struct {
+		desc             string
+		inputFilterChain *v3listenerpb.FilterChain
+		wantFilterChain  *FilterChain
+		wantErr          bool
+	}{
+		{
+			desc:             "empty",
+			inputFilterChain: nil,
+		},
+		{
+			desc: "unsupported destination port",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					DestinationPort: &wrapperspb.UInt32Value{
+						Value: 666,
+					},
+				},
+			},
+		},
+		{
+			desc: "unsupported server names",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					ServerNames: []string{"example-server"},
+				},
+			},
+		},
+		{
+			desc: "unsupported transport protocol",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					TransportProtocol: "tls",
+				},
+			},
+		},
+		{
+			desc: "unsupported application protocol",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					ApplicationProtocols: []string{"h2"},
+				},
+			},
+		},
+		{
+			desc: "bad dest address prefix",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "a.b.c.d",
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			desc: "bad dest prefix length",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "10.1.1.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: 50,
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			desc: "dest prefix ranges",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "10.1.1.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: 8,
+							},
+						},
+						{
+							AddressPrefix: "192.168.1.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: 24,
+							},
+						},
+					},
+				},
+			},
+			wantFilterChain: &FilterChain{
+				Match: &FilterChainMatch{
+					DestPrefixRanges: []net.IP{
+						net.IPv4(10, 1, 1, 0),
+						net.IPv4(192, 168, 1, 0),
+					},
+				},
+			},
+		},
+		{
+			desc: "source type local",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+				},
+			},
+			wantFilterChain: &FilterChain{
+				Match: &FilterChainMatch{
+					SourceType: SourceTypeSameOrLoopback,
+				},
+			},
+		},
+		{
+			desc: "source type external",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					SourceType: v3listenerpb.FilterChainMatch_EXTERNAL,
+				},
+			},
+			wantFilterChain: &FilterChain{
+				Match: &FilterChainMatch{
+					SourceType: SourceTypeExternal,
+				},
+			},
+		},
+		{
+			desc: "source type any",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					SourceType: v3listenerpb.FilterChainMatch_ANY,
+				},
+			},
+			wantFilterChain: &FilterChain{
+				Match: &FilterChainMatch{
+					SourceType: SourceTypeAny,
+				},
+			},
+		},
+		{
+			desc: "bad source address prefix",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "a.b.c.d",
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			desc: "bad source prefix length",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "10.1.1.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: 50,
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			desc: "source prefix ranges",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "10.1.1.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: 8,
+							},
+						},
+						{
+							AddressPrefix: "192.168.1.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: 24,
+							},
+						},
+					},
+				},
+			},
+			wantFilterChain: &FilterChain{
+				Match: &FilterChainMatch{
+					SourcePrefixRanges: []net.IP{
+						net.IPv4(10, 1, 1, 0),
+						net.IPv4(192, 168, 1, 0),
+					},
+				},
+			},
+		},
+		{
+			desc:             "empty transport socket",
+			inputFilterChain: &v3listenerpb.FilterChain{},
+			wantFilterChain:  &FilterChain{Match: &FilterChainMatch{}},
+		},
+		{
+			desc: "bad transport socket name",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "unsupported-transport-socket-name",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			desc: "unexpected url in transport socket",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: marshalAny(&v3tlspb.UpstreamTlsContext{}),
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			desc: "badly marshaled downstream tls context",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: &anypb.Any{
+							TypeUrl: version.V3DownstreamTLSContextURL,
+							Value:   []byte{1, 2, 3, 4},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			desc: "missing common tls context",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{}),
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			desc: "unsupported validation context",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
+									ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
+										Name: "foo-sds-secret",
+									},
+								},
+							},
+						}),
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			desc: "no identity and root certificate providers",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+							RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+									InstanceName:    "identityPluginInstance",
+									CertificateName: "identityCertName",
+								},
+							},
+						}),
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			desc: "no identity certificate provider with require_client_cert",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{},
+						}),
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			desc: "happy case",
+			inputFilterChain: &v3listenerpb.FilterChain{
+				Name: "filter-chain-1",
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "10.1.1.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: 8,
+							},
+						},
+					},
+					SourceType: v3listenerpb.FilterChainMatch_EXTERNAL,
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "10.1.1.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: 8,
+							},
+						},
+					},
+					SourcePorts: []uint32{80, 8080},
+				},
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+							RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+									InstanceName:    "identityPluginInstance",
+									CertificateName: "identityCertName",
+								},
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+									ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+										InstanceName:    "rootPluginInstance",
+										CertificateName: "rootCertName",
+									},
+								},
+							},
+						}),
+					},
+				},
+			},
+			wantFilterChain: &FilterChain{
+				Match: &FilterChainMatch{
+					DestPrefixRanges:   []net.IP{net.IPv4(10, 1, 1, 0)},
+					SourceType:         SourceTypeExternal,
+					SourcePrefixRanges: []net.IP{net.IPv4(10, 1, 1, 0)},
+					SourcePorts:        []uint32{80, 8080},
+				},
+				SecurityCfg: &SecurityConfig{
+					RootInstanceName:     "rootPluginInstance",
+					RootCertName:         "rootCertName",
+					IdentityInstanceName: "identityPluginInstance",
+					IdentityCertName:     "identityCertName",
+					RequireClientCert:    true,
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			gotFilterChain, gotErr := getFilterChain(test.inputFilterChain)
+			if (gotErr != nil) != test.wantErr {
+				t.Fatalf("getFilterChain(%+v) returned error: %v, wantErr: %v", test.inputFilterChain, gotErr, test.wantErr)
+			}
+			if diff := cmp.Diff(test.wantFilterChain, gotFilterChain); diff != "" {
+				t.Errorf("getFilterChain(%+v) returned unexpected, diff (-want +got):\n%s", test.inputFilterChain, diff)
 			}
 		})
 	}
@@ -1509,11 +1935,7 @@ var customFilterTypedStructConfig = &v1typepb.TypedStruct{
 var wrappedCustomFilterTypedStructConfig *anypb.Any
 
 func init() {
-	var err error
-	wrappedCustomFilterTypedStructConfig, err = ptypes.MarshalAny(customFilterTypedStructConfig)
-	if err != nil {
-		panic(err.Error())
-	}
+	wrappedCustomFilterTypedStructConfig = marshalAny(customFilterTypedStructConfig)
 }
 
 var unknownFilterConfig = &anypb.Any{
@@ -1522,16 +1944,19 @@ var unknownFilterConfig = &anypb.Any{
 }
 
 func wrappedOptionalFilter(name string) *anypb.Any {
-	filter := &v3routepb.FilterConfig{
+	return marshalAny(&v3routepb.FilterConfig{
 		IsOptional: true,
 		Config: &anypb.Any{
 			TypeUrl: name,
 			Value:   []byte{1, 2, 3},
 		},
-	}
-	w, err := ptypes.MarshalAny(filter)
+	})
+}
+
+func marshalAny(m proto.Message) *anypb.Any {
+	a, err := ptypes.MarshalAny(m)
 	if err != nil {
-		panic("error marshalling any: " + err.Error())
+		panic(fmt.Sprintf("ptypes.MarshalAny(%+v) failed: %v", m, err))
 	}
-	return w
+	return a
 }

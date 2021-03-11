@@ -41,7 +41,7 @@ import (
 )
 
 const (
-	defaultTestTimeout      = 10 * time.Second
+	defaultTestTimeout      = 1 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
 	defaultTestCertSAN      = "*.test.example.com"
 	authority               = "authority"
@@ -218,7 +218,8 @@ func newTestContextWithHandshakeInfo(parent context.Context, root, identity cert
 	// Creating the HandshakeInfo and adding it to the attributes is very
 	// similar to what the CDS balancer would do when it intercepts calls to
 	// NewSubConn().
-	info := xdsinternal.NewHandshakeInfo(root, identity, sans...)
+	info := xdsinternal.NewHandshakeInfo(root, identity)
+	info.SetAcceptedSANs(sans)
 	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, info)
 
 	// Moving the attributes from the resolver.Address to the context passed to
@@ -530,7 +531,8 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	// Create a root provider which will fail the handshake because it does not
 	// use the correct trust roots.
 	root1 := makeRootProvider(t, "x509/client_ca_cert.pem")
-	handshakeInfo := xdsinternal.NewHandshakeInfo(root1, nil, defaultTestCertSAN)
+	handshakeInfo := xdsinternal.NewHandshakeInfo(root1, nil)
+	handshakeInfo.SetAcceptedSANs([]string{defaultTestCertSAN})
 
 	// We need to repeat most of what newTestContextWithHandshakeInfo() does
 	// here because we need access to the underlying HandshakeInfo so that we

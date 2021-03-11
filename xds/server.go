@@ -25,18 +25,16 @@ import (
 	"net"
 	"strings"
 	"sync"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
-	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/server"
 )
 
 const serverPrefix = "[xds-server %p] "
@@ -52,7 +50,6 @@ var (
 
 	// Unexported function to retrieve transport credentials from a gRPC server.
 	grpcGetServerCreds = internal.GetServerCredentials.(func(*grpc.Server) credentials.TransportCredentials)
-	buildProvider      = buildProviderFunc
 	logger             = grpclog.Component("xds")
 )
 
@@ -168,6 +165,7 @@ func (s *GRPCServer) initXDSClient() error {
 // initiated here.
 //
 // Serve will return a non-nil error unless Stop or GracefulStop is called.
+// TODO: Support callback to get notified on serving state changes.
 func (s *GRPCServer) Serve(lis net.Listener) error {
 	s.logger.Infof("Serve() passed a net.Listener on %s", lis.Addr().String())
 	if _, ok := lis.Addr().(*net.TCPAddr); !ok {
@@ -180,46 +178,20 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 		return err
 	}
 
+	cfg := s.xdsC.BootstrapConfig()
+	if cfg == nil {
+		return errors.New("bootstrap configuration is empty")
+	}
+
 	// If xds credentials were specified by the user, but bootstrap configs do
 	// not contain any certificate provider configuration, it is better to fail
 	// right now rather than failing when attempting to create certificate
 	// providers after receiving an LDS response with security configuration.
 	if s.xdsCredsInUse {
-		bc := s.xdsC.BootstrapConfig()
-		if bc == nil || len(bc.CertProviderConfigs) == 0 {
+		if len(cfg.CertProviderConfigs) == 0 {
 			return errors.New("xds: certificate_providers config missing in bootstrap file")
 		}
 	}
-
-	lw, err := s.newListenerWrapper(lis)
-	if lw == nil {
-		// Error returned can be nil (when Stop/GracefulStop() is called). So,
-		// we need to check the returned listenerWrapper instead.
-		return err
-	}
-	return s.gs.Serve(lw)
-}
-
-// newListenerWrapper creates and returns a listenerWrapper, which is a thin
-// wrapper around the passed in listener lis, that can be passed to
-// grpcServer.Serve().
-//
-// It then registers a watch for a Listener resource and blocks until a good
-// response is received or the server is stopped by a call to
-// Stop/GracefulStop().
-func (s *GRPCServer) newListenerWrapper(lis net.Listener) (*listenerWrapper, error) {
-	lw := &listenerWrapper{
-		Listener: lis,
-		closed:   grpcsync.NewEvent(),
-		xdsHI:    xdsinternal.NewHandshakeInfo(nil, nil),
-	}
-
-	// This is used to notify that a good update has been received and that
-	// Serve() can be invoked on the underlying gRPC server. Using a
-	// grpcsync.Event instead of a vanilla channel simplifies the update handler
-	// as it need not keep track of whether the received update is the first one
-	// or not.
-	goodUpdate := grpcsync.NewEvent()
 
 	// The server listener resource name template from the bootstrap
 	// configuration contains a template for the name of the Listener resource
@@ -227,31 +199,22 @@ func (s *GRPCServer) newListenerWrapper(lis net.Listener) (*listenerWrapper, err
 	// string, it will be replaced with the server's listening "IP:port" (e.g.,
 	// "0.0.0.0:8080", "[::]:8080"). The absence of a template will be treated
 	// as an error since we do not have any default value for this.
-	cfg := s.xdsC.BootstrapConfig()
-	if cfg == nil || cfg.ServerListenerResourceNameTemplate == "" {
-		return nil, errors.New("missing server_listener_resource_name_template in the bootstrap configuration")
+	if cfg.ServerListenerResourceNameTemplate == "" {
+		return errors.New("missing server_listener_resource_name_template in the bootstrap configuration")
 	}
 	name := cfg.ServerListenerResourceNameTemplate
 	if strings.Contains(cfg.ServerListenerResourceNameTemplate, "%s") {
 		name = strings.ReplaceAll(cfg.ServerListenerResourceNameTemplate, "%s", lis.Addr().String())
 	}
 
-	// Register an LDS watch using our xdsClient, and specify the listening
-	// address as the resource name.
-	cancelWatch := s.xdsC.WatchListener(name, func(update xdsclient.ListenerUpdate, err error) {
-		s.handleListenerUpdate(listenerUpdate{
-			lw:         lw,
-			name:       name,
-			lds:        update,
-			err:        err,
-			goodUpdate: goodUpdate,
-		})
+	// Create a listenerWrapper which handles all functionality required by
+	// this particular instance of Serve().
+	lw, goodUpdateCh := server.NewListenerWrapper(server.ListenerWrapperParams{
+		Listener:             lis,
+		ListenerResourceName: name,
+		XDSCredsInUse:        s.xdsCredsInUse,
+		XDSClient:            s.xdsC,
 	})
-	s.logger.Infof("Watch started on resource name %v", name)
-	lw.cancelWatch = func() {
-		cancelWatch()
-		s.logger.Infof("Watch cancelled on resource name %v", name)
-	}
 
 	// Block until a good LDS response is received or the server is stopped.
 	select {
@@ -260,155 +223,10 @@ func (s *GRPCServer) newListenerWrapper(lis net.Listener) (*listenerWrapper, err
 		// need to explicitly close the listener. Cancellation of the xDS watch
 		// is handled by the listenerWrapper.
 		lw.Close()
-		return nil, nil
-	case <-goodUpdate.Done():
-	}
-	return lw, nil
-}
-
-// listenerUpdate wraps the information received from a registered LDS watcher.
-type listenerUpdate struct {
-	lw         *listenerWrapper         // listener associated with this watch
-	name       string                   // resource name being watched
-	lds        xdsclient.ListenerUpdate // received update
-	err        error                    // received error
-	goodUpdate *grpcsync.Event          // event to fire upon a good update
-}
-
-func (s *GRPCServer) handleListenerUpdate(update listenerUpdate) {
-	if update.lw.closed.HasFired() {
-		s.logger.Warningf("Resource %q received update: %v with error: %v, after for listener was closed", update.name, update.lds, update.err)
-		return
-	}
-
-	if update.err != nil {
-		// We simply log an error here and hope we get a successful update
-		// in the future. The error could be because of a timeout or an
-		// actual error, like the requested resource not found. In any case,
-		// it is fine for the server to hang indefinitely until Stop() is
-		// called.
-		s.logger.Warningf("Received error for resource %q: %+v", update.name, update.err)
-		return
-	}
-	s.logger.Infof("Received update for resource %q: %+v", update.name, update.lds.String())
-
-	// Make sure that the socket address on the received Listener resource
-	// matches the address of the net.Listener passed to us by the user. This
-	// check is done here instead of at the xdsClient layer because of the
-	// following couple of reasons:
-	// - xdsClient cannot know the listening address of every listener in the
-	//   system, and hence cannot perform this check.
-	// - this is a very context-dependent check and only the server has the
-	//   appropriate context to perform this check.
-	//
-	// What this means is that the xdsClient has ACKed a resource which is going
-	// to push the server into a "not serving" state. This is not ideal, but
-	// this is what we have decided to do. See gRPC A36 for more details.
-	// TODO(easwars): Switch to "not serving" if the host:port does not match.
-	lisAddr := update.lw.Listener.Addr().String()
-	addr, port, err := net.SplitHostPort(lisAddr)
-	if err != nil {
-		// This is never expected to return a non-nil error since we have made
-		// sure that the listener is a TCP listener at the beginning of Serve().
-		// This is simply paranoia.
-		s.logger.Warningf("Local listener address %q failed to parse as IP:port: %v", lisAddr, err)
-		return
-	}
-	ilc := update.lds.InboundListenerCfg
-	if ilc == nil {
-		s.logger.Warningf("Missing host:port in Listener updates")
-		return
-	}
-	if ilc.Address != addr || ilc.Port != port {
-		s.logger.Warningf("Received host:port (%s:%d) in Listener update does not match local listening address: %s", ilc.Address, ilc.Port, lisAddr)
-		return
-	}
-
-	if err := s.handleSecurityConfig(update.lds.SecurityCfg, update.lw); err != nil {
-		s.logger.Warningf("Invalid security config update: %v", err)
-		return
-	}
-
-	// If we got all the way here, it means the received update was a good one.
-	update.goodUpdate.Fire()
-}
-
-func (s *GRPCServer) handleSecurityConfig(config *xdsclient.SecurityConfig, lw *listenerWrapper) error {
-	// If xdsCredentials are not in use, i.e, the user did not want to get
-	// security configuration from the control plane, we should not be acting on
-	// the received security config here. Doing so poses a security threat.
-	if !s.xdsCredsInUse {
 		return nil
+	case <-goodUpdateCh:
 	}
-
-	// Security config being nil is a valid case where the control plane has
-	// not sent any security configuration. The xdsCredentials implementation
-	// handles this by delegating to its fallback credentials.
-	if config == nil {
-		// We need to explicitly set the fields to nil here since this might be
-		// a case of switching from a good security configuration to an empty
-		// one where fallback credentials are to be used.
-		lw.xdsHI.SetRootCertProvider(nil)
-		lw.xdsHI.SetIdentityCertProvider(nil)
-		lw.xdsHI.SetRequireClientCert(false)
-		return nil
-	}
-
-	cpc := s.xdsC.BootstrapConfig().CertProviderConfigs
-	// Identity provider is mandatory on the server side.
-	identityProvider, err := buildProvider(cpc, config.IdentityInstanceName, config.IdentityCertName, true, false)
-	if err != nil {
-		return err
-	}
-
-	// A root provider is required only when doing mTLS.
-	var rootProvider certprovider.Provider
-	if config.RootInstanceName != "" {
-		rootProvider, err = buildProvider(cpc, config.RootInstanceName, config.RootCertName, false, true)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Close the old providers and cache the new ones.
-	lw.providerMu.Lock()
-	if lw.cachedIdentity != nil {
-		lw.cachedIdentity.Close()
-	}
-	if lw.cachedRoot != nil {
-		lw.cachedRoot.Close()
-	}
-	lw.cachedRoot = rootProvider
-	lw.cachedIdentity = identityProvider
-
-	// We set all fields here, even if some of them are nil, since they
-	// could have been non-nil earlier.
-	lw.xdsHI.SetRootCertProvider(rootProvider)
-	lw.xdsHI.SetIdentityCertProvider(identityProvider)
-	lw.xdsHI.SetRequireClientCert(config.RequireClientCert)
-	lw.providerMu.Unlock()
-
-	return nil
-}
-
-func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanceName, certName string, wantIdentity, wantRoot bool) (certprovider.Provider, error) {
-	cfg, ok := configs[instanceName]
-	if !ok {
-		return nil, fmt.Errorf("certificate provider instance %q not found in bootstrap file", instanceName)
-	}
-	provider, err := cfg.Build(certprovider.BuildOptions{
-		CertName:     certName,
-		WantIdentity: wantIdentity,
-		WantRoot:     wantRoot,
-	})
-	if err != nil {
-		// This error is not expected since the bootstrap process parses the
-		// config and makes sure that it is acceptable to the plugin. Still, it
-		// is possible that the plugin parses the config successfully, but its
-		// Build() method errors out.
-		return nil, fmt.Errorf("failed to get security plugin instance (%+v): %v", cfg, err)
-	}
-	return provider, nil
+	return s.gs.Serve(lw)
 }
 
 // Stop stops the underlying gRPC server. It immediately closes all open
@@ -448,106 +266,4 @@ func xdsUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServ
 // This is a no-op at this point.
 func xdsStreamInterceptor(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	return handler(srv, ss)
-}
-
-// listenerWrapper wraps the net.Listener associated with the listening address
-// passed to Serve(). It also contains all other state associated with this
-// particular invocation of Serve().
-type listenerWrapper struct {
-	net.Listener
-	cancelWatch func()
-
-	// A small race exists in the xdsClient code where an xDS response is
-	// received while the user is calling cancel(). In this small window the
-	// registered callback can be called after the watcher is canceled. We avoid
-	// processing updates received in callbacks once the listener is closed, to
-	// make sure that we do not process updates received during this race
-	// window.
-	closed *grpcsync.Event
-
-	// The certificate providers are cached here to that they can be closed when
-	// a new provider is to be created.
-	providerMu     sync.Mutex
-	cachedRoot     certprovider.Provider
-	cachedIdentity certprovider.Provider
-
-	// Wraps all information required by the xds handshaker.
-	xdsHI *xdsinternal.HandshakeInfo
-}
-
-// Accept blocks on an Accept() on the underlying listener, and wraps the
-// returned net.Conn with the configured certificate providers.
-func (l *listenerWrapper) Accept() (net.Conn, error) {
-	c, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-	return &conn{Conn: c, xdsHI: l.xdsHI}, nil
-}
-
-// Close closes the underlying listener. It also cancels the xDS watch
-// registered in Serve() and closes any certificate provider instances created
-// based on security configuration received in the LDS response.
-func (l *listenerWrapper) Close() error {
-	l.closed.Fire()
-	l.Listener.Close()
-	if l.cancelWatch != nil {
-		l.cancelWatch()
-	}
-
-	l.providerMu.Lock()
-	if l.cachedIdentity != nil {
-		l.cachedIdentity.Close()
-		l.cachedIdentity = nil
-	}
-	if l.cachedRoot != nil {
-		l.cachedRoot.Close()
-		l.cachedRoot = nil
-	}
-	l.providerMu.Unlock()
-
-	return nil
-}
-
-// conn is a thin wrapper around a net.Conn returned by Accept().
-type conn struct {
-	net.Conn
-
-	// This is the same HandshakeInfo as stored in the listenerWrapper that
-	// created this conn. The former updates the HandshakeInfo whenever it
-	// receives new security configuration.
-	xdsHI *xdsinternal.HandshakeInfo
-
-	// The connection deadline as configured by the grpc.Server on the rawConn
-	// that is returned by a call to Accept(). This is set to the connection
-	// timeout value configured by the user (or to a default value) before
-	// initiating the transport credential handshake, and set to zero after
-	// completing the HTTP2 handshake.
-	deadlineMu sync.Mutex
-	deadline   time.Time
-}
-
-// SetDeadline makes a copy of the passed in deadline and forwards the call to
-// the underlying rawConn.
-func (c *conn) SetDeadline(t time.Time) error {
-	c.deadlineMu.Lock()
-	c.deadline = t
-	c.deadlineMu.Unlock()
-	return c.Conn.SetDeadline(t)
-}
-
-// GetDeadline returns the configured deadline. This will be invoked by the
-// ServerHandshake() method of the XdsCredentials, which needs a deadline to
-// pass to the certificate provider.
-func (c *conn) GetDeadline() time.Time {
-	c.deadlineMu.Lock()
-	t := c.deadline
-	c.deadlineMu.Unlock()
-	return t
-}
-
-// XDSHandshakeInfo returns a pointer to the HandshakeInfo stored in conn. This
-// will be invoked by the ServerHandshake() method of the XdsCredentials.
-func (c *conn) XDSHandshakeInfo() *xdsinternal.HandshakeInfo {
-	return c.xdsHI
 }

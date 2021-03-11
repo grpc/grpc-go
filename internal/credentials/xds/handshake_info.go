@@ -217,14 +217,6 @@ func (hi *HandshakeInfo) MatchingSANExists(cert *x509.Certificate) bool {
 
 // NewHandshakeInfo returns a new instance of HandshakeInfo with the given root
 // and identity certificate providers.
-func NewHandshakeInfo(root, identity certprovider.Provider, sans ...string) *HandshakeInfo {
-	acceptedSANs := make(map[string]bool, len(sans))
-	for _, san := range sans {
-		acceptedSANs[san] = true
-	}
-	return &HandshakeInfo{
-		rootProvider:     root,
-		identityProvider: identity,
-		acceptedSANs:     acceptedSANs,
-	}
+func NewHandshakeInfo(root, identity certprovider.Provider) *HandshakeInfo {
+	return &HandshakeInfo{rootProvider: root, identityProvider: identity}
 }
