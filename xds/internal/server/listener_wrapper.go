@@ -24,18 +24,32 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/grpclog"
+	internalbackoff "google.golang.org/grpc/internal/backoff"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
-var logger = grpclog.Component("xds")
+var (
+	logger = grpclog.Component("xds")
+
+	// Backoff strategy for temporary errors received from Accept(). If this
+	// needs to be configurable, we can inject it through ListenerWrapperParams.
+	bs = internalbackoff.Exponential{Config: backoff.Config{
+		BaseDelay:  5 * time.Millisecond,
+		Multiplier: 2.0,
+		MaxDelay:   1 * time.Second,
+	}}
+	backoffFunc = bs.Backoff
+)
 
 func prefixLogger(p *listenerWrapper) *internalgrpclog.PrefixLogger {
-	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[xds-server-listener %p]", p))
+	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[xds-server-listener %p] ", p))
 }
 
 // XDSClientInterface wraps the methods on the xdsClient which are required by
@@ -61,17 +75,25 @@ type ListenerWrapperParams struct {
 // NewListenerWrapper creates a new listenerWrapper with params. It returns a
 // net.Listener and a channel which is written to, indicating that the former is
 // ready to be passed to grpc.Serve().
+//
+// Only TCP listeners are supported.
 func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan struct{}) {
 	lw := &listenerWrapper{
-		Listener:      params.Listener,
-		name:          params.ListenerResourceName,
-		xdsCredsInUse: params.XDSCredsInUse,
-		xdsC:          params.XDSClient,
+		Listener:          params.Listener,
+		name:              params.ListenerResourceName,
+		xdsCredsInUse:     params.XDSCredsInUse,
+		xdsC:              params.XDSClient,
+		isUnspecifiedAddr: params.Listener.Addr().(*net.TCPAddr).IP.IsUnspecified(),
 
 		closed:     grpcsync.NewEvent(),
 		goodUpdate: grpcsync.NewEvent(),
 	}
 	lw.logger = prefixLogger(lw)
+
+	// Serve() verifies that Addr() returns a valid TCPAddr. So, it is safe to
+	// ignore the error from SplitHostPort().
+	lisAddr := lw.Listener.Addr().String()
+	lw.addr, lw.port, _ = net.SplitHostPort(lisAddr)
 
 	cancelWatch := lw.xdsC.WatchListener(lw.name, lw.handleListenerUpdate)
 	lw.logger.Infof("Watch started on resource name %v", lw.name)
@@ -96,6 +118,13 @@ type listenerWrapper struct {
 	xdsC          XDSClientInterface
 	cancelWatch   func()
 
+	// Set to true if the listener is bound to the IP_ANY address (which is
+	// "0.0.0.0" for IPv4 and "::" for IPv6).
+	isUnspecifiedAddr bool
+	// Listening address and port. Used to validate the socket address in the
+	// Listener resource received from the control plane.
+	addr, port string
+
 	// This is used to notify that a good update has been received and that
 	// Serve() can be invoked on the underlying gRPC server. Using an event
 	// instead of a vanilla channel simplifies the update handler as it need not
@@ -113,20 +142,72 @@ type listenerWrapper struct {
 	// using an rw lock here is that this field will be read by all connections
 	// during their server-side handshake (in the hot path), but writes to this
 	// happen rarely (when we get a Listener resource update).
-	mu                 sync.RWMutex
-	filterChains       []*xdsclient.FilterChain
-	defaultFilterChain *xdsclient.FilterChain
+	mu           sync.RWMutex
+	filterChains *xdsclient.FilterChainManager
 }
 
 // Accept blocks on an Accept() on the underlying listener, and wraps the
 // returned net.connWrapper with the configured certificate providers.
 func (l *listenerWrapper) Accept() (net.Conn, error) {
-	c, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
+	var retries int
+	for {
+		conn, err := l.Listener.Accept()
+		if err != nil {
+			// Temporary() method is implemented by certain error types returned
+			// from the net package, and it is useful for us to not shutdown the
+			// server in these conditions. The listen queue being full is one
+			// such case.
+			if ne, ok := err.(interface{ Temporary() bool }); ok && ne.Temporary() {
+				retries++
+				timer := time.NewTimer(backoffFunc(retries))
+				select {
+				case <-timer.C:
+				case <-l.closed.Done():
+					timer.Stop()
+					// Continuing here will cause us to call Accept() again
+					// which will return a non-temporary error.
+					continue
+				}
+				continue
+			}
+			// Non-temporary errors will be sent upstairs.
+			return nil, err
+		}
+		// Reset retries after a successful Accept().
+		retries = 0
+
+		// TODO: Close connections if in "non-serving" state
+
+		// Since the net.Conn represents an incoming connection, the source and
+		// destination address can be retrieved from the local address and remote
+		// address of the net.Conn respectively. And since we only accept TCP
+		// listeners in Serve(), we can safely type assert here.
+		destAddr := conn.LocalAddr().(*net.TCPAddr).IP
+		srcAddr := conn.RemoteAddr().(*net.TCPAddr)
+		fc, err := l.filterChains.Lookup(xdsclient.FilterChainLookupParams{
+			IsUnspecifiedListener: l.isUnspecifiedAddr,
+			DestAddr:              destAddr,
+			SourceAddr:            srcAddr.IP,
+			SourcePort:            srcAddr.Port,
+		})
+		if err != nil {
+			// When a matching filter chain is not found, we close the
+			// connection right away, but do not return an error back to
+			// `grpc.Serve()` from where this Accept() was invoked. Returning an
+			// error to `grpc.Serve()` causes the server to shutdown. If we want
+			// to avoid the server from shutting down, we would need to return
+			// an error type which implements the `Temporary() bool` method,
+			// which is invoked by `grpc.Serve()` to see if the returned error
+			// represents a temporary condition. In the case of a temporary
+			// error, `grpc.Serve()` method sleeps for a small duration and
+			// therefore ends up blocking all connection attempts during that
+			// time frame, which is also not ideal for an error like this.
+			l.logger.Warningf("connection from %s to %s failed to find any matching filter chain", conn.RemoteAddr().String(), conn.LocalAddr().String())
+			conn.Close()
+			continue
+		}
+		return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
 	}
-	// TODO: Close connections if in "non-serving" state.
-	return &connWrapper{Conn: c, parent: l}, nil
 }
 
 // Close closes the underlying listener. It also cancels the xDS watch
@@ -168,32 +249,18 @@ func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, 
 	// - this is a very context-dependent check and only the server has the
 	//   appropriate context to perform this check.
 	//
-	// What this means is that the xdsClient has ACKed a resource which is going
-	// to push the server into a "not serving" state. This is not ideal, but
-	// this is what we have decided to do. See gRPC A36 for more details.
-	// TODO(easwars): Switch to "not serving" if the host:port does not match.
-	lisAddr := l.Listener.Addr().String()
-	addr, port, err := net.SplitHostPort(lisAddr)
-	if err != nil {
-		// This is never expected to return a non-nil error since we have made
-		// sure that the listener is a TCP listener at the beginning of Serve().
-		// This is simply paranoia.
-		l.logger.Warningf("Local listener address %q failed to parse as IP:port: %v", lisAddr, err)
-		return
-	}
+	// What this means is that the xdsClient has ACKed a resource which can push
+	// the server into a "not serving" state. This is not ideal, but this is
+	// what we have decided to do. See gRPC A36 for more details.
 	ilc := update.InboundListenerCfg
-	if ilc == nil {
-		l.logger.Warningf("Missing host:port in Listener updates")
-		return
-	}
-	if ilc.Address != addr || ilc.Port != port {
-		l.logger.Warningf("Received host:port (%s:%d) in Listener update does not match local listening address: %s", ilc.Address, ilc.Port, lisAddr)
+	if ilc.Address != l.addr || ilc.Port != l.port {
+		// TODO: Switch to "not serving" if the host:port does not match.
+		l.logger.Warningf("Received host:port (%s:%d) in Listener update does not match local listening address: (%s:%s", ilc.Address, ilc.Port, l.addr, l.port)
 		return
 	}
 
 	l.mu.Lock()
 	l.filterChains = ilc.FilterChains
-	l.defaultFilterChain = ilc.DefaultFilterChain
 	l.mu.Unlock()
 	l.goodUpdate.Fire()
 	// TODO: Move to serving state on receipt of a good response.
