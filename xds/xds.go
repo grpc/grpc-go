@@ -28,6 +28,11 @@
 package xds
 
 import (
+	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	"google.golang.org/grpc"
+	internaladmin "google.golang.org/grpc/internal/admin"
+	"google.golang.org/grpc/xds/csds"
+
 	_ "google.golang.org/grpc/credentials/tls/certprovider/pemfile" // Register the file watcher certificate provider plugin.
 	_ "google.golang.org/grpc/xds/internal/balancer"                // Register the balancers.
 	_ "google.golang.org/grpc/xds/internal/client/v2"               // Register the v2 xDS API client.
@@ -35,3 +40,20 @@ import (
 	_ "google.golang.org/grpc/xds/internal/httpfilter/fault"        // Register the fault injection filter.
 	_ "google.golang.org/grpc/xds/internal/resolver"                // Register the xds_resolver.
 )
+
+func init() {
+	internaladmin.AddService("csds", func(registrar grpc.ServiceRegistrar) {
+		s, ok := registrar.(*grpc.Server)
+		if !ok {
+			// This check is necessary because CSDS proto's register function
+			// only accept *grpc.Server (it's using an old codegen):
+			// https://github.com/envoyproxy/go-control-plane/blob/d456d987392e1325f0e06e170d2488b4f57e9623/envoy/service/status/v3/csds.pb.go#L824
+			//
+			// TODO: update CSDS's generated proto, and remove this check.
+			// https://github.com/envoyproxy/go-control-plane/issues/403
+			logger.Warningf("Server to register service on is not a *grpc.Server, CSDS will not be registered")
+			return
+		}
+		v3statuspb.RegisterClientStatusDiscoveryServiceServer(s, csds.NewClientStatusDiscoveryServer())
+	})
+}
