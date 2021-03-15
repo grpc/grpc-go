@@ -23,6 +23,7 @@ package resolver
 import (
 	"context"
 	"net"
+	"time"
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/credentials"
@@ -155,6 +156,9 @@ type BuildOptions struct {
 	// field. In most cases though, it is not appropriate, and this field may
 	// be ignored.
 	Dialer func(context.Context, string) (net.Conn, error)
+	// Used to backoff calls to ResolveNow(). The user will have no need to configure this, but we will need to be able
+	// to configure this in tests.
+	ResolveNowBackoff func(int) time.Duration
 }
 
 // State contains the current Resolver state relevant to the ClientConn.
@@ -181,7 +185,7 @@ type State struct {
 // gRPC to add new methods to this interface.
 type ClientConn interface {
 	// UpdateState updates the state of the ClientConn appropriately.
-	UpdateState(State)
+	UpdateState(State) error
 	// ReportError notifies the ClientConn that the Resolver encountered an
 	// error.  The ClientConn will notify the load balancer and begin calling
 	// ResolveNow on the Resolver with exponential backoff.

@@ -88,8 +88,9 @@ type testClientConn struct {
 	errorCh *testutils.Channel
 }
 
-func (t *testClientConn) UpdateState(s resolver.State) {
+func (t *testClientConn) UpdateState(s resolver.State) error {
 	t.stateCh.Send(s)
+	return nil
 }
 
 func (t *testClientConn) ReportError(err error) {

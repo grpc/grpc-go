@@ -59,11 +59,12 @@ type testClientConn struct {
 	errChan             chan error
 }
 
-func (t *testClientConn) UpdateState(s resolver.State) {
+func (t *testClientConn) UpdateState(s resolver.State) error {
 	t.m1.Lock()
 	defer t.m1.Unlock()
 	t.state = s
 	t.updateStateCalls++
+	return nil
 }
 
 func (t *testClientConn) getState() (resolver.State, int) {

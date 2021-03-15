@@ -32,6 +32,7 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/balancer"
 	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/envconfig"
@@ -144,6 +145,7 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 	d.wg.Add(1)
 	go d.watcher()
 	d.ResolveNow(resolver.ResolveNowOptions{})
+	d.resolveNowBackoff = opts.ResolveNowBackoff
 	return d, nil
 }
 
@@ -183,6 +185,59 @@ type dnsResolver struct {
 	// has data race with replaceNetFunc (WRITE the lookup function pointers).
 	wg                   sync.WaitGroup
 	disableServiceConfig bool
+
+	pollingMu sync.Mutex
+	polling chan struct{}
+
+	resolveNowBackoff func(int) time.Duration
+	// Used to determine poll loop.
+	errorFromClientConn error
+}
+
+// poll begins or ends asynchronous polling of the resolver based on whether
+// err is ErrBadResolverState.
+func (d *dnsResolver) poll() {
+	d.pollingMu.Lock()
+	defer d.pollingMu.Unlock()
+	// The only time to stop polling is when we don't receive an ErrBadResolverState from client.
+	if d.errorFromClientConn != balancer.ErrBadResolverState {
+		// Stop polling
+		if d.polling != nil {
+			close(d.polling)
+			d.polling = nil
+		}
+		return
+	}
+	// The goroutine that is running poll() is already running.
+	if d.polling != nil {
+		return
+	}
+	p := make(chan struct{})
+	d.polling = p
+	// This exponential backoff go routine will be running at most once
+	go func() {
+		// Exponentially backoff until it hopefully succeeds.
+		for i := 0; ; i++ {
+			d.ResolveNow(resolver.ResolveNowOptions{})
+			t := time.NewTimer(d.resolveNowBackoff(i))
+			select {
+			case <-p:
+				// Polling was successful
+				t.Stop()
+				return
+			case <-d.ctx.Done():
+				return
+			case <-t.C:
+				select {
+				case <-p:
+					// Polling was successful
+					return
+				default:
+				}
+				// Timer expired; re-resolve
+			}
+		}
+	}()
 }
 
 // ResolveNow invoke an immediate resolution of the target that this dnsResolver watches.
@@ -210,9 +265,19 @@ func (d *dnsResolver) watcher() {
 
 		state, err := d.lookup()
 		if err != nil {
+			// Report error to the underlying grpc.ClientConn.
 			d.cc.ReportError(err)
+			// Since there was an error from here, start polling.
+			d.errorFromClientConn = balancer.ErrBadResolverState
+			d.poll()
 		} else {
-			d.cc.UpdateState(*state)
+			d.errorFromClientConn = d.cc.UpdateState(*state)
+			d.poll()
+			/*if errorFromClientConn := d.cc.UpdateState(*state); errorFromClientConn == balancer.ErrBadResolverState {
+				d.errorFromClientConn = errorFromClientConn
+				// Keep polling until you succeed
+				d.poll()
+			}*/
 		}
 
 		// Sleep to prevent excessive re-resolutions. Incoming resolution requests
