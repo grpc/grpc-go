@@ -36,6 +36,7 @@ import (
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
 )
@@ -43,7 +44,7 @@ import (
 const (
 	defaultTestTimeout      = 1 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
-	defaultTestCertSAN      = "*.test.example.com"
+	defaultTestCertSAN      = "abc.test.example.com"
 	authority               = "authority"
 )
 
@@ -214,12 +215,14 @@ func makeRootProvider(t *testing.T, caPath string) *fakeProvider {
 
 // newTestContextWithHandshakeInfo returns a copy of parent with HandshakeInfo
 // context value added to it.
-func newTestContextWithHandshakeInfo(parent context.Context, root, identity certprovider.Provider, sans ...string) context.Context {
+func newTestContextWithHandshakeInfo(parent context.Context, root, identity certprovider.Provider, sanExactMatch string) context.Context {
 	// Creating the HandshakeInfo and adding it to the attributes is very
 	// similar to what the CDS balancer would do when it intercepts calls to
 	// NewSubConn().
 	info := xdsinternal.NewHandshakeInfo(root, identity)
-	info.SetAcceptedSANs(sans)
+	if sanExactMatch != "" {
+		info.SetSANMatchers([]xds.StringMatcher{xds.StringMatcherForTesting(newStringP(sanExactMatch), nil, nil, nil, nil, false)})
+	}
 	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, info)
 
 	// Moving the attributes from the resolver.Address to the context passed to
@@ -293,7 +296,7 @@ func (s) TestClientCredsInvalidHandshakeInfo(t *testing.T) {
 
 	pCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	ctx := newTestContextWithHandshakeInfo(pCtx, nil, &fakeProvider{})
+	ctx := newTestContextWithHandshakeInfo(pCtx, nil, &fakeProvider{}, "")
 	if _, _, err := creds.ClientHandshake(ctx, authority, nil); err == nil {
 		t.Fatal("ClientHandshake succeeded without root certificate provider in HandshakeInfo")
 	}
@@ -330,7 +333,7 @@ func (s) TestClientCredsProviderFailure(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			ctx = newTestContextWithHandshakeInfo(ctx, test.rootProvider, test.identityProvider)
+			ctx = newTestContextWithHandshakeInfo(ctx, test.rootProvider, test.identityProvider, "")
 			if _, _, err := creds.ClientHandshake(ctx, authority, nil); err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("ClientHandshake() returned error: %q, wantErr: %q", err, test.wantErr)
 			}
@@ -372,7 +375,7 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 			desc:          "mTLS with no acceptedSANs specified",
 			handshakeFunc: testServerMutualTLSHandshake,
 			handshakeInfoCtx: func(ctx context.Context) context.Context {
-				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"))
+				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"), "")
 			},
 		},
 	}
@@ -532,7 +535,7 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	// use the correct trust roots.
 	root1 := makeRootProvider(t, "x509/client_ca_cert.pem")
 	handshakeInfo := xdsinternal.NewHandshakeInfo(root1, nil)
-	handshakeInfo.SetAcceptedSANs([]string{defaultTestCertSAN})
+	handshakeInfo.SetSANMatchers([]xds.StringMatcher{xds.StringMatcherForTesting(newStringP(defaultTestCertSAN), nil, nil, nil, nil, false)})
 
 	// We need to repeat most of what newTestContextWithHandshakeInfo() does
 	// here because we need access to the underlying HandshakeInfo so that we
@@ -583,4 +586,8 @@ func (s) TestClientClone(t *testing.T) {
 	if clone := orig.Clone(); clone == orig {
 		t.Fatal("return value from Clone() doesn't point to new credentials instance")
 	}
+}
+
+func newStringP(s string) *string {
+	return &s
 }

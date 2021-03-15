@@ -40,6 +40,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
@@ -697,21 +698,24 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext) (*Secu
 	// those possible values:
 	//  - combined validation context:
 	//    - contains a default validation context which holds the list of
-	//      accepted SANs.
+	//      matchers for accepted SANs.
 	//    - contains certificate provider instance configuration
 	//  - certificate provider instance configuration
 	//    - in this case, we do not get a list of accepted SANs.
 	switch t := common.GetValidationContextType().(type) {
 	case *v3tlspb.CommonTlsContext_CombinedValidationContext:
 		combined := common.GetCombinedValidationContext()
+		var matchers []xds.StringMatcher
 		if def := combined.GetDefaultValidationContext(); def != nil {
-			for _, matcher := range def.GetMatchSubjectAltNames() {
-				// We only support exact matches for now.
-				if exact := matcher.GetExact(); exact != "" {
-					sc.AcceptedSANs = append(sc.AcceptedSANs, exact)
+			for _, m := range def.GetMatchSubjectAltNames() {
+				matcher, err := xds.StringMatcherFromProto(m)
+				if err != nil {
+					return nil, err
 				}
+				matchers = append(matchers, matcher)
 			}
 		}
+		sc.SubjectAltNameMatchers = matchers
 		if pi := combined.GetValidationContextCertificateProviderInstance(); pi != nil {
 			sc.RootInstanceName = pi.GetInstanceName()
 			sc.RootCertName = pi.GetCertificateName()
