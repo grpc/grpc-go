@@ -36,13 +36,10 @@ func init() {
 
 // Register registers the set of admin services to the given server.
 //
-// Note that this only supports `*grpc.Server` instead of
-// `grpc.ServiceRegistrar`, because CSDS generated code isn't updated to support
-// `grpc.ServiceRegistrar`.
-func Register(s *grpc.Server) {
-	// TODO: update this to `grpc.ServiceRegistrar` when CSDS generated code is
-	// updated.
-	//
-	// https://github.com/envoyproxy/go-control-plane/issues/403
+// Note that if the server is not a *grpc.Server or a *xds.GRPCServer, CSDS will
+// not be registered due to CSDS generated code is too old and doesn't support
+// interface `grpc.ServiceRegistrar`.
+// https://github.com/envoyproxy/go-control-plane/issues/403
+func Register(s grpc.ServiceRegistrar) {
 	internaladmin.Register(s)
 }

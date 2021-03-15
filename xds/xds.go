@@ -43,17 +43,19 @@ import (
 
 func init() {
 	internaladmin.AddService("csds", func(registrar grpc.ServiceRegistrar) {
-		s, ok := registrar.(*grpc.Server)
-		if !ok {
-			// This check is necessary because CSDS proto's register function
-			// only accept *grpc.Server (it's using an old codegen):
-			// https://github.com/envoyproxy/go-control-plane/blob/d456d987392e1325f0e06e170d2488b4f57e9623/envoy/service/status/v3/csds.pb.go#L824
-			//
-			// TODO: update CSDS's generated proto, and remove this check.
-			// https://github.com/envoyproxy/go-control-plane/issues/403
-			logger.Warningf("Server to register service on is not a *grpc.Server, CSDS will not be registered")
+		switch ss := registrar.(type) {
+		case *grpc.Server:
+			v3statuspb.RegisterClientStatusDiscoveryServiceServer(ss, csds.NewClientStatusDiscoveryServer())
+		case *GRPCServer:
+			sss, ok := ss.gs.(*grpc.Server)
+			if !ok {
+				logger.Warningf("grpc server within xds.GRPCServer is not *grpc.Server, CSDS will not be registered")
+				return
+			}
+			v3statuspb.RegisterClientStatusDiscoveryServiceServer(sss, csds.NewClientStatusDiscoveryServer())
+		default:
+			logger.Warningf("Server to register service on is neither a *grpc.Server or a *xds.GRPCServer, CSDS will not be registered")
 			return
 		}
-		v3statuspb.RegisterClientStatusDiscoveryServiceServer(s, csds.NewClientStatusDiscoveryServer())
 	})
 }
