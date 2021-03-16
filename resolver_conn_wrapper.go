@@ -37,9 +37,6 @@ type ccResolverWrapper struct {
 	resolver   resolver.Resolver
 	done       *grpcsync.Event
 	curState   resolver.State
-
-	//pollingMu sync.Mutex
-	//polling   chan struct{}
 }
 
 // newCCResolverWrapper uses the resolver.Builder to build a Resolver and
@@ -91,51 +88,6 @@ func (ccr *ccResolverWrapper) close() {
 	ccr.resolverMu.Unlock()
 }
 
-// poll begins or ends asynchronous polling of the resolver based on whether
-// err is ErrBadResolverState.
-/*
-func (ccr *ccResolverWrapper) poll(err error) {
-	ccr.pollingMu.Lock()
-	defer ccr.pollingMu.Unlock()
-	if err != balancer.ErrBadResolverState {
-		// stop polling
-		if ccr.polling != nil {
-			close(ccr.polling)
-			ccr.polling = nil
-		}
-		return
-	}
-	if ccr.polling != nil {
-		// already polling
-		return
-	}
-	p := make(chan struct{})
-	ccr.polling = p
-	go func() {
-		for i := 0; ; i++ {
-			ccr.resolveNow(resolver.ResolveNowOptions{})
-			t := time.NewTimer(ccr.cc.dopts.resolveNowBackoff(i))
-			select {
-			case <-p:
-				t.Stop()
-				return
-			case <-ccr.done.Done():
-				// Resolver has been closed.
-				t.Stop()
-				return
-			case <-t.C:
-				select {
-				case <-p:
-					return
-				default:
-				}
-				// Timer expired; re-resolve.
-			}
-		}
-	}()
-}
-*/
-// Same method except with API change of returning error
 func (ccr *ccResolverWrapper) UpdateState(s resolver.State) error {
 	if ccr.done.HasFired() {
 		return nil
