@@ -391,6 +391,7 @@ func (b *cdsBalancer) run() {
 				b.edsLB.Close()
 				b.edsLB = nil
 			}
+			b.xdsClient.Close()
 			// This is the *ONLY* point of return from this function.
 			b.logger.Infof("Shutdown")
 			return
@@ -493,7 +494,6 @@ func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 // Close closes the cdsBalancer and the underlying edsBalancer.
 func (b *cdsBalancer) Close() {
 	b.closed.Fire()
-	b.xdsClient.Close()
 }
 
 // ccWrapper wraps the balancer.ClientConn passed to the CDS balancer at
