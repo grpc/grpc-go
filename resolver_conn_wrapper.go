@@ -20,13 +20,14 @@ package grpc
 
 import (
 	"fmt"
+	"strings"
+	"sync"
+
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	"strings"
-	"sync"
 )
 
 // ccResolverWrapper is a wrapper on top of cc for resolvers.

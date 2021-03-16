@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/balancer"
 	"net"
 	"os"
 	"reflect"
@@ -57,6 +58,8 @@ type testClientConn struct {
 	state               resolver.State
 	updateStateCalls    int
 	errChan             chan error
+
+	causeDNSResolverToBackoff bool
 }
 
 func (t *testClientConn) UpdateState(s resolver.State) error {
@@ -65,6 +68,9 @@ func (t *testClientConn) UpdateState(s resolver.State) error {
 	t.state = s
 	t.updateStateCalls++
 	// This error determines whether DNS Resolver actually decides to exponentially backoff or not - has to return balancer.ErrBadResolverState to exponentially backoff.
+	if t.causeDNSResolverToBackoff {
+		return balancer.ErrBadResolverState
+	}
 	return nil
 }
 
@@ -664,6 +670,7 @@ func txtLookup(host string) ([]string, error) {
 
 func TestResolve(t *testing.T) {
 	testDNSResolver(t)
+	testDNSResolveNow(t)
 	testDNSResolverWithSRV(t)
 	testDNSResolveNow(t)
 	testIPResolver(t)
@@ -740,6 +747,70 @@ func testDNSResolver(t *testing.T) {
 		r.Close()
 	}
 }
+
+func testDNSResolverExponentialBackoff(t *testing.T) {
+	defer leakcheck.Check(t)
+	tests := []struct {
+		target   string
+		addrWant []resolver.Address
+		scWant   string
+	}{
+		{
+			"foo.bar.com",
+			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			generateSC("foo.bar.com"),
+		},
+		{
+			"foo.bar.com:1234",
+			[]resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
+			generateSC("foo.bar.com"),
+		},
+		{
+			"srv.ipv4.single.fake",
+			[]resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
+			generateSC("srv.ipv4.single.fake"),
+		},
+	}
+	for _, a := range tests {
+		b := NewBuilder()
+		cc := &testClientConn{target: a.target}
+		cc.causeDNSResolverToBackoff = true
+		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
+			// Should call update state 4 more times in 11 seconds, 1 + 2 + 3 + 4 seconds = 10 seconds
+			return time.Second * time.Duration(i)
+		}})
+		if err != nil {
+			t.Fatalf("%v\n", err)
+		}
+		var state resolver.State
+		var cnt int
+		for i := 0; i < 2000; i++ {
+			state, cnt = cc.getState()
+			if cnt > 0 {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		if cnt == 0 {
+			t.Fatalf("UpdateState not called after 2s; aborting")
+		}
+		if !reflect.DeepEqual(a.addrWant, state.Addresses) {
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v", a.target, state.Addresses, a.addrWant)
+		}
+		sc := scFromState(state)
+		if a.scWant != sc {
+			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scWant)
+		}
+		// Should cause resolve now to call 5 total time (1 initial + 4 more total)
+		time.Sleep(time.Second * time.Duration(11))
+		if cc.updateStateCalls != 5 {
+			t.Errorf("Exponential backoff is not working as expected - should be updating state 5 total times")
+		}
+		r.Close()
+	}
+}
+
+// Test the error condition path as well
 
 func testDNSResolverWithSRV(t *testing.T) {
 	EnableSRVLookups = true
