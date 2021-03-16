@@ -28,6 +28,8 @@
 package xds
 
 import (
+	"fmt"
+
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"google.golang.org/grpc"
 	internaladmin "google.golang.org/grpc/internal/admin"
@@ -42,20 +44,26 @@ import (
 )
 
 func init() {
-	internaladmin.AddService("csds", func(registrar grpc.ServiceRegistrar) {
+	internaladmin.AddService("csds", func(registrar grpc.ServiceRegistrar) (func(), error) {
+		var grpcServer *grpc.Server
 		switch ss := registrar.(type) {
 		case *grpc.Server:
-			v3statuspb.RegisterClientStatusDiscoveryServiceServer(ss, csds.NewClientStatusDiscoveryServer())
+			grpcServer = ss
 		case *GRPCServer:
 			sss, ok := ss.gs.(*grpc.Server)
 			if !ok {
-				logger.Warningf("grpc server within xds.GRPCServer is not *grpc.Server, CSDS will not be registered")
-				return
+				return nil, fmt.Errorf("grpc server within xds.GRPCServer is not *grpc.Server, CSDS will not be registered")
 			}
-			v3statuspb.RegisterClientStatusDiscoveryServiceServer(sss, csds.NewClientStatusDiscoveryServer())
+			grpcServer = sss
 		default:
-			logger.Warningf("Server to register service on is neither a *grpc.Server or a *xds.GRPCServer, CSDS will not be registered")
-			return
+			return nil, fmt.Errorf("server to register service on is neither a *grpc.Server or a *xds.GRPCServer, CSDS will not be registered")
 		}
+
+		csdss, err := csds.NewClientStatusDiscoveryServer()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create csds server: %v", err)
+		}
+		v3statuspb.RegisterClientStatusDiscoveryServiceServer(grpcServer, csdss)
+		return csdss.Close, nil
 	})
 }

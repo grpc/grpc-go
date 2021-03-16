@@ -55,7 +55,11 @@ func RunRegisterTests(rcs []RunAndCode) error {
 
 	server := grpc.NewServer()
 	defer server.Stop()
-	admin.Register(server)
+	cleanup, err := admin.Register(server)
+	if err != nil {
+		return fmt.Errorf("failed to register admin: %v", err)
+	}
+	defer cleanup()
 	go func() {
 		server.Serve(lis)
 	}()
