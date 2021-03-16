@@ -775,9 +775,11 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
 		cc.causeDNSResolverToBackoff = true
+		boIter := make(chan int)
 		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
-			// Should call update state 4 more times in 11 seconds, 1 + 2 + 3 + 4 seconds = 10 seconds elapsed for 4 retries
-			return time.Second * time.Duration(i)
+			boIter <- i
+			// Will make it update state 5 more times in the test.
+			return time.Millisecond * time.Duration(i * 10)
 		}})
 		if err != nil {
 			t.Fatalf("%v\n", err)
@@ -801,11 +803,24 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 		if a.scWant != sc {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scWant)
 		}
-		// Should cause resolve now to call 5 total time (1 initial + 5ish more total).
-		time.Sleep(time.Second * time.Duration(11))
-		if cc.updateStateCalls <= 4 {
-			t.Errorf("Exponential backoff is not working as expected - should be updating state at least 5 total times instead of %d", cc.updateStateCalls)
+		// Wait for exponential backoff algorithm to call 6 more times.
+		for i := 0; i < 5; i++ {
+			if v := <-boIter; v != i {
+				t.Errorf("Backoff call %v uses value %v", i, v)
+			}
 		}
+		if cc.updateStateCalls != 5 {
+			t.Errorf("Exponential backoff is not working as expected - should be updating state 5 total times instead of %d", cc.updateStateCalls)
+		}
+
+		// Update resolver.ClientConn to not return balancer.ErrBadResolverState anymore - this should stop it from backing off.
+		cc.causeDNSResolverToBackoff = false
+
+		time.Sleep(time.Second * time.Duration(10))
+		if cc.updateStateCalls != 6 {
+			t.Errorf("Exponential backoff is not working as expected - should stop backing off")
+		}
+
 		r.Close()
 	}
 }

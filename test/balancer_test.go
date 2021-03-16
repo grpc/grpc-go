@@ -718,8 +718,6 @@ func (s) TestEmptyAddrs(t *testing.T) {
 
 	// Remove all addresses.
 	pfr.UpdateState(resolver.State{})
-	// Wait for a ResolveNow call on the pick first client's resolver.
-	<-pfrnCalled.Done()
 
 	// Initialize roundrobin client
 	rrr := manual.NewBuilderWithScheme("whatever")
@@ -745,8 +743,6 @@ func (s) TestEmptyAddrs(t *testing.T) {
 
 	// Remove all addresses.
 	rrr.UpdateState(resolver.State{})
-	// Wait for a ResolveNow call on the round robin client's resolver.
-	<-rrrnCalled.Done()
 
 	// Confirm several new RPCs succeed on pick first.
 	for i := 0; i < 10; i++ {
