@@ -1486,7 +1486,7 @@ func TestReportError(t *testing.T) {
 	totalTimesCalledError := 1
 	timeout := make(chan string)
 	go func() {
-		time.Sleep(time.Second * 10)
+		time.Sleep(time.Second * 11)
 		timeout <- "timeout"
 	}()
 	for {
