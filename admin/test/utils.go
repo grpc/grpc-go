@@ -40,6 +40,8 @@ const (
 	defaultTestTimeout = 10 * time.Second
 )
 
+// RunAndCode contains the function to make an RPC and the expected status code
+// (can be OK).
 type RunAndCode struct {
 	// Name of this RPC.
 	Name string
@@ -49,6 +51,8 @@ type RunAndCode struct {
 	Code codes.Code
 }
 
+// RunRegisterTests makes a client, runs the RPCs, and compares the status
+// codes.
 func RunRegisterTests(rcs []RunAndCode) error {
 	nodeID := uuid.New().String()
 	bootstrapCleanup, err := xds.SetupBootstrapFile(xds.BootstrapOptions{
@@ -90,6 +94,7 @@ func RunRegisterTests(rcs []RunAndCode) error {
 	return nil
 }
 
+// RunChannelz makes a channelz RPC.
 func RunChannelz(conn *grpc.ClientConn) error {
 	c := channelzpb.NewChannelzClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -98,6 +103,7 @@ func RunChannelz(conn *grpc.ClientConn) error {
 	return err
 }
 
+// RunCSDS makes a CSDS RPC.
 func RunCSDS(conn *grpc.ClientConn) error {
 	c := v3statuspb.NewClientStatusDiscoveryServiceClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
