@@ -1476,7 +1476,7 @@ func TestReportError(t *testing.T) {
 	b := NewBuilder()
 	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
 		// To avoid nil panic in exponential backoff.
-		return time.Second * time.Duration(10)
+		return time.Second * time.Duration(1000)
 	}})
 	if err != nil {
 		t.Fatalf("%v\n", err)
