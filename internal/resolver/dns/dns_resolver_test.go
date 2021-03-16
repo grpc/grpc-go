@@ -59,7 +59,7 @@ type testClientConn struct {
 	updateStateCalls    int
 	errChan             chan error
 
-	backoffMutex		sync.Mutex
+	backoffMutex              sync.Mutex
 	causeDNSResolverToBackoff bool
 }
 
@@ -782,7 +782,7 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 		cc.causeDNSResolverToBackoff = true
 		cc.backoffMutex.Unlock()
 		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
-			return time.Millisecond * time.Duration(i * 200)
+			return time.Millisecond * time.Duration(i*200)
 		}})
 		if err != nil {
 			t.Fatalf("%v\n", err)
@@ -822,7 +822,7 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 		cc.backoffMutex.Unlock()
 		time.Sleep(time.Second * time.Duration(10))
 		cc.m1.Lock()
-		if cc.updateStateCalls != currentUpdateStateCalls + 1 {
+		if cc.updateStateCalls != currentUpdateStateCalls+1 {
 			cc.m1.Unlock()
 			t.Errorf("Exponential backoff is not working as expected - should stop backing off")
 		}
