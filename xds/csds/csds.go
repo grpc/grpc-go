@@ -83,15 +83,15 @@ func NewClientStatusDiscoveryServer() v3statuspb.ClientStatusDiscoveryServiceSer
 		// Besides, if client cannot be created, the users should have received
 		// the error, because their client/server cannot work, either.
 		logger.Errorf("failed to create xds client: %v", ret.xdsClientErr)
-	} else {
-		ret.xdsClient = xdsC
-		// We don't want to return a function for users to call (in defer). So
-		// we set a finalizer to close the xDS client. This will be called when
-		// user's gRPC server where this CSDS implementation is GC'ed.
-		runtime.SetFinalizer(ret, func(s *clientStatusServer) {
-			s.xdsClient.Close()
-		})
+		return ret
 	}
+	ret.xdsClient = xdsC
+	// We don't want to return a function for users to call (in defer). So
+	// we set a finalizer to close the xDS client. This will be called when
+	// user's gRPC server where this CSDS implementation is GC'ed.
+	runtime.SetFinalizer(ret, func(s *clientStatusServer) {
+		s.xdsClient.Close()
+	})
 	return ret
 }
 
@@ -316,6 +316,7 @@ func serviceStatusToProto(serviceStatus client.ServiceStatus) v3adminpb.ClientRe
 		return v3adminpb.ClientResourceStatus_ACKED
 	case client.ServiceStatusNACKed:
 		return v3adminpb.ClientResourceStatus_NACKED
+	default:
+		return v3adminpb.ClientResourceStatus_UNKNOWN
 	}
-	return v3adminpb.ClientResourceStatus_UNKNOWN
 }
