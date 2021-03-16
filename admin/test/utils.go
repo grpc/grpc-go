@@ -27,10 +27,12 @@ import (
 	"time"
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/admin"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/status"
 )
 
@@ -48,6 +50,17 @@ type RunAndCode struct {
 }
 
 func RunRegisterTests(rcs []RunAndCode) error {
+	nodeID := uuid.New().String()
+	bootstrapCleanup, err := xds.SetupBootstrapFile(xds.BootstrapOptions{
+		Version:   xds.TransportV3,
+		NodeID:    nodeID,
+		ServerURI: "no.need.for.a.server",
+	})
+	if err != nil {
+		return err
+	}
+	defer bootstrapCleanup()
+
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		return fmt.Errorf("cannot create listener: %v", err)

@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
@@ -39,7 +40,6 @@ import (
 	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/load"
-	"google.golang.org/grpc/xds/internal/env"
 )
 
 // TODO: make this a environment variable?

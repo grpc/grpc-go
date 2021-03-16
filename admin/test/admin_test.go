@@ -40,10 +40,7 @@ func TestRegisterWithCSDS(t *testing.T) {
 		{
 			Name: "CSDS",
 			Run:  test.RunCSDS,
-			// CSDS is registered, but the xds client cannot be built (because
-			// bootstrap config isn't set), so RPC will fail, but not with code
-			// Unimplemented.
-			Code: codes.FailedPrecondition,
+			Code: codes.OK,
 		},
 	}); err != nil {
 		t.Fatal(err)

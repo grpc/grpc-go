@@ -38,6 +38,7 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/uuid"
+	xds2 "google.golang.org/grpc/internal/xds"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -150,8 +151,8 @@ func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, fun
 	cpc := e2e.DefaultFileWatcherConfig(path.Join(tmpdir, certFile), path.Join(tmpdir, keyFile), path.Join(tmpdir, rootFile))
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := e2e.SetupBootstrapFile(e2e.BootstrapOptions{
-		Version:                            e2e.TransportV3,
+	bootstrapCleanup, err := xds2.SetupBootstrapFile(xds2.BootstrapOptions{
+		Version:                            xds2.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          fs.Address,
 		CertificateProviders:               cpc,

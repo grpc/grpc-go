@@ -41,8 +41,8 @@ import (
 
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
 )
