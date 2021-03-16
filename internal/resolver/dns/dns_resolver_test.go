@@ -64,7 +64,7 @@ func (t *testClientConn) UpdateState(s resolver.State) error {
 	defer t.m1.Unlock()
 	t.state = s
 	t.updateStateCalls++
-	return nil
+	return nil // This determines when it actually decides to hit poll() or not
 }
 
 func (t *testClientConn) getState() (resolver.State, int) {
@@ -663,6 +663,7 @@ func txtLookup(host string) ([]string, error) {
 
 func TestResolve(t *testing.T) {
 	testDNSResolver(t)
+	//testDNSResolverPoll(t)
 	testDNSResolverWithSRV(t)
 	testDNSResolveNow(t)
 	testIPResolver(t)
@@ -736,6 +737,19 @@ func testDNSResolver(t *testing.T) {
 		r.Close()
 	}
 }
+/*
+func testDNSResolverPoll(t *testing.T) {
+	target := "something"
+	defer leakcheck.Check(t)
+	b := NewBuilder()
+	cc := &testClientConn{target: target}
+	r, err := b.Build(resolver.Target{target}, cc, resolver.BuildOptions{})
+	if err != nil {
+		t.Fatalf("%v\n", err)
+	}
+	var state resolver.State
+	var cnt int
+}*/
 
 func testDNSResolverWithSRV(t *testing.T) {
 	EnableSRVLookups = true
@@ -1001,8 +1015,14 @@ func TestResolveFunc(t *testing.T) {
 
 	b := NewBuilder()
 	for _, v := range tests {
+		if logger.V(2) {
+			logger.Infof(v.addr)
+		}
 		cc := &testClientConn{target: v.addr, errChan: make(chan error, 1)}
-		r, err := b.Build(resolver.Target{Endpoint: v.addr}, cc, resolver.BuildOptions{})
+		r, err := b.Build(resolver.Target{Endpoint: v.addr}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
+			// To avoid nil panic in exponential backoff
+			return 10000
+		}})
 		if err == nil {
 			r.Close()
 		}
@@ -1227,7 +1247,10 @@ func TestCustomAuthority(t *testing.T) {
 
 		b := NewBuilder()
 		cc := &testClientConn{target: "foo.bar.com", errChan: make(chan error, 1)}
-		r, err := b.Build(resolver.Target{Endpoint: "foo.bar.com", Authority: a.authority}, cc, resolver.BuildOptions{})
+		r, err := b.Build(resolver.Target{Endpoint: "foo.bar.com", Authority: a.authority}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
+			// To avoid nil panic in exponential backoff
+			return 10000
+		}})
 
 		if err == nil {
 			r.Close()
