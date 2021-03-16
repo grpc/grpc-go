@@ -73,13 +73,13 @@ type ClientStatusDiscoveryServer struct {
 // NewClientStatusDiscoveryServer returns an implementation of the CSDS server that can be
 // registered on a gRPC server.
 func NewClientStatusDiscoveryServer() (*ClientStatusDiscoveryServer, error) {
-	ret := &ClientStatusDiscoveryServer{}
 	xdsC, err := newXDSClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create xds client: %v", err)
 	}
-	ret.xdsClient = xdsC
-	return ret, nil
+	return &ClientStatusDiscoveryServer{
+		xdsClient: xdsC,
+	}, nil
 }
 
 // StreamClientStatus implementations interface ClientStatusDiscoveryServiceServer.
@@ -116,10 +116,6 @@ func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statusp
 	// https://github.com/grpc/proposal/blob/master/A40-csds-support.md#detail-node-matching.
 	if len(req.NodeMatchers) != 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "node_matchers are not supported, request contains node_matchers: %v", req.NodeMatchers)
-	}
-	if s.xdsClient == nil {
-		// This should never happen.
-		return nil, status.Errorf(codes.FailedPrecondition, "xds client is nil")
 	}
 
 	ret := &v3statuspb.ClientStatusResponse{
