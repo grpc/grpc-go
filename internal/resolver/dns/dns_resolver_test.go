@@ -1469,26 +1469,38 @@ func TestRateLimitedResolve(t *testing.T) {
 		t.Errorf("Resolved addresses of target: %q = %+v, want %+v", target, state.Addresses, wantAddrs)
 	}
 }
-
+// DNS Resolver immediately starts polling on an error. Thus, test that constantly sending errors.
 func TestReportError(t *testing.T) {
 	const target = "notfoundaddress"
 	cc := &testClientConn{target: target, errChan: make(chan error)}
 	b := NewBuilder()
 	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
 		// To avoid nil panic in exponential backoff.
-		return time.Second * time.Duration(1000)
+		return time.Second * time.Duration(i)
 	}})
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
 	defer r.Close()
-	select {
-	case err := <-cc.errChan:
-		if !strings.Contains(err.Error(), "hostLookup error") {
-			t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
+	// Wait for 10 seconds to see how many times DNS Resolver updated Error.
+	totalTimesCalledError := 1
+	timeout := make(chan string)
+	go func() {
+		time.Sleep(time.Second * 10)
+		timeout <- "timeout"
+	}()
+	for {
+		select {
+		case err := <-cc.errChan:
+			if !strings.Contains(err.Error(), "hostLookup error") {
+				t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
+			}
+			totalTimesCalledError++
+		case <-timeout:
+			if totalTimesCalledError < 3 {
+				t.Errorf("Exponential backoff is not working as expected - should be reporting error at least 3 total times instead of %d", totalTimesCalledError)
+			}
+			return
 		}
-		return
-	case <-time.After(time.Second):
-		t.Fatalf("did not receive error after 1s")
 	}
 }
