@@ -1469,6 +1469,7 @@ func TestRateLimitedResolve(t *testing.T) {
 		t.Errorf("Resolved addresses of target: %q = %+v, want %+v", target, state.Addresses, wantAddrs)
 	}
 }
+
 // DNS Resolver immediately starts polling on an error. Thus, test that constantly sending errors.
 func TestReportError(t *testing.T) {
 	const target = "notfoundaddress"
