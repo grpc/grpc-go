@@ -671,7 +671,6 @@ func txtLookup(host string) ([]string, error) {
 func TestResolve(t *testing.T) {
 	testDNSResolver(t)
 	testDNSResolverExponentialBackoff(t)
-	testDNSResolverExponentialBackoffStartedWithAnError(t)
 	testDNSResolverWithSRV(t)
 	testDNSResolveNow(t)
 	testIPResolver(t)
@@ -802,41 +801,12 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 		if a.scWant != sc {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scWant)
 		}
-		// Should cause resolve now to call 5 total time (1 initial + 4 more total)
+		// Should cause resolve now to call 5 total time (1 initial + 5ish more total).
 		time.Sleep(time.Second * time.Duration(11))
-		if cc.updateStateCalls != 5 {
-			t.Errorf("Exponential backoff is not working as expected - should be updating state 5 total times")
+		if cc.updateStateCalls <= 4 {
+			t.Errorf("Exponential backoff is not working as expected - should be updating state at least 5 total times instead of %d", cc.updateStateCalls)
 		}
 		r.Close()
-	}
-}
-
-// Test the error condition path as well - this will constantly return errors from lookups
-func testDNSResolverExponentialBackoffStartedWithAnError(t *testing.T) {
-	b := NewBuilder()
-	cc := &testClientConn{target: "www.google.com"}
-	r, err := b.Build(resolver.Target{Endpoint: "www.google.com"}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
-		// Should try to re-resolve (will hit error branch of logic) 4 more times in 11 seconds, 1 + 2 + 3 + 4 seconds = 10 seconds elapsed for 4 retries
-		return time.Second * time.Duration(i)
-	}})
-	if err != nil {
-		t.Fatalf("%v\n", err)
-	}
-	totalErrors := 0
-	for i := 0; i <= 11; i += 1 {
-		select {
-		case <-cc.errChan:
-			totalErrors += 1
-		default:
-
-		}
-		time.Sleep(time.Second)
-	}
-	if cc.updateStateCalls != 0 {
-		t.Errorf("Should never call into UpdateState() for this test")
-	}
-	if totalErrors != 5 {
-		t.Errorf("Exponential backoff is not working as expected - should be reporting error 5 total times")
 	}
 }
 
