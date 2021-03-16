@@ -187,7 +187,7 @@ type dnsResolver struct {
 	disableServiceConfig bool
 
 	pollingMu sync.Mutex
-	polling chan struct{}
+	polling   chan struct{}
 
 	resolveNowBackoff func(int) time.Duration
 	// Used to determine poll loop.
