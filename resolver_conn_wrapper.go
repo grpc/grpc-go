@@ -56,7 +56,7 @@ func newCCResolverWrapper(cc *ClientConn, rb resolver.Builder) (*ccResolverWrapp
 		DialCreds:            credsClone,
 		CredsBundle:          cc.dopts.copts.CredsBundle,
 		Dialer:               cc.dopts.copts.Dialer,
-		ResolveNowBackoff:	  cc.dopts.resolveNowBackoff,
+		ResolveNowBackoff:    cc.dopts.resolveNowBackoff,
 	}
 
 	var err error
