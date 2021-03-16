@@ -199,23 +199,14 @@ type dnsResolver struct {
 func (d *dnsResolver) poll() {
 	d.pollingMu.Lock()
 	defer d.pollingMu.Unlock()
-	if logger.V(2) {
-		logger.Infof("Hit poll()")
-	}
 	// The only time to stop polling is when we don't receive an ErrBadResolverState from client.
 	if d.errorFromClientConn != balancer.ErrBadResolverState {
-		if logger.V(2) {
-			logger.Infof("Wasn't bad resolver state")
-		}
 		// Stop polling
 		if d.polling != nil {
 			close(d.polling)
 			d.polling = nil
 		}
 		return
-	}
-	if logger.V(2) {
-		logger.Infof("Was error bad resolver state")
 	}
 	// The goroutine that is running poll() is already running.
 	if d.polling != nil {
@@ -225,9 +216,6 @@ func (d *dnsResolver) poll() {
 	d.polling = p
 	// This exponential backoff go routine will be running at most once
 	go func() {
-		if logger.V(2) {
-			logger.Infof("Created exponential backoff algorithm goroutine")
-		}
 		// Exponentially backoff until it hopefully succeeds.
 		for i := 0; ; i++ {
 			d.ResolveNow(resolver.ResolveNowOptions{})
@@ -285,11 +273,6 @@ func (d *dnsResolver) watcher() {
 		} else {
 			d.errorFromClientConn = d.cc.UpdateState(*state)
 			d.poll()
-			/*if errorFromClientConn := d.cc.UpdateState(*state); errorFromClientConn == balancer.ErrBadResolverState {
-				d.errorFromClientConn = errorFromClientConn
-				// Keep polling until you succeed
-				d.poll()
-			}*/
 		}
 
 		// Sleep to prevent excessive re-resolutions. Incoming resolution requests
