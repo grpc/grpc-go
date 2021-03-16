@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/balancer"
 	"net"
 	"os"
 	"reflect"
@@ -31,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/balancer"
 	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/leakcheck"
