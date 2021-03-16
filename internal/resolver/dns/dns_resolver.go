@@ -218,7 +218,6 @@ func (d *dnsResolver) poll() {
 	go func() {
 		// Exponentially backoff until it hopefully succeeds.
 		for i := 0; ; i++ {
-			d.ResolveNow(resolver.ResolveNowOptions{})
 			t := time.NewTimer(d.resolveNowBackoff(i))
 			select {
 			case <-p:
@@ -236,6 +235,10 @@ func (d *dnsResolver) poll() {
 				}
 				// Timer expired; re-resolve
 			}
+			// After select for testing purposes. Calling an extra ResolveNow() would cause many tests to be flaky.
+			// This allows ResolveNow() call to be guarded by the resolveNowBackoff() function, which can be toggled
+			// in a test.
+			d.ResolveNow(resolver.ResolveNowOptions{})
 		}
 	}()
 }
