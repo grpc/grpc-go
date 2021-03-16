@@ -611,16 +611,6 @@ func withMinConnectDeadline(f func() time.Duration) DialOption {
 	})
 }
 
-// withResolveNowBackoff specifies the function that clientconn uses to backoff
-// between successive calls to resolver.ResolveNow().
-//
-// For testing purpose only.
-func withResolveNowBackoff(f func(int) time.Duration) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.resolveNowBackoff = f
-	})
-}
-
 // WithResolvers allows a list of resolver implementations to be registered
 // locally with the ClientConn without needing to be globally registered via
 // resolver.Register.  They will be matched against the scheme used for the
