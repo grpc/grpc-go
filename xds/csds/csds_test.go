@@ -21,7 +21,6 @@ package csds
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -276,7 +275,11 @@ func commonSetup(t *testing.T) (xdsClientInterfaceWithWatch, *e2e.ManagementServ
 
 	// Initialize an gRPC server and register CSDS on it.
 	server := grpc.NewServer()
-	v3statuspb.RegisterClientStatusDiscoveryServiceServer(server, NewClientStatusDiscoveryServer())
+	csdss, err := NewClientStatusDiscoveryServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	v3statuspb.RegisterClientStatusDiscoveryServiceServer(server, csdss)
 	// Create a local listener and pass it to Serve().
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -305,6 +308,7 @@ func commonSetup(t *testing.T) (xdsClientInterfaceWithWatch, *e2e.ManagementServ
 		cancel()
 		conn.Close()
 		server.Stop()
+		csdss.Close()
 		newXDSClient = oldNewXDSClient
 		xdsC.Close()
 		bootstrapCleanup()
@@ -675,36 +679,5 @@ func Test_nodeProtoToV3(t *testing.T) {
 				t.Errorf("nodeProtoToV3() got unexpected result, diff (-got, +want): %v", diff)
 			}
 		})
-	}
-}
-
-type testCloseClient struct {
-	xdsClientInterface
-	done chan struct{}
-}
-
-func (c *testCloseClient) Close() {
-	close(c.done)
-}
-
-func TestFinalizerCloseXDSClient(t *testing.T) {
-	c := &testCloseClient{done: make(chan struct{})}
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) {
-		return c, nil
-	}
-	defer func() { newXDSClient = oldNewXDSClient }()
-
-	// Create a dangling CSDS server, which will be GC'ed. We want to make sure
-	// it's finalizer is called to close the xDS client.
-	NewClientStatusDiscoveryServer()
-
-	// Manually trigger GC.
-	runtime.GC()
-
-	select {
-	case <-c.done:
-	case <-time.After(time.Second):
-		t.Fatalf("timeout waiting for xds client to be closed")
 	}
 }

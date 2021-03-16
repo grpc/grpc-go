@@ -25,8 +25,8 @@ package csds
 
 import (
 	"context"
+	"fmt"
 	"io"
-	"runtime"
 	"time"
 
 	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
@@ -63,39 +63,27 @@ var (
 	}
 )
 
-type clientStatusServer struct {
+// ClientStatusDiscoveryServer implementations interface ClientStatusDiscoveryServiceServer.
+type ClientStatusDiscoveryServer struct {
 	// xdsClient will always be the same in practise. But we keep a copy in each
 	// server instance for testing.
-	xdsClient    xdsClientInterface
-	xdsClientErr error
+	xdsClient xdsClientInterface
 }
 
 // NewClientStatusDiscoveryServer returns an implementation of the CSDS server that can be
 // registered on a gRPC server.
-func NewClientStatusDiscoveryServer() v3statuspb.ClientStatusDiscoveryServiceServer {
-	ret := &clientStatusServer{}
+func NewClientStatusDiscoveryServer() (*ClientStatusDiscoveryServer, error) {
+	ret := &ClientStatusDiscoveryServer{}
 	xdsC, err := newXDSClient()
 	if err != nil {
-		ret.xdsClientErr = err
-		// Log error instead of returning an error, so that
-		// `NewClientStatusDiscoveryServer` is easier to use.
-		//
-		// Besides, if client cannot be created, the users should have received
-		// the error, because their client/server cannot work, either.
-		logger.Errorf("failed to create xds client: %v", ret.xdsClientErr)
-		return ret
+		return nil, fmt.Errorf("failed to create xds client: %v", err)
 	}
 	ret.xdsClient = xdsC
-	// We don't want to return a function for users to call (in defer). So
-	// we set a finalizer to close the xDS client. This will be called when
-	// user's gRPC server where this CSDS implementation is GC'ed.
-	runtime.SetFinalizer(ret, func(s *clientStatusServer) {
-		s.xdsClient.Close()
-	})
-	return ret
+	return ret, nil
 }
 
-func (s *clientStatusServer) StreamClientStatus(stream v3statuspb.ClientStatusDiscoveryService_StreamClientStatusServer) error {
+// StreamClientStatus implementations interface ClientStatusDiscoveryServiceServer.
+func (s *ClientStatusDiscoveryServer) StreamClientStatus(stream v3statuspb.ClientStatusDiscoveryService_StreamClientStatusServer) error {
 	for {
 		req, err := stream.Recv()
 		if err == io.EOF {
@@ -114,7 +102,8 @@ func (s *clientStatusServer) StreamClientStatus(stream v3statuspb.ClientStatusDi
 	}
 }
 
-func (s *clientStatusServer) FetchClientStatus(_ context.Context, req *v3statuspb.ClientStatusRequest) (*v3statuspb.ClientStatusResponse, error) {
+// FetchClientStatus implementations interface ClientStatusDiscoveryServiceServer.
+func (s *ClientStatusDiscoveryServer) FetchClientStatus(_ context.Context, req *v3statuspb.ClientStatusRequest) (*v3statuspb.ClientStatusResponse, error) {
 	return s.buildClientStatusRespForReq(req)
 }
 
@@ -122,14 +111,15 @@ func (s *clientStatusServer) FetchClientStatus(_ context.Context, req *v3statusp
 // the response to be sent back to client.
 //
 // If it returns an error, the error is a status error.
-func (s *clientStatusServer) buildClientStatusRespForReq(req *v3statuspb.ClientStatusRequest) (*v3statuspb.ClientStatusResponse, error) {
+func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statuspb.ClientStatusRequest) (*v3statuspb.ClientStatusResponse, error) {
 	// Field NodeMatchers is unsupported, by design
 	// https://github.com/grpc/proposal/blob/master/A40-csds-support.md#detail-node-matching.
 	if len(req.NodeMatchers) != 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "node_matchers are not supported, request contains node_matchers: %v", req.NodeMatchers)
 	}
 	if s.xdsClient == nil {
-		return nil, status.Errorf(codes.FailedPrecondition, "xds client creation failed with error: %v", s.xdsClientErr)
+		// This should never happen.
+		return nil, status.Errorf(codes.FailedPrecondition, "xds client is nil")
 	}
 
 	ret := &v3statuspb.ClientStatusResponse{
@@ -146,6 +136,11 @@ func (s *clientStatusServer) buildClientStatusRespForReq(req *v3statuspb.ClientS
 		},
 	}
 	return ret, nil
+}
+
+// Close cleans up the resources.
+func (s *ClientStatusDiscoveryServer) Close() {
+	s.xdsClient.Close()
 }
 
 // nodeProtoToV3 converts the given proto into a v3.Node. n is from bootstrap
@@ -179,7 +174,7 @@ func nodeProtoToV3(n proto.Message) *v3corepb.Node {
 	return node
 }
 
-func (s *clientStatusServer) buildLDSPerXDSConfig() *v3statuspb.PerXdsConfig {
+func (s *ClientStatusDiscoveryServer) buildLDSPerXDSConfig() *v3statuspb.PerXdsConfig {
 	version, dump := s.xdsClient.DumpLDS()
 	var resources []*v3adminpb.ListenersConfigDump_DynamicListener
 	for name, d := range dump {
@@ -213,7 +208,7 @@ func (s *clientStatusServer) buildLDSPerXDSConfig() *v3statuspb.PerXdsConfig {
 	}
 }
 
-func (s *clientStatusServer) buildRDSPerXDSConfig() *v3statuspb.PerXdsConfig {
+func (s *ClientStatusDiscoveryServer) buildRDSPerXDSConfig() *v3statuspb.PerXdsConfig {
 	_, dump := s.xdsClient.DumpRDS()
 	var resources []*v3adminpb.RoutesConfigDump_DynamicRouteConfig
 	for _, d := range dump {
@@ -243,7 +238,7 @@ func (s *clientStatusServer) buildRDSPerXDSConfig() *v3statuspb.PerXdsConfig {
 	}
 }
 
-func (s *clientStatusServer) buildCDSPerXDSConfig() *v3statuspb.PerXdsConfig {
+func (s *ClientStatusDiscoveryServer) buildCDSPerXDSConfig() *v3statuspb.PerXdsConfig {
 	version, dump := s.xdsClient.DumpCDS()
 	var resources []*v3adminpb.ClustersConfigDump_DynamicCluster
 	for _, d := range dump {
@@ -274,7 +269,7 @@ func (s *clientStatusServer) buildCDSPerXDSConfig() *v3statuspb.PerXdsConfig {
 	}
 }
 
-func (s *clientStatusServer) buildEDSPerXDSConfig() *v3statuspb.PerXdsConfig {
+func (s *ClientStatusDiscoveryServer) buildEDSPerXDSConfig() *v3statuspb.PerXdsConfig {
 	_, dump := s.xdsClient.DumpEDS()
 	var resources []*v3adminpb.EndpointsConfigDump_DynamicEndpointConfig
 	for _, d := range dump {
