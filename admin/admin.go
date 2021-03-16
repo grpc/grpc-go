@@ -18,6 +18,9 @@
 
 // Package admin implements the admin service. It is a convenient API to expose
 // states in the gRPC library.
+//
+// Notice: This package is EXPERIMENTAL and may be changed or removed in a later
+// release.
 package admin
 
 import (
@@ -41,7 +44,7 @@ func init() {
 // allocated for the service handlers.
 //
 // Note that if the server is not a *grpc.Server or a *xds.GRPCServer, CSDS will
-// not be registered due to CSDS generated code is too old and doesn't support
+// not be registered because CSDS generated code is old and doesn't support
 // interface `grpc.ServiceRegistrar`.
 // https://github.com/envoyproxy/go-control-plane/issues/403
 func Register(s grpc.ServiceRegistrar) (cleanup func(), _ error) {

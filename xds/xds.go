@@ -52,11 +52,15 @@ func init() {
 		case *GRPCServer:
 			sss, ok := ss.gs.(*grpc.Server)
 			if !ok {
-				return nil, fmt.Errorf("grpc server within xds.GRPCServer is not *grpc.Server, CSDS will not be registered")
+				logger.Warningf("grpc server within xds.GRPCServer is not *grpc.Server, CSDS will not be registered")
+				return nil, nil
 			}
 			grpcServer = sss
 		default:
-			return nil, fmt.Errorf("server to register service on is neither a *grpc.Server or a *xds.GRPCServer, CSDS will not be registered")
+			// Returning an error would cause the top level admin.Register() to
+			// fail. Log a warning instead.
+			logger.Warningf("server to register service on is neither a *grpc.Server or a *xds.GRPCServer, CSDS will not be registered")
+			return nil, nil
 		}
 
 		csdss, err := csds.NewClientStatusDiscoveryServer()
