@@ -779,7 +779,7 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
 			boIter <- i
 			// Will make it update state 5 more times in the test.
-			return time.Millisecond * time.Duration(i * 10)
+			return time.Millisecond * time.Duration(i*10)
 		}})
 		if err != nil {
 			t.Fatalf("%v\n", err)
