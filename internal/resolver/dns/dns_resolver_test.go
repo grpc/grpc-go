@@ -1487,6 +1487,7 @@ func TestReportError(t *testing.T) {
 		if !strings.Contains(err.Error(), "hostLookup error") {
 			t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
 		}
+		return
 	case <-time.After(time.Second):
 		t.Fatalf("did not receive error after 1s")
 	}
