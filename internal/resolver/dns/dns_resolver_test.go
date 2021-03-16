@@ -711,7 +711,10 @@ func testDNSResolver(t *testing.T) {
 	for _, a := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
-		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{})
+		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
+			// To avoid nil panic in exponential backoff.
+			return 10000
+		}})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -799,7 +802,10 @@ func testDNSResolverWithSRV(t *testing.T) {
 	for _, a := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
-		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{})
+		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
+			// To avoid nil panic in exponential backoff.
+			return 10000
+		}})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -876,7 +882,10 @@ func testDNSResolveNow(t *testing.T) {
 	for _, a := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
-		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{})
+		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
+			// To avoid nil panic in exponential backoff.
+			return 10000
+		}})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -947,7 +956,10 @@ func testIPResolver(t *testing.T) {
 	for _, v := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: v.target}
-		r, err := b.Build(resolver.Target{Endpoint: v.target}, cc, resolver.BuildOptions{})
+		r, err := b.Build(resolver.Target{Endpoint: v.target}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
+			// To avoid nil panic in exponential backoff.
+			return 10000
+		}})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -1004,7 +1016,7 @@ func TestResolveFunc(t *testing.T) {
 	for _, v := range tests {
 		cc := &testClientConn{target: v.addr, errChan: make(chan error, 1)}
 		r, err := b.Build(resolver.Target{Endpoint: v.addr}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
-			// To avoid nil panic in exponential backoff
+			// To avoid nil panic in exponential backoff.
 			return 10000
 		}})
 		if err == nil {
@@ -1038,7 +1050,10 @@ func TestDisableServiceConfig(t *testing.T) {
 	for _, a := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
-		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{DisableServiceConfig: a.disableServiceConfig})
+		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{DisableServiceConfig: a.disableServiceConfig, ResolveNowBackoff: func(i int) time.Duration {
+			// To avoid nil panic in exponential backoff.
+			return 10000
+		}})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -1069,7 +1084,10 @@ func TestTXTError(t *testing.T) {
 		envconfig.TXTErrIgnore = ignore
 		b := NewBuilder()
 		cc := &testClientConn{target: "ipv4.single.fake"} // has A records but not TXT records.
-		r, err := b.Build(resolver.Target{Endpoint: "ipv4.single.fake"}, cc, resolver.BuildOptions{})
+		r, err := b.Build(resolver.Target{Endpoint: "ipv4.single.fake"}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
+			// To avoid nil panic in exponential backoff.
+			return 10000
+		}})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -1098,7 +1116,10 @@ func TestDNSResolverRetry(t *testing.T) {
 	b := NewBuilder()
 	target := "ipv4.single.fake"
 	cc := &testClientConn{target: target}
-	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOptions{})
+	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
+		// To avoid nil panic in exponential backoff.
+		return 10000
+	}})
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
@@ -1232,7 +1253,7 @@ func TestCustomAuthority(t *testing.T) {
 		b := NewBuilder()
 		cc := &testClientConn{target: "foo.bar.com", errChan: make(chan error, 1)}
 		r, err := b.Build(resolver.Target{Endpoint: "foo.bar.com", Authority: a.authority}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
-			// To avoid nil panic in exponential backoff
+			// To avoid nil panic in exponential backoff.
 			return 10000
 		}})
 
@@ -1273,7 +1294,10 @@ func TestRateLimitedResolve(t *testing.T) {
 	b := NewBuilder()
 	cc := &testClientConn{target: target}
 
-	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOptions{})
+	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
+		// To avoid nil panic in exponential backoff.
+		return 10000
+	}})
 	if err != nil {
 		t.Fatalf("resolver.Build() returned error: %v\n", err)
 	}
@@ -1359,7 +1383,10 @@ func TestReportError(t *testing.T) {
 	const target = "notfoundaddress"
 	cc := &testClientConn{target: target, errChan: make(chan error)}
 	b := NewBuilder()
-	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOptions{})
+	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOptions{ResolveNowBackoff: func(i int) time.Duration {
+		// To avoid nil panic in exponential backoff.
+		return 10000
+	}})
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
