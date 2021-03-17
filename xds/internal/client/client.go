@@ -355,9 +355,18 @@ type SecurityConfig struct {
 	RequireClientCert bool
 }
 
+type ClusterType int
+
+const (
+	eds = iota
+	logical_dns
+	aggregate
+)
+
 // ClusterUpdate contains information from a received CDS response, which is of
 // interest to the registered CDS watcher.
 type ClusterUpdate struct {
+	ClusterType ClusterType
 	// ServiceName is the service name corresponding to the clusterName which
 	// is being watched for through CDS.
 	ServiceName string
@@ -370,6 +379,10 @@ type ClusterUpdate struct {
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
+
+	// PrioritizedClusterNames is used only for cluster type aggregate. It represents
+	// a prioritized list of cluster names.
+	PrioritizedClusterNames []string
 }
 
 // OverloadDropConfig contains the config to drop overloads.
