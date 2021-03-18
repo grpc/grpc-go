@@ -848,9 +848,9 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 
 		time.Sleep(time.Millisecond * 3)
 		select {
-			case <-timerChan:
-				t.Error("Should not poll again after balancer.BadResolverState does not return")
-			default:
+		case <-timerChan:
+			t.Error("Should not poll again after balancer.BadResolverState does not return")
+		default:
 		}
 		cc.m1.Lock()
 		if cc.updateStateCalls != 12 {
