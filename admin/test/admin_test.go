@@ -31,18 +31,8 @@ import (
 )
 
 func TestRegisterWithCSDS(t *testing.T) {
-	if err := test.RunRegisterTests([]test.RegisterTestCase{
-		{
-			Name: "channelz",
-			Run:  test.RunChannelz,
-			Code: codes.OK,
-		},
-		{
-			Name: "CSDS",
-			Run:  test.RunCSDS,
-			Code: codes.OK,
-		},
-	}); err != nil {
-		t.Fatal(err)
-	}
+	test.RunRegisterTests(t, test.ExpectedStatusCodes{
+		ChannelzCode: codes.OK,
+		CSDSCode:     codes.OK,
+	})
 }

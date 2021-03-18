@@ -26,19 +26,9 @@ import (
 )
 
 func TestRegisterNoCSDS(t *testing.T) {
-	if err := test.RunRegisterTests([]test.RegisterTestCase{
-		{
-			Name: "channelz",
-			Run:  test.RunChannelz,
-			Code: codes.OK,
-		},
-		{
-			Name: "CSDS",
-			Run:  test.RunCSDS,
-			// CSDS is not registered because xDS isn't imported.
-			Code: codes.Unimplemented,
-		},
-	}); err != nil {
-		t.Fatal(err)
-	}
+	test.RunRegisterTests(t, test.ExpectedStatusCodes{
+		ChannelzCode: codes.OK,
+		// CSDS is not registered because xDS isn't imported.
+		CSDSCode: codes.Unimplemented,
+	})
 }

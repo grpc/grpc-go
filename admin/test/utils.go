@@ -22,8 +22,8 @@ package test
 
 import (
 	"context"
-	"fmt"
 	"net"
+	"testing"
 	"time"
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
@@ -40,20 +40,16 @@ const (
 	defaultTestTimeout = 10 * time.Second
 )
 
-// RegisterTestCase contains the function to make an RPC and the expected status code
-// (can be OK).
-type RegisterTestCase struct {
-	// Name of this RPC.
-	Name string
-	// The function to make the RPC on the ClientConn.
-	Run func(*grpc.ClientConn) error
-	// The expected code returned from the RPC.
-	Code codes.Code
+// ExpectedStatusCodes contains the expected status code for each RPC (can be
+// OK).
+type ExpectedStatusCodes struct {
+	ChannelzCode codes.Code
+	CSDSCode     codes.Code
 }
 
 // RunRegisterTests makes a client, runs the RPCs, and compares the status
 // codes.
-func RunRegisterTests(rcs []RegisterTestCase) error {
+func RunRegisterTests(t *testing.T, ec ExpectedStatusCodes) {
 	nodeID := uuid.New().String()
 	bootstrapCleanup, err := xds.SetupBootstrapFile(xds.BootstrapOptions{
 		Version:   xds.TransportV3,
@@ -61,20 +57,20 @@ func RunRegisterTests(rcs []RegisterTestCase) error {
 		ServerURI: "no.need.for.a.server",
 	})
 	if err != nil {
-		return err
+		t.Fatal(err)
 	}
 	defer bootstrapCleanup()
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		return fmt.Errorf("cannot create listener: %v", err)
+		t.Fatalf("cannot create listener: %v", err)
 	}
 
 	server := grpc.NewServer()
 	defer server.Stop()
 	cleanup, err := admin.Register(server)
 	if err != nil {
-		return fmt.Errorf("failed to register admin: %v", err)
+		t.Fatalf("failed to register admin: %v", err)
 	}
 	defer cleanup()
 	go func() {
@@ -83,15 +79,16 @@ func RunRegisterTests(rcs []RegisterTestCase) error {
 
 	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
 	if err != nil {
-		return fmt.Errorf("cannot connect to server: %v", err)
+		t.Fatalf("cannot connect to server: %v", err)
 	}
 
-	for _, rc := range rcs {
-		if err := rc.Run(conn); status.Code(err) != rc.Code {
-			return fmt.Errorf("%s test failed with error %v, want code %v", rc.Name, err, rc.Code)
-		}
+	if err := RunChannelz(conn); status.Code(err) != ec.ChannelzCode {
+		t.Fatalf("%s test failed with error %v, want code %v", "channelz", err, ec.ChannelzCode)
 	}
-	return nil
+
+	if err := RunCSDS(conn); status.Code(err) != ec.CSDSCode {
+		t.Fatalf("%s test failed with error %v, want code %v", "CSDS", err, ec.CSDSCode)
+	}
 }
 
 // RunChannelz makes a channelz RPC.
