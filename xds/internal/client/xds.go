@@ -533,7 +533,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		}
 	} else if cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS {
 		// TODO (zasweq): any checks on the Logical DNS Config just like EDS?
-		updateToReturn.ClusterType = ClusterType(logical_dns)
+		updateToReturn.ClusterType = ClusterType(logicalDNS)
 		updateToReturn.ServiceName = cluster.GetName()
 	} else if cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate" {
 		updateToReturn.ClusterType = ClusterType(aggregate)

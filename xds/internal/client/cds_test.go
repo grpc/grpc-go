@@ -157,7 +157,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_LOGICAL_DNS},
 				LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: ClusterUpdate{ServiceName: "", EnableLRS: false, ClusterType: logical_dns},
+			wantUpdate: ClusterUpdate{ServiceName: "", EnableLRS: false, ClusterType: logicalDNS},
 		},
 		{
 			name: "happy-case-aggregate-v3",

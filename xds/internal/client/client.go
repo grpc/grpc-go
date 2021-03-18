@@ -355,11 +355,12 @@ type SecurityConfig struct {
 	RequireClientCert bool
 }
 
+// ClusterType is the type of cluster from a received CDS response.
 type ClusterType int
 
 const (
 	eds = iota
-	logical_dns
+	logicalDNS
 	aggregate
 )
 
