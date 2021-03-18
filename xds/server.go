@@ -204,7 +204,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 	}
 	name := cfg.ServerListenerResourceNameTemplate
 	if strings.Contains(cfg.ServerListenerResourceNameTemplate, "%s") {
-		name = strings.ReplaceAll(cfg.ServerListenerResourceNameTemplate, "%s", lis.Addr().String())
+		name = strings.Replace(cfg.ServerListenerResourceNameTemplate, "%s", lis.Addr().String(), -1)
 	}
 
 	// Create a listenerWrapper which handles all functionality required by
