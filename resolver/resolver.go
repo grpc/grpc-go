@@ -22,10 +22,11 @@ package resolver
 
 import (
 	"context"
+	"net"
+
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/serviceconfig"
-	"net"
 )
 
 var (
