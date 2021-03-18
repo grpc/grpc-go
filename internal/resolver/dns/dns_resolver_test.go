@@ -825,7 +825,7 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			timer := <-timerChan
 			timer.Reset(0)
-			// Propogate.
+			// Propagate.
 			time.Sleep(time.Millisecond)
 		}
 		cc.m1.Lock()
@@ -841,7 +841,7 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 		cc.backoffMutex.Unlock()
 		timer := <-timerChan
 		timer.Reset(0)
-		// Propogate the updated state.
+		// Propagate the updated state.
 		time.Sleep(time.Millisecond * 3)
 		timer = <-timerChan
 		timer.Reset(0)
@@ -1554,9 +1554,7 @@ func TestReportError(t *testing.T) {
 		newTimer = nt
 	}(nt)
 	timerChan := make(chan *time.Timer, 1)
-	//durationChan := make(chan time.Duration, 1)
 	newTimer = func(d time.Duration) *time.Timer {
-		//durationChan <- d
 		// Will never fire on it's own, allowing us to control it.
 		logger.Infof("Hit new timer")
 		t := time.NewTimer(time.Hour)
@@ -1565,27 +1563,13 @@ func TestReportError(t *testing.T) {
 	}
 	cc := &testClientConn{target: target, errChan: make(chan error)}
 	totalTimesCalledError := 0
-	/*done := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case err := <-cc.errChan:
-				if !strings.Contains(err.Error(), "hostLookup error") {
-					t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
-				}
-				totalTimesCalledError++
-			case <-done:
-				return
-			}
-		}
-	}()*/
 	b := NewBuilder()
 	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
 	defer r.Close()
-	// Should receive first error
+	// Should receive first error.
 	err = <-cc.errChan
 	if !strings.Contains(err.Error(), "hostLookup error") {
 		t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
@@ -1599,7 +1583,7 @@ func TestReportError(t *testing.T) {
 		// Should call ReportError()
 		select {
 		case err = <-cc.errChan:
-			// Propogate.
+			// Propagate.
 			time.Sleep(time.Millisecond)
 			if !strings.Contains(err.Error(), "hostLookup error") {
 				t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
@@ -1607,30 +1591,6 @@ func TestReportError(t *testing.T) {
 			totalTimesCalledError++
 		}
 	}
-	/*timer := <-timerChan
-	done := make(chan struct{}, 1)
-
-	go func() {
-		for i := 0; i < 10; i++ {
-			timer.Reset(0)
-		}
-		done <- struct{}{}
-	}()*/
-	//previousDuration := -1
-	/*for {
-		select {
-		case err := <-cc.errChan:
-			if !strings.Contains(err.Error(), "hostLookup error") {
-				t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
-			}
-			//nextDuration := int(<-durationChan)
-			//if nextDuration <= previousDuration {
-			//	t.Fatalf("Durations should be increasing")
-			//}
-			//previousDuration = nextDuration
-			totalTimesCalledError++
-		case <-done:
-	}*/
 
 	if totalTimesCalledError != 11 {
 		t.Errorf("ReportError() not called 11 times, instead called %d times.", totalTimesCalledError)
