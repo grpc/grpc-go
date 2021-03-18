@@ -21,6 +21,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	"net"
 	"strconv"
 	"strings"
@@ -32,7 +33,6 @@ import (
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
@@ -500,50 +500,56 @@ func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (strin
 		return "", ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 	logger.Infof("Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, cluster)
-	cu, err := validateCluster(cluster)
+	cu, err := validateClusterAndConstructClusterUpdate(cluster)
 	if err != nil {
 		return cluster.GetName(), ClusterUpdate{}, err
 	}
-	// Only three types of cluster are currently supported by grpc-go.
-	if cluster.GetClusterType().Name == "envoy.clusters.aggregate" {
-		// A custom type of cluster.
-		cu.ClusterType = ClusterType(aggregate)
-		// Loop through ClusterConfig here to get cluster names.
-		clusters := &v3aggregateclusterpb.ClusterConfig{}
-		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
-			return "", ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
-		}
-		cu.PrioritizedClusterNames = clusters.Clusters
-	} else {
-		// A type of cluster from discrete enum.
-		if (cluster.GetType() == v3clusterpb.Cluster_EDS) {
-			cu.ClusterType = ClusterType(eds)
-		} else if (cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS) {
-			cu.ClusterType = ClusterType(logical_dns)
-		}
-	}
 
 	cu.Raw = r
-	// If the Cluster message in the CDS response did not contain a
-	// serviceName, we will just use the clusterName for EDS.
-	if cu.ServiceName == "" {
-		cu.ServiceName = cluster.GetName()
-	}
+
 	return cluster.GetName(), cu, nil
 }
 
-func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
+func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	emptyUpdate := ClusterUpdate{ServiceName: "", EnableLRS: false}
-	switch {
-	case cluster.GetType() != v3clusterpb.Cluster_EDS && cluster.GetType() != v3clusterpb.Cluster_LOGICAL_DNS || cluster.GetClusterType().Name != "envoy.clusters.aggregate":
+	updateToReturn := ClusterUpdate{ServiceName: "", EnableLRS: false}
+	// Only three types of cluster are currently supported by grpc-go.
+	if cluster.GetType() == v3clusterpb.Cluster_EDS {
+		if cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil {
+			return emptyUpdate, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
+		}
+		if cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN {
+			return emptyUpdate, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
+		}
+
+		updateToReturn.ClusterType = ClusterType(eds)
+
+		// If the Cluster message in the CDS response did not contain a
+		// serviceName, we will just use the clusterName for EDS.
+		if cluster.GetEdsClusterConfig().GetServiceName() == "" {
+			updateToReturn.ServiceName = cluster.GetName()
+		} else {
+			updateToReturn.ServiceName = cluster.GetEdsClusterConfig().GetServiceName()
+		}
+	} else if cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS {
+		// TODO (zasweq): any checks on the Logical DNS Config just like EDS?
+		updateToReturn.ClusterType = ClusterType(logical_dns)
+		updateToReturn.ServiceName = cluster.GetName()
+	} else if cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate" {
+		updateToReturn.ClusterType = ClusterType(aggregate)
+		// Loop through ClusterConfig here to get cluster names.
+		// TODO (zasweq): support v2 with v2alpha.ClusterConfig containing the clusters?
+		clusters := &v3aggregateclusterpb.ClusterConfig{}
+		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
+			return emptyUpdate, fmt.Errorf("failed to unmarshal resource: %v", err)
+		}
+		updateToReturn.PrioritizedClusterNames = clusters.Clusters
+		updateToReturn.ServiceName = cluster.GetName()
+	} else { // Not currently supported by grpc-go
 		return emptyUpdate, fmt.Errorf("unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
-	case cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil:
-		return emptyUpdate, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
-	case cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN:
-		return emptyUpdate, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
 
-	// Process security configuration received from the control plane iff the
+	// Process security configuration received from the control plane if the
 	// corresponding environment variable is set.
 	var sc *SecurityConfig
 	if env.ClientSideSecuritySupport {
@@ -553,12 +559,10 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 		}
 	}
 
-	return ClusterUpdate{
-		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
-		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
-		SecurityCfg: sc,
-		MaxRequests: circuitBreakersFromCluster(cluster),
-	}, nil
+	updateToReturn.EnableLRS = cluster.GetLrsServer().GetSelf() != nil
+	updateToReturn.SecurityCfg = sc
+	updateToReturn.MaxRequests = circuitBreakersFromCluster(cluster)
+	return updateToReturn, nil
 }
 
 // securityConfigFromCluster extracts the relevant security configuration from
