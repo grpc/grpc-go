@@ -765,7 +765,6 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 	}(nt)
 	timerChan := make(chan *time.Timer, 1)
 	newTimer = func(d time.Duration) *time.Timer {
-		logger.Infof("in new timer")
 		// Will never fire on it's own, will protect from triggering exponential backoff.
 		t := time.NewTimer(time.Hour)
 		timerChan <- t
@@ -1556,7 +1555,6 @@ func TestReportError(t *testing.T) {
 	timerChan := make(chan *time.Timer, 1)
 	newTimer = func(d time.Duration) *time.Timer {
 		// Will never fire on it's own, allowing us to control it.
-		logger.Infof("Hit new timer")
 		t := time.NewTimer(time.Hour)
 		timerChan <- t
 		return t
@@ -1581,15 +1579,13 @@ func TestReportError(t *testing.T) {
 		timer := <-timerChan
 		timer.Reset(0)
 		// Should call ReportError()
-		select {
-		case err = <-cc.errChan:
-			// Propagate.
-			time.Sleep(time.Millisecond)
-			if !strings.Contains(err.Error(), "hostLookup error") {
-				t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
-			}
-			totalTimesCalledError++
+		err = <-cc.errChan
+		// Propagate.
+		time.Sleep(time.Millisecond)
+		if !strings.Contains(err.Error(), "hostLookup error") {
+			t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
 		}
+		totalTimesCalledError++
 	}
 
 	if totalTimesCalledError != 11 {
