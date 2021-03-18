@@ -334,7 +334,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := strings.ReplaceAll(testServerListenerResourceNameTemplate, "%s", lis.Addr().String())
+	wantName := strings.Replace(testServerListenerResourceNameTemplate, "%s", lis.Addr().String(), -1)
 	if name != wantName {
 		t.Fatalf("LDS watch registered for name %q, want %q", name, wantName)
 	}
@@ -421,7 +421,7 @@ func (s) TestServeWithStop(t *testing.T) {
 		server.Stop()
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := strings.ReplaceAll(testServerListenerResourceNameTemplate, "%s", lis.Addr().String())
+	wantName := strings.Replace(testServerListenerResourceNameTemplate, "%s", lis.Addr().String(), -1)
 	if name != wantName {
 		server.Stop()
 		t.Fatalf("LDS watch registered for name %q, wantPrefix %q", name, wantName)
@@ -618,7 +618,7 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := strings.ReplaceAll(testServerListenerResourceNameTemplate, "%s", lis.Addr().String())
+	wantName := strings.Replace(testServerListenerResourceNameTemplate, "%s", lis.Addr().String(), -1)
 	if name != wantName {
 		t.Fatalf("LDS watch registered for name %q, want %q", name, wantName)
 	}
@@ -696,7 +696,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error when waiting for a ListenerWatch: %v", err)
 	}
-	wantName := strings.ReplaceAll(testServerListenerResourceNameTemplate, "%s", lis.Addr().String())
+	wantName := strings.Replace(testServerListenerResourceNameTemplate, "%s", lis.Addr().String(), -1)
 	if name != wantName {
 		t.Fatalf("LDS watch registered for name %q, want %q", name, wantName)
 	}
