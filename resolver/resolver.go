@@ -22,12 +22,10 @@ package resolver
 
 import (
 	"context"
-	"net"
-	"time"
-
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/serviceconfig"
+	"net"
 )
 
 var (
@@ -156,9 +154,6 @@ type BuildOptions struct {
 	// field. In most cases though, it is not appropriate, and this field may
 	// be ignored.
 	Dialer func(context.Context, string) (net.Conn, error)
-	// Used to backoff calls to ResolveNow(). The user will have no need to configure this, but we will need to be able
-	// to configure this in tests.
-	ResolveNowBackoff func(int) time.Duration
 }
 
 // State contains the current Resolver state relevant to the ClientConn.
