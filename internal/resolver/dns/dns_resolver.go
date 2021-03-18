@@ -192,7 +192,7 @@ type dnsResolver struct {
 	wg                   sync.WaitGroup
 	disableServiceConfig bool
 
-	polling   chan struct{}
+	polling chan struct{}
 }
 
 // poll begins or ends asynchronous polling of the resolver based on whether
