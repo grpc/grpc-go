@@ -17,7 +17,7 @@
  */
 
 // Package test contains test only functions for package admin. It's used by
-// admin/admin_test.go and admin/test/admin_test.go in this directory.
+// admin/admin_test.go and admin/test/admin_test.go.
 package test
 
 import (
@@ -40,9 +40,9 @@ const (
 	defaultTestTimeout = 10 * time.Second
 )
 
-// RunAndCode contains the function to make an RPC and the expected status code
+// RegisterTestCase contains the function to make an RPC and the expected status code
 // (can be OK).
-type RunAndCode struct {
+type RegisterTestCase struct {
 	// Name of this RPC.
 	Name string
 	// The function to make the RPC on the ClientConn.
@@ -53,7 +53,7 @@ type RunAndCode struct {
 
 // RunRegisterTests makes a client, runs the RPCs, and compares the status
 // codes.
-func RunRegisterTests(rcs []RunAndCode) error {
+func RunRegisterTests(rcs []RegisterTestCase) error {
 	nodeID := uuid.New().String()
 	bootstrapCleanup, err := xds.SetupBootstrapFile(xds.BootstrapOptions{
 		Version:   xds.TransportV3,

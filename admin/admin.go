@@ -16,11 +16,16 @@
  *
  */
 
-// Package admin implements the admin service. It is a convenient API to expose
-// states in the gRPC library.
+// Package admin provides a convenient method for registering a collection of
+// administration services to a gRPC server. The services registered are:
 //
-// Notice: This package is EXPERIMENTAL and may be changed or removed in a later
-// release.
+// - Channelz: description and/or link to channelz info
+// - CSDS: description and/or link to CSDS info
+//
+// Experimental
+//
+// Notice: All APIs in this package are experimental and may be removed in a
+// later release.
 package admin
 
 import (
@@ -41,11 +46,11 @@ func init() {
 // Register registers the set of admin services to the given server.
 //
 // The returned cleanup function should be called to clean up the resources
-// allocated for the service handlers.
+// allocated for the service handlers after the server is stopped.
 //
-// Note that if the server is not a *grpc.Server or a *xds.GRPCServer, CSDS will
-// not be registered because CSDS generated code is old and doesn't support
-// interface `grpc.ServiceRegistrar`.
+// Note that if `s` is not a *grpc.Server or a *xds.GRPCServer, CSDS will not be
+// registered because CSDS generated code is old and doesn't support interface
+// `grpc.ServiceRegistrar`.
 // https://github.com/envoyproxy/go-control-plane/issues/403
 func Register(s grpc.ServiceRegistrar) (cleanup func(), _ error) {
 	return internaladmin.Register(s)

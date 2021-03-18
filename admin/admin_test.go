@@ -26,7 +26,7 @@ import (
 )
 
 func TestRegisterNoCSDS(t *testing.T) {
-	if err := test.RunRegisterTests([]test.RunAndCode{
+	if err := test.RunRegisterTests([]test.RegisterTestCase{
 		{
 			Name: "channelz",
 			Run:  test.RunChannelz,
