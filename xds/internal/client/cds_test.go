@@ -163,7 +163,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			name: "happy-case-aggregate-v3",
 			cluster: &v3clusterpb.Cluster{
 				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
-					&v3clusterpb.Cluster_CustomClusterType{Name: "envoy.clusters.aggregate"},
+					ClusterType: &v3clusterpb.Cluster_CustomClusterType{Name: "envoy.clusters.aggregate"},
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
