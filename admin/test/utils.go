@@ -82,13 +82,16 @@ func RunRegisterTests(t *testing.T, ec ExpectedStatusCodes) {
 		t.Fatalf("cannot connect to server: %v", err)
 	}
 
-	if err := RunChannelz(conn); status.Code(err) != ec.ChannelzCode {
-		t.Fatalf("%s test failed with error %v, want code %v", "channelz", err, ec.ChannelzCode)
-	}
-
-	if err := RunCSDS(conn); status.Code(err) != ec.CSDSCode {
-		t.Fatalf("%s test failed with error %v, want code %v", "CSDS", err, ec.CSDSCode)
-	}
+	t.Run("channelz", func(t *testing.T) {
+		if err := RunChannelz(conn); status.Code(err) != ec.ChannelzCode {
+			t.Fatalf("%s RPC failed with error %v, want code %v", "channelz", err, ec.ChannelzCode)
+		}
+	})
+	t.Run("csds", func(t *testing.T) {
+		if err := RunCSDS(conn); status.Code(err) != ec.CSDSCode {
+			t.Fatalf("%s RPC failed with error %v, want code %v", "CSDS", err, ec.CSDSCode)
+		}
+	})
 }
 
 // RunChannelz makes a channelz RPC.
