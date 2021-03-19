@@ -213,14 +213,16 @@ func (d *dnsResolver) poll(errorFromClientConn error) {
 	}
 	p := make(chan struct{})
 	d.polling = p
-	// This exponential backoff go routine will be running at most once
+	// This exponential backoff go routine will be running at most once.
+	d.wg.Add(1)
 	go func() {
+		defer d.wg.Done()
 		// Exponentially backoff until it hopefully succeeds.
 		for i := 0; ; i++ {
 			t := newTimer(backoff.DefaultExponential.Backoff(i))
 			select {
 			case <-p:
-				// Polling was successful
+				// Polling was successful.
 				t.Stop()
 				return
 			case <-d.ctx.Done():
@@ -228,11 +230,11 @@ func (d *dnsResolver) poll(errorFromClientConn error) {
 			case <-t.C:
 				select {
 				case <-p:
-					// Polling was successful
+					// Polling was successful.
 					return
 				default:
 				}
-				// Timer expired; re-resolve
+				// Timer expired; re-resolve.
 			}
 			// After select for testing purposes. Forcing a re-resolution would cause many tests to be flaky.
 			// This allows a re-resolution to be guarded by the resolveNowBackoff() function, which can be toggled
