@@ -37,7 +37,7 @@ import (
 func init() {
 	// Add a list of default services to admin here. Optional services, like
 	// CSDS, will be added by other packages.
-	internaladmin.AddService("channelz", func(registrar grpc.ServiceRegistrar) (func(), error) {
+	internaladmin.AddService(func(registrar grpc.ServiceRegistrar) (func(), error) {
 		channelzservice.RegisterChannelzServiceToServer(registrar)
 		return nil, nil
 	})

@@ -44,7 +44,7 @@ import (
 )
 
 func init() {
-	internaladmin.AddService("csds", func(registrar grpc.ServiceRegistrar) (func(), error) {
+	internaladmin.AddService(func(registrar grpc.ServiceRegistrar) (func(), error) {
 		var grpcServer *grpc.Server
 		switch ss := registrar.(type) {
 		case *grpc.Server:
