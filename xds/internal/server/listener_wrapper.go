@@ -184,12 +184,15 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 		// listeners in Serve(), we can safely type assert here.
 		destAddr := conn.LocalAddr().(*net.TCPAddr).IP
 		srcAddr := conn.RemoteAddr().(*net.TCPAddr)
+
+		l.mu.RLock()
 		fc, err := l.filterChains.Lookup(xdsclient.FilterChainLookupParams{
 			IsUnspecifiedListener: l.isUnspecifiedAddr,
 			DestAddr:              destAddr,
 			SourceAddr:            srcAddr.IP,
 			SourcePort:            srcAddr.Port,
 		})
+		l.mu.RUnlock()
 		if err != nil {
 			// When a matching filter chain is not found, we close the
 			// connection right away, but do not return an error back to
