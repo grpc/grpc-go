@@ -19,8 +19,8 @@
 // Package admin provides a convenient method for registering a collection of
 // administration services to a gRPC server. The services registered are:
 //
-// - Channelz: description and/or link to channelz info
-// - CSDS: description and/or link to CSDS info
+// - Channelz: https://github.com/grpc/proposal/blob/master/A14-channelz.md
+// - CSDS: https://github.com/grpc/proposal/blob/master/A40-csds-support.md
 //
 // Experimental
 //
