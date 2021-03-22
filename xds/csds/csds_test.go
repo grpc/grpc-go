@@ -37,6 +37,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
@@ -255,8 +256,8 @@ func commonSetup(t *testing.T) (xdsClientInterfaceWithWatch, *e2e.ManagementServ
 	}
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := e2e.SetupBootstrapFile(e2e.BootstrapOptions{
-		Version:   e2e.TransportV3,
+	bootstrapCleanup, err := xds.SetupBootstrapFile(xds.BootstrapOptions{
+		Version:   xds.TransportV3,
 		NodeID:    nodeID,
 		ServerURI: fs.Address,
 	})

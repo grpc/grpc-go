@@ -28,6 +28,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 
@@ -54,8 +55,8 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	}
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := e2e.SetupBootstrapFile(e2e.BootstrapOptions{
-		Version:   e2e.TransportV3,
+	bootstrapCleanup, err := xds.SetupBootstrapFile(xds.BootstrapOptions{
+		Version:   xds.TransportV3,
 		NodeID:    nodeID,
 		ServerURI: fs.Address,
 	})

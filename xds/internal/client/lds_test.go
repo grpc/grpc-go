@@ -31,7 +31,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	spb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/xds/internal/env"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/types/known/durationpb"

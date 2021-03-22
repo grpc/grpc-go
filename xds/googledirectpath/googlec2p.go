@@ -35,11 +35,11 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/googlecloud"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/resolver"
 	_ "google.golang.org/grpc/xds" // To register xds resolvers and balancers.
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
-	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/types/known/structpb"
 )
