@@ -28,6 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/credentials"
@@ -54,6 +55,8 @@ const (
 )
 
 var (
+	vmOnGCP       bool
+	once          sync.Once
 	maxRPCVersion = &altspb.RpcProtocolVersions_Version{
 		Major: protocolVersionMaxMajor,
 		Minor: protocolVersionMaxMinor,
@@ -147,6 +150,9 @@ func NewServerCreds(opts *ServerOptions) credentials.TransportCredentials {
 }
 
 func newALTS(side core.Side, accounts []string, hsAddress string) credentials.TransportCredentials {
+	once.Do(func() {
+		vmOnGCP = googlecloud.OnGCE()
+	})
 	if hsAddress == "" {
 		hsAddress = hypervisorHandshakerServiceAddress
 	}
@@ -163,7 +169,7 @@ func newALTS(side core.Side, accounts []string, hsAddress string) credentials.Tr
 
 // ClientHandshake implements the client side handshake protocol.
 func (g *altsTC) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (_ net.Conn, _ credentials.AuthInfo, err error) {
-	if !googlecloud.OnGCE() {
+	if !vmOnGCP {
 		return nil, nil, ErrUntrustedPlatform
 	}
 
@@ -218,7 +224,7 @@ func (g *altsTC) ClientHandshake(ctx context.Context, addr string, rawConn net.C
 
 // ServerHandshake implements the server side ALTS handshaker.
 func (g *altsTC) ServerHandshake(rawConn net.Conn) (_ net.Conn, _ credentials.AuthInfo, err error) {
-	if !googlecloud.OnGCE() {
+	if !vmOnGCP {
 		return nil, nil, ErrUntrustedPlatform
 	}
 	// Connecting to ALTS handshaker service.
