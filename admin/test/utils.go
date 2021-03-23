@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -105,7 +106,7 @@ func RunChannelz(conn *grpc.ClientConn) error {
 
 // RunCSDS makes a CSDS RPC.
 func RunCSDS(conn *grpc.ClientConn) error {
-	c := v3statuspb.NewClientStatusDiscoveryServiceClient(conn)
+	c := v3statusgrpc.NewClientStatusDiscoveryServiceClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	_, err := c.FetchClientStatus(ctx, &v3statuspb.ClientStatusRequest{}, grpc.WaitForReady(true))
