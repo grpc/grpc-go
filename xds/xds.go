@@ -30,7 +30,7 @@ package xds
 import (
 	"fmt"
 
-	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"google.golang.org/grpc"
 	internaladmin "google.golang.org/grpc/internal/admin"
 	"google.golang.org/grpc/xds/csds"
@@ -67,7 +67,7 @@ func init() {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create csds server: %v", err)
 		}
-		v3statuspb.RegisterClientStatusDiscoveryServiceServer(grpcServer, csdss)
+		v3statusgrpc.RegisterClientStatusDiscoveryServiceServer(grpcServer, csdss)
 		return csdss.Close, nil
 	})
 }
