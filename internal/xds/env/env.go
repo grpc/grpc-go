@@ -63,14 +63,14 @@ var (
 	// CircuitBreakingSupport indicates whether circuit breaking support is
 	// enabled, which can be done by setting the environment variable
 	// "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING" to "true".
-	CircuitBreakingSupport = strings.EqualFold(os.Getenv(circuitBreakingSupportEnv), "true")
+	CircuitBreakingSupport = !strings.EqualFold(os.Getenv(circuitBreakingSupportEnv), "false")
 	// TimeoutSupport indicates whether support for max_stream_duration in
 	// route actions is enabled.  This can be enabled by setting the
 	// environment variable "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT" to "true".
-	TimeoutSupport = strings.EqualFold(os.Getenv(timeoutSupportEnv), "true")
+	TimeoutSupport = !strings.EqualFold(os.Getenv(timeoutSupportEnv), "false")
 	// FaultInjectionSupport is used to control both fault injection and HTTP
 	// filter support.
-	FaultInjectionSupport = strings.EqualFold(os.Getenv(faultInjectionSupportEnv), "true")
+	FaultInjectionSupport = !strings.EqualFold(os.Getenv(faultInjectionSupportEnv), "false")
 	// C2PResolverSupport indicates whether support for C2P resolver is enabled.
 	// This can be enabled by setting the environment variable
 	// "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER" to "true".
