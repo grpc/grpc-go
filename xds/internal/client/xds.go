@@ -521,9 +521,8 @@ func clusterTypeFromCluster(cluster *v3clusterpb.Cluster) (ClusterType, string, 
 		// serviceName, we will just use the clusterName for EDS.
 		if cluster.GetEdsClusterConfig().GetServiceName() == "" {
 			return Eds, cluster.GetName(), nil, nil
-		} else {
-			return Eds, cluster.GetEdsClusterConfig().GetServiceName(), nil, nil
 		}
+		return Eds, cluster.GetEdsClusterConfig().GetServiceName(), nil, nil
 	}
 
 	if cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS {
