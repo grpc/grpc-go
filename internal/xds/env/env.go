@@ -61,12 +61,12 @@ var (
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	BootstrapFileContent = os.Getenv(BootstrapFileContentEnv)
 	// CircuitBreakingSupport indicates whether circuit breaking support is
-	// enabled, which can be done by setting the environment variable
-	// "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING" to "true".
+	// enabled, which can be disabled by setting the environment variable
+	// "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING" to "false".
 	CircuitBreakingSupport = !strings.EqualFold(os.Getenv(circuitBreakingSupportEnv), "false")
 	// TimeoutSupport indicates whether support for max_stream_duration in
-	// route actions is enabled.  This can be enabled by setting the
-	// environment variable "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT" to "true".
+	// route actions is enabled.  This can be disabled by setting the
+	// environment variable "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT" to "false".
 	TimeoutSupport = !strings.EqualFold(os.Getenv(timeoutSupportEnv), "false")
 	// FaultInjectionSupport is used to control both fault injection and HTTP
 	// filter support.
