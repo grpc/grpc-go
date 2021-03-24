@@ -560,11 +560,11 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	}
 
 	return ClusterUpdate{
-		ClusterType: clusterType,
-		ServiceName: serviceName,
-		EnableLRS: cluster.GetLrsServer().GetSelf() != nil,
-		SecurityCfg: sc,
-		MaxRequests: circuitBreakersFromCluster(cluster),
+		ClusterType:             clusterType,
+		ServiceName:             serviceName,
+		EnableLRS:               cluster.GetLrsServer().GetSelf() != nil,
+		SecurityCfg:             sc,
+		MaxRequests:             circuitBreakersFromCluster(cluster),
 		PrioritizedClusterNames: prioritizedClusters,
 	}, nil
 }
