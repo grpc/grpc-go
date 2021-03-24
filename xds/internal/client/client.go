@@ -359,9 +359,9 @@ type SecurityConfig struct {
 type ClusterType int
 
 const (
-	eds = iota
-	logicalDNS
-	aggregate
+	Eds ClusterType = iota
+	LogicalDNS
+	Aggregate
 )
 
 // ClusterUpdate contains information from a received CDS response, which is of

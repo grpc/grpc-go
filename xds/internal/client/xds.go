@@ -504,65 +504,69 @@ func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (strin
 	if err != nil {
 		return cluster.GetName(), ClusterUpdate{}, err
 	}
-
 	cu.Raw = r
 
 	return cluster.GetName(), cu, nil
 }
 
-func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
-	emptyUpdate := ClusterUpdate{ServiceName: "", EnableLRS: false}
-	updateToReturn := ClusterUpdate{ServiceName: "", EnableLRS: false}
-	// Only three types of cluster are currently supported by grpc-go.
+func clusterTypeFromCluster(cluster *v3clusterpb.Cluster) (ClusterType, string, []string, error) {
 	if cluster.GetType() == v3clusterpb.Cluster_EDS {
 		if cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil {
-			return emptyUpdate, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
+			return 0, "", nil, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
 		}
 		if cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN {
-			return emptyUpdate, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
+			return 0, "", nil, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 		}
-
-		updateToReturn.ClusterType = ClusterType(eds)
-
 		// If the Cluster message in the CDS response did not contain a
 		// serviceName, we will just use the clusterName for EDS.
 		if cluster.GetEdsClusterConfig().GetServiceName() == "" {
-			updateToReturn.ServiceName = cluster.GetName()
+			return Eds, cluster.GetName(), nil, nil
 		} else {
-			updateToReturn.ServiceName = cluster.GetEdsClusterConfig().GetServiceName()
+			return Eds, cluster.GetEdsClusterConfig().GetServiceName(), nil, nil
 		}
-	} else if cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS {
-		// TODO (zasweq): any checks on the Logical DNS Config just like EDS?
-		updateToReturn.ClusterType = ClusterType(logicalDNS)
-		updateToReturn.ServiceName = cluster.GetName()
-	} else if cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate" {
-		updateToReturn.ClusterType = ClusterType(aggregate)
-		// Loop through ClusterConfig here to get cluster names.
-		// TODO (zasweq): support v2 with v2alpha.ClusterConfig containing the clusters?
-		clusters := &v3aggregateclusterpb.ClusterConfig{}
-		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
-			return emptyUpdate, fmt.Errorf("failed to unmarshal resource: %v", err)
-		}
-		updateToReturn.PrioritizedClusterNames = clusters.Clusters
-		updateToReturn.ServiceName = cluster.GetName()
-	} else { // Not currently supported by grpc-go
-		return emptyUpdate, fmt.Errorf("unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
 	}
 
-	// Process security configuration received from the control plane if the
+	if cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS {
+		// TODO (zasweq): any checks on the Logical DNS Config just like EDS?
+		return LogicalDNS, cluster.GetName(), nil, nil
+	}
+
+	if cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate" {
+		// Loop through ClusterConfig here to get cluster names.
+		clusters := &v3aggregateclusterpb.ClusterConfig{}
+		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
+			return 0, "", nil, fmt.Errorf("failed to unmarshal resource: %v", err)
+		}
+		return Aggregate, cluster.GetName(), clusters.Clusters, nil
+	}
+	return 0, "", nil, fmt.Errorf("unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
+}
+
+func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
+	emptyUpdate := ClusterUpdate{ServiceName: "", EnableLRS: false}
+	clusterType, serviceName, prioritizedClusters, err := clusterTypeFromCluster(cluster)
+	if err != nil {
+		return emptyUpdate, err
+	}
+
+	// Process security configuration received from the control plane iff the
 	// corresponding environment variable is set.
 	var sc *SecurityConfig
 	if env.ClientSideSecuritySupport {
 		var err error
 		if sc, err = securityConfigFromCluster(cluster); err != nil {
-			return emptyUpdate, err
+			return ClusterUpdate{ServiceName: "", EnableLRS: false}, err
 		}
 	}
 
-	updateToReturn.EnableLRS = cluster.GetLrsServer().GetSelf() != nil
-	updateToReturn.SecurityCfg = sc
-	updateToReturn.MaxRequests = circuitBreakersFromCluster(cluster)
-	return updateToReturn, nil
+	return ClusterUpdate{
+		ClusterType: clusterType,
+		ServiceName: serviceName,
+		EnableLRS: cluster.GetLrsServer().GetSelf() != nil,
+		SecurityCfg: sc,
+		MaxRequests: circuitBreakersFromCluster(cluster),
+		PrioritizedClusterNames: prioritizedClusters,
+	}, nil
 }
 
 // securityConfigFromCluster extracts the relevant security configuration from
