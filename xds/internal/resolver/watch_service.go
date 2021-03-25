@@ -115,11 +115,9 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsclient.ListenerUpdate, er
 		// inline RDS resource.
 
 		// If there was an RDS watch, cancel it.
-		if w.rdsName != "" {
-			w.rdsName = ""
-			if w.rdsCancel != nil {
-				w.rdsCancel()
-			}
+		w.rdsName = ""
+		if w.rdsCancel != nil {
+			w.rdsCancel()
 			w.rdsCancel = nil
 		}
 
@@ -128,7 +126,9 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsclient.ListenerUpdate, er
 		return
 	}
 
-	// RDS name from update is not an empty string, start RDS watch.
+	// RDS name from update is not an empty string, need RDS to fetch the
+	// routes.
+
 	if w.rdsName == update.RouteConfigName {
 		// If the new RouteConfigName is same as the previous, don't cancel and
 		// restart the RDS watch.
