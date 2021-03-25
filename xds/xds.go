@@ -28,9 +28,46 @@
 package xds
 
 import (
+	"fmt"
+
+	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	"google.golang.org/grpc"
+	internaladmin "google.golang.org/grpc/internal/admin"
+	"google.golang.org/grpc/xds/csds"
+
 	_ "google.golang.org/grpc/credentials/tls/certprovider/pemfile" // Register the file watcher certificate provider plugin.
 	_ "google.golang.org/grpc/xds/internal/balancer"                // Register the balancers.
 	_ "google.golang.org/grpc/xds/internal/client/v2"               // Register the v2 xDS API client.
 	_ "google.golang.org/grpc/xds/internal/client/v3"               // Register the v3 xDS API client.
+	_ "google.golang.org/grpc/xds/internal/httpfilter/fault"        // Register the fault injection filter.
 	_ "google.golang.org/grpc/xds/internal/resolver"                // Register the xds_resolver.
 )
+
+func init() {
+	internaladmin.AddService(func(registrar grpc.ServiceRegistrar) (func(), error) {
+		var grpcServer *grpc.Server
+		switch ss := registrar.(type) {
+		case *grpc.Server:
+			grpcServer = ss
+		case *GRPCServer:
+			sss, ok := ss.gs.(*grpc.Server)
+			if !ok {
+				logger.Warningf("grpc server within xds.GRPCServer is not *grpc.Server, CSDS will not be registered")
+				return nil, nil
+			}
+			grpcServer = sss
+		default:
+			// Returning an error would cause the top level admin.Register() to
+			// fail. Log a warning instead.
+			logger.Warningf("server to register service on is neither a *grpc.Server or a *xds.GRPCServer, CSDS will not be registered")
+			return nil, nil
+		}
+
+		csdss, err := csds.NewClientStatusDiscoveryServer()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create csds server: %v", err)
+		}
+		v3statusgrpc.RegisterClientStatusDiscoveryServiceServer(grpcServer, csdss)
+		return csdss.Close, nil
+	})
+}

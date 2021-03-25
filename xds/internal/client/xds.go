@@ -40,8 +40,9 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/xds"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
 )
@@ -246,10 +247,12 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 }
 
 func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
-	// Make sure that an address encoded in the received listener resource, and
-	// that it matches the one specified in the name. Listener names on the
-	// server-side as in the following format:
-	// grpc/server?udpa.resource.listening_address=IP:Port.
+	if n := len(lis.ListenerFilters); n != 0 {
+		return nil, fmt.Errorf("unsupported field 'listener_filters' contains %d entries", n)
+	}
+	if useOrigDst := lis.GetUseOriginalDst(); useOrigDst != nil && useOrigDst.GetValue() {
+		return nil, errors.New("unsupported field 'use_original_dst' is present and set to true")
+	}
 	addr := lis.GetAddress()
 	if addr == nil {
 		return nil, fmt.Errorf("no address field in LDS response: %+v", lis)
@@ -258,24 +261,89 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	if sockAddr == nil {
 		return nil, fmt.Errorf("no socket_address field in LDS response: %+v", lis)
 	}
-	host, port, err := getAddressFromName(lis.GetName())
-	if err != nil {
-		return nil, fmt.Errorf("no host:port in name field of LDS response: %+v, error: %v", lis, err)
-	}
-	if h := sockAddr.GetAddress(); host != h {
-		return nil, fmt.Errorf("socket_address host does not match the one in name. Got %q, want %q", h, host)
-	}
-	if p := strconv.Itoa(int(sockAddr.GetPortValue())); port != p {
-		return nil, fmt.Errorf("socket_address port does not match the one in name. Got %q, want %q", p, port)
+	lu := &ListenerUpdate{
+		InboundListenerCfg: &InboundListenerConfig{
+			Address: sockAddr.GetAddress(),
+			Port:    strconv.Itoa(int(sockAddr.GetPortValue())),
+		},
 	}
 
-	// Make sure the listener resource contains a single filter chain. We do not
-	// support multiple filter chains and picking the best match from the list.
-	fcs := lis.GetFilterChains()
-	if n := len(fcs); n != 1 {
-		return nil, fmt.Errorf("filter chains count in LDS response does not match expected. Got %d, want 1", n)
+	var filterChains []*FilterChain
+	for _, fc := range lis.GetFilterChains() {
+		filterChain, err := getFilterChain(fc)
+		if err != nil {
+			return nil, err
+		}
+		filterChains = append(filterChains, filterChain)
 	}
-	fc := fcs[0]
+	defaultFilterChain, err := getFilterChain(lis.GetDefaultFilterChain())
+	if err != nil {
+		return nil, err
+	}
+	if len(filterChains) == 0 && defaultFilterChain == nil {
+		return nil, fmt.Errorf("xds: no supported filter chains and no default filter chain")
+	}
+	lu.InboundListenerCfg.FilterChains = filterChains
+	lu.InboundListenerCfg.DefaultFilterChain = defaultFilterChain
+	return lu, nil
+}
+
+// getFilterChain parses the filter chain proto and converts it into the local
+// representation. If fc contains unsupported filter chain match fields, a nil
+// FilterChain object and a nil error are returned. If fc does not parse or
+// contains other invalid data, an non-nil error is returned.
+func getFilterChain(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
+	if fc == nil {
+		return nil, nil
+	}
+
+	// If the match criteria contains unsupported fields, skip the filter chain.
+	fcm := fc.GetFilterChainMatch()
+	if fcm.GetDestinationPort().GetValue() != 0 ||
+		fcm.GetServerNames() != nil ||
+		(fcm.GetTransportProtocol() != "" && fcm.TransportProtocol != "raw_buffer") ||
+		fcm.GetApplicationProtocols() != nil {
+		return nil, nil
+	}
+
+	// Extract the supported match criteria.
+	var dstPrefixRanges []net.IP
+	for _, pr := range fcm.GetPrefixRanges() {
+		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
+		ip, _, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return nil, fmt.Errorf("xds: failed to parse destination prefix range: %+v", pr)
+		}
+		dstPrefixRanges = append(dstPrefixRanges, ip)
+	}
+	var srcType SourceType
+	switch fcm.GetSourceType() {
+	case v3listenerpb.FilterChainMatch_ANY:
+		srcType = SourceTypeAny
+	case v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK:
+		srcType = SourceTypeSameOrLoopback
+	case v3listenerpb.FilterChainMatch_EXTERNAL:
+		srcType = SourceTypeExternal
+	default:
+		return nil, fmt.Errorf("xds: unsupported source type: %v", fcm.GetSourceType())
+	}
+	var srcPrefixRanges []net.IP
+	for _, pr := range fcm.GetSourcePrefixRanges() {
+		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
+		ip, _, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return nil, fmt.Errorf("xds: failed to parse source prefix range: %+v", pr)
+		}
+		srcPrefixRanges = append(srcPrefixRanges, ip)
+	}
+	filterChain := &FilterChain{
+		Match: &FilterChainMatch{
+			DestPrefixRanges:   dstPrefixRanges,
+			SourceType:         srcType,
+			SourcePrefixRanges: srcPrefixRanges,
+			SourcePorts:        fcm.GetSourcePorts(),
+		},
+	}
 
 	// If the transport_socket field is not specified, it means that the control
 	// plane has not sent us any security config. This is fine and the server
@@ -283,7 +351,7 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	// xdsCredentials.
 	ts := fc.GetTransportSocket()
 	if ts == nil {
-		return &ListenerUpdate{}, nil
+		return filterChain, nil
 	}
 	if name := ts.GetName(); name != transportSocketName {
 		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
@@ -310,15 +378,8 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	if sc.RequireClientCert && sc.RootInstanceName == "" {
 		return nil, errors.New("security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set")
 	}
-	return &ListenerUpdate{SecurityCfg: sc}, nil
-}
-
-func getAddressFromName(name string) (host string, port string, err error) {
-	parts := strings.SplitN(name, "udpa.resource.listening_address=", 2)
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("udpa.resource_listening_address not found in name: %v", name)
-	}
-	return net.SplitHostPort(parts[1])
+	filterChain.SecurityCfg = sc
+	return filterChain, nil
 }
 
 // UnmarshalRouteConfig processes resources received in an RDS response,
@@ -637,21 +698,24 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext) (*Secu
 	// those possible values:
 	//  - combined validation context:
 	//    - contains a default validation context which holds the list of
-	//      accepted SANs.
+	//      matchers for accepted SANs.
 	//    - contains certificate provider instance configuration
 	//  - certificate provider instance configuration
 	//    - in this case, we do not get a list of accepted SANs.
 	switch t := common.GetValidationContextType().(type) {
 	case *v3tlspb.CommonTlsContext_CombinedValidationContext:
 		combined := common.GetCombinedValidationContext()
+		var matchers []xds.StringMatcher
 		if def := combined.GetDefaultValidationContext(); def != nil {
-			for _, matcher := range def.GetMatchSubjectAltNames() {
-				// We only support exact matches for now.
-				if exact := matcher.GetExact(); exact != "" {
-					sc.AcceptedSANs = append(sc.AcceptedSANs, exact)
+			for _, m := range def.GetMatchSubjectAltNames() {
+				matcher, err := xds.StringMatcherFromProto(m)
+				if err != nil {
+					return nil, err
 				}
+				matchers = append(matchers, matcher)
 			}
 		}
+		sc.SubjectAltNameMatchers = matchers
 		if pi := combined.GetValidationContextCertificateProviderInstance(); pi != nil {
 			sc.RootInstanceName = pi.GetInstanceName()
 			sc.RootCertName = pi.GetCertificateName()

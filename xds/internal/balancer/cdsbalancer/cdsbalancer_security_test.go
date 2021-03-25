@@ -20,16 +20,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
-	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
+	xdscredsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/testutils"
+	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/resolver"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
@@ -41,16 +44,25 @@ const (
 	fakeProvider1Name = "fake-certificate-provider-1"
 	fakeProvider2Name = "fake-certificate-provider-2"
 	fakeConfig        = "my fake config"
+	testSAN           = "test-san"
 )
 
 var (
+	testSANMatchers = []xdsinternal.StringMatcher{
+		xdsinternal.StringMatcherForTesting(newStringP(testSAN), nil, nil, nil, nil, true),
+		xdsinternal.StringMatcherForTesting(nil, newStringP(testSAN), nil, nil, nil, false),
+		xdsinternal.StringMatcherForTesting(nil, nil, newStringP(testSAN), nil, nil, false),
+		xdsinternal.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(testSAN), false),
+		xdsinternal.StringMatcherForTesting(nil, nil, nil, newStringP(testSAN), nil, false),
+	}
 	fpb1, fpb2                   *fakeProviderBuilder
 	bootstrapConfig              *bootstrap.Config
 	cdsUpdateWithGoodSecurityCfg = xdsclient.ClusterUpdate{
 		ServiceName: serviceName,
 		SecurityCfg: &xdsclient.SecurityConfig{
-			RootInstanceName:     "default1",
-			IdentityInstanceName: "default2",
+			RootInstanceName:       "default1",
+			IdentityInstanceName:   "default2",
+			SubjectAltNameMatchers: testSANMatchers,
 		},
 	}
 	cdsUpdateWithMissingSecurityCfg = xdsclient.ClusterUpdate{
@@ -60,6 +72,10 @@ var (
 		},
 	}
 )
+
+func newStringP(s string) *string {
+	return &s
+}
 
 func init() {
 	fpb1 = &fakeProviderBuilder{name: fakeProvider1Name}
@@ -190,13 +206,18 @@ func makeNewSubConn(ctx context.Context, edsCC balancer.ClientConn, parentCC *xd
 		if got, want := gotAddrs[0].Addr, addrs[0].Addr; got != want {
 			return nil, fmt.Errorf("resolver.Address passed to parent ClientConn has address %q, want %q", got, want)
 		}
-		getHI := internal.GetXDSHandshakeInfoForTesting.(func(attr *attributes.Attributes) *xdsinternal.HandshakeInfo)
+		getHI := internal.GetXDSHandshakeInfoForTesting.(func(attr *attributes.Attributes) *xdscredsinternal.HandshakeInfo)
 		hi := getHI(gotAddrs[0].Attributes)
 		if hi == nil {
 			return nil, errors.New("resolver.Address passed to parent ClientConn doesn't contain attributes")
 		}
 		if gotFallback := hi.UseFallbackCreds(); gotFallback != wantFallback {
 			return nil, fmt.Errorf("resolver.Address HandshakeInfo uses fallback creds? %v, want %v", gotFallback, wantFallback)
+		}
+		if !wantFallback {
+			if diff := cmp.Diff(testSANMatchers, hi.GetSANMatchersForTesting(), cmp.AllowUnexported(regexp.Regexp{})); diff != "" {
+				return nil, fmt.Errorf("unexpected diff in the list of SAN matchers (-got, +want):\n%s", diff)
+			}
 		}
 	}
 	return sc, nil
@@ -507,7 +528,7 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 		if got, want := gotAddrs[0].Addr, addrs[0].Addr; got != want {
 			t.Fatalf("resolver.Address passed to parent ClientConn through UpdateAddresses() has address %q, want %q", got, want)
 		}
-		getHI := internal.GetXDSHandshakeInfoForTesting.(func(attr *attributes.Attributes) *xdsinternal.HandshakeInfo)
+		getHI := internal.GetXDSHandshakeInfoForTesting.(func(attr *attributes.Attributes) *xdscredsinternal.HandshakeInfo)
 		hi := getHI(gotAddrs[0].Attributes)
 		if hi == nil {
 			t.Fatal("resolver.Address passed to parent ClientConn through UpdateAddresses() doesn't contain attributes")
@@ -657,7 +678,8 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 	cdsUpdate := xdsclient.ClusterUpdate{
 		ServiceName: serviceName,
 		SecurityCfg: &xdsclient.SecurityConfig{
-			RootInstanceName: "default1",
+			RootInstanceName:       "default1",
+			SubjectAltNameMatchers: testSANMatchers,
 		},
 	}
 	wantCCS := edsCCS(serviceName, nil, false)
@@ -681,7 +703,8 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 	cdsUpdate = xdsclient.ClusterUpdate{
 		ServiceName: serviceName,
 		SecurityCfg: &xdsclient.SecurityConfig{
-			RootInstanceName: "default2",
+			RootInstanceName:       "default2",
+			SubjectAltNameMatchers: testSANMatchers,
 		},
 	}
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {

@@ -42,6 +42,9 @@ const (
 	timeoutSupportEnv            = "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT"
 	faultInjectionSupportEnv     = "GRPC_XDS_EXPERIMENTAL_FAULT_INJECTION"
 	clientSideSecuritySupportEnv = "GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT"
+
+	c2pResolverSupportEnv                    = "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER"
+	c2pResolverTestOnlyTrafficDirectorURIEnv = "GRPC_TEST_ONLY_GOOGLE_C2P_RESOLVER_TRAFFIC_DIRECTOR_URI"
 )
 
 var (
@@ -58,16 +61,20 @@ var (
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	BootstrapFileContent = os.Getenv(BootstrapFileContentEnv)
 	// CircuitBreakingSupport indicates whether circuit breaking support is
-	// enabled, which can be done by setting the environment variable
-	// "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING" to "true".
-	CircuitBreakingSupport = strings.EqualFold(os.Getenv(circuitBreakingSupportEnv), "true")
+	// enabled, which can be disabled by setting the environment variable
+	// "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING" to "false".
+	CircuitBreakingSupport = !strings.EqualFold(os.Getenv(circuitBreakingSupportEnv), "false")
 	// TimeoutSupport indicates whether support for max_stream_duration in
-	// route actions is enabled.  This can be enabled by setting the
-	// environment variable "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT" to "true".
-	TimeoutSupport = strings.EqualFold(os.Getenv(timeoutSupportEnv), "true")
+	// route actions is enabled.  This can be disabled by setting the
+	// environment variable "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT" to "false".
+	TimeoutSupport = !strings.EqualFold(os.Getenv(timeoutSupportEnv), "false")
 	// FaultInjectionSupport is used to control both fault injection and HTTP
 	// filter support.
-	FaultInjectionSupport = strings.EqualFold(os.Getenv(faultInjectionSupportEnv), "true")
+	FaultInjectionSupport = !strings.EqualFold(os.Getenv(faultInjectionSupportEnv), "false")
+	// C2PResolverSupport indicates whether support for C2P resolver is enabled.
+	// This can be enabled by setting the environment variable
+	// "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER" to "true".
+	C2PResolverSupport = strings.EqualFold(os.Getenv(c2pResolverSupportEnv), "true")
 	// ClientSideSecuritySupport is used to control processing of security
 	// configuration on the client-side.
 	//
@@ -75,4 +82,6 @@ var (
 	// have a brand new API on the server-side and users explicitly need to use
 	// the new API to get security integration on the server.
 	ClientSideSecuritySupport = strings.EqualFold(os.Getenv(clientSideSecuritySupportEnv), "true")
+	// C2PResolverTestOnlyTrafficDirectorURI is the TD URI for testing.
+	C2PResolverTestOnlyTrafficDirectorURI = os.Getenv(c2pResolverTestOnlyTrafficDirectorURIEnv)
 )

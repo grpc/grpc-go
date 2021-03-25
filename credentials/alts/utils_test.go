@@ -22,8 +22,6 @@ package alts
 
 import (
 	"context"
-	"io"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -41,67 +39,6 @@ const (
 
 	defaultTestTimeout = 10 * time.Second
 )
-
-func setupManufacturerReader(testOS string, reader func() (io.Reader, error)) func() {
-	tmpOS := runningOS
-	tmpReader := manufacturerReader
-
-	// Set test OS and reader function.
-	runningOS = testOS
-	manufacturerReader = reader
-	return func() {
-		runningOS = tmpOS
-		manufacturerReader = tmpReader
-	}
-
-}
-
-func setup(testOS string, testReader io.Reader) func() {
-	reader := func() (io.Reader, error) {
-		return testReader, nil
-	}
-	return setupManufacturerReader(testOS, reader)
-}
-
-func setupError(testOS string, err error) func() {
-	reader := func() (io.Reader, error) {
-		return nil, err
-	}
-	return setupManufacturerReader(testOS, reader)
-}
-
-func (s) TestIsRunningOnGCP(t *testing.T) {
-	for _, tc := range []struct {
-		description string
-		testOS      string
-		testReader  io.Reader
-		out         bool
-	}{
-		// Linux tests.
-		{"linux: not a GCP platform", "linux", strings.NewReader("not GCP"), false},
-		{"Linux: GCP platform (Google)", "linux", strings.NewReader("Google"), true},
-		{"Linux: GCP platform (Google Compute Engine)", "linux", strings.NewReader("Google Compute Engine"), true},
-		{"Linux: GCP platform (Google Compute Engine) with extra spaces", "linux", strings.NewReader("  Google Compute Engine        "), true},
-		// Windows tests.
-		{"windows: not a GCP platform", "windows", strings.NewReader("not GCP"), false},
-		{"windows: GCP platform (Google)", "windows", strings.NewReader("Google"), true},
-		{"windows: GCP platform (Google) with extra spaces", "windows", strings.NewReader("  Google     "), true},
-	} {
-		reverseFunc := setup(tc.testOS, tc.testReader)
-		if got, want := isRunningOnGCP(), tc.out; got != want {
-			t.Errorf("%v: isRunningOnGCP()=%v, want %v", tc.description, got, want)
-		}
-		reverseFunc()
-	}
-}
-
-func (s) TestIsRunningOnGCPNoProductNameFile(t *testing.T) {
-	reverseFunc := setupError("linux", os.ErrNotExist)
-	if isRunningOnGCP() {
-		t.Errorf("ErrNotExist: isRunningOnGCP()=true, want false")
-	}
-	reverseFunc()
-}
 
 func (s) TestAuthInfoFromContext(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

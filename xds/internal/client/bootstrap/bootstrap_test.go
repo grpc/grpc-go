@@ -36,7 +36,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/xds/internal/env"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -240,8 +240,8 @@ func (c *Config) compare(want *Config) error {
 	if diff := cmp.Diff(want.NodeProto, c.NodeProto, cmp.Comparer(proto.Equal)); diff != "" {
 		return fmt.Errorf("config.NodeProto diff (-want, +got):\n%s", diff)
 	}
-	if c.ServerResourceNameID != want.ServerResourceNameID {
-		return fmt.Errorf("config.ServerResourceNameID is %q, want %q", c.ServerResourceNameID, want.ServerResourceNameID)
+	if c.ServerListenerResourceNameTemplate != want.ServerListenerResourceNameTemplate {
+		return fmt.Errorf("config.ServerListenerResourceNameTemplate is %q, want %q", c.ServerListenerResourceNameTemplate, want.ServerListenerResourceNameTemplate)
 	}
 
 	// A vanilla cmp.Equal or cmp.Diff will not produce useful error message
@@ -711,9 +711,9 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 	}
 }
 
-func TestNewConfigWithServerResourceNameID(t *testing.T) {
+func TestNewConfigWithServerListenerResourceNameTemplate(t *testing.T) {
 	cancel := setupBootstrapOverride(map[string]string{
-		"badServerResourceNameID": `
+		"badServerListenerResourceNameTemplate:": `
 		{
 			"node": {
 				"id": "ENVOY_NODE_ID",
@@ -727,9 +727,9 @@ func TestNewConfigWithServerResourceNameID(t *testing.T) {
 					{ "type": "google_default" }
 				]
 			}],
-			"grpc_server_resource_name_id": 123456789
+			"server_listener_resource_name_template": 123456789
 		}`,
-		"goodServerResourceNameID": `
+		"goodServerListenerResourceNameTemplate": `
 		{
 			"node": {
 				"id": "ENVOY_NODE_ID",
@@ -743,7 +743,7 @@ func TestNewConfigWithServerResourceNameID(t *testing.T) {
 					{ "type": "google_default" }
 				]
 			}],
-			"grpc_server_resource_name_id": "grpc/server"
+			"server_listener_resource_name_template": "grpc/server?xds.resource.listening_address=%s"
 		}`,
 	})
 	defer cancel()
@@ -754,17 +754,17 @@ func TestNewConfigWithServerResourceNameID(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name:    "badServerResourceNameID",
+			name:    "badServerListenerResourceNameTemplate",
 			wantErr: true,
 		},
 		{
-			name: "goodServerResourceNameID",
+			name: "goodServerListenerResourceNameTemplate",
 			wantConfig: &Config{
-				BalancerName:         "trafficdirector.googleapis.com:443",
-				Creds:                grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-				TransportAPI:         version.TransportV2,
-				NodeProto:            v2NodeProto,
-				ServerResourceNameID: "grpc/server",
+				BalancerName:                       "trafficdirector.googleapis.com:443",
+				Creds:                              grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
+				TransportAPI:                       version.TransportV2,
+				NodeProto:                          v2NodeProto,
+				ServerListenerResourceNameTemplate: "grpc/server?xds.resource.listening_address=%s",
 			},
 		},
 	}
