@@ -112,9 +112,6 @@ func processClientSideListener(lis *v3listenerpb.Listener, logger *grpclog.Prefi
 		}
 		update.RouteConfigName = name
 	case *v3httppb.HttpConnectionManager_RouteConfig:
-		// // TODO: Add support for specifying the RouteConfiguration inline
-		// // in the LDS response.
-		// return nil, fmt.Errorf("LDS response contains RDS config inline. Not supported for now: %+v", apiLis)
 		routeU, err := generateRDSUpdateFromRouteConfiguration(apiLis.GetRouteConfig(), logger, v2)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
