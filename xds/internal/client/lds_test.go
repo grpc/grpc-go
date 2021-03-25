@@ -54,6 +54,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		v3LDSTarget       = "lds.target.good:3333"
 		v2RouteConfigName = "v2RouteConfig"
 		v3RouteConfigName = "v3RouteConfig"
+		routeName         = "routeName"
 	)
 
 	var (
@@ -131,6 +132,39 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			Name:       "unknownFilter",
 			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: unknownFilterConfig},
 			IsOptional: true,
+		}
+		v3LisWithInlineRoute = &anypb.Any{
+			TypeUrl: version.V3ListenerURL,
+			Value: func() []byte {
+				hcm := &v3httppb.HttpConnectionManager{
+					RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+						RouteConfig: &v3routepb.RouteConfiguration{
+							Name: routeName,
+							VirtualHosts: []*v3routepb.VirtualHost{{
+								Domains: []string{v3LDSTarget},
+								Routes: []*v3routepb.Route{{
+									Match: &v3routepb.RouteMatch{
+										PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+									},
+									Action: &v3routepb.Route_Route{
+										Route: &v3routepb.RouteAction{
+											ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
+										}}}}}}},
+					},
+					CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
+						MaxStreamDuration: durationpb.New(time.Second),
+					},
+				}
+				mcm := marshalAny(hcm)
+				lis := &v3listenerpb.Listener{
+					Name: v3LDSTarget,
+					ApiListener: &v3listenerpb.ApiListener{
+						ApiListener: mcm,
+					},
+				}
+				mLis, _ := proto.Marshal(lis)
+				return mLis
+			}(),
 		}
 		v3LisWithFilters = func(fs ...*v3httppb.HttpFilter) *anypb.Any {
 			hcm := &v3httppb.HttpConnectionManager{
@@ -644,6 +678,25 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resources: []*anypb.Any{v3LisWithFilters()},
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3LisWithFilters()},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
+			name:      "v3 listener with inline route configuration",
+			resources: []*anypb.Any{v3LisWithInlineRoute},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {
+					InlineRouteConfig: RouteConfigUpdate{
+						VirtualHosts: []*VirtualHost{{
+							Domains: []string{v3LDSTarget},
+							Routes:  []*Route{{Prefix: newStringP("/"), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}}},
+						}}},
+					MaxStreamDuration: time.Second,
+					Raw:               v3LisWithInlineRoute,
+				},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,

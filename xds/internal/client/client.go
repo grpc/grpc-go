@@ -195,7 +195,15 @@ type UpdateMetadata struct {
 type ListenerUpdate struct {
 	// RouteConfigName is the route configuration name corresponding to the
 	// target which is being watched through LDS.
+	//
+	// Only one of RouteConfigName and InlineRouteConfig is set.
 	RouteConfigName string
+	// InlineRouteConfig is the inline route configuration (RDS response)
+	// returned inside LDS.
+	//
+	// Only one of RouteConfigName and InlineRouteConfig is set.
+	InlineRouteConfig RouteConfigUpdate
+
 	// MaxStreamDuration contains the HTTP connection manager's
 	// common_http_protocol_options.max_stream_duration field, or zero if
 	// unset.
