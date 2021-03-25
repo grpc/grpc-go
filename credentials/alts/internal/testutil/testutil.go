@@ -25,6 +25,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc/credentials/alts/internal/conn"
 )
@@ -90,6 +91,10 @@ func (c *testConn) Close() error {
 	return nil
 }
 
+func (c *testConn) SetReadDeadline(time.Time) error {
+	return nil
+}
+
 // unresponsiveTestConn mimics a net.Conn for an unresponsive peer. It is used
 // for testing the PeerNotResponding case.
 type unresponsiveTestConn struct {
@@ -113,6 +118,10 @@ func (c *unresponsiveTestConn) Write(b []byte) (n int, err error) {
 
 // Close closes the TestConn object.
 func (c *unresponsiveTestConn) Close() error {
+	return nil
+}
+
+func (c *unresponsiveTestConn) SetReadDeadline(time.Time) error {
 	return nil
 }
 
