@@ -26,7 +26,7 @@ import (
 	"io"
 	"net"
 	"sync"
-
+	"time"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -44,6 +44,8 @@ const (
 	// maxPendingHandshakes represents the maximum number of concurrent
 	// handshakes.
 	maxPendingHandshakes = 100
+	// Timeout on Read() calls when doing the handshake.
+	readTimeout = 10 * time.Second
 )
 
 var (
@@ -334,6 +336,7 @@ func (h *altsHandshaker) processUntilDone(resp *altspb.HandshakerResp, extra []b
 			return resp.Result, extra, nil
 		}
 		buf := make([]byte, frameLimit)
+		h.conn.SetReadDeadline(time.Now().Add(readTimeout))
 		n, err := h.conn.Read(buf)
 		if err != nil && err != io.EOF {
 			return nil, nil, err
