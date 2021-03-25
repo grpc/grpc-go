@@ -126,7 +126,10 @@ func main() {
 	}
 
 	resolver.SetDefaultScheme("dns")
-	serverAddr := net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
+	serverAddr := *serverHost
+	if *serverPort != 0 {
+		serverAddr = net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
+	}
 	var opts []grpc.DialOption
 	switch credsChosen {
 	case credsTLS:
