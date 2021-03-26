@@ -190,7 +190,7 @@ type dnsResolver struct {
 	wg                   sync.WaitGroup
 	disableServiceConfig bool
 
-	stopPolling    *grpcsync.Event
+	stopPolling *grpcsync.Event
 }
 
 // poll begins or ends asynchronous polling of the resolver based on whether
@@ -206,7 +206,7 @@ func (d *dnsResolver) poll(updateStateErr error) {
 		return
 	}
 	// The goroutine that is running poll() has already been created.
-	if d.stopPolling != nil{
+	if d.stopPolling != nil {
 		return
 	}
 	d.stopPolling = grpcsync.NewEvent()
