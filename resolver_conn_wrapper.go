@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -97,7 +98,10 @@ func (ccr *ccResolverWrapper) UpdateState(s resolver.State) error {
 		ccr.addChannelzTraceEvent(s)
 	}
 	ccr.curState = s
-	return ccr.cc.updateResolverState(ccr.curState, nil)
+	if err := ccr.cc.updateResolverState(ccr.curState, nil); err != balancer.ErrBadResolverState {
+		return nil
+	}
+	return balancer.ErrBadResolverState
 }
 
 func (ccr *ccResolverWrapper) ReportError(err error) {
