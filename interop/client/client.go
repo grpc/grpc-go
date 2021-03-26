@@ -185,8 +185,7 @@ func main() {
 		}
 	}
 	if len(*serviceConfigJSON) > 0 {
-		opts = append(opts, grpc.WithDisableServiceConfig())
-		opts = append(opts, grpc.WithDefaultServiceConfig(*serviceConfigJSON))
+		opts = append(opts, grpc.WithDisableServiceConfig(), grpc.WithDefaultServiceConfig(*serviceConfigJSON))
 	}
 	opts = append(opts, grpc.WithBlock())
 	conn, err := grpc.Dial(serverAddr, opts...)
