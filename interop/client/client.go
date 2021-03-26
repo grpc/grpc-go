@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/interop"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
+	_ "google.golang.org/grpc/xds/googledirectpath"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -127,7 +128,10 @@ func main() {
 	}
 
 	resolver.SetDefaultScheme("dns")
-	serverAddr := net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
+	serverAddr := *serverHost
+	if *serverPort != 0 {
+		serverAddr = net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
+	}
 	var opts []grpc.DialOption
 	switch credsChosen {
 	case credsTLS:
