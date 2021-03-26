@@ -520,14 +520,14 @@ func clusterTypeFromCluster(cluster *v3clusterpb.Cluster) (ClusterType, string, 
 		// If the Cluster message in the CDS response did not contain a
 		// serviceName, we will just use the clusterName for EDS.
 		if cluster.GetEdsClusterConfig().GetServiceName() == "" {
-			return Eds, cluster.GetName(), nil, nil
+			return ClusterTypeEDS, cluster.GetName(), nil, nil
 		}
-		return Eds, cluster.GetEdsClusterConfig().GetServiceName(), nil, nil
+		return ClusterTypeEDS, cluster.GetEdsClusterConfig().GetServiceName(), nil, nil
 	}
 
 	if cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS {
 		// TODO (zasweq): any checks on the Logical DNS Config just like EDS?
-		return LogicalDNS, cluster.GetName(), nil, nil
+		return ClusterTypeLogicalDNS, cluster.GetName(), nil, nil
 	}
 
 	if cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate" {
@@ -536,9 +536,9 @@ func clusterTypeFromCluster(cluster *v3clusterpb.Cluster) (ClusterType, string, 
 		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
 			return 0, "", nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 		}
-		return Aggregate, cluster.GetName(), clusters.Clusters, nil
+		return ClusterTypeAggregate, cluster.GetName(), clusters.Clusters, nil
 	}
-	return 0, "", nil, fmt.Errorf("unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
+	return 0, "", nil, fmt.Errorf("unexpected cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
 }
 
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
@@ -554,7 +554,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	if env.ClientSideSecuritySupport {
 		var err error
 		if sc, err = securityConfigFromCluster(cluster); err != nil {
-			return ClusterUpdate{ServiceName: "", EnableLRS: false}, err
+			return emptyUpdate, err
 		}
 	}
 

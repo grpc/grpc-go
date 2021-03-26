@@ -53,7 +53,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name: "non-supported-cluster-type",
+			name: "non-supported-cluster-type-static",
 			cluster: &v3clusterpb.Cluster{
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
@@ -69,7 +69,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 			wantErr:    true,
 		},
 		{
-			name: "non-supported-cluster-type",
+			name: "non-supported-cluster-type-original-dst",
 			cluster: &v3clusterpb.Cluster{
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_ORIGINAL_DST},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
@@ -137,27 +137,12 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		wantUpdate ClusterUpdate
 	}{
 		{
-			name: "happy-case-no-service-name-no-lrs",
-			cluster: &v3clusterpb.Cluster{
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-			},
-			wantUpdate: emptyUpdate,
-		},
-		{
 			name: "happy-case-logical-dns",
 			cluster: &v3clusterpb.Cluster{
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_LOGICAL_DNS},
 				LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: ClusterUpdate{ServiceName: "", EnableLRS: false, ClusterType: LogicalDNS},
+			wantUpdate: ClusterUpdate{ServiceName: "", EnableLRS: false, ClusterType: ClusterTypeLogicalDNS},
 		},
 		{
 			name: "happy-case-aggregate-v3",
@@ -167,7 +152,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: ClusterUpdate{ServiceName: "", EnableLRS: false, ClusterType: Aggregate},
+			wantUpdate: ClusterUpdate{ServiceName: "", EnableLRS: false, ClusterType: ClusterTypeAggregate},
 		},
 		{
 			name: "happy-case-no-service-name-no-lrs",
