@@ -359,15 +359,15 @@ type SecurityConfig struct {
 type ClusterType int
 
 const (
-	// Eds represents the EDS cluster type, which will delegate endpoint discovery
-	// to the management server.
+	// ClusterTypeEDS represents the EDS cluster type, which will delegate endpoint
+	// discovery to the management server.
 	ClusterTypeEDS ClusterType = iota
-	// LogicalDNS represents the Logical DNS cluster type, which essentially maps
-	// to the gRPC behavior of using the DNS resolver with pick_first LB policy.
+	// ClusterTypeLogicalDNS represents the Logical DNS cluster type, which essentially
+	// maps to the gRPC behavior of using the DNS resolver with pick_first LB policy.
 	ClusterTypeLogicalDNS
-	// Aggregate represents the Aggregate Cluster type, which provides a prioritized
-	// list of clusters to use. It is used for failover between clusters with a
-	// different configuration.
+	// ClusterTypeAggregate represents the Aggregate Cluster type, which provides a
+	// prioritized list of clusters to use. It is used for failover between clusters
+	// with a different configuration.
 	ClusterTypeAggregate
 )
 
