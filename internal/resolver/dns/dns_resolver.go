@@ -191,25 +191,26 @@ type dnsResolver struct {
 	disableServiceConfig bool
 
 	stopPolling    *grpcsync.Event
-	startedPolling bool
 }
 
 // poll begins or ends asynchronous polling of the resolver based on whether
 // it is called with an error.
 func (d *dnsResolver) poll(updateStateErr error) {
 	if updateStateErr == nil {
-		if d.startedPolling {
+		// There is a goroutine that is running poll(). Since there is no longer an error returned,
+		// there is no longer any need for poll() to continue running.
+		if d.stopPolling != nil {
 			d.stopPolling.Fire()
-			d.startedPolling = false
+			d.stopPolling = nil
 		}
 		return
 	}
-	// The goroutine that is running poll() is already running.
-	if d.startedPolling {
+	// The goroutine that is running poll() has already been created.
+	if d.stopPolling != nil{
 		return
 	}
-	d.startedPolling = true
 	d.stopPolling = grpcsync.NewEvent()
+	stopPolling := d.stopPolling
 	// This exponential backoff go routine will be running at most once.
 	d.wg.Add(1)
 	go func() {
@@ -218,14 +219,14 @@ func (d *dnsResolver) poll(updateStateErr error) {
 		for i := 0; ; i++ {
 			t := newTimer(backoff.DefaultExponential.Backoff(i))
 			select {
-			case <-d.stopPolling.Done():
+			case <-stopPolling.Done():
 				// Polling was successful.
 				t.Stop()
 				return
 			case <-d.ctx.Done():
 				return
 			case <-t.C:
-				if d.stopPolling.HasFired() {
+				if stopPolling.HasFired() {
 					return
 				}
 				// Timer expired; re-resolve.
