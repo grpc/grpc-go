@@ -190,8 +190,7 @@ type dnsResolver struct {
 	wg                   sync.WaitGroup
 	disableServiceConfig bool
 
-	//polling chan struct{}
-	stopPolling *grpcsync.Event
+	stopPolling    *grpcsync.Event
 	startedPolling bool
 }
 
