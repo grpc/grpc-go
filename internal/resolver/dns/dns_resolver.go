@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -134,7 +135,6 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 		cancel:               cancel,
 		cc:                   cc,
 		rn:                   make(chan struct{}, 1),
-		pn:                   make(chan struct{}, 1),
 		disableServiceConfig: opts.DisableServiceConfig,
 	}
 
@@ -179,10 +179,8 @@ type dnsResolver struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	cc       resolver.ClientConn
-	// rn channel is used by ResolveNow() to force an immediate resolution of the target.
+	// rn channel is used by ResolveNow() and poll() to force an immediate resolution of the target.
 	rn chan struct{}
-	// pn channel is used by poll() to force another resolution of the target.
-	pn chan struct{}
 	// wg is used to enforce Close() to return after the watcher() goroutine has finished.
 	// Otherwise, data race will be possible. [Race Example] in dns_resolver_test we
 	// replace the real lookup functions with mocked ones to facilitate testing.
@@ -192,27 +190,27 @@ type dnsResolver struct {
 	wg                   sync.WaitGroup
 	disableServiceConfig bool
 
-	polling chan struct{}
+	//polling chan struct{}
+	stopPolling *grpcsync.Event
+	startedPolling bool
 }
 
 // poll begins or ends asynchronous polling of the resolver based on whether
 // err is ErrBadResolverState.
-func (d *dnsResolver) poll(errorFromClientConn error) {
-	// The only time to stop polling is when we don't receive an ErrBadResolverState from client.
-	if errorFromClientConn != balancer.ErrBadResolverState {
-		// Stop polling
-		if d.polling != nil {
-			close(d.polling)
-			d.polling = nil
+func (d *dnsResolver) poll(updateStateErr error) {
+	if updateStateErr == nil {
+		if d.startedPolling {
+			d.stopPolling.Fire()
+			d.startedPolling = false
 		}
 		return
 	}
 	// The goroutine that is running poll() is already running.
-	if d.polling != nil {
+	if d.startedPolling {
 		return
 	}
-	p := make(chan struct{})
-	d.polling = p
+	d.startedPolling = true
+	d.stopPolling = grpcsync.NewEvent()
 	// This exponential backoff go routine will be running at most once.
 	d.wg.Add(1)
 	go func() {
@@ -221,18 +219,15 @@ func (d *dnsResolver) poll(errorFromClientConn error) {
 		for i := 0; ; i++ {
 			t := newTimer(backoff.DefaultExponential.Backoff(i))
 			select {
-			case <-p:
+			case <-d.stopPolling.Done():
 				// Polling was successful.
 				t.Stop()
 				return
 			case <-d.ctx.Done():
 				return
 			case <-t.C:
-				select {
-				case <-p:
-					// Polling was successful.
+				if d.stopPolling.HasFired() {
 					return
-				default:
 				}
 				// Timer expired; re-resolve.
 			}
@@ -240,7 +235,7 @@ func (d *dnsResolver) poll(errorFromClientConn error) {
 			// This allows a re-resolution to be guarded by the resolveNowBackoff() function, which can be toggled
 			// in a test.
 			select {
-			case d.pn <- struct{}{}:
+			case d.rn <- struct{}{}:
 			default:
 			}
 		}
@@ -268,7 +263,6 @@ func (d *dnsResolver) watcher() {
 		case <-d.ctx.Done():
 			return
 		case <-d.rn:
-		case <-d.pn:
 		}
 
 		state, err := d.lookup()
