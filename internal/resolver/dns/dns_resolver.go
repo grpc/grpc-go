@@ -195,7 +195,7 @@ type dnsResolver struct {
 }
 
 // poll begins or ends asynchronous polling of the resolver based on whether
-// err is ErrBadResolverState.
+// it is called with an error.
 func (d *dnsResolver) poll(updateStateErr error) {
 	if updateStateErr == nil {
 		if d.startedPolling {

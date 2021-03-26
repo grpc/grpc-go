@@ -68,7 +68,8 @@ func (t *testClientConn) UpdateState(s resolver.State) error {
 	defer t.m1.Unlock()
 	t.state = s
 	t.updateStateCalls++
-	// This error determines whether DNS Resolver actually decides to exponentially backoff or not - has to return balancer.ErrBadResolverState to exponentially backoff.
+	// This error determines whether DNS Resolver actually decides to exponentially backoff or not.
+	// This can be any error.
 	t.backoffMutex.Lock()
 	if t.causeDNSResolverToBackoff {
 		t.backoffMutex.Unlock()
@@ -834,7 +835,7 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 		}
 		cc.m1.Unlock()
 
-		// Update resolver.ClientConn to not return balancer.ErrBadResolverState anymore - this should stop it from backing off.
+		// Update resolver.ClientConn to not return an error anymore - this should stop it from backing off.
 		cc.backoffMutex.Lock()
 		cc.causeDNSResolverToBackoff = false
 		cc.backoffMutex.Unlock()
@@ -848,7 +849,7 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 		time.Sleep(time.Millisecond * 3)
 		select {
 		case <-timerChan:
-			t.Error("Should not poll again after balancer.BadResolverState does not return")
+			t.Error("Should not poll again after no more error")
 		default:
 		}
 		cc.m1.Lock()
@@ -1545,7 +1546,8 @@ func TestRateLimitedResolve(t *testing.T) {
 	}
 }
 
-// DNS Resolver immediately starts polling on an error. Thus, test that constantly sending errors.
+// DNS Resolver immediately starts polling on an error. This will cause the re-resolution to return another error.
+// Thus, test that it constantly sends errors to the grpc.ClientConn.
 func TestReportError(t *testing.T) {
 	const target = "notfoundaddress"
 	nt := newTimer
@@ -1578,7 +1580,7 @@ func TestReportError(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		timer := <-timerChan
 		timer.Reset(0)
-		// Should call ReportError()
+		// Should call ReportError().
 		err = <-cc.errChan
 		// Propagate.
 		time.Sleep(time.Millisecond)
