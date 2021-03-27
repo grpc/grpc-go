@@ -72,7 +72,10 @@ jobs:
       # Only run vet for 'vet' runs.
       - name: Run vet.sh
         if: ${{ matrix.type == 'vet' }}
-        run: ./vet.sh -install && ./vet.sh
+        run: |
+          ./vet.sh -install && ./vet.sh
+          cd ${GITHUB_WORKSPACE}/security/advancedtls && go vet -all ./...
+          cd ${GITHUB_WORKSPACE}/security/authorization && go vet -all ./...
 
       # Main tests run for everything except when testing "extras", the race
       # detector and Go1.11 (where we run a reduced set of tests).
