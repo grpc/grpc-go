@@ -21,10 +21,10 @@ test:
 
 testsubmodule:
 # 	cd security/advancedtls && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/advancedtls/...
-	$(info this is a information line)
-	$(warning this is a information line)
-	$(error this is a information line)
-	xxx
+# 	$(info this is a information line)
+# 	$(warning this is a information line)
+# 	$(error this is a information line)
+# 	xxx
 	cd security/advancedtls && go vet -all ./...
 # 	cd security/authorization && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/authorization/...
 
