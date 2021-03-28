@@ -182,8 +182,6 @@ func (s) TestServerHandshakeReturnsAuthInfo(t *testing.T) {
 	if !compare(clientAuthInfo, serverAuthInfo) {
 		t.Fatalf("ServerHandshake(_) = %v, want %v.", serverAuthInfo, clientAuthInfo)
 	}
-	//ctx, _ := context.WithCancel(context.Background())
-	//fmt.Println(ctx)
 }
 
 func (s) TestServerAndClientHandshake(t *testing.T) {

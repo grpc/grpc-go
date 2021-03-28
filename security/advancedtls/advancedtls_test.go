@@ -181,8 +181,6 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 			}
 		})
 	}
-	//ctx, _ := context.WithCancel(context.Background())
-	//fmt.Println(ctx)
 }
 
 func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
