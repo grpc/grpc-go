@@ -121,10 +121,24 @@ if [[ -z "${VET_SKIP_PROTO}" ]]; then
 fi
 
 # - Check that our modules are tidy.
+#if go help mod >& /dev/null; then
+#  find . -name 'go.mod' | xargs -IXXX bash -c 'cd $(dirname XXX); go mod tidy'
+#  git status --porcelain 2>&1 | fail_on_output || \
+#    (git status; git --no-pager diff; exit 1)
+#fi
+
 if go help mod >& /dev/null; then
-  find . -name 'go.mod' | xargs -IXXX bash -c 'cd $(dirname XXX); go mod tidy'
-  git status --porcelain 2>&1 | fail_on_output || \
+  for x in $(find . -name 'go.mod'); do
+    pushd $(dirname $x)
+    # anything else per-module? are gofmt, goimports, golint, staticcheck, etc also module-bound?
+    go vet -all ./...
+
+
+    go mod tidy
+    git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
+    popd
+  done
 fi
 
 # - Collection of static analysis checks
