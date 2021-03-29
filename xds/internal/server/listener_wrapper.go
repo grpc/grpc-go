@@ -157,21 +157,20 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			// from the net package, and it is useful for us to not shutdown the
 			// server in these conditions. The listen queue being full is one
 			// such case.
-			if ne, ok := err.(interface{ Temporary() bool }); ok && ne.Temporary() {
-				retries++
-				timer := time.NewTimer(backoffFunc(retries))
-				select {
-				case <-timer.C:
-				case <-l.closed.Done():
-					timer.Stop()
-					// Continuing here will cause us to call Accept() again
-					// which will return a non-temporary error.
-					continue
-				}
+			if ne, ok := err.(interface{ Temporary() bool }); !ok || !ne.Temporary() {
+				return nil, err
+			}
+			retries++
+			timer := time.NewTimer(backoffFunc(retries))
+			select {
+			case <-timer.C:
+			case <-l.closed.Done():
+				timer.Stop()
+				// Continuing here will cause us to call Accept() again
+				// which will return a non-temporary error.
 				continue
 			}
-			// Non-temporary errors will be sent upstairs.
-			return nil, err
+			continue
 		}
 		// Reset retries after a successful Accept().
 		retries = 0
@@ -179,16 +178,20 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 		// TODO: Close connections if in "non-serving" state
 
 		// Since the net.Conn represents an incoming connection, the source and
-		// destination address can be retrieved from the local address and remote
-		// address of the net.Conn respectively. And since we only accept TCP
-		// listeners in Serve(), we can safely type assert here.
-		destAddr := conn.LocalAddr().(*net.TCPAddr).IP
-		srcAddr := conn.RemoteAddr().(*net.TCPAddr)
+		// destination address can be retrieved from the local address and
+		// remote address of the net.Conn respectively. If the incoming
+		// connection is not a TCP connection, we close it and move on.
+		destAddr, ok1 := conn.LocalAddr().(*net.TCPAddr)
+		srcAddr, ok2 := conn.RemoteAddr().(*net.TCPAddr)
+		if !ok1 || !ok2 {
+			conn.Close()
+			continue
+		}
 
 		l.mu.RLock()
 		fc, err := l.filterChains.Lookup(xdsclient.FilterChainLookupParams{
 			IsUnspecifiedListener: l.isUnspecifiedAddr,
-			DestAddr:              destAddr,
+			DestAddr:              destAddr.IP,
 			SourceAddr:            srcAddr.IP,
 			SourcePort:            srcAddr.Port,
 		})
