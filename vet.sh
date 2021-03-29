@@ -19,8 +19,8 @@ fail_on_output() {
   tee /dev/stderr | not read
 }
 
-# Check to make sure it's safe to modify the user's git repo.
-git status --porcelain --untracked-files=no | fail_on_output
+## Check to make sure it's safe to modify the user's git repo.
+#git status --porcelain --untracked-files=no | fail_on_output
 
 # Undo any edits made by this script.
 cleanup() {
@@ -105,12 +105,6 @@ git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.
 # TODO: Remove when we drop Go 1.10 support
 go list -f {{.Dir}} ./... | xargs go run test/go_vet/vet.go
 
-# - gofmt, goimports, golint (with exceptions for generated code), go vet.
-gofmt -s -d -l . 2>&1 | fail_on_output
-goimports -l . 2>&1 | not grep -vE "\.pb\.go"
-golint ./... 2>&1 | not grep -vE "/testv3\.pb\.go:"
-go vet -all ./...
-
 misspell -error .
 
 # - Check that generated proto files are up to date.
@@ -120,19 +114,20 @@ if [[ -z "${VET_SKIP_PROTO}" ]]; then
     (git status; git --no-pager diff; exit 1)
 fi
 
-# - Check that our modules are tidy.
-#if go help mod >& /dev/null; then
-#  find . -name 'go.mod' | xargs -IXXX bash -c 'cd $(dirname XXX); go mod tidy'
-#  git status --porcelain 2>&1 | fail_on_output || \
-#    (git status; git --no-pager diff; exit 1)
-#fi
-
+# - gofmt, goimports, golint (with exceptions for generated code), go vet,
+# go mod tidy.
+# Perform these checks on each module inside gRPC.
 if go help mod >& /dev/null; then
-  for x in $(find . -name 'go.mod'); do
-    pushd $(dirname $x)
-    # anything else per-module? are gofmt, goimports, golint, staticcheck, etc also module-bound?
-    go vet -all ./...
-
+  for MOD_FILE in $(find . -name 'go.mod'); do
+    MOD_DIR=$(dirname $MOD_FILE)
+    if [[ $MOD_DIR == "./test/tools" ]]; then
+      continue
+    fi
+    pushd $MOD_DIR
+    go vet -all ./... | fail_on_output
+    gofmt -s -d -l . 2>&1 | fail_on_output
+    goimports -l . 2>&1 | not grep -vE "\.pb\.go"
+    golint ./... 2>&1 | not grep -vE "/testv3\.pb\.go:"
 
     go mod tidy
     git status --porcelain 2>&1 | fail_on_output || \
