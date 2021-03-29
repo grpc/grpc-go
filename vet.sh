@@ -19,8 +19,8 @@ fail_on_output() {
   tee /dev/stderr | not read
 }
 
-## Check to make sure it's safe to modify the user's git repo.
-#git status --porcelain --untracked-files=no | fail_on_output
+# Check to make sure it's safe to modify the user's git repo.
+git status --porcelain --untracked-files=no | fail_on_output
 
 # Undo any edits made by this script.
 cleanup() {
