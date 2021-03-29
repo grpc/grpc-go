@@ -25,7 +25,7 @@ testsubmodule:
 
 testrace:
 	go test -race -cpu 1,4 -timeout 7m google.golang.org/grpc/...
-	
+
 testdeps:
 	GO111MODULE=on go get -d -v -t google.golang.org/grpc/...
 
