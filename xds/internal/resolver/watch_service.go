@@ -110,9 +110,8 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsclient.ListenerUpdate, er
 		httpFilterConfig:  update.HTTPFilters,
 	}
 
-	if update.RouteConfigName == "" {
-		// RDS name from update is empty string, the LDS resp received has an
-		// inline RDS resource.
+	if update.InlineRouteConfig != nil {
+		// The LDS resp received has an inline RDS resource.
 
 		// If there was an RDS watch, cancel it.
 		w.rdsName = ""
@@ -122,7 +121,7 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsclient.ListenerUpdate, er
 		}
 
 		// Handle the inline RDS update as if it's from an RDS watch.
-		w.updateVirtualHostsFromRDS(update.InlineRouteConfig)
+		w.updateVirtualHostsFromRDS(*update.InlineRouteConfig)
 		return
 	}
 

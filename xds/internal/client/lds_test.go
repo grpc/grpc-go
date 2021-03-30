@@ -689,7 +689,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resources: []*anypb.Any{v3LisWithInlineRoute},
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
-					InlineRouteConfig: RouteConfigUpdate{
+					InlineRouteConfig: &RouteConfigUpdate{
 						VirtualHosts: []*VirtualHost{{
 							Domains: []string{v3LDSTarget},
 							Routes:  []*Route{{Prefix: newStringP("/"), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}}},

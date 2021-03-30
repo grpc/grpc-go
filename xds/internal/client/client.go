@@ -202,7 +202,7 @@ type ListenerUpdate struct {
 	// returned inside LDS.
 	//
 	// Only one of RouteConfigName and InlineRouteConfig is set.
-	InlineRouteConfig RouteConfigUpdate
+	InlineRouteConfig *RouteConfigUpdate
 
 	// MaxStreamDuration contains the HTTP connection manager's
 	// common_http_protocol_options.max_stream_duration field, or zero if

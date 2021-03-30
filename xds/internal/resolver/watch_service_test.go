@@ -396,7 +396,7 @@ func (s) TestServiceWatchInlineRDS(t *testing.T) {
 		}},
 	}
 	wantUpdate2 := serviceUpdate{virtualHost: wantVirtualHosts2}
-	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{InlineRouteConfig: xdsclient.RouteConfigUpdate{
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{InlineRouteConfig: &xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{wantVirtualHosts2},
 	}}, nil)
 	// This inline RDS resource should cause the RDS watch to be canceled.
@@ -423,7 +423,7 @@ func (s) TestServiceWatchInlineRDS(t *testing.T) {
 	}
 
 	// Switch LDS resp to a LDS with inline RDS resource again.
-	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{InlineRouteConfig: xdsclient.RouteConfigUpdate{
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{InlineRouteConfig: &xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{wantVirtualHosts2},
 	}}, nil)
 	// This inline RDS resource should cause the RDS watch to be canceled.

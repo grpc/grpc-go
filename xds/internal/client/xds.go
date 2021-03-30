@@ -116,7 +116,7 @@ func processClientSideListener(lis *v3listenerpb.Listener, logger *grpclog.Prefi
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
 		}
-		update.InlineRouteConfig = routeU
+		update.InlineRouteConfig = &routeU
 	case nil:
 		return nil, fmt.Errorf("no RouteSpecifier: %+v", apiLis)
 	default:
