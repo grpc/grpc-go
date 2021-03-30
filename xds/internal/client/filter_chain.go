@@ -413,13 +413,17 @@ func (fci *FilterChainManager) Lookup(params FilterChainLookupParams) (*FilterCh
 		}
 		return nil, fmt.Errorf("no matching filter chain based on source prefix match for %+v", params)
 	}
-
-	filterChain, err := filterBasedOnSourcePorts(srcPrefixEntries, params.SourcePort)
-	if err != nil {
-		return nil, fmt.Errorf("filter chain match failed for %+v: %v", params, err)
+	// We expect a single matching source prefix entry at this point. If we have
+	// multiple entries here, and some of their source port matchers had
+	// wildcard entries, we could be left with more than one matching filter
+	// chain and hence would have been flagged as an invalid configuration at
+	// config validation time.
+	if len(srcPrefixEntries) != 1 {
+		return nil, errors.New("multiple matching filter chains")
 	}
-	if filterChain != nil {
-		return filterChain, nil
+
+	if fc := filterBasedOnSourcePorts(srcPrefixEntries[0], params.SourcePort); fc != nil {
+		return fc, nil
 	}
 	if fci.def != nil {
 		return fci.def, nil
@@ -526,52 +530,18 @@ func filterBasedOnSourcePrefixes(srcPrefixes []*sourcePrefixes, srcAddr net.IP) 
 }
 
 // filterBasedOnSourcePorts is the last stage of the filter chain matching
-// algorithm. It trims the filter chains based on the source ports. It expects
-// to be left with a single matching filter chain and returns an error if there
-// are multiple matching filter chains at the end.
-func filterBasedOnSourcePorts(srcPrefixEntries []*sourcePrefixEntry, srcPort int) (*FilterChain, error) {
-	// We need to find the most specific match from each of these source prefix
-	// entries. A match could be a wildcard match (this happens when the match
+// algorithm. It trims the filter chains based on the source ports.
+func filterBasedOnSourcePorts(spe *sourcePrefixEntry, srcPort int) *FilterChain {
+	// A match could be a wildcard match (this happens when the match
 	// criteria does not specify source ports) or a specific port match (this
 	// happens when the match criteria specifies a set of ports and the source
 	// port of the incoming connection matches one of the specified ports). The
 	// latter is considered to be a more specific match.
-	//
-	// Once all source prefix entries have been processed, we need a single
-	// most-specific matching filter chain.
-	var (
-		wildcardFCs []*FilterChain
-		portFC      *FilterChain
-	)
-	for _, spe := range srcPrefixEntries {
-		if fc := spe.srcPortMap[srcPort]; fc != nil {
-			// There can only be one non-wildcard match. So, the moment we find
-			// a second one, we can error out.
-			if portFC != nil {
-				return nil, errors.New("multiple matching filter chains")
-			}
-			portFC = fc
-		} else if fc := spe.srcPortMap[0]; fc != nil {
-			wildcardFCs = append(wildcardFCs, fc)
-		}
+	if fc := spe.srcPortMap[srcPort]; fc != nil {
+		return fc
 	}
-	if portFC == nil && len(wildcardFCs) == 0 {
-		// This happens when specific source ports are mentioned in the matching
-		// source prefix (and therefore there is no entry for a wildcard port),
-		// but none of them match the incoming source port.
-		return nil, errors.New("no matching filter chain after all match criteria")
+	if fc := spe.srcPortMap[0]; fc != nil {
+		return fc
 	}
-
-	// If we have a specific match, we can be sure that there was only one such
-	// match. So, we can safely return it.
-	if portFC != nil {
-		return portFC, nil
-	}
-
-	// If we did not find a specific match and have more than one wildcard
-	// match, we have a match conflict.
-	if len(wildcardFCs) != 1 {
-		return nil, errors.New("multiple matching filter chains")
-	}
-	return wildcardFCs[0], nil
+	return nil
 }
