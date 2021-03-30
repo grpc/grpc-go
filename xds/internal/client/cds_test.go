@@ -19,6 +19,7 @@
 package client
 
 import (
+	"regexp"
 	"testing"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
@@ -31,7 +32,8 @@ import (
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/grpc/xds/internal/env"
+	xdsinternal "google.golang.org/grpc/internal/xds"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -223,16 +225,79 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 	}
 }
 
+func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
+	// Turn off the env var protection for client-side security.
+	origClientSideSecurityEnvVar := env.ClientSideSecuritySupport
+	env.ClientSideSecuritySupport = false
+	defer func() { env.ClientSideSecuritySupport = origClientSideSecurityEnvVar }()
+
+	cluster := &v3clusterpb.Cluster{
+		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+		EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+			EdsConfig: &v3corepb.ConfigSource{
+				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+					Ads: &v3corepb.AggregatedConfigSource{},
+				},
+			},
+			ServiceName: serviceName,
+		},
+		LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+		TransportSocket: &v3corepb.TransportSocket{
+			Name: "envoy.transport_sockets.tls",
+			ConfigType: &v3corepb.TransportSocket_TypedConfig{
+				TypedConfig: &anypb.Any{
+					TypeUrl: version.V3UpstreamTLSContextURL,
+					Value: func() []byte {
+						tls := &v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+									ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+										InstanceName:    "rootInstance",
+										CertificateName: "rootCert",
+									},
+								},
+							},
+						}
+						mtls, _ := proto.Marshal(tls)
+						return mtls
+					}(),
+				},
+			},
+		},
+	}
+	wantUpdate := ClusterUpdate{
+		ServiceName: serviceName,
+		EnableLRS:   false,
+	}
+	gotUpdate, err := validateCluster(cluster)
+	if err != nil {
+		t.Errorf("validateCluster() failed: %v", err)
+	}
+	if diff := cmp.Diff(wantUpdate, gotUpdate); diff != "" {
+		t.Errorf("validateCluster() returned unexpected diff (-want, got):\n%s", diff)
+	}
+}
+
 func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
+	// Turn on the env var protection for client-side security.
+	origClientSideSecurityEnvVar := env.ClientSideSecuritySupport
+	env.ClientSideSecuritySupport = true
+	defer func() { env.ClientSideSecuritySupport = origClientSideSecurityEnvVar }()
+
 	const (
 		identityPluginInstance = "identityPluginInstance"
 		identityCertName       = "identityCert"
 		rootPluginInstance     = "rootPluginInstance"
 		rootCertName           = "rootCert"
 		serviceName            = "service"
-		san1                   = "san1"
-		san2                   = "san2"
+		sanExact               = "san-exact"
+		sanPrefix              = "san-prefix"
+		sanSuffix              = "san-suffix"
+		sanRegexBad            = "??"
+		sanRegexGood           = "san?regex?"
+		sanContains            = "san-contains"
 	)
+	var sanRE = regexp.MustCompile(sanRegexGood)
 
 	tests := []struct {
 		name       string
@@ -378,6 +443,182 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "empty-prefix-in-matching-SAN",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: &anypb.Any{
+							TypeUrl: version.V3UpstreamTLSContextURL,
+							Value: func() []byte {
+								tls := &v3tlspb.UpstreamTlsContext{
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+											CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+												DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+													MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+														{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: ""}},
+													},
+												},
+												ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+													InstanceName:    rootPluginInstance,
+													CertificateName: rootCertName,
+												},
+											},
+										},
+									},
+								}
+								mtls, _ := proto.Marshal(tls)
+								return mtls
+							}(),
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty-suffix-in-matching-SAN",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: &anypb.Any{
+							TypeUrl: version.V3UpstreamTLSContextURL,
+							Value: func() []byte {
+								tls := &v3tlspb.UpstreamTlsContext{
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+											CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+												DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+													MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+														{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: ""}},
+													},
+												},
+												ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+													InstanceName:    rootPluginInstance,
+													CertificateName: rootCertName,
+												},
+											},
+										},
+									},
+								}
+								mtls, _ := proto.Marshal(tls)
+								return mtls
+							}(),
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty-contains-in-matching-SAN",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: &anypb.Any{
+							TypeUrl: version.V3UpstreamTLSContextURL,
+							Value: func() []byte {
+								tls := &v3tlspb.UpstreamTlsContext{
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+											CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+												DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+													MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+														{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: ""}},
+													},
+												},
+												ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+													InstanceName:    rootPluginInstance,
+													CertificateName: rootCertName,
+												},
+											},
+										},
+									},
+								}
+								mtls, _ := proto.Marshal(tls)
+								return mtls
+							}(),
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid-regex-in-matching-SAN",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: &anypb.Any{
+							TypeUrl: version.V3UpstreamTLSContextURL,
+							Value: func() []byte {
+								tls := &v3tlspb.UpstreamTlsContext{
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+											CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+												DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+													MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+														{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: sanRegexBad}}},
+													},
+												},
+												ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+													InstanceName:    rootPluginInstance,
+													CertificateName: rootCertName,
+												},
+											},
+										},
+									},
+								}
+								mtls, _ := proto.Marshal(tls)
+								return mtls
+							}(),
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "happy-case-with-no-identity-certs",
 			cluster: &v3clusterpb.Cluster{
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -502,8 +743,14 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 											CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
 												DefaultValidationContext: &v3tlspb.CertificateValidationContext{
 													MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
-														{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: san1}},
-														{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: san2}},
+														{
+															MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: sanExact},
+															IgnoreCase:   true,
+														},
+														{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: sanPrefix}},
+														{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: sanSuffix}},
+														{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: sanRegexGood}}},
+														{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: sanContains}},
 													},
 												},
 												ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
@@ -529,7 +776,13 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 					RootCertName:         rootCertName,
 					IdentityInstanceName: identityPluginInstance,
 					IdentityCertName:     identityCertName,
-					AcceptedSANs:         []string{san1, san2},
+					SubjectAltNameMatchers: []xdsinternal.StringMatcher{
+						xdsinternal.StringMatcherForTesting(newStringP(sanExact), nil, nil, nil, nil, true),
+						xdsinternal.StringMatcherForTesting(nil, newStringP(sanPrefix), nil, nil, nil, false),
+						xdsinternal.StringMatcherForTesting(nil, nil, newStringP(sanSuffix), nil, nil, false),
+						xdsinternal.StringMatcherForTesting(nil, nil, nil, nil, sanRE, false),
+						xdsinternal.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
+					},
 				},
 			},
 		},
@@ -538,8 +791,11 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			update, err := validateCluster(test.cluster)
-			if ((err != nil) != test.wantErr) || !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
-				t.Errorf("validateCluster(%+v) = (%+v, %v), want: (%+v, %v)", test.cluster, update, err, test.wantUpdate, test.wantErr)
+			if (err != nil) != test.wantErr {
+				t.Errorf("validateCluster() returned err %v wantErr %v)", err, test.wantErr)
+			}
+			if diff := cmp.Diff(test.wantUpdate, update, cmpopts.EquateEmpty(), cmp.AllowUnexported(regexp.Regexp{})); diff != "" {
+				t.Errorf("validateCluster() returned unexpected diff (-want, +got):\n%s", diff)
 			}
 		})
 	}

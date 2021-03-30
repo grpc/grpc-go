@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 
@@ -194,8 +196,6 @@ type ListenerUpdate struct {
 	// RouteConfigName is the route configuration name corresponding to the
 	// target which is being watched through LDS.
 	RouteConfigName string
-	// SecurityCfg contains security configuration sent by the control plane.
-	SecurityCfg *SecurityConfig
 	// MaxStreamDuration contains the HTTP connection manager's
 	// common_http_protocol_options.max_stream_duration field, or zero if
 	// unset.
@@ -203,6 +203,8 @@ type ListenerUpdate struct {
 	// HTTPFilters is a list of HTTP filters (name, config) from the LDS
 	// response.
 	HTTPFilters []HTTPFilter
+	// InboundListenerCfg contains inbound listener configuration.
+	InboundListenerCfg *InboundListenerConfig
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
@@ -221,8 +223,70 @@ type HTTPFilter struct {
 	Config httpfilter.FilterConfig
 }
 
-func (lu *ListenerUpdate) String() string {
-	return fmt.Sprintf("{RouteConfigName: %q, SecurityConfig: %+v", lu.RouteConfigName, lu.SecurityCfg)
+// InboundListenerConfig contains information about the inbound listener, i.e
+// the server-side listener.
+type InboundListenerConfig struct {
+	// Address is the local address on which the inbound listener is expected to
+	// accept incoming connections.
+	Address string
+	// Port is the local port on which the inbound listener is expected to
+	// accept incoming connections.
+	Port string
+	// FilterChains is the list of filter chains associated with this listener.
+	FilterChains []*FilterChain
+	// DefaultFilterChain is the filter chain to be used when none of the above
+	// filter chains matches an incoming connection.
+	DefaultFilterChain *FilterChain
+}
+
+// FilterChain wraps a set of match criteria and associated security
+// configuration.
+//
+// The actual set filters associated with this filter chain are not captured
+// here, since we do not support these filters on the server yet.
+type FilterChain struct {
+	// Match contains the criteria to use when matching a connection to this
+	// filter chain.
+	Match *FilterChainMatch
+	// SecurityCfg contains transport socket security configuration.
+	SecurityCfg *SecurityConfig
+}
+
+// SourceType specifies the connection source IP match type.
+type SourceType int
+
+const (
+	// SourceTypeAny matches connection attempts from any source.
+	SourceTypeAny SourceType = iota
+	// SourceTypeSameOrLoopback matches connection attempts from the same host.
+	SourceTypeSameOrLoopback
+	// SourceTypeExternal matches connection attempts from a different host.
+	SourceTypeExternal
+)
+
+// FilterChainMatch specifies the match criteria for selecting a specific filter
+// chain of a listener, for an incoming connection.
+//
+// The xDS FilterChainMatch proto specifies 8 match criteria. But we only have a
+// subset of those fields here because we explicitly ignore filter chains whose
+// match criteria specifies values for fields like destination_port,
+// server_names, application_protocols, transport_protocol.
+type FilterChainMatch struct {
+	// DestPrefixRanges specifies a set of IP addresses and prefix lengths to
+	// match the destination address of the incoming connection when the
+	// listener is bound to 0.0.0.0/[::]. If this field is empty, the
+	// destination address is ignored.
+	DestPrefixRanges []net.IP
+	// SourceType specifies the connection source IP match type. Can be any,
+	// local or external network.
+	SourceType SourceType
+	// SourcePrefixRanges specifies a set of IP addresses and prefix lengths to
+	// match the source address of the incoming connection. If this field is
+	// empty, the source address is ignored.
+	SourcePrefixRanges []net.IP
+	// SourcePorts specifies a set of ports to match the source port of the
+	// incoming connection. If this field is empty, the source port is ignored.
+	SourcePorts []uint32
 }
 
 // RouteConfigUpdate contains information received in an RDS response, which is
@@ -322,11 +386,15 @@ type SecurityConfig struct {
 	// IdentityCertName is the certificate name to be passed to the plugin
 	// (looked up from the bootstrap file) while fetching identity certificates.
 	IdentityCertName string
-	// AcceptedSANs is a list of Subject Alternative Names. During the TLS
-	// handshake, the SAN present in the peer certificate is compared against
-	// this list, and the handshake succeeds only if a match is found. Used only
-	// on the client-side.
-	AcceptedSANs []string
+	// SubjectAltNameMatchers is an optional list of match criteria for SANs
+	// specified on the peer certificate. Used only on the client-side.
+	//
+	// Some intricacies:
+	// - If this field is empty, then any peer certificate is accepted.
+	// - If the peer certificate contains a wildcard DNS SAN, and an `exact`
+	//   matcher is configured, a wildcard DNS match is performed instead of a
+	//   regular string comparison.
+	SubjectAltNameMatchers []xds.StringMatcher
 	// RequireClientCert indicates if the server handshake process expects the
 	// client to present a certificate. Set to true when performing mTLS. Used
 	// only on the server-side.

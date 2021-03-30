@@ -38,6 +38,7 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/uuid"
+	xds2 "google.golang.org/grpc/internal/xds"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -60,6 +61,9 @@ const (
 	certFile = "cert.pem"
 	keyFile  = "key.pem"
 	rootFile = "ca.pem"
+
+	// Template for server Listener resource name.
+	serverListenerResourceNameTemplate = "grpc/server?xds.resource.listening_address=%s"
 )
 
 func createTmpFile(t *testing.T, src, dst string) {
@@ -147,12 +151,12 @@ func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, fun
 	cpc := e2e.DefaultFileWatcherConfig(path.Join(tmpdir, certFile), path.Join(tmpdir, keyFile), path.Join(tmpdir, rootFile))
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := e2e.SetupBootstrapFile(e2e.BootstrapOptions{
-		Version:              e2e.TransportV3,
-		NodeID:               nodeID,
-		ServerURI:            fs.Address,
-		CertificateProviders: cpc,
-		ServerResourceNameID: "grpc/server",
+	bootstrapCleanup, err := xds2.SetupBootstrapFile(xds2.BootstrapOptions{
+		Version:                            xds2.TransportV3,
+		NodeID:                             nodeID,
+		ServerURI:                          fs.Address,
+		CertificateProviders:               cpc,
+		ServerListenerResourceNameTemplate: serverListenerResourceNameTemplate,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -211,7 +215,7 @@ func listenerResourceWithoutSecurityConfig(t *testing.T, lis net.Listener) *v3li
 	host, port := hostPortFromListener(t, lis)
 	return &v3listenerpb.Listener{
 		// This needs to match the name we are querying for.
-		Name: fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", lis.Addr().String()),
+		Name: fmt.Sprintf(serverListenerResourceNameTemplate, lis.Addr().String()),
 		Address: &v3corepb.Address{
 			Address: &v3corepb.Address_SocketAddress{
 				SocketAddress: &v3corepb.SocketAddress{
@@ -237,7 +241,7 @@ func listenerResourceWithSecurityConfig(t *testing.T, lis net.Listener) *v3liste
 	host, port := hostPortFromListener(t, lis)
 	return &v3listenerpb.Listener{
 		// This needs to match the name we are querying for.
-		Name: fmt.Sprintf("grpc/server?udpa.resource.listening_address=%s", lis.Addr().String()),
+		Name: fmt.Sprintf(serverListenerResourceNameTemplate, lis.Addr().String()),
 		Address: &v3corepb.Address{
 			Address: &v3corepb.Address_SocketAddress{
 				SocketAddress: &v3corepb.SocketAddress{

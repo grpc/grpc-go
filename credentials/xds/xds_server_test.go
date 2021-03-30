@@ -95,12 +95,13 @@ func (s) TestServerCredsWithoutFallback(t *testing.T) {
 
 type wrapperConn struct {
 	net.Conn
-	xdsHI    *xdsinternal.HandshakeInfo
-	deadline time.Time
+	xdsHI            *xdsinternal.HandshakeInfo
+	deadline         time.Time
+	handshakeInfoErr error
 }
 
-func (wc *wrapperConn) XDSHandshakeInfo() *xdsinternal.HandshakeInfo {
-	return wc.xdsHI
+func (wc *wrapperConn) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
+	return wc.xdsHI, wc.handshakeInfoErr
 }
 
 func (wc *wrapperConn) GetDeadline() time.Time {
@@ -163,6 +164,58 @@ func (s) TestServerCredsProviderFailure(t *testing.T) {
 				t.Fatalf("ServerHandshake() returned error: %q, wantErr: %q", err, test.wantErr)
 			}
 		})
+	}
+}
+
+// TestServerCredsHandshake_XDSHandshakeInfoError verifies the case where the
+// call to XDSHandshakeInfo() from the ServerHandshake() method returns an
+// error, and the test verifies that the ServerHandshake() fails with the
+// expected error.
+func (s) TestServerCredsHandshake_XDSHandshakeInfoError(t *testing.T) {
+	opts := ServerOptions{FallbackCreds: &errorCreds{}}
+	creds, err := NewServerCredentials(opts)
+	if err != nil {
+		t.Fatalf("NewServerCredentials(%v) failed: %v", opts, err)
+	}
+
+	// Create a test server which uses the xDS server credentials created above
+	// to perform TLS handshake on incoming connections.
+	ts := newTestServerWithHandshakeFunc(func(rawConn net.Conn) handshakeResult {
+		// Create a wrapped conn which returns a nil HandshakeInfo and a non-nil error.
+		conn := newWrappedConn(rawConn, nil, time.Now().Add(defaultTestTimeout))
+		hiErr := errors.New("xdsHandshakeInfo error")
+		conn.handshakeInfoErr = hiErr
+
+		// Invoke the ServerHandshake() method on the xDS credentials and verify
+		// that the error returned by the XDSHandshakeInfo() method on the
+		// wrapped conn is returned here.
+		_, _, err := creds.ServerHandshake(conn)
+		if !errors.Is(err, hiErr) {
+			return handshakeResult{err: fmt.Errorf("ServerHandshake() returned err: %v, wantErr: %v", err, hiErr)}
+		}
+		return handshakeResult{}
+	})
+	defer ts.stop()
+
+	// Dial the test server, but don't trigger the TLS handshake. This will
+	// cause ServerHandshake() to fail.
+	rawConn, err := net.Dial("tcp", ts.address)
+	if err != nil {
+		t.Fatalf("net.Dial(%s) failed: %v", ts.address, err)
+	}
+	defer rawConn.Close()
+
+	// Read handshake result from the testServer which will return an error if
+	// the handshake succeeded.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	val, err := ts.hsResult.Receive(ctx)
+	if err != nil {
+		t.Fatalf("testServer failed to return handshake result: %v", err)
+	}
+	hsr := val.(handshakeResult)
+	if hsr.err != nil {
+		t.Fatalf("testServer handshake failure: %v", hsr.err)
 	}
 }
 

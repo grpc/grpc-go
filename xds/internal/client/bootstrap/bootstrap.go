@@ -35,7 +35,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/xds/internal/env"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -79,10 +79,12 @@ type Config struct {
 	// CertProviderConfigs contains a mapping from certificate provider plugin
 	// instance names to parsed buildable configs.
 	CertProviderConfigs map[string]*certprovider.BuildableConfig
-	// ServerResourceNameID contains the value to be used as the id in the
-	// resource name used to fetch the Listener resource on the xDS-enabled gRPC
-	// server.
-	ServerResourceNameID string
+	// ServerListenerResourceNameTemplate is a template for the name of the
+	// Listener resource to subscribe to for a gRPC server. If the token `%s` is
+	// present in the string, it will be replaced with the server's listening
+	// "IP:port" (e.g., "0.0.0.0:8080", "[::]:8080"). For example, a value of
+	// "example/resource/%s" could become "example/resource/0.0.0.0:8080".
+	ServerListenerResourceNameTemplate string
 }
 
 type channelCreds struct {
@@ -145,7 +147,7 @@ func bootstrapConfigFromEnvVariable() ([]byte, error) {
 //        "config": { foo plugin config in JSON }
 //      }
 //    },
-//    "grpc_server_resource_name_id": "grpc/server"
+//    "server_listener_resource_name_template": "grpc/server?xds.resource.listening_address=%s"
 // }
 //
 // Currently, we support exactly one type of credential, which is
@@ -241,8 +243,8 @@ func NewConfig() (*Config, error) {
 				configs[instance] = bc
 			}
 			config.CertProviderConfigs = configs
-		case "grpc_server_resource_name_id":
-			if err := json.Unmarshal(v, &config.ServerResourceNameID); err != nil {
+		case "server_listener_resource_name_template":
+			if err := json.Unmarshal(v, &config.ServerListenerResourceNameTemplate); err != nil {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 		}
