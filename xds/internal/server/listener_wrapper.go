@@ -179,13 +179,15 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 
 		// Since the net.Conn represents an incoming connection, the source and
 		// destination address can be retrieved from the local address and
-		// remote address of the net.Conn respectively. If the incoming
-		// connection is not a TCP connection, we close it and move on.
+		// remote address of the net.Conn respectively.
 		destAddr, ok1 := conn.LocalAddr().(*net.TCPAddr)
 		srcAddr, ok2 := conn.RemoteAddr().(*net.TCPAddr)
 		if !ok1 || !ok2 {
-			conn.Close()
-			continue
+			// If the incoming connection is not a TCP connection, which is
+			// really unexpected since we check whether the provided listener is
+			// a TCP listener in Serve(), we return an error which would cause
+			// us to stop serving.
+			return nil, fmt.Errorf("received connection with non-TCP address (local: %T, remote %T)", conn.LocalAddr(), conn.RemoteAddr())
 		}
 
 		l.mu.RLock()
