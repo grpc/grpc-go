@@ -21,7 +21,6 @@ package credentials
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -168,8 +167,6 @@ func (s) TestClientHandshakeReturnsAuthInfo(t *testing.T) {
 			}
 		})
 	}
-	ctx, _ := context.WithCancel(context.Background())
-	fmt.Println(ctx)
 }
 
 func (s) TestServerHandshakeReturnsAuthInfo(t *testing.T) {
