@@ -386,7 +386,7 @@ type FilterChainLookupParams struct {
 // multiple matching filter chains were found, and in both cases, the incoming
 // connection must be dropped.
 func (fci *FilterChainManager) Lookup(params FilterChainLookupParams) (*FilterChain, error) {
-	dstPrefixes := filterBasedOnDestinationPrefixes(fci.dstPrefixes, params.IsUnspecifiedListener, params.DestAddr)
+	dstPrefixes := filterByDestinationPrefixes(fci.dstPrefixes, params.IsUnspecifiedListener, params.DestAddr)
 	if len(dstPrefixes) == 0 {
 		if fci.def != nil {
 			return fci.def, nil
@@ -398,31 +398,18 @@ func (fci *FilterChainManager) Lookup(params FilterChainLookupParams) (*FilterCh
 	if params.SourceAddr.Equal(params.DestAddr) || params.SourceAddr.IsLoopback() {
 		srcType = SourceTypeSameOrLoopback
 	}
-	srcPrefixes := filterBasedOnSourceType(dstPrefixes, srcType)
+	srcPrefixes := filterBySourceType(dstPrefixes, srcType)
 	if len(srcPrefixes) == 0 {
 		if fci.def != nil {
 			return fci.def, nil
 		}
 		return nil, fmt.Errorf("no matching filter chain based on source type match for %+v", params)
 	}
-
-	srcPrefixEntries := filterBasedOnSourcePrefixes(srcPrefixes, params.SourceAddr)
-	if len(srcPrefixEntries) == 0 {
-		if fci.def != nil {
-			return fci.def, nil
-		}
-		return nil, fmt.Errorf("no matching filter chain based on source prefix match for %+v", params)
+	srcPrefixEntry, err := filterBySourcePrefixes(srcPrefixes, params.SourceAddr)
+	if err != nil {
+		return nil, err
 	}
-	// We expect a single matching source prefix entry at this point. If we have
-	// multiple entries here, and some of their source port matchers had
-	// wildcard entries, we could be left with more than one matching filter
-	// chain and hence would have been flagged as an invalid configuration at
-	// config validation time.
-	if len(srcPrefixEntries) != 1 {
-		return nil, errors.New("multiple matching filter chains")
-	}
-
-	if fc := filterBasedOnSourcePorts(srcPrefixEntries[0], params.SourcePort); fc != nil {
+	if fc := filterBySourcePorts(srcPrefixEntry, params.SourcePort); fc != nil {
 		return fc, nil
 	}
 	if fci.def != nil {
@@ -431,11 +418,11 @@ func (fci *FilterChainManager) Lookup(params FilterChainLookupParams) (*FilterCh
 	return nil, fmt.Errorf("no matching filter chain after all match criteria for %+v", params)
 }
 
-// filterBasedOnDestinationPrefixes is the first stage of the filter chain
+// filterByDestinationPrefixes is the first stage of the filter chain
 // matching algorithm. It takes the complete set of configured filter chain
 // matchers and returns the most specific matchers based on the destination
 // prefix match criteria (the prefixes which match the most number of bits).
-func filterBasedOnDestinationPrefixes(dstPrefixes []*destPrefixEntry, isUnspecified bool, dstAddr net.IP) []*destPrefixEntry {
+func filterByDestinationPrefixes(dstPrefixes []*destPrefixEntry, isUnspecified bool, dstAddr net.IP) []*destPrefixEntry {
 	if !isUnspecified {
 		// Destination prefix matchers are considered only when the listener is
 		// bound to the wildcard address.
@@ -462,9 +449,9 @@ func filterBasedOnDestinationPrefixes(dstPrefixes []*destPrefixEntry, isUnspecif
 	return matchingDstPrefixes
 }
 
-// filterBasedOnSourceType is the second stage of the matching algorithm. It
+// filterBySourceType is the second stage of the matching algorithm. It
 // trims the filter chains based on the most specific source type match.
-func filterBasedOnSourceType(dstPrefixes []*destPrefixEntry, srcType SourceType) []*sourcePrefixes {
+func filterBySourceType(dstPrefixes []*destPrefixEntry, srcType SourceType) []*sourcePrefixes {
 	var (
 		srcPrefixes      []*sourcePrefixes
 		bestSrcTypeMatch int
@@ -502,10 +489,10 @@ func filterBasedOnSourceType(dstPrefixes []*destPrefixEntry, srcType SourceType)
 	return srcPrefixes
 }
 
-// filterBasedOnSourcePrefixes is the third stage of the filter chain matching
-// algorithm. It trims the filter chains based on the source prefix. Only filter
-// chains with the most specific match progress to the next stage.
-func filterBasedOnSourcePrefixes(srcPrefixes []*sourcePrefixes, srcAddr net.IP) []*sourcePrefixEntry {
+// filterBySourcePrefixes is the third stage of the filter chain matching
+// algorithm. It trims the filter chains based on the source prefix. At most one
+// filter chain with the most specific match progress to the next stage.
+func filterBySourcePrefixes(srcPrefixes []*sourcePrefixes, srcAddr net.IP) (*sourcePrefixEntry, error) {
 	var (
 		matchingSrcPrefixes []*sourcePrefixEntry
 		maxSubnetMatch      int
@@ -526,12 +513,28 @@ func filterBasedOnSourcePrefixes(srcPrefixes []*sourcePrefixes, srcAddr net.IP) 
 			matchingSrcPrefixes = append(matchingSrcPrefixes, prefix)
 		}
 	}
-	return matchingSrcPrefixes
+	if len(matchingSrcPrefixes) == 0 {
+		// Finding no match is not an error condition. The caller will end up
+		// using the default filter chain if one was configured.
+		return nil, nil
+	}
+	// We expect at most a single matching source prefix entry at this point. If
+	// we have multiple entries here, and some of their source port matchers had
+	// wildcard entries, we could be left with more than one matching filter
+	// chain and hence would have been flagged as an invalid configuration at
+	// config validation time.
+	if len(matchingSrcPrefixes) != 1 {
+		return nil, errors.New("multiple matching filter chains")
+	}
+	return matchingSrcPrefixes[0], nil
 }
 
-// filterBasedOnSourcePorts is the last stage of the filter chain matching
+// filterBySourcePorts is the last stage of the filter chain matching
 // algorithm. It trims the filter chains based on the source ports.
-func filterBasedOnSourcePorts(spe *sourcePrefixEntry, srcPort int) *FilterChain {
+func filterBySourcePorts(spe *sourcePrefixEntry, srcPort int) *FilterChain {
+	if spe == nil {
+		return nil
+	}
 	// A match could be a wildcard match (this happens when the match
 	// criteria does not specify source ports) or a specific port match (this
 	// happens when the match criteria specifies a set of ports and the source

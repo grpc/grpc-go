@@ -895,7 +895,7 @@ func TestLookup_Failures(t *testing.T) {
 				DestAddr:              net.IPv4(192, 168, 100, 1),
 				SourceAddr:            net.IPv4(192, 168, 100, 1),
 			},
-			wantErr: "no matching filter chain based on source prefix match",
+			wantErr: "no matching filter chain after all match criteria",
 		},
 		{
 			desc: "multiple matching filter chains",
