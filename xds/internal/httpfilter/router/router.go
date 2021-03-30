@@ -73,7 +73,10 @@ func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.Fil
 	return config{}, nil
 }
 
-var _ httpfilter.ClientInterceptorBuilder = builder{}
+var (
+	_ httpfilter.ClientInterceptorBuilder = builder{}
+	_ httpfilter.ServerInterceptorBuilder = builder{}
+)
 
 func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
 	if _, ok := cfg.(config); !ok {
@@ -85,6 +88,18 @@ func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (ir
 	// The gRPC router is implemented within the xds resolver's config
 	// selector, not as a separate plugin.  So we return a nil HTTPFilter,
 	// which will not be invoked.
+	return nil, nil
+}
+
+func (builder) BuildServerInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+	if _, ok := cfg.(config); !ok {
+		return nil, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
+	}
+	if override != nil {
+		return nil, fmt.Errorf("router: unexpected override configuration specified: %v", override)
+	}
+	// The gRPC router is currently unimplemented on the server side. So we
+	// return a nil HTTPFilter, which will not be invoked.
 	return nil, nil
 }
 

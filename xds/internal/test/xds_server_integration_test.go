@@ -35,6 +35,7 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/uuid"
@@ -229,6 +230,14 @@ func listenerResourceWithoutSecurityConfig(t *testing.T, lis net.Listener) *v3li
 		FilterChains: []*v3listenerpb.FilterChain{
 			{
 				Name: "filter-chain-1",
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+						},
+					},
+				},
 			},
 		},
 	}
@@ -268,6 +277,14 @@ func listenerResourceWithSecurityConfig(t *testing.T, lis net.Listener) *v3liste
 							PrefixLen: &wrapperspb.UInt32Value{
 								Value: uint32(0),
 							},
+						},
+					},
+				},
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
 						},
 					},
 				},
