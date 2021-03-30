@@ -20,9 +20,11 @@ import (
 	"encoding/json"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
@@ -104,6 +106,13 @@ type edsBalancerImpl struct {
 	innerState             balancer.State // The state of the picker without drop support.
 	serviceRequestsCounter *client.ServiceRequestsCounter
 	serviceRequestCountMax uint32
+
+	// clusterName is the cluster name used for watching EDS. It's attached to
+	// the addresses, and will be read by the google default creds handshaker to
+	// decide to use TLS or ALTS.
+	//
+	// It's a string. Only access atomically.
+	clusterName atomic.Value
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
@@ -444,6 +453,16 @@ func (edsImpl *edsBalancerImpl) updateServiceRequestsConfig(serviceName string, 
 	edsImpl.pickerMu.Unlock()
 }
 
+func (edsImpl *edsBalancerImpl) updateClusterName(name string) {
+	edsImpl.clusterName.Store(name)
+}
+
+func (edsImpl *edsBalancerImpl) getClusterName() (string, bool) {
+	v := edsImpl.clusterName.Load()
+	vv, ok := v.(string)
+	return vv, ok
+}
+
 // updateState first handles priority, and then wraps picker in a drop picker
 // before forwarding the update.
 func (edsImpl *edsBalancerImpl) updateState(priority priorityType, s balancer.State) {
@@ -479,8 +498,27 @@ type edsBalancerWrapperCC struct {
 }
 
 func (ebwcc *edsBalancerWrapperCC) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	if clusterName, ok := ebwcc.parent.getClusterName(); ok {
+		newAddrs := make([]resolver.Address, len(addrs))
+		for i, addr := range addrs {
+			newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
+		}
+		addrs = newAddrs
+	}
 	return ebwcc.parent.newSubConn(ebwcc.priority, addrs, opts)
 }
+
+func (ebwcc *edsBalancerWrapperCC) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
+	if clusterName, ok := ebwcc.parent.getClusterName(); ok {
+		newAddrs := make([]resolver.Address, len(addrs))
+		for i, addr := range addrs {
+			newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
+		}
+		addrs = newAddrs
+	}
+	ebwcc.ClientConn.UpdateAddresses(sc, addrs)
+}
+
 func (ebwcc *edsBalancerWrapperCC) UpdateState(state balancer.State) {
 	ebwcc.parent.enqueueChildBalancerStateUpdate(ebwcc.priority, state)
 }

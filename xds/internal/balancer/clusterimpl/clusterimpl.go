@@ -27,11 +27,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/buffer"
+	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/loadstore"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -110,7 +113,7 @@ type clusterImplBalancer struct {
 	config           *lbConfig
 	childLB          balancer.Balancer
 	cancelLoadReport func()
-	clusterName      string
+	clusterName      atomic.Value
 	edsServiceName   string
 	lrsServerName    string
 	loadWrapper      *loadstore.Wrapper
@@ -132,9 +135,11 @@ func (cib *clusterImplBalancer) updateLoadStore(newConfig *lbConfig) error {
 
 	// ClusterName is different, restart. ClusterName is from ClusterName and
 	// EdsServiceName.
-	if cib.clusterName != newConfig.Cluster {
+	clusterName, _ := cib.getClusterName()
+	if clusterName != newConfig.Cluster {
 		updateLoadClusterAndService = true
-		cib.clusterName = newConfig.Cluster
+		cib.clusterName.Store(newConfig.Cluster)
+		clusterName = newConfig.Cluster
 	}
 	if cib.edsServiceName != newConfig.EDSServiceName {
 		updateLoadClusterAndService = true
@@ -149,7 +154,7 @@ func (cib *clusterImplBalancer) updateLoadStore(newConfig *lbConfig) error {
 		// On the other hand, this will almost never happen. Each LRS policy
 		// shouldn't get updated config. The parent should do a graceful switch
 		// when the clusterName or serviceName is changed.
-		cib.loadWrapper.UpdateClusterAndService(cib.clusterName, cib.edsServiceName)
+		cib.loadWrapper.UpdateClusterAndService(clusterName, cib.edsServiceName)
 	}
 
 	// Check if it's necessary to restart load report.
@@ -303,6 +308,34 @@ func (cib *clusterImplBalancer) Close() {
 func (cib *clusterImplBalancer) UpdateState(state balancer.State) {
 	// Instead of updating parent ClientConn inline, send state to run().
 	cib.pickerUpdateCh.Put(state)
+}
+
+func (cib *clusterImplBalancer) getClusterName() (string, bool) {
+	v := cib.clusterName.Load()
+	vv, ok := v.(string)
+	return vv, ok
+}
+
+func (cib *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	if clusterName, ok := cib.getClusterName(); ok {
+		newAddrs := make([]resolver.Address, len(addrs))
+		for i, addr := range addrs {
+			newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
+		}
+		addrs = newAddrs
+	}
+	return cib.ClientConn.NewSubConn(addrs, opts)
+}
+
+func (cib *clusterImplBalancer) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
+	if clusterName, ok := cib.getClusterName(); ok {
+		newAddrs := make([]resolver.Address, len(addrs))
+		for i, addr := range addrs {
+			newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
+		}
+		addrs = newAddrs
+	}
+	cib.ClientConn.UpdateAddresses(sc, addrs)
 }
 
 type dropConfigs struct {

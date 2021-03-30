@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
+	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/client/load"
@@ -367,5 +368,96 @@ func TestPickerUpdateAfterClose(t *testing.T) {
 	case <-cc.NewPickerCh:
 		t.Fatalf("unexpected picker update after balancer is closed")
 	case <-time.After(time.Millisecond * 10):
+	}
+}
+
+// TestClusterNameInAddressAttributes covers the case that cluster name is
+// attached to the subconn address attributes.
+func TestClusterNameInAddressAttributes(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	defer func() { newXDSClient = oldNewXDSClient }()
+
+	builder := balancer.Get(clusterImplName)
+	cc := testutils.NewTestClientConn(t)
+	b := builder.Build(cc, balancer.BuildOptions{})
+	defer b.Close()
+
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Addresses: testBackendAddrs,
+		},
+		BalancerConfig: &lbConfig{
+			Cluster:        testClusterName,
+			EDSServiceName: testServiceName,
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
+	}
+
+	sc1 := <-cc.NewSubConnCh
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	// This should get the connecting picker.
+	p0 := <-cc.NewPickerCh
+	for i := 0; i < 10; i++ {
+		_, err := p0.Pick(balancer.PickInfo{})
+		if err != balancer.ErrNoSubConnAvailable {
+			t.Fatalf("picker.Pick, got _,%v, want Err=%v", err, balancer.ErrNoSubConnAvailable)
+		}
+	}
+
+	addrs1 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs1[0].Addr, testBackendAddrs[0].Addr; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	cn, ok := xdsinternal.GetHandshakeClusterName(addrs1[0].Attributes)
+	if !ok || cn != testClusterName {
+		t.Fatalf("sc is created with addr with cluster name %v, %v, want cluster name %v", cn, ok, testClusterName)
+	}
+
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	// Test pick with one backend.
+	// Test pick with one backend.
+	p1 := <-cc.NewPickerCh
+	const rpcCount = 20
+	for i := 0; i < rpcCount; i++ {
+		gotSCSt, err := p1.Pick(balancer.PickInfo{})
+		if err != nil || !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			t.Fatalf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
+		}
+		if gotSCSt.Done != nil {
+			gotSCSt.Done(balancer.DoneInfo{})
+		}
+	}
+
+	const testClusterName2 = "test-cluster-2"
+	var addr2 = resolver.Address{Addr: "2.2.2.2"}
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Addresses: []resolver.Address{addr2},
+		},
+		BalancerConfig: &lbConfig{
+			Cluster:        testClusterName2,
+			EDSServiceName: testServiceName,
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
+	}
+
+	addrs2 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs2[0].Addr, addr2.Addr; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	// New addresses should have the new cluster name.
+	cn2, ok := xdsinternal.GetHandshakeClusterName(addrs2[0].Attributes)
+	if !ok || cn2 != testClusterName2 {
+		t.Fatalf("sc is created with addr with cluster name %v, %v, want cluster name %v", cn2, ok, testClusterName2)
 	}
 }
