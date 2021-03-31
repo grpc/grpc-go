@@ -111,8 +111,6 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsclient.ListenerUpdate, er
 	}
 
 	if update.InlineRouteConfig != nil {
-		// The LDS resp received has an inline RDS resource.
-
 		// If there was an RDS watch, cancel it.
 		w.rdsName = ""
 		if w.rdsCancel != nil {
