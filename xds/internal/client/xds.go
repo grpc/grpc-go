@@ -270,118 +270,12 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 		},
 	}
 
-	var filterChains []*FilterChain
-	for _, fc := range lis.GetFilterChains() {
-		filterChain, err := getFilterChain(fc)
-		if err != nil {
-			return nil, err
-		}
-		filterChains = append(filterChains, filterChain)
-	}
-	defaultFilterChain, err := getFilterChain(lis.GetDefaultFilterChain())
+	fcMgr, err := NewFilterChainManager(lis)
 	if err != nil {
 		return nil, err
 	}
-	if len(filterChains) == 0 && defaultFilterChain == nil {
-		return nil, fmt.Errorf("xds: no supported filter chains and no default filter chain")
-	}
-	lu.InboundListenerCfg.FilterChains = filterChains
-	lu.InboundListenerCfg.DefaultFilterChain = defaultFilterChain
+	lu.InboundListenerCfg.FilterChains = fcMgr
 	return lu, nil
-}
-
-// getFilterChain parses the filter chain proto and converts it into the local
-// representation. If fc contains unsupported filter chain match fields, a nil
-// FilterChain object and a nil error are returned. If fc does not parse or
-// contains other invalid data, an non-nil error is returned.
-func getFilterChain(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
-	if fc == nil {
-		return nil, nil
-	}
-
-	// If the match criteria contains unsupported fields, skip the filter chain.
-	fcm := fc.GetFilterChainMatch()
-	if fcm.GetDestinationPort().GetValue() != 0 ||
-		fcm.GetServerNames() != nil ||
-		(fcm.GetTransportProtocol() != "" && fcm.TransportProtocol != "raw_buffer") ||
-		fcm.GetApplicationProtocols() != nil {
-		return nil, nil
-	}
-
-	// Extract the supported match criteria.
-	var dstPrefixRanges []net.IP
-	for _, pr := range fcm.GetPrefixRanges() {
-		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
-		ip, _, err := net.ParseCIDR(cidr)
-		if err != nil {
-			return nil, fmt.Errorf("xds: failed to parse destination prefix range: %+v", pr)
-		}
-		dstPrefixRanges = append(dstPrefixRanges, ip)
-	}
-	var srcType SourceType
-	switch fcm.GetSourceType() {
-	case v3listenerpb.FilterChainMatch_ANY:
-		srcType = SourceTypeAny
-	case v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK:
-		srcType = SourceTypeSameOrLoopback
-	case v3listenerpb.FilterChainMatch_EXTERNAL:
-		srcType = SourceTypeExternal
-	default:
-		return nil, fmt.Errorf("xds: unsupported source type: %v", fcm.GetSourceType())
-	}
-	var srcPrefixRanges []net.IP
-	for _, pr := range fcm.GetSourcePrefixRanges() {
-		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
-		ip, _, err := net.ParseCIDR(cidr)
-		if err != nil {
-			return nil, fmt.Errorf("xds: failed to parse source prefix range: %+v", pr)
-		}
-		srcPrefixRanges = append(srcPrefixRanges, ip)
-	}
-	filterChain := &FilterChain{
-		Match: &FilterChainMatch{
-			DestPrefixRanges:   dstPrefixRanges,
-			SourceType:         srcType,
-			SourcePrefixRanges: srcPrefixRanges,
-			SourcePorts:        fcm.GetSourcePorts(),
-		},
-	}
-
-	// If the transport_socket field is not specified, it means that the control
-	// plane has not sent us any security config. This is fine and the server
-	// will use the fallback credentials configured as part of the
-	// xdsCredentials.
-	ts := fc.GetTransportSocket()
-	if ts == nil {
-		return filterChain, nil
-	}
-	if name := ts.GetName(); name != transportSocketName {
-		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
-	}
-	any := ts.GetTypedConfig()
-	if any == nil || any.TypeUrl != version.V3DownstreamTLSContextURL {
-		return nil, fmt.Errorf("transport_socket field has unexpected typeURL: %s", any.TypeUrl)
-	}
-	downstreamCtx := &v3tlspb.DownstreamTlsContext{}
-	if err := proto.Unmarshal(any.GetValue(), downstreamCtx); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal DownstreamTlsContext in LDS response: %v", err)
-	}
-	if downstreamCtx.GetCommonTlsContext() == nil {
-		return nil, errors.New("DownstreamTlsContext in LDS response does not contain a CommonTlsContext")
-	}
-	sc, err := securityConfigFromCommonTLSContext(downstreamCtx.GetCommonTlsContext())
-	if err != nil {
-		return nil, err
-	}
-	if sc.IdentityInstanceName == "" {
-		return nil, errors.New("security configuration on the server-side does not contain identity certificate provider instance name")
-	}
-	sc.RequireClientCert = downstreamCtx.GetRequireClientCertificate().GetValue()
-	if sc.RequireClientCert && sc.RootInstanceName == "" {
-		return nil, errors.New("security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set")
-	}
-	filterChain.SecurityCfg = sc
-	return filterChain, nil
 }
 
 // UnmarshalRouteConfig processes resources received in an RDS response,
