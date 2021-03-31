@@ -93,7 +93,9 @@ type FilterChainManager struct {
 	// This means that we cannot use the above map at connection time. This list
 	// contains the map entries from the above map that we can use at connection
 	// time to find matching destination prefixes in O(n) time.
-	// TODO: Implement LC-trie to support logarithmic time lookups.
+	//
+	// TODO: Implement LC-trie to support logarithmic time lookups. If that
+	// involves too much time/effort, sort this slice based on the netmask size.
 	dstPrefixes []*destPrefixEntry
 
 	def   *FilterChain // Default filter chain, if specified.
@@ -442,7 +444,7 @@ func filterByDestinationPrefixes(dstPrefixes []*destPrefixEntry, isUnspecified b
 		}
 		if matchSize > maxSubnetMatch {
 			maxSubnetMatch = matchSize
-			matchingDstPrefixes = make([]*destPrefixEntry, 0)
+			matchingDstPrefixes = make([]*destPrefixEntry, 0, 1)
 		}
 		matchingDstPrefixes = append(matchingDstPrefixes, prefix)
 	}
@@ -508,7 +510,7 @@ func filterBySourcePrefixes(srcPrefixes []*sourcePrefixes, srcAddr net.IP) (*sou
 			}
 			if matchSize > maxSubnetMatch {
 				maxSubnetMatch = matchSize
-				matchingSrcPrefixes = make([]*sourcePrefixEntry, 0)
+				matchingSrcPrefixes = make([]*sourcePrefixEntry, 0, 1)
 			}
 			matchingSrcPrefixes = append(matchingSrcPrefixes, prefix)
 		}
