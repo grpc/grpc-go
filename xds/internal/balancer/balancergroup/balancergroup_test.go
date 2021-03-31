@@ -957,10 +957,10 @@ func (s) TestBalancerGroup_CloseStopsBalancerInCache(t *testing.T) {
 	gator.Remove(testBalancerIDs[2])
 	bg.Remove(testBalancerIDs[2])
 
-	// Immediately close balancergroup, before the cache timeout
+	// Immediately close balancergroup, before the cache timeout.
 	bg.Close()
 
-	// Make sure the remove child balancer is closed.
+	// Make sure the removed child balancer is closed eventually.
 	select {
 	case <-closed:
 	case <-time.After(time.Second * 2):
