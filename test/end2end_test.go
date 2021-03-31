@@ -1333,6 +1333,53 @@ func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
 	awaitNewConnLogOutput()
 }
 
+func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
+	for _, e := range listTestEnv() {
+		testDetailedConnectionCloseErrorPropagatesToRpcError(t, e)
+	}
+}
+
+func testDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := tc.FullDuplexCall(ctx)
+	// first, do a round of ping pong to be certain that the call has been received at the server
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	sreq := &testpb.StreamingOutputCallRequest{
+		ResponseParameters: []*testpb.ResponseParameters{
+			{
+				Size: int32(0),
+			},
+		},
+	}
+	if err := stream.Send(sreq); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
+	}
+	if err := stream.Send(sreq); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
+	}
+	// stop the server; the RPC should now fail and the error message should include details
+	// about the specific connection error that was encountered
+	te.srv.Stop()
+	possibleConnResetMsg := "connection reset by peer"
+	possibleEOFMsg := "error reading from server: EOF"
+	if _, err := stream.Recv(); err == nil || (!strings.Contains(err.Error(), possibleConnResetMsg) && !strings.Contains(err.Error(), possibleEOFMsg)) {
+		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: |%v| OR |%v|", stream, err, possibleConnResetMsg, possibleEOFMsg)
+	}
+}
+
 func (s) TestClientConnCloseAfterGoAwayWithActiveStream(t *testing.T) {
 	for _, e := range listTestEnv() {
 		if e.name == "handler-tls" {

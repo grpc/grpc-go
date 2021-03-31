@@ -622,7 +622,7 @@ type ClientTransport interface {
 	// Close tears down this transport. Once it returns, the transport
 	// should not be accessed any more. The caller must make sure this
 	// is called only once.
-	Close() error
+	Close(err error) error
 
 	// GracefulClose starts to tear down the transport: the transport will stop
 	// accepting new RPCs and NewStream will return error. Once all streams are
