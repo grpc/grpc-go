@@ -119,9 +119,6 @@ fi
 # Perform these checks on each module inside gRPC.
 for MOD_FILE in $(find . -name 'go.mod'); do
   MOD_DIR=$(dirname ${MOD_FILE})
-  if [[ ${MOD_DIR} == "./test/tools" ]]; then
-    continue
-  fi
   pushd ${MOD_DIR}
   go vet -all ./... | fail_on_output
   gofmt -s -d -l . 2>&1 | fail_on_output
