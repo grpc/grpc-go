@@ -24,7 +24,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
-	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer"
+
+	_ "google.golang.org/grpc/xds/internal/balancer/lrs"
 )
 
 const (
@@ -32,24 +33,23 @@ const (
   "targets": {
 	"cluster_1" : {
 	  "weight":75,
-	  "childPolicy":[{"cds_experimental":{"cluster":"cluster_1"}}]
+	  "childPolicy":[{"lrs_experimental":{"clusterName":"cluster_1","lrsLoadReportingServerName":"lrs.server","locality":{"zone":"test-zone-1"}}}]
 	},
 	"cluster_2" : {
 	  "weight":25,
-	  "childPolicy":[{"cds_experimental":{"cluster":"cluster_2"}}]
+	  "childPolicy":[{"lrs_experimental":{"clusterName":"cluster_2","lrsLoadReportingServerName":"lrs.server","locality":{"zone":"test-zone-2"}}}]
 	}
   }
 }`
-
-	cdsName = "cds_experimental"
+	lrsBalancerName = "lrs_experimental"
 )
 
 var (
-	cdsConfigParser = balancer.Get(cdsName).(balancer.ConfigParser)
-	cdsConfigJSON1  = `{"cluster":"cluster_1"}`
-	cdsConfig1, _   = cdsConfigParser.ParseConfig([]byte(cdsConfigJSON1))
-	cdsConfigJSON2  = `{"cluster":"cluster_2"}`
-	cdsConfig2, _   = cdsConfigParser.ParseConfig([]byte(cdsConfigJSON2))
+	lrsConfigParser = balancer.Get(lrsBalancerName).(balancer.ConfigParser)
+	lrsConfigJSON1  = `{"clusterName":"cluster_1","lrsLoadReportingServerName":"lrs.server","locality":{"zone":"test-zone-1"}}`
+	lrsConfig1, _   = lrsConfigParser.ParseConfig([]byte(lrsConfigJSON1))
+	lrsConfigJSON2  = `{"clusterName":"cluster_2","lrsLoadReportingServerName":"lrs.server","locality":{"zone":"test-zone-2"}}`
+	lrsConfig2, _   = lrsConfigParser.ParseConfig([]byte(lrsConfigJSON2))
 )
 
 func Test_parseConfig(t *testing.T) {
@@ -73,15 +73,15 @@ func Test_parseConfig(t *testing.T) {
 					"cluster_1": {
 						Weight: 75,
 						ChildPolicy: &internalserviceconfig.BalancerConfig{
-							Name:   cdsName,
-							Config: cdsConfig1,
+							Name:   lrsBalancerName,
+							Config: lrsConfig1,
 						},
 					},
 					"cluster_2": {
 						Weight: 25,
 						ChildPolicy: &internalserviceconfig.BalancerConfig{
-							Name:   cdsName,
-							Config: cdsConfig2,
+							Name:   lrsBalancerName,
+							Config: lrsConfig2,
 						},
 					},
 				},
