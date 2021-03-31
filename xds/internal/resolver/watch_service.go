@@ -110,6 +110,22 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsclient.ListenerUpdate, er
 		httpFilterConfig:  update.HTTPFilters,
 	}
 
+	if update.InlineRouteConfig != nil {
+		// If there was an RDS watch, cancel it.
+		w.rdsName = ""
+		if w.rdsCancel != nil {
+			w.rdsCancel()
+			w.rdsCancel = nil
+		}
+
+		// Handle the inline RDS update as if it's from an RDS watch.
+		w.updateVirtualHostsFromRDS(*update.InlineRouteConfig)
+		return
+	}
+
+	// RDS name from update is not an empty string, need RDS to fetch the
+	// routes.
+
 	if w.rdsName == update.RouteConfigName {
 		// If the new RouteConfigName is same as the previous, don't cancel and
 		// restart the RDS watch.
@@ -124,6 +140,18 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsclient.ListenerUpdate, er
 		w.rdsCancel()
 	}
 	w.rdsCancel = w.c.WatchRouteConfig(update.RouteConfigName, w.handleRDSResp)
+}
+
+func (w *serviceUpdateWatcher) updateVirtualHostsFromRDS(update xdsclient.RouteConfigUpdate) {
+	matchVh := findBestMatchingVirtualHost(w.serviceName, update.VirtualHosts)
+	if matchVh == nil {
+		// No matching virtual host found.
+		w.serviceCb(serviceUpdate{}, fmt.Errorf("no matching virtual host found for %q", w.serviceName))
+		return
+	}
+
+	w.lastUpdate.virtualHost = matchVh
+	w.serviceCb(w.lastUpdate, nil)
 }
 
 func (w *serviceUpdateWatcher) handleRDSResp(update xdsclient.RouteConfigUpdate, err error) {
@@ -142,16 +170,7 @@ func (w *serviceUpdateWatcher) handleRDSResp(update xdsclient.RouteConfigUpdate,
 		w.serviceCb(serviceUpdate{}, err)
 		return
 	}
-
-	matchVh := findBestMatchingVirtualHost(w.serviceName, update.VirtualHosts)
-	if matchVh == nil {
-		// No matching virtual host found.
-		w.serviceCb(serviceUpdate{}, fmt.Errorf("no matching virtual host found for %q", w.serviceName))
-		return
-	}
-
-	w.lastUpdate.virtualHost = matchVh
-	w.serviceCb(w.lastUpdate, nil)
+	w.updateVirtualHostsFromRDS(update)
 }
 
 func (w *serviceUpdateWatcher) close() {
