@@ -32,13 +32,11 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc/balancer"
 	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcrand"
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -136,6 +134,7 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 		cc:                   cc,
 		rn:                   make(chan struct{}, 1),
 		disableServiceConfig: opts.DisableServiceConfig,
+		pollTimer:			  time.NewTimer(0),
 	}
 
 	if target.Authority == "" {
@@ -149,7 +148,6 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 
 	d.wg.Add(1)
 	go d.watcher()
-	d.ResolveNow(resolver.ResolveNowOptions{})
 	return d, nil
 }
 
@@ -190,27 +188,13 @@ type dnsResolver struct {
 	wg                   sync.WaitGroup
 	disableServiceConfig bool
 
-	stopPolling *grpcsync.Event
+	// New
+	pollTimer *time.Timer
 }
-
+/*
 // poll begins or ends asynchronous polling of the resolver based on whether
 // it is called with an error.
 func (d *dnsResolver) poll(updateStateErr error) {
-	if updateStateErr == nil {
-		// There is a goroutine that is running poll(). Since there is no longer an error returned,
-		// there is no longer any need for poll() to continue running.
-		if d.stopPolling != nil {
-			d.stopPolling.Fire()
-			d.stopPolling = nil
-		}
-		return
-	}
-	// The goroutine that is running poll() has already been created.
-	if d.stopPolling != nil {
-		return
-	}
-	d.stopPolling = grpcsync.NewEvent()
-	stopPolling := d.stopPolling
 	// This exponential backoff go routine will be running at most once.
 	d.wg.Add(1)
 	go func() {
@@ -240,7 +224,7 @@ func (d *dnsResolver) poll(updateStateErr error) {
 			}
 		}
 	}()
-}
+}*/
 
 // ResolveNow invoke an immediate resolution of the target that this dnsResolver watches.
 func (d *dnsResolver) ResolveNow(resolver.ResolveNowOptions) {
@@ -252,36 +236,81 @@ func (d *dnsResolver) ResolveNow(resolver.ResolveNowOptions) {
 
 // Close closes the dnsResolver.
 func (d *dnsResolver) Close() {
+	logger.Info("Close() called.")
 	d.cancel()
+	logger.Info("Just called cancel()")
 	d.wg.Wait()
+	logger.Info("Finished waiting on wait group.")
 }
 
 func (d *dnsResolver) watcher() {
 	defer d.wg.Done()
+	backoffIndex := 1
+	nextBackoffRate := backoff.DefaultExponential.Backoff(backoffIndex)
+	logger.Info("248")
 	for {
 		select {
 		case <-d.ctx.Done():
+			logger.Info("cancelled context select case")
+			d.pollTimer.Stop()
 			return
 		case <-d.rn:
+			logger.Info("called resolve now select")
+			// Reset polling timer if active, as ResolveNow was called from ClientConn.
+			if !d.pollTimer.Stop() {
+				select {
+				case <-d.pollTimer.C:
+				default:
+				}
+			}
+			backoffIndex = 1
+			nextBackoffRate = backoff.DefaultExponential.Backoff(backoffIndex)
+		case <-d.pollTimer.C:
+			logger.Info("called poll timer select case")
 		}
 
 		state, err := d.lookup()
 		if err != nil {
+			logger.Info("Reporting error, as error was not nil.")
 			// Report error to the underlying grpc.ClientConn.
 			d.cc.ReportError(err)
-			// Since there was an error from here, start polling.
-			d.poll(balancer.ErrBadResolverState)
 		} else {
-			d.poll(d.cc.UpdateState(*state))
+			logger.Info("Updating State. Error from lookup was nil.")
+			err = d.cc.UpdateState(*state)
+		}
+
+		if err == nil {
+			// Success; reset polling for next usage.
+			if !d.pollTimer.Stop() {
+				logger.Info("267")
+				select {
+					case <-d.pollTimer.C:
+					default:
+				}
+			}
+			logger.Info("Error was nil. Reseting backoff index, and gearing up for next run")
+			backoffIndex = 1
+			nextBackoffRate = backoff.DefaultExponential.Backoff(backoffIndex)
+		} else {
+			logger.Info("275")
+			// Logical ABABABABABAB, so ok, A is start timer, B is receive from tiemr
+			d.pollTimer = newTimer(nextBackoffRate) // Once this receives, this is done and does not cause any more logic, thus it is nice to 
+			backoffIndex++
+			nextBackoffRate = backoff.DefaultExponential.Backoff(backoffIndex)
 		}
 
 		// Sleep to prevent excessive re-resolutions. Incoming resolution requests
 		// will be queued in d.rn.
 		t := time.NewTimer(minDNSResRate)
+		logger.Info("Right after sleeping to prevent excessive re-resolutions")
 		select {
 		case <-t.C:
+			logger.Info("Reloop")
 		case <-d.ctx.Done():
+			logger.Info("Called context select in bottom switch.")
+			d.pollTimer.Stop()
 			t.Stop()
+			logger.Info("About to return")
 			return
 		}
 	}
