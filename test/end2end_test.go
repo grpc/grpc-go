@@ -1342,6 +1342,13 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 func testDetailedConnectionCloseErrorPropagatesToRPCError(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
+	rpcStartedOnServer := make(chan struct{})
+	rpcDoneOnClient := make(chan struct{})
+	te.streamServerInt = func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		close(rpcStartedOnServer)
+		<-rpcDoneOnClient
+		return status.Error(codes.Internal, "arbitrary status")
+	}
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
@@ -1349,35 +1356,21 @@ func testDetailedConnectionCloseErrorPropagatesToRPCError(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	stream, err := tc.FullDuplexCall(ctx)
-	// first, do a round of ping pong to be certain that the call has been received at the server
-	if err != nil {
-		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
-	}
-	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseParameters: []*testpb.ResponseParameters{
-			{
-				Size: int32(0),
-			},
-		},
-	}
-	if err := stream.Send(sreq); err != nil {
-		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
-	}
-	if _, err := stream.Recv(); err != nil {
-		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
-	}
-	if err := stream.Send(sreq); err != nil {
-		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
-	}
-	// stop the server; the RPC should now fail and the error message should include details
-	// about the specific connection error that was encountered
-	te.srv.Stop()
 	possibleConnResetMsg := "connection reset by peer"
 	possibleEOFMsg := "error reading from server: EOF"
+	// Get the RPC to make it to the server. Then, while the RPC is still being handled at the server, abruptly
+	// stop the server, killing the connection. The RPC error message should include details about the specific
+	// connection error that was encountered.
+	stream, err := tc.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall = _, %v, want _, <nil>", tc, err)
+	}
+	<-rpcStartedOnServer
+	te.srv.Stop()
 	if _, err := stream.Recv(); err == nil || (!strings.Contains(err.Error(), possibleConnResetMsg) && !strings.Contains(err.Error(), possibleEOFMsg)) {
 		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: |%v| OR |%v|", stream, err, possibleConnResetMsg, possibleEOFMsg)
 	}
+	close(rpcDoneOnClient)
 }
 
 func (s) TestClientConnCloseAfterGoAwayWithActiveStream(t *testing.T) {
