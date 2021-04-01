@@ -1335,11 +1335,11 @@ func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
 
 func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 	for _, e := range listTestEnv() {
-		testDetailedConnectionCloseErrorPropagatesToRpcError(t, e)
+		testDetailedConnectionCloseErrorPropagatesToRPCError(t, e)
 	}
 }
 
-func testDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T, e env) {
+func testDetailedConnectionCloseErrorPropagatesToRPCError(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
 	te.startServer(&testServer{security: e.security})

@@ -47,7 +47,7 @@ func (s) TestMaxConnectionIdle(t *testing.T) {
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer func() {
-		client.Close()
+		client.Close(nil)
 		server.stop()
 		cancel()
 	}()
@@ -86,7 +86,7 @@ func (s) TestMaxConnectionIdleBusyClient(t *testing.T) {
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer func() {
-		client.Close()
+		client.Close(nil)
 		server.stop()
 		cancel()
 	}()
@@ -122,7 +122,7 @@ func (s) TestMaxConnectionAge(t *testing.T) {
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer func() {
-		client.Close()
+		client.Close(nil)
 		server.stop()
 		cancel()
 	}()
@@ -169,7 +169,7 @@ func (s) TestKeepaliveServerClosesUnresponsiveClient(t *testing.T) {
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer func() {
-		client.Close()
+		client.Close(nil)
 		server.stop()
 		cancel()
 	}()
@@ -228,7 +228,7 @@ func (s) TestKeepaliveServerWithResponsiveClient(t *testing.T) {
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer func() {
-		client.Close()
+		client.Close(nil)
 		server.stop()
 		cancel()
 	}()
@@ -257,7 +257,7 @@ func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 		PermitWithoutStream: true,
 	}}, connCh)
 	defer cancel()
-	defer client.Close()
+	defer client.Close(nil)
 
 	conn, ok := <-connCh
 	if !ok {
@@ -288,7 +288,7 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 		Timeout: 1 * time.Second,
 	}}, connCh)
 	defer cancel()
-	defer client.Close()
+	defer client.Close(nil)
 
 	conn, ok := <-connCh
 	if !ok {
@@ -317,7 +317,7 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 		Timeout: 1 * time.Second,
 	}}, connCh)
 	defer cancel()
-	defer client.Close()
+	defer client.Close(nil)
 
 	conn, ok := <-connCh
 	if !ok {
@@ -352,7 +352,7 @@ func (s) TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 			PermitWithoutStream: true,
 		}})
 	defer func() {
-		client.Close()
+		client.Close(nil)
 		server.stop()
 		cancel()
 	}()
@@ -391,7 +391,7 @@ func (s) TestKeepaliveClientFrequency(t *testing.T) {
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
 	defer func() {
-		client.Close()
+		client.Close(nil)
 		server.stop()
 		cancel()
 	}()
@@ -436,7 +436,7 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
 	defer func() {
-		client.Close()
+		client.Close(nil)
 		server.stop()
 		cancel()
 	}()
@@ -480,7 +480,7 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions)
 	defer func() {
-		client.Close()
+		client.Close(nil)
 		server.stop()
 		cancel()
 	}()
@@ -530,7 +530,7 @@ func (s) TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
 	defer func() {
-		client.Close()
+		client.Close(nil)
 		server.stop()
 		cancel()
 	}()
@@ -564,7 +564,7 @@ func (s) TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions)
 	defer func() {
-		client.Close()
+		client.Close(nil)
 		server.stop()
 		cancel()
 	}()
@@ -604,7 +604,7 @@ func (s) TestKeepaliveServerEnforcementWithDormantKeepaliveOnClient(t *testing.T
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
 	defer func() {
-		client.Close()
+		client.Close(nil)
 		server.stop()
 		cancel()
 	}()
@@ -658,7 +658,7 @@ func (s) TestTCPUserTimeout(t *testing.T) {
 			},
 		)
 		defer func() {
-			client.Close()
+			client.Close(nil)
 			server.stop()
 			cancel()
 		}()
