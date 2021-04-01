@@ -514,9 +514,6 @@ func clusterTypeFromCluster(cluster *v3clusterpb.Cluster) (ClusterType, string, 
 		if cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil {
 			return 0, "", nil, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
 		}
-		if cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN {
-			return 0, "", nil, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
-		}
 		// If the Cluster message in the CDS response did not contain a
 		// serviceName, we will just use the clusterName for EDS.
 		if cluster.GetEdsClusterConfig().GetServiceName() == "" {
@@ -526,7 +523,6 @@ func clusterTypeFromCluster(cluster *v3clusterpb.Cluster) (ClusterType, string, 
 	}
 
 	if cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS {
-		// TODO (zasweq): any checks on the Logical DNS Config just like EDS?
 		return ClusterTypeLogicalDNS, cluster.GetName(), nil, nil
 	}
 
@@ -543,6 +539,9 @@ func clusterTypeFromCluster(cluster *v3clusterpb.Cluster) (ClusterType, string, 
 
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	emptyUpdate := ClusterUpdate{ServiceName: "", EnableLRS: false}
+	if cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN {
+		return emptyUpdate, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
+	}
 	clusterType, serviceName, prioritizedClusters, err := clusterTypeFromCluster(cluster)
 	if err != nil {
 		return emptyUpdate, err
