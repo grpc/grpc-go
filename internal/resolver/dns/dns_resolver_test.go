@@ -15,7 +15,7 @@
  * limitations under the License.
  *
  */
-// IF BLOCKING FOREVER ON SELECT IT MEANS IT CALLED REPORT ERROR OR UPDATE STATE ONE MORE TIME I THINK
+
 package dns
 
 import (
@@ -758,6 +758,8 @@ func testDNSResolver(t *testing.T) {
 	}
 }
 
+// DNS Resolver immediately starts polling on an error from grpc. This should continue until the ClientConn doesn't
+// send back an error from updating the DNS Resolver's state.
 func testDNSResolverExponentialBackoff(t *testing.T) {
 	defer leakcheck.Check(t)
 	nt := newTimer
@@ -766,7 +768,7 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 	}(nt)
 	timerChan := make(chan *time.Timer, 1)
 	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on it's own, will protect from triggering exponential backoff.
+		// Will never fire on it's own, allows this test to call timer immediately.
 		t := time.NewTimer(time.Hour)
 		timerChan <- t
 		return t
@@ -845,10 +847,7 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 		timer.Reset(0)
 		// Propagate the updated state.
 		time.Sleep(time.Millisecond * 3)
-		/*timer = <-timerChan
-		timer.Reset(0)*/
 
-		time.Sleep(time.Millisecond * 3)
 		select {
 		case <-timerChan:
 			t.Error("Should not poll again after no more error")
