@@ -19,6 +19,7 @@
 package transport
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -116,6 +117,9 @@ type http2Client struct {
 	// goAwayReason records the http2.ErrCode and debug data received with the
 	// GoAway frame.
 	goAwayReason GoAwayReason
+	// goAwayDebugMessage contains a detailed human readable string about a
+	// GoAway frame, useful for error messages.
+	goAwayDebugMessage string
 	// A condition variable used to signal when the keepalive goroutine should
 	// go dormant. The condition for dormancy is based on the number of active
 	// streams and the `PermitWithoutStream` keepalive client parameter. And
@@ -874,6 +878,12 @@ func (t *http2Client) Close(err error) error {
 	if channelz.IsOn() {
 		channelz.RemoveEntry(t.channelzID)
 	}
+	// Append info about previous goaways if there were any, since this may be important
+	// for understanding the root cause for this connection to be closed.
+	_, goAwayDebugMessage := t.GetGoAwayReason()
+	if len(goAwayDebugMessage) > 0 {
+		err = fmt.Errorf("closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
+	}
 	// Notify all active streams.
 	for _, s := range streams {
 		t.closeStream(s, err, false, http2.ErrCodeNo, status.New(codes.Unavailable, ErrConnClosing.Desc), nil, false)
@@ -1215,12 +1225,18 @@ func (t *http2Client) setGoAwayReason(f *http2.GoAwayFrame) {
 			t.goAwayReason = GoAwayTooManyPings
 		}
 	}
+	var m bytes.Buffer
+	m.WriteString("code: ")
+	m.WriteString(f.ErrCode.String())
+	m.WriteString(", debug data: ")
+	m.Write(f.DebugData())
+	t.goAwayDebugMessage = m.String()
 }
 
-func (t *http2Client) GetGoAwayReason() GoAwayReason {
+func (t *http2Client) GetGoAwayReason() (GoAwayReason, string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.goAwayReason
+	return t.goAwayReason, t.goAwayDebugMessage
 }
 
 func (t *http2Client) handleWindowUpdate(f *http2.WindowUpdateFrame) {

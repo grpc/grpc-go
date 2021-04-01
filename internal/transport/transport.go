@@ -656,8 +656,9 @@ type ClientTransport interface {
 	// HTTP/2).
 	GoAway() <-chan struct{}
 
-	// GetGoAwayReason returns the reason why GoAway frame was received.
-	GetGoAwayReason() GoAwayReason
+	// GetGoAwayReason returns the reason why GoAway frame was received, along
+	// with a human readable string with debug info.
+	GetGoAwayReason() (GoAwayReason, string)
 
 	// RemoteAddr returns the remote network address.
 	RemoteAddr() net.Addr

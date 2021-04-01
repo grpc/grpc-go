@@ -55,12 +55,14 @@ import (
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -1371,6 +1373,101 @@ func testDetailedConnectionCloseErrorPropagatesToRPCError(t *testing.T, e env) {
 		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: |%v| OR |%v|", stream, err, possibleConnResetMsg, possibleEOFMsg)
 	}
 	close(rpcDoneOnClient)
+}
+
+func (s) TestDetailedGoawayErrorOnGracefulClosePropagatesToRPCError(t *testing.T) {
+	for _, e := range listTestEnv() {
+		testDetailedGoawayErrorOnGracefulClosePropagatesToRPCError(t, e)
+	}
+}
+
+func testDetailedGoawayErrorOnGracefulClosePropagatesToRPCError(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.customServerOptions = []grpc.ServerOption{
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			MaxConnectionAge:      time.Millisecond * 100,
+			MaxConnectionAgeGrace: time.Millisecond,
+		}),
+	}
+	rpcDoneOnClient := make(chan struct{})
+	te.streamServerInt = func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		<-rpcDoneOnClient
+		return status.Error(codes.Internal, "arbitrary status")
+	}
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := tc.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall = _, %v, want _, <nil>", tc, err)
+	}
+	expectedErrorMessageSubstring := "received prior goaway: code: NO_ERROR"
+	_, err = stream.Recv()
+	close(rpcDoneOnClient)
+	if err == nil || !strings.Contains(err.Error(), expectedErrorMessageSubstring) {
+		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: |%v|", stream, err, expectedErrorMessageSubstring)
+	}
+}
+
+func (s) TestDetailedGoawayErrorOnAbruptClosePropagatesToRPCError(t *testing.T) {
+	// first, lower the min keepalive time so that we can generate
+	// server-side ping abuse logic quickly
+	prev := internal.KeepaliveMinPingTime
+	internal.KeepaliveMinPingTime = time.Millisecond
+	defer func() { internal.KeepaliveMinPingTime = prev }()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			// TODO(apolcyn): the server doesn't terminate the connection due
+			// to aggressive keepalives under the handler-tls configuration, is
+			// this WAI?
+			continue
+		}
+		testDetailedGoawayErrorOnAbruptClosePropagatesToRPCError(t, e)
+	}
+}
+
+func testDetailedGoawayErrorOnAbruptClosePropagatesToRPCError(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.customDialOptions = []grpc.DialOption{
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                time.Millisecond,   /* should trigger "too many pings" error quickly */
+			Timeout:             time.Second * 1000, /* arbitrarym, arge value */
+			PermitWithoutStream: false,
+		}),
+	}
+	te.customServerOptions = []grpc.ServerOption{
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime: time.Second * 1000, /* arbitrary, large value */
+		}),
+	}
+	rpcDoneOnClient := make(chan struct{})
+	te.streamServerInt = func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		<-rpcDoneOnClient
+		return status.Error(codes.Internal, "arbitrary status")
+	}
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := tc.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall = _, %v, want _, <nil>", tc, err)
+	}
+	expectedErrorMessageSubstring := "received prior goaway: code: ENHANCE_YOUR_CALM, debug data: too_many_pings"
+	_, err = stream.Recv()
+	close(rpcDoneOnClient)
+	if err == nil || !strings.Contains(err.Error(), expectedErrorMessageSubstring) {
+		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: |%v|", stream, err, expectedErrorMessageSubstring)
+	}
 }
 
 func (s) TestClientConnCloseAfterGoAwayWithActiveStream(t *testing.T) {
