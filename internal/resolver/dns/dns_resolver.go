@@ -134,7 +134,7 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 		cc:                   cc,
 		rn:                   make(chan struct{}, 1),
 		disableServiceConfig: opts.DisableServiceConfig,
-		pollTimer:			  time.NewTimer(0),
+		pollTimer:            time.NewTimer(0),
 	}
 
 	if target.Authority == "" {
@@ -191,40 +191,6 @@ type dnsResolver struct {
 	// New
 	pollTimer *time.Timer
 }
-/*
-// poll begins or ends asynchronous polling of the resolver based on whether
-// it is called with an error.
-func (d *dnsResolver) poll(updateStateErr error) {
-	// This exponential backoff go routine will be running at most once.
-	d.wg.Add(1)
-	go func() {
-		defer d.wg.Done()
-		// Exponentially backoff until it hopefully succeeds.
-		for i := 0; ; i++ {
-			t := newTimer(backoff.DefaultExponential.Backoff(i))
-			select {
-			case <-stopPolling.Done():
-				// Polling was successful.
-				t.Stop()
-				return
-			case <-d.ctx.Done():
-				return
-			case <-t.C:
-				if stopPolling.HasFired() {
-					return
-				}
-				// Timer expired; re-resolve.
-			}
-			// After select for testing purposes. Forcing a re-resolution would cause many tests to be flaky.
-			// This allows a re-resolution to be guarded by the resolveNowBackoff() function, which can be toggled
-			// in a test.
-			select {
-			case d.rn <- struct{}{}:
-			default:
-			}
-		}
-	}()
-}*/
 
 // ResolveNow invoke an immediate resolution of the target that this dnsResolver watches.
 func (d *dnsResolver) ResolveNow(resolver.ResolveNowOptions) {
@@ -274,8 +240,8 @@ func (d *dnsResolver) watcher() {
 			// Success; reset polling for next usage.
 			if !d.pollTimer.Stop() {
 				select {
-					case <-d.pollTimer.C:
-					default:
+				case <-d.pollTimer.C:
+				default:
 				}
 			}
 			backoffIndex = 1
