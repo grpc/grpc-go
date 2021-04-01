@@ -236,26 +236,20 @@ func (d *dnsResolver) ResolveNow(resolver.ResolveNowOptions) {
 
 // Close closes the dnsResolver.
 func (d *dnsResolver) Close() {
-	logger.Info("Close() called.")
 	d.cancel()
-	logger.Info("Just called cancel()")
 	d.wg.Wait()
-	logger.Info("Finished waiting on wait group.")
 }
 
 func (d *dnsResolver) watcher() {
 	defer d.wg.Done()
 	backoffIndex := 1
 	nextBackoffRate := backoff.DefaultExponential.Backoff(backoffIndex)
-	logger.Info("248")
 	for {
 		select {
 		case <-d.ctx.Done():
-			logger.Info("cancelled context select case")
 			d.pollTimer.Stop()
 			return
 		case <-d.rn:
-			logger.Info("called resolve now select")
 			// Reset polling timer if active, as ResolveNow was called from ClientConn.
 			if !d.pollTimer.Stop() {
 				select {
@@ -266,35 +260,29 @@ func (d *dnsResolver) watcher() {
 			backoffIndex = 1
 			nextBackoffRate = backoff.DefaultExponential.Backoff(backoffIndex)
 		case <-d.pollTimer.C:
-			logger.Info("called poll timer select case")
 		}
 
 		state, err := d.lookup()
 		if err != nil {
-			logger.Info("Reporting error, as error was not nil.")
 			// Report error to the underlying grpc.ClientConn.
 			d.cc.ReportError(err)
 		} else {
-			logger.Info("Updating State. Error from lookup was nil.")
 			err = d.cc.UpdateState(*state)
 		}
 
 		if err == nil {
 			// Success; reset polling for next usage.
 			if !d.pollTimer.Stop() {
-				logger.Info("267")
 				select {
 					case <-d.pollTimer.C:
 					default:
 				}
 			}
-			logger.Info("Error was nil. Reseting backoff index, and gearing up for next run")
 			backoffIndex = 1
 			nextBackoffRate = backoff.DefaultExponential.Backoff(backoffIndex)
 		} else {
-			logger.Info("275")
-			// Logical ABABABABABAB, so ok, A is start timer, B is receive from tiemr
-			d.pollTimer = newTimer(nextBackoffRate) // Once this receives, this is done and does not cause any more logic, thus it is nice to 
+			// Start polling on an error found in DNS Resolver or an error received from ClientConn.
+			d.pollTimer = newTimer(nextBackoffRate)
 			backoffIndex++
 			nextBackoffRate = backoff.DefaultExponential.Backoff(backoffIndex)
 		}
@@ -302,15 +290,11 @@ func (d *dnsResolver) watcher() {
 		// Sleep to prevent excessive re-resolutions. Incoming resolution requests
 		// will be queued in d.rn.
 		t := time.NewTimer(minDNSResRate)
-		logger.Info("Right after sleeping to prevent excessive re-resolutions")
 		select {
 		case <-t.C:
-			logger.Info("Reloop")
 		case <-d.ctx.Done():
-			logger.Info("Called context select in bottom switch.")
 			d.pollTimer.Stop()
 			t.Stop()
-			logger.Info("About to return")
 			return
 		}
 	}

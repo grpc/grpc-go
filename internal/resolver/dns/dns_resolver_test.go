@@ -682,7 +682,6 @@ func TestResolve(t *testing.T) {
 }
 
 func testDNSResolver(t *testing.T) {
-	logger.Info("Test DNS Resolver")
 	defer leakcheck.Check(t)
 	nt := newTimer
 	defer func(func(d time.Duration) *time.Timer) {
@@ -730,7 +729,6 @@ func testDNSResolver(t *testing.T) {
 	}
 
 	for _, a := range tests {
-		logger.Info("733")
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
 		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{})
@@ -756,13 +754,11 @@ func testDNSResolver(t *testing.T) {
 		if a.scWant != sc {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scWant)
 		}
-		logger.Info("759")
 		r.Close()
 	}
 }
 
 func testDNSResolverExponentialBackoff(t *testing.T) {
-	logger.Info("Test exponential backoff")
 	defer leakcheck.Check(t)
 	nt := newTimer
 	defer func(func(d time.Duration) *time.Timer) {
@@ -845,12 +841,10 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 		cc.backoffMutex.Lock()
 		cc.causeDNSResolverToBackoff = false
 		cc.backoffMutex.Unlock()
-		logger.Info("First Receive")
 		timer = <-timerChan
 		timer.Reset(0)
 		// Propagate the updated state.
 		time.Sleep(time.Millisecond * 3)
-		logger.Info("Second receive")
 		/*timer = <-timerChan
 		timer.Reset(0)*/
 
@@ -866,7 +860,6 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 			t.Fatalf("Exponential backoff is not working as expected - should stop backing off.")
 		}
 		cc.m1.Unlock()
-		logger.Info("Right before r.close")
 		r.Close()
 	}
 }
@@ -1571,27 +1564,23 @@ func TestReportError(t *testing.T) {
 	}
 	cc := &testClientConn{target: target, errChan: make(chan error)}
 	totalTimesCalledError := 0
-	logger.Info("Before build.")
 	b := NewBuilder()
 	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
 	// Should receive first error.
-	logger.Info("Receiving first error.")
 	err = <-cc.errChan
 	if !strings.Contains(err.Error(), "hostLookup error") {
 		t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
 	}
 	totalTimesCalledError++
-	logger.Info("Receiving first timer.")
 	timer := <-timerChan
 	timer.Reset(0)
 	defer r.Close()
 
 	// Cause timer to go off 10 times, and see if it matches DNS Resolver updating Error.
 	for i := 0; i < 10; i++ {
-		logger.Info("At beginning of for loop.")
 		// Should call ReportError().
 		err = <-cc.errChan
 		// Propagate.
@@ -1602,22 +1591,12 @@ func TestReportError(t *testing.T) {
 		totalTimesCalledError++
 		timer = <-timerChan
 		timer.Reset(0)
-		// Last iteration there is no need to cause the poll timer to go off. This allows the context to cancel
-		// the watcher goroutine successfully.
-		/*if i != 9 {
-			logger.Info("Right before timerChan receive on if")
-			timer = <-timerChan
-			timer.Reset(0)
-		} else {
-			logger.Info("Right before errChan receive")
-			err = <-cc.errChan
-		}*/
 	}
 
 	if totalTimesCalledError != 11 {
 		t.Errorf("ReportError() not called 11 times, instead called %d times.", totalTimesCalledError)
 	}
-	logger.Info("Right before timerChan receive")
+	// Clean up final watcher iteration.
 	<-cc.errChan
 	<-timerChan
 }
