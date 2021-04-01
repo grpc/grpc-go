@@ -29,6 +29,7 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
@@ -284,6 +285,24 @@ func (cib *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balanc
 	if cib.closed.HasFired() {
 		cib.logger.Warningf("xds: received subconn state change {%+v, %+v} after clusterImplBalancer was closed", sc, s)
 		return
+	}
+
+	// Trigger re-resolution when a SubConn turns transient failure. This is
+	// necessary for the LogicalDNS in cluster_resolver policy to re-resolve.
+	//
+	// Note that this happens not only for the addresses from DNS, but also for
+	// EDS (cluster_impl doesn't know if it's DNS or EDS, only the parent
+	// knows). The parent priority policy is configured to ignore re-resolution
+	// signal from the EDS children.
+	//
+	// Another option is to add a boolean to cluster_impl's config, and only
+	// trigger re-resolution if that's true. But this requires changing the
+	// balancer config, and is not consistent for all languages.
+	//
+	// The final goal is to move re-resolution into the leaf policies
+	// (round_robin), so that this won't be necessary.
+	if s.ConnectivityState == connectivity.TransientFailure {
+		cib.ClientConn.ResolveNow(resolver.ResolveNowOptions{})
 	}
 
 	if cib.childLB != nil {
