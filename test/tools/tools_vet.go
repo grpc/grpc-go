@@ -16,6 +16,6 @@
  *
  */
 
-// This file exists to avoid causing errors when running "go vet" in this module.
-
+// Package tools is used to pin specific versions of external tools in this
+// module's go.mod that gRPC uses for internal testing.
 package tools
