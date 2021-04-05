@@ -134,7 +134,7 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 		cc:                   cc,
 		rn:                   make(chan struct{}, 1),
 		disableServiceConfig: opts.DisableServiceConfig,
-		pollTimer:            time.NewTimer(0),
+		//pollTimer:            time.NewTimer(0),
 	}
 
 	if target.Authority == "" {
@@ -187,8 +187,6 @@ type dnsResolver struct {
 	// has data race with replaceNetFunc (WRITE the lookup function pointers).
 	wg                   sync.WaitGroup
 	disableServiceConfig bool
-
-	pollTimer *time.Timer
 }
 
 // ResolveNow invoke an immediate resolution of the target that this dnsResolver watches.
@@ -207,24 +205,15 @@ func (d *dnsResolver) Close() {
 
 func (d *dnsResolver) watcher() {
 	defer d.wg.Done()
+	pollTimer := time.NewTimer(0) // JUST CALL RESET IN TESTS case send on a timer, default nothing
+	defer pollTimer.Stop() // HANDLES ALL BRANCHES OF LOGIC TO CONVERGE TO STOPPING THE TIMER
 	backoffIndex := 1
-	nextBackoffRate := backoff.DefaultExponential.Backoff(backoffIndex)
 	for {
 		select {
 		case <-d.ctx.Done():
-			d.pollTimer.Stop()
 			return
 		case <-d.rn:
-			// Reset polling timer if active, as ResolveNow was called from ClientConn.
-			if !d.pollTimer.Stop() {
-				select {
-				case <-d.pollTimer.C:
-				default:
-				}
-			}
-			backoffIndex = 1
-			nextBackoffRate = backoff.DefaultExponential.Backoff(backoffIndex)
-		case <-d.pollTimer.C:
+		case <-pollTimer.C:
 		}
 
 		state, err := d.lookup()
@@ -235,33 +224,46 @@ func (d *dnsResolver) watcher() {
 			err = d.cc.UpdateState(*state)
 		}
 
-		if err == nil {
-			// Success; reset polling for next usage.
-			if !d.pollTimer.Stop() {
-				select {
-				case <-d.pollTimer.C:
-				default:
-				}
+		if err == nil { // POLLING SHOULD STOP
+			// Success; stop polling if active.
+			if !pollTimer.Stop() {
+				<-pollTimer.C
 			}
 			backoffIndex = 1
-			nextBackoffRate = backoff.DefaultExponential.Backoff(backoffIndex)
-		} else {
+			// Okay since you drained channel ^^^
+			pollTimer.Reset(9223372036854775807) // Max duration, send on channel will never happen
+			// I like the idea of moving the time.Sleep here, as this happens on the success case
+			// If this is here, then you can move cleanup on Timer to prevent it from calling exponential backoff
+			// Sleep to prevent excessive re-resolutions on the succesful case. Incoming resolution requests
+			// will be queued in d.rn.
+			t := time.NewTimer(minDNSResRate)
+			select {
+			case <-t.C:
+			case <-d.ctx.Done():
+				t.Stop()
+				return
+			}
+		} else { // POLLING SHOULD CONTINUE TO NEXT ITERATION
 			// Start polling on an error found in DNS Resolver or an error received from ClientConn.
-			d.pollTimer = newTimer(nextBackoffRate)
+			// WILL HAVE TO DRAIN POLLTIMER HERE IN CASE OF GETTING A RESOLVE NOW CALL FROM ANOTHER COMPONENT WHILE POLL
+			// TIMER IS ACTIVE WAIT IT DOESNT MATTER RIGHT, AS THIS IS A NEW TIMER, THE SEND ON THE OLD TIMER WOULDN'T
+			// BLOCK ANYTHING
+			// Note: if there is a ResolveNow{} call on the client conn, this will simply move forward in it's iteration.
+			pollTimer = newTimer(backoff.DefaultExponential.Backoff(backoffIndex)) // Iterates forward here, by discarding the old and constructing a new timer
 			backoffIndex++
-			nextBackoffRate = backoff.DefaultExponential.Backoff(backoffIndex)
 		}
-
+		// I like the idea of wrapping this in an if clause, as time.Sleep() should be decoupled from ResolveNow calls
+		// ResolveNow{} is what determines in success would be determined by ResolveNow()
+		// Can't you just wrap this in an if clause where if pollTimer is actually active,
 		// Sleep to prevent excessive re-resolutions. Incoming resolution requests
 		// will be queued in d.rn.
-		t := time.NewTimer(minDNSResRate)
+		/*t := time.NewTimer(minDNSResRate)
 		select {
 		case <-t.C:
 		case <-d.ctx.Done():
-			d.pollTimer.Stop()
 			t.Stop()
 			return
-		}
+		}*/
 	}
 }
 
