@@ -56,11 +56,12 @@ func GetServiceRequestsCounter(serviceName string) *ServiceRequestsCounter {
 // StartRequest starts a request for a service, incrementing its number of
 // requests by 1. Returns an error if the max number of requests is exceeded.
 func (c *ServiceRequestsCounter) StartRequest(max uint32) error {
-	if atomic.LoadUint32(&c.numRequests) >= max {
-		return fmt.Errorf("max requests %v exceeded on service %v", max, c.ServiceName)
+	newNum := atomic.AddUint32(&c.numRequests, 1)
+	if newNum <= max {
+		return nil
 	}
-	atomic.AddUint32(&c.numRequests, 1)
-	return nil
+	atomic.AddUint32(&c.numRequests, ^uint32(0))
+	return fmt.Errorf("max requests %v exceeded on service %v", max, c.ServiceName)
 }
 
 // EndRequest ends a request for a service, decrementing its number of requests
