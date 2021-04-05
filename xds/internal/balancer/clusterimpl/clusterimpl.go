@@ -92,9 +92,10 @@ type xdsClientInterface interface {
 type clusterImplBalancer struct {
 	balancer.ClientConn
 
-	// mu protects closed and the parent ClientConn. It's to make sure the run()
-	// goroutine doesn't send picker update to parent after this balancer is
-	// closed.
+	// mu guarantees mutual exclusion between Close() and handling of picker
+	// update to the parent ClientConn in run(). It's to make sure that the
+	// run() goroutine doesn't send picker update to parent after the balancer
+	// is closed.
 	//
 	// It's only used by the run() goroutine, but not the other exported
 	// functions. Because the exported functions are guaranteed to be

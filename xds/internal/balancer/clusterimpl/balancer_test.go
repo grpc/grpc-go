@@ -352,8 +352,8 @@ func TestPickerUpdateAfterClose(t *testing.T) {
 			},
 		},
 	}); err != nil {
-		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
 		b.Close()
+		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
 	}
 
 	// Send SubConn state changes to trigger picker updates. Balancer will
