@@ -42,8 +42,10 @@ import (
 type connWrapper struct {
 	net.Conn
 
+	// The specific filter chain picked for handling this connection.
+	filterChain *xdsclient.FilterChain
+
 	// A reference fo the listenerWrapper on which this connection was accepted.
-	// Used to access the filter chains during the server-side handshake.
 	parent *listenerWrapper
 
 	// The certificate providers created for this connection.
@@ -90,12 +92,7 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 		return nil, errors.New("user has not configured xDS credentials")
 	}
 
-	fc := c.getMatchingFilterChain()
-	if fc == nil {
-		return nil, errors.New("no matching filter chain for incoming connection")
-	}
-
-	if fc.SecurityCfg == nil {
+	if c.filterChain.SecurityCfg == nil {
 		// If the security config is empty, this means that the control plane
 		// did not provide any security configuration and therefore we should
 		// return an empty HandshakeInfo here so that the xdsCreds can use the
@@ -106,13 +103,14 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	cpc := c.parent.xdsC.BootstrapConfig().CertProviderConfigs
 	// Identity provider name is mandatory on the server-side, and this is
 	// enforced when the resource is received at the xdsClient layer.
-	ip, err := buildProviderFunc(cpc, fc.SecurityCfg.IdentityInstanceName, fc.SecurityCfg.IdentityCertName, true, false)
+	secCfg := c.filterChain.SecurityCfg
+	ip, err := buildProviderFunc(cpc, secCfg.IdentityInstanceName, secCfg.IdentityCertName, true, false)
 	if err != nil {
 		return nil, err
 	}
 	// Root provider name is optional and required only when doing mTLS.
 	var rp certprovider.Provider
-	if instance, cert := fc.SecurityCfg.RootInstanceName, fc.SecurityCfg.RootCertName; instance != "" {
+	if instance, cert := secCfg.RootInstanceName, secCfg.RootCertName; instance != "" {
 		rp, err = buildProviderFunc(cpc, instance, cert, false, true)
 		if err != nil {
 			return nil, err
@@ -122,26 +120,8 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	c.rootProvider = rp
 
 	xdsHI := xdsinternal.NewHandshakeInfo(c.identityProvider, c.rootProvider)
-	xdsHI.SetRequireClientCert(fc.SecurityCfg.RequireClientCert)
+	xdsHI.SetRequireClientCert(secCfg.RequireClientCert)
 	return xdsHI, nil
-}
-
-// The logic specified in the documentation around the xDS FilterChainMatch
-// proto mentions 8 criteria to match on. gRPC does not support 4 of those, and
-// hence we got rid of them at the time of parsing the received Listener
-// resource. Here we use the remaining 4 criteria to find a matching filter
-// chain: Destination IP address, Source type, Source IP address, Source port.
-func (c *connWrapper) getMatchingFilterChain() *xdsclient.FilterChain {
-	c.parent.mu.RLock()
-	defer c.parent.mu.RUnlock()
-
-	// TODO: Do the filter chain match here and return the best match.
-	// For now, we simply return the first filter_chain in the list or the
-	// default one.
-	if len(c.parent.filterChains) == 0 {
-		return c.parent.defaultFilterChain
-	}
-	return c.parent.filterChains[0]
 }
 
 func (c *connWrapper) Close() error {
