@@ -49,6 +49,7 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	v3statuspbgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
 
 const (
@@ -246,7 +247,7 @@ func TestCSDS(t *testing.T) {
 	}
 }
 
-func commonSetup(t *testing.T) (xdsClientInterfaceWithWatch, *e2e.ManagementServer, string, v3statuspb.ClientStatusDiscoveryService_StreamClientStatusClient, func()) {
+func commonSetup(t *testing.T) (xdsClientInterfaceWithWatch, *e2e.ManagementServer, string, v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient, func()) {
 	t.Helper()
 
 	// Spin up a xDS management server on a local port.
@@ -281,7 +282,7 @@ func commonSetup(t *testing.T) (xdsClientInterfaceWithWatch, *e2e.ManagementServ
 	if err != nil {
 		t.Fatal(err)
 	}
-	v3statuspb.RegisterClientStatusDiscoveryServiceServer(server, csdss)
+	v3statuspbgrpc.RegisterClientStatusDiscoveryServiceServer(server, csdss)
 	// Create a local listener and pass it to Serve().
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -298,7 +299,7 @@ func commonSetup(t *testing.T) (xdsClientInterfaceWithWatch, *e2e.ManagementServ
 	if err != nil {
 		t.Fatalf("cannot connect to server: %v", err)
 	}
-	c := v3statuspb.NewClientStatusDiscoveryServiceClient(conn)
+	c := v3statuspbgrpc.NewClientStatusDiscoveryServiceClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	stream, err := c.StreamClientStatus(ctx, grpc.WaitForReady(true))
 	if err != nil {
@@ -317,7 +318,7 @@ func commonSetup(t *testing.T) (xdsClientInterfaceWithWatch, *e2e.ManagementServ
 	}
 }
 
-func checkForRequested(stream v3statuspb.ClientStatusDiscoveryService_StreamClientStatusClient) error {
+func checkForRequested(stream v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient) error {
 	if err := stream.Send(&v3statuspb.ClientStatusRequest{Node: nil}); err != nil {
 		return fmt.Errorf("failed to send request: %v", err)
 	}
@@ -395,7 +396,7 @@ func checkForRequested(stream v3statuspb.ClientStatusDiscoveryService_StreamClie
 	return nil
 }
 
-func checkForACKed(stream v3statuspb.ClientStatusDiscoveryService_StreamClientStatusClient) error {
+func checkForACKed(stream v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient) error {
 	const wantVersion = "1"
 
 	if err := stream.Send(&v3statuspb.ClientStatusRequest{Node: nil}); err != nil {
@@ -492,7 +493,7 @@ func checkForACKed(stream v3statuspb.ClientStatusDiscoveryService_StreamClientSt
 	return nil
 }
 
-func checkForNACKed(nackResourceIdx int, stream v3statuspb.ClientStatusDiscoveryService_StreamClientStatusClient) error {
+func checkForNACKed(nackResourceIdx int, stream v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient) error {
 	const (
 		ackVersion  = "1"
 		nackVersion = "2"
