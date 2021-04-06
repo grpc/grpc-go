@@ -56,6 +56,10 @@ func GetServiceRequestsCounter(serviceName string) *ServiceRequestsCounter {
 // StartRequest starts a request for a service, incrementing its number of
 // requests by 1. Returns an error if the max number of requests is exceeded.
 func (c *ServiceRequestsCounter) StartRequest(max uint32) error {
+	// Note that during race, the limits could be exceeded. This is allowed:
+	// "Since the implementation is eventually consistent, races between threads
+	// may allow limits to be potentially exceeded."
+	// https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/circuit_breaking#arch-overview-circuit-break.
 	if atomic.LoadUint32(&c.numRequests) >= max {
 		return fmt.Errorf("max requests %v exceeded on service %v", max, c.ServiceName)
 	}
