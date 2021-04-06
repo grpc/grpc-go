@@ -589,14 +589,14 @@ func withHealthCheckFunc(f internal.HealthChecker) DialOption {
 
 func defaultDialOptions() dialOptions {
 	return dialOptions{
-		disableRetry:    !envconfig.Retry,
-		healthCheckFunc: internal.HealthCheckFunc,
-		copts: transport.ConnectOptions{
+		disableRetry:    !envconfig.Retry,//是否重试
+		healthCheckFunc: internal.HealthCheckFunc,//健康检查函数
+		copts: transport.ConnectOptions{//传输连接配置
 			WriteBufferSize: defaultWriteBufSize,
 			ReadBufferSize:  defaultReadBufSize,
 			UseProxy:        true,
 		},
-		resolveNowBackoff: internalbackoff.DefaultExponential.Backoff,
+		resolveNowBackoff: internalbackoff.DefaultExponential.Backoff,//根据给定的重试次数，返回下一次重试之前要等待的时间，默认是一秒钟
 	}
 }
 

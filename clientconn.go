@@ -100,7 +100,7 @@ const (
 	defaultReadBufSize  = 32 * 1024
 )
 
-// Dial creates a client connection to the given target.
+// Dial 根据 target 开始创建一个客户端连接
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
 }
@@ -140,17 +140,18 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		dopts:             defaultDialOptions(),
 		blockingpicker:    newPickerWrapper(),
 		czData:            new(channelzData),
-		firstResolveEvent: grpcsync.NewEvent(),
+		firstResolveEvent: grpcsync.NewEvent(),//一次性事件
 	}
 	cc.retryThrottler.Store((*retryThrottler)(nil))
+	//这里设置可以取消的 context，调用 cc.cancel() 主动中断 Dial
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
 	for _, opt := range opts {
-		opt.apply(&cc.dopts)
+		opt.apply(&cc.dopts)//初始化所有参数
 	}
 
-	chainUnaryClientInterceptors(cc)
-	chainStreamClientInterceptors(cc)
+	chainUnaryClientInterceptors(cc) //处理一元拦截器
+	chainStreamClientInterceptors(cc) //处理流客户端拦截器
 
 	defer func() {
 		if err != nil {
@@ -158,6 +159,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}()
 
+	//设置 channelz
 	if channelz.IsOn() {
 		if cc.dopts.channelzParentID != 0 {
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, cc.dopts.channelzParentID, target)
@@ -176,7 +178,10 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.csMgr.channelzID = cc.channelzID
 	}
 
-	if !cc.dopts.insecure {
+	//这里判断与配置ClientConn的传输安全性
+	if !cc.dopts.insecure {//通过 WithInsecure 配置
+		//表示禁用ClientConn的传输安全性时
+		//存储建立客户端连接所需的身份验证器  TransportCredentials和CredsBundle中必须有一个为 nil。
 		if cc.dopts.copts.TransportCredentials == nil && cc.dopts.copts.CredsBundle == nil {
 			return nil, errNoTransportSecurity
 		}
@@ -184,6 +189,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			return nil, errTransportCredsAndBundle
 		}
 	} else {
+		//表示启用ClientConn的传输安全性时
+		//TransportCredentials和CredsBundle中必须都为 non-nil。
 		if cc.dopts.copts.TransportCredentials != nil || cc.dopts.copts.CredsBundle != nil {
 			return nil, errCredentialsConflict
 		}
@@ -193,7 +200,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			}
 		}
 	}
-
+	//默认的服务配置，以JSON格式输入
 	if cc.dopts.defaultServiceConfigRawJSON != nil {
 		scpr := parseServiceConfig(*cc.dopts.defaultServiceConfigRawJSON)
 		if scpr.Err != nil {
@@ -201,22 +208,25 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 		cc.dopts.defaultServiceConfig, _ = scpr.Config.(*ServiceConfig)
 	}
-	cc.mkp = cc.dopts.copts.KeepaliveParams
 
+	//配置长连接参数
+	cc.mkp = cc.dopts.copts.KeepaliveParams
+	//设置 UA
 	if cc.dopts.copts.UserAgent != "" {
 		cc.dopts.copts.UserAgent += " " + grpcUA
 	} else {
 		cc.dopts.copts.UserAgent = grpcUA
 	}
 
-	if cc.dopts.timeout > 0 {
+	if cc.dopts.timeout > 0 {//可以通过 WithTimeout 函数设置
+		//这个超时是用作 clientConn 初始化超时判断
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, cc.dopts.timeout)
 		defer cancel()
 	}
 	defer func() {
 		select {
-		case <-ctx.Done():
+		case <-ctx.Done()://收到这个，表示cc.dopts.timeout >0 且已经设置了超时，且 ctx 过期了
 			switch {
 			case ctx.Err() == err:
 				conn = nil
@@ -230,8 +240,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}()
 
 	scSet := false
-	if cc.dopts.scChan != nil {
-		// Try to get an initial service config.
+	if cc.dopts.scChan != nil {//通过 WithServiceConfig 设置，是一个具有读取服务配置的通道
+		// 尝试获取初始服务配置
 		select {
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
@@ -242,25 +252,29 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		default:
 		}
 	}
-	if cc.dopts.bs == nil {
+	if cc.dopts.bs == nil {//用于设置连接尝试失败后，用于connectRetryNum的退避策略，通过 withBackoff 设置
 		cc.dopts.bs = backoff.DefaultExponential
 	}
 
-	// Determine the resolver to use.
+	// 确定要使用的解析器
+	// cc.dopts.copts 涵盖了与服务器通信的所有相关选项
+	// cc.dopts.copts.Dialer 指定了如何请求网络上的某个地址
+	//这里开始解析 target ，转化成 parsedTarget
 	cc.parsedTarget = grpcutil.ParseTarget(cc.target, cc.dopts.copts.Dialer != nil)
-	channelz.Infof(logger, cc.channelzID, "parsed scheme: %q", cc.parsedTarget.Scheme)
-	resolverBuilder := cc.getResolver(cc.parsedTarget.Scheme)
+	channelz.Infof(logger, cc.channelzID, "parsed scheme: %q", cc.parsedTarget.Scheme)//打印日志，并添加链路追踪
+	resolverBuilder := cc.getResolver(cc.parsedTarget.Scheme)//可能返回在给定方案中注册的解析器。如果没有在该方案中注册，则将返回nil。
 	if resolverBuilder == nil {
-		// If resolver builder is still nil, the parsed target's scheme is
-		// not registered. Fallback to default resolver and set Endpoint to
-		// the original target.
-		channelz.Infof(logger, cc.channelzID, "scheme %q not registered, fallback to default scheme", cc.parsedTarget.Scheme)
+		//如果解析程序生成器仍为nil，表明已解析目标的方案未注册。
+		//回退到默认解析器，并将 target 设置为 Endpoint。
+		channelz.Infof(logger, cc.channelzID, "scheme %q not registered, fallback to default scheme", cc.parsedTarget.Scheme)//打印日志，并添加链路追踪
 		cc.parsedTarget = resolver.Target{
 			Scheme:   resolver.GetDefaultScheme(),
 			Endpoint: target,
 		}
+		//再次尝试获取解析器
 		resolverBuilder = cc.getResolver(cc.parsedTarget.Scheme)
 		if resolverBuilder == nil {
+			//如果默认的解析器还获取不到，就报错
 			return nil, fmt.Errorf("could not get resolver for default scheme: %q", cc.parsedTarget.Scheme)
 		}
 	}
@@ -348,14 +362,20 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 }
 
 // chainUnaryClientInterceptors chains all unary client interceptors into one.
+//将所有一元客户端拦截器都链接到一个上
 func chainUnaryClientInterceptors(cc *ClientConn) {
+	//获取目前已有的拦截器
 	interceptors := cc.dopts.chainUnaryInts
 	// Prepend dopts.unaryInt to the chaining interceptors if it exists, since unaryInt will
 	// be executed before any other chained interceptors.
 	if cc.dopts.unaryInt != nil {
+		//将拦截器组装到一起
 		interceptors = append([]UnaryClientInterceptor{cc.dopts.unaryInt}, interceptors...)
 	}
 	var chainedInt UnaryClientInterceptor
+	//如果拦截器数量为0，就将一元客户端拦截器置为 nil
+	//如果拦截器数量为1，那么一元客户端拦截器置为该拦截器
+	//如果拦截器数量大于1，那么取第一个，且将这些拦截器生成一个链接的调用程序
 	if len(interceptors) == 0 {
 		chainedInt = nil
 	} else if len(interceptors) == 1 {
@@ -379,6 +399,8 @@ func getChainUnaryInvoker(interceptors []UnaryClientInterceptor, curr int, final
 }
 
 // chainStreamClientInterceptors chains all stream client interceptors into one.
+//将所有流客户端拦截器链接到一个上
+//逻辑参考 chainUnaryClientInterceptors
 func chainStreamClientInterceptors(cc *ClientConn) {
 	interceptors := cc.dopts.chainStreamInts
 	// Prepend dopts.streamInt to the chaining interceptors if it exists, since streamInt will
@@ -481,16 +503,16 @@ var _ ClientConnInterface = (*ClientConn)(nil)
 // handshakes. It also handles errors on established connections by
 // re-resolving the name and reconnecting.
 type ClientConn struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx    context.Context    //给 dial 进行会话控制
+	cancel context.CancelFunc //主动调用cancel，断开 dial
 
-	target       string
-	parsedTarget resolver.Target
+	target       string          //在没有负载均衡的情况下，是服务器的地址：ip+端口；在负载情况下，是etcd的key
+	parsedTarget resolver.Target //去解析 target 生成 parsedTarget
 	authority    string
-	dopts        dialOptions
-	csMgr        *connectivityStateManager
+	dopts        dialOptions //建立连接的各种配置
+	csMgr        *connectivityStateManager //每个连接的状态管理
 
-	balancerBuildOpts balancer.BuildOptions
+	balancerBuildOpts balancer.BuildOptions//与远程负载均衡服务器连接的凭证，若没有安全上的考虑，忽略该项
 	blockingpicker    *pickerWrapper
 
 	safeConfigSelector iresolver.SafeConfigSelector
@@ -498,9 +520,9 @@ type ClientConn struct {
 	mu              sync.RWMutex
 	resolverWrapper *ccResolverWrapper
 	sc              *ServiceConfig
-	conns           map[*addrConn]struct{}
+	conns           map[*addrConn]struct{} //维护各个地址对应的长连接
 	// Keepalive parameter can be updated if a GoAway is received.
-	mkp             keepalive.ClientParameters
+	mkp             keepalive.ClientParameters //针对客户端设置长连接参数
 	curBalancerName string
 	balancerWrapper *ccBalancerWrapper
 	retryThrottler  atomic.Value

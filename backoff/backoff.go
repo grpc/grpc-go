@@ -45,7 +45,7 @@ type Config struct {
 // This should be useful for callers who want to configure backoff with
 // non-default values only for a subset of the options.
 var DefaultConfig = Config{
-	BaseDelay:  1.0 * time.Second,
+	BaseDelay:  1.0 * time.Second,//默认的重试等待时间
 	Multiplier: 1.6,
 	Jitter:     0.2,
 	MaxDelay:   120 * time.Second,
