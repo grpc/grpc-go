@@ -32,6 +32,7 @@ import (
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
@@ -499,29 +500,51 @@ func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (strin
 		return "", ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 	logger.Infof("Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, cluster)
-
-	cu, err := validateCluster(cluster)
+	cu, err := validateClusterAndConstructClusterUpdate(cluster)
 	if err != nil {
 		return cluster.GetName(), ClusterUpdate{}, err
 	}
 	cu.Raw = r
-	// If the Cluster message in the CDS response did not contain a
-	// serviceName, we will just use the clusterName for EDS.
-	if cu.ServiceName == "" {
-		cu.ServiceName = cluster.GetName()
-	}
+
 	return cluster.GetName(), cu, nil
 }
 
-func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
+func clusterTypeFromCluster(cluster *v3clusterpb.Cluster) (ClusterType, string, []string, error) {
+	if cluster.GetType() == v3clusterpb.Cluster_EDS {
+		if cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil {
+			return 0, "", nil, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
+		}
+		// If the Cluster message in the CDS response did not contain a
+		// serviceName, we will just use the clusterName for EDS.
+		if cluster.GetEdsClusterConfig().GetServiceName() == "" {
+			return ClusterTypeEDS, cluster.GetName(), nil, nil
+		}
+		return ClusterTypeEDS, cluster.GetEdsClusterConfig().GetServiceName(), nil, nil
+	}
+
+	if cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS {
+		return ClusterTypeLogicalDNS, cluster.GetName(), nil, nil
+	}
+
+	if cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate" {
+		// Loop through ClusterConfig here to get cluster names.
+		clusters := &v3aggregateclusterpb.ClusterConfig{}
+		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
+			return 0, "", nil, fmt.Errorf("failed to unmarshal resource: %v", err)
+		}
+		return ClusterTypeAggregate, cluster.GetName(), clusters.Clusters, nil
+	}
+	return 0, "", nil, fmt.Errorf("unexpected cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
+}
+
+func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	emptyUpdate := ClusterUpdate{ServiceName: "", EnableLRS: false}
-	switch {
-	case cluster.GetType() != v3clusterpb.Cluster_EDS:
-		return emptyUpdate, fmt.Errorf("unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
-	case cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil:
-		return emptyUpdate, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
-	case cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN:
+	if cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN {
 		return emptyUpdate, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
+	}
+	clusterType, serviceName, prioritizedClusters, err := clusterTypeFromCluster(cluster)
+	if err != nil {
+		return emptyUpdate, err
 	}
 
 	// Process security configuration received from the control plane iff the
@@ -535,10 +558,12 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	}
 
 	return ClusterUpdate{
-		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
-		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
-		SecurityCfg: sc,
-		MaxRequests: circuitBreakersFromCluster(cluster),
+		ClusterType:             clusterType,
+		ServiceName:             serviceName,
+		EnableLRS:               cluster.GetLrsServer().GetSelf() != nil,
+		SecurityCfg:             sc,
+		MaxRequests:             circuitBreakersFromCluster(cluster),
+		PrioritizedClusterNames: prioritizedClusters,
 	}, nil
 }
 
