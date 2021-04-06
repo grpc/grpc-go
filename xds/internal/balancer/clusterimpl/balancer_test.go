@@ -324,3 +324,48 @@ func TestDropCircuitBreaking(t *testing.T) {
 		t.Fatalf("got unexpected drop reports, diff (-got, +want): %v", diff)
 	}
 }
+
+// TestPickerUpdateAfterClose covers the case that cluster_impl wants to update
+// picker after it's closed. Because picker updates are sent in the run()
+// goroutine.
+func TestPickerUpdateAfterClose(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	defer func() { newXDSClient = oldNewXDSClient }()
+
+	builder := balancer.Get(clusterImplName)
+	cc := testutils.NewTestClientConn(t)
+	b := builder.Build(cc, balancer.BuildOptions{})
+
+	var maxRequest uint32 = 50
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Addresses: testBackendAddrs,
+		},
+		BalancerConfig: &lbConfig{
+			Cluster:               testClusterName,
+			EDSServiceName:        testServiceName,
+			MaxConcurrentRequests: &maxRequest,
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
+	}); err != nil {
+		b.Close()
+		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
+	}
+
+	// Send SubConn state changes to trigger picker updates. Balancer will
+	// closed in a defer.
+	sc1 := <-cc.NewSubConnCh
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	// This close will race with the SubConn state update.
+	b.Close()
+
+	select {
+	case <-cc.NewPickerCh:
+		t.Fatalf("unexpected picker update after balancer is closed")
+	case <-time.After(time.Millisecond * 10):
+	}
+}

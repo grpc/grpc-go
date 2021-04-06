@@ -26,6 +26,7 @@ package clusterimpl
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/buffer"
@@ -90,8 +91,19 @@ type xdsClientInterface interface {
 
 type clusterImplBalancer struct {
 	balancer.ClientConn
-	bOpts  balancer.BuildOptions
+
+	// mu guarantees mutual exclusion between Close() and handling of picker
+	// update to the parent ClientConn in run(). It's to make sure that the
+	// run() goroutine doesn't send picker update to parent after the balancer
+	// is closed.
+	//
+	// It's only used by the run() goroutine, but not the other exported
+	// functions. Because the exported functions are guaranteed to be
+	// synchronized with Close().
+	mu     sync.Mutex
 	closed *grpcsync.Event
+
+	bOpts  balancer.BuildOptions
 	logger *grpclog.PrefixLogger
 	xdsC   xdsClientInterface
 
@@ -274,12 +286,15 @@ func (cib *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balanc
 }
 
 func (cib *clusterImplBalancer) Close() {
+	cib.mu.Lock()
+	cib.closed.Fire()
+	cib.mu.Unlock()
+
 	if cib.childLB != nil {
 		cib.childLB.Close()
 		cib.childLB = nil
 	}
 	cib.xdsC.Close()
-	cib.closed.Fire()
 	cib.logger.Infof("Shutdown")
 }
 
@@ -301,6 +316,11 @@ func (cib *clusterImplBalancer) run() {
 		select {
 		case update := <-cib.pickerUpdateCh.Get():
 			cib.pickerUpdateCh.Load()
+			cib.mu.Lock()
+			if cib.closed.HasFired() {
+				cib.mu.Unlock()
+				return
+			}
 			switch u := update.(type) {
 			case balancer.State:
 				cib.childState = u
@@ -322,6 +342,7 @@ func (cib *clusterImplBalancer) run() {
 					})
 				}
 			}
+			cib.mu.Unlock()
 		case <-cib.closed.Done():
 			return
 		}
