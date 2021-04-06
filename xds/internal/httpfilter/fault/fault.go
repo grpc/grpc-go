@@ -125,7 +125,12 @@ func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (ir
 		}
 	}
 
-	return &interceptor{config: c.config}, nil
+	icfg := c.config
+	if (icfg.GetMaxActiveFaults() != nil && icfg.GetMaxActiveFaults().GetValue() == 0) ||
+		(icfg.GetDelay() == nil && icfg.GetAbort() == nil) {
+		return nil, nil
+	}
+	return &interceptor{config: icfg}, nil
 }
 
 type interceptor struct {
