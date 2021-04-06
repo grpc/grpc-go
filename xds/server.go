@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/buffer"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -48,9 +49,9 @@ var (
 		return grpc.NewServer(opts...)
 	}
 
-	// Unexported function to retrieve transport credentials from a gRPC server.
-	grpcGetServerCreds = internal.GetServerCredentials.(func(*grpc.Server) credentials.TransportCredentials)
-	logger             = grpclog.Component("xds")
+	grpcGetServerCreds    = internal.GetServerCredentials.(func(*grpc.Server) credentials.TransportCredentials)
+	drainServerTransports = internal.DrainServerTransports.(func(*grpc.Server, string))
+	logger                = grpclog.Component("xds")
 )
 
 func prefixLogger(p *GRPCServer) *internalgrpclog.PrefixLogger {
@@ -88,6 +89,7 @@ type GRPCServer struct {
 	quit          *grpcsync.Event
 	logger        *internalgrpclog.PrefixLogger
 	xdsCredsInUse bool
+	opts          *serverOptions
 
 	// clientMu is used only in initXDSClient(), which is called at the
 	// beginning of Serve(), where we have to decide if we have to create a
@@ -104,15 +106,22 @@ type GRPCServer struct {
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 // release.
-func NewGRPCServer(opts ...grpc.ServerOption) *GRPCServer {
+func NewGRPCServer(gOpts []grpc.ServerOption, xOpts []ServerOption) *GRPCServer {
+	// Handle the xDS specific server options.
+	opts := &serverOptions{}
+	for _, o := range xOpts {
+		o.apply(opts)
+	}
+
 	newOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(xdsUnaryInterceptor),
 		grpc.ChainStreamInterceptor(xdsStreamInterceptor),
 	}
-	newOpts = append(newOpts, opts...)
+	newOpts = append(newOpts, gOpts...)
 	s := &GRPCServer{
 		gs:   newGRPCServer(newOpts...),
 		quit: grpcsync.NewEvent(),
+		opts: opts,
 	}
 	s.logger = prefixLogger(s)
 	s.logger.Infof("Created xds.GRPCServer")
@@ -165,7 +174,6 @@ func (s *GRPCServer) initXDSClient() error {
 // initiated here.
 //
 // Serve will return a non-nil error unless Stop or GracefulStop is called.
-// TODO: Support callback to get notified on serving state changes.
 func (s *GRPCServer) Serve(lis net.Listener) error {
 	s.logger.Infof("Serve() passed a net.Listener on %s", lis.Addr().String())
 	if _, ok := lis.Addr().(*net.TCPAddr); !ok {
@@ -207,6 +215,11 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 		name = strings.Replace(cfg.ServerListenerResourceNameTemplate, "%s", lis.Addr().String(), -1)
 	}
 
+	modeUpdateCh := buffer.NewUnbounded()
+	go func() {
+		s.handleServingModeChanges(modeUpdateCh)
+	}()
+
 	// Create a listenerWrapper which handles all functionality required by
 	// this particular instance of Serve().
 	lw, goodUpdateCh := server.NewListenerWrapper(server.ListenerWrapperParams{
@@ -214,6 +227,13 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 		ListenerResourceName: name,
 		XDSCredsInUse:        s.xdsCredsInUse,
 		XDSClient:            s.xdsC,
+		ModeCallback: func(addr net.Addr, mode server.ServingMode, err error) {
+			modeUpdateCh.Put(&modeChangeArgs{
+				addr: addr,
+				mode: mode,
+				err:  err,
+			})
+		},
 	})
 
 	// Block until a good LDS response is received or the server is stopped.
@@ -227,6 +247,51 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 	case <-goodUpdateCh:
 	}
 	return s.gs.Serve(lw)
+}
+
+// modeChangeArgs wraps argument required for invoking mode change callback.
+type modeChangeArgs struct {
+	addr net.Addr
+	mode server.ServingMode
+	err  error
+}
+
+// handleServingModeChanges runs as a separate goroutine, spawned from Serve().
+// It reads a channel on to which mode change arguments are pushed, and in turn
+// invokes the user registered callback. It also calls an internal method on the
+// underlying grpc.Server to gracefully close existing connections, if the
+// listener moved to a "not-serving" mode.
+func (s *GRPCServer) handleServingModeChanges(updateCh *buffer.Unbounded) {
+	for {
+		select {
+		case <-s.quit.Done():
+			return
+		case u := <-updateCh.Get():
+			updateCh.Load()
+			args := u.(*modeChangeArgs)
+			var ss ServingMode
+			switch args.mode {
+			case server.ServingModeNotServing:
+				ss = ServingModeNotServing
+			case server.ServingModeServing:
+				ss = ServingModeServing
+			}
+			if ss == ServingModeNotServing {
+				// We type assert our underlying gRPC server to the real
+				// grpc.Server here before trying to initiate the drain
+				// operation. This approach avoids performing the same type
+				// assertion in the grpc package which provides the
+				// implementation for internal.GetServerCredentials, and allows
+				// us to use a fake gRPC server in tests.
+				if gs, ok := s.gs.(*grpc.Server); ok {
+					drainServerTransports(gs, args.addr.String())
+				}
+			}
+			if s.opts.modeCallback != nil {
+				s.opts.modeCallback(args.addr, ss, args.err)
+			}
+		}
+	}
 }
 
 // Stop stops the underlying gRPC server. It immediately closes all open

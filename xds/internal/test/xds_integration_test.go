@@ -32,7 +32,8 @@ import (
 )
 
 const (
-	defaultTestTimeout = 10 * time.Second
+	defaultTestTimeout      = 10 * time.Second
+	defaultTestShortTimeout = 100 * time.Millisecond
 )
 
 type s struct {

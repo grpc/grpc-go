@@ -150,7 +150,7 @@ func (s) TestNewServer(t *testing.T) {
 				newGRPCServer = origNewGRPCServer
 			}()
 
-			s := NewGRPCServer(test.serverOpts...)
+			s := NewGRPCServer(test.serverOpts, nil)
 			defer s.Stop()
 
 			if s.xdsCredsInUse != test.wantXDSCredsInUse {
@@ -167,7 +167,7 @@ func (s) TestRegisterService(t *testing.T) {
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServerInterface { return fs }
 	defer func() { newGRPCServer = origNewGRPCServer }()
 
-	s := NewGRPCServer()
+	s := NewGRPCServer(nil, nil)
 	defer s.Stop()
 
 	s.RegisterService(&grpc.ServiceDesc{}, nil)
@@ -311,7 +311,14 @@ func (s) TestServeSuccess(t *testing.T) {
 	fs, clientCh, cleanup := setupOverrides()
 	defer cleanup()
 
-	server := NewGRPCServer()
+	// Create a new xDS-enabled gRPC server and pass it a server option to get
+	// notified about serving mode changes.
+	modeChangeCh := testutils.NewChannel()
+	modeChangeOption := &ServingModeServerOption{Callback: func(addr net.Addr, mode ServingMode, err error) {
+		t.Logf("server mode change callback invoked for listener %q with mode %q and error %v", addr.String(), mode, err)
+		modeChangeCh.Send(mode)
+	}}
+	server := NewGRPCServer(nil, []ServerOption{modeChangeOption})
 	defer server.Stop()
 
 	lis, err := xdstestutils.LocalTCPListener()
@@ -349,11 +356,20 @@ func (s) TestServeSuccess(t *testing.T) {
 
 	// Push an error to the registered listener watch callback and make sure
 	// that Serve does not return.
-	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{}, errors.New("LDS error"))
+	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{}, xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "LDS resource not found"))
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := serveDone.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Fatal("Serve() returned after a bad LDS response")
+	}
+
+	// Make sure the serving mode changes appropriately.
+	v, err := modeChangeCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("error when waiting for serving mode to change: %v", err)
+	}
+	if mode := v.(ServingMode); mode != ServingModeNotServing {
+		t.Fatalf("server mode is %q, want %q", mode, ServingModeNotServing)
 	}
 
 	// Push a good LDS response, and wait for Serve() to be invoked on the
@@ -370,11 +386,18 @@ func (s) TestServeSuccess(t *testing.T) {
 		t.Fatalf("error when waiting for Serve() to be invoked on the grpc.Server")
 	}
 
+	// Make sure the serving mode changes appropriately.
+	v, err = modeChangeCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("error when waiting for serving mode to change: %v", err)
+	}
+	if mode := v.(ServingMode); mode != ServingModeServing {
+		t.Fatalf("server mode is %q, want %q", mode, ServingModeServing)
+	}
+
 	// Push an update to the registered listener watch callback with a Listener
 	// resource whose host:port does not match the actual listening address and
-	// port. Serve() should not return and should continue to use the old state.
-	//
-	// This will change once we add start tracking serving state.
+	// port. This will push the listener to "not-serving" mode.
 	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
 		RouteConfigName: "routeconfig",
 		InboundListenerCfg: &xdsclient.InboundListenerConfig{
@@ -387,6 +410,15 @@ func (s) TestServeSuccess(t *testing.T) {
 	if _, err := serveDone.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Fatal("Serve() returned after a bad LDS response")
 	}
+
+	// Make sure the serving mode changes appropriately.
+	v, err = modeChangeCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("error when waiting for serving mode to change: %v", err)
+	}
+	if mode := v.(ServingMode); mode != ServingModeNotServing {
+		t.Fatalf("server mode is %q, want %q", mode, ServingModeNotServing)
+	}
 }
 
 // TestServeWithStop tests the case where Stop() is called before an LDS update
@@ -398,7 +430,7 @@ func (s) TestServeWithStop(t *testing.T) {
 
 	// Note that we are not deferring the Stop() here since we explicitly call
 	// it after the LDS watch has been registered.
-	server := NewGRPCServer()
+	server := NewGRPCServer(nil, nil)
 
 	lis, err := xdstestutils.LocalTCPListener()
 	if err != nil {
@@ -456,7 +488,7 @@ func (s) TestServeBootstrapFailure(t *testing.T) {
 	// Since we have not setup fakes for anything, this will attempt to do real
 	// xDS bootstrap and that will fail because the bootstrap environment
 	// variable is not set.
-	server := NewGRPCServer()
+	server := NewGRPCServer(nil, nil)
 	defer server.Stop()
 
 	lis, err := xdstestutils.LocalTCPListener()
@@ -527,7 +559,7 @@ func (s) TestServeBootstrapConfigInvalid(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create xds server credentials: %v", err)
 			}
-			server := NewGRPCServer(grpc.Creds(xdsCreds))
+			server := NewGRPCServer([]grpc.ServerOption{grpc.Creds(xdsCreds)}, nil)
 			defer server.Stop()
 
 			lis, err := xdstestutils.LocalTCPListener()
@@ -563,7 +595,7 @@ func (s) TestServeNewClientFailure(t *testing.T) {
 	}
 	defer func() { newXDSClient = origNewXDSClient }()
 
-	server := NewGRPCServer()
+	server := NewGRPCServer(nil, nil)
 	defer server.Stop()
 
 	lis, err := xdstestutils.LocalTCPListener()
@@ -595,7 +627,7 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 	fs, clientCh, cleanup := setupOverrides()
 	defer cleanup()
 
-	server := NewGRPCServer()
+	server := NewGRPCServer(nil, nil)
 	defer server.Stop()
 
 	lis, err := xdstestutils.LocalTCPListener()
@@ -687,7 +719,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 		t.Fatalf("failed to create xds server credentials: %v", err)
 	}
 
-	server := NewGRPCServer(grpc.Creds(xdsCreds))
+	server := NewGRPCServer([]grpc.ServerOption{grpc.Creds(xdsCreds)}, nil)
 	defer server.Stop()
 
 	lis, err := xdstestutils.LocalTCPListener()
