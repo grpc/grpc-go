@@ -158,6 +158,15 @@ type scUpdate struct {
 	state   balancer.SubConnState
 }
 
+// clusterHandlerUpdate wraps the information received from the clusterHandler.
+// A non-nil error is propagated to the underlying XdsClusterResolverLoadBalancingPolicyConfig.
+// A valid update results in creating a new XdsClusterResolverLoadBalancer (if one doesn't already
+// exist) and pushing the update to it.
+type clusterHandlerUpdate struct {
+	listOfClusters []xdsclient.ClusterUpdate
+	err error
+}
+
 // watchUpdate wraps the information received from a registered CDS watcher. A
 // non-nil error is propagated to the underlying edsBalancer. A valid update
 // results in creating a new edsBalancer (if one doesn't already exist) and
@@ -190,6 +199,13 @@ type cdsBalancer struct {
 	cachedIdentity certprovider.Provider
 	xdsHI          *xdsinternal.HandshakeInfo
 	xdsCredsInUse  bool
+
+	// This handler will be used to give this cdsBalancer a stream
+	// of clusterUpdate lists in order to pass down to the xds_cluster_resolver LB policy.
+	clusterHandler ClusterHandler
+
+	// Receives updates from ClusterHandler.
+	clusterUpdate <-chan []xdsclient.ClusterUpdate
 }
 
 // handleClientConnUpdate handles a ClientConnUpdate received from gRPC. Good
@@ -304,9 +320,16 @@ func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanc
 	return provider, nil
 }
 
+func (b *cdsBalancer) handleClusterHandlerUpdate(update *clusterHandlerUpdate) {
+	// TODO: Error handling
+
+	b.logger.Infof("Update from ClusterHandler")
+
+}
+
 // handleWatchUpdate handles a watch update from the xDS Client. Good updates
 // lead to clientConn updates being invoked on the underlying edsBalancer.
-func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
+func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) { // Instead of having this be a watch update, instead have this be a ClusterHandler update, i.e. this can take a single EDS name or a list of EDS names, but have it still construct the EDS balancer here
 	if err := update.err; err != nil {
 		b.logger.Warningf("Watch error from xds-client %p: %v", b.xdsClient, err)
 		b.handleErrorFromUpdate(err, false)
@@ -379,7 +402,7 @@ func (b *cdsBalancer) run() {
 					break
 				}
 				b.edsLB.UpdateSubConnState(update.subConn, update.state)
-			case *watchUpdate:
+			case *watchUpdate: // Switch this
 				b.handleWatchUpdate(update)
 			}
 		case <-b.closed.Done():
