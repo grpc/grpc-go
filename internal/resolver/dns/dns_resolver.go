@@ -204,17 +204,8 @@ func (d *dnsResolver) Close() {
 
 func (d *dnsResolver) watcher() {
 	defer d.wg.Done()
-	pollTimer := time.NewTimer(0)
-	defer pollTimer.Stop()
 	backoffIndex := 1
 	for {
-		select {
-		case <-d.ctx.Done():
-			return
-		case <-d.rn:
-		case <-pollTimer.C:
-		}
-
 		state, err := d.lookup()
 		if err != nil {
 			// Report error to the underlying grpc.ClientConn.
@@ -223,23 +214,28 @@ func (d *dnsResolver) watcher() {
 			err = d.cc.UpdateState(*state)
 		}
 
+		var timer *time.Timer
 		if err == nil {
-			// Success, so stop polling by resetting the poll timer to max duration.
-			pollTimer.Reset(9223372036854775807)
+			// Success resolving, wait for the next ResolveNow. However, also wait 30 seconds at the very least
+			// to prevent constantly re-resolving.
 			backoffIndex = 1
-			// Sleep to prevent excessive re-resolutions if the DNS Resolver was successful. Incoming resolution requests
-			// will be queued in d.rn.
-			t := time.NewTimer(minDNSResRate)
+			timer = time.NewTimer(minDNSResRate)
 			select {
-			case <-t.C:
 			case <-d.ctx.Done():
-				t.Stop()
+				timer.Stop()
 				return
+			case <-d.rn:
 			}
 		} else {
 			// Poll on an error found in DNS Resolver or an error received from ClientConn.
-			pollTimer = newTimer(backoff.DefaultExponential.Backoff(backoffIndex))
+			timer = newTimer(backoff.DefaultExponential.Backoff(backoffIndex))
 			backoffIndex++
+		}
+		select {
+		case <-d.ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
 		}
 	}
 }
