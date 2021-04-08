@@ -16,78 +16,56 @@
  *
  */
 
-// Package main implements a client for Greeter service.
+// Binary main implements a client for Greeter service using gRPC's client-side
+// support for xDS APIs.
 package main
 
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	xdscreds "google.golang.org/grpc/credentials/xds"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 
 	_ "google.golang.org/grpc/xds" // To install the xds resolvers and balancers.
 )
 
-const (
-	defaultTarget = "localhost:50051"
-	defaultName   = "world"
+var (
+	target   = flag.String("target", "xds:///localhost:50051", "uri of the Greeter Server, e.g. 'xds:///helloworld-service:8080'")
+	name     = flag.String("name", "world", "name you wished to be greeted by the server")
+	xdsCreds = flag.Bool("xds_creds", false, "whether the server should use xDS APIs to receive security configuration")
 )
-
-var help = flag.Bool("help", false, "Print usage information")
-
-func init() {
-	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), `
-Usage: client [name [target]]
-
-  name
-        The name you wish to be greeted by. Defaults to %q
-  target
-        The URI of the server, e.g. "xds:///helloworld-service". Defaults to %q
-`, defaultName, defaultTarget)
-
-		flag.PrintDefaults()
-	}
-}
 
 func main() {
 	flag.Parse()
-	if *help {
-		flag.Usage()
-		return
-	}
-	args := flag.Args()
 
-	if len(args) > 2 {
-		flag.Usage()
-		return
+	if !strings.HasPrefix(*target, "xds:///") {
+		log.Fatalf("-target must use a URI with scheme set to 'xds'")
 	}
 
-	name := defaultName
-	if len(args) > 0 {
-		name = args[0]
+	creds := insecure.NewCredentials()
+	if *xdsCreds {
+		log.Println("Using xDS credentials...")
+		var err error
+		if creds, err = xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()}); err != nil {
+			log.Fatalf("failed to create client-side xDS credentials: %v", err)
+		}
 	}
-
-	target := defaultTarget
-	if len(args) > 1 {
-		target = args[1]
-	}
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(target, grpc.WithInsecure())
+	conn, err := grpc.Dial(*target, grpc.WithTransportCredentials(creds))
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		log.Fatalf("grpc.Dial(%s) failed: %v", *target, err)
 	}
 	defer conn.Close()
-	c := pb.NewGreeterClient(conn)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: name})
+	c := pb.NewGreeterClient(conn)
+	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: *name})
 	if err != nil {
 		log.Fatalf("could not greet: %v", err)
 	}
