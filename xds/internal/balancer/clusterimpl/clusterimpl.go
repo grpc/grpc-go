@@ -324,6 +324,22 @@ func (cib *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balanc
 		}
 		addrs = newAddrs
 	}
+	// When there's no cluster name, we create the SubConn without attributes.
+	//
+	// The cluster name is set in the same method this balancer receives and
+	// forwards the addresses. So this can only happen if the child policy
+	// creates a SubConn before receiving any address. This is impossible for
+	// balancers like roundrobin, but can happen for sophisticated ones like
+	// xds.
+	//
+	// We have some options:
+	// 1. block and wait for a cluster name - this is an overkill.
+	// 2. return an error - this is probably fine
+	// 3. create without attributes.
+	//
+	// Option 3 is better because in most cases, the cluster name in attributes
+	// isn't used by any one. In the one case where it's used (direct path,
+	// google default creds read it), the connection will fail at handshake.
 	return cib.ClientConn.NewSubConn(addrs, opts)
 }
 

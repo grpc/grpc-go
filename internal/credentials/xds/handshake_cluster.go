@@ -37,6 +37,6 @@ func SetHandshakeClusterName(addr resolver.Address, clusterName string) resolver
 // GetHandshakeClusterName returns cluster name stored in attr.
 func GetHandshakeClusterName(attr *attributes.Attributes) (string, bool) {
 	v := attr.Value(handshakeClusterNameKey{})
-	hi, ok := v.(string)
-	return hi, ok
+	name, ok := v.(string)
+	return name, ok
 }
