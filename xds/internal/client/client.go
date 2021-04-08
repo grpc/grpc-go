@@ -355,9 +355,26 @@ type SecurityConfig struct {
 	RequireClientCert bool
 }
 
+// ClusterType is the type of cluster from a received CDS response.
+type ClusterType int
+
+const (
+	// ClusterTypeEDS represents the EDS cluster type, which will delegate endpoint
+	// discovery to the management server.
+	ClusterTypeEDS ClusterType = iota
+	// ClusterTypeLogicalDNS represents the Logical DNS cluster type, which essentially
+	// maps to the gRPC behavior of using the DNS resolver with pick_first LB policy.
+	ClusterTypeLogicalDNS
+	// ClusterTypeAggregate represents the Aggregate Cluster type, which provides a
+	// prioritized list of clusters to use. It is used for failover between clusters
+	// with a different configuration.
+	ClusterTypeAggregate
+)
+
 // ClusterUpdate contains information from a received CDS response, which is of
 // interest to the registered CDS watcher.
 type ClusterUpdate struct {
+	ClusterType ClusterType
 	// ServiceName is the service name corresponding to the clusterName which
 	// is being watched for through CDS.
 	ServiceName string
@@ -370,6 +387,10 @@ type ClusterUpdate struct {
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
+
+	// PrioritizedClusterNames is used only for cluster type aggregate. It represents
+	// a prioritized list of cluster names.
+	PrioritizedClusterNames []string
 }
 
 // OverloadDropConfig contains the config to drop overloads.

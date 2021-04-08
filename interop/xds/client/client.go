@@ -31,9 +31,11 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/admin"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	_ "google.golang.org/grpc/xds"
 
@@ -370,6 +372,12 @@ func main() {
 	defer s.Stop()
 	testgrpc.RegisterLoadBalancerStatsServiceServer(s, &statsService{})
 	testgrpc.RegisterXdsUpdateClientConfigureServiceServer(s, &configureService{})
+	reflection.Register(s)
+	cleanup, err := admin.Register(s)
+	if err != nil {
+		logger.Fatalf("failed to register admin: %v", err)
+	}
+	defer cleanup()
 	go s.Serve(lis)
 
 	clients := make([]testgrpc.TestServiceClient, *numChannels)

@@ -938,6 +938,36 @@ func (s) TestBalancerGroup_locality_caching_readd_with_different_builder(t *test
 	}
 }
 
+// After removing a sub-balancer, it will be kept in cache. Make sure that this
+// sub-balancer's Close is called when the balancer group is closed.
+func (s) TestBalancerGroup_CloseStopsBalancerInCache(t *testing.T) {
+	const balancerName = "stub-TestBalancerGroup_check_close"
+	closed := make(chan struct{})
+	stub.Register(balancerName, stub.BalancerFuncs{Close: func(_ *stub.BalancerData) {
+		close(closed)
+	}})
+	builder := balancer.Get(balancerName)
+
+	defer replaceDefaultSubBalancerCloseTimeout(time.Second)()
+	gator, bg, _, _ := initBalancerGroupForCachingTest(t)
+
+	// Add balancer, and remove
+	gator.Add(testBalancerIDs[2], 1)
+	bg.Add(testBalancerIDs[2], builder)
+	gator.Remove(testBalancerIDs[2])
+	bg.Remove(testBalancerIDs[2])
+
+	// Immediately close balancergroup, before the cache timeout.
+	bg.Close()
+
+	// Make sure the removed child balancer is closed eventually.
+	select {
+	case <-closed:
+	case <-time.After(time.Second * 2):
+		t.Fatalf("timeout waiting for the child balancer in cache to be closed")
+	}
+}
+
 // TestBalancerGroupBuildOptions verifies that the balancer.BuildOptions passed
 // to the balancergroup at creation time is passed to child policies.
 func (s) TestBalancerGroupBuildOptions(t *testing.T) {
