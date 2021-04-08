@@ -132,7 +132,15 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsclient.ListenerUpdate, er
 		//
 		// If the route name did change, then we must wait until the first RDS
 		// update before reporting this LDS config.
-		w.serviceCb(w.lastUpdate, nil)
+		if w.lastUpdate.virtualHost != nil {
+			// We want to send an update with the new fields from the new LDS
+			// (e.g. max stream duration), and old fields from the the previous
+			// RDS.
+			//
+			// But note that this should only happen when virtual host is set,
+			// which means an RDS was received.
+			w.serviceCb(w.lastUpdate, nil)
+		}
 		return
 	}
 	w.rdsName = update.RouteConfigName
