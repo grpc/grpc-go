@@ -25,7 +25,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 
-	_ "google.golang.org/grpc/xds/internal/balancer/lrs"
+	_ "google.golang.org/grpc/xds/internal/balancer/lrs" // Register LRS balancer, so we can use it as child policy in the config tests.
 )
 
 const (
