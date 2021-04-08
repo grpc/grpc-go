@@ -202,6 +202,7 @@ func (fci *FilterChainManager) addFilterChains(fcs []*v3listenerpb.FilterChain) 
 		if fcm.GetDestinationPort().GetValue() != 0 {
 			// Destination port is the first match criteria and we do not
 			// support filter chains which contains this match criteria.
+			logger.Warningf("Dropping filter chain %+v since it contains unsupported destination_port match field", fc)
 			continue
 		}
 
@@ -248,6 +249,7 @@ func (fci *FilterChainManager) addFilterChainsForServerNames(dstEntry *destPrefi
 	// Filter chains specifying server names in their match criteria always fail
 	// a match at connection time. So, these filter chains can be dropped now.
 	if len(fc.GetFilterChainMatch().GetServerNames()) != 0 {
+		logger.Warningf("Dropping filter chain %+v since it contains unsupported server_names match field", fc)
 		return nil
 	}
 
@@ -260,11 +262,13 @@ func (fci *FilterChainManager) addFilterChainsForTransportProtocols(dstEntry *de
 	case tp != "" && tp != "raw_buffer":
 		// Only allow filter chains with transport protocol set to empty string
 		// or "raw_buffer".
+		logger.Warningf("Dropping filter chain %+v since it contains unsupported value for transport_protocols match field", fc)
 		return nil
 	case tp == "" && dstEntry.rawBufferSeen:
 		// If we have already seen filter chains with transport protocol set to
 		// "raw_buffer", we can drop filter chains with transport protocol set
 		// to empty string, since the former takes precedence.
+		logger.Warningf("Dropping filter chain %+v since it contains unsupported value for transport_protocols match field", fc)
 		return nil
 	case tp != "" && !dstEntry.rawBufferSeen:
 		// This is the first "raw_buffer" that we are seeing. Set the bit and
@@ -278,6 +282,7 @@ func (fci *FilterChainManager) addFilterChainsForTransportProtocols(dstEntry *de
 
 func (fci *FilterChainManager) addFilterChainsForApplicationProtocols(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
 	if len(fc.GetFilterChainMatch().GetApplicationProtocols()) != 0 {
+		logger.Warningf("Dropping filter chain %+v since it contains unsupported application_protocols match field", fc)
 		return nil
 	}
 	return fci.addFilterChainsForSourceType(dstEntry, fc)
