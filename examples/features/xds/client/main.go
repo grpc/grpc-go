@@ -36,7 +36,7 @@ import (
 )
 
 var (
-	target   = flag.String("target", "", "uri of the Greeter Server, e.g. 'xds:///helloworld-service:8080'")
+	target   = flag.String("target", "xds:///localhost:50051", "uri of the Greeter Server, e.g. 'xds:///helloworld-service:8080'")
 	name     = flag.String("name", "world", "name you wished to be greeted by the server")
 	xdsCreds = flag.Bool("xds_creds", false, "whether the server should use xDS APIs to receive security configuration")
 )
