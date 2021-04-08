@@ -402,8 +402,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 						},
 					},
 				},
-				def:   &FilterChain{},
-				fcCnt: 1,
+				def: &FilterChain{},
 			},
 		},
 		{
@@ -471,7 +470,6 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 						IdentityCertName:     "defaultIdentityCertName",
 					},
 				},
-				fcCnt: 1,
 			},
 		},
 		{
@@ -560,7 +558,6 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 						RequireClientCert:    true,
 					},
 				},
-				fcCnt: 1,
 			},
 		},
 	}
@@ -648,8 +645,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						},
 					},
 				},
-				def:   &FilterChain{},
-				fcCnt: 3,
+				def: &FilterChain{},
 			},
 		},
 		{
@@ -704,8 +700,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						},
 					},
 				},
-				def:   &FilterChain{},
-				fcCnt: 2,
+				def: &FilterChain{},
 			},
 		},
 		{
@@ -757,8 +752,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						},
 					},
 				},
-				def:   &FilterChain{},
-				fcCnt: 2,
+				def: &FilterChain{},
 			},
 		},
 		{
@@ -818,8 +812,126 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						},
 					},
 				},
-				def:   &FilterChain{},
-				fcCnt: 2,
+				def: &FilterChain{},
+			},
+		},
+		{
+			desc: "some chains have unsupported fields",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{},
+					},
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)}},
+					},
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges:      []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("10.0.0.0", 8)},
+							TransportProtocol: "raw_buffer",
+						},
+					},
+					{
+						// This chain will be dropped in favor of the above
+						// filter chain because they both have the same
+						// destination prefix, but this one has an empty
+						// transport protocol while the above chain has the more
+						// preferred "raw_buffer".
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges:       []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("10.0.0.0", 8)},
+							TransportProtocol:  "",
+							SourceType:         v3listenerpb.FilterChainMatch_EXTERNAL,
+							SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("10.0.0.0", 16)},
+						},
+					},
+					{
+						// This chain will be dropped for unsupported server
+						// names.
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.100.1", 32)},
+							ServerNames:  []string{"foo", "bar"},
+						},
+					},
+					{
+						// This chain will be dropped for unsupported transport
+						// protocol.
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges:      []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.100.2", 32)},
+							TransportProtocol: "not-raw-buffer",
+						},
+					},
+					{
+						// This chain will be dropped for unsupported
+						// application protocol.
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges:         []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.100.3", 32)},
+							ApplicationProtocols: []string{"h2"},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					"0.0.0.0/0": {
+						net: zeroIP,
+						srcTypeArr: [3]*sourcePrefixes{
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									"0.0.0.0/0": {
+										net: zeroIP,
+										srcPortMap: map[int]*FilterChain{
+											0: {},
+										},
+									},
+								},
+							},
+						},
+					},
+					"192.168.0.0/16": {
+						net: ipNetFromCIDR("192.168.2.2/16"),
+						srcTypeArr: [3]*sourcePrefixes{
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									"0.0.0.0/0": {
+										net: zeroIP,
+										srcPortMap: map[int]*FilterChain{
+											0: {},
+										},
+									},
+								},
+							},
+						},
+					},
+					"10.0.0.0/8": {
+						net: ipNetFromCIDR("10.0.0.0/8"),
+						srcTypeArr: [3]*sourcePrefixes{
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									"0.0.0.0/0": {
+										net: zeroIP,
+										srcPortMap: map[int]*FilterChain{
+											0: {},
+										},
+									},
+								},
+							},
+						},
+					},
+					"192.168.100.1/32": {
+						net:        ipNetFromCIDR("192.168.100.1/32"),
+						srcTypeArr: [3]*sourcePrefixes{},
+					},
+					"192.168.100.2/32": {
+						net:        ipNetFromCIDR("192.168.100.2/32"),
+						srcTypeArr: [3]*sourcePrefixes{},
+					},
+					"192.168.100.3/32": {
+						net:        ipNetFromCIDR("192.168.100.3/32"),
+						srcTypeArr: [3]*sourcePrefixes{},
+					},
+				},
+				def: &FilterChain{},
 			},
 		},
 	}
@@ -931,11 +1043,39 @@ func TestLookup_Failures(t *testing.T) {
 				},
 			},
 			params: FilterChainLookupParams{
-				DestAddr:   net.IPv4(192, 168, 100, 1),
-				SourceAddr: net.IPv4(192, 168, 100, 1),
-				SourcePort: 80,
+				IsUnspecifiedListener: true,
+				DestAddr:              net.IPv4(192, 168, 100, 1),
+				SourceAddr:            net.IPv4(192, 168, 100, 1),
+				SourcePort:            80,
 			},
 			wantErr: "no matching filter chain after all match criteria",
+		},
+		{
+			desc: "most specific match dropped for unsupported field",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						// This chain will be picked in the destination prefix
+						// stage, but will be dropped at the server names stage.
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.100.1", 32)},
+							ServerNames:  []string{"foo"},
+						},
+					},
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.100.0", 16)},
+						},
+					},
+				},
+			},
+			params: FilterChainLookupParams{
+				IsUnspecifiedListener: true,
+				DestAddr:              net.IPv4(192, 168, 100, 1),
+				SourceAddr:            net.IPv4(192, 168, 100, 1),
+				SourcePort:            80,
+			},
+			wantErr: "no matching filter chain based on source type match",
 		},
 	}
 
@@ -1142,8 +1282,6 @@ func (fci *FilterChainManager) Equal(other *FilterChainManager) bool {
 		return false
 	case !cmp.Equal(fci.def, other.def):
 		return false
-	case fci.fcCnt != other.fcCnt:
-		return false
 	}
 	return true
 }
@@ -1218,7 +1356,6 @@ func (fci *FilterChainManager) String() string {
 	if fci.def != nil {
 		sb.WriteString(fmt.Sprintf("default_filter_chain: %+v ", fci.def))
 	}
-	sb.WriteString(fmt.Sprintf("filter_chain_count: %d ", fci.fcCnt))
 	return sb.String()
 }
 

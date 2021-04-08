@@ -74,12 +74,17 @@ const (
 //    connection time.
 //
 // The logic specified in the documentation around the xDS FilterChainMatch
-// proto mentions 8 criteria to match on. gRPC does not support 4 of those, and
-// we ignore filter chains which contain any of these unsupported fields at
-// parsing time. Here we use the remaining 4 criteria to find a matching filter
-// chain in the following order:
-// Destination IP address, Source type, Source IP address, Source port.
-// TODO: Ignore chains with unsupported fields *only* at connection time.
+// proto mentions 8 criteria to match on.
+// The following order applies:
+//
+// 1. Destination port.
+// 2. Destination IP address.
+// 3. Server name (e.g. SNI for TLS protocol),
+// 4. Transport protocol.
+// 5. Application protocols (e.g. ALPN for TLS protocol).
+// 6. Source type (e.g. any, local or external network).
+// 7. Source IP address.
+// 8. Source port.
 type FilterChainManager struct {
 	// Destination prefix is the first match criteria that we support.
 	// Therefore, this multi-stage map is indexed on destination prefixes
@@ -98,19 +103,28 @@ type FilterChainManager struct {
 	// involves too much time/effort, sort this slice based on the netmask size.
 	dstPrefixes []*destPrefixEntry
 
-	def   *FilterChain // Default filter chain, if specified.
-	fcCnt int          // Count of supported filter chains, for validation.
+	def *FilterChain // Default filter chain, if specified.
 }
 
 // destPrefixEntry is the value type of the map indexed on destination prefixes.
 type destPrefixEntry struct {
 	net *net.IPNet // The actual destination prefix.
+	// We need to keep track of the transport protocols seen as part of the
+	// config validation (and internal structure building) phase. The only two
+	// values that we support are empty string and "raw_buffer", with the latter
+	// taking preference. Once we have seen one filter chain with "raw_buffer",
+	// we can drop everything other filter chain with an empty transport
+	// protocol.
+	rawBufferSeen bool
 	// For each specified source type in the filter chain match criteria, this
 	// array points to the set of specified source prefixes.
 	// Unspecified source type matches end up as a wildcard entry here with an
 	// index of 0, which actually represents the source type `ANY`.
-	srcTypeArr [3]*sourcePrefixes
+	srcTypeArr sourceTypesArray
 }
+
+// An array for the fixed number of source types that we have.
+type sourceTypesArray [3]*sourcePrefixes
 
 // sourcePrefixes contains source prefix related information specified in the
 // match criteria. These are pointed to by the array of source types.
@@ -141,6 +155,24 @@ func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, err
 	if err := fci.addFilterChains(lis.GetFilterChains()); err != nil {
 		return nil, err
 	}
+	// Build the source and dest prefix slices used by Lookup().
+	fcSeen := false
+	for _, dstPrefix := range fci.dstPrefixMap {
+		fci.dstPrefixes = append(fci.dstPrefixes, dstPrefix)
+		for _, st := range dstPrefix.srcTypeArr {
+			if st == nil {
+				continue
+			}
+			for _, srcPrefix := range st.srcPrefixMap {
+				st.srcPrefixes = append(st.srcPrefixes, srcPrefix)
+				for _, fc := range srcPrefix.srcPortMap {
+					if fc != nil {
+						fcSeen = true
+					}
+				}
+			}
+		}
+	}
 
 	// Retrieve the default filter chain. The match criteria specified on the
 	// default filter chain is never used. The default filter chain simply gets
@@ -156,7 +188,7 @@ func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, err
 
 	// If there are no supported filter chains and no default filter chain, we
 	// fail here. This will call the Listener resource to be NACK'ed.
-	if fci.fcCnt == 0 && fci.def == nil {
+	if !fcSeen && fci.def == nil {
 		return nil, fmt.Errorf("no supported filter chains and no default filter chain")
 	}
 	return fci, nil
@@ -166,114 +198,133 @@ func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, err
 // internal data structures corresponding to the match criteria.
 func (fci *FilterChainManager) addFilterChains(fcs []*v3listenerpb.FilterChain) error {
 	for _, fc := range fcs {
-		// Skip filter chains with unsupported match fields/criteria.
 		fcm := fc.GetFilterChainMatch()
-		if fcm.GetDestinationPort().GetValue() != 0 ||
-			fcm.GetServerNames() != nil ||
-			(fcm.GetTransportProtocol() != "" && fcm.TransportProtocol != "raw_buffer") ||
-			fcm.GetApplicationProtocols() != nil {
+		if fcm.GetDestinationPort().GetValue() != 0 {
+			// Destination port is the first match criteria and we do not
+			// support filter chains which contains this match criteria.
+			logger.Warningf("Dropping filter chain %+v since it contains unsupported destination_port match field", fc)
 			continue
 		}
 
-		// Extract the supported match criteria, which will be used by
-		// successive addFilterChainsForXxx() functions.
-		var dstPrefixes []*net.IPNet
-		for _, pr := range fcm.GetPrefixRanges() {
-			cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
-			_, ipnet, err := net.ParseCIDR(cidr)
-			if err != nil {
-				return fmt.Errorf("failed to parse destination prefix range: %+v", pr)
-			}
-			dstPrefixes = append(dstPrefixes, ipnet)
-		}
-
-		var srcType SourceType
-		switch fcm.GetSourceType() {
-		case v3listenerpb.FilterChainMatch_ANY:
-			srcType = SourceTypeAny
-		case v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK:
-			srcType = SourceTypeSameOrLoopback
-		case v3listenerpb.FilterChainMatch_EXTERNAL:
-			srcType = SourceTypeExternal
-		default:
-			return fmt.Errorf("unsupported source type: %v", fcm.GetSourceType())
-		}
-
-		var srcPrefixes []*net.IPNet
-		for _, pr := range fcm.GetSourcePrefixRanges() {
-			cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
-			_, ipnet, err := net.ParseCIDR(cidr)
-			if err != nil {
-				return fmt.Errorf("failed to parse source prefix range: %+v", pr)
-			}
-			srcPrefixes = append(srcPrefixes, ipnet)
-		}
-
-		var srcPorts []int
-		for _, port := range fcm.GetSourcePorts() {
-			srcPorts = append(srcPorts, int(port))
-		}
-
 		// Build the internal representation of the filter chain match fields.
-		if err := fci.addFilterChainsForDestPrefixes(dstPrefixes, srcType, srcPrefixes, srcPorts, fc); err != nil {
+		if err := fci.addFilterChainsForDestPrefixes(fc); err != nil {
 			return err
 		}
-		fci.fcCnt++
 	}
 
-	// Build the source and dest prefix slices used by Lookup().
-	for _, dstPrefix := range fci.dstPrefixMap {
-		fci.dstPrefixes = append(fci.dstPrefixes, dstPrefix)
-		for _, st := range dstPrefix.srcTypeArr {
-			if st == nil {
-				continue
-			}
-			for _, srcPrefix := range st.srcPrefixMap {
-				st.srcPrefixes = append(st.srcPrefixes, srcPrefix)
-			}
-		}
-	}
 	return nil
 }
 
-// addFilterChainsForDestPrefixes adds destination prefixes to the internal data
-// structures and delegates control to addFilterChainsForSourceType to continue
-// building the internal data structure.
-func (fci *FilterChainManager) addFilterChainsForDestPrefixes(dstPrefixes []*net.IPNet, srcType SourceType, srcPrefixes []*net.IPNet, srcPorts []int, fc *v3listenerpb.FilterChain) error {
+func (fci *FilterChainManager) addFilterChainsForDestPrefixes(fc *v3listenerpb.FilterChain) error {
+	var dstPrefixes []*net.IPNet
+	for _, pr := range fc.GetFilterChainMatch().GetPrefixRanges() {
+		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
+		_, ipnet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return fmt.Errorf("failed to parse destination prefix range: %+v", pr)
+		}
+		dstPrefixes = append(dstPrefixes, ipnet)
+	}
+
 	if len(dstPrefixes) == 0 {
 		// Use the wildcard IP when destination prefix is unspecified.
 		if fci.dstPrefixMap[emptyAddrMapKey] == nil {
 			fci.dstPrefixMap[emptyAddrMapKey] = &destPrefixEntry{net: zeroIP}
 		}
-		return fci.addFilterChainsForSourceType(fci.dstPrefixMap[emptyAddrMapKey], srcType, srcPrefixes, srcPorts, fc)
+		return fci.addFilterChainsForServerNames(fci.dstPrefixMap[emptyAddrMapKey], fc)
 	}
 	for _, prefix := range dstPrefixes {
 		p := prefix.String()
 		if fci.dstPrefixMap[p] == nil {
 			fci.dstPrefixMap[p] = &destPrefixEntry{net: prefix}
 		}
-		if err := fci.addFilterChainsForSourceType(fci.dstPrefixMap[p], srcType, srcPrefixes, srcPorts, fc); err != nil {
+		if err := fci.addFilterChainsForServerNames(fci.dstPrefixMap[p], fc); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+func (fci *FilterChainManager) addFilterChainsForServerNames(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
+	// Filter chains specifying server names in their match criteria always fail
+	// a match at connection time. So, these filter chains can be dropped now.
+	if len(fc.GetFilterChainMatch().GetServerNames()) != 0 {
+		logger.Warningf("Dropping filter chain %+v since it contains unsupported server_names match field", fc)
+		return nil
+	}
+
+	return fci.addFilterChainsForTransportProtocols(dstEntry, fc)
+}
+
+func (fci *FilterChainManager) addFilterChainsForTransportProtocols(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
+	tp := fc.GetFilterChainMatch().GetTransportProtocol()
+	switch {
+	case tp != "" && tp != "raw_buffer":
+		// Only allow filter chains with transport protocol set to empty string
+		// or "raw_buffer".
+		logger.Warningf("Dropping filter chain %+v since it contains unsupported value for transport_protocols match field", fc)
+		return nil
+	case tp == "" && dstEntry.rawBufferSeen:
+		// If we have already seen filter chains with transport protocol set to
+		// "raw_buffer", we can drop filter chains with transport protocol set
+		// to empty string, since the former takes precedence.
+		logger.Warningf("Dropping filter chain %+v since it contains unsupported value for transport_protocols match field", fc)
+		return nil
+	case tp != "" && !dstEntry.rawBufferSeen:
+		// This is the first "raw_buffer" that we are seeing. Set the bit and
+		// reset the source types array which might contain entries for filter
+		// chains with transport protocol set to empty string.
+		dstEntry.rawBufferSeen = true
+		dstEntry.srcTypeArr = sourceTypesArray{}
+	}
+	return fci.addFilterChainsForApplicationProtocols(dstEntry, fc)
+}
+
+func (fci *FilterChainManager) addFilterChainsForApplicationProtocols(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
+	if len(fc.GetFilterChainMatch().GetApplicationProtocols()) != 0 {
+		logger.Warningf("Dropping filter chain %+v since it contains unsupported application_protocols match field", fc)
+		return nil
+	}
+	return fci.addFilterChainsForSourceType(dstEntry, fc)
+}
+
 // addFilterChainsForSourceType adds source types to the internal data
 // structures and delegates control to addFilterChainsForSourcePrefixes to
 // continue building the internal data structure.
-func (fci *FilterChainManager) addFilterChainsForSourceType(dstEntry *destPrefixEntry, srcType SourceType, srcPrefixes []*net.IPNet, srcPorts []int, fc *v3listenerpb.FilterChain) error {
+func (fci *FilterChainManager) addFilterChainsForSourceType(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
+	var srcType SourceType
+	switch st := fc.GetFilterChainMatch().GetSourceType(); st {
+	case v3listenerpb.FilterChainMatch_ANY:
+		srcType = SourceTypeAny
+	case v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK:
+		srcType = SourceTypeSameOrLoopback
+	case v3listenerpb.FilterChainMatch_EXTERNAL:
+		srcType = SourceTypeExternal
+	default:
+		return fmt.Errorf("unsupported source type: %v", st)
+	}
+
 	st := int(srcType)
 	if dstEntry.srcTypeArr[st] == nil {
 		dstEntry.srcTypeArr[st] = &sourcePrefixes{srcPrefixMap: make(map[string]*sourcePrefixEntry)}
 	}
-	return fci.addFilterChainsForSourcePrefixes(dstEntry.srcTypeArr[st].srcPrefixMap, srcPrefixes, srcPorts, fc)
+	return fci.addFilterChainsForSourcePrefixes(dstEntry.srcTypeArr[st].srcPrefixMap, fc)
 }
 
 // addFilterChainsForSourcePrefixes adds source prefixes to the internal data
 // structures and delegates control to addFilterChainsForSourcePorts to continue
 // building the internal data structure.
-func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map[string]*sourcePrefixEntry, srcPrefixes []*net.IPNet, srcPorts []int, fc *v3listenerpb.FilterChain) error {
+func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map[string]*sourcePrefixEntry, fc *v3listenerpb.FilterChain) error {
+	var srcPrefixes []*net.IPNet
+	for _, pr := range fc.GetFilterChainMatch().GetSourcePrefixRanges() {
+		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
+		_, ipnet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return fmt.Errorf("failed to parse source prefix range: %+v", pr)
+		}
+		srcPrefixes = append(srcPrefixes, ipnet)
+	}
+
 	if len(srcPrefixes) == 0 {
 		// Use the wildcard IP when source prefix is unspecified.
 		if srcPrefixMap[emptyAddrMapKey] == nil {
@@ -282,7 +333,7 @@ func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map
 				srcPortMap: make(map[int]*FilterChain),
 			}
 		}
-		return fci.addFilterChainsForSourcePorts(srcPrefixMap[emptyAddrMapKey], srcPorts, fc)
+		return fci.addFilterChainsForSourcePorts(srcPrefixMap[emptyAddrMapKey], fc)
 	}
 	for _, prefix := range srcPrefixes {
 		p := prefix.String()
@@ -292,7 +343,7 @@ func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map
 				srcPortMap: make(map[int]*FilterChain),
 			}
 		}
-		if err := fci.addFilterChainsForSourcePorts(srcPrefixMap[p], srcPorts, fc); err != nil {
+		if err := fci.addFilterChainsForSourcePorts(srcPrefixMap[p], fc); err != nil {
 			return err
 		}
 	}
@@ -303,7 +354,12 @@ func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map
 // structures and completes the process of building the internal data structure.
 // It is here that we determine if there are multiple filter chains with
 // overlapping matching rules.
-func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePrefixEntry, srcPorts []int, fcProto *v3listenerpb.FilterChain) error {
+func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePrefixEntry, fcProto *v3listenerpb.FilterChain) error {
+	var srcPorts []int
+	for _, port := range fcProto.GetFilterChainMatch().GetSourcePorts() {
+		srcPorts = append(srcPorts, int(port))
+	}
+
 	fc, err := filterChainFromProto(fcProto)
 	if err != nil {
 		return err
