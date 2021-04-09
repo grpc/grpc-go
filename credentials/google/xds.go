@@ -68,6 +68,10 @@ func (c *clusterTransportCreds) ServerHandshake(conn net.Conn) (net.Conn, creden
 }
 
 func (c *clusterTransportCreds) Info() credentials.ProtocolInfo {
+	// TODO: this always returns tls.Info now, because we don't have a cluster
+	// name to check when this method is called. This method doesn't affect
+	// anything important now. We may want to revisit this if it becomes more
+	// important later.
 	return c.tls.Info()
 }
 
