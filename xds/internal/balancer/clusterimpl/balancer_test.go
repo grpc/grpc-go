@@ -421,7 +421,6 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 
 	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
-	// Test pick with one backend.
 	p1 := <-cc.NewPickerCh
 	const rpcCount = 20
 	for i := 0; i < rpcCount; i++ {

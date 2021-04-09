@@ -27,7 +27,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/buffer"
@@ -113,10 +112,12 @@ type clusterImplBalancer struct {
 	config           *lbConfig
 	childLB          balancer.Balancer
 	cancelLoadReport func()
-	clusterName      atomic.Value
 	edsServiceName   string
 	lrsServerName    string
 	loadWrapper      *loadstore.Wrapper
+
+	clusterNameMu sync.Mutex
+	clusterName   string
 
 	// childState/drops/requestCounter can only be accessed in run(). And run()
 	// is the only goroutine that sends picker to the parent ClientConn. All
@@ -135,10 +136,10 @@ func (cib *clusterImplBalancer) updateLoadStore(newConfig *lbConfig) error {
 
 	// ClusterName is different, restart. ClusterName is from ClusterName and
 	// EdsServiceName.
-	clusterName, _ := cib.getClusterName()
+	clusterName := cib.getClusterName()
 	if clusterName != newConfig.Cluster {
 		updateLoadClusterAndService = true
-		cib.clusterName.Store(newConfig.Cluster)
+		cib.setClusterName(newConfig.Cluster)
 		clusterName = newConfig.Cluster
 	}
 	if cib.edsServiceName != newConfig.EDSServiceName {
@@ -310,48 +311,34 @@ func (cib *clusterImplBalancer) UpdateState(state balancer.State) {
 	cib.pickerUpdateCh.Put(state)
 }
 
-func (cib *clusterImplBalancer) getClusterName() (string, bool) {
-	v := cib.clusterName.Load()
-	vv, ok := v.(string)
-	return vv, ok
+func (cib *clusterImplBalancer) setClusterName(n string) {
+	cib.clusterNameMu.Lock()
+	defer cib.clusterNameMu.Unlock()
+	cib.clusterName = n
+}
+
+func (cib *clusterImplBalancer) getClusterName() string {
+	cib.clusterNameMu.Lock()
+	defer cib.clusterNameMu.Unlock()
+	return cib.clusterName
 }
 
 func (cib *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	if clusterName, ok := cib.getClusterName(); ok {
-		newAddrs := make([]resolver.Address, len(addrs))
-		for i, addr := range addrs {
-			newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
-		}
-		addrs = newAddrs
+	clusterName := cib.getClusterName()
+	newAddrs := make([]resolver.Address, len(addrs))
+	for i, addr := range addrs {
+		newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
 	}
-	// When there's no cluster name, we create the SubConn without attributes.
-	//
-	// The cluster name is set in the same method this balancer receives and
-	// forwards the addresses. So this can only happen if the child policy
-	// creates a SubConn before receiving any address. This is impossible for
-	// balancers like roundrobin, but can happen for sophisticated ones like
-	// xds.
-	//
-	// We have some options:
-	// 1. block and wait for a cluster name - this is an overkill.
-	// 2. return an error - this is probably fine
-	// 3. create without attributes.
-	//
-	// Option 3 is better because in most cases, the cluster name in attributes
-	// isn't used by any one. In the one case where it's used (direct path,
-	// google default creds read it), the connection will fail at handshake.
-	return cib.ClientConn.NewSubConn(addrs, opts)
+	return cib.ClientConn.NewSubConn(newAddrs, opts)
 }
 
 func (cib *clusterImplBalancer) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
-	if clusterName, ok := cib.getClusterName(); ok {
-		newAddrs := make([]resolver.Address, len(addrs))
-		for i, addr := range addrs {
-			newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
-		}
-		addrs = newAddrs
+	clusterName := cib.getClusterName()
+	newAddrs := make([]resolver.Address, len(addrs))
+	for i, addr := range addrs {
+		newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
 	}
-	cib.ClientConn.UpdateAddresses(sc, addrs)
+	cib.ClientConn.UpdateAddresses(sc, newAddrs)
 }
 
 type dropConfigs struct {

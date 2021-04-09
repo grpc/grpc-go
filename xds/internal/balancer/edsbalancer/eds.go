@@ -116,7 +116,7 @@ type edsBalancerImplInterface interface {
 	// updateServiceRequestsConfig updates the service requests counter to the
 	// one for the given service name.
 	updateServiceRequestsConfig(serviceName string, max *uint32)
-	// updateClusterName updates the cluster name that will be attaches to the
+	// updateClusterName updates the cluster name that will be attached to the
 	// address attributes.
 	updateClusterName(name string)
 	// close closes the eds balancer.
