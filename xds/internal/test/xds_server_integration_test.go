@@ -42,7 +42,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	testutils2 "google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils"
 	xds2 "google.golang.org/grpc/internal/xds"
 
 	"google.golang.org/grpc"
@@ -54,7 +54,7 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
 	"google.golang.org/grpc/xds"
-	"google.golang.org/grpc/xds/internal/testutils"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/version"
 )
@@ -178,7 +178,7 @@ func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, fun
 	testpb.RegisterTestServiceServer(server, &testService{})
 
 	// Create a local listener and pass it to Serve().
-	lis, err := testutils.LocalTCPListener()
+	lis, err := xdstestutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
@@ -236,7 +236,7 @@ func listenerResourceWithoutSecurityConfig(t *testing.T, lis net.Listener) *v3li
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils2.MarshalAny(&v3httppb.HttpConnectionManager{}),
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
 						},
 					},
 				},
@@ -286,7 +286,7 @@ func listenerResourceWithSecurityConfig(t *testing.T, lis net.Listener) *v3liste
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils2.MarshalAny(&v3httppb.HttpConnectionManager{}),
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
 						},
 					},
 				},
