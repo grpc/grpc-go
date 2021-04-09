@@ -31,6 +31,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -247,7 +248,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 						TransportSocket: &v3corepb.TransportSocket{
 							Name: "envoy.transport_sockets.tls",
 							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: marshalAny(&v3tlspb.UpstreamTlsContext{}),
+								TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{}),
 							},
 						},
 					},
@@ -282,7 +283,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 						TransportSocket: &v3corepb.TransportSocket{
 							Name: "envoy.transport_sockets.tls",
 							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{}),
+								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{}),
 							},
 						},
 					},
@@ -298,7 +299,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 						TransportSocket: &v3corepb.TransportSocket{
 							Name: "envoy.transport_sockets.tls",
 							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
 									CommonTlsContext: &v3tlspb.CommonTlsContext{
 										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
 											ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
@@ -322,7 +323,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 						TransportSocket: &v3corepb.TransportSocket{
 							Name: "envoy.transport_sockets.tls",
 							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
 									RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
 									CommonTlsContext: &v3tlspb.CommonTlsContext{
 										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
@@ -346,7 +347,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 						TransportSocket: &v3corepb.TransportSocket{
 							Name: "envoy.transport_sockets.tls",
 							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
 									CommonTlsContext: &v3tlspb.CommonTlsContext{},
 								}),
 							},
@@ -413,7 +414,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 						TransportSocket: &v3corepb.TransportSocket{
 							Name: "envoy.transport_sockets.tls",
 							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
 									CommonTlsContext: &v3tlspb.CommonTlsContext{
 										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
 											InstanceName:    "identityPluginInstance",
@@ -429,7 +430,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 					TransportSocket: &v3corepb.TransportSocket{
 						Name: "envoy.transport_sockets.tls",
 						ConfigType: &v3corepb.TransportSocket_TypedConfig{
-							TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+							TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
 								CommonTlsContext: &v3tlspb.CommonTlsContext{
 									TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
 										InstanceName:    "defaultIdentityPluginInstance",
@@ -480,7 +481,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 						TransportSocket: &v3corepb.TransportSocket{
 							Name: "envoy.transport_sockets.tls",
 							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
 									RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
 									CommonTlsContext: &v3tlspb.CommonTlsContext{
 										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
@@ -504,7 +505,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 					TransportSocket: &v3corepb.TransportSocket{
 						Name: "envoy.transport_sockets.tls",
 						ConfigType: &v3corepb.TransportSocket_TypedConfig{
-							TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+							TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
 								RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
 								CommonTlsContext: &v3tlspb.CommonTlsContext{
 									TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
@@ -1101,7 +1102,7 @@ func TestLookup_Successes(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{InstanceName: "instance1"},
 							},
@@ -1115,7 +1116,7 @@ func TestLookup_Successes(t *testing.T) {
 			TransportSocket: &v3corepb.TransportSocket{
 				Name: "envoy.transport_sockets.tls",
 				ConfigType: &v3corepb.TransportSocket_TypedConfig{
-					TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+					TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
 						CommonTlsContext: &v3tlspb.CommonTlsContext{
 							TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{InstanceName: "default"},
 						},
@@ -1434,7 +1435,7 @@ func transportSocketWithInstanceName(name string) *v3corepb.TransportSocket {
 	return &v3corepb.TransportSocket{
 		Name: "envoy.transport_sockets.tls",
 		ConfigType: &v3corepb.TransportSocket_TypedConfig{
-			TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+			TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
 				CommonTlsContext: &v3tlspb.CommonTlsContext{
 					TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{InstanceName: name},
 				},

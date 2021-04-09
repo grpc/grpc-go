@@ -65,9 +65,6 @@ type ClientInterceptorBuilder interface {
 
 // ServerInterceptorBuilder constructs a Server Interceptor.  If this type is
 // implemented by a Filter, it is capable of working on a server.
-//
-// Server side filters are not currently supported, but this interface is
-// defined for clarity.
 type ServerInterceptorBuilder interface {
 	// BuildServerInterceptor uses the FilterConfigs produced above to produce
 	// an HTTP filter interceptor for servers.  config will always be non-nil,
