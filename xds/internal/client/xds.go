@@ -291,10 +291,10 @@ func validateNetworkFilterChains(filterChains []*v3listenerpb.FilterChain) error
 		for _, filter := range filterChain.GetFilters() {
 			name := filter.GetName()
 			if name == "" {
-				return errors.New("filter missing name field")
+				return fmt.Errorf("filter chain {%+v} is missing name field in filter: {%+v}", filterChain, filter)
 			}
 			if seenNames[name] {
-				return fmt.Errorf("duplicate filter name %q", name)
+				return fmt.Errorf("filter chain {%+v} has duplicate filter name %q", filterChain, name)
 			}
 			seenNames[name] = true
 
@@ -315,11 +315,11 @@ func validateNetworkFilterChains(filterChains []*v3listenerpb.FilterChain) error
 				// we have for HTTP filters), when we have to support network
 				// filters other than HttpConnectionManager.
 				if tc.GetTypeUrl() != version.V3HTTPConnManagerURL {
-					return fmt.Errorf("unsupported network filter: %s", tc.GetTypeUrl())
+					return fmt.Errorf("filter chain {%+v} has unsupported network filter: %s", filterChain, tc.GetTypeUrl())
 				}
 				hcm := &v3httppb.HttpConnectionManager{}
 				if err := ptypes.UnmarshalAny(tc, hcm); err != nil {
-					return fmt.Errorf("failed to unmarshal network filter: %v", err)
+					return fmt.Errorf("filter chain {%+v} failed unmarshaling of network filter: %v", filterChain, err)
 				}
 				// We currently don't support HTTP filters on the server-side.
 				// We will be adding support for it in the future. So, we want
@@ -329,11 +329,11 @@ func validateNetworkFilterChains(filterChains []*v3listenerpb.FilterChain) error
 				}
 				seenHCM = true
 			default:
-				return fmt.Errorf("unsupported config_type %T in filter %s", typ, filter.GetName())
+				return fmt.Errorf("filter chain {%+v} has unsupported config_type %T in filter %s", filterChain, typ, filter.GetName())
 			}
 		}
 		if !seenHCM {
-			return errors.New("filter chain missing HttpConnectionManager filter")
+			return fmt.Errorf("filter chain {%+v} missing HttpConnectionManager filter", filterChain)
 		}
 	}
 	return nil

@@ -39,9 +39,11 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/uuid"
-	xds2 "google.golang.org/grpc/internal/xds"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+
+	testutils2 "google.golang.org/grpc/internal/testutils"
+	xds2 "google.golang.org/grpc/internal/xds"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -234,7 +236,7 @@ func listenerResourceWithoutSecurityConfig(t *testing.T, lis net.Listener) *v3li
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+							TypedConfig: testutils2.MarshalAny(&v3httppb.HttpConnectionManager{}),
 						},
 					},
 				},
@@ -284,7 +286,7 @@ func listenerResourceWithSecurityConfig(t *testing.T, lis net.Listener) *v3liste
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+							TypedConfig: testutils2.MarshalAny(&v3httppb.HttpConnectionManager{}),
 						},
 					},
 				},
