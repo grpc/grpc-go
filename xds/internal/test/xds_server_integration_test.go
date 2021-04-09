@@ -33,30 +33,29 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/google/uuid"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/testdata"
+	"google.golang.org/grpc/xds"
+	"google.golang.org/grpc/xds/internal/testutils/e2e"
+	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
+
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
-	"github.com/google/uuid"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
-
-	"google.golang.org/grpc/internal/testutils"
-	xds2 "google.golang.org/grpc/internal/xds"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
-	"google.golang.org/grpc/status"
+	xdsinternal "google.golang.org/grpc/internal/xds"
 	testpb "google.golang.org/grpc/test/grpc_testing"
-	"google.golang.org/grpc/testdata"
-	"google.golang.org/grpc/xds"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/e2e"
-	"google.golang.org/grpc/xds/internal/version"
 )
 
 const (
@@ -154,8 +153,8 @@ func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, fun
 	cpc := e2e.DefaultFileWatcherConfig(path.Join(tmpdir, certFile), path.Join(tmpdir, keyFile), path.Join(tmpdir, rootFile))
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := xds2.SetupBootstrapFile(xds2.BootstrapOptions{
-		Version:                            xds2.TransportV3,
+	bootstrapCleanup, err := xdsinternal.SetupBootstrapFile(xdsinternal.BootstrapOptions{
+		Version:                            xdsinternal.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          fs.Address,
 		CertificateProviders:               cpc,

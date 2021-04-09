@@ -269,7 +269,11 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 			Port:    strconv.Itoa(int(sockAddr.GetPortValue())),
 		},
 	}
-	if err := validateNetworkFilterChains(append(lis.GetFilterChains(), lis.GetDefaultFilterChain())); err != nil {
+	chains := lis.GetFilterChains()
+	if def := lis.GetDefaultFilterChain(); def != nil {
+		chains = append(chains, def)
+	}
+	if err := validateNetworkFilterChains(chains); err != nil {
 		return nil, err
 	}
 
@@ -283,9 +287,6 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 
 func validateNetworkFilterChains(filterChains []*v3listenerpb.FilterChain) error {
 	for _, filterChain := range filterChains {
-		if filterChain == nil {
-			continue
-		}
 		seenNames := make(map[string]bool, len(filterChain.GetFilters()))
 		seenHCM := false
 		for _, filter := range filterChain.GetFilters() {
@@ -315,11 +316,11 @@ func validateNetworkFilterChains(filterChains []*v3listenerpb.FilterChain) error
 				// we have for HTTP filters), when we have to support network
 				// filters other than HttpConnectionManager.
 				if tc.GetTypeUrl() != version.V3HTTPConnManagerURL {
-					return fmt.Errorf("filter chain {%+v} has unsupported network filter: %s", filterChain, tc.GetTypeUrl())
+					return fmt.Errorf("filter chain {%+v} has unsupported network filter %q in filter {%+v}", filterChain, tc.GetTypeUrl(), filter)
 				}
 				hcm := &v3httppb.HttpConnectionManager{}
 				if err := ptypes.UnmarshalAny(tc, hcm); err != nil {
-					return fmt.Errorf("filter chain {%+v} failed unmarshaling of network filter: %v", filterChain, err)
+					return fmt.Errorf("filter chain {%+v} failed unmarshaling of network filter {%+v}: %v", filterChain, filter, err)
 				}
 				// We currently don't support HTTP filters on the server-side.
 				// We will be adding support for it in the future. So, we want
