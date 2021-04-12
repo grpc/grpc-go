@@ -30,13 +30,22 @@ import (
 	"google.golang.org/grpc/xds/internal/version"
 )
 
-// Represents a wildcard IP prefix. Go stdlib `Contains()` method works for both
-// v4 and v6 addresses when used on this wildcard address.
-const emptyAddrMapKey = "0.0.0.0/0"
+const (
+	// Used as the map key for unspecified prefixes. The actual value of this
+	// key is immaterial.
+	unspecifiedPrefixMapKey = "unspecified"
 
-var (
-	// Parsed wildcard IP prefix.
-	_, zeroIP, _ = net.ParseCIDR("0.0.0.0/0")
+	// An unspecified destination or source prefix should be considered a less
+	// specific match than a wildcard prefix, `0.0.0.0/0` or `::/0`. Also, an
+	// unspecified prefix should match most v4 and v6 addresses compared to the
+	// wildcard prefixes which match only a specific network (v4 or v6).
+	//
+	// We use these constants when looking up the most specific prefix match. A
+	// wildcard prefix will match 0 bits, and to make sure that a wildcard
+	// prefix is considered a more specific match than an unspecified prefix, we
+	// use a value of -1 for the latter.
+	noPrefixMatch          = -2
+	unspecifiedPrefixMatch = -1
 )
 
 // FilterChain captures information from within a FilterChain message in a
@@ -108,7 +117,11 @@ type FilterChainManager struct {
 
 // destPrefixEntry is the value type of the map indexed on destination prefixes.
 type destPrefixEntry struct {
-	net *net.IPNet // The actual destination prefix.
+	// The actual destination prefix. Set to nil for unspecified prefixes.
+	net *net.IPNet
+	// Set to true for unspecified prefixes.
+	absent bool
+
 	// We need to keep track of the transport protocols seen as part of the
 	// config validation (and internal structure building) phase. The only two
 	// values that we support are empty string and "raw_buffer", with the latter
@@ -137,7 +150,10 @@ type sourcePrefixes struct {
 
 // sourcePrefixEntry contains match criteria per source prefix.
 type sourcePrefixEntry struct {
-	net *net.IPNet // The actual source prefix.
+	// The actual destination prefix. Set to nil for unspecified prefixes.
+	net *net.IPNet
+	// Set to true for unspecified prefixes.
+	absent bool
 	// Mapping from source ports specified in the match criteria to the actual
 	// filter chain. Unspecified source port matches en up as a wildcard entry
 	// here with a key of 0.
@@ -227,11 +243,11 @@ func (fci *FilterChainManager) addFilterChainsForDestPrefixes(fc *v3listenerpb.F
 	}
 
 	if len(dstPrefixes) == 0 {
-		// Use the wildcard IP when destination prefix is unspecified.
-		if fci.dstPrefixMap[emptyAddrMapKey] == nil {
-			fci.dstPrefixMap[emptyAddrMapKey] = &destPrefixEntry{net: zeroIP}
+		// Use the unspecified entry when destination prefix is unspecified.
+		if fci.dstPrefixMap[unspecifiedPrefixMapKey] == nil {
+			fci.dstPrefixMap[unspecifiedPrefixMapKey] = &destPrefixEntry{absent: true}
 		}
-		return fci.addFilterChainsForServerNames(fci.dstPrefixMap[emptyAddrMapKey], fc)
+		return fci.addFilterChainsForServerNames(fci.dstPrefixMap[unspecifiedPrefixMapKey], fc)
 	}
 	for _, prefix := range dstPrefixes {
 		p := prefix.String()
@@ -326,14 +342,14 @@ func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map
 	}
 
 	if len(srcPrefixes) == 0 {
-		// Use the wildcard IP when source prefix is unspecified.
-		if srcPrefixMap[emptyAddrMapKey] == nil {
-			srcPrefixMap[emptyAddrMapKey] = &sourcePrefixEntry{
-				net:        zeroIP,
+		// Use the unspecified entry when destination prefix is unspecified.
+		if srcPrefixMap[unspecifiedPrefixMapKey] == nil {
+			srcPrefixMap[unspecifiedPrefixMapKey] = &sourcePrefixEntry{
+				absent:     true,
 				srcPortMap: make(map[int]*FilterChain),
 			}
 		}
-		return fci.addFilterChainsForSourcePorts(srcPrefixMap[emptyAddrMapKey], fc)
+		return fci.addFilterChainsForSourcePorts(srcPrefixMap[unspecifiedPrefixMapKey], fc)
 	}
 	for _, prefix := range srcPrefixes {
 		p := prefix.String()
@@ -486,15 +502,24 @@ func filterByDestinationPrefixes(dstPrefixes []*destPrefixEntry, isUnspecified b
 		// bound to the wildcard address.
 		return dstPrefixes
 	}
-	var (
-		matchingDstPrefixes []*destPrefixEntry
-		maxSubnetMatch      int
-	)
+
+	var matchingDstPrefixes []*destPrefixEntry
+	maxSubnetMatch := noPrefixMatch
 	for _, prefix := range dstPrefixes {
-		if !prefix.net.Contains(dstAddr) {
+		var matchSize int
+		switch {
+		case prefix.absent:
+			// For unspecified prefixes, since we do not store a real net.IPNet
+			// inside prefix, we do not perform a match. Instead we simply set
+			// the matchSize to -1, which is less than the matchSize (0) for a
+			// wildcard prefix, but greater than the matchSize (-2) for a not
+			// matching prefix.
+			matchSize = unspecifiedPrefixMatch
+		case !prefix.net.Contains(dstAddr):
 			continue
+		default:
+			matchSize, _ = prefix.net.Mask.Size()
 		}
-		matchSize, _ := prefix.net.Mask.Size()
 		if matchSize < maxSubnetMatch {
 			continue
 		}
@@ -551,16 +576,23 @@ func filterBySourceType(dstPrefixes []*destPrefixEntry, srcType SourceType) []*s
 // algorithm. It trims the filter chains based on the source prefix. At most one
 // filter chain with the most specific match progress to the next stage.
 func filterBySourcePrefixes(srcPrefixes []*sourcePrefixes, srcAddr net.IP) (*sourcePrefixEntry, error) {
-	var (
-		matchingSrcPrefixes []*sourcePrefixEntry
-		maxSubnetMatch      int
-	)
+	var matchingSrcPrefixes []*sourcePrefixEntry
+	maxSubnetMatch := noPrefixMatch
 	for _, sp := range srcPrefixes {
 		for _, prefix := range sp.srcPrefixes {
-			if !prefix.net.Contains(srcAddr) {
+			var matchSize int
+			switch {
+			case prefix.absent:
+				// For unspecified prefixes, since we do not store a real net.IPNet
+				// inside prefix, we do not perform a match. Instead we simply set
+				// the matchSize to -1, which is less than the matchSize (0) for a
+				// wildcard prefix.
+				matchSize = unspecifiedPrefixMatch
+			case !prefix.net.Contains(srcAddr):
 				continue
+			default:
+				matchSize, _ = prefix.net.Mask.Size()
 			}
-			matchSize, _ := prefix.net.Mask.Size()
 			if matchSize < maxSubnetMatch {
 				continue
 			}
