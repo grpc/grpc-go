@@ -363,7 +363,7 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 			wantCCS:   edsCCS(serviceName, nil, false),
 		},
 	}
-	// What am I doing: finding out how the current tests plug in with the fake xds client and then seeing where I can expand functionality?
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)

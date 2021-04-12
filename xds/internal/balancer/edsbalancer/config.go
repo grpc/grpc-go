@@ -25,53 +25,6 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-type ClusterType int
-
-const (
-	// ClusterTypeEDS represents the EDS cluster type, which will delegate endpoint
-	// discovery to the management server.
-	ClusterTypeEDS ClusterType = iota
-	// ClusterTypeLogicalDNS represents the Logical DNS cluster type, which essentially
-	// maps to the gRPC behavior of using the DNS resolver with pick_first LB policy.
-	ClusterTypeLogicalDNS
-)
-// TOMORROW: HANDLE CDS BALANCER CHANGES (pull functionality out, put new functionality in
-// including constructing this new struct)
-type DiscoveryMechanism struct {
-	// Cluster name.
-	cluster string
-	// LRS server to send load reports to.  If not present, load reporting
-	// will be disabled.  If set to the empty string, load reporting will
-	// be sent to the same server that we obtained CDS data from.
-	LrsLoadReportingServerName *string
-
-	// Maximum number of outstanding requests can be made to the upstream cluster. Default
-	// is 1024.
-	MaxConcurrentRequests *uint32
-
-	ClusterType ClusterType
-	// Name to use in EDS query.  If not present, defaults to the server
-	// name from the target URI. For type EDS only.
-	EDSServiceName string
-}
-
-type XDSClusterResolverConfig struct {
-	// Ordered list of discovery mechanisms. Must have at least one element.
-	// Results from each discovery mechanism are concatenated together in
-	// successive priorities.
-	DiscoveryMechanisms []DiscoveryMechanism
-
-	// Locality picking policy. This config is expected to be in the format used
-	// by the weighted target policy. Note that the config should include an empty
-	// value for the "targets" field; that empty value will be replaced by one that is
-	// dynamically generated based on the EDS data. Optional, defaults to "weighted
-	// target".
-	LocalityPickingPolicy []*loadBalancingConfig
-	// Endpoint picking policy. This will be configured as the policy for each child in
-	// the locality-policy's config. Optional; defaults to "round_robin".
-	EndpointPickingPolicy []*loadBalancingConfig
-}
-
 // EDSConfig represents the loadBalancingConfig section of the service config
 // for EDS balancers.
 type EDSConfig struct {
