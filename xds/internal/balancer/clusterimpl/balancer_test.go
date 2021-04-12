@@ -496,9 +496,6 @@ func TestReResolution(t *testing.T) {
 		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
 	}
 
-	// ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	// defer cancel()
-
 	sc1 := <-cc.NewSubConnCh
 	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	// This should get the connecting picker.
