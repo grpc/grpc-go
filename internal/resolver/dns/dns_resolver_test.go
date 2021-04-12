@@ -58,9 +58,7 @@ type testClientConn struct {
 	state               resolver.State
 	updateStateCalls    int
 	errChan             chan error
-
-	backoffMutex              sync.Mutex
-	causeDNSResolverToBackoff bool
+	updateStateErr      error
 }
 
 func (t *testClientConn) UpdateState(s resolver.State) error {
@@ -70,13 +68,7 @@ func (t *testClientConn) UpdateState(s resolver.State) error {
 	t.updateStateCalls++
 	// This error determines whether DNS Resolver actually decides to exponentially backoff or not.
 	// This can be any error.
-	t.backoffMutex.Lock()
-	if t.causeDNSResolverToBackoff {
-		t.backoffMutex.Unlock()
-		return balancer.ErrBadResolverState
-	}
-	t.backoffMutex.Unlock()
-	return nil
+	return t.updateStateErr
 }
 
 func (t *testClientConn) getState() (resolver.State, int) {
@@ -675,7 +667,6 @@ func txtLookup(host string) ([]string, error) {
 
 func TestResolve(t *testing.T) {
 	testDNSResolver(t)
-	testDNSResolverExponentialBackoff(t)
 	testDNSResolverWithSRV(t)
 	testDNSResolveNow(t)
 	testIPResolver(t)
@@ -760,7 +751,7 @@ func testDNSResolver(t *testing.T) {
 
 // DNS Resolver immediately starts polling on an error from grpc. This should continue until the ClientConn doesn't
 // send back an error from updating the DNS Resolver's state.
-func testDNSResolverExponentialBackoff(t *testing.T) {
+func TestDNSResolverExponentialBackoff(t *testing.T) {
 	defer leakcheck.Check(t)
 	nt := newTimer
 	defer func(func(d time.Duration) *time.Timer) {
@@ -797,9 +788,8 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 	for _, a := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
-		cc.backoffMutex.Lock()
-		cc.causeDNSResolverToBackoff = true
-		cc.backoffMutex.Unlock()
+		// Cause ClientConn to return an error.
+		cc.updateStateErr = balancer.ErrBadResolverState
 		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{})
 		timer := <-timerChan
 		timer.Reset(0)
@@ -840,9 +830,7 @@ func testDNSResolverExponentialBackoff(t *testing.T) {
 		cc.m1.Unlock()
 
 		// Update resolver.ClientConn to not return an error anymore - this should stop it from backing off.
-		cc.backoffMutex.Lock()
-		cc.causeDNSResolverToBackoff = false
-		cc.backoffMutex.Unlock()
+		cc.updateStateErr = nil
 		timer = <-timerChan
 		timer.Reset(0)
 		// Propagate the updated state.
