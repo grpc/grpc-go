@@ -98,10 +98,10 @@ func (ccr *ccResolverWrapper) UpdateState(s resolver.State) error {
 		ccr.addChannelzTraceEvent(s)
 	}
 	ccr.curState = s
-	if err := ccr.cc.updateResolverState(ccr.curState, nil); err != balancer.ErrBadResolverState {
-		return nil
+	if err := ccr.cc.updateResolverState(ccr.curState, nil); err == balancer.ErrBadResolverState {
+		return balancer.ErrBadResolverState
 	}
-	return balancer.ErrBadResolverState
+	return nil
 }
 
 func (ccr *ccResolverWrapper) ReportError(err error) {
