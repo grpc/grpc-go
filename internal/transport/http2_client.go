@@ -849,12 +849,12 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 // This method blocks until the addrConn that initiated this transport is
 // re-connected. This happens because t.onClose() begins reconnect logic at the
 // addrConn level and blocks until the addrConn is successfully connected.
-func (t *http2Client) Close(err error) error {
+func (t *http2Client) Close(err error) {
 	t.mu.Lock()
 	// Make sure we only Close once.
 	if t.state == closing {
 		t.mu.Unlock()
-		return nil
+		return
 	}
 	// Call t.onClose before setting the state to closing to prevent the client
 	// from attempting to create new streams ASAP.
@@ -870,13 +870,13 @@ func (t *http2Client) Close(err error) error {
 	t.mu.Unlock()
 	t.controlBuf.finish()
 	t.cancel()
-	closeErr := t.conn.Close()
+	t.conn.Close()
 	if channelz.IsOn() {
 		channelz.RemoveEntry(t.channelzID)
 	}
 	// Notify all active streams.
 	for _, s := range streams {
-		t.closeStream(s, err, false, http2.ErrCodeNo, status.New(codes.Unavailable, ErrConnClosing.Desc), nil, false)
+		t.closeStream(s, err, false, http2.ErrCodeNo, status.New(codes.Unavailable, err.Error()), nil, false)
 	}
 	if t.statsHandler != nil {
 		connEnd := &stats.ConnEnd{
@@ -884,7 +884,6 @@ func (t *http2Client) Close(err error) error {
 		}
 		t.statsHandler.HandleConn(t.ctx, connEnd)
 	}
-	return closeErr
 }
 
 // GracefulClose sets the state to draining, which prevents new streams from
@@ -1149,7 +1148,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		}
 	}
 	id := f.LastStreamID
-	if id > 0 && id%2 != 1 {
+	if id%2 != 1 {
 		t.mu.Unlock()
 		t.Close(connectionErrorf(true, nil, "received goaway with odd numbered stream id: %v", id))
 		return
@@ -1328,7 +1327,7 @@ func (t *http2Client) reader() {
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
 		// this kicks off resetTransport, so must be last before return
-		t.Close(connectionErrorf(true, nil, "initial http2 frame from server is not a settings frame"))
+		t.Close(connectionErrorf(true, nil, "initial http2 frame from server is not a settings frame: %T", frame))
 		return
 	}
 	t.onPrefaceReceipt()
