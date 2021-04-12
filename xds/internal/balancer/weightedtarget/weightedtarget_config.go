@@ -25,30 +25,23 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-type target struct {
+// Target represents one target with the weight and the child policy.
+type Target struct {
 	// Weight is the weight of the child policy.
-	Weight uint32
+	Weight uint32 `json:"weight,omitempty"`
 	// ChildPolicy is the child policy and it's config.
-	ChildPolicy *internalserviceconfig.BalancerConfig
+	ChildPolicy *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
 
-// lbConfig is the balancer config for weighted_target. The proto representation
-// is:
-//
-// message WeightedTargetConfig {
-//   message Target {
-//     uint32 weight = 1;
-//     repeated LoadBalancingConfig child_policy = 2;
-//   }
-//   map<string, Target> targets = 1;
-// }
-type lbConfig struct {
-	serviceconfig.LoadBalancingConfig
-	Targets map[string]target
+// LBConfig is the balancer config for weighted_target.
+type LBConfig struct {
+	serviceconfig.LoadBalancingConfig `json:"-"`
+
+	Targets map[string]Target `json:"targets,omitempty"`
 }
 
-func parseConfig(c json.RawMessage) (*lbConfig, error) {
-	var cfg lbConfig
+func parseConfig(c json.RawMessage) (*LBConfig, error) {
+	var cfg LBConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
 		return nil, err
 	}

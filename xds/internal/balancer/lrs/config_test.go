@@ -37,7 +37,7 @@ func TestParseConfig(t *testing.T) {
 	tests := []struct {
 		name    string
 		js      string
-		want    *lbConfig
+		want    *LBConfig
 		wantErr bool
 	}{
 		{
@@ -95,7 +95,7 @@ func TestParseConfig(t *testing.T) {
   "childPolicy":[{"round_robin":{}}]
 }
 			`,
-			want: &lbConfig{
+			want: &LBConfig{
 				ClusterName:                testClusterName,
 				EdsServiceName:             testServiceName,
 				LrsLoadReportingServerName: testLRSServerName,

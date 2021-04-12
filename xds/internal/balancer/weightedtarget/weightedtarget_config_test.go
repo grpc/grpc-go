@@ -56,7 +56,7 @@ func Test_parseConfig(t *testing.T) {
 	tests := []struct {
 		name    string
 		js      string
-		want    *lbConfig
+		want    *LBConfig
 		wantErr bool
 	}{
 		{
@@ -68,8 +68,8 @@ func Test_parseConfig(t *testing.T) {
 		{
 			name: "OK",
 			js:   testJSONConfig,
-			want: &lbConfig{
-				Targets: map[string]target{
+			want: &LBConfig{
+				Targets: map[string]Target{
 					"cluster_1": {
 						Weight: 75,
 						ChildPolicy: &internalserviceconfig.BalancerConfig{

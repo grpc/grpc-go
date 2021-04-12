@@ -49,7 +49,7 @@ var (
 )
 
 // TestLoadReporting verifies that the lrs balancer starts the loadReport
-// stream when the lbConfig passed to it contains a valid value for the LRS
+// stream when the LBConfig passed to it contains a valid value for the LRS
 // server (empty string).
 func TestLoadReporting(t *testing.T) {
 	xdsC := fakeclient.NewClient()
@@ -57,7 +57,7 @@ func TestLoadReporting(t *testing.T) {
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
-	builder := balancer.Get(lrsBalancerName)
+	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
 	lrsB := builder.Build(cc, balancer.BuildOptions{})
 	defer lrsB.Close()
@@ -66,7 +66,7 @@ func TestLoadReporting(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: testBackendAddrs,
 		},
-		BalancerConfig: &lbConfig{
+		BalancerConfig: &LBConfig{
 			ClusterName:                testClusterName,
 			EdsServiceName:             testServiceName,
 			LrsLoadReportingServerName: testLRSServerName,

@@ -33,7 +33,8 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 )
 
-const weightedTargetName = "weighted_target_experimental"
+// Name is the name of the weighted_target balancer.
+const Name = "weighted_target_experimental"
 
 // newRandomWRR is the WRR constructor used to pick sub-pickers from
 // sub-balancers. It's to be modified in tests.
@@ -57,7 +58,7 @@ func (wt *weightedTargetBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOp
 }
 
 func (wt *weightedTargetBB) Name() string {
-	return weightedTargetName
+	return Name
 }
 
 func (wt *weightedTargetBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
@@ -75,14 +76,14 @@ type weightedTargetBalancer struct {
 	bg              *balancergroup.BalancerGroup
 	stateAggregator *weightedaggregator.Aggregator
 
-	targets map[string]target
+	targets map[string]Target
 }
 
 // UpdateClientConnState takes the new targets in balancer group,
 // creates/deletes sub-balancers and sends them update. Addresses are split into
 // groups based on hierarchy path.
 func (w *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	newConfig, ok := s.BalancerConfig.(*lbConfig)
+	newConfig, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
 	}

@@ -37,7 +37,8 @@ func init() {
 
 var newXDSClient = func() (xdsClientInterface, error) { return xdsclient.New() }
 
-const lrsBalancerName = "lrs_experimental"
+// Name is the name of the LRS balancer.
+const Name = "lrs_experimental"
 
 type lrsBB struct{}
 
@@ -60,7 +61,7 @@ func (l *lrsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balanc
 }
 
 func (l *lrsBB) Name() string {
-	return lrsBalancerName
+	return Name
 }
 
 func (l *lrsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
@@ -74,12 +75,12 @@ type lrsBalancer struct {
 	logger *grpclog.PrefixLogger
 	client *xdsClientWrapper
 
-	config *lbConfig
+	config *LBConfig
 	lb     balancer.Balancer // The sub balancer.
 }
 
 func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	newConfig, ok := s.BalancerConfig.(*lbConfig)
+	newConfig, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
 	}
@@ -182,7 +183,7 @@ func newXDSClientWrapper(c xdsClientInterface) *xdsClientWrapper {
 
 // update checks the config and xdsclient, and decides whether it needs to
 // restart the load reporting stream.
-func (w *xdsClientWrapper) update(newConfig *lbConfig) error {
+func (w *xdsClientWrapper) update(newConfig *LBConfig) error {
 	var (
 		restartLoadReport           bool
 		updateLoadClusterAndService bool

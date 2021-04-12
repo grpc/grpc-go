@@ -67,7 +67,7 @@ func TestDropByCategory(t *testing.T) {
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
-	builder := balancer.Get(clusterImplName)
+	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
@@ -81,11 +81,11 @@ func TestDropByCategory(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: testBackendAddrs,
 		},
-		BalancerConfig: &lbConfig{
+		BalancerConfig: &LBConfig{
 			Cluster:                    testClusterName,
 			EDSServiceName:             testServiceName,
 			LRSLoadReportingServerName: newString(testLRSServerName),
-			DropCategories: []dropCategory{{
+			DropCategories: []DropCategory{{
 				Category:           dropReason,
 				RequestsPerMillion: million * dropNumerator / dropDenominator,
 			}},
@@ -168,11 +168,11 @@ func TestDropByCategory(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: testBackendAddrs,
 		},
-		BalancerConfig: &lbConfig{
+		BalancerConfig: &LBConfig{
 			Cluster:                    testClusterName,
 			EDSServiceName:             testServiceName,
 			LRSLoadReportingServerName: newString(testLRSServerName),
-			DropCategories: []dropCategory{{
+			DropCategories: []DropCategory{{
 				Category:           dropReason2,
 				RequestsPerMillion: million * dropNumerator2 / dropDenominator2,
 			}},
@@ -224,7 +224,7 @@ func TestDropCircuitBreaking(t *testing.T) {
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
-	builder := balancer.Get(clusterImplName)
+	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
@@ -234,7 +234,7 @@ func TestDropCircuitBreaking(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: testBackendAddrs,
 		},
-		BalancerConfig: &lbConfig{
+		BalancerConfig: &LBConfig{
 			Cluster:                    testClusterName,
 			EDSServiceName:             testServiceName,
 			LRSLoadReportingServerName: newString(testLRSServerName),
@@ -335,7 +335,7 @@ func TestPickerUpdateAfterClose(t *testing.T) {
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
-	builder := balancer.Get(clusterImplName)
+	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 
@@ -344,7 +344,7 @@ func TestPickerUpdateAfterClose(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: testBackendAddrs,
 		},
-		BalancerConfig: &lbConfig{
+		BalancerConfig: &LBConfig{
 			Cluster:               testClusterName,
 			EDSServiceName:        testServiceName,
 			MaxConcurrentRequests: &maxRequest,

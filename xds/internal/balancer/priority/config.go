@@ -26,24 +26,26 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-type child struct {
-	Config *internalserviceconfig.BalancerConfig
+// Child is a child of priority balancer.
+type Child struct {
+	Config *internalserviceconfig.BalancerConfig `json:"config,omitempty"`
 }
 
-type lbConfig struct {
-	serviceconfig.LoadBalancingConfig
+// LBConfig represents priority balancer's config.
+type LBConfig struct {
+	serviceconfig.LoadBalancingConfig `json:"-"`
 
 	// Children is a map from the child balancer names to their configs. Child
 	// names can be found in field Priorities.
-	Children map[string]*child
+	Children map[string]*Child `json:"children,omitempty"`
 	// Priorities is a list of child balancer names. They are sorted from
 	// highest priority to low. The type/config for each child can be found in
 	// field Children, with the balancer name as the key.
-	Priorities []string
+	Priorities []string `json:"priorities,omitempty"`
 }
 
-func parseConfig(c json.RawMessage) (*lbConfig, error) {
-	var cfg lbConfig
+func parseConfig(c json.RawMessage) (*LBConfig, error) {
+	var cfg LBConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
 		return nil, err
 	}
