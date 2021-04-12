@@ -1148,9 +1148,9 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		}
 	}
 	id := f.LastStreamID
-	if id%2 != 1 {
+	if id > 0 && id%2 != 1 {
 		t.mu.Unlock()
-		t.Close(connectionErrorf(true, nil, "received goaway with odd numbered stream id: %v", id))
+		t.Close(connectionErrorf(true, nil, "received goaway with non-zero even-numbered numbered stream id: %v", id))
 		return
 	}
 	// A client can receive multiple GoAways from the server (see
