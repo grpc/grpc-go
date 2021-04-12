@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
@@ -104,6 +105,9 @@ type edsBalancerImpl struct {
 	innerState             balancer.State // The state of the picker without drop support.
 	serviceRequestsCounter *client.ServiceRequestsCounter
 	serviceRequestCountMax uint32
+
+	clusterNameMu sync.Mutex
+	clusterName   string
 }
 
 // newEDSBalancerImpl create a new edsBalancerImpl.
@@ -444,6 +448,18 @@ func (edsImpl *edsBalancerImpl) updateServiceRequestsConfig(serviceName string, 
 	edsImpl.pickerMu.Unlock()
 }
 
+func (edsImpl *edsBalancerImpl) updateClusterName(name string) {
+	edsImpl.clusterNameMu.Lock()
+	defer edsImpl.clusterNameMu.Unlock()
+	edsImpl.clusterName = name
+}
+
+func (edsImpl *edsBalancerImpl) getClusterName() string {
+	edsImpl.clusterNameMu.Lock()
+	defer edsImpl.clusterNameMu.Unlock()
+	return edsImpl.clusterName
+}
+
 // updateState first handles priority, and then wraps picker in a drop picker
 // before forwarding the update.
 func (edsImpl *edsBalancerImpl) updateState(priority priorityType, s balancer.State) {
@@ -479,8 +495,23 @@ type edsBalancerWrapperCC struct {
 }
 
 func (ebwcc *edsBalancerWrapperCC) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	return ebwcc.parent.newSubConn(ebwcc.priority, addrs, opts)
+	clusterName := ebwcc.parent.getClusterName()
+	newAddrs := make([]resolver.Address, len(addrs))
+	for i, addr := range addrs {
+		newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
+	}
+	return ebwcc.parent.newSubConn(ebwcc.priority, newAddrs, opts)
 }
+
+func (ebwcc *edsBalancerWrapperCC) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
+	clusterName := ebwcc.parent.getClusterName()
+	newAddrs := make([]resolver.Address, len(addrs))
+	for i, addr := range addrs {
+		newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
+	}
+	ebwcc.ClientConn.UpdateAddresses(sc, newAddrs)
+}
+
 func (ebwcc *edsBalancerWrapperCC) UpdateState(state balancer.State) {
 	ebwcc.parent.enqueueChildBalancerStateUpdate(ebwcc.priority, state)
 }
