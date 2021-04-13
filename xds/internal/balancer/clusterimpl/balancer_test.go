@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
-	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
+	"google.golang.org/grpc/internal"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/client/load"
@@ -414,7 +414,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 	if got, want := addrs1[0].Addr, testBackendAddrs[0].Addr; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
-	cn, ok := xdsinternal.GetHandshakeClusterName(addrs1[0].Attributes)
+	cn, ok := internal.GetXDSHandshakeClusterName(addrs1[0].Attributes)
 	if !ok || cn != testClusterName {
 		t.Fatalf("sc is created with addr with cluster name %v, %v, want cluster name %v", cn, ok, testClusterName)
 	}
@@ -455,7 +455,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	// New addresses should have the new cluster name.
-	cn2, ok := xdsinternal.GetHandshakeClusterName(addrs2[0].Attributes)
+	cn2, ok := internal.GetXDSHandshakeClusterName(addrs2[0].Attributes)
 	if !ok || cn2 != testClusterName2 {
 		t.Fatalf("sc is created with addr with cluster name %v, %v, want cluster name %v", cn2, ok, testClusterName2)
 	}

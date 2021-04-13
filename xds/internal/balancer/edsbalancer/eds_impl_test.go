@@ -26,14 +26,14 @@ import (
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
+	"google.golang.org/grpc/internal"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/xds/env"
-	"google.golang.org/grpc/xds/internal"
+	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -834,7 +834,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	edsb.updateServiceRequestsConfig(testServiceName, &maxRequestsTemp)
 	defer client.ClearCounterForTesting(testServiceName)
 
-	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityID)
+	backendToBalancerID := make(map[balancer.SubConn]xdsinternal.LocalityID)
 
 	const testDropCategory = "test-drop"
 	// Two localities, each with one backend.
@@ -844,7 +844,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
 	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
-	locality1 := internal.LocalityID{SubZone: testSubZones[0]}
+	locality1 := xdsinternal.LocalityID{SubZone: testSubZones[0]}
 	backendToBalancerID[sc1] = locality1
 
 	// Add the second locality later to make sure sc2 belongs to the second
@@ -855,7 +855,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	sc2 := <-cc.NewSubConnCh
 	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
 	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
-	locality2 := internal.LocalityID{SubZone: testSubZones[1]}
+	locality2 := xdsinternal.LocalityID{SubZone: testSubZones[1]}
 	backendToBalancerID[sc2] = locality2
 
 	// Test roundrobin with two subconns.
@@ -954,7 +954,7 @@ func (s) TestEDS_ClusterNameInAddressAttributes(t *testing.T) {
 	if got, want := addrs1[0].Addr, testEndpointAddrs[0]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
-	cn, ok := xdsinternal.GetHandshakeClusterName(addrs1[0].Attributes)
+	cn, ok := internal.GetXDSHandshakeClusterName(addrs1[0].Attributes)
 	if !ok || cn != clusterName1 {
 		t.Fatalf("sc is created with addr with cluster name %v, %v, want cluster name %v", cn, ok, clusterName1)
 	}
@@ -986,7 +986,7 @@ func (s) TestEDS_ClusterNameInAddressAttributes(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	// New addresses should have the new cluster name.
-	cn2, ok := xdsinternal.GetHandshakeClusterName(addrs2[0].Attributes)
+	cn2, ok := internal.GetXDSHandshakeClusterName(addrs2[0].Attributes)
 	if !ok || cn2 != clusterName2 {
 		t.Fatalf("sc is created with addr with cluster name %v, %v, want cluster name %v", cn2, ok, clusterName1)
 	}

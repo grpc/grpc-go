@@ -23,14 +23,13 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
-
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/resolver"
@@ -498,7 +497,7 @@ func (ebwcc *edsBalancerWrapperCC) NewSubConn(addrs []resolver.Address, opts bal
 	clusterName := ebwcc.parent.getClusterName()
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
-		newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
+		newAddrs[i] = internal.SetXDSHandshakeClusterName(addr, clusterName)
 	}
 	return ebwcc.parent.newSubConn(ebwcc.priority, newAddrs, opts)
 }
@@ -507,7 +506,7 @@ func (ebwcc *edsBalancerWrapperCC) UpdateAddresses(sc balancer.SubConn, addrs []
 	clusterName := ebwcc.parent.getClusterName()
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
-		newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
+		newAddrs[i] = internal.SetXDSHandshakeClusterName(addr, clusterName)
 	}
 	ebwcc.ClientConn.UpdateAddresses(sc, newAddrs)
 }

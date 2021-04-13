@@ -29,8 +29,8 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/buffer"
-	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
@@ -327,7 +327,7 @@ func (cib *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balanc
 	clusterName := cib.getClusterName()
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
-		newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
+		newAddrs[i] = internal.SetXDSHandshakeClusterName(addr, clusterName)
 	}
 	return cib.ClientConn.NewSubConn(newAddrs, opts)
 }
@@ -336,7 +336,7 @@ func (cib *clusterImplBalancer) UpdateAddresses(sc balancer.SubConn, addrs []res
 	clusterName := cib.getClusterName()
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
-		newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
+		newAddrs[i] = internal.SetXDSHandshakeClusterName(addr, clusterName)
 	}
 	cib.ClientConn.UpdateAddresses(sc, newAddrs)
 }

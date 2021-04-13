@@ -25,7 +25,6 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
-	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -94,7 +93,7 @@ func TestClientHandshakeBasedOnClusterName(t *testing.T) {
 			{
 				name: "with non-CFE cluster name",
 				ctx: contextWithHandshakeInfo(context.Background(), credentials.ClientHandshakeInfo{
-					Attributes: xdsinternal.SetHandshakeClusterName(resolver.Address{}, "lalala").Attributes,
+					Attributes: internal.SetXDSHandshakeClusterName(resolver.Address{}, "lalala").Attributes,
 				}),
 				// non-CFE backends should use alts.
 				wantTyp: "alts",
@@ -102,7 +101,7 @@ func TestClientHandshakeBasedOnClusterName(t *testing.T) {
 			{
 				name: "with CFE cluster name",
 				ctx: contextWithHandshakeInfo(context.Background(), credentials.ClientHandshakeInfo{
-					Attributes: xdsinternal.SetHandshakeClusterName(resolver.Address{}, cfeClusterName).Attributes,
+					Attributes: internal.SetXDSHandshakeClusterName(resolver.Address{}, cfeClusterName).Attributes,
 				}),
 				// CFE should use tls.
 				wantTyp: "tls",

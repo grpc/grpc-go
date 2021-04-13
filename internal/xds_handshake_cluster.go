@@ -16,7 +16,7 @@
  *
  */
 
-package xds
+package internal
 
 import (
 	"google.golang.org/grpc/attributes"
@@ -29,13 +29,13 @@ type handshakeClusterNameKey struct{}
 
 // SetHandshakeClusterName returns a copy of addr in which the Attributes field
 // is updated with the cluster name.
-func SetHandshakeClusterName(addr resolver.Address, clusterName string) resolver.Address {
+func SetXDSHandshakeClusterName(addr resolver.Address, clusterName string) resolver.Address {
 	addr.Attributes = addr.Attributes.WithValues(handshakeClusterNameKey{}, clusterName)
 	return addr
 }
 
 // GetHandshakeClusterName returns cluster name stored in attr.
-func GetHandshakeClusterName(attr *attributes.Attributes) (string, bool) {
+func GetXDSHandshakeClusterName(attr *attributes.Attributes) (string, bool) {
 	v := attr.Value(handshakeClusterNameKey{})
 	name, ok := v.(string)
 	return name, ok
