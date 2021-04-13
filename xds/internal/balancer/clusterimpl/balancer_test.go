@@ -379,7 +379,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
-	builder := balancer.Get(clusterImplName)
+	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
@@ -388,7 +388,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: testBackendAddrs,
 		},
-		BalancerConfig: &lbConfig{
+		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName,
 			EDSServiceName: testServiceName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
@@ -439,7 +439,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{addr2},
 		},
-		BalancerConfig: &lbConfig{
+		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName2,
 			EDSServiceName: testServiceName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
