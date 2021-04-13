@@ -1127,12 +1127,10 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						FilterChains: &FilterChainManager{
 							dstPrefixMap: map[string]*destPrefixEntry{
 								unspecifiedPrefixMapKey: {
-									absent: true,
 									srcTypeArr: [3]*sourcePrefixes{
 										{
 											srcPrefixMap: map[string]*sourcePrefixEntry{
 												unspecifiedPrefixMapKey: {
-													absent: true,
 													srcPortMap: map[int]*FilterChain{
 														0: {},
 													},
@@ -1217,12 +1215,10 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						FilterChains: &FilterChainManager{
 							dstPrefixMap: map[string]*destPrefixEntry{
 								unspecifiedPrefixMapKey: {
-									absent: true,
 									srcTypeArr: [3]*sourcePrefixes{
 										{
 											srcPrefixMap: map[string]*sourcePrefixEntry{
 												unspecifiedPrefixMapKey: {
-													absent: true,
 													srcPortMap: map[int]*FilterChain{
 														0: {
 															SecurityCfg: &SecurityConfig{
@@ -1264,12 +1260,10 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						FilterChains: &FilterChainManager{
 							dstPrefixMap: map[string]*destPrefixEntry{
 								unspecifiedPrefixMapKey: {
-									absent: true,
 									srcTypeArr: [3]*sourcePrefixes{
 										{
 											srcPrefixMap: map[string]*sourcePrefixEntry{
 												unspecifiedPrefixMapKey: {
-													absent: true,
 													srcPortMap: map[int]*FilterChain{
 														0: {
 															SecurityCfg: &SecurityConfig{

@@ -396,12 +396,10 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
 					unspecifiedPrefixMapKey: {
-						absent: true,
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
-										absent: true,
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -453,12 +451,10 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
 					unspecifiedPrefixMapKey: {
-						absent: true,
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
-										absent: true,
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												SecurityCfg: &SecurityConfig{
@@ -535,12 +531,10 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
 					unspecifiedPrefixMapKey: {
-						absent: true,
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
-										absent: true,
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												SecurityCfg: &SecurityConfig{
@@ -591,12 +585,10 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 // unsupported match fields will be skipped at lookup time.
 func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 	unspecifiedEntry := &destPrefixEntry{
-		absent: true,
 		srcTypeArr: [3]*sourcePrefixes{
 			{
 				srcPrefixMap: map[string]*sourcePrefixEntry{
 					unspecifiedPrefixMapKey: {
-						absent: true,
 						srcPortMap: map[int]*FilterChain{
 							0: {},
 						},
@@ -773,12 +765,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
 					unspecifiedPrefixMapKey: {
-						absent: true,
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
-										absent: true,
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -795,7 +785,6 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
-										absent: true,
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -812,7 +801,6 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
-										absent: true,
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -827,7 +815,6 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
-										absent: true,
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -842,7 +829,6 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
-										absent: true,
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -874,13 +860,11 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
 					unspecifiedPrefixMapKey: {
-						absent: true,
 						srcTypeArr: [3]*sourcePrefixes{
 							nil,
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
-										absent: true,
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -897,7 +881,6 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
-										absent: true,
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -929,7 +912,6 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
 					unspecifiedPrefixMapKey: {
-						absent: true,
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
@@ -983,12 +965,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
 					unspecifiedPrefixMapKey: {
-						absent: true,
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
-										absent: true,
 										srcPortMap: map[int]*FilterChain{
 											1: {},
 											2: {},
@@ -1081,12 +1061,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
 					unspecifiedPrefixMapKey: {
-						absent: true,
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
-										absent: true,
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -1101,7 +1079,6 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
-										absent: true,
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -1116,7 +1093,6 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
-										absent: true,
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},

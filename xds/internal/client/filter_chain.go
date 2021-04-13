@@ -119,9 +119,6 @@ type FilterChainManager struct {
 type destPrefixEntry struct {
 	// The actual destination prefix. Set to nil for unspecified prefixes.
 	net *net.IPNet
-	// Set to true for unspecified prefixes.
-	absent bool
-
 	// We need to keep track of the transport protocols seen as part of the
 	// config validation (and internal structure building) phase. The only two
 	// values that we support are empty string and "raw_buffer", with the latter
@@ -152,8 +149,6 @@ type sourcePrefixes struct {
 type sourcePrefixEntry struct {
 	// The actual destination prefix. Set to nil for unspecified prefixes.
 	net *net.IPNet
-	// Set to true for unspecified prefixes.
-	absent bool
 	// Mapping from source ports specified in the match criteria to the actual
 	// filter chain. Unspecified source port matches en up as a wildcard entry
 	// here with a key of 0.
@@ -243,9 +238,10 @@ func (fci *FilterChainManager) addFilterChainsForDestPrefixes(fc *v3listenerpb.F
 	}
 
 	if len(dstPrefixes) == 0 {
-		// Use the unspecified entry when destination prefix is unspecified.
+		// Use the unspecified entry when destination prefix is unspecified, and
+		// set the `net` field to nil.
 		if fci.dstPrefixMap[unspecifiedPrefixMapKey] == nil {
-			fci.dstPrefixMap[unspecifiedPrefixMapKey] = &destPrefixEntry{absent: true}
+			fci.dstPrefixMap[unspecifiedPrefixMapKey] = &destPrefixEntry{}
 		}
 		return fci.addFilterChainsForServerNames(fci.dstPrefixMap[unspecifiedPrefixMapKey], fc)
 	}
@@ -342,10 +338,10 @@ func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map
 	}
 
 	if len(srcPrefixes) == 0 {
-		// Use the unspecified entry when destination prefix is unspecified.
+		// Use the unspecified entry when destination prefix is unspecified, and
+		// set the `net` field to nil.
 		if srcPrefixMap[unspecifiedPrefixMapKey] == nil {
 			srcPrefixMap[unspecifiedPrefixMapKey] = &sourcePrefixEntry{
-				absent:     true,
 				srcPortMap: make(map[int]*FilterChain),
 			}
 		}
@@ -506,18 +502,16 @@ func filterByDestinationPrefixes(dstPrefixes []*destPrefixEntry, isUnspecified b
 	var matchingDstPrefixes []*destPrefixEntry
 	maxSubnetMatch := noPrefixMatch
 	for _, prefix := range dstPrefixes {
-		var matchSize int
-		switch {
-		case prefix.absent:
-			// For unspecified prefixes, since we do not store a real net.IPNet
-			// inside prefix, we do not perform a match. Instead we simply set
-			// the matchSize to -1, which is less than the matchSize (0) for a
-			// wildcard prefix, but greater than the matchSize (-2) for a not
-			// matching prefix.
-			matchSize = unspecifiedPrefixMatch
-		case !prefix.net.Contains(dstAddr):
+		if prefix.net != nil && !prefix.net.Contains(dstAddr) {
+			// Skip prefixes which don't match.
 			continue
-		default:
+		}
+		// For unspecified prefixes, since we do not store a real net.IPNet
+		// inside prefix, we do not perform a match. Instead we simply set
+		// the matchSize to -1, which is less than the matchSize (0) for a
+		// wildcard prefix.
+		matchSize := unspecifiedPrefixMatch
+		if prefix.net != nil {
 			matchSize, _ = prefix.net.Mask.Size()
 		}
 		if matchSize < maxSubnetMatch {
@@ -580,17 +574,16 @@ func filterBySourcePrefixes(srcPrefixes []*sourcePrefixes, srcAddr net.IP) (*sou
 	maxSubnetMatch := noPrefixMatch
 	for _, sp := range srcPrefixes {
 		for _, prefix := range sp.srcPrefixes {
-			var matchSize int
-			switch {
-			case prefix.absent:
-				// For unspecified prefixes, since we do not store a real net.IPNet
-				// inside prefix, we do not perform a match. Instead we simply set
-				// the matchSize to -1, which is less than the matchSize (0) for a
-				// wildcard prefix.
-				matchSize = unspecifiedPrefixMatch
-			case !prefix.net.Contains(srcAddr):
+			if prefix.net != nil && !prefix.net.Contains(srcAddr) {
+				// Skip prefixes which don't match.
 				continue
-			default:
+			}
+			// For unspecified prefixes, since we do not store a real net.IPNet
+			// inside prefix, we do not perform a match. Instead we simply set
+			// the matchSize to -1, which is less than the matchSize (0) for a
+			// wildcard prefix.
+			matchSize := unspecifiedPrefixMatch
+			if prefix.net != nil {
 				matchSize, _ = prefix.net.Mask.Size()
 			}
 			if matchSize < maxSubnetMatch {
