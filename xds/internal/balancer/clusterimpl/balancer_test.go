@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/internal"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
@@ -69,6 +70,7 @@ func init() {
 // TestDropByCategory verifies that the balancer correctly drops the picks, and
 // that the drops are reported.
 func TestDropByCategory(t *testing.T) {
+	defer client.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
@@ -226,6 +228,7 @@ func TestDropByCategory(t *testing.T) {
 // TestDropCircuitBreaking verifies that the balancer correctly drops the picks
 // due to circuit breaking, and that the drops are reported.
 func TestDropCircuitBreaking(t *testing.T) {
+	defer client.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
@@ -337,6 +340,7 @@ func TestDropCircuitBreaking(t *testing.T) {
 // picker after it's closed. Because picker updates are sent in the run()
 // goroutine.
 func TestPickerUpdateAfterClose(t *testing.T) {
+	defer client.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
@@ -381,6 +385,7 @@ func TestPickerUpdateAfterClose(t *testing.T) {
 // TestClusterNameInAddressAttributes covers the case that cluster name is
 // attached to the subconn address attributes.
 func TestClusterNameInAddressAttributes(t *testing.T) {
+	defer client.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
@@ -471,6 +476,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 // TestReResolution verifies that when a SubConn turns transient failure,
 // re-resolution is triggered.
 func TestReResolution(t *testing.T) {
+	defer client.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
