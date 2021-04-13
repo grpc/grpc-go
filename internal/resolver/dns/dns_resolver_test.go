@@ -49,6 +49,7 @@ func TestMain(m *testing.M) {
 
 const (
 	txtBytesLimit = 255
+	defaultTestTimeout = 10 * time.Second
 )
 
 type testClientConn struct {
@@ -674,12 +675,11 @@ func TestResolve(t *testing.T) {
 
 func testDNSResolver(t *testing.T) {
 	defer leakcheck.Check(t)
-	nt := newTimer
-	defer func(func(d time.Duration) *time.Timer) {
+	defer func(nt func(d time.Duration) *time.Timer) {
 		newTimer = nt
-	}(nt)
-	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on it's own, will protect from triggering exponential backoff.
+	}(newTimer)
+	newTimer = func(_ time.Duration) *time.Timer {
+		// Will never fire on its own, will protect from triggering exponential backoff.
 		return time.NewTimer(time.Hour)
 	}
 	tests := []struct {
@@ -753,13 +753,12 @@ func testDNSResolver(t *testing.T) {
 // send back an error from updating the DNS Resolver's state.
 func TestDNSResolverExponentialBackoff(t *testing.T) {
 	defer leakcheck.Check(t)
-	nt := newTimer
-	defer func(func(d time.Duration) *time.Timer) {
+	defer func(nt func(d time.Duration) *time.Timer) {
 		newTimer = nt
-	}(nt)
+	}(newTimer)
 	timerChan := make(chan *time.Timer, 1)
 	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on it's own, allows this test to call timer immediately.
+		// Will never fire on its own, allows this test to call timer immediately.
 		t := time.NewTimer(time.Hour)
 		timerChan <- t
 		return t
@@ -791,8 +790,6 @@ func TestDNSResolverExponentialBackoff(t *testing.T) {
 		// Cause ClientConn to return an error.
 		cc.updateStateErr = balancer.ErrBadResolverState
 		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{})
-		timer := <-timerChan
-		timer.Reset(0)
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -819,34 +816,50 @@ func TestDNSResolverExponentialBackoff(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			timer := <-timerChan
 			timer.Reset(0)
-			// Propagate.
-			time.Sleep(time.Millisecond)
 		}
-		cc.m1.Lock()
-		if cc.updateStateCalls != 12 {
+		// Poll to see if DNS Resolver updated state the correct number of times, which allows time for the DNS Resolver to call
+		// ClientConn update state.
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		for {
+			timer := time.NewTimer(time.Millisecond)
+			select {
+			case <-ctx.Done():
+				t.Fatalf("Exponential backoff is not working as expected - should update state 11 times instead of %d", cc.updateStateCalls)
+			case <-timer.C:
+			}
+			cc.m1.Lock()
+			if cc.updateStateCalls == 11 {
+				cc.m1.Unlock()
+				break
+			}
 			cc.m1.Unlock()
-			t.Fatalf("Exponential backoff is not working as expected - should be updating state at least 10 total times instead of %d", cc.updateStateCalls)
 		}
-		cc.m1.Unlock()
+		cancel()
 
 		// Update resolver.ClientConn to not return an error anymore - this should stop it from backing off.
 		cc.updateStateErr = nil
-		timer = <-timerChan
+		timer := <-timerChan
 		timer.Reset(0)
-		// Propagate the updated state.
-		time.Sleep(time.Millisecond * 3)
-
-		select {
-		case <-timerChan:
-			t.Error("Should not poll again after no more error")
-		default:
-		}
-		cc.m1.Lock()
-		if cc.updateStateCalls != 13 {
+		// Poll to see if DNS Resolver updated state the correct number of times, which allows time for the DNS Resolver to call
+		// ClientConn update state the final time. The DNS Resolver should then stop polling.
+		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+		for {
+			timer := time.NewTimer(time.Millisecond)
+			select {
+			case <-ctx.Done():
+				t.Fatalf("Exponential backoff is not working as expected - should stop backing off at 12 total UpdateState calls instead of %d", cc.updateStateCalls)
+			case <-timerChan:
+				t.Fatalf("Should not poll again after no more error")
+			case <-timer.C:
+			}
+			cc.m1.Lock()
+			if cc.updateStateCalls == 12 {
+				cc.m1.Unlock()
+				break
+			}
 			cc.m1.Unlock()
-			t.Fatalf("Exponential backoff is not working as expected - should stop backing off.")
 		}
-		cc.m1.Unlock()
+		cancel()
 		r.Close()
 	}
 }
@@ -857,12 +870,11 @@ func testDNSResolverWithSRV(t *testing.T) {
 		EnableSRVLookups = false
 	}()
 	defer leakcheck.Check(t)
-	nt := newTimer
-	defer func(func(d time.Duration) *time.Timer) {
+	defer func(nt func(d time.Duration) *time.Timer) {
 		newTimer = nt
-	}(nt)
-	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on it's own, will protect from triggering exponential backoff.
+	}(newTimer)
+	newTimer = func(_ time.Duration) *time.Timer {
+		// Will never fire on its own, will protect from triggering exponential backoff.
 		return time.NewTimer(time.Hour)
 	}
 	tests := []struct {
@@ -978,12 +990,11 @@ func mutateTbl(target string) func() {
 
 func testDNSResolveNow(t *testing.T) {
 	defer leakcheck.Check(t)
-	nt := newTimer
-	defer func(func(d time.Duration) *time.Timer) {
+	defer func(nt func(d time.Duration) *time.Timer) {
 		newTimer = nt
-	}(nt)
-	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on it's own, will protect from triggering exponential backoff.
+	}(newTimer)
+	newTimer = func(_ time.Duration) *time.Timer {
+		// Will never fire on its own, will protect from triggering exponential backoff.
 		return time.NewTimer(time.Hour)
 	}
 	tests := []struct {
@@ -1057,12 +1068,11 @@ const colonDefaultPort = ":" + defaultPort
 
 func testIPResolver(t *testing.T) {
 	defer leakcheck.Check(t)
-	nt := newTimer
-	defer func(func(d time.Duration) *time.Timer) {
+	defer func(nt func(d time.Duration) *time.Timer) {
 		newTimer = nt
-	}(nt)
-	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on it's own, will protect from triggering exponential backoff.
+	}(newTimer)
+	newTimer = func(_ time.Duration) *time.Timer {
+		// Will never fire on its own, will protect from triggering exponential backoff.
 		return time.NewTimer(time.Hour)
 	}
 	tests := []struct {
@@ -1114,12 +1124,11 @@ func testIPResolver(t *testing.T) {
 
 func TestResolveFunc(t *testing.T) {
 	defer leakcheck.Check(t)
-	nt := newTimer
-	defer func(func(d time.Duration) *time.Timer) {
+	defer func(nt func(d time.Duration) *time.Timer) {
 		newTimer = nt
-	}(nt)
+	}(newTimer)
 	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on it's own, will protect from triggering exponential backoff.
+		// Will never fire on its own, will protect from triggering exponential backoff.
 		return time.NewTimer(time.Hour)
 	}
 	tests := []struct {
@@ -1160,12 +1169,11 @@ func TestResolveFunc(t *testing.T) {
 
 func TestDisableServiceConfig(t *testing.T) {
 	defer leakcheck.Check(t)
-	nt := newTimer
-	defer func(func(d time.Duration) *time.Timer) {
+	defer func(nt func(d time.Duration) *time.Timer) {
 		newTimer = nt
-	}(nt)
+	}(newTimer)
 	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on it's own, will protect from triggering exponential backoff.
+		// Will never fire on its own, will protect from triggering exponential backoff.
 		return time.NewTimer(time.Hour)
 	}
 	tests := []struct {
@@ -1214,12 +1222,11 @@ func TestDisableServiceConfig(t *testing.T) {
 
 func TestTXTError(t *testing.T) {
 	defer leakcheck.Check(t)
-	nt := newTimer
-	defer func(func(d time.Duration) *time.Timer) {
+	defer func(nt func(d time.Duration) *time.Timer) {
 		newTimer = nt
-	}(nt)
+	}(newTimer)
 	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on it's own, will protect from triggering exponential backoff.
+		// Will never fire on its own, will protect from triggering exponential backoff.
 		return time.NewTimer(time.Hour)
 	}
 	defer func(v bool) { envconfig.TXTErrIgnore = v }(envconfig.TXTErrIgnore)
@@ -1253,12 +1260,11 @@ func TestTXTError(t *testing.T) {
 }
 
 func TestDNSResolverRetry(t *testing.T) {
-	nt := newTimer
-	defer func(func(d time.Duration) *time.Timer) {
+	defer func(nt func(d time.Duration) *time.Timer) {
 		newTimer = nt
-	}(nt)
+	}(newTimer)
 	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on it's own, will protect from triggering exponential backoff.
+		// Will never fire on its own, will protect from triggering exponential backoff.
 		return time.NewTimer(time.Hour)
 	}
 	b := NewBuilder()
@@ -1315,12 +1321,11 @@ func TestDNSResolverRetry(t *testing.T) {
 
 func TestCustomAuthority(t *testing.T) {
 	defer leakcheck.Check(t)
-	nt := newTimer
-	defer func(func(d time.Duration) *time.Timer) {
+	defer func(nt func(d time.Duration) *time.Timer) {
 		newTimer = nt
-	}(nt)
+	}(newTimer)
 	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on it's own, will protect from triggering exponential backoff.
+		// Will never fire on its own, will protect from triggering exponential backoff.
 		return time.NewTimer(time.Hour)
 	}
 
@@ -1430,12 +1435,11 @@ func TestCustomAuthority(t *testing.T) {
 // requests are made.
 func TestRateLimitedResolve(t *testing.T) {
 	defer leakcheck.Check(t)
-	nt := newTimer
-	defer func(func(d time.Duration) *time.Timer) {
+	defer func(nt func(d time.Duration) *time.Timer) {
 		newTimer = nt
-	}(nt)
+	}(newTimer)
 	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on it's own, will protect from triggering exponential backoff.
+		// Will never fire on its own, will protect from triggering exponential backoff.
 		return time.NewTimer(time.Hour)
 	}
 
@@ -1538,13 +1542,12 @@ func TestRateLimitedResolve(t *testing.T) {
 // Thus, test that it constantly sends errors to the grpc.ClientConn.
 func TestReportError(t *testing.T) {
 	const target = "notfoundaddress"
-	nt := newTimer
-	defer func(func(d time.Duration) *time.Timer) {
+	defer func(nt func(d time.Duration) *time.Timer) {
 		newTimer = nt
-	}(nt)
+	}(newTimer)
 	timerChan := make(chan *time.Timer, 1)
 	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on it's own, allowing us to control it.
+		// Will never fire on its own, allowing us to control it.
 		t := time.NewTimer(time.Hour)
 		timerChan <- t
 		return t
@@ -1570,8 +1573,6 @@ func TestReportError(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		// Should call ReportError().
 		err = <-cc.errChan
-		// Propagate.
-		time.Sleep(time.Millisecond)
 		if !strings.Contains(err.Error(), "hostLookup error") {
 			t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
 		}
