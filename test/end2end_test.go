@@ -1341,7 +1341,9 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 			return status.Error(codes.Internal, "arbitrary status")
 		},
 	}
-	if err := ss.Start(nil); err != nil {
+	// Use WithBlock() to guarantee that the RPC will be able to pick a healthy connection to
+	// go out on before we call Stop on the server.
+	if err := ss.Start(nil, grpc.WithBlock()); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
