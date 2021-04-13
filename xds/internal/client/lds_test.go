@@ -1126,13 +1126,11 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						Port:    "9999",
 						FilterChains: &FilterChainManager{
 							dstPrefixMap: map[string]*destPrefixEntry{
-								"0.0.0.0/0": {
-									net: zeroIP,
+								unspecifiedPrefixMapKey: {
 									srcTypeArr: [3]*sourcePrefixes{
 										{
 											srcPrefixMap: map[string]*sourcePrefixEntry{
-												"0.0.0.0/0": {
-													net: zeroIP,
+												unspecifiedPrefixMapKey: {
 													srcPortMap: map[int]*FilterChain{
 														0: {},
 													},
@@ -1216,13 +1214,11 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						Port:    "9999",
 						FilterChains: &FilterChainManager{
 							dstPrefixMap: map[string]*destPrefixEntry{
-								"0.0.0.0/0": {
-									net: zeroIP,
+								unspecifiedPrefixMapKey: {
 									srcTypeArr: [3]*sourcePrefixes{
 										{
 											srcPrefixMap: map[string]*sourcePrefixEntry{
-												"0.0.0.0/0": {
-													net: zeroIP,
+												unspecifiedPrefixMapKey: {
 													srcPortMap: map[int]*FilterChain{
 														0: {
 															SecurityCfg: &SecurityConfig{
@@ -1263,13 +1259,11 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						Port:    "9999",
 						FilterChains: &FilterChainManager{
 							dstPrefixMap: map[string]*destPrefixEntry{
-								"0.0.0.0/0": {
-									net: zeroIP,
+								unspecifiedPrefixMapKey: {
 									srcTypeArr: [3]*sourcePrefixes{
 										{
 											srcPrefixMap: map[string]*sourcePrefixEntry{
-												"0.0.0.0/0": {
-													net: zeroIP,
+												unspecifiedPrefixMapKey: {
 													srcPortMap: map[int]*FilterChain{
 														0: {
 															SecurityCfg: &SecurityConfig{

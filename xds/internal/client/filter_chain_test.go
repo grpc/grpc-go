@@ -35,6 +35,8 @@ import (
 	"google.golang.org/grpc/xds/internal/version"
 )
 
+// TestNewFilterChainImpl_Failure_BadMatchFields verifies cases where we have a
+// single filter chain with match criteria that contains unsupported fields.
 func TestNewFilterChainImpl_Failure_BadMatchFields(t *testing.T) {
 	tests := []struct {
 		desc string
@@ -131,6 +133,8 @@ func TestNewFilterChainImpl_Failure_BadMatchFields(t *testing.T) {
 	}
 }
 
+// TestNewFilterChainImpl_Failure_OverlappingMatchingRules verifies cases where
+// there are multiple filter chains and they have overlapping match rules.
 func TestNewFilterChainImpl_Failure_OverlappingMatchingRules(t *testing.T) {
 	tests := []struct {
 		desc string
@@ -218,6 +222,8 @@ func TestNewFilterChainImpl_Failure_OverlappingMatchingRules(t *testing.T) {
 	}
 }
 
+// TestNewFilterChainImpl_Failure_BadSecurityConfig verifies cases where the
+// security configuration in the filter chain is invalid.
 func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 	tests := []struct {
 		desc    string
@@ -369,6 +375,8 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 	}
 }
 
+// TestNewFilterChainImpl_Success_SecurityConfig verifies cases where the
+// security configuration in the filter chain contains valid data.
 func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 	tests := []struct {
 		desc   string
@@ -387,13 +395,11 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
-					"0.0.0.0/0": {
-						net: zeroIP,
+					unspecifiedPrefixMapKey: {
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
-									"0.0.0.0/0": {
-										net: zeroIP,
+									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -444,13 +450,11 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
-					"0.0.0.0/0": {
-						net: zeroIP,
+					unspecifiedPrefixMapKey: {
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
-									"0.0.0.0/0": {
-										net: zeroIP,
+									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												SecurityCfg: &SecurityConfig{
@@ -526,13 +530,11 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
-					"0.0.0.0/0": {
-						net: zeroIP,
+					unspecifiedPrefixMapKey: {
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
-									"0.0.0.0/0": {
-										net: zeroIP,
+									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												SecurityCfg: &SecurityConfig{
@@ -576,6 +578,153 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 	}
 }
 
+// TestNewFilterChainImpl_Success_UnsupportedMatchFields verifies cases where
+// there are multiple filter chains, and one of them is valid while the other
+// contains unsupported match fields. These configurations should lead to
+// success at config validation time and the filter chains which contains
+// unsupported match fields will be skipped at lookup time.
+func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
+	unspecifiedEntry := &destPrefixEntry{
+		srcTypeArr: [3]*sourcePrefixes{
+			{
+				srcPrefixMap: map[string]*sourcePrefixEntry{
+					unspecifiedPrefixMapKey: {
+						srcPortMap: map[int]*FilterChain{
+							0: {},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		desc   string
+		lis    *v3listenerpb.Listener
+		wantFC *FilterChainManager
+	}{
+		{
+			desc: "unsupported destination port",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "good-chain",
+					},
+					{
+						Name: "unsupported-destination-port",
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges:    []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)},
+							DestinationPort: &wrapperspb.UInt32Value{Value: 666},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					unspecifiedPrefixMapKey: unspecifiedEntry,
+				},
+				def: &FilterChain{},
+			},
+		},
+		{
+			desc: "unsupported server names",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "good-chain",
+					},
+					{
+						Name: "unsupported-server-names",
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)},
+							ServerNames:  []string{"example-server"},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					unspecifiedPrefixMapKey: unspecifiedEntry,
+					"192.168.0.0/16": {
+						net: ipNetFromCIDR("192.168.2.2/16"),
+					},
+				},
+				def: &FilterChain{},
+			},
+		},
+		{
+			desc: "unsupported transport protocol",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "good-chain",
+					},
+					{
+						Name: "unsupported-transport-protocol",
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges:      []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)},
+							TransportProtocol: "tls",
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					unspecifiedPrefixMapKey: unspecifiedEntry,
+					"192.168.0.0/16": {
+						net: ipNetFromCIDR("192.168.2.2/16"),
+					},
+				},
+				def: &FilterChain{},
+			},
+		},
+		{
+			desc: "unsupported application protocol",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "good-chain",
+					},
+					{
+						Name: "unsupported-application-protocol",
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges:         []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)},
+							ApplicationProtocols: []string{"h2"},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					unspecifiedPrefixMapKey: unspecifiedEntry,
+					"192.168.0.0/16": {
+						net: ipNetFromCIDR("192.168.2.2/16"),
+					},
+				},
+				def: &FilterChain{},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			gotFC, err := NewFilterChainManager(test.lis)
+			if err != nil {
+				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
+			}
+			if !cmp.Equal(gotFC, test.wantFC, cmp.AllowUnexported(FilterChainManager{}, destPrefixEntry{}, sourcePrefixes{}, sourcePrefixEntry{})) {
+				t.Fatalf("NewFilterChainManager() returned %+v, want: %+v", gotFC, test.wantFC)
+			}
+		})
+	}
+}
+
+// TestNewFilterChainImpl_Success_AllCombinations verifies different
+// combinations of the supported match criteria.
 func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 	tests := []struct {
 		desc   string
@@ -587,7 +736,22 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 			lis: &v3listenerpb.Listener{
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
+						// Unspecified destination prefix.
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{},
+					},
+					{
+						// v4 wildcard destination prefix.
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
+							SourceType:   v3listenerpb.FilterChainMatch_EXTERNAL,
+						},
+					},
+					{
+						// v6 wildcard destination prefix.
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("::", 0)},
+							SourceType:   v3listenerpb.FilterChainMatch_EXTERNAL,
+						},
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)}},
@@ -600,13 +764,43 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
-					"0.0.0.0/0": {
-						net: zeroIP,
+					unspecifiedPrefixMapKey: {
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
-									"0.0.0.0/0": {
-										net: zeroIP,
+									unspecifiedPrefixMapKey: {
+										srcPortMap: map[int]*FilterChain{
+											0: {},
+										},
+									},
+								},
+							},
+						},
+					},
+					"0.0.0.0/0": {
+						net: ipNetFromCIDR("0.0.0.0/0"),
+						srcTypeArr: [3]*sourcePrefixes{
+							nil,
+							nil,
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									unspecifiedPrefixMapKey: {
+										srcPortMap: map[int]*FilterChain{
+											0: {},
+										},
+									},
+								},
+							},
+						},
+					},
+					"::/0": {
+						net: ipNetFromCIDR("::/0"),
+						srcTypeArr: [3]*sourcePrefixes{
+							nil,
+							nil,
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -620,8 +814,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
-									"0.0.0.0/0": {
-										net: zeroIP,
+									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -635,8 +828,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
-									"0.0.0.0/0": {
-										net: zeroIP,
+									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -667,14 +859,12 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
-					"0.0.0.0/0": {
-						net: zeroIP,
+					unspecifiedPrefixMapKey: {
 						srcTypeArr: [3]*sourcePrefixes{
 							nil,
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
-									"0.0.0.0/0": {
-										net: zeroIP,
+									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -690,8 +880,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							nil,
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
-									"0.0.0.0/0": {
-										net: zeroIP,
+									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -722,8 +911,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
-					"0.0.0.0/0": {
-						net: zeroIP,
+					unspecifiedPrefixMapKey: {
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
@@ -776,13 +964,11 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
-					"0.0.0.0/0": {
-						net: zeroIP,
+					unspecifiedPrefixMapKey: {
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
-									"0.0.0.0/0": {
-										net: zeroIP,
+									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
 											1: {},
 											2: {},
@@ -874,13 +1060,11 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
-					"0.0.0.0/0": {
-						net: zeroIP,
+					unspecifiedPrefixMapKey: {
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
-									"0.0.0.0/0": {
-										net: zeroIP,
+									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -894,8 +1078,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
-									"0.0.0.0/0": {
-										net: zeroIP,
+									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -909,8 +1092,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						srcTypeArr: [3]*sourcePrefixes{
 							{
 								srcPrefixMap: map[string]*sourcePrefixEntry{
-									"0.0.0.0/0": {
-										net: zeroIP,
+									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
 											0: {},
 										},
@@ -1128,18 +1310,24 @@ func TestLookup_Successes(t *testing.T) {
 	lisWithoutDefaultChain := &v3listenerpb.Listener{
 		FilterChains: []*v3listenerpb.FilterChain{
 			{
-				TransportSocket: transportSocketWithInstanceName("wildcard"),
+				TransportSocket: transportSocketWithInstanceName("unspecified-dest-and-source-prefix"),
 			},
 			{
 				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
-					SourceType:   v3listenerpb.FilterChainMatch_EXTERNAL,
+					PrefixRanges:       []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
+					SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
 				},
-				TransportSocket: transportSocketWithInstanceName("any-destination-prefix"),
+				TransportSocket: transportSocketWithInstanceName("wildcard-prefixes-v4"),
+			},
+			{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("::", 0)},
+				},
+				TransportSocket: transportSocketWithInstanceName("wildcard-source-prefix-v6"),
 			},
 			{
 				FilterChainMatch: &v3listenerpb.FilterChainMatch{PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)}},
-				TransportSocket:  transportSocketWithInstanceName("specific-destination-prefix-wildcard-source-type"),
+				TransportSocket:  transportSocketWithInstanceName("specific-destination-prefix-unspecified-source-type"),
 			},
 			{
 				FilterChainMatch: &v3listenerpb.FilterChainMatch{
@@ -1184,7 +1372,18 @@ func TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{SecurityCfg: &SecurityConfig{IdentityInstanceName: "default"}},
 		},
 		{
-			desc: "wildcard destination match",
+			desc: "unspecified destination match",
+			lis:  lisWithoutDefaultChain,
+			params: FilterChainLookupParams{
+				IsUnspecifiedListener: true,
+				DestAddr:              net.ParseIP("2001:68::db8"),
+				SourceAddr:            net.IPv4(10, 1, 1, 1),
+				SourcePort:            1,
+			},
+			wantFC: &FilterChain{SecurityCfg: &SecurityConfig{IdentityInstanceName: "unspecified-dest-and-source-prefix"}},
+		},
+		{
+			desc: "wildcard destination match v4",
 			lis:  lisWithoutDefaultChain,
 			params: FilterChainLookupParams{
 				IsUnspecifiedListener: true,
@@ -1192,18 +1391,18 @@ func TestLookup_Successes(t *testing.T) {
 				SourceAddr:            net.IPv4(10, 1, 1, 1),
 				SourcePort:            1,
 			},
-			wantFC: &FilterChain{SecurityCfg: &SecurityConfig{IdentityInstanceName: "wildcard"}},
+			wantFC: &FilterChain{SecurityCfg: &SecurityConfig{IdentityInstanceName: "wildcard-prefixes-v4"}},
 		},
 		{
-			desc: "ANY destination match",
+			desc: "wildcard source match v6",
 			lis:  lisWithoutDefaultChain,
 			params: FilterChainLookupParams{
 				IsUnspecifiedListener: true,
-				DestAddr:              net.IPv4(10, 1, 1, 1),
-				SourceAddr:            net.IPv4(10, 1, 1, 2),
+				DestAddr:              net.ParseIP("2001:68::1"),
+				SourceAddr:            net.ParseIP("2001:68::2"),
 				SourcePort:            1,
 			},
-			wantFC: &FilterChain{SecurityCfg: &SecurityConfig{IdentityInstanceName: "any-destination-prefix"}},
+			wantFC: &FilterChain{SecurityCfg: &SecurityConfig{IdentityInstanceName: "wildcard-source-prefix-v6"}},
 		},
 		{
 			desc: "specific destination and wildcard source type match",
@@ -1214,7 +1413,7 @@ func TestLookup_Successes(t *testing.T) {
 				SourceAddr:            net.IPv4(192, 168, 100, 1),
 				SourcePort:            80,
 			},
-			wantFC: &FilterChain{SecurityCfg: &SecurityConfig{IdentityInstanceName: "specific-destination-prefix-wildcard-source-type"}},
+			wantFC: &FilterChain{SecurityCfg: &SecurityConfig{IdentityInstanceName: "specific-destination-prefix-unspecified-source-type"}},
 		},
 		{
 			desc: "specific destination and source type match",
