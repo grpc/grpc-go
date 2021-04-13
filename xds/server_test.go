@@ -150,7 +150,7 @@ func (s) TestNewServer(t *testing.T) {
 				newGRPCServer = origNewGRPCServer
 			}()
 
-			s := NewGRPCServer(test.serverOpts, nil)
+			s := NewGRPCServer(test.serverOpts...)
 			defer s.Stop()
 
 			if s.xdsCredsInUse != test.wantXDSCredsInUse {
@@ -167,7 +167,7 @@ func (s) TestRegisterService(t *testing.T) {
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServerInterface { return fs }
 	defer func() { newGRPCServer = origNewGRPCServer }()
 
-	s := NewGRPCServer(nil, nil)
+	s := NewGRPCServer()
 	defer s.Stop()
 
 	s.RegisterService(&grpc.ServiceDesc{}, nil)
@@ -314,11 +314,11 @@ func (s) TestServeSuccess(t *testing.T) {
 	// Create a new xDS-enabled gRPC server and pass it a server option to get
 	// notified about serving mode changes.
 	modeChangeCh := testutils.NewChannel()
-	modeChangeOption := &ServingModeServerOption{Callback: func(addr net.Addr, mode ServingMode, err error) {
+	modeChangeOption := WithServingModeCallback(func(addr net.Addr, mode ServingMode, err error) {
 		t.Logf("server mode change callback invoked for listener %q with mode %q and error %v", addr.String(), mode, err)
 		modeChangeCh.Send(mode)
-	}}
-	server := NewGRPCServer(nil, []ServerOption{modeChangeOption})
+	})
+	server := NewGRPCServer(modeChangeOption)
 	defer server.Stop()
 
 	lis, err := xdstestutils.LocalTCPListener()
@@ -430,7 +430,7 @@ func (s) TestServeWithStop(t *testing.T) {
 
 	// Note that we are not deferring the Stop() here since we explicitly call
 	// it after the LDS watch has been registered.
-	server := NewGRPCServer(nil, nil)
+	server := NewGRPCServer()
 
 	lis, err := xdstestutils.LocalTCPListener()
 	if err != nil {
@@ -488,7 +488,7 @@ func (s) TestServeBootstrapFailure(t *testing.T) {
 	// Since we have not setup fakes for anything, this will attempt to do real
 	// xDS bootstrap and that will fail because the bootstrap environment
 	// variable is not set.
-	server := NewGRPCServer(nil, nil)
+	server := NewGRPCServer()
 	defer server.Stop()
 
 	lis, err := xdstestutils.LocalTCPListener()
@@ -559,7 +559,7 @@ func (s) TestServeBootstrapConfigInvalid(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create xds server credentials: %v", err)
 			}
-			server := NewGRPCServer([]grpc.ServerOption{grpc.Creds(xdsCreds)}, nil)
+			server := NewGRPCServer(grpc.Creds(xdsCreds))
 			defer server.Stop()
 
 			lis, err := xdstestutils.LocalTCPListener()
@@ -595,7 +595,7 @@ func (s) TestServeNewClientFailure(t *testing.T) {
 	}
 	defer func() { newXDSClient = origNewXDSClient }()
 
-	server := NewGRPCServer(nil, nil)
+	server := NewGRPCServer()
 	defer server.Stop()
 
 	lis, err := xdstestutils.LocalTCPListener()
@@ -627,7 +627,7 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 	fs, clientCh, cleanup := setupOverrides()
 	defer cleanup()
 
-	server := NewGRPCServer(nil, nil)
+	server := NewGRPCServer()
 	defer server.Stop()
 
 	lis, err := xdstestutils.LocalTCPListener()
@@ -719,7 +719,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 		t.Fatalf("failed to create xds server credentials: %v", err)
 	}
 
-	server := NewGRPCServer([]grpc.ServerOption{grpc.Creds(xdsCreds)}, nil)
+	server := NewGRPCServer(grpc.Creds(xdsCreds))
 	defer server.Stop()
 
 	lis, err := xdstestutils.LocalTCPListener()

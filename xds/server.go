@@ -106,22 +106,17 @@ type GRPCServer struct {
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 // release.
-func NewGRPCServer(gOpts []grpc.ServerOption, xOpts []ServerOption) *GRPCServer {
-	// Handle the xDS specific server options.
-	opts := &serverOptions{}
-	for _, o := range xOpts {
-		o.apply(opts)
-	}
-
+func NewGRPCServer(opts ...grpc.ServerOption) *GRPCServer {
+	so, grpcOpts := handleServerOptions(opts)
 	newOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(xdsUnaryInterceptor),
 		grpc.ChainStreamInterceptor(xdsStreamInterceptor),
 	}
-	newOpts = append(newOpts, gOpts...)
+	newOpts = append(newOpts, grpcOpts...)
 	s := &GRPCServer{
 		gs:   newGRPCServer(newOpts...),
 		quit: grpcsync.NewEvent(),
-		opts: opts,
+		opts: so,
 	}
 	s.logger = prefixLogger(s)
 	s.logger.Infof("Created xds.GRPCServer")
@@ -140,6 +135,23 @@ func NewGRPCServer(gOpts []grpc.ServerOption, xOpts []ServerOption) *GRPCServer 
 
 	s.logger.Infof("xDS credentials in use: %v", s.xdsCredsInUse)
 	return s
+}
+
+// handleServerOptions iterates through the list of server options passed in by
+// the user, and handles the xDS server specific options and returns the gRPC
+// specific options which are to be passed to grpc.NewServer.
+func handleServerOptions(opts []grpc.ServerOption) (*serverOptions, []grpc.ServerOption) {
+	so := &serverOptions{}
+	var grpcOpts []grpc.ServerOption
+	for _, opt := range opts {
+		switch o := opt.(type) {
+		case *smcOption:
+			so.modeCallback = o.cb
+		default:
+			grpcOpts = append(grpcOpts, opt)
+		}
+	}
+	return so, grpcOpts
 }
 
 // RegisterService registers a service and its implementation to the underlying

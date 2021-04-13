@@ -2,7 +2,7 @@
 
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,14 +120,13 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 
 	// Create a server option to get notified about serving mode changes.
 	modeTracker := newModeTracker()
-	opt := &xds.ServingModeServerOption{Callback: func(addr net.Addr, mode xds.ServingMode, err error) {
+	modeChangeOpt := xds.WithServingModeCallback(func(addr net.Addr, mode xds.ServingMode, err error) {
 		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), mode, err)
 		modeTracker.updateMode(addr, mode)
-	}}
-	xdsServerOptions := []xds.ServerOption{opt}
+	})
 
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
-	server := xds.NewGRPCServer([]grpc.ServerOption{grpc.Creds(creds)}, xdsServerOptions)
+	server := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt)
 	defer server.Stop()
 	testpb.RegisterTestServiceServer(server, &testService{})
 

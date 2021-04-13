@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,32 +18,35 @@
 
 package xds
 
-import "net"
+import (
+	"net"
+
+	"google.golang.org/grpc"
+)
 
 // Experimental
 //
 // Notice: All APIs in this file are EXPERIMENTAL and may be changed or removed
 // in a later release.
 
-// A ServerOption sets options which are specific to xDS functionality provided
-// by GRPCServer. Options related to functionality provided by grpc.Server must
-// be specified using grpc.ServerOption.
-type ServerOption interface {
-	apply(*serverOptions)
+// WithServingModeCallback returns a grpc.ServerOption which allows users to
+// register a callback to get notified about serving mode changes.
+//
+// NOTE: The returned ServerOption must *only* be used in a call to
+// xds.NewGRPCServer() and must not be used in a call to grpc.NewServer().
+func WithServingModeCallback(cb ServingModeCallback) grpc.ServerOption {
+	return &smcOption{cb: cb}
+}
+
+// smcOption is a server option containing a callback to be invoked when the
+// serving mode changes.
+type smcOption struct {
+	grpc.ServerOption
+	cb ServingModeCallback
 }
 
 type serverOptions struct {
 	modeCallback ServingModeCallback
-}
-
-// ServingModeServerOption is a ServerOption which allows users to register a
-// callback to get notified about serving mode changes.
-type ServingModeServerOption struct {
-	Callback ServingModeCallback
-}
-
-func (s *ServingModeServerOption) apply(opts *serverOptions) {
-	opts.modeCallback = s.Callback
 }
 
 // ServingMode indicates the current mode of operation of the server.

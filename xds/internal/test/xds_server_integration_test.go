@@ -171,7 +171,7 @@ func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, fun
 	}
 
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
-	server := xds.NewGRPCServer([]grpc.ServerOption{grpc.Creds(creds)}, nil)
+	server := xds.NewGRPCServer(grpc.Creds(creds))
 	testpb.RegisterTestServiceServer(server, &testService{})
 
 	// Create a local listener and pass it to Serve().
