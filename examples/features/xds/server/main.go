@@ -84,7 +84,7 @@ func main() {
 		}
 	}
 
-	greeterServer := xds.NewGRPCServer([]grpc.ServerOption{grpc.Creds(creds)}, nil)
+	greeterServer := xds.NewGRPCServer(grpc.Creds(creds))
 	pb.RegisterGreeterServer(greeterServer, &server{serverName: determineHostname()})
 
 	healthPort := fmt.Sprintf(":%d", *port+1)
