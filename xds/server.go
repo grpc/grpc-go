@@ -275,14 +275,7 @@ func (s *GRPCServer) handleServingModeChanges(updateCh *buffer.Unbounded) {
 		case u := <-updateCh.Get():
 			updateCh.Load()
 			args := u.(*modeChangeArgs)
-			var mode ServingMode
-			switch args.mode {
-			case server.ServingModeNotServing:
-				mode = ServingModeNotServing
-			case server.ServingModeServing:
-				mode = ServingModeServing
-			}
-			if mode == ServingModeNotServing {
+			if args.mode == ServingModeNotServing {
 				// We type assert our underlying gRPC server to the real
 				// grpc.Server here before trying to initiate the drain
 				// operation. This approach avoids performing the same type
@@ -295,7 +288,7 @@ func (s *GRPCServer) handleServingModeChanges(updateCh *buffer.Unbounded) {
 			}
 			if s.opts.modeCallback != nil {
 				s.opts.modeCallback(args.addr, ServingModeChangeArgs{
-					Mode: mode,
+					Mode: args.mode,
 					Err:  args.err,
 				})
 			}
