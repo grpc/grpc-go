@@ -1197,7 +1197,7 @@ func (ac *addrConn) resetTransport() {
 		ac.mu.Lock()
 		if ac.state == connectivity.Shutdown {
 			ac.mu.Unlock()
-			newTr.Close()
+			newTr.Close(fmt.Errorf("reached connectivity state: SHUTDOWN"))
 			return
 		}
 		ac.curAddr = addr
@@ -1329,7 +1329,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 	select {
 	case <-time.After(time.Until(connectDeadline)):
 		// We didn't get the preface in time.
-		newTr.Close()
+		newTr.Close(fmt.Errorf("failed to receive server preface within timeout"))
 		channelz.Warningf(logger, ac.channelzID, "grpc: addrConn.createTransport failed to connect to %v: didn't receive server preface in time. Reconnecting...", addr)
 		return nil, nil, errors.New("timed out waiting for server handshake")
 	case <-prefaceReceived:

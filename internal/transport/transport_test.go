@@ -481,7 +481,7 @@ func (s) TestInflightStreamClosing(t *testing.T) {
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer cancel()
 	defer server.stop()
-	defer client.Close()
+	defer client.Close(fmt.Errorf("closed manually by test"))
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -550,7 +550,7 @@ func (s) TestClientSendAndReceive(t *testing.T) {
 	if recvErr != io.EOF {
 		t.Fatalf("Error: %v; want <EOF>", recvErr)
 	}
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 	server.stop()
 }
 
@@ -560,7 +560,7 @@ func (s) TestClientErrorNotify(t *testing.T) {
 	go server.stop()
 	// ct.reader should detect the error and activate ct.Error().
 	<-ct.Error()
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 }
 
 func performOneRPC(ct ClientTransport) {
@@ -597,7 +597,7 @@ func (s) TestClientMix(t *testing.T) {
 	}(s)
 	go func(ct ClientTransport) {
 		<-ct.Error()
-		ct.Close()
+		ct.Close(fmt.Errorf("closed manually by test"))
 	}(ct)
 	for i := 0; i < 1000; i++ {
 		time.Sleep(10 * time.Millisecond)
@@ -636,7 +636,7 @@ func (s) TestLargeMessage(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 	server.stop()
 }
 
@@ -653,7 +653,7 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 	server, ct, cancel := setUpWithOptions(t, 0, sc, delayRead, co)
 	defer cancel()
 	defer server.stop()
-	defer ct.Close()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
 	server.mu.Lock()
 	ready := server.ready
 	server.mu.Unlock()
@@ -831,7 +831,7 @@ func (s) TestLargeMessageSuspension(t *testing.T) {
 	if _, err := s.Read(make([]byte, 8)); err.Error() != expectedErr.Error() {
 		t.Fatalf("Read got %v of type %T, want %v", err, err, expectedErr)
 	}
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 	server.stop()
 }
 
@@ -841,7 +841,7 @@ func (s) TestMaxStreams(t *testing.T) {
 	}
 	server, ct, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer cancel()
-	defer ct.Close()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
 	defer server.stop()
 	callHdr := &CallHdr{
 		Host:   "localhost",
@@ -901,7 +901,7 @@ func (s) TestMaxStreams(t *testing.T) {
 	// Close the first stream created so that the new stream can finally be created.
 	ct.CloseStream(s, nil)
 	<-done
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 	<-ct.writerDone
 	if ct.maxConcurrentStreams != 1 {
 		t.Fatalf("ct.maxConcurrentStreams: %d, want 1", ct.maxConcurrentStreams)
@@ -960,7 +960,7 @@ func (s) TestServerContextCanceledOnClosedConnection(t *testing.T) {
 		sc.mu.Unlock()
 		break
 	}
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 	select {
 	case <-ss.Context().Done():
 		if ss.Context().Err() != context.Canceled {
@@ -980,7 +980,7 @@ func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 	server, client, cancel := setUpWithOptions(t, 0, &ServerConfig{}, notifyCall, connectOptions)
 	defer cancel()
 	defer server.stop()
-	defer client.Close()
+	defer client.Close(fmt.Errorf("closed manually by test"))
 
 	waitWhileTrue(t, func() (bool, error) {
 		server.mu.Lock()
@@ -1069,7 +1069,7 @@ func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer cancel()
 	defer server.stop()
-	defer client.Close()
+	defer client.Close(fmt.Errorf("closed manually by test"))
 	waitWhileTrue(t, func() (bool, error) {
 		server.mu.Lock()
 		defer server.mu.Unlock()
@@ -1302,7 +1302,7 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
-	defer ct.Close()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
 	str, err := ct.NewStream(connectCtx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("Error while creating stream: %v", err)
@@ -1345,7 +1345,7 @@ func (s) TestEncodingRequiredStatus(t *testing.T) {
 	if !testutils.StatusErrEqual(s.Status().Err(), encodingTestStatus.Err()) {
 		t.Fatalf("stream with status %v, want %v", s.Status(), encodingTestStatus)
 	}
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 	server.stop()
 }
 
@@ -1367,7 +1367,7 @@ func (s) TestInvalidHeaderField(t *testing.T) {
 	if se, ok := status.FromError(err); !ok || se.Code() != codes.Internal || !strings.Contains(err.Error(), expectedInvalidHeaderField) {
 		t.Fatalf("Read got error %v, want error with code %s and contains %q", err, codes.Internal, expectedInvalidHeaderField)
 	}
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 	server.stop()
 }
 
@@ -1375,7 +1375,7 @@ func (s) TestHeaderChanClosedAfterReceivingAnInvalidHeader(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, invalidHeaderField)
 	defer cancel()
 	defer server.stop()
-	defer ct.Close()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	s, err := ct.NewStream(ctx, &CallHdr{Host: "localhost", Method: "foo"})
@@ -1481,7 +1481,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	server, client, cancel := setUpWithOptions(t, 0, sc, pingpong, co)
 	defer cancel()
 	defer server.stop()
-	defer client.Close()
+	defer client.Close(fmt.Errorf("closed manually by test"))
 	waitWhileTrue(t, func() (bool, error) {
 		server.mu.Lock()
 		defer server.mu.Unlock()
@@ -1563,7 +1563,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	}
 	// Close down both server and client so that their internals can be read without data
 	// races.
-	client.Close()
+	client.Close(fmt.Errorf("closed manually by test"))
 	st.Close()
 	<-st.readerDone
 	<-st.writerDone
@@ -1762,7 +1762,7 @@ func runPingPongTest(t *testing.T, msgSize int) {
 	server, client, cancel := setUp(t, 0, 0, pingpong)
 	defer cancel()
 	defer server.stop()
-	defer client.Close()
+	defer client.Close(fmt.Errorf("closed manually by test"))
 	waitWhileTrue(t, func() (bool, error) {
 		server.mu.Lock()
 		defer server.mu.Unlock()
@@ -1850,7 +1850,7 @@ func (s) TestHeaderTblSize(t *testing.T) {
 
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
 	defer cancel()
-	defer ct.Close()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
 	defer server.stop()
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -1969,7 +1969,7 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClientTransport(): %v", err)
 	}
-	defer tr.Close()
+	defer tr.Close(fmt.Errorf("closed manually by test"))
 
 	wantAttr := attributes.New(testAttrKey, testAttrVal)
 	if gotAttr := creds.attr; !cmp.Equal(gotAttr, wantAttr, cmp.AllowUnexported(attributes.Attributes{})) {
