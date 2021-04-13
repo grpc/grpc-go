@@ -23,7 +23,7 @@ import (
 	"net"
 
 	"google.golang.org/grpc/credentials"
-	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
+	"google.golang.org/grpc/internal"
 )
 
 const cfeClusterName = "google-cfe"
@@ -54,7 +54,7 @@ func (c *clusterTransportCreds) ClientHandshake(ctx context.Context, authority s
 	if chi.Attributes == nil {
 		return c.tls.ClientHandshake(ctx, authority, rawConn)
 	}
-	cn, ok := xdsinternal.GetHandshakeClusterName(chi.Attributes)
+	cn, ok := internal.GetXDSHandshakeClusterName(chi.Attributes)
 	if !ok || cn == cfeClusterName {
 		return c.tls.ClientHandshake(ctx, authority, rawConn)
 	}

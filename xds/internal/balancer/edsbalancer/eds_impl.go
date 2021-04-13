@@ -23,19 +23,18 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
-
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal"
+	xdsi "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 	"google.golang.org/grpc/xds/internal/client"
@@ -58,7 +57,7 @@ type localityConfig struct {
 type balancerGroupWithConfig struct {
 	bg              *balancergroup.BalancerGroup
 	stateAggregator *weightedaggregator.Aggregator
-	configs         map[internal.LocalityID]*localityConfig
+	configs         map[xdsi.LocalityID]*localityConfig
 }
 
 // edsBalancerImpl does load balancing based on the EDS responses. Note that it
@@ -261,7 +260,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponse(edsResp xdsclient.EndpointsUpd
 			bgwc = &balancerGroupWithConfig{
 				bg:              balancergroup.New(ccPriorityWrapper, edsImpl.buildOpts, stateAggregator, edsImpl.loadReporter, edsImpl.logger),
 				stateAggregator: stateAggregator,
-				configs:         make(map[internal.LocalityID]*localityConfig),
+				configs:         make(map[xdsi.LocalityID]*localityConfig),
 			}
 			edsImpl.priorityToLocalities[priority] = bgwc
 			priorityChanged = true
@@ -295,7 +294,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponsePerPriority(bgwc *balancerGroup
 	// newLocalitiesSet contains all names of localities in the new EDS response
 	// for the same priority. It's used to delete localities that are removed in
 	// the new EDS response.
-	newLocalitiesSet := make(map[internal.LocalityID]struct{})
+	newLocalitiesSet := make(map[xdsi.LocalityID]struct{})
 	var rebuildStateAndPicker bool
 	for _, locality := range newLocalities {
 		// One balancer for each locality.
@@ -498,7 +497,7 @@ func (ebwcc *edsBalancerWrapperCC) NewSubConn(addrs []resolver.Address, opts bal
 	clusterName := ebwcc.parent.getClusterName()
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
-		newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
+		newAddrs[i] = internal.SetXDSHandshakeClusterName(addr, clusterName)
 	}
 	return ebwcc.parent.newSubConn(ebwcc.priority, newAddrs, opts)
 }
@@ -507,7 +506,7 @@ func (ebwcc *edsBalancerWrapperCC) UpdateAddresses(sc balancer.SubConn, addrs []
 	clusterName := ebwcc.parent.getClusterName()
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
-		newAddrs[i] = xdsinternal.SetHandshakeClusterName(addr, clusterName)
+		newAddrs[i] = internal.SetXDSHandshakeClusterName(addr, clusterName)
 	}
 	ebwcc.ClientConn.UpdateAddresses(sc, newAddrs)
 }
