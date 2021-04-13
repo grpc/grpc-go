@@ -314,9 +314,9 @@ func (s) TestServeSuccess(t *testing.T) {
 	// Create a new xDS-enabled gRPC server and pass it a server option to get
 	// notified about serving mode changes.
 	modeChangeCh := testutils.NewChannel()
-	modeChangeOption := WithServingModeCallback(func(addr net.Addr, mode ServingMode, err error) {
-		t.Logf("server mode change callback invoked for listener %q with mode %q and error %v", addr.String(), mode, err)
-		modeChangeCh.Send(mode)
+	modeChangeOption := ServingModeCallback(func(addr net.Addr, args ServingModeChangeArgs) {
+		t.Logf("server mode change callback invoked for listener %q with mode %q and error %v", addr.String(), args.Mode, args.Err)
+		modeChangeCh.Send(args.Mode)
 	})
 	server := NewGRPCServer(modeChangeOption)
 	defer server.Stop()

@@ -58,7 +58,7 @@ var (
 	// GetServerCredentials returns the transport credentials configured on a
 	// gRPC server. An xDS-enabled server needs to know what type of credentials
 	// is configured on the underlying gRPC server. This is set by server.go.
-	GetServerCredentials interface{} // func (*grpc.Server) credentials.TransportCredentialsa
+	GetServerCredentials interface{} // func (*grpc.Server) credentials.TransportCredentials
 	// DrainServerTransports initiates a graceful close of existing connections
 	// on a gRPC server accepted on the provided listener address. An
 	// xDS-enabled server invokes this method on a grpc.Server when a particular

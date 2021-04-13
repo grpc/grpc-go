@@ -71,16 +71,7 @@ func init() {
 		return srv.opts.creds
 	}
 	internal.DrainServerTransports = func(srv *Server, addr string) {
-		srv.mu.Lock()
-		for a, conns := range srv.conns {
-			if a != addr {
-				continue
-			}
-			for st := range conns {
-				st.Drain()
-			}
-		}
-		srv.mu.Unlock()
+		srv.drainServerTransports(addr)
 	}
 }
 
@@ -843,6 +834,15 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 		s.serveStreams(st)
 		s.removeConn(lisAddr, st)
 	}()
+}
+
+func (s *Server) drainServerTransports(addr string) {
+	s.mu.Lock()
+	conns := s.conns[addr]
+	for st := range conns {
+		st.Drain()
+	}
+	s.mu.Unlock()
 }
 
 // newHTTP2Transport sets up a http/2 transport (using the

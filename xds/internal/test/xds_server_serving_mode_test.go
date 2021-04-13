@@ -120,9 +120,9 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 
 	// Create a server option to get notified about serving mode changes.
 	modeTracker := newModeTracker()
-	modeChangeOpt := xds.WithServingModeCallback(func(addr net.Addr, mode xds.ServingMode, err error) {
-		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), mode, err)
-		modeTracker.updateMode(addr, mode)
+	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
+		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
+		modeTracker.updateMode(addr, args.Mode)
 	})
 
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.

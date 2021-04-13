@@ -107,16 +107,15 @@ type GRPCServer struct {
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 // release.
 func NewGRPCServer(opts ...grpc.ServerOption) *GRPCServer {
-	so, grpcOpts := handleServerOptions(opts)
 	newOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(xdsUnaryInterceptor),
 		grpc.ChainStreamInterceptor(xdsStreamInterceptor),
 	}
-	newOpts = append(newOpts, grpcOpts...)
+	newOpts = append(newOpts, opts...)
 	s := &GRPCServer{
 		gs:   newGRPCServer(newOpts...),
 		quit: grpcsync.NewEvent(),
-		opts: so,
+		opts: handleServerOptions(opts),
 	}
 	s.logger = prefixLogger(s)
 	s.logger.Infof("Created xds.GRPCServer")
@@ -138,20 +137,15 @@ func NewGRPCServer(opts ...grpc.ServerOption) *GRPCServer {
 }
 
 // handleServerOptions iterates through the list of server options passed in by
-// the user, and handles the xDS server specific options and returns the gRPC
-// specific options which are to be passed to grpc.NewServer.
-func handleServerOptions(opts []grpc.ServerOption) (*serverOptions, []grpc.ServerOption) {
+// the user, and handles the xDS server specific options.
+func handleServerOptions(opts []grpc.ServerOption) *serverOptions {
 	so := &serverOptions{}
-	var grpcOpts []grpc.ServerOption
 	for _, opt := range opts {
-		switch o := opt.(type) {
-		case *smcOption:
-			so.modeCallback = o.cb
-		default:
-			grpcOpts = append(grpcOpts, opt)
+		if o, ok := opt.(serverOption); ok {
+			o.applyServerOption(so)
 		}
 	}
-	return so, grpcOpts
+	return so
 }
 
 // RegisterService registers a service and its implementation to the underlying
@@ -281,14 +275,14 @@ func (s *GRPCServer) handleServingModeChanges(updateCh *buffer.Unbounded) {
 		case u := <-updateCh.Get():
 			updateCh.Load()
 			args := u.(*modeChangeArgs)
-			var ss ServingMode
+			var mode ServingMode
 			switch args.mode {
 			case server.ServingModeNotServing:
-				ss = ServingModeNotServing
+				mode = ServingModeNotServing
 			case server.ServingModeServing:
-				ss = ServingModeServing
+				mode = ServingModeServing
 			}
-			if ss == ServingModeNotServing {
+			if mode == ServingModeNotServing {
 				// We type assert our underlying gRPC server to the real
 				// grpc.Server here before trying to initiate the drain
 				// operation. This approach avoids performing the same type
@@ -300,7 +294,10 @@ func (s *GRPCServer) handleServingModeChanges(updateCh *buffer.Unbounded) {
 				}
 			}
 			if s.opts.modeCallback != nil {
-				s.opts.modeCallback(args.addr, ss, args.err)
+				s.opts.modeCallback(args.addr, ServingModeChangeArgs{
+					Mode: mode,
+					Err:  args.err,
+				})
 			}
 		}
 	}
