@@ -106,11 +106,11 @@ func TestParseConfig(t *testing.T) {
 			name: "OK",
 			js:   testJSONConfig,
 			want: &LBConfig{
-				Cluster:                    "test_cluster",
-				EDSServiceName:             "test-eds",
-				LRSLoadReportingServerName: newString("lrs_server"),
-				MaxConcurrentRequests:      newUint32(123),
-				DropCategories: []DropCategory{
+				Cluster:                 "test_cluster",
+				EDSServiceName:          "test-eds",
+				LoadReportingServerName: newString("lrs_server"),
+				MaxConcurrentRequests:   newUint32(123),
+				DropCategories: []DropConfig{
 					{Category: "drop-1", RequestsPerMillion: 314},
 					{Category: "drop-2", RequestsPerMillion: 159},
 				},

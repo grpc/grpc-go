@@ -67,10 +67,10 @@ func TestLoadReporting(t *testing.T) {
 			Addresses: testBackendAddrs,
 		},
 		BalancerConfig: &LBConfig{
-			ClusterName:                testClusterName,
-			EdsServiceName:             testServiceName,
-			LrsLoadReportingServerName: testLRSServerName,
-			Locality:                   testLocality,
+			ClusterName:             testClusterName,
+			EDSServiceName:          testServiceName,
+			LoadReportingServerName: testLRSServerName,
+			Locality:                testLocality,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
 			},

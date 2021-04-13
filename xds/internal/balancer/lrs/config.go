@@ -31,11 +31,11 @@ import (
 type LBConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
 
-	ClusterName                string                                `json:"clusterName,omitempty"`
-	EdsServiceName             string                                `json:"edsServiceName,omitempty"`
-	LrsLoadReportingServerName string                                `json:"lrsLoadReportingServerName,omitempty"`
-	Locality                   *internal.LocalityID                  `json:"locality,omitempty"`
-	ChildPolicy                *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
+	ClusterName             string                                `json:"clusterName,omitempty"`
+	EDSServiceName          string                                `json:"edsServiceName,omitempty"`
+	LoadReportingServerName string                                `json:"lrsLoadReportingServerName,omitempty"`
+	Locality                *internal.LocalityID                  `json:"locality,omitempty"`
+	ChildPolicy             *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
 
 func parseConfig(c json.RawMessage) (*LBConfig, error) {
@@ -46,8 +46,8 @@ func parseConfig(c json.RawMessage) (*LBConfig, error) {
 	if cfg.ClusterName == "" {
 		return nil, fmt.Errorf("required ClusterName is not set in %+v", cfg)
 	}
-	if cfg.LrsLoadReportingServerName == "" {
-		return nil, fmt.Errorf("required LrsLoadReportingServerName is not set in %+v", cfg)
+	if cfg.LoadReportingServerName == "" {
+		return nil, fmt.Errorf("required LoadReportingServerName is not set in %+v", cfg)
 	}
 	if cfg.Locality == nil {
 		return nil, fmt.Errorf("required Locality is not set in %+v", cfg)

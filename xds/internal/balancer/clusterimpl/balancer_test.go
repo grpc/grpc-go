@@ -82,10 +82,10 @@ func TestDropByCategory(t *testing.T) {
 			Addresses: testBackendAddrs,
 		},
 		BalancerConfig: &LBConfig{
-			Cluster:                    testClusterName,
-			EDSServiceName:             testServiceName,
-			LRSLoadReportingServerName: newString(testLRSServerName),
-			DropCategories: []DropCategory{{
+			Cluster:                 testClusterName,
+			EDSServiceName:          testServiceName,
+			LoadReportingServerName: newString(testLRSServerName),
+			DropCategories: []DropConfig{{
 				Category:           dropReason,
 				RequestsPerMillion: million * dropNumerator / dropDenominator,
 			}},
@@ -169,10 +169,10 @@ func TestDropByCategory(t *testing.T) {
 			Addresses: testBackendAddrs,
 		},
 		BalancerConfig: &LBConfig{
-			Cluster:                    testClusterName,
-			EDSServiceName:             testServiceName,
-			LRSLoadReportingServerName: newString(testLRSServerName),
-			DropCategories: []DropCategory{{
+			Cluster:                 testClusterName,
+			EDSServiceName:          testServiceName,
+			LoadReportingServerName: newString(testLRSServerName),
+			DropCategories: []DropConfig{{
 				Category:           dropReason2,
 				RequestsPerMillion: million * dropNumerator2 / dropDenominator2,
 			}},
@@ -235,10 +235,10 @@ func TestDropCircuitBreaking(t *testing.T) {
 			Addresses: testBackendAddrs,
 		},
 		BalancerConfig: &LBConfig{
-			Cluster:                    testClusterName,
-			EDSServiceName:             testServiceName,
-			LRSLoadReportingServerName: newString(testLRSServerName),
-			MaxConcurrentRequests:      &maxRequest,
+			Cluster:                 testClusterName,
+			EDSServiceName:          testServiceName,
+			LoadReportingServerName: newString(testLRSServerName),
+			MaxConcurrentRequests:   &maxRequest,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
 			},

@@ -190,14 +190,14 @@ func (w *xdsClientWrapper) update(newConfig *LBConfig) error {
 	)
 
 	// ClusterName is different, restart. ClusterName is from ClusterName and
-	// EdsServiceName.
+	// EDSServiceName.
 	if w.clusterName != newConfig.ClusterName {
 		updateLoadClusterAndService = true
 		w.clusterName = newConfig.ClusterName
 	}
-	if w.edsServiceName != newConfig.EdsServiceName {
+	if w.edsServiceName != newConfig.EDSServiceName {
 		updateLoadClusterAndService = true
-		w.edsServiceName = newConfig.EdsServiceName
+		w.edsServiceName = newConfig.EDSServiceName
 	}
 
 	if updateLoadClusterAndService {
@@ -212,11 +212,11 @@ func (w *xdsClientWrapper) update(newConfig *LBConfig) error {
 		w.loadWrapper.UpdateClusterAndService(w.clusterName, w.edsServiceName)
 	}
 
-	if w.lrsServerName != newConfig.LrsLoadReportingServerName {
-		// LrsLoadReportingServerName is different, load should be report to a
+	if w.lrsServerName != newConfig.LoadReportingServerName {
+		// LoadReportingServerName is different, load should be report to a
 		// different server, restart.
 		restartLoadReport = true
-		w.lrsServerName = newConfig.LrsLoadReportingServerName
+		w.lrsServerName = newConfig.LoadReportingServerName
 	}
 
 	if restartLoadReport {

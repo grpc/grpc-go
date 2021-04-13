@@ -96,9 +96,9 @@ func TestParseConfig(t *testing.T) {
 }
 			`,
 			want: &LBConfig{
-				ClusterName:                testClusterName,
-				EdsServiceName:             testServiceName,
-				LrsLoadReportingServerName: testLRSServerName,
+				ClusterName:             testClusterName,
+				EDSServiceName:          testServiceName,
+				LoadReportingServerName: testLRSServerName,
 				Locality: &xdsinternal.LocalityID{
 					Region:  "test-region",
 					Zone:    "test-zone",

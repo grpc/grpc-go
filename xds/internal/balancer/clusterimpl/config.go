@@ -25,8 +25,8 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-// DropCategory contains the category, and drop ratio.
-type DropCategory struct {
+// DropConfig contains the category, and drop ratio.
+type DropConfig struct {
 	Category           string
 	RequestsPerMillion uint32
 }
@@ -35,12 +35,12 @@ type DropCategory struct {
 type LBConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
 
-	Cluster                    string                                `json:"cluster,omitempty"`
-	EDSServiceName             string                                `json:"edsServiceName,omitempty"`
-	LRSLoadReportingServerName *string                               `json:"lrsLoadReportingServerName,omitempty"`
-	MaxConcurrentRequests      *uint32                               `json:"maxConcurrentRequests,omitempty"`
-	DropCategories             []DropCategory                        `json:"dropCategories,omitempty"`
-	ChildPolicy                *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
+	Cluster                 string                                `json:"cluster,omitempty"`
+	EDSServiceName          string                                `json:"edsServiceName,omitempty"`
+	LoadReportingServerName *string                               `json:"lrsLoadReportingServerName,omitempty"`
+	MaxConcurrentRequests   *uint32                               `json:"maxConcurrentRequests,omitempty"`
+	DropCategories          []DropConfig                          `json:"dropCategories,omitempty"`
+	ChildPolicy             *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
 
 func parseConfig(c json.RawMessage) (*LBConfig, error) {
@@ -51,7 +51,7 @@ func parseConfig(c json.RawMessage) (*LBConfig, error) {
 	return &cfg, nil
 }
 
-func equalDropCategories(a, b []DropCategory) bool {
+func equalDropCategories(a, b []DropConfig) bool {
 	if len(a) != len(b) {
 		return false
 	}
