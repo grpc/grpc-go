@@ -38,12 +38,6 @@ var (
 	// KeepaliveMinPingTime is the minimum ping interval.  This must be 10s by
 	// default, but tests may wish to set it lower for convenience.
 	KeepaliveMinPingTime = 10 * time.Second
-	// NewRequestInfoContext creates a new context based on the argument context attaching
-	// the passed in RequestInfo to the new context.
-	NewRequestInfoContext interface{} // func(context.Context, credentials.RequestInfo) context.Context
-	// NewClientHandshakeInfoContext returns a copy of the input context with
-	// the passed in ClientHandshakeInfo struct added to it.
-	NewClientHandshakeInfoContext interface{} // func(context.Context, credentials.ClientHandshakeInfo) context.Context
 	// ParseServiceConfigForTesting is for creating a fake
 	// ClientConn for resolver testing only
 	ParseServiceConfigForTesting interface{} // func(string) *serviceconfig.ParseResult

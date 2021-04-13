@@ -1,5 +1,4 @@
 /*
- *
  * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +12,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 package internal
@@ -27,14 +25,14 @@ import (
 // the Attributes field of resolver.Address.
 type handshakeClusterNameKey struct{}
 
-// SetHandshakeClusterName returns a copy of addr in which the Attributes field
+// SetXDSHandshakeClusterName returns a copy of addr in which the Attributes field
 // is updated with the cluster name.
 func SetXDSHandshakeClusterName(addr resolver.Address, clusterName string) resolver.Address {
 	addr.Attributes = addr.Attributes.WithValues(handshakeClusterNameKey{}, clusterName)
 	return addr
 }
 
-// GetHandshakeClusterName returns cluster name stored in attr.
+// GetXDSHandshakeClusterName returns cluster name stored in attr.
 func GetXDSHandshakeClusterName(attr *attributes.Attributes) (string, bool) {
 	v := attr.Value(handshakeClusterNameKey{})
 	name, ok := v.(string)

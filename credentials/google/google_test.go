@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
+	icredentials "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -52,8 +53,6 @@ func (t *testAuthInfo) AuthType() string {
 var (
 	testTLS  = &testCreds{typ: "tls"}
 	testALTS = &testCreds{typ: "alts"}
-
-	contextWithHandshakeInfo = internal.NewClientHandshakeInfoContext.(func(context.Context, credentials.ClientHandshakeInfo) context.Context)
 )
 
 func overrideNewCredsFuncs() func() {
@@ -92,7 +91,7 @@ func TestClientHandshakeBasedOnClusterName(t *testing.T) {
 			},
 			{
 				name: "with non-CFE cluster name",
-				ctx: contextWithHandshakeInfo(context.Background(), credentials.ClientHandshakeInfo{
+				ctx: icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
 					Attributes: internal.SetXDSHandshakeClusterName(resolver.Address{}, "lalala").Attributes,
 				}),
 				// non-CFE backends should use alts.
@@ -100,7 +99,7 @@ func TestClientHandshakeBasedOnClusterName(t *testing.T) {
 			},
 			{
 				name: "with CFE cluster name",
-				ctx: contextWithHandshakeInfo(context.Background(), credentials.ClientHandshakeInfo{
+				ctx: icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
 					Attributes: internal.SetXDSHandshakeClusterName(resolver.Address{}, cfeClusterName).Attributes,
 				}),
 				// CFE should use tls.
