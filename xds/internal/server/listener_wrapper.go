@@ -181,9 +181,8 @@ type listenerWrapper struct {
 	// Accept() for all incoming connections, but writes happen rarely (when we
 	// get a Listener resource update).
 	mu sync.RWMutex
-	// Current serving mode and error.
-	mode        ServingMode
-	lastSeenErr error
+	// Current serving mode.
+	mode ServingMode
 	// Filter chains received as part of the last good update.
 	filterChains *xdsclient.FilterChainManager
 }
@@ -325,26 +324,9 @@ func (l *listenerWrapper) switchMode(fcs *xdsclient.FilterChainManager, newMode 
 	defer l.mu.Unlock()
 
 	l.filterChains = fcs
-	if l.mode == newMode && isErrEqual(l.lastSeenErr, err) {
-		// Since we cannot guarantee that the control plane does not send the
-		// same response again and again, we don't want to invoke the registered
-		// callback when the mode has not changed.
-		return
-	}
 	l.mode = newMode
-	l.lastSeenErr = err
 	if l.modeCallback != nil {
 		l.modeCallback(l.Listener.Addr(), newMode, err)
 	}
 	l.logger.Warningf("Listener %q entering mode: %q due to error: %v", l.Addr(), newMode, err)
-}
-
-func isErrEqual(err1, err2 error) bool {
-	if (err1 != nil) != (err2 != nil) {
-		return false
-	}
-	if err1 == nil {
-		return true
-	}
-	return err1.Error() == err2.Error()
 }

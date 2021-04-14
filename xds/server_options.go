@@ -66,16 +66,14 @@ type serverOptions struct {
 type ServingMode = iserver.ServingMode
 
 const (
-	// servingModeStarting indicates that the serving is starting up.
-	servingModeStarting ServingMode = iota
 	// ServingModeServing indicates the the server contains all required xDS
 	// configuration is serving RPCs.
-	ServingModeServing
+	ServingModeServing = iserver.ServingModeServing
 	// ServingModeNotServing indicates that the server is not accepting new
 	// connections. Existing connections will be closed gracefully, allowing
 	// in-progress RPCs to complete. A server enters this mode when it does not
 	// contain the required xDS configuration to serve RPCs.
-	ServingModeNotServing
+	ServingModeNotServing = iserver.ServingModeNotServing
 )
 
 // ServingModeCallbackFunc is the callback that users can register to get
