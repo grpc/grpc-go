@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/balancer"
 	"net"
 	"os"
 	"reflect"
@@ -30,7 +31,6 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/balancer"
 	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/leakcheck"
@@ -764,103 +764,113 @@ func TestDNSResolverExponentialBackoff(t *testing.T) {
 		return t
 	}
 	tests := []struct {
+		name     string
 		target   string
 		addrWant []resolver.Address
 		scWant   string
 	}{
 		{
+			"happy-case-default-port",
 			"foo.bar.com",
 			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
 			generateSC("foo.bar.com"),
 		},
 		{
+			"happy-case-specified-port",
 			"foo.bar.com:1234",
 			[]resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
 			generateSC("foo.bar.com"),
 		},
 		{
+			"happy-case-another-default-port",
 			"srv.ipv4.single.fake",
 			[]resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
 			generateSC("srv.ipv4.single.fake"),
 		},
 	}
-	for _, a := range tests {
-		b := NewBuilder()
-		cc := &testClientConn{target: a.target}
-		// Cause ClientConn to return an error.
-		cc.updateStateErr = balancer.ErrBadResolverState
-		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOptions{})
-		if err != nil {
-			t.Fatalf("%v\n", err)
-		}
-		var state resolver.State
-		var cnt int
-		for i := 0; i < 2000; i++ {
-			state, cnt = cc.getState()
-			if cnt > 0 {
-				break
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			b := NewBuilder()
+			cc := &testClientConn{target: test.target}
+			// Cause ClientConn to return an error.
+			cc.updateStateErr = balancer.ErrBadResolverState
+			r, err := b.Build(resolver.Target{Endpoint: test.target}, cc, resolver.BuildOptions{})
+			if err != nil {
+				t.Fatalf("%v\n", err)
 			}
-			time.Sleep(time.Millisecond)
-		}
-		if cnt == 0 {
-			t.Fatalf("UpdateState not called after 2s; aborting")
-		}
-		if !reflect.DeepEqual(a.addrWant, state.Addresses) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v", a.target, state.Addresses, a.addrWant)
-		}
-		sc := scFromState(state)
-		if a.scWant != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scWant)
-		}
-		// Cause timer to go off 10 times, and see if it calls updateState() correctly.
-		for i := 0; i < 10; i++ {
+			var state resolver.State
+			var cnt int
+			for i := 0; i < 2000; i++ {
+				state, cnt = cc.getState()
+				if cnt > 0 {
+					break
+				}
+				time.Sleep(time.Millisecond)
+			}
+			if cnt == 0 {
+				t.Fatalf("UpdateState not called after 2s; aborting")
+			}
+			if !reflect.DeepEqual(test.addrWant, state.Addresses) {
+				t.Errorf("Resolved addresses of target: %q = %+v, want %+v", test.target, state.Addresses, test.addrWant)
+			}
+			sc := scFromState(state)
+			if test.scWant != sc {
+				t.Errorf("Resolved service config of target: %q = %+v, want %+v", test.target, sc, test.scWant)
+			}
+			// Cause timer to go off 10 times, and see if it calls updateState() correctly.
+			for i := 0; i < 10; i++ {
+				timer := <-timerChan
+				timer.Reset(0)
+			}
+			// Poll to see if DNS Resolver updated state the correct number of times, which allows time for the DNS Resolver to call
+			// ClientConn update state.
+			deadline := time.Now().Add(defaultTestTimeout)
+			for {
+				cc.m1.Lock()
+				got := cc.updateStateCalls
+				if got == 11 {
+					cc.m1.Unlock()
+					break
+				}
+				cc.m1.Unlock()
+
+				if time.Now().After(deadline) {
+					t.Fatalf("Exponential backoff is not working as expected - should update state 11 times instead of %d", got)
+				}
+
+				time.Sleep(time.Millisecond)
+			}
+
+			// Update resolver.ClientConn to not return an error anymore - this should stop it from backing off.
+			cc.updateStateErr = nil
 			timer := <-timerChan
 			timer.Reset(0)
-		}
-		// Poll to see if DNS Resolver updated state the correct number of times, which allows time for the DNS Resolver to call
-		// ClientConn update state.
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		for {
-			timer := time.NewTimer(time.Millisecond)
-			select {
-			case <-ctx.Done():
-				t.Fatalf("Exponential backoff is not working as expected - should update state 11 times instead of %d", cc.updateStateCalls)
-			case <-timer.C:
-			}
-			cc.m1.Lock()
-			if cc.updateStateCalls == 11 {
+			// Poll to see if DNS Resolver updated state the correct number of times, which allows time for the DNS Resolver to call
+			// ClientConn update state the final time. The DNS Resolver should then stop polling.
+			deadline = time.Now().Add(defaultTestTimeout)
+			for {
+				cc.m1.Lock()
+				got := cc.updateStateCalls
+				if got == 12 {
+					cc.m1.Unlock()
+					break
+				}
 				cc.m1.Unlock()
-				break
-			}
-			cc.m1.Unlock()
-		}
-		cancel()
 
-		// Update resolver.ClientConn to not return an error anymore - this should stop it from backing off.
-		cc.updateStateErr = nil
-		timer := <-timerChan
-		timer.Reset(0)
-		// Poll to see if DNS Resolver updated state the correct number of times, which allows time for the DNS Resolver to call
-		// ClientConn update state the final time. The DNS Resolver should then stop polling.
-		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-		for {
-			timer := time.NewTimer(time.Millisecond)
-			select {
-			case <-ctx.Done():
-				t.Fatalf("Exponential backoff is not working as expected - should stop backing off at 12 total UpdateState calls instead of %d", cc.updateStateCalls)
-			case <-timerChan:
-				t.Fatalf("Should not poll again after no more error")
-			case <-timer.C:
+				if time.Now().After(deadline) {
+					t.Fatalf("Exponential backoff is not working as expected - should stop backing off at 12 total UpdateState calls instead of %d", got)
+				}
+
+				select {
+				case <-timerChan:
+					t.Fatalf("Should not poll again after no more error")
+				default:
+				}
+
+				time.Sleep(time.Millisecond)
 			}
-			cc.m1.Lock()
-			if cc.updateStateCalls == 12 {
-				cc.m1.Unlock()
-				break
-			}
-			cc.m1.Unlock()
-		}
-		cancel()
-		r.Close()
+			r.Close()
+		})
 	}
 }
 
