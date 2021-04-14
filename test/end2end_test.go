@@ -1437,7 +1437,7 @@ func (s) TestDetailedGoawayErrorOnAbruptClosePropagatesToRPCError(t *testing.T) 
 	dopts := []grpc.DialOption{
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                time.Millisecond,   /* should trigger "too many pings" error quickly */
-			Timeout:             time.Second * 1000, /* arbitrarym, arge value */
+			Timeout:             time.Second * 1000, /* arbitrary, large value */
 			PermitWithoutStream: false,
 		}),
 	}
