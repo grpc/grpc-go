@@ -56,7 +56,7 @@ import (
 
 type serverReflectionServer struct {
 	rpb.UnimplementedServerReflectionServer
-	s *grpc.Server
+	queryServices func() map[string]grpc.ServiceInfo
 
 	initSymbols  sync.Once
 	serviceNames []string
@@ -65,8 +65,15 @@ type serverReflectionServer struct {
 
 // Register registers the server reflection service on the given gRPC server.
 func Register(s *grpc.Server) {
-	rpb.RegisterServerReflectionServer(s, &serverReflectionServer{
-		s: s,
+	RegisterWithRegistrar(s, s.GetServiceInfo)
+}
+
+// RegisterWithRegistrar registers the server reflection service with the given registrar.
+// The given function is invoked to determine the services that will be exposed. It is not
+// invoked until the service impl is actually used.
+func RegisterWithRegistrar(r grpc.ServiceRegistrar, queryServices func() map[string]grpc.ServiceInfo) {
+	rpb.RegisterServerReflectionServer(r, &serverReflectionServer{
+		queryServices: queryServices,
 	})
 }
 
@@ -80,7 +87,7 @@ type protoMessage interface {
 
 func (s *serverReflectionServer) getSymbols() (svcNames []string, symbolIndex map[string]*dpb.FileDescriptorProto) {
 	s.initSymbols.Do(func() {
-		serviceInfo := s.s.GetServiceInfo()
+		serviceInfo := s.queryServices()
 
 		s.symbols = map[string]*dpb.FileDescriptorProto{}
 		s.serviceNames = make([]string, 0, len(serviceInfo))
