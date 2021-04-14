@@ -46,7 +46,7 @@ func (s) TestProfiling(t *testing.T) {
 	stat := NewStat("foo")
 	cb.Push(stat)
 	bar := func(n int) {
-		if n%2 == 0 {
+		if n&1 == 0 {
 			defer stat.NewTimer(strconv.Itoa(n)).Egress()
 		} else {
 			timer := NewTimer(strconv.Itoa(n))
@@ -100,7 +100,7 @@ func (s) TestProfilingRace(t *testing.T) {
 	for i := 0; i < numTimers; i++ {
 		go func(n int) {
 			defer wg.Done()
-			if n%2 == 0 {
+			if n&1 == 0 {
 				defer stat.NewTimer(strconv.Itoa(n)).Egress()
 			} else {
 				timer := NewTimer(strconv.Itoa(n))

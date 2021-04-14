@@ -126,7 +126,7 @@ func TestDropByCategory(t *testing.T) {
 	for i := 0; i < rpcCount; i++ {
 		gotSCSt, err := p1.Pick(balancer.PickInfo{})
 		// Even RPCs are dropped.
-		if i%2 == 0 {
+		if i&1 == 0 {
 			if err == nil || !strings.Contains(err.Error(), "dropped") {
 				t.Fatalf("pick.Pick, got %v, %v, want error RPC dropped", gotSCSt, err)
 			}

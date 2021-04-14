@@ -77,7 +77,7 @@ func Pairs(kv ...string) MD {
 	md := MD{}
 	var key string
 	for i, s := range kv {
-		if i%2 == 0 {
+		if i&1 == 0 {
 			key = strings.ToLower(s)
 			continue
 		}
