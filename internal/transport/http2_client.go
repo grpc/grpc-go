@@ -19,7 +19,6 @@
 package transport
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -1223,12 +1222,7 @@ func (t *http2Client) setGoAwayReason(f *http2.GoAwayFrame) {
 			t.goAwayReason = GoAwayTooManyPings
 		}
 	}
-	var m bytes.Buffer
-	m.WriteString("code: ")
-	m.WriteString(f.ErrCode.String())
-	m.WriteString(", debug data: ")
-	m.Write(f.DebugData())
-	t.goAwayDebugMessage = m.String()
+	t.goAwayDebugMessage = fmt.Sprintf("code: %s, debug data: %v", f.ErrCode, string(f.DebugData()))
 }
 
 func (t *http2Client) GetGoAwayReason() (GoAwayReason, string) {
