@@ -1155,8 +1155,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		}
 	}
 	id := f.LastStreamID
-	// TODO(apolcyn): address this review comment
-	if id > 0 && id%2 != 1 {
+	if id > 0 && id%2 == 0 {
 		t.mu.Unlock()
 		t.Close(connectionErrorf(true, nil, "received goaway with non-zero even-numbered numbered stream id: %v", id))
 		return
