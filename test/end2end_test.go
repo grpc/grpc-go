@@ -1336,41 +1336,48 @@ func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
 }
 
 func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
-	for _, e := range listTestEnv() {
-		testDetailedConnectionCloseErrorPropagatesToRPCError(t, e)
-	}
-}
-
-func testDetailedConnectionCloseErrorPropagatesToRPCError(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.userAgent = testAppUA
 	rpcStartedOnServer := make(chan struct{})
 	rpcDoneOnClient := make(chan struct{})
-	te.streamServerInt = func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		close(rpcStartedOnServer)
-		<-rpcDoneOnClient
-		return status.Error(codes.Internal, "arbitrary status")
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			close(rpcStartedOnServer)
+			<-rpcDoneOnClient
+			return status.Error(codes.Internal, "arbitrary status")
+		},
 	}
-	te.startServer(&testServer{security: e.security})
-	defer te.tearDown()
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
 
-	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	possibleConnResetMsg := "connection reset by peer"
-	possibleEOFMsg := "error reading from server: EOF"
-	// Get the RPC to make it to the server. Then, while the RPC is still being handled at the server, abruptly
+	// The precise behavior of this test is subject to raceyness around the timing of when TCP packets
+	// are sent from client to server, and when we tell the server to stop, so we need to account for both
+	// of these possible error messages:
+	// 1) If the call to ss.S.Stop() causes the server's sockets to close while there's still in-fight
+	//    data from the client on the TCP connection, then the kernel can send an RST back to the client (also
+	//    see https://stackoverflow.com/questions/33053507/econnreset-in-send-linux-c). Note that while this
+	//    condition is expected to be rare due to the rpcStartedOnServer synchronization, in theory it should
+	//    be possible, e.g. if the client sends a BDP ping at the right time.
+	// 2) If, for example, the call to ss.S.Stop() happens after the RPC headers have been received at the
+	//    server, then the TCP connection can shutdown gracefully when the server's socket closes.
+	const possibleConnResetMsg = "connection reset by peer"
+	const possibleEOFMsg = "error reading from server: EOF"
+	// Start an RPC. Then, while the RPC is still being accepted or handled at the server, abruptly
 	// stop the server, killing the connection. The RPC error message should include details about the specific
 	// connection error that was encountered.
-	stream, err := tc.FullDuplexCall(ctx)
+	stream, err := ss.Client.FullDuplexCall(ctx)
 	if err != nil {
-		t.Fatalf("%v.FullDuplexCall = _, %v, want _, <nil>", tc, err)
+		t.Fatalf("%v.FullDuplexCall = _, %v, want _, <nil>", ss.Client, err)
 	}
+	// Block until the RPC has been started on the server. This ensures that the ClientConn will find a healthy
+	// connection for the RPC to go out on initially, and that the TCP connection will shut down strictly after
+	// the RPC has been started on it.
 	<-rpcStartedOnServer
-	te.srv.Stop()
+	ss.S.Stop()
 	if _, err := stream.Recv(); err == nil || (!strings.Contains(err.Error(), possibleConnResetMsg) && !strings.Contains(err.Error(), possibleEOFMsg)) {
-		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: |%v| OR |%v|", stream, err, possibleConnResetMsg, possibleEOFMsg)
+		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: %q OR %q", stream, err, possibleConnResetMsg, possibleEOFMsg)
 	}
 	close(rpcDoneOnClient)
 }

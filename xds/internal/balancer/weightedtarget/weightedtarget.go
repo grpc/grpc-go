@@ -115,6 +115,16 @@ func (w *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnStat
 			w.bg.Add(name, balancer.Get(newT.ChildPolicy.Name))
 			// Not trigger a state/picker update. Wait for the new sub-balancer
 			// to send its updates.
+		} else if newT.ChildPolicy.Name != oldT.ChildPolicy.Name {
+			// If the child policy name is differet, remove from balancer group
+			// and re-add.
+			w.stateAggregator.Remove(name)
+			w.bg.Remove(name)
+			w.stateAggregator.Add(name, newT.Weight)
+			w.bg.Add(name, balancer.Get(newT.ChildPolicy.Name))
+			// Trigger a state/picker update, because we don't want `ClientConn`
+			// to pick this sub-balancer anymore.
+			rebuildStateAndPicker = true
 		} else if newT.Weight != oldT.Weight {
 			// If this is an existing sub-balancer, update weight if necessary.
 			w.stateAggregator.UpdateWeight(name, newT.Weight)

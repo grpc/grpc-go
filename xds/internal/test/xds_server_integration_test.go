@@ -35,25 +35,24 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/uuid"
-	xds2 "google.golang.org/grpc/internal/xds"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
+	"google.golang.org/grpc/internal/testutils"
+	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
 	"google.golang.org/grpc/xds"
-	"google.golang.org/grpc/xds/internal/testutils"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
-	"google.golang.org/grpc/xds/internal/version"
 )
 
 const (
@@ -151,8 +150,8 @@ func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, fun
 	cpc := e2e.DefaultFileWatcherConfig(path.Join(tmpdir, certFile), path.Join(tmpdir, keyFile), path.Join(tmpdir, rootFile))
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := xds2.SetupBootstrapFile(xds2.BootstrapOptions{
-		Version:                            xds2.TransportV3,
+	bootstrapCleanup, err := xdsinternal.SetupBootstrapFile(xdsinternal.BootstrapOptions{
+		Version:                            xdsinternal.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          fs.Address,
 		CertificateProviders:               cpc,
@@ -175,7 +174,7 @@ func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, fun
 	testpb.RegisterTestServiceServer(server, &testService{})
 
 	// Create a local listener and pass it to Serve().
-	lis, err := testutils.LocalTCPListener()
+	lis, err := xdstestutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
@@ -229,6 +228,14 @@ func listenerResourceWithoutSecurityConfig(t *testing.T, lis net.Listener) *v3li
 		FilterChains: []*v3listenerpb.FilterChain{
 			{
 				Name: "filter-chain-1",
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+						},
+					},
+				},
 			},
 		},
 	}
@@ -238,6 +245,24 @@ func listenerResourceWithoutSecurityConfig(t *testing.T, lis net.Listener) *v3li
 // configuration pointing to the use of the file_watcher certificate provider
 // plugin, and name and address fields matching the passed in net.Listener.
 func listenerResourceWithSecurityConfig(t *testing.T, lis net.Listener) *v3listenerpb.Listener {
+	transportSocket := &v3corepb.TransportSocket{
+		Name: "envoy.transport_sockets.tls",
+		ConfigType: &v3corepb.TransportSocket_TypedConfig{
+			TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+				RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+				CommonTlsContext: &v3tlspb.CommonTlsContext{
+					TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+						InstanceName: "google_cloud_private_spiffe",
+					},
+					ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+						ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+							InstanceName: "google_cloud_private_spiffe",
+						},
+					},
+				},
+			}),
+		},
+	}
 	host, port := hostPortFromListener(t, lis)
 	return &v3listenerpb.Listener{
 		// This needs to match the name we are querying for.
@@ -251,27 +276,68 @@ func listenerResourceWithSecurityConfig(t *testing.T, lis net.Listener) *v3liste
 					}}}},
 		FilterChains: []*v3listenerpb.FilterChain{
 			{
-				Name: "filter-chain-1",
-				TransportSocket: &v3corepb.TransportSocket{
-					Name: "envoy.transport_sockets.tls",
-					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3DownstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.DownstreamTlsContext{
-									RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
-									CommonTlsContext: &v3tlspb.CommonTlsContext{
-										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-											InstanceName: "google_cloud_private_spiffe",
-										},
-										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-											ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-												InstanceName: "google_cloud_private_spiffe",
-											}}}}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						}}}}},
+				Name: "v4-wildcard",
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "0.0.0.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "0.0.0.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+				},
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+						},
+					},
+				},
+				TransportSocket: transportSocket,
+			},
+			{
+				Name: "v6-wildcard",
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "::",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "::",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+				},
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+						},
+					},
+				},
+				TransportSocket: transportSocket,
+			},
+		},
 	}
 }
 

@@ -1,8 +1,6 @@
-// +build tools
-
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,19 +13,24 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-// This file is not intended to be compiled.  Because some of these imports are
-// not actual go packages, we use a build constraint at the top of this file to
-// prevent tools from inspecting the imports.
-
-package tools
+package testutils
 
 import (
-	_ "github.com/client9/misspell/cmd/misspell"
-	_ "github.com/golang/protobuf/protoc-gen-go"
-	_ "golang.org/x/lint/golint"
-	_ "golang.org/x/tools/cmd/goimports"
-	_ "honnef.co/go/tools/cmd/staticcheck"
+	"fmt"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/types/known/anypb"
 )
+
+// MarshalAny is a convenience function to marshal protobuf messages into any
+// protos. It will panic if the marshaling fails.
+func MarshalAny(m proto.Message) *anypb.Any {
+	a, err := ptypes.MarshalAny(m)
+	if err != nil {
+		panic(fmt.Sprintf("ptypes.MarshalAny(%+v) failed: %v", m, err))
+	}
+	return a
+}

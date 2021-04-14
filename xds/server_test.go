@@ -28,6 +28,12 @@ import (
 	"testing"
 	"time"
 
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
+	anypb "github.com/golang/protobuf/ptypes/any"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
@@ -626,21 +632,35 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 	// Push a good LDS response with security config, and wait for Serve() to be
 	// invoked on the underlying grpc.Server. Also make sure that certificate
 	// providers are not created.
+	fcm, err := xdsclient.NewFilterChainManager(&v3listenerpb.Listener{
+		FilterChains: []*v3listenerpb.FilterChain{
+			{
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+									InstanceName:    "identityPluginInstance",
+									CertificateName: "identityCertName",
+								},
+							},
+						}),
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
+	}
 	addr, port := splitHostPort(lis.Addr().String())
 	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
 		RouteConfigName: "routeconfig",
 		InboundListenerCfg: &xdsclient.InboundListenerConfig{
-			Address: addr,
-			Port:    port,
-			FilterChains: []*xdsclient.FilterChain{
-				{
-					SecurityCfg: &xdsclient.SecurityConfig{
-						RootInstanceName:     "default1",
-						IdentityInstanceName: "default2",
-						RequireClientCert:    true,
-					},
-				},
-			},
+			Address:      addr,
+			Port:         port,
+			FilterChains: fcm,
 		},
 	}, nil)
 	if _, err := fs.serveCh.Receive(ctx); err != nil {
@@ -703,20 +723,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 
 	// Push an error to the registered listener watch callback and make sure
 	// that Serve does not return.
-	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
-		RouteConfigName: "routeconfig",
-		InboundListenerCfg: &xdsclient.InboundListenerConfig{
-			FilterChains: []*xdsclient.FilterChain{
-				{
-					SecurityCfg: &xdsclient.SecurityConfig{
-						RootInstanceName:     "default1",
-						IdentityInstanceName: "default2",
-						RequireClientCert:    true,
-					},
-				},
-			},
-		},
-	}, errors.New("LDS error"))
+	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{}, errors.New("LDS error"))
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := serveDone.Receive(sCtx); err != context.DeadlineExceeded {
@@ -741,4 +748,12 @@ func verifyCertProviderNotCreated() error {
 		return errors.New("certificate provider created when no xDS creds were specified")
 	}
 	return nil
+}
+
+func marshalAny(m proto.Message) *anypb.Any {
+	a, err := ptypes.MarshalAny(m)
+	if err != nil {
+		panic(fmt.Sprintf("ptypes.MarshalAny(%+v) failed: %v", m, err))
+	}
+	return a
 }

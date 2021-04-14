@@ -1,8 +1,6 @@
-// +build tools
-
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +16,6 @@
  *
  */
 
-// This file is not intended to be compiled.  Because some of these imports are
-// not actual go packages, we use a build constraint at the top of this file to
-// prevent tools from inspecting the imports.
-
+// Package tools is used to pin specific versions of external tools in this
+// module's go.mod that gRPC uses for internal testing.
 package tools
-
-import (
-	_ "github.com/client9/misspell/cmd/misspell"
-	_ "github.com/golang/protobuf/protoc-gen-go"
-	_ "golang.org/x/lint/golint"
-	_ "golang.org/x/tools/cmd/goimports"
-	_ "honnef.co/go/tools/cmd/staticcheck"
-)

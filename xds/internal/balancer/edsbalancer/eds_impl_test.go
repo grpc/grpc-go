@@ -26,13 +26,14 @@ import (
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/internal"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/xds/env"
-	"google.golang.org/grpc/xds/internal"
+	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
@@ -833,7 +834,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	edsb.updateServiceRequestsConfig(testServiceName, &maxRequestsTemp)
 	defer client.ClearCounterForTesting(testServiceName)
 
-	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityID)
+	backendToBalancerID := make(map[balancer.SubConn]xdsinternal.LocalityID)
 
 	const testDropCategory = "test-drop"
 	// Two localities, each with one backend.
@@ -843,7 +844,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
 	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
-	locality1 := internal.LocalityID{SubZone: testSubZones[0]}
+	locality1 := xdsinternal.LocalityID{SubZone: testSubZones[0]}
 	backendToBalancerID[sc1] = locality1
 
 	// Add the second locality later to make sure sc2 belongs to the second
@@ -854,7 +855,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	sc2 := <-cc.NewSubConnCh
 	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
 	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
-	locality2 := internal.LocalityID{SubZone: testSubZones[1]}
+	locality2 := xdsinternal.LocalityID{SubZone: testSubZones[1]}
 	backendToBalancerID[sc2] = locality2
 
 	// Test roundrobin with two subconns.
@@ -931,5 +932,75 @@ func (s) TestEDS_LoadReportDisabled(t *testing.T) {
 	// We call picks to make sure they don't panic.
 	for i := 0; i < 10; i++ {
 		p1.Pick(balancer.PickInfo{})
+	}
+}
+
+// TestEDS_ClusterNameInAddressAttributes covers the case that cluster name is
+// attached to the subconn address attributes.
+func (s) TestEDS_ClusterNameInAddressAttributes(t *testing.T) {
+	cc := testutils.NewTestClientConn(t)
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
+	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+
+	const clusterName1 = "cluster-name-1"
+	edsb.updateClusterName(clusterName1)
+
+	// One locality with one backend.
+	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
+	edsb.handleEDSResponse(parseEDSRespProtoForTesting(clab1.Build()))
+
+	addrs1 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs1[0].Addr, testEndpointAddrs[0]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	cn, ok := internal.GetXDSHandshakeClusterName(addrs1[0].Attributes)
+	if !ok || cn != clusterName1 {
+		t.Fatalf("sc is created with addr with cluster name %v, %v, want cluster name %v", cn, ok, clusterName1)
+	}
+
+	sc1 := <-cc.NewSubConnCh
+	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
+
+	// Pick with only the first backend.
+	p1 := <-cc.NewPickerCh
+	for i := 0; i < 5; i++ {
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
+		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
+		}
+	}
+
+	// Change cluster name.
+	const clusterName2 = "cluster-name-2"
+	edsb.updateClusterName(clusterName2)
+
+	// Change backend.
+	clab2 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[1:2], nil)
+	edsb.handleEDSResponse(parseEDSRespProtoForTesting(clab2.Build()))
+
+	addrs2 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs2[0].Addr, testEndpointAddrs[1]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	// New addresses should have the new cluster name.
+	cn2, ok := internal.GetXDSHandshakeClusterName(addrs2[0].Attributes)
+	if !ok || cn2 != clusterName2 {
+		t.Fatalf("sc is created with addr with cluster name %v, %v, want cluster name %v", cn2, ok, clusterName1)
+	}
+
+	sc2 := <-cc.NewSubConnCh
+	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
+
+	// Test roundrobin with two subconns.
+	p2 := <-cc.NewPickerCh
+	for i := 0; i < 5; i++ {
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{})
+		if !cmp.Equal(gotSCSt.SubConn, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
+		}
 	}
 }

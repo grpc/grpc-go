@@ -32,6 +32,7 @@ import (
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
@@ -72,7 +73,7 @@ func unmarshalListenerResource(r *anypb.Any, logger *grpclog.PrefixLogger) (stri
 	}
 	logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, lis)
 
-	lu, err := processListener(lis, v2)
+	lu, err := processListener(lis, logger, v2)
 	if err != nil {
 		return lis.GetName(), ListenerUpdate{}, err
 	}
@@ -80,16 +81,16 @@ func unmarshalListenerResource(r *anypb.Any, logger *grpclog.PrefixLogger) (stri
 	return lis.GetName(), *lu, nil
 }
 
-func processListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUpdate, error) {
+func processListener(lis *v3listenerpb.Listener, logger *grpclog.PrefixLogger, v2 bool) (*ListenerUpdate, error) {
 	if lis.GetApiListener() != nil {
-		return processClientSideListener(lis, v2)
+		return processClientSideListener(lis, logger, v2)
 	}
 	return processServerSideListener(lis)
 }
 
 // processClientSideListener checks if the provided Listener proto meets
 // the expected criteria. If so, it returns a non-empty routeConfigName.
-func processClientSideListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUpdate, error) {
+func processClientSideListener(lis *v3listenerpb.Listener, logger *grpclog.PrefixLogger, v2 bool) (*ListenerUpdate, error) {
 	update := &ListenerUpdate{}
 
 	apiLisAny := lis.GetApiListener().GetApiListener()
@@ -112,9 +113,11 @@ func processClientSideListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUp
 		}
 		update.RouteConfigName = name
 	case *v3httppb.HttpConnectionManager_RouteConfig:
-		// TODO: Add support for specifying the RouteConfiguration inline
-		// in the LDS response.
-		return nil, fmt.Errorf("LDS response contains RDS config inline. Not supported for now: %+v", apiLis)
+		routeU, err := generateRDSUpdateFromRouteConfiguration(apiLis.GetRouteConfig(), logger, v2)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
+		}
+		update.InlineRouteConfig = &routeU
 	case nil:
 		return nil, fmt.Errorf("no RouteSpecifier: %+v", apiLis)
 	default:
@@ -267,119 +270,75 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 			Port:    strconv.Itoa(int(sockAddr.GetPortValue())),
 		},
 	}
-
-	var filterChains []*FilterChain
-	for _, fc := range lis.GetFilterChains() {
-		filterChain, err := getFilterChain(fc)
-		if err != nil {
-			return nil, err
-		}
-		filterChains = append(filterChains, filterChain)
+	chains := lis.GetFilterChains()
+	if def := lis.GetDefaultFilterChain(); def != nil {
+		chains = append(chains, def)
 	}
-	defaultFilterChain, err := getFilterChain(lis.GetDefaultFilterChain())
+	if err := validateNetworkFilterChains(chains); err != nil {
+		return nil, err
+	}
+
+	fcMgr, err := NewFilterChainManager(lis)
 	if err != nil {
 		return nil, err
 	}
-	if len(filterChains) == 0 && defaultFilterChain == nil {
-		return nil, fmt.Errorf("xds: no supported filter chains and no default filter chain")
-	}
-	lu.InboundListenerCfg.FilterChains = filterChains
-	lu.InboundListenerCfg.DefaultFilterChain = defaultFilterChain
+	lu.InboundListenerCfg.FilterChains = fcMgr
 	return lu, nil
 }
 
-// getFilterChain parses the filter chain proto and converts it into the local
-// representation. If fc contains unsupported filter chain match fields, a nil
-// FilterChain object and a nil error are returned. If fc does not parse or
-// contains other invalid data, an non-nil error is returned.
-func getFilterChain(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
-	if fc == nil {
-		return nil, nil
-	}
+func validateNetworkFilterChains(filterChains []*v3listenerpb.FilterChain) error {
+	for _, filterChain := range filterChains {
+		seenNames := make(map[string]bool, len(filterChain.GetFilters()))
+		seenHCM := false
+		for _, filter := range filterChain.GetFilters() {
+			name := filter.GetName()
+			if name == "" {
+				return fmt.Errorf("filter chain {%+v} is missing name field in filter: {%+v}", filterChain, filter)
+			}
+			if seenNames[name] {
+				return fmt.Errorf("filter chain {%+v} has duplicate filter name %q", filterChain, name)
+			}
+			seenNames[name] = true
 
-	// If the match criteria contains unsupported fields, skip the filter chain.
-	fcm := fc.GetFilterChainMatch()
-	if fcm.GetDestinationPort().GetValue() != 0 ||
-		fcm.GetServerNames() != nil ||
-		(fcm.GetTransportProtocol() != "" && fcm.TransportProtocol != "raw_buffer") ||
-		fcm.GetApplicationProtocols() != nil {
-		return nil, nil
-	}
+			// Network filters have a oneof field named `config_type` where we
+			// only support `TypedConfig` variant.
+			switch typ := filter.GetConfigType().(type) {
+			case *v3listenerpb.Filter_TypedConfig:
+				// The typed_config field has an `anypb.Any` proto which could
+				// directly contain the serialized bytes of the actual filter
+				// configuration, or it could be encoded as a `TypedStruct`.
+				// TODO: Add support for `TypedStruct`.
+				tc := filter.GetTypedConfig()
 
-	// Extract the supported match criteria.
-	var dstPrefixRanges []net.IP
-	for _, pr := range fcm.GetPrefixRanges() {
-		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
-		ip, _, err := net.ParseCIDR(cidr)
-		if err != nil {
-			return nil, fmt.Errorf("xds: failed to parse destination prefix range: %+v", pr)
+				// The only network filter that we currently support is the v3
+				// HttpConnectionManager. So, we can directly check the type_url
+				// and unmarshal the config.
+				// TODO: Implement a registry of supported network filters (like
+				// we have for HTTP filters), when we have to support network
+				// filters other than HttpConnectionManager.
+				if tc.GetTypeUrl() != version.V3HTTPConnManagerURL {
+					return fmt.Errorf("filter chain {%+v} has unsupported network filter %q in filter {%+v}", filterChain, tc.GetTypeUrl(), filter)
+				}
+				hcm := &v3httppb.HttpConnectionManager{}
+				if err := ptypes.UnmarshalAny(tc, hcm); err != nil {
+					return fmt.Errorf("filter chain {%+v} failed unmarshaling of network filter {%+v}: %v", filterChain, filter, err)
+				}
+				// We currently don't support HTTP filters on the server-side.
+				// We will be adding support for it in the future. So, we want
+				// to make sure that the http_filters configuration is valid.
+				if _, err := processHTTPFilters(hcm.GetHttpFilters(), true); err != nil {
+					return err
+				}
+				seenHCM = true
+			default:
+				return fmt.Errorf("filter chain {%+v} has unsupported config_type %T in filter %s", filterChain, typ, filter.GetName())
+			}
 		}
-		dstPrefixRanges = append(dstPrefixRanges, ip)
-	}
-	var srcType SourceType
-	switch fcm.GetSourceType() {
-	case v3listenerpb.FilterChainMatch_ANY:
-		srcType = SourceTypeAny
-	case v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK:
-		srcType = SourceTypeSameOrLoopback
-	case v3listenerpb.FilterChainMatch_EXTERNAL:
-		srcType = SourceTypeExternal
-	default:
-		return nil, fmt.Errorf("xds: unsupported source type: %v", fcm.GetSourceType())
-	}
-	var srcPrefixRanges []net.IP
-	for _, pr := range fcm.GetSourcePrefixRanges() {
-		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
-		ip, _, err := net.ParseCIDR(cidr)
-		if err != nil {
-			return nil, fmt.Errorf("xds: failed to parse source prefix range: %+v", pr)
+		if !seenHCM {
+			return fmt.Errorf("filter chain {%+v} missing HttpConnectionManager filter", filterChain)
 		}
-		srcPrefixRanges = append(srcPrefixRanges, ip)
 	}
-	filterChain := &FilterChain{
-		Match: &FilterChainMatch{
-			DestPrefixRanges:   dstPrefixRanges,
-			SourceType:         srcType,
-			SourcePrefixRanges: srcPrefixRanges,
-			SourcePorts:        fcm.GetSourcePorts(),
-		},
-	}
-
-	// If the transport_socket field is not specified, it means that the control
-	// plane has not sent us any security config. This is fine and the server
-	// will use the fallback credentials configured as part of the
-	// xdsCredentials.
-	ts := fc.GetTransportSocket()
-	if ts == nil {
-		return filterChain, nil
-	}
-	if name := ts.GetName(); name != transportSocketName {
-		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
-	}
-	any := ts.GetTypedConfig()
-	if any == nil || any.TypeUrl != version.V3DownstreamTLSContextURL {
-		return nil, fmt.Errorf("transport_socket field has unexpected typeURL: %s", any.TypeUrl)
-	}
-	downstreamCtx := &v3tlspb.DownstreamTlsContext{}
-	if err := proto.Unmarshal(any.GetValue(), downstreamCtx); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal DownstreamTlsContext in LDS response: %v", err)
-	}
-	if downstreamCtx.GetCommonTlsContext() == nil {
-		return nil, errors.New("DownstreamTlsContext in LDS response does not contain a CommonTlsContext")
-	}
-	sc, err := securityConfigFromCommonTLSContext(downstreamCtx.GetCommonTlsContext())
-	if err != nil {
-		return nil, err
-	}
-	if sc.IdentityInstanceName == "" {
-		return nil, errors.New("security configuration on the server-side does not contain identity certificate provider instance name")
-	}
-	sc.RequireClientCert = downstreamCtx.GetRequireClientCertificate().GetValue()
-	if sc.RequireClientCert && sc.RootInstanceName == "" {
-		return nil, errors.New("security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set")
-	}
-	filterChain.SecurityCfg = sc
-	return filterChain, nil
+	return nil
 }
 
 // UnmarshalRouteConfig processes resources received in an RDS response,
@@ -603,29 +562,51 @@ func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (strin
 		return "", ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 	logger.Infof("Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, cluster)
-
-	cu, err := validateCluster(cluster)
+	cu, err := validateClusterAndConstructClusterUpdate(cluster)
 	if err != nil {
 		return cluster.GetName(), ClusterUpdate{}, err
 	}
 	cu.Raw = r
-	// If the Cluster message in the CDS response did not contain a
-	// serviceName, we will just use the clusterName for EDS.
-	if cu.ServiceName == "" {
-		cu.ServiceName = cluster.GetName()
-	}
+
 	return cluster.GetName(), cu, nil
 }
 
-func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
+func clusterTypeFromCluster(cluster *v3clusterpb.Cluster) (ClusterType, string, []string, error) {
+	if cluster.GetType() == v3clusterpb.Cluster_EDS {
+		if cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil {
+			return 0, "", nil, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
+		}
+		// If the Cluster message in the CDS response did not contain a
+		// serviceName, we will just use the clusterName for EDS.
+		if cluster.GetEdsClusterConfig().GetServiceName() == "" {
+			return ClusterTypeEDS, cluster.GetName(), nil, nil
+		}
+		return ClusterTypeEDS, cluster.GetEdsClusterConfig().GetServiceName(), nil, nil
+	}
+
+	if cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS {
+		return ClusterTypeLogicalDNS, cluster.GetName(), nil, nil
+	}
+
+	if cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate" {
+		// Loop through ClusterConfig here to get cluster names.
+		clusters := &v3aggregateclusterpb.ClusterConfig{}
+		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
+			return 0, "", nil, fmt.Errorf("failed to unmarshal resource: %v", err)
+		}
+		return ClusterTypeAggregate, cluster.GetName(), clusters.Clusters, nil
+	}
+	return 0, "", nil, fmt.Errorf("unexpected cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
+}
+
+func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	emptyUpdate := ClusterUpdate{ServiceName: "", EnableLRS: false}
-	switch {
-	case cluster.GetType() != v3clusterpb.Cluster_EDS:
-		return emptyUpdate, fmt.Errorf("unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
-	case cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil:
-		return emptyUpdate, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
-	case cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN:
+	if cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN {
 		return emptyUpdate, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
+	}
+	clusterType, serviceName, prioritizedClusters, err := clusterTypeFromCluster(cluster)
+	if err != nil {
+		return emptyUpdate, err
 	}
 
 	// Process security configuration received from the control plane iff the
@@ -639,10 +620,12 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	}
 
 	return ClusterUpdate{
-		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
-		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
-		SecurityCfg: sc,
-		MaxRequests: circuitBreakersFromCluster(cluster),
+		ClusterType:             clusterType,
+		ServiceName:             serviceName,
+		EnableLRS:               cluster.GetLrsServer().GetSelf() != nil,
+		SecurityCfg:             sc,
+		MaxRequests:             circuitBreakersFromCluster(cluster),
+		PrioritizedClusterNames: prioritizedClusters,
 	}, nil
 }
 

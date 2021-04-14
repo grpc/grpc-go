@@ -20,7 +20,6 @@ package client
 
 import (
 	"fmt"
-	"net"
 	"strings"
 	"testing"
 	"time"
@@ -28,13 +27,14 @@ import (
 	v1typepb "github.com/cncf/udpa/go/udpa/type/v1"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	spb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/types/known/durationpb"
+
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
-	"google.golang.org/protobuf/types/known/durationpb"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -54,13 +54,15 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		v3LDSTarget       = "lds.target.good:3333"
 		v2RouteConfigName = "v2RouteConfig"
 		v3RouteConfigName = "v3RouteConfig"
+		routeName         = "routeName"
+		testVersion       = "test-version-lds-client"
 	)
 
 	var (
-		v2Lis = &anypb.Any{
-			TypeUrl: version.V2ListenerURL,
-			Value: func() []byte {
-				cm := &v2httppb.HttpConnectionManager{
+		v2Lis = testutils.MarshalAny(&v2xdspb.Listener{
+			Name: v2LDSTarget,
+			ApiListener: &v2listenerpb.ApiListener{
+				ApiListener: testutils.MarshalAny(&v2httppb.HttpConnectionManager{
 					RouteSpecifier: &v2httppb.HttpConnectionManager_Rds{
 						Rds: &v2httppb.Rds{
 							ConfigSource: &v2corepb.ConfigSource{
@@ -69,21 +71,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 							RouteConfigName: v2RouteConfigName,
 						},
 					},
-				}
-				mcm, _ := proto.Marshal(cm)
-				lis := &v2xdspb.Listener{
-					Name: v2LDSTarget,
-					ApiListener: &v2listenerpb.ApiListener{
-						ApiListener: &anypb.Any{
-							TypeUrl: version.V2HTTPConnManagerURL,
-							Value:   mcm,
-						},
-					},
-				}
-				mLis, _ := proto.Marshal(lis)
-				return mLis
-			}(),
-		}
+				}),
+			},
+		})
 		customFilter = &v3httppb.HttpFilter{
 			Name:       "customFilter",
 			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: customFilterConfig},
@@ -132,38 +122,61 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: unknownFilterConfig},
 			IsOptional: true,
 		}
-		v3LisWithFilters = func(fs ...*v3httppb.HttpFilter) *anypb.Any {
-			hcm := &v3httppb.HttpConnectionManager{
-				RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
-					Rds: &v3httppb.Rds{
-						ConfigSource: &v3corepb.ConfigSource{
-							ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
-						},
-						RouteConfigName: v3RouteConfigName,
+		v3LisWithInlineRoute = testutils.MarshalAny(&v3listenerpb.Listener{
+			Name: v3LDSTarget,
+			ApiListener: &v3listenerpb.ApiListener{
+				ApiListener: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+					RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+						RouteConfig: &v3routepb.RouteConfiguration{
+							Name: routeName,
+							VirtualHosts: []*v3routepb.VirtualHost{{
+								Domains: []string{v3LDSTarget},
+								Routes: []*v3routepb.Route{{
+									Match: &v3routepb.RouteMatch{
+										PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+									},
+									Action: &v3routepb.Route_Route{
+										Route: &v3routepb.RouteAction{
+											ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
+										}}}}}}},
 					},
+					CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
+						MaxStreamDuration: durationpb.New(time.Second),
+					},
+				}),
+			},
+		})
+		v3LisWithFilters = func(fs ...*v3httppb.HttpFilter) *anypb.Any {
+			return testutils.MarshalAny(&v3listenerpb.Listener{
+				Name: v3LDSTarget,
+				ApiListener: &v3listenerpb.ApiListener{
+					ApiListener: testutils.MarshalAny(
+						&v3httppb.HttpConnectionManager{
+							RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+								Rds: &v3httppb.Rds{
+									ConfigSource: &v3corepb.ConfigSource{
+										ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+									},
+									RouteConfigName: v3RouteConfigName,
+								},
+							},
+							CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
+								MaxStreamDuration: durationpb.New(time.Second),
+							},
+							HttpFilters: fs,
+						}),
 				},
-				CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
-					MaxStreamDuration: durationpb.New(time.Second),
-				},
-				HttpFilters: fs,
-			}
-			return &anypb.Any{
-				TypeUrl: version.V3ListenerURL,
-				Value: func() []byte {
-					mcm := marshalAny(hcm)
-					lis := &v3listenerpb.Listener{
-						Name: v3LDSTarget,
-						ApiListener: &v3listenerpb.ApiListener{
-							ApiListener: mcm,
-						},
-					}
-					mLis, _ := proto.Marshal(lis)
-					return mLis
-				}(),
-			}
+			})
+		}
+		errMD = UpdateMetadata{
+			Status:  ServiceStatusNACKed,
+			Version: testVersion,
+			ErrState: &UpdateErrorMetadata{
+				Version: testVersion,
+				Err:     errPlaceHolder,
+			},
 		}
 	)
-	const testVersion = "test-version-lds-client"
 
 	tests := []struct {
 		name       string
@@ -176,15 +189,8 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		{
 			name:      "non-listener resource",
 			resources: []*anypb.Any{{TypeUrl: version.V3HTTPConnManagerURL}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: true,
+			wantMD:    errMD,
+			wantErr:   true,
 		},
 		{
 			name: "badly marshaled listener resource",
@@ -207,181 +213,80 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				},
 			},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: true,
+			wantMD:     errMD,
+			wantErr:    true,
 		},
 		{
 			name: "wrong type in apiListener",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							ApiListener: &v3listenerpb.ApiListener{
-								ApiListener: &anypb.Any{
-									TypeUrl: version.V2ListenerURL,
-									Value: func() []byte {
-										cm := &v3httppb.HttpConnectionManager{
-											RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
-												Rds: &v3httppb.Rds{
-													ConfigSource: &v3corepb.ConfigSource{
-														ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
-													},
-													RouteConfigName: v3RouteConfigName,
-												},
-											},
-										}
-										mcm, _ := proto.Marshal(cm)
-										return mcm
-									}(),
-								},
-							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name: v3LDSTarget,
+				ApiListener: &v3listenerpb.ApiListener{
+					ApiListener: testutils.MarshalAny(&v2xdspb.Listener{}),
 				},
-			},
+			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: true,
+			wantMD:     errMD,
+			wantErr:    true,
 		},
 		{
 			name: "empty httpConnMgr in apiListener",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							ApiListener: &v3listenerpb.ApiListener{
-								ApiListener: &anypb.Any{
-									TypeUrl: version.V2ListenerURL,
-									Value: func() []byte {
-										cm := &v3httppb.HttpConnectionManager{
-											RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
-												Rds: &v3httppb.Rds{},
-											},
-										}
-										mcm, _ := proto.Marshal(cm)
-										return mcm
-									}(),
-								},
-							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name: v3LDSTarget,
+				ApiListener: &v3listenerpb.ApiListener{
+					ApiListener: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+						RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+							Rds: &v3httppb.Rds{},
+						},
+					}),
 				},
-			},
+			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: true,
+			wantMD:     errMD,
+			wantErr:    true,
 		},
 		{
 			name: "scopedRoutes routeConfig in apiListener",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							ApiListener: &v3listenerpb.ApiListener{
-								ApiListener: &anypb.Any{
-									TypeUrl: version.V2ListenerURL,
-									Value: func() []byte {
-										cm := &v3httppb.HttpConnectionManager{
-											RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
-										}
-										mcm, _ := proto.Marshal(cm)
-										return mcm
-									}(),
-								},
-							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name: v3LDSTarget,
+				ApiListener: &v3listenerpb.ApiListener{
+					ApiListener: &anypb.Any{
+						TypeUrl: version.V2ListenerURL,
+						Value: func() []byte {
+							cm := &v3httppb.HttpConnectionManager{
+								RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
+							}
+							mcm, _ := proto.Marshal(cm)
+							return mcm
+						}(),
+					},
 				},
-			},
+			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: true,
+			wantMD:     errMD,
+			wantErr:    true,
 		},
 		{
 			name: "rds.ConfigSource in apiListener is not ADS",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							ApiListener: &v3listenerpb.ApiListener{
-								ApiListener: &anypb.Any{
-									TypeUrl: version.V2ListenerURL,
-									Value: func() []byte {
-										cm := &v3httppb.HttpConnectionManager{
-											RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
-												Rds: &v3httppb.Rds{
-													ConfigSource: &v3corepb.ConfigSource{
-														ConfigSourceSpecifier: &v3corepb.ConfigSource_Path{
-															Path: "/some/path",
-														},
-													},
-													RouteConfigName: v3RouteConfigName,
-												},
-											},
-										}
-										mcm, _ := proto.Marshal(cm)
-										return mcm
-									}(),
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name: v3LDSTarget,
+				ApiListener: &v3listenerpb.ApiListener{
+					ApiListener: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+						RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+							Rds: &v3httppb.Rds{
+								ConfigSource: &v3corepb.ConfigSource{
+									ConfigSourceSpecifier: &v3corepb.ConfigSource_Path{
+										Path: "/some/path",
+									},
 								},
+								RouteConfigName: v3RouteConfigName,
 							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
+						},
+					}),
 				},
-			},
+			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: true,
+			wantMD:     errMD,
+			wantErr:    true,
 		},
 		{
 			name: "empty resource list",
@@ -474,15 +379,8 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			name:       "v3 with two filters with same name",
 			resources:  []*anypb.Any{v3LisWithFilters(customFilter, customFilter)},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: true,
+			wantMD:     errMD,
+			wantErr:    true,
 		},
 		{
 			name:      "v3 with two filters - same type different name",
@@ -511,15 +409,8 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			name:       "v3 with server-only filter",
 			resources:  []*anypb.Any{v3LisWithFilters(serverOnlyCustomFilter)},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: true,
+			wantMD:     errMD,
+			wantErr:    true,
 		},
 		{
 			name:      "v3 with optional server-only filter",
@@ -559,43 +450,22 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			name:       "v3 with err filter",
 			resources:  []*anypb.Any{v3LisWithFilters(errFilter)},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: true,
+			wantMD:     errMD,
+			wantErr:    true,
 		},
 		{
 			name:       "v3 with optional err filter",
 			resources:  []*anypb.Any{v3LisWithFilters(errOptionalFilter)},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: true,
+			wantMD:     errMD,
+			wantErr:    true,
 		},
 		{
 			name:       "v3 with unknown filter",
 			resources:  []*anypb.Any{v3LisWithFilters(unknownFilter)},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: true,
+			wantMD:     errMD,
+			wantErr:    true,
 		},
 		{
 			name:      "v3 with unknown filter (optional)",
@@ -651,6 +521,25 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
+			name:      "v3 listener with inline route configuration",
+			resources: []*anypb.Any{v3LisWithInlineRoute},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {
+					InlineRouteConfig: &RouteConfigUpdate{
+						VirtualHosts: []*VirtualHost{{
+							Domains: []string{v3LDSTarget},
+							Routes:  []*Route{{Prefix: newStringP("/"), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}}},
+						}}},
+					MaxStreamDuration: time.Second,
+					Raw:               v3LisWithInlineRoute,
+				},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
 			name:      "multiple listener resources",
 			resources: []*anypb.Any{v2Lis, v3LisWithFilters()},
 			wantUpdate: map[string]ListenerUpdate{
@@ -693,14 +582,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3LisWithFilters()},
 				"bad":       {},
 			},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
+			wantMD:  errMD,
 			wantErr: true,
 		},
 	}
@@ -726,187 +608,143 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 }
 
 func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
-	const v3LDSTarget = "grpc/server?xds.resource.listening_address=0.0.0.0:9999"
-
-	var (
-		listenerEmptyTransportSocket = &anypb.Any{
-			TypeUrl: version.V3ListenerURL,
-			Value: func() []byte {
-				lis := &v3listenerpb.Listener{
-					Name: v3LDSTarget,
-					Address: &v3corepb.Address{
-						Address: &v3corepb.Address_SocketAddress{
-							SocketAddress: &v3corepb.SocketAddress{
-								Address: "0.0.0.0",
-								PortSpecifier: &v3corepb.SocketAddress_PortValue{
-									PortValue: 9999,
-								},
-							},
-						},
-					},
-					FilterChains: []*v3listenerpb.FilterChain{
-						{
-							Name: "filter-chain-1",
-						},
-					},
-				}
-				mLis, _ := proto.Marshal(lis)
-				return mLis
-			}(),
-		}
-		listenerNoValidationContext = &anypb.Any{
-			TypeUrl: version.V3ListenerURL,
-			Value: func() []byte {
-				lis := &v3listenerpb.Listener{
-					Name: v3LDSTarget,
-					Address: &v3corepb.Address{
-						Address: &v3corepb.Address_SocketAddress{
-							SocketAddress: &v3corepb.SocketAddress{
-								Address: "0.0.0.0",
-								PortSpecifier: &v3corepb.SocketAddress_PortValue{
-									PortValue: 9999,
-								},
-							},
-						},
-					},
-					FilterChains: []*v3listenerpb.FilterChain{
-						{
-							Name: "filter-chain-1",
-							TransportSocket: &v3corepb.TransportSocket{
-								Name: "envoy.transport_sockets.tls",
-								ConfigType: &v3corepb.TransportSocket_TypedConfig{
-									TypedConfig: &anypb.Any{
-										TypeUrl: version.V3DownstreamTLSContextURL,
-										Value: func() []byte {
-											tls := &v3tlspb.DownstreamTlsContext{
-												CommonTlsContext: &v3tlspb.CommonTlsContext{
-													TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-														InstanceName:    "identityPluginInstance",
-														CertificateName: "identityCertName",
-													},
-												},
-											}
-											mtls, _ := proto.Marshal(tls)
-											return mtls
-										}(),
-									},
-								},
-							},
-						},
-					},
-					DefaultFilterChain: &v3listenerpb.FilterChain{
-						Name: "default-filter-chain-1",
-						TransportSocket: &v3corepb.TransportSocket{
-							Name: "envoy.transport_sockets.tls",
-							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: &anypb.Any{
-									TypeUrl: version.V3DownstreamTLSContextURL,
-									Value: func() []byte {
-										tls := &v3tlspb.DownstreamTlsContext{
-											CommonTlsContext: &v3tlspb.CommonTlsContext{
-												TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-													InstanceName:    "defaultIdentityPluginInstance",
-													CertificateName: "defaultIdentityCertName",
-												},
-											},
-										}
-										mtls, _ := proto.Marshal(tls)
-										return mtls
-									}(),
-								},
-							},
-						},
-					},
-				}
-				mLis, _ := proto.Marshal(lis)
-				return mLis
-			}(),
-		}
-		listenerWithValidationContext = &anypb.Any{
-			TypeUrl: version.V3ListenerURL,
-			Value: func() []byte {
-				lis := &v3listenerpb.Listener{
-					Name: v3LDSTarget,
-					Address: &v3corepb.Address{
-						Address: &v3corepb.Address_SocketAddress{
-							SocketAddress: &v3corepb.SocketAddress{
-								Address: "0.0.0.0",
-								PortSpecifier: &v3corepb.SocketAddress_PortValue{
-									PortValue: 9999,
-								},
-							},
-						},
-					},
-					FilterChains: []*v3listenerpb.FilterChain{
-						{
-							Name: "filter-chain-1",
-							TransportSocket: &v3corepb.TransportSocket{
-								Name: "envoy.transport_sockets.tls",
-								ConfigType: &v3corepb.TransportSocket_TypedConfig{
-									TypedConfig: &anypb.Any{
-										TypeUrl: version.V3DownstreamTLSContextURL,
-										Value: func() []byte {
-											tls := &v3tlspb.DownstreamTlsContext{
-												RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
-												CommonTlsContext: &v3tlspb.CommonTlsContext{
-													TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-														InstanceName:    "identityPluginInstance",
-														CertificateName: "identityCertName",
-													},
-													ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-														ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-															InstanceName:    "rootPluginInstance",
-															CertificateName: "rootCertName",
-														},
-													},
-												},
-											}
-											mtls, _ := proto.Marshal(tls)
-											return mtls
-										}(),
-									},
-								},
-							},
-						},
-					},
-					DefaultFilterChain: &v3listenerpb.FilterChain{
-						Name: "default-filter-chain-1",
-						TransportSocket: &v3corepb.TransportSocket{
-							Name: "envoy.transport_sockets.tls",
-							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: &anypb.Any{
-									TypeUrl: version.V3DownstreamTLSContextURL,
-									Value: func() []byte {
-										tls := &v3tlspb.DownstreamTlsContext{
-											RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
-											CommonTlsContext: &v3tlspb.CommonTlsContext{
-												TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-													InstanceName:    "defaultIdentityPluginInstance",
-													CertificateName: "defaultIdentityCertName",
-												},
-												ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-													ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-														InstanceName:    "defaultRootPluginInstance",
-														CertificateName: "defaultRootCertName",
-													},
-												},
-											},
-										}
-										mtls, _ := proto.Marshal(tls)
-										return mtls
-									}(),
-								},
-							},
-						},
-					},
-				}
-				mLis, _ := proto.Marshal(lis)
-				return mLis
-			}(),
-		}
+	const (
+		v3LDSTarget = "grpc/server?xds.resource.listening_address=0.0.0.0:9999"
+		testVersion = "test-version-lds-server"
 	)
 
-	const testVersion = "test-version-lds-server"
+	var (
+		emptyValidNetworkFilters = []*v3listenerpb.Filter{
+			{
+				Name: "filter-1",
+				ConfigType: &v3listenerpb.Filter_TypedConfig{
+					TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+				},
+			},
+		}
+		localSocketAddress = &v3corepb.Address{
+			Address: &v3corepb.Address_SocketAddress{
+				SocketAddress: &v3corepb.SocketAddress{
+					Address: "0.0.0.0",
+					PortSpecifier: &v3corepb.SocketAddress_PortValue{
+						PortValue: 9999,
+					},
+				},
+			},
+		}
+		listenerEmptyTransportSocket = testutils.MarshalAny(&v3listenerpb.Listener{
+			Name:    v3LDSTarget,
+			Address: localSocketAddress,
+			FilterChains: []*v3listenerpb.FilterChain{
+				{
+					Name:    "filter-chain-1",
+					Filters: emptyValidNetworkFilters,
+				},
+			},
+		})
+		listenerNoValidationContext = testutils.MarshalAny(&v3listenerpb.Listener{
+			Name:    v3LDSTarget,
+			Address: localSocketAddress,
+			FilterChains: []*v3listenerpb.FilterChain{
+				{
+					Name:    "filter-chain-1",
+					Filters: emptyValidNetworkFilters,
+					TransportSocket: &v3corepb.TransportSocket{
+						Name: "envoy.transport_sockets.tls",
+						ConfigType: &v3corepb.TransportSocket_TypedConfig{
+							TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+								CommonTlsContext: &v3tlspb.CommonTlsContext{
+									TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+										InstanceName:    "identityPluginInstance",
+										CertificateName: "identityCertName",
+									},
+								},
+							}),
+						},
+					},
+				},
+			},
+			DefaultFilterChain: &v3listenerpb.FilterChain{
+				Name:    "default-filter-chain-1",
+				Filters: emptyValidNetworkFilters,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+									InstanceName:    "defaultIdentityPluginInstance",
+									CertificateName: "defaultIdentityCertName",
+								},
+							},
+						}),
+					},
+				},
+			},
+		})
+		listenerWithValidationContext = testutils.MarshalAny(&v3listenerpb.Listener{
+			Name:    v3LDSTarget,
+			Address: localSocketAddress,
+			FilterChains: []*v3listenerpb.FilterChain{
+				{
+					Name:    "filter-chain-1",
+					Filters: emptyValidNetworkFilters,
+					TransportSocket: &v3corepb.TransportSocket{
+						Name: "envoy.transport_sockets.tls",
+						ConfigType: &v3corepb.TransportSocket_TypedConfig{
+							TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+								RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+								CommonTlsContext: &v3tlspb.CommonTlsContext{
+									TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+										InstanceName:    "identityPluginInstance",
+										CertificateName: "identityCertName",
+									},
+									ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+										ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+											InstanceName:    "rootPluginInstance",
+											CertificateName: "rootCertName",
+										},
+									},
+								},
+							}),
+						},
+					},
+				},
+			},
+			DefaultFilterChain: &v3listenerpb.FilterChain{
+				Name:    "default-filter-chain-1",
+				Filters: emptyValidNetworkFilters,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+							RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+									InstanceName:    "defaultIdentityPluginInstance",
+									CertificateName: "defaultIdentityCertName",
+								},
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+									ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+										InstanceName:    "defaultRootPluginInstance",
+										CertificateName: "defaultRootCertName",
+									},
+								},
+							},
+						}),
+					},
+				},
+			},
+		})
+		errMD = UpdateMetadata{
+			Status:  ServiceStatusNACKed,
+			Version: testVersion,
+			ErrState: &UpdateErrorMetadata{
+				Version: testVersion,
+				Err:     errPlaceHolder,
+			},
+		}
+	)
 
 	tests := []struct {
 		name       string
@@ -917,362 +755,366 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 	}{
 		{
 			name: "non-empty listener filters",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							ListenerFilters: []*v3listenerpb.ListenerFilter{
-								{Name: "listener-filter-1"},
-							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name: v3LDSTarget,
+				ListenerFilters: []*v3listenerpb.ListenerFilter{
+					{Name: "listener-filter-1"},
 				},
-			},
+			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: "unsupported field 'listener_filters'",
+			wantMD:     errMD,
+			wantErr:    "unsupported field 'listener_filters'",
 		},
 		{
 			name: "use_original_dst is set",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name:           v3LDSTarget,
-							UseOriginalDst: &wrapperspb.BoolValue{Value: true},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
-				},
-			},
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:           v3LDSTarget,
+				UseOriginalDst: &wrapperspb.BoolValue{Value: true},
+			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: "unsupported field 'use_original_dst'",
+			wantMD:     errMD,
+			wantErr:    "unsupported field 'use_original_dst'",
 		},
 		{
-			name: "no address field",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
-				},
-			},
+			name:       "no address field",
+			resources:  []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{Name: v3LDSTarget})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: "no address field in LDS response",
+			wantMD:     errMD,
+			wantErr:    "no address field in LDS response",
 		},
 		{
 			name: "no socket address field",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name:    v3LDSTarget,
-							Address: &v3corepb.Address{},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
-				},
-			},
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: &v3corepb.Address{},
+			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
+			wantMD:     errMD,
+			wantErr:    "no socket_address field in LDS response",
+		},
+		{
+			name: "no filter chains and no default filter chain",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{DestinationPort: &wrapperspb.UInt32Value{Value: 666}},
+						Filters:          emptyValidNetworkFilters,
+					},
 				},
-			},
-			wantErr: "no socket_address field in LDS response",
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "no supported filter chains and no default filter chain",
+		},
+		{
+			name: "missing http connection manager network filter",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "missing HttpConnectionManager filter",
+		},
+		{
+			name: "missing filter name in http filter",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+								},
+							},
+						},
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "missing name field in filter",
+		},
+		{
+			name: "duplicate filter names in http filter",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "name",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+								},
+							},
+							{
+								Name: "name",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+								},
+							},
+						},
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "duplicate filter name",
+		},
+		{
+			name: "unsupported oneof in typed config of http filter",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name:       "name",
+								ConfigType: &v3listenerpb.Filter_ConfigDiscovery{},
+							},
+						},
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "unsupported config_type",
+		},
+		{
+			name: "overlapping filter chain match criteria",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{SourcePorts: []uint32{1, 2, 3, 4, 5}},
+						Filters:          emptyValidNetworkFilters,
+					},
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{},
+						Filters:          emptyValidNetworkFilters,
+					},
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{SourcePorts: []uint32{5, 6, 7}},
+						Filters:          emptyValidNetworkFilters,
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "multiple filter chains with overlapping matching rules are defined",
+		},
+		{
+			name: "unsupported network filter",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "name",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.LocalReplyConfig{}),
+								},
+							},
+						},
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "unsupported network filter",
+		},
+		{
+			name: "badly marshaled network filter",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "name",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: &anypb.Any{
+										TypeUrl: version.V3HTTPConnManagerURL,
+										Value:   []byte{1, 2, 3, 4},
+									},
+								},
+							},
+						},
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "failed unmarshaling of network filter",
+		},
+		{
+			name: "client only http filter inside the network filter",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										HttpFilters: []*v3httppb.HttpFilter{
+											{
+												Name:       "clientOnlyCustomFilter",
+												ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: clientOnlyCustomFilterConfig},
+											},
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "not supported server-side",
 		},
 		{
 			name: "unexpected transport socket name",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							Address: &v3corepb.Address{
-								Address: &v3corepb.Address_SocketAddress{
-									SocketAddress: &v3corepb.SocketAddress{
-										Address: "0.0.0.0",
-										PortSpecifier: &v3corepb.SocketAddress_PortValue{
-											PortValue: 9999,
-										},
-									},
-								},
-							},
-							FilterChains: []*v3listenerpb.FilterChain{
-								{
-									Name: "filter-chain-1",
-									TransportSocket: &v3corepb.TransportSocket{
-										Name: "unsupported-transport-socket-name",
-									},
-								},
-							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name:    "filter-chain-1",
+						Filters: emptyValidNetworkFilters,
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "unsupported-transport-socket-name",
+						},
+					},
 				},
-			},
+			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: "transport_socket field has unexpected name",
+			wantMD:     errMD,
+			wantErr:    "transport_socket field has unexpected name",
 		},
 		{
 			name: "unexpected transport socket typedConfig URL",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							Address: &v3corepb.Address{
-								Address: &v3corepb.Address_SocketAddress{
-									SocketAddress: &v3corepb.SocketAddress{
-										Address: "0.0.0.0",
-										PortSpecifier: &v3corepb.SocketAddress_PortValue{
-											PortValue: 9999,
-										},
-									},
-								},
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name:    "filter-chain-1",
+						Filters: emptyValidNetworkFilters,
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{}),
 							},
-							FilterChains: []*v3listenerpb.FilterChain{
-								{
-									Name: "filter-chain-1",
-									TransportSocket: &v3corepb.TransportSocket{
-										Name: "envoy.transport_sockets.tls",
-										ConfigType: &v3corepb.TransportSocket_TypedConfig{
-											TypedConfig: &anypb.Any{
-												TypeUrl: version.V3UpstreamTLSContextURL,
-											},
-										},
-									},
-								},
-							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
+						},
+					},
 				},
-			},
+			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: "transport_socket field has unexpected typeURL",
+			wantMD:     errMD,
+			wantErr:    "transport_socket field has unexpected typeURL",
 		},
 		{
 			name: "badly marshaled transport socket",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							Address: &v3corepb.Address{
-								Address: &v3corepb.Address_SocketAddress{
-									SocketAddress: &v3corepb.SocketAddress{
-										Address: "0.0.0.0",
-										PortSpecifier: &v3corepb.SocketAddress_PortValue{
-											PortValue: 9999,
-										},
-									},
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name:    "filter-chain-1",
+						Filters: emptyValidNetworkFilters,
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: &anypb.Any{
+									TypeUrl: version.V3DownstreamTLSContextURL,
+									Value:   []byte{1, 2, 3, 4},
 								},
 							},
-							FilterChains: []*v3listenerpb.FilterChain{
-								{
-									Name: "filter-chain-1",
-									TransportSocket: &v3corepb.TransportSocket{
-										Name: "envoy.transport_sockets.tls",
-										ConfigType: &v3corepb.TransportSocket_TypedConfig{
-											TypedConfig: &anypb.Any{
-												TypeUrl: version.V3DownstreamTLSContextURL,
-												Value:   []byte{1, 2, 3, 4},
-											},
-										},
-									},
-								},
-							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
+						},
+					},
 				},
-			},
+			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: "failed to unmarshal DownstreamTlsContext in LDS response",
+			wantMD:     errMD,
+			wantErr:    "failed to unmarshal DownstreamTlsContext in LDS response",
 		},
 		{
 			name: "missing CommonTlsContext",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							Address: &v3corepb.Address{
-								Address: &v3corepb.Address_SocketAddress{
-									SocketAddress: &v3corepb.SocketAddress{
-										Address: "0.0.0.0",
-										PortSpecifier: &v3corepb.SocketAddress_PortValue{
-											PortValue: 9999,
-										},
-									},
-								},
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name:    "filter-chain-1",
+						Filters: emptyValidNetworkFilters,
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{}),
 							},
-							FilterChains: []*v3listenerpb.FilterChain{
-								{
-									Name: "filter-chain-1",
-									TransportSocket: &v3corepb.TransportSocket{
-										Name: "envoy.transport_sockets.tls",
-										ConfigType: &v3corepb.TransportSocket_TypedConfig{
-											TypedConfig: &anypb.Any{
-												TypeUrl: version.V3DownstreamTLSContextURL,
-												Value: func() []byte {
-													tls := &v3tlspb.DownstreamTlsContext{}
-													mtls, _ := proto.Marshal(tls)
-													return mtls
-												}(),
-											},
-										},
-									},
-								},
-							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
+						},
+					},
 				},
-			},
+			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: "DownstreamTlsContext in LDS response does not contain a CommonTlsContext",
+			wantMD:     errMD,
+			wantErr:    "DownstreamTlsContext in LDS response does not contain a CommonTlsContext",
 		},
 		{
 			name: "unsupported validation context in transport socket",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							Address: &v3corepb.Address{
-								Address: &v3corepb.Address_SocketAddress{
-									SocketAddress: &v3corepb.SocketAddress{
-										Address: "0.0.0.0",
-										PortSpecifier: &v3corepb.SocketAddress_PortValue{
-											PortValue: 9999,
-										},
-									},
-								},
-							},
-							FilterChains: []*v3listenerpb.FilterChain{
-								{
-									Name: "filter-chain-1",
-									TransportSocket: &v3corepb.TransportSocket{
-										Name: "envoy.transport_sockets.tls",
-										ConfigType: &v3corepb.TransportSocket_TypedConfig{
-											TypedConfig: &anypb.Any{
-												TypeUrl: version.V3DownstreamTLSContextURL,
-												Value: func() []byte {
-													tls := &v3tlspb.DownstreamTlsContext{
-														CommonTlsContext: &v3tlspb.CommonTlsContext{
-															ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
-																ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
-																	Name: "foo-sds-secret",
-																},
-															},
-														},
-													}
-													mtls, _ := proto.Marshal(tls)
-													return mtls
-												}(),
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name:    "filter-chain-1",
+						Filters: emptyValidNetworkFilters,
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
+											ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
+												Name: "foo-sds-secret",
 											},
 										},
 									},
-								},
+								}),
 							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
+						},
+					},
 				},
-			},
+			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: "validation context contains unexpected type",
+			wantMD:     errMD,
+			wantErr:    "validation context contains unexpected type",
 		},
 		{
 			name:      "empty transport socket",
@@ -1280,9 +1122,25 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
 					InboundListenerCfg: &InboundListenerConfig{
-						Address:      "0.0.0.0",
-						Port:         "9999",
-						FilterChains: []*FilterChain{{Match: &FilterChainMatch{}}},
+						Address: "0.0.0.0",
+						Port:    "9999",
+						FilterChains: &FilterChainManager{
+							dstPrefixMap: map[string]*destPrefixEntry{
+								unspecifiedPrefixMapKey: {
+									srcTypeArr: [3]*sourcePrefixes{
+										{
+											srcPrefixMap: map[string]*sourcePrefixEntry{
+												unspecifiedPrefixMapKey: {
+													srcPortMap: map[int]*FilterChain{
+														0: {},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 					Raw: listenerEmptyTransportSocket,
 				},
@@ -1294,119 +1152,57 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "no identity and root certificate providers",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							Address: &v3corepb.Address{
-								Address: &v3corepb.Address_SocketAddress{
-									SocketAddress: &v3corepb.SocketAddress{
-										Address: "0.0.0.0",
-										PortSpecifier: &v3corepb.SocketAddress_PortValue{
-											PortValue: 9999,
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name:    "filter-chain-1",
+						Filters: emptyValidNetworkFilters,
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+									RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+											InstanceName:    "identityPluginInstance",
+											CertificateName: "identityCertName",
 										},
 									},
-								},
+								}),
 							},
-							FilterChains: []*v3listenerpb.FilterChain{
-								{
-									Name: "filter-chain-1",
-									TransportSocket: &v3corepb.TransportSocket{
-										Name: "envoy.transport_sockets.tls",
-										ConfigType: &v3corepb.TransportSocket_TypedConfig{
-											TypedConfig: &anypb.Any{
-												TypeUrl: version.V3DownstreamTLSContextURL,
-												Value: func() []byte {
-													tls := &v3tlspb.DownstreamTlsContext{
-														RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
-														CommonTlsContext: &v3tlspb.CommonTlsContext{
-															TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-																InstanceName:    "identityPluginInstance",
-																CertificateName: "identityCertName",
-															},
-														},
-													}
-													mtls, _ := proto.Marshal(tls)
-													return mtls
-												}(),
-											},
-										},
-									},
-								},
-							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
+						},
+					},
 				},
-			},
+			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: "security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set",
+			wantMD:     errMD,
+			wantErr:    "security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set",
 		},
 		{
 			name: "no identity certificate provider with require_client_cert",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: v3LDSTarget,
-							Address: &v3corepb.Address{
-								Address: &v3corepb.Address_SocketAddress{
-									SocketAddress: &v3corepb.SocketAddress{
-										Address: "0.0.0.0",
-										PortSpecifier: &v3corepb.SocketAddress_PortValue{
-											PortValue: 9999,
-										},
-									},
-								},
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name:    "filter-chain-1",
+						Filters: emptyValidNetworkFilters,
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+									CommonTlsContext: &v3tlspb.CommonTlsContext{},
+								}),
 							},
-							FilterChains: []*v3listenerpb.FilterChain{
-								{
-									Name: "filter-chain-1",
-									TransportSocket: &v3corepb.TransportSocket{
-										Name: "envoy.transport_sockets.tls",
-										ConfigType: &v3corepb.TransportSocket_TypedConfig{
-											TypedConfig: &anypb.Any{
-												TypeUrl: version.V3DownstreamTLSContextURL,
-												Value: func() []byte {
-													tls := &v3tlspb.DownstreamTlsContext{
-														CommonTlsContext: &v3tlspb.CommonTlsContext{},
-													}
-													mtls, _ := proto.Marshal(tls)
-													return mtls
-												}(),
-											},
-										},
-									},
-								},
-							},
-						}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
+						},
+					},
 				},
-			},
+			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     errPlaceHolder,
-				},
-			},
-			wantErr: "security configuration on the server-side does not contain identity certificate provider instance name",
+			wantMD:     errMD,
+			wantErr:    "security configuration on the server-side does not contain identity certificate provider instance name",
 		},
 		{
 			name:      "happy case with no validation context",
@@ -1416,20 +1212,32 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					InboundListenerCfg: &InboundListenerConfig{
 						Address: "0.0.0.0",
 						Port:    "9999",
-						FilterChains: []*FilterChain{
-							{
-								Match: &FilterChainMatch{},
-								SecurityCfg: &SecurityConfig{
-									IdentityInstanceName: "identityPluginInstance",
-									IdentityCertName:     "identityCertName",
+						FilterChains: &FilterChainManager{
+							dstPrefixMap: map[string]*destPrefixEntry{
+								unspecifiedPrefixMapKey: {
+									srcTypeArr: [3]*sourcePrefixes{
+										{
+											srcPrefixMap: map[string]*sourcePrefixEntry{
+												unspecifiedPrefixMapKey: {
+													srcPortMap: map[int]*FilterChain{
+														0: {
+															SecurityCfg: &SecurityConfig{
+																IdentityInstanceName: "identityPluginInstance",
+																IdentityCertName:     "identityCertName",
+															},
+														},
+													},
+												},
+											},
+										},
+									},
 								},
 							},
-						},
-						DefaultFilterChain: &FilterChain{
-							Match: &FilterChainMatch{},
-							SecurityCfg: &SecurityConfig{
-								IdentityInstanceName: "defaultIdentityPluginInstance",
-								IdentityCertName:     "defaultIdentityCertName",
+							def: &FilterChain{
+								SecurityCfg: &SecurityConfig{
+									IdentityInstanceName: "defaultIdentityPluginInstance",
+									IdentityCertName:     "defaultIdentityCertName",
+								},
 							},
 						},
 					},
@@ -1449,26 +1257,38 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					InboundListenerCfg: &InboundListenerConfig{
 						Address: "0.0.0.0",
 						Port:    "9999",
-						FilterChains: []*FilterChain{
-							{
-								Match: &FilterChainMatch{},
-								SecurityCfg: &SecurityConfig{
-									RootInstanceName:     "rootPluginInstance",
-									RootCertName:         "rootCertName",
-									IdentityInstanceName: "identityPluginInstance",
-									IdentityCertName:     "identityCertName",
-									RequireClientCert:    true,
+						FilterChains: &FilterChainManager{
+							dstPrefixMap: map[string]*destPrefixEntry{
+								unspecifiedPrefixMapKey: {
+									srcTypeArr: [3]*sourcePrefixes{
+										{
+											srcPrefixMap: map[string]*sourcePrefixEntry{
+												unspecifiedPrefixMapKey: {
+													srcPortMap: map[int]*FilterChain{
+														0: {
+															SecurityCfg: &SecurityConfig{
+																RootInstanceName:     "rootPluginInstance",
+																RootCertName:         "rootCertName",
+																IdentityInstanceName: "identityPluginInstance",
+																IdentityCertName:     "identityCertName",
+																RequireClientCert:    true,
+															},
+														},
+													},
+												},
+											},
+										},
+									},
 								},
 							},
-						},
-						DefaultFilterChain: &FilterChain{
-							Match: &FilterChainMatch{},
-							SecurityCfg: &SecurityConfig{
-								RootInstanceName:     "defaultRootPluginInstance",
-								RootCertName:         "defaultRootCertName",
-								IdentityInstanceName: "defaultIdentityPluginInstance",
-								IdentityCertName:     "defaultIdentityCertName",
-								RequireClientCert:    true,
+							def: &FilterChain{
+								SecurityCfg: &SecurityConfig{
+									RootInstanceName:     "defaultRootPluginInstance",
+									RootCertName:         "defaultRootCertName",
+									IdentityInstanceName: "defaultIdentityPluginInstance",
+									IdentityCertName:     "defaultIdentityCertName",
+									RequireClientCert:    true,
+								},
 							},
 						},
 					},
@@ -1484,6 +1304,10 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			oldFI := env.FaultInjectionSupport
+			env.FaultInjectionSupport = true
+			defer func() { env.FaultInjectionSupport = oldFI }()
+
 			gotUpdate, md, err := UnmarshalListener(testVersion, test.resources, nil)
 			if (err != nil) != (test.wantErr != "") {
 				t.Fatalf("UnmarshalListener(), got err: %v, wantErr: %v", err, test.wantErr)
@@ -1496,389 +1320,6 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			}
 			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreDetails); diff != "" {
 				t.Errorf("got unexpected metadata, diff (-got +want): %v", diff)
-			}
-		})
-	}
-}
-
-func (s) TestGetFilterChain(t *testing.T) {
-	tests := []struct {
-		desc             string
-		inputFilterChain *v3listenerpb.FilterChain
-		wantFilterChain  *FilterChain
-		wantErr          bool
-	}{
-		{
-			desc:             "empty",
-			inputFilterChain: nil,
-		},
-		{
-			desc: "unsupported destination port",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					DestinationPort: &wrapperspb.UInt32Value{
-						Value: 666,
-					},
-				},
-			},
-		},
-		{
-			desc: "unsupported server names",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					ServerNames: []string{"example-server"},
-				},
-			},
-		},
-		{
-			desc: "unsupported transport protocol",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					TransportProtocol: "tls",
-				},
-			},
-		},
-		{
-			desc: "unsupported application protocol",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					ApplicationProtocols: []string{"h2"},
-				},
-			},
-		},
-		{
-			desc: "bad dest address prefix",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					PrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "a.b.c.d",
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			desc: "bad dest prefix length",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					PrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "10.1.1.0",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: 50,
-							},
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			desc: "dest prefix ranges",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					PrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "10.1.1.0",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: 8,
-							},
-						},
-						{
-							AddressPrefix: "192.168.1.0",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: 24,
-							},
-						},
-					},
-				},
-			},
-			wantFilterChain: &FilterChain{
-				Match: &FilterChainMatch{
-					DestPrefixRanges: []net.IP{
-						net.IPv4(10, 1, 1, 0),
-						net.IPv4(192, 168, 1, 0),
-					},
-				},
-			},
-		},
-		{
-			desc: "source type local",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
-				},
-			},
-			wantFilterChain: &FilterChain{
-				Match: &FilterChainMatch{
-					SourceType: SourceTypeSameOrLoopback,
-				},
-			},
-		},
-		{
-			desc: "source type external",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					SourceType: v3listenerpb.FilterChainMatch_EXTERNAL,
-				},
-			},
-			wantFilterChain: &FilterChain{
-				Match: &FilterChainMatch{
-					SourceType: SourceTypeExternal,
-				},
-			},
-		},
-		{
-			desc: "source type any",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					SourceType: v3listenerpb.FilterChainMatch_ANY,
-				},
-			},
-			wantFilterChain: &FilterChain{
-				Match: &FilterChainMatch{
-					SourceType: SourceTypeAny,
-				},
-			},
-		},
-		{
-			desc: "bad source address prefix",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					SourcePrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "a.b.c.d",
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			desc: "bad source prefix length",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					SourcePrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "10.1.1.0",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: 50,
-							},
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			desc: "source prefix ranges",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					SourcePrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "10.1.1.0",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: 8,
-							},
-						},
-						{
-							AddressPrefix: "192.168.1.0",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: 24,
-							},
-						},
-					},
-				},
-			},
-			wantFilterChain: &FilterChain{
-				Match: &FilterChainMatch{
-					SourcePrefixRanges: []net.IP{
-						net.IPv4(10, 1, 1, 0),
-						net.IPv4(192, 168, 1, 0),
-					},
-				},
-			},
-		},
-		{
-			desc:             "empty transport socket",
-			inputFilterChain: &v3listenerpb.FilterChain{},
-			wantFilterChain:  &FilterChain{Match: &FilterChainMatch{}},
-		},
-		{
-			desc: "bad transport socket name",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				TransportSocket: &v3corepb.TransportSocket{
-					Name: "unsupported-transport-socket-name",
-				},
-			},
-			wantErr: true,
-		},
-		{
-			desc: "unexpected url in transport socket",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				TransportSocket: &v3corepb.TransportSocket{
-					Name: "envoy.transport_sockets.tls",
-					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: marshalAny(&v3tlspb.UpstreamTlsContext{}),
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			desc: "badly marshaled downstream tls context",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				TransportSocket: &v3corepb.TransportSocket{
-					Name: "envoy.transport_sockets.tls",
-					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3DownstreamTLSContextURL,
-							Value:   []byte{1, 2, 3, 4},
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			desc: "missing common tls context",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				TransportSocket: &v3corepb.TransportSocket{
-					Name: "envoy.transport_sockets.tls",
-					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{}),
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			desc: "unsupported validation context",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				TransportSocket: &v3corepb.TransportSocket{
-					Name: "envoy.transport_sockets.tls",
-					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
-							CommonTlsContext: &v3tlspb.CommonTlsContext{
-								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
-									ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
-										Name: "foo-sds-secret",
-									},
-								},
-							},
-						}),
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			desc: "no identity and root certificate providers",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				TransportSocket: &v3corepb.TransportSocket{
-					Name: "envoy.transport_sockets.tls",
-					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
-							RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
-							CommonTlsContext: &v3tlspb.CommonTlsContext{
-								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-									InstanceName:    "identityPluginInstance",
-									CertificateName: "identityCertName",
-								},
-							},
-						}),
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			desc: "no identity certificate provider with require_client_cert",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				TransportSocket: &v3corepb.TransportSocket{
-					Name: "envoy.transport_sockets.tls",
-					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
-							CommonTlsContext: &v3tlspb.CommonTlsContext{},
-						}),
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			desc: "happy case",
-			inputFilterChain: &v3listenerpb.FilterChain{
-				Name: "filter-chain-1",
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					PrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "10.1.1.0",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: 8,
-							},
-						},
-					},
-					SourceType: v3listenerpb.FilterChainMatch_EXTERNAL,
-					SourcePrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "10.1.1.0",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: 8,
-							},
-						},
-					},
-					SourcePorts: []uint32{80, 8080},
-				},
-				TransportSocket: &v3corepb.TransportSocket{
-					Name: "envoy.transport_sockets.tls",
-					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
-							RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
-							CommonTlsContext: &v3tlspb.CommonTlsContext{
-								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-									InstanceName:    "identityPluginInstance",
-									CertificateName: "identityCertName",
-								},
-								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-									ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-										InstanceName:    "rootPluginInstance",
-										CertificateName: "rootCertName",
-									},
-								},
-							},
-						}),
-					},
-				},
-			},
-			wantFilterChain: &FilterChain{
-				Match: &FilterChainMatch{
-					DestPrefixRanges:   []net.IP{net.IPv4(10, 1, 1, 0)},
-					SourceType:         SourceTypeExternal,
-					SourcePrefixRanges: []net.IP{net.IPv4(10, 1, 1, 0)},
-					SourcePorts:        []uint32{80, 8080},
-				},
-				SecurityCfg: &SecurityConfig{
-					RootInstanceName:     "rootPluginInstance",
-					RootCertName:         "rootCertName",
-					IdentityInstanceName: "identityPluginInstance",
-					IdentityCertName:     "identityCertName",
-					RequireClientCert:    true,
-				},
-			},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.desc, func(t *testing.T) {
-			gotFilterChain, gotErr := getFilterChain(test.inputFilterChain)
-			if (gotErr != nil) != test.wantErr {
-				t.Fatalf("getFilterChain(%+v) returned error: %v, wantErr: %v", test.inputFilterChain, gotErr, test.wantErr)
-			}
-			if diff := cmp.Diff(test.wantFilterChain, gotFilterChain); diff != "" {
-				t.Errorf("getFilterChain(%+v) returned unexpected, diff (-want +got):\n%s", test.inputFilterChain, diff)
 			}
 		})
 	}
@@ -1989,7 +1430,7 @@ var customFilterTypedStructConfig = &v1typepb.TypedStruct{
 var wrappedCustomFilterTypedStructConfig *anypb.Any
 
 func init() {
-	wrappedCustomFilterTypedStructConfig = marshalAny(customFilterTypedStructConfig)
+	wrappedCustomFilterTypedStructConfig = testutils.MarshalAny(customFilterTypedStructConfig)
 }
 
 var unknownFilterConfig = &anypb.Any{
@@ -1998,19 +1439,11 @@ var unknownFilterConfig = &anypb.Any{
 }
 
 func wrappedOptionalFilter(name string) *anypb.Any {
-	return marshalAny(&v3routepb.FilterConfig{
+	return testutils.MarshalAny(&v3routepb.FilterConfig{
 		IsOptional: true,
 		Config: &anypb.Any{
 			TypeUrl: name,
 			Value:   []byte{1, 2, 3},
 		},
 	})
-}
-
-func marshalAny(m proto.Message) *anypb.Any {
-	a, err := ptypes.MarshalAny(m)
-	if err != nil {
-		panic(fmt.Sprintf("ptypes.MarshalAny(%+v) failed: %v", m, err))
-	}
-	return a
 }

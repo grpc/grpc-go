@@ -37,7 +37,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal"
+	icredentials "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 )
@@ -104,7 +104,7 @@ func createTestContext(ctx context.Context, s credentials.SecurityLevel) context
 		Method:   "testInfo",
 		AuthInfo: auth,
 	}
-	return internal.NewRequestInfoContext.(func(context.Context, credentials.RequestInfo) context.Context)(ctx, ri)
+	return icredentials.NewRequestInfoContext(ctx, ri)
 }
 
 // errReader implements the io.Reader interface and returns an error from the

@@ -117,6 +117,7 @@ type fakeEDSBalancer struct {
 	edsUpdate          *testutils.Channel
 	serviceName        *testutils.Channel
 	serviceRequestMax  *testutils.Channel
+	clusterName        *testutils.Channel
 }
 
 func (f *fakeEDSBalancer) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
@@ -136,6 +137,10 @@ func (f *fakeEDSBalancer) updateState(priority priorityType, s balancer.State) {
 func (f *fakeEDSBalancer) updateServiceRequestsConfig(serviceName string, max *uint32) {
 	f.serviceName.Send(serviceName)
 	f.serviceRequestMax.Send(max)
+}
+
+func (f *fakeEDSBalancer) updateClusterName(name string) {
+	f.clusterName.Send(name)
 }
 
 func (f *fakeEDSBalancer) close() {}
@@ -207,6 +212,18 @@ func (f *fakeEDSBalancer) waitForCountMaxUpdate(ctx context.Context, want *uint3
 	return fmt.Errorf("got countMax %+v, want %+v", got, want)
 }
 
+func (f *fakeEDSBalancer) waitForClusterNameUpdate(ctx context.Context, wantClusterName string) error {
+	val, err := f.clusterName.Receive(ctx)
+	if err != nil {
+		return err
+	}
+	gotServiceName := val.(string)
+	if gotServiceName != wantClusterName {
+		return fmt.Errorf("got clusterName %v, want %v", gotServiceName, wantClusterName)
+	}
+	return nil
+}
+
 func newFakeEDSBalancer(cc balancer.ClientConn) edsBalancerImplInterface {
 	return &fakeEDSBalancer{
 		cc:                 cc,
@@ -215,6 +232,7 @@ func newFakeEDSBalancer(cc balancer.ClientConn) edsBalancerImplInterface {
 		edsUpdate:          testutils.NewChannelWithSize(10),
 		serviceName:        testutils.NewChannelWithSize(10),
 		serviceRequestMax:  testutils.NewChannelWithSize(10),
+		clusterName:        testutils.NewChannelWithSize(10),
 	}
 }
 
@@ -653,6 +671,59 @@ func (s) TestCounterUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := edsI.waitForCountMaxUpdate(ctx, &testCountMax); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestClusterNameUpdateInAddressAttributes verifies that cluster name update in
+// edsImpl is triggered with the update from a new service config.
+func (s) TestClusterNameUpdateInAddressAttributes(t *testing.T) {
+	edsLBCh := testutils.NewChannel()
+	xdsC, cleanup := setup(edsLBCh)
+	defer cleanup()
+
+	builder := balancer.Get(edsName)
+	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
+	if edsB == nil {
+		t.Fatalf("builder.Build(%s) failed and returned nil", edsName)
+	}
+	defer edsB.Close()
+
+	// Update should trigger counter update with provided service name.
+	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		BalancerConfig: &EDSConfig{
+			EDSServiceName: "foobar-1",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	gotCluster, err := xdsC.WaitForWatchEDS(ctx)
+	if err != nil || gotCluster != "foobar-1" {
+		t.Fatalf("unexpected EDS watch: %v, %v", gotCluster, err)
+	}
+	edsI := edsB.(*edsBalancer).edsImpl.(*fakeEDSBalancer)
+	if err := edsI.waitForClusterNameUpdate(ctx, "foobar-1"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Update should trigger counter update with provided service name.
+	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		BalancerConfig: &EDSConfig{
+			EDSServiceName: "foobar-2",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := xdsC.WaitForCancelEDSWatch(ctx); err != nil {
+		t.Fatalf("failed to wait for EDS cancel: %v", err)
+	}
+	gotCluster2, err := xdsC.WaitForWatchEDS(ctx)
+	if err != nil || gotCluster2 != "foobar-2" {
+		t.Fatalf("unexpected EDS watch: %v, %v", gotCluster2, err)
+	}
+	if err := edsI.waitForClusterNameUpdate(ctx, "foobar-2"); err != nil {
 		t.Fatal(err)
 	}
 }

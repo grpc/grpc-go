@@ -116,6 +116,9 @@ type edsBalancerImplInterface interface {
 	// updateServiceRequestsConfig updates the service requests counter to the
 	// one for the given service name.
 	updateServiceRequestsConfig(serviceName string, max *uint32)
+	// updateClusterName updates the cluster name that will be attached to the
+	// address attributes.
+	updateClusterName(name string)
 	// close closes the eds balancer.
 	close()
 }
@@ -250,6 +253,7 @@ func (x *edsBalancer) handleServiceConfigUpdate(config *EDSConfig) error {
 		// This is OK for now, because we don't actually expect edsServiceName
 		// to change. Fix this (a bigger change) will happen later.
 		x.lsw.updateServiceName(x.edsServiceName)
+		x.edsImpl.updateClusterName(x.edsServiceName)
 	}
 
 	// Restart load reporting when the loadReportServer name has changed.

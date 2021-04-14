@@ -479,6 +479,10 @@ func (bg *BalancerGroup) Close() {
 	}
 	bg.incomingMu.Unlock()
 
+	// Clear(true) runs clear function to close sub-balancers in cache. It
+	// must be called out of outgoing mutex.
+	bg.balancerCache.Clear(true)
+
 	bg.outgoingMu.Lock()
 	if bg.outgoingStarted {
 		bg.outgoingStarted = false
@@ -487,9 +491,6 @@ func (bg *BalancerGroup) Close() {
 		}
 	}
 	bg.outgoingMu.Unlock()
-	// Clear(true) runs clear function to close sub-balancers in cache. It
-	// must be called out of outgoing mutex.
-	bg.balancerCache.Clear(true)
 }
 
 const (

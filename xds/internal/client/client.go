@@ -24,7 +24,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"sync"
 	"time"
 
@@ -195,7 +194,15 @@ type UpdateMetadata struct {
 type ListenerUpdate struct {
 	// RouteConfigName is the route configuration name corresponding to the
 	// target which is being watched through LDS.
+	//
+	// Only one of RouteConfigName and InlineRouteConfig is set.
 	RouteConfigName string
+	// InlineRouteConfig is the inline route configuration (RDS response)
+	// returned inside LDS.
+	//
+	// Only one of RouteConfigName and InlineRouteConfig is set.
+	InlineRouteConfig *RouteConfigUpdate
+
 	// MaxStreamDuration contains the HTTP connection manager's
 	// common_http_protocol_options.max_stream_duration field, or zero if
 	// unset.
@@ -233,60 +240,7 @@ type InboundListenerConfig struct {
 	// accept incoming connections.
 	Port string
 	// FilterChains is the list of filter chains associated with this listener.
-	FilterChains []*FilterChain
-	// DefaultFilterChain is the filter chain to be used when none of the above
-	// filter chains matches an incoming connection.
-	DefaultFilterChain *FilterChain
-}
-
-// FilterChain wraps a set of match criteria and associated security
-// configuration.
-//
-// The actual set filters associated with this filter chain are not captured
-// here, since we do not support these filters on the server yet.
-type FilterChain struct {
-	// Match contains the criteria to use when matching a connection to this
-	// filter chain.
-	Match *FilterChainMatch
-	// SecurityCfg contains transport socket security configuration.
-	SecurityCfg *SecurityConfig
-}
-
-// SourceType specifies the connection source IP match type.
-type SourceType int
-
-const (
-	// SourceTypeAny matches connection attempts from any source.
-	SourceTypeAny SourceType = iota
-	// SourceTypeSameOrLoopback matches connection attempts from the same host.
-	SourceTypeSameOrLoopback
-	// SourceTypeExternal matches connection attempts from a different host.
-	SourceTypeExternal
-)
-
-// FilterChainMatch specifies the match criteria for selecting a specific filter
-// chain of a listener, for an incoming connection.
-//
-// The xDS FilterChainMatch proto specifies 8 match criteria. But we only have a
-// subset of those fields here because we explicitly ignore filter chains whose
-// match criteria specifies values for fields like destination_port,
-// server_names, application_protocols, transport_protocol.
-type FilterChainMatch struct {
-	// DestPrefixRanges specifies a set of IP addresses and prefix lengths to
-	// match the destination address of the incoming connection when the
-	// listener is bound to 0.0.0.0/[::]. If this field is empty, the
-	// destination address is ignored.
-	DestPrefixRanges []net.IP
-	// SourceType specifies the connection source IP match type. Can be any,
-	// local or external network.
-	SourceType SourceType
-	// SourcePrefixRanges specifies a set of IP addresses and prefix lengths to
-	// match the source address of the incoming connection. If this field is
-	// empty, the source address is ignored.
-	SourcePrefixRanges []net.IP
-	// SourcePorts specifies a set of ports to match the source port of the
-	// incoming connection. If this field is empty, the source port is ignored.
-	SourcePorts []uint32
+	FilterChains *FilterChainManager
 }
 
 // RouteConfigUpdate contains information received in an RDS response, which is
@@ -401,9 +355,26 @@ type SecurityConfig struct {
 	RequireClientCert bool
 }
 
+// ClusterType is the type of cluster from a received CDS response.
+type ClusterType int
+
+const (
+	// ClusterTypeEDS represents the EDS cluster type, which will delegate endpoint
+	// discovery to the management server.
+	ClusterTypeEDS ClusterType = iota
+	// ClusterTypeLogicalDNS represents the Logical DNS cluster type, which essentially
+	// maps to the gRPC behavior of using the DNS resolver with pick_first LB policy.
+	ClusterTypeLogicalDNS
+	// ClusterTypeAggregate represents the Aggregate Cluster type, which provides a
+	// prioritized list of clusters to use. It is used for failover between clusters
+	// with a different configuration.
+	ClusterTypeAggregate
+)
+
 // ClusterUpdate contains information from a received CDS response, which is of
 // interest to the registered CDS watcher.
 type ClusterUpdate struct {
+	ClusterType ClusterType
 	// ServiceName is the service name corresponding to the clusterName which
 	// is being watched for through CDS.
 	ServiceName string
@@ -416,6 +387,10 @@ type ClusterUpdate struct {
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
+
+	// PrioritizedClusterNames is used only for cluster type aggregate. It represents
+	// a prioritized list of cluster names.
+	PrioritizedClusterNames []string
 }
 
 // OverloadDropConfig contains the config to drop overloads.

@@ -53,9 +53,25 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name: "non-eds-cluster-type",
+			name: "non-supported-cluster-type-static",
 			cluster: &v3clusterpb.Cluster{
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+				},
+				LbPolicy: v3clusterpb.Cluster_LEAST_REQUEST,
+			},
+			wantUpdate: emptyUpdate,
+			wantErr:    true,
+		},
+		{
+			name: "non-supported-cluster-type-original-dst",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_ORIGINAL_DST},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
 					EdsConfig: &v3corepb.ConfigSource{
 						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
@@ -107,8 +123,8 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if update, err := validateCluster(test.cluster); err == nil {
-				t.Errorf("validateCluster(%+v) = %v, wanted error", test.cluster, update)
+			if update, err := validateClusterAndConstructClusterUpdate(test.cluster); err == nil {
+				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) = %v, wanted error", test.cluster, update)
 			}
 		})
 	}
@@ -120,6 +136,24 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		cluster    *v3clusterpb.Cluster
 		wantUpdate ClusterUpdate
 	}{
+		{
+			name: "happy-case-logical-dns",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_LOGICAL_DNS},
+				LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
+			},
+			wantUpdate: ClusterUpdate{ServiceName: "", EnableLRS: false, ClusterType: ClusterTypeLogicalDNS},
+		},
+		{
+			name: "happy-case-aggregate-v3",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
+					ClusterType: &v3clusterpb.Cluster_CustomClusterType{Name: "envoy.clusters.aggregate"},
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+			},
+			wantUpdate: ClusterUpdate{ServiceName: "", EnableLRS: false, ClusterType: ClusterTypeAggregate},
+		},
 		{
 			name: "happy-case-no-service-name-no-lrs",
 			cluster: &v3clusterpb.Cluster{
@@ -214,12 +248,12 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 	defer func() { env.CircuitBreakingSupport = origCircuitBreakingSupport }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, err := validateCluster(test.cluster)
+			update, err := validateClusterAndConstructClusterUpdate(test.cluster)
 			if err != nil {
-				t.Errorf("validateCluster(%+v) failed: %v", test.cluster, err)
+				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) failed: %v", test.cluster, err)
 			}
 			if !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
-				t.Errorf("validateCluster(%+v) = %v, want: %v", test.cluster, update, test.wantUpdate)
+				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) = %v, want: %v", test.cluster, update, test.wantUpdate)
 			}
 		})
 	}
@@ -269,12 +303,12 @@ func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
 		ServiceName: serviceName,
 		EnableLRS:   false,
 	}
-	gotUpdate, err := validateCluster(cluster)
+	gotUpdate, err := validateClusterAndConstructClusterUpdate(cluster)
 	if err != nil {
-		t.Errorf("validateCluster() failed: %v", err)
+		t.Errorf("validateClusterAndConstructClusterUpdate() failed: %v", err)
 	}
 	if diff := cmp.Diff(wantUpdate, gotUpdate); diff != "" {
-		t.Errorf("validateCluster() returned unexpected diff (-want, got):\n%s", diff)
+		t.Errorf("validateClusterAndConstructClusterUpdate() returned unexpected diff (-want, got):\n%s", diff)
 	}
 }
 
@@ -790,12 +824,12 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, err := validateCluster(test.cluster)
+			update, err := validateClusterAndConstructClusterUpdate(test.cluster)
 			if (err != nil) != test.wantErr {
-				t.Errorf("validateCluster() returned err %v wantErr %v)", err, test.wantErr)
+				t.Errorf("validateClusterAndConstructClusterUpdate() returned err %v wantErr %v)", err, test.wantErr)
 			}
 			if diff := cmp.Diff(test.wantUpdate, update, cmpopts.EquateEmpty(), cmp.AllowUnexported(regexp.Regexp{})); diff != "" {
-				t.Errorf("validateCluster() returned unexpected diff (-want, +got):\n%s", diff)
+				t.Errorf("validateClusterAndConstructClusterUpdate() returned unexpected diff (-want, +got):\n%s", diff)
 			}
 		})
 	}
