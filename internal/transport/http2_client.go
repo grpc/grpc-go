@@ -518,7 +518,7 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 		}
 		for _, vv := range added {
 			for i, v := range vv {
-				if i%2 == 0 {
+				if i&1 == 0 {
 					k = strings.ToLower(v)
 					continue
 				}

@@ -194,7 +194,7 @@ func TestParallel(t *testing.T) {
 					throttles[num] = throttle
 					return
 				default:
-					if i%2 == 0 {
+					if i&1 == 0 {
 						th.RegisterBackendResponse(true)
 						throttle++
 					} else {
