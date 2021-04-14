@@ -65,13 +65,20 @@ type serverReflectionServer struct {
 
 // Register registers the server reflection service on the given gRPC server.
 func Register(s *grpc.Server) {
-	RegisterWithRegistrar(s, s.GetServiceInfo)
+	register(s, s.GetServiceInfo)
 }
 
 // RegisterWithRegistrar registers the server reflection service with the given registrar.
-// The given function is invoked to determine the services that will be exposed. It is not
-// invoked until the service impl is actually used.
-func RegisterWithRegistrar(r grpc.ServiceRegistrar, queryServices func() map[string]grpc.ServiceInfo) {
+// The given map describes the services that will be exposed via reflection.
+func RegisterWithRegistrar(r grpc.ServiceRegistrar, svcs map[string]grpc.ServiceInfo) {
+	rpb.RegisterServerReflectionServer(r, &serverReflectionServer{
+		queryServices: func() map[string]grpc.ServiceInfo {
+			return svcs
+		},
+	})
+}
+
+func register(r grpc.ServiceRegistrar, queryServices func() map[string]grpc.ServiceInfo) {
 	rpb.RegisterServerReflectionServer(r, &serverReflectionServer{
 		queryServices: queryServices,
 	})
