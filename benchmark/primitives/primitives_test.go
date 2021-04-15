@@ -427,24 +427,24 @@ func BenchmarkRLockUnlock(b *testing.B) {
 }
 
 func BenchmarkEvenBit(b *testing.B) {
-	n := 1 << 33
+	n := int64(1 << 33)
 	b.ResetTimer()
-	for i := 0; i <= n; i++ {
+	for i := int64(0); i <= n; i++ {
 		runBit(i)
 	}
 	b.StopTimer()
 }
-func runBit(i int) bool {
+func runBit(i int64) bool {
 	return i&1 == 0
 }
 func BenchmarkEvenMod(b *testing.B) {
-	n := 1 << 33
+	n := int64(1 << 33)
 	b.ResetTimer()
-	for i := 0; i <= n; i++ {
+	for i := int64(0); i <= n; i++ {
 		runMod(i)
 	}
 	b.StopTimer()
 }
-func runMod(i int) bool {
+func runMod(i int64) bool {
 	return i%2 == 0
 }
