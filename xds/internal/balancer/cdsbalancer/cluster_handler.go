@@ -30,8 +30,9 @@ import (
 // in a stream like fashion.
 type clusterHandler struct {
 	// A mutex to protect entire tree of clusters.
-	clusterMutex sync.Mutex
-	root         *clusterNode
+	clusterMutex    sync.Mutex
+	root            *clusterNode
+	rootClusterName string
 
 	// A way to ping CDS Balanccer about any updates or errors to a Node in the tree.
 	// This will either get called from this handler constructing an update or from a child with an error.
@@ -40,29 +41,33 @@ type clusterHandler struct {
 	xdsClient      xdsClientInterface
 }
 
-func (ch *clusterHandler) updateRootCluster(clusterName string) /*Return value - the expectation for a stream back to the CDS Policy*/ {
+// He has something called WatchCluster which takes xdsClientInterface and also a callback.
+
+func (ch *clusterHandler) updateRootCluster(rootClusterName string) {
+	ch.clusterMutex.Lock()
+	defer ch.clusterMutex.Unlock()
 	if ch.root == nil {
 		// Construct a root node on first update.
-		ch.root = createClusterNode(clusterName, ch.xdsClient, ch)
+		ch.root = createClusterNode(rootClusterName, ch.xdsClient, ch)
+		ch.rootClusterName = rootClusterName
 		return
 	}
 	// Check if root cluster was changed. If it was, delete old one and start new one, if not
 	// do nothing.
-	if clusterName != ch.root.clusterUpdate.ServiceName {
+	if rootClusterName != ch.rootClusterName {
 		ch.root.delete()
-		ch.root = createClusterNode(clusterName, ch.xdsClient, ch)
+		ch.root = createClusterNode(rootClusterName, ch.xdsClient, ch)
+		ch.rootClusterName = rootClusterName
 	}
 }
 
 
 // This function tries to construct a cluster update to send to CDS.
 func (ch *clusterHandler) constructClusterUpdate() {
-	ch.clusterMutex.Lock()
 	// If there was an error received no op, as this simply means one of the children hasn't received an update yet.
-	if clusterUpdate, err := ch.root.constructClusterUpdate(); err != nil {
+	if clusterUpdate, err := ch.root.constructClusterUpdate(); err == nil {
 		ch.updateChannel.Put(&clusterHandlerUpdate{chu: clusterUpdate, err: nil})
 	}
-	ch.clusterMutex.Unlock()
 }
 
 // This logically represents a cluster. This handles all the logic for starting and stopping
@@ -78,10 +83,10 @@ type clusterNode struct {
 	// XdsClusterResolverLoadBalancingPolicy.
 	clusterUpdate xdsclient.ClusterUpdate
 
-	// This boolean determines whether this Node has received the first update or not. This isn't the best practice,
+	// This boolean determines whether this Node has received an update or not. This isn't the best practice,
 	// but this will protect a list of Cluster Updates from being constructed if a cluster in the tree has not received
 	// an update yet.
-	receivedFirstUpdate bool
+	receivedUpdate bool
 
 	clusterHandler *clusterHandler
 
@@ -97,14 +102,8 @@ func createClusterNode(clusterName string, xdsClient xdsClientInterface, topLeve
 	return c
 }
 
-// This function serves as a wrapper around recursive logic in order to grab the lock.
+// This function cancels the cluster watch on the cluster and all of it's children.
 func (c *clusterNode) delete() {
-	c.clusterHandler.clusterMutex.Lock()
-	c.deleteRecursive()
-	c.clusterHandler.clusterMutex.Unlock()
-}
-
-func (c *clusterNode) deleteRecursive() {
 	c.cancelFunc()
 	for _, child := range c.children {
 		child.delete()
@@ -114,7 +113,7 @@ func (c *clusterNode) deleteRecursive() {
 // Construct cluster update (potentially a list of ClusterUpdates) for a node.
 func (c *clusterNode) constructClusterUpdate() ([]xdsclient.ClusterUpdate, error) {
 	// If the cluster has not yet received an update, the cluster update is not yet ready.
-	if !c.receivedFirstUpdate {
+	if !c.receivedUpdate {
 		return nil, errors.New("Tried to construct a cluster update on a cluster that has not received an update.")
 	}
 
@@ -130,9 +129,7 @@ func (c *clusterNode) constructClusterUpdate() ([]xdsclient.ClusterUpdate, error
 		if err != nil {
 			return nil, err
 		}
-		for _, clusterUpdate := range childUpdateList {
-			childrenUpdates = append(childrenUpdates, clusterUpdate)
-		}
+		childrenUpdates = append(childrenUpdates, childUpdateList...)
 	}
 
 	return childrenUpdates, nil
@@ -142,11 +139,12 @@ func (c *clusterNode) constructClusterUpdate() ([]xdsclient.ClusterUpdate, error
 // handles any logic with regards to any child state that may have changed.
 func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err error) {
 	c.clusterHandler.clusterMutex.Lock()
+	defer c.clusterHandler.clusterMutex.Unlock()
 	if err != nil { // Write this error for run() to pick up in CDS LB policy.
 		c.clusterHandler.updateChannel.Put(&clusterHandlerUpdate{chu: nil, err: err})
 		return
 	}
-	c.receivedFirstUpdate = true
+	c.receivedUpdate = true
 	c.clusterUpdate = clusterUpdate
 
 	// This variable will determine whether there was a delta with regards to this clusterupdate. If there was, at the end
@@ -161,7 +159,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 		}
 	}
 
-	for _, child := range(c.children) {
+	for _, child := range c.children {
 		// If the child is still present in the update, then there is nothing to do for that child name in the update.
 		if _, found := newChildren[child.clusterUpdate.ServiceName]; found {
 			delete(newChildren, child.clusterUpdate.ServiceName)
@@ -181,5 +179,4 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 	if delta {
 		c.clusterHandler.constructClusterUpdate()
 	}
-	c.clusterHandler.clusterMutex.Unlock()
 }
