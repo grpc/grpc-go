@@ -20,7 +20,6 @@ import (
 	"errors"
 	"sync"
 
-	"google.golang.org/grpc/internal/buffer"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
@@ -36,7 +35,8 @@ type clusterHandler struct {
 
 	// A way to ping CDS Balanccer about any updates or errors to a Node in the tree.
 	// This will either get called from this handler constructing an update or from a child with an error.
-	updateChannel *buffer.Unbounded
+	// Capacity of one as the only update CDS Balancer cares about is the most recent update.
+	updateChannel chan clusterHandlerUpdate
 
 	xdsClient      xdsClientInterface
 }
@@ -66,7 +66,13 @@ func (ch *clusterHandler) updateRootCluster(rootClusterName string) {
 func (ch *clusterHandler) constructClusterUpdate() {
 	// If there was an error received no op, as this simply means one of the children hasn't received an update yet.
 	if clusterUpdate, err := ch.root.constructClusterUpdate(); err == nil {
-		ch.updateChannel.Put(&clusterHandlerUpdate{chu: clusterUpdate, err: nil})
+		// For a ClusterUpdate, the only update CDS cares about is the most recent one, so opportunistically drain the
+		// update channel before sending the new update.
+		select {
+		case <-ch.updateChannel:
+		default:
+		}
+		ch.updateChannel<-clusterHandlerUpdate{chu: clusterUpdate, err: nil}
 	}
 }
 
@@ -141,15 +147,19 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 	c.clusterHandler.clusterMutex.Lock()
 	defer c.clusterHandler.clusterMutex.Unlock()
 	if err != nil { // Write this error for run() to pick up in CDS LB policy.
-		c.clusterHandler.updateChannel.Put(&clusterHandlerUpdate{chu: nil, err: err})
+		c.clusterHandler.updateChannel<-clusterHandlerUpdate{chu: nil, err: err}
 		return
 	}
-	c.receivedUpdate = true
-	c.clusterUpdate = clusterUpdate
-
 	// This variable will determine whether there was a delta with regards to this clusterupdate. If there was, at the end
 	// of the response ping ClusterHandler to send CDS Policy a new list of ClusterUpdates.
 	var delta bool
+	// If this is the first update to the Cluster Node, ping ClusterHandler at the end of method to try and build a config.
+	if !c.receivedUpdate {
+		delta = true
+	}
+
+	c.receivedUpdate = true
+	c.clusterUpdate = clusterUpdate
 
 	// This map will be empty if the cluster update specifies cluster is an EDS or LogicalDNS cluster, as will have no children.
 	newChildren := make(map[string]struct{})
