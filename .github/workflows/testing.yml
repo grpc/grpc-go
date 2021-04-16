@@ -53,12 +53,22 @@ jobs:
             goversion: 1.13
           - type: tests111
             goversion: 1.11  # Keep until interop tests no longer require Go1.11
+          - type: arm64
+            goversion: 1.15
 
     steps:
       # Setup the environment.
       - name: Setup GOARCH=386
         if: ${{ matrix.type == '386' }}
         run: echo "GOARCH=386" >> $GITHUB_ENV
+      - name: Setup GOARCH=arm64
+        if: ${{ matrix.type == 'arm64' }}
+        run: echo "GOARCH=arm64" >> $GITHUB_ENV
+      - name: Setup qemu emulator
+        if: ${{ matrix.type == 'arm64' }}
+        # setup qemu-user-static emulator and register it with binfmt_misc so that aarch64 binaries
+        # are automatically executed using qemu.
+        run: docker run --rm --privileged multiarch/qemu-user-static:5.2.0-2 --reset --credential yes --persistent yes
       - name: Setup RETRY
         if: ${{ matrix.type == 'retry' }}
         run: echo "GRPC_GO_RETRY=on" >> $GITHUB_ENV
