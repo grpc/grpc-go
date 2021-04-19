@@ -47,8 +47,6 @@ type Client struct {
 
 	ldsCb func(xdsclient.ListenerUpdate, error)
 	rdsCb func(xdsclient.RouteConfigUpdate, error)
-	cdsCb func(xdsclient.ClusterUpdate, error) // Switch this from a single callback to
-	//
 	cdsCbs map[string]func(xdsclient.ClusterUpdate, error)
 	edsCb func(xdsclient.EndpointsUpdate, error)
 }
@@ -122,16 +120,15 @@ func (xdsC *Client) WaitForCancelRouteConfigWatch(ctx context.Context) error {
 }
 
 // WatchCluster registers a CDS watch.
-// Right now, I need to expand this to handle multiple service names, clusters, and multiple callbacks.
-// Right now, it looks like this, persists a single callback which it calls back into
-// Can expand that out into a map of serviceName, callback, to logically represent tree like structure, although
-// it doesn't really care about tree so just has a list of key value pairs as a map.
 func (xdsC *Client) WatchCluster(clusterName string, callback func(xdsclient.ClusterUpdate, error)) func() {
-	xdsC.cdsCbs[clusterName] = callback // TODO: Will I still have to construct this map or does it happen implicitly?
+	// Due to the tree like structure of aggregate clusters, there can be multiple callbacks persisted for each cluster
+	// node. However, the client doesn't care about the parent child relationship between the nodes, only that it invokes
+	// the right callback for a particular cluster.
+	xdsC.cdsCbs[clusterName] = callback
 	print(clusterName)
 	xdsC.cdsWatchCh.Send(clusterName)
-	return func() { // It returns a function here, which simply allows verification that cancel was called I'm assuming
-		xdsC.cdsCancelCh.Send(clusterName) // I think this validation is enough
+	return func() {
+		xdsC.cdsCancelCh.Send(clusterName)
 	}
 }
 
@@ -157,7 +154,8 @@ func (xdsC *Client) InvokeWatchClusterCallback(update xdsclient.ClusterUpdate, e
 			xdsC.cdsCbs[clusterName](update, err)
 		}
 	} else {
-		// Have what callback you call with the update determined by the service name in the ClusterUpdate.
+		// Have what callback you call with the update determined by the service name in the ClusterUpdate. Left up to the
+		// caller to make sure the cluster update matches with a persisted callback.
 		print(update.ServiceName, " else")
 		xdsC.cdsCbs[update.ServiceName](update, err)
 	}
