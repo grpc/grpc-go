@@ -69,20 +69,24 @@ func (s) TestUpdateRootClusterEDSSuccess(t *testing.T) {
 		ServiceName: edsService,
 	}, nil)
 
-	chu := <-ch.updateChannel // TODO: Should this also wait on a timeout?
-	// Should I move these equality checks to a separate method? Seems very boilerplatey.
-	// Since the cluster type is EDS and not aggregate, the update should contain a list with length 1 of cluster updates.
-	if len(chu.chu) != 1 {
-		t.Fatal("Cluster Update passed to CDS should only have one update as cluster type EDS")
-	}
-	if chu.chu[0].ClusterType != xdsclient.ClusterTypeEDS {
-		t.Fatalf("ClusterUpdate Type received: %v, ClusterUpdate wanted: %v", chu, xdsclient.ClusterTypeEDS)
-	}
-	if chu.chu[0].ServiceName != edsService {
-		t.Fatalf("ClusterUpdate ServiceName received: %v, ClusterUpdate wanted: %v", chu.chu[0].ServiceName, edsService)
+
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	select {
+		case chu := <-ch.updateChannel:
+			if len(chu.chu) != 1 {
+				t.Fatal("Cluster Update passed to CDS should only have one update as cluster type EDS")
+			}
+			if chu.chu[0].ClusterType != xdsclient.ClusterTypeEDS {
+				t.Fatalf("ClusterUpdate Type received: %v, ClusterUpdate wanted: %v", chu, xdsclient.ClusterTypeEDS)
+			}
+			if chu.chu[0].ServiceName != edsService {
+				t.Fatalf("ClusterUpdate ServiceName received: %v, ClusterUpdate wanted: %v", chu.chu[0].ServiceName, edsService)
+			}
+		case <-ctx.Done():
+			t.Fatal("Timed out waiting for update from updateChannel.")
 	}
 
-	// Change the root to a Logical DNS? How long should the "story" be?
 }
 
 // This test is the same as the prior test, expect that the cluster type is of LogicalDNS rather than EDS.
@@ -105,21 +109,24 @@ func (s) TestUpdateRootClusterLogicalDNSSuccess(t *testing.T) {
 		ServiceName: logicalDNSService,
 	}, nil)
 
-	// TODO: wait on timeout?
-	chu := <-ch.updateChannel
-	if len(chu.chu) != 1 {
-		t.Fatal("Cluster Update passed to CDS should only have one update as type EDS")
-	}
-	if chu.chu[0].ClusterType != xdsclient.ClusterTypeLogicalDNS {
-		t.Fatalf("ClusterUpdate Type received: %v, ClusterUpdate wanted: %v", chu, xdsclient.ClusterTypeLogicalDNS)
-	}
-	if chu.chu[0].ServiceName != logicalDNSService {
-		t.Fatalf("ClusterUpdate ServiceName received: %v, ClusterUpdate wanted: %v", chu.chu[0].ServiceName, logicalDNSService)
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	select {
+		case chu := <-ch.updateChannel:
+			if len(chu.chu) != 1 {
+				t.Fatal("Cluster Update passed to CDS should only have one update as type EDS")
+			}
+			if chu.chu[0].ClusterType != xdsclient.ClusterTypeLogicalDNS {
+				t.Fatalf("ClusterUpdate Type received: %v, ClusterUpdate wanted: %v", chu, xdsclient.ClusterTypeLogicalDNS)
+			}
+			if chu.chu[0].ServiceName != logicalDNSService {
+				t.Fatalf("ClusterUpdate ServiceName received: %v, ClusterUpdate wanted: %v", chu.chu[0].ServiceName, logicalDNSService)
+			}
+		case <-ctx.Done():
+			t.Fatal("Timed out waiting for update from updateChannel.")
 	}
 }
 
-// You can move all the functionality ^^^ upward
-// When I come back, RELEARN THIS LOGIC AND PERHAPS TEST IT STEP BY STEP TO SEE IF IT ALL WORKS
 func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	ch, fakeClient := setupTests(t)
 	ch.updateRootCluster(aggregateClusterService)
