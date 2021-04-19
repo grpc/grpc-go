@@ -131,11 +131,13 @@ func serverHandle(hs serverHandshake, done chan testServerHandleResult, lis net.
 	serverRawConn, err := lis.Accept()
 	if err != nil {
 		done <- testServerHandleResult{authInfo: nil, err: fmt.Errorf("Server failed to accept connection. Error: %v", err)}
+		return
 	}
 	serverAuthInfo, err := hs(serverRawConn)
 	if err != nil {
 		serverRawConn.Close()
 		done <- testServerHandleResult{authInfo: nil, err: fmt.Errorf("Server failed while handshake. Error: %v", err)}
+		return
 	}
 	done <- testServerHandleResult{authInfo: serverAuthInfo, err: nil}
 }
