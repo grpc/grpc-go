@@ -18,9 +18,10 @@ package cdsbalancer
 
 import (
 	"context"
+	"testing"
+
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
-	"testing"
 )
 
 const (
@@ -182,7 +183,7 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	case <-ch.updateChannel:
 		t.Fatal("Cluster Handler wrote an update to updateChannel when it shouldn't have, as each node in the full cluster tree has not yet received an update")
 	case <-ctx.Done():
-
+	}
 
 	// Send callback for the EDS child cluster.
 	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
@@ -220,21 +221,3 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	// Should I also delete the root node up here? or try a shift of the root node to CDS, similar question to first test
 	// case, what should the scope of a test case be?
 }
-
-
-
-
-
-
-
-
-
-
-
-// Unit tests, not end to end, missing end to end tests adding end to end tests for xds. Make a real grpc client conn, verify that rpc are routed to same backends.
-// Integration tests: grpc client, google cloud, talk to real traffic director for configuration.
-
-// Let's say we have a situation where this component is this, this component is this, etc.
-// Behavior where this thing is this, this thing is this, BEHAVIOR OF COMPONENT in this situation
-
-// A component that you've coded, the picture of how it fits into logical system, then think of the possibilities of the state of the other components
