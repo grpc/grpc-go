@@ -38,6 +38,7 @@ const (
 	defaultServerKeepaliveTime    = 2 * time.Hour
 	defaultServerKeepaliveTimeout = 20 * time.Second
 	defaultKeepalivePolicyMinTime = 5 * time.Minute
+	defaultMaxPingStrikes         = uint8(2)
 	// max window limit set by HTTP2 Specs.
 	maxWindowSize = math.MaxInt32
 	// defaultWriteQuota is the default value for number of data

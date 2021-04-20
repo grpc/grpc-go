@@ -210,6 +210,10 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	if kep.MinTime == 0 {
 		kep.MinTime = defaultKeepalivePolicyMinTime
 	}
+	if kep.MaxPingStrikes == nil {
+		defaultPingStrikes := defaultMaxPingStrikes
+		kep.MaxPingStrikes = &defaultPingStrikes
+	}
 	done := make(chan struct{})
 	t := &http2Server{
 		ctx:               context.Background(),
@@ -701,7 +705,6 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 }
 
 const (
-	maxPingStrikes     = 2
 	defaultPingTimeout = 2 * time.Hour
 )
 
@@ -725,6 +728,12 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 	defer func() {
 		t.lastPingAt = now
 	}()
+
+	// if ping strikes is infinite, don't do any checking
+	if *t.kep.MaxPingStrikes == 0 {
+		return
+	}
+
 	// A reset ping strikes means that we don't need to check for policy
 	// violation for this ping and the pingStrikes counter should be set
 	// to 0.
@@ -735,6 +744,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 	t.mu.Lock()
 	ns := len(t.activeStreams)
 	t.mu.Unlock()
+
 	if ns < 1 && !t.kep.PermitWithoutStream {
 		// Keepalive shouldn't be active thus, this new ping should
 		// have come after at least defaultPingTimeout.
@@ -748,7 +758,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 		}
 	}
 
-	if t.pingStrikes > maxPingStrikes {
+	if t.pingStrikes > *t.kep.MaxPingStrikes {
 		// Send goaway and close the connection.
 		if logger.V(logLevel) {
 			logger.Errorf("transport: Got too many pings from the client, closing the connection.")

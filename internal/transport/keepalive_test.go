@@ -418,6 +418,104 @@ func (s) TestKeepaliveClientFrequency(t *testing.T) {
 	}
 }
 
+// TestKeepaliveMaxPingStrikesConfigurable creates a server which responds to
+// keepalive pings, and closes after a configured number of max ping strikes occur.
+func (s) TestKeepaliveMaxPingStrikesConfigurable(t *testing.T) {
+	pingStrikes := uint8(5)
+	serverConfig := &ServerConfig{
+		KeepalivePolicy: keepalive.EnforcementPolicy{
+			MinTime:             1200 * time.Millisecond, // 1.2 seconds
+			PermitWithoutStream: true,
+			MaxPingStrikes:      &pingStrikes,
+		},
+	}
+	clientOptions := ConnectOptions{
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:                1 * time.Second,
+			Timeout:             2 * time.Second,
+			PermitWithoutStream: true,
+		},
+	}
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
+	defer func() {
+		client.Close(fmt.Errorf("closed manually by test"))
+		server.stop()
+		cancel()
+	}()
+
+	// This should take 7 seconds & 100 ms
+	start := time.Now()
+	timeout := time.NewTimer(8 * time.Second)
+	select {
+	case <-client.Error():
+		if !timeout.Stop() {
+			<-timeout.C
+		}
+		if reason := client.GetGoAwayReason(); reason != GoAwayTooManyPings {
+			t.Fatalf("GoAwayReason is %v, want %v", reason, GoAwayTooManyPings)
+		}
+	case <-timeout.C:
+		t.Fatalf("client transport still healthy; expected GoAway from the server.")
+	}
+
+	delta := time.Since(start)
+	if delta < (7*time.Second) || delta > (7*time.Second)+(100*time.Millisecond) {
+		t.Fatalf("Expected 5 ping strikes to take between 7 and 7.1 seconds but took %v", delta)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Make sure the client transport is not healthy.
+	if _, err := client.NewStream(ctx, &CallHdr{}); err == nil {
+		t.Fatal("client.NewStream() should have failed, but succeeded")
+	}
+}
+
+// TestKeepaliveInfiniteMaxPingStrikes creates a server which responds to
+// keepalive pings, and never closes, regardless of how many ping strikes occur
+// in the intervening 8 seconds.
+func (s) TestKeepaliveInfiniteMaxPingStrikes(t *testing.T) {
+	pingStrikes := uint8(0)
+	serverConfig := &ServerConfig{
+		KeepalivePolicy: keepalive.EnforcementPolicy{
+			MinTime:             1200 * time.Millisecond, // 1.2 seconds
+			PermitWithoutStream: true,
+			MaxPingStrikes:      &pingStrikes,
+		},
+	}
+	clientOptions := ConnectOptions{
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:                1 * time.Second,
+			Timeout:             2 * time.Second,
+			PermitWithoutStream: true,
+		},
+	}
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
+	defer func() {
+		client.Close(fmt.Errorf("closed manually by test"))
+		server.stop()
+		cancel()
+	}()
+
+	// We should definitely get enough ping strikes to GOAWAY after 6 seconds -- timeout at 8
+	timeout := time.NewTimer(8 * time.Second)
+	select {
+	case <-client.Error():
+		if !timeout.Stop() {
+			<-timeout.C
+		}
+		t.Fatalf("Got reason to GoAway: %v", client.GetGoAwayReason())
+	case <-timeout.C:
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Make sure the client transport is healthy.
+	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
+		t.Fatal("client.NewStream() failed")
+	}
+}
+
 // TestKeepaliveServerEnforcementWithAbusiveClientNoRPC verifies that the
 // server closes a client transport when it sends too many keepalive pings
 // (when there are no active streams), based on the configured

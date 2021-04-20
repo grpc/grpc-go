@@ -82,4 +82,12 @@ type EnforcementPolicy struct {
 	// streams(RPCs). If false, and client sends ping when there are no active
 	// streams, server will send GOAWAY and close the connection.
 	PermitWithoutStream bool // false by default.
+	// MaxPingStrikes is the total number of ping strikes that a server will
+	// tolerate before sending a GOAWAY frame and closing the connection.
+	// If set to high, servers run the risk of allowing too much load from
+	// clients behaving badly. If set to low, servers risk cutting off clients
+	// due to network bumps or latency. By default, this setting is 2 but
+	// should be tuned to specific network environments. 0 implies infinite
+	// ping strikes can be tolerated.
+	MaxPingStrikes *uint8 // 2 by default.
 }
