@@ -27,6 +27,8 @@ import (
 const (
 	edsService = "EDS Service"
 	logicalDNSService = "Logical DNS Service"
+	edsService2 = "EDS Service 2"
+	logicalDNSService2 = "Logical DNS Service 2"
 	aggregateClusterService = "Aggregate Cluster Service"
 )
 
@@ -69,9 +71,6 @@ func (s) TestUpdateRootClusterEDSSuccess(t *testing.T) {
 		ServiceName: edsService,
 	}, nil)
 
-
-	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
 	select {
 		case chu := <-ch.updateChannel:
 			if len(chu.chu) != 1 {
@@ -109,8 +108,6 @@ func (s) TestUpdateRootClusterLogicalDNSSuccess(t *testing.T) {
 		ServiceName: logicalDNSService,
 	}, nil)
 
-	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
 	select {
 		case chu := <-ch.updateChannel:
 			if len(chu.chu) != 1 {
@@ -140,7 +137,7 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	if gotCluster != aggregateClusterService {
 		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, aggregateClusterService)
 	}
-
+	// Does this need a go behind it?
 	go func(){fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
 		ClusterType: xdsclient.ClusterTypeAggregate,
 		ServiceName: aggregateClusterService,
@@ -154,8 +151,6 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	// the aggregate cluster's children.
 
 	// xds client should be called to start a watch for the first? child cluster, which is an EDS Service.
-	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
 	gotCluster, err = fakeClient.WaitForWatchCluster(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
@@ -163,8 +158,6 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	if gotCluster != edsService {
 		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, edsService)
 	}
-
-	print("after EDS watch")
 
 	// xds client should also be called to start a watch for the second child cluster, which is a Logical DNS Service.
 	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -177,19 +170,17 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, logicalDNSService)
 	}
 
-	print("after DNS watch")
-
 	// The handleResp() call on the root aggregate cluster will ping the cluster handler to try and construct an update.
 	// However, due to the two children having not yet received an update from the xds channel, the update should not
 	// successfully build. Thus, there should be nothing in the update channel.
 
-	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer ctxCancel()
+	shouldNotHappenCtx, shouldNotHappenCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer shouldNotHappenCtxCancel()
 
 	select {
 	case <-ch.updateChannel:
 		t.Fatal("Cluster Handler wrote an update to updateChannel when it shouldn't have, as each node in the full cluster tree has not yet received an update")
-	case <-ctx.Done():
+	case <-shouldNotHappenCtx.Done():
 	}
 
 	// Send callback for the EDS child cluster.
@@ -200,13 +191,11 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 
 	// EDS child cluster will ping the Cluster Handler, to try an update, which still won't successfully build as the
 	// LogicalDNS child of the root aggregate cluster has not yet received and handled an update.
-	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer ctxCancel()
 
 	select {
 	case <-ch.updateChannel:
 		t.Fatal("Cluster Handler wrote an update to updateChannel when it shouldn't have, as each node in the full cluster tree has not yet received an update")
-	case <-ctx.Done():
+	case <-shouldNotHappenCtx.Done():
 	}
 
 	// Send callback for Logical DNS child cluster.
@@ -228,3 +217,171 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	// Should I also delete the root node up here? or try a shift of the root node to CDS, similar question to first test
 	// case, what should the scope of a test case be?
 }
+
+// From this aggregate cluster, branch it off into two (or three) more tests
+
+// The first set of tests represents "modify" test. These tests will switch the aggregate cluster to one child and one child with change.
+
+// The second set of tests represents the "delete" test. For this test I will have the root aggregate cluster be changed to an EDS cluster, which should
+// delete the root aggregate cluster.
+
+/*
+// This test tests whether updating the root aggregate cluster as a new aggregate cluster with less children successfully deletes child and writes update with deleted child.
+func (s) TestUpdateRootClusterAggregateThenDeleteChild(t *testing.T) {
+	// Put the same thing as I had in UpdateRootClusterAggregateSuccess, expect no validations, then update it and add validations.
+	// Due to there being a test for the first update for an aggregate cluster successfully writing to a buffer, there
+	// will be no validations in this test until this test gets to same stage (has an aggregate cluster with a child EDS
+	// and LogicalDNS as the root node in cluster handler). (ACTUALLY, SHIFT THIS FROM HAVING TWO CHILDREN TO HAVING THREE
+	// CHILDREN)
+	ch, fakeClient := setupTests(t)
+	ch.updateRootCluster(aggregateClusterService)
+
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	fakeClient.WaitForWatchCluster(ctx)
+
+	go func(){
+		fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
+			ClusterType: xdsclient.ClusterTypeAggregate,
+			ServiceName: aggregateClusterService,
+			PrioritizedClusterNames: []string{edsService, logicalDNSService},
+		}, nil)
+	}()
+
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	fakeClient.WaitForWatchCluster(ctx)
+	// Do we need a seperate ctx here?
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	fakeClient.WaitForWatchCluster(ctx)
+
+	// No need to read from buffer as the update channel will be drained and replaced with most recent update.
+
+	// New logic, which involves invoking the update callback for the root aggregate node, deleting the EDS child.
+}
+
+// This test tests whether updating the root aggregate cluster with a changed child successfully writes update with changed child.
+func (s) TestUpdateRootClusterAggregateThenUpdateChildToAnAggregate(t *testing.T) {
+	ch, fakeClient := setupTests(t)
+	ch.updateRootCluster(aggregateClusterService)
+
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	fakeClient.WaitForWatchCluster(ctx)
+
+	go func(){
+		fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
+			ClusterType: xdsclient.ClusterTypeAggregate,
+			ServiceName: aggregateClusterService,
+			PrioritizedClusterNames: []string{edsService, logicalDNSService},
+		}, nil)
+	}()
+
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	fakeClient.WaitForWatchCluster(ctx)
+	// Do we need a seperate ctx here?
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	fakeClient.WaitForWatchCluster(ctx)
+
+	// No need to read from buffer as the update channel will be drained and replaced with most recent update.
+
+	// New logic, which involves invoking the update callback for the root aggregate node, deleting the LogicalDNS child and
+	// replacing it with an aggregate cluster.
+
+	// Go() call?
+	// This update adds a second EDS service to the aggregate cluster's children. This should start a watch for the new
+	// second EDS service child. Afterward, it should successfully send back an update to CDS (by writing to update buffer)
+	// with the new child.
+	go func(){
+		fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
+			ClusterType: xdsclient.ClusterTypeAggregate,
+			ServiceName: aggregateClusterService,
+			PrioritizedClusterNames: []string{edsService, logicalDNSService, edsService2},
+		}, nil)
+	}()
+
+	// That update from xdsClient should start a watch for the new second EDS service child.
+
+	// *** Start validation on start watch
+	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	fakeClient.WaitForWatchCluster(ctx)
+	// *** End validation on start watch
+
+
+	// Shouldn't update, as full nodes have not all received updates.
+
+	// *** Start validation on not writing an update ***
+
+	// *** End validation on not writing an update ***
+
+
+	// THEN YOU HAVE TO NOW INVOKE A CALLBACK TO UPDATE NEW NODE
+
+
+
+
+
+
+	// Should update here as the aggregate cluster's full nodes have all received updates.
+
+	// *** Start validation on updating CDS with new update
+
+	// *** End validation on updating CDS with new update
+
+
+
+	// This update deletes EDS service 2 and adds DNS service 2 to the aggregate cluster's children. This should delete
+	// EDS Service 2 from the aggregate cluster's children and also start a watch for the new DNS service 2 child cluster.
+	// Afterward, it should successfully send back an update to CDS (by writing to update buffer) with the new children.
+	go func(){
+		fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
+			ClusterType: xdsclient.ClusterTypeAggregate,
+			ServiceName: aggregateClusterService,
+			PrioritizedClusterNames: []string{edsService, logicalDNSService, logicalDNSService2},
+		}, nil)
+	}()
+
+	// The update from xdsClient should delete EDS Service 2
+
+	// *** Start validation on deleting EDS service 2 from aggregate clusters children.
+
+	// *** End validation on deleting EDS service 2 from aggregate clusters children.
+
+
+
+	// The update should also start a watch for new second EDS service child
+
+	// *** Start validation on starting a watch for new second EDS service child.
+
+	// *** End validation on starting a watch for new second EDS service child.
+
+
+
+	// Shouldn't update, as full nodes have not all received updates.
+
+	// *** Start validation on not writing an update ***
+
+	// *** End validation on not writing an update ***
+
+
+	// THEN YOU HAVE TO NOW INVOKE A CALLBACK TO UPDATE NEW NODE
+
+
+
+	// Should update here as aggregate cluster's full nodes have all received updates.
+
+	// *** Start validation on updating CDS with new update.
+
+	// *** End validation on updating CDS with new update.
+
+}
+
+// This test tests whether switching the root cluster from an aggregate cluster to a non aggregate cluster successfully
+// deletes all nodes in aggregate cluster and also starts a node for the new root. (Will test updating root rather than handleResp callback)
+func (s) TestUpdateRootClusterAggregateToEDS(t *testing.T) {
+
+}*/
