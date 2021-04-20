@@ -761,7 +761,7 @@ func TestDNSResolverExponentialBackoff(t *testing.T) {
 	newTimer = func(d time.Duration) *time.Timer {
 		// Will never fire on its own, allows this test to call timer immediately.
 		t := time.NewTimer(time.Hour)
-		timerChan.SendOrFail(t)
+		timerChan.Send(t)
 		return t
 	}
 	tests := []struct {
@@ -1567,7 +1567,7 @@ func TestReportError(t *testing.T) {
 	newTimer = func(d time.Duration) *time.Timer {
 		// Will never fire on its own, allows this test to call timer immediately.
 		t := time.NewTimer(time.Hour)
-		timerChan.SendOrFail(t)
+		timerChan.Send(t)
 		return t
 	}
 	cc := &testClientConn{target: target, errChan: make(chan error)}
