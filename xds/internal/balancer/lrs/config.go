@@ -46,9 +46,6 @@ func parseConfig(c json.RawMessage) (*LBConfig, error) {
 	if cfg.ClusterName == "" {
 		return nil, fmt.Errorf("required ClusterName is not set in %+v", cfg)
 	}
-	if cfg.LoadReportingServerName == "" {
-		return nil, fmt.Errorf("required LoadReportingServerName is not set in %+v", cfg)
-	}
 	if cfg.Locality == nil {
 		return nil, fmt.Errorf("required Locality is not set in %+v", cfg)
 	}

@@ -56,21 +56,6 @@ func TestParseConfig(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "no LRS server name",
-			js: `{
-  "clusterName": "test-cluster",
-  "edsServiceName": "test-eds-service",
-  "locality": {
-    "region": "test-region",
-    "zone": "test-zone",
-    "subZone": "test-sub-zone"
-  },
-  "childPolicy":[{"round_robin":{}}]
-}
-			`,
-			wantErr: true,
-		},
-		{
 			name: "no locality",
 			js: `{
   "clusterName": "test-cluster",
