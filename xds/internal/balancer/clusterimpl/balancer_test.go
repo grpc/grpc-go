@@ -482,7 +482,7 @@ func TestReResolution(t *testing.T) {
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
-	builder := balancer.Get(clusterImplName)
+	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
@@ -491,7 +491,7 @@ func TestReResolution(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: testBackendAddrs,
 		},
-		BalancerConfig: &lbConfig{
+		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName,
 			EDSServiceName: testServiceName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
