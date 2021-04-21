@@ -391,6 +391,12 @@ func (b *cdsBalancer) run() {
 				b.edsLB = nil
 			}
 			b.xdsClient.Close()
+			if b.cachedRoot != nil {
+				b.cachedRoot.Close()
+			}
+			if b.cachedIdentity != nil {
+				b.cachedIdentity.Close()
+			}
 			b.logger.Infof("Shutdown")
 			b.done.Fire()
 			return
