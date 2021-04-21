@@ -27,6 +27,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/xds/internal/balancer/loadstore"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -818,9 +819,9 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	// implements the LoadStore() method to return the underlying load.Store to
 	// be used.
 	loadStore := load.NewStore()
-	lsWrapper := &loadStoreWrapper{}
-	lsWrapper.updateServiceName(testClusterNames[0])
-	lsWrapper.updateLoadStore(loadStore)
+	lsWrapper := loadstore.NewWrapper()
+	lsWrapper.UpdateClusterAndService(testClusterNames[0], "")
+	lsWrapper.UpdateLoadStore(loadStore)
 
 	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, lsWrapper, nil)
@@ -911,8 +912,8 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 // TestEDS_LoadReportDisabled covers the case that LRS is disabled. It makes
 // sure the EDS implementation isn't broken (doesn't panic).
 func (s) TestEDS_LoadReportDisabled(t *testing.T) {
-	lsWrapper := &loadStoreWrapper{}
-	lsWrapper.updateServiceName(testClusterNames[0])
+	lsWrapper := loadstore.NewWrapper()
+	lsWrapper.UpdateClusterAndService(testClusterNames[0], "")
 	// Not calling lsWrapper.updateLoadStore(loadStore) because LRS is disabled.
 
 	cc := testutils.NewTestClientConn(t)

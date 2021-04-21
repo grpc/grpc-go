@@ -25,6 +25,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/xds/internal/balancer/loadstore"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -68,7 +69,7 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		grpcUpdate:        make(chan interface{}),
 		xdsClientUpdate:   make(chan *edsUpdate),
 		childPolicyUpdate: buffer.NewUnbounded(),
-		lsw:               &loadStoreWrapper{},
+		loadWrapper:       loadstore.NewWrapper(),
 		config:            &EDSConfig{},
 	}
 	x.logger = prefixLogger(x)
@@ -80,7 +81,7 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 	}
 
 	x.xdsClient = client
-	x.edsImpl = newEDSBalancer(x.cc, opts, x.enqueueChildBalancerState, x.lsw, x.logger)
+	x.edsImpl = newEDSBalancer(x.cc, opts, x.enqueueChildBalancerState, x.loadWrapper, x.logger)
 	x.logger.Infof("Created")
 	go x.run()
 	return x
@@ -138,14 +139,14 @@ type edsBalancer struct {
 	xdsClientUpdate   chan *edsUpdate
 	childPolicyUpdate *buffer.Unbounded
 
-	xdsClient xdsClientInterface
-	lsw       *loadStoreWrapper
-	config    *EDSConfig // may change when passed a different service config
-	edsImpl   edsBalancerImplInterface
+	xdsClient   xdsClientInterface
+	loadWrapper *loadstore.Wrapper
+	config      *EDSConfig // may change when passed a different service config
+	edsImpl     edsBalancerImplInterface
 
-	// edsServiceName is the edsServiceName currently being watched, not
-	// necessary the edsServiceName from service config.
+	clusterName          string
 	edsServiceName       string
+	edsToWatch           string // this is edsServiceName if it's set, otherwise, it's clusterName.
 	cancelEndpointsWatch func()
 	loadReportServer     *string // LRS is disabled if loadReporterServer is nil.
 	cancelLoadReport     func()
@@ -241,10 +242,35 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 // handleServiceConfigUpdate applies the service config update, watching a new
 // EDS service name and restarting LRS stream, as required.
 func (x *edsBalancer) handleServiceConfigUpdate(config *EDSConfig) error {
-	// Restart EDS watch when the edsServiceName has changed.
+	var updateLoadClusterAndService bool
+	if x.clusterName != config.ClusterName {
+		updateLoadClusterAndService = true
+		x.clusterName = config.ClusterName
+		x.edsImpl.updateClusterName(x.clusterName)
+	}
 	if x.edsServiceName != config.EDSServiceName {
+		updateLoadClusterAndService = true
 		x.edsServiceName = config.EDSServiceName
+	}
+
+	// If EDSServiceName is set, use it to watch EDS. Otherwise, use the cluster
+	// name.
+	newEDSToWatch := config.EDSServiceName
+	if newEDSToWatch == "" {
+		newEDSToWatch = config.ClusterName
+	}
+	var restartEDSWatch bool
+	if x.edsToWatch != newEDSToWatch {
+		restartEDSWatch = true
+		x.edsToWatch = newEDSToWatch
+	}
+
+	// Restart EDS watch when the eds name has changed.
+	if restartEDSWatch {
 		x.startEndpointsWatch()
+	}
+
+	if updateLoadClusterAndService {
 		// TODO: this update for the LRS service name is too early. It should
 		// only apply to the new EDS response. But this is applied to the RPCs
 		// before the new EDS response. To fully fix this, the EDS balancer
@@ -252,14 +278,13 @@ func (x *edsBalancer) handleServiceConfigUpdate(config *EDSConfig) error {
 		//
 		// This is OK for now, because we don't actually expect edsServiceName
 		// to change. Fix this (a bigger change) will happen later.
-		x.lsw.updateServiceName(x.edsServiceName)
-		x.edsImpl.updateClusterName(x.edsServiceName)
+		x.loadWrapper.UpdateClusterAndService(x.clusterName, x.edsServiceName)
 	}
 
 	// Restart load reporting when the loadReportServer name has changed.
 	if !equalStringPointers(x.loadReportServer, config.LrsLoadReportingServerName) {
 		loadStore := x.startLoadReport(config.LrsLoadReportingServerName)
-		x.lsw.updateLoadStore(loadStore)
+		x.loadWrapper.UpdateLoadStore(loadStore)
 	}
 
 	return nil
@@ -273,14 +298,15 @@ func (x *edsBalancer) startEndpointsWatch() {
 	if x.cancelEndpointsWatch != nil {
 		x.cancelEndpointsWatch()
 	}
-	cancelEDSWatch := x.xdsClient.WatchEndpoints(x.edsServiceName, func(update xdsclient.EndpointsUpdate, err error) {
+	edsToWatch := x.edsToWatch
+	cancelEDSWatch := x.xdsClient.WatchEndpoints(edsToWatch, func(update xdsclient.EndpointsUpdate, err error) {
 		x.logger.Infof("Watch update from xds-client %p, content: %+v", x.xdsClient, update)
 		x.handleEDSUpdate(update, err)
 	})
-	x.logger.Infof("Watch started on resource name %v with xds-client %p", x.edsServiceName, x.xdsClient)
+	x.logger.Infof("Watch started on resource name %v with xds-client %p", edsToWatch, x.xdsClient)
 	x.cancelEndpointsWatch = func() {
 		cancelEDSWatch()
-		x.logger.Infof("Watch cancelled on resource name %v with xds-client %p", x.edsServiceName, x.xdsClient)
+		x.logger.Infof("Watch cancelled on resource name %v with xds-client %p", edsToWatch, x.xdsClient)
 	}
 }
 

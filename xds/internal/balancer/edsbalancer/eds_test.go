@@ -584,7 +584,7 @@ func verifyExpectedRequests(ctx context.Context, fc *fakeclient.Client, resource
 			if err := fc.WaitForCancelEDSWatch(ctx); err != nil {
 				return fmt.Errorf("timed out when expecting resource %q", name)
 			}
-			return nil
+			continue
 		}
 
 		resName, err := fc.WaitForWatchEDS(ctx)
@@ -613,6 +613,18 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	}
 	defer edsB.Close()
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// If eds service name is not set, should watch for cluster name.
+	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		BalancerConfig: &EDSConfig{ClusterName: "cluster-1"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyExpectedRequests(ctx, xdsC, "cluster-1"); err != nil {
+		t.Fatal(err)
+	}
+
 	// Update with an non-empty edsServiceName should trigger an EDS watch for
 	// the same.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
@@ -620,9 +632,7 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if err := verifyExpectedRequests(ctx, xdsC, "foobar-1"); err != nil {
+	if err := verifyExpectedRequests(ctx, xdsC, "", "foobar-1"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -692,7 +702,7 @@ func (s) TestClusterNameUpdateInAddressAttributes(t *testing.T) {
 	// Update should trigger counter update with provided service name.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
-			EDSServiceName: "foobar-1",
+			ClusterName: "foobar-1",
 		},
 	}); err != nil {
 		t.Fatal(err)
@@ -711,7 +721,7 @@ func (s) TestClusterNameUpdateInAddressAttributes(t *testing.T) {
 	// Update should trigger counter update with provided service name.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
-			EDSServiceName: "foobar-2",
+			ClusterName: "foobar-2",
 		},
 	}); err != nil {
 		t.Fatal(err)
