@@ -103,7 +103,7 @@ func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
 		testBackendAddrStrs = append(testBackendAddrStrs, fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i))
 	}
-	wtbBuilder = balancer.Get(weightedTargetName)
+	wtbBuilder = balancer.Get(Name)
 	wtbParser = wtbBuilder.(balancer.ConfigParser)
 
 	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond

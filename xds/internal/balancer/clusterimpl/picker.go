@@ -47,7 +47,7 @@ func gcd(a, b uint32) uint32 {
 	return a
 }
 
-func newDropper(c dropCategory) *dropper {
+func newDropper(c DropConfig) *dropper {
 	w := newRandomWRR()
 	gcdv := gcd(c.RequestsPerMillion, million)
 	// Return true for RequestPerMillion, false for the rest.

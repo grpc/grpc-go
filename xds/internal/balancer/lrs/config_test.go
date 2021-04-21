@@ -37,7 +37,7 @@ func TestParseConfig(t *testing.T) {
 	tests := []struct {
 		name    string
 		js      string
-		want    *lbConfig
+		want    *LBConfig
 		wantErr bool
 	}{
 		{
@@ -95,10 +95,10 @@ func TestParseConfig(t *testing.T) {
   "childPolicy":[{"round_robin":{}}]
 }
 			`,
-			want: &lbConfig{
-				ClusterName:                testClusterName,
-				EdsServiceName:             testServiceName,
-				LrsLoadReportingServerName: testLRSServerName,
+			want: &LBConfig{
+				ClusterName:             testClusterName,
+				EDSServiceName:          testServiceName,
+				LoadReportingServerName: testLRSServerName,
 				Locality: &xdsinternal.LocalityID{
 					Region:  "test-region",
 					Zone:    "test-zone",

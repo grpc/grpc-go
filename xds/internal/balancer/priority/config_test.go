@@ -30,7 +30,7 @@ func TestParseConfig(t *testing.T) {
 	tests := []struct {
 		name    string
 		js      string
-		want    *lbConfig
+		want    *LBConfig
 		wantErr bool
 	}{
 		{
@@ -69,8 +69,8 @@ func TestParseConfig(t *testing.T) {
   }
 }
 			`,
-			want: &lbConfig{
-				Children: map[string]*child{
+			want: &LBConfig{
+				Children: map[string]*Child{
 					"child-1": {
 						&internalserviceconfig.BalancerConfig{
 							Name: roundrobin.Name,
