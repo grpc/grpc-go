@@ -39,57 +39,56 @@ jobs:
         include:
           - type: vet+tests
             goversion: 1.16
-            arch: amd64
 
           - type: tests
             goversion: 1.16
-            arch: amd64
             testflags: -race
 
-          - type: retry tests
+          - type: tests
             goversion: 1.16
-            arch: amd64
+            grpcenv: GRPC_GO_RETRY=on
 
           - type: extras
             goversion: 1.16
-            arch: amd64
 
           - type: tests
             goversion: 1.16
-            arch: 386
+            goarch: 386
 
           - type: tests
             goversion: 1.16
-            arch: arm64
+            goarch: arm64
 
           - type: tests
             goversion: 1.15
-            arch: amd64
 
           - type: tests
             goversion: 1.14
-            arch: amd64
 
           - type: test111  # Keep until interop tests no longer require Go1.11
             goversion: 1.11
-            arch: amd64
 
     steps:
       # Setup the environment.
       - name: Setup GOARCH
-        run: echo "GOARCH=${{ matrix.arch }}" >> $GITHUB_ENV
+        if: matrix.goarch != ''
+        run: echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
+
       - name: Setup qemu emulator
-        if: matrix.arch == 'arm64'
+        if: matrix.goarch == 'arm64'
         # setup qemu-user-static emulator and register it with binfmt_misc so that aarch64 binaries
         # are automatically executed using qemu.
         run: docker run --rm --privileged multiarch/qemu-user-static:5.2.0-2 --reset --credential yes --persistent yes
-      - name: Setup RETRY
-        if: startsWith(matrix.type, 'retry')
-        run: echo "GRPC_GO_RETRY=on" >> $GITHUB_ENV
+
+      - name: Setup GRPC environment
+        if: matrix.grpcenv != ''
+        run: echo "${{ matrix.grpcenv }}" >> $GITHUB_ENV
+
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.goversion }}
+
       - name: Checkout repo
         uses: actions/checkout@v2
 
