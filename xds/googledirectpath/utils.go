@@ -41,7 +41,7 @@ func getFromMetadata(timeout time.Duration, urlStr string) ([]byte, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed communicating with metadata server: %w", err)
+		return nil, fmt.Errorf("failed communicating with metadata server: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -49,7 +49,7 @@ func getFromMetadata(timeout time.Duration, urlStr string) ([]byte, error) {
 	}
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed reading from metadata server: %w", err)
+		return nil, fmt.Errorf("failed reading from metadata server: %v", err)
 	}
 	return body, nil
 }
