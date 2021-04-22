@@ -138,7 +138,10 @@ func (hi *HandshakeInfo) ClientSideTLSConfig(ctx context.Context) (*tls.Config, 
 	// Currently the Go stdlib does complete verification of the cert (which
 	// includes hostname verification) or none. We are forced to go with the
 	// latter and perform the normal cert validation ourselves.
-	cfg := &tls.Config{InsecureSkipVerify: true}
+	cfg := &tls.Config{
+		InsecureSkipVerify: true,
+		NextProtos:         []string{"h2"},
+	}
 
 	km, err := rootProv.KeyMaterial(ctx)
 	if err != nil {
@@ -159,7 +162,10 @@ func (hi *HandshakeInfo) ClientSideTLSConfig(ctx context.Context) (*tls.Config, 
 // ServerSideTLSConfig constructs a tls.Config to be used in a server-side
 // handshake based on the contents of the HandshakeInfo.
 func (hi *HandshakeInfo) ServerSideTLSConfig(ctx context.Context) (*tls.Config, error) {
-	cfg := &tls.Config{ClientAuth: tls.NoClientCert}
+	cfg := &tls.Config{
+		ClientAuth: tls.NoClientCert,
+		NextProtos: []string{"h2"},
+	}
 	hi.mu.Lock()
 	// On the server side, identityProvider is mandatory. RootProvider is
 	// optional based on whether the server is doing TLS or mTLS.
