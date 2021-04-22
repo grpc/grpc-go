@@ -41,9 +41,10 @@ jobs:
             goversion: 1.16
             arch: amd64
 
-          - type: race
+          - type: tests
             goversion: 1.16
             arch: amd64
+            testflags: -race
 
           - type: retry tests
             goversion: 1.16
@@ -97,20 +98,13 @@ jobs:
         if: startsWith(matrix.type, 'vet')
         run: ./vet.sh -install && ./vet.sh
 
-      # Main tests run for everything except when testing "extras", the race
-      # detector and Go1.11 (where we run a reduced set of tests).
+      # Main tests run for everything except when testing "extras" and Go1.11
+      # (where we run a reduced set of tests).
       - name: Run tests
         if: contains(matrix.type, 'tests')
         run: |
           go version
-          go test -cpu 1,4 -timeout 7m google.golang.org/grpc/...
-
-      # Race detector tests
-      - name: Run test race
-        if: startsWith(matrix.type, 'race')
-        run: |
-          go version
-          go test -race -cpu 1,4 -timeout 7m google.golang.org/grpc/...
+          go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc/...
 
       # Non-core gRPC tests (examples, interop, etc)
       - name: Run extras tests
