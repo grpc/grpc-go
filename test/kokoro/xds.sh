@@ -27,7 +27,7 @@ grpc/tools/run_tests/helper_scripts/prep_xds.sh
 # they are added into "all".
 GRPC_GO_LOG_VERBOSITY_LEVEL=99 GRPC_GO_LOG_SEVERITY_LEVEL=info \
   python3 grpc/tools/run_tests/run_xds_tests.py \
-    --test_case="all,circuit_breaking,timeout,fault_injection" \
+    --test_case="all,circuit_breaking,timeout,fault_injection,csds" \
     --project_id=grpc-testing \
     --project_num=830293263384 \
     --source_image=projects/grpc-testing/global/images/xds-test-server-4 \
