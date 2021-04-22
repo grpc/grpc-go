@@ -65,7 +65,7 @@ jobs:
           - type: tests
             goversion: 1.14
 
-          - type: test111  # Keep until interop tests no longer require Go1.11
+          - type: tests  # Keep until interop tests no longer require Go1.11
             goversion: 1.11
 
     steps:
@@ -97,7 +97,7 @@ jobs:
         if: startsWith(matrix.type, 'vet')
         run: ./vet.sh -install && ./vet.sh
 
-      # Main tests run for everything except when testing "extras" and Go1.11
+      # Main tests run for everything except when testing "extras"
       # (where we run a reduced set of tests).
       - name: Run tests
         if: contains(matrix.type, 'tests')
@@ -115,12 +115,3 @@ jobs:
           interop/interop_test.sh
           cd ${GITHUB_WORKSPACE}/security/advancedtls && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/advancedtls/...
           cd ${GITHUB_WORKSPACE}/security/authorization && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/authorization/...
-
-      # Reduced set of tests for Go 1.11
-      - name: Run Go1.11 tests
-        if: matrix.type == 'test111'
-        run: |
-          go version
-          tests=$(find ${GITHUB_WORKSPACE} -name '*_test.go' | xargs -n1 dirname | sort -u | sed "s:^${GITHUB_WORKSPACE}:.:" | sed "s:\/$::" | grep -v ^./security | grep -v ^./credentials/sts | grep -v ^./credentials/tls/certprovider | grep -v ^./credentials/xds | grep -v ^./xds )
-          echo "Running tests for " ${tests}
-          go test -cpu 1,4 -timeout 7m ${tests}
