@@ -26,6 +26,7 @@ import (
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"github.com/golang/protobuf/proto"
@@ -35,6 +36,7 @@ import (
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/version"
+	anypb2 "google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -43,7 +45,7 @@ const (
 	serviceName = "service"
 )
 
-var emptyUpdate = ClusterUpdate{ClusterName: "", EnableLRS: false}
+var emptyUpdate = ClusterUpdate{ClusterName: clusterName, EnableLRS: false}
 
 func (s) TestValidateCluster_Failure(t *testing.T) {
 	tests := []struct {
@@ -139,24 +141,38 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		{
 			name: "happy-case-logical-dns",
 			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_LOGICAL_DNS},
 				LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: ClusterUpdate{ClusterName: "", EnableLRS: false, ClusterType: ClusterTypeLogicalDNS},
+			wantUpdate: ClusterUpdate{ClusterName: clusterName, EnableLRS: false, ClusterType: ClusterTypeLogicalDNS},
 		},
 		{
 			name: "happy-case-aggregate-v3",
 			cluster: &v3clusterpb.Cluster{
+				Name: clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
-					ClusterType: &v3clusterpb.Cluster_CustomClusterType{Name: "envoy.clusters.aggregate"},
+					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
+						Name: "envoy.clusters.aggregate",
+						TypedConfig: func() *anypb2.Any {
+							r, _ := anypb2.New(&v3aggregateclusterpb.ClusterConfig{
+								Clusters: []string{"a", "b", "c"},
+							})
+							return r
+						}(),
+					},
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: ClusterUpdate{ClusterName: "", EnableLRS: false, ClusterType: ClusterTypeAggregate},
+			wantUpdate: ClusterUpdate{
+				ClusterName: clusterName, EnableLRS: false, ClusterType: ClusterTypeAggregate,
+				PrioritizedClusterNames: []string{"a", "b", "c"},
+			},
 		},
 		{
 			name: "happy-case-no-service-name-no-lrs",
 			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
 					EdsConfig: &v3corepb.ConfigSource{

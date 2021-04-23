@@ -35,9 +35,10 @@ type EDSConfig struct {
 	// FallBackPolicy represents the load balancing config for the
 	// fallback.
 	FallBackPolicy *loadBalancingConfig
-	// Cluster name.
+	// ClusterName is the cluster name.
 	ClusterName string
-	// Name to use in EDS query. If not set, use ClusterName.
+	// EDSServiceName is the name to use in EDS query. If not set, use
+	// ClusterName.
 	EDSServiceName string
 	// MaxConcurrentRequests is the max number of concurrent request allowed for
 	// this service. If unset, default value 1024 is used.
